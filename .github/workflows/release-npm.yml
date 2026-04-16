@@ -1,0 +1,59 @@
+name: Release npm package
+
+on:
+  push:
+    tags:
+      - 'sdk/v*'
+      - 'runtime-react/v*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine package from tag
+        id: pkg
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          NAME="${TAG%/v*}"
+          case "$NAME" in
+            sdk)
+              echo "path=packages/sdk" >> "$GITHUB_OUTPUT"
+              ;;
+            runtime-react)
+              echo "path=packages/runtime-react" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unknown package prefix: $NAME"
+              exit 1
+              ;;
+          esac
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        working-directory: ${{ steps.pkg.outputs.path }}
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Build
+        working-directory: ${{ steps.pkg.outputs.path }}
+        run: pnpm build
+
+      - name: Publish to npm
+        working-directory: ${{ steps.pkg.outputs.path }}
+        run: pnpm publish --access public --tag latest --no-git-checks
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

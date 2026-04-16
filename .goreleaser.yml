@@ -1,0 +1,30 @@
+project_name: metacore
+
+builds:
+  - id: cli
+    main: ./cli
+    binary: metacore
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    name_template: 'metacore_{{ .Os }}_{{ .Arch }}'
+    format_overrides:
+      - goos: windows
+        format: zip
+
+checksum:
+  name_template: checksums.txt
+
+release:
+  github:
+    owner: asteby
+    name: metacore-sdk

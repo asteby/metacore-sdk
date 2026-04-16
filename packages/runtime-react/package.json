@@ -2,6 +2,11 @@
   "name": "@asteby/metacore-runtime-react",
   "version": "2.0.0",
   "description": "React runtime for metacore hosts — renders addon contributions dynamically",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asteby/metacore-sdk",
+    "directory": "packages/runtime-react"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

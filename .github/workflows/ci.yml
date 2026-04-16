@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  go:
+    name: Go (${{ matrix.go-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        go-version: ['1.23']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: true
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test ./...
+
+      - name: Build fiscal-mx backend webhook example
+        run: |
+          if [ -d examples/fiscal-mx/backend-webhook ]; then
+            cd examples/fiscal-mx/backend-webhook
+            go build ./...
+          else
+            echo "examples/fiscal-mx/backend-webhook not present, skipping"
+          fi
+
+  node:
+    name: Node (${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: ['20']
+        package: [packages/sdk, packages/runtime-react]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        working-directory: ${{ matrix.package }}
+        run: pnpm install --frozen-lockfile=false
+
+      - name: Build
+        working-directory: ${{ matrix.package }}
+        run: pnpm build
+
+      - name: Typecheck
+        working-directory: ${{ matrix.package }}
+        run: pnpm typecheck

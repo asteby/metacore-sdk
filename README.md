@@ -54,9 +54,17 @@ metacore-sdk/
 
 ## Related repositories
 
-- [`asteby/hub-web`](https://github.com/asteby/hub-web) — the marketplace UI.
-- [`asteby/ops`](https://github.com/asteby/ops) — the Ops host.
-- [hub.asteby.com](https://hub.asteby.com) — the public addon marketplace.
+**Framework** (`asteby/`):
+- [`metacore-sdk`](https://github.com/asteby/metacore-sdk) — this repo (public).
+- [`metacore-kernel`](https://github.com/asteby/metacore-kernel) — private runtime kernel.
+
+**Products** (`asteby-hq/`):
+- [`hub`](https://github.com/asteby-hq/hub) — marketplace UI + API server (lives in `hub/server/`).
+- [`ops`](https://github.com/asteby-hq/ops) — the Ops host.
+- [`link`](https://github.com/asteby-hq/link) — the conversational host.
+- [`pilot`](https://github.com/asteby-hq/pilot) — internal pilot app.
+
+Public marketplace: [hub.asteby.com](https://hub.asteby.com).
 
 ## Contributing
 

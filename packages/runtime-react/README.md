@@ -1,6 +1,6 @@
 # @asteby/metacore-runtime-react
 
-React runtime for [metacore](https://github.com/asteby/metacore) hosts. This
+React runtime for [metacore](https://github.com/asteby/metacore-sdk) hosts. This
 package bundles the generic components a host (`ops`, `link`, `hub`) renders
 when showing addon contributions — dynamic tables, forms, action dispatchers,
 slot extension points and the federated addon loader.
