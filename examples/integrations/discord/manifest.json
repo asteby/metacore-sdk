@@ -1,0 +1,64 @@
+{
+  "key": "discord",
+  "name": "Discord",
+  "description": "Envía alertas y notificaciones a canales de Discord.",
+  "version": "1.0.0",
+  "category": "communication",
+  "icon": "discord",
+  "icon_type": "brand",
+  "icon_slug": "discord",
+  "icon_color": "5865F2",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "author": "asteby",
+  "license": "MIT",
+  "settings": [
+    {
+      "key": "discord_webhook_url",
+      "label": "Webhook URL",
+      "type": "password",
+      "secret": true
+    }
+  ],
+  "tools": [
+    {
+      "id": "send_message",
+      "name": "Enviar Mensaje",
+      "description": "Envía un mensaje a un canal de Discord.",
+      "category": "communication",
+      "input_schema": [
+        {
+          "name": "discord_webhook_url",
+          "type": "string",
+          "description": "Webhook URL de Discord (provisto por settings)",
+          "required": true
+        },
+        {
+          "name": "message",
+          "type": "string",
+          "description": "Mensaje a enviar al canal de Discord",
+          "required": true,
+          "extraction_hint": "Contenido del mensaje o alerta"
+        }
+      ],
+      "endpoint": "{{discord_webhook_url}}",
+      "method": "POST"
+    }
+  ],
+  "events": [],
+  "backend": {
+    "runtime": "webhook"
+  },
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "discord.com",
+      "reason": "API oficial de Discord"
+    },
+    {
+      "kind": "http:fetch",
+      "target": "discordapp.com",
+      "reason": "Dominio legado de webhooks Discord"
+    }
+  ]
+}

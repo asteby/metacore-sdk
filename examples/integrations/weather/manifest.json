@@ -1,0 +1,45 @@
+{
+  "key": "weather",
+  "name": "Clima Actual",
+  "description": "Consulta el clima actual de cualquier ciudad del mundo vía wttr.in. Sin API key requerida.",
+  "version": "1.0.0",
+  "category": "utilities",
+  "icon": "https://www.google.com/s2/favicons?domain=wttr.in&sz=128",
+  "icon_type": "url",
+  "icon_slug": "https://www.google.com/s2/favicons?domain=wttr.in&sz=128",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "backend": {
+    "runtime": "webhook"
+  },
+  "tools": [
+    {
+      "id": "current_weather",
+      "name": "Clima Actual",
+      "description": "Obtiene la temperatura y condición climática actual de una ciudad.",
+      "category": "query",
+      "input_schema": [
+        {
+          "name": "city",
+          "type": "string",
+          "description": "Nombre de la ciudad, puede incluir país",
+          "required": true,
+          "example": "Ciudad de Mexico",
+          "extraction_hint": "Ciudad mencionada por el usuario"
+        }
+      ],
+      "endpoint": "https://wttr.in/{{city}}?format=3",
+      "method": "GET"
+    }
+  ],
+  "events": [],
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "wttr.in",
+      "reason": "Consulta de clima sin API key"
+    }
+  ],
+  "author": "asteby",
+  "license": "MIT"
+}

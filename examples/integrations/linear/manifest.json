@@ -1,0 +1,65 @@
+{
+  "key": "linear",
+  "name": "Linear",
+  "description": "Crea y consulta issues en Linear para gestionar proyectos de desarrollo.",
+  "version": "1.0.0",
+  "category": "dev",
+  "icon": "linear",
+  "icon_type": "brand",
+  "icon_slug": "linear",
+  "icon_color": "5E6AD2",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "settings": [
+    {
+      "key": "linear_api_key",
+      "label": "API Key",
+      "type": "password",
+      "secret": true
+    },
+    {
+      "key": "linear_team_id",
+      "label": "Team ID",
+      "type": "string"
+    }
+  ],
+  "tools": [
+    {
+      "id": "create_issue",
+      "name": "Crear Issue",
+      "description": "Crea un nuevo issue en Linear.",
+      "input_schema": [
+        {
+          "name": "title",
+          "type": "string",
+          "description": "Título del issue",
+          "required": true,
+          "extraction_hint": "Resumen del problema o tarea"
+        },
+        {
+          "name": "description",
+          "type": "string",
+          "description": "Descripción detallada",
+          "required": true,
+          "extraction_hint": "Contexto y detalles del problema"
+        }
+      ],
+      "endpoint": "https://api.linear.app/graphql",
+      "method": "POST",
+      "auto_create_record": "ticket"
+    }
+  ],
+  "events": [],
+  "backend": {
+    "runtime": "webhook"
+  },
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "api.linear.app",
+      "reason": "Ejecutar mutations GraphQL en Linear"
+    }
+  ],
+  "author": "asteby",
+  "license": "MIT"
+}

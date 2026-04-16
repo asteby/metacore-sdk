@@ -1,0 +1,127 @@
+{
+  "key": "github",
+  "name": "GitHub",
+  "description": "Gestiona issues y comentarios en repositorios de GitHub desde conversaciones.",
+  "version": "1.0.0",
+  "category": "dev",
+  "icon": "github",
+  "icon_type": "brand",
+  "icon_slug": "github",
+  "icon_color": "181717",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "settings": [
+    {
+      "key": "github_token",
+      "label": "Personal Access Token",
+      "type": "password",
+      "secret": true
+    },
+    {
+      "key": "github_repo",
+      "label": "Repositorio (owner/repo)",
+      "type": "string"
+    }
+  ],
+  "tools": [
+    {
+      "id": "create_issue",
+      "name": "Crear Issue",
+      "description": "Abre un nuevo issue en el repositorio.",
+      "input_schema": [
+        {
+          "name": "github_repo",
+          "type": "string",
+          "description": "Repositorio destino (owner/repo). Por default usa el configurado en settings.",
+          "required": true,
+          "extraction_hint": "owner/repo mencionado por el usuario o el configurado"
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "description": "Título del issue",
+          "required": true,
+          "example": "Login falla con OAuth",
+          "extraction_hint": "Resumen del problema reportado"
+        },
+        {
+          "name": "body",
+          "type": "string",
+          "description": "Descripción detallada",
+          "required": true,
+          "extraction_hint": "Pasos para reproducir, contexto del usuario"
+        },
+        {
+          "name": "labels",
+          "type": "string",
+          "description": "Etiquetas separadas por coma",
+          "example": "bug,urgent"
+        }
+      ],
+      "endpoint": "https://api.github.com/repos/{{github_repo}}/issues",
+      "method": "POST",
+      "auto_create_record": "ticket"
+    },
+    {
+      "id": "add_comment",
+      "name": "Agregar Comentario",
+      "description": "Agrega un comentario a un issue existente.",
+      "input_schema": [
+        {
+          "name": "github_repo",
+          "type": "string",
+          "description": "Repositorio destino (owner/repo).",
+          "required": true
+        },
+        {
+          "name": "issue_number",
+          "type": "number",
+          "description": "Número del issue",
+          "required": true
+        },
+        {
+          "name": "comment",
+          "type": "string",
+          "description": "Texto del comentario",
+          "required": true
+        }
+      ],
+      "endpoint": "https://api.github.com/repos/{{github_repo}}/issues/{{issue_number}}/comments",
+      "method": "POST"
+    },
+    {
+      "id": "close_issue",
+      "name": "Cerrar Issue",
+      "description": "Cierra un issue existente.",
+      "input_schema": [
+        {
+          "name": "github_repo",
+          "type": "string",
+          "description": "Repositorio destino (owner/repo).",
+          "required": true
+        },
+        {
+          "name": "issue_number",
+          "type": "number",
+          "description": "Número del issue a cerrar",
+          "required": true
+        }
+      ],
+      "endpoint": "https://api.github.com/repos/{{github_repo}}/issues/{{issue_number}}",
+      "method": "PATCH"
+    }
+  ],
+  "events": [],
+  "backend": {
+    "runtime": "webhook"
+  },
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "api.github.com",
+      "reason": "Crear y modificar issues/comentarios en GitHub"
+    }
+  ],
+  "author": "asteby",
+  "license": "MIT"
+}

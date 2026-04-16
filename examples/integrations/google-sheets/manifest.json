@@ -1,0 +1,89 @@
+{
+  "key": "google_sheets",
+  "name": "Google Sheets",
+  "description": "Registra datos en hojas de cálculo de Google Sheets desde conversaciones.",
+  "version": "1.0.0",
+  "category": "productivity",
+  "icon": "googlesheets",
+  "icon_type": "brand",
+  "icon_slug": "googlesheets",
+  "icon_color": "34A853",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "settings": [
+    {
+      "key": "gsheets_token",
+      "label": "OAuth Access Token",
+      "type": "password",
+      "secret": true
+    },
+    {
+      "key": "gsheets_spreadsheet_id",
+      "label": "ID de la hoja",
+      "type": "string"
+    },
+    {
+      "key": "gsheets_sheet_name",
+      "label": "Nombre de la pestaña",
+      "type": "string"
+    }
+  ],
+  "tools": [
+    {
+      "id": "append_row",
+      "name": "Agregar Fila",
+      "description": "Agrega una fila con datos al final de la hoja de cálculo.",
+      "input_schema": [
+        {
+          "name": "gsheets_spreadsheet_id",
+          "type": "string",
+          "description": "ID del spreadsheet (default = settings)",
+          "required": true
+        },
+        {
+          "name": "gsheets_sheet_name",
+          "type": "string",
+          "description": "Pestaña destino (default = settings)",
+          "required": true
+        },
+        {
+          "name": "col1",
+          "type": "string",
+          "description": "Valor para columna A",
+          "required": true,
+          "extraction_hint": "Primer dato a registrar"
+        },
+        {
+          "name": "col2",
+          "type": "string",
+          "description": "Valor para columna B"
+        },
+        {
+          "name": "col3",
+          "type": "string",
+          "description": "Valor para columna C"
+        },
+        {
+          "name": "col4",
+          "type": "string",
+          "description": "Valor para columna D"
+        }
+      ],
+      "endpoint": "https://sheets.googleapis.com/v4/spreadsheets/{{gsheets_spreadsheet_id}}/values/{{gsheets_sheet_name}}!A1:append?valueInputOption=USER_ENTERED",
+      "method": "POST"
+    }
+  ],
+  "events": [],
+  "backend": {
+    "runtime": "webhook"
+  },
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "*.googleapis.com",
+      "reason": "Escribir filas en Google Sheets API"
+    }
+  ],
+  "author": "asteby",
+  "license": "MIT"
+}

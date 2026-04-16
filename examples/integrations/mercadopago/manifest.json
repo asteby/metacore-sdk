@@ -1,0 +1,74 @@
+{
+  "key": "mercadopago",
+  "name": "MercadoPago",
+  "description": "Consulta cobros y genera links de pago con MercadoPago. Ideal para LATAM.",
+  "version": "1.0.0",
+  "category": "payments",
+  "icon": "https://www.google.com/s2/favicons?domain=mercadopago.com&sz=128",
+  "icon_type": "url",
+  "icon_slug": "https://www.google.com/s2/favicons?domain=mercadopago.com&sz=128",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "settings": [
+    {
+      "key": "mercadopago_access_token",
+      "label": "Access Token",
+      "type": "password",
+      "secret": true
+    }
+  ],
+  "tools": [
+    {
+      "id": "get_payment",
+      "name": "Consultar Pago",
+      "description": "Consulta el estado de un pago en MercadoPago.",
+      "input_schema": [
+        {
+          "name": "payment_id",
+          "type": "string",
+          "description": "ID del pago",
+          "required": true,
+          "extraction_hint": "Número o ID del pago de MercadoPago"
+        }
+      ],
+      "endpoint": "https://api.mercadopago.com/v1/payments/{{payment_id}}",
+      "method": "GET"
+    },
+    {
+      "id": "create_payment_link",
+      "name": "Crear Link de Pago",
+      "description": "Genera un link de checkout para cobrar un monto.",
+      "input_schema": [
+        {
+          "name": "title",
+          "type": "string",
+          "description": "Concepto del cobro",
+          "required": true,
+          "extraction_hint": "Producto o servicio a cobrar"
+        },
+        {
+          "name": "amount",
+          "type": "number",
+          "description": "Monto en pesos (ej: 500.00)",
+          "required": true,
+          "extraction_hint": "Cantidad a cobrar"
+        }
+      ],
+      "endpoint": "https://api.mercadopago.com/checkout/preferences",
+      "method": "POST"
+    }
+  ],
+  "events": [],
+  "backend": {
+    "runtime": "webhook"
+  },
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "*.mercadopago.com",
+      "reason": "Llamadas a la API de MercadoPago"
+    }
+  ],
+  "author": "asteby",
+  "license": "MIT"
+}

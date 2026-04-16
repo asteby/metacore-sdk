@@ -1,0 +1,68 @@
+{
+  "key": "jina_reader",
+  "name": "Lector de Páginas Web (Jina)",
+  "description": "Extrae el contenido legible de cualquier URL: artículos, documentación, páginas de producto. Sin API key requerida.",
+  "version": "1.0.0",
+  "category": "research",
+  "icon": "https://www.google.com/s2/favicons?domain=jina.ai&sz=128",
+  "icon_type": "url",
+  "icon_slug": "https://www.google.com/s2/favicons?domain=jina.ai&sz=128",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "backend": {
+    "runtime": "webhook"
+  },
+  "tools": [
+    {
+      "id": "read_url",
+      "name": "Leer URL",
+      "description": "Obtiene el contenido en texto plano de una página web. Útil para resumir artículos, documentación o páginas de producto.",
+      "category": "query",
+      "input_schema": [
+        {
+          "name": "url",
+          "type": "string",
+          "description": "URL completa de la página a leer",
+          "required": true,
+          "example": "https://docs.github.com/en/issues",
+          "extraction_hint": "URL mencionada por el usuario o inferida del contexto"
+        }
+      ],
+      "endpoint": "https://r.jina.ai/{{url}}",
+      "method": "GET"
+    },
+    {
+      "id": "search_web",
+      "name": "Buscar en la Web (Jina)",
+      "description": "Realiza una búsqueda web vía Jina Search y devuelve los resultados como texto plano listo para LLM.",
+      "category": "query",
+      "input_schema": [
+        {
+          "name": "query",
+          "type": "string",
+          "description": "Consulta de búsqueda",
+          "required": true,
+          "example": "últimas noticias IA",
+          "extraction_hint": "Lo que el usuario quiere buscar"
+        }
+      ],
+      "endpoint": "https://s.jina.ai/{{query}}",
+      "method": "GET"
+    }
+  ],
+  "events": [],
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "r.jina.ai",
+      "reason": "Extracción de contenido de URLs vía Jina Reader"
+    },
+    {
+      "kind": "http:fetch",
+      "target": "s.jina.ai",
+      "reason": "Búsqueda web vía Jina Search"
+    }
+  ],
+  "author": "asteby",
+  "license": "MIT"
+}

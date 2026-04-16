@@ -1,0 +1,220 @@
+{
+  "key": "orders_native",
+  "name": "Pedidos (nativo)",
+  "description": "Gestión de pedidos respaldada por el pipeline nativo de link.",
+  "version": "1.0.0",
+  "category": "productivity",
+  "icon": "Sparkles",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "author": "asteby",
+  "license": "MIT",
+  "tools": [
+    {
+      "id": "create-order",
+      "name": "Crear Pedido",
+      "description": "Registra un pedido de venta a partir de la conversación con el cliente.",
+      "category": "action",
+      "endpoint": "http://link-backend:8080/api/_mc/native/orders_native/create-order",
+      "method": "POST",
+      "trigger_keywords": [],
+      "trigger_intents": [],
+      "input_schema": [
+        {
+          "name": "title",
+          "type": "string",
+          "example": "Pedido WhatsApp Juan",
+          "required": true,
+          "description": "Título corto del pedido (ej: 'Pedido 2 pizzas + refresco')",
+          "extraction_hint": "Resumen breve del pedido"
+        },
+        {
+          "name": "items",
+          "type": "string",
+          "required": true,
+          "description": "Lista de artículos en formato JSON: [{\"product_name\":\"...\",\"quantity\":1,\"unit_price\":0}]. Los precios se completan automáticamente desde el catálogo. Si faltan productos, pregunta al cliente.",
+          "extraction_hint": "Productos mencionados con cantidad y precio"
+        },
+        {
+          "name": "payment_method",
+          "type": "string",
+          "required": true,
+          "description": "Método de pago confirmado por el cliente: 'cash' (efectivo), 'card' (tarjeta), 'transfer' (transferencia). Si no lo sabes, pregunta antes de crear el pedido.",
+          "extraction_hint": "El cliente debe haber indicado cómo va a pagar"
+        },
+        {
+          "name": "delivery_type",
+          "type": "string",
+          "required": true,
+          "description": "Tipo de entrega confirmado: 'pickup' (recoger en tienda) o 'delivery' (entrega a domicilio). SIEMPRE pregunta al cliente antes de crear el pedido.",
+          "extraction_hint": "Si el cliente quiere que se lo lleven es 'delivery', si pasa a recoger es 'pickup'"
+        },
+        {
+          "name": "shipping_address",
+          "type": "string",
+          "required": false,
+          "description": "Dirección de entrega completa (calle, número, colonia, ciudad, CP). OBLIGATORIA cuando delivery_type='delivery'. Si falta, pregunta al cliente antes de crear el pedido.",
+          "extraction_hint": "La dirección física donde el cliente quiere recibir su pedido"
+        },
+        {
+          "name": "shipping_cost",
+          "type": "number",
+          "required": false,
+          "description": "Costo de envío a domicilio. Se suma al total automáticamente."
+        },
+        {
+          "name": "total",
+          "type": "number",
+          "required": false,
+          "description": "Monto total del pedido (sin envío). Se calcula automáticamente desde items."
+        },
+        {
+          "name": "currency",
+          "type": "string",
+          "required": false,
+          "description": "Código de moneda ISO. Si no se indica, se usa la moneda configurada en la organización."
+        },
+        {
+          "name": "description",
+          "type": "string",
+          "required": false,
+          "description": "Notas o detalles adicionales del pedido"
+        },
+        {
+          "name": "tags",
+          "type": "string",
+          "required": false,
+          "description": "Etiquetas separadas por coma"
+        }
+      ],
+      "auto_create_record": "order",
+      "timeout": 20
+    },
+    {
+      "id": "list-orders",
+      "name": "Ver Pedidos",
+      "description": "Consulta los pedidos del cliente actual con filtros opcionales.",
+      "category": "action",
+      "endpoint": "http://link-backend:8080/api/_mc/native/orders_native/list-orders",
+      "method": "POST",
+      "trigger_keywords": [],
+      "trigger_intents": [],
+      "input_schema": [
+        {
+          "name": "status",
+          "type": "string",
+          "required": false,
+          "description": "Filtrar por estado: pending, paid, fulfilled, partially_fulfilled, refunded, cancelled"
+        },
+        {
+          "name": "payment_status",
+          "type": "string",
+          "required": false,
+          "description": "Filtrar por estado de pago: pending, paid, refunded, failed"
+        },
+        {
+          "name": "scope",
+          "type": "string",
+          "required": false,
+          "description": "Alcance: 'conversation' para solo esta conversación, vacío para todos los del contacto"
+        },
+        {
+          "name": "search",
+          "type": "string",
+          "required": false,
+          "description": "Buscar por texto en título, descripción o número de pedido"
+        },
+        {
+          "name": "limit",
+          "type": "number",
+          "required": false,
+          "description": "Máximo de resultados (default 10, max 50)"
+        }
+      ],
+      "auto_create_record": "",
+      "timeout": 20
+    },
+    {
+      "id": "update-order",
+      "name": "Actualizar Pedido",
+      "description": "Actualiza el estado, pago o información de envío de un pedido existente.",
+      "category": "action",
+      "endpoint": "http://link-backend:8080/api/_mc/native/orders_native/update-order",
+      "method": "POST",
+      "trigger_keywords": [],
+      "trigger_intents": [],
+      "input_schema": [
+        {
+          "name": "order_id",
+          "type": "string",
+          "required": true,
+          "description": "ID o número del pedido (ej: OR-100)",
+          "extraction_hint": "Número o identificador del pedido a actualizar"
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "required": false,
+          "description": "Nuevo estado: pending, paid, fulfilled, partially_fulfilled, refunded, cancelled"
+        },
+        {
+          "name": "payment_status",
+          "type": "string",
+          "required": false,
+          "description": "Nuevo estado de pago"
+        },
+        {
+          "name": "tracking_number",
+          "type": "string",
+          "required": false,
+          "description": "Número de seguimiento del envío"
+        },
+        {
+          "name": "carrier",
+          "type": "string",
+          "required": false,
+          "description": "Empresa de envío (DHL, FedEx, etc.)"
+        },
+        {
+          "name": "comment",
+          "type": "string",
+          "required": false,
+          "description": "Comentario adicional"
+        }
+      ],
+      "auto_create_record": "",
+      "timeout": 20
+    },
+    {
+      "id": "close-order",
+      "name": "Cancelar Pedido",
+      "description": "Cancela un pedido existente.",
+      "category": "action",
+      "endpoint": "http://link-backend:8080/api/_mc/native/orders_native/close-order",
+      "method": "POST",
+      "trigger_keywords": [],
+      "trigger_intents": [],
+      "input_schema": [
+        {
+          "name": "order_id",
+          "type": "string",
+          "required": true,
+          "description": "ID o número del pedido a cancelar (ej: OR-100)",
+          "extraction_hint": "Número o identificador del pedido"
+        },
+        {
+          "name": "reason",
+          "type": "string",
+          "required": false,
+          "description": "Motivo de la cancelación",
+          "extraction_hint": "Razón por la que el cliente cancela"
+        }
+      ],
+      "auto_create_record": "",
+      "timeout": 20
+    }
+  ],
+  "icon_type": "lucide",
+  "icon_slug": "ShoppingCart",
+  "icon_color": ""
+}

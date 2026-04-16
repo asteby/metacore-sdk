@@ -1,0 +1,47 @@
+name: Feature request
+description: Suggest an enhancement to the SDK, CLI, or manifest spec.
+title: "feat: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For manifest or ABI changes, please read `CONTRIBUTING.md` — contract
+        changes go through an RFC discussion first.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the user-facing problem, not the solution.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Rough sketch of API, CLI flag, or manifest field.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Affected surface
+      multiple: true
+      options:
+        - CLI
+        - Manifest schema
+        - WASM ABI
+        - Go SDK (pkg/)
+        - TS SDK (packages/)
+        - Documentation
+        - Examples
+    validations:
+      required: true

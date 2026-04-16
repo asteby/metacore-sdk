@@ -1,0 +1,72 @@
+{
+  "key": "whatsapp_outbound",
+  "name": "WhatsApp — Envío Externo",
+  "description": "El agente envía mensajes a otros números y gestiona contactos usando el dispositivo de la conversación activa.",
+  "version": "1.0.0",
+  "category": "communication",
+  "icon": "whatsapp",
+  "icon_type": "brand",
+  "icon_slug": "whatsapp",
+  "icon_color": "25D366",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "author": "asteby",
+  "license": "MIT",
+  "tools": [
+    {
+      "id": "send_whatsapp",
+      "name": "Enviar Mensaje",
+      "description": "Envía un mensaje de WhatsApp a cualquier número usando el dispositivo de la conversación activa.",
+      "category": "communication",
+      "input_schema": [
+        {
+          "name": "phone",
+          "type": "phone",
+          "description": "Número destino con código de país",
+          "required": true,
+          "example": "573053396459",
+          "extraction_hint": "Número al que notificar, puede estar predefinido en las instrucciones"
+        },
+        {
+          "name": "message",
+          "type": "string",
+          "description": "Texto del mensaje a enviar",
+          "required": true
+        }
+      ],
+      "endpoint": "https://graph.facebook.com/v20.0/me/messages",
+      "method": "POST"
+    },
+    {
+      "id": "list_contacts",
+      "name": "Listar Contactos",
+      "description": "Consulta contactos existentes en la organización para obtener nombres, teléfonos y emails.",
+      "category": "query",
+      "input_schema": [
+        {
+          "name": "search",
+          "type": "string",
+          "description": "Buscar por nombre, teléfono o email"
+        },
+        {
+          "name": "limit",
+          "type": "number",
+          "description": "Máximo de resultados (default 20, max 50)"
+        }
+      ],
+      "endpoint": "https://graph.facebook.com/v20.0/me/contacts",
+      "method": "GET"
+    }
+  ],
+  "events": [],
+  "backend": {
+    "runtime": "webhook"
+  },
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "graph.facebook.com",
+      "reason": "Meta WhatsApp Cloud API (Graph)"
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "key": "telegram",
+  "name": "Telegram",
+  "description": "Envía mensajes a grupos o chats de Telegram vía Bot API.",
+  "version": "1.0.0",
+  "category": "communication",
+  "icon": "telegram",
+  "icon_type": "brand",
+  "icon_slug": "telegram",
+  "icon_color": "26A5E4",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "author": "asteby",
+  "license": "MIT",
+  "settings": [
+    {
+      "key": "telegram_bot_token",
+      "label": "Bot Token",
+      "type": "password",
+      "secret": true
+    },
+    {
+      "key": "telegram_chat_id",
+      "label": "Chat ID",
+      "type": "string"
+    }
+  ],
+  "tools": [
+    {
+      "id": "send_message",
+      "name": "Enviar Mensaje",
+      "description": "Envía un mensaje de texto a un chat de Telegram.",
+      "category": "communication",
+      "input_schema": [
+        {
+          "name": "telegram_bot_token",
+          "type": "string",
+          "description": "Bot token de Telegram (provisto por settings)",
+          "required": true
+        },
+        {
+          "name": "message",
+          "type": "string",
+          "description": "Texto del mensaje a enviar",
+          "required": true,
+          "extraction_hint": "Contenido del mensaje o notificación"
+        }
+      ],
+      "endpoint": "https://api.telegram.org/bot{{telegram_bot_token}}/sendMessage",
+      "method": "POST"
+    }
+  ],
+  "events": [],
+  "backend": {
+    "runtime": "webhook"
+  },
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "api.telegram.org",
+      "reason": "Bot API de Telegram"
+    }
+  ]
+}

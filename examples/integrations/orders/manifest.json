@@ -1,0 +1,173 @@
+{
+  "key": "orders",
+  "name": "Pedidos",
+  "description": "Registra y gestiona pedidos de venta directamente en Link. Incluye modals para cumplir y cancelar pedidos, y tools LLM para crear/consultar.",
+  "version": "1.0.0",
+  "category": "productivity",
+  "icon": "ShoppingCart",
+  "icon_type": "lucide",
+  "icon_slug": "ShoppingCart",
+  "icon_color": "10B981",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "schema-per-tenant",
+
+  "author": "Asteby",
+  "website": "https://asteby.com",
+  "license": "MIT",
+  "price": "free",
+
+  "features": [
+    "Gestión de pedidos (crear, consultar, cumplir, cancelar)",
+    "Modals compilados para fulfillment y cancelación",
+    "Herramientas LLM para agentes conversacionales"
+  ],
+
+  "navigation": [{
+    "title": "addons.orders.sidebar.orders",
+    "icon": "ShoppingCart",
+    "target": "sidebar.operations",
+    "items": [{
+      "title": "addons.orders.sidebar.orders",
+      "url": "/m/orders",
+      "icon": "ShoppingCart",
+      "model": "orders"
+    }]
+  }],
+
+  "model_definitions": [{
+    "table_name": "orders",
+    "model_key": "orders",
+    "label": "Pedidos",
+    "org_scoped": true,
+    "soft_delete": true,
+    "columns": [
+      { "name": "customer_id",      "type": "uuid",    "index": true },
+      { "name": "status",           "type": "string",  "size": 24, "required": true, "default": "'pending'", "index": true },
+      { "name": "payment_status",   "type": "string",  "size": 24, "default": "'pending'", "index": true },
+      { "name": "total",            "type": "decimal", "required": true, "default": 0 },
+      { "name": "shipping_cost",    "type": "decimal", "default": 0 },
+      { "name": "currency",         "type": "string",  "size": 3, "default": "'MXN'" },
+      { "name": "delivery_type",    "type": "string",  "size": 16, "default": "'pickup'" },
+      { "name": "shipping_address", "type": "string",  "size": 512 },
+      { "name": "tracking_number",  "type": "string",  "size": 128 },
+      { "name": "carrier",          "type": "string",  "size": 64 },
+      { "name": "fulfilled_at",     "type": "timestamp" },
+      { "name": "cancelled_at",     "type": "timestamp" },
+      { "name": "cancel_reason",    "type": "string",  "size": 255 },
+      { "name": "items",            "type": "jsonb" },
+      { "name": "notes",            "type": "text" }
+    ]
+  }],
+
+  "actions": {
+    "orders": [
+      {
+        "key": "fulfill",
+        "name": "Cumplir",
+        "label": "addons.orders.actions.fulfill",
+        "icon": "Truck",
+        "color": "green",
+        "modal": "orders.fulfill",
+        "requiresState": ["pending", "paid"],
+        "fields": [
+          { "name": "tracking_number", "label": "Número de seguimiento", "type": "text", "required": true },
+          { "name": "carrier",         "label": "Empresa de envío",      "type": "select", "required": true,
+            "options": [
+              { "value": "DHL",    "label": "DHL" },
+              { "value": "FedEx",  "label": "FedEx" },
+              { "value": "UPS",    "label": "UPS" },
+              { "value": "Estafeta","label": "Estafeta" },
+              { "value": "other",  "label": "Otro" }
+            ]
+          },
+          { "name": "notes", "label": "Notas", "type": "text" }
+        ]
+      },
+      {
+        "key": "cancel",
+        "name": "Cancelar",
+        "label": "addons.orders.actions.cancel",
+        "icon": "X",
+        "color": "red",
+        "modal": "orders.cancel",
+        "requiresState": ["pending", "paid"],
+        "fields": [
+          { "name": "reason", "label": "Motivo", "type": "text", "required": true }
+        ]
+      }
+    ]
+  },
+
+  "tools": [
+    {
+      "id": "create_order",
+      "name": "Crear pedido",
+      "description": "Crea un pedido de venta a partir de la conversación con el cliente.",
+      "category": "action",
+      "endpoint": "/webhooks/create_order",
+      "method": "POST",
+      "timeout": 15,
+      "trigger_keywords": ["crear pedido", "nuevo pedido", "registrar pedido"],
+      "trigger_intents": ["orders.order.create"],
+      "input_schema": [
+        { "name": "customer_id",   "type": "string", "required": true, "description": "UUID del cliente" },
+        { "name": "items",         "type": "string", "required": true, "description": "JSON con items [{product_id,quantity,unit_price}]" },
+        { "name": "total",         "type": "number", "required": true },
+        { "name": "delivery_type", "type": "string", "required": false, "default_value": "pickup" },
+        { "name": "shipping_address","type": "string", "required": false }
+      ]
+    },
+    {
+      "id": "get_order",
+      "name": "Consultar pedido",
+      "description": "Obtiene los detalles de un pedido por id.",
+      "category": "query",
+      "endpoint": "/webhooks/get_order",
+      "method": "POST",
+      "timeout": 10,
+      "trigger_keywords": ["ver pedido", "detalle pedido", "estado pedido"],
+      "trigger_intents": ["orders.order.get"],
+      "input_schema": [
+        { "name": "order_id", "type": "string", "required": true, "description": "UUID del pedido" }
+      ]
+    }
+  ],
+
+  "events": ["orders.order.fulfilled", "orders.order.cancelled", "orders.order.created"],
+
+  "backend": {
+    "runtime": "wasm",
+    "entry": "backend/backend.wasm",
+    "exports": ["fulfill", "cancel", "create_order", "get_order"],
+    "memory_limit_mb": 64,
+    "timeout_ms": 10000
+  },
+
+  "capabilities": [
+    { "kind": "event:emit", "target": "orders.*", "reason": "Notificar eventos de pedidos" }
+  ],
+
+  "settings": [
+    { "key": "default_currency", "label": "Moneda por defecto", "type": "text", "default_value": "MXN" }
+  ],
+
+  "i18n": {
+    "es": {
+      "addons.orders.sidebar.orders": "Pedidos",
+      "addons.orders.actions.fulfill": "Cumplir pedido",
+      "addons.orders.actions.cancel": "Cancelar pedido"
+    },
+    "en": {
+      "addons.orders.sidebar.orders": "Orders",
+      "addons.orders.actions.fulfill": "Fulfill order",
+      "addons.orders.actions.cancel": "Cancel order"
+    }
+  },
+
+  "frontend": {
+    "entry": "/api/metacore/addons/orders/frontend/remoteEntry.js",
+    "format": "federation",
+    "expose": "./plugin",
+    "container": "metacore_orders"
+  }
+}

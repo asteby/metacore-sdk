@@ -1,0 +1,85 @@
+{
+  "key": "schedules_native",
+  "name": "Agendas (nativo)",
+  "description": "Programación de citas y recordatorios.",
+  "version": "1.0.0",
+  "category": "productivity",
+  "icon": "Sparkles",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "author": "asteby",
+  "license": "MIT",
+  "tools": [
+    {
+      "id": "create-schedule",
+      "name": "Agendar Cita",
+      "description": "Crea una cita o evento en la agenda.",
+      "category": "action",
+      "endpoint": "http://link-backend:8080/api/_mc/native/schedules_native/create-schedule",
+      "method": "POST",
+      "trigger_keywords": [],
+      "trigger_intents": [],
+      "input_schema": [
+        {
+          "name": "title",
+          "type": "string",
+          "example": "Cita con Dr. García",
+          "required": true,
+          "description": "Título del evento",
+          "extraction_hint": "Nombre o motivo del evento mencionado"
+        },
+        {
+          "name": "start_at",
+          "type": "string",
+          "example": "2026-03-15T10:00:00-06:00",
+          "required": true,
+          "description": "Fecha y hora de inicio en ISO 8601",
+          "extraction_hint": "Interpreta fechas relativas como 'mañana a las 3pm', 'el lunes', 'en 2 horas'"
+        },
+        {
+          "name": "end_at",
+          "type": "string",
+          "required": false,
+          "description": "Fecha y hora de fin. Si no se especifica, se asume 1 hora después."
+        },
+        {
+          "name": "location",
+          "type": "string",
+          "required": false,
+          "description": "Lugar del evento (dirección, link de videollamada, oficina, etc.)"
+        },
+        {
+          "name": "description",
+          "type": "string",
+          "required": false,
+          "description": "Notas o detalles adicionales del evento"
+        },
+        {
+          "name": "category",
+          "type": "string",
+          "required": false,
+          "description": "Tipo: appointment, meeting, followup, demo, consultation, other",
+          "default_value": "appointment"
+        }
+      ],
+      "auto_create_record": "schedule",
+      "timeout": 20
+    },
+    {
+      "id": "list-schedules",
+      "name": "Ver Agenda",
+      "description": "Consulta las próximas citas y eventos del contacto.",
+      "category": "action",
+      "endpoint": "http://link-backend:8080/api/_mc/native/schedules_native/list-schedules",
+      "method": "POST",
+      "trigger_keywords": [],
+      "trigger_intents": [],
+      "input_schema": [],
+      "auto_create_record": "",
+      "timeout": 20
+    }
+  ],
+  "icon_type": "lucide",
+  "icon_slug": "Calendar",
+  "icon_color": ""
+}

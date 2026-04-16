@@ -1,0 +1,119 @@
+{
+  "key": "order_generation",
+  "name": "Order Generation",
+  "description": "Genera pedidos desde conversaciones de IA. Aislado por org vía schema-per-tenant.",
+  "version": "1.0.0",
+  "category": "commerce",
+  "icon": "ShoppingCart",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "schema-per-tenant",
+
+  "author": "asteby",
+  "license": "MIT",
+  "features": [
+    "Crear pedidos desde chat con extracción automática de parámetros",
+    "Listado y cancelación por número de orden",
+    "Aislamiento físico por org — schema propio por instalación"
+  ],
+
+  "navigation": [
+    {
+      "title": "sidebar.orders.group",
+      "icon": "ShoppingCart",
+      "target": "sidebar.operations",
+      "items": [
+        { "title": "sidebar.orders.list", "url": "/m/orders", "icon": "ListOrdered", "model": "orders" }
+      ]
+    }
+  ],
+
+  "model_definitions": [
+    {
+      "table_name": "orders",
+      "model_key": "orders",
+      "label": "Pedidos",
+      "soft_delete": true,
+      "columns": [
+        { "name": "order_number", "type": "string", "size": 32, "required": true, "unique": true },
+        { "name": "customer_phone", "type": "string", "size": 32, "index": true },
+        { "name": "customer_name", "type": "string", "size": 255 },
+        { "name": "total_amount", "type": "decimal", "required": true, "default": "0" },
+        { "name": "status", "type": "string", "size": 20, "required": true, "default": "'pending'", "index": true },
+        { "name": "channel", "type": "string", "size": 20, "default": "'whatsapp'" },
+        { "name": "metadata", "type": "jsonb" }
+      ]
+    },
+    {
+      "table_name": "order_items",
+      "model_key": "order_items",
+      "label": "Items del pedido",
+      "columns": [
+        { "name": "order_id", "type": "uuid", "required": true, "index": true },
+        { "name": "product_sku", "type": "string", "size": 64, "required": true, "index": true },
+        { "name": "product_name", "type": "string", "size": 255, "required": true },
+        { "name": "quantity", "type": "decimal", "required": true, "default": "1" },
+        { "name": "unit_price", "type": "decimal", "required": true, "default": "0" }
+      ]
+    }
+  ],
+
+  "tools": [
+    {
+      "id": "create_order",
+      "name": "Crear pedido",
+      "description": "Crea un pedido nuevo con uno o más productos. Usa esta herramienta cuando el cliente exprese intención de comprar u ordenar productos.",
+      "category": "action",
+      "endpoint": "http://localhost:7200/webhooks/create_order",
+      "method": "POST",
+      "auto_create_record": "order",
+      "trigger_keywords": ["pedido", "ordenar", "comprar", "quiero", "necesito"],
+      "trigger_intents": ["order.create"],
+      "timeout": 20,
+      "input_schema": [
+        { "name": "customer_phone", "type": "phone", "required": true, "description": "Teléfono del cliente", "extraction_hint": "Número del remitente de WhatsApp" },
+        { "name": "customer_name", "type": "string", "description": "Nombre del cliente", "extraction_hint": "Nombre del contacto si está disponible" },
+        { "name": "product_sku", "type": "string", "required": true, "description": "SKU del producto solicitado", "normalize": "uppercase" },
+        { "name": "quantity", "type": "number", "required": true, "description": "Cantidad solicitada", "default_value": "1" }
+      ]
+    },
+    {
+      "id": "list_orders",
+      "name": "Listar pedidos",
+      "description": "Muestra los pedidos recientes del cliente identificado por su teléfono.",
+      "category": "query",
+      "endpoint": "http://localhost:7200/webhooks/list_orders",
+      "method": "POST",
+      "cache_ttl": 30,
+      "trigger_keywords": ["mis pedidos", "historial", "qué pedí"],
+      "trigger_intents": ["order.list"],
+      "input_schema": [
+        { "name": "customer_phone", "type": "phone", "required": true, "description": "Teléfono del cliente" }
+      ]
+    },
+    {
+      "id": "cancel_order",
+      "name": "Cancelar pedido",
+      "description": "Cancela un pedido por su número si aún no ha sido enviado.",
+      "category": "action",
+      "endpoint": "http://localhost:7200/webhooks/cancel_order",
+      "method": "POST",
+      "trigger_keywords": ["cancelar", "anular"],
+      "trigger_intents": ["order.cancel"],
+      "input_schema": [
+        { "name": "order_number", "type": "string", "required": true, "description": "Número del pedido a cancelar", "format_pattern": "ORD-XXXXXX" }
+      ]
+    }
+  ],
+
+  "events": ["order.created", "order.cancelled", "order.fulfilled"],
+
+  "capabilities": [
+    { "kind": "event:emit", "target": "order.*", "reason": "Notificar creación y cambios de estado de pedidos" },
+    { "kind": "http:fetch", "target": "api.stripe.com", "reason": "Procesar cobros opcionales" }
+  ],
+
+  "settings": [
+    { "key": "order_prefix", "label": "Prefijo de pedido", "type": "text", "default_value": "ORD" },
+    { "key": "starting_number", "label": "Número inicial", "type": "number", "default_value": 1000 }
+  ]
+}

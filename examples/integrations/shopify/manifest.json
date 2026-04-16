@@ -1,0 +1,77 @@
+{
+  "key": "shopify",
+  "name": "Shopify",
+  "description": "Consulta pedidos y productos de tu tienda Shopify.",
+  "version": "1.0.0",
+  "category": "crm",
+  "icon": "shopify",
+  "icon_type": "brand",
+  "icon_slug": "shopify",
+  "icon_color": "7AB55C",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "settings": [
+    {
+      "key": "shopify_store",
+      "label": "Nombre de la tienda",
+      "type": "string"
+    },
+    {
+      "key": "shopify_access_token",
+      "label": "Access Token",
+      "type": "password",
+      "secret": true
+    }
+  ],
+  "tools": [
+    {
+      "id": "search_orders",
+      "name": "Buscar Pedidos",
+      "description": "Busca pedidos por número de orden en Shopify.",
+      "input_schema": [
+        {
+          "name": "order_number",
+          "type": "string",
+          "description": "Número del pedido (ej: 1001, #1001)",
+          "required": true,
+          "extraction_hint": "Número de orden mencionado por el cliente"
+        }
+      ],
+      "endpoint": "https://{{shopify_store}}.myshopify.com/admin/api/2024-10/orders.json?name={{order_number}}&status=any",
+      "method": "GET"
+    },
+    {
+      "id": "get_product",
+      "name": "Ver Producto",
+      "description": "Obtiene información detallada de un producto por su ID.",
+      "input_schema": [
+        {
+          "name": "product_id",
+          "type": "string",
+          "description": "ID del producto en Shopify",
+          "required": true
+        }
+      ],
+      "endpoint": "https://{{shopify_store}}.myshopify.com/admin/api/2024-10/products/{{product_id}}.json",
+      "method": "GET"
+    }
+  ],
+  "events": [],
+  "backend": {
+    "runtime": "webhook"
+  },
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "*.myshopify.com",
+      "reason": "Admin API de la tienda del cliente"
+    },
+    {
+      "kind": "http:fetch",
+      "target": "*.shopify.com",
+      "reason": "Endpoints auxiliares de Shopify"
+    }
+  ],
+  "author": "asteby",
+  "license": "MIT"
+}

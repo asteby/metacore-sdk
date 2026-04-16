@@ -1,0 +1,136 @@
+{
+  "key": "tickets",
+  "name": "Tickets & Pedidos",
+  "description": "Sistema de tickets y pedidos con estados, prioridades y asignación.",
+  "version": "1.0.0",
+  "category": "utility",
+  "icon": "TicketCheck",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+
+  "author": "asteby",
+  "license": "MIT",
+  "features": [
+    "Tickets con estados (open, in_progress, resolved, closed)",
+    "Prioridades (low, normal, high, urgent)",
+    "Asignación a usuarios y menciones",
+    "Adjuntos y comentarios threaded",
+    "Sidebar + rutas dedicadas"
+  ],
+
+  "navigation": [
+    {
+      "title": "addons.tickets.sidebar.group",
+      "icon": "TicketCheck",
+      "target": "sidebar.operations",
+      "items": [
+        {
+          "title": "addons.tickets.sidebar.tickets",
+          "url": "/m/tickets",
+          "icon": "Ticket",
+          "model": "tickets"
+        },
+        {
+          "title": "addons.tickets.sidebar.comments",
+          "url": "/m/ticket_comments",
+          "icon": "MessageCircle",
+          "model": "ticket_comments"
+        }
+      ]
+    }
+  ],
+
+  "model_definitions": [
+    {
+      "table_name": "tickets",
+      "model_key": "tickets",
+      "label": "Tickets",
+      "org_scoped": true,
+      "soft_delete": true,
+      "columns": [
+        { "name": "number", "type": "string", "size": 32, "required": true, "unique": true },
+        { "name": "title", "type": "string", "size": 255, "required": true },
+        { "name": "description", "type": "text" },
+        { "name": "status", "type": "string", "size": 20, "required": true, "default": "'open'", "index": true },
+        { "name": "priority", "type": "string", "size": 10, "required": true, "default": "'normal'", "index": true },
+        { "name": "assignee_id", "type": "uuid", "index": true },
+        { "name": "reporter_id", "type": "uuid", "required": true, "index": true },
+        { "name": "due_at", "type": "timestamp" },
+        { "name": "resolved_at", "type": "timestamp" },
+        { "name": "tags", "type": "jsonb" }
+      ]
+    },
+    {
+      "table_name": "ticket_comments",
+      "model_key": "ticket_comments",
+      "label": "Comentarios",
+      "org_scoped": true,
+      "columns": [
+        { "name": "ticket_id", "type": "uuid", "required": true, "index": true, "ref": "addon_tickets.tickets" },
+        { "name": "author_id", "type": "uuid", "required": true },
+        { "name": "body", "type": "text", "required": true },
+        { "name": "mentions", "type": "jsonb" }
+      ]
+    }
+  ],
+
+  "actions": {
+    "tickets": [
+      {
+        "key": "resolve",
+        "name": "Resolve",
+        "label": "addons.tickets.actions.resolve",
+        "icon": "CheckCircle2",
+        "confirm": true,
+        "confirmMessage": "addons.tickets.actions.resolve_confirm",
+        "requiresState": ["open", "in_progress"]
+      },
+      {
+        "key": "reassign",
+        "name": "Reassign",
+        "label": "addons.tickets.actions.reassign",
+        "icon": "UserPlus",
+        "modal": "tickets.reassign",
+        "fields": [
+          { "name": "assignee_id", "label": "Nuevo asignado", "type": "user", "required": true },
+          { "name": "note", "label": "Nota", "type": "text" }
+        ]
+      }
+    ]
+  },
+
+  "events": ["ticket.created", "ticket.resolved", "ticket.reassigned"],
+
+  "hooks": {
+    "tickets::resolve":  "http://localhost:7101/webhooks/resolve",
+    "tickets::reassign": "http://localhost:7101/webhooks/reassign"
+  },
+
+  "capabilities": [
+    { "kind": "db:read",   "target": "users",           "reason": "Mostrar nombres de asignados y autores" },
+    { "kind": "event:emit","target": "ticket.*",        "reason": "Notificar cambios de estado" },
+    { "kind": "http:fetch","target": "api.slack.com",   "reason": "Posteo opcional a Slack en resolución" }
+  ],
+
+  "settings": [
+    {
+      "key": "auto_assign_round_robin",
+      "label": "Auto-asignar round-robin",
+      "type": "boolean",
+      "default_value": false
+    },
+    {
+      "key": "slack_webhook",
+      "label": "Webhook de Slack",
+      "type": "text",
+      "secret": true
+    }
+  ],
+
+  "frontend": {
+    "entry": "/api/metacore/addons/tickets/frontend/remoteEntry.js",
+    "format": "federation",
+    "expose": "./plugin",
+    "container": "metacore_tickets"
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "key": "slack",
+  "name": "Slack",
+  "description": "Envía notificaciones a canales de Slack cuando ocurren eventos importantes.",
+  "version": "1.0.0",
+  "category": "communication",
+  "icon": "slack",
+  "icon_type": "brand",
+  "icon_slug": "slack",
+  "icon_color": "4A154B",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "author": "asteby",
+  "license": "MIT",
+  "settings": [
+    {
+      "key": "slack_webhook_url",
+      "label": "Webhook URL",
+      "type": "password",
+      "secret": true
+    }
+  ],
+  "tools": [
+    {
+      "id": "send_message",
+      "name": "Enviar Mensaje",
+      "description": "Envía un mensaje a un canal de Slack.",
+      "category": "communication",
+      "input_schema": [
+        {
+          "name": "slack_webhook_url",
+          "type": "string",
+          "description": "Webhook URL de Slack (provisto por settings)",
+          "required": true
+        },
+        {
+          "name": "message",
+          "type": "string",
+          "description": "Mensaje a enviar al canal de Slack",
+          "required": true,
+          "extraction_hint": "Contenido del mensaje o alerta"
+        }
+      ],
+      "endpoint": "{{slack_webhook_url}}",
+      "method": "POST"
+    }
+  ],
+  "events": [],
+  "backend": {
+    "runtime": "webhook"
+  },
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "slack.com",
+      "reason": "API oficial de Slack"
+    },
+    {
+      "kind": "http:fetch",
+      "target": "hooks.slack.com",
+      "reason": "Incoming webhooks de Slack"
+    }
+  ]
+}

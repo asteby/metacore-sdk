@@ -1,0 +1,33 @@
+{
+  "name": "@metacore-addons/schedules",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Agenda — metacore addon frontend.",
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "@asteby/metacore-sdk": "^2.0.0"
+  },
+  "devDependencies": {
+    "@asteby/metacore-sdk": "link:../../../../sdk",
+    "@originjs/vite-plugin-federation": "^1.3.5",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "typescript": "^5.4.0",
+    "vite": "^5.2.0"
+  },
+  "metacore": {
+    "expose": "./plugin",
+    "entry": "src/plugin.tsx",
+    "format": "federation"
+  }
+}

@@ -1,0 +1,89 @@
+{
+  "key": "woocommerce",
+  "name": "WooCommerce",
+  "description": "Consulta pedidos y gestiona tu tienda WooCommerce. Los productos se sincronizan automáticamente con búsqueda semántica.",
+  "version": "1.0.0",
+  "category": "crm",
+  "icon": "woocommerce",
+  "icon_type": "brand",
+  "icon_slug": "woocommerce",
+  "icon_color": "96588A",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "settings": [
+    {
+      "key": "wc_store_url",
+      "label": "URL de la tienda",
+      "type": "string"
+    },
+    {
+      "key": "wc_consumer_key",
+      "label": "Consumer Key",
+      "type": "password",
+      "secret": true
+    },
+    {
+      "key": "wc_consumer_secret",
+      "label": "Consumer Secret",
+      "type": "password",
+      "secret": true
+    }
+  ],
+  "tools": [
+    {
+      "id": "search_orders",
+      "name": "Buscar Pedidos",
+      "description": "Busca pedidos en WooCommerce por número de orden, nombre o email del cliente.",
+      "input_schema": [
+        {
+          "name": "query",
+          "type": "string",
+          "description": "Número de pedido, nombre o email del cliente",
+          "required": true,
+          "extraction_hint": "Identificador del pedido o datos del cliente"
+        }
+      ],
+      "endpoint": "{{wc_store_url}}/wp-json/wc/v3/orders?consumer_key={{wc_consumer_key}}&consumer_secret={{wc_consumer_secret}}&search={{query}}&per_page=5",
+      "method": "GET"
+    },
+    {
+      "id": "get_order",
+      "name": "Ver Pedido",
+      "description": "Obtiene los detalles completos de un pedido por su ID.",
+      "input_schema": [
+        {
+          "name": "order_id",
+          "type": "number",
+          "description": "ID numérico del pedido en WooCommerce",
+          "required": true,
+          "extraction_hint": "ID del pedido (no confundir con número de orden)"
+        }
+      ],
+      "endpoint": "{{wc_store_url}}/wp-json/wc/v3/orders/{{order_id}}?consumer_key={{wc_consumer_key}}&consumer_secret={{wc_consumer_secret}}",
+      "method": "GET"
+    },
+    {
+      "id": "list_products",
+      "name": "Listar Productos",
+      "description": "Lista productos de WooCommerce con búsqueda por texto. Para búsqueda inteligente usa la herramienta de búsqueda de productos integrada.",
+      "input_schema": [
+        {
+          "name": "search",
+          "type": "string",
+          "description": "Término de búsqueda",
+          "required": true,
+          "extraction_hint": "Nombre o SKU del producto"
+        }
+      ],
+      "endpoint": "{{wc_store_url}}/wp-json/wc/v3/products?consumer_key={{wc_consumer_key}}&consumer_secret={{wc_consumer_secret}}&search={{search}}&per_page=5",
+      "method": "GET"
+    }
+  ],
+  "events": [],
+  "backend": {
+    "runtime": "webhook"
+  },
+  "capabilities": [],
+  "author": "asteby",
+  "license": "MIT"
+}

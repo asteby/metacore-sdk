@@ -1,0 +1,175 @@
+{
+  "key": "schedules",
+  "name": "Agenda",
+  "description": "Agenda citas y eventos directamente en Link. Modals para confirmar, reagendar y cancelar; tools LLM para crear/listar.",
+  "version": "1.0.0",
+  "category": "productivity",
+  "icon": "CalendarCheck",
+  "icon_type": "lucide",
+  "icon_slug": "CalendarCheck",
+  "icon_color": "3B82F6",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "schema-per-tenant",
+
+  "author": "Asteby",
+  "website": "https://asteby.com",
+  "license": "MIT",
+  "price": "free",
+
+  "features": [
+    "Agenda de citas y eventos",
+    "Modals para confirmar, reagendar y cancelar",
+    "Herramientas LLM para agentes conversacionales"
+  ],
+
+  "navigation": [{
+    "title": "addons.schedules.sidebar.schedules",
+    "icon": "CalendarCheck",
+    "target": "sidebar.operations",
+    "items": [{
+      "title": "addons.schedules.sidebar.schedules",
+      "url": "/m/schedule_events",
+      "icon": "CalendarDays",
+      "model": "schedule_events"
+    }]
+  }],
+
+  "model_definitions": [{
+    "table_name": "schedule_events",
+    "model_key": "schedule_events",
+    "label": "Eventos de Agenda",
+    "org_scoped": true,
+    "soft_delete": true,
+    "columns": [
+      { "name": "contact_id",  "type": "uuid",    "index": true },
+      { "name": "title",       "type": "string",  "size": 255, "required": true },
+      { "name": "description", "type": "text" },
+      { "name": "starts_at",   "type": "timestamp", "required": true, "index": true },
+      { "name": "ends_at",     "type": "timestamp", "required": true },
+      { "name": "location",    "type": "string",  "size": 512 },
+      { "name": "category",    "type": "string",  "size": 32, "default": "'appointment'" },
+      { "name": "status",      "type": "string",  "size": 24, "required": true, "default": "'scheduled'", "index": true },
+      { "name": "confirmed_at","type": "timestamp" },
+      { "name": "cancelled_at","type": "timestamp" },
+      { "name": "cancel_reason","type": "string", "size": 255 }
+    ]
+  }],
+
+  "actions": {
+    "schedule_events": [
+      {
+        "key": "confirm",
+        "name": "Confirmar",
+        "label": "addons.schedules.actions.confirm",
+        "icon": "CheckCircle",
+        "color": "green",
+        "modal": "schedules.confirm",
+        "requiresState": ["scheduled"],
+        "fields": []
+      },
+      {
+        "key": "reschedule",
+        "name": "Reagendar",
+        "label": "addons.schedules.actions.reschedule",
+        "icon": "CalendarClock",
+        "color": "blue",
+        "modal": "schedules.reschedule",
+        "requiresState": ["scheduled", "confirmed"],
+        "fields": [
+          { "name": "starts_at", "label": "Nuevo inicio", "type": "text", "required": true },
+          { "name": "ends_at",   "label": "Nuevo fin",    "type": "text", "required": true }
+        ]
+      },
+      {
+        "key": "cancel",
+        "name": "Cancelar",
+        "label": "addons.schedules.actions.cancel",
+        "icon": "X",
+        "color": "red",
+        "modal": "schedules.cancel",
+        "requiresState": ["scheduled", "confirmed"],
+        "fields": [
+          { "name": "reason", "label": "Motivo", "type": "text", "required": true }
+        ]
+      }
+    ]
+  },
+
+  "tools": [
+    {
+      "id": "create_event",
+      "name": "Crear evento",
+      "description": "Crea una cita o evento en la agenda.",
+      "category": "action",
+      "endpoint": "/webhooks/create_event",
+      "method": "POST",
+      "timeout": 15,
+      "trigger_keywords": ["agendar", "crear cita", "reservar"],
+      "trigger_intents": ["schedules.event.create"],
+      "input_schema": [
+        { "name": "title",     "type": "string", "required": true },
+        { "name": "starts_at", "type": "string", "required": true, "description": "ISO 8601" },
+        { "name": "ends_at",   "type": "string", "required": false },
+        { "name": "location",  "type": "string", "required": false },
+        { "name": "contact_id","type": "string", "required": false }
+      ]
+    },
+    {
+      "id": "list_events",
+      "name": "Listar eventos",
+      "description": "Consulta eventos de agenda filtrando por fecha, contacto o estado.",
+      "category": "query",
+      "endpoint": "/webhooks/list_events",
+      "method": "POST",
+      "timeout": 10,
+      "trigger_keywords": ["ver agenda", "listar citas", "mis eventos"],
+      "trigger_intents": ["schedules.event.list"],
+      "input_schema": [
+        { "name": "contact_id", "type": "string", "required": false },
+        { "name": "from",       "type": "string", "required": false },
+        { "name": "to",         "type": "string", "required": false },
+        { "name": "status",     "type": "string", "required": false }
+      ]
+    }
+  ],
+
+  "events": ["schedules.event.created", "schedules.event.confirmed", "schedules.event.rescheduled", "schedules.event.cancelled"],
+
+  "backend": {
+    "runtime": "wasm",
+    "entry": "backend/backend.wasm",
+    "exports": ["confirm", "reschedule", "cancel", "create_event", "list_events"],
+    "memory_limit_mb": 64,
+    "timeout_ms": 10000
+  },
+
+  "capabilities": [
+    { "kind": "event:emit", "target": "schedules.*", "reason": "Notificar eventos de agenda" }
+  ],
+
+  "settings": [
+    { "key": "default_duration_minutes", "label": "Duración por defecto (min)", "type": "text", "default_value": "60" }
+  ],
+
+  "i18n": {
+    "es": {
+      "addons.schedules.sidebar.schedules": "Agenda",
+      "addons.schedules.actions.confirm": "Confirmar cita",
+      "addons.schedules.actions.reschedule": "Reagendar",
+      "addons.schedules.actions.cancel": "Cancelar cita"
+    },
+    "en": {
+      "addons.schedules.sidebar.schedules": "Schedule",
+      "addons.schedules.actions.confirm": "Confirm appointment",
+      "addons.schedules.actions.reschedule": "Reschedule",
+      "addons.schedules.actions.cancel": "Cancel appointment"
+    }
+  },
+
+  "frontend": {
+    "entry": "/api/metacore/addons/schedules/frontend/remoteEntry.js",
+    "format": "federation",
+    "expose": "./plugin",
+    "container": "metacore_schedules"
+  }
+}

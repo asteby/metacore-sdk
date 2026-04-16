@@ -1,0 +1,71 @@
+{
+  "key": "serper_search",
+  "name": "Búsqueda Google (Serper)",
+  "description": "Busca en Google y obtiene resultados actualizados: noticias, precios, eventos. Plan gratuito: 2500 búsquedas/mes.",
+  "version": "1.0.0",
+  "category": "research",
+  "icon": "https://www.google.com/s2/favicons?domain=serper.dev&sz=128",
+  "icon_type": "url",
+  "icon_slug": "https://www.google.com/s2/favicons?domain=serper.dev&sz=128",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "backend": {
+    "runtime": "webhook"
+  },
+  "settings": [
+    {
+      "key": "serper_api_key",
+      "label": "Serper API Key",
+      "type": "password",
+      "secret": true
+    }
+  ],
+  "tools": [
+    {
+      "id": "google_search",
+      "name": "Buscar en Google",
+      "description": "Busca en Google y devuelve los resultados más relevantes. Úsalo para noticias, precios actuales, eventos recientes o cualquier información que requiera datos de internet.",
+      "category": "query",
+      "input_schema": [
+        {
+          "name": "query",
+          "type": "string",
+          "description": "Consulta de búsqueda",
+          "required": true,
+          "example": "precio Solana hoy",
+          "extraction_hint": "Lo que el usuario quiere buscar o investigar"
+        }
+      ],
+      "endpoint": "https://google.serper.dev/search",
+      "method": "POST"
+    },
+    {
+      "id": "google_news",
+      "name": "Buscar Noticias",
+      "description": "Busca noticias recientes en Google News sobre un tema.",
+      "category": "query",
+      "input_schema": [
+        {
+          "name": "query",
+          "type": "string",
+          "description": "Tema sobre el que buscar noticias",
+          "required": true,
+          "example": "Bitcoin regulación México",
+          "extraction_hint": "Tema de noticias que el usuario quiere conocer"
+        }
+      ],
+      "endpoint": "https://google.serper.dev/news",
+      "method": "POST"
+    }
+  ],
+  "events": [],
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "google.serper.dev",
+      "reason": "Llamar a la API de Serper (Google Search)"
+    }
+  ],
+  "author": "asteby",
+  "license": "MIT"
+}

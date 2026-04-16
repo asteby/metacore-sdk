@@ -1,0 +1,120 @@
+{
+  "key": "fiscal_mx",
+  "name": "Sistema Fiscal de México",
+  "description": "Timbrado CFDI 4.0 ante el SAT vía PAC. Expone la acción stamp_sat para ops (botón en factura) y link (herramienta conversacional).",
+  "version": "1.0.0",
+  "category": "fiscal",
+  "icon": "Stamp",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "schema-per-tenant",
+
+  "author": "asteby",
+  "license": "MIT",
+
+  "navigation": [{
+    "title": "addons.fiscal_mx.sidebar.group",
+    "icon": "FileText",
+    "target": "sidebar.finance",
+    "items": [{
+      "title": "addons.fiscal_mx.sidebar.cfdi",
+      "url": "/m/cfdi_invoices",
+      "icon": "Receipt",
+      "model": "cfdi_invoices"
+    }]
+  }],
+
+  "model_definitions": [{
+    "table_name": "cfdi_invoices",
+    "model_key": "cfdi_invoices",
+    "label": "CFDI",
+    "org_scoped": true,
+    "soft_delete": true,
+    "columns": [
+      { "name": "folio", "type": "string", "size": 32, "required": true, "unique": true },
+      { "name": "uuid_sat", "type": "string", "size": 36, "index": true },
+      { "name": "rfc_emisor", "type": "string", "size": 13, "required": true, "index": true },
+      { "name": "rfc_receptor", "type": "string", "size": 13, "required": true, "index": true },
+      { "name": "total", "type": "decimal", "required": true },
+      { "name": "status", "type": "string", "size": 20, "required": true, "default": "'draft'", "index": true },
+      { "name": "uso_cfdi", "type": "string", "size": 10 },
+      { "name": "xml", "type": "text" },
+      { "name": "stamped_at", "type": "timestamp" }
+    ]
+  }],
+
+  "actions": {
+    "cfdi_invoices": [{
+      "key": "stamp_sat",
+      "name": "Timbrar",
+      "label": "addons.fiscal_mx.actions.stamp",
+      "icon": "Stamp",
+      "modal": "fiscal_mx.stamp_sat",
+      "requiresState": ["draft"],
+      "fields": [
+        { "name": "rfc_receptor", "label": "RFC receptor", "type": "text", "required": true },
+        { "name": "uso_cfdi", "label": "Uso CFDI", "type": "select", "required": true,
+          "options": [
+            { "value": "G01", "label": "Adquisición de mercancías" },
+            { "value": "G03", "label": "Gastos en general" },
+            { "value": "P01", "label": "Por definir" }
+          ]
+        }
+      ]
+    }, {
+      "key": "cancel_sat",
+      "name": "Cancelar",
+      "label": "addons.fiscal_mx.actions.cancel",
+      "icon": "Ban",
+      "confirm": true,
+      "confirmMessage": "addons.fiscal_mx.actions.cancel_confirm",
+      "requiresState": ["stamped"]
+    }]
+  },
+
+  "tools": [{
+    "id": "stamp_sat",
+    "name": "Timbrar CFDI",
+    "description": "Timbra una factura CFDI ante el SAT cuando el cliente lo pide por WhatsApp o chat. NO llamar para cotizaciones o borradores sin RFC.",
+    "category": "action",
+    "endpoint": "/webhooks/stamp_sat",
+    "method": "POST",
+    "trigger_keywords": ["timbrar", "factura", "cfdi", "sat", "facturar"],
+    "input_schema": [
+      { "name": "rfc_receptor", "type": "string", "required": true,
+        "extraction_hint": "RFC de 13 caracteres (personas físicas) o 12 (morales)",
+        "validation": "^[A-ZÑ&]{3,4}\\d{6}[A-Z0-9]{3}$",
+        "normalize": "uppercase" },
+      { "name": "uso_cfdi", "type": "string", "required": true,
+        "extraction_hint": "Si no se especifica usar G03",
+        "default_value": "G03" }
+    ]
+  }],
+
+  "events": ["cfdi.stamped", "cfdi.cancelled"],
+
+  "hooks": {
+    "cfdi_invoices::stamp_sat": "http://localhost:7102/webhooks/stamp_sat"
+  },
+
+  "capabilities": [
+    { "kind": "http:fetch", "target": "*.sat.gob.mx", "reason": "Llamadas al PAC/SAT" },
+    { "kind": "event:emit", "target": "cfdi.*", "reason": "Notificar timbrado/cancelación" }
+  ],
+
+  "settings": [
+    { "key": "pac_provider", "label": "Proveedor PAC", "type": "select",
+      "options": [
+        { "value": "finkok", "label": "Finkok" },
+        { "value": "sw_sapien", "label": "SW Sapien" }
+      ],
+      "default_value": "finkok" },
+    { "key": "pac_api_key", "label": "API Key del PAC", "type": "text", "secret": true }
+  ],
+
+  "frontend": {
+    "entry": "/api/metacore/addons/fiscal_mx/frontend/remoteEntry.js",
+    "format": "federation",
+    "expose": "./plugin",
+    "container": "metacore_fiscal_mx"
+  }
+}

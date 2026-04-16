@@ -1,0 +1,69 @@
+{
+  "key": "sendgrid",
+  "name": "SendGrid",
+  "description": "Envía correos transaccionales con SendGrid de Twilio.",
+  "version": "1.0.0",
+  "category": "email",
+  "icon": "https://www.google.com/s2/favicons?domain=sendgrid.com&sz=128",
+  "icon_type": "url",
+  "icon_slug": "https://www.google.com/s2/favicons?domain=sendgrid.com&sz=128",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "author": "asteby",
+  "license": "MIT",
+  "settings": [
+    {
+      "key": "sendgrid_api_key",
+      "label": "API Key",
+      "type": "password",
+      "secret": true
+    },
+    {
+      "key": "sendgrid_from_email",
+      "label": "Email remitente",
+      "type": "string"
+    }
+  ],
+  "tools": [
+    {
+      "id": "send_email",
+      "name": "Enviar Email",
+      "description": "Envía un correo electrónico vía SendGrid.",
+      "category": "communication",
+      "input_schema": [
+        {
+          "name": "to_email",
+          "type": "email",
+          "description": "Correo del destinatario",
+          "required": true,
+          "extraction_hint": "Email del usuario o contacto"
+        },
+        {
+          "name": "subject",
+          "type": "string",
+          "description": "Asunto del correo",
+          "required": true
+        },
+        {
+          "name": "html_body",
+          "type": "string",
+          "description": "Contenido del email en HTML",
+          "required": true
+        }
+      ],
+      "endpoint": "https://api.sendgrid.com/v3/mail/send",
+      "method": "POST"
+    }
+  ],
+  "events": [],
+  "backend": {
+    "runtime": "webhook"
+  },
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "api.sendgrid.com",
+      "reason": "API de envío de correos de SendGrid"
+    }
+  ]
+}

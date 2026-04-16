@@ -1,0 +1,59 @@
+{
+  "key": "custom_webhook",
+  "name": "Webhook Personalizado",
+  "description": "Conecta cualquier servicio propio o de terceros vía un endpoint HTTP. El host/admin configura la URL destino en tiempo de instalación.",
+  "version": "1.0.0",
+  "category": "custom",
+  "icon": "Webhook",
+  "icon_type": "lucide",
+  "icon_slug": "Webhook",
+  "icon_color": "6366F1",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "backend": {
+    "runtime": "webhook"
+  },
+  "settings": [
+    {
+      "key": "webhook_url",
+      "label": "URL del Endpoint",
+      "type": "string"
+    }
+  ],
+  "tools": [
+    {
+      "id": "call_endpoint",
+      "name": "Llamar Endpoint",
+      "description": "Envía datos al endpoint configurado por el admin.",
+      "category": "integration",
+      "input_schema": [
+        {
+          "name": "payload",
+          "type": "string",
+          "description": "Datos a enviar al endpoint",
+          "required": true,
+          "extraction_hint": "Contenido a enviar al servicio externo"
+        },
+        {
+          "name": "webhook_url",
+          "type": "string",
+          "description": "URL destino. Se toma del setting webhook_url en runtime; el LLM NO debe inferirla.",
+          "required": false,
+          "extraction_hint": "No extraer del mensaje — usar setting"
+        }
+      ],
+      "endpoint": "{{webhook_url}}",
+      "method": "POST"
+    }
+  ],
+  "events": [],
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "*.example.com",
+      "reason": "Placeholder — el host sustituye este target por el dominio real derivado de settings.webhook_url en tiempo de instalación. El admin debe validar que la URL configurada coincida con el dominio aprobado en su instalación."
+    }
+  ],
+  "author": "asteby",
+  "license": "MIT"
+}

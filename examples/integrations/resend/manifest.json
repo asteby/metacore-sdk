@@ -1,0 +1,71 @@
+{
+  "key": "resend",
+  "name": "Resend",
+  "description": "Envía correos electrónicos transaccionales con Resend. 100 emails/día gratis.",
+  "version": "1.0.0",
+  "category": "email",
+  "icon": "https://www.google.com/s2/favicons?domain=resend.com&sz=128",
+  "icon_type": "url",
+  "icon_slug": "https://www.google.com/s2/favicons?domain=resend.com&sz=128",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "author": "asteby",
+  "license": "MIT",
+  "settings": [
+    {
+      "key": "resend_api_key",
+      "label": "API Key",
+      "type": "password",
+      "secret": true
+    },
+    {
+      "key": "resend_from_email",
+      "label": "Email remitente",
+      "type": "string"
+    }
+  ],
+  "tools": [
+    {
+      "id": "send_email",
+      "name": "Enviar Email",
+      "description": "Envía un correo electrónico a un destinatario.",
+      "category": "communication",
+      "input_schema": [
+        {
+          "name": "to_email",
+          "type": "email",
+          "description": "Correo del destinatario",
+          "required": true,
+          "extraction_hint": "Email del usuario o contacto"
+        },
+        {
+          "name": "subject",
+          "type": "string",
+          "description": "Asunto del correo",
+          "required": true,
+          "extraction_hint": "Tema o motivo del email"
+        },
+        {
+          "name": "html_body",
+          "type": "string",
+          "description": "Contenido del email en HTML",
+          "required": true,
+          "extraction_hint": "Mensaje a enviar por correo"
+        }
+      ],
+      "endpoint": "https://api.resend.com/emails",
+      "method": "POST"
+    }
+  ],
+  "events": [],
+  "backend": {
+    "runtime": "webhook"
+  },
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "api.resend.com",
+      "reason": "API de envío de correos de Resend"
+    }
+  ]
+}

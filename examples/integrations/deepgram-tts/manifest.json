@@ -1,0 +1,66 @@
+{
+  "key": "deepgram_tts",
+  "name": "Deepgram — Texto a Voz",
+  "description": "Convierte texto en audio con voces naturales de Deepgram Aura. Ideal para enviar notas de voz al usuario.",
+  "version": "1.0.0",
+  "category": "communication",
+  "icon": "https://www.google.com/s2/favicons?domain=deepgram.com&sz=128",
+  "icon_type": "url",
+  "icon_slug": "https://www.google.com/s2/favicons?domain=deepgram.com&sz=128",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "backend": {
+    "runtime": "webhook"
+  },
+  "settings": [
+    {
+      "key": "deepgram_api_key",
+      "label": "Deepgram API Key",
+      "type": "password",
+      "secret": true
+    },
+    {
+      "key": "deepgram_model",
+      "label": "Modelo de voz",
+      "type": "string",
+      "default_value": "aura-asteria-en"
+    }
+  ],
+  "tools": [
+    {
+      "id": "text_to_speech",
+      "name": "Enviar Audio",
+      "description": "Convierte un texto corto en un mensaje de voz (audio) y lo envía al usuario. Útil para dar un toque humano o cuando el usuario solicita un audio/nota de voz.",
+      "category": "communication",
+      "input_schema": [
+        {
+          "name": "text",
+          "type": "string",
+          "description": "Texto a convertir en audio (mensaje de voz). Sé breve y natural.",
+          "required": true,
+          "extraction_hint": "Mensaje que el agente quiere enviar como nota de voz"
+        },
+        {
+          "name": "deepgram_model",
+          "type": "string",
+          "description": "Modelo de voz Deepgram Aura. Normalmente se toma del setting.",
+          "required": false,
+          "default_value": "aura-asteria-en",
+          "extraction_hint": "No extraer del mensaje — usar setting"
+        }
+      ],
+      "endpoint": "https://api.deepgram.com/v1/speak?model={{deepgram_model}}",
+      "method": "POST"
+    }
+  ],
+  "events": [],
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "api.deepgram.com",
+      "reason": "Síntesis de voz vía Deepgram Aura"
+    }
+  ],
+  "author": "asteby",
+  "license": "MIT"
+}

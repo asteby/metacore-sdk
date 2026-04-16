@@ -1,0 +1,45 @@
+{
+  "key": "coingecko",
+  "name": "Precios Crypto (CoinGecko)",
+  "description": "Consulta precios actuales de cualquier criptomoneda en USD, MXN u otras divisas. Sin API key requerida.",
+  "version": "1.0.0",
+  "category": "research",
+  "icon": "https://www.google.com/s2/favicons?domain=coingecko.com&sz=128",
+  "icon_type": "url",
+  "icon_slug": "https://www.google.com/s2/favicons?domain=coingecko.com&sz=128",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "backend": {
+    "runtime": "webhook"
+  },
+  "tools": [
+    {
+      "id": "crypto_price",
+      "name": "Precio de Criptomoneda",
+      "description": "Obtiene el precio actual de una o varias criptomonedas. Usa el ID de CoinGecko: bitcoin, ethereum, solana, dogecoin, etc.",
+      "category": "query",
+      "input_schema": [
+        {
+          "name": "coin_ids",
+          "type": "string",
+          "description": "ID(s) de la crypto en CoinGecko separados por coma",
+          "required": true,
+          "example": "solana,bitcoin",
+          "extraction_hint": "Criptomoneda mencionada por el usuario (solana, bitcoin, ethereum, dogecoin, etc.)"
+        }
+      ],
+      "endpoint": "https://api.coingecko.com/api/v3/simple/price?ids={{coin_ids}}&vs_currencies=usd,mxn",
+      "method": "GET"
+    }
+  ],
+  "events": [],
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "api.coingecko.com",
+      "reason": "Consulta de precios crypto"
+    }
+  ],
+  "author": "asteby",
+  "license": "MIT"
+}

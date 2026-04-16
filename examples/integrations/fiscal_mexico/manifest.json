@@ -1,0 +1,218 @@
+{
+  "key": "fiscal_mexico",
+  "name": "Facturación Electrónica México (CFDI 4.0)",
+  "description": "Emisión y cancelación de CFDI ante el SAT vía PAC (factura.com). Catálogos SAT, extensiones fiscales para facturas/clientes/productos y herramientas LLM para agentes conversacionales.",
+  "version": "1.0.0",
+  "category": "integration",
+  "icon": "FileText",
+  "icon_type": "lucide",
+  "icon_slug": "FileText",
+  "icon_color": "F59E0B",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "schema-per-tenant",
+
+  "author": "Asteby",
+  "website": "https://asteby.com",
+  "license": "MIT",
+  "price": "free",
+
+  "features": [
+    "Timbrado CFDI 4.0 vía factura.com",
+    "Cancelación de documentos fiscales",
+    "Catálogos SAT completos (uso CFDI, formas de pago, régimen fiscal)",
+    "Modals compilados para timbrar y cancelar",
+    "Herramientas LLM para agentes conversacionales"
+  ],
+
+  "navigation": [{
+    "title": "addons.fiscal_mexico.sidebar.fiscal",
+    "icon": "FileText",
+    "target": "sidebar.finance",
+    "items": [{
+      "title": "addons.fiscal_mexico.sidebar.fiscal_documents",
+      "url": "/m/fiscal_documents",
+      "icon": "FileCheck",
+      "model": "fiscal_documents"
+    }]
+  }],
+
+  "model_definitions": [{
+    "table_name": "fiscal_documents",
+    "model_key": "fiscal_documents",
+    "label": "Documentos Fiscales",
+    "org_scoped": true,
+    "soft_delete": true,
+    "columns": [
+      { "name": "invoice_id",    "type": "uuid",    "required": true, "index": true },
+      { "name": "fiscal_uuid",   "type": "string",  "size": 36, "index": true },
+      { "name": "rfc_emisor",    "type": "string",  "size": 13, "required": true, "index": true },
+      { "name": "rfc_receptor",  "type": "string",  "size": 13, "required": true, "index": true },
+      { "name": "total",         "type": "decimal", "required": true },
+      { "name": "status",        "type": "string",  "size": 20, "required": true, "default": "'draft'", "index": true },
+      { "name": "cfdi_usage",    "type": "string",  "size": 10 },
+      { "name": "payment_form",  "type": "string",  "size": 4 },
+      { "name": "payment_method","type": "string",  "size": 4 },
+      { "name": "environment",   "type": "string",  "size": 16, "default": "'sandbox'" },
+      { "name": "xml_url",       "type": "string",  "size": 512 },
+      { "name": "pdf_url",       "type": "string",  "size": 512 },
+      { "name": "xml",           "type": "text" },
+      { "name": "stamped_at",    "type": "timestamp" },
+      { "name": "cancelled_at",  "type": "timestamp" },
+      { "name": "cancel_reason", "type": "string",  "size": 4 },
+      { "name": "replacement_uuid","type": "string","size": 36 },
+      { "name": "provider_data", "type": "jsonb" }
+    ]
+  }],
+
+  "actions": {
+    "fiscal_documents": [
+      {
+        "key": "stamp_fiscal",
+        "name": "Timbrar",
+        "label": "addons.fiscal_mexico.actions.stamp",
+        "icon": "FileCheck",
+        "color": "green",
+        "modal": "fiscal_mexico.stamp_fiscal",
+        "requiresState": ["draft"],
+        "fields": [
+          { "name": "cfdi_usage",     "label": "Uso CFDI",       "type": "select", "required": true,
+            "options": [
+              { "value": "G01", "label": "G01 — Adquisición de mercancías" },
+              { "value": "G03", "label": "G03 — Gastos en general" },
+              { "value": "I01", "label": "I01 — Construcciones" },
+              { "value": "P01", "label": "P01 — Por definir" },
+              { "value": "S01", "label": "S01 — Sin efectos fiscales" }
+            ]
+          },
+          { "name": "payment_form",   "label": "Forma de pago",  "type": "select", "required": true,
+            "options": [
+              { "value": "01", "label": "01 — Efectivo" },
+              { "value": "03", "label": "03 — Transferencia electrónica" },
+              { "value": "04", "label": "04 — Tarjeta de crédito" },
+              { "value": "28", "label": "28 — Tarjeta de débito" },
+              { "value": "99", "label": "99 — Por definir" }
+            ]
+          },
+          { "name": "payment_method", "label": "Método de pago", "type": "select", "required": true,
+            "options": [
+              { "value": "PUE", "label": "PUE — Pago en una exhibición" },
+              { "value": "PPD", "label": "PPD — Pago diferido" }
+            ]
+          },
+          { "name": "test_mode", "label": "Modo sandbox", "type": "boolean", "default": false }
+        ]
+      },
+      {
+        "key": "cancel_fiscal",
+        "name": "Cancelar",
+        "label": "addons.fiscal_mexico.actions.cancel",
+        "icon": "FileX",
+        "color": "red",
+        "modal": "fiscal_mexico.cancel_fiscal",
+        "requiresState": ["stamped"],
+        "fields": [
+          { "name": "cancel_reason", "label": "Motivo", "type": "select", "required": true,
+            "options": [
+              { "value": "01", "label": "01 — Emitido con errores, con relación" },
+              { "value": "02", "label": "02 — Emitido con errores, sin relación" },
+              { "value": "03", "label": "03 — No se llevó a cabo la operación" },
+              { "value": "04", "label": "04 — Operación nominativa en factura global" }
+            ]
+          },
+          { "name": "replacement_uuid", "label": "UUID sustituto (motivo 01)", "type": "text" }
+        ]
+      }
+    ]
+  },
+
+  "tools": [
+    {
+      "id": "stamp_fiscal",
+      "name": "Timbrar factura",
+      "description": "Emite y timbra un CFDI ante el SAT a partir de una venta. Úsalo cuando el usuario pida 'timbra la factura X'. NO usar para borradores sin RFC receptor.",
+      "category": "action",
+      "endpoint": "/webhooks/stamp_fiscal",
+      "method": "POST",
+      "timeout": 20,
+      "trigger_keywords": ["timbrar", "factura", "cfdi", "facturar", "emitir"],
+      "trigger_intents": ["fiscal.invoice.stamp"],
+      "input_schema": [
+        { "name": "invoice_id",    "type": "string", "required": true,
+          "description": "UUID de la factura draft a timbrar",
+          "extraction_hint": "ID o número de factura" },
+        { "name": "cfdi_usage",    "type": "string", "required": false, "default_value": "G03" },
+        { "name": "payment_form",  "type": "string", "required": false, "default_value": "03" },
+        { "name": "payment_method","type": "string", "required": false, "default_value": "PUE" }
+      ]
+    },
+    {
+      "id": "cancel_fiscal",
+      "name": "Cancelar CFDI",
+      "description": "Cancela un CFDI timbrado usando su UUID fiscal. Pide motivo (01, 02, 03, 04).",
+      "category": "action",
+      "endpoint": "/webhooks/cancel_fiscal",
+      "method": "POST",
+      "timeout": 20,
+      "trigger_keywords": ["cancelar factura", "cancelar cfdi", "anular comprobante"],
+      "trigger_intents": ["fiscal.invoice.cancel"],
+      "input_schema": [
+        { "name": "fiscal_uuid",  "type": "string", "required": true,
+          "description": "UUID fiscal del CFDI a cancelar",
+          "normalize": "uppercase" },
+        { "name": "cancel_reason","type": "string", "required": true, "default_value": "02" },
+        { "name": "replacement_uuid", "type": "string", "required": false }
+      ]
+    }
+  ],
+
+  "events": ["fiscal.invoice.stamped", "fiscal.invoice.cancelled", "fiscal.invoice.stamp_error"],
+
+  "backend": {
+    "runtime": "wasm",
+    "entry": "backend/backend.wasm",
+    "exports": ["stamp_fiscal", "cancel_fiscal"],
+    "memory_limit_mb": 64,
+    "timeout_ms": 10000
+  },
+
+  "capabilities": [
+    { "kind": "http:fetch", "target": "*.factura.com", "reason": "PAC para timbrado/cancelación CFDI" },
+    { "kind": "http:fetch", "target": "*.sat.gob.mx", "reason": "Validación ante SAT" },
+    { "kind": "event:emit", "target": "fiscal.*", "reason": "Notificar eventos de timbrado" }
+  ],
+
+  "settings": [
+    { "key": "api_key",     "label": "API Key de factura.com",    "type": "text", "secret": true },
+    { "key": "api_secret",  "label": "API Secret de factura.com", "type": "text", "secret": true },
+    { "key": "environment", "label": "Ambiente", "type": "select", "default_value": "sandbox",
+      "options": [
+        { "value": "sandbox", "label": "Sandbox (pruebas)" },
+        { "value": "live",    "label": "Producción" }
+      ]
+    },
+    { "key": "series",      "label": "Serie de factura", "type": "text", "default_value": "A" },
+    { "key": "auto_stamp",  "label": "Timbrar automáticamente al emitir", "type": "boolean", "default_value": false }
+  ],
+
+  "i18n": {
+    "es": {
+      "addons.fiscal_mexico.sidebar.fiscal": "Fiscal",
+      "addons.fiscal_mexico.sidebar.fiscal_documents": "Documentos Fiscales",
+      "addons.fiscal_mexico.actions.stamp": "Timbrar CFDI",
+      "addons.fiscal_mexico.actions.cancel": "Cancelar CFDI"
+    },
+    "en": {
+      "addons.fiscal_mexico.sidebar.fiscal": "Fiscal",
+      "addons.fiscal_mexico.sidebar.fiscal_documents": "Fiscal Documents",
+      "addons.fiscal_mexico.actions.stamp": "Stamp CFDI",
+      "addons.fiscal_mexico.actions.cancel": "Cancel CFDI"
+    }
+  },
+
+  "frontend": {
+    "entry": "/api/metacore/addons/fiscal_mexico/frontend/remoteEntry.js",
+    "format": "federation",
+    "expose": "./plugin",
+    "container": "metacore_fiscal_mexico"
+  }
+}

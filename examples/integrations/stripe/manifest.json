@@ -1,0 +1,76 @@
+{
+  "key": "stripe",
+  "name": "Stripe",
+  "description": "Consulta pagos y genera links de cobro con Stripe.",
+  "version": "1.0.0",
+  "category": "payments",
+  "icon": "stripe",
+  "icon_type": "brand",
+  "icon_slug": "stripe",
+  "icon_color": "635BFF",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "settings": [
+    {
+      "key": "stripe_secret_key",
+      "label": "Secret Key",
+      "type": "password",
+      "secret": true
+    }
+  ],
+  "tools": [
+    {
+      "id": "get_payment",
+      "name": "Consultar Pago",
+      "description": "Busca el estado de un pago/cargo en Stripe por su ID.",
+      "input_schema": [
+        {
+          "name": "charge_id",
+          "type": "string",
+          "description": "ID del cargo (ch_...)",
+          "required": true,
+          "example": "ch_1ABC123",
+          "extraction_hint": "ID de pago o cargo de Stripe"
+        }
+      ],
+      "endpoint": "https://api.stripe.com/v1/charges/{{charge_id}}",
+      "method": "GET"
+    },
+    {
+      "id": "create_payment_link",
+      "name": "Crear Link de Pago",
+      "description": "Genera un link de pago para cobrar un monto específico.",
+      "input_schema": [
+        {
+          "name": "product_name",
+          "type": "string",
+          "description": "Nombre del producto o concepto de pago",
+          "required": true,
+          "extraction_hint": "Concepto por el cual se cobra"
+        },
+        {
+          "name": "amount_cents",
+          "type": "number",
+          "description": "Monto en centavos (ej: 50000 = $500.00 MXN)",
+          "required": true,
+          "extraction_hint": "Monto a cobrar multiplicado por 100"
+        }
+      ],
+      "endpoint": "https://api.stripe.com/v1/payment_links",
+      "method": "POST"
+    }
+  ],
+  "events": [],
+  "backend": {
+    "runtime": "webhook"
+  },
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "*.stripe.com",
+      "reason": "Llamadas a la API de Stripe"
+    }
+  ],
+  "author": "asteby",
+  "license": "MIT"
+}

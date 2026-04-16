@@ -1,0 +1,176 @@
+{
+  "key": "tickets_native",
+  "name": "Tickets (nativo)",
+  "description": "Tickets de soporte — respaldado por el pipeline nativo de link vía webhook firmado.",
+  "version": "1.0.0",
+  "category": "productivity",
+  "icon": "Sparkles",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "author": "asteby",
+  "license": "MIT",
+  "tools": [
+    {
+      "id": "create-ticket",
+      "name": "Crear Ticket",
+      "description": "Registra un ticket de soporte a partir de la conversación.",
+      "category": "action",
+      "endpoint": "http://link-backend:8080/api/_mc/native/tickets_native/create-ticket",
+      "method": "POST",
+      "trigger_keywords": [],
+      "trigger_intents": [],
+      "input_schema": [
+        {
+          "name": "title",
+          "type": "string",
+          "example": "Error al procesar pago",
+          "required": true,
+          "description": "Título del ticket",
+          "extraction_hint": "Resumen del problema reportado"
+        },
+        {
+          "name": "description",
+          "type": "string",
+          "required": true,
+          "description": "Descripción detallada",
+          "extraction_hint": "Contexto y pasos para reproducir"
+        },
+        {
+          "name": "priority",
+          "type": "string",
+          "required": false,
+          "description": "Prioridad: low, medium, high, urgent",
+          "default_value": "medium"
+        },
+        {
+          "name": "category",
+          "type": "string",
+          "required": false,
+          "description": "Categoría: bug, feature, question, complaint, support, other"
+        },
+        {
+          "name": "tags",
+          "type": "string",
+          "example": "pago,error",
+          "required": false,
+          "description": "Etiquetas separadas por coma"
+        }
+      ],
+      "auto_create_record": "ticket",
+      "timeout": 20
+    },
+    {
+      "id": "list-tickets",
+      "name": "Ver Tickets",
+      "description": "Consulta tickets existentes con filtros de estado, prioridad o búsqueda.",
+      "category": "action",
+      "endpoint": "http://link-backend:8080/api/_mc/native/tickets_native/list-tickets",
+      "method": "POST",
+      "trigger_keywords": [],
+      "trigger_intents": [],
+      "input_schema": [
+        {
+          "name": "status",
+          "type": "string",
+          "required": false,
+          "description": "Filtrar por estado: open, in_progress, resolved, closed"
+        },
+        {
+          "name": "priority",
+          "type": "string",
+          "required": false,
+          "description": "Filtrar por prioridad: low, medium, high, urgent"
+        },
+        {
+          "name": "scope",
+          "type": "string",
+          "required": false,
+          "description": "Alcance: 'conversation' para solo esta conversación, vacío para todos los del contacto"
+        },
+        {
+          "name": "search",
+          "type": "string",
+          "required": false,
+          "description": "Buscar por texto en título o descripción"
+        },
+        {
+          "name": "limit",
+          "type": "number",
+          "required": false,
+          "description": "Máximo de resultados (default 10, max 50)"
+        }
+      ],
+      "auto_create_record": "",
+      "timeout": 20
+    },
+    {
+      "id": "update-ticket",
+      "name": "Actualizar Ticket",
+      "description": "Actualiza el estado o prioridad de un ticket existente.",
+      "category": "action",
+      "endpoint": "http://link-backend:8080/api/_mc/native/tickets_native/update-ticket",
+      "method": "POST",
+      "trigger_keywords": [],
+      "trigger_intents": [],
+      "input_schema": [
+        {
+          "name": "ticket_id",
+          "type": "string",
+          "required": true,
+          "description": "ID del ticket a actualizar"
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "required": false,
+          "description": "Nuevo estado: open, in_progress, resolved, closed"
+        },
+        {
+          "name": "priority",
+          "type": "string",
+          "required": false,
+          "description": "Nueva prioridad: low, medium, high, urgent"
+        },
+        {
+          "name": "comment",
+          "type": "string",
+          "required": false,
+          "description": "Comentario o nota adicional"
+        }
+      ],
+      "auto_create_record": "",
+      "timeout": 20
+    },
+    {
+      "id": "close-ticket",
+      "name": "Cerrar Ticket",
+      "description": "Cierra un ticket de soporte existente, marcándolo como resuelto.",
+      "category": "action",
+      "endpoint": "http://link-backend:8080/api/_mc/native/tickets_native/close-ticket",
+      "method": "POST",
+      "trigger_keywords": [],
+      "trigger_intents": [],
+      "input_schema": [
+        {
+          "name": "ticket_id",
+          "type": "string",
+          "required": true,
+          "description": "ID o número del ticket a cerrar (ej: SUP-100)",
+          "extraction_hint": "Número o identificador del ticket que el usuario quiere cerrar"
+        },
+        {
+          "name": "resolution",
+          "type": "string",
+          "required": false,
+          "description": "Descripción de la resolución o motivo de cierre",
+          "extraction_hint": "Resumen de cómo se resolvió el problema"
+        }
+      ],
+      "auto_create_record": "",
+      "timeout": 20
+    }
+  ],
+  "icon_type": "lucide",
+  "icon_slug": "Ticket",
+  "icon_color": ""
+}

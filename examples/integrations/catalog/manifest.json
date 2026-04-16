@@ -1,0 +1,155 @@
+{
+  "key": "catalog",
+  "name": "Catálogo de Productos",
+  "description": "Gestiona un catálogo de productos con búsqueda IA. Modals para actualizar stock y publicar; tools LLM para buscar/consultar.",
+  "version": "1.0.0",
+  "category": "productivity",
+  "icon": "Package",
+  "icon_type": "lucide",
+  "icon_slug": "Package",
+  "icon_color": "8B5CF6",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "schema-per-tenant",
+
+  "author": "Asteby",
+  "website": "https://asteby.com",
+  "license": "MIT",
+  "price": "free",
+
+  "features": [
+    "Catálogo de productos",
+    "Modals para gestión de stock y publicación",
+    "Herramientas LLM con búsqueda semántica"
+  ],
+
+  "navigation": [{
+    "title": "addons.catalog.sidebar.catalog",
+    "icon": "Package",
+    "target": "sidebar.catalog",
+    "items": [{
+      "title": "addons.catalog.sidebar.products",
+      "url": "/m/products",
+      "icon": "Package",
+      "model": "products"
+    }]
+  }],
+
+  "model_definitions": [{
+    "table_name": "products",
+    "model_key": "products",
+    "label": "Productos",
+    "org_scoped": true,
+    "soft_delete": true,
+    "columns": [
+      { "name": "sku",         "type": "string",  "size": 64, "required": true, "index": true },
+      { "name": "name",        "type": "string",  "size": 255, "required": true, "index": true },
+      { "name": "description", "type": "text" },
+      { "name": "price",       "type": "decimal", "required": true, "default": 0 },
+      { "name": "currency",    "type": "string",  "size": 3, "default": "'MXN'" },
+      { "name": "stock",       "type": "integer", "default": 0 },
+      { "name": "published",   "type": "boolean", "default": false, "index": true },
+      { "name": "category",    "type": "string",  "size": 64, "index": true },
+      { "name": "brand",       "type": "string",  "size": 64 },
+      { "name": "images",      "type": "jsonb" },
+      { "name": "attributes",  "type": "jsonb" }
+    ]
+  }],
+
+  "actions": {
+    "products": [
+      {
+        "key": "update_stock",
+        "name": "Actualizar stock",
+        "label": "addons.catalog.actions.update_stock",
+        "icon": "Package",
+        "color": "blue",
+        "modal": "catalog.update_stock",
+        "fields": [
+          { "name": "quantity", "label": "Nueva cantidad", "type": "text", "required": true }
+        ]
+      },
+      {
+        "key": "toggle_published",
+        "name": "Publicar/Despublicar",
+        "label": "addons.catalog.actions.toggle_published",
+        "icon": "Eye",
+        "color": "green",
+        "modal": "catalog.toggle_published",
+        "fields": []
+      }
+    ]
+  },
+
+  "tools": [
+    {
+      "id": "search_products",
+      "name": "Buscar productos",
+      "description": "Busca productos en el catálogo con búsqueda semántica (nombre, descripción, categoría).",
+      "category": "query",
+      "endpoint": "/webhooks/search_products",
+      "method": "POST",
+      "timeout": 10,
+      "trigger_keywords": ["buscar producto", "ver productos", "catálogo"],
+      "trigger_intents": ["catalog.product.search"],
+      "input_schema": [
+        { "name": "query", "type": "string", "required": true, "description": "Consulta en lenguaje natural" },
+        { "name": "limit", "type": "number", "required": false, "default_value": "10" }
+      ]
+    },
+    {
+      "id": "get_product",
+      "name": "Consultar producto",
+      "description": "Obtiene el detalle de un producto por SKU o id.",
+      "category": "query",
+      "endpoint": "/webhooks/get_product",
+      "method": "POST",
+      "timeout": 10,
+      "trigger_keywords": ["detalle producto", "info producto"],
+      "trigger_intents": ["catalog.product.get"],
+      "input_schema": [
+        { "name": "sku", "type": "string", "required": false },
+        { "name": "product_id", "type": "string", "required": false }
+      ]
+    }
+  ],
+
+  "events": ["catalog.product.stock_updated", "catalog.product.published", "catalog.product.unpublished"],
+
+  "backend": {
+    "runtime": "wasm",
+    "entry": "backend/backend.wasm",
+    "exports": ["update_stock", "toggle_published", "search_products", "get_product"],
+    "memory_limit_mb": 64,
+    "timeout_ms": 10000
+  },
+
+  "capabilities": [
+    { "kind": "event:emit", "target": "catalog.*", "reason": "Notificar cambios de catálogo" }
+  ],
+
+  "settings": [
+    { "key": "default_currency", "label": "Moneda por defecto", "type": "text", "default_value": "MXN" }
+  ],
+
+  "i18n": {
+    "es": {
+      "addons.catalog.sidebar.catalog": "Catálogo",
+      "addons.catalog.sidebar.products": "Productos",
+      "addons.catalog.actions.update_stock": "Actualizar stock",
+      "addons.catalog.actions.toggle_published": "Publicar/Despublicar"
+    },
+    "en": {
+      "addons.catalog.sidebar.catalog": "Catalog",
+      "addons.catalog.sidebar.products": "Products",
+      "addons.catalog.actions.update_stock": "Update stock",
+      "addons.catalog.actions.toggle_published": "Publish/Unpublish"
+    }
+  },
+
+  "frontend": {
+    "entry": "/api/metacore/addons/catalog/frontend/remoteEntry.js",
+    "format": "federation",
+    "expose": "./plugin",
+    "container": "metacore_catalog"
+  }
+}

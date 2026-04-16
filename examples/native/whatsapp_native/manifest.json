@@ -1,0 +1,105 @@
+{
+  "key": "whatsapp_native",
+  "name": "WhatsApp (nativo)",
+  "description": "Mensajería WhatsApp saliente respaldada por el pipeline nativo de link.",
+  "version": "1.0.0",
+  "category": "communication",
+  "icon": "Sparkles",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "author": "asteby",
+  "license": "MIT",
+  "tools": [
+    {
+      "id": "send-whatsapp",
+      "name": "Enviar Mensaje",
+      "description": "Envía un mensaje de WhatsApp a cualquier número usando el dispositivo de la conversación activa.",
+      "category": "action",
+      "endpoint": "http://link-backend:8080/api/_mc/native/whatsapp_native/send-whatsapp",
+      "method": "POST",
+      "trigger_keywords": [],
+      "trigger_intents": [],
+      "input_schema": [
+        {
+          "name": "phone",
+          "type": "phone",
+          "example": "573053396459",
+          "required": true,
+          "description": "Número destino con código de país",
+          "extraction_hint": "Número al que notificar, puede estar predefinido en las instrucciones"
+        },
+        {
+          "name": "message",
+          "type": "string",
+          "required": true,
+          "description": "Texto del mensaje a enviar"
+        }
+      ],
+      "auto_create_record": "",
+      "timeout": 20
+    },
+    {
+      "id": "list-contacts",
+      "name": "Listar Contactos",
+      "description": "Consulta contactos existentes en la organización para obtener nombres, teléfonos y emails.",
+      "category": "action",
+      "endpoint": "http://link-backend:8080/api/_mc/native/whatsapp_native/list-contacts",
+      "method": "POST",
+      "trigger_keywords": [],
+      "trigger_intents": [],
+      "input_schema": [
+        {
+          "name": "search",
+          "type": "string",
+          "required": false,
+          "description": "Buscar por nombre, teléfono o email"
+        },
+        {
+          "name": "limit",
+          "type": "number",
+          "required": false,
+          "description": "Máximo de resultados (default 20, max 50)"
+        }
+      ],
+      "auto_create_record": "",
+      "timeout": 20
+    },
+    {
+      "id": "list-contacts",
+      "name": "Listar contactos",
+      "description": "Lista contactos del tenant con filtros por nombre o teléfono. Úsalo cuando el usuario pida 'a quién le mandé', 'mis contactos', o busque identificar a un cliente.",
+      "category": "query",
+      "endpoint": "http://link-backend:8080/api/_mc/native/whatsapp_native/list-contacts",
+      "method": "POST",
+      "trigger_keywords": [
+        "contactos",
+        "clientes",
+        "listar contactos",
+        "mis contactos"
+      ],
+      "trigger_intents": [
+        "contacts.list"
+      ],
+      "input_schema": [
+        {
+          "name": "search",
+          "type": "string",
+          "description": "Texto a buscar en nombre o teléfono",
+          "required": false,
+          "extraction_hint": "nombre parcial o últimos dígitos"
+        },
+        {
+          "name": "limit",
+          "type": "number",
+          "description": "Máximo de resultados (default 20, max 100)",
+          "required": false,
+          "default_value": "20"
+        }
+      ],
+      "timeout": 15
+    }
+  ],
+  "icon_type": "brand",
+  "icon_slug": "whatsapp",
+  "icon_color": "25D366"
+}

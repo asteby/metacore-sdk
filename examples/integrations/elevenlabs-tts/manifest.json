@@ -1,0 +1,69 @@
+{
+  "key": "elevenlabs_tts",
+  "name": "ElevenLabs — Texto a Voz",
+  "description": "Voces ultra-realistas con IA de ElevenLabs. Soporta clonación de voz y múltiples idiomas.",
+  "version": "1.0.0",
+  "category": "communication",
+  "icon": "https://www.google.com/s2/favicons?domain=elevenlabs.io&sz=128",
+  "icon_type": "url",
+  "icon_slug": "https://www.google.com/s2/favicons?domain=elevenlabs.io&sz=128",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "backend": {
+    "runtime": "webhook"
+  },
+  "settings": [
+    {
+      "key": "elevenlabs_api_key",
+      "label": "ElevenLabs API Key",
+      "type": "password",
+      "secret": true
+    },
+    {
+      "key": "elevenlabs_voice_id",
+      "label": "Voice ID por defecto",
+      "type": "string"
+    },
+    {
+      "key": "elevenlabs_model",
+      "label": "Modelo",
+      "type": "string"
+    }
+  ],
+  "tools": [
+    {
+      "id": "text_to_speech",
+      "name": "Enviar Audio",
+      "description": "Convierte un texto corto en un mensaje de voz con la voz configurada de ElevenLabs. Útil para notas de voz personalizadas.",
+      "category": "communication",
+      "input_schema": [
+        {
+          "name": "text",
+          "type": "string",
+          "description": "Texto a convertir en audio (mensaje de voz). Sé breve y natural.",
+          "required": true,
+          "extraction_hint": "Mensaje que el agente quiere enviar como nota de voz"
+        },
+        {
+          "name": "elevenlabs_voice_id",
+          "type": "string",
+          "description": "ID de la voz de ElevenLabs a usar. Normalmente se toma del setting con el mismo nombre.",
+          "required": false,
+          "extraction_hint": "No extraer del mensaje del usuario — usar setting configurado"
+        }
+      ],
+      "endpoint": "https://api.elevenlabs.io/v1/text-to-speech/{{elevenlabs_voice_id}}",
+      "method": "POST"
+    }
+  ],
+  "events": [],
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "api.elevenlabs.io",
+      "reason": "Síntesis de voz vía ElevenLabs"
+    }
+  ],
+  "author": "asteby",
+  "license": "MIT"
+}

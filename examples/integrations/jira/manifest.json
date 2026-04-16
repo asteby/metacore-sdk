@@ -1,0 +1,77 @@
+{
+  "key": "jira",
+  "name": "Jira",
+  "description": "Crea issues en Jira para equipos enterprise.",
+  "version": "1.0.0",
+  "category": "dev",
+  "icon": "jira",
+  "icon_type": "brand",
+  "icon_slug": "jira",
+  "icon_color": "0052CC",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "settings": [
+    {
+      "key": "jira_domain",
+      "label": "Dominio (subdomain de atlassian.net)",
+      "type": "string"
+    },
+    {
+      "key": "jira_basic_auth",
+      "label": "Auth Token (Base64)",
+      "type": "password",
+      "secret": true
+    },
+    {
+      "key": "jira_project_key",
+      "label": "Clave del Proyecto",
+      "type": "string"
+    }
+  ],
+  "tools": [
+    {
+      "id": "create_issue",
+      "name": "Crear Issue",
+      "description": "Crea un nuevo issue/tarea en Jira.",
+      "input_schema": [
+        {
+          "name": "jira_domain",
+          "type": "string",
+          "description": "Subdominio Atlassian (sin .atlassian.net). Por default usa settings.",
+          "required": true,
+          "extraction_hint": "Subdominio del tenant de Jira"
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "description": "Título del issue",
+          "required": true,
+          "extraction_hint": "Resumen del problema o tarea"
+        },
+        {
+          "name": "description",
+          "type": "string",
+          "description": "Descripción detallada",
+          "required": true,
+          "extraction_hint": "Contexto y detalles"
+        }
+      ],
+      "endpoint": "https://{{jira_domain}}.atlassian.net/rest/api/3/issue",
+      "method": "POST",
+      "auto_create_record": "ticket"
+    }
+  ],
+  "events": [],
+  "backend": {
+    "runtime": "webhook"
+  },
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "*.atlassian.net",
+      "reason": "Crear issues en Jira Cloud"
+    }
+  ],
+  "author": "asteby",
+  "license": "MIT"
+}

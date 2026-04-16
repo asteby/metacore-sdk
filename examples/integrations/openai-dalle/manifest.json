@@ -1,0 +1,53 @@
+{
+  "key": "openai_dalle",
+  "name": "OpenAI DALL·E",
+  "description": "Genera imágenes con IA usando DALL·E 3 de OpenAI.",
+  "version": "1.0.0",
+  "category": "ai",
+  "icon": "openai",
+  "icon_type": "brand",
+  "icon_slug": "openai",
+  "icon_color": "412991",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+  "backend": {
+    "runtime": "webhook"
+  },
+  "settings": [
+    {
+      "key": "openai_api_key",
+      "label": "OpenAI API Key",
+      "type": "password",
+      "secret": true
+    }
+  ],
+  "tools": [
+    {
+      "id": "generate_image",
+      "name": "Generar Imagen",
+      "description": "Genera una imagen a partir de una descripción de texto usando DALL·E 3.",
+      "category": "action",
+      "input_schema": [
+        {
+          "name": "prompt",
+          "type": "string",
+          "description": "Descripción de la imagen a generar",
+          "required": true,
+          "extraction_hint": "Lo que el usuario quiere ver en la imagen, traducido al inglés para mejores resultados"
+        }
+      ],
+      "endpoint": "https://api.openai.com/v1/images/generations",
+      "method": "POST"
+    }
+  ],
+  "events": [],
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "api.openai.com",
+      "reason": "Generación de imágenes vía DALL·E"
+    }
+  ],
+  "author": "asteby",
+  "license": "MIT"
+}
