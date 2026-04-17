@@ -1,0 +1,137 @@
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  DoubleArrowLeftIcon,
+  DoubleArrowRightIcon,
+} from '@radix-ui/react-icons'
+import { type Table } from '@tanstack/react-table'
+import { useTranslation } from 'react-i18next'
+import { cn, getPageNumbers } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+
+type DataTablePaginationProps<TData> = {
+  table: Table<TData>
+  className?: string
+  pageSizeOptions?: number[]
+  leftActions?: React.ReactNode
+}
+
+export function DataTablePagination<TData>({
+  table,
+  className,
+  pageSizeOptions = [10, 20, 30, 40, 50],
+  leftActions,
+}: DataTablePaginationProps<TData>) {
+  const { t } = useTranslation()
+  const currentPage = table.getState().pagination.pageIndex + 1
+  const totalPages = table.getPageCount()
+  const pageNumbers = getPageNumbers(currentPage, totalPages)
+
+  return (
+    <div
+      className={cn(
+        'flex items-center justify-between overflow-clip px-2',
+        '@max-2xl/content:flex-col-reverse @max-2xl/content:gap-4',
+        className
+      )}
+      style={{ overflowClipMargin: 1 }}
+    >
+      <div className='flex w-full items-center justify-between'>
+        <div className='flex w-[100px] items-center justify-center text-sm font-medium @2xl/content:hidden'>
+          {t('datatable.page_x_of_y', { current: currentPage, total: totalPages })}
+        </div>
+        <div className='flex items-center gap-2 @max-2xl/content:flex-row-reverse'>
+          <Select
+            value={`${table.getState().pagination.pageSize}`}
+            onValueChange={(value) => {
+              table.setPageSize(Number(value))
+            }}
+          >
+            <SelectTrigger className='h-9 w-[70px]'>
+              <SelectValue placeholder={table.getState().pagination.pageSize} />
+            </SelectTrigger>
+            <SelectContent side='top'>
+              {pageSizeOptions.map((pageSize) => (
+                <SelectItem key={pageSize} value={`${pageSize}`}>
+                  {pageSize}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className='hidden text-sm font-medium sm:block'>{t('datatable.rows_per_page')}</p>
+          {leftActions}
+        </div>
+      </div>
+
+      <div className='flex items-center sm:space-x-6 lg:space-x-8'>
+        <div className='flex w-[100px] items-center justify-center text-sm font-medium @max-3xl/content:hidden'>
+          {t('datatable.page_x_of_y', { current: currentPage, total: totalPages })}
+        </div>
+        <div className='flex items-center space-x-2'>
+          <Button
+            variant='outline'
+            className='size-9 p-0 @max-md/content:hidden'
+            onClick={() => table.setPageIndex(0)}
+            disabled={!table.getCanPreviousPage()}
+          >
+            <span className='sr-only'>{t('datatable.go_first_page')}</span>
+            <DoubleArrowLeftIcon className='h-4 w-4' />
+          </Button>
+          <Button
+            variant='outline'
+            className='size-9 p-0'
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            <span className='sr-only'>{t('datatable.go_previous_page')}</span>
+            <ChevronLeftIcon className='h-4 w-4' />
+          </Button>
+
+          {/* Page number buttons */}
+          {pageNumbers.map((pageNumber, index) => (
+            <div key={`${pageNumber}-${index}`} className='flex items-center'>
+              {pageNumber === '...' ? (
+                <span className='text-muted-foreground px-1 text-sm'>...</span>
+              ) : (
+                <Button
+                  variant={currentPage === pageNumber ? 'default' : 'outline'}
+                  className='h-9 min-w-9 px-3'
+                  onClick={() => table.setPageIndex((pageNumber as number) - 1)}
+                >
+                  <span className='sr-only'>{t('datatable.go_page', { page: pageNumber })}</span>
+                  {pageNumber}
+                </Button>
+              )}
+            </div>
+          ))}
+
+          <Button
+            variant='outline'
+            className='size-9 p-0'
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+          >
+            <span className='sr-only'>{t('datatable.go_next_page')}</span>
+            <ChevronRightIcon className='h-4 w-4' />
+          </Button>
+          <Button
+            variant='outline'
+            className='size-9 p-0 @max-md/content:hidden'
+            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
+            disabled={!table.getCanNextPage()}
+          >
+            <span className='sr-only'>{t('datatable.go_last_page')}</span>
+            <DoubleArrowRightIcon className='h-4 w-4' />
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,3 @@
+# Metacore app environment variables. Copy to `.env.local` and fill in.
+VITE_APP_NAME={{APP_NAME}}
+VITE_API_URL=http://localhost:8080

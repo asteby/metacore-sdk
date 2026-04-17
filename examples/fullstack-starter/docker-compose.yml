@@ -7,21 +7,11 @@ services:
       POSTGRES_PASSWORD: metacore
     ports: ["5432:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
-
-  backend:
-    build: ./backend
-    depends_on: [db]
-    environment:
-      PORT: "7200"
-      DATABASE_URL: postgres://metacore:metacore@db:5432/metacore?sslmode=disable
-      JWT_SECRET: change-me-super-long-random-secret-at-least-32-chars
-      CORS_ORIGINS: http://localhost:5173
-    ports: ["7200:7200"]
-
-  frontend:
-    build: ./frontend
-    depends_on: [backend]
-    ports: ["5173:5173"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U metacore -d metacore"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
 
 volumes:
   pgdata:

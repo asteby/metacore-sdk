@@ -1,0 +1,46 @@
+{
+  "name": "create-metacore-app",
+  "version": "0.1.0",
+  "description": "Scaffolder for metacore Vite+React apps. Run `npx create-metacore-app my-app`.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asteby/metacore-sdk",
+    "directory": "packages/create-metacore-app"
+  },
+  "type": "module",
+  "bin": {
+    "create-metacore-app": "./bin/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "bin",
+    "dist",
+    "templates",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --target node20 --clean --dts",
+    "dev": "tsup src/index.ts --format esm --target node20 --watch",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "kolorist": "^1.8.0",
+    "prompts": "^2.4.2",
+    "tiny-glob": "^0.2.9"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/prompts": "^2.4.9",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

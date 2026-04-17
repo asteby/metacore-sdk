@@ -1,1 +1,8 @@
 @import '@asteby/metacore-theme/index.css';
+
+@source "../../node_modules/@asteby/metacore-ui/dist";
+@source "../../node_modules/@asteby/metacore-auth/dist";
+@source "../../node_modules/@asteby/metacore-runtime-react/dist";
+@source "../../node_modules/@asteby/metacore-pwa/dist";
+@source "../../node_modules/@asteby/metacore-notifications/dist";
+@source "../../node_modules/@asteby/metacore-webhooks/dist";

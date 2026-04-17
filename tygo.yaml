@@ -1,0 +1,12 @@
+packages:
+  - path: "github.com/asteby/metacore-kernel/manifest"
+    output_path: "packages/sdk/src/generated/manifest.ts"
+    type_mappings:
+      "time.Time": "string"
+      "json.RawMessage": "unknown"
+    frontmatter: |
+      /**
+       * AUTO-GENERATED — do not edit by hand.
+       * Re-generate with: pnpm codegen
+       * Source: github.com/asteby/metacore-kernel/manifest
+       */

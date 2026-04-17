@@ -6,7 +6,7 @@ export const api = createApiClient({
   getToken: () => useAuthStore.getState().auth.accessToken,
   onUnauthorized: () => {
     useAuthStore.getState().auth.reset()
-    if (typeof window !== 'undefined') {
+    if (!window.location.pathname.startsWith('/sign-in')) {
       window.location.href = '/sign-in'
     }
   },

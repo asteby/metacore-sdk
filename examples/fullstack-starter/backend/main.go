@@ -6,11 +6,14 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/google/uuid"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 
+	"github.com/asteby/metacore-kernel/auth"
 	"github.com/asteby/metacore-kernel/host"
 	"github.com/asteby/metacore-kernel/modelbase"
+	metacorews "github.com/asteby/metacore-kernel/ws"
 
 	"github.com/asteby/metacore-sdk/examples/fullstack-starter/backend/models"
 )
@@ -20,22 +23,95 @@ func main() {
 	if err != nil {
 		log.Fatalf("db: %v", err)
 	}
-	db.AutoMigrate(&models.Product{}, &models.Customer{})
+	db.AutoMigrate(&models.Product{}, &models.Customer{}, &models.Notification{})
 
 	app := host.NewApp(host.AppConfig{
 		DB:             db,
 		JWTSecret:      []byte(host.MustGetenv("JWT_SECRET")),
 		EnableWebhooks: true,
-		EnablePush:     true,
-		VAPIDPublic:    os.Getenv("VAPID_PUBLIC_KEY"),
-		VAPIDPrivate:   os.Getenv("VAPID_PRIVATE_KEY"),
 	})
 	app.RegisterModel("products", func() modelbase.ModelDefiner { return &models.Product{} })
 	app.RegisterModel("customers", func() modelbase.ModelDefiner { return &models.Customer{} })
+	app.RegisterModel("notifications", func() modelbase.ModelDefiner { return &models.Notification{} })
+
+	// When a NOTIFICATION is sent via WebSocket, persist it to DB
+	app.WSHub.OnNotification = func(userID uuid.UUID, msg metacorews.Message) {
+		type payload struct {
+			Title   string `json:"title"`
+			Message string `json:"message"`
+			Type    string `json:"type"`
+			Link    string `json:"link"`
+			Icon    string `json:"icon"`
+		}
+		// Best-effort persistence
+		notif := models.Notification{
+			UserID:  &userID,
+			Title:   "Notification",
+			Message: "New notification",
+			Type:    "info",
+		}
+		if p, ok := msg.Payload.(map[string]any); ok {
+			if t, _ := p["title"].(string); t != "" {
+				notif.Title = t
+			}
+			if m, _ := p["message"].(string); m != "" {
+				notif.Message = m
+			}
+			if tp, _ := p["type"].(string); tp != "" {
+				notif.Type = tp
+			}
+			if l, _ := p["link"].(string); l != "" {
+				notif.Link = l
+			}
+		}
+		notif.OrganizationID = uuid.Nil // will be set by user lookup
+		db.Create(&notif)
+	}
 
 	fiberApp := fiber.New()
-	fiberApp.Use(cors.New(cors.Config{AllowOrigins: os.Getenv("CORS_ORIGINS")}))
-	app.Mount(fiberApp.Group("/api"))
+	fiberApp.Use(cors.New(cors.Config{AllowOrigins: "*", AllowHeaders: "Origin, Content-Type, Accept, Authorization"}))
+
+	apiRouter := app.Mount(fiberApp.Group("/api"))
+
+	// GET /api/notifications/me — returns current user's notifications
+	apiRouter.Get("/notifications/me", func(c *fiber.Ctx) error {
+		userID := auth.GetUserID(c)
+		var notifs []models.Notification
+		db.Where("user_id = ?", userID).Order("created_at DESC").Limit(20).Find(&notifs)
+		return c.JSON(fiber.Map{"success": true, "data": notifs})
+	})
+
+	// POST /api/test-notification — sends a test notification via WebSocket
+	apiRouter.Post("/test-notification", func(c *fiber.Ctx) error {
+		userID := auth.GetUserID(c)
+
+		// Save to DB
+		notif := models.Notification{
+			UserID:  &userID,
+			Title:   "Test Notification",
+			Message: "This was sent via WebSocket in real-time!",
+			Type:    "success",
+			Link:    "/m/customers",
+			Icon:    "bell",
+		}
+		db.Create(&notif)
+
+		// Push via WebSocket
+		app.WSHub.SendToUser(userID, metacorews.Message{
+			Type: metacorews.MsgNotification,
+			Payload: map[string]any{
+				"id":      notif.ID,
+				"title":   notif.Title,
+				"message": notif.Message,
+				"type":    notif.Type,
+				"link":    notif.Link,
+				"icon":    notif.Icon,
+			},
+		})
+
+		return c.JSON(fiber.Map{"success": true, "message": "Notification sent via WebSocket"})
+	})
+
 	fiberApp.Get("/healthz", func(c *fiber.Ctx) error { return c.SendString("ok") })
 
 	log.Fatal(fiberApp.Listen(":" + os.Getenv("PORT")))

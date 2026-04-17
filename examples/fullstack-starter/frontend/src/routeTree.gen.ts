@@ -13,9 +13,8 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
 import { Route as authSignUpRouteImport } from './routes/(auth)/sign-up'
 import { Route as authSignInRouteImport } from './routes/(auth)/sign-in'
-import { Route as AuthenticatedWebhooksIndexRouteImport } from './routes/_authenticated/webhooks/index'
-import { Route as AuthenticatedProductsIndexRouteImport } from './routes/_authenticated/products/index'
-import { Route as AuthenticatedCustomersIndexRouteImport } from './routes/_authenticated/customers/index'
+import { Route as AuthenticatedMarketplaceIndexRouteImport } from './routes/_authenticated/marketplace/index'
+import { Route as AuthenticatedMModelIndexRouteImport } from './routes/_authenticated/m/$model/index'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
@@ -36,22 +35,16 @@ const authSignInRoute = authSignInRouteImport.update({
   path: '/sign-in',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedWebhooksIndexRoute =
-  AuthenticatedWebhooksIndexRouteImport.update({
-    id: '/webhooks/',
-    path: '/webhooks/',
+const AuthenticatedMarketplaceIndexRoute =
+  AuthenticatedMarketplaceIndexRouteImport.update({
+    id: '/marketplace/',
+    path: '/marketplace/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedProductsIndexRoute =
-  AuthenticatedProductsIndexRouteImport.update({
-    id: '/products/',
-    path: '/products/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
-const AuthenticatedCustomersIndexRoute =
-  AuthenticatedCustomersIndexRouteImport.update({
-    id: '/customers/',
-    path: '/customers/',
+const AuthenticatedMModelIndexRoute =
+  AuthenticatedMModelIndexRouteImport.update({
+    id: '/m/$model/',
+    path: '/m/$model/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
 
@@ -59,17 +52,15 @@ export interface FileRoutesByFullPath {
   '/': typeof AuthenticatedIndexRoute
   '/sign-in': typeof authSignInRoute
   '/sign-up': typeof authSignUpRoute
-  '/customers/': typeof AuthenticatedCustomersIndexRoute
-  '/products/': typeof AuthenticatedProductsIndexRoute
-  '/webhooks/': typeof AuthenticatedWebhooksIndexRoute
+  '/marketplace/': typeof AuthenticatedMarketplaceIndexRoute
+  '/m/$model/': typeof AuthenticatedMModelIndexRoute
 }
 export interface FileRoutesByTo {
   '/sign-in': typeof authSignInRoute
   '/sign-up': typeof authSignUpRoute
   '/': typeof AuthenticatedIndexRoute
-  '/customers': typeof AuthenticatedCustomersIndexRoute
-  '/products': typeof AuthenticatedProductsIndexRoute
-  '/webhooks': typeof AuthenticatedWebhooksIndexRoute
+  '/marketplace': typeof AuthenticatedMarketplaceIndexRoute
+  '/m/$model': typeof AuthenticatedMModelIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -77,30 +68,22 @@ export interface FileRoutesById {
   '/(auth)/sign-in': typeof authSignInRoute
   '/(auth)/sign-up': typeof authSignUpRoute
   '/_authenticated/': typeof AuthenticatedIndexRoute
-  '/_authenticated/customers/': typeof AuthenticatedCustomersIndexRoute
-  '/_authenticated/products/': typeof AuthenticatedProductsIndexRoute
-  '/_authenticated/webhooks/': typeof AuthenticatedWebhooksIndexRoute
+  '/_authenticated/marketplace/': typeof AuthenticatedMarketplaceIndexRoute
+  '/_authenticated/m/$model/': typeof AuthenticatedMModelIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/sign-in'
-    | '/sign-up'
-    | '/customers/'
-    | '/products/'
-    | '/webhooks/'
+  fullPaths: '/' | '/sign-in' | '/sign-up' | '/marketplace/' | '/m/$model/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/sign-in' | '/sign-up' | '/' | '/customers' | '/products' | '/webhooks'
+  to: '/sign-in' | '/sign-up' | '/' | '/marketplace' | '/m/$model'
   id:
     | '__root__'
     | '/_authenticated'
     | '/(auth)/sign-in'
     | '/(auth)/sign-up'
     | '/_authenticated/'
-    | '/_authenticated/customers/'
-    | '/_authenticated/products/'
-    | '/_authenticated/webhooks/'
+    | '/_authenticated/marketplace/'
+    | '/_authenticated/m/$model/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -139,25 +122,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof authSignInRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/webhooks/': {
-      id: '/_authenticated/webhooks/'
-      path: '/webhooks'
-      fullPath: '/webhooks/'
-      preLoaderRoute: typeof AuthenticatedWebhooksIndexRouteImport
+    '/_authenticated/marketplace/': {
+      id: '/_authenticated/marketplace/'
+      path: '/marketplace'
+      fullPath: '/marketplace/'
+      preLoaderRoute: typeof AuthenticatedMarketplaceIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/products/': {
-      id: '/_authenticated/products/'
-      path: '/products'
-      fullPath: '/products/'
-      preLoaderRoute: typeof AuthenticatedProductsIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/_authenticated/customers/': {
-      id: '/_authenticated/customers/'
-      path: '/customers'
-      fullPath: '/customers/'
-      preLoaderRoute: typeof AuthenticatedCustomersIndexRouteImport
+    '/_authenticated/m/$model/': {
+      id: '/_authenticated/m/$model/'
+      path: '/m/$model'
+      fullPath: '/m/$model/'
+      preLoaderRoute: typeof AuthenticatedMModelIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
   }
@@ -165,16 +141,14 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedIndexRoute: typeof AuthenticatedIndexRoute
-  AuthenticatedCustomersIndexRoute: typeof AuthenticatedCustomersIndexRoute
-  AuthenticatedProductsIndexRoute: typeof AuthenticatedProductsIndexRoute
-  AuthenticatedWebhooksIndexRoute: typeof AuthenticatedWebhooksIndexRoute
+  AuthenticatedMarketplaceIndexRoute: typeof AuthenticatedMarketplaceIndexRoute
+  AuthenticatedMModelIndexRoute: typeof AuthenticatedMModelIndexRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedIndexRoute: AuthenticatedIndexRoute,
-  AuthenticatedCustomersIndexRoute: AuthenticatedCustomersIndexRoute,
-  AuthenticatedProductsIndexRoute: AuthenticatedProductsIndexRoute,
-  AuthenticatedWebhooksIndexRoute: AuthenticatedWebhooksIndexRoute,
+  AuthenticatedMarketplaceIndexRoute: AuthenticatedMarketplaceIndexRoute,
+  AuthenticatedMModelIndexRoute: AuthenticatedMModelIndexRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
