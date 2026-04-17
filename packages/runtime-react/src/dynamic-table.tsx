@@ -85,8 +85,9 @@ interface DynamicTableProps {
      * Host-provided factory that turns metadata into TanStack column defs.
      * Lives in the host because the rendered cells depend on the host's
      * design system (Badge, Avatar, MediaGallery, phone flags, etc.).
+     * Optional — a sensible default maps each column to { accessorKey, header }.
      */
-    getDynamicColumns: GetDynamicColumns
+    getDynamicColumns?: GetDynamicColumns
 }
 
 export function DynamicTable({
@@ -98,7 +99,7 @@ export function DynamicTable({
     refreshTrigger,
     defaultFilters,
     extraColumns = [],
-    getDynamicColumns,
+    getDynamicColumns = defaultGetDynamicColumns,
 }: DynamicTableProps) {
     const { t, i18n } = useTranslation()
     const api = useApi()
@@ -755,3 +756,11 @@ export function DynamicTable({
         </OptionsContext.Provider>
     )
 }
+
+/** Sensible default when hosts don't provide their own getDynamicColumns. */
+const defaultGetDynamicColumns: GetDynamicColumns = (metadata, _handleAction, _t, _lang, _filters) =>
+    (metadata.columns ?? []).map((col: any) => ({
+        accessorKey: col.name,
+        header: col.label ?? col.name,
+        enableSorting: col.sortable ?? false,
+    }))
