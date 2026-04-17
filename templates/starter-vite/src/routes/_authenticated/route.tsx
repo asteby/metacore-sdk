@@ -26,7 +26,7 @@ const SidebarLink = (props: React.AnchorHTMLAttributes<HTMLAnchorElement> & { to
   const { to, children, ...rest } = props
   return (
     <Link to={to} {...rest}>
-      {children}
+      {children as any}
     </Link>
   )
 }
