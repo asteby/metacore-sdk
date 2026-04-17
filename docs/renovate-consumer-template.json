@@ -1,0 +1,9 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "packageRules": [
+    { "matchPackagePatterns": ["^@asteby/metacore-"], "matchUpdateTypes": ["patch","minor"], "automerge": true, "platformAutomerge": true, "groupName": "metacore core" },
+    { "matchPackagePatterns": ["^@asteby/metacore-"], "matchUpdateTypes": ["major"], "automerge": false, "assignees": ["@tech-lead"] }
+  ],
+  "schedule": ["at any time"]
+}

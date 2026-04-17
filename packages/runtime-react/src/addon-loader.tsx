@@ -49,11 +49,16 @@ function loadScript(url: string, scope: string): Promise<void> {
     return promise
 }
 
+interface FederationContainer {
+    init: (shareScope: unknown) => Promise<void>
+    get: (module: string) => Promise<() => any>
+}
+
 async function loadRemote(scope: string, module: string) {
     if (typeof window.__webpack_init_sharing__ === 'function') {
         await window.__webpack_init_sharing__('default')
     }
-    const container = window[scope]
+    const container = window[scope] as FederationContainer | undefined
     if (!container) throw new Error(`Addon container "${scope}" not found on window`)
     if (typeof container.init === 'function' && window.__webpack_share_scopes__) {
         await container.init(window.__webpack_share_scopes__.default)

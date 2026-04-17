@@ -1,20 +1,19 @@
-// Minimal standalone DynamicForm. Neither host ships a dedicated component —
-// the existing "dynamic-record-dialog" inlines form rendering. This file
-// factors a reusable <DynamicForm> out of that pattern + the ActionFieldDef
-// renderer. Consumes `fields[]` from a manifest.
+// Minimal standalone DynamicForm. Factored from the dynamic-record-dialog
+// pattern + ActionFieldDef renderer so callers can reuse the form layout
+// outside the full record-edit modal.
 import { useEffect, useState } from 'react'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
-import { Switch } from '@/components/ui/switch'
-import { Button } from '@/components/ui/button'
 import {
+    Input,
+    Textarea,
+    Label,
+    Switch,
+    Button,
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from '@/components/ui/select'
+} from '@asteby/metacore-ui/primitives'
 import type { ActionFieldDef } from './types'
 
 export interface DynamicFormProps {
@@ -47,7 +46,7 @@ export function DynamicForm({
         setValues(defaults)
     }, [fields, initialValues])
 
-    const update = (k: string, v: any) => setValues(prev => ({ ...prev, [k]: v }))
+    const update = (k: string, v: any) => setValues((prev: Record<string, any>) => ({ ...prev, [k]: v }))
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -69,7 +68,7 @@ export function DynamicForm({
                         {field.label}
                         {field.required && <span className="text-red-500 ml-1">*</span>}
                     </Label>
-                    {renderField(field, values[field.key], (v) => update(field.key, v))}
+                    {renderField(field, values[field.key], (v: any) => update(field.key, v))}
                 </div>
             ))}
             <div className="flex justify-end gap-2 pt-2">
@@ -87,7 +86,7 @@ export function DynamicForm({
 function renderField(field: ActionFieldDef, value: any, onChange: (v: any) => void) {
     switch (field.type) {
         case 'textarea':
-            return <Textarea id={field.key} value={value || ''} onChange={(e) => onChange(e.target.value)} placeholder={field.placeholder} />
+            return <Textarea id={field.key} value={value || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)} placeholder={field.placeholder} />
         case 'select':
             return (
                 <Select value={value || ''} onValueChange={onChange}>
@@ -100,10 +99,10 @@ function renderField(field: ActionFieldDef, value: any, onChange: (v: any) => vo
         case 'boolean':
             return <Switch id={field.key} checked={!!value} onCheckedChange={onChange} />
         case 'number':
-            return <Input id={field.key} type="number" value={value ?? ''} onChange={(e) => onChange(e.target.valueAsNumber || '')} placeholder={field.placeholder} />
+            return <Input id={field.key} type="number" value={value ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.valueAsNumber || '')} placeholder={field.placeholder} />
         case 'date':
-            return <Input id={field.key} type="date" value={value || ''} onChange={(e) => onChange(e.target.value)} />
+            return <Input id={field.key} type="date" value={value || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} />
         default:
-            return <Input id={field.key} type={field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : 'text'} value={value || ''} onChange={(e) => onChange(e.target.value)} placeholder={field.placeholder} />
+            return <Input id={field.key} type={field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : 'text'} value={value || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} placeholder={field.placeholder} />
     }
 }

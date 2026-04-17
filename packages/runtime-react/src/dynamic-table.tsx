@@ -1,19 +1,30 @@
-// Ported from ops/frontend/src/components/dynamic/dynamic-table.tsx (semantic union with link).
-// Host-injected peer deps (the host must alias these in its bundler):
-//   @/components/ui/*       → shadcn primitives
-//   @/components/data-table → DataTableToolbar, DataTablePagination, DataTableBulkActions, DynamicFilterOption type
-//   @/lib/api               → axios instance
-//   @/lib/utils             → cn
-//   @/stores/metadata-cache → useMetadataCache zustand store
-//   @/stores/branch-store   → useBranchStore zustand store (optional — no-op on hosts without branches)
+// DynamicTable — metadata-driven CRUD table used by every metacore host.
+// Ported from the ops starter but with the host-specific aliases swapped
+// for metacore packages + context-injected peer deps:
+//   * `@/lib/api` → <ApiProvider> (see api-context.tsx)
+//   * `@/stores/branch-store` → <BranchProvider> (optional)
+//   * `@/stores/metadata-cache` → internal ./metadata-cache zustand store
+//   * `@/components/ui/*` → @asteby/metacore-ui/primitives
+//   * `@/components/data-table/*` → @asteby/metacore-ui/data-table
+//   * `@/components/dynamic/{record,export,import}-dialog` → ./dialogs/*
+//   * `@/components/dynamic/dynamic-columns` → host-injected via the
+//     `getDynamicColumns` prop (hosts retain ownership because the rendered
+//     column cells are tightly coupled to their design system).
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { format } from 'date-fns'
-import { DateRange } from 'react-day-picker'
+import type { DateRange } from 'react-day-picker'
 import {
     type SortingState,
     type VisibilityState,
+    type ColumnFiltersState,
+    type PaginationState,
+    type ColumnDef,
+    type HeaderGroup,
+    type Header,
+    type Row,
+    type Cell,
     flexRender,
     getCoreRowModel,
     getFacetedRowModel,
@@ -22,11 +33,8 @@ import {
     getPaginationRowModel,
     getSortedRowModel,
     useReactTable,
-    ColumnFiltersState,
-    PaginationState,
-    ColumnDef
 } from '@tanstack/react-table'
-import { cn } from '@/lib/utils'
+import { cn } from '@asteby/metacore-ui/lib'
 import {
     Table,
     TableBody,
@@ -34,19 +42,8 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from '@/components/ui/table'
-import { DataTablePagination, DataTableToolbar } from '@/components/data-table'
-import type { DynamicFilterOption } from '@/components/data-table/dynamic-filter'
-import { api } from '@/lib/api'
-import { useBranchStore } from '@/stores/branch-store'
-import { Inbox, Download, Upload, Trash2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Progress } from '@/components/ui/progress'
-import { toast } from 'sonner'
-import { useMetadataCache } from '@/stores/metadata-cache'
-import { DataTableBulkActions } from '@/components/data-table/bulk-actions'
-import {
+    Button,
+    Skeleton,
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
@@ -55,18 +52,25 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-
-// These three are siblings inside the host (dynamic-record-dialog / export-dialog / import-dialog)
-// and are NOT part of runtime-react yet — hosts still own them. Imported via `@/components/dynamic/*`.
-import { DynamicRecordDialog } from '@/components/dynamic/dynamic-record-dialog'
-import { ExportDialog } from '@/components/dynamic/export-dialog'
-import { ImportDialog } from '@/components/dynamic/import-dialog'
-
-import { getDynamicColumns, type ColumnFilterConfig } from './dynamic-columns-shim'
+} from '@asteby/metacore-ui/primitives'
+import {
+    DataTablePagination,
+    DataTableToolbar,
+    DataTableBulkActions,
+    type FilterOption as DynamicFilterOption,
+} from '@asteby/metacore-ui/data-table'
+import { Inbox, Download, Upload, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { Progress } from './dialogs/_primitives'
+import { useMetadataCache } from './metadata-cache'
+import { useApi, useCurrentBranch } from './api-context'
+import type { ColumnFilterConfig, GetDynamicColumns } from './dynamic-columns-shim'
 import { OptionsContext } from './options-context'
 import { ActionModalDispatcher } from './action-modal-dispatcher'
 import type { TableMetadata, ApiResponse, ActionMetadata } from './types'
+import { DynamicRecordDialog } from './dialogs/dynamic-record'
+import { ExportDialog } from './dialogs/export'
+import { ImportDialog } from './dialogs/import'
 
 interface DynamicTableProps {
     model: string
@@ -77,6 +81,12 @@ interface DynamicTableProps {
     refreshTrigger?: any
     defaultFilters?: Record<string, any>
     extraColumns?: ColumnDef<any>[]
+    /**
+     * Host-provided factory that turns metadata into TanStack column defs.
+     * Lives in the host because the rendered cells depend on the host's
+     * design system (Badge, Avatar, MediaGallery, phone flags, etc.).
+     */
+    getDynamicColumns: GetDynamicColumns
 }
 
 export function DynamicTable({
@@ -87,19 +97,15 @@ export function DynamicTable({
     onAction,
     refreshTrigger,
     defaultFilters,
-    extraColumns = []
+    extraColumns = [],
+    getDynamicColumns,
 }: DynamicTableProps) {
     const { t, i18n } = useTranslation()
-    const { currentBranch } = useBranchStore()
+    const api = useApi()
+    const currentBranch = useCurrentBranch()
+    const navigate = useNavigate()
 
     const prevBranchId = useRef(currentBranch?.id)
-    useEffect(() => {
-        if (prevBranchId.current !== currentBranch?.id) {
-            prevBranchId.current = currentBranch?.id
-            setPagination(prev => ({ ...prev, pageIndex: 0 }))
-            setRowSelection({})
-        }
-    }, [currentBranch?.id])
 
     const { getMetadata, setMetadata: cacheMetadata } = useMetadataCache()
     const cachedMeta = getMetadata(model)
@@ -145,14 +151,20 @@ export function DynamicTable({
     const [globalFilter, setGlobalFilter] = useState('')
     const [rowCount, setRowCount] = useState(0)
 
-    const navigate = useNavigate()
-
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
     const [dynamicFilters, setDynamicFilters] = useState<Record<string, string[]>>({})
     const [filterOptionsMap, setFilterOptionsMap] = useState<Map<string, DynamicFilterOption[]>>(new Map())
 
     const initializedFromUrl = useRef(false)
     const urlHadPerPage = useRef(false)
+
+    useEffect(() => {
+        if (prevBranchId.current !== currentBranch?.id) {
+            prevBranchId.current = currentBranch?.id
+            setPagination((prev: PaginationState) => ({ ...prev, pageIndex: 0 }))
+            setRowSelection({})
+        }
+    }, [currentBranch?.id])
 
     const urlAliasToOperator: Record<string, string> = {
         'contains': 'ILIKE', 'like': 'LIKE', 'in': 'IN', 'not_in': 'NOT_IN',
@@ -188,7 +200,7 @@ export function DynamicTable({
         const perPage = params.get('per_page')
         if (perPage) urlHadPerPage.current = true
         if (page || perPage) {
-            setPagination(prev => ({
+            setPagination((prev: PaginationState) => ({
                 pageIndex: page ? Math.max(0, parseInt(page, 10) - 1) : prev.pageIndex,
                 pageSize: perPage ? parseInt(perPage, 10) : prev.pageSize,
             }))
@@ -248,7 +260,7 @@ export function DynamicTable({
         const map = new Map<string, any[]>()
         results.forEach(r => map.set(r.endpoint, r.data))
         return map
-    }, [])
+    }, [api])
 
     const metaInitRef = useRef(false)
     useEffect(() => {
@@ -260,17 +272,17 @@ export function DynamicTable({
             if (cached) {
                 meta = cached
                 setMetadata(meta)
-                if (!urlHadPerPage.current) setPagination(prev => ({ ...prev, pageSize: meta.defaultPerPage || 10 }))
+                if (!urlHadPerPage.current) setPagination((prev: PaginationState) => ({ ...prev, pageSize: meta.defaultPerPage || 10 }))
                 setLoading(false)
             } else {
                 setLoading(true)
                 try {
-                    const res = await api.get<ApiResponse<TableMetadata>>(`/metadata/table/${model}`)
+                    const res = await api.get(`/metadata/table/${model}`) as { data: ApiResponse<TableMetadata> }
                     if (!res.data.success) return
                     meta = res.data.data
                     setMetadata(meta)
                     cacheMetadata(model, meta)
-                    if (!urlHadPerPage.current) setPagination(prev => ({ ...prev, pageSize: meta.defaultPerPage || 10 }))
+                    if (!urlHadPerPage.current) setPagination((prev: PaginationState) => ({ ...prev, pageSize: meta.defaultPerPage || 10 }))
                 } catch (error) {
                     console.error('Error al cargar la configuración de la tabla', error)
                     return
@@ -311,7 +323,7 @@ export function DynamicTable({
             params.order = sorting[0].desc ? 'desc' : 'asc'
         }
         if (globalFilter) params.search = globalFilter
-        columnFilters.forEach(filter => { params[`f_${filter.id}`] = filter.value })
+        columnFilters.forEach((filter: { id: string; value: unknown }) => { params[`f_${filter.id}`] = filter.value })
         if (defaultFilters) Object.entries(defaultFilters).forEach(([key, value]) => { params[`f_${key}`] = value })
         Object.entries(dynamicFilters).forEach(([key, values]) => {
             if (values.length === 0) return
@@ -351,7 +363,7 @@ export function DynamicTable({
                 per_page: pagination.pageSize,
                 ...buildFilterParams(),
             }
-            const res = await api.get<ApiResponse<any[]>>(endpoint || `/data/${model}`, { params })
+            const res = await api.get(endpoint || `/data/${model}`, { params }) as { data: ApiResponse<any[]> }
             if (res.data.success) {
                 setData(res.data.data || [])
                 if (res.data.meta) setRowCount(res.data.meta.total)
@@ -361,7 +373,7 @@ export function DynamicTable({
         } finally {
             setLoadingData(false)
         }
-    }, [model, metadata, pagination, buildFilterParams, refreshTrigger, endpoint, currentBranch?.id])
+    }, [model, metadata, pagination, buildFilterParams, refreshTrigger, endpoint, currentBranch?.id, api])
 
     const initialFetchDone = useRef(false)
     useEffect(() => {
@@ -411,7 +423,7 @@ export function DynamicTable({
         }
         if (onAction) { await Promise.resolve(onAction(action, row)); handleRefresh() }
         else handleRefresh()
-    }, [onAction, handleRefresh, metadata])
+    }, [onAction, handleRefresh, metadata, navigate])
 
     const confirmDelete = async () => {
         if (!rowToDelete) return
@@ -458,8 +470,8 @@ export function DynamicTable({
     }
 
     const handleDynamicFilterChange = useCallback((filterKey: string, values: string[]) => {
-        setDynamicFilters(prev => ({ ...prev, [filterKey]: values }))
-        setPagination(prev => ({ ...prev, pageIndex: 0 }))
+        setDynamicFilters((prev: Record<string, string[]>) => ({ ...prev, [filterKey]: values }))
+        setPagination((prev: PaginationState) => ({ ...prev, pageIndex: 0 }))
     }, [])
 
     const columnFilterConfigs = useMemo(() => {
@@ -491,11 +503,11 @@ export function DynamicTable({
     const columns = useMemo(() => {
         if (!metadata) return []
         const baseColumns = getDynamicColumns(metadata, handleInternalAction, t, i18n.language, columnFilterConfigs)
-        const filteredBase = baseColumns.filter(col => !hiddenColumns.includes(col.id as string))
-        const actionsCol = filteredBase.find(c => c.id === 'actions')
-        const otherCols = filteredBase.filter(c => c.id !== 'actions')
+        const filteredBase = baseColumns.filter((col: ColumnDef<any>) => !hiddenColumns.includes(col.id as string))
+        const actionsCol = filteredBase.find((c: ColumnDef<any>) => c.id === 'actions')
+        const otherCols = filteredBase.filter((c: ColumnDef<any>) => c.id !== 'actions')
         return [...otherCols, ...extraColumns, ...(actionsCol ? [actionsCol] : [])]
-    }, [metadata, handleInternalAction, hiddenColumns, extraColumns, t, i18n.language, columnFilterConfigs])
+    }, [metadata, handleInternalAction, hiddenColumns, extraColumns, t, i18n.language, columnFilterConfigs, getDynamicColumns])
 
     const filters = useMemo(() => [], [])
 
@@ -549,7 +561,7 @@ export function DynamicTable({
                     </div>
                 </div>
                 <div className='flex-1 min-h-0 overflow-auto border rounded-md bg-card'>
-                    <Table noWrapper className='min-w-max w-full'>
+                    <Table className='min-w-max w-full'>
                         <TableHeader className='sticky top-0 z-10'>
                             <TableRow className='border-b-0 hover:bg-transparent'>
                                 <TableHead className='bg-card border-b h-10 w-10'><Skeleton className="h-4 w-4" /></TableHead>
@@ -603,11 +615,11 @@ export function DynamicTable({
                     />
                 </div>
                 <div className='flex-1 min-h-0 overflow-auto border rounded-md bg-card'>
-                    <Table noWrapper className='min-w-max w-full'>
+                    <Table className='min-w-max w-full'>
                         <TableHeader className='sticky top-0 z-10'>
-                            {table.getHeaderGroups().map((headerGroup) => (
+                            {table.getHeaderGroups().map((headerGroup: HeaderGroup<any>) => (
                                 <TableRow key={headerGroup.id} className='border-b-0 hover:bg-transparent'>
-                                    {headerGroup.headers.map((header) => {
+                                    {headerGroup.headers.map((header: Header<any, unknown>) => {
                                         const isActionsColumn = header.id === 'actions'
                                         return (
                                             <TableHead
@@ -627,9 +639,9 @@ export function DynamicTable({
                             {loadingData && data.length === 0 ? (
                                 <TableSkeleton />
                             ) : table.getRowModel().rows?.length ? (
-                                table.getRowModel().rows.map((row) => (
+                                table.getRowModel().rows.map((row: Row<any>) => (
                                     <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
-                                        {row.getVisibleCells().map((cell) => {
+                                        {row.getVisibleCells().map((cell: Cell<any, unknown>) => {
                                             const isActionsColumn = cell.column.id === 'actions'
                                             return (
                                                 <TableCell
@@ -664,14 +676,12 @@ export function DynamicTable({
                 <div className='shrink-0 pt-4'>
                     <DataTablePagination
                         table={table}
-                        // @ts-ignore
-                        totalRows={rowCount}
                         pageSizeOptions={metadata.perPageOptions}
                     />
                 </div>
             </div>
 
-            <AlertDialog open={!!rowToDelete} onOpenChange={(open) => !open && setRowToDelete(null)}>
+            <AlertDialog open={!!rowToDelete} onOpenChange={(open: boolean) => !open && setRowToDelete(null)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>¿Está absolutamente seguro?</AlertDialogTitle>
@@ -679,14 +689,14 @@ export function DynamicTable({
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel disabled={isDeleting}>{t('common.cancel')}</AlertDialogCancel>
-                        <AlertDialogAction onClick={(e) => { e.preventDefault(); confirmDelete() }} className="bg-red-600 hover:bg-red-700" disabled={isDeleting}>
+                        <AlertDialogAction onClick={(e: React.MouseEvent) => { e.preventDefault(); confirmDelete() }} className="bg-red-600 hover:bg-red-700" disabled={isDeleting}>
                             {isDeleting ? 'Eliminando...' : 'Eliminar'}
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
 
-            <AlertDialog open={showBulkDeleteConfirm} onOpenChange={(open) => !open && !isBulkDeleting && setShowBulkDeleteConfirm(false)}>
+            <AlertDialog open={showBulkDeleteConfirm} onOpenChange={(open: boolean) => !open && !isBulkDeleting && setShowBulkDeleteConfirm(false)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>{isBulkDeleting ? 'Eliminando registros...' : '¿Eliminar múltiples registros?'}</AlertDialogTitle>
@@ -704,7 +714,7 @@ export function DynamicTable({
                     {!isBulkDeleting && (
                         <AlertDialogFooter>
                             <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-                            <AlertDialogAction onClick={(e) => { e.preventDefault(); confirmBulkDelete() }} className="bg-red-600 hover:bg-red-700">Eliminar todos</AlertDialogAction>
+                            <AlertDialogAction onClick={(e: React.MouseEvent) => { e.preventDefault(); confirmBulkDelete() }} className="bg-red-600 hover:bg-red-700">Eliminar todos</AlertDialogAction>
                         </AlertDialogFooter>
                     )}
                 </AlertDialogContent>
@@ -712,7 +722,7 @@ export function DynamicTable({
 
             <DynamicRecordDialog
                 open={recordDialog.open}
-                onOpenChange={open => setRecordDialog(prev => ({ ...prev, open }))}
+                onOpenChange={(open: boolean) => setRecordDialog((prev) => ({ ...prev, open }))}
                 mode={recordDialog.mode}
                 model={model}
                 recordId={recordDialog.recordId}
@@ -729,7 +739,7 @@ export function DynamicTable({
             {actionModal.action && (
                 <ActionModalDispatcher
                     open={actionModal.open}
-                    onOpenChange={(open) => setActionModal((prev) => ({ ...prev, open }))}
+                    onOpenChange={(open: boolean) => setActionModal((prev) => ({ ...prev, open }))}
                     action={actionModal.action}
                     model={model}
                     record={actionModal.record}

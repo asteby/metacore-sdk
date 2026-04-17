@@ -1,6 +1,11 @@
-// Ported from link/frontend/src/components/dynamic/action-modal.tsx
-// (link won: same logic, both branches identical modulo `/dynamic/` vs `/data/`
-//  base URL — we expose `endpoint` prop so callers control it).
+// ActionModalDispatcher — renders the right modal for a custom action:
+// 1) Custom component from the SDK registry → use it
+// 2) action.fields[] → GenericActionModal (form)
+// 3) action.confirm → ConfirmActionDialog
+// 4) otherwise → nothing (caller executes immediately)
+//
+// The host injects its axios-like client via <ApiProvider>; we no longer
+// depend on a bundler alias to `@/lib/api`.
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -10,8 +15,6 @@ import {
     DialogTitle,
     DialogDescription,
     DialogFooter,
-} from '@/components/ui/dialog'
-import {
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
@@ -20,23 +23,21 @@ import {
     AlertDialogFooter,
     AlertDialogHeader,
     AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
-import {
+    Button,
+    Input,
+    Textarea,
+    Label,
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
+    Switch,
+} from '@asteby/metacore-ui/primitives'
 import { Loader2 } from 'lucide-react'
-import { api } from '@/lib/api'
 import { toast } from 'sonner'
-import { DynamicIcon } from './dynamic-columns-shim'
+import { useApi } from './api-context'
+import { DynamicIcon } from './dynamic-icon'
 // Canonical registry lives in @asteby/metacore-sdk
 import {
     type ActionMetadata,
@@ -46,13 +47,6 @@ import {
 
 export type { ActionMetadata, ActionModalProps }
 
-/**
- * ActionModalDispatcher decides what to render for a custom action:
- * 1. Custom component from registry → render it
- * 2. Action has fields[] → render GenericActionModal (form)
- * 3. Action has confirm → render simple confirmation dialog
- * 4. Otherwise → execute immediately
- */
 export function ActionModalDispatcher({
     open,
     onOpenChange,
@@ -113,12 +107,12 @@ export function ActionModalDispatcher({
 }
 
 function buildActionUrl(endpoint: string | undefined, model: string, recordId: string, actionKey: string) {
-    // The host passes `endpoint` when present; fall back to the canonical /data base.
     return endpoint ? `${endpoint}/${recordId}/action/${actionKey}` : `/data/${model}/me/${recordId}/action/${actionKey}`
 }
 
 function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoint, onSuccess }: ActionModalProps) {
     const { t } = useTranslation()
+    const api = useApi()
     const [executing, setExecuting] = useState(false)
 
     const execute = async () => {
@@ -155,7 +149,7 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
                 <AlertDialogFooter>
                     <AlertDialogCancel disabled={executing}>{t('common.cancel')}</AlertDialogCancel>
                     <AlertDialogAction
-                        onClick={(e) => { e.preventDefault(); execute() }}
+                        onClick={(e: React.MouseEvent) => { e.preventDefault(); execute() }}
                         disabled={executing}
                         style={action.color ? { backgroundColor: action.color } : undefined}
                     >
@@ -170,6 +164,7 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
 
 function GenericActionModal({ open, onOpenChange, action, model, record, endpoint, onSuccess }: ActionModalProps) {
     const { t } = useTranslation()
+    const api = useApi()
     const [formData, setFormData] = useState<Record<string, any>>({})
     const [executing, setExecuting] = useState(false)
 
@@ -183,7 +178,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
         }
     }, [open, action.fields])
 
-    const updateField = (key: string, value: any) => setFormData((prev) => ({ ...prev, [key]: value }))
+    const updateField = (key: string, value: any) => setFormData((prev: Record<string, any>) => ({ ...prev, [key]: value }))
 
     const execute = async () => {
         if (action.fields) {
@@ -229,7 +224,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                                 {field.label}
                                 {field.required && <span className="text-red-500 ml-1">*</span>}
                             </Label>
-                            {renderField(field, formData[field.key], (v) => updateField(field.key, v))}
+                            {renderField(field, formData[field.key], (v: any) => updateField(field.key, v))}
                         </div>
                     ))}
                 </div>
@@ -258,7 +253,7 @@ function renderField(
 ) {
     switch (field.type) {
         case 'textarea':
-            return <Textarea id={field.key} value={value || ''} onChange={(e) => onChange(e.target.value)} placeholder={field.placeholder} />
+            return <Textarea id={field.key} value={value || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)} placeholder={field.placeholder} />
         case 'select':
             return (
                 <Select value={value || ''} onValueChange={onChange}>
@@ -271,10 +266,10 @@ function renderField(
         case 'boolean':
             return <Switch id={field.key} checked={!!value} onCheckedChange={onChange} />
         case 'number':
-            return <Input id={field.key} type="number" value={value ?? ''} onChange={(e) => onChange(e.target.valueAsNumber || '')} placeholder={field.placeholder} />
+            return <Input id={field.key} type="number" value={value ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.valueAsNumber || '')} placeholder={field.placeholder} />
         case 'date':
-            return <Input id={field.key} type="date" value={value || ''} onChange={(e) => onChange(e.target.value)} />
+            return <Input id={field.key} type="date" value={value || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} />
         default:
-            return <Input id={field.key} type={field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : 'text'} value={value || ''} onChange={(e) => onChange(e.target.value)} placeholder={field.placeholder} />
+            return <Input id={field.key} type={field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : 'text'} value={value || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} placeholder={field.placeholder} />
     }
 }

@@ -1,0 +1,55 @@
+{
+  "name": "@asteby/metacore-auth",
+  "version": "0.1.0",
+  "description": "Metacore auth kit — Zustand store, API client factory, login/signup/forgot pages, guards for TanStack Router",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asteby/metacore-sdk",
+    "directory": "packages/auth"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "README.md"],
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./store": { "types": "./dist/store.d.ts", "import": "./dist/store.js" },
+    "./provider": { "types": "./dist/provider.d.ts", "import": "./dist/provider.js" },
+    "./api-client": { "types": "./dist/api-client.d.ts", "import": "./dist/api-client.js" },
+    "./guards": { "types": "./dist/guards.d.ts", "import": "./dist/guards.js" },
+    "./pages": { "types": "./dist/pages/index.d.ts", "import": "./dist/pages/index.js" },
+    "./components": { "types": "./dist/components/index.d.ts", "import": "./dist/components/index.js" }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "@asteby/metacore-ui": "workspace:^",
+    "@tanstack/react-router": ">=1.100",
+    "zustand": ">=5"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^3.9.0",
+    "axios": "^1.7.7",
+    "lucide-react": "^0.460.0",
+    "react-hook-form": "^7.72.0",
+    "zod": "^4.3.0"
+  },
+  "devDependencies": {
+    "@asteby/metacore-ui": "workspace:*",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@tanstack/react-router": "^1.168.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "typescript": "^5.6.0",
+    "zustand": "^5.0.0"
+  },
+  "publishConfig": { "access": "public" }
+}

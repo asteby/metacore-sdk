@@ -10,11 +10,7 @@
     "declaration": true,
     "declarationMap": true,
     "outDir": "./dist",
-    "rootDir": "./src",
-    "paths": {
-      "@asteby/metacore-sdk": ["../sdk/src/index.ts"],
-      "@asteby/metacore-sdk/*": ["../sdk/src/*"]
-    }
+    "rootDir": "./src"
   },
   "include": ["src/**/*"]
 }

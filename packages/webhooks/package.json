@@ -1,0 +1,61 @@
+{
+  "name": "@asteby/metacore-webhooks",
+  "version": "0.1.0",
+  "description": "Metacore webhooks management UI — list, create, logs, test/replay, signing secrets",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asteby/metacore-sdk",
+    "directory": "packages/webhooks"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "README.md"],
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
+    "./components": { "types": "./dist/components/index.d.ts", "import": "./dist/components/index.js" },
+    "./hooks": { "types": "./dist/hooks.d.ts", "import": "./dist/hooks.js" }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "@asteby/metacore-ui": "workspace:^",
+    "@tanstack/react-query": ">=5",
+    "react-hook-form": ">=7",
+    "react-i18next": ">=13",
+    "sonner": ">=1.7",
+    "date-fns": ">=3",
+    "lucide-react": ">=0.460"
+  },
+  "peerDependenciesMeta": {
+    "react-i18next": { "optional": true },
+    "date-fns": { "optional": true },
+    "react-hook-form": { "optional": true }
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^3.9.0",
+    "zod": "^4.3.0"
+  },
+  "devDependencies": {
+    "@asteby/metacore-ui": "workspace:*",
+    "@tanstack/react-query": "^5.95.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^0.460.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-hook-form": "^7.72.0",
+    "react-i18next": "^15.1.0",
+    "sonner": "^1.7.0",
+    "typescript": "^5.6.0"
+  },
+  "publishConfig": { "access": "public" }
+}

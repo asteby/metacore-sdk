@@ -18,16 +18,46 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "dev": "tsc -w -p tsconfig.json"
+    "dev": "tsc -w -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist"
   },
   "peerDependencies": {
     "react": ">=18",
     "react-dom": ">=18",
-    "@asteby/metacore-sdk": "^2.0.0",
-    "@tanstack/react-query": ">=5"
+    "@asteby/metacore-sdk": "workspace:^",
+    "@asteby/metacore-ui": "workspace:^",
+    "@tanstack/react-query": ">=5",
+    "@tanstack/react-table": ">=8",
+    "@tanstack/react-router": ">=1.100",
+    "i18next": ">=23",
+    "react-i18next": ">=13",
+    "sonner": ">=1.7",
+    "zustand": ">=5",
+    "lucide-react": ">=0.460",
+    "date-fns": ">=3",
+    "react-day-picker": ">=8"
+  },
+  "peerDependenciesMeta": {
+    "@tanstack/react-router": { "optional": true },
+    "react-day-picker": { "optional": true }
   },
   "devDependencies": {
+    "@asteby/metacore-sdk": "workspace:*",
+    "@asteby/metacore-ui": "workspace:*",
+    "@tanstack/react-query": "^5.95.0",
+    "@tanstack/react-router": "^1.168.0",
+    "@tanstack/react-table": "^8.20.0",
+    "@types/react": "^19.0.0",
+    "date-fns": "^4.1.0",
+    "i18next": "^23.16.0",
+    "lucide-react": "^0.460.0",
+    "react": "^19.2.4",
+    "react-day-picker": "^8.10.1",
+    "react-dom": "^19.2.4",
+    "react-i18next": "^15.1.0",
+    "sonner": "^1.7.0",
     "typescript": "^5.6.0",
-    "@types/react": "^18.2.0"
+    "zustand": "^5.0.0"
   }
 }

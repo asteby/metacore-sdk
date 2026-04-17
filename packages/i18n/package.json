@@ -1,0 +1,79 @@
+{
+  "name": "@asteby/metacore-i18n",
+  "version": "0.1.0",
+  "description": "Metacore i18n — i18next factory, base ES/EN bundles, language switcher, RTL provider",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asteby/metacore-sdk",
+    "directory": "packages/i18n"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js"
+    },
+    "./language-switcher": {
+      "types": "./dist/language-switcher.d.ts",
+      "import": "./dist/language-switcher.js"
+    },
+    "./direction-provider": {
+      "types": "./dist/direction-provider.d.ts",
+      "import": "./dist/direction-provider.js"
+    },
+    "./hooks": {
+      "types": "./dist/hooks.d.ts",
+      "import": "./dist/hooks.js"
+    },
+    "./locales/en": "./dist/locales/en.json",
+    "./locales/es": "./dist/locales/es.json"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "@asteby/metacore-ui": "workspace:^",
+    "i18next": ">=23",
+    "lucide-react": ">=0.460",
+    "react-i18next": ">=13"
+  },
+  "peerDependenciesMeta": {
+    "@asteby/metacore-ui": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "i18next-browser-languagedetector": "^8.0.0"
+  },
+  "devDependencies": {
+    "@asteby/metacore-ui": "workspace:*",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "i18next": "^23.16.0",
+    "lucide-react": "^0.460.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-i18next": "^15.1.0",
+    "tsc-alias": "^1.8.10",
+    "typescript": "^5.6.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

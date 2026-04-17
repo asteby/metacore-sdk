@@ -1,59 +1,37 @@
-name: Release npm package
+name: Release npm packages
 
 on:
   push:
-    tags:
-      - 'sdk/v*'
-      - 'runtime-react/v*'
+    branches: [main]
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
     steps:
       - uses: actions/checkout@v4
-
-      - name: Determine package from tag
-        id: pkg
-        run: |
-          TAG="${GITHUB_REF#refs/tags/}"
-          NAME="${TAG%/v*}"
-          case "$NAME" in
-            sdk)
-              echo "path=packages/sdk" >> "$GITHUB_OUTPUT"
-              ;;
-            runtime-react)
-              echo "path=packages/runtime-react" >> "$GITHUB_OUTPUT"
-              ;;
-            *)
-              echo "Unknown package prefix: $NAME"
-              exit 1
-              ;;
-          esac
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
         with:
           node-version: '20'
           registry-url: 'https://registry.npmjs.org'
           cache: 'pnpm'
-
-      - name: Install dependencies
-        working-directory: ${{ steps.pkg.outputs.path }}
-        run: pnpm install --frozen-lockfile=false
-
-      - name: Build
-        working-directory: ${{ steps.pkg.outputs.path }}
-        run: pnpm build
-
-      - name: Publish to npm
-        working-directory: ${{ steps.pkg.outputs.path }}
-        run: pnpm publish --access public --tag latest --no-git-checks
+      - run: pnpm install --frozen-lockfile=false
+      - run: pnpm build
+      - name: Create Release PR or Publish
+        uses: changesets/action@v1
+        with:
+          publish: pnpm release
+          version: pnpm version
+          commit: "chore(release): version packages"
+          title: "chore(release): version packages"
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

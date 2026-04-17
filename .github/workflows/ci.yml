@@ -38,34 +38,15 @@ jobs:
           fi
 
   node:
-    name: Node (${{ matrix.node-version }})
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version: ['20']
-        package: [packages/sdk, packages/runtime-react]
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        with: { fetch-depth: 2 }
+      - uses: pnpm/action-setup@v4
+        with: { version: 10 }
+      - uses: actions/setup-node@v4
         with:
-          version: 9
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
+          node-version: '20'
           cache: 'pnpm'
-
-      - name: Install dependencies
-        working-directory: ${{ matrix.package }}
-        run: pnpm install --frozen-lockfile=false
-
-      - name: Build
-        working-directory: ${{ matrix.package }}
-        run: pnpm build
-
-      - name: Typecheck
-        working-directory: ${{ matrix.package }}
-        run: pnpm typecheck
+      - run: pnpm install --frozen-lockfile=false
+      - run: pnpm turbo run build typecheck --filter=...[origin/main]
