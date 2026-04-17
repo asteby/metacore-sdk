@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-webhooks",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Metacore webhooks management UI — list, create, logs, test/replay, signing secrets",
   "license": "Apache-2.0",
   "repository": {
@@ -11,11 +11,23 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./components": { "types": "./dist/components/index.d.ts", "import": "./dist/components/index.js" },
-    "./hooks": { "types": "./dist/hooks.d.ts", "import": "./dist/hooks.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./components": {
+      "types": "./dist/components/index.d.ts",
+      "import": "./dist/components/index.js"
+    },
+    "./hooks": {
+      "types": "./dist/hooks.d.ts",
+      "import": "./dist/hooks.js"
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -35,9 +47,15 @@
     "lucide-react": ">=0.460"
   },
   "peerDependenciesMeta": {
-    "react-i18next": { "optional": true },
-    "date-fns": { "optional": true },
-    "react-hook-form": { "optional": true }
+    "react-i18next": {
+      "optional": true
+    },
+    "date-fns": {
+      "optional": true
+    },
+    "react-hook-form": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -57,5 +75,7 @@
     "sonner": "^1.7.0",
     "typescript": "^5.6.0"
   },
-  "publishConfig": { "access": "public" }
+  "publishConfig": {
+    "access": "public"
+  }
 }

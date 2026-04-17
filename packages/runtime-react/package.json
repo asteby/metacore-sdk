@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-runtime-react",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "React runtime for metacore hosts — renders addon contributions dynamically",
   "repository": {
     "type": "git",
@@ -39,8 +39,12 @@
     "react-day-picker": ">=8"
   },
   "peerDependenciesMeta": {
-    "@tanstack/react-router": { "optional": true },
-    "react-day-picker": { "optional": true }
+    "@tanstack/react-router": {
+      "optional": true
+    },
+    "react-day-picker": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@asteby/metacore-sdk": "workspace:*",

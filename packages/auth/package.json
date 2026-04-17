@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-auth",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Metacore auth kit — Zustand store, API client factory, login/signup/forgot pages, guards for TanStack Router",
   "license": "Apache-2.0",
   "repository": {
@@ -11,15 +11,39 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./store": { "types": "./dist/store.d.ts", "import": "./dist/store.js" },
-    "./provider": { "types": "./dist/provider.d.ts", "import": "./dist/provider.js" },
-    "./api-client": { "types": "./dist/api-client.d.ts", "import": "./dist/api-client.js" },
-    "./guards": { "types": "./dist/guards.d.ts", "import": "./dist/guards.js" },
-    "./pages": { "types": "./dist/pages/index.d.ts", "import": "./dist/pages/index.js" },
-    "./components": { "types": "./dist/components/index.d.ts", "import": "./dist/components/index.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./store": {
+      "types": "./dist/store.d.ts",
+      "import": "./dist/store.js"
+    },
+    "./provider": {
+      "types": "./dist/provider.d.ts",
+      "import": "./dist/provider.js"
+    },
+    "./api-client": {
+      "types": "./dist/api-client.d.ts",
+      "import": "./dist/api-client.js"
+    },
+    "./guards": {
+      "types": "./dist/guards.d.ts",
+      "import": "./dist/guards.js"
+    },
+    "./pages": {
+      "types": "./dist/pages/index.d.ts",
+      "import": "./dist/pages/index.js"
+    },
+    "./components": {
+      "types": "./dist/components/index.d.ts",
+      "import": "./dist/components/index.js"
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -51,5 +75,7 @@
     "typescript": "^5.6.0",
     "zustand": "^5.0.0"
   },
-  "publishConfig": { "access": "public" }
+  "publishConfig": {
+    "access": "public"
+  }
 }

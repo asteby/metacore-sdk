@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-websocket",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Metacore WebSocket provider — auto-reconnect, typed messages, channel subscriptions",
   "license": "Apache-2.0",
   "repository": {
@@ -11,11 +11,23 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" },
-    "./provider": { "types": "./dist/provider.d.ts", "import": "./dist/provider.js" },
-    "./hooks": { "types": "./dist/hooks.d.ts", "import": "./dist/hooks.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./provider": {
+      "types": "./dist/provider.d.ts",
+      "import": "./dist/provider.js"
+    },
+    "./hooks": {
+      "types": "./dist/hooks.d.ts",
+      "import": "./dist/hooks.js"
+    }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -34,5 +46,7 @@
     "react-dom": "^19.2.4",
     "typescript": "^5.6.0"
   },
-  "publishConfig": { "access": "public" }
+  "publishConfig": {
+    "access": "public"
+  }
 }

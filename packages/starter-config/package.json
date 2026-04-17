@@ -1,0 +1,57 @@
+{
+  "name": "@asteby/metacore-starter-config",
+  "version": "0.1.0",
+  "description": "Shared build & lint configs for metacore apps (Vite + React + Tailwind 4 + TanStack Router + ESLint + TS)",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asteby/metacore-sdk",
+    "directory": "packages/starter-config"
+  },
+  "type": "module",
+  "main": "./tailwind-preset.js",
+  "files": [
+    "tailwind-preset.js",
+    "tsconfig.base.json",
+    "vite-preset.ts",
+    "vite-preset.js",
+    "vite-preset.d.ts",
+    "eslint-preset.js",
+    "README.md"
+  ],
+  "exports": {
+    "./tailwind": "./tailwind-preset.js",
+    "./tsconfig": "./tsconfig.base.json",
+    "./vite": {
+      "types": "./vite-preset.d.ts",
+      "import": "./vite-preset.ts"
+    },
+    "./eslint": "./eslint-preset.js",
+    "./package.json": "./package.json"
+  },
+  "peerDependencies": {
+    "@tailwindcss/vite": ">=4",
+    "@tanstack/eslint-plugin-query": ">=5",
+    "@tanstack/router-plugin": ">=1.100",
+    "@vitejs/plugin-react-swc": ">=3",
+    "eslint": ">=9",
+    "eslint-plugin-react-hooks": ">=5",
+    "eslint-plugin-react-refresh": ">=0.4",
+    "globals": ">=15",
+    "tailwindcss": ">=4",
+    "typescript": ">=5",
+    "typescript-eslint": ">=8",
+    "vite": ">=6",
+    "vite-plugin-pwa": ">=1",
+    "vite-tsconfig-paths": ">=5"
+  },
+  "peerDependenciesMeta": {
+    "vite-plugin-pwa": { "optional": true },
+    "vite-tsconfig-paths": { "optional": true },
+    "@tanstack/router-plugin": { "optional": true },
+    "@tanstack/eslint-plugin-query": { "optional": true }
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
