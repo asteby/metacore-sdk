@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asteby/metacore-sdk/pkg/manifest"
+	"github.com/asteby/metacore-kernel/manifest"
 )
 
 func TestValidateContract_RejectsModalSlugMismatch(t *testing.T) {

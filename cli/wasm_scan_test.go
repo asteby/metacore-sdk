@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asteby/metacore-sdk/pkg/manifest"
+	"github.com/asteby/metacore-kernel/manifest"
 )
 
 // buildMinimalWASM emits a syntactically valid WebAssembly module whose only

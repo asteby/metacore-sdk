@@ -2,7 +2,7 @@
 /**
  * AUTO-GENERATED — do not edit by hand.
  * Re-generate with: pnpm codegen
- * Source: pkg/manifest/manifest.go
+ * Source: github.com/asteby/metacore-kernel/manifest
  */
 
 //////////

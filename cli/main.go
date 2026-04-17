@@ -8,7 +8,7 @@
 //	metacore inspect <bundle>     print manifest + migrations + frontend size
 //
 // The CLI is stdlib-only and uses the SDK packages under
-// github.com/asteby/metacore-sdk/pkg/*.
+// github.com/asteby/metacore-kernel/*.
 package main
 
 import (
@@ -22,9 +22,9 @@ import (
 	"encoding/json"
 	"flag"
 
-	"github.com/asteby/metacore-sdk/pkg/bundle"
-	"github.com/asteby/metacore-sdk/pkg/dynamic"
-	"github.com/asteby/metacore-sdk/pkg/manifest"
+	"github.com/asteby/metacore-kernel/bundle"
+	"github.com/asteby/metacore-kernel/dynamic"
+	"github.com/asteby/metacore-kernel/manifest"
 )
 
 func main() {

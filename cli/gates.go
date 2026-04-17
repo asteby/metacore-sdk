@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/asteby/metacore-sdk/pkg/manifest"
+	"github.com/asteby/metacore-kernel/manifest"
 )
 
 // gateResult accumulates strict errors and non-strict warnings so the CLI can
