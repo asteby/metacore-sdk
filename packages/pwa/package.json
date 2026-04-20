@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-pwa",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Metacore PWA helpers — vite plugin wrapper, install/update prompts, push notifications, offline indicator",
   "license": "Apache-2.0",
   "repository": {
