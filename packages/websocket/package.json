@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-websocket",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Metacore WebSocket provider — auto-reconnect, typed messages, channel subscriptions",
   "license": "Apache-2.0",
   "repository": {

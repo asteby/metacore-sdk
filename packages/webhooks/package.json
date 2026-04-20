@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-webhooks",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Metacore webhooks management UI — list, create, logs, test/replay, signing secrets",
   "license": "Apache-2.0",
   "repository": {

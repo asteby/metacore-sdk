@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-sdk",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Metacore frontend SDK — federated addon loader, slot registry, typed manifest & API client.",
   "license": "Apache-2.0",
   "repository": {
