@@ -230,6 +230,27 @@ importers:
         specifier: ^5.2.0
         version: 5.4.21(@types/node@22.19.17)(lightningcss@1.32.0)(terser@5.46.1)
 
+  packages/app-providers:
+    devDependencies:
+      '@radix-ui/react-direction':
+        specifier: ^1.1.1
+        version: 1.1.1(@types/react@19.2.14)(react@19.2.5)
+      '@types/react':
+        specifier: ^19.2.14
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.2.3
+        version: 19.2.3(@types/react@19.2.14)
+      react:
+        specifier: ^19.2.4
+        version: 19.2.5
+      react-dom:
+        specifier: ^19.2.4
+        version: 19.2.5(react@19.2.5)
+      typescript:
+        specifier: ^5.6.0
+        version: 5.9.3
+
   packages/auth:
     dependencies:
       '@hookform/resolvers':
