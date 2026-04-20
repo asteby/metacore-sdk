@@ -1,6 +1,7 @@
 {
   "name": "create-metacore-app",
   "version": "0.2.0",
+  "private": true,
   "description": "Scaffolder for metacore Vite+React apps. Run `npx create-metacore-app my-app`.",
   "license": "Apache-2.0",
   "repository": {
