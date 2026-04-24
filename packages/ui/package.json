@@ -55,6 +55,10 @@
       "types": "./dist/icons/custom/index.d.ts",
       "import": "./dist/icons/custom/index.js"
     },
+    "./error-pages": {
+      "types": "./dist/error-pages/index.d.ts",
+      "import": "./dist/error-pages/index.js"
+    },
     "./primitives": {
       "types": "./dist/primitives/index.d.ts",
       "import": "./dist/primitives/index.js"

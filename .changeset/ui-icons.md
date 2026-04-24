@@ -2,14 +2,17 @@
 '@asteby/metacore-ui': minor
 ---
 
-Add icons subpath — `@asteby/metacore-ui/icons`, `/icons/brand`, `/icons/custom`.
+Add two new subpath exports that apps were maintaining as byte-duplicated
+local copies:
 
-Exports 16 brand icons (Discord, Docker, Facebook, Figma, GitHub, GitLab,
-Gmail, Medium, Notion, Skype, Slack, Stripe, Telegram, Trello, WhatsApp,
-Zoom) and 9 custom icons (layout variants, sidebar variants, theme
-variants). Apps that had byte-duplicated copies in `assets/brand-icons/`
-and `assets/custom/` can drop the local files and import from the SDK.
+- **`/icons`**, **`/icons/brand`**, **`/icons/custom`** — 16 brand icons
+  (Discord, Docker, Facebook, Figma, GitHub, GitLab, Gmail, Medium,
+  Notion, Skype, Slack, Stripe, Telegram, Trello, WhatsApp, Zoom) and
+  9 custom icons (layout variants, sidebar variants, theme variants).
+  `IconDir` stays in the apps for now — it consumes a direction
+  provider that is a separate promotion candidate.
 
-`IconDir` (app-context-coupled via a direction provider) intentionally
-stays out of this release — it should land together with the provider
-promotion.
+- **`/error-pages`** — `NotFoundError`, `GeneralError`, `UnauthorisedError`,
+  `ForbiddenError`, `MaintenanceError`. Standard full-page error
+  components using `@tanstack/react-router`. Apps drop their copies in
+  `features/errors/*` and import from here.
