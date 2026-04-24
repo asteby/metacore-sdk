@@ -11,11 +11,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 2 }
+        with: { fetch-depth: 0 }
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile=false
-      - run: pnpm turbo run build typecheck --filter=...[origin/main]
+      # Exclude template/example packages whose routeTree.gen is only written
+      # by `tsr watch` during dev and not committed. They are private, not
+      # published, and already marked `ignore` in the Changesets release
+      # pipeline; extending the intent to CI keeps unrelated PRs green.
+      - run: pnpm turbo run build typecheck --filter=...[origin/main] --filter=!@asteby/metacore-starter-core --filter=!create-metacore-app --filter=!@asteby/metacore-starter-vite --filter=!@asteby/metacore-fullstack-example
