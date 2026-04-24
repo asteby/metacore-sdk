@@ -18,4 +18,8 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile=false
-      - run: pnpm turbo run build typecheck --filter=...[origin/main]
+      # starter-core is already marked `ignore` in .changeset/config.json for
+      # the release pipeline; extend that intent to CI so its routeTree.gen
+      # scaffold (only written by `tsr watch` at dev time) doesn't break
+      # unrelated PRs. create-metacore-app is also excluded as release-only.
+      - run: pnpm turbo run build typecheck --filter=...[origin/main] --filter=!@asteby/metacore-starter-core --filter=!create-metacore-app
