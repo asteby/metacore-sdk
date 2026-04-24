@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-notifications",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Metacore notifications — dropdown, app badge, WebSocket-driven real-time updates",
   "license": "Apache-2.0",
   "repository": {
