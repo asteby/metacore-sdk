@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-ui",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Metacore UI kit — data-table, layout shell, command-menu, hooks y primitives shadcn reutilizables",
   "license": "Apache-2.0",
   "repository": {
@@ -42,6 +42,18 @@
     "./hooks": {
       "types": "./dist/hooks/index.d.ts",
       "import": "./dist/hooks/index.js"
+    },
+    "./icons": {
+      "types": "./dist/icons/index.d.ts",
+      "import": "./dist/icons/index.js"
+    },
+    "./icons/brand": {
+      "types": "./dist/icons/brand/index.d.ts",
+      "import": "./dist/icons/brand/index.js"
+    },
+    "./icons/custom": {
+      "types": "./dist/icons/custom/index.d.ts",
+      "import": "./dist/icons/custom/index.js"
     },
     "./primitives": {
       "types": "./dist/primitives/index.d.ts",
