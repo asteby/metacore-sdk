@@ -50,7 +50,7 @@ metacore-sdk/
 | [manifest-spec.md](./docs/manifest-spec.md) | Every field of `manifest.json`. |
 | [wasm-abi.md](./docs/wasm-abi.md) | Writing a sandboxed WASM backend. |
 | [capabilities.md](./docs/capabilities.md) | Declaring scoped permissions safely. |
-| [publishing.md](./docs/publishing.md) | Signing, uploading and the review flow. |
+| [addon-publishing.md](./docs/addon-publishing.md) | Signing, uploading and the review flow. |
 
 ## Related repositories
 

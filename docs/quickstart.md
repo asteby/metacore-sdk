@@ -133,5 +133,5 @@ any organization can install it.
 - [manifest-spec](./manifest-spec.md) — every field of `manifest.json`
 - [wasm-abi](./wasm-abi.md) — writing a WASM backend
 - [capabilities](./capabilities.md) — declaring sandboxed permissions
-- [publishing](./publishing.md) — signing, versioning and the review flow
+- [addon-publishing](./addon-publishing.md) — signing, versioning and the review flow
 - [shared-addon-pattern](https://github.com/asteby/metacore-sdk/blob/main/docs/shared-addon-pattern.md) — serving ops and link from one manifest
