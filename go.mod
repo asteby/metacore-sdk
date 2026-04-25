@@ -2,9 +2,7 @@ module github.com/asteby/metacore-sdk
 
 go 1.25.0
 
-require github.com/asteby/metacore-kernel v0.1.0
-
-replace github.com/asteby/metacore-kernel => ../metacore-kernel
+require github.com/asteby/metacore-kernel v0.2.0
 
 require (
 	github.com/Masterminds/semver/v3 v3.3.0 // indirect
