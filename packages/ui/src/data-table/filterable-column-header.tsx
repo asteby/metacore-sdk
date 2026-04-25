@@ -41,12 +41,32 @@ export interface FilterOption {
   color?: string
 }
 
+/**
+ * Canonical filter-type union shared by every metacore app that renders a
+ * DynamicTable. Kept open for extension — new niches (BI dashboards, CRM,
+ * inventory, catalog) can add variants here instead of each forking the type.
+ */
+export type ColumnFilterType =
+  | 'select'
+  | 'boolean'
+  | 'text'
+  | 'number_range'
+  | 'date_range'
+
 export interface ColumnFilterMeta {
   filterable?: boolean
-  filterType?: 'select' | 'boolean' | 'text' | 'number_range'
+  filterType?: ColumnFilterType
   filterKey?: string
   filterOptions?: FilterOption[]
   filterLoading?: boolean
+  /**
+   * Async search endpoint for server-driven option lookups. When set, the
+   * filter renders a searchable combobox backed by the app's API instead of
+   * iterating an in-memory filterOptions array. Apps wire this through the
+   * standard `/api/options/:model?field=` shape produced by
+   * kernel/dynamic.Service.Options.
+   */
+  filterSearchEndpoint?: string
   selectedValues?: string[]
   onFilterChange?: (filterKey: string, values: string[]) => void
 }

@@ -8,4 +8,5 @@ export {
   FilterableColumnHeader,
   type FilterOption,
   type ColumnFilterMeta,
+  type ColumnFilterType,
 } from './filterable-column-header'
