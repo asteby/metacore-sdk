@@ -1,0 +1,40 @@
+{
+  "name": "@asteby/metacore-tools",
+  "version": "0.1.0",
+  "description": "Cliente TypeScript para el runtime de Tools del kernel metacore — ejecución, registro y validación client-side de addons instalados",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asteby/metacore-sdk",
+    "directory": "packages/tools"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "@asteby/metacore-sdk": "workspace:^"
+  },
+  "devDependencies": {
+    "@asteby/metacore-sdk": "workspace:*",
+    "typescript": "^5.6.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
