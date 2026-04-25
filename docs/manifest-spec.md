@@ -208,7 +208,7 @@ The addon's own schema (`addon_<key>.*`) is always accessible — never declare 
 ```
 
 - `hooks`: `"<model>::<action>" → <webhook path or URL>`. The host POSTs
-  an HMAC-signed envelope (see [publishing.md](./publishing.md)).
+  an HMAC-signed envelope (see [addon-publishing.md](./addon-publishing.md)).
 - `lifecycle_hooks`: per-model CRUD triggers:
   ```json
   "lifecycle_hooks": {
