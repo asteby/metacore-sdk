@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-tools",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Cliente TypeScript para el runtime de Tools del kernel metacore — ejecución, registro y validación client-side de addons instalados",
   "license": "Apache-2.0",
   "repository": {
