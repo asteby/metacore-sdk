@@ -54,7 +54,7 @@ manifest.actions[].key = "stamp_fiscal"
     └─► manifest.tools[].id = "stamp_fiscal" (mismo key → mismo endpoint)
              │
              ▼
-         link expone al LLM con extraction_hints; invoca /webhooks/stamp_fiscal con X-Metacore-Invocation: tool
+         host expone al LLM con extraction_hints; invoca /webhooks/stamp_fiscal con X-Metacore-Invocation: tool
 ```
 
 El CLI `metacore build --strict` aplica **5 gates** que garantizan esta alineación:
@@ -89,7 +89,7 @@ curl -X POST https://hub.asteby.com/v1/addons \
 ## Runtime
 
 - Deploy `backend/` en tu infra (`fiscal.asteby.com:7103`) — el host lo invoca vía webhook firmado; nunca ejecuta tu código Go.
-- El host (ops/link) instala el bundle → aplica migration → carga `remoteEntry.js` → registra modals → tool queda disponible para LLM en link / botón en DynamicTable en ops.
+- El host instala el bundle → aplica migration → carga `remoteEntry.js` → registra modals → tool queda disponible (LLM tool, botón en DynamicTable, etc., según el host).
 - Cada webhook outbound lleva `X-Metacore-{Host,Tenant,Installation-ID,Invocation,Timestamp,Nonce,Signature}` — replay protection y sandbox por instalación incluidos.
 
 ## Environment variables
