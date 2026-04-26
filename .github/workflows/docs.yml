@@ -44,6 +44,11 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
+        with:
+          # Auto-enable Pages on the repo if a maintainer hasn't toggled it
+          # in Settings yet. Otherwise the action fails with "Get Pages site
+          # failed" because the site doesn't exist.
+          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
