@@ -7,5 +7,5 @@
   "access": "public",
   "baseBranch": "main",
   "updateInternalDependencies": "patch",
-  "ignore": ["@asteby/metacore-starter-core", "create-metacore-app"]
+  "ignore": ["create-metacore-app"]
 }
