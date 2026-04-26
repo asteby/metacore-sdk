@@ -1,6 +1,6 @@
 # @asteby/metacore-sdk
 
-Frontend SDK for the [Metacore](https://github.com/asteby/metacore-sdk) framework. It is the typed contract every host (Ops, Link, third-party apps) and every addon shares — manifest types, federated addon loader, slot registry, action registry, and a typed API client.
+Frontend SDK for the [Metacore](https://github.com/asteby/metacore-sdk) framework. It is the typed contract every host application and every addon shares — manifest types, federated addon loader, slot registry, action registry, and a typed API client.
 
 The TypeScript types are mirrored from the Go source of truth (`pkg/manifest/`) via [`tygo`](https://github.com/gzuidhof/tygo); they are guaranteed to match `APIVersion = 2.0.0`.
 

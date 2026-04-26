@@ -1,6 +1,6 @@
 # @asteby/metacore-starter-config
 
-Shared build & lint configs for metacore apps (ops, link, starter, future apps).
+Shared build & lint configs for metacore host applications.
 Centralizes Tailwind 4, TypeScript, Vite, and ESLint so apps extend instead of copy.
 
 ## Install
@@ -48,9 +48,9 @@ import { defineMetacoreConfig } from '@asteby/metacore-starter-config/vite'
 export default defineMetacoreConfig({
   router: true,
   pwa: {
-    name: 'Ops',
-    shortName: 'Ops',
-    description: 'ERP SaaS Platform',
+    name: 'My Host',
+    shortName: 'My Host',
+    description: 'My host application',
     themeColor: '#84cc16',
     backgroundColor: '#1a2e05',
     icons: [/* ... */],

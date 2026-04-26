@@ -19,7 +19,7 @@
     `ValidationError`; re-exports `ToolDef`, `ToolInputParam` from
     `@asteby/metacore-sdk` (tygo-generated from Go source).
 
-  Unblocks ops and link — both consume this via
+  Unblocks host applications consuming this via
   `file:../../metacore-sdk/packages/tools`; prior to this release the
   package had `dist/` but no `package.json`, so `go build`-equivalent
   pnpm resolution failed at the file-link step.

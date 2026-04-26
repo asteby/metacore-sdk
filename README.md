@@ -38,9 +38,9 @@
 
 **Metacore** is a declarative framework for extending business applications. You describe your addon with a single `manifest.json` — tables, UI contributions, webhooks, LLM tools, sandboxed permissions — and the kernel materializes it across every host that speaks Metacore.
 
-**Dynamic CRUD without the boilerplate.** Declare `model_definitions[]` in your manifest and the kernel auto-generates the database schema, REST endpoints, metadata documents and permission gates. The SDK's `<DynamicTable model="..." />` consumes that metadata and renders a full CRUD surface — sortable, filterable, paginated, with create/edit dialogs and custom action modals. You write zero rendering code. The same manifest powers Asteby Ops, Asteby Link, and any third-party host. See [`docs/dynamic-ui.md`](./docs/dynamic-ui.md) for the full UI contract.
+**Dynamic CRUD without the boilerplate.** Declare `model_definitions[]` in your manifest and the kernel auto-generates the database schema, REST endpoints, metadata documents and permission gates. The SDK's `<DynamicTable model="..." />` consumes that metadata and renders a full CRUD surface — sortable, filterable, paginated, with create/edit dialogs and custom action modals. You write zero rendering code. The same manifest powers any host application that speaks Metacore. See [`docs/dynamic-ui.md`](./docs/dynamic-ui.md) for the full UI contract.
 
-The kernel runs sandboxed WASM backends, enforces capability scopes, manages tenant isolation, and exposes a typed bridge to React frontends. Hosts (Asteby Ops, Asteby Link, third-party apps) embed the kernel as a Go module and consume the SDK packages from npm. One bundle, every host.
+The kernel runs sandboxed WASM backends, enforces capability scopes, manages tenant isolation, and exposes a typed bridge to React frontends. Host applications embed the kernel as a Go module and consume the SDK packages from npm. One bundle, every host.
 
 **This repository** is the public, open-source SDK that makes building, distributing and consuming Metacore addons possible:
 
@@ -142,15 +142,15 @@ All published as `@asteby/metacore-*` on npm under Apache-2.0. Versions reflect 
    ┌──────────────────────────────────────────┐         ┌──────────────┐
    │  /metadata/table/<model>     ◀──── caches│         │              │
    │  /metadata/modal/<model>     ◀──── caches│         │  Host apps   │
-   │  /data/<model>            (CRUD list/CRUD)         │   ┌────────┐ │
-   │  /data/<model>/<id>/action/<key>          │  ◀────▶│   │  Ops   │ │
-   │  /options/<endpoint>          (FK pickers)│         │   │ (CRUD) │ │
-   └──────────────────────────────────────────┘         │   ├────────┤ │
-                │                                       │   │  Link  │ │
-                │                                       │   │ (LLM)  │ │
-                ▼                                       │   ├────────┤ │
-   ┌──────────────────────────────────────────┐         │   │  …     │ │
-   │  <DynamicTable model="tickets" />        │  ◀──────┤   └────────┘ │
+   │  /data/<model>            (CRUD list/CRUD)         │              │
+   │  /data/<model>/<id>/action/<key>          │  ◀────▶│  Any app     │
+   │  /options/<endpoint>          (FK pickers)│         │  that embeds │
+   └──────────────────────────────────────────┘         │  the kernel  │
+                │                                       │              │
+                │                                       │              │
+                ▼                                       │              │
+   ┌──────────────────────────────────────────┐         │              │
+   │  <DynamicTable model="tickets" />        │  ◀──────┤              │
    │  <DynamicForm fields={…} />              │         │              │
    │  <DynamicRecordDialog />                 │         │ Hosts embed  │
    │  <ActionModalDispatcher />               │         │ the kernel   │
@@ -165,7 +165,7 @@ All published as `@asteby/metacore-*` on npm under Apache-2.0. Versions reflect 
 - **Manifest → Kernel.** You write a manifest and (optionally) a TinyGo WASM backend. The CLI validates, signs and packages a `.tar.gz`. The kernel parses it, runs migrations under tenant isolation, loads the WASM bundle into wazero, and serves CRUD endpoints + metadata documents.
 - **Kernel → Metadata.** For every declared model the kernel exposes `/metadata/table/<model>` (columns, filters, actions), `/metadata/modal/<model>` (form schema), and `/metadata/all` (one-shot prefetch).
 - **Metadata → UI.** `<DynamicTable>` reads the metadata, fetches `/data/<model>` paginated, renders rows with cell-type-aware renderers, and dispatches custom actions to `<ActionModalDispatcher>`. No code is written per feature.
-- **Kernel → Host.** Ops and Link embed the kernel as a Go module. Their React frontends import from `@asteby/metacore-*` to render the contributions consistently.
+- **Kernel → Host.** Host applications embed the kernel as a Go module. Their React frontends import from `@asteby/metacore-*` to render the contributions consistently.
 
 ## Documentation
 
@@ -217,7 +217,7 @@ Releases are fully automated through [Changesets](https://github.com/changesets/
 2. **Merge to `main`:** the [`Release npm packages`](./.github/workflows/release-npm.yml) workflow runs.
 3. **Version PR:** if there are unreleased changesets, the workflow opens (or updates) a `chore(release): version packages` PR. Its diff bumps `package.json` versions, regenerates `CHANGELOG.md`, and consumes the changesets.
 4. **Publish:** merging the version PR runs `changeset publish`, building the affected packages and pushing them to npm under the `@asteby` scope.
-5. **Propagate:** consumer apps (Ops, Link, internal panels) receive a Renovate PR within minutes — patch and minor bumps auto-merge, majors await human review.
+5. **Propagate:** consumer host applications receive a Renovate PR within minutes — patch and minor bumps auto-merge, majors await human review.
 
 The workflow uses `NPM_TOKEN` (a Granular Access Token with **Bypass 2FA** enabled, scoped to publish on `@asteby`). Linked packages — `@asteby/metacore-ui` and `@asteby/metacore-theme` — version together; `@asteby/metacore-starter-core` and `create-metacore-app` are excluded from the publish flow via `.changeset/config.json`.
 
@@ -229,12 +229,6 @@ Full details and troubleshooting in [`docs/PUBLISHING.md`](./docs/PUBLISHING.md)
 
 - [`metacore-sdk`](https://github.com/asteby/metacore-sdk) — this repo (public).
 - [`metacore-kernel`](https://github.com/asteby/metacore-kernel) — runtime kernel (private).
-
-**Products** (`asteby-hq/`):
-
-- [`hub`](https://github.com/asteby-hq/hub) — marketplace UI + API server.
-- [`ops`](https://github.com/asteby-hq/ops) — the CRUD/ERP host.
-- [`link`](https://github.com/asteby-hq/link) — the conversational LLM host.
 
 Public marketplace: [hub.asteby.com](https://hub.asteby.com).
 

@@ -2,9 +2,9 @@
 
 Cliente TypeScript para el runtime de Tools del kernel metacore.
 
-Define un contrato común para que un host (ops, link, cualquier app del
-ecosistema) ejecute tools publicadas en el hub marketplace, con validación
-client-side de params consistente con la que hace `kernel/tool.Validate` en Go.
+Define un contrato común para que cualquier host application ejecute tools
+publicadas en el hub marketplace, con validación client-side de params
+consistente con la que hace `kernel/tool.Validate` en Go.
 
 ## Instalación
 
@@ -56,4 +56,4 @@ const result = await client.execute({
 
 ## Relación con el kernel
 
-Este paquete es el lado frontend del contrato que define [`kernel/tool`](https://github.com/asteby/metacore-kernel/tree/main/tool) en Go. El host backend (ops, link) expone las rutas HTTP y delega al `tool.Registry` + `tool.HTTPDispatcher` interno, que firma con HMAC y llama al endpoint del addon.
+Este paquete es el lado frontend del contrato que define [`kernel/tool`](https://github.com/asteby/metacore-kernel/tree/main/tool) en Go. El host backend expone las rutas HTTP y delega al `tool.Registry` + `tool.HTTPDispatcher` interno, que firma con HMAC y llama al endpoint del addon.

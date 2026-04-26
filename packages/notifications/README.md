@@ -41,10 +41,10 @@ export function Header() {
 }
 ```
 
-`apiBasePath` is the only difference between the `ops` and `link` frontends:
+`apiBasePath` lets each host application point at its own notifications endpoint, for example:
 
-- `ops`: `"/data/notifications/me"`
-- `link`: `"/dynamic/notifications/me"`
+- `"/data/notifications/me"`
+- `"/dynamic/notifications/me"`
 
 ## Props
 
