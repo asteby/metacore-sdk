@@ -22,7 +22,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
           cache: 'pnpm'
       - run: pnpm install --frozen-lockfile=false
-      - run: pnpm --filter "./packages/*" --filter "!create-metacore-app" -r build
+      - run: pnpm --filter "./packages/*" -r build
       - name: Create Release PR or Publish
         uses: changesets/action@v1
         with:
