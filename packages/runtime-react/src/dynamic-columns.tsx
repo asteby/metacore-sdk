@@ -3,7 +3,7 @@
 // badge (static + endpoint-loaded options), avatar, phone, date, boolean,
 // relation-badge-list, media-gallery, image, plus a generic text fallback.
 //
-// The implementation was previously duplicated across `link` and `ops`
+// The implementation was previously duplicated across multiple host apps
 // (~550 LOC each, drifting). It now lives here so a single fix propagates
 // to every host. Hosts inject app-specific URL helpers via the `helpers`
 // argument so the SDK stays free of environment-bound code.

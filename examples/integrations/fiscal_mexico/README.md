@@ -79,7 +79,7 @@ export METACORE_DEV_KEY=~/.metacore/asteby.pem
 ./build.sh   # produce fiscal_mexico-1.0.0.tar.gz + .sig
 
 # 4. Publicar al hub
-curl -X POST https://hub.asteby.com/v1/addons \
+curl -X POST https://<your-hub-url>/v1/addons \
   -H "X-Developer-Key: $MARKETPLACE_DEV_KEY" \
   -F bundle=@fiscal_mexico-1.0.0.tar.gz \
   -F signature=@fiscal_mexico-1.0.0.tar.gz.sig \
@@ -88,7 +88,7 @@ curl -X POST https://hub.asteby.com/v1/addons \
 
 ## Runtime
 
-- Deploy `backend/` en tu infra (`fiscal.asteby.com:7103`) — el host lo invoca vía webhook firmado; nunca ejecuta tu código Go.
+- Deploy `backend/` en tu propia infra (por ejemplo `https://fiscal.example.com:7103`) — el host lo invoca vía webhook firmado; nunca ejecuta tu código Go.
 - El host instala el bundle → aplica migration → carga `remoteEntry.js` → registra modals → tool queda disponible (LLM tool, botón en DynamicTable, etc., según el host).
 - Cada webhook outbound lleva `X-Metacore-{Host,Tenant,Installation-ID,Invocation,Timestamp,Nonce,Signature}` — replay protection y sandbox por instalación incluidos.
 

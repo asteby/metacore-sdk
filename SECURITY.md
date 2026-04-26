@@ -30,7 +30,7 @@ You can pull it from `https://asteby.com/.well-known/pgp-security.asc`.
    publish a fix, and credit the reporter unless anonymity is requested.
 
 Affected downstream consumers (addon developers, hub operators) are
-notified through the hub.asteby.com status page and the
+notified through GitHub security advisories on this repository and the
 `security-announce@asteby.com` mailing list.
 
 ## Bug bounty

@@ -1,6 +1,6 @@
 // ExportDialog — lets users pick format (csv/json) + columns and kicks off
 // either a sync download or an async export job (polled via /exports/:id/status).
-// Ported from the ops starter. Axios-like client is provided by <ApiProvider>.
+// Axios-like client is provided by <ApiProvider>.
 import { useState, useEffect, useCallback } from 'react'
 import {
     Dialog,

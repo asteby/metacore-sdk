@@ -1,4 +1,6 @@
-// Union of the two host copies (link + ops). Ops adds the `link` action type + `linkUrl`.
+// Shared metadata shape consumed by every host. Some hosts add a `link`
+// action type with a `linkUrl` template — represented here as part of the
+// `type` union so the SDK can render it uniformly.
 export interface TableMetadata {
     title: string
     endpoint: string

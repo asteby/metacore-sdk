@@ -81,8 +81,8 @@ export interface NotificationsDropdownProps {
   apiClient: NotificationsApiClient
   /**
    * Base collection path for the current user's notifications. Typical
-   * values: `/data/notifications/me` (ops) or `/dynamic/notifications/me`
-   * (link). Items are mutated under `${apiBasePath}/${id}`.
+   * values: `/data/notifications/me` or `/dynamic/notifications/me`,
+   * depending on the host. Items are mutated under `${apiBasePath}/${id}`.
    */
   apiBasePath: string
   /** When true (default), updates `navigator.setAppBadge` with unread count. */

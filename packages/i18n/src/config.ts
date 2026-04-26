@@ -101,8 +101,8 @@ export function createI18n(options: CreateI18nOptions): I18nInstance {
   }
 
   // Kick off init. Callers can `await instance.init(...)` themselves if they
-  // need the promise; we follow the same fire-and-forget pattern as the ops
-  // reference implementation so `useTranslation` just works.
+  // need the promise; we follow a fire-and-forget pattern so `useTranslation`
+  // just works.
   void instance.init(initOptions)
 
   if (syncHtmlLang && typeof document !== 'undefined') {

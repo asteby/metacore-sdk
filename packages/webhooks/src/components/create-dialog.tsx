@@ -38,7 +38,7 @@ import type {
 import type { WebhooksTranslate } from '../i18n'
 import { defaultTranslate } from '../i18n'
 
-/** Default event presets covering both ops and link apps. */
+/** Default event presets covering common host applications (CRUD + conversational). */
 export const DEFAULT_EVENT_PRESETS: WebhookEventOption[] = [
   { value: 'message.incoming', label: 'Mensaje entrante', icon: 'envelope' },
   { value: 'message.sent', label: 'Mensaje enviado', icon: 'send' },

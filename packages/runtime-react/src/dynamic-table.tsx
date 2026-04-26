@@ -1,6 +1,6 @@
 // DynamicTable — metadata-driven CRUD table used by every metacore host.
-// Ported from the ops starter but with the host-specific aliases swapped
-// for metacore packages + context-injected peer deps:
+// Originally extracted from a host app and generalized so the host-specific
+// aliases are swapped for metacore packages + context-injected peer deps:
 //   * `@/lib/api` → <ApiProvider> (see api-context.tsx)
 //   * `@/stores/branch-store` → <BranchProvider> (optional)
 //   * `@/stores/metadata-cache` → internal ./metadata-cache zustand store
