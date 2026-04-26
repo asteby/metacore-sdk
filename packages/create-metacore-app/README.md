@@ -1,9 +1,9 @@
-# create-metacore-app
+# @asteby/create-metacore-app
 
 Scaffolder CLI for metacore Vite+React apps.
 
 ```bash
-npx create-metacore-app my-app
+npm create @asteby/metacore-app my-app
 cd my-app
 pnpm dev
 ```
@@ -16,7 +16,7 @@ The generated app depends on:
 ## Options
 
 ```bash
-create-metacore-app [name] [options]
+npm create @asteby/metacore-app [name] [options]
 
   -t, --template <name>   template to use (default: "default")
       --no-install        skip dependency install after copy

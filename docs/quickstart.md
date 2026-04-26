@@ -35,17 +35,17 @@ No glue code. No controllers. No forms. The contract is the manifest.
 | pnpm 9+ | Workspace package manager. |
 | Go 1.22+ | Required if you build the addon CLI from source or compile a WASM backend. |
 | TinyGo 0.31+ | Only if your addon ships a WASM backend (optional for this guide). |
-| A running Metacore host | Any host application that embeds the kernel, or a fresh app from `npx create-metacore-app`. |
+| A running Metacore host | Any host application that embeds the kernel, or a fresh app from `npm create @asteby/metacore-app`. |
 
 If you don't have a host yet, scaffold one in 30 seconds:
 
 ```bash
-npx create-metacore-app my-host
+npm create @asteby/metacore-app my-host
 cd my-host
 pnpm dev
 ```
 
-`create-metacore-app` wires `@asteby/metacore-starter-config`, theme, UI, auth, i18n and the runtime — see [`CONSUMER_GUIDE.md`](./CONSUMER_GUIDE.md) for the full integration.
+`@asteby/create-metacore-app` wires `@asteby/metacore-starter-config`, theme, UI, auth, i18n and the runtime — see [`CONSUMER_GUIDE.md`](./CONSUMER_GUIDE.md) for the full integration.
 
 ## Step 1 — Scaffold an addon
 

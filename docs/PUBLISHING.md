@@ -77,7 +77,7 @@ For an isolated channel (e.g., `beta`), use `pnpm changeset pre enter beta`.
 `.changeset/config.json` configures two important constraints:
 
 - `linked: [["@asteby/metacore-ui", "@asteby/metacore-theme"]]` — UI and theme **must** version together. They share a design contract; bumping one alone breaks consumers.
-- `ignore: ["@asteby/metacore-starter-core", "create-metacore-app"]` — these packages are private / internal and excluded from the publish flow. Their changesets are still generated but never trigger npm publishes.
+- `ignore: []` — every public package participates in the publish flow. (Past constraint: `starter-core` and `create-metacore-app` were marked `private` and ignored; both are now public.)
 
 Do not edit these without understanding the downstream effect on consumers.
 
