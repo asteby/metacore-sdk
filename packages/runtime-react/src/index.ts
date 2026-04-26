@@ -25,6 +25,11 @@ export type {
     GetDynamicColumns,
     DynamicIconComponent,
 } from './dynamic-columns-shim'
+export {
+    defaultGetDynamicColumns,
+    makeDefaultGetDynamicColumns,
+    type DynamicColumnsHelpers,
+} from './dynamic-columns'
 export { DynamicRecordDialog } from './dialogs/dynamic-record'
 export { ExportDialog } from './dialogs/export'
 export { ImportDialog } from './dialogs/import'
