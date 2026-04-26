@@ -95,7 +95,7 @@ export function SignInRoute() {
 
 ## Design notes
 
-- **Zustand store is canonical** — matches the Ops frontend shape (user + token + reset). Persists to `localStorage` keys `auth_token` / `auth_user`.
+- **Zustand store is canonical** — generic shape (user + token + reset) shared across host applications. Persists to `localStorage` keys `auth_token` / `auth_user`.
 - **Factory, not singleton** — `createApiClient` avoids baking env vars into the library. The host app wires token / language / branch getters.
 - **Pages are brand-less** — accept `brandName`, `logo`, `showcase`, `headerSlot`, `footerSlot` so each app supplies its own identity.
 - **`onSubmit` delegated** — pages don't assume endpoints, toasts, or navigation. The caller owns the network layer.
