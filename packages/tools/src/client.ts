@@ -1,8 +1,8 @@
 import type { ToolDef, ToolExecutionRequest, ToolExecutionResponse } from './types'
 
 /**
- * Transport-agnostic contract que un host (ops, link) implementa para que el
- * frontend ejecute tools a través del backend propio. El host se encarga del
+ * Transport-agnostic contract que un host implementa para que el frontend
+ * ejecute tools a través de su propio backend. El host se encarga del
  * HMAC + dispatch al endpoint del addon usando kernel/tool.HTTPDispatcher.
  */
 export interface ToolClient {

@@ -35,8 +35,8 @@ export interface Manifest {
   icon?: string;
   /**
    * IconType: "brand" (simple-icons slug), "lucide" (PascalCase icon
-   * name) or "url" (absolute URL). Mirrors link/MarketplaceIntegration so
-   * the hub frontend consumes them identically.
+   * name) or "url" (absolute URL). Mirrors the host's MarketplaceIntegration
+   * shape so the hub frontend consumes them identically.
    */
   icon_type?: string;
   icon_slug?: string;
@@ -64,9 +64,9 @@ export interface Manifest {
   hooks?: { [key: string]: string};
   actions?: { [key: string]: ActionDef[]};
   /**
-   * Tools are LLM-facing actions. Conversational hosts (link) sync these
-   * into their agent-tool registry on install so an AI can trigger them
-   * from a user message. Unlike Actions (UI-triggered record ops) Tools
+   * Tools are LLM-facing actions. Conversational hosts sync these into
+   * their agent-tool registry on install so an AI can trigger them from a
+   * user message. Unlike Actions (UI-triggered record operations) Tools
    * are semantic and carry extraction hints for parameter inference.
    */
   tools?: ToolDef[];
@@ -218,8 +218,8 @@ export interface Option {
 }
 /**
  * ToolDef is an LLM-callable function the addon exposes. Hosts with
- * conversational AI (link) register these into their agent-tool registry
- * so a user message can trigger them. The endpoint receives an HMAC-signed
+ * conversational AI register these into their agent-tool registry so a
+ * user message can trigger them. The endpoint receives an HMAC-signed
  * webhook produced by kernel/security.WebhookDispatcher.
  */
 export interface ToolDef {

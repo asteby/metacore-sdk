@@ -232,7 +232,9 @@ Full details and troubleshooting in [`docs/PUBLISHING.md`](./docs/PUBLISHING.md)
 - [`metacore-sdk`](https://github.com/asteby/metacore-sdk) — this repo (public).
 - [`metacore-kernel`](https://github.com/asteby/metacore-kernel) — runtime kernel (private).
 
-Public marketplace: [hub.asteby.com](https://hub.asteby.com).
+Hosts can run any compatible marketplace; configure the URL via the
+`VITE_HUB_URL` environment variable on the consumer app (defaults to a
+placeholder — see `examples/fullstack-starter/frontend/.env.example`).
 
 ## License
 

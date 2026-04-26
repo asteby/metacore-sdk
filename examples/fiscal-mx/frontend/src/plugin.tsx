@@ -1,5 +1,5 @@
 // Federated entry for the fiscal_mx addon. Exposed as "./plugin" per
-// manifest.frontend.expose. Hosts (ops, link) dynamically import this module
+// manifest.frontend.expose. Host applications dynamically import this module
 // at addon install/boot time.
 import { definePlugin } from "@asteby/metacore-sdk";
 import { StampSATModal } from "./modals/StampSATModal";

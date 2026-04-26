@@ -3,9 +3,9 @@ import type { ToolDef, ToolInputParam } from '@asteby/metacore-sdk'
 export type { ToolDef, ToolInputParam }
 
 /**
- * Request enviada al host backend (ops o link) para ejecutar una tool
- * instalada. El host se encarga del dispatch HMAC-firmado al endpoint del
- * addon (lo hace kernel/tool.HTTPDispatcher en Go).
+ * Request enviada al host backend para ejecutar una tool instalada. El host
+ * se encarga del dispatch HMAC-firmado al endpoint del addon (lo hace
+ * kernel/tool.HTTPDispatcher en Go).
  */
 export interface ToolExecutionRequest {
   /** manifest.Manifest.Key del addon hospedador */

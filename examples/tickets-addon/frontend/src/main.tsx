@@ -2,8 +2,8 @@
  * Standalone dev harness for the tickets addon.
  *
  * This entry is NOT used in production — in prod the addon is loaded as a
- * federated remote by the host shell (ops / link). Instead, `main.tsx` lets a
- * developer run `vite dev` and exercise the plugin in isolation against a
+ * federated remote by the host application's shell. Instead, `main.tsx` lets
+ * a developer run `vite dev` and exercise the plugin in isolation against a
  * fake Registry + MarketplaceClient pair.
  *
  * Flow:

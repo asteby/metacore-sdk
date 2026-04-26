@@ -6,6 +6,11 @@ export const Route = createFileRoute('/_authenticated/marketplace/')({
   component: MarketplacePage,
 })
 
+// Configure the marketplace/hub URL via the VITE_HUB_URL env var.
+// Falls back to a placeholder so the route renders, but addon install
+// flows require a real hub.
+const HUB_URL = import.meta.env.VITE_HUB_URL ?? 'https://your-hub.example.com'
+
 function MarketplacePage() {
   return (
     <div data-layout='fixed' className='flex flex-col h-full overflow-hidden'>
@@ -16,18 +21,18 @@ function MarketplacePage() {
             Marketplace
           </h1>
           <p className='text-sm text-muted-foreground mt-1'>
-            Instala addons y extensiones desde el Hub de Metacore
+            Instala addons y extensiones desde tu Hub de Metacore
           </p>
         </div>
         <Button variant='outline' asChild>
-          <a href='https://hub.asteby.com' target='_blank' rel='noopener noreferrer' className='gap-2'>
+          <a href={HUB_URL} target='_blank' rel='noopener noreferrer' className='gap-2'>
             Abrir Hub
             <ExternalLink className='h-4 w-4' />
           </a>
         </Button>
       </div>
       <iframe
-        src='https://hub.asteby.com'
+        src={HUB_URL}
         className='flex-1 w-full border-0'
         title='Metacore Hub Marketplace'
         allow='clipboard-read; clipboard-write'

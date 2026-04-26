@@ -1,7 +1,7 @@
 /**
  * MarketplaceClient — transport-agnostic SDK for the host's marketplace API.
  * Mirrors the REST surface every kernel-consuming app exposes under
- * `/api/metacore/*`. Swap the `fetcher` to run against ops, link, or a mock.
+ * `/api/metacore/*`. Swap the `fetcher` to run against any host or a mock.
  */
 
 import type { Installation, Manifest, NavGroup } from "./types.js";

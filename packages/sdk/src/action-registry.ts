@@ -1,7 +1,7 @@
 import { type ComponentType } from 'react'
 
-// Canonical action registry. Hosts (link, ops) re-export this module so every
-// addon modal lives in a single registry regardless of which host loaded it.
+// Canonical action registry. Hosts re-export this module so every addon
+// modal lives in a single registry regardless of which host loaded it.
 
 export interface ActionFieldDef {
     key: string

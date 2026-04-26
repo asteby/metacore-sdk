@@ -1,7 +1,7 @@
 // Metadata cache — a zustand store that memoizes table/modal metadata
-// responses across dynamic-table mounts. Ported from the ops starter's
-// `@/stores/metadata-cache` so the runtime-react package no longer depends
-// on a host-specific alias.
+// responses across dynamic-table mounts. Generalized from a host-app
+// metadata-cache store so the runtime-react package no longer depends on
+// a host-specific alias.
 //
 // The prefetchAll() method needs an `api` client (axios-like); we keep that
 // as an injectable parameter so the store stays host-agnostic. If a caller

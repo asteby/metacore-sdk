@@ -94,10 +94,10 @@ pnpm --filter @asteby/metacore-runtime-react build
 
 ## GOPRIVATE setup
 
-If your work touches modules that depend on private repos (the kernel, hub-server), configure Go to fetch them through your PAT:
+If your work touches modules that depend on private repos (e.g. the kernel), configure Go to fetch them through your PAT:
 
 ```bash
-export GOPRIVATE=github.com/asteby/metacore-kernel,github.com/asteby/hub-server
+export GOPRIVATE=github.com/asteby/metacore-kernel
 
 cat >> ~/.netrc <<EOF
 machine github.com

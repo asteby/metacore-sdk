@@ -1,6 +1,5 @@
 // ImportDialog — three-step CSV/JSON import flow (upload → validate → import
-// with per-row error report). Ported from the ops starter. Axios-like client
-// is provided by <ApiProvider>.
+// with per-row error report). Axios-like client is provided by <ApiProvider>.
 import { useState, useEffect, useRef } from 'react'
 import {
     Dialog,
