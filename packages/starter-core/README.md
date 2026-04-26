@@ -1,24 +1,17 @@
 # @asteby/metacore-starter-core
 
-Núcleo compartido del starter de Metacore: providers, stores (Zustand), context y hooks que consumen todas las apps Vite+React del ecosistema (ops, link, paneles internos).
+Internal scaffolding shared by the official Metacore Vite + React starter and a small number of internal apps. It is **not published to npm** (`"private": true` in `package.json`) and is excluded from the Changesets publish pipeline.
 
-Reemplaza al antiguo flujo de "copiar `metacore-starter` a cada repo": ahora se instala como dependencia npm y los cambios propagan automáticamente.
+If you are building a Metacore app, start from [`create-metacore-app`](../create-metacore-app) instead — it scaffolds a project that depends on the public `@asteby/metacore-*` packages directly, without going through this internal layer.
 
-## Estado
+## What lives here
 
-Scaffolding inicial (fase 1). El código se migra desde `metacore-starter/src/` en la fase 2.
+The package re-exports curated subsets of:
 
-## Instalación
+- `lib/` — small utilities used across the starter templates.
+- `components/ui/` — shadcn/ui primitives in their canonical form, kept in sync with `@asteby/metacore-ui`.
 
-```bash
-pnpm add @asteby/metacore-starter-core
-```
-
-Requiere como peer deps: `react`, `react-dom`, `@asteby/metacore-sdk`, `@asteby/metacore-ui`, `@asteby/metacore-auth`, `@asteby/metacore-theme`, `@tanstack/react-router`, `zustand`.
-
-## Uso
-
-_Pendiente — se documentará cuando la fase 2 migre providers y stores._
+It exists so the `templates/` shipped by `create-metacore-app` can pin a single version of the starter scaffolding while the public packages evolve at their own pace.
 
 ## Build
 
@@ -26,4 +19,4 @@ _Pendiente — se documentará cuando la fase 2 migre providers y stores._
 pnpm --filter @asteby/metacore-starter-core build
 ```
 
-Genera un bundle ESM + CJS con `vite` en modo library y `.d.ts` vía `tsc`.
+Produces an ESM + CJS bundle via Vite library mode and `.d.ts` files via `tsc`. The build runs in CI but is excluded from `pnpm release` because the package is private.
