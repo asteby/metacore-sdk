@@ -5,8 +5,9 @@
 <h1 align="center">Metacore SDK</h1>
 
 <p align="center">
-  <strong>The framework for building addons on the Metacore runtime.</strong><br />
-  One declarative manifest. Sandboxed WASM backends. React contributions. Every Metacore host.
+  <strong>Declarative addons. Zero-glue UI. Native performance.</strong><br />
+  Declare a model in <code>manifest.json</code>. The kernel materializes the table, endpoints and metadata.<br />
+  The SDK renders the CRUD UI. One bundle, every host.
 </p>
 
 <p align="center">
@@ -22,6 +23,7 @@
 ## Table of contents
 
 - [What is Metacore](#what-is-metacore)
+- [Why Metacore](#why-metacore)
 - [Quickstart](#quickstart)
 - [Packages](#packages)
 - [Architecture](#architecture)
@@ -36,6 +38,8 @@
 
 **Metacore** is a declarative framework for extending business applications. You describe your addon with a single `manifest.json` — tables, UI contributions, webhooks, LLM tools, sandboxed permissions — and the kernel materializes it across every host that speaks Metacore.
 
+**Dynamic CRUD without the boilerplate.** Declare `model_definitions[]` in your manifest and the kernel auto-generates the database schema, REST endpoints, metadata documents and permission gates. The SDK's `<DynamicTable model="..." />` consumes that metadata and renders a full CRUD surface — sortable, filterable, paginated, with create/edit dialogs and custom action modals. You write zero rendering code. The same manifest powers Asteby Ops, Asteby Link, and any third-party host. See [`docs/dynamic-ui.md`](./docs/dynamic-ui.md) for the full UI contract.
+
 The kernel runs sandboxed WASM backends, enforces capability scopes, manages tenant isolation, and exposes a typed bridge to React frontends. Hosts (Asteby Ops, Asteby Link, third-party apps) embed the kernel as a Go module and consume the SDK packages from npm. One bundle, every host.
 
 **This repository** is the public, open-source SDK that makes building, distributing and consuming Metacore addons possible:
@@ -46,21 +50,31 @@ The kernel runs sandboxed WASM backends, enforces capability scopes, manages ten
 
 The kernel itself is private and hosted in [`asteby/metacore-kernel`](https://github.com/asteby/metacore-kernel).
 
+## Why Metacore
+
+Building a CRUD feature in a typical SaaS stack means writing — and maintaining — a SQL migration, a model class, a controller, a list endpoint, a detail endpoint, a create endpoint, an update endpoint, a delete endpoint, a list page with search/sort/pagination, an edit form, validation, permission middleware, and translations for every label. Per feature.
+
+With Metacore:
+
+| You write | What is no longer your problem |
+|---|---|
+| 1 manifest entry per model (~15 lines of JSON) | The migration, the model, all four CRUD endpoints, the metadata document, the permission middleware. |
+| 1 line of TSX (`<DynamicTable model="…" />`) | The list view, the toolbar, filter chips, sort indicators, pagination, the edit modal, the delete confirmation, the bulk-actions bar, URL state sync, capability-gated buttons. |
+| Optional: action handlers (webhook or WASM) | Action routing, modal dispatching, form validation, confirm dialogs, error toasts. |
+
+The cost: addons live inside the manifest's contract. When you need shapes the manifest doesn't model (multi-table joins, custom RPC, optimistic UIs), drop down to `@asteby/metacore-ui` primitives — the SDK is composable, not all-or-nothing. See [`docs/dynamic-ui.md`](./docs/dynamic-ui.md#what-you-cant-do-yet) for the honest list of limitations.
+
 ## Quickstart
 
-### Build an addon
-
-Install the Go CLI and scaffold a new addon:
+### Three commands → working CRUD
 
 ```bash
-go install github.com/asteby/metacore-sdk/cli@latest
-metacore init my-addon
-cd my-addon
-metacore validate
-metacore build --strict
+go install github.com/asteby/metacore-sdk/cli@latest   # 1. install the CLI
+metacore init tickets && cd tickets                    # 2. scaffold an addon
+metacore validate && metacore build --strict           # 3. validate + bundle
 ```
 
-Full walkthrough — manifest, migrations, signing, marketplace upload — in [`docs/quickstart.md`](./docs/quickstart.md).
+Edit `manifest.json` to declare your model, install the bundle in a host, and render `<DynamicTable model="tickets" />` in the host frontend. That's the full path. Full walkthrough — manifest, migrations, custom actions, signing, marketplace upload — in [`docs/quickstart.md`](./docs/quickstart.md).
 
 ### Build a host app (Vite + React)
 
@@ -102,47 +116,64 @@ All published as `@asteby/metacore-*` on npm under Apache-2.0. Versions reflect 
 ## Architecture
 
 ```
-                   +-----------------------------+
-                   |       Addon (your code)     |
-                   |  manifest.json + migrations |
-                   |  + frontend/ + WASM backend |
-                   +--------------+--------------+
-                                  |
-                                  v
-                   +-----------------------------+
-                   |   metacore-sdk (this repo)  |
-                   |  CLI · Go pkg · npm packages|
-                   +--------------+--------------+
-                                  |
-                                  v
-                   +-----------------------------+
-                   |     metacore-kernel (Go)    |
-                   |  WASM runtime · capability  |
-                   |  enforcer · WebSocket hub   |
-                   |  installer · lifecycle      |
-                   +--------------+--------------+
-                                  |
-                       +----------+-----------+
-                       |                      |
-                       v                      v
-                 +-----------+         +-----------+
-                 |    Ops    |         |   Link    |
-                 |  (CRUD)   |         |  (LLM)    |
-                 +-----------+         +-----------+
-                  Host apps embed the kernel as a
-                  Go module; the React frontends
-                  consume @asteby/metacore-* from npm.
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │                        Addon (your code)                            │
+   │             manifest.json — declarative contract                    │
+   │       model_definitions[] · actions[] · capabilities[] · …          │
+   │            + migrations/ · frontend/ · WASM backend                 │
+   └─────────────────────────────┬───────────────────────────────────────┘
+                                 │
+                                 ▼
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │                  metacore-sdk (this repo, public)                   │
+   │   CLI ─ Go pkg ─ @asteby/metacore-{sdk, runtime-react, ui, …}       │
+   └─────────────────────────────┬───────────────────────────────────────┘
+                                 │
+                                 ▼
+   ┌─────────────────────────────────────────────────────────────────────┐
+   │                  metacore-kernel (Go, private)                      │
+   │     manifest parser · AutoMigrate · WASM runtime · capability       │
+   │      enforcer · WebSocket hub · installer · lifecycle hooks         │
+   └────────────┬────────────────────────────────────────────────────────┘
+                │
+                │  REST + WebSocket
+                │
+                ▼
+   ┌──────────────────────────────────────────┐         ┌──────────────┐
+   │  /metadata/table/<model>     ◀──── caches│         │              │
+   │  /metadata/modal/<model>     ◀──── caches│         │  Host apps   │
+   │  /data/<model>            (CRUD list/CRUD)         │   ┌────────┐ │
+   │  /data/<model>/<id>/action/<key>          │  ◀────▶│   │  Ops   │ │
+   │  /options/<endpoint>          (FK pickers)│         │   │ (CRUD) │ │
+   └──────────────────────────────────────────┘         │   ├────────┤ │
+                │                                       │   │  Link  │ │
+                │                                       │   │ (LLM)  │ │
+                ▼                                       │   ├────────┤ │
+   ┌──────────────────────────────────────────┐         │   │  …     │ │
+   │  <DynamicTable model="tickets" />        │  ◀──────┤   └────────┘ │
+   │  <DynamicForm fields={…} />              │         │              │
+   │  <DynamicRecordDialog />                 │         │ Hosts embed  │
+   │  <ActionModalDispatcher />               │         │ the kernel   │
+   │  <CapabilityGate require="…">            │         │ as a Go      │
+   └──────────────────────────────────────────┘         │ module and   │
+        runtime-react renders metadata into UI         │ consume      │
+                                                        │ @asteby/*    │
+                                                        │ from npm.    │
+                                                        └──────────────┘
 ```
 
-- **Addon → SDK.** You write a manifest and (optionally) a TinyGo WASM backend. The CLI validates, signs and packages a `.tar.gz`.
-- **SDK → Kernel.** The kernel parses the manifest, runs migrations under tenant isolation, loads the WASM bundle into wazero, and exposes the addon's contributions over WebSocket + REST.
+- **Manifest → Kernel.** You write a manifest and (optionally) a TinyGo WASM backend. The CLI validates, signs and packages a `.tar.gz`. The kernel parses it, runs migrations under tenant isolation, loads the WASM bundle into wazero, and serves CRUD endpoints + metadata documents.
+- **Kernel → Metadata.** For every declared model the kernel exposes `/metadata/table/<model>` (columns, filters, actions), `/metadata/modal/<model>` (form schema), and `/metadata/all` (one-shot prefetch).
+- **Metadata → UI.** `<DynamicTable>` reads the metadata, fetches `/data/<model>` paginated, renders rows with cell-type-aware renderers, and dispatches custom actions to `<ActionModalDispatcher>`. No code is written per feature.
 - **Kernel → Host.** Ops and Link embed the kernel as a Go module. Their React frontends import from `@asteby/metacore-*` to render the contributions consistently.
 
 ## Documentation
 
 | Doc | What it covers |
 |---|---|
-| [`docs/quickstart.md`](./docs/quickstart.md) | Your first addon in 10 minutes — scaffold, validate, sign, upload. |
+| [`docs/quickstart.md`](./docs/quickstart.md) | Build a CRUD addon in 5 minutes — declare a model, render a table. |
+| [`docs/dynamic-ui.md`](./docs/dynamic-ui.md) | The Dynamic UI framework — `<DynamicTable>`, `<DynamicForm>`, `<ActionModalDispatcher>`, capability gates. |
+| [`docs/addon-cookbook.md`](./docs/addon-cookbook.md) | Recipes — foreign keys, soft delete, custom actions, events, federation. |
 | [`docs/manifest-spec.md`](./docs/manifest-spec.md) | Every field of `manifest.json` against `APIVersion = 2.0.0`. |
 | [`docs/capabilities.md`](./docs/capabilities.md) | Declaring scoped permissions safely. |
 | [`docs/wasm-abi.md`](./docs/wasm-abi.md) | Writing a sandboxed WASM backend (TinyGo ABI). |

@@ -66,6 +66,21 @@ const client = createMetacoreClient({
 const installations = await client.installations.list()
 ```
 
+## Key types
+
+| Type | Source | What it shapes |
+|---|---|---|
+| `Manifest` | `src/generated/manifest.ts` | The full manifest document. Mirrored from Go via `tygo`. |
+| `ModelDefinition` | `src/generated/manifest.ts` | One entry of `model_definitions[]` — table name, columns, soft-delete and org-scoping flags. |
+| `ColumnDef` | `src/generated/manifest.ts` | A column inside a model — name, type, size, default, indices, ref. |
+| `Capability` | `src/generated/manifest.ts` | `{ kind, target, reason }`. |
+| `ActionFieldDef` | `src/generated/manifest.ts` | A field declared inside a manifest action. Reused by `<DynamicForm>` and the action dispatcher. |
+| `ToolDef` | `src/generated/manifest.ts` | LLM-facing tool with `input_schema`, `extraction_hint`, `normalize`, `validation`. |
+| `AddonAPI` | `src/api.ts` | Host bindings injected into an addon's `register()` call. |
+| `ActionModalProps` | `src/action-registry.ts` | Props passed to action modals registered via `actionRegistry.register()`. |
+
+The `runtime-react` package consumes `AddonAPI`, the action registry and the slot registry from this package. Dynamic UI components live in [`@asteby/metacore-runtime-react`](../runtime-react) and are documented in [`docs/dynamic-ui.md`](https://github.com/asteby/metacore-sdk/blob/main/docs/dynamic-ui.md).
+
 ## Regenerating types
 
 When the Go manifest changes:

@@ -1,11 +1,26 @@
-# Capabilities
+<p align="center">
+  <img src="./assets/metacore.svg" width="120" alt="Metacore" />
+</p>
+
+<h1 align="center">Capabilities</h1>
 
 Capabilities are the declarative sandbox of an addon. Every privileged
 operation the addon attempts — SELECT on a foreign table, outbound HTTP,
 event bus publish — is checked against a compiled `Capabilities` policy.
 
-Implementation: `kernel/security/context.go`. Validation:
-`kernel/manifest/validate.go`.
+Implementation: [`kernel/security/context.go`](https://github.com/asteby/metacore-kernel/blob/main/security/context.go).
+Validation: [`kernel/manifest/validate.go`](https://github.com/asteby/metacore-kernel/blob/main/manifest/validate.go).
+For the kernel-side enforcement model see [`kernel/docs/permissions.md`](https://github.com/asteby/metacore-kernel/blob/main/docs/permissions.md).
+
+## Table of contents
+
+- [1. Shape](#1-shape)
+- [2. The addon's own schema is implicit](#2-the-addons-own-schema-is-implicit)
+- [3. Kinds](#3-kinds)
+- [4. Declaring capabilities](#4-declaring-capabilities)
+- [5. Runtime enforcement](#5-runtime-enforcement)
+- [6. Review expectations](#6-review-expectations)
+- [7. UI gating](#7-ui-gating)
 
 ## 1. Shape
 
@@ -130,3 +145,29 @@ The marketplace review process flags:
   brand-new TLDs registered by the publisher).
 - `db:write` on core tables (`users`, `organizations`, `billing_*`) unless
   the addon category explicitly requires it.
+
+## 7. UI gating
+
+The kernel is the source of truth, but the SDK ships a `<CapabilityGate>`
+component for hiding affordances the user can't act on:
+
+```tsx
+import { CapabilityGate, CapabilityProvider } from '@asteby/metacore-runtime-react'
+
+<CapabilityProvider capabilities={user.capabilities}>
+  <CapabilityGate require="db:write addon_tickets.tickets">
+    <Button onClick={createTicket}>New ticket</Button>
+  </CapabilityGate>
+</CapabilityProvider>
+```
+
+The gate is **purely cosmetic** — never rely on it for security. The host
+must always validate the same capability server-side. See
+[`dynamic-ui.md`](./dynamic-ui.md#capability-gates) for the full prop
+surface.
+
+## See also
+
+- [`manifest-spec.md`](./manifest-spec.md#7-capabilities) — declaring `capabilities[]` in the manifest.
+- [`dynamic-ui.md`](./dynamic-ui.md) — `<CapabilityGate>` and runtime gating.
+- [`addon-publishing.md`](./addon-publishing.md) — how unscoped capabilities affect the marketplace review.

@@ -1,12 +1,54 @@
-# `manifest.json` reference
+<p align="center">
+  <img src="./assets/metacore.svg" width="120" alt="Metacore" />
+</p>
+
+<h1 align="center"><code>manifest.json</code> reference</h1>
 
 The manifest is the **single contract** between an addon and the metacore
-kernel. It is consumed by Go (`kernel/manifest`) and mirrored by the TS SDK.
-This document reflects `APIVersion = "2.0.0"`.
+kernel. It is consumed by Go (`kernel/manifest`) and mirrored by the TS SDK
+via [`tygo`](https://github.com/gzuidhof/tygo). This document reflects
+`APIVersion = "2.0.0"`.
 
 When this spec evolves, `APIVersion` is bumped and a migration path is
 documented. Addons opt into a compatibility window via the top-level
 `kernel` field.
+
+## Table of contents
+
+- [Top-level fields](#top-level-fields)
+- [1. Identity](#1-identity)
+- [2. Tenant isolation](#2-tenant-isolation)
+- [3. `model_definitions[]`](#3-model_definitions)
+- [4. `navigation[]`](#4-navigation)
+- [5. `actions{}`](#5-actions-ui-triggered)
+- [6. `tools[]`](#6-tools-llm-triggered)
+- [7. `capabilities[]`](#7-capabilities)
+- [8. `hooks{}` and `lifecycle_hooks{}`](#8-hooks-and-lifecycle_hooks)
+- [9. `settings[]`](#9-settings)
+- [10. `frontend{}`](#10-frontend)
+- [11. `backend{}`](#11-backend)
+- [12. `signature{}`](#12-signature)
+- [13. `events[]`](#13-events)
+
+## Top-level fields
+
+| Field | Type | Required | Section |
+|---|---|---|---|
+| `key`, `name`, `version`, `kernel` | string | yes (key/name/version) | [Identity](#1-identity) |
+| `description`, `category`, `author`, `website`, `license`, `icon_*` | string | no | [Identity](#1-identity) |
+| `tenant_isolation` | enum | no (default `"shared"`) | [Tenant isolation](#2-tenant-isolation) |
+| `model_definitions` | array | no | [Models](#3-model_definitions) |
+| `navigation` | array | no | [Navigation](#4-navigation) |
+| `actions` | object | no | [Actions](#5-actions-ui-triggered) |
+| `tools` | array | no | [Tools](#6-tools-llm-triggered) |
+| `capabilities` | array | recommended | [Capabilities](#7-capabilities) |
+| `hooks`, `lifecycle_hooks` | object | no | [Hooks](#8-hooks-and-lifecycle_hooks) |
+| `settings` | array | no | [Settings](#9-settings) |
+| `frontend` | object | no | [Frontend](#10-frontend) |
+| `backend` | object | no | [Backend](#11-backend) |
+| `signature` | object | stamped at publish | [Signature](#12-signature) |
+| `events` | string[] | no | [Events](#13-events) |
+| `i18n` | object | no | Locale → namespace tree, merged into the host's i18next via [`I18nProvider`](./dynamic-ui.md#i18n). |
 
 ## 1. Identity
 
@@ -295,3 +337,10 @@ register the schema; subscribers declare `capabilities: [{kind: "event:subscribe
 ```json
 "events": ["ticket.created", "ticket.resolved"]
 ```
+
+## See also
+
+- [`dynamic-ui.md`](./dynamic-ui.md) — how the SDK turns metadata derived from this manifest into a working CRUD UI.
+- [`addon-cookbook.md`](./addon-cookbook.md) — recipes for foreign keys, soft delete, custom actions, events and more.
+- [`capabilities.md`](./capabilities.md) — full catalog of `kind` values and target patterns.
+- [`quickstart.md`](./quickstart.md) — hands-on walkthrough end-to-end.

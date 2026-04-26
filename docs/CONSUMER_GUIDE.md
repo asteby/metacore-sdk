@@ -7,6 +7,7 @@ Guide for apps that consume the Metacore SDK (Ops, Link, internal panels, third-
 - [1. Install packages](#1-install-packages)
 - [2. Mount providers](#2-mount-providers)
 - [3. Use the building blocks](#3-use-the-building-blocks)
+- [3.1. Setting up `<DynamicTable>` in your app](#31-setting-up-dynamictable-in-your-app)
 - [4. Mixed npm + `file:` pattern for local development](#4-mixed-npm--file-pattern-for-local-development)
 - [5. Vite — `metacoreOptimizeDeps`](#5-vite--metacoreoptimizedeps)
 - [6. Tailwind 4 — `@source` directives](#6-tailwind-4--source-directives)
@@ -99,6 +100,47 @@ export function UsersPage({ data }: { data: User[] }) {
 ```
 
 See each package's README for the full surface — [`packages/ui`](../packages/ui), [`packages/auth`](../packages/auth), [`packages/runtime-react`](../packages/runtime-react), and so on.
+
+## 3.1. Setting up `<DynamicTable>` in your app
+
+`<DynamicTable model="..." />` is the centerpiece of the runtime: one component renders a full CRUD surface from kernel-served metadata. Three providers must be mounted before it works.
+
+```tsx
+// src/main.tsx — extension of the tree above
+import { ApiProvider, CapabilityProvider } from '@asteby/metacore-runtime-react'
+import { api } from './lib/api'                  // your axios instance
+
+createRoot(document.getElementById('root')!).render(
+  <I18nextProvider i18n={i18n}>
+    <DirectionProvider language={i18n.language}>
+      <AuthProvider>
+        <ApiProvider client={api}>
+          <CapabilityProvider capabilities={session.capabilities}>
+            <WebSocketProvider url={import.meta.env.VITE_WS_URL} getToken={getToken}>
+              <RouterProvider router={router} />
+            </WebSocketProvider>
+          </CapabilityProvider>
+        </ApiProvider>
+      </AuthProvider>
+    </DirectionProvider>
+  </I18nextProvider>,
+)
+```
+
+Then mount the table on any route:
+
+```tsx
+// src/routes/tickets.tsx
+import { DynamicTable } from '@asteby/metacore-runtime-react'
+
+export function TicketsPage() {
+  return <DynamicTable model="tickets" />
+}
+```
+
+If the `i18n` instance is missing the `datatable.*` and `common.*` keys the runtime uses, headers and pagination labels render as raw keys. Either copy the key list from [`packages/ui/README.md`](../packages/ui#i18n) into your bundles or pre-translate column labels in a custom `getDynamicColumns` factory.
+
+For a deep dive on every prop, custom cell renderers, capability gating, action dispatchers and the metadata cache, see [`dynamic-ui.md`](./dynamic-ui.md).
 
 ## 4. Mixed npm + `file:` pattern for local development
 
