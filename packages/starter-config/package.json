@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-starter-config",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Shared build & lint configs for metacore apps (Vite + React + Tailwind 4 + TanStack Router + ESLint + TS)",
   "license": "Apache-2.0",
   "repository": {
