@@ -83,7 +83,7 @@ Edit `manifest.json` to declare your model, install the bundle in a host, and re
 Scaffold a Vite + React host that consumes the SDK:
 
 ```bash
-npx create-metacore-app my-app
+npm create @asteby/metacore-app my-app
 cd my-app
 pnpm dev
 ```
@@ -110,8 +110,8 @@ All published as `@asteby/metacore-*` on npm under Apache-2.0. Versions reflect 
 | [`@asteby/metacore-pwa`](./packages/pwa) | PWA helpers — Vite plugin wrapper, install/update prompts, push, offline. | beta |
 | [`@asteby/metacore-app-providers`](./packages/app-providers) | Generic providers — direction, font, layout, search palette. | beta |
 | [`@asteby/metacore-starter-config`](./packages/starter-config) | Shared Vite, TypeScript, Tailwind 4 and ESLint presets. | beta |
-| [`@asteby/metacore-starter-core`](./packages/starter-core) | Internal starter scaffolding (private — not published to npm). | internal |
-| [`create-metacore-app`](./packages/create-metacore-app) | `npx` scaffolder for new Metacore Vite + React apps. | beta |
+| [`@asteby/metacore-starter-core`](./packages/starter-core) | Starter scaffolding — providers, hooks, UI primitives. | beta |
+| [`@asteby/create-metacore-app`](./packages/create-metacore-app) | `npm create` scaffolder for new Metacore Vite + React apps. | beta |
 
 > Stability legend: `alpha` = pre-1.0, breaking changes likely; `beta` = pre-1.0 but stabilizing; `stable` = 1.0+ with semver discipline.
 
@@ -221,7 +221,7 @@ Releases are fully automated through [Changesets](https://github.com/changesets/
 4. **Publish:** merging the version PR runs `changeset publish`, building the affected packages and pushing them to npm under the `@asteby` scope.
 5. **Propagate:** consumer host applications receive a Renovate PR within minutes — patch and minor bumps auto-merge, majors await human review.
 
-The workflow uses `NPM_TOKEN` (a Granular Access Token with **Bypass 2FA** enabled, scoped to publish on `@asteby`). Linked packages — `@asteby/metacore-ui` and `@asteby/metacore-theme` — version together; `@asteby/metacore-starter-core` and `create-metacore-app` are excluded from the publish flow via `.changeset/config.json`.
+The workflow uses `NPM_TOKEN` (a Granular Access Token with **Bypass 2FA** enabled, scoped to publish on `@asteby`). Linked packages — `@asteby/metacore-ui` and `@asteby/metacore-theme` — version together; the rest version independently via Changesets.
 
 Full details and troubleshooting in [`docs/PUBLISHING.md`](./docs/PUBLISHING.md).
 

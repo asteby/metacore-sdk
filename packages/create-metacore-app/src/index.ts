@@ -2,7 +2,7 @@
  * create-metacore-app — scaffolder for Vite+React apps wired to
  * `@asteby/metacore-starter-core` and `@asteby/metacore-starter-config`.
  *
- * Usage: `npx create-metacore-app [name]`
+ * Usage: `npm create @asteby/metacore-app [name]`
  */
 import { Command } from 'commander'
 import prompts from 'prompts'
