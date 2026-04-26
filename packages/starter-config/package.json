@@ -24,7 +24,7 @@
     "./tsconfig": "./tsconfig.base.json",
     "./vite": {
       "types": "./vite-preset.d.ts",
-      "import": "./vite-preset.ts"
+      "import": "./vite-preset.js"
     },
     "./eslint": "./eslint-preset.js",
     "./package.json": "./package.json"
