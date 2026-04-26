@@ -11,9 +11,49 @@
  *     router: true,
  *   })
  */
-import type { UserConfig, PluginOption } from 'vite'
+import type { UserConfig, PluginOption, DepOptimizationOptions } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
+
+/**
+ * Lista de packages `@asteby/metacore-*` (y sus subpaths) que Vite debe
+ * pre-bundlear obligatoriamente.
+ *
+ * Por qué: el monorepo los linkea via `file:`/workspace; pnpm los expone como
+ * symlinks y Vite por defecto NO pre-bundlea linked deps. Eso hace que sus
+ * `dist/*.js` lleguen al browser con imports bare (`@asteby/metacore-ui/...`,
+ * `@asteby/metacore-runtime-react`, etc.) y dispara
+ * `Failed to resolve module specifier` en el browser.
+ *
+ * Forzando el pre-bundling, esbuild reescribe los bare specifiers a rutas
+ * resolvibles y todas las apps consumidoras quedan blindadas con una sola
+ * línea de config.
+ */
+export const metacoreOptimizeDepsInclude = [
+  '@asteby/metacore-app-providers',
+  '@asteby/metacore-auth',
+  '@asteby/metacore-notifications',
+  '@asteby/metacore-pwa',
+  '@asteby/metacore-runtime-react',
+  '@asteby/metacore-sdk',
+  '@asteby/metacore-starter-core',
+  '@asteby/metacore-theme',
+  '@asteby/metacore-tools',
+  '@asteby/metacore-ui',
+  '@asteby/metacore-ui/primitives',
+  '@asteby/metacore-ui/lib',
+  '@asteby/metacore-ui/data-table',
+  '@asteby/metacore-ui/dialogs',
+  '@asteby/metacore-ui/layout',
+  '@asteby/metacore-ui/hooks',
+  '@asteby/metacore-ui/icons',
+  '@asteby/metacore-ui/command-menu',
+  '@asteby/metacore-websocket',
+] as const
+
+export const metacoreOptimizeDeps: DepOptimizationOptions = {
+  include: [...metacoreOptimizeDepsInclude],
+}
 
 export interface MetacorePwaOptions {
   name: string
@@ -105,5 +145,13 @@ export async function defineMetacoreConfig(
   return {
     ...extend,
     plugins: [...plugins, ...(extend.plugins ?? [])],
+    optimizeDeps: {
+      ...metacoreOptimizeDeps,
+      ...(extend.optimizeDeps ?? {}),
+      include: [
+        ...metacoreOptimizeDepsInclude,
+        ...(extend.optimizeDeps?.include ?? []),
+      ],
+    },
   }
 }
