@@ -18,6 +18,8 @@
   <a href="https://pkg.go.dev/github.com/asteby/metacore-sdk"><img src="https://pkg.go.dev/badge/github.com/asteby/metacore-sdk.svg" alt="Go Reference" /></a>
 </p>
 
+> 📚 **Documentation:** Full docs live at **[asteby.github.io/metacore](https://asteby.github.io/metacore/)**. The `docs/` folder in this repo is kept for offline reference only.
+
 ---
 
 ## Table of contents
