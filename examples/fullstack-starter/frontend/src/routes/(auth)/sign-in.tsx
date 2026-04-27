@@ -115,12 +115,7 @@ function SignIn() {
                 name='password'
                 render={({ field }) => (
                   <FormItem>
-                    <div className='flex items-center justify-between'>
-                      <FormLabel className='text-xs'>Contraseña</FormLabel>
-                      <Link to='/forgot-password' className='text-xs font-medium text-primary hover:underline underline-offset-4'>
-                        ¿Olvidaste tu contraseña?
-                      </Link>
-                    </div>
+                    <FormLabel className='text-xs'>Contraseña</FormLabel>
                     <FormControl>
                       <div className='relative'>
                         <Input type={showPassword ? 'text' : 'password'} placeholder='••••••••' autoComplete='current-password' className='h-10 pr-10' {...field} />
