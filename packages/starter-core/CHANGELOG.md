@@ -1,5 +1,12 @@
 # @asteby/metacore-starter-core
 
+## 2.0.0
+
+### Patch Changes
+
+- Updated dependencies [c9e78a0]
+  - @asteby/metacore-auth@4.1.0
+
 ## 1.1.1
 
 ### Patch Changes
