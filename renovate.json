@@ -1,10 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", ":semanticCommits", ":dependencyDashboard"],
-  "schedule": ["before 6am on monday"],
-  "packageRules": [
-    { "matchManagers": ["npm"], "matchDepTypes": ["dependencies","devDependencies"], "matchUpdateTypes": ["minor","patch"], "automerge": true, "platformAutomerge": true },
-    { "matchPackagePatterns": ["^react","^@tanstack/","^@radix-ui/"], "groupName": "react ecosystem" },
-    { "matchPackagePatterns": ["^@asteby/metacore-"], "matchUpdateTypes": ["major"], "automerge": false }
+  "extends": [
+    "github>asteby/renovate-config"
   ]
 }
