@@ -1,5 +1,12 @@
 # @asteby/metacore-starter-core
 
+## 3.0.0
+
+### Patch Changes
+
+- Updated dependencies [ea200fb]
+  - @asteby/metacore-auth@5.0.0
+
 ## 2.0.0
 
 ### Patch Changes

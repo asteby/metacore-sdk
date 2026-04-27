@@ -1,5 +1,12 @@
 # @asteby/metacore-starter-vite
 
+## 0.1.6
+
+### Patch Changes
+
+- Updated dependencies [ea200fb]
+  - @asteby/metacore-auth@5.0.0
+
 ## 0.1.5
 
 ### Patch Changes
