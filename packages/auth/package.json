@@ -43,6 +43,22 @@
     "./components": {
       "types": "./dist/components/index.d.ts",
       "import": "./dist/components/index.js"
+    },
+    "./showcases": {
+      "types": "./dist/showcases/index.d.ts",
+      "import": "./dist/showcases/index.js"
+    },
+    "./showcases/whatsapp": {
+      "types": "./dist/showcases/whatsapp.d.ts",
+      "import": "./dist/showcases/whatsapp.js"
+    },
+    "./showcases/marketplace": {
+      "types": "./dist/showcases/marketplace.d.ts",
+      "import": "./dist/showcases/marketplace.js"
+    },
+    "./showcases/generic": {
+      "types": "./dist/showcases/generic.d.ts",
+      "import": "./dist/showcases/generic.js"
     }
   },
   "scripts": {
@@ -56,7 +72,11 @@
     "react-dom": ">=18",
     "@asteby/metacore-ui": "workspace:^",
     "@tanstack/react-router": ">=1.100",
+    "framer-motion": ">=10",
     "zustand": ">=5"
+  },
+  "peerDependenciesMeta": {
+    "framer-motion": { "optional": true }
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
@@ -70,6 +90,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@tanstack/react-router": "^1.168.0",
+    "framer-motion": "^11.11.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "typescript": "^5.6.0",
