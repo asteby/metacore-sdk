@@ -13,5 +13,46 @@ services:
       timeout: 5s
       retries: 10
 
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports: ["7200:7200"]
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: "7200"
+      DATABASE_URL: "postgres://metacore:metacore@db:5432/metacore?sslmode=disable"
+      JWT_SECRET: "change-me-super-long-random-secret-at-least-32-chars"
+      CORS_ORIGINS: "http://localhost:5173"
+      SEED_DEMO_DATA: "true"
+      # Generate real keys with:
+      #   docker run --rm node:22-alpine npx -y web-push generate-vapid-keys
+      VAPID_PUBLIC_KEY: ""
+      VAPID_PRIVATE_KEY: ""
+    env_file:
+      - path: ./backend/.env
+        required: false
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: "http://localhost:7200/api"
+        VITE_WS_URL: "ws://localhost:7200/api/ws"
+    # Frontend Dockerfile builds static assets and serves via nginx on :80.
+    # Map host 5173 -> container 80 so the documented localhost:5173 still works.
+    ports: ["5173:80"]
+    depends_on:
+      - backend
+    environment:
+      VITE_API_URL: "http://localhost:7200/api"
+      VITE_WS_URL: "ws://localhost:7200/api/ws"
+    env_file:
+      - path: ./frontend/.env
+        required: false
+
 volumes:
   pgdata:

@@ -122,7 +122,8 @@ function AuthLayout() {
 
   useEffect(() => {
     if (!token) return
-    const ws = new WebSocket(`ws://localhost:7200/api/ws?token=${encodeURIComponent(token)}`)
+    const wsBase = (import.meta.env.VITE_WS_URL as string | undefined) ?? 'ws://localhost:7200/api/ws'
+    const ws = new WebSocket(`${wsBase}?token=${encodeURIComponent(token)}`)
     wsRef.current = ws
     ws.onopen = () => { setWsConnected(true); console.log('WS connected') }
     ws.onmessage = (e) => {

@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"strings"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
@@ -33,6 +34,14 @@ func main() {
 	app.RegisterModel("products", func() modelbase.ModelDefiner { return &models.Product{} })
 	app.RegisterModel("customers", func() modelbase.ModelDefiner { return &models.Customer{} })
 	app.RegisterModel("notifications", func() modelbase.ModelDefiner { return &models.Notification{} })
+
+	// Seed demo data so a fresh `docker compose up` is immediately usable.
+	// Defaults to enabled; set SEED_DEMO_DATA=false to skip in production.
+	if seedEnabled() {
+		if err := SeedDemoData(db); err != nil {
+			log.Printf("seed: failed to seed demo data: %v", err)
+		}
+	}
 
 	// When a NOTIFICATION is sent via WebSocket, persist it to DB
 	app.WSHub.OnNotification = func(userID uuid.UUID, msg metacorews.Message) {
@@ -115,4 +124,19 @@ func main() {
 	fiberApp.Get("/healthz", func(c *fiber.Ctx) error { return c.SendString("ok") })
 
 	log.Fatal(fiberApp.Listen(":" + os.Getenv("PORT")))
+}
+
+// seedEnabled reports whether SeedDemoData should run on boot. Defaults to
+// true so the local/dev/docker-compose experience works out-of-the-box; set
+// SEED_DEMO_DATA=false (or 0/no) to disable in production.
+func seedEnabled() bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("SEED_DEMO_DATA")))
+	switch v {
+	case "":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return true
+	}
 }
