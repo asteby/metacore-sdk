@@ -48,17 +48,13 @@
       "types": "./dist/showcases/index.d.ts",
       "import": "./dist/showcases/index.js"
     },
-    "./showcases/whatsapp": {
-      "types": "./dist/showcases/whatsapp.d.ts",
-      "import": "./dist/showcases/whatsapp.js"
-    },
-    "./showcases/marketplace": {
-      "types": "./dist/showcases/marketplace.d.ts",
-      "import": "./dist/showcases/marketplace.js"
-    },
     "./showcases/generic": {
       "types": "./dist/showcases/generic.d.ts",
       "import": "./dist/showcases/generic.js"
+    },
+    "./showcases/blocks": {
+      "types": "./dist/showcases/blocks/index.d.ts",
+      "import": "./dist/showcases/blocks/index.js"
     }
   },
   "scripts": {
