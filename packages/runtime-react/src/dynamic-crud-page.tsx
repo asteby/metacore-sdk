@@ -35,6 +35,7 @@ import { DynamicTable } from './dynamic-table'
 import { DynamicRecordDialog } from './dialogs/dynamic-record'
 import { ExportDialog } from './dialogs/export'
 import { ImportDialog } from './dialogs/import'
+import { getModelExtension } from './model-extension-registry'
 import type { TableMetadata } from './types'
 
 export interface DynamicCRUDPageStrings {
@@ -112,6 +113,7 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
 
     const strings = { ...defaultStrings, ...(i18n ?? {}) }
     const dataEndpoint = endpoint ?? `/dynamic/${model}`
+    const ext = getModelExtension(model)
 
     const api = useApi()
     const cachedMeta = useMetadataCache((s) => s.getMetadata(model))
@@ -143,17 +145,22 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
         }
     }, [model, cachedMeta, api])
 
-    const title = titleOverride ?? metadata?.title ?? model
+    const title = titleOverride ?? ext?.title ?? metadata?.title ?? model
+    const resolvedNewLabel = newLabel ?? ext?.newLabel
     const singular = useMemo(() => {
         const t = title.replace(/s$/i, '')
         return t.charAt(0).toUpperCase() + t.slice(1)
     }, [title])
 
     const enableCRUD = metadata?.enableCRUDActions ?? false
-    const showCreate = enableCRUD && !hideCreate
-    const showImport = enableCRUD && !hideImport
-    const showExport = !hideExport
-    const showRefresh = !hideRefresh
+    const effectiveHideCreate = hideCreate || ext?.hideCreate
+    const effectiveHideExport = hideExport || ext?.hideExport
+    const effectiveHideImport = hideImport || ext?.hideImport
+    const effectiveHideRefresh = hideRefresh || ext?.hideRefresh
+    const showCreate = enableCRUD && !effectiveHideCreate
+    const showImport = enableCRUD && !effectiveHideImport
+    const showExport = !effectiveHideExport
+    const showRefresh = !effectiveHideRefresh
 
     const handleRefresh = useCallback(() => {
         setRefreshKey((k) => k + 1)
@@ -170,6 +177,7 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
     return (
         <div className={rootCls}>
             <div className={containerCls}>
+                {ext?.headerExtras && <ext.headerExtras model={model} onRefresh={handleRefresh} />}
                 {headerExtras}
                 <div className={headerCls}>
                     {metadata ? (
@@ -208,6 +216,7 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
                                 {strings.import}
                             </button>
                         )}
+                        {ext?.toolbarExtras && <ext.toolbarExtras model={model} onRefresh={handleRefresh} />}
                         {toolbarExtras}
                         {showCreate && (
                             <button
@@ -216,7 +225,7 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
                                 className='inline-flex items-center gap-2 h-9 px-3 rounded-md bg-primary text-primary-foreground hover:opacity-90 text-sm font-medium'
                             >
                                 <Plus className='size-4' />
-                                {newLabel ?? `${strings.newPrefix} ${singular}`}
+                                {resolvedNewLabel ?? `${strings.newPrefix} ${singular}`}
                             </button>
                         )}
                     </div>

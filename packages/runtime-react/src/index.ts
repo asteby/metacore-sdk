@@ -39,3 +39,10 @@ export {
     type DynamicCRUDPageStrings,
     type DynamicCRUDPageClasses,
 } from './dynamic-crud-page'
+export {
+    registerModelExtension,
+    getModelExtension,
+    clearModelExtensions,
+    type ModelExtension,
+    type ModelExtensionProps,
+} from './model-extension-registry'
