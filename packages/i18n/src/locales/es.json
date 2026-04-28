@@ -124,7 +124,9 @@
     "desc": "Desc",
     "hide": "Ocultar",
     "columns": "Columnas",
-    "view": "Ver"
+    "view": "Ver",
+    "edit": "Editar",
+    "delete": "Eliminar"
   },
   "settings": {
     "profile": {
