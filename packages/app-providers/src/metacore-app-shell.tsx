@@ -29,6 +29,12 @@ import {
 } from '@asteby/metacore-pwa'
 import { Toaster } from '@asteby/metacore-ui/primitives'
 
+export interface MetacoreInstallRequest {
+  addonKey: string
+  version?: string
+  bundleURL?: string
+}
+
 export interface MetacoreAppShellProps {
   /** Axios-compatible API client used by ApiProvider + PWAProvider. */
   api: any
@@ -44,6 +50,21 @@ export interface MetacoreAppShellProps {
   hideOfflineIndicator?: boolean
   /** Disable the metadata-cache invalidation that fires on SW updates. */
   disableMetadataInvalidate?: boolean
+  /**
+   * Handle the `metacore:install` postMessage from an embedded Hub iframe.
+   * Receives the addon key + version + bundle URL; the host runs its own
+   * install pipeline (POST `/api/marketplace/install/<key>`, etc) and is
+   * responsible for messaging back to the iframe with `metacore:installed`
+   * once done. The MessageEventSource argument is the iframe's window —
+   * call `source.postMessage({type:'metacore:installed', addonKey})` to
+   * confirm.
+   *
+   * Default: POSTs `/marketplace/install` on the bundled API client and
+   * replies on success. Set to `null` to disable the listener entirely.
+   */
+  onAddonInstall?:
+    | ((req: MetacoreInstallRequest, source: MessageEventSource | null) => void | Promise<void>)
+    | null
   /** Toaster position; passed straight to sonner. */
   toasterPosition?:
     | 'top-left'
@@ -61,6 +82,59 @@ export interface MetacoreAppShellProps {
  * <DynamicTable> hits the network instead of replaying yesterday's
  * column / filter / actions definitions.
  */
+/**
+ * Listens for the `metacore:install` postMessage from an embedded Hub
+ * iframe and forwards to the supplied handler (or the default backend
+ * call). Confirms back to the iframe with `metacore:installed` so the
+ * Hub UI flips to the success state.
+ */
+function AddonInstallListener({
+  api,
+  onAddonInstall,
+}: {
+  api: any
+  onAddonInstall: MetacoreAppShellProps['onAddonInstall']
+}) {
+  React.useEffect(() => {
+    if (onAddonInstall === null) return
+    const handler = async (e: MessageEvent) => {
+      const data = e.data as { type?: string; addonKey?: string; version?: string; bundleURL?: string } | null
+      if (!data || data.type !== 'metacore:install' || !data.addonKey) return
+      const req = {
+        addonKey: data.addonKey,
+        version: data.version,
+        bundleURL: data.bundleURL,
+      }
+      try {
+        if (onAddonInstall) {
+          await onAddonInstall(req, e.source)
+        } else {
+          // Default pipeline: POST to the host's marketplace install
+          // endpoint. Apps that don't ship that endpoint should pass an
+          // explicit `onAddonInstall` handler.
+          await api.post('/marketplace/install', req)
+        }
+        e.source?.postMessage(
+          { type: 'metacore:installed', addonKey: req.addonKey },
+          { targetOrigin: '*' } as WindowPostMessageOptions,
+        )
+      } catch (err) {
+        e.source?.postMessage(
+          {
+            type: 'metacore:install-failed',
+            addonKey: req.addonKey,
+            error: err instanceof Error ? err.message : String(err),
+          },
+          { targetOrigin: '*' } as WindowPostMessageOptions,
+        )
+      }
+    }
+    window.addEventListener('message', handler)
+    return () => window.removeEventListener('message', handler)
+  }, [api, onAddonInstall])
+  return null
+}
+
 function MetadataInvalidator({ disabled }: { disabled: boolean }) {
   const { needRefresh } = usePWAContext()
   React.useEffect(() => {
@@ -92,6 +166,7 @@ export function MetacoreAppShell({
   hidePWAUpdate,
   hideOfflineIndicator,
   disableMetadataInvalidate,
+  onAddonInstall,
   toasterPosition = 'top-right',
   children,
 }: MetacoreAppShellProps) {
@@ -100,6 +175,7 @@ export function MetacoreAppShell({
       <PWAProvider api={api}>
         {children}
         <MetadataInvalidator disabled={!!disableMetadataInvalidate} />
+        <AddonInstallListener api={api} onAddonInstall={onAddonInstall} />
         {!hidePWAInstall && <PWAInstallPrompt />}
         {!hidePWAUpdate && <PWAUpdatePrompt />}
         {!hideOfflineIndicator && <OfflineIndicator />}
