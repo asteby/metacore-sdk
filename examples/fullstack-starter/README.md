@@ -35,7 +35,8 @@ The CLI clones this directory from `asteby/metacore-sdk` via `tiged`, replaces e
 
 - **~50 LOC of Go** that boots auth, metadata-driven CRUD, webhooks, push and websockets via `host.NewApp()`.
 - **~500 LOC of React** that gives you sign-in, sidebar shell, dynamic tables/forms, command menu and a notification bell — every route is a one-liner over `@asteby/metacore-runtime-react`.
-- **Docker compose** spinning Postgres + backend + frontend, idempotent seeders, and a VAPID-ready PWA.
+- **Docker compose** spinning `pgvector/pgvector:pg17` + backend + frontend, idempotent seeders, and a VAPID-ready PWA.
+- **Semantic search ready**: bundled Postgres ships pgvector, and `host.AppConfig.EnableVectorStore` / `EnableEmbedder` wire `app.VectorStore` (cosine search) and `app.Embedder` (BGE-M3 default) so you can add search to any model by dropping an `embedding vector(N)` column.
 - **Apple-style auto-updates**: Renovate keeps every `@asteby/metacore-*` and `github.com/asteby/metacore-*` dep on the latest patch/minor, automatically.
 
 ## 📦 What's inside
