@@ -63,6 +63,12 @@ export class PushNotificationService {
       const registration = await navigator.serviceWorker.ready
       this.subscription = await registration.pushManager.getSubscription()
     } catch (error) {
+      // 404 means the backend doesn't have VAPID configured (push is opt-in
+      // on the kernel, gated by `EnablePush`) — that's a valid deployment,
+      // not an error. Surface other failures so misconfigured keys still
+      // show up in the console.
+      const status = (error as { response?: { status?: number } })?.response?.status
+      if (status === 404) return
       // eslint-disable-next-line no-console
       console.error('Failed to initialize push service:', error)
     }
