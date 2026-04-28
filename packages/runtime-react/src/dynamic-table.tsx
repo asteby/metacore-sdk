@@ -602,7 +602,7 @@ export function DynamicTable({
                     </div>
                 </div>
                 <div className='flex-1 min-h-0 overflow-auto border rounded-md bg-card'>
-                    <Table className='min-w-max w-full'>
+                    <Table noWrapper className="min-w-max w-full">
                         <TableHeader className='sticky top-0 z-10'>
                             <TableRow className='border-b-0 hover:bg-transparent'>
                                 <TableHead className='bg-card border-b h-10 w-10'><Skeleton className="h-4 w-4" /></TableHead>
@@ -656,7 +656,7 @@ export function DynamicTable({
                     />
                 </div>
                 <div className='flex-1 min-h-0 overflow-auto border rounded-md bg-card'>
-                    <Table className='min-w-max w-full'>
+                    <Table noWrapper className="min-w-max w-full">
                         <TableHeader className='sticky top-0 z-10'>
                             {table.getHeaderGroups().map((headerGroup: HeaderGroup<any>) => (
                                 <TableRow key={headerGroup.id} className='border-b-0 hover:bg-transparent'>
