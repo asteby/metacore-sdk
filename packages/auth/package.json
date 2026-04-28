@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-auth",
-  "version": "5.0.0",
+  "version": "6.0.0",
   "description": "Metacore auth kit — Zustand store, API client factory, login/signup/forgot pages, guards for TanStack Router",
   "license": "Apache-2.0",
   "repository": {

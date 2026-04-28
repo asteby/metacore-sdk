@@ -1,5 +1,18 @@
 # @asteby/metacore-runtime-react
 
+## 7.0.0
+
+### Patch Changes
+
+- 3450876: Add `getInitials(name)` helper to `@asteby/metacore-ui/lib`.
+
+  Pulls a duplicated 6-line snippet (`name.split(' ').map(n => n[0]).slice(0, 2).join('').toUpperCase()`) out of every avatar across the platform — chat headers, profile dropdowns, dynamic-table avatar cells, sidebar nav. Trims whitespace, caps token count, and falls back to a single character when the input is empty.
+
+  `runtime-react`'s avatar cell renderer now uses it; visually identical, one less inline lambda.
+
+- Updated dependencies [3450876]
+  - @asteby/metacore-ui@0.7.0
+
 ## 6.4.0
 
 ### Minor Changes
