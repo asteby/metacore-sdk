@@ -54,7 +54,7 @@
     "vite-plugin-pwa": ">=1"
   },
   "dependencies": {
-    "lucide-react": "^0.460.0"
+    "lucide-react": "^1.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",

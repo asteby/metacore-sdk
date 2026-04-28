@@ -55,7 +55,7 @@
     "@types/react": "^19.0.0",
     "date-fns": "^4.1.0",
     "i18next": "^26.0.0",
-    "lucide-react": "^0.460.0",
+    "lucide-react": "^1.0.0",
     "react": "^19.2.4",
     "react-day-picker": "^8.10.1",
     "react-dom": "^19.2.4",
