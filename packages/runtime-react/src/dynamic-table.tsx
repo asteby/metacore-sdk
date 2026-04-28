@@ -65,6 +65,7 @@ import { Progress } from './dialogs/_primitives'
 import { useMetadataCache } from './metadata-cache'
 import { useApi, useCurrentBranch } from './api-context'
 import type { ColumnFilterConfig, GetDynamicColumns } from './dynamic-columns-shim'
+import { defaultGetDynamicColumns } from './dynamic-columns'
 import { OptionsContext } from './options-context'
 import { ActionModalDispatcher } from './action-modal-dispatcher'
 import type { TableMetadata, ApiResponse, ActionMetadata } from './types'
@@ -757,10 +758,3 @@ export function DynamicTable({
     )
 }
 
-/** Sensible default when hosts don't provide their own getDynamicColumns. */
-const defaultGetDynamicColumns: GetDynamicColumns = (metadata, _handleAction, _t, _lang, _filters) =>
-    (metadata.columns ?? []).map((col: any) => ({
-        accessorKey: col.name,
-        header: col.label ?? col.name,
-        enableSorting: col.sortable ?? false,
-    }))
