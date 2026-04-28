@@ -3,7 +3,7 @@ module github.com/asteby/metacore-sdk/examples/fullstack-starter/backend
 go 1.25.0
 
 require (
-	github.com/asteby/metacore-kernel v0.3.2
+	github.com/asteby/metacore-kernel v0.4.0
 	github.com/gofiber/fiber/v2 v2.52.12
 	github.com/google/uuid v1.6.0
 	github.com/shopspring/decimal v1.4.0
@@ -31,6 +31,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/pgvector/pgvector-go v0.3.0 // indirect
 	github.com/pressly/goose/v3 v3.27.0 // indirect
 	github.com/prometheus/client_golang v1.23.2 // indirect
 	github.com/prometheus/client_model v0.6.2 // indirect
@@ -50,9 +51,4 @@ require (
 	golang.org/x/sys v0.43.0 // indirect
 	golang.org/x/text v0.36.0 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
-)
-
-replace (
-	github.com/asteby/metacore-kernel => ../../../../metacore-kernel
-	github.com/asteby/metacore-sdk => ../../../../metacore-sdk
 )

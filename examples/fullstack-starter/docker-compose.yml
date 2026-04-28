@@ -1,6 +1,10 @@
 services:
   db:
-    image: postgres:16-alpine
+    # pgvector ships pg17 + the `vector` extension preinstalled, so the
+    # backend can run `CREATE EXTENSION IF NOT EXISTS vector` and use
+    # kernel/vector for semantic search out of the box. Link, ops and
+    # hub all run the same image in production.
+    image: pgvector/pgvector:pg17
     environment:
       POSTGRES_DB: metacore
       POSTGRES_USER: metacore
@@ -32,6 +36,15 @@ services:
       VAPID_PUBLIC_KEY: ""
       VAPID_PRIVATE_KEY: ""
       VAPID_SUBJECT: "mailto:admin@example.com"
+      # Semantic search is opt-in. Set ENABLE_VECTOR_STORE=true to wire
+      # app.VectorStore (kernel/vector) on top of the pgvector image; set
+      # ENABLE_EMBEDDER=true to wire app.Embedder against the BGE-M3
+      # endpoint. Both are off by default so the starter boots even on a
+      # vanilla postgres image if someone swaps it out.
+      ENABLE_VECTOR_STORE: "true"
+      ENABLE_EMBEDDER: "false"
+      BGE_EMBEDDING_URL: ""
+      BGE_EMBEDDING_MODEL: ""
     env_file:
       - path: ./backend/.env
         required: false

@@ -66,6 +66,13 @@ func main() {
 		VAPIDSubject:        getenvDefault("VAPID_SUBJECT", "mailto:admin@example.com"),
 		Translator:          translator,
 		I18nDefaultLanguage: defaultLang,
+		// Semantic search: requires `pgvector/pgvector` image. Off by default
+		// so the starter still boots on vanilla postgres if someone swaps the
+		// compose image. Toggle via ENABLE_VECTOR_STORE / ENABLE_EMBEDDER.
+		EnableVectorStore: envBool("ENABLE_VECTOR_STORE", false),
+		EnableEmbedder:    envBool("ENABLE_EMBEDDER", false),
+		EmbeddingURL:      os.Getenv("BGE_EMBEDDING_URL"),
+		EmbeddingModel:    os.Getenv("BGE_EMBEDDING_MODEL"),
 	})
 
 	// Domain tables — topo-sorted AutoMigrate keeps FKs in order.
@@ -176,5 +183,20 @@ func seedEnabled() bool {
 		return false
 	default:
 		return true
+	}
+}
+
+func envBool(key string, fallback bool) bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if v == "" {
+		return fallback
+	}
+	switch v {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
 	}
 }
