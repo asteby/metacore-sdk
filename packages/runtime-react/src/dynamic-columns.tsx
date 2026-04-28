@@ -461,7 +461,42 @@ export function makeDefaultGetDynamicColumns(
             })
         })
 
-        if (metadata.hasActions && metadata.actions.length > 0) {
+        // Resolve which actions to surface in the row dropdown:
+        //   1. If the host metadata declares its own actions, use them as-is.
+        //   2. Otherwise, when enableCRUDActions is true, fall back to the
+        //      canonical View / Edit / Delete trio so any model with CRUD on
+        //      gets the same dropdown without the host having to declare it.
+        // The DynamicTable wires `view`/`edit`/`delete` to its own dialogs
+        // through onAction, so labels/icons are the only thing this needs to
+        // ship.
+        const explicitActions = metadata.actions ?? []
+        const hasExplicitActions = (metadata.hasActions ?? explicitActions.length > 0) && explicitActions.length > 0
+        const defaultCRUDActions: typeof explicitActions =
+            metadata.enableCRUDActions
+                ? [
+                      {
+                          key: 'view',
+                          name: 'view',
+                          label: t ? t('datatable.view_record') : 'Ver',
+                          icon: 'Eye',
+                      } as any,
+                      {
+                          key: 'edit',
+                          name: 'edit',
+                          label: t ? t('datatable.edit') : 'Editar',
+                          icon: 'Pencil',
+                      } as any,
+                      {
+                          key: 'delete',
+                          name: 'delete',
+                          label: t ? t('datatable.delete') : 'Eliminar',
+                          icon: 'Trash2',
+                      } as any,
+                  ]
+                : []
+        const resolvedActions = hasExplicitActions ? explicitActions : defaultCRUDActions
+
+        if (resolvedActions.length > 0) {
             columns.push({
                 id: 'actions',
                 header: () => <div className="text-right">{t ? t('common.actions') : 'Acciones'}</div>,
@@ -478,7 +513,7 @@ export function makeDefaultGetDynamicColumns(
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                {metadata.actions
+                                {resolvedActions
                                     .filter((action) => {
                                         if (!action.condition) return true
                                         const { field, operator, value } = action.condition

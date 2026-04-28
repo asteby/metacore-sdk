@@ -156,7 +156,11 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
     const effectiveHideCreate = hideCreate || ext?.hideCreate
     const effectiveHideExport = hideExport || ext?.hideExport
     const effectiveHideImport = hideImport || ext?.hideImport
-    const effectiveHideRefresh = hideRefresh || ext?.hideRefresh
+    // Refresh defaults to hidden in the page header — <DynamicTable> ships
+    // its own refresh icon next to the View / column-visibility toolbar, so
+    // showing one in the page chrome is just visual duplication. Apps that
+    // want it back can pass `hideRefresh={false}`.
+    const effectiveHideRefresh = hideRefresh ?? ext?.hideRefresh ?? true
     const showCreate = enableCRUD && !effectiveHideCreate
     const showImport = enableCRUD && !effectiveHideImport
     const showExport = !effectiveHideExport

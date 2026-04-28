@@ -507,7 +507,17 @@ export function DynamicTable({
             if (!c.filterable || map.has(c.key)) continue
             const hasStaticOptions = (c.options?.length ?? 0) > 0
             const hasEndpoint = !!c.searchEndpoint
-            if (!hasStaticOptions && !hasEndpoint && c.type !== 'boolean') continue
+            // Pick the filter UI from column type:
+            //   - explicit options or searchEndpoint → multi-select dropdown
+            //   - boolean → boolean toggle (renders as select under the hood)
+            //   - number / number_range / numeric → number range
+            //   - everything else (text, email, phone, tags…) → text contains
+            let filterType: ColumnFilterConfig['filterType'] = 'select'
+            if (hasStaticOptions || hasEndpoint) filterType = 'select'
+            else if (c.type === 'boolean') filterType = 'boolean'
+            else if (c.type === 'number') filterType = 'number_range'
+            else filterType = 'text'
+
             const options = hasStaticOptions
                 ? c.options!.map(o => ({
                       label: o.label,
@@ -519,7 +529,7 @@ export function DynamicTable({
                   ? filterOptionsMap.get(c.searchEndpoint!) || []
                   : []
             map.set(c.key, {
-                filterType: 'select',
+                filterType,
                 filterKey: c.key,
                 options,
                 selectedValues: dynamicFilters[c.key] || [],

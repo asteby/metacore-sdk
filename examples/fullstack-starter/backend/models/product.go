@@ -28,10 +28,10 @@ func (Product) DefineTable() modelbase.TableMetadata {
 		DefaultPerPage:    20,
 		PerPageOptions:    []int{10, 20, 50},
 		Columns: []modelbase.ColumnDef{
-			{Key: "name", Label: "models.products.table.columns.name", Type: "text", Sortable: true},
-			{Key: "sku", Label: "models.products.table.columns.sku", Type: "text", Sortable: true},
-			{Key: "price", Label: "models.products.table.columns.price", Type: "currency", Sortable: true},
-			{Key: "stock", Label: "models.products.table.columns.stock", Type: "number", Sortable: true},
+			{Key: "name", Label: "models.products.table.columns.name", Type: "text", Sortable: true, Filterable: true},
+			{Key: "sku", Label: "models.products.table.columns.sku", Type: "text", Sortable: true, Filterable: true},
+			{Key: "price", Label: "models.products.table.columns.price", Type: "currency", Sortable: true, Filterable: true},
+			{Key: "stock", Label: "models.products.table.columns.stock", Type: "number", Sortable: true, Filterable: true},
 			{Key: "category", Label: "models.products.table.columns.category", Type: "text", Sortable: true, Filterable: true},
 			{Key: "status", Label: "models.products.table.columns.status", Type: "badge", Sortable: true, Filterable: true, UseOptions: true, Options: []modelbase.OptionDef{
 				{Value: "active", Label: "models.products.table.options.active", Color: "green"},
