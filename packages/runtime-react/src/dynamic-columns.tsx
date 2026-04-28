@@ -471,25 +471,27 @@ export function makeDefaultGetDynamicColumns(
         // ship.
         const explicitActions = metadata.actions ?? []
         const hasExplicitActions = (metadata.hasActions ?? explicitActions.length > 0) && explicitActions.length > 0
+        const tx = (key: string, fallback: string) =>
+            t ? t(key, { defaultValue: fallback }) : fallback
         const defaultCRUDActions: typeof explicitActions =
             metadata.enableCRUDActions
                 ? [
                       {
                           key: 'view',
                           name: 'view',
-                          label: t ? t('datatable.view_record') : 'Ver',
+                          label: tx('datatable.view', 'Ver'),
                           icon: 'Eye',
                       } as any,
                       {
                           key: 'edit',
                           name: 'edit',
-                          label: t ? t('datatable.edit') : 'Editar',
+                          label: tx('datatable.edit', 'Editar'),
                           icon: 'Pencil',
                       } as any,
                       {
                           key: 'delete',
                           name: 'delete',
-                          label: t ? t('datatable.delete') : 'Eliminar',
+                          label: tx('datatable.delete', 'Eliminar'),
                           icon: 'Trash2',
                       } as any,
                   ]
