@@ -12,6 +12,7 @@
     "clean": "rm -rf dist node_modules/.vite"
   },
   "dependencies": {
+    "@asteby/metacore-app-providers": "workspace:*",
     "@asteby/metacore-auth": "workspace:*",
     "@asteby/metacore-i18n": "workspace:*",
     "@asteby/metacore-lib": "workspace:*",

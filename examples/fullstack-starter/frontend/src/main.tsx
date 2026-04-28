@@ -1,22 +1,20 @@
 import { StrictMode } from 'react'
 import ReactDOM from 'react-dom/client'
-import { QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from '@tanstack/react-router'
-import { Toaster } from '@asteby/metacore-ui/primitives'
-import { ApiProvider } from '@asteby/metacore-runtime-react'
+import { MetacoreAppShell } from '@asteby/metacore-app-providers'
 
 import { router, queryClient } from './router'
 import { api } from './lib/api'
 import './lib/i18n'
 import './styles/index.css'
 
+// One line bootstraps every metacore provider:
+// QueryClient, Api, PWA (install + update prompts + offline indicator),
+// Toaster, and metadata-cache invalidation when a new SW lands.
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <ApiProvider client={api}>
-        <RouterProvider router={router} />
-        <Toaster position='top-right' richColors theme='light' />
-      </ApiProvider>
-    </QueryClientProvider>
+    <MetacoreAppShell api={api} queryClient={queryClient}>
+      <RouterProvider router={router} />
+    </MetacoreAppShell>
   </StrictMode>
 )
