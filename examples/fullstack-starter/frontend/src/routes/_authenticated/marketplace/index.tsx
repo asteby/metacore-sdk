@@ -6,10 +6,10 @@ export const Route = createFileRoute('/_authenticated/marketplace/')({
   component: MarketplacePage,
 })
 
-// Configure the marketplace/hub URL via the VITE_HUB_URL env var.
-// Falls back to a placeholder so the route renders, but addon install
-// flows require a real hub.
-const HUB_URL = import.meta.env.VITE_HUB_URL ?? 'https://your-hub.example.com'
+// Configure the marketplace/hub URL via the VITE_HUB_URL env var. Defaults
+// to the official Metacore Hub at hub.asteby.com so the route works
+// out of the box; teams running their own hub override via env.
+const HUB_URL = import.meta.env.VITE_HUB_URL ?? 'https://hub.asteby.com'
 
 function MarketplacePage() {
   return (
