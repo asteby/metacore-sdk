@@ -38,7 +38,7 @@ func (Product) DefineTable() modelbase.TableMetadata {
 				{Value: "draft", Label: "models.products.table.options.draft", Color: "yellow"},
 				{Value: "archived", Label: "models.products.table.options.archived", Color: "gray"},
 			}},
-			{Key: "created_at", Label: "models.products.table.columns.created_at", Type: "date", Sortable: true},
+			{Key: "created_at", Label: "models.products.table.columns.created_at", Type: "date", Sortable: true, Filterable: true},
 		},
 	}
 }

@@ -29,7 +29,7 @@ func (Notification) DefineTable() modelbase.TableMetadata {
 			{Key: "message", Label: "models.notifications.table.columns.message", Type: "string", Filterable: true},
 			{Key: "type", Label: "models.notifications.table.columns.type", Type: "badge", Sortable: true, Filterable: true},
 			{Key: "is_read", Label: "models.notifications.table.columns.is_read", Type: "boolean", Sortable: true, Filterable: true},
-			{Key: "created_at", Label: "models.notifications.table.columns.created_at", Type: "date", Sortable: true},
+			{Key: "created_at", Label: "models.notifications.table.columns.created_at", Type: "date", Sortable: true, Filterable: true},
 		},
 	}
 }
