@@ -347,8 +347,8 @@ importers:
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.14)
       i18next:
-        specifier: ^23.16.0
-        version: 23.16.8
+        specifier: ^26.0.0
+        version: 26.0.5(typescript@5.9.3)
       lucide-react:
         specifier: ^0.460.0
         version: 0.460.0(react@19.2.5)
@@ -360,7 +360,7 @@ importers:
         version: 19.2.5(react@19.2.5)
       react-i18next:
         specifier: ^15.1.0
-        version: 15.7.4(i18next@23.16.8)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(typescript@5.9.3)
+        version: 15.7.4(i18next@26.0.5(typescript@5.9.3))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(typescript@5.9.3)
       tsc-alias:
         specifier: ^1.8.10
         version: 1.8.16
@@ -471,8 +471,8 @@ importers:
         specifier: ^4.1.0
         version: 4.1.0
       i18next:
-        specifier: ^23.16.0
-        version: 23.16.8
+        specifier: ^26.0.0
+        version: 26.0.5(typescript@5.9.3)
       lucide-react:
         specifier: ^0.460.0
         version: 0.460.0(react@19.2.5)
@@ -487,7 +487,7 @@ importers:
         version: 19.2.5(react@19.2.5)
       react-i18next:
         specifier: ^15.1.0
-        version: 15.7.4(i18next@23.16.8)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(typescript@5.9.3)
+        version: 15.7.4(i18next@26.0.5(typescript@5.9.3))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(typescript@5.9.3)
       sonner:
         specifier: ^1.7.0
         version: 1.7.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -979,8 +979,8 @@ importers:
         specifier: ^4.1.0
         version: 4.1.0
       i18next:
-        specifier: ^23.16.0
-        version: 23.16.8
+        specifier: ^26.0.0
+        version: 26.0.5(typescript@5.9.3)
       lucide-react:
         specifier: ^0.460.0
         version: 0.460.0(react@19.2.5)
@@ -998,7 +998,7 @@ importers:
         version: 7.72.1(react@19.2.5)
       react-i18next:
         specifier: ^15.1.0
-        version: 15.7.4(i18next@23.16.8)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(typescript@5.9.3)
+        version: 15.7.4(i18next@26.0.5(typescript@5.9.3))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(typescript@5.9.3)
       sonner:
         specifier: ^1.7.0
         version: 1.7.4(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
