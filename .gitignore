@@ -32,4 +32,5 @@ coverage/
 
 # Go build artifacts
 bin/
+!packages/create-metacore-app/bin/
 *.test
