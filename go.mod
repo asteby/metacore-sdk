@@ -2,13 +2,13 @@ module github.com/asteby/metacore-sdk
 
 go 1.25.0
 
-require github.com/asteby/metacore-kernel v0.5.0
+require github.com/asteby/metacore-kernel v0.7.1
 
 require (
 	github.com/Masterminds/semver/v3 v3.3.0 // indirect
 	github.com/andybalholm/brotli v1.2.0 // indirect
 	github.com/fatih/structtag v1.2.0 // indirect
-	github.com/gofiber/fiber/v2 v2.52.12 // indirect
+	github.com/gofiber/fiber/v2 v2.52.13 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gzuidhof/tygo v0.2.21 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
