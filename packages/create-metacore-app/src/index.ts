@@ -1,8 +1,18 @@
 /**
- * create-metacore-app — scaffolder for Vite+React apps wired to
- * `@asteby/metacore-starter-core` and `@asteby/metacore-starter-config`.
+ * create-metacore-app — scaffolder for metacore apps.
  *
- * Usage: `npm create @asteby/metacore-app [name]`
+ * Two modes:
+ *   1. `--template <name>` (default `default`): copies a template that ships
+ *      inside this package (`templates/<name>/`). Lightweight, offline-friendly.
+ *   2. `--example <name>`: fetches an example from the monorepo on GitHub
+ *      (`asteby/metacore-sdk/examples/<name>`) via `tiged` and freezes any
+ *      `workspace:*` deps to the latest published npm version. This is the
+ *      flow that powers the fullstack starter — same pattern as
+ *      `create-next-app --example`.
+ *
+ * Usage:
+ *   npm create @asteby/metacore-app my-app
+ *   npm create @asteby/metacore-app my-app -- --example fullstack-starter
  */
 import { Command } from 'commander'
 import prompts from 'prompts'
@@ -15,13 +25,14 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-// dist/ sibling to templates/, fall back to repo layout during local `pnpm dev`.
 const TEMPLATE_ROOT = path.resolve(__dirname, '..', 'templates')
+const MONOREPO = 'asteby/metacore-sdk'
 
 const VALID_NAME = /^(?:@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/
 
 interface CliOptions {
   template: string
+  example?: string
   install: boolean
   packageManager: 'pnpm' | 'npm' | 'yarn'
 }
@@ -30,9 +41,13 @@ async function main(): Promise<void> {
   const program = new Command()
   program
     .name('create-metacore-app')
-    .description('Scaffold a Vite+React app wired to the metacore starter.')
+    .description('Scaffold a metacore app — local template or GitHub example.')
     .argument('[name]', 'directory/name of the app to create')
-    .option('-t, --template <name>', 'template to use', 'default')
+    .option('-t, --template <name>', 'local template to use', 'default')
+    .option(
+      '-e, --example <name>',
+      `clone an example from ${MONOREPO}/examples/<name> (e.g. fullstack-starter)`
+    )
     .option('--no-install', 'skip dependency install')
     .option(
       '--pm <manager>',
@@ -44,6 +59,7 @@ async function main(): Promise<void> {
   const cliArgs = program.args
   const opts = program.opts<{
     template: string
+    example?: string
     install: boolean
     pm: 'pnpm' | 'npm' | 'yarn'
   }>()
@@ -94,31 +110,47 @@ async function main(): Promise<void> {
 
   const options: CliOptions = {
     template: opts.template,
+    example: opts.example,
     install: opts.install,
     packageManager: opts.pm,
   }
 
   const targetDir = path.resolve(process.cwd(), appName)
-  const templateDir = path.join(TEMPLATE_ROOT, options.template)
-
-  if (!existsSync(templateDir)) {
-    console.error(
-      red(`Template "${options.template}" not found at ${templateDir}`)
-    )
-    process.exit(1)
-  }
+  await mkdir(targetDir, { recursive: true })
 
   console.log()
   console.log(bold(blue('▸ Scaffolding metacore app')))
   console.log(`  ${bold('name   :')} ${cyan(appName)}`)
   console.log(`  ${bold('target :')} ${targetDir}`)
-  console.log(`  ${bold('from   :')} ${templateDir}`)
-  console.log()
 
-  await mkdir(targetDir, { recursive: true })
-  await copyTemplate(templateDir, targetDir, { appName })
+  if (options.example) {
+    const remote = `${MONOREPO}/examples/${options.example}`
+    console.log(`  ${bold('source :')} ${remote} (degit)`)
+    console.log()
+    await fetchExample(remote, targetDir)
+    console.log(green('✓ Example cloned.'))
 
-  console.log(green('✓ Files copied.'))
+    const replaced = await freezeWorkspaceDeps(targetDir)
+    if (replaced > 0) {
+      console.log(
+        green(`✓ Pinned ${replaced} workspace deps to latest npm versions.`)
+      )
+    }
+
+    await applyAppName(targetDir, appName)
+  } else {
+    const templateDir = path.join(TEMPLATE_ROOT, options.template)
+    if (!existsSync(templateDir)) {
+      console.error(
+        red(`Template "${options.template}" not found at ${templateDir}`)
+      )
+      process.exit(1)
+    }
+    console.log(`  ${bold('source :')} ${templateDir}`)
+    console.log()
+    await copyTemplate(templateDir, targetDir, { appName })
+    console.log(green('✓ Files copied.'))
+  }
 
   if (options.install) {
     console.log(blue(`▸ Installing deps with ${options.packageManager}…`))
@@ -138,6 +170,108 @@ async function main(): Promise<void> {
   console.log()
 }
 
+interface TigedEmitter {
+  clone: (target: string) => Promise<void>
+}
+type TigedFactory = (
+  src: string,
+  opts?: { cache?: boolean; force?: boolean; verbose?: boolean }
+) => TigedEmitter
+
+async function fetchExample(remote: string, dest: string): Promise<void> {
+  const tigedMod = (await import(/* @vite-ignore */ 'tiged')) as
+    | { default: TigedFactory }
+    | TigedFactory
+  const factory: TigedFactory =
+    typeof tigedMod === 'function' ? tigedMod : tigedMod.default
+  const emitter = factory(remote, { force: true })
+  await emitter.clone(dest)
+}
+
+interface PkgJson {
+  name?: string
+  dependencies?: Record<string, string>
+  devDependencies?: Record<string, string>
+  peerDependencies?: Record<string, string>
+}
+
+async function freezeWorkspaceDeps(root: string): Promise<number> {
+  const pkgs = await glob('**/package.json', {
+    cwd: root,
+    dot: true,
+    filesOnly: true,
+    absolute: true,
+  })
+  const cache = new Map<string, string>()
+  let replaced = 0
+  for (const file of pkgs) {
+    if (file.includes(`${path.sep}node_modules${path.sep}`)) continue
+    const raw = await readFile(file, 'utf8')
+    const json: PkgJson = JSON.parse(raw)
+    let touched = false
+    for (const section of [
+      'dependencies',
+      'devDependencies',
+      'peerDependencies',
+    ] as const) {
+      const deps = json[section]
+      if (!deps) continue
+      for (const [name, version] of Object.entries(deps)) {
+        if (typeof version !== 'string' || !version.startsWith('workspace:')) {
+          continue
+        }
+        let latest = cache.get(name)
+        if (!latest) {
+          const fetched = await fetchLatestVersion(name)
+          if (fetched) {
+            latest = fetched
+            cache.set(name, fetched)
+          }
+        }
+        if (latest) {
+          deps[name] = `^${latest}`
+          touched = true
+          replaced++
+        } else {
+          // Couldn't resolve — drop the workspace marker so install fails loudly
+          // instead of silently exploding with "workspace: protocol unsupported".
+          deps[name] = '*'
+          touched = true
+          replaced++
+        }
+      }
+    }
+    if (touched) {
+      await writeFile(file, JSON.stringify(json, null, 2) + '\n', 'utf8')
+    }
+  }
+  return replaced
+}
+
+async function fetchLatestVersion(pkg: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://registry.npmjs.org/${pkg}/latest`, {
+      headers: { accept: 'application/json' },
+    })
+    if (!res.ok) return null
+    const body = (await res.json()) as { version?: string }
+    return body.version ?? null
+  } catch {
+    return null
+  }
+}
+
+async function applyAppName(root: string, appName: string): Promise<void> {
+  const rootPkg = path.join(root, 'package.json')
+  if (!existsSync(rootPkg)) return
+  const raw = await readFile(rootPkg, 'utf8')
+  const json: PkgJson = JSON.parse(raw)
+  if (!json.name || !json.name.startsWith('@')) {
+    json.name = appName
+    await writeFile(rootPkg, JSON.stringify(json, null, 2) + '\n', 'utf8')
+  }
+}
+
 async function copyTemplate(
   from: string,
   to: string,
@@ -152,8 +286,6 @@ async function copyTemplate(
 
   for (const rel of entries) {
     const src = path.join(from, rel)
-    // Rename `_gitignore` / `_env.example` style tokens to their dotted variants,
-    // and keep `.gitkeep` files verbatim.
     const destRel = rel
       .replace(/(^|\/)_gitignore$/, '$1.gitignore')
       .replace(/(^|\/)_env\.example$/, '$1.env.example')
@@ -168,7 +300,6 @@ async function copyTemplate(
       await copyFile(src, dest)
     }
 
-    // Best-effort: preserve execute bit on shell files.
     try {
       const st = await stat(src)
       if ((st.mode & 0o111) !== 0) {

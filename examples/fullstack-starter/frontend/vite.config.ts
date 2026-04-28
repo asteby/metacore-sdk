@@ -12,14 +12,16 @@ export default defineConfig({
     tailwind(),
     metacorePWA({
       manifest: {
-        name: 'Metacore Fullstack Starter',
+        name: 'Metacore Starter Kit',
         short_name: 'Metacore',
-        description: 'End-to-end metacore demo app',
-        theme_color: '#0ea5e9',
+        description: 'Official fullstack starter for the Metacore platform',
+        theme_color: '#14b8a6',
         background_color: '#0a0a0a',
         start_url: '/',
         display: 'standalone',
-        icons: [],
+        icons: [
+          { src: '/images/logo.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' },
+        ],
       },
     }),
   ],

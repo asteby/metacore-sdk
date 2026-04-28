@@ -1,0 +1,65 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended", ":semanticCommits", ":dependencyDashboard"],
+  "schedule": ["before 6am every weekday"],
+  "prHourlyLimit": 4,
+  "prConcurrentLimit": 10,
+  "labels": ["dependencies"],
+  "packageRules": [
+    {
+      "description": "Metacore platform (npm) — auto-merge minor/patch so apps stay in sync with the kernel/SDK release train.",
+      "matchManagers": ["npm"],
+      "matchPackagePatterns": ["^@asteby/metacore-"],
+      "groupName": "metacore platform",
+      "groupSlug": "metacore-platform",
+      "schedule": ["at any time"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true,
+      "platformAutomerge": true
+    },
+    {
+      "description": "Metacore platform — major bumps need human review (breaking changes).",
+      "matchManagers": ["npm"],
+      "matchPackagePatterns": ["^@asteby/metacore-"],
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["breaking", "review-required"]
+    },
+    {
+      "description": "Metacore kernel (Go) — auto-merge minor/patch.",
+      "matchManagers": ["gomod"],
+      "matchPackagePatterns": ["^github.com/asteby/metacore-"],
+      "groupName": "metacore platform",
+      "groupSlug": "metacore-platform",
+      "schedule": ["at any time"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true,
+      "platformAutomerge": true
+    },
+    {
+      "description": "Metacore kernel (Go) — major bumps need human review.",
+      "matchManagers": ["gomod"],
+      "matchPackagePatterns": ["^github.com/asteby/metacore-"],
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["breaking", "review-required"]
+    },
+    {
+      "description": "Generic ecosystem patches — auto-merge.",
+      "matchManagers": ["npm", "gomod"],
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "platformAutomerge": true
+    },
+    {
+      "description": "React + TanStack + Radix grouped to land together.",
+      "matchPackagePatterns": ["^react", "^@tanstack/", "^@radix-ui/"],
+      "groupName": "react ecosystem"
+    },
+    {
+      "description": "Fiber + GORM grouped.",
+      "matchPackagePatterns": ["^github.com/gofiber/", "^gorm.io/"],
+      "groupName": "fiber + gorm"
+    }
+  ]
+}

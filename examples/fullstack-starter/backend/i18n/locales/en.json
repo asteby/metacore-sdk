@@ -1,0 +1,99 @@
+{
+  "models": {
+    "customers": {
+      "table": {
+        "title": "Customers",
+        "search_placeholder": "Search by name, email or phone…",
+        "columns": {
+          "name": "Name",
+          "email": "Email",
+          "phone": "Phone",
+          "status": "Status",
+          "tags": "Tags",
+          "created_at": "Created"
+        },
+        "options": {
+          "active": "Active",
+          "inactive": "Inactive",
+          "lead": "Lead"
+        }
+      },
+      "modal": {
+        "title": "Customer",
+        "create_title": "New customer",
+        "edit_title": "Edit customer",
+        "delete_title": "Delete customer",
+        "fields": {
+          "name": "Name",
+          "email": "Email",
+          "phone": "Phone",
+          "status": "Status",
+          "tags": "Tags",
+          "tags_placeholder": "vip, wholesale, retail"
+        }
+      }
+    },
+    "products": {
+      "table": {
+        "title": "Products",
+        "search_placeholder": "Search by name, SKU or category…",
+        "columns": {
+          "name": "Product",
+          "sku": "SKU",
+          "price": "Price",
+          "stock": "Stock",
+          "category": "Category",
+          "status": "Status",
+          "created_at": "Created"
+        },
+        "options": {
+          "active": "Active",
+          "draft": "Draft",
+          "archived": "Archived"
+        }
+      },
+      "modal": {
+        "title": "Product",
+        "create_title": "New product",
+        "edit_title": "Edit product",
+        "delete_title": "Delete product",
+        "fields": {
+          "name": "Name",
+          "sku": "SKU",
+          "description": "Description",
+          "price": "Price",
+          "stock": "Stock",
+          "category": "Category",
+          "status": "Status"
+        }
+      }
+    },
+    "notifications": {
+      "table": {
+        "title": "Notifications",
+        "columns": {
+          "title": "Title",
+          "message": "Message",
+          "type": "Type",
+          "is_read": "Read",
+          "created_at": "Date"
+        }
+      },
+      "modal": {
+        "title": "Notification",
+        "fields": {
+          "title": "Title",
+          "message": "Message",
+          "type": "Type",
+          "link": "Link"
+        },
+        "options": {
+          "info": "Info",
+          "success": "Success",
+          "warning": "Warning",
+          "error": "Error"
+        }
+      }
+    }
+  }
+}
