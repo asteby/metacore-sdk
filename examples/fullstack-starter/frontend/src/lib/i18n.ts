@@ -1,99 +1,34 @@
-import i18n from 'i18next'
-import { initReactI18next } from 'react-i18next'
+// i18n bootstrap for the starter. Uses `createI18n` from
+// `@asteby/metacore-i18n` so language detection, fallback, and HTML <html lang>
+// sync are wired the same way every metacore app gets them.
+//
+// `baseResources` ships the strings owned by SDK packages (auth, runtime-react,
+// etc.); we deep-merge starter-specific keys on top.
+import { createI18n, baseResources } from '@asteby/metacore-i18n'
+import esStarter from '@/i18n/es.json'
+import enStarter from '@/i18n/en.json'
 
-i18n.use(initReactI18next).init({
-  lng: 'es',
-  fallbackLng: 'es',
-  interpolation: { escapeValue: false },
+const merge = (
+  lang: 'es' | 'en',
+  starter: Record<string, unknown>,
+) => ({
+  translation: {
+    ...((baseResources as Record<string, { translation?: Record<string, unknown> }>)[lang]
+      ?.translation ?? {}),
+    ...starter,
+  },
+})
+
+const i18n = createI18n({
+  fallback: 'es',
   resources: {
-    es: {
-      translation: {
-        // DataTable
-        'datatable.view': 'Vista',
-        'datatable.columns': 'Columnas',
-        'datatable.rows_per_page': 'Filas por página',
-        'datatable.page_x_of_y': 'Página {{current}} de {{total}}',
-        'datatable.no_results': 'No se encontraron resultados',
-        'datatable.no_data': 'No hay datos para mostrar en este momento.',
-        'datatable.search': 'Buscar...',
-        'datatable.filter': 'Filtrar',
-        'datatable.clear_filters': 'Limpiar filtros',
-        'datatable.selected': '{{count}} seleccionados',
-        'datatable.delete_selected': 'Eliminar seleccionados',
-        'datatable.refresh': 'Actualizar',
-        'datatable.export': 'Exportar',
-        'datatable.import': 'Importar',
-        'datatable.create': 'Crear',
-        'datatable.edit': 'Editar',
-        'datatable.delete': 'Eliminar',
-        'datatable.view_record': 'Ver',
-        'datatable.confirm_delete': '¿Estás seguro de que deseas eliminar este registro?',
-        'datatable.confirm_delete_many': '¿Estás seguro de que deseas eliminar {{count}} registros?',
-        'datatable.deleted': 'Registro eliminado',
-        'datatable.created': 'Registro creado',
-        'datatable.updated': 'Registro actualizado',
-        'datatable.error': 'Ocurrió un error',
-        'datatable.first_page': 'Primera página',
-        'datatable.previous_page': 'Página anterior',
-        'datatable.next_page': 'Siguiente página',
-        'datatable.last_page': 'Última página',
-        'datatable.go_first_page': 'Ir a primera página',
-        'datatable.go_previous_page': 'Ir a página anterior',
-        'datatable.go_next_page': 'Ir a siguiente página',
-        'datatable.go_last_page': 'Ir a última página',
-        'datatable.go_page': 'Ir a página {{page}}',
-        // Common
-        'common.save': 'Guardar',
-        'common.cancel': 'Cancelar',
-        'common.close': 'Cerrar',
-        'common.confirm': 'Confirmar',
-        'common.loading': 'Cargando...',
-        'common.actions': 'Acciones',
-      },
-    },
-    en: {
-      translation: {
-        'datatable.view': 'View',
-        'datatable.columns': 'Columns',
-        'datatable.rows_per_page': 'Rows per page',
-        'datatable.page_x_of_y': 'Page {{current}} of {{total}}',
-        'datatable.no_results': 'No results found',
-        'datatable.no_data': 'No data to display.',
-        'datatable.search': 'Search...',
-        'datatable.filter': 'Filter',
-        'datatable.clear_filters': 'Clear filters',
-        'datatable.selected': '{{count}} selected',
-        'datatable.delete_selected': 'Delete selected',
-        'datatable.refresh': 'Refresh',
-        'datatable.export': 'Export',
-        'datatable.import': 'Import',
-        'datatable.create': 'Create',
-        'datatable.edit': 'Edit',
-        'datatable.delete': 'Delete',
-        'datatable.view_record': 'View',
-        'datatable.confirm_delete': 'Are you sure you want to delete this record?',
-        'datatable.confirm_delete_many': 'Are you sure you want to delete {{count}} records?',
-        'datatable.deleted': 'Record deleted',
-        'datatable.created': 'Record created',
-        'datatable.updated': 'Record updated',
-        'datatable.error': 'An error occurred',
-        'datatable.first_page': 'First page',
-        'datatable.previous_page': 'Previous page',
-        'datatable.next_page': 'Next page',
-        'datatable.last_page': 'Last page',
-        'datatable.go_first_page': 'Go to first page',
-        'datatable.go_previous_page': 'Go to previous page',
-        'datatable.go_next_page': 'Go to next page',
-        'datatable.go_last_page': 'Go to last page',
-        'datatable.go_page': 'Go to page {{page}}',
-        'common.save': 'Save',
-        'common.cancel': 'Cancel',
-        'common.close': 'Close',
-        'common.confirm': 'Confirm',
-        'common.loading': 'Loading...',
-        'common.actions': 'Actions',
-      },
-    },
+    es: merge('es', esStarter),
+    en: merge('en', enStarter),
+  },
+  detection: {
+    order: ['localStorage', 'navigator', 'htmlTag'],
+    caches: ['localStorage'],
+    lookupLocalStorage: 'metacore-lang',
   },
 })
 
