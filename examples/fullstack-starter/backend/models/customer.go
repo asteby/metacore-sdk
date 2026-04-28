@@ -23,15 +23,15 @@ func (Customer) DefineTable() modelbase.TableMetadata {
 		DefaultPerPage:    20,
 		PerPageOptions:    []int{10, 20, 50},
 		Columns: []modelbase.ColumnDef{
-			{Key: "name", Label: "models.customers.table.columns.name", Type: "text", Sortable: true},
-			{Key: "email", Label: "models.customers.table.columns.email", Type: "text", Sortable: true},
-			{Key: "phone", Label: "models.customers.table.columns.phone", Type: "text"},
+			{Key: "name", Label: "models.customers.table.columns.name", Type: "text", Sortable: true, Filterable: true},
+			{Key: "email", Label: "models.customers.table.columns.email", Type: "text", Sortable: true, Filterable: true},
+			{Key: "phone", Label: "models.customers.table.columns.phone", Type: "text", Filterable: true},
 			{Key: "status", Label: "models.customers.table.columns.status", Type: "badge", Sortable: true, Filterable: true, UseOptions: true, Options: []modelbase.OptionDef{
 				{Value: "active", Label: "models.customers.table.options.active", Color: "green"},
 				{Value: "inactive", Label: "models.customers.table.options.inactive", Color: "gray"},
 				{Value: "lead", Label: "models.customers.table.options.lead", Color: "blue"},
 			}},
-			{Key: "tags", Label: "models.customers.table.columns.tags", Type: "text"},
+			{Key: "tags", Label: "models.customers.table.columns.tags", Type: "text", Filterable: true},
 			{Key: "created_at", Label: "models.customers.table.columns.created_at", Type: "date", Sortable: true},
 		},
 	}
