@@ -1,5 +1,13 @@
 # @asteby/metacore-starter-core
 
+## 4.0.0
+
+### Patch Changes
+
+- Updated dependencies [3450876]
+  - @asteby/metacore-ui@0.7.0
+  - @asteby/metacore-auth@6.0.0
+
 ## 3.0.0
 
 ### Patch Changes
