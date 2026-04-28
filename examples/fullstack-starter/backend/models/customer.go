@@ -32,7 +32,7 @@ func (Customer) DefineTable() modelbase.TableMetadata {
 				{Value: "lead", Label: "models.customers.table.options.lead", Color: "blue"},
 			}},
 			{Key: "tags", Label: "models.customers.table.columns.tags", Type: "text", Filterable: true},
-			{Key: "created_at", Label: "models.customers.table.columns.created_at", Type: "date", Sortable: true},
+			{Key: "created_at", Label: "models.customers.table.columns.created_at", Type: "date", Sortable: true, Filterable: true},
 		},
 	}
 }

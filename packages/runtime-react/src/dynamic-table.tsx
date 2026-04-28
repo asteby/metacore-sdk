@@ -511,11 +511,13 @@ export function DynamicTable({
             //   - explicit options or searchEndpoint → multi-select dropdown
             //   - boolean → boolean toggle (renders as select under the hood)
             //   - number / number_range / numeric → number range
+            //   - date → date range picker (start/end calendar)
             //   - everything else (text, email, phone, tags…) → text contains
             let filterType: ColumnFilterConfig['filterType'] = 'select'
             if (hasStaticOptions || hasEndpoint) filterType = 'select'
             else if (c.type === 'boolean') filterType = 'boolean'
             else if (c.type === 'number') filterType = 'number_range'
+            else if (c.type === 'date') filterType = 'date_range'
             else filterType = 'text'
 
             const options = hasStaticOptions
