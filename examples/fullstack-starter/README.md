@@ -69,8 +69,25 @@ Replace `frontend/public/images/logo.svg` with your own logo and override the pa
 ### Adding a model
 
 1. Define a Go struct under `backend/models/` implementing `modelbase.ModelDefiner`.
-2. Register it in `main.go` via `app.RegisterModel("your-model", ...)`.
-3. Done. The sidebar, tables, and forms in the frontend pick it up via `/metadata/all`.
+2. Register it in `main.go` via `app.RegisterModel("your-model", ...)` and append to `appModels` for migrations.
+3. (Optional) Drop a `<thing>_seeder.go` next to the others in `backend/database/seeders/` and append it to `seeders.All()`.
+4. Done. The sidebar, tables, and forms in the frontend pick it up via `/metadata/all`.
+
+### Seeders & migrations
+
+The starter ships with the same framework `link` and `ops` use in production:
+
+```sh
+# inside backend/
+go run ./cmd/seed              # default: migrate + seed everything (idempotent)
+go run ./cmd/seed --migrate    # schema only
+go run ./cmd/seed --seed       # data only
+go run ./cmd/seed --only=products
+go run ./cmd/seed --list       # show every registered seeder
+SEED_RESET_CONFIRM=yes go run ./cmd/seed --reset   # DROP everything, then rebuild
+```
+
+Each seeder lives in its own file under `database/seeders/` and reads tunable defaults from `SEED_*` env vars (see `backend/.env.example`). Adding a seeder is one struct + one line in `seeders.All()`.
 
 ## Environment variables
 
