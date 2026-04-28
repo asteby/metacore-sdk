@@ -58,7 +58,7 @@
     }
   },
   "dependencies": {
-    "@hookform/resolvers": "^3.9.0",
+    "@hookform/resolvers": "^5.0.0",
     "zod": "^4.3.0"
   },
   "devDependencies": {
