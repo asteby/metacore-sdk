@@ -172,7 +172,7 @@ export function DynamicRecordDialog({
                 } else {
                     const recordEndpoint = endpoint
                         ? `${endpoint}/${recordId}`
-                        : `/data/${model}/${recordId}`
+                        : `/dynamic/${model}/${recordId}`
 
                     const recRes = await api.get(recordEndpoint)
                     if (cancelled) return
@@ -223,12 +223,12 @@ export function DynamicRecordDialog({
         try {
             let res
             if (isCreate) {
-                const createEndpoint = endpoint || `/data/${model}`
+                const createEndpoint = endpoint || `/dynamic/${model}`
                 res = await api.post(createEndpoint, formValues)
             } else {
                 const updateEndpoint = endpoint
                     ? `${endpoint}/${recordId}`
-                    : `/data/${model}/${recordId}`
+                    : `/dynamic/${model}/${recordId}`
                 res = await api.put(updateEndpoint, formValues)
             }
 

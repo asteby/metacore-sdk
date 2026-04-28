@@ -158,7 +158,7 @@ export function ExportDialog({
                 })
             }
 
-            const response = await api.get(`/data/${model}/export`, {
+            const response = await api.get(`/dynamic/${model}/export`, {
                 params,
                 responseType: 'blob',
                 validateStatus: () => true,

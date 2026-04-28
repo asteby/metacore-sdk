@@ -87,7 +87,7 @@ export function ImportDialog({
 
     const handleDownloadTemplate = async () => {
         try {
-            const response = await api.get(`/data/${model}/export/template`, {
+            const response = await api.get(`/dynamic/${model}/export/template`, {
                 responseType: 'blob',
             })
             const url = window.URL.createObjectURL(response.data)
@@ -114,7 +114,7 @@ export function ImportDialog({
             const formData = new FormData()
             formData.append('file', file)
 
-            const res = await api.post(`/data/${model}/import/validate`, formData, {
+            const res = await api.post(`/dynamic/${model}/import/validate`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             })
 
@@ -143,7 +143,7 @@ export function ImportDialog({
             const formData = new FormData()
             formData.append('file', file)
 
-            const res = await api.post(`/data/${model}/import`, formData, {
+            const res = await api.post(`/dynamic/${model}/import`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
                 onUploadProgress: (progressEvent: { loaded: number; total?: number }) => {
                     if (progressEvent.total) {
