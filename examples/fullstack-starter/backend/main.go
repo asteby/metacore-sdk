@@ -20,16 +20,24 @@ import (
 )
 
 func main() {
-	db, err := gorm.Open(postgres.Open(os.Getenv("DATABASE_URL")), &gorm.Config{})
+	db, err := gorm.Open(postgres.Open(host.MustGetenv("DATABASE_URL")), &gorm.Config{})
 	if err != nil {
 		log.Fatalf("db: %v", err)
 	}
 	db.AutoMigrate(&models.Product{}, &models.Customer{}, &models.Notification{})
 
+	vapidPub := os.Getenv("VAPID_PUBLIC_KEY")
+	vapidPriv := os.Getenv("VAPID_PRIVATE_KEY")
+
 	app := host.NewApp(host.AppConfig{
 		DB:             db,
 		JWTSecret:      []byte(host.MustGetenv("JWT_SECRET")),
 		EnableWebhooks: true,
+		EnableMetrics:  true,
+		EnablePush:     vapidPub != "" && vapidPriv != "",
+		VAPIDPublic:    vapidPub,
+		VAPIDPrivate:   vapidPriv,
+		VAPIDSubject:   getenvDefault("VAPID_SUBJECT", "mailto:admin@example.com"),
 	})
 	app.RegisterModel("products", func() modelbase.ModelDefiner { return &models.Product{} })
 	app.RegisterModel("customers", func() modelbase.ModelDefiner { return &models.Customer{} })
@@ -78,7 +86,12 @@ func main() {
 	}
 
 	fiberApp := fiber.New()
-	fiberApp.Use(cors.New(cors.Config{AllowOrigins: "*", AllowHeaders: "Origin, Content-Type, Accept, Authorization"}))
+	fiberApp.Use(cors.New(cors.Config{
+		AllowOrigins:     getenvDefault("CORS_ORIGINS", "http://localhost:5173"),
+		AllowMethods:     "GET,POST,PUT,DELETE,PATCH,OPTIONS",
+		AllowHeaders:     "Origin,Content-Type,Accept,Authorization",
+		AllowCredentials: true,
+	}))
 
 	apiRouter := app.Mount(fiberApp.Group("/api"))
 
@@ -123,7 +136,16 @@ func main() {
 
 	fiberApp.Get("/healthz", func(c *fiber.Ctx) error { return c.SendString("ok") })
 
-	log.Fatal(fiberApp.Listen(":" + os.Getenv("PORT")))
+	port := getenvDefault("PORT", "7200")
+	log.Printf("🚀 Metacore Starter listening on :%s", port)
+	log.Fatal(fiberApp.Listen(":" + port))
+}
+
+func getenvDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
 
 // seedEnabled reports whether SeedDemoData should run on boot. Defaults to

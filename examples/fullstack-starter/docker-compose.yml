@@ -31,6 +31,7 @@ services:
       #   docker run --rm node:22-alpine npx -y web-push generate-vapid-keys
       VAPID_PUBLIC_KEY: ""
       VAPID_PRIVATE_KEY: ""
+      VAPID_SUBJECT: "mailto:admin@example.com"
     env_file:
       - path: ./backend/.env
         required: false
