@@ -263,8 +263,8 @@ importers:
         specifier: ^1.7.7
         version: 1.15.0
       lucide-react:
-        specifier: ^0.460.0
-        version: 0.460.0(react@19.2.5)
+        specifier: ^1.0.0
+        version: 1.8.0(react@19.2.5)
       react-hook-form:
         specifier: ^7.72.0
         version: 7.72.1(react@19.2.5)
@@ -350,8 +350,8 @@ importers:
         specifier: ^26.0.0
         version: 26.0.5(typescript@5.9.3)
       lucide-react:
-        specifier: ^0.460.0
-        version: 0.460.0(react@19.2.5)
+        specifier: ^1.0.0
+        version: 1.8.0(react@19.2.5)
       react:
         specifier: ^19.2.4
         version: 19.2.5
@@ -401,8 +401,8 @@ importers:
         specifier: ^4.1.0
         version: 4.1.0
       lucide-react:
-        specifier: ^0.460.0
-        version: 0.460.0(react@19.2.5)
+        specifier: ^1.0.0
+        version: 1.8.0(react@19.2.5)
       react:
         specifier: ^19.2.4
         version: 19.2.5
@@ -419,8 +419,8 @@ importers:
   packages/pwa:
     dependencies:
       lucide-react:
-        specifier: ^0.460.0
-        version: 0.460.0(react@19.2.5)
+        specifier: ^1.0.0
+        version: 1.8.0(react@19.2.5)
     devDependencies:
       '@types/react':
         specifier: ^19.2.14
@@ -474,8 +474,8 @@ importers:
         specifier: ^26.0.0
         version: 26.0.5(typescript@5.9.3)
       lucide-react:
-        specifier: ^0.460.0
-        version: 0.460.0(react@19.2.5)
+        specifier: ^1.0.0
+        version: 1.8.0(react@19.2.5)
       react:
         specifier: ^19.2.4
         version: 19.2.5
@@ -827,8 +827,8 @@ importers:
         specifier: ^1.4.2
         version: 1.4.2(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       lucide-react:
-        specifier: ^0.460.0
-        version: 0.460.0(react@19.2.5)
+        specifier: ^1.0.0
+        version: 1.8.0(react@19.2.5)
       react-day-picker:
         specifier: ^9.4.0
         version: 9.14.0(react@19.2.5)
@@ -901,8 +901,8 @@ importers:
         specifier: ^4.1.0
         version: 4.1.0
       lucide-react:
-        specifier: ^0.460.0
-        version: 0.460.0(react@19.2.5)
+        specifier: ^1.0.0
+        version: 1.8.0(react@19.2.5)
       react:
         specifier: ^19.2.4
         version: 19.2.5
@@ -982,8 +982,8 @@ importers:
         specifier: ^26.0.0
         version: 26.0.5(typescript@5.9.3)
       lucide-react:
-        specifier: ^0.460.0
-        version: 0.460.0(react@19.2.5)
+        specifier: ^1.0.0
+        version: 1.8.0(react@19.2.5)
       react:
         specifier: ^19.2.4
         version: 19.2.5

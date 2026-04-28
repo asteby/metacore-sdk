@@ -120,7 +120,7 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.0.4",
     "input-otp": "^1.4.2",
-    "lucide-react": "^0.460.0",
+    "lucide-react": "^1.0.0",
     "react-day-picker": "^9.4.0",
     "sonner": "^1.7.0",
     "tailwind-merge": "^2.5.4"
