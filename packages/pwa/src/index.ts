@@ -26,5 +26,10 @@ export {
   NotificationPermissionPrompt,
 } from './components'
 
-export { metacorePWA } from './vite-plugin'
-export type { MetacorePWAOptions } from './vite-plugin'
+// `metacorePWA` lives in the dedicated `@asteby/metacore-pwa/vite-plugin`
+// sub-export. Re-exporting it from the root would drag `vite-plugin-pwa`
+// (Node-only) into every consumer's browser bundle and crash with
+// `module.createRequire is not a function`. Apps that need it import the
+// sub-export directly:
+//
+//   import { metacorePWA } from '@asteby/metacore-pwa/vite-plugin'
