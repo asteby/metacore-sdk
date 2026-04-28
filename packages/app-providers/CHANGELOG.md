@@ -1,5 +1,11 @@
 # @asteby/metacore-app-providers
 
+## 0.6.1
+
+### Patch Changes
+
+- 27b043c: `MetacoreAppShell`'s addon-install listener now surfaces a loading / success / failure toast in the host's toaster while the install runs, matching the feedback users get on every other long action (export, import, delete). Previously the iframe button flipped state silently in the host's perspective.
+
 ## 0.6.0
 
 ### Minor Changes
