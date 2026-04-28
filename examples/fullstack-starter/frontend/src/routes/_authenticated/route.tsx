@@ -23,6 +23,9 @@ import {
   DropdownMenuTrigger,
 } from '@asteby/metacore-ui/primitives'
 import { NotificationsDropdown } from '@asteby/metacore-notifications/dropdown'
+import { LanguageSwitcher } from '@asteby/metacore-i18n/language-switcher'
+import { getInitials } from '@asteby/metacore-ui/lib'
+import { useTranslation } from 'react-i18next'
 import { api } from '@/lib/api'
 
 export const Route = createFileRoute('/_authenticated')({
@@ -45,6 +48,7 @@ const SidebarLink = (props: any) => {
 function AuthLayout() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { t } = useTranslation()
   const { auth } = useAuthStore()
   const user = auth.user as any
 
@@ -109,9 +113,7 @@ function AuthLayout() {
     navigate({ to: '/sign-in' })
   }, [auth, navigate])
 
-  const initials = user?.name
-    ? user.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
-    : '?'
+  const initials = getInitials(user?.name)
 
   const token = auth.accessToken
   const [wsConnected, setWsConnected] = useState(false)
@@ -178,7 +180,7 @@ function AuthLayout() {
             {/* Search trigger */}
             <Button variant='outline' size='sm' className='h-8 gap-2 text-muted-foreground' onClick={() => setCommandOpen(true)}>
               <Search className='h-3.5 w-3.5' />
-              <span className='hidden sm:inline text-xs'>Buscar...</span>
+              <span className='hidden sm:inline text-xs'>{t('datatable.search')}</span>
               <kbd className='hidden sm:inline-flex pointer-events-none h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium text-muted-foreground'>
                 ⌘K
               </kbd>
@@ -188,6 +190,12 @@ function AuthLayout() {
               apiBasePath='/notifications/me'
               onNotificationClick={(n: any) => n.url && navigate({ to: n.url })}
               subscribeToNotifications={subscribeToNotifications}
+            />
+            <LanguageSwitcher
+              languages={[
+                { code: 'es', label: 'ES' },
+                { code: 'en', label: 'EN' },
+              ]}
             />
             {/* Theme toggle */}
             <Button variant='ghost' size='icon' className='h-8 w-8' onClick={() => document.documentElement.classList.toggle('dark')}>

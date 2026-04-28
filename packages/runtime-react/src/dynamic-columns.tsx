@@ -31,7 +31,7 @@ import {
     FilterableColumnHeader,
     type ColumnFilterMeta,
 } from '@asteby/metacore-ui/data-table'
-import { generateBadgeStyles } from '@asteby/metacore-ui/lib'
+import { generateBadgeStyles, getInitials } from '@asteby/metacore-ui/lib'
 import { OptionsContext } from './options-context'
 import { DynamicIcon } from './dynamic-icon'
 import type { TableMetadata, ColumnDefinition } from './types'
@@ -329,12 +329,7 @@ export function makeDefaultGetDynamicColumns(
                                             className="object-cover"
                                         />
                                         <AvatarFallback className="text-[10px] font-bold bg-primary/5 text-primary rounded-lg">
-                                            {String(name)
-                                                .split(' ')
-                                                .map((n: string) => n[0])
-                                                .slice(0, 2)
-                                                .join('')
-                                                .toUpperCase()}
+                                            {getInitials(String(name))}
                                         </AvatarFallback>
                                     </Avatar>
                                     <div className="flex flex-col min-w-0 overflow-hidden">
