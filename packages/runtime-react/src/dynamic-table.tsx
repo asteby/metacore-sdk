@@ -478,8 +478,12 @@ export function DynamicTable({
 
     const columnFilterConfigs = useMemo(() => {
         const map = new Map<string, ColumnFilterConfig>()
-        if (!metadata?.filters) return map
-        for (const f of metadata.filters) {
+        if (!metadata) return map
+        // Explicit `metadata.filters` wins. When the backend does not emit
+        // them, derive a filter chip from every column flagged
+        // `filterable: true` — keeps the kernel API minimal (one flag on the
+        // column) while still rendering the FilterableColumnHeader.
+        for (const f of metadata.filters ?? []) {
             const fType = f.type as ColumnFilterConfig['filterType']
             let options: { label: string; value: string; icon?: string; color?: string }[] = []
             if (f.options && f.options.length > 0) {
@@ -497,6 +501,31 @@ export function DynamicTable({
                 onFilterChange: handleDynamicFilterChange,
                 loading: f.searchEndpoint ? !filterOptionsMap.has(f.searchEndpoint) : false,
                 searchEndpoint: f.searchEndpoint,
+            })
+        }
+        for (const c of metadata.columns ?? []) {
+            if (!c.filterable || map.has(c.key)) continue
+            const hasStaticOptions = (c.options?.length ?? 0) > 0
+            const hasEndpoint = !!c.searchEndpoint
+            if (!hasStaticOptions && !hasEndpoint && c.type !== 'boolean') continue
+            const options = hasStaticOptions
+                ? c.options!.map(o => ({
+                      label: o.label,
+                      value: String(o.value),
+                      icon: o.icon,
+                      color: o.color,
+                  }))
+                : hasEndpoint && filterOptionsMap.has(c.searchEndpoint!)
+                  ? filterOptionsMap.get(c.searchEndpoint!) || []
+                  : []
+            map.set(c.key, {
+                filterType: 'select',
+                filterKey: c.key,
+                options,
+                selectedValues: dynamicFilters[c.key] || [],
+                onFilterChange: handleDynamicFilterChange,
+                loading: hasEndpoint && !filterOptionsMap.has(c.searchEndpoint!),
+                searchEndpoint: c.searchEndpoint,
             })
         }
         return map

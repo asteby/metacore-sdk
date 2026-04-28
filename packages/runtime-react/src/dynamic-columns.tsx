@@ -255,22 +255,26 @@ export function makeDefaultGetDynamicColumns(
                     ),
                 cell: ({ row }) => {
                     const value = getNestedValue(row.original, col.key)
+                    // Kernel emits the renderer flag as `type`; older hosts used
+                    // `cellStyle`. Accept both so a single backend works across
+                    // SDK versions.
+                    const renderAs = col.cellStyle ?? col.type
 
                     // Endpoint-loaded badge options (preloaded into OptionsContext)
-                    if (col.cellStyle === 'badge' && col.useOptions && col.searchEndpoint) {
+                    if (renderAs === 'badge' && col.useOptions && col.searchEndpoint) {
                         if (!value) return <span className="text-muted-foreground">-</span>
                         return <BadgeWithEndpointOptions endpoint={col.searchEndpoint} value={value} />
                     }
 
                     // Static badge options — map value → label/icon/color
-                    if (col.cellStyle === 'badge' && col.options && col.options.length > 0) {
+                    if (renderAs === 'badge' && col.options && col.options.length > 0) {
                         if (!value && value !== 0) return <span className="text-muted-foreground">-</span>
                         const option = col.options.find((o) => o.value === String(value))
                         if (option) return <OptionBadge option={option} fallback={String(value)} />
                         return <Badge variant="outline">{String(value)}</Badge>
                     }
 
-                    if (col.cellStyle === 'relation-badge-list') {
+                    if (renderAs === 'relation-badge-list') {
                         return renderRelationBadges(value, col)
                     }
 
