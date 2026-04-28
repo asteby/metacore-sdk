@@ -25,6 +25,7 @@ import (
 	metacorews "github.com/asteby/metacore-kernel/ws"
 
 	"github.com/asteby/metacore-sdk/examples/fullstack-starter/backend/database/seeders"
+	starteri18n "github.com/asteby/metacore-sdk/examples/fullstack-starter/backend/i18n"
 	"github.com/asteby/metacore-sdk/examples/fullstack-starter/backend/models"
 )
 
@@ -51,15 +52,20 @@ func main() {
 	// first time you boot. Production deployments should run
 	// `cmd/seed --migrate` from a one-shot job and disable in-process
 	// migration in a custom kernel configuration.
+	defaultLang := getenvDefault("DEFAULT_LANGUAGE", "es")
+	translator := starteri18n.MustNew(defaultLang)
+
 	app := host.NewApp(host.AppConfig{
-		DB:             db,
-		JWTSecret:      []byte(host.MustGetenv("JWT_SECRET")),
-		EnableWebhooks: true,
-		EnableMetrics:  true,
-		EnablePush:     vapidPub != "" && vapidPriv != "",
-		VAPIDPublic:    vapidPub,
-		VAPIDPrivate:   vapidPriv,
-		VAPIDSubject:   getenvDefault("VAPID_SUBJECT", "mailto:admin@example.com"),
+		DB:                  db,
+		JWTSecret:           []byte(host.MustGetenv("JWT_SECRET")),
+		EnableWebhooks:      true,
+		EnableMetrics:       true,
+		EnablePush:          vapidPub != "" && vapidPriv != "",
+		VAPIDPublic:         vapidPub,
+		VAPIDPrivate:        vapidPriv,
+		VAPIDSubject:        getenvDefault("VAPID_SUBJECT", "mailto:admin@example.com"),
+		Translator:          translator,
+		I18nDefaultLanguage: defaultLang,
 	})
 
 	// Domain tables — topo-sorted AutoMigrate keeps FKs in order.

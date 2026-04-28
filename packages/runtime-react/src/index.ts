@@ -33,3 +33,9 @@ export {
 export { DynamicRecordDialog } from './dialogs/dynamic-record'
 export { ExportDialog } from './dialogs/export'
 export { ImportDialog } from './dialogs/import'
+export {
+    DynamicCRUDPage,
+    type DynamicCRUDPageProps,
+    type DynamicCRUDPageStrings,
+    type DynamicCRUDPageClasses,
+} from './dynamic-crud-page'

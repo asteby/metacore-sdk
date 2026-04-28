@@ -9,50 +9,50 @@ type Customer struct {
 	Email  string `json:"email" gorm:"uniqueIndex"`
 	Phone  string `json:"phone"`
 	Status string `json:"status" gorm:"default:active"`
-	Tags   string `json:"tags"` // comma-separated for simplicity
+	Tags   string `json:"tags"`
 }
 
 func (Customer) TableName() string { return "customers" }
 
 func (Customer) DefineTable() modelbase.TableMetadata {
 	return modelbase.TableMetadata{
-		Title:             "Customers",
+		Title:             "models.customers.table.title",
 		SearchColumns:     []string{"name", "email", "phone"},
-		SearchPlaceholder: "Search by name, email or phone...",
+		SearchPlaceholder: "models.customers.table.search_placeholder",
 		EnableCRUDActions: true,
 		DefaultPerPage:    20,
 		PerPageOptions:    []int{10, 20, 50},
 		Columns: []modelbase.ColumnDef{
-			{Key: "name", Label: "Name", Type: "text", Sortable: true},
-			{Key: "email", Label: "Email", Type: "text", Sortable: true},
-			{Key: "phone", Label: "Phone", Type: "text"},
-			{Key: "status", Label: "Status", Type: "badge", Sortable: true, Filterable: true, UseOptions: true, Options: []modelbase.OptionDef{
-				{Value: "active", Label: "Active", Color: "green"},
-				{Value: "inactive", Label: "Inactive", Color: "gray"},
-				{Value: "lead", Label: "Lead", Color: "blue"},
+			{Key: "name", Label: "models.customers.table.columns.name", Type: "text", Sortable: true},
+			{Key: "email", Label: "models.customers.table.columns.email", Type: "text", Sortable: true},
+			{Key: "phone", Label: "models.customers.table.columns.phone", Type: "text"},
+			{Key: "status", Label: "models.customers.table.columns.status", Type: "badge", Sortable: true, Filterable: true, UseOptions: true, Options: []modelbase.OptionDef{
+				{Value: "active", Label: "models.customers.table.options.active", Color: "green"},
+				{Value: "inactive", Label: "models.customers.table.options.inactive", Color: "gray"},
+				{Value: "lead", Label: "models.customers.table.options.lead", Color: "blue"},
 			}},
-			{Key: "tags", Label: "Tags", Type: "text"},
-			{Key: "created_at", Label: "Created", Type: "date", Sortable: true},
+			{Key: "tags", Label: "models.customers.table.columns.tags", Type: "text"},
+			{Key: "created_at", Label: "models.customers.table.columns.created_at", Type: "date", Sortable: true},
 		},
 	}
 }
 
 func (Customer) DefineModal() modelbase.ModalMetadata {
 	return modelbase.ModalMetadata{
-		Title:       "Customer",
-		CreateTitle: "New Customer",
-		EditTitle:   "Edit Customer",
-		DeleteTitle: "Delete Customer",
+		Title:       "models.customers.modal.title",
+		CreateTitle: "models.customers.modal.create_title",
+		EditTitle:   "models.customers.modal.edit_title",
+		DeleteTitle: "models.customers.modal.delete_title",
 		Fields: []modelbase.FieldDef{
-			{Key: "name", Label: "Name", Type: "text", Required: true},
-			{Key: "email", Label: "Email", Type: "email", Required: true},
-			{Key: "phone", Label: "Phone", Type: "text"},
-			{Key: "status", Label: "Status", Type: "select", Required: true, DefaultValue: "active", Options: []modelbase.OptionDef{
-				{Value: "active", Label: "Active"},
-				{Value: "inactive", Label: "Inactive"},
-				{Value: "lead", Label: "Lead"},
+			{Key: "name", Label: "models.customers.modal.fields.name", Type: "text", Required: true},
+			{Key: "email", Label: "models.customers.modal.fields.email", Type: "email", Required: true},
+			{Key: "phone", Label: "models.customers.modal.fields.phone", Type: "text"},
+			{Key: "status", Label: "models.customers.modal.fields.status", Type: "select", Required: true, DefaultValue: "active", Options: []modelbase.OptionDef{
+				{Value: "active", Label: "models.customers.table.options.active"},
+				{Value: "inactive", Label: "models.customers.table.options.inactive"},
+				{Value: "lead", Label: "models.customers.table.options.lead"},
 			}},
-			{Key: "tags", Label: "Tags", Type: "text", Placeholder: "vip, wholesale, retail"},
+			{Key: "tags", Label: "models.customers.modal.fields.tags", Type: "text", Placeholder: "models.customers.modal.fields.tags_placeholder"},
 		},
 	}
 }

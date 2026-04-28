@@ -1,0 +1,99 @@
+{
+  "models": {
+    "customers": {
+      "table": {
+        "title": "Clientes",
+        "search_placeholder": "Buscar por nombre, email o teléfono…",
+        "columns": {
+          "name": "Nombre",
+          "email": "Correo",
+          "phone": "Teléfono",
+          "status": "Estado",
+          "tags": "Etiquetas",
+          "created_at": "Registrado"
+        },
+        "options": {
+          "active": "Activo",
+          "inactive": "Inactivo",
+          "lead": "Prospecto"
+        }
+      },
+      "modal": {
+        "title": "Cliente",
+        "create_title": "Nuevo cliente",
+        "edit_title": "Editar cliente",
+        "delete_title": "Eliminar cliente",
+        "fields": {
+          "name": "Nombre",
+          "email": "Correo electrónico",
+          "phone": "Teléfono",
+          "status": "Estado",
+          "tags": "Etiquetas",
+          "tags_placeholder": "vip, mayoreo, retail"
+        }
+      }
+    },
+    "products": {
+      "table": {
+        "title": "Productos",
+        "search_placeholder": "Buscar por nombre, SKU o categoría…",
+        "columns": {
+          "name": "Producto",
+          "sku": "SKU",
+          "price": "Precio",
+          "stock": "Stock",
+          "category": "Categoría",
+          "status": "Estado",
+          "created_at": "Creado"
+        },
+        "options": {
+          "active": "Activo",
+          "draft": "Borrador",
+          "archived": "Archivado"
+        }
+      },
+      "modal": {
+        "title": "Producto",
+        "create_title": "Nuevo producto",
+        "edit_title": "Editar producto",
+        "delete_title": "Eliminar producto",
+        "fields": {
+          "name": "Nombre",
+          "sku": "SKU",
+          "description": "Descripción",
+          "price": "Precio",
+          "stock": "Stock",
+          "category": "Categoría",
+          "status": "Estado"
+        }
+      }
+    },
+    "notifications": {
+      "table": {
+        "title": "Notificaciones",
+        "columns": {
+          "title": "Título",
+          "message": "Mensaje",
+          "type": "Tipo",
+          "is_read": "Leída",
+          "created_at": "Fecha"
+        }
+      },
+      "modal": {
+        "title": "Notificación",
+        "fields": {
+          "title": "Título",
+          "message": "Mensaje",
+          "type": "Tipo",
+          "link": "Enlace"
+        },
+        "options": {
+          "info": "Información",
+          "success": "Éxito",
+          "warning": "Advertencia",
+          "error": "Error"
+        }
+      }
+    }
+  }
+}

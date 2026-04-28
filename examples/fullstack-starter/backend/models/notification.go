@@ -21,32 +21,32 @@ func (Notification) TableName() string { return "notifications" }
 
 func (Notification) DefineTable() modelbase.TableMetadata {
 	return modelbase.TableMetadata{
-		Title:          "Notifications",
+		Title:          "models.notifications.table.title",
 		DefaultPerPage: 20,
 		SearchColumns:  []string{"title", "message"},
 		Columns: []modelbase.ColumnDef{
-			{Key: "title", Label: "Title", Type: "string", Sortable: true},
-			{Key: "message", Label: "Message", Type: "string"},
-			{Key: "type", Label: "Type", Type: "badge", Sortable: true},
-			{Key: "is_read", Label: "Read", Type: "boolean", Sortable: true},
-			{Key: "created_at", Label: "Date", Type: "date", Sortable: true},
+			{Key: "title", Label: "models.notifications.table.columns.title", Type: "string", Sortable: true},
+			{Key: "message", Label: "models.notifications.table.columns.message", Type: "string"},
+			{Key: "type", Label: "models.notifications.table.columns.type", Type: "badge", Sortable: true},
+			{Key: "is_read", Label: "models.notifications.table.columns.is_read", Type: "boolean", Sortable: true},
+			{Key: "created_at", Label: "models.notifications.table.columns.created_at", Type: "date", Sortable: true},
 		},
 	}
 }
 
 func (Notification) DefineModal() modelbase.ModalMetadata {
 	return modelbase.ModalMetadata{
-		Title: "Notification",
+		Title: "models.notifications.modal.title",
 		Fields: []modelbase.FieldDef{
-			{Key: "title", Label: "Title", Type: "text", Required: true},
-			{Key: "message", Label: "Message", Type: "textarea", Required: true},
-			{Key: "type", Label: "Type", Type: "select", DefaultValue: "info", Options: []modelbase.OptionDef{
-				{Label: "Info", Value: "info"},
-				{Label: "Success", Value: "success"},
-				{Label: "Warning", Value: "warning"},
-				{Label: "Error", Value: "error"},
+			{Key: "title", Label: "models.notifications.modal.fields.title", Type: "text", Required: true},
+			{Key: "message", Label: "models.notifications.modal.fields.message", Type: "textarea", Required: true},
+			{Key: "type", Label: "models.notifications.modal.fields.type", Type: "select", DefaultValue: "info", Options: []modelbase.OptionDef{
+				{Label: "models.notifications.modal.options.info", Value: "info"},
+				{Label: "models.notifications.modal.options.success", Value: "success"},
+				{Label: "models.notifications.modal.options.warning", Value: "warning"},
+				{Label: "models.notifications.modal.options.error", Value: "error"},
 			}},
-			{Key: "link", Label: "Link", Type: "text"},
+			{Key: "link", Label: "models.notifications.modal.fields.link", Type: "text"},
 		},
 	}
 }
