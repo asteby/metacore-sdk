@@ -257,8 +257,8 @@ importers:
   packages/auth:
     dependencies:
       '@hookform/resolvers':
-        specifier: ^3.9.0
-        version: 3.10.0(react-hook-form@7.72.1(react@19.2.5))
+        specifier: ^5.0.0
+        version: 5.2.2(react-hook-form@7.72.1(react@19.2.5))
       axios:
         specifier: ^1.7.7
         version: 1.15.0
@@ -879,8 +879,8 @@ importers:
   packages/webhooks:
     dependencies:
       '@hookform/resolvers':
-        specifier: ^3.9.0
-        version: 3.10.0(react-hook-form@7.72.1(react@19.2.5))
+        specifier: ^5.0.0
+        version: 5.2.2(react-hook-form@7.72.1(react@19.2.5))
       zod:
         specifier: ^4.3.0
         version: 4.3.6
@@ -961,8 +961,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
       '@hookform/resolvers':
-        specifier: ^3.9.0
-        version: 3.10.0(react-hook-form@7.72.1(react@19.2.5))
+        specifier: ^5.0.0
+        version: 5.2.2(react-hook-form@7.72.1(react@19.2.5))
       '@tanstack/react-query':
         specifier: ^5.95.0
         version: 5.99.0(react@19.2.5)
@@ -2011,6 +2011,11 @@ packages:
     peerDependencies:
       react-hook-form: ^7.0.0
 
+  '@hookform/resolvers@5.2.2':
+    resolution: {integrity: sha512-A/IxlMLShx3KjV/HeTcTfaMxdwy690+L/ZADoeaTltLx+CVuzkeVIPuybK3jrRfw7YZnmdKsVVHAlEPIAEUNlA==}
+    peerDependencies:
+      react-hook-form: ^7.55.0
+
   '@humanfs/core@0.19.1':
     resolution: {integrity: sha512-5DyQ4+1JEUzejeK1JGICcideyfUbGixgS9jNgex5nqkW+cY7WZhxBigmieN5Qnw9ZosSNVC9KQKyb+GUaGyKUA==}
     engines: {node: '>=18.18.0'}
@@ -2990,6 +2995,9 @@ packages:
 
   '@rushstack/ts-command-line@5.3.6':
     resolution: {integrity: sha512-ZMGtpDyH+EY9Bmg604Ol5aEMNjitEj0CxWUOsKe8/RbqcDiXuiQZJ3fWipd3w524eNpCxxVAnA6hUnW+co+ErA==}
+
+  '@standard-schema/utils@0.3.0':
+    resolution: {integrity: sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g==}
 
   '@surma/rollup-plugin-off-main-thread@2.2.3':
     resolution: {integrity: sha512-lR8q/9W7hZpMWweNiAKU7NQerBnzQQLvi8qnTDU/fxItPhtZVMbPV3lbCwjhIlNBe9Bbr5V+KHshvWmVSG9cxQ==}
@@ -7161,6 +7169,11 @@ snapshots:
     dependencies:
       react-hook-form: 7.72.1(react@19.2.5)
 
+  '@hookform/resolvers@5.2.2(react-hook-form@7.72.1(react@19.2.5))':
+    dependencies:
+      '@standard-schema/utils': 0.3.0
+      react-hook-form: 7.72.1(react@19.2.5)
+
   '@humanfs/core@0.19.1': {}
 
   '@humanfs/node@0.16.7':
@@ -8087,6 +8100,8 @@ snapshots:
       string-argv: 0.3.2
     transitivePeerDependencies:
       - '@types/node'
+
+  '@standard-schema/utils@0.3.0': {}
 
   '@surma/rollup-plugin-off-main-thread@2.2.3':
     dependencies:
