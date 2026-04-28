@@ -269,29 +269,34 @@ export function DynamicTable({
         if (metaInitRef.current) return
         metaInitRef.current = true
         const initMetadataAndOptions = async () => {
-            let meta: TableMetadata
             const cached = getMetadata(model)
+            // Stale-while-revalidate: paint with the cached metadata if any so
+            // the table renders instantly, then always re-fetch in the
+            // background so a backend metadata change (new column, new
+            // filterable flag) propagates without users having to clear
+            // localStorage.
             if (cached) {
-                meta = cached
-                setMetadata(meta)
-                if (!urlHadPerPage.current) setPagination((prev: PaginationState) => ({ ...prev, pageSize: meta.defaultPerPage || 10 }))
+                setMetadata(cached)
+                if (!urlHadPerPage.current) setPagination((prev: PaginationState) => ({ ...prev, pageSize: cached.defaultPerPage || 10 }))
                 setLoading(false)
             } else {
                 setLoading(true)
-                try {
-                    const res = await api.get(`/metadata/table/${model}`) as { data: ApiResponse<TableMetadata> }
-                    if (!res.data.success) return
+            }
+            let meta: TableMetadata | null = cached || null
+            try {
+                const res = await api.get(`/metadata/table/${model}`) as { data: ApiResponse<TableMetadata> }
+                if (res.data.success) {
                     meta = res.data.data
                     setMetadata(meta)
                     cacheMetadata(model, meta)
                     if (!urlHadPerPage.current) setPagination((prev: PaginationState) => ({ ...prev, pageSize: meta.defaultPerPage || 10 }))
-                } catch (error) {
-                    console.error('Error al cargar la configuración de la tabla', error)
-                    return
-                } finally {
-                    setLoading(false)
                 }
+            } catch (error) {
+                if (!cached) console.error('Error al cargar la configuración de la tabla', error)
+            } finally {
+                setLoading(false)
             }
+            if (!meta) return
             const columnEndpoints = meta.columns.filter(c => c.useOptions && c.searchEndpoint).map(c => c.searchEndpoint!)
             const filterEndpoints = (meta.filters || []).filter(f => f.searchEndpoint && (f.type === 'select' || f.type === 'boolean')).map(f => f.searchEndpoint!)
             const allEndpoints = [...columnEndpoints, ...filterEndpoints]

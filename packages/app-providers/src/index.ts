@@ -18,3 +18,7 @@ export {
   type BrandingFetcher,
   type PlatformConfigProviderProps,
 } from './platform-config-provider'
+export {
+  MetacoreAppShell,
+  type MetacoreAppShellProps,
+} from './metacore-app-shell'

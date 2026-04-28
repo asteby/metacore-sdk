@@ -60,6 +60,9 @@ importers:
 
   examples/fullstack-starter/frontend:
     dependencies:
+      '@asteby/metacore-app-providers':
+        specifier: workspace:*
+        version: link:../../../packages/app-providers
       '@asteby/metacore-auth':
         specifier: workspace:*
         version: link:../../../packages/auth
@@ -232,6 +235,15 @@ importers:
 
   packages/app-providers:
     devDependencies:
+      '@asteby/metacore-pwa':
+        specifier: workspace:*
+        version: link:../pwa
+      '@asteby/metacore-runtime-react':
+        specifier: workspace:*
+        version: link:../runtime-react
+      '@asteby/metacore-ui':
+        specifier: workspace:*
+        version: link:../ui
       '@radix-ui/react-direction':
         specifier: ^1.1.1
         version: 1.1.1(@types/react@19.2.14)(react@19.2.5)
