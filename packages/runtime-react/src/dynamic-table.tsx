@@ -286,10 +286,11 @@ export function DynamicTable({
             try {
                 const res = await api.get(`/metadata/table/${model}`) as { data: ApiResponse<TableMetadata> }
                 if (res.data.success) {
-                    meta = res.data.data
-                    setMetadata(meta)
-                    cacheMetadata(model, meta)
-                    if (!urlHadPerPage.current) setPagination((prev: PaginationState) => ({ ...prev, pageSize: meta.defaultPerPage || 10 }))
+                    const fresh = res.data.data
+                    meta = fresh
+                    setMetadata(fresh)
+                    cacheMetadata(model, fresh)
+                    if (!urlHadPerPage.current) setPagination((prev: PaginationState) => ({ ...prev, pageSize: fresh.defaultPerPage || 10 }))
                 }
             } catch (error) {
                 if (!cached) console.error('Error al cargar la configuración de la tabla', error)
