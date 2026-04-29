@@ -1,5 +1,13 @@
 # @asteby/metacore-app-providers
 
+## 0.6.2
+
+### Patch Changes
+
+- 1c7c31a: Trim redundant addon-key from install toasts.
+
+  `Instalando ${addonKey}…` repeated information the user already saw on the iframe button. The host now shows generic `Instalando…` / `Addon instalado` / `Falló la instalación` (with the error message in the toast description on failure).
+
 ## 0.6.1
 
 ### Patch Changes
