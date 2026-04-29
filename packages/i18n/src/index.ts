@@ -23,3 +23,9 @@ export {
   DEFAULT_RTL_LANGUAGES,
   type UseLocaleResult,
 } from './hooks'
+export {
+  useAddonI18n,
+  useAddonNames,
+  type UseAddonI18nOptions,
+  type UseAddonI18nResult,
+} from './addon-i18n'

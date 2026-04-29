@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { createFileRoute, Link, Outlet, useLocation, useNavigate } from '@tanstack/react-router'
 import { createAuthGuard } from '@asteby/metacore-auth/guards'
 import { useAuthStore } from '@asteby/metacore-auth/store'
@@ -6,6 +6,7 @@ import { AuthenticatedLayout, AppSidebar, OrganizationCard } from '@asteby/metac
 import { CommandMenu } from '@asteby/metacore-ui/command-menu'
 import type { NavGroupData } from '@asteby/metacore-ui/layout'
 import type { CommandMenuNavGroup } from '@asteby/metacore-ui/command-menu'
+import { useAddonNames } from '@asteby/metacore-i18n/addon-i18n'
 import {
   LayoutDashboard, LogOut, Settings, User, Sun, Moon, Search, Store,
   Package, Users, ShoppingCart, FileText, Truck,
@@ -53,10 +54,14 @@ function AuthLayout() {
   const user = auth.user as any
 
   const [commandOpen, setCommandOpen] = useState(false)
-  const [navGroups, setNavGroups] = useState<NavGroupData[]>([
-    { title: 'General', items: [{ title: 'Dashboard', url: '/', icon: LayoutDashboard }] },
-  ])
-  const [commandNavGroups, setCommandNavGroups] = useState<CommandMenuNavGroup[]>([])
+  // We split sidebar state into the raw inputs (model entries + installed
+  // addon rows) and derive navGroups synchronously from them. This way a
+  // language switch picks up the localised addon name from `useAddonNames`
+  // without re-issuing /metadata/all and /marketplace/installs.
+  type ModelItem = { key: string; title: string }
+  type AddonRow = { addon_key: string; name?: string }
+  const [modelItems, setModelItems] = useState<ModelItem[]>([])
+  const [addonRows, setAddonRows] = useState<AddonRow[]>([])
 
   // ⌘K shortcut
   useEffect(() => {
@@ -70,10 +75,9 @@ function AuthLayout() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  // Fetch models + installed addons → build sidebar + command menu.
-  // The two queries run in parallel: /metadata/all for the models the
-  // backend registered at boot, /marketplace/installs for the addons
-  // that were installed at runtime via the Hub.
+  // Fetch models + installed addons. Two queries in parallel: /metadata/all
+  // for the models the backend registered at boot, /marketplace/installs
+  // for the addons that were installed at runtime via the Hub.
   const refreshNav = useCallback(async () => {
     const [modelsRes, addonsRes] = await Promise.allSettled([
       api.get('/metadata/all'),
@@ -82,39 +86,53 @@ function AuthLayout() {
 
     const tables =
       modelsRes.status === 'fulfilled' ? modelsRes.value.data?.data?.tables ?? {} : {}
-    const modelItems = Object.entries(tables).map(([key, meta]: [string, any]) => ({
-      title: meta.title || key,
-      url: `/m/${key}`,
-      icon: ICON_MAP[key] || Package,
-    }))
+    setModelItems(
+      Object.entries(tables).map(([key, meta]: [string, any]) => ({
+        key,
+        title: meta.title || key,
+      })),
+    )
 
-    const addonRows: any[] =
+    const rows: AddonRow[] =
       addonsRes.status === 'fulfilled' ? addonsRes.value.data?.data ?? [] : []
     // Dedupe on addon_key (newest install wins via the DESC order from
     // the API) and skip ones whose key already lives in tables — those
     // are addons that registered models, the model nav already shows them.
     const seen = new Set<string>()
-    const addonItems = addonRows
-      .filter((row) => {
-        if (!row?.addon_key) return false
-        if (seen.has(row.addon_key)) return false
-        if (tables[row.addon_key]) return false
-        seen.add(row.addon_key)
-        return true
-      })
-      .map((row) => ({
-        // Display the Hub-localised name when present (postMessage carries
-        // it at install time), fall back to the addon key so old rows
-        // installed before this column existed don't show as blank.
-        title: row.name || row.addon_key,
-        url: `/marketplace/addons/${row.addon_key}`,
-        icon: Package,
-      }))
+    const dedup: AddonRow[] = []
+    for (const row of rows) {
+      if (!row?.addon_key) continue
+      if (seen.has(row.addon_key)) continue
+      if (tables[row.addon_key]) continue
+      seen.add(row.addon_key)
+      dedup.push(row)
+    }
+    setAddonRows(dedup)
+  }, [])
 
+  const addonKeys = useMemo(() => addonRows.map((r) => r.addon_key), [addonRows])
+  // Live-localised display names from the Hub manifest. Reactive to
+  // `useLocale()` — switching language re-resolves the labels without
+  // a /marketplace/installs round-trip or reinstall.
+  const addonNames = useAddonNames(addonKeys)
+
+  const navGroups = useMemo<NavGroupData[]>(() => {
+    const modelNav = modelItems.map((m) => ({
+      title: m.title,
+      url: `/m/${m.key}`,
+      icon: ICON_MAP[m.key] || Package,
+    }))
+    const addonNav = addonRows.map((row) => ({
+      // Resolution order: Hub-published manifest i18n (live, lang-aware) →
+      // install-time row.name (localised at click time) → raw key.
+      title: addonNames[row.addon_key] || row.name || row.addon_key,
+      url: `/marketplace/addons/${row.addon_key}`,
+      icon: Package,
+    }))
     const groups: NavGroupData[] = [
       {
         title: 'General',
-        items: [{ title: 'Dashboard', url: '/', icon: LayoutDashboard }, ...modelItems],
+        items: [{ title: 'Dashboard', url: '/', icon: LayoutDashboard }, ...modelNav],
       },
       {
         title: 'Plataforma',
@@ -124,22 +142,25 @@ function AuthLayout() {
         ],
       },
     ]
-    if (addonItems.length > 0) {
-      groups.splice(1, 0, { title: 'Addons', items: addonItems })
+    if (addonNav.length > 0) {
+      groups.splice(1, 0, { title: 'Addons', items: addonNav })
     }
-    setNavGroups(groups)
+    return groups
+  }, [modelItems, addonRows, addonNames])
 
-    setCommandNavGroups([
+  const commandNavGroups = useMemo<CommandMenuNavGroup[]>(() => {
+    const modelNav = modelItems.map((m) => ({ title: m.title, url: `/m/${m.key}` }))
+    const addonNav = addonRows.map((row) => ({
+      title: addonNames[row.addon_key] || row.name || row.addon_key,
+      url: `/marketplace/addons/${row.addon_key}`,
+    }))
+    return [
       {
         title: 'Navegación',
-        items: [
-          { title: 'Dashboard', url: '/' },
-          ...modelItems.map((m) => ({ title: m.title, url: m.url })),
-          ...addonItems.map((a) => ({ title: a.title, url: a.url })),
-        ],
+        items: [{ title: 'Dashboard', url: '/' }, ...modelNav, ...addonNav],
       },
-    ])
-  }, [])
+    ]
+  }, [modelItems, addonRows, addonNames])
 
   useEffect(() => {
     void refreshNav()
