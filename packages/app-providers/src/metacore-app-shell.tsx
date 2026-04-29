@@ -108,7 +108,7 @@ function AddonInstallListener({
       }
       // Surface the install in the host's toaster too so the user knows
       // the click was heard even if the iframe loses focus.
-      const toastId = toast.loading(`Instalando ${req.addonKey}…`)
+      const toastId = toast.loading('Instalando…')
       try {
         if (onAddonInstall) {
           await onAddonInstall(req, e.source)
@@ -118,14 +118,14 @@ function AddonInstallListener({
           // explicit `onAddonInstall` handler.
           await api.post('/marketplace/install', req)
         }
-        toast.success(`${req.addonKey} instalado`, { id: toastId })
+        toast.success('Addon instalado', { id: toastId })
         e.source?.postMessage(
           { type: 'metacore:installed', addonKey: req.addonKey },
           { targetOrigin: '*' } as WindowPostMessageOptions,
         )
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
-        toast.error(`Falló la instalación: ${message}`, { id: toastId })
+        toast.error('Falló la instalación', { id: toastId, description: message })
         e.source?.postMessage(
           {
             type: 'metacore:install-failed',
