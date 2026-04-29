@@ -103,7 +103,10 @@ function AuthLayout() {
         return true
       })
       .map((row) => ({
-        title: row.addon_key,
+        // Display the Hub-localised name when present (postMessage carries
+        // it at install time), fall back to the addon key so old rows
+        // installed before this column existed don't show as blank.
+        title: row.name || row.addon_key,
         url: `/marketplace/addons/${row.addon_key}`,
         icon: Package,
       }))

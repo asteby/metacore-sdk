@@ -34,6 +34,10 @@ export interface MetacoreInstallRequest {
   addonKey: string
   version?: string
   bundleURL?: string
+  /** Display name already localised by the Hub at click time. */
+  name?: string
+  /** Hub-supplied category bucket. */
+  category?: string
 }
 
 export interface MetacoreAppShellProps {
@@ -99,12 +103,16 @@ function AddonInstallListener({
   React.useEffect(() => {
     if (onAddonInstall === null) return
     const handler = async (e: MessageEvent) => {
-      const data = e.data as { type?: string; addonKey?: string; version?: string; bundleURL?: string } | null
+      const data = e.data as
+        | { type?: string; addonKey?: string; version?: string; bundleURL?: string; name?: string; category?: string }
+        | null
       if (!data || data.type !== 'metacore:install' || !data.addonKey) return
-      const req = {
+      const req: MetacoreInstallRequest = {
         addonKey: data.addonKey,
         version: data.version,
         bundleURL: data.bundleURL,
+        name: data.name,
+        category: data.category,
       }
       // Surface the install in the host's toaster too so the user knows
       // the click was heard even if the iframe loses focus.
