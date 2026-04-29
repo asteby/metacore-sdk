@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-app-providers",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "description": "Providers genéricos reutilizables para apps metacore (direction, font, layout, search, platform-config)",
   "license": "Apache-2.0",
   "repository": {
