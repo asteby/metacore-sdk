@@ -137,6 +137,18 @@ function AddonInstallListener({
         } catch {
           /* best-effort */
         }
+        // Notify host components (sidebar, dashboard, command menu)
+        // that the model + addon graph just changed. Listeners refetch
+        // /metadata/all and /marketplace/installs without a page reload.
+        try {
+          window.dispatchEvent(
+            new CustomEvent('metacore:metadata-changed', {
+              detail: { reason: 'addon-installed', addonKey: req.addonKey },
+            }),
+          )
+        } catch {
+          /* SSR / very old browsers */
+        }
         e.source?.postMessage(
           { type: 'metacore:installed', addonKey: req.addonKey },
           { targetOrigin: '*' } as WindowPostMessageOptions,

@@ -70,43 +70,83 @@ function AuthLayout() {
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  // Fetch models → build sidebar + command menu
-  useEffect(() => {
-    api.get('/metadata/all').then((res) => {
-      const tables = res.data?.data?.tables ?? {}
-      const modelItems = Object.entries(tables).map(([key, meta]: [string, any]) => ({
-        title: meta.title || key,
-        url: `/m/${key}`,
-        icon: ICON_MAP[key] || Package,
+  // Fetch models + installed addons → build sidebar + command menu.
+  // The two queries run in parallel: /metadata/all for the models the
+  // backend registered at boot, /marketplace/installs for the addons
+  // that were installed at runtime via the Hub.
+  const refreshNav = useCallback(async () => {
+    const [modelsRes, addonsRes] = await Promise.allSettled([
+      api.get('/metadata/all'),
+      api.get('/marketplace/installs'),
+    ])
+
+    const tables =
+      modelsRes.status === 'fulfilled' ? modelsRes.value.data?.data?.tables ?? {} : {}
+    const modelItems = Object.entries(tables).map(([key, meta]: [string, any]) => ({
+      title: meta.title || key,
+      url: `/m/${key}`,
+      icon: ICON_MAP[key] || Package,
+    }))
+
+    const addonRows: any[] =
+      addonsRes.status === 'fulfilled' ? addonsRes.value.data?.data ?? [] : []
+    // Dedupe on addon_key (newest install wins via the DESC order from
+    // the API) and skip ones whose key already lives in tables — those
+    // are addons that registered models, the model nav already shows them.
+    const seen = new Set<string>()
+    const addonItems = addonRows
+      .filter((row) => {
+        if (!row?.addon_key) return false
+        if (seen.has(row.addon_key)) return false
+        if (tables[row.addon_key]) return false
+        seen.add(row.addon_key)
+        return true
+      })
+      .map((row) => ({
+        title: row.addon_key,
+        url: `/marketplace/addons/${row.addon_key}`,
+        icon: Package,
       }))
 
-      const groups: NavGroupData[] = [
-        {
-          title: 'General',
-          items: [{ title: 'Dashboard', url: '/', icon: LayoutDashboard }, ...modelItems],
-        },
-        {
-          title: 'Plataforma',
-          items: [
-            { title: 'Marketplace', url: '/marketplace', icon: Store },
-            { title: 'Configuración', url: '/settings', icon: Settings },
-          ],
-        },
-      ]
-      setNavGroups(groups)
+    const groups: NavGroupData[] = [
+      {
+        title: 'General',
+        items: [{ title: 'Dashboard', url: '/', icon: LayoutDashboard }, ...modelItems],
+      },
+      {
+        title: 'Plataforma',
+        items: [
+          { title: 'Marketplace', url: '/marketplace', icon: Store },
+          { title: 'Configuración', url: '/settings', icon: Settings },
+        ],
+      },
+    ]
+    if (addonItems.length > 0) {
+      groups.splice(1, 0, { title: 'Addons', items: addonItems })
+    }
+    setNavGroups(groups)
 
-      // Command menu nav groups
-      setCommandNavGroups([
-        {
-          title: 'Navegación',
-          items: [
-            { title: 'Dashboard', url: '/' },
-            ...modelItems.map((m) => ({ title: m.title, url: m.url })),
-          ],
-        },
-      ])
-    }).catch(() => {})
+    setCommandNavGroups([
+      {
+        title: 'Navegación',
+        items: [
+          { title: 'Dashboard', url: '/' },
+          ...modelItems.map((m) => ({ title: m.title, url: m.url })),
+          ...addonItems.map((a) => ({ title: a.title, url: a.url })),
+        ],
+      },
+    ])
   }, [])
+
+  useEffect(() => {
+    void refreshNav()
+    // MetacoreAppShell dispatches metacore:metadata-changed after a
+    // successful addon install; re-pulling /marketplace/installs here
+    // surfaces the new entry in the sidebar without a page reload.
+    const onChanged = () => void refreshNav()
+    window.addEventListener('metacore:metadata-changed', onChanged)
+    return () => window.removeEventListener('metacore:metadata-changed', onChanged)
+  }, [refreshNav])
 
   const handleSignOut = useCallback(() => {
     auth.reset()
