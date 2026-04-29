@@ -36,6 +36,10 @@
       "types": "./dist/hooks.d.ts",
       "import": "./dist/hooks.js"
     },
+    "./addon-i18n": {
+      "types": "./dist/addon-i18n.d.ts",
+      "import": "./dist/addon-i18n.js"
+    },
     "./locales/en": "./dist/locales/en.json",
     "./locales/es": "./dist/locales/es.json"
   },
