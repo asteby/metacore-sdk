@@ -1,12 +1,12 @@
 module github.com/asteby/metacore-sdk
 
-go 1.25.0
+go 1.25.7
 
-require github.com/asteby/metacore-kernel v0.7.1
+require github.com/asteby/metacore-kernel v0.7.2
 
 require (
 	github.com/Masterminds/semver/v3 v3.3.0 // indirect
-	github.com/andybalholm/brotli v1.2.0 // indirect
+	github.com/andybalholm/brotli v1.2.1 // indirect
 	github.com/fatih/structtag v1.2.0 // indirect
 	github.com/gofiber/fiber/v2 v2.52.13 // indirect
 	github.com/google/uuid v1.6.0 // indirect
@@ -14,9 +14,9 @@ require (
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
-	github.com/klauspost/compress v1.18.4 // indirect
+	github.com/klauspost/compress v1.18.5 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mattn/go-isatty v0.0.21 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/spf13/cobra v1.3.0 // indirect
