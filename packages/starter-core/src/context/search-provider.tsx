@@ -1,46 +1,16 @@
-import { createContext, useContext, useEffect, useState } from 'react'
-import { CommandMenu } from '@/components/command-menu'
-
-type SearchContextType = {
-  open: boolean
-  setOpen: React.Dispatch<React.SetStateAction<boolean>>
-}
-
-const SearchContext = createContext<SearchContextType | null>(null)
-
-type SearchProviderProps = {
-  children: React.ReactNode
-}
-
-export function SearchProvider({ children }: SearchProviderProps) {
-  const [open, setOpen] = useState(false)
-
-  useEffect(() => {
-    const down = (e: KeyboardEvent) => {
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault()
-        setOpen((open) => !open)
-      }
-    }
-    document.addEventListener('keydown', down)
-    return () => document.removeEventListener('keydown', down)
-  }, [])
-
-  return (
-    <SearchContext value={{ open, setOpen }}>
-      {children}
-      <CommandMenu />
-    </SearchContext>
-  )
-}
-
-// eslint-disable-next-line react-refresh/only-export-components
-export const useSearch = () => {
-  const searchContext = useContext(SearchContext)
-
-  if (!searchContext) {
-    throw new Error('useSearch has to be used within SearchProvider')
-  }
-
-  return searchContext
-}
+/**
+ * Re-export of `SearchProvider` from `@asteby/metacore-app-providers`, which
+ * is the source of truth for transport-agnostic context providers in the
+ * metacore ecosystem (see feedback note "PlatformConfigProvider en
+ * app-providers").
+ *
+ * NOTE: the legacy starter copy auto-rendered `<CommandMenu />` as a child of
+ * the provider, which coupled the provider to a specific UI tree. The
+ * canonical `app-providers` `SearchProvider` is UI-agnostic — apps render
+ * their own `<CommandMenu />` (typically inside the authenticated layout).
+ */
+export {
+  SearchProvider,
+  useSearch,
+  type SearchProviderProps,
+} from '@asteby/metacore-app-providers'

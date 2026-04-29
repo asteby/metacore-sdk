@@ -17,6 +17,8 @@
     "vite-preset.js",
     "vite-preset.d.ts",
     "eslint-preset.js",
+    "fonts.js",
+    "fonts.d.ts",
     "README.md"
   ],
   "exports": {
@@ -27,6 +29,10 @@
       "import": "./vite-preset.js"
     },
     "./eslint": "./eslint-preset.js",
+    "./fonts": {
+      "types": "./fonts.d.ts",
+      "import": "./fonts.js"
+    },
     "./package.json": "./package.json"
   },
   "peerDependencies": {

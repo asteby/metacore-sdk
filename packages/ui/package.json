@@ -66,6 +66,10 @@
     "./lib": {
       "types": "./dist/lib/index.d.ts",
       "import": "./dist/lib/index.js"
+    },
+    "./shared": {
+      "types": "./dist/shared/index.d.ts",
+      "import": "./dist/shared/index.js"
     }
   },
   "scripts": {
@@ -82,6 +86,7 @@
     "@tanstack/react-table": ">=8",
     "@tanstack/react-query": ">=5",
     "@tanstack/react-router": ">=1.100",
+    "date-fns": ">=3",
     "tailwindcss": ">=4"
   },
   "peerDependenciesMeta": {
@@ -92,6 +97,9 @@
       "optional": true
     },
     "@tanstack/react-router": {
+      "optional": true
+    },
+    "date-fns": {
       "optional": true
     }
   },
@@ -128,6 +136,7 @@
   "devDependencies": {
     "@tanstack/react-query": "^5.95.0",
     "@tanstack/react-router": "^1.168.0",
+    "date-fns": "^4.1.0",
     "@tanstack/react-table": "^8.20.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

@@ -35,6 +35,10 @@
     "./errors": {
       "types": "./dist/errors.d.ts",
       "import": "./dist/errors.js"
+    },
+    "./show-submitted-data": {
+      "types": "./dist/show-submitted-data.d.ts",
+      "import": "./dist/show-submitted-data.js"
     }
   },
   "scripts": {
@@ -45,16 +49,22 @@
   },
   "peerDependencies": {
     "date-fns": ">=3",
+    "react": ">=18",
     "sonner": ">=1.7"
   },
   "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
     "sonner": {
       "optional": true
     }
   },
   "dependencies": {},
   "devDependencies": {
+    "@types/react": "^19.2.14",
     "date-fns": "^4.1.0",
+    "react": "^19.2.4",
     "sonner": "^2.0.0",
     "typescript": "^5.6.0"
   },
