@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-fullstack-example",
-  "version": "0.1.20",
+  "version": "0.1.21",
   "private": true,
   "type": "module",
   "description": "End-to-end fullstack starter: ~50 LOC backend + ~500 LOC frontend powered by metacore",

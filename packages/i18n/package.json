@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-i18n",
-  "version": "5.0.1",
+  "version": "5.1.0",
   "description": "Metacore i18n — i18next factory, base ES/EN bundles, language switcher, RTL provider",
   "license": "Apache-2.0",
   "repository": {
