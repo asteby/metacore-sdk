@@ -119,6 +119,24 @@ function AddonInstallListener({
           await api.post('/marketplace/install', req)
         }
         toast.success('Addon instalado', { id: toastId })
+        // Wipe the metadata cache so the sidebar / dashboard refresh
+        // the next time they read /metadata/all and pick up whatever
+        // models the new addon registered. No-op when the cache module
+        // shape changes — best-effort.
+        try {
+          const state = useMetadataCache.getState() as any
+          if (state?.cache) {
+            for (const k of Object.keys(state.cache)) delete state.cache[k]
+          }
+          if (state?.modalCache) {
+            for (const k of Object.keys(state.modalCache)) delete state.modalCache[k]
+          }
+          if (typeof state?.set === 'function') {
+            state.set({ prefetched: false })
+          }
+        } catch {
+          /* best-effort */
+        }
         e.source?.postMessage(
           { type: 'metacore:installed', addonKey: req.addonKey },
           { targetOrigin: '*' } as WindowPostMessageOptions,
