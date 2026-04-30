@@ -585,6 +585,9 @@ importers:
       '@asteby/metacore-auth':
         specifier: workspace:*
         version: link:../auth
+      '@asteby/metacore-runtime-react':
+        specifier: workspace:*
+        version: link:../runtime-react
       '@asteby/metacore-sdk':
         specifier: workspace:*
         version: link:../sdk
