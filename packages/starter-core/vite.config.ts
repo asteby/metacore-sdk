@@ -53,7 +53,6 @@ export default defineConfig({
         'sonner',
         'tailwind-merge',
         'zod',
-        '@monaco-editor/react',
       ],
       output: {
         preserveModules: false,

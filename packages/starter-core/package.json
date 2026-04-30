@@ -1,7 +1,7 @@
 {
   "name": "@asteby/metacore-starter-core",
-  "version": "4.0.0",
-  "description": "Metacore starter core — shared providers, stores, hooks y context que consumen las apps Vite+React que embeden el kernel.",
+  "version": "5.0.0",
+  "description": "Metacore starter core \u2014 shared providers, stores, hooks y context que consumen las apps Vite+React que embeden el kernel.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -31,6 +31,7 @@
   },
   "peerDependencies": {
     "@asteby/metacore-auth": "workspace:^",
+    "@asteby/metacore-runtime-react": "workspace:^",
     "@asteby/metacore-sdk": "workspace:^",
     "@asteby/metacore-theme": "workspace:^",
     "@asteby/metacore-ui": "workspace:^",
@@ -78,10 +79,10 @@
   },
   "devDependencies": {
     "@asteby/metacore-auth": "workspace:*",
+    "@asteby/metacore-runtime-react": "workspace:*",
     "@asteby/metacore-sdk": "workspace:*",
     "@asteby/metacore-theme": "workspace:*",
     "@asteby/metacore-ui": "workspace:*",
-    "@monaco-editor/react": "^4.7.0",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-avatar": "^1.1.11",
