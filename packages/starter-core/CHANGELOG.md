@@ -1,5 +1,39 @@
 # @asteby/metacore-starter-core
 
+## 6.0.0
+
+### Major Changes
+
+- 738f41b: Split Monaco editor into opt-in `@asteby/metacore-starter-monaco` package.
+
+  **Breaking** — `CodeEditor` no longer ships from `@asteby/metacore-starter-core`. Apps that used it must:
+  1. `pnpm add @asteby/metacore-starter-monaco @monaco-editor/react`
+  2. Update import: `import { CodeEditor } from '@asteby/metacore-starter-monaco'`
+  3. Pass `theme` as a prop (the new package is decoupled from `starter-core`'s theme provider).
+
+  Apps that did not use `CodeEditor` save the full Monaco bundle (~2MB pre-gzip) and the `@monaco-editor/react` peer dependency.
+
+  Also fixes a missing peer dependency: `@asteby/metacore-runtime-react` is now declared as a `peerDependency` of `starter-core` (was imported by internal shims under `components/dynamic/*` without being declared).
+
+### Patch Changes
+
+- 64de425: Replace the duplicated `direction-provider`, `font-provider`, `layout-provider`, and `search-provider` files under `src/context/` with thin re-exports from `@asteby/metacore-app-providers`, which is the source of truth for transport-agnostic context providers in the metacore ecosystem.
+
+  The duplicates were never part of starter-core's published surface (the package only ships `lib/` + `components/ui/` from `src/index.ts`), so this is a no-op for consumers — but it removes ~250 lines of drift-prone copy/paste and ensures any future tweak to a provider lands in one place.
+
+  Two real divergences from the legacy starter copies are intentional and live in the source of truth:
+  - `FontProvider` now requires an explicit `fonts` prop (use `import { fonts } from '@asteby/metacore-starter-config/fonts'`) instead of reading a hard-coded list.
+  - `SearchProvider` no longer auto-renders `<CommandMenu />`; apps mount their own command menu inside the authenticated layout.
+
+- Updated dependencies [c91d778]
+- Updated dependencies [0e8db78]
+- Updated dependencies [64de425]
+  - @asteby/metacore-sdk@2.3.0
+  - @asteby/metacore-theme@2.0.0
+  - @asteby/metacore-ui@2.0.0
+  - @asteby/metacore-runtime-react@8.0.0
+  - @asteby/metacore-auth@7.0.0
+
 ## 4.0.0
 
 ### Patch Changes
