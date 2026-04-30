@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-starter-monaco",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Opt-in Monaco editor wrapper extracted from @asteby/metacore-starter-core. Apps without an embedded code editor avoid the ~2MB Monaco bundle entirely.",
   "license": "Apache-2.0",
   "repository": {

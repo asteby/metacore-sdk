@@ -1,7 +1,7 @@
 {
   "name": "@asteby/metacore-starter-core",
-  "version": "5.0.0",
-  "description": "Metacore starter core \u2014 shared providers, stores, hooks y context que consumen las apps Vite+React que embeden el kernel.",
+  "version": "6.0.0",
+  "description": "Metacore starter core — shared providers, stores, hooks y context que consumen las apps Vite+React que embeden el kernel.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
