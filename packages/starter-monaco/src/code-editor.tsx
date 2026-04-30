@@ -1,10 +1,12 @@
 import { useRef, useState } from 'react'
 import Editor, { type OnMount, type BeforeMount } from '@monaco-editor/react'
-import { useTheme } from '../../context/theme-provider'
 import { Loader2 } from 'lucide-react'
-import { cn } from '../../lib/utils'
 
-interface CodeEditorProps {
+function cn(...classes: Array<string | false | null | undefined>): string {
+    return classes.filter(Boolean).join(' ')
+}
+
+export interface CodeEditorProps {
     value: string
     onChange?: (value: string | undefined) => void
     language?: 'json' | 'sql' | 'javascript' | 'typescript' | 'plaintext'
@@ -13,6 +15,7 @@ interface CodeEditorProps {
     minimap?: boolean
     onDrop?: (text: string) => void
     disableValidation?: boolean
+    theme?: 'dark' | 'light'
 }
 
 export function CodeEditor({
@@ -24,9 +27,9 @@ export function CodeEditor({
     minimap = false,
     onDrop,
     disableValidation = false,
+    theme = 'light',
 }: CodeEditorProps) {
-    const { theme } = useTheme()
-    const editorRef = useRef<any>(null)
+    const editorRef = useRef<unknown>(null)
     const [isDragOver, setIsDragOver] = useState(false)
 
     const handleEditorWillMount: BeforeMount = (monaco) => {
@@ -47,12 +50,13 @@ export function CodeEditor({
             padding: { top: 8, bottom: 8 },
         })
 
-        // Disable validation markers if requested
         if (disableValidation) {
-            monaco.editor.setModelMarkers(editor.getModel()!, 'json', [])
+            const model = editor.getModel()
+            if (model) {
+                monaco.editor.setModelMarkers(model, 'json', [])
+            }
         }
 
-        // Enable drop on the editor
         const domNode = editor.getDomNode()
         if (domNode) {
             domNode.addEventListener('dragover', (e: DragEvent) => {
@@ -71,47 +75,47 @@ export function CodeEditor({
                 e.stopPropagation()
                 setIsDragOver(false)
 
-                const droppedText = e.dataTransfer?.getData('variable') || e.dataTransfer?.getData('text/plain')
+                const droppedText =
+                    e.dataTransfer?.getData('variable') || e.dataTransfer?.getData('text/plain')
                 if (!droppedText) return
 
-                // Get drop position in editor coordinates
                 const target = editor.getTargetAtClientPoint(e.clientX, e.clientY)
-                
+
                 if (target?.position) {
-                    // Insert at drop position
                     const position = target.position
-                    editor.executeEdits('drop', [{
-                        range: {
-                            startLineNumber: position.lineNumber,
-                            startColumn: position.column,
-                            endLineNumber: position.lineNumber,
-                            endColumn: position.column,
+                    editor.executeEdits('drop', [
+                        {
+                            range: {
+                                startLineNumber: position.lineNumber,
+                                startColumn: position.column,
+                                endLineNumber: position.lineNumber,
+                                endColumn: position.column,
+                            },
+                            text: droppedText,
                         },
-                        text: droppedText,
-                    }])
-                    // Move cursor after inserted text
+                    ])
                     editor.setPosition({
                         lineNumber: position.lineNumber,
                         column: position.column + droppedText.length,
                     })
                     editor.focus()
                 } else {
-                    // Fallback: insert at current cursor or end
                     const currentPosition = editor.getPosition()
                     if (currentPosition) {
-                        editor.executeEdits('drop', [{
-                            range: {
-                                startLineNumber: currentPosition.lineNumber,
-                                startColumn: currentPosition.column,
-                                endLineNumber: currentPosition.lineNumber,
-                                endColumn: currentPosition.column,
+                        editor.executeEdits('drop', [
+                            {
+                                range: {
+                                    startLineNumber: currentPosition.lineNumber,
+                                    startColumn: currentPosition.column,
+                                    endLineNumber: currentPosition.lineNumber,
+                                    endColumn: currentPosition.column,
+                                },
+                                text: droppedText,
                             },
-                            text: droppedText,
-                        }])
+                        ])
                     }
                 }
 
-                // Trigger onChange with new value
                 const newValue = editor.getValue()
                 onChange?.(newValue)
                 onDrop?.(droppedText)
@@ -120,10 +124,10 @@ export function CodeEditor({
     }
 
     return (
-        <div 
+        <div
             className={cn(
-                "border rounded-md overflow-hidden bg-background transition-all duration-200",
-                isDragOver && "ring-2 ring-violet-500 ring-offset-2 border-violet-500"
+                'border rounded-md overflow-hidden bg-background transition-all duration-200',
+                isDragOver && 'ring-2 ring-violet-500 ring-offset-2 border-violet-500'
             )}
         >
             <Editor
