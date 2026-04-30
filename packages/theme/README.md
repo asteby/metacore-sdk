@@ -9,6 +9,14 @@ Ships the canonical Metacore visual language:
 - Font families (`Inter`, `Lora`, `IBM Plex Mono`)
 - `@theme inline` block mapping tokens to Tailwind v4 utilities
 
+## Stability
+
+Stable as of v1.0. The token names, CSS variable contract (`--primary`,
+`--background`, `--sidebar-*`, ...), `themeConfig` shape and the public
+exports below follow semver. Internal `oklch` values may shift in minor
+releases when the palette is re-tuned; if your UI depends on exact color
+values, pin to a minor range.
+
 ## Install
 
 ```bash
@@ -64,6 +72,10 @@ import { themeConfig } from '@asteby/metacore-theme/preset'
 
 Apply the `.dark` class to `<html>` or any ancestor. A `@custom-variant dark` is
 registered so Tailwind utilities like `dark:bg-card` work out of the box.
+
+The bundled `<ThemeProvider>` (light/dark/system, cookie-persisted) is the
+recommended entry; consumer apps can drop their local copies and use
+`useTheme()` for the toggle UI.
 
 ## License
 

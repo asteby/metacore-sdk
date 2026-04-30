@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-theme",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "description": "Metacore design tokens + Tailwind 4 preset (oklch, shadows, fonts, dark mode)",
   "license": "Apache-2.0",
   "repository": {

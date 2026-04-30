@@ -3,6 +3,14 @@
 Shared build & lint configs for metacore host applications.
 Centralizes Tailwind 4, TypeScript, Vite, and ESLint so apps extend instead of copy.
 
+## Stability
+
+Stable as of v1.0. The four exported subpaths (`./tailwind`, `./tsconfig`,
+`./vite`, `./eslint`) plus `./fonts` follow semver. The exact set of plugins
+wired by `defineMetacoreConfig()` may grow in minor releases (e.g. new
+optional integrations); the option object is additive and existing options
+will not change shape inside the major.
+
 ## Install
 
 ```bash
@@ -16,12 +24,13 @@ Plus the relevant peers (most apps already have these): `vite`, `@vitejs/plugin-
 
 ## Exports
 
-| Subpath | What it gives you |
+| Subpath       | What it gives you |
 |---|---|
 | `./tailwind`  | Tailwind v4 preset (safelist, plugins hook). Tokens live in `@asteby/metacore-theme/tokens.css`. |
 | `./tsconfig`  | Base `compilerOptions` (strict, Bundler, ES2020, JSX). Paths are **empty** — apps define their own. |
-| `./vite`      | `defineMetacoreConfig()` factory with React SWC + Tailwind + optional TanStack Router + optional PWA. |
+| `./vite`      | `defineMetacoreConfig()` factory with React SWC + Tailwind + optional TanStack Router + optional PWA. Also exports `metacoreOptimizeDeps` / `metacoreOptimizeDepsInclude` for apps that build their own Vite config. |
 | `./eslint`    | Flat ESLint config array (TS, react-hooks, react-refresh, TanStack Query). |
+| `./fonts`     | Canonical `fonts` tuple (`['inter', 'manrope', 'system']`) and `Font` type — single source of truth for `<FontProvider fonts={...} />`. |
 
 ## Usage
 
@@ -86,8 +95,21 @@ export default defineConfig(
 )
 ```
 
-## Status
+### Pre-bundling linked SDK packages
 
-- `0.1.0` — first extraction from `metacore-starter`. Apps should migrate opportunistically.
+Apps that consume `@asteby/metacore-*` via `file:` or `workspace:` need Vite
+to pre-bundle them or the browser sees bare specifiers. `defineMetacoreConfig()`
+already wires this. If you build your own Vite config, import the same list:
+
+```ts
+import { metacoreOptimizeDeps } from '@asteby/metacore-starter-config/vite'
+
+export default defineConfig({
+  optimizeDeps: metacoreOptimizeDeps,
+})
+```
+
+## Notes
+
 - PWA icon set is **not** embedded (apps own their assets); pass `icons` via options.
 - Design tokens (colors, fonts, shadows) remain in `@asteby/metacore-theme`.
