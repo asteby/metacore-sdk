@@ -2,7 +2,7 @@ module github.com/asteby/metacore-sdk
 
 go 1.25.7
 
-require github.com/asteby/metacore-kernel v0.8.0
+require github.com/asteby/metacore-kernel v0.8.1
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
@@ -19,7 +19,7 @@ require (
 	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/klauspost/compress v1.18.5 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
-	github.com/mattn/go-isatty v0.0.21 // indirect
+	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
