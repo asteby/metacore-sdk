@@ -40,6 +40,16 @@ export {
     type DynamicCRUDPageClasses,
 } from './dynamic-crud-page'
 export {
+    DynamicRelation,
+    type DynamicRelationProps,
+    type DynamicRelationStrings,
+    type DynamicRelationKind,
+    buildRelationFilterParams,
+    buildCreatePayload,
+    deriveRelationFormFields,
+    relationRowKey,
+} from './dynamic-relation'
+export {
     registerModelExtension,
     getModelExtension,
     clearModelExtensions,
