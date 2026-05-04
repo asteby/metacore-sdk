@@ -20,12 +20,15 @@ export type {
   ToolDef,
   ToolInputParam,
   ActionDef,
+  ActionTrigger,
   FieldDef,
   HookDef,
   HookTarget,
   ModelExtension,
   ModelDefinition,
   ColumnDef,
+  RelationDef,
+  ValidationRule,
   Signature,
 } from "./generated/manifest";
 
