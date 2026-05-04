@@ -53,6 +53,8 @@ github.com/Masterminds/semver/v3 v3.3.0 h1:B8LGeaivUe71a5qox1ICM/JLl0NqZSW5CHyL+
 github.com/Masterminds/semver/v3 v3.3.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/Masterminds/semver/v3 v3.4.0 h1:Zog+i5UMtVoCU8oKka5P7i9q9HgrJeGzI9SA1Xbatp0=
 github.com/Masterminds/semver/v3 v3.4.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
+github.com/Masterminds/semver/v3 v3.5.0 h1:kQceYJfbupGfZOKZQg0kou0DgAKhzDg2NZPAwZ/2OOE=
+github.com/Masterminds/semver/v3 v3.5.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/OneOfOne/xxhash v1.2.2/go.mod h1:HSdplMjZKSmBqAxg5vPj2TmRDmfkzw+cTzAElWljhcU=
 github.com/alecthomas/template v0.0.0-20160405071501-a0175ee3bccc/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
 github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751/go.mod h1:LOuyumcjzFXgccqObfd/Ljyb9UuFJ6TxHnclSeseNhc=
@@ -82,6 +84,8 @@ github.com/asteby/metacore-kernel v0.8.0 h1:KS5Rr4Ec6Io5bcu+pl7OkTDbE5q1BsROw2ce
 github.com/asteby/metacore-kernel v0.8.0/go.mod h1:6na9/8g8rWLBX8iyJyqBYBeBOIingl2m4JHTXo5BqtE=
 github.com/asteby/metacore-kernel v0.8.1 h1:kbNSZKvGcsHhPsKAniYNN2XZaqql1ESfEeW1vrk0FaI=
 github.com/asteby/metacore-kernel v0.8.1/go.mod h1:8PGVEdWCYWOczcR/xFF6Fk2h1/iUC8P0mnd2rRQRAgs=
+github.com/asteby/metacore-kernel v0.8.2 h1:6WodP+IKq7FYsfEtUkmDY0Fyu+n1EhRHUz6qzw90DSg=
+github.com/asteby/metacore-kernel v0.8.2/go.mod h1:ZTbdSTRn19Usac+ccqXrBVHCNuhTkqOS+dqdOvWyYes=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/beorn7/perks v1.0.0/go.mod h1:KWe93zE9D1o94FZ5RNwFwVgaQK1VOXiVxmqh+CedLV8=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
