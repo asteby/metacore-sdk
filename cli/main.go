@@ -98,8 +98,92 @@ func cmdValidate(args []string) error {
 	if err := m.Validate(manifest.APIVersion); err != nil {
 		return fmt.Errorf("manifest invalid: %w", err)
 	}
+	if err := validateActionTriggerExports(filepath.Join(path, "manifest.json")); err != nil {
+		return fmt.Errorf("manifest invalid: %w", err)
+	}
 	fmt.Printf("ok: %s@%s passes validation against kernel %s\n", m.Key, m.Version, manifest.APIVersion)
 	return nil
+}
+
+// validateActionTriggerExports parses manifest.json a second time as raw JSON
+// and enforces that every ActionDef.Trigger with Type="wasm" names an export
+// declared in BackendSpec.Exports. The check lives in the CLI (not just the
+// kernel's manifest.Validate) so addon authors get a stable, version-pinned
+// failure message regardless of which tagged kernel the SDK pulls — the kernel
+// learned the same rule in a later release, this is the matching guard the CLI
+// owns. The walk is intentionally tolerant of unrelated keys: it only rejects
+// the precise Trigger.Export ↔ Backend.Exports mismatch and leaves every other
+// shape concern to the kernel's own m.Validate.
+func validateActionTriggerExports(manifestPath string) error {
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return fmt.Errorf("read manifest: %w", err)
+	}
+	var raw struct {
+		Backend struct {
+			Runtime string   `json:"runtime"`
+			Exports []string `json:"exports"`
+		} `json:"backend"`
+		Actions    map[string][]actionRaw `json:"actions"`
+		Extensions []struct {
+			Model   string      `json:"model"`
+			Actions []actionRaw `json:"actions"`
+		} `json:"extensions"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("parse manifest: %w", err)
+	}
+	exports := make(map[string]struct{}, len(raw.Backend.Exports))
+	for _, e := range raw.Backend.Exports {
+		exports[e] = struct{}{}
+	}
+	check := func(prefix string, a actionRaw) error {
+		if a.Trigger == nil || a.Trigger.Type != "wasm" {
+			return nil
+		}
+		if strings.TrimSpace(a.Trigger.Export) == "" {
+			return fmt.Errorf("%s: trigger.export required when type=wasm", prefix)
+		}
+		if _, ok := exports[a.Trigger.Export]; !ok {
+			return fmt.Errorf("%s: trigger.export %q not declared in backend.exports", prefix, a.Trigger.Export)
+		}
+		return nil
+	}
+	// Sort model keys so the first failure is deterministic across runs and
+	// addon authors hit the same error twice in a row.
+	models := make([]string, 0, len(raw.Actions))
+	for model := range raw.Actions {
+		models = append(models, model)
+	}
+	sort.Strings(models)
+	for _, model := range models {
+		for i, a := range raw.Actions[model] {
+			if err := check(fmt.Sprintf("actions[%q][%d]", model, i), a); err != nil {
+				return err
+			}
+		}
+	}
+	for i, ext := range raw.Extensions {
+		for j, a := range ext.Actions {
+			if err := check(fmt.Sprintf("extensions[%d].actions[%d]", i, j), a); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// actionRaw is the minimal shape validateActionTriggerExports needs from each
+// ActionDef. It mirrors the kernel manifest.ActionDef.Trigger discriminator
+// without depending on its struct definition so the check runs unchanged
+// against older kernel modules that pre-date the field.
+type actionRaw struct {
+	Key     string `json:"key"`
+	Trigger *struct {
+		Type    string `json:"type"`
+		Export  string `json:"export"`
+		RunInTx bool   `json:"run_in_tx"`
+	} `json:"trigger"`
 }
 
 // ---------------------------------------------------------------------------
@@ -336,6 +420,15 @@ func cmdInit(args []string) error {
 			Format: "federation",
 			Expose: "./plugin",
 		},
+		// The scaffold ships a wasm backend with one example action so
+		// `metacore validate` exercises the trigger.export ↔ backend.exports
+		// contract out of the box. The compiled module is not produced by
+		// `init` — `metacore compile-wasm` writes backend/backend.wasm later.
+		Backend: &manifest.BackendSpec{
+			Runtime: "wasm",
+			Entry:   "backend/backend.wasm",
+			Exports: []string{"Echo"},
+		},
 	}
 	if err := m.Validate(manifest.APIVersion); err != nil {
 		return fmt.Errorf("scaffold would be invalid: %w", err)
@@ -349,6 +442,18 @@ func cmdInit(args []string) error {
 	}
 
 	mb, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	// Inject the example wasm-trigger action via a raw-JSON merge. The
+	// action.trigger discriminator lands in the kernel manifest tag that
+	// follows v0.8.1 (the version the SDK currently pins), so the typed
+	// manifest.ActionDef imported above does not yet expose a Trigger
+	// field. Writing the action as a map[string]any keeps `metacore init`
+	// emitting the v2 contract today; the on-disk `metacore validate`
+	// re-parses the trigger ↔ backend.exports rule from raw JSON regardless
+	// of which kernel tag is linked.
+	mb, err = injectScaffoldAction(mb, key+"_items", "echo", "Echo")
 	if err != nil {
 		return err
 	}
@@ -403,4 +508,39 @@ func readManifest(dir string) (*manifest.Manifest, error) {
 		return nil, fmt.Errorf("parse manifest: %w", err)
 	}
 	return &m, nil
+}
+
+// injectScaffoldAction merges a single ActionDef with a wasm Trigger into the
+// raw manifest JSON produced by `metacore init`. The merge happens at the JSON
+// layer (not the typed manifest.Manifest) because the kernel module the SDK
+// currently links — v0.8.1 — predates the ActionTrigger discriminator landing
+// in manifest.ActionDef. Writing the action as a map keeps the scaffold
+// emitting the v2 contract regardless of which kernel tag the SDK is built
+// against; the on-disk `metacore validate` already parses the trigger via raw
+// JSON so it accepts the result. When the SDK bumps to a kernel that exposes
+// ActionTrigger natively this helper can be inlined back into the typed
+// Manifest literal in cmdInit.
+func injectScaffoldAction(manifestJSON []byte, model, actionKey, export string) ([]byte, error) {
+	var raw map[string]any
+	if err := json.Unmarshal(manifestJSON, &raw); err != nil {
+		return nil, fmt.Errorf("scaffold remarshal: %w", err)
+	}
+	raw["actions"] = map[string]any{
+		model: []any{
+			map[string]any{
+				"key":   actionKey,
+				"name":  actionKey,
+				"label": strings.Title(actionKey), //nolint:staticcheck
+				"trigger": map[string]any{
+					"type":   "wasm",
+					"export": export,
+				},
+			},
+		},
+	}
+	out, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("scaffold remarshal: %w", err)
+	}
+	return out, nil
 }

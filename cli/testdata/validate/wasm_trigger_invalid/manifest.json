@@ -1,0 +1,26 @@
+{
+  "key": "tickets",
+  "name": "Tickets",
+  "description": "Demo manifest where the wasm trigger references an export the backend never declares.",
+  "version": "0.1.0",
+  "category": "utility",
+  "kernel": ">=2.0.0 <3.0.0",
+  "backend": {
+    "runtime": "wasm",
+    "entry": "backend/backend.wasm",
+    "exports": ["ResolveTicket"]
+  },
+  "actions": {
+    "tickets": [
+      {
+        "key": "escalate",
+        "name": "escalate",
+        "label": "Escalate",
+        "trigger": {
+          "type": "wasm",
+          "export": "EscalateTicket"
+        }
+      }
+    ]
+  }
+}
