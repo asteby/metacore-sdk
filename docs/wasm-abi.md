@@ -1,11 +1,20 @@
-# WASM ABI (v1)
+# WASM ABI (v1.1 — proposal)
 
 The metacore kernel can run addon backends as sandboxed WebAssembly modules
 via [wazero](https://wazero.io). This document is the contract between the
 guest (your addon) and the host (the kernel).
 
-> ABI version: **1**. Bundled via `manifest.backend.runtime = "wasm"`.
+> ABI version: **1.1** (proposal — `db_query` host import added, no breaking
+> changes vs. v1).
+> Bundled via `manifest.backend.runtime = "wasm"`.
 > Implementation: `kernel/runtime/wasm/abi.go`.
+
+### Version history
+
+| Version | Status   | Changes |
+|---------|----------|---------|
+| 1.0     | shipped  | initial surface: `log`, `env_get`, `http_fetch`. |
+| 1.1     | proposal | adds `db_query` host import; guests built against 1.0 keep working. |
 
 ## 1. Declaration
 
@@ -66,6 +75,12 @@ env_get(keyPtr i32, keyLen i32) -> i64
 http_fetch(urlPtr, urlLen, methPtr, methLen, bodyPtr, bodyLen i32) -> i64
   -> packed (ptr, len) of the response body. Subject to the addon's
      `http:fetch` capabilities and the egress SSRF guard (see capabilities.md).
+
+db_query(sqlPtr i32, sqlLen i32, argsPtr i32, argsLen i32) -> i64   [v1.1]
+  -> packed (ptr, len) of a JSON envelope with rows. Scoped to the addon's
+     own schema (`SET LOCAL search_path TO addon_<key>, public` per call) and
+     gated by `db:read` capabilities for any cross-schema reference. Read-only
+     in v1.1 — see § 9 for the full contract.
 ```
 
 The host allocates response buffers inside guest memory via `alloc`, writes
@@ -162,8 +177,203 @@ result, tool invocation). Panics and abort traps are reported as
 Host imports check the addon's compiled capabilities before execution:
 
 - `http_fetch` calls `Capabilities.CanFetch(url)`.
-- No raw DB access from WASM — instead declare `db:read` / `db:write` and
-  call the dedicated database import surface (roadmap, v2 ABI).
+- `db_query` (v1.1) parses the SQL, walks every referenced relation, and
+  calls `Capabilities.CanReadModel(<schema>.<table>)` for any reference
+  that resolves outside `addon_<key>`. The owning addon's own schema is
+  always permitted (implicit `addon_<key>.*`).
 
 If an import is denied, the host returns a packed buffer whose JSON payload
 contains `{"error":{"code":"forbidden","message":"..."}}`.
+
+## 9. `db_query` — scoped read-only SQL (v1.1)
+
+`db_query` is the dedicated database import. It is intentionally narrow: a
+single read-only statement, scoped to the addon's schema, parameterised, and
+capability-checked. Mutating SQL belongs to a separate `db_exec` import that
+will land in a future minor version.
+
+### 9.1 Signature
+
+```
+db_query(sqlPtr i32, sqlLen i32, argsPtr i32, argsLen i32) -> i64
+```
+
+| Param      | Type | Meaning                                                                |
+|------------|------|------------------------------------------------------------------------|
+| `sqlPtr`   | i32  | Guest pointer to the SQL text.                                         |
+| `sqlLen`   | i32  | Length in bytes (UTF-8). Hard cap: 16 KiB.                             |
+| `argsPtr`  | i32  | Guest pointer to a JSON array of positional arguments. May be `0`.     |
+| `argsLen`  | i32  | Length of the JSON array buffer. `0` if the query has no parameters.   |
+| **return** | i64  | Packed `(ptr<<32)\|len` of the response envelope (see § 9.4).          |
+
+A return of `0` is reserved and currently never produced — `db_query` always
+allocates an envelope, even for zero-row results.
+
+### 9.2 SQL contract
+
+- **Read-only**: only `SELECT` (and `WITH … SELECT`) is accepted in v1.1.
+  Any other top-level statement (`INSERT`, `UPDATE`, `DELETE`, `MERGE`,
+  `CREATE`, `DROP`, `ALTER`, `TRUNCATE`, `COPY`, `GRANT`, `SET`, `CALL`,
+  `DO`, `LISTEN`, `NOTIFY`, `BEGIN`, `COMMIT`) is rejected with
+  `invalid_sql`.
+- **Single statement**: the input is parsed into a statement list and must
+  contain exactly one node. Trailing `;` is tolerated; multi-statement
+  payloads are rejected with `invalid_sql`.
+- **Parameters**: positional placeholders use Postgres syntax (`$1`, `$2`,
+  …). The arg count must equal the highest placeholder index — otherwise
+  `arg_count_mismatch`.
+- **No `SET search_path`**: the host issues `SET LOCAL search_path` on
+  every call and rejects guest-side overrides at parse time.
+- **No `pg_*` / `information_schema`** lookups in v1.1 — these are
+  filtered to keep the surface explainable. (Schema introspection has its
+  own dedicated import on the roadmap.)
+
+### 9.3 Schema scope & capability check
+
+The host wraps every invocation in a transaction-scoped `SET LOCAL
+search_path TO addon_<key>, public`. Bare table names therefore resolve
+against the addon's own schema first.
+
+For each parsed relation reference the host computes a fully-qualified
+`<schema>.<table>` and decides:
+
+| Reference                         | Outcome                                                                  |
+|-----------------------------------|--------------------------------------------------------------------------|
+| Bare name resolved into `addon_<key>` | Allowed. Implicit `addon_<key>.*` capability.                        |
+| `addon_<key>.<table>` (qualified) | Allowed.                                                                 |
+| `public.<table>` or other schema  | Requires `db:read <schema>.<table>` or `db:read <schema>.*`.             |
+| `pg_*` / `information_schema.*`   | Always denied (`forbidden`, `reason: "introspection_disabled"`).         |
+
+Cross-tenant scoping (org filters) is **orthogonal** and applied by the
+host transparently for any model that carries an `org_id` column — see
+`kernel/docs/permissions.md` for the row-level rules.
+
+### 9.4 Response envelope
+
+The response follows the kernel `{success, data, meta}` convention:
+
+```json
+{
+  "success": true,
+  "data": {
+    "rows":    [ { "id": 1, "title": "..." }, … ],
+    "rowCount": 42,
+    "columns": [
+      { "name": "id",    "type": "int8" },
+      { "name": "title", "type": "text" }
+    ]
+  },
+  "meta": {
+    "schema":     "addon_tickets",
+    "durationMs": 7,
+    "truncated":  false
+  }
+}
+```
+
+Errors share the same outer shape:
+
+```json
+{
+  "success": false,
+  "error":   { "code": "forbidden", "message": "addon \"tickets\" lacks db:read \"billing.invoices\"" },
+  "meta":    { "schema": "addon_tickets", "durationMs": 1 }
+}
+```
+
+Defined error codes:
+
+| Code                  | When                                                                |
+|-----------------------|---------------------------------------------------------------------|
+| `invalid_sql`         | Parse failure, multi-statement, non-`SELECT`, banned construct.     |
+| `arg_count_mismatch`  | Highest `$N` placeholder ≠ JSON args length.                        |
+| `arg_decode`          | `argsPtr/argsLen` is not valid JSON or contains an unsupported type.|
+| `forbidden`           | Capability check failed for one of the referenced relations.        |
+| `query_timeout`       | Statement exceeded the per-call DB deadline (default 5 s, see § 9.5).|
+| `row_limit_exceeded`  | Result set exceeded the configured row cap (default 10 000).        |
+| `db_error`            | Underlying driver/SQL error (message redacted, code preserved).     |
+
+### 9.5 Limits
+
+| Knob                | Default | Configurable via                                  |
+|---------------------|---------|---------------------------------------------------|
+| Max SQL length      | 16 KiB  | host-side (`runtime/wasm` config).                |
+| Max args            | 64      | host-side.                                        |
+| Per-call deadline   | 5 s     | bounded by `manifest.backend.timeout_ms` (lower wins). |
+| Max rows            | 10 000  | host-side; emits `row_limit_exceeded` past it.    |
+| Max response bytes  | 8 MiB   | host-side; mirrors the `http_fetch` cap.          |
+
+### 9.6 Allowed argument types
+
+JSON args are decoded into the driver's native types as follows:
+
+| JSON                      | Postgres parameter type    |
+|---------------------------|----------------------------|
+| `null`                    | `NULL`                     |
+| `true` / `false`          | `bool`                     |
+| integer literal           | `int8`                     |
+| floating literal          | `float8`                   |
+| string                    | `text`                     |
+| `{"$bytes": "<base64>"}`  | `bytea`                    |
+| `{"$uuid":  "<uuid>"}`    | `uuid`                     |
+| `{"$ts":    "<RFC3339>"}` | `timestamptz`              |
+
+Plain JSON arrays/objects are rejected with `arg_decode` — the driver-level
+`jsonb` round-trip is intentionally explicit (`{"$jsonb": …}` is reserved
+for v1.2 once nested encoding is finalised).
+
+### 9.7 Minimal TinyGo example
+
+```go
+//go:wasmimport metacore_host db_query
+func hostDBQuery(sqlPtr, sqlLen, argsPtr, argsLen uint32) uint64
+
+func listOpenTickets(assignee string) ([]byte, error) {
+	const sql = "SELECT id, title FROM tickets WHERE assignee = $1 AND status = 'open'"
+	args := []byte(`["` + assignee + `"]`) // pre-escape for the example
+
+	sp := uint32(uintptr(unsafe.Pointer(unsafe.StringData(sql))))
+	ap := uint32(uintptr(unsafe.Pointer(&args[0])))
+	res := hostDBQuery(sp, uint32(len(sql)), ap, uint32(len(args)))
+	if res == 0 {
+		return nil, errors.New("empty response")
+	}
+	ptr := uint32(res >> 32)
+	n   := uint32(res)
+	return unsafe.Slice((*byte)(unsafe.Pointer(uintptr(ptr))), n), nil
+}
+```
+
+The TypeScript SDK ships a thin wrapper (`@asteby/metacore-addon-sdk`):
+
+```ts
+const { rows } = await db.query<{ id: number; title: string }>(
+  'SELECT id, title FROM tickets WHERE assignee = $1',
+  [assignee],
+)
+```
+
+### 9.8 Manifest declarations
+
+Reading the addon's own schema needs no declaration. Reading anything else
+requires explicit capabilities — same as today:
+
+```json
+"capabilities": [
+  { "kind": "db:read", "target": "users",          "reason": "Show ticket author names" },
+  { "kind": "db:read", "target": "addon_billing.*", "reason": "Cross-link invoices" }
+]
+```
+
+### 9.9 Out of scope for v1.1
+
+These are deliberately **not** in v1.1 and will land as separate proposals
+once the read path is exercised in production:
+
+- `db_exec` for `INSERT`/`UPDATE`/`DELETE`. Will require additional
+  audit hooks and an outbox-style write log.
+- Streaming cursors. v1.1 buffers the full result set in host memory; large
+  reports should pre-aggregate in SQL.
+- Prepared-statement caching across invocations. Each call re-prepares.
+- Schema introspection (`information_schema`). A dedicated import will
+  expose a curated subset.

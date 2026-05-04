@@ -53,6 +53,28 @@ export interface ActionCondition {
     value: string | string[]
 }
 
+// Mirrors `ValidationRule` from packages/sdk/src/generated/manifest.ts. Kept
+// inline here so runtime-react does not import generated kernel types directly
+// — apps and addons author ActionFieldDef literals.
+export interface FieldValidation {
+    regex?: string
+    min?: number
+    max?: number
+    custom?: string
+}
+
+// Widget hints for the form renderer. Subset that DynamicForm knows how to
+// render today; unknown values fall back to the `type`-based default.
+export type FieldWidget =
+    | 'text'
+    | 'textarea'
+    | 'richtext'
+    | 'color'
+    | 'number'
+    | 'date'
+    | 'select'
+    | 'switch'
+
 export interface ActionFieldDef {
     key: string
     label: string
@@ -62,6 +84,8 @@ export interface ActionFieldDef {
     defaultValue?: any
     placeholder?: string
     searchEndpoint?: string
+    validation?: FieldValidation
+    widget?: FieldWidget | string
 }
 
 export interface ActionDefinition {

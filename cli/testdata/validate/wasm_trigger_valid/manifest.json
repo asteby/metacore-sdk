@@ -1,0 +1,36 @@
+{
+  "key": "tickets",
+  "name": "Tickets",
+  "description": "Demo manifest exercising the wasm action trigger.",
+  "version": "0.1.0",
+  "category": "utility",
+  "kernel": ">=2.0.0 <3.0.0",
+  "backend": {
+    "runtime": "wasm",
+    "entry": "backend/backend.wasm",
+    "exports": ["EscalateTicket", "ResolveTicket"]
+  },
+  "actions": {
+    "tickets": [
+      {
+        "key": "escalate",
+        "name": "escalate",
+        "label": "Escalate",
+        "trigger": {
+          "type": "wasm",
+          "export": "EscalateTicket",
+          "run_in_tx": true
+        }
+      },
+      {
+        "key": "resolve",
+        "name": "resolve",
+        "label": "Resolve",
+        "trigger": {
+          "type": "wasm",
+          "export": "ResolveTicket"
+        }
+      }
+    ]
+  }
+}

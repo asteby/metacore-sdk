@@ -24,6 +24,42 @@ const metacoreOptimizeDepsInclude = [
 const metacoreOptimizeDeps = {
   include: [...metacoreOptimizeDepsInclude]
 };
+const METACORE_FEDERATION_SINGLETONS = [
+  "react",
+  "react-dom",
+  "@asteby/metacore-runtime-react",
+  "@asteby/metacore-theme",
+  "@asteby/metacore-auth",
+  "@asteby/metacore-ui",
+  "@asteby/metacore-sdk"
+];
+function metacoreFederationShared(opts) {
+  const {
+    host,
+    apps,
+    filename = "remoteEntry.js",
+    exposes,
+    extras = [],
+    overrides = {}
+  } = opts;
+  const shared = {};
+  for (const name of METACORE_FEDERATION_SINGLETONS) {
+    shared[name] = { singleton: true, requiredVersion: false };
+  }
+  for (const name of extras) {
+    shared[name] ??= { singleton: true, requiredVersion: false };
+  }
+  for (const [name, override] of Object.entries(overrides)) {
+    shared[name] = { ...shared[name] ?? {}, ...override };
+  }
+  return {
+    name: host,
+    filename,
+    ...apps ? { remotes: { ...apps } } : {},
+    ...exposes ? { exposes: { ...exposes } } : {},
+    shared
+  };
+}
 async function defineMetacoreConfig(options = {}) {
   const {
     router = true,
@@ -87,7 +123,9 @@ async function defineMetacoreConfig(options = {}) {
   };
 }
 export {
+  METACORE_FEDERATION_SINGLETONS,
   defineMetacoreConfig,
+  metacoreFederationShared,
   metacoreOptimizeDeps,
   metacoreOptimizeDepsInclude
 };

@@ -20,6 +20,7 @@
     "@asteby/metacore-pwa": "workspace:*",
     "@asteby/metacore-runtime-react": "workspace:*",
     "@asteby/metacore-sdk": "workspace:*",
+    "@asteby/metacore-starter-config": "workspace:*",
     "@asteby/metacore-theme": "workspace:*",
     "@asteby/metacore-ui": "workspace:*",
     "@asteby/metacore-webhooks": "workspace:*",
@@ -43,6 +44,7 @@
     "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@originjs/vite-plugin-federation": "^1.4.1",
     "@tailwindcss/vite": "^4.2.0",
     "@tanstack/router-generator": "^1.166.0",
     "@tanstack/router-plugin": "^1.167.0",
