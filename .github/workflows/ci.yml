@@ -22,4 +22,4 @@ jobs:
       # by `tsr watch` during dev and not committed. They are private, not
       # published, and already marked `ignore` in the Changesets release
       # pipeline; extending the intent to CI keeps unrelated PRs green.
-      - run: pnpm turbo run build typecheck --filter=...[origin/main] --filter=!@asteby/metacore-starter-vite --filter=!@asteby/metacore-fullstack-example --filter=!@metacore-addons/fiscal-mx
+      - run: pnpm turbo run build typecheck --filter=...[origin/main] --filter=!@asteby/metacore-starter-vite --filter=!@asteby/metacore-fullstack-example --filter=!@metacore-addons/fiscal-mx --filter=!@metacore-addons/tickets
