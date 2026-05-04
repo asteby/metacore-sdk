@@ -6,6 +6,26 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
+ * Resolves the backend base URL at runtime. We can't read
+ * `import.meta.env.VITE_API_URL` here because Vite inlines its value during
+ * the SDK's own build (so consuming apps end up with whatever value the SDK
+ * happened to have at build time — typically `localhost:8080`). Instead we
+ * read from a global that the consuming app sets at startup.
+ *
+ * Apps (Vite, Next.js, anything else) should set this once before rendering:
+ *
+ *   ;(globalThis as any).__METACORE_BACKEND_URL__ = import.meta.env.VITE_BACKEND_URL
+ *
+ * If the global is missing we fall back to `localhost:8080`, matching the
+ * historical default.
+ */
+function resolveBackendBaseUrl(): string {
+  const g = globalThis as { __METACORE_BACKEND_URL__?: string }
+  const raw = g.__METACORE_BACKEND_URL__ || 'http://localhost:8080'
+  return raw.replace(/\/api\/?$/, '').replace(/\/+$/, '')
+}
+
+/**
  * Gets the full URL for a storage file
  * @param filename - File name (e.g., "20260112_uuid.png")
  * @param folder - Storage folder (e.g., "organizations", "uploads")
@@ -19,9 +39,7 @@ export function getStorageUrl(filename: string | undefined | null, folder: strin
     return filename
   }
 
-  // Get base URL from env (remove /api suffix if present)
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080/api'
-  const baseUrl = apiUrl.replace(/\/api$/, '')
+  const baseUrl = resolveBackendBaseUrl()
 
   // If it's already an absolute storage path, use it directly
   if (filename.startsWith('/storage/')) {
@@ -38,14 +56,8 @@ export function getImageUrl(path: string | undefined | null): string {
   if (!path) return ''
   if (path.startsWith('http://') || path.startsWith('https://')) return path
 
-  // Get base URL (backend)
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8080'
-  // Remove /api if present to get root backend URL
-  const baseUrl = apiUrl.replace(/\/api\/?$/, '').replace(/\/+$/, '')
-
-  // Ensure path starts with /
+  const baseUrl = resolveBackendBaseUrl()
   const cleanPath = path.startsWith('/') ? path : `/${path}`
-
   return `${baseUrl}${cleanPath}`
 }
 
