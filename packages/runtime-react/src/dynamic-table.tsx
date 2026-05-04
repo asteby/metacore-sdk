@@ -69,6 +69,7 @@ import { defaultGetDynamicColumns } from './dynamic-columns'
 import { OptionsContext } from './options-context'
 import { ActionModalDispatcher } from './action-modal-dispatcher'
 import type { TableMetadata, ApiResponse, ActionMetadata } from './types'
+import { getSearchableColumnKeys } from './column-visibility'
 import { DynamicRecordDialog } from './dialogs/dynamic-record'
 import { ExportDialog } from './dialogs/export'
 import { ImportDialog } from './dialogs/import'
@@ -324,13 +325,30 @@ export function DynamicTable({
         initMetadataAndOptions()
     }, [model]) // eslint-disable-line react-hooks/exhaustive-deps
 
+    // Derived from `metadata.columns[].searchable`. `null` means the kernel
+    // didn't emit the flag for any column → preserve legacy "search every
+    // column" behaviour by not narrowing the request. An empty array means
+    // every column was explicitly opted out → skip sending `search` at all.
+    const searchableKeys = useMemo(
+        () => (metadata ? getSearchableColumnKeys(metadata) : null),
+        [metadata],
+    )
+
     const buildFilterParams = useCallback(() => {
         const params: Record<string, any> = {}
         if (sorting.length > 0) {
             params.sortBy = sorting[0].id
             params.order = sorting[0].desc ? 'desc' : 'asc'
         }
-        if (globalFilter) params.search = globalFilter
+        if (globalFilter) {
+            if (searchableKeys === null) {
+                params.search = globalFilter
+            } else if (searchableKeys.length > 0) {
+                params.search = globalFilter
+                params.search_columns = searchableKeys.join(',')
+            }
+            // searchableKeys === [] → drop the search request entirely
+        }
         columnFilters.forEach((filter: { id: string; value: unknown }) => { params[`f_${filter.id}`] = filter.value })
         if (defaultFilters) Object.entries(defaultFilters).forEach(([key, value]) => { params[`f_${key}`] = value })
         Object.entries(dynamicFilters).forEach(([key, values]) => {
@@ -352,7 +370,7 @@ export function DynamicTable({
             params['f_created_at'] = `${startDate}_${endDate}`
         }
         return params
-    }, [sorting, globalFilter, columnFilters, defaultFilters, dynamicFilters, dateRange])
+    }, [sorting, globalFilter, columnFilters, defaultFilters, dynamicFilters, dateRange, searchableKeys])
 
     const hasActiveFilters = useMemo(() => {
         if (globalFilter) return true
