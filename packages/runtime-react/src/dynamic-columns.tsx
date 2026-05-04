@@ -35,6 +35,7 @@ import { generateBadgeStyles, getInitials } from '@asteby/metacore-ui/lib'
 import { OptionsContext } from './options-context'
 import { DynamicIcon } from './dynamic-icon'
 import type { TableMetadata, ColumnDefinition } from './types'
+import { isColumnVisibleInTable } from './column-visibility'
 import type {
     ColumnFilterConfig,
     GetDynamicColumns,
@@ -221,7 +222,9 @@ export function makeDefaultGetDynamicColumns(
         ]
 
         metadata.columns.forEach((col) => {
-            if (col.hidden) return
+            // Honors both the legacy `hidden` boolean and the kernel's
+            // `visibility` scope (skips `'modal'` and `'list'`).
+            if (!isColumnVisibleInTable(col)) return
 
             const translatedLabel = col.label
             const filterConfig = filterConfigs?.get(col.key)

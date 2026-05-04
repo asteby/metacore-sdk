@@ -26,6 +26,18 @@ export interface FilterDefinition {
     searchEndpoint?: string
 }
 
+/**
+ * Where a column is rendered. Mirrors `manifest.ColumnDef.Visibility` in the
+ * kernel:
+ *   - `''` / `'all'` — visible everywhere (default).
+ *   - `'table'`     — only the list/index page.
+ *   - `'modal'`     — only the create/edit modal.
+ *   - `'list'`      — only API list payloads (omitted from UI).
+ * Hosts may extend the union with their own scopes; the SDK only acts on the
+ * canonical values above.
+ */
+export type ColumnVisibility = 'all' | 'table' | 'modal' | 'list' | (string & {})
+
 export interface ColumnDefinition {
     key: string
     label: string
@@ -33,6 +45,19 @@ export interface ColumnDefinition {
     sortable: boolean
     filterable: boolean
     hidden?: boolean
+    /**
+     * Scopes where this column is rendered. When `'modal'` (or `'list'`) the
+     * column is hidden from the table even if `hidden` is unset. Empty/`'all'`/
+     * `'table'` keep the column visible. See `column-visibility.ts`.
+     */
+    visibility?: ColumnVisibility
+    /**
+     * Opts the column into the model's full-text/contains search. Independent
+     * of `filterable` (which drives column-level filter chips). When at least
+     * one column declares `searchable`, the SDK narrows the global search to
+     * those columns; otherwise legacy "search every column" behaviour applies.
+     */
+    searchable?: boolean
     styleConfig?: Record<string, any>
     tooltip?: string
     description?: string

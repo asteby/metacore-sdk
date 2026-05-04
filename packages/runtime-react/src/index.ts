@@ -56,3 +56,7 @@ export {
     type ModelExtension,
     type ModelExtensionProps,
 } from './model-extension-registry'
+export {
+    isColumnVisibleInTable,
+    getSearchableColumnKeys,
+} from './column-visibility'
