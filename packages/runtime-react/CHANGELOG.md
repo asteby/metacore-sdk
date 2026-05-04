@@ -1,5 +1,68 @@
 # @asteby/metacore-runtime-react
 
+## 9.0.0
+
+### Minor Changes
+
+- d51ef45: feat(runtime-react): `DynamicForm` aplica `Validation` (regex/min/max) al schema zod generado y soporta widgets `textarea`/`richtext`/`color`.
+  - `ActionFieldDef` extendido con `validation?: FieldValidation` (regex/min/max/custom — espejo del `ValidationRule` del manifest del kernel) y `widget?: FieldWidget | string`.
+  - `DynamicForm` ahora deriva un schema zod por field y valida en el submit, mostrando errores inline en lugar del `alert()` previo. Min/max aplica como longitud para strings y como bound para numéricos (mismo dual semantics que el kernel). Regex malformada del manifest se ignora silenciosamente para no tirar el render.
+  - Nuevo export `buildZodSchema(fields)` para que callers reutilicen el mismo schema fuera del form.
+  - Renderer mapea widgets explícitos a primitivos de `@asteby/metacore-ui`:
+    - `textarea` → `Textarea`
+    - `richtext` → `Textarea` con `data-widget="richtext"` (puente hasta que aterrice un primitivo MDX/rich; mantiene el contrato sin romper consumers).
+    - `color` → `Input type="color"`.
+  - Backwards compat: zero-value (sin `validation`/`widget`) preserva el comportamiento previo (widget inferido por `type`, sin reglas de validación más allá de `required`).
+
+- 88b176c: feat(runtime-react): `<DynamicRelation kind="many_to_many">` — multi-select sobre la tabla destino, sync transparente contra la tabla pivote (`through`).
+
+  API mínima:
+
+  ```tsx
+  <DynamicRelation
+    kind="many_to_many"
+    through="org_members" // tabla pivote
+    references="users" // tabla destino sobre la que se hace multi-select
+    foreignKey="organization_id" // FK del pivot al padre
+    parentId={org.id}
+  />
+  ```
+
+  - `referencesKey` por default es `${references}_id` (override opcional). Endpoints `/data/${through}` y `/data/${references}` con override por prop si la app expone rutas custom.
+  - Lectura: lista pivot rows filtradas por `f_<foreignKey>=eq:<parentId>` (mismo envelope kernel `{success, data, meta}` que `<DynamicTable>`); lista target rows del modelo `references`.
+  - Escritura: el `<MultiSelect>` dispara un diff entre la selección previa y la nueva. Cada nuevo target → `POST /data/${through}` con `{[foreignKey]: parentId, [referencesKey]: targetId}`. Cada target removido → `DELETE /data/${through}/<pivotRowId>`.
+  - Permisos por prop (`canCreate` controla attach, `canDelete` controla detach — default `true`).
+  - Label de cada opción: `displayKey` prop si está; si no se infiere de la metadata (primer column no-id no-hidden); fallback al `id`.
+  - Nuevos helpers puros exportados: `buildPivotAttachPayload`, `extractSelectedTargetIds`, `buildPivotRowIndex`, `diffSelection`, `pickOptionLabel`.
+
+  `kind="one_to_many"` no cambia.
+
+- 88b176c: feat(runtime-react): nuevo `<DynamicRelation kind="one_to_many">` — lista inline editable que cuelga del registro padre.
+
+  API mínima:
+
+  ```tsx
+  <DynamicRelation
+    kind="one_to_many"
+    model="line_items"
+    foreignKey="invoice_id"
+    parentId={id}
+  />
+  ```
+
+  - Lista filas del modelo hijo filtradas por `f_<foreignKey>=eq:<parentId>` (envelope kernel `{success, data, meta}`).
+  - Crear/Editar via `<DynamicForm>` derivado del `TableMetadata.columns` del modelo; la FK queda fija al `parentId` y se oculta automáticamente del form y de la lista.
+  - Quitar via `DELETE /data/<model>/<id>` con confirm dialog.
+  - Permisos por prop (`canCreate` / `canEdit` / `canDelete` — default `true`) y strings traducibles via prop `strings`.
+  - Helpers puros exportados (`buildRelationFilterParams`, `buildCreatePayload`, `deriveRelationFormFields`, `relationRowKey`) para que callers reutilicen las convenciones fuera del componente.
+  - `kind="many_to_many"` queda stubbed (renderiza `not-implemented`) — sigue como follow-up; la RFC completa vive en `packages/runtime-react/docs/relations.md`.
+  - Ejemplo end-to-end en `examples/dynamic-relation-one-to-many/`.
+
+### Patch Changes
+
+- Updated dependencies [ec9ad56]
+  - @asteby/metacore-sdk@2.4.0
+
 ## 8.0.0
 
 ### Patch Changes
