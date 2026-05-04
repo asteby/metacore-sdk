@@ -15,7 +15,7 @@
     "@asteby/metacore-sdk": "^2.3.0"
   },
   "devDependencies": {
-    "@asteby/metacore-sdk": "link:../../../sdk",
+    "@asteby/metacore-sdk": "workspace:*",
     "@originjs/vite-plugin-federation": "^1.3.5",
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
