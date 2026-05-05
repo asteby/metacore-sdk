@@ -26,7 +26,7 @@
     "codegen": "go run github.com/gzuidhof/tygo@v0.2.17 generate"
   },
   "devDependencies": {
-    "@changesets/changelog-github": "^0.6.0",
+    "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.27.9",
     "tsup": "^8.3.5",
     "turbo": "^2.3.3",
