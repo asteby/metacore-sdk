@@ -146,7 +146,7 @@ importers:
         version: 1.4.0
       zod:
         specifier: ^4.3.0
-        version: 4.3.6
+        version: 4.4.3
       zustand:
         specifier: ^5.0.0
         version: 5.0.13(@types/react@19.2.14)(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5))
@@ -291,7 +291,7 @@ importers:
         version: 7.72.1(react@19.2.5)
       zod:
         specifier: ^4.3.0
-        version: 4.3.6
+        version: 4.4.3
     devDependencies:
       '@asteby/metacore-ui':
         specifier: workspace:*
@@ -478,7 +478,7 @@ importers:
     dependencies:
       zod:
         specifier: ^4.3.0
-        version: 4.3.6
+        version: 4.4.3
     devDependencies:
       '@asteby/metacore-sdk':
         specifier: workspace:*
@@ -750,7 +750,7 @@ importers:
         version: 5.0.0(@microsoft/api-extractor@7.58.3(@types/node@22.19.17))(esbuild@0.27.7)(rollup@4.60.3)(typescript@5.9.3)(vite@8.0.10(@types/node@22.19.17)(esbuild@0.27.7)(jiti@2.6.1)(terser@5.46.2)(tsx@4.21.0))
       zod:
         specifier: ^4.3.6
-        version: 4.3.6
+        version: 4.4.3
       zustand:
         specifier: ^5.0.12
         version: 5.0.13(@types/react@19.2.14)(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5))
@@ -947,7 +947,7 @@ importers:
         version: 5.2.2(react-hook-form@7.72.1(react@19.2.5))
       zod:
         specifier: ^4.3.0
-        version: 4.3.6
+        version: 4.4.3
     devDependencies:
       '@asteby/metacore-ui':
         specifier: workspace:*
@@ -1071,7 +1071,7 @@ importers:
         version: 1.4.0
       zod:
         specifier: ^4.3.0
-        version: 4.3.6
+        version: 4.4.3
       zustand:
         specifier: ^5.0.0
         version: 5.0.13(@types/react@19.2.14)(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5))
@@ -6602,6 +6602,9 @@ packages:
 
   zod@4.3.6:
     resolution: {integrity: sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg==}
+
+  zod@4.4.3:
+    resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
   zustand@5.0.13:
     resolution: {integrity: sha512-efI2tVaVQPqtOh114loML/Z80Y4NP3yc+Ff0fYiZJPauNeWZeIp/bRFD7I9bfmCOYBh/PHxlglQ9+wvlwnPikQ==}
@@ -12420,6 +12423,8 @@ snapshots:
   zod@3.25.76: {}
 
   zod@4.3.6: {}
+
+  zod@4.4.3: {}
 
   zustand@5.0.13(@types/react@19.2.14)(react@19.2.5)(use-sync-external-store@1.6.0(react@19.2.5)):
     optionalDependencies:
