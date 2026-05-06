@@ -33,7 +33,7 @@
     "tiny-glob": "^0.2.9"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^24.0.0",
     "@types/prompts": "^2.4.9",
     "tsup": "^8.3.5",
     "typescript": "^5.6.0"
