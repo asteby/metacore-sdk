@@ -3,6 +3,37 @@
 // metacore-ui primitives.
 import { z, type ZodTypeAny } from 'zod'
 import type { ActionFieldDef, FieldValidation } from './types'
+import { resolveValidatorToken } from './use-org-config-bridge'
+
+/**
+ * Built-in validators the SDK knows how to apply by symbolic name. Apps
+ * that wire `OrgConfigProvider` map `$org.<key>` references to one of
+ * these slugs (or to a custom slug they register). Unknown slugs are a
+ * no-op so unresolved $org references degrade to "no extra check"
+ * rather than a runtime crash — matches the kernel's pass-through
+ * semantics for unresolved references.
+ */
+const builtinValidators: Record<string, (s: z.ZodString) => z.ZodString> = {
+    // The SDK ships ZERO fiscal vocabulary by default. Apps register
+    // their own validators (mx.rfc, co.nit, pe.ruc, etc.) via
+    // `registerValidator` so kernel/SDK stay region-agnostic.
+}
+
+/**
+ * Apps register validator implementations by slug. The slug is the value
+ * `OrgConfig.validators[<key>]` returns for a $org.<key> reference.
+ */
+export function registerValidator(slug: string, fn: (s: z.ZodString) => z.ZodString): void {
+    builtinValidators[slug] = fn
+}
+
+function applyCustomValidator(s: z.ZodString, customToken: string | undefined): z.ZodString {
+    if (!customToken) return s
+    const resolved = resolveValidatorToken(customToken)
+    if (!resolved) return s
+    const fn = builtinValidators[resolved]
+    return fn ? fn(s) : s
+}
 
 // Builds a zod object schema from an ActionFieldDef[]. Required fields stay
 // non-empty; optional fields accept undefined / "". Validation rules
@@ -43,6 +74,11 @@ function fieldToZod(field: ActionFieldDef): ZodTypeAny {
     }
     if (field.type === 'email') s = s.email('Email inválido')
     if (field.type === 'url') s = s.url('URL inválida')
+
+    // Custom validator: a literal slug (`mx.rfc`) OR a `$org.<key>`
+    // reference resolved through the OrgConfigProvider. Unknown slugs
+    // pass through as no-ops so apps never crash on missing config.
+    s = applyCustomValidator(s, v.custom)
 
     if (field.required) {
         return s.min(Math.max(typeof v.min === 'number' ? v.min : 1, 1), `${field.label} es requerido`)

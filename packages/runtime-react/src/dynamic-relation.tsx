@@ -25,6 +25,7 @@ import { Plus, Trash2, Pencil } from 'lucide-react'
 import { useApi } from './api-context'
 import { useMetadataCache } from './metadata-cache'
 import { DynamicForm } from './dynamic-form'
+import { useOptionsResolver } from './use-options-resolver'
 import type { ApiResponse, TableMetadata } from './types'
 import {
     buildCreatePayload,
@@ -380,7 +381,13 @@ function ManyToManyRelation({
 
     const refKey = referencesKey || `${references}_id`
     const pivotPath = pivotEndpoint || `/data/${through}`
-    const targetPath = referencesEndpoint || `/data/${references}`
+    // referencesEndpoint is preserved as a legacy escape hatch — when set
+    // we keep the old `/data/<references>` raw fetch path (so apps that
+    // depend on a custom server route do not break). When unset we use
+    // the canonical `/api/options/:references` endpoint via
+    // useOptionsResolver, which is what the kernel auto-derives Ref to.
+    const useResolver = !referencesEndpoint
+    const legacyTargetPath = referencesEndpoint || `/data/${references}`
 
     const cachedTargetMeta = getMetadata(references)
     const [targetMeta, setTargetMeta] = useState<TableMetadata | null>(cachedTargetMeta || null)
@@ -389,41 +396,65 @@ function ManyToManyRelation({
     const [loading, setLoading] = useState(true)
     const [syncing, setSyncing] = useState(false)
 
-    const fetchAll = useCallback(async () => {
+    // Canonical path: SDK options resolver. Only fires when no legacy
+    // override is set. The hook is a no-op when `useResolver` is false.
+    const resolved = useOptionsResolver({
+        modelKey: '',
+        fieldKey: 'id',
+        ref: useResolver ? references : undefined,
+        enabled: useResolver,
+    })
+
+    const fetchPivotAndMeta = useCallback(async () => {
         setLoading(true)
         try {
             const params = buildRelationFilterParams(foreignKey, parentId)
-            const [metaRes, pivotRes, targetRes] = await Promise.all([
-                targetMeta ? Promise.resolve(null) : api.get(`/metadata/table/${references}`),
+            const tasks: Promise<unknown>[] = [
                 api.get(pivotPath, { params }),
-                api.get(targetPath),
-            ])
-            if (metaRes && (metaRes as any).data?.success) {
-                const fresh = (metaRes as { data: ApiResponse<TableMetadata> }).data.data
-                setTargetMeta(fresh)
-                cacheMetadata(references, fresh)
+            ]
+            if (!targetMeta) tasks.push(api.get(`/metadata/table/${references}`))
+            // Legacy fallback path: the resolver is disabled, fetch the
+            // target rows the old way so callers that depend on a custom
+            // route keep working.
+            if (!useResolver) tasks.push(api.get(legacyTargetPath))
+            const results = await Promise.all(tasks)
+            const pivotRes = results[0] as { data: ApiResponse<any[]> }
+            if (pivotRes.data.success) setPivotRows(pivotRes.data.data || [])
+            let cursor = 1
+            if (!targetMeta) {
+                const metaRes = results[cursor++] as { data: ApiResponse<TableMetadata> }
+                if (metaRes.data?.success) {
+                    setTargetMeta(metaRes.data.data)
+                    cacheMetadata(references, metaRes.data.data)
+                }
             }
-            const pivotList = (pivotRes as { data: ApiResponse<any[]> }).data
-            if (pivotList.success) setPivotRows(pivotList.data || [])
-            const targetList = (targetRes as { data: ApiResponse<any[]> }).data
-            if (targetList.success) setTargetRows(targetList.data || [])
+            if (!useResolver) {
+                const targetRes = results[cursor++] as { data: ApiResponse<any[]> }
+                if (targetRes.data.success) setTargetRows(targetRes.data.data || [])
+            }
         } catch (err) {
             console.error('DynamicRelation m2m fetch error', err)
         } finally {
             setLoading(false)
         }
-    }, [api, pivotPath, targetPath, foreignKey, parentId, references, targetMeta, cacheMetadata])
+    }, [api, pivotPath, foreignKey, parentId, references, targetMeta, cacheMetadata, useResolver, legacyTargetPath])
 
-    useEffect(() => { fetchAll() }, [fetchAll])
+    useEffect(() => { fetchPivotAndMeta() }, [fetchPivotAndMeta])
 
     const options = useMemo(() => {
+        if (useResolver) {
+            return resolved.options.map((o) => ({
+                value: String(o.id),
+                label: o.label,
+            }))
+        }
         return targetRows
             .filter(r => r && r.id !== undefined && r.id !== null && r.id !== '')
             .map(r => ({
                 value: String(r.id),
                 label: pickOptionLabel(r, displayKey, targetMeta?.columns),
             }))
-    }, [targetRows, displayKey, targetMeta])
+    }, [useResolver, resolved.options, targetRows, displayKey, targetMeta])
 
     const selectedIds = useMemo(
         () => extractSelectedTargetIds(pivotRows, refKey),
@@ -454,14 +485,18 @@ function ManyToManyRelation({
                 const res = await api.delete(`${pivotPath}/${pivotId}`)
                 if (!(res as any).data?.success) throw new Error('detach failed')
             }
-            await fetchAll()
+            await fetchPivotAndMeta()
+            // Refresh resolver-driven options when active so newly attached
+            // targets reflect immediately. Refetching the pivot rows alone
+            // is enough when the resolver branch is off.
+            if (useResolver) resolved.refetch()
             onChange?.()
         } catch (err) {
             console.error('DynamicRelation m2m sync error', err)
         } finally {
             setSyncing(false)
         }
-    }, [api, canCreate, canDelete, fetchAll, foreignKey, onChange, parentId, pivotIndex, pivotPath, refKey, selectedIds, syncing])
+    }, [api, canCreate, canDelete, fetchPivotAndMeta, useResolver, resolved, foreignKey, onChange, parentId, pivotIndex, pivotPath, refKey, selectedIds, syncing])
 
     return (
         <div
@@ -476,7 +511,7 @@ function ManyToManyRelation({
                 </div>
             )}
 
-            {loading ? (
+            {(loading || (useResolver && resolved.loading)) ? (
                 <Skeleton className="h-10 w-full" />
             ) : options.length === 0 ? (
                 <div className="text-center text-sm text-muted-foreground py-8 border rounded-md bg-muted/30">
