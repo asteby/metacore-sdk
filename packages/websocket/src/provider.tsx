@@ -26,11 +26,11 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
     !(value instanceof ArrayBuffer) && !ArrayBuffer.isView(value)
 }
 
-function serialize(payload: SendPayload): string | ArrayBufferLike | Blob | ArrayBufferView {
+function serialize(payload: SendPayload): string | Blob | BufferSource {
   if (typeof payload === 'string') return payload
   if (payload instanceof Blob) return payload
   if (payload instanceof ArrayBuffer) return payload
-  if (ArrayBuffer.isView(payload)) return payload
+  if (ArrayBuffer.isView(payload)) return payload as ArrayBufferView<ArrayBuffer>
   if (isPlainObject(payload)) return JSON.stringify(payload)
   return String(payload)
 }
