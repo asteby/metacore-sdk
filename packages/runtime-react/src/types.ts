@@ -70,6 +70,20 @@ export interface ColumnDefinition {
     relationPath?: string
     useOptions?: boolean
     options?: { value: string; label: string; icon?: string; color?: string }[]
+    /**
+     * FK target model. When the kernel auto-derives this from a
+     * belongs_to relation (or an author sets it explicitly), the SDK
+     * resolves the column's options against `/api/options/<ref>?field=id`
+     * via `useOptionsResolver`. Wins over `searchEndpoint` for select
+     * widgets — `searchEndpoint` stays as the legacy escape hatch.
+     */
+    ref?: string
+    /**
+     * Server-side validation rules the SDK can also pre-flight in the
+     * form layer. `custom` may be a literal slug or a $org.<key>
+     * reference resolved through the OrgConfigProvider.
+     */
+    validation?: FieldValidation
 }
 
 export interface ActionCondition {
@@ -81,6 +95,10 @@ export interface ActionCondition {
 // Mirrors `ValidationRule` from packages/sdk/src/generated/manifest.ts. Kept
 // inline here so runtime-react does not import generated kernel types directly
 // — apps and addons author ActionFieldDef literals.
+//
+// `custom` accepts either a literal validator slug (e.g. `mx.rfc`) registered
+// via `registerValidator`, or a `$org.<key>` reference resolved through the
+// OrgConfigProvider — same contract as kernel ColumnDef.Validation.Custom.
 export interface FieldValidation {
     regex?: string
     min?: number
@@ -111,6 +129,12 @@ export interface ActionFieldDef {
     searchEndpoint?: string
     validation?: FieldValidation
     widget?: FieldWidget | string
+    /**
+     * FK target model — same semantics as ColumnDefinition.ref. When
+     * present, DynamicForm resolves the field's options through
+     * `useOptionsResolver` against `/api/options/<ref>?field=id`.
+     */
+    ref?: string
 }
 
 export interface ActionDefinition {
