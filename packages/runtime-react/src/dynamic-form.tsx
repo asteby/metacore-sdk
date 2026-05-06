@@ -16,6 +16,7 @@ import {
 } from '@asteby/metacore-ui/primitives'
 import type { ActionFieldDef } from './types'
 import { buildZodSchema, resolveWidget } from './dynamic-form-schema'
+import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 
 export { buildZodSchema, resolveWidget }
 
@@ -81,7 +82,11 @@ export function DynamicForm({
                         {field.label}
                         {field.required && <span className="text-red-500 ml-1">*</span>}
                     </Label>
-                    {renderField(field, values[field.key], (v: any) => update(field.key, v))}
+                    <FieldRenderer
+                        field={field}
+                        value={values[field.key]}
+                        onChange={(v: any) => update(field.key, v)}
+                    />
                     {errors[field.key] && (
                         <span className="text-red-500 text-sm" role="alert">{errors[field.key]}</span>
                     )}
@@ -99,8 +104,21 @@ export function DynamicForm({
     )
 }
 
-function renderField(field: ActionFieldDef, value: any, onChange: (v: any) => void) {
+interface FieldRendererProps {
+    field: ActionFieldDef
+    value: any
+    onChange: (v: any) => void
+}
+
+function FieldRenderer({ field, value, onChange }: FieldRendererProps) {
     const widget = resolveWidget(field)
+    // Ref-driven select: hook into useOptionsResolver so the canonical
+    // /api/options/<ref>?field=id endpoint feeds the dropdown. This is
+    // the path the kernel auto-derives for FK columns; legacy callers
+    // shipping inline `options` keep working in the branch below.
+    if (widget === 'select' && field.ref) {
+        return <RefSelect field={field} value={value} onChange={onChange} />
+    }
     switch (widget) {
         case 'textarea':
             return <Textarea id={field.key} value={value || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)} placeholder={field.placeholder} />
@@ -129,5 +147,25 @@ function renderField(field: ActionFieldDef, value: any, onChange: (v: any) => vo
         default:
             return <Input id={field.key} type={field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : 'text'} value={value || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} placeholder={field.placeholder} />
     }
+}
+
+function RefSelect({ field, value, onChange }: FieldRendererProps) {
+    const { options, loading } = useOptionsResolver({
+        modelKey: '',          // unused — `ref` drives the URL
+        fieldKey: 'id',
+        ref: field.ref,
+    })
+    return (
+        <Select value={value || ''} onValueChange={onChange} disabled={loading}>
+            <SelectTrigger>
+                <SelectValue placeholder={loading ? 'Cargando…' : (field.placeholder || 'Seleccionar...')} />
+            </SelectTrigger>
+            <SelectContent>
+                {options.map((opt: ResolvedOption) => (
+                    <SelectItem key={String(opt.id)} value={String(opt.id)}>{opt.label}</SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
+    )
 }
 

@@ -19,6 +19,14 @@ export {
   type PlatformConfigProviderProps,
 } from './platform-config-provider'
 export {
+  OrgConfigProvider,
+  useOrgConfig,
+  FALLBACK_ORG_CONFIG,
+  type OrgConfig,
+  type OrgConfigFetcher,
+  type OrgConfigProviderProps,
+} from './org-config-provider'
+export {
   MetacoreAppShell,
   type MetacoreAppShellProps,
 } from './metacore-app-shell'
