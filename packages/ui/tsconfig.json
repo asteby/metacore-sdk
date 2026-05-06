@@ -7,6 +7,7 @@
     "paths": {
       "@/*": ["./*"]
     },
+    "ignoreDeprecations": "6.0",
     "noUncheckedIndexedAccess": false,
     "skipLibCheck": true
   },

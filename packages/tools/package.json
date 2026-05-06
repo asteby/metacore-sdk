@@ -32,7 +32,7 @@
   },
   "devDependencies": {
     "@asteby/metacore-sdk": "workspace:*",
-    "typescript": "^5.6.0"
+    "typescript": "^6.0.0"
   },
   "publishConfig": {
     "access": "public"
