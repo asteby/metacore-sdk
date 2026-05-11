@@ -47,7 +47,7 @@
 // a prop so AddonRoute starts immersive immediately, skipping the shell
 // frame. The `layout` prop short-circuits the context read for that case.
 
-import { useEffect, type ReactNode } from 'react'
+import { Fragment, useEffect, type ReactNode } from 'react'
 import {
     useAddonLayout,
     useAddonLayoutControl,
@@ -84,6 +84,24 @@ export interface AddonRouteProps {
      * when not immersive.
      */
     shell?: (content: ReactNode) => ReactNode
+    /**
+     * Optional version key. When it changes, React unmounts and remounts
+     * the addon subtree (because `key` flips), which forces the federation
+     * loader to re-fetch `remoteEntry.js` and re-evaluate the exposed
+     * module. Wire this from `useHotSwapReload().addonVersionMap[addonKey]`
+     * (see `@asteby/metacore-runtime-react`) so the host receives the new
+     * code automatically when the kernel announces a manifest change.
+     *
+     * Re-keying is **intentionally destructive**: any state inside the
+     * addon is lost. The code version changed — stale state held by old
+     * closures is the bug we're avoiding. Pair with an `onBeforeReload`
+     * gate (via `useHotSwapReload`) if you need to prompt the user before
+     * blowing away in-progress work.
+     *
+     * Leave undefined for addons whose host does not subscribe to
+     * manifest changes — the subtree mounts once and never re-keys.
+     */
+    version?: string
 }
 
 /**
@@ -101,10 +119,25 @@ export function AddonRoute({
     layout: layoutProp,
     immersiveClassName,
     shell,
+    version,
 }: AddonRouteProps) {
     const ctxLayout = useAddonLayout()
     const { setLayout } = useAddonLayoutControl()
     const layout: AddonLayout = layoutProp ?? ctxLayout
+
+    // Wrap children in a keyed Fragment so a `version` change forces React
+    // to unmount + remount the subtree. The federation loader is hash-keyed
+    // on entry URL + version (see sdk/federation.ts), so the re-mount
+    // re-fetches `remoteEntry.js?v=<hash8>` and re-evaluates the addon.
+    // When `version` is undefined we render `children` as-is so the inner
+    // tree stays referentially stable across re-renders (no spurious
+    // remounts and no extra DOM node).
+    const keyedChildren =
+        version !== undefined ? (
+            <Fragment key={version}>{children}</Fragment>
+        ) : (
+            children
+        )
 
     // When a static prop pins the route to a layout, push that value into
     // the context so any consumer downstream (e.g. an addon that also
@@ -139,15 +172,15 @@ export function AddonRoute({
                     .filter(Boolean)
                     .join(' ')}
             >
-                {children}
+                {keyedChildren}
             </div>
         )
     }
 
     if (shell) {
-        return <>{shell(children)}</>
+        return <>{shell(keyedChildren)}</>
     }
-    return <>{children}</>
+    return <>{keyedChildren}</>
 }
 
 export default AddonRoute

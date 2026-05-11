@@ -114,6 +114,41 @@ describe('AddonRoute', () => {
         expect(html).toContain('fixed inset-0')
     })
 
+    it('renders unchanged DOM when `version` is undefined (no extra wrapper)', () => {
+        const html = renderToStaticMarkup(
+            createElement(
+                AddonLayoutProvider,
+                null,
+                createElement(
+                    AddonRoute,
+                    null,
+                    createElement(Marker, { id: 'no-version' }),
+                ),
+            ),
+        )
+        // Plain children, no Fragment-introduced wrapper or version markers.
+        expect(html).toBe('<span data-marker="no-version"></span>')
+    })
+
+    it('still mounts children when `version` is provided (key triggers remount on change)', () => {
+        // We can't observe React's unmount/remount cycle via static markup,
+        // but we can prove the version prop is accepted and the output is
+        // identical to the unversioned render — i.e. the Fragment wrapper
+        // is transparent in the output (keys live on the virtual DOM only).
+        const html = renderToStaticMarkup(
+            createElement(
+                AddonLayoutProvider,
+                null,
+                createElement(
+                    AddonRoute,
+                    { version: 'abcdef12' },
+                    createElement(Marker, { id: 'versioned' }),
+                ),
+            ),
+        )
+        expect(html).toBe('<span data-marker="versioned"></span>')
+    })
+
     it('still works when an addon component declares immersive on mount', () => {
         // Inner component models an addon that flips to immersive via the
         // declarative hook. Under SSR, the cleanup never runs, so the

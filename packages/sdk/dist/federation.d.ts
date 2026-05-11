@@ -43,8 +43,31 @@ declare global {
  *
  * `addonKey` is used to derive the default container name when
  * `spec.container` is not set. Pass the manifest key.
+ *
+ * When the runtime knows a manifest hash for the addon (e.g. after the
+ * hot-swap subscriber observes `ADDON_MANIFEST_CHANGED`), pass it as
+ * `version` so the loader cache-busts the `remoteEntry.js` URL via
+ * {@link withVersionParam}. The cache key includes the version so a hash
+ * bump triggers a fresh load instead of returning the memoized old
+ * container. Callers that want to swap the running container should also
+ * invoke `clearFederationContainer(scope)` from runtime-react before
+ * re-mounting the addon — see runtime-react's `hotswap-reload-policy`.
  */
-export declare function loadFederatedAddon(spec: FrontendSpec, addonKey?: string): Promise<unknown>;
+export declare function loadFederatedAddon(spec: FrontendSpec, addonKey?: string, version?: string): Promise<unknown>;
+/**
+ * Append a `?v=<hash8>` query string to a `remoteEntry.js` URL so the
+ * browser treats it as a distinct resource and bypasses any HTTP / module
+ * cache. Idempotent — passing the same hash twice yields the same URL.
+ * Preserves existing query params and replaces a prior `v=` entry if one
+ * is present, so successive bumps don't accumulate stale parameters.
+ *
+ * Accepts kernel-format hashes (`sha256:abc...`) and bare hex digests; the
+ * function strips the algorithm prefix and lower-cases the first eight
+ * hex chars. Returns the URL unchanged if `hash` is falsy.
+ *
+ * Pure (no `window` access) — safe in SSR.
+ */
+export declare function withVersionParam(url: string, hash: string | undefined): string;
 /**
  * Derive the global container name. Prefers the explicit `container` field
  * on the FrontendSpec, falling back to `metacore_<sanitized_key>`. Throws
