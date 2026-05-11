@@ -2,7 +2,8 @@
 // waits for the `window[scope]` container to initialize, then calls the
 // addon's `register(api)` export with the AddonAPI injected by the host.
 import { useEffect, useRef, useState } from 'react'
-import type { AddonAPI } from '@asteby/metacore-sdk'
+import type { AddonAPI, AddonLayout } from '@asteby/metacore-sdk'
+import { useDeclareAddonLayout } from './addon-layout-context'
 
 declare global {
     interface Window {
@@ -27,6 +28,18 @@ export interface AddonLoaderProps {
     onReady?: () => void
     /** Called if loading fails. */
     onError?: (err: Error) => void
+    /**
+     * Layout the host shell should render the addon under, mirroring
+     * `manifest.frontend.layout`. Default (undefined / `"shell"`) keeps the
+     * legacy chrome (Sidebar, Topbar, breadcrumbs). `"immersive"` flips the
+     * shared {@link useAddonLayout} context so the host shell hides chrome
+     * while the addon is mounted and restores it on unmount.
+     *
+     * Hosts that consume the context (see `useAddonLayout` /
+     * `<AddonLayoutProvider>`) do NOT need to branch on this prop themselves
+     * — the loader sets the context value via {@link useDeclareAddonLayout}.
+     */
+    layout?: AddonLayout
     children?: React.ReactNode
 }
 
@@ -75,11 +88,18 @@ export function AddonLoader({
     fallback = null,
     onReady,
     onError,
+    layout,
     children,
 }: AddonLoaderProps) {
     const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
     const [error, setError] = useState<Error | null>(null)
     const didRegister = useRef(false)
+
+    // Propagate the addon's preferred layout to the host shell via context.
+    // No-op when `layout` is undefined or `"shell"` (legacy default). Cleanup
+    // restores `"shell"` automatically when the loader unmounts, so chrome
+    // returns as soon as the user navigates away from an immersive addon.
+    useDeclareAddonLayout(layout)
 
     useEffect(() => {
         let cancelled = false

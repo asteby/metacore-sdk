@@ -3,8 +3,46 @@
  * Re-generate with: pnpm codegen (runs `go run github.com/gzuidhof/tygo generate`).
  * Do NOT hand-edit the Manifest types below; edit manifest.go and regenerate.
  */
+import "./generated/manifest";
 export { APIVersion as METACORE_API_VERSION } from "./generated/manifest";
-export type { Manifest, Module, NavGroup, NavItem, FrontendSpec, BackendSpec, Capability, Permission, SettingDef, Option, ToolDef, ToolInputParam, ActionDef, FieldDef, HookDef, HookTarget, ModelExtension, ModelDefinition, ColumnDef, Signature, } from "./generated/manifest";
+export type { Manifest, Module, NavGroup, NavItem, FrontendSpec, BackendSpec, Capability, Permission, SettingDef, Option, ToolDef, ToolInputParam, ActionDef, ActionTrigger, FieldDef, HookDef, HookTarget, ModelExtension, ModelDefinition, ColumnDef, RelationDef, ValidationRule, Signature, } from "./generated/manifest";
+/**
+ * AddonLayout selects how the host shell wraps the federated addon when it
+ * mounts. Default (undefined / "shell") keeps the legacy behaviour: the addon
+ * renders inside the host chrome (Sidebar, Topbar, breadcrumbs).
+ *
+ *   "shell"     — render inside the host chrome. Default; semantic equivalent
+ *                 of leaving the field unset.
+ *   "immersive" — render full-viewport, no chrome. The shell hides Sidebar,
+ *                 Topbar and breadcrumbs while the addon is active and
+ *                 restores them as soon as the user navigates away. Used by
+ *                 POS, kitchen-display, signage and any other addon that
+ *                 owns the whole screen.
+ *
+ * Mirrors `manifest.FrontendSpec.Layout` (kernel ≥ TBD). Kept additive on the
+ * TS side via declaration-merging extension of the auto-generated tygo type so
+ * the new field is available to consumers ahead of the Go change landing in
+ * the SDK's regen pipeline.
+ */
+export type AddonLayout = "shell" | "immersive";
+/**
+ * Augment the generated `FrontendSpec` so `manifest.frontend?.layout` is
+ * visible to consumers ahead of tygo regeneration. Declaration merging is
+ * purely additive: the regenerated interface remains the source of truth,
+ * this block only contributes the optional `layout` field. When the
+ * kernel-side change lands and tygo regenerates the file with `Layout
+ * string`, this augmentation becomes redundant but stays in sync because the
+ * field is optional and string-typed.
+ */
+declare module "./generated/manifest" {
+    interface FrontendSpec {
+        /**
+         * Layout selects how the host shell renders the addon entry. See
+         * {@link AddonLayout}. `undefined` === `"shell"` (legacy default).
+         */
+        layout?: AddonLayout;
+    }
+}
 export type CapabilityKind = "db:read" | "db:write" | "http:fetch" | "event:emit" | "event:subscribe";
 export interface Installation {
     id: string;
