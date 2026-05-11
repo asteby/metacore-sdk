@@ -34,6 +34,18 @@ export {
     type ManifestHotSwapClient,
     type WireHotSwapInvalidationOptions,
 } from './manifest-hotswap-subscriber'
+export {
+    useHotSwapReload,
+    applyHotSwapReload,
+    withVersionParam,
+    clearFederationContainer,
+    shortenHash,
+    type HotSwapReloadStrategy,
+    type HotSwapReloadConfig,
+    type HotSwapReloadAction,
+    type HotSwapReloadDeps,
+    type UseHotSwapReloadResult,
+} from './hotswap-reload-policy'
 export * from './dynamic-icon'
 export type {
     ColumnFilterConfig,
