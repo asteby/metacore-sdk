@@ -29,6 +29,7 @@ const METACORE_FEDERATION_SINGLETONS = [
   "react-dom",
   "@asteby/metacore-runtime-react",
   "@asteby/metacore-theme",
+  "@asteby/metacore-app-providers",
   "@asteby/metacore-auth",
   "@asteby/metacore-ui",
   "@asteby/metacore-sdk"
@@ -40,6 +41,7 @@ function metacoreFederationShared(opts) {
     filename = "remoteEntry.js",
     exposes,
     extras = [],
+    extra = {},
     overrides = {}
   } = opts;
   const shared = {};
@@ -48,6 +50,9 @@ function metacoreFederationShared(opts) {
   }
   for (const name of extras) {
     shared[name] ??= { singleton: true, requiredVersion: false };
+  }
+  for (const [name, cfg] of Object.entries(extra)) {
+    shared[name] = { singleton: true, requiredVersion: false, ...cfg };
   }
   for (const [name, override] of Object.entries(overrides)) {
     shared[name] = { ...shared[name] ?? {}, ...override };

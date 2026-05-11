@@ -12,6 +12,14 @@ export {
     type ActionModalProps,
 } from './action-modal-dispatcher'
 export * from './addon-loader'
+export {
+    AddonLayoutProvider,
+    useAddonLayout,
+    useAddonLayoutControl,
+    useDeclareAddonLayout,
+    type AddonLayout,
+    type AddonLayoutProviderProps,
+} from './addon-layout-context'
 export * from './slot'
 export * from './capability-gate'
 export * from './navigation-builder'
