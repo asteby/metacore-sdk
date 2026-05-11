@@ -15,6 +15,12 @@
   "include": [
     "src/index.ts",
     "src/lib/**/*",
-    "src/components/ui/**/*"
+    "src/components/ui/**/*",
+    "src/components/AddonRoute.tsx"
+  ],
+  "exclude": [
+    "src/**/__tests__/**",
+    "src/**/*.test.ts",
+    "src/**/*.test.tsx"
   ]
 }
