@@ -68,6 +68,7 @@ export const METACORE_FEDERATION_SINGLETONS = [
   'react-dom',
   '@asteby/metacore-runtime-react',
   '@asteby/metacore-theme',
+  '@asteby/metacore-app-providers',
   '@asteby/metacore-auth',
   '@asteby/metacore-ui',
   '@asteby/metacore-sdk',
@@ -109,12 +110,25 @@ export interface MetacoreFederationOptions {
    * Paquetes adicionales a marcar como `singleton: true` con `requiredVersion: false`,
    * por encima de los obligatorios. Para extras opcionales del ecosistema
    * (`@tanstack/react-query`, `i18next`, `zustand`, `sonner`, ...).
+   *
+   * Forma simple — solo nombres, todos heredan `{ singleton: true, requiredVersion: false }`:
+   *   `extras: ['@tanstack/react-query', 'i18next']`
    */
   extras?: string[]
   /**
+   * Paquetes extra con config explícita por paquete. Mergeado encima de los
+   * defaults canónicos. Equivalente a `extras` + `overrides` en una sola llave:
+   *   `extra: { lodash: { singleton: true } }`
+   * Pensado para el caso típico — "necesito añadir un paquete con su config" —
+   * sin pedirle al caller que escriba dos campos separados. Si un paquete aparece
+   * tanto en `extras` como en `extra`, gana `extra`.
+   */
+  extra?: Record<string, MetacoreFederationShareConfig>
+  /**
    * Override per-package — útil si se quiere forzar `requiredVersion: '^X'` para un
    * paquete específico, o desactivar `singleton` puntualmente. Se mergea sobre la
-   * entry base.
+   * entry base. Equivalente semántico a `extra` pero la convención es: usar
+   * `overrides` para AJUSTAR defaults, `extra` para AÑADIR paquetes nuevos.
    */
   overrides?: Record<string, MetacoreFederationShareConfig>
 }
@@ -151,9 +165,25 @@ export interface MetacoreFederationConfig {
  * }))
  * ```
  *
- * Los 7 singletons obligatorios (`METACORE_FEDERATION_SINGLETONS`) se declaran
- * con `singleton: true, requiredVersion: false` — el host gana en versiones.
- * Cuando los packages estabilicen su contrato federado, pasamos a `^X` por package.
+ * Añadir extras con config explícita:
+ * ```ts
+ * metacoreFederationShared({
+ *   host: 'metacore_ops',
+ *   extra: { lodash: { singleton: true } },
+ * })
+ * ```
+ *
+ * Los singletons obligatorios (`METACORE_FEDERATION_SINGLETONS`) se declaran
+ * con `singleton: true, requiredVersion: false`:
+ *
+ *   - `singleton: true` — UNA copia compartida entre host y addon. Sin esto
+ *     cada remote bundlea su propio React y se rompen los hooks ("Invalid hook
+ *     call") además de los contextos (Auth, Theme, Query, Router).
+ *   - `requiredVersion: false` — evita un 404 en runtime cuando addons quedan
+ *     rezagados respecto al host. Module Federation no exige match exacto; el
+ *     host gana al ser el primero en init the share scope, y los addons
+ *     consumen su versión. Cuando los packages estabilicen su contrato
+ *     federado pasamos a `^X` por package vía `overrides`.
  */
 export function metacoreFederationShared(
   opts: MetacoreFederationOptions
@@ -164,16 +194,32 @@ export function metacoreFederationShared(
     filename = 'remoteEntry.js',
     exposes,
     extras = [],
+    extra = {},
     overrides = {},
   } = opts
 
   const shared: Record<string, MetacoreFederationShareConfig> = {}
+  // Defaults canónicos: cada paquete del ecosistema se declara `singleton:true`
+  // para garantizar UNA sola copia entre host y addon — evita el clásico "Invalid
+  // hook call" cuando React se duplica, y mantiene contextos compartidos (Auth,
+  // Theme, Query, Router) entre módulos federados.
+  // `requiredVersion:false` evita un 404 en runtime cuando un addon queda
+  // rezagado de versiones del host: Module Federation no exige match exacto y el
+  // host gana al ser el primero en init the share scope.
   for (const name of METACORE_FEDERATION_SINGLETONS) {
     shared[name] = { singleton: true, requiredVersion: false }
   }
+  // `extras` (string[]) — paquetes extra que solo necesitan los defaults.
   for (const name of extras) {
     shared[name] ??= { singleton: true, requiredVersion: false }
   }
+  // `extra` (Record) — paquetes nuevos con config explícita. Es la forma canónica
+  // cuando un caller quiere algo distinto al default (p.ej. forzar requiredVersion).
+  for (const [name, cfg] of Object.entries(extra)) {
+    shared[name] = { singleton: true, requiredVersion: false, ...cfg }
+  }
+  // `overrides` — ajusta UN paquete existente sin alterar el resto. Se aplica
+  // al final para que tenga la última palabra sobre defaults y `extra`.
   for (const [name, override] of Object.entries(overrides)) {
     shared[name] = { ...(shared[name] ?? {}), ...override }
   }
