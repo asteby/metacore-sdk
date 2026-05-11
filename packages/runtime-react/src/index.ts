@@ -26,6 +26,14 @@ export * from './navigation-builder'
 export * from './i18n-provider'
 export * from './api-context'
 export * from './metadata-cache'
+export {
+    ADDON_MANIFEST_CHANGED_TYPE,
+    wireHotSwapInvalidation,
+    useManifestHotSwapSubscriber,
+    type AddonManifestChangedMessage,
+    type ManifestHotSwapClient,
+    type WireHotSwapInvalidationOptions,
+} from './manifest-hotswap-subscriber'
 export * from './dynamic-icon'
 export type {
     ColumnFilterConfig,
