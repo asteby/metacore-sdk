@@ -3,7 +3,7 @@ module github.com/asteby/metacore-sdk
 go 1.25.7
 
 require (
-	github.com/asteby/metacore-kernel v0.10.0
+	github.com/asteby/metacore-kernel v0.10.1
 	github.com/gofiber/fiber/v3 v3.2.0
 	github.com/google/uuid v1.6.0
 	github.com/stripe/stripe-go/v85 v85.1.0
