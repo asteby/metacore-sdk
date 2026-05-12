@@ -90,6 +90,8 @@ github.com/asteby/metacore-kernel v0.9.0 h1:wFUkMQIaej5Sa8L2Mv67mgN2pUrh2Qm0jUEu
 github.com/asteby/metacore-kernel v0.9.0/go.mod h1:FFQuZneWYuzHScNppc1VWmtPjLXmnbP6aTPNXWYcl6k=
 github.com/asteby/metacore-kernel v0.10.0 h1:U0R+WKcs+y1RcvVU5QlXOYXIbY+7ALPc3OlRBFBXlao=
 github.com/asteby/metacore-kernel v0.10.0/go.mod h1:HmoCSOEd7hV2vQ/aDlwcxrU/iNUJt6Qt6hLdWXR55p4=
+github.com/asteby/metacore-kernel v0.10.1 h1:vN7AVsEw6Z3G/G1JIeSc7j6tjSZc0b9G9KVpql+20sQ=
+github.com/asteby/metacore-kernel v0.10.1/go.mod h1:HmoCSOEd7hV2vQ/aDlwcxrU/iNUJt6Qt6hLdWXR55p4=
 github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973/go.mod h1:Dwedo/Wpr24TaqPxmxbtue+5NUziq4I4S80YR8gNf3Q=
 github.com/beorn7/perks v1.0.0/go.mod h1:KWe93zE9D1o94FZ5RNwFwVgaQK1VOXiVxmqh+CedLV8=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
