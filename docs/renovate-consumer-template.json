@@ -1,9 +1,5 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
-  "packageRules": [
-    { "matchPackagePatterns": ["^@asteby/metacore-"], "matchUpdateTypes": ["patch","minor"], "automerge": true, "platformAutomerge": true, "groupName": "metacore core" },
-    { "matchPackagePatterns": ["^@asteby/metacore-"], "matchUpdateTypes": ["major"], "automerge": false, "assignees": ["@tech-lead"] }
-  ],
-  "schedule": ["at any time"]
+  "$comment": "Template for repos that consume @asteby/metacore-* packages. Drop this at the repo root as renovate.json. The asteby/renovate-config preset is the singularity source of truth — it owns auto-merge policy (including majors), grouping, schedules, and labels. Do NOT add overrides here unless you have a repo-specific exception; if you need a change for the whole ecosystem, edit asteby/renovate-config instead.",
+  "extends": ["github>asteby/renovate-config"]
 }
