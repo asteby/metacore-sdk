@@ -99,3 +99,24 @@ export function SignInRoute() {
 - **Factory, not singleton** — `createApiClient` avoids baking env vars into the library. The host app wires token / language / branch getters.
 - **Pages are brand-less** — accept `brandName`, `logo`, `showcase`, `headerSlot`, `footerSlot` so each app supplies its own identity.
 - **`onSubmit` delegated** — pages don't assume endpoints, toasts, or navigation. The caller owns the network layer.
+
+## `AuthProvider` / `useAuth` are deprecated
+
+Both exports remain in the public API for back-compat, but they are now thin wrappers over `useAuthStore`:
+
+- `AuthProvider` is a `Fragment` that, on mount, optionally seeds the store with an `initialUser` / `initialAccessToken` (SSR / hydration use-case). It owns no local state and renders no Context.
+- `useAuth()` projects the store's `AuthUser` down to the legacy `{ user, login, logout, isAuthenticated }` shape. `login` / `logout` mutate the same store, so `useAuth()` and `useAuthStore` cannot diverge.
+
+**Prefer `useAuthStore` directly in new code:**
+
+```ts
+// Reading
+const user = useAuthStore((state) => state.auth.user)
+
+// Writing
+useAuthStore.getState().auth.setUser(fullUser)
+useAuthStore.getState().auth.setAccessToken(token)
+useAuthStore.getState().auth.reset() // clears both user & token
+```
+
+The legacy hook is kept indefinitely; it's free of cost now that it's a read-through. The deprecation is purely a "prefer the typed, fully-featured surface" hint — not a removal timeline.
