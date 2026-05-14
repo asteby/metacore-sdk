@@ -33,6 +33,7 @@ coverage/
 # Go build artifacts
 bin/
 !packages/create-metacore-app/bin/
+!packages/create-addon/bin/
 *.test
 
 # Go workspace (local dev only — never published)
