@@ -177,26 +177,33 @@ pos/
 ```ts
 import { defineConfig } from 'vite'
 import federation from '@originjs/vite-plugin-federation'
-import { metacoreOptimizeDeps } from '@asteby/metacore-starter-config'
+import {
+  metacoreFederationShared,
+  metacoreOptimizeDeps,
+} from '@asteby/metacore-starter-config/vite'
 
 export default defineConfig({
   plugins: [
-    federation({
-      name: 'metacore_pos',
-      filename: 'remoteEntry.js',
-      exposes: {
-        './pages/register': './src/pages/register.tsx',
-        './pages/kitchen':  './src/pages/kitchen.tsx',
-      },
-      shared: ['react', 'react-dom', 'react-i18next'],
-    }),
+    federation(
+      metacoreFederationShared({
+        host: 'metacore_pos',                                // == manifest.frontend.container
+        exposes: {
+          './pages/register': './src/pages/register.tsx',
+          './pages/kitchen':  './src/pages/kitchen.tsx',
+        },
+        extras: ['react-i18next'],                           // optional: extra singletons beyond the canonical seven
+      }),
+    ),
   ],
-  optimizeDeps: metacoreOptimizeDeps(),
+  optimizeDeps: metacoreOptimizeDeps,
   build: { target: 'esnext', modulePreload: false, cssCodeSplit: false },
 })
 ```
 
-A single bundle, two exposed modules, one `remoteEntry.js`.
+A single bundle, two exposed modules, one `remoteEntry.js`. The `shared`
+config is delegated to `metacoreFederationShared()` so every SDK singleton
+(React, the registry, theme, auth, app-providers, UI) is declared in one
+place — see [`docs/federation.md`](./federation.md).
 
 ### `manifest.json` (register)
 

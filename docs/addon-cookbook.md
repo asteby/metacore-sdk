@@ -92,14 +92,29 @@ Declare the action under the model with `fields[]`:
 
 `<DynamicTable>` adds "Reassign" to the row dropdown. Clicking it fires `<ActionModalDispatcher>`, which renders a modal with the declared inputs and POSTs to `/data/tickets/<id>/action/reassign`. Wire the server side via `hooks` (webhook), a WASM export, or a compiled `ActionInterceptor` — see [`manifest-spec.md`](./manifest-spec.md#8-hooks-and-lifecycle_hooks).
 
-For full custom UI register a component:
+For full custom UI register a component on the modal registry — the
+component must accept the canonical `ModalProps` and narrow `payload` at the
+entry:
 
 ```tsx
-import { actionRegistry } from '@asteby/metacore-sdk'
-actionRegistry.register('tickets', 'reassign', ReassignDialog)
+import type { AddonAPI, ModalProps } from '@asteby/metacore-sdk'
+
+interface ReassignPayload { ticketId: string }
+
+function ReassignDialog(props: ModalProps) {
+  const { ticketId } = props.payload as unknown as ReassignPayload
+  // …form, submit, then:
+  // props.close({ ticketId })
+}
+
+export function register(api: AddonAPI) {
+  api.registry.registerModal({ slug: 'tickets.reassign', component: ReassignDialog })
+}
 ```
 
-The dispatcher routes to your component when `(model, action.key)` matches.
+The action's `modal: "tickets.reassign"` field in the manifest tells the
+dispatcher to mount this component instead of the generic field-driven
+dialog. See [`docs/modals.md`](./modals.md) for the full contract.
 
 ## How do I require a permission for a button?
 
@@ -201,7 +216,17 @@ Declare a federation entry in the manifest:
 }
 ```
 
-Build the frontend with `@originjs/vite-plugin-federation` and a `name` matching `container`. The exposed module must export `register(api: AddonAPI)`, which receives the host SDK and registers slot contributions, action handlers, navigation items, etc.
+Build the frontend with `@originjs/vite-plugin-federation`, wired through
+`metacoreFederationShared()` from `@asteby/metacore-starter-config/vite` —
+the canonical helper that pre-declares every SDK singleton, including the
+ones whose type the upstream plugin recently dropped from its public
+`SharedConfig`. See [`docs/federation.md`](./federation.md) for the full
+sample and the rationale; the `name` option must match the manifest's
+`container`.
+
+The exposed module must export `register(api: AddonAPI)`, which receives the
+host SDK and registers slot contributions, action handlers, navigation items,
+etc.
 
 ```tsx
 // frontend/src/plugin.tsx

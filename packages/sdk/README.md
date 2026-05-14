@@ -53,6 +53,31 @@ slotRegistry.contribute('dashboard.widgets', () => <RevenueWidget />)
 actionRegistry.register('invoice.send', async (ctx, payload) => { /* … */ })
 ```
 
+### Modals
+
+The `Registry` holds modal contributions keyed by slug; the host renders them
+through `<ActionModalDispatcher>` whenever a manifest action sets
+`modal: "<slug>"`. The component must accept the canonical `ModalProps`:
+
+```ts
+import type { ModalProps } from '@asteby/metacore-sdk'
+
+interface ReassignPayload { ticketId: string }
+
+export function ReassignModal(props: ModalProps) {
+  const { ticketId } = props.payload as unknown as ReassignPayload
+  // …on submit:
+  // props.close({ ticketId })
+}
+```
+
+`payload` is typed as `Record<string, unknown>` so the registry can hold any
+addon's modal — addons **narrow at entry** to their declared payload shape.
+The double cast through `unknown` is intentional. See
+[`docs/modals.md`](https://github.com/asteby/metacore-sdk/blob/main/docs/modals.md)
+for the full contract, why the generic was removed, and a migration note for
+modals authored before 2.5.
+
 ### Typed API client
 
 ```ts
