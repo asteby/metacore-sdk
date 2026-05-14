@@ -85,6 +85,51 @@ func New(db *gorm.DB, svc *billing.Service, cfg Config) *Handler {
 }
 
 // ──────────────────────────────────────────────────────────────────────
+// GET /api/billing/features
+// ──────────────────────────────────────────────────────────────────────
+
+// Features returns the caller's plan feature matrix — the JSON-decoded
+// feature slugs from Plan.Features plus the numeric limits (agents,
+// contacts, messages_per_month, devices, users). The frontend's
+// `useFeature(key)` hook reads off this single endpoint and React Query
+// caches it for the page lifetime.
+//
+// Response shape:
+//
+//	{
+//	  "success": true,
+//	  "data": {
+//	    "plan_slug": "pro",
+//	    "plan_name": "Pro",
+//	    "features": {"rag_advanced": true, "flow_builder": true, ...},
+//	    "limits":   {"agents": -1, "messages_per_month": -1, ...},
+//	    "trialing": true
+//	  }
+//	}
+//
+// -1 in a limit means unlimited.
+func (h *Handler) Features(c fiber.Ctx) error {
+	orgID, ok := c.Locals("organization_id").(uuid.UUID)
+	if !ok {
+		return c.Status(401).JSON(fiber.Map{"success": false, "error": "unauthorized"})
+	}
+	matrix, err := h.billing.GetFeatureMatrix(c.Context(), orgID)
+	if err != nil {
+		// No subscription row yet (fresh signup that hasn't been seeded) —
+		// return an empty matrix instead of 404 so the frontend hook can
+		// render gracefully (everything disabled but the page loads).
+		return c.JSON(fiber.Map{"success": true, "data": fiber.Map{
+			"plan_slug": "",
+			"plan_name": "",
+			"features":  fiber.Map{},
+			"limits":    fiber.Map{},
+			"trialing":  false,
+		}})
+	}
+	return c.JSON(fiber.Map{"success": true, "data": matrix})
+}
+
+// ──────────────────────────────────────────────────────────────────────
 // GET /api/billing/subscription
 // ──────────────────────────────────────────────────────────────────────
 
