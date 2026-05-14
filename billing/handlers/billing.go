@@ -59,6 +59,17 @@ type Config struct {
 	DefaultReturnPath string
 	// UserLookup resolves the caller's display name for first checkout.
 	UserLookup UserLookup
+	// ResourceCounters maps a usage metric label (the same one used by the
+	// frontend) to the GORM table name to count for the current org. Used
+	// by GET /billing/usage to surface live consumption for absolute-count
+	// resources like agents/devices. Example:
+	//
+	//   ResourceCounters: map[string]string{"agents": "agents", "devices": "devices"}
+	//
+	// Tables must have an `organization_id` column. Hosts that don't pass
+	// a map only see the monthly metrics from usage_metrics in the usage
+	// response.
+	ResourceCounters map[string]string
 }
 
 // Handler exposes the billing routes for Fiber v3.
@@ -82,6 +93,58 @@ func New(db *gorm.DB, svc *billing.Service, cfg Config) *Handler {
 		cfg.UserLookup = NewDefaultUserLookup(db)
 	}
 	return &Handler{db: db, billing: svc, cfg: cfg}
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// GET /api/billing/usage
+// ──────────────────────────────────────────────────────────────────────
+
+// Usage returns the org's current consumption snapshot — paired with
+// /billing/features (which serves limits) it lets the frontend compute
+// percentage-used per metric without doing a separate round-trip per
+// resource.
+//
+// Counts returned:
+//   - Every metric named in Config.ResourceCounters → SELECT COUNT(*) on
+//     the configured table filtered by organization_id (used for absolute
+//     resource caps: agents, devices, knowledge items).
+//   - Every row in usage_metrics for this org in the current month
+//     (used for per-month volume counters: messages_this_month, etc.)
+//
+// Response shape:
+//
+//	{
+//	  "success": true,
+//	  "data": {
+//	    "agents": 3,
+//	    "devices": 1,
+//	    "messages_this_month": 142
+//	  }
+//	}
+func (h *Handler) Usage(c fiber.Ctx) error {
+	orgID, ok := c.Locals("organization_id").(uuid.UUID)
+	if !ok {
+		return c.Status(401).JSON(fiber.Map{"success": false, "error": "unauthorized"})
+	}
+
+	out := fiber.Map{}
+
+	for metric, table := range h.cfg.ResourceCounters {
+		var count int64
+		if err := h.db.Table(table).Where("organization_id = ?", orgID).Count(&count).Error; err == nil {
+			out[metric] = count
+		}
+	}
+
+	var metrics []models.UsageMetric
+	if err := h.db.Where("organization_id = ? AND period_start = ?", orgID, models.CurrentMonthStart()).
+		Find(&metrics).Error; err == nil {
+		for _, m := range metrics {
+			out[m.Metric+"_this_month"] = m.Count
+		}
+	}
+
+	return c.JSON(fiber.Map{"success": true, "data": out})
 }
 
 // ──────────────────────────────────────────────────────────────────────
