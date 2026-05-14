@@ -12,7 +12,7 @@
  */
 
 import React from "react";
-import { definePlugin, type AddonAPI } from "@asteby/metacore-sdk";
+import { definePlugin, type AddonAPI, type ModalProps } from "@asteby/metacore-sdk";
 
 function TicketsPage({ api }: { api: AddonAPI }) {
   return (
@@ -26,25 +26,37 @@ function TicketsPage({ api }: { api: AddonAPI }) {
   );
 }
 
-function ReassignModal(props: {
-  payload: { ticketId: string };
-  close: (result?: unknown) => void;
-}) {
+/**
+ * Payload contract enforced by `manifest.actions.tickets[].fields`. The SDK
+ * widens `ModalProps.payload` to `Record<string, unknown>` because the
+ * registry is action-agnostic; the addon narrows back at the modal entry.
+ */
+interface ReassignPayload {
+  ticketId: string;
+}
+
+function ReassignModal({ payload, close }: ModalProps) {
+  // `Record<string, unknown>` → `ReassignPayload` needs the `unknown`
+  // hop because TS treats the two as non-overlapping; the manifest gate
+  // (host-side) is the actual runtime guarantee.
+  const { ticketId } = payload as unknown as ReassignPayload;
   const [assignee, setAssignee] = React.useState("");
   return (
     <div className="grid gap-3">
-      <label className="text-sm font-medium">Nuevo asignado</label>
+      <label className="text-sm font-medium">
+        Nuevo asignado para ticket {ticketId}
+      </label>
       <input
         value={assignee}
         onChange={(e) => setAssignee(e.target.value)}
         className="rounded-md border px-3 py-2"
       />
       <div className="flex justify-end gap-2">
-        <button onClick={() => props.close()} className="text-sm">
+        <button onClick={() => close()} className="text-sm">
           Cancelar
         </button>
         <button
-          onClick={() => props.close({ assignee_id: assignee })}
+          onClick={() => close({ assignee_id: assignee })}
           className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground"
         >
           Reasignar

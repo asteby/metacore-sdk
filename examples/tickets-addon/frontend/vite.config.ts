@@ -20,6 +20,23 @@ import federation from "@originjs/vite-plugin-federation";
 // case (served from the host backend) the base is the bundle-relative root.
 const base = process.env.VITE_ADDON_BASE_URL ?? "./";
 
+// The plugin still honours `singleton` at runtime, but its exported
+// `SharedConfig` no longer types the field (drift introduced in
+// @originjs/vite-plugin-federation 1.4.x). We declare a local share type that
+// preserves the field so the literal type-checks while runtime behaviour is
+// unchanged. Same approach the canonical `metacoreFederationShared()` helper
+// in `@asteby/metacore-starter-config` uses.
+interface FederationShareConfig {
+  singleton?: boolean;
+  requiredVersion?: string | false;
+}
+
+const shared: Record<string, FederationShareConfig> = {
+  react: { singleton: true, requiredVersion: false },
+  "react-dom": { singleton: true, requiredVersion: false },
+  "@asteby/metacore-sdk": { singleton: true, requiredVersion: false },
+};
+
 export default defineConfig({
   base,
   plugins: [
@@ -33,11 +50,7 @@ export default defineConfig({
       },
       // Shared deps come from the host's shared scope. `requiredVersion: false`
       // keeps the addon forgiving about minor host bumps; the host wins.
-      shared: {
-        react: { singleton: true, requiredVersion: false },
-        "react-dom": { singleton: true, requiredVersion: false },
-        "@asteby/metacore-sdk": { singleton: true, requiredVersion: false },
-      },
+      shared,
     }),
   ],
   build: {

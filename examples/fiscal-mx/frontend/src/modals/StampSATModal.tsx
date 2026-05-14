@@ -1,13 +1,27 @@
 import React from "react";
+import type { ModalProps } from "@asteby/metacore-sdk";
+
+/**
+ * Payload contract enforced by `manifest.actions.cfdi_invoices[].fields`. The
+ * SDK widens `ModalProps.payload` to `Record<string, unknown>` because the
+ * registry is action-agnostic; the addon narrows back to the manifest-declared
+ * shape at the modal entry.
+ */
+interface StampSATPayload {
+  record_id: string;
+  rfc_receptor?: string;
+  uso_cfdi?: string;
+}
 
 // Host contract: a registered modal receives the action payload and a close
 // callback. The payload's shape follows manifest.actions[].fields.
-export function StampSATModal(props: {
-  payload: { record_id: string; rfc_receptor?: string; uso_cfdi?: string };
-  close: (result?: { rfc_receptor: string; uso_cfdi: string }) => void;
-}) {
-  const [rfc, setRfc] = React.useState(props.payload.rfc_receptor ?? "");
-  const [uso, setUso] = React.useState(props.payload.uso_cfdi ?? "G03");
+export function StampSATModal({ payload, close }: ModalProps) {
+  // `Record<string, unknown>` → `StampSATPayload` needs the `unknown` hop
+  // because TS treats the two as non-overlapping; the manifest gate
+  // (host-side) is the actual runtime guarantee.
+  const { rfc_receptor, uso_cfdi } = payload as unknown as StampSATPayload;
+  const [rfc, setRfc] = React.useState(rfc_receptor ?? "");
+  const [uso, setUso] = React.useState(uso_cfdi ?? "G03");
   const valid = /^[A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3}$/.test(rfc);
 
   return (
@@ -34,12 +48,12 @@ export function StampSATModal(props: {
       </select>
 
       <div className="flex justify-end gap-2 mt-2">
-        <button onClick={() => props.close()} className="text-sm">
+        <button onClick={() => close()} className="text-sm">
           Cancelar
         </button>
         <button
           disabled={!valid}
-          onClick={() => props.close({ rfc_receptor: rfc, uso_cfdi: uso })}
+          onClick={() => close({ rfc_receptor: rfc, uso_cfdi: uso })}
           className="rounded-md bg-primary px-3 py-2 text-sm text-primary-foreground disabled:opacity-50"
         >
           Timbrar
