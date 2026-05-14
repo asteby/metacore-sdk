@@ -40,6 +40,19 @@ type Subscription struct {
 	GatewaySubscriptionID  string `json:"gateway_subscription_id" gorm:"size:255"`
 	GatewayCustomerID      string `json:"gateway_customer_id" gorm:"size:255"`
 	GatewayPaymentMethodID string `json:"gateway_payment_method_id" gorm:"size:255"`
+
+	// DunningStage tracks where in the trial-ending lifecycle this
+	// subscription is — read/written by the host's dunning sweep so the
+	// same warning email isn't sent twice. Empty / "none" means no
+	// warning has been emitted yet. Canonical values:
+	//   "none"           — no warning sent
+	//   "warned_3d"      — T-3 days reminder sent
+	//   "warned_1d"      — T-1 day reminder sent
+	//   "expired_notified" — T+0 expiration email sent
+	//   "grace_expired"  — T+7 downgrade email sent
+	// Hosts can extend the vocabulary; SDK consumers should treat
+	// unknown values as "already-warned" (defensive: avoids resending).
+	DunningStage string `json:"dunning_stage,omitempty" gorm:"size:30;default:'none'"`
 }
 
 // TableName lets hosts override the GORM table name without subclassing.
