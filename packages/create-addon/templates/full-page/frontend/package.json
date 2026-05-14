@@ -17,7 +17,7 @@
   },
   "devDependencies": {
     "@asteby/metacore-sdk": "^2.5.0",
-    "@asteby/metacore-runtime-react": "^4.0.0",
+    "@asteby/metacore-runtime-react": "^10.0.0",
     "@asteby/metacore-starter-config": "^2.2.0",
     "@asteby/metacore-theme": "^1.0.0",
     "@asteby/metacore-ui": "^1.0.0",
