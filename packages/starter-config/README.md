@@ -97,6 +97,14 @@ export default defineConfig(
 
 ### Module Federation singletons (`metacoreFederationShared`)
 
+> `metacoreFederationShared()` is the **canonical way** to configure Module
+> Federation for any metacore host or addon. Authoring a `shared:` block by
+> hand against `@originjs/vite-plugin-federation`'s public `SharedConfig`
+> type breaks on plugin >= 1.4 (the `singleton` field was dropped from the
+> type, even though the runtime still honours it). See
+> [`docs/federation.md`](../../docs/federation.md) for the full rationale
+> and the escape hatch for the rare case where the helper does not fit.
+
 Toda app federada (host o addon) debe compartir las mismas instancias de React,
 de los providers (`@asteby/metacore-{runtime-react,theme,auth,ui}`) y del registry
 del SDK (`@asteby/metacore-sdk`). Caso contrario, los addons terminan con su propia

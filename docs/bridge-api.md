@@ -301,7 +301,7 @@ export default defineConfig({
 })
 ```
 
-The seven mandatory singletons are:
+The mandatory singletons are:
 
 - `react`
 - `react-dom`
@@ -317,7 +317,10 @@ Each is declared with `{ singleton: true, requiredVersion: false }`. The
 exact match at runtime, and the host wins the share scope race. Addons that
 linger on older shell versions still load. Addons that want stricter version
 gating pass `overrides`. Detailed reasoning per package lives in
-[`docs/audits/2026-05-04-mf-shared-deps.md`](./audits/2026-05-04-mf-shared-deps.md).
+[`docs/audits/2026-05-04-mf-shared-deps.md`](./audits/2026-05-04-mf-shared-deps.md);
+the canonical addon/host wiring is in [`docs/federation.md`](./federation.md) —
+hand-rolling the `shared:` block against the plugin's public types is
+deprecated.
 
 ### 2. The addon receives every shell service through hooks, never imports
 
