@@ -2,9 +2,10 @@
 export { useAuthStore, AUTH_STORAGE_KEYS } from './store'
 export type { AuthUser, AuthState } from './store'
 
-// Provider
+// Provider — thin wrapper around the store, kept for back-compat.
+// New code should consume `useAuthStore` directly.
 export { AuthProvider, useAuth } from './provider'
-export type { AuthProviderProps } from './provider'
+export type { AuthProviderProps, LegacyAuthUser } from './provider'
 
 // API client factory
 export { createApiClient } from './api-client'
