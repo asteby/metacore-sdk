@@ -13,6 +13,7 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 
@@ -156,6 +157,52 @@ func (g *Guard) CheckQuota(_ context.Context, orgID uuid.UUID, metric string, pl
 	return Decision{Allowed: true}
 }
 
+// CheckFeature returns a Decision that 402s callers whose current plan does
+// NOT include the given feature slug. Plan.Features is the source of truth
+// (JSON-encoded array of strings, seeded per plan).
+//
+// Permissive when no subscription row exists yet — same convention as
+// CheckActiveSubscription. The host's auth.Register seeds the subscription
+// on signup so this is a fresh-DB-only edge case.
+func (g *Guard) CheckFeature(_ context.Context, orgID uuid.UUID, featureKey string) Decision {
+	if featureKey == "" {
+		return Decision{Allowed: true}
+	}
+	sub, plan := g.loadSubscription(orgID)
+	if sub == nil || plan == nil {
+		return Decision{Allowed: true}
+	}
+	for _, f := range decodeFeatureSlugs(plan.Features) {
+		if f == featureKey {
+			return Decision{Allowed: true}
+		}
+	}
+	return Decision{
+		Allowed:    false,
+		StatusCode: 402,
+		Reason:     "feature_locked",
+		Message:    "Esta funcionalidad no está incluida en tu plan actual.",
+		Extra: map[string]any{
+			"feature":      featureKey,
+			"plan_slug":    plan.Slug,
+			"upgrade_path": "/settings/billing",
+		},
+	}
+}
+
+// decodeFeatureSlugs parses the JSON-encoded Plan.Features string. Returns
+// nil on any error so a malformed seed never crashes a request.
+func decodeFeatureSlugs(raw string) []string {
+	if raw == "" {
+		return nil
+	}
+	var out []string
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		return nil
+	}
+	return out
+}
+
 // PlanRank establishes ordering for plan checks. Unknown slugs rank 0.
 func PlanRank(slug string) int {
 	switch slug {
@@ -263,5 +310,19 @@ func (m *FiberMiddleware) RequireQuota(metric string, planLimitField PlanLimitFi
 			return c.Status(401).JSON(fiber.Map{"success": false, "error": "unauthorized"})
 		}
 		return renderDecision(c, m.g.CheckQuota(c.Context(), orgID, metric, planLimitField))
+	}
+}
+
+// RequireFeature 402s callers whose current plan does not include the
+// given feature slug. Unlike RequirePlan (tier-based), this checks the
+// JSON-encoded Plan.Features list, which lets a host gate on arbitrary
+// feature combinations without enforcing a strict tier ladder.
+func (m *FiberMiddleware) RequireFeature(featureKey string) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		orgID, err := orgFromLocals(c)
+		if err != nil {
+			return c.Status(401).JSON(fiber.Map{"success": false, "error": "unauthorized"})
+		}
+		return renderDecision(c, m.g.CheckFeature(c.Context(), orgID, featureKey))
 	}
 }
