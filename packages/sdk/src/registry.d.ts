@@ -26,7 +26,7 @@ export interface SlotContribution {
     /** Slot name: "invoice.header.right", "dashboard.widget", etc. */
     name: string;
     component: ComponentType<unknown>;
-    /** Lower renders first. */
+    /** Sort weight; higher renders first. Default 0. See docs/slot-priority.md. */
     priority?: number;
 }
 export interface ModalProps {
