@@ -22,6 +22,8 @@ class SlotRegistryImpl {
         const entry: SlotEntry = { id: slotId, component, priority: opts?.priority ?? 0, source: opts?.source }
         const list = this.slots.get(slotId) ?? []
         list.push(entry)
+        // Higher priority renders first — canonical across SDK and runtime-react.
+        // See docs/slot-priority.md.
         list.sort((a, b) => b.priority - a.priority)
         this.slots.set(slotId, list)
         this.emit()
