@@ -157,6 +157,51 @@ func (g *Guard) CheckQuota(_ context.Context, orgID uuid.UUID, metric string, pl
 	return Decision{Allowed: true}
 }
 
+// CheckResourceCount returns a Decision that 402s callers who already have
+// `limit` rows in the host's resource table for this org. -1 means unlimited.
+//
+// Unlike CheckQuota (which reads a per-month counter from usage_metrics),
+// this counts absolute resource rows — agents, devices, knowledge items.
+// The host passes the table name (e.g. "agents") and a PlanLimitField that
+// projects the matching cap (Plan.MaxAgents). The count query is scoped to
+// rows with organization_id = orgID; tables without that column will
+// silently match nothing and the guard will pass (worst case, the host
+// catches the misuse during integration).
+func (g *Guard) CheckResourceCount(_ context.Context, orgID uuid.UUID, metric string, tableName string, planLimit PlanLimitField) Decision {
+	_, plan := g.loadSubscription(orgID)
+	if plan == nil {
+		return Decision{Allowed: true}
+	}
+	limit := planLimit(plan)
+	if limit < 0 {
+		return Decision{Allowed: true}
+	}
+
+	var count int64
+	if err := g.db.Table(tableName).Where("organization_id = ?", orgID).Count(&count).Error; err != nil {
+		// Don't let a count query failure 5xx the request — return permissive
+		// and rely on logs to catch the misconfiguration.
+		return Decision{Allowed: true}
+	}
+
+	if int(count) >= limit {
+		return Decision{
+			Allowed:    false,
+			StatusCode: 402,
+			Reason:     "resource_limit_reached",
+			Message:    "Alcanzaste el límite de tu plan para este recurso.",
+			Extra: map[string]any{
+				"metric":       metric,
+				"current":      count,
+				"limit":        limit,
+				"plan_slug":    plan.Slug,
+				"upgrade_path": "/settings/billing",
+			},
+		}
+	}
+	return Decision{Allowed: true}
+}
+
 // CheckFeature returns a Decision that 402s callers whose current plan does
 // NOT include the given feature slug. Plan.Features is the source of truth
 // (JSON-encoded array of strings, seeded per plan).
@@ -324,5 +369,27 @@ func (m *FiberMiddleware) RequireFeature(featureKey string) fiber.Handler {
 			return c.Status(401).JSON(fiber.Map{"success": false, "error": "unauthorized"})
 		}
 		return renderDecision(c, m.g.CheckFeature(c.Context(), orgID, featureKey))
+	}
+}
+
+// RequireResourceCount 402s callers who have already hit the per-plan cap
+// on rows in the named table for their org. Pass the metric label (used in
+// the error body) and a PlanLimitField selecting the right Plan.MaxX.
+//
+// Example:
+//
+//	api.Post("/dynamic/agents/me",
+//	    authMiddleware.AuthRequired,
+//	    billingMW.RequireResourceCount("agents", "agents",
+//	        func(p *models.Plan) int { return p.MaxAgents }),
+//	    handler.Create,
+//	)
+func (m *FiberMiddleware) RequireResourceCount(metric string, tableName string, planLimitField PlanLimitField) fiber.Handler {
+	return func(c fiber.Ctx) error {
+		orgID, err := orgFromLocals(c)
+		if err != nil {
+			return c.Status(401).JSON(fiber.Map{"success": false, "error": "unauthorized"})
+		}
+		return renderDecision(c, m.g.CheckResourceCount(c.Context(), orgID, metric, tableName, planLimitField))
 	}
 }
