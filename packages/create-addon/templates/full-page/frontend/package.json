@@ -1,0 +1,40 @@
+{
+  "name": "@metacore-addons/{{ADDON_KEY}}",
+  "version": "0.1.0",
+  "private": true,
+  "description": "{{ADDON_DESCRIPTION}}",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "@asteby/metacore-sdk": "^2.5.0",
+    "@asteby/metacore-runtime-react": "^4.0.0"
+  },
+  "devDependencies": {
+    "@asteby/metacore-sdk": "^2.5.0",
+    "@asteby/metacore-runtime-react": "^4.0.0",
+    "@asteby/metacore-starter-config": "^2.2.0",
+    "@asteby/metacore-theme": "^1.0.0",
+    "@asteby/metacore-ui": "^1.0.0",
+    "@originjs/vite-plugin-federation": "^1.3.5",
+    "@tailwindcss/vite": "^4.2.0",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react-swc": "^4.3.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "tailwindcss": "^4.2.0",
+    "typescript": "^6.0.0",
+    "vite": "^8.0.0"
+  },
+  "metacore": {
+    "expose": "./plugin",
+    "entry": "src/plugin.tsx",
+    "format": "federation"
+  }
+}

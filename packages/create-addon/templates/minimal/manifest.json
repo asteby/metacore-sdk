@@ -1,0 +1,38 @@
+{
+  "key": "{{ADDON_KEY}}",
+  "name": "{{ADDON_NAME}}",
+  "description": "{{ADDON_DESCRIPTION}}",
+  "version": "0.1.0",
+  "category": "utility",
+  "icon": "Puzzle",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+
+  "author": "{{AUTHOR}}",
+  "license": "{{LICENSE}}",
+
+  "navigation": [
+    {
+      "title": "{{ADDON_NAME}}",
+      "icon": "Puzzle",
+      "target": "sidebar.operations",
+      "items": [
+        {
+          "title": "{{ADDON_NAME}}",
+          "url": "/m/{{ADDON_KEY}}",
+          "icon": "Puzzle"
+        }
+      ]
+    }
+  ],
+
+  "capabilities": [],
+
+  "frontend": {
+    "entry": "/api/metacore/addons/{{ADDON_KEY}}/frontend/remoteEntry.js",
+    "format": "federation",
+    "expose": "./plugin",
+    "container": "metacore_{{ADDON_KEY}}",
+    "layout": "shell"
+  }
+}

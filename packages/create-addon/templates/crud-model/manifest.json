@@ -1,0 +1,93 @@
+{
+  "key": "{{ADDON_KEY}}",
+  "name": "{{ADDON_NAME}}",
+  "description": "{{ADDON_DESCRIPTION}}",
+  "version": "0.1.0",
+  "category": "utility",
+  "icon": "Database",
+  "kernel": ">=2.0.0 <3.0.0",
+  "tenant_isolation": "shared",
+
+  "author": "{{AUTHOR}}",
+  "license": "{{LICENSE}}",
+
+  "navigation": [
+    {
+      "title": "{{ADDON_NAME}}",
+      "icon": "Database",
+      "target": "sidebar.operations",
+      "items": [
+        {
+          "title": "{{ADDON_NAME}} — Items",
+          "url": "/m/{{ADDON_KEY}}_items",
+          "icon": "List",
+          "model": "{{ADDON_KEY}}_items"
+        }
+      ]
+    }
+  ],
+
+  "model_definitions": [
+    {
+      "table_name": "{{ADDON_KEY}}_items",
+      "model_key": "{{ADDON_KEY}}_items",
+      "label": "Items",
+      "org_scoped": true,
+      "soft_delete": true,
+      "columns": [
+        { "name": "title", "type": "string", "size": 255, "required": true },
+        { "name": "status", "type": "string", "size": 20, "required": true, "default": "'pending'", "index": true },
+        { "name": "amount_cents", "type": "int8", "default": "0" },
+        { "name": "metadata", "type": "jsonb" }
+      ]
+    }
+  ],
+
+  "actions": {
+    "{{ADDON_KEY}}_items": [
+      {
+        "key": "mark_done",
+        "name": "Mark Done",
+        "label": "Mark as done",
+        "icon": "CheckCircle2",
+        "confirm": true,
+        "requiresState": ["pending"]
+      }
+    ]
+  },
+
+  "events": ["{{ADDON_KEY}}.item.created", "{{ADDON_KEY}}.item.completed"],
+
+  "capabilities": [
+    {
+      "kind": "event:emit",
+      "target": "{{ADDON_KEY}}.*",
+      "reason": "Publish item lifecycle events"
+    }
+  ],
+
+  "backend": {
+    "runtime": "wasm",
+    "entry": "backend/backend.wasm",
+    "exports": ["mark_done"],
+    "memory_limit_mb": 64,
+    "timeout_ms": 10000
+  },
+
+  "settings": [
+    {
+      "key": "default_currency",
+      "label": "Default currency",
+      "type": "text",
+      "default_value": "USD"
+    }
+  ],
+
+  "frontend": {
+    "entry": "/api/metacore/addons/{{ADDON_KEY}}/frontend/remoteEntry.js",
+    "format": "federation",
+    "expose": "./plugin",
+    "container": "metacore_{{ADDON_KEY}}",
+    "layout": "shell"
+  }
+}

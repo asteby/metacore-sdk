@@ -1,0 +1,47 @@
+{
+  "name": "create-metacore-addon",
+  "version": "0.1.0",
+  "description": "Scaffolder for metacore addons. Run `npm create metacore-addon@latest my-addon`.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asteby/metacore-sdk",
+    "directory": "packages/create-addon"
+  },
+  "type": "module",
+  "bin": {
+    "create-metacore-addon": "./bin/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "bin",
+    "dist",
+    "templates",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --target node20 --clean --dts",
+    "dev": "tsup src/index.ts --format esm --target node20 --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "commander": "^14.0.0",
+    "kolorist": "^1.8.0",
+    "prompts": "^2.4.2",
+    "tiny-glob": "^0.2.9"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/prompts": "^2.4.9",
+    "tsup": "^8.3.5",
+    "typescript": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

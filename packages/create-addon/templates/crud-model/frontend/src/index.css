@@ -1,0 +1,12 @@
+@import 'tailwindcss';
+@import '@asteby/metacore-theme/tokens.css';
+
+/*
+ * Tailwind v4 needs explicit `@source` for every external package whose
+ * classes should land in the bundle. Without these, classes used inside
+ * `@asteby/metacore-*` packages (ui, runtime-react, auth, etc.) get
+ * tree-shaken away at build time. Memory: feedback_tailwind_v4_source_sdk.
+ */
+@source '../../../node_modules/@asteby/metacore-ui';
+@source '../../../node_modules/@asteby/metacore-runtime-react';
+@source '../../../node_modules/@asteby/metacore-sdk';
