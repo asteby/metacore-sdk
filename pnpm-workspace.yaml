@@ -7,3 +7,14 @@ packages:
 allowBuilds:
   '@swc/core': true
   esbuild: true
+
+packageExtensions:
+  'input-otp@*':
+    peerDependencies:
+      '@types/react': '^19'
+  'cmdk@*':
+    peerDependencies:
+      '@types/react': '^19'
+  'react-phone-number-input@*':
+    peerDependencies:
+      '@types/react': '^19'

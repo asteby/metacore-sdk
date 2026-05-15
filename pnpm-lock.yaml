@@ -4,6 +4,8 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+packageExtensionsChecksum: sha256-LupEPbJQb5/L/p/Q5zAeQytm6QmUNXwZmVKvuOVWLWg=
+
 importers:
 
   .:
@@ -765,7 +767,7 @@ importers:
         version: 12.38.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       input-otp:
         specifier: ^1.4.2
-        version: 1.4.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+        version: 1.4.2(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       lucide-react:
         specifier: ^1.7.0
         version: 1.16.0(react@19.2.6)
@@ -789,7 +791,7 @@ importers:
         version: 10.1.0(@types/react@19.2.14)(react@19.2.6)
       react-phone-number-input:
         specifier: ^3.4.16
-        version: 3.4.16(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+        version: 3.4.16(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       react-use-websocket:
         specifier: ^4.13.0
         version: 4.13.0
@@ -949,7 +951,7 @@ importers:
         version: 1.1.1(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       input-otp:
         specifier: ^1.4.2
-        version: 1.4.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+        version: 1.4.2(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       lucide-react:
         specifier: ^1.0.0
         version: 1.16.0(react@19.2.6)
@@ -3994,6 +3996,7 @@ packages:
   cmdk@1.1.1:
     resolution: {integrity: sha512-Vsv7kFaXm+ptHDMZ7izaRsP70GgrW9NBNGswt9OZaVBLlE0SNpDq8eu/VGXyF9r7M0azK3Wy7OlYXsuyYLFzHg==}
     peerDependencies:
+      '@types/react': ^19
       react: ^18 || ^19 || ^19.0.0-rc
       react-dom: ^18 || ^19 || ^19.0.0-rc
 
@@ -4624,6 +4627,7 @@ packages:
   input-otp@1.4.2:
     resolution: {integrity: sha512-l3jWwYNvrEa6NTCt7BECfCm48GvwuZzkoeG3gBL2w4CHeOXW3eKFmf9UNYkNfYc3mxMrthMnxjIE07MT0zLBQA==}
     peerDependencies:
+      '@types/react': ^19
       react: ^16.8 || ^17.0 || ^18.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^16.8 || ^17.0 || ^18.0 || ^19.0.0 || ^19.0.0-rc
 
@@ -5476,6 +5480,7 @@ packages:
   react-phone-number-input@3.4.16:
     resolution: {integrity: sha512-ix1+SIyGuLxnlAeW+XQNhwOmmDd4Zmr6Ng1eQl0E2XS8xIuue3gdZeBG4LGTMjTIFneOTO9pUPL+AEDhV6+r+A==}
     peerDependencies:
+      '@types/react': ^19
       react: '>=16.8'
       react-dom: '>=16.8'
 
@@ -9192,10 +9197,10 @@ snapshots:
       '@radix-ui/react-dialog': 1.1.15(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@radix-ui/react-id': 1.1.1(@types/react@19.2.14)(react@19.2.6)
       '@radix-ui/react-primitive': 2.1.4(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      '@types/react': 19.2.14
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)
     transitivePeerDependencies:
-      - '@types/react'
       - '@types/react-dom'
 
   colorette@1.2.1: {}
@@ -9949,8 +9954,9 @@ snapshots:
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)
 
-  input-otp@1.4.2(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
+  input-otp@1.4.2(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
     dependencies:
+      '@types/react': 19.2.14
       react: 19.2.6
       react-dom: 19.2.6(react@19.2.6)
 
@@ -10825,8 +10831,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  react-phone-number-input@3.4.16(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
+  react-phone-number-input@3.4.16(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
     dependencies:
+      '@types/react': 19.2.14
       classnames: 2.5.1
       country-flag-icons: 1.6.17
       input-format: 0.3.14(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
