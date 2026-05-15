@@ -3,3 +3,7 @@ packages:
   - 'templates/*'
   - 'examples/*'
   - 'examples/*/frontend'
+
+onlyBuiltDependencies:
+  - '@swc/core'
+  - esbuild
