@@ -1,5 +1,15 @@
 # @metacore-addons/fiscal-mx
 
+## 7.0.0
+
+### Patch Changes
+
+- Updated dependencies [dee623a]
+- Updated dependencies [56d2013]
+- Updated dependencies [1c4a108]
+- Updated dependencies [3a3ea4b]
+  - @asteby/metacore-sdk@2.6.0
+
 ## 6.0.0
 
 ### Patch Changes
