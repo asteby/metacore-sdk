@@ -1,5 +1,123 @@
 # @asteby/metacore-sdk
 
+## 2.6.0
+
+### Minor Changes
+
+- dee623a: docs: documenting `ModalProps.payload` widening and federation canonical helper.
+
+  Two contract changes that existed in code but had no docs:
+  1. **`ModalProps.payload` widening.** `packages/sdk/src/registry.ts` declares
+     `payload: Record<string, unknown>` — the registry holds modals from any
+     addon, so the typed shape cannot survive contravariance. Addons that used
+     to declare a narrow `payload: { ticketId }` directly on the prop type need
+     to switch to the **narrow-at-entry** pattern: type the component as
+     `ModalProps`, then `const { ticketId } = props.payload as unknown as MyPayload`
+     inside the body. The runtime contract is unchanged. See the new
+     [`docs/modals.md`](https://github.com/asteby/metacore-sdk/blob/main/docs/modals.md)
+     and the new "Modals" section in `packages/sdk/README.md`.
+  2. **`metacoreFederationShared()` is the canonical federation helper.**
+     `@originjs/vite-plugin-federation` >= 1.4 dropped `singleton` from its
+     public `SharedConfig` TypeScript type (the runtime still honours the
+     field). Any addon authoring a `shared:` block against the plugin's own
+     type will fail to typecheck on the next bump. The new
+     [`docs/federation.md`](https://github.com/asteby/metacore-sdk/blob/main/docs/federation.md)
+     promotes `metacoreFederationShared()` from `@asteby/metacore-starter-config/vite`
+     as the **only** documented way to wire federation, with a worked sample,
+     a warning against the plugin's direct type, and a fallback for the rare
+     case where the helper does not fit. The starter-config README links to
+     it, and the `addon-cookbook.md` "How do I bundle a frontend extension"
+     recipe + the `full-page-federation.md` sample now use the helper instead
+     of the legacy inline `shared:` array.
+
+  No runtime or public type changes — docs only.
+
+### Patch Changes
+
+- 56d2013: feat(marketplace): expand `CatalogAddon` and `AddonVersion` with the
+  fields the hub catalog UI needs to render version selectors, install
+  gates, and entitlement state.
+
+  All new fields are optional so existing consumers keep compiling
+  unchanged.
+
+  Added to `AddonVersion`:
+  - `changelog?: string` — per-version release notes (markdown).
+  - `review_status?: AddonVersionReviewStatus` — `"pending" | "approved" |
+"rejected" | "scan_failed" | "deprecated"`, used to badge versions
+    in the version selector. Also exported as a named type.
+
+  Added to `CatalogAddon`:
+  - `installable?: boolean` — server-side gate, used to disable the
+    install button when the hub already knows the install would fail
+    (ABI mismatch, region block, publisher suspended, etc.).
+  - `entitled?: boolean` — whether the caller's tenant already holds a
+    valid licence for this addon. Drives the "Install" vs "Buy" /
+    "Upgrade plan" branch in the UI.
+  - `reason?: string` — human-readable explanation when `installable`
+    or `entitled` is `false` ("License required", "Upgrade to Pro",
+    "Requires kernel ≥ 1.4", etc.).
+
+  These fields are populated by the hub from
+  `GET /v1/catalog/addons[/{key}]` and
+  `GET /v1/catalog/addons/{key}/versions`; see the JSDoc on each field
+  for the exact semantics.
+
+- 1c4a108: feat(marketplace): phase 2 — add `tags`, `screenshots`, `maintainer`,
+  `pricing`, kernel-compat range, artifact size, and signing identity to
+  the marketplace types.
+
+  Follow-up to the phase-1 expansion that added `installable` /
+  `entitled` / `reason` / `changelog` / `review_status`. All new fields
+  are optional so existing consumers keep compiling unchanged.
+
+  Added to `AddonVersion`:
+  - `min_kernel_version?: string` / `max_kernel_version?: string` —
+    inclusive semver bounds, used by the catalog UI to pre-filter
+    selectable versions client-side without waiting on the server-side
+    `installable` gate.
+  - `size_bytes?: number` — raw artifact size, surfaced as "Downloads
+    2.3 MB" in the install confirmation dialog.
+  - `signed_by?: SigningInfo` — signing-key identity (`fingerprint`,
+    optional `key_id`) so the UI can render "Signed by …" provenance.
+    Verification of the signature itself remains a kernel-side concern.
+
+  Added to `CatalogAddon`:
+  - `tags?: string[]` — free-form keyword tags complementing the single
+    `category` for filtering and search.
+  - `screenshots?: Array<{ url: string; alt?: string }>` — detail-page
+    gallery. Objects (not bare URLs) so we can extend with a11y / lazy-
+    load metadata without breaking the wire format.
+  - `maintainer?: MaintainerInfo` — publisher display info (`name`,
+    optional `url` / `email` / `verified`), preferred over the
+    manifest's `author` / `website` for catalog UX. `verified` matches
+    the developer-account flag on the hub.
+  - `pricing?: PricingInfo` — marketing-level price summary
+    (`model: "free" | "one_time" | "subscription"`, `price_cents`,
+    `currency`, `trial_days`), so the catalog card can render a price
+    tag without a second round-trip to the billing service.
+
+  New named types: `MaintainerInfo`, `PricingInfo`, `PricingModel`,
+  `SigningInfo`.
+
+  These fields are populated by the hub from
+  `GET /v1/catalog/addons[/{key}]` and
+  `GET /v1/catalog/addons/{key}/versions`; see the JSDoc on each field
+  for the exact semantics.
+
+- 3a3ea4b: fix: unify slot priority ordering across SDK and runtime-react (was
+  inconsistent — DESC is now canonical, see `docs/slot-priority.md`).
+
+  `Registry.registerSlot` in `@asteby/metacore-sdk` sorted ascending
+  ("lower renders first") while `slotRegistry` in
+  `@asteby/metacore-runtime-react` sorted descending ("higher renders
+  first"). The runtime-react behaviour matches `docs/dynamic-ui.md`,
+  `mergeNavigation` and every other priority sort in the codebase, so the
+  SDK has been flipped to match. Addons that register a single
+  contribution per slot — i.e. every in-tree consumer we audited — are
+  unaffected. Addons relying on the inverted SDK order will need to swap
+  their priority values.
+
 ## 2.5.0
 
 ### Minor Changes

@@ -1,5 +1,22 @@
 # @asteby/metacore-starter-core
 
+## 11.0.0
+
+### Major Changes
+
+- af243f0: Delete unused duplicate `src/context/auth-provider.tsx`. The file was a parallel copy of the legacy `AuthProvider` with the double source-of-truth bug (localStorage `saas_user` + zustand `auth-storage`) and was never re-exported from `index.ts`, so no public consumer is affected. Apps should use the thin `AuthProvider`/`useAuth` from `@asteby/metacore-auth` (see #191).
+
+### Patch Changes
+
+- Updated dependencies [43502ab]
+- Updated dependencies [dee623a]
+- Updated dependencies [56d2013]
+- Updated dependencies [1c4a108]
+- Updated dependencies [3a3ea4b]
+  - @asteby/metacore-auth@7.1.0
+  - @asteby/metacore-sdk@2.6.0
+  - @asteby/metacore-runtime-react@11.0.0
+
 ## 10.0.0
 
 ### Minor Changes

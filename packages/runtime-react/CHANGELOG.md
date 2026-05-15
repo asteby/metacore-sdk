@@ -1,5 +1,28 @@
 # @asteby/metacore-runtime-react
 
+## 11.0.0
+
+### Patch Changes
+
+- 3a3ea4b: fix: unify slot priority ordering across SDK and runtime-react (was
+  inconsistent — DESC is now canonical, see `docs/slot-priority.md`).
+
+  `Registry.registerSlot` in `@asteby/metacore-sdk` sorted ascending
+  ("lower renders first") while `slotRegistry` in
+  `@asteby/metacore-runtime-react` sorted descending ("higher renders
+  first"). The runtime-react behaviour matches `docs/dynamic-ui.md`,
+  `mergeNavigation` and every other priority sort in the codebase, so the
+  SDK has been flipped to match. Addons that register a single
+  contribution per slot — i.e. every in-tree consumer we audited — are
+  unaffected. Addons relying on the inverted SDK order will need to swap
+  their priority values.
+
+- Updated dependencies [dee623a]
+- Updated dependencies [56d2013]
+- Updated dependencies [1c4a108]
+- Updated dependencies [3a3ea4b]
+  - @asteby/metacore-sdk@2.6.0
+
 ## 10.0.0
 
 ### Minor Changes
