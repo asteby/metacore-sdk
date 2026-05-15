@@ -4,6 +4,6 @@ packages:
   - 'examples/*'
   - 'examples/*/frontend'
 
-onlyBuiltDependencies:
-  - '@swc/core'
-  - esbuild
+allowBuilds:
+  '@swc/core': true
+  esbuild: true
