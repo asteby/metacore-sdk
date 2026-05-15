@@ -13,7 +13,7 @@ import { Slot } from '@radix-ui/react-slot'
 import { cn } from '../../lib/utils'
 import { Label } from './label'
 
-const Form = FormProvider
+const Form: typeof FormProvider = FormProvider
 
 type FormFieldContextValue<
   TFieldValues extends FieldValues = FieldValues,
