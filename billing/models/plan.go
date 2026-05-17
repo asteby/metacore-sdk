@@ -34,6 +34,17 @@ type Plan struct {
 	PriceYearly  int    `json:"price_yearly" gorm:"not null;default:0"`
 	Currency     string `json:"currency" gorm:"size:3;not null;default:'USD'"`
 
+	// PricingKind separates how a plan is sold from how much it costs:
+	//
+	//   - "free":  zero-cost recurring plan (no Stripe checkout, no trial)
+	//   - "paid":  recurring Stripe subscription (eligible for the trial)
+	//   - "quote": sales-led / contact-us (never reaches Stripe)
+	//
+	// Defaults to "paid" so existing rows with a non-zero price keep working
+	// without a backfill. Hosts that seed free or quote tiers must set this
+	// explicitly. The Stripe trial gate in CreateCheckoutSession reads this.
+	PricingKind string `json:"pricing_kind" gorm:"size:16;not null;default:'paid'"`
+
 	// Limits (-1 means unlimited).
 	MaxAgents        int `json:"max_agents" gorm:"not null;default:1"`
 	MaxContacts      int `json:"max_contacts" gorm:"not null;default:500"`
