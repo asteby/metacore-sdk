@@ -17,6 +17,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/asteby/metacore-sdk/billing"
 	"github.com/asteby/metacore-sdk/billing/models"
 
 	"github.com/gofiber/fiber/v3"
@@ -177,8 +178,8 @@ func (g *Guard) CheckResourceCount(_ context.Context, orgID uuid.UUID, metric st
 		return Decision{Allowed: true}
 	}
 
-	var count int64
-	if err := g.db.Table(tableName).Where("organization_id = ?", orgID).Count(&count).Error; err != nil {
+	count, err := billing.CountLiveResource(g.db, tableName, orgID)
+	if err != nil {
 		// Don't let a count query failure 5xx the request — return permissive
 		// and rely on logs to catch the misconfiguration.
 		return Decision{Allowed: true}

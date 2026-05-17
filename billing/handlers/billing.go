@@ -130,8 +130,7 @@ func (h *Handler) Usage(c fiber.Ctx) error {
 	out := fiber.Map{}
 
 	for metric, table := range h.cfg.ResourceCounters {
-		var count int64
-		if err := h.db.Table(table).Where("organization_id = ?", orgID).Count(&count).Error; err == nil {
+		if count, err := billing.CountLiveResource(h.db, table, orgID); err == nil {
 			out[metric] = count
 		}
 	}
