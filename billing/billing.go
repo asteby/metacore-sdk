@@ -299,9 +299,10 @@ func (s *Service) CreateCheckoutSession(ctx context.Context, in CheckoutInput) (
 		},
 	}
 
-	// Trial: only Pro gets the 14-day card-upfront trial. Trial is set via
+	// Every paid plan (PricingKind == "paid") gets the 14-day trial in
+	// checkout. Quote-only plans never reach Stripe checkout. Trial set via
 	// SubscriptionData so it survives webhook reconciliation cleanly.
-	if plan.Slug == "pro" {
+	if plan.PricingKind == "paid" {
 		params.SubscriptionData.TrialPeriodDays = stripe.Int64(int64(TrialDays))
 	}
 
