@@ -62,13 +62,14 @@ export function AuthenticatedLayout({
       <SidebarInset
         className={cn(
           '@container/content',
+          'min-w-0',
           'has-data-[layout=fixed]:h-svh',
           'peer-data-[variant=inset]:has-data-[layout=fixed]:h-[calc(100svh-(var(--spacing)*4))]'
         )}
       >
         {topBanner}
         <Header fixed>
-          <div className='ms-auto flex items-center space-x-4'>
+          <div className='ms-auto flex min-w-0 flex-1 items-center justify-end gap-2 sm:gap-4'>
             {headerChildren}
           </div>
         </Header>
