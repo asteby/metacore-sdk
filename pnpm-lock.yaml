@@ -102,7 +102,7 @@ importers:
         version: 3.10.0(react-hook-form@7.76.0(react@19.2.6))
       '@tanstack/react-query':
         specifier: ^5.95.0
-        version: 5.100.11(react@19.2.6)
+        version: 5.100.10(react@19.2.6)
       '@tanstack/react-router':
         specifier: ^1.168.0
         version: 1.170.4(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -253,7 +253,7 @@ importers:
         version: 1.1.1(@types/react@19.2.14)(react@19.2.6)
       '@tanstack/react-query':
         specifier: ^5.59.0
-        version: 5.100.11(react@19.2.6)
+        version: 5.100.10(react@19.2.6)
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.14
@@ -305,7 +305,7 @@ importers:
         version: 19.2.3(@types/react@19.2.14)
       framer-motion:
         specifier: ^12.0.0
-        version: 12.38.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+        version: 12.39.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       react:
         specifier: ^19.2.4
         version: 19.2.6
@@ -329,7 +329,7 @@ importers:
         version: link:../ui
       '@tanstack/react-query':
         specifier: ^5.95.0
-        version: 5.100.11(react@19.2.6)
+        version: 5.100.10(react@19.2.6)
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.14
@@ -476,7 +476,7 @@ importers:
         version: link:../websocket
       '@tanstack/react-query':
         specifier: ^5.95.0
-        version: 5.100.11(react@19.2.6)
+        version: 5.100.10(react@19.2.6)
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.14
@@ -547,7 +547,7 @@ importers:
         version: link:../ui
       '@tanstack/react-query':
         specifier: ^5.95.0
-        version: 5.100.11(react@19.2.6)
+        version: 5.100.10(react@19.2.6)
       '@tanstack/react-router':
         specifier: ^1.168.0
         version: 1.170.4(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -731,7 +731,7 @@ importers:
         version: 1.2.8(@types/react-dom@19.2.3(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       '@tanstack/react-query':
         specifier: ^5.99.0
-        version: 5.100.11(react@19.2.6)
+        version: 5.100.10(react@19.2.6)
       '@tanstack/react-router':
         specifier: ^1.168.0
         version: 1.170.4(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -764,7 +764,7 @@ importers:
         version: 4.1.0
       framer-motion:
         specifier: ^12.38.0
-        version: 12.38.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+        version: 12.39.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       input-otp:
         specifier: ^1.4.2
         version: 1.4.2(@types/react@19.2.14)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -970,7 +970,7 @@ importers:
     devDependencies:
       '@tanstack/react-query':
         specifier: ^5.95.0
-        version: 5.100.11(react@19.2.6)
+        version: 5.100.10(react@19.2.6)
       '@tanstack/react-router':
         specifier: ^1.168.0
         version: 1.170.4(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -1019,7 +1019,7 @@ importers:
         version: link:../ui
       '@tanstack/react-query':
         specifier: ^5.95.0
-        version: 5.100.11(react@19.2.6)
+        version: 5.100.10(react@19.2.6)
       '@types/react':
         specifier: ^19.0.0
         version: 19.2.14
@@ -1094,7 +1094,7 @@ importers:
         version: 5.2.2(react-hook-form@7.76.0(react@19.2.6))
       '@tanstack/react-query':
         specifier: ^5.95.0
-        version: 5.100.11(react@19.2.6)
+        version: 5.100.10(react@19.2.6)
       '@tanstack/react-router':
         specifier: ^1.168.0
         version: 1.170.4(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -3454,16 +3454,8 @@ packages:
   '@tanstack/query-core@5.100.10':
     resolution: {integrity: sha512-8UR0yJR+GiQ40m3lPhUr0xbfAupe6GSQiksSBSa9SM2NjezFyxXCIA69/lz8cSoNKZLrw1/PktIyQBJcVeMi3w==}
 
-  '@tanstack/query-core@5.100.11':
-    resolution: {integrity: sha512-lmE0994apShXPj8CUxgx4ch5yUJhE9k/+tVwihBvPOyerACWdBocfFg24t8+0RhtlTd7tEgchDkhlCxNssvDxw==}
-
   '@tanstack/react-query@5.100.10':
     resolution: {integrity: sha512-FLaZf2RCrA/Zgp4aiu5tG3TyasTRO7aZ99skxQpr3Hg/zXOhu6yq5FZCYQ/tRaJtM9ylnoK8tFK7PolXQadv6Q==}
-    peerDependencies:
-      react: ^18 || ^19
-
-  '@tanstack/react-query@5.100.11':
-    resolution: {integrity: sha512-J0f9s5x3LE1450nNNfYx+e/n0DMa0uOBdFJUy5r0RvmsXd4nB/n0rbHtHI1vYXhikNFan+wf51p6Tmp4c8ucrg==}
     peerDependencies:
       react: ^18 || ^19
 
@@ -4414,8 +4406,8 @@ packages:
     resolution: {integrity: sha512-8RipRLol37bNs2bhoV67fiTEvdTrbMUYcFTiy3+wuuOnUog2QBHCZWXDRijWQfAkhBj2Uf5UnVaiWwA5vdd82w==}
     engines: {node: '>= 6'}
 
-  framer-motion@12.38.0:
-    resolution: {integrity: sha512-rFYkY/pigbcswl1XQSb7q424kSTQ8q6eAC+YUsSKooHQYuLdzdHjrt6uxUC+PRAO++q5IS7+TamgIw1AphxR+g==}
+  framer-motion@12.39.0:
+    resolution: {integrity: sha512-+vnLfzrv0MzjLzNl+nvNvR7jdg3q4cxxjz/YvzfifHl0TREtL00cs1RoMTxs+1PzLiEqZGV6gYsBY0oEAYZ24w==}
     peerDependencies:
       '@emotion/is-prop-valid': '*'
       react: ^18.0.0 || ^19.0.0
@@ -5181,11 +5173,11 @@ packages:
   monaco-editor@0.55.1:
     resolution: {integrity: sha512-jz4x+TJNFHwHtwuV9vA9rMujcZRb0CEilTEwG2rRSpe/A7Jdkuj8xPKttCgOh+v/lkHy7HsZ64oj+q3xoAFl9A==}
 
-  motion-dom@12.38.0:
-    resolution: {integrity: sha512-pdkHLD8QYRp8VfiNLb8xIBJis1byQ9gPT3Jnh2jqfFtAsWUA3dEepDlsWe/xMpO8McV+VdpKVcp+E+TGJEtOoA==}
+  motion-dom@12.39.0:
+    resolution: {integrity: sha512-Xn7aAcGDhco/JZTXOub64UmaYn73C6J1Po7Fk+8EvkJsNGTqfhon6UJY53vJKXW5v5Zl8HrYsVxv6oPXeGoGLQ==}
 
-  motion-utils@12.36.0:
-    resolution: {integrity: sha512-eHWisygbiwVvf6PZ1vhaHCLamvkSbPIeAYxWUuL3a2PD/TROgE7FvfHWTIH4vMl798QLfMw15nRqIaRDXTlYRg==}
+  motion-utils@12.39.0:
+    resolution: {integrity: sha512-8nadJAJjTtqRkmRF36FoJTrywK9nnFmnPwnSMyxaOCU7GDjN9RTMJIxx9De8ErM+vpPhMccr/6fo5WciyQLnMQ==}
 
   mri@1.1.6:
     resolution: {integrity: sha512-oi1b3MfbyGa7FJMP9GmLTttni5JoICpYBRlq+x5V16fZbLsnL9N3wFqqIm/nIG43FjUFkFh9Epzp/kzUGUnJxQ==}
@@ -8583,16 +8575,9 @@ snapshots:
 
   '@tanstack/query-core@5.100.10': {}
 
-  '@tanstack/query-core@5.100.11': {}
-
   '@tanstack/react-query@5.100.10(react@19.2.6)':
     dependencies:
       '@tanstack/query-core': 5.100.10
-      react: 19.2.6
-
-  '@tanstack/react-query@5.100.11(react@19.2.6)':
-    dependencies:
-      '@tanstack/query-core': 5.100.11
       react: 19.2.6
 
   '@tanstack/react-router@1.170.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6)':
@@ -9758,10 +9743,10 @@ snapshots:
       hasown: 2.0.3
       mime-types: 2.1.35
 
-  framer-motion@12.38.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
+  framer-motion@12.39.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
     dependencies:
-      motion-dom: 12.38.0
-      motion-utils: 12.36.0
+      motion-dom: 12.39.0
+      motion-utils: 12.39.0
       tslib: 2.8.1
     optionalDependencies:
       react: 19.2.6
@@ -10618,11 +10603,11 @@ snapshots:
       dompurify: 3.2.7
       marked: 14.0.0
 
-  motion-dom@12.38.0:
+  motion-dom@12.39.0:
     dependencies:
-      motion-utils: 12.36.0
+      motion-utils: 12.39.0
 
-  motion-utils@12.36.0: {}
+  motion-utils@12.39.0: {}
 
   mri@1.1.6: {}
 
