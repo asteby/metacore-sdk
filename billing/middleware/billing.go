@@ -168,7 +168,7 @@ func (g *Guard) CheckQuota(_ context.Context, orgID uuid.UUID, metric string, pl
 // rows with organization_id = orgID; tables without that column will
 // silently match nothing and the guard will pass (worst case, the host
 // catches the misuse during integration).
-func (g *Guard) CheckResourceCount(_ context.Context, orgID uuid.UUID, metric string, tableName string, planLimit PlanLimitField) Decision {
+func (g *Guard) CheckResourceCount(_ context.Context, orgID uuid.UUID, metric string, tableName string, planLimit PlanLimitField, extraScopes ...func(*gorm.DB) *gorm.DB) Decision {
 	_, plan := g.loadSubscription(orgID)
 	if plan == nil {
 		return Decision{Allowed: true}
@@ -178,7 +178,7 @@ func (g *Guard) CheckResourceCount(_ context.Context, orgID uuid.UUID, metric st
 		return Decision{Allowed: true}
 	}
 
-	count, err := billing.CountLiveResource(g.db, tableName, orgID)
+	count, err := billing.CountLiveResource(g.db, tableName, orgID, extraScopes...)
 	if err != nil {
 		// Don't let a count query failure 5xx the request — return permissive
 		// and rely on logs to catch the misconfiguration.
@@ -385,12 +385,12 @@ func (m *FiberMiddleware) RequireFeature(featureKey string) fiber.Handler {
 //	        func(p *models.Plan) int { return p.MaxAgents }),
 //	    handler.Create,
 //	)
-func (m *FiberMiddleware) RequireResourceCount(metric string, tableName string, planLimitField PlanLimitField) fiber.Handler {
+func (m *FiberMiddleware) RequireResourceCount(metric string, tableName string, planLimitField PlanLimitField, extraScopes ...func(*gorm.DB) *gorm.DB) fiber.Handler {
 	return func(c fiber.Ctx) error {
 		orgID, err := orgFromLocals(c)
 		if err != nil {
 			return c.Status(401).JSON(fiber.Map{"success": false, "error": "unauthorized"})
 		}
-		return renderDecision(c, m.g.CheckResourceCount(c.Context(), orgID, metric, tableName, planLimitField))
+		return renderDecision(c, m.g.CheckResourceCount(c.Context(), orgID, metric, tableName, planLimitField, extraScopes...))
 	}
 }

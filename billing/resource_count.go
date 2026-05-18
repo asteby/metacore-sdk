@@ -29,10 +29,22 @@ func tableHasSoftDelete(db *gorm.DB, table string) bool {
 // Use this whenever billing reads a resource population (devices, agents,
 // contacts) — going through `.Table()` directly skips GORM's soft-delete
 // scope and overcounts archived rows toward the plan cap.
-func CountLiveResource(db *gorm.DB, tableName string, orgID uuid.UUID) (int64, error) {
+//
+// extraScopes are applied AFTER organization_id and soft-delete filters.
+// They exist so host models can declare "billing should NOT count these
+// rows" — e.g. the simulator/demo channel that every Link install ships
+// with: the model's ApplyListScope hides it from the UI, but without
+// this hook it still ticked toward the channels cap and produced
+// banners like "2 / 1 canales" when the user saw only one device.
+func CountLiveResource(db *gorm.DB, tableName string, orgID uuid.UUID, extraScopes ...func(*gorm.DB) *gorm.DB) (int64, error) {
 	q := db.Table(tableName).Where("organization_id = ?", orgID)
 	if tableHasSoftDelete(db, tableName) {
 		q = q.Where("deleted_at IS NULL")
+	}
+	for _, scope := range extraScopes {
+		if scope != nil {
+			q = scope(q)
+		}
 	}
 	var n int64
 	if err := q.Count(&n).Error; err != nil {

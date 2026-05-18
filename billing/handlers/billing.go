@@ -70,6 +70,16 @@ type Config struct {
 	// a map only see the monthly metrics from usage_metrics in the usage
 	// response.
 	ResourceCounters map[string]string
+
+	// ResourceCounterScopes optionally lets the host narrow what counts
+	// toward each metric beyond the default "every row with this org_id
+	// and deleted_at IS NULL". Keyed by the same metric label as
+	// ResourceCounters. Useful for excluding system/demo rows that the
+	// model's ApplyListScope hides from the UI — e.g. Link's simulator
+	// channel: present in `devices`, hidden in the Canales list, and
+	// previously counted toward the plan cap. Optional; metrics without
+	// a registered scope keep the default behaviour.
+	ResourceCounterScopes map[string]func(*gorm.DB) *gorm.DB
 }
 
 // Handler exposes the billing routes for Fiber v3.
@@ -130,7 +140,8 @@ func (h *Handler) Usage(c fiber.Ctx) error {
 	out := fiber.Map{}
 
 	for metric, table := range h.cfg.ResourceCounters {
-		if count, err := billing.CountLiveResource(h.db, table, orgID); err == nil {
+		scope := h.cfg.ResourceCounterScopes[metric]
+		if count, err := billing.CountLiveResource(h.db, table, orgID, scope); err == nil {
 			out[metric] = count
 		}
 	}
