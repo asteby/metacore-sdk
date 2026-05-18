@@ -1,5 +1,13 @@
 # @asteby/metacore-fullstack-example
 
+## 0.1.28
+
+### Patch Changes
+
+- Updated dependencies [0f3efbe]
+  - @asteby/metacore-websocket@0.4.0
+  - @asteby/metacore-notifications@7.0.0
+
 ## 0.1.27
 
 ### Patch Changes
