@@ -76,6 +76,34 @@ function hexToOklch(hex: string): string | null {
   return `oklch(${L.toFixed(4)} ${C.toFixed(4)} ${h.toFixed(4)})`
 }
 
+// The full set of CSS custom properties the branding system owns. Both
+// light and dark code paths MUST write a value for every key in this
+// list, otherwise toggling between modes leaves stale values from the
+// previous mode on `<html>.style` and the UI ends up with, e.g., a dark
+// `--background` rendered under light-mode `--primary` — fluorescent
+// chrome floating on a black canvas. Keep dark and light symmetrical.
+const BRANDED_KEYS = [
+  '--primary',
+  '--ring',
+  '--chart-2',
+  '--secondary',
+  '--muted',
+  '--accent',
+  '--accent-foreground',
+  '--border',
+  '--input',
+  '--background',
+  '--card',
+  '--popover',
+  '--sidebar',
+  '--sidebar-primary',
+  '--sidebar-primary-foreground',
+  '--sidebar-accent',
+  '--sidebar-accent-foreground',
+  '--sidebar-border',
+  '--sidebar-ring',
+] as const
+
 function generateThemeVars(primaryHex: string, accentHex: string) {
   const primary = hexToOklch(primaryHex)
   const accent = hexToOklch(accentHex)
@@ -91,37 +119,49 @@ function generateThemeVars(primaryHex: string, accentHex: string) {
   if (!p) return null
 
   const isDark = document.documentElement.classList.contains('dark')
+  const h = p.h.toFixed(4)
   const vars: Record<string, string> = {}
 
   if (isDark) {
-    vars['--primary'] = `oklch(${(p.l + 0.05).toFixed(4)} ${p.c.toFixed(4)} ${p.h.toFixed(4)})`
+    vars['--primary'] = `oklch(${(p.l + 0.05).toFixed(4)} ${p.c.toFixed(4)} ${h})`
     vars['--ring'] = vars['--primary']
-    vars['--sidebar-primary'] = vars['--primary']
-    vars['--sidebar-accent-foreground'] = vars['--primary']
-    vars['--sidebar-ring'] = vars['--primary']
     vars['--chart-2'] = vars['--primary']
-    vars['--secondary'] = `oklch(0.29 0.02 ${p.h.toFixed(4)})`
-    vars['--muted'] = `oklch(0.29 0.02 ${p.h.toFixed(4)})`
-    vars['--accent'] = `oklch(0.28 0.05 ${p.h.toFixed(4)})`
-    vars['--accent-foreground'] = `oklch(0.80 0.10 ${p.h.toFixed(4)})`
-    vars['--border'] = `oklch(0.33 0.02 ${p.h.toFixed(4)})`
-    vars['--input'] = `oklch(0.33 0.02 ${p.h.toFixed(4)})`
-    vars['--background'] = `oklch(0.22 0.01 ${p.h.toFixed(4)})`
-    vars['--card'] = `oklch(0.24 0.01 ${p.h.toFixed(4)})`
-    vars['--popover'] = `oklch(0.24 0.01 ${p.h.toFixed(4)})`
-    vars['--sidebar'] = `oklch(0.20 0.01 ${p.h.toFixed(4)})`
-    vars['--sidebar-accent'] = `oklch(0.29 0.02 ${p.h.toFixed(4)})`
-    vars['--sidebar-border'] = `oklch(0.33 0.02 ${p.h.toFixed(4)})`
+    vars['--secondary'] = `oklch(0.29 0.02 ${h})`
+    vars['--muted'] = `oklch(0.29 0.02 ${h})`
+    vars['--accent'] = `oklch(0.28 0.05 ${h})`
+    vars['--accent-foreground'] = `oklch(0.80 0.10 ${h})`
+    vars['--border'] = `oklch(0.33 0.02 ${h})`
+    vars['--input'] = `oklch(0.33 0.02 ${h})`
+    vars['--background'] = `oklch(0.22 0.01 ${h})`
+    vars['--card'] = `oklch(0.24 0.01 ${h})`
+    vars['--popover'] = `oklch(0.24 0.01 ${h})`
+    vars['--sidebar'] = `oklch(0.20 0.01 ${h})`
+    vars['--sidebar-primary'] = vars['--primary']
+    vars['--sidebar-primary-foreground'] = `oklch(1 0 0)`
+    vars['--sidebar-accent'] = `oklch(0.29 0.02 ${h})`
+    vars['--sidebar-accent-foreground'] = vars['--primary']
+    vars['--sidebar-border'] = `oklch(0.33 0.02 ${h})`
+    vars['--sidebar-ring'] = vars['--primary']
   } else {
     vars['--primary'] = primary
     vars['--ring'] = `oklch(0 0 0)`
-    vars['--sidebar-primary'] = `oklch(0 0 0)`
     vars['--chart-2'] = primary
-    vars['--secondary'] = `oklch(0.9540 0.0063 ${p.h.toFixed(4)})`
-    vars['--accent'] = `oklch(0.94 0.03 ${p.h.toFixed(4)})`
-    vars['--accent-foreground'] = `oklch(0.5445 0.1903 ${p.h.toFixed(4)})`
-    vars['--border'] = `oklch(0.9300 0.0094 ${p.h.toFixed(4)})`
-    vars['--sidebar'] = `oklch(0.9777 0.0051 ${p.h.toFixed(4)})`
+    vars['--secondary'] = `oklch(0.9540 0.0063 ${h})`
+    vars['--muted'] = `oklch(0.9702 0 0)`
+    vars['--accent'] = `oklch(0.94 0.03 ${h})`
+    vars['--accent-foreground'] = `oklch(0.5445 0.1903 ${h})`
+    vars['--border'] = `oklch(0.9300 0.0094 ${h})`
+    vars['--input'] = `oklch(0.9401 0 0)`
+    vars['--background'] = `oklch(0.9940 0 0)`
+    vars['--card'] = `oklch(0.9940 0 0)`
+    vars['--popover'] = `oklch(0.9911 0 0)`
+    vars['--sidebar'] = `oklch(0.9777 0.0051 ${h})`
+    vars['--sidebar-primary'] = `oklch(0 0 0)`
+    vars['--sidebar-primary-foreground'] = `oklch(1 0 0)`
+    vars['--sidebar-accent'] = `oklch(0.9401 0 0)`
+    vars['--sidebar-accent-foreground'] = `oklch(0 0 0)`
+    vars['--sidebar-border'] = `oklch(0.9401 0 0)`
+    vars['--sidebar-ring'] = `oklch(0 0 0)`
   }
 
   return vars
@@ -129,6 +169,11 @@ function generateThemeVars(primaryHex: string, accentHex: string) {
 
 function applyThemeVars(vars: Record<string, string>) {
   const root = document.documentElement
+  // Clear any branded keys we won't be rewriting in this pass so a
+  // stale value from a previous mode/branding can't bleed through.
+  for (const key of BRANDED_KEYS) {
+    if (!(key in vars)) root.style.removeProperty(key)
+  }
   for (const [key, value] of Object.entries(vars)) {
     root.style.setProperty(key, value)
   }
