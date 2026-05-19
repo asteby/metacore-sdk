@@ -1,5 +1,14 @@
 # @asteby/metacore-starter-vite
 
+## 0.1.21
+
+### Patch Changes
+
+- Updated dependencies [8ce56cb]
+  - @asteby/metacore-ui@2.0.1
+  - @asteby/metacore-auth@7.1.0
+  - @asteby/metacore-runtime-react@11.0.0
+
 ## 0.1.20
 
 ### Patch Changes
