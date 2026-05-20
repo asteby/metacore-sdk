@@ -104,6 +104,14 @@ const BRANDED_KEYS = [
   '--sidebar-ring',
 ] as const
 
+// Clamp the perceptual lightness of the brand color into a band that produces
+// readable buttons/badges. Without this, intrinsically light hues like lime
+// (#84cc16 → L≈0.77) render fluorescent — and dark mode's +0.05 bias makes
+// it worse. Indigo (#6366f1 → L≈0.55) stays untouched.
+function clampL(l: number, min: number, max: number) {
+  return Math.min(Math.max(l, min), max)
+}
+
 function generateThemeVars(primaryHex: string, accentHex: string) {
   const primary = hexToOklch(primaryHex)
   const accent = hexToOklch(accentHex)
@@ -123,7 +131,10 @@ function generateThemeVars(primaryHex: string, accentHex: string) {
   const vars: Record<string, string> = {}
 
   if (isDark) {
-    vars['--primary'] = `oklch(${(p.l + 0.05).toFixed(4)} ${p.c.toFixed(4)} ${h})`
+    // Preserve the legacy +0.05 brighten for colors that need it (e.g. indigo
+    // L≈0.55 → 0.60), but clamp the upper bound so lime/yellow don't blow out.
+    const lPrimary = clampL(p.l + 0.05, 0.55, 0.70)
+    vars['--primary'] = `oklch(${lPrimary.toFixed(4)} ${p.c.toFixed(4)} ${h})`
     vars['--ring'] = vars['--primary']
     vars['--chart-2'] = vars['--primary']
     vars['--secondary'] = `oklch(0.29 0.02 ${h})`
@@ -143,9 +154,11 @@ function generateThemeVars(primaryHex: string, accentHex: string) {
     vars['--sidebar-border'] = `oklch(0.33 0.02 ${h})`
     vars['--sidebar-ring'] = vars['--primary']
   } else {
-    vars['--primary'] = primary
+    const lPrimary = clampL(p.l, 0.45, 0.65)
+    const primaryClamped = `oklch(${lPrimary.toFixed(4)} ${p.c.toFixed(4)} ${h})`
+    vars['--primary'] = primaryClamped
     vars['--ring'] = `oklch(0 0 0)`
-    vars['--chart-2'] = primary
+    vars['--chart-2'] = primaryClamped
     vars['--secondary'] = `oklch(0.9540 0.0063 ${h})`
     vars['--muted'] = `oklch(0.9702 0 0)`
     vars['--accent'] = `oklch(0.94 0.03 ${h})`
