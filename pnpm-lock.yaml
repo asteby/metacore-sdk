@@ -469,6 +469,33 @@ importers:
         specifier: ^6.0.0
         version: 6.0.3
 
+  packages/marketplace:
+    devDependencies:
+      '@asteby/metacore-app-providers':
+        specifier: workspace:*
+        version: link:../app-providers
+      '@tanstack/react-query':
+        specifier: ^5.95.0
+        version: 5.100.11(react@19.2.6)
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.14
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.3(@types/react@19.2.14)
+      react:
+        specifier: ^19.2.4
+        version: 19.2.6
+      react-dom:
+        specifier: ^19.2.4
+        version: 19.2.6(react@19.2.6)
+      typescript:
+        specifier: ^6.0.0
+        version: 6.0.3
+      vitest:
+        specifier: ^4.0.0
+        version: 4.1.6(@types/node@22.19.19)(vite@8.0.13(@types/node@22.19.19)(esbuild@0.28.0)(jiti@2.7.0)(terser@5.47.1)(tsx@4.22.3))
+
   packages/notifications:
     devDependencies:
       '@asteby/metacore-ui':

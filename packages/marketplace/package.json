@@ -1,0 +1,71 @@
+{
+  "name": "@asteby/metacore-marketplace",
+  "version": "0.1.0",
+  "description": "Metacore marketplace SDK — Hub catalog + Ops install/upgrade client, React hooks, and headless UI primitives shared across host apps (Ops, link).",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asteby/metacore-sdk",
+    "directory": "packages/marketplace"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js"
+    },
+    "./hooks": {
+      "types": "./dist/hooks/index.d.ts",
+      "import": "./dist/hooks/index.js"
+    },
+    "./components": {
+      "types": "./dist/components/index.d.ts",
+      "import": "./dist/components/index.js"
+    },
+    "./providers": {
+      "types": "./dist/providers/index.d.ts",
+      "import": "./dist/providers/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18",
+    "@tanstack/react-query": ">=5",
+    "@asteby/metacore-app-providers": "^7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@asteby/metacore-app-providers": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@asteby/metacore-app-providers": "workspace:*",
+    "@tanstack/react-query": "^5.95.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "typescript": "^6.0.0",
+    "vitest": "^4.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
