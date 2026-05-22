@@ -3,6 +3,7 @@
 // starter. Host-owned infra that was referenced by alias (axios client,
 // branch store) now flows through <ApiProvider> from runtime-react.
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import type { ModelSchema } from './types'
 import {
     Dialog,
     DialogContent,
@@ -59,11 +60,14 @@ interface FieldDef {
     filterBy?: string
 }
 
+// Permissive shape: the wire payload may omit some fields (e.g. `title` is
+// optional on legacy backends). Keep field types loose so a host-supplied
+// `ModelSchema` (see ./types.ts) is structurally assignable here.
 interface ModalMetadata {
-    title: string
-    createTitle: string
-    editTitle: string
-    fields: FieldDef[]
+    title?: string
+    createTitle?: string
+    editTitle?: string
+    fields?: FieldDef[]
 }
 
 export interface DynamicRecordDialogProps {
@@ -74,6 +78,38 @@ export interface DynamicRecordDialogProps {
     recordId?: string | null
     endpoint?: string
     onSaved?: () => void
+    /**
+     * Optional override invoked instead of the default `POST` when the dialog
+     * is in `create` mode. Hosts may use this to route writes through custom
+     * mutations (optimistic updates, audit hooks, etc.). The dialog still
+     * closes and fires `onSaved` on success.
+     */
+    onCreate?: (data: Record<string, any>) => Promise<{ id?: string | number } | void>
+    /**
+     * Optional override invoked instead of the default `PUT` when the dialog
+     * is in `edit` mode. Receives the record id and the form payload.
+     */
+    onUpdate?: (recordId: string, data: Record<string, any>) => Promise<{ id?: string | number } | void>
+    /**
+     * Optional default values seeded into the form on `create`. Ignored when
+     * `mode` is `'edit'` or `'view'` (those fetch from the record endpoint).
+     */
+    defaults?: Record<string, any>
+    /**
+     * Optional pre-fetched metadata. When provided the dialog skips the
+     * `/metadata/modal/:model` request and uses this shape directly.
+     */
+    schema?: ModelSchema
+    /**
+     * Optional handler shown as a "Delete" action in `view` mode. The dialog
+     * awaits the promise and closes on success. Omit to hide the action.
+     */
+    onDelete?: () => Promise<void>
+    /**
+     * Optional handler shown as an "Edit" action in `view` mode. Omit to hide
+     * the action.
+     */
+    onEdit?: () => void
 }
 
 function resolvePath(obj: any, path: string): any {
@@ -136,15 +172,25 @@ export function DynamicRecordDialog({
     recordId,
     endpoint,
     onSaved,
+    onCreate,
+    onUpdate,
+    defaults,
+    schema,
+    onDelete,
+    onEdit,
 }: DynamicRecordDialogProps) {
     const api = useApi()
-    const [modalMeta, setModalMeta] = useState<ModalMetadata | null>(null)
+    const [modalMeta, setModalMeta] = useState<ModalMetadata | null>(
+        schema ? (schema as ModalMetadata) : null,
+    )
     const [record, setRecord] = useState<any | null>(null)
     const [formValues, setFormValues] = useState<Record<string, any>>({})
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
+    const [deleting, setDeleting] = useState(false)
 
     const isCreate = mode === 'create'
+    const isView = mode === 'view'
     const isEditable = mode === 'create' || mode === 'edit'
     const config = MODE_CONFIG[mode]
 
@@ -157,16 +203,21 @@ export function DynamicRecordDialog({
         const load = async () => {
             setLoading(true)
             try {
-                const metaRes = await api.get(`/metadata/modal/${model}`)
-                if (cancelled) return
-
-                const meta: ModalMetadata = metaRes.data?.data ?? metaRes.data
+                let meta: ModalMetadata | null = schema ? (schema as ModalMetadata) : null
+                if (!meta) {
+                    const metaRes = await api.get(`/metadata/modal/${model}`)
+                    if (cancelled) return
+                    meta = metaRes.data?.data ?? metaRes.data
+                }
                 setModalMeta(meta)
 
                 if (isCreate) {
                     const initial: Record<string, any> = {}
-                    for (const field of meta.fields ?? []) {
-                        initial[field.key] = field.defaultValue ?? ''
+                    for (const field of meta?.fields ?? []) {
+                        initial[field.key] =
+                            (defaults && Object.prototype.hasOwnProperty.call(defaults, field.key)
+                                ? defaults[field.key]
+                                : field.defaultValue) ?? ''
                     }
                     setFormValues(initial)
                 } else {
@@ -181,7 +232,7 @@ export function DynamicRecordDialog({
                     setRecord(rec)
 
                     const initial: Record<string, any> = {}
-                    for (const field of meta.fields ?? []) {
+                    for (const field of meta?.fields ?? []) {
                         initial[field.key] = resolvePath(rec, field.key) ?? field.defaultValue ?? ''
                     }
                     setFormValues(initial)
@@ -196,7 +247,7 @@ export function DynamicRecordDialog({
 
         load()
         return () => { cancelled = true }
-    }, [open, recordId, model, endpoint, isCreate])
+    }, [open, recordId, model, endpoint, isCreate, schema, defaults])
 
     useEffect(() => {
         if (!open) {
@@ -211,7 +262,7 @@ export function DynamicRecordDialog({
         if (!modalMeta) return
 
         if (isEditable) {
-            for (const field of modalMeta.fields) {
+            for (const field of modalMeta.fields ?? []) {
                 if (field.required && !formValues[field.key] && formValues[field.key] !== 0 && formValues[field.key] !== false) {
                     toast.error(`El campo "${field.label}" es obligatorio`)
                     return
@@ -221,6 +272,22 @@ export function DynamicRecordDialog({
 
         setSaving(true)
         try {
+            if (isCreate && onCreate) {
+                await onCreate(formValues)
+                toast.success('Registro creado correctamente')
+                onSaved?.()
+                onOpenChange(false)
+                return
+            }
+
+            if (!isCreate && recordId && onUpdate) {
+                await onUpdate(String(recordId), formValues)
+                toast.success('Guardado correctamente')
+                onSaved?.()
+                onOpenChange(false)
+                return
+            }
+
             let res
             if (isCreate) {
                 const createEndpoint = endpoint || `/dynamic/${model}`
@@ -243,6 +310,20 @@ export function DynamicRecordDialog({
             toast.error(err?.response?.data?.message || 'Error al guardar')
         } finally {
             setSaving(false)
+        }
+    }
+
+    const handleDelete = async () => {
+        if (!onDelete) return
+        setDeleting(true)
+        try {
+            await onDelete()
+            onOpenChange(false)
+        } catch (err: any) {
+            console.error('[DynamicRecordDialog] delete error:', err)
+            toast.error(err?.response?.data?.message || err?.message || 'Error al eliminar')
+        } finally {
+            setDeleting(false)
         }
     }
 
@@ -311,9 +392,24 @@ export function DynamicRecordDialog({
                 </div>
 
                 <DialogFooter className="p-4 border-t shrink-0">
-                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
+                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving || deleting}>
                         {config.cancelLabel}
                     </Button>
+                    {isView && onDelete && (
+                        <Button
+                            variant="destructive"
+                            onClick={handleDelete}
+                            disabled={deleting || loading}
+                        >
+                            {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                            {deleting ? 'Eliminando...' : 'Eliminar'}
+                        </Button>
+                    )}
+                    {isView && onEdit && (
+                        <Button onClick={onEdit} disabled={deleting || loading}>
+                            Editar
+                        </Button>
+                    )}
                     {isEditable && (
                         <Button
                             type="submit"
