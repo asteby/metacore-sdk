@@ -59,6 +59,16 @@ export {
     type DynamicColumnsHelpers,
 } from './dynamic-columns'
 export { DynamicRecordDialog } from './dialogs/dynamic-record'
+export { CreateRecordDialog } from './dialogs/create-record-dialog'
+export { ViewRecordDialog } from './dialogs/view-record-dialog'
+export type {
+    ModelKey,
+    ModelSchema,
+    CreateResult,
+    RecordDialogProps,
+    CreateRecordDialogProps,
+    ViewRecordDialogProps,
+} from './dialogs/types'
 export { ExportDialog } from './dialogs/export'
 export { ImportDialog } from './dialogs/import'
 export {
