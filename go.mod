@@ -4,7 +4,7 @@ go 1.25.7
 
 require (
 	github.com/asteby/metacore-kernel v0.12.0
-	github.com/gofiber/fiber/v3 v3.2.0
+	github.com/gofiber/fiber/v3 v3.3.0
 	github.com/google/uuid v1.6.0
 	github.com/stripe/stripe-go/v85 v85.1.0
 	gorm.io/driver/sqlite v1.6.0
@@ -16,7 +16,7 @@ require (
 	github.com/andybalholm/brotli v1.2.1 // indirect
 	github.com/fatih/structtag v1.2.0 // indirect
 	github.com/gofiber/schema v1.7.1 // indirect
-	github.com/gofiber/utils/v2 v2.0.5 // indirect
+	github.com/gofiber/utils/v2 v2.0.6 // indirect
 	github.com/gzuidhof/tygo v0.2.21 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
