@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildZodSchema, resolveWidget } from '../dynamic-form-schema'
+import { buildZodSchema, resolveWidget, isLineItemsField, getItemFields } from '../dynamic-form-schema'
 import type { ActionFieldDef } from '../types'
 
 describe('buildZodSchema', () => {
@@ -100,5 +100,60 @@ describe('resolveWidget', () => {
         expect(resolveWidget({ key: 'k', label: 'L', type: 'date' })).toBe('date')
         expect(resolveWidget({ key: 'k', label: 'L', type: 'string' })).toBe('text')
         expect(resolveWidget({ key: 'k', label: 'L', type: 'email' })).toBe('text')
+    })
+})
+
+describe('line-items (repeatable group)', () => {
+    const lineItemsField: ActionFieldDef = {
+        key: 'lines',
+        label: 'Renglones',
+        type: 'array',
+        itemFields: [
+            { key: 'product_id', label: 'Producto', type: 'select', ref: 'product' },
+            { key: 'quantity', label: 'Cantidad', type: 'number', required: true },
+        ],
+    }
+
+    it('detecta un campo line-items por sus itemFields', () => {
+        expect(isLineItemsField(lineItemsField)).toBe(true)
+        expect(isLineItemsField({ key: 'name', label: 'Nombre', type: 'string' })).toBe(false)
+        expect(getItemFields(lineItemsField)).toHaveLength(2)
+    })
+
+    it('tolera item_fields snake_case crudo del kernel', () => {
+        const raw = {
+            key: 'lines',
+            label: 'Renglones',
+            type: 'array',
+            item_fields: [{ key: 'sku', label: 'SKU', type: 'string' }],
+        } as unknown as ActionFieldDef
+        expect(isLineItemsField(raw)).toBe(true)
+        expect(getItemFields(raw)).toHaveLength(1)
+    })
+
+    it('valida como array de objetos por renglón', () => {
+        const schema = buildZodSchema([lineItemsField])
+        const ok = schema.safeParse({ lines: [{ product_id: 'p1', quantity: 3 }] })
+        expect(ok.success).toBe(true)
+        // No es un array → inválido (el valor del grupo debe ser una lista de renglones)
+        expect(schema.safeParse({ lines: 'nope' }).success).toBe(false)
+    })
+
+    it('aplica reglas por columna dentro de cada renglón', () => {
+        const withBound: ActionFieldDef = {
+            key: 'lines',
+            label: 'Renglones',
+            type: 'array',
+            itemFields: [{ key: 'qty', label: 'Cantidad', type: 'number', required: true, validation: { min: 1 } }],
+        }
+        const schema = buildZodSchema([withBound])
+        expect(schema.safeParse({ lines: [{ qty: 5 }] }).success).toBe(true)
+        expect(schema.safeParse({ lines: [{ qty: 0 }] }).success).toBe(false)
+    })
+
+    it('un grupo requerido exige al menos un renglón', () => {
+        const schema = buildZodSchema([{ ...lineItemsField, required: true }])
+        expect(schema.safeParse({ lines: [] }).success).toBe(false)
+        expect(schema.safeParse({ lines: [{ product_id: 'p1', quantity: 1 }] }).success).toBe(true)
     })
 })
