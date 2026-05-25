@@ -38,6 +38,9 @@ import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useApi } from './api-context'
 import { DynamicIcon } from './dynamic-icon'
+import { DynamicLineItems } from './dynamic-line-items'
+import { isLineItemsField } from './dynamic-form-schema'
+import type { ActionFieldDef } from './types'
 // Canonical registry lives in @asteby/metacore-sdk
 import {
     type ActionMetadata,
@@ -172,6 +175,10 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
         if (open && action.fields) {
             const defaults: Record<string, any> = {}
             for (const field of action.fields) {
+                if (isLineItemsField(field)) {
+                    defaults[field.key] = field.defaultValue ?? []
+                    continue
+                }
                 defaults[field.key] = field.defaultValue ?? (field.type === 'boolean' ? false : '')
             }
             setFormData(defaults)
@@ -183,7 +190,16 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
     const execute = async () => {
         if (action.fields) {
             for (const field of action.fields) {
-                if (field.required && !formData[field.key] && formData[field.key] !== false) {
+                if (!field.required) continue
+                if (isLineItemsField(field)) {
+                    const rows = formData[field.key]
+                    if (!Array.isArray(rows) || rows.length === 0) {
+                        toast.error(`${field.label} requiere al menos un renglón`)
+                        return
+                    }
+                    continue
+                }
+                if (!formData[field.key] && formData[field.key] !== false) {
                     toast.error(`${field.label} es requerido`)
                     return
                 }
@@ -247,10 +263,14 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
 }
 
 function renderField(
-    field: { key: string; type: string; options?: { value: string; label: string }[]; placeholder?: string },
+    field: ActionFieldDef,
     value: any,
     onChange: (value: any) => void,
 ) {
+    // Repeatable line-items group → row grid (value is an array of row objects).
+    if (isLineItemsField(field)) {
+        return <DynamicLineItems field={field} value={value} onChange={onChange} />
+    }
     switch (field.type) {
         case 'textarea':
             return <Textarea id={field.key} value={value || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)} placeholder={field.placeholder} />

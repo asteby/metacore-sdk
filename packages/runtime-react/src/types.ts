@@ -135,6 +135,16 @@ export interface ActionFieldDef {
      * `useOptionsResolver` against `/api/options/<ref>?field=id`.
      */
     ref?: string
+    /**
+     * Columns of a repeatable line-items group. Mirrors the kernel v3
+     * `ActionField.item_fields` (json `item_fields`). Present on a field
+     * with `type: "array"` — the multi-row container (e.g. the item rows
+     * of a "Recibir mercancía" modal, or the debit/credit lines of a
+     * journal entry). Each entry is itself an ActionFieldDef describing
+     * one column's cell widget. The field value is an array of objects
+     * keyed by these item field keys. Rendered by `DynamicLineItems`.
+     */
+    itemFields?: ActionFieldDef[]
 }
 
 export interface ActionDefinition {

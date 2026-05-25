@@ -15,10 +15,12 @@ import {
     SelectValue,
 } from '@asteby/metacore-ui/primitives'
 import type { ActionFieldDef } from './types'
-import { buildZodSchema, resolveWidget } from './dynamic-form-schema'
+import { buildZodSchema, resolveWidget, isLineItemsField } from './dynamic-form-schema'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
+import { DynamicLineItems } from './dynamic-line-items'
 
 export { buildZodSchema, resolveWidget }
+export { DynamicLineItems } from './dynamic-line-items'
 
 export interface DynamicFormProps {
     fields: ActionFieldDef[]
@@ -48,6 +50,10 @@ export function DynamicForm({
     useEffect(() => {
         const defaults: Record<string, any> = {}
         for (const f of fields) {
+            if (isLineItemsField(f)) {
+                defaults[f.key] = initialValues?.[f.key] ?? f.defaultValue ?? []
+                continue
+            }
             defaults[f.key] = initialValues?.[f.key] ?? f.defaultValue ?? (f.type === 'boolean' ? false : '')
         }
         setValues(defaults)
@@ -111,6 +117,11 @@ interface FieldRendererProps {
 }
 
 function FieldRenderer({ field, value, onChange }: FieldRendererProps) {
+    // Repeatable line-items group → render the row grid. Its value is an array
+    // of row objects rather than a scalar.
+    if (isLineItemsField(field)) {
+        return <DynamicLineItems field={field} value={value} onChange={onChange} />
+    }
     const widget = resolveWidget(field)
     // Ref-driven select: hook into useOptionsResolver so the canonical
     // /api/options/<ref>?field=id endpoint feeds the dropdown. This is

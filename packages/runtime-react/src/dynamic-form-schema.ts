@@ -47,7 +47,32 @@ export function buildZodSchema(fields: ActionFieldDef[]) {
     return z.object(shape)
 }
 
+/**
+ * Returns the line-items columns of a repeatable-group field, tolerating both
+ * the camelCase `itemFields` (the authored SDK shape) and the raw snake_case
+ * `item_fields` that the kernel serves in action metadata. Empty when the
+ * field is not a line-items group.
+ */
+export function getItemFields(field: ActionFieldDef): ActionFieldDef[] {
+    const raw = field.itemFields ?? (field as { item_fields?: ActionFieldDef[] }).item_fields
+    return Array.isArray(raw) ? raw : []
+}
+
+/** A field is a repeatable line-items group when it declares item columns. */
+export function isLineItemsField(field: ActionFieldDef): boolean {
+    return getItemFields(field).length > 0
+}
+
 function fieldToZod(field: ActionFieldDef): ZodTypeAny {
+    // Repeatable line-items group → array of row objects, each row built from
+    // the item field columns. Required keeps at least one row.
+    const itemFields = getItemFields(field)
+    if (itemFields.length > 0) {
+        const row = buildZodSchema(itemFields)
+        const arr = z.array(row)
+        return field.required ? arr.min(1, `${field.label} requiere al menos un renglón`) : arr
+    }
+
     const v = field.validation ?? ({} as FieldValidation)
     const isNumeric = field.type === 'number'
     const isBool = field.type === 'boolean'
