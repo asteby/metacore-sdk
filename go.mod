@@ -3,7 +3,7 @@ module github.com/asteby/metacore-sdk
 go 1.25.7
 
 require (
-	github.com/asteby/metacore-kernel v0.12.0
+	github.com/asteby/metacore-kernel v0.15.0
 	github.com/gofiber/fiber/v3 v3.3.0
 	github.com/google/uuid v1.6.0
 	github.com/stripe/stripe-go/v85 v85.1.0
@@ -26,16 +26,17 @@ require (
 	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/mattn/go-sqlite3 v1.14.44 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
+	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1 // indirect
 	github.com/spf13/cobra v1.3.0 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasthttp v1.71.0 // indirect
-	golang.org/x/crypto v0.51.0 // indirect
+	golang.org/x/crypto v0.52.0 // indirect
 	golang.org/x/mod v0.35.0 // indirect
 	golang.org/x/net v0.54.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
-	golang.org/x/sys v0.44.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
 	golang.org/x/tools v0.44.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
