@@ -7,8 +7,8 @@
 Email `security@asteby.com` with:
 
 - A clear description and, where possible, a minimal reproducer.
-- The affected component (`cli`, `pkg/manifest`, a published addon, the
-  hub itself).
+- The affected component (`cli`, an `@asteby/metacore-*` package, a published
+  addon, or the hub itself).
 - Your preferred disclosure timeline.
 
 Optionally encrypt with our PGP key:

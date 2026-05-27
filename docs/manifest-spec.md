@@ -7,7 +7,17 @@
 The manifest is the **single contract** between an addon and the metacore
 kernel. It is consumed by Go (`kernel/manifest`) and mirrored by the TS SDK
 via [`tygo`](https://github.com/gzuidhof/tygo). This document reflects
-`APIVersion = "2.0.0"`.
+`APIVersion = "2.0.0"` — the v2 manifest the `metacore` CLI in this repo
+validates and packages against.
+
+> **v2 vs v3.** The production kernel has moved to the Module Contract v3
+> (`apiVersion: "asteby.com/v3"`), which restructures this document — `kind`,
+> a nested `metadata{}` block, a `compatibility{}` block, `models[]` (instead
+> of `model_definitions[]`), `contributions{}`, `extension_points{}` and
+> `rbac{}`. v3 is strict (unknown fields rejected). The CLI, generated TS
+> types and examples in this repo are still on v2; see the
+> [Manifest contract version](../README.md#manifest-contract-version) note for
+> the migration status before authoring a manifest for a v3 host.
 
 When this spec evolves, `APIVersion` is bumped and a migration path is
 documented. Addons opt into a compatibility window via the top-level

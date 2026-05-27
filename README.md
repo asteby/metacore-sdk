@@ -47,7 +47,7 @@ The kernel runs sandboxed WASM backends, enforces capability scopes, manages ten
 **This repository** is the public, open-source SDK that makes building, distributing and consuming Metacore addons possible:
 
 - The `metacore` Go CLI for scaffolding, validating, signing and packaging addons.
-- A monorepo of 16 npm packages under the `@asteby/*` scope that hosts and addons share — from the federated runtime to the auth kit to the design tokens.
+- A monorepo of 20 npm packages under the `@asteby/*` scope that hosts and addons share — from the federated runtime to the auth kit to the design tokens.
 - Reference examples and the canonical `manifest.json` specification.
 
 The kernel itself is private and hosted in [`asteby/metacore-kernel`](https://github.com/asteby/metacore-kernel).
@@ -83,12 +83,12 @@ Edit `manifest.json` to declare your model, install the bundle in a host, and re
 Scaffold a Vite + React host that consumes the SDK:
 
 ```bash
-npm create @asteby/metacore-app my-app
+npm create @asteby/metacore-app my-app -- --example fullstack-starter
 cd my-app
 pnpm dev
 ```
 
-The scaffolder wires `@asteby/metacore-starter-config`, `@asteby/metacore-theme`, `@asteby/metacore-ui`, auth, i18n and the runtime in one step. See [`docs/CONSUMER_GUIDE.md`](./docs/CONSUMER_GUIDE.md) for the full integration guide.
+`--example fullstack-starter` clones the canonical full-stack reference (Vite + React frontend + Go host). Omit it to scaffold from the bundled local template instead. The scaffolder wires `@asteby/metacore-starter-config`, `@asteby/metacore-theme`, `@asteby/metacore-ui`, auth, i18n and the runtime in one step. See [`docs/CONSUMER_GUIDE.md`](./docs/CONSUMER_GUIDE.md) for the full integration guide.
 
 ## Packages
 
@@ -112,6 +112,10 @@ All published as `@asteby/metacore-*` on npm under Apache-2.0. Versions reflect 
 | [`@asteby/metacore-starter-config`](./packages/starter-config) | Shared Vite, TypeScript, Tailwind 4 and ESLint presets. | beta |
 | [`@asteby/metacore-starter-core`](./packages/starter-core) | Starter scaffolding — providers, hooks, UI primitives. | beta |
 | [`@asteby/create-metacore-app`](./packages/create-metacore-app) | `npm create` scaffolder for new Metacore Vite + React apps. | beta |
+| [`@asteby/metacore-marketplace`](./packages/marketplace) | Marketplace SDK — hub/ops clients, React Query hooks, headless catalog/install UI. | alpha |
+| [`@asteby/metacore-billing`](./packages/billing) | Billing UI primitives shared across hosts. | alpha |
+| [`@asteby/metacore-starter-monaco`](./packages/starter-monaco) | Monaco editor preset for in-app code/manifest editing. | alpha |
+| [`create-metacore-addon`](./packages/create-addon) | `npm create` scaffolder for new Metacore addons. | alpha |
 
 > Stability legend: `alpha` = pre-1.0, breaking changes likely; `beta` = pre-1.0 but stabilizing; `stable` = 1.0+ with semver discipline.
 
@@ -169,6 +173,27 @@ All published as `@asteby/metacore-*` on npm under Apache-2.0. Versions reflect 
 - **Metadata → UI.** `<DynamicTable>` reads the metadata, fetches `/data/<model>` paginated, renders rows with cell-type-aware renderers, and dispatches custom actions to `<ActionModalDispatcher>`. No code is written per feature.
 - **Kernel → Host.** Host applications embed the kernel as a Go module. Their React frontends import from `@asteby/metacore-*` to render the contributions consistently.
 
+## Manifest contract version
+
+> **Heads up — v2 → v3 transition in progress.**
+> The `metacore` CLI, the generated TypeScript types (`@asteby/metacore-sdk`),
+> the bundled examples and every doc in `docs/` currently describe the **v2
+> manifest** (`APIVersion = "2.0.0"`): a flat document with top-level
+> `model_definitions[]`, `actions{}`, a `kernel` semver-range field, etc. This
+> is the contract the CLI shipped in this repo validates and packages against
+> (it pins `metacore-kernel v0.12.0`).
+>
+> The production kernel has since moved to the **Module Contract v3**
+> (`apiVersion: "asteby.com/v3"`): a restructured document with `kind`
+> (`Addon`/`Preset`/`Theme`/`ConnectorPack`), a nested `metadata{}` block, a
+> `compatibility{}` block, `models[]` (renamed from `model_definitions[]`),
+> `contributions{}`, `extension_points{}`, `rbac{}` and more. v3 is strict —
+> unknown fields are rejected and keys are SQL-style underscore.
+>
+> Until this repo's `go.mod`, CLI, generated types and examples are bumped to
+> the v3 kernel, treat the v2 docs below as accurate for what this CLI produces,
+> and the v3 schema in the kernel as the forward-looking target.
+
 ## Documentation
 
 | Doc | What it covers |
@@ -176,7 +201,7 @@ All published as `@asteby/metacore-*` on npm under Apache-2.0. Versions reflect 
 | [`docs/quickstart.md`](./docs/quickstart.md) | Build a CRUD addon in 5 minutes — declare a model, render a table. |
 | [`docs/dynamic-ui.md`](./docs/dynamic-ui.md) | The Dynamic UI framework — `<DynamicTable>`, `<DynamicForm>`, `<ActionModalDispatcher>`, capability gates. |
 | [`docs/addon-cookbook.md`](./docs/addon-cookbook.md) | Recipes — foreign keys, soft delete, custom actions, events, federation. |
-| [`docs/manifest-spec.md`](./docs/manifest-spec.md) | Every field of `manifest.json` against `APIVersion = 2.0.0`. |
+| [`docs/manifest-spec.md`](./docs/manifest-spec.md) | Every field of `manifest.json`. Documents the v2 contract (`APIVersion = 2.0.0`) the CLI in this repo validates against; see the [Manifest contract version](#manifest-contract-version) note for the v3 transition. |
 | [`docs/capabilities.md`](./docs/capabilities.md) | Declaring scoped permissions safely. |
 | [`docs/wasm-abi.md`](./docs/wasm-abi.md) | Writing a sandboxed WASM backend (TinyGo ABI). |
 | [`docs/CONSUMER_GUIDE.md`](./docs/CONSUMER_GUIDE.md) | Apps consuming the npm packages — install, Vite, Tailwind, deploy, Renovate. |
@@ -189,8 +214,8 @@ All published as `@asteby/metacore-*` on npm under Apache-2.0. Versions reflect 
 ```
 metacore-sdk/
 ├── cli/          # `metacore` Go CLI — init, validate, build, sign, compile-wasm
-├── pkg/          # Go SDK helpers — manifest types, signing, host context
-├── packages/     # pnpm workspace — 16 npm packages under @asteby/metacore-*
+│                 #   (manifest types + signing come from the metacore-kernel module)
+├── packages/     # pnpm workspace — 20 npm packages under @asteby/metacore-*
 ├── examples/     # reference addons (fiscal-mx, tickets, hello-wasm)
 ├── templates/    # scaffold templates embedded by the CLI
 ├── docs/         # public documentation served from this folder

@@ -15,7 +15,7 @@ This document is for **contributors to the SDK itself**. If you only consume `@a
 ## Prerequisites
 
 - **Node.js 20+** and **pnpm 10+** (the root `packageManager` field is authoritative; `corepack enable` will install the matching pnpm).
-- **Go 1.22+** for the CLI (`cli/`) and Go helpers (`pkg/`).
+- **Go 1.25+** for the CLI (`cli/`). Manifest types and signing are imported from the `metacore-kernel` Go module (see [GOPRIVATE setup](#goprivate-setup)).
 - **TinyGo 0.31+** only if you rebuild the WASM examples.
 - **GitHub PAT** with `repo` (read) scope if you also work against private kernel modules — see [GOPRIVATE setup](#goprivate-setup).
 
@@ -25,7 +25,7 @@ This document is for **contributors to the SDK itself**. If you only consume `@a
 git clone https://github.com/asteby/metacore-sdk.git
 cd metacore-sdk
 
-# Go side — CLI, pkg/ helpers, examples/
+# Go side — CLI + examples/
 go mod download
 go test ./...
 
@@ -41,7 +41,6 @@ pnpm -r test
 ```
 metacore-sdk/
 ├── cli/          # Go CLI — init, validate, build, sign, compile-wasm
-├── pkg/          # Go SDK helpers — manifest types, signing, host context
 ├── packages/     # pnpm workspace — @asteby/metacore-* npm packages
 ├── examples/     # reference addons (built in CI to catch regressions)
 ├── templates/    # scaffold templates embedded by the CLI

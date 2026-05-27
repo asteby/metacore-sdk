@@ -33,7 +33,7 @@ No glue code. No controllers. No forms. The contract is the manifest.
 |---|---|
 | Node.js 20+ | Host frontend, scaffolders. |
 | pnpm 9+ | Workspace package manager. |
-| Go 1.22+ | Required if you build the addon CLI from source or compile a WASM backend. |
+| Go 1.25+ | Required if you build the addon CLI from source or compile a WASM backend (matches the repo `go.mod`). |
 | TinyGo 0.31+ | Only if your addon ships a WASM backend (optional for this guide). |
 | A running Metacore host | Any host application that embeds the kernel, or a fresh app from `npm create @asteby/metacore-app`. |
 
@@ -196,8 +196,8 @@ The host POSTs an HMAC-signed envelope to your webhook with the ticket id and th
 For action UIs that need form fields, add `fields: [...]` to the action — `<ActionModalDispatcher>` will render a dynamic form from them automatically. For full-custom modals, register a component:
 
 ```tsx
-import { actionRegistry } from '@asteby/metacore-sdk'
-actionRegistry.register('tickets', 'resolve', MyResolveDialog)
+import { registerActionComponent } from '@asteby/metacore-sdk'
+registerActionComponent('tickets', 'resolve', MyResolveDialog)
 ```
 
 The dispatcher will use `MyResolveDialog` instead of the generic confirmation. See [`dynamic-ui.md`](./dynamic-ui.md#actionmodaldispatcher).
