@@ -221,5 +221,5 @@ required.
 
 - [`bridge-api.md`](./bridge-api.md) — the full bridge contract; modals are one of four registry contribution kinds.
 - [`addon-cookbook.md`](./addon-cookbook.md#how-do-i-create-a-custom-action-with-a-modal) — recipe for declaring a custom action in the manifest.
-- [`manifest-spec.md`](./manifest-spec.md#9-actions) — `actions[model][].modal` field reference.
+- [`manifest-spec.md`](./manifest-spec.md#5-actions-ui-triggered) — `actions[model][].modal` field reference.
 - [`packages/sdk/src/registry.ts`](../packages/sdk/src/registry.ts) — `ModalProps`, `ModalContribution`, `Registry` source.

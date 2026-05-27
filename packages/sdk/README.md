@@ -2,7 +2,7 @@
 
 Frontend SDK for the [Metacore](https://github.com/asteby/metacore-sdk) framework. It is the typed contract every host application and every addon shares — manifest types, federated addon loader, slot registry, action registry, and a typed API client.
 
-The TypeScript types are mirrored from the Go source of truth (`pkg/manifest/`) via [`tygo`](https://github.com/gzuidhof/tygo); they are guaranteed to match `APIVersion = 2.0.0`.
+The TypeScript types are mirrored from the Go source of truth (`github.com/asteby/metacore-kernel/manifest`) via [`tygo`](https://github.com/gzuidhof/tygo); they currently match the v2 contract (`APIVersion = 2.0.0`). The production kernel has moved to the Module Contract v3 (`apiVersion: "asteby.com/v3"`) — these types and the CLI in this repo are not yet on v3.
 
 ## Install
 
@@ -34,24 +34,36 @@ console.log(METACORE_API_VERSION) // "2.0.0"
 ### Federated addon loader
 
 ```ts
-import { loadAddon } from '@asteby/metacore-sdk'
+import { loadFederatedAddon } from '@asteby/metacore-sdk'
 
-const addon = await loadAddon({
-  scope: 'billing',
-  url: '/addons/billing/remoteEntry.js',
-})
+const mod = await loadFederatedAddon(
+  {
+    entry: '/addons/billing/remoteEntry.js',
+    format: 'federation',
+    expose: './plugin',
+    container: 'metacore_billing',
+  },
+  'billing',          // addonKey
+  '1.0.0',            // version — included in the cache key
+)
 
-addon.register({ /* AddonAPI host bindings */ })
+// mod.register(api) — call the addon's register() export with AddonAPI bindings
 ```
 
-### Slot and action registries
+### Action registry
+
+Custom action modal components are registered by `<model>::<action.key>`:
 
 ```ts
-import { slotRegistry, actionRegistry } from '@asteby/metacore-sdk'
+import { registerActionComponent, getActionComponent } from '@asteby/metacore-sdk'
 
-slotRegistry.contribute('dashboard.widgets', () => <RevenueWidget />)
-actionRegistry.register('invoice.send', async (ctx, payload) => { /* … */ })
+registerActionComponent('invoices', 'send_email', SendEmailDialog)
+const Cmp = getActionComponent('invoices', 'send_email')
 ```
+
+> The `slotRegistry` (named-slot contributions) lives in
+> [`@asteby/metacore-runtime-react`](../runtime-react), not this package — see
+> [`docs/dynamic-ui.md`](https://github.com/asteby/metacore-sdk/blob/main/docs/dynamic-ui.md#slots).
 
 ### Modals
 
@@ -78,17 +90,21 @@ The double cast through `unknown` is intentional. See
 for the full contract, why the generic was removed, and a migration note for
 modals authored before 2.5.
 
-### Typed API client
+### Marketplace / installations client
+
+`MarketplaceClient` is a transport-agnostic wrapper over the host's
+`/api/metacore/*` REST surface:
 
 ```ts
-import { createMetacoreClient } from '@asteby/metacore-sdk'
+import { MarketplaceClient } from '@asteby/metacore-sdk'
 
-const client = createMetacoreClient({
-  baseURL: '/api/metacore',
-  getToken: () => session.accessToken,
+const client = new MarketplaceClient({
+  baseUrl: '/api/metacore',
+  headers: () => ({ Authorization: `Bearer ${session.accessToken}` }),
 })
 
-const installations = await client.installations.list()
+const installed = await client.installed()   // GET /installations
+const catalog = await client.catalog()        // GET /catalog
 ```
 
 ## Key types
@@ -102,7 +118,7 @@ const installations = await client.installations.list()
 | `ActionFieldDef` | `src/generated/manifest.ts` | A field declared inside a manifest action. Reused by `<DynamicForm>` and the action dispatcher. |
 | `ToolDef` | `src/generated/manifest.ts` | LLM-facing tool with `input_schema`, `extraction_hint`, `normalize`, `validation`. |
 | `AddonAPI` | `src/api.ts` | Host bindings injected into an addon's `register()` call. |
-| `ActionModalProps` | `src/action-registry.ts` | Props passed to action modals registered via `actionRegistry.register()`. |
+| `ActionModalProps` | `src/action-registry.ts` | Props passed to action modals registered via `registerActionComponent()`. |
 
 The `runtime-react` package consumes `AddonAPI`, the action registry and the slot registry from this package. Dynamic UI components live in [`@asteby/metacore-runtime-react`](../runtime-react) and are documented in [`docs/dynamic-ui.md`](https://github.com/asteby/metacore-sdk/blob/main/docs/dynamic-ui.md).
 

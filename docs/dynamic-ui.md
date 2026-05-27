@@ -246,8 +246,8 @@ Routes a custom action declared in `manifest.actions[]` to the right modal:
 
 1. **Custom registered component.** If the SDK's action registry has a component for `<model>::<action.key>`, it is used. Hosts register these via:
    ```ts
-   import { actionRegistry } from '@asteby/metacore-sdk'
-   actionRegistry.register('tickets', 'reassign', ReassignDialog)
+   import { registerActionComponent } from '@asteby/metacore-sdk'
+   registerActionComponent('tickets', 'reassign', ReassignDialog)
    ```
 2. **`action.fields[].length > 0`.** Renders a generic modal with `<DynamicForm>`-style inputs.
 3. **`action.confirm === true`.** Renders an `AlertDialog` confirmation.
@@ -470,8 +470,8 @@ Two layers:
 1. Declarative — declare `actions[]` in the manifest with `confirm`, `fields[]` and let `<ActionModalDispatcher>` render the modal.
 2. Imperative — register a fully custom modal component:
    ```ts
-   import { actionRegistry } from '@asteby/metacore-sdk'
-   actionRegistry.register('invoices', 'send_email', SendEmailDialog)
+   import { registerActionComponent } from '@asteby/metacore-sdk'
+   registerActionComponent('invoices', 'send_email', SendEmailDialog)
    ```
    The dispatcher will pick up your component when an action key matches.
 
