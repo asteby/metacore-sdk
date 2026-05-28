@@ -22,8 +22,8 @@ for progress.
 - **Custom capabilities** — declaring `http:fetch`, `event:subscribe`,
   `db:read` scopes; the runtime egress SSRF guard; per-installation
   approval prompts. See `docs/capabilities.md` for the in-flight spec.
-- **Multi-tenant patterns** — `tenant_isolation: "schema-per-tenant"`,
-  per-tenant migrations, regulated-data layouts.
+- **Multi-tenant patterns** — `tenancy.isolation: "schema"`
+  (schema-per-tenant), per-tenant migrations, regulated-data layouts.
 
 ## Reference docs (non-tutorial)
 

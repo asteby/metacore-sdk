@@ -434,11 +434,17 @@ A complete addon that renders **"Hello tenant {name}"** under
 
 ```jsonc
 {
-  "key": "hello",
-  "name": "Hello Tenant",
-  "version": "1.0.0",
-  "kernel": ">=2.0.0 <3.0.0",
-  "category": "demo",
+  "apiVersion": "asteby.com/v3",
+  "kind": "Addon",
+  "metadata": {
+    "key": "hello",
+    "name": "Hello Tenant",
+    "version": "1.0.0",
+    "category": "demo"
+  },
+  "compatibility": {
+    "requires": [{ "key": "kernel", "version": ">=3.0.0 <4.0.0" }]
+  },
 
   "frontend": {
     "entry":     "/api/metacore/addons/hello/frontend/remoteEntry.js",
@@ -447,11 +453,13 @@ A complete addon that renders **"Hello tenant {name}"** under
     "container": "metacore_hello"
   },
 
-  "navigation": [{
-    "title": "sidebar.hello",
-    "icon": "Hand",
-    "url": "/addons/hello/dashboard"
-  }]
+  "contributions": {
+    "navigation": [{
+      "title": "sidebar.hello",
+      "icon": "Hand",
+      "url": "/addons/hello/dashboard"
+    }]
+  }
 }
 ```
 

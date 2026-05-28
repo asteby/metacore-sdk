@@ -40,7 +40,7 @@
 
 **Metacore** is a declarative framework for extending business applications. You describe your addon with a single `manifest.json` — tables, UI contributions, webhooks, LLM tools, sandboxed permissions — and the kernel materializes it across every host that speaks Metacore.
 
-**Dynamic CRUD without the boilerplate.** Declare `model_definitions[]` in your manifest and the kernel auto-generates the database schema, REST endpoints, metadata documents and permission gates. The SDK's `<DynamicTable model="..." />` consumes that metadata and renders a full CRUD surface — sortable, filterable, paginated, with create/edit dialogs and custom action modals. You write zero rendering code. The same manifest powers any host application that speaks Metacore. See [`docs/dynamic-ui.md`](./docs/dynamic-ui.md) for the full UI contract.
+**Dynamic CRUD without the boilerplate.** Declare `models[]` in your manifest and the kernel auto-generates the database schema, REST endpoints, metadata documents and permission gates. The SDK's `<DynamicTable model="..." />` consumes that metadata and renders a full CRUD surface — sortable, filterable, paginated, with create/edit dialogs and custom action modals. You write zero rendering code. The same manifest powers any host application that speaks Metacore. See [`docs/dynamic-ui.md`](./docs/dynamic-ui.md) for the full UI contract.
 
 The kernel runs sandboxed WASM backends, enforces capability scopes, manages tenant isolation, and exposes a typed bridge to React frontends. Host applications embed the kernel as a Go module and consume the SDK packages from npm. One bundle, every host.
 
@@ -125,7 +125,7 @@ All published as `@asteby/metacore-*` on npm under Apache-2.0. Versions reflect 
    ┌─────────────────────────────────────────────────────────────────────┐
    │                        Addon (your code)                            │
    │             manifest.json — declarative contract                    │
-   │       model_definitions[] · actions[] · capabilities[] · …          │
+   │     models[] · contributions{} · capabilities[] · rbac{} · …        │
    │            + migrations/ · frontend/ · WASM backend                 │
    └─────────────────────────────┬───────────────────────────────────────┘
                                  │

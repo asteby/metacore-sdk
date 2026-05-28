@@ -23,6 +23,7 @@
     "build": "tsup src/index.ts --format esm --target node20 --clean --dts",
     "dev": "tsup src/index.ts --format esm --target node20 --watch",
     "typecheck": "tsc --noEmit",
+    "pretest": "pnpm build",
     "test": "node --test test/*.test.js",
     "clean": "rm -rf dist"
   },

@@ -34,8 +34,8 @@ This document covers the React side: which components exist, what props they acc
 ```
    manifest.json                kernel                       runtime-react
    ─────────────                ──────                       ─────────────
-   model_definitions[] ──▶  AutoMigrate  ──▶  /metadata/table/<model>
-   actions[]                                  /data/<model>
+   models[]            ──▶  AutoMigrate  ──▶  /metadata/table/<model>
+   contributions.actions[]                    /data/<model>
    capabilities[]                             /data/<model>/<id>
                                               /data/<model>/<id>/action/<key>
                                               /options/<endpoint>

@@ -40,5 +40,7 @@ dev-dist
 .env.*.local
 !.env.example
 
-# Generated TanStack Router tree
-src/routeTree.gen.ts
+# Generated TanStack Router tree — COMMITTED to the repo (ecosystem
+# convention: metacore-starter / link / ops all commit it) so `tsc -b`
+# resolves the ./routeTree.gen import before `vite build` regenerates it.
+# Regenerate with: pnpm gen:routes (root) or vite dev/build.

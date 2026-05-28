@@ -171,12 +171,14 @@ Inside the manifest, declare a custom modal by setting `modal: "<slug>"` on
 the action; the slug must match exactly what the addon registered:
 
 ```json
-"actions": {
-  "tickets": [{
+"contributions": {
+  "actions": [{
     "key": "reassign",
     "label": "Reassign",
     "icon": "UserPlus",
+    "target_model": "Ticket",
     "modal": "tickets.reassign",
+    "handler": { "type": "webhook", "url": "/webhooks/reassign" },
     "fields": [
       { "key": "assignee_id", "label": "Assignee", "type": "user", "required": true }
     ]

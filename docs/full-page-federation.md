@@ -209,24 +209,35 @@ place — see [`docs/federation.md`](./federation.md).
 
 ```jsonc
 {
-  "key": "pos_register",
-  "name": "POS — Register",
-  "version": "1.0.0",
-  "kernel": ">=2.0.0 <3.0.0",
-  "category": "operations",
+  "apiVersion": "asteby.com/v3",
+  "kind": "Addon",
+  "metadata": {
+    "key": "pos_register",
+    "name": "POS — Register",
+    "version": "1.0.0",
+    "category": "operations"
+  },
+  "compatibility": {
+    "requires": [{ "key": "kernel", "version": ">=3.0.0 <4.0.0" }]
+  },
+  "tenancy": { "isolation": "shared", "rls_column": "organization_id" },
 
-  "model_definitions": [
+  "models": [
     {
-      "table_name": "tickets",
-      "model_key": "tickets",
+      "key": "Ticket",
+      "table": "tickets",
       "label": "Tickets",
-      "org_scoped": true,
-      "soft_delete": true,
       "columns": [
-        { "name": "number",    "type": "int",     "required": true, "index": true },
-        { "name": "state",     "type": "string",  "size": 20, "default": "'open'" },
-        { "name": "total",     "type": "decimal", "default": 0 },
-        { "name": "opened_at", "type": "timestamp", "default": "now()" }
+        { "name": "id",              "type": "uuid",        "primary_key": true, "default": "gen_random_uuid()" },
+        { "name": "organization_id", "type": "uuid",        "not_null": true },
+        { "name": "number",          "type": "integer",     "not_null": true },
+        { "name": "state",           "type": "text",        "default": "open" },
+        { "name": "total",           "type": "numeric",     "default": 0 },
+        { "name": "opened_at",       "type": "timestamptz", "default": "now()" },
+        { "name": "deleted_at",      "type": "timestamptz" }
+      ],
+      "indices": [
+        { "name": "tickets_number_idx", "columns": ["number"] }
       ]
     }
   ],
@@ -234,11 +245,16 @@ place — see [`docs/federation.md`](./federation.md).
   "capabilities": [
     { "kind": "db:read",  "target": "addon_pos_register.tickets" },
     { "kind": "db:write", "target": "addon_pos_register.tickets" },
-    { "kind": "event:emit", "target": "pos.ticket.opened" },
-    { "kind": "event:emit", "target": "pos.ticket.paid" }
+    { "kind": "event:emit", "target": "pos.ticket_opened" },
+    { "kind": "event:emit", "target": "pos.ticket_paid" }
   ],
 
-  "events": ["pos.ticket.opened", "pos.ticket.paid"],
+  "extension_points": {
+    "events": [
+      { "name": "pos.ticket_opened" },
+      { "name": "pos.ticket_paid" }
+    ]
+  },
 
   "frontend": {
     "entry":     "/api/metacore/addons/pos_register/frontend/remoteEntry.js",
