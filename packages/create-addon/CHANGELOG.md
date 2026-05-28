@@ -1,5 +1,11 @@
 # create-metacore-addon
 
+## 1.0.1
+
+### Patch Changes
+
+- 3f15c1d: Declarar `publishConfig.access: public` en `create-metacore-addon`. Sin este flag npm trata el primer release de un package unscoped como restricted contra tokens de organización y rechaza con E403, bloqueando el resto del release pipeline.
+
 ## 1.0.0
 
 ### Major Changes
