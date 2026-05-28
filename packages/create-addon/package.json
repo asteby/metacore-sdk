@@ -9,6 +9,9 @@
     "directory": "packages/create-addon"
   },
   "type": "module",
+  "publishConfig": {
+    "access": "public"
+  },
   "bin": {
     "create-metacore-addon": "./bin/index.js"
   },
