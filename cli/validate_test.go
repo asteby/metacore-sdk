@@ -7,20 +7,20 @@ import (
 	"testing"
 )
 
-// TestCmdValidate_WasmTriggerExport_GoldenFixtures exercises the
-// `metacore validate` flow against two checked-in manifests:
+// TestCmdValidate_V3_GoldenFixtures exercises the `metacore validate` flow,
+// which now runs the strict Module Contract v3 schema (v3.Validate), against
+// two checked-in manifests:
 //
-//	testdata/validate/wasm_trigger_valid    — every ActionDef.Trigger.Export
-//	                                          (Type=wasm) is listed in
-//	                                          BackendSpec.Exports.
-//	testdata/validate/wasm_trigger_invalid  — one trigger references an
-//	                                          export the backend never
-//	                                          declared; validate must reject it.
+//	testdata/validate/v3_valid    — a well-formed v3 Addon manifest.
+//	testdata/validate/v3_invalid  — wrong apiVersion + a stray top-level
+//	                                `backend` field the strict schema rejects
+//	                                (additionalProperties:false). validate
+//	                                must reject it.
 //
 // Keeping the manifests on disk (rather than inline) makes them easy to grep
 // from a failing CI run and serves as an addon-author-facing example of the
 // contract the CLI enforces.
-func TestCmdValidate_WasmTriggerExport_GoldenFixtures(t *testing.T) {
+func TestCmdValidate_V3_GoldenFixtures(t *testing.T) {
 	// cmdValidate writes a success line to stdout; redirect it so test output
 	// stays clean. Restored on every iteration via the cleanup func.
 	suppressStdout := func(t *testing.T) {
@@ -49,30 +49,24 @@ func TestCmdValidate_WasmTriggerExport_GoldenFixtures(t *testing.T) {
 		})
 	}
 
-	t.Run("valid manifest passes", func(t *testing.T) {
+	t.Run("valid v3 manifest passes", func(t *testing.T) {
 		suppressStdout(t)
-		if err := cmdValidate([]string{"testdata/validate/wasm_trigger_valid"}); err != nil {
-			t.Fatalf("expected valid manifest to pass, got %v", err)
+		if err := cmdValidate([]string{"testdata/validate/v3_valid"}); err != nil {
+			t.Fatalf("expected valid v3 manifest to pass, got %v", err)
 		}
 	})
 
-	t.Run("missing export is rejected", func(t *testing.T) {
+	t.Run("invalid v3 manifest is rejected", func(t *testing.T) {
 		suppressStdout(t)
-		err := cmdValidate([]string{"testdata/validate/wasm_trigger_invalid"})
+		err := cmdValidate([]string{"testdata/validate/v3_invalid"})
 		if err == nil {
-			t.Fatal("expected validate to reject a wasm trigger whose export is not in backend.exports")
+			t.Fatal("expected validate to reject a manifest with the wrong apiVersion and a stray top-level field")
 		}
-		// The kernel manifest validator surfaces this as
-		// `trigger.export: "X" not declared in backend.exports`. Assert the
-		// stable substrings — the exact prefix path may evolve, but the
-		// `backend.exports` clause is the contract the CLI must surface so
-		// addon authors know what to fix.
-		msg := err.Error()
-		if !strings.Contains(msg, "backend.exports") {
-			t.Fatalf("error %q should mention backend.exports", msg)
-		}
-		if !strings.Contains(msg, "EscalateTicket") {
-			t.Fatalf("error %q should name the offending export EscalateTicket", msg)
+		// v3.Validate surfaces the failure with a "manifest invalid" wrapper
+		// from cmdValidate. We don't pin the exact schema diagnostic (it can
+		// evolve), only that the CLI flags it as invalid.
+		if msg := err.Error(); !strings.Contains(msg, "manifest invalid") {
+			t.Fatalf("error %q should be flagged as a manifest validation failure", msg)
 		}
 	})
 }

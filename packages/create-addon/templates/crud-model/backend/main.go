@@ -57,7 +57,7 @@ func mark_done(ptr, length uint32) uint64 {
 		"id":     req.ID,
 		"status": "done",
 	})
-	emit("{{ADDON_KEY}}.item.completed", payload)
+	emit("{{ADDON_KEY}}.item_completed", payload)
 
 	return writeJSON(map[string]any{
 		"success": true,

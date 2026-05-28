@@ -84,9 +84,20 @@ for (const template of ['minimal', 'crud-model', 'full-page']) {
         'manifest.json still contains unsubstituted placeholders'
       )
       const manifest = JSON.parse(manifestRaw)
-      assert.equal(manifest.key, 'my_addon')
-      assert.ok(manifest.name, 'manifest.name missing')
-      assert.ok(manifest.version, 'manifest.version missing')
+      // Module Contract v3: apiVersion + kind + nested metadata.
+      assert.equal(manifest.apiVersion, 'asteby.com/v3')
+      assert.equal(manifest.kind, 'Addon')
+      assert.ok(manifest.metadata, 'manifest.metadata missing')
+      assert.equal(manifest.metadata.key, 'my_addon')
+      assert.ok(manifest.metadata.name, 'manifest.metadata.name missing')
+      assert.ok(manifest.metadata.version, 'manifest.metadata.version missing')
+      assert.ok(
+        Array.isArray(manifest.compatibility?.requires) &&
+          manifest.compatibility.requires.some(
+            (r) => r.key === 'kernel' && /3\.0\.0/.test(r.version)
+          ),
+        'manifest.compatibility.requires missing the kernel >=3.0.0 range'
+      )
       assert.ok(manifest.frontend, 'manifest.frontend missing')
       assert.equal(manifest.frontend.format, 'federation')
       assert.equal(manifest.frontend.container, 'metacore_my_addon')
@@ -134,13 +145,18 @@ for (const template of ['minimal', 'crud-model', 'full-page']) {
 
       // template-specific assertions
       if (template === 'crud-model') {
-        assert.ok(manifest.backend, 'crud-model: manifest.backend missing')
-        assert.equal(manifest.backend.runtime, 'wasm')
+        // v3 drops the contract-level backend block — the wasm runtime is a
+        // bundle concern. The action's handler.function ("mark_done") IS the
+        // export the compiled module must ship.
         assert.ok(
-          Array.isArray(manifest.model_definitions) &&
-            manifest.model_definitions.length > 0,
-          'crud-model: model_definitions missing'
+          Array.isArray(manifest.models) && manifest.models.length > 0,
+          'crud-model: models[] missing'
         )
+        const action = (manifest.contributions?.actions ?? []).find(
+          (a) => a.handler?.type === 'wasm'
+        )
+        assert.ok(action, 'crud-model: contributions.actions[] missing a wasm handler')
+        assert.equal(action.handler.function, 'mark_done')
         assert.ok(
           existsSync(path.join(dir, 'backend', 'main.go')),
           'crud-model: backend/main.go missing'
@@ -160,11 +176,11 @@ for (const template of ['minimal', 'crud-model', 'full-page']) {
       }
 
       if (template === 'minimal') {
-        // minimal must NOT ship a backend block (keeps the addon tiny).
+        // minimal ships no models, no actions — keeps the addon tiny.
         assert.equal(
-          manifest.backend,
+          manifest.models,
           undefined,
-          'minimal: manifest.backend should be omitted'
+          'minimal: manifest.models should be omitted'
         )
       }
     } finally {

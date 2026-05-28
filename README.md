@@ -175,24 +175,26 @@ All published as `@asteby/metacore-*` on npm under Apache-2.0. Versions reflect 
 
 ## Manifest contract version
 
-> **Heads up — v2 → v3 transition in progress.**
-> The `metacore` CLI, the generated TypeScript types (`@asteby/metacore-sdk`),
-> the bundled examples and every doc in `docs/` currently describe the **v2
-> manifest** (`APIVersion = "2.0.0"`): a flat document with top-level
-> `model_definitions[]`, `actions{}`, a `kernel` semver-range field, etc. This
-> is the contract the CLI shipped in this repo validates and packages against
-> (it pins `metacore-kernel v0.12.0`).
->
-> The production kernel has since moved to the **Module Contract v3**
-> (`apiVersion: "asteby.com/v3"`): a restructured document with `kind`
+> **Canonical: Module Contract v3 (`apiVersion: "asteby.com/v3"`).**
+> The `metacore` CLI, the generated TypeScript types (`@asteby/metacore-sdk`)
+> and the bundled examples all **emit and validate v3**. This repo pins
+> `metacore-kernel v0.20.0` and validates manifests with the kernel's strict
+> `manifest/v3` parser. A v3 manifest declares `apiVersion`, `kind`
 > (`Addon`/`Preset`/`Theme`/`ConnectorPack`), a nested `metadata{}` block, a
-> `compatibility{}` block, `models[]` (renamed from `model_definitions[]`),
-> `contributions{}`, `extension_points{}`, `rbac{}` and more. v3 is strict —
-> unknown fields are rejected and keys are SQL-style underscore.
+> `compatibility{}` block (semver kernel range), `models[]` (full column
+> definitions, replacing the v2 `model_definitions[]`), `contributions{}`
+> (navigation/actions/tools/subscriptions/slots), `extension_points{}`,
+> `rbac{}` and top-level `settings[]`. v3 is strict — unknown fields are
+> rejected and keys are SQL-style underscore.
 >
-> Until this repo's `go.mod`, CLI, generated types and examples are bumped to
-> the v3 kernel, treat the v2 docs below as accurate for what this CLI produces,
-> and the v3 schema in the kernel as the forward-looking target.
+> Scaffold one with `metacore init <key>` or `npx create-metacore-addon`.
+> The authoritative grammar (JSON schema, v2→v3 migration guide, canonical
+> examples) lives in the kernel repo under `docs/spec/v3/`.
+>
+> **v2 compatibility.** The kernel *dual-reads* legacy v2 manifests (no
+> `apiVersion`) throughout the 3.x line, so already-published v2 addons keep
+> installing. New addons author v3; v2 support is removed in the 4.x kernel
+> train.
 
 ## Documentation
 
@@ -201,7 +203,7 @@ All published as `@asteby/metacore-*` on npm under Apache-2.0. Versions reflect 
 | [`docs/quickstart.md`](./docs/quickstart.md) | Build a CRUD addon in 5 minutes — declare a model, render a table. |
 | [`docs/dynamic-ui.md`](./docs/dynamic-ui.md) | The Dynamic UI framework — `<DynamicTable>`, `<DynamicForm>`, `<ActionModalDispatcher>`, capability gates. |
 | [`docs/addon-cookbook.md`](./docs/addon-cookbook.md) | Recipes — foreign keys, soft delete, custom actions, events, federation. |
-| [`docs/manifest-spec.md`](./docs/manifest-spec.md) | Every field of `manifest.json`. Documents the v2 contract (`APIVersion = 2.0.0`) the CLI in this repo validates against; see the [Manifest contract version](#manifest-contract-version) note for the v3 transition. |
+| [`docs/manifest-spec.md`](./docs/manifest-spec.md) | Every field of `manifest.json`. The CLI emits/validates Module Contract **v3** (`apiVersion: "asteby.com/v3"`); the page links the authoritative v3 schema in the kernel and retains the legacy v2 field reference (the kernel dual-reads v2). |
 | [`docs/capabilities.md`](./docs/capabilities.md) | Declaring scoped permissions safely. |
 | [`docs/wasm-abi.md`](./docs/wasm-abi.md) | Writing a sandboxed WASM backend (TinyGo ABI). |
 | [`docs/CONSUMER_GUIDE.md`](./docs/CONSUMER_GUIDE.md) | Apps consuming the npm packages — install, Vite, Tailwind, deploy, Renovate. |

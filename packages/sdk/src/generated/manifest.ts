@@ -2,7 +2,19 @@
 /**
  * AUTO-GENERATED — do not edit by hand.
  * Re-generate with: pnpm codegen
- * Source: github.com/asteby/metacore-kernel/manifest
+ * Source: github.com/asteby/metacore-kernel/manifest (legacy v2 contract)
+ *
+ * DEPRECATED: the SDK emits Module Contract v3 (see manifest-v3.ts).
+ * These types remain only so consumers that still reference the v2 shape
+ * keep type-checking during the migration window.
+ */
+
+//////////
+// source: from_v3.go
+
+/**
+ * kernelRequirementKey is the reserved compatibility.requires[] key whose
+ * version range the kernel reads as the legacy `Manifest.Kernel` field.
  */
 
 //////////
@@ -11,8 +23,13 @@
 /**
  * APIVersion is the kernel contract version this package implements.
  * Addons declare `kernel: ">=X.Y <Z"` to opt into a compatibility window.
+ * Bumped to 3.0.0 once the bundle ingestion path learned to dual-read the
+ * Module Contract v3 manifest (see bundle.parseManifest + manifest.FromV3):
+ * the kernel now satisfies v3 addons' `kernel: ">=3.0.0 <4.0.0"` requirement.
+ * Legacy v2 addons declare no range (checkKernelRange skips them) so they are
+ * unaffected.
  */
-export const APIVersion = "2.0.0";
+export const APIVersion = "3.0.0";
 /**
  * Manifest describes everything an addon provides: metadata, extension points,
  * data model, navigation, permissions and distribution info.
@@ -66,7 +83,27 @@ export interface Manifest {
    */
   tools?: ToolDef[];
   model_definitions?: ModelDefinition[];
+  /**
+   * Events lists the event names the addon may emit. It predates the
+   * capability-based gate (`{kind:"event:emit", target:"<name>"}`) and is
+   * kept on the type for backwards compatibility with v0.x manifests.
+   * @deprecated — Will be derived from Capabilities[event:emit] in v2 and
+   * removed. The runtime gate is already the capability set; declaring
+   * names here is documentation only. ValidateAdvisory emits a warning
+   * when an Events entry has no matching `event:emit` capability so the
+   * drift surfaces at install time. New manifests should declare event
+   * names via Capabilities exclusively.
+   */
   events?: string[];
+  /**
+   * LifecycleHooks maps a hook event ("install" | "uninstall" | "enable"
+   * | "disable" | "upgrade" | "before_create" | "after_create" |
+   * "before_update" | "after_update" | "before_delete" | "after_delete")
+   * to one or more HookDef entries the kernel dispatches when the event
+   * fires. Lifecycle transitions run from the installer; CRUD events
+   * fire from dynamic.Service. See [docs/lifecycle-hooks.md] for the
+   * full contract (timeouts, error semantics, payload shape).
+   */
   lifecycle_hooks?: { [key: string]: HookDef[]};
   i18n?: { [key: string]: { [key: string]: string}};
   /**
@@ -96,6 +133,31 @@ export interface Manifest {
   screenshots?: string[];
   features?: string[];
   price?: string;
+  /**
+   * Countries scopes the addon to ISO 3166-1 alpha-2 markets (e.g. ["MX"]).
+   * Empty/omitted = global. The hub uses it to filter the catalog by the
+   * browsing user's country so region-specific (fiscal) addons don't surface
+   * where they don't apply.
+   */
+  countries?: string[];
+  /**
+   * MetadataI18n carries marketplace catalog localizations keyed by locale
+   * ("es", "en"). Populated by FromV3 from v3 metadata.i18n. The hub stores
+   * and serves these so the catalog renders in the browsed locale; the flat
+   * Name/Description/Features above stay the default/fallback copy. Tagged
+   * "metadata_i18n" because the top-level Manifest.I18n (app-UI string
+   * bundles) already owns the "i18n" JSON key.
+   */
+  metadata_i18n?: { [key: string]: MetadataLocale};
+}
+/**
+ * MetadataLocale is one locale's catalog copy (name/description/features).
+ * Any field may be empty — consumers fall back to the default Manifest copy.
+ */
+export interface MetadataLocale {
+  name?: string;
+  description?: string;
+  features?: string[];
 }
 /**
  * Module is a named reference with a translatable label.
@@ -153,6 +215,23 @@ export interface FrontendSpec {
    * to locate the container after injecting the script tag.
    */
   container?: string;
+  /**
+   * Layout selects how the host frames the addon UI on screen.
+   * 	""          — legacy / unset: treated as "shell" for retro-compat
+   * 	              with every manifest published before this field landed.
+   * 	"shell"     — default chrome: sidebar + topbar + content slot. The
+   * 	              host renders navigation around the addon and the
+   * 	              federated module only owns the content viewport.
+   * 	"immersive" — full-page takeover. The addon owns the entire viewport
+   * 	              (no sidebar, no topbar) and is responsible for any
+   * 	              navigation back to the shell. Use for point-of-sale
+   * 	              terminals, kitchen-display screens, customer-facing
+   * 	              waiting-room displays and other kiosk-style UIs where
+   * 	              the surrounding ERP chrome is noise.
+   * Validate rejects any value outside this closed set so addon authors
+   * catch typos at install time rather than at first paint.
+   */
+  layout?: string;
 }
 /**
  * BackendSpec declares how the addon's backend code is executed.
@@ -160,7 +239,14 @@ export interface FrontendSpec {
  * 	Runtime = "wasm"    — sandboxed in-process module at Entry. Exports
  * 	                      enumerates the function symbols each hook can
  * 	                      dispatch to; kernel/runtime/wasm enforces it.
- * 	Runtime = "binary"  — reserved for future use (native side-car).
+ * 	Runtime = "binary"  — RESERVED for a future native side-car runtime.
+ * 	                      The manifest validates (so addon authors can
+ * 	                      declare it ahead of time) but the kernel has no
+ * 	                      installer / invoker for it yet. ValidateAdvisory
+ * 	                      emits a warning and host.LoadWASMFromBundle
+ * 	                      surfaces a runtime_not_implemented error at
+ * 	                      install time. See docs/wasm-abi.md
+ * 	                      "Reserved / advisory fields".
  */
 export interface BackendSpec {
   runtime: string; // "webhook" | "wasm" | "binary"
@@ -313,7 +399,19 @@ export interface FieldDef {
   size?: number /* int */;
 }
 /**
- * HookDef is a CRUD lifecycle hook dispatch target.
+ * HookDef is one declared lifecycle hook entry. The kernel dispatches
+ * every entry under a given LifecycleHooks key in Priority-ascending order
+ * when the matching event fires.
+ *   - Event mirrors the map key for self-documenting manifests. When set
+ *     it MUST match the key (Validate rejects mismatches); when empty the
+ *     map key is authoritative.
+ *   - Target is the dispatch destination (wasm export, webhook URL, or
+ *     reserved prompt). Required.
+ *   - Priority orders multiple hooks bound to the same event — lower
+ *     numbers fire first. Default 0.
+ *   - Async detaches the dispatch onto a goroutine. Allowed only on
+ *     after_*-family events because before-events and lifecycle
+ *     transitions must block on the result to honour a veto.
  */
 export interface HookDef {
   event: string;
@@ -323,6 +421,14 @@ export interface HookDef {
 }
 /**
  * HookTarget describes where a lifecycle hook dispatches to.
+ *   Type = "wasm"    — invoke the exported function `Function` on the
+ *                      addon's compiled wasm module. The function MUST
+ *                      appear in Backend.Exports.
+ *   Type = "webhook" — POST the event payload to URL (HMAC-signed via
+ *                      the host's webhook dispatcher).
+ *   Type = "prompt"  — reserved for a future LLM dispatcher; validates
+ *                      but currently runs as a no-op unless the host
+ *                      registers a custom prompt dispatcher.
  */
 export interface HookTarget {
   type: string;

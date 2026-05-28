@@ -73,23 +73,30 @@ The manifest already declares one model (`tickets_items`) with two columns. Let'
 
 ## Step 2 — Declare your model
 
-Open `manifest.json` and replace `model_definitions` with:
+`metacore init` emits a **Module Contract v3** manifest (`apiVersion:
+"asteby.com/v3"`). Open `manifest.json` and replace the `models[]` entry with
+something more interesting (v3 declares full column definitions inline):
 
 ```json
-"model_definitions": [
+"models": [
   {
-    "table_name": "tickets",
-    "model_key": "tickets",
+    "key": "Ticket",
+    "table": "tickets",
     "label": "Tickets",
-    "org_scoped": true,
-    "soft_delete": true,
     "columns": [
-      { "name": "number",      "type": "string",  "size": 32,  "required": true, "unique": true },
-      { "name": "title",       "type": "string",  "size": 255, "required": true },
-      { "name": "description", "type": "text" },
-      { "name": "status",      "type": "string",  "size": 20,  "required": true, "default": "'open'", "index": true },
-      { "name": "priority",    "type": "string",  "size": 10,  "default": "'normal'" },
-      { "name": "due_at",      "type": "timestamp" }
+      { "name": "id",              "type": "uuid",        "primary_key": true, "default": "gen_random_uuid()" },
+      { "name": "organization_id", "type": "uuid",        "not_null": true },
+      { "name": "number",          "type": "text",        "not_null": true },
+      { "name": "title",           "type": "text",        "not_null": true },
+      { "name": "description",     "type": "text" },
+      { "name": "status",          "type": "text",        "not_null": true, "default": "open" },
+      { "name": "priority",        "type": "text",        "default": "normal" },
+      { "name": "due_at",          "type": "timestamptz" },
+      { "name": "created_at",      "type": "timestamptz", "not_null": true, "default": "now()" }
+    ],
+    "indices": [
+      { "name": "tickets_org_number_uq", "columns": ["organization_id", "number"], "unique": true },
+      { "name": "tickets_status_idx",    "columns": ["status"] }
     ]
   }
 ]
@@ -99,7 +106,7 @@ Validate the manifest:
 
 ```bash
 metacore validate
-# ok: tickets@0.1.0 passes validation against kernel 2.0.0
+# ok: tickets@0.1.0 passes validation against the v3 contract (asteby.com/v3)
 ```
 
 `validate` runs the same gates the marketplace runs at upload time: identifier regex, default-literal whitelist, capability scoping, semver. Failures are loud and specific.
@@ -164,34 +171,29 @@ You wrote zero rendering code. Every column type, every filter, every dialog com
 
 ## Step 5 — Add a custom action
 
-Declare an action under the model:
+In v3, actions live under `contributions.actions[]`. Each action carries its
+own `handler` (the server side is wired *into the action*, not a separate
+`hooks{}` map). Declare a webhook-backed action:
 
 ```json
-"actions": {
-  "tickets": [
+"contributions": {
+  "actions": [
     {
       "key": "resolve",
       "label": "Resolve",
       "icon": "CheckCircle2",
+      "target_model": "Ticket",
+      "handler": { "type": "webhook", "url": "/webhooks/resolve_ticket" },
       "confirm": true,
-      "confirmMessage": "Mark this ticket as resolved?",
-      "requiresState": ["open", "in_progress"]
+      "confirm_message": "Mark this ticket as resolved?"
     }
   ]
 }
 ```
 
-`metacore validate && metacore build --strict` — restart the host. The row dropdown now shows a "Resolve" entry. Clicking it pops a confirmation dialog (`<ActionModalDispatcher>` decides which UI to render based on the action shape) and POSTs to `/data/tickets/<id>/action/resolve`.
+`metacore validate && metacore build --strict` — restart the host. The row dropdown now shows a "Resolve" entry. Clicking it pops a confirmation dialog (`<ActionModalDispatcher>` decides which UI to render based on the action shape) and dispatches to the action's `handler`.
 
-Wire the server side via `hooks`:
-
-```json
-"hooks": {
-  "tickets::resolve": "/webhooks/resolve_ticket"
-}
-```
-
-The host POSTs an HMAC-signed envelope to your webhook with the ticket id and the operator's identity. See [`addon-publishing.md`](./addon-publishing.md) for the envelope format.
+The handler can be a `webhook` (the host POSTs an HMAC-signed envelope to `handler.url` with the ticket id and the operator's identity) or a `wasm` function (`{ "type": "wasm", "function": "ResolveTicket" }` — the named export of your compiled `backend/backend.wasm`). See [`addon-publishing.md`](./addon-publishing.md) for the envelope format and [`wasm-abi.md`](./wasm-abi.md) for the wasm ABI.
 
 For action UIs that need form fields, add `fields: [...]` to the action — `<ActionModalDispatcher>` will render a dynamic form from them automatically. For full-custom modals, register a component:
 

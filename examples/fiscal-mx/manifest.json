@@ -1,120 +1,236 @@
 {
-  "key": "fiscal_mx",
-  "name": "Sistema Fiscal de México",
-  "description": "Timbrado CFDI 4.0 ante el SAT vía PAC. Expone la acción stamp_sat para ops (botón en factura) y link (herramienta conversacional).",
-  "version": "1.0.0",
-  "category": "fiscal",
-  "icon": "Stamp",
-  "kernel": ">=2.0.0 <3.0.0",
-  "tenant_isolation": "schema-per-tenant",
-
-  "author": "asteby",
-  "license": "MIT",
-
-  "navigation": [{
-    "title": "addons.fiscal_mx.sidebar.group",
-    "icon": "FileText",
-    "target": "sidebar.finance",
-    "items": [{
-      "title": "addons.fiscal_mx.sidebar.cfdi",
-      "url": "/m/cfdi_invoices",
-      "icon": "Receipt",
-      "model": "cfdi_invoices"
-    }]
-  }],
-
-  "model_definitions": [{
-    "table_name": "cfdi_invoices",
-    "model_key": "cfdi_invoices",
-    "label": "CFDI",
-    "org_scoped": true,
-    "soft_delete": true,
-    "columns": [
-      { "name": "folio", "type": "string", "size": 32, "required": true, "unique": true },
-      { "name": "uuid_sat", "type": "string", "size": 36, "index": true },
-      { "name": "rfc_emisor", "type": "string", "size": 13, "required": true, "index": true },
-      { "name": "rfc_receptor", "type": "string", "size": 13, "required": true, "index": true },
-      { "name": "total", "type": "decimal", "required": true },
-      { "name": "status", "type": "string", "size": 20, "required": true, "default": "'draft'", "index": true },
-      { "name": "uso_cfdi", "type": "string", "size": 10 },
-      { "name": "xml", "type": "text" },
-      { "name": "stamped_at", "type": "timestamp" }
+  "apiVersion": "asteby.com/v3",
+  "kind": "Addon",
+  "metadata": {
+    "key": "fiscal_mx",
+    "name": "Sistema Fiscal de México",
+    "version": "1.0.0",
+    "description": "Timbrado CFDI 4.0 ante el SAT vía PAC. Expone la acción stamp_sat para ops (botón en factura) y link (herramienta conversacional).",
+    "category": "fiscal",
+    "icon": {
+      "type": "lucide",
+      "slug": "Stamp"
+    },
+    "author": "asteby",
+    "license": "MIT"
+  },
+  "compatibility": {
+    "requires": [
+      {
+        "key": "kernel",
+        "version": ">=3.0.0 <4.0.0"
+      }
     ]
-  }],
-
-  "actions": {
-    "cfdi_invoices": [{
-      "key": "stamp_sat",
-      "name": "Timbrar",
-      "label": "addons.fiscal_mx.actions.stamp",
-      "icon": "Stamp",
-      "modal": "fiscal_mx.stamp_sat",
-      "requiresState": ["draft"],
-      "fields": [
-        { "name": "rfc_receptor", "label": "RFC receptor", "type": "text", "required": true },
-        { "name": "uso_cfdi", "label": "Uso CFDI", "type": "select", "required": true,
-          "options": [
-            { "value": "G01", "label": "Adquisición de mercancías" },
-            { "value": "G03", "label": "Gastos en general" },
-            { "value": "P01", "label": "Por definir" }
-          ]
+  },
+  "tenancy": {
+    "isolation": "schema",
+    "rls_column": "organization_id"
+  },
+  "capabilities": [
+    {
+      "kind": "http:fetch",
+      "target": "*.sat.gob.mx",
+      "reason": "Llamadas al PAC/SAT"
+    },
+    {
+      "kind": "event:emit",
+      "target": "cfdi.*",
+      "reason": "Notificar timbrado/cancelación"
+    }
+  ],
+  "models": [
+    {
+      "key": "CfdiInvoices",
+      "table": "cfdi_invoices",
+      "label": "CFDI",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "primary_key": true,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "organization_id",
+          "type": "uuid",
+          "not_null": true
+        },
+        {
+          "name": "folio",
+          "type": "text",
+          "not_null": true
+        },
+        {
+          "name": "uuid_sat",
+          "type": "text"
+        },
+        {
+          "name": "rfc_emisor",
+          "type": "text",
+          "not_null": true
+        },
+        {
+          "name": "rfc_receptor",
+          "type": "text",
+          "not_null": true
+        },
+        {
+          "name": "total",
+          "type": "numeric",
+          "not_null": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "not_null": true,
+          "default": "draft"
+        },
+        {
+          "name": "uso_cfdi",
+          "type": "text"
+        },
+        {
+          "name": "xml",
+          "type": "text"
+        },
+        {
+          "name": "stamped_at",
+          "type": "timestamptz"
         }
       ]
-    }, {
-      "key": "cancel_sat",
-      "name": "Cancelar",
-      "label": "addons.fiscal_mx.actions.cancel",
-      "icon": "Ban",
-      "confirm": true,
-      "confirmMessage": "addons.fiscal_mx.actions.cancel_confirm",
-      "requiresState": ["stamped"]
-    }]
-  },
-
-  "tools": [{
-    "id": "stamp_sat",
-    "name": "Timbrar CFDI",
-    "description": "Timbra una factura CFDI ante el SAT cuando el cliente lo pide por WhatsApp o chat. NO llamar para cotizaciones o borradores sin RFC.",
-    "category": "action",
-    "endpoint": "/webhooks/stamp_sat",
-    "method": "POST",
-    "trigger_keywords": ["timbrar", "factura", "cfdi", "sat", "facturar"],
-    "input_schema": [
-      { "name": "rfc_receptor", "type": "string", "required": true,
-        "extraction_hint": "RFC de 13 caracteres (personas físicas) o 12 (morales)",
-        "validation": "^[A-ZÑ&]{3,4}\\d{6}[A-Z0-9]{3}$",
-        "normalize": "uppercase" },
-      { "name": "uso_cfdi", "type": "string", "required": true,
-        "extraction_hint": "Si no se especifica usar G03",
-        "default_value": "G03" }
-    ]
-  }],
-
-  "events": ["cfdi.stamped", "cfdi.cancelled"],
-
-  "hooks": {
-    "cfdi_invoices::stamp_sat": "http://localhost:7102/webhooks/stamp_sat"
-  },
-
-  "capabilities": [
-    { "kind": "http:fetch", "target": "*.sat.gob.mx", "reason": "Llamadas al PAC/SAT" },
-    { "kind": "event:emit", "target": "cfdi.*", "reason": "Notificar timbrado/cancelación" }
+    }
   ],
-
-  "settings": [
-    { "key": "pac_provider", "label": "Proveedor PAC", "type": "select",
-      "options": [
-        { "value": "finkok", "label": "Finkok" },
-        { "value": "sw_sapien", "label": "SW Sapien" }
-      ],
-      "default_value": "finkok" },
-    { "key": "pac_api_key", "label": "API Key del PAC", "type": "text", "secret": true }
-  ],
-
   "frontend": {
     "entry": "/api/metacore/addons/fiscal_mx/frontend/remoteEntry.js",
     "format": "federation",
     "expose": "./plugin",
     "container": "metacore_fiscal_mx"
-  }
+  },
+  "contributions": {
+    "navigation": [
+      {
+        "title": "addons.fiscal_mx.sidebar.group",
+        "icon": "FileText",
+        "target": "sidebar.finance",
+        "items": [
+          {
+            "title": "addons.fiscal_mx.sidebar.cfdi",
+            "model": "CfdiInvoices",
+            "icon": "Receipt"
+          }
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "key": "stamp_sat",
+        "label": "addons.fiscal_mx.actions.stamp",
+        "icon": "Stamp",
+        "handler": {
+          "type": "webhook",
+          "url": "http://localhost:7102/webhooks/stamp_sat"
+        },
+        "target_model": "CfdiInvoices",
+        "modal": "fiscal_mx.stamp_sat",
+        "fields": [
+          {
+            "key": "rfc_receptor",
+            "type": "text",
+            "label": "RFC receptor",
+            "required": true
+          },
+          {
+            "key": "uso_cfdi",
+            "type": "select",
+            "label": "Uso CFDI",
+            "required": true,
+            "options": [
+              {
+                "value": "G01",
+                "label": "Adquisición de mercancías"
+              },
+              {
+                "value": "G03",
+                "label": "Gastos en general"
+              },
+              {
+                "value": "P01",
+                "label": "Por definir"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "key": "cancel_sat",
+        "label": "addons.fiscal_mx.actions.cancel",
+        "icon": "Ban",
+        "handler": {
+          "type": "wasm",
+          "function": "CancelSat"
+        },
+        "target_model": "CfdiInvoices",
+        "confirm": true,
+        "confirm_message": "addons.fiscal_mx.actions.cancel_confirm"
+      }
+    ],
+    "tools": [
+      {
+        "key": "stamp_sat",
+        "description": "Timbra una factura CFDI ante el SAT cuando el cliente lo pide por WhatsApp o chat. NO llamar para cotizaciones o borradores sin RFC.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "rfc_receptor": {
+              "type": "string"
+            },
+            "uso_cfdi": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "rfc_receptor",
+            "uso_cfdi"
+          ]
+        },
+        "handler": {
+          "type": "webhook",
+          "url": "/webhooks/stamp_sat"
+        }
+      }
+    ]
+  },
+  "extension_points": {
+    "events": [
+      {
+        "name": "cfdi.stamped"
+      },
+      {
+        "name": "cfdi.cancelled"
+      }
+    ]
+  },
+  "settings": [
+    {
+      "key": "pac_provider",
+      "type": "select",
+      "label": "Proveedor PAC",
+      "default": "finkok",
+      "options": [
+        {
+          "value": "finkok",
+          "label": "Finkok"
+        },
+        {
+          "value": "sw_sapien",
+          "label": "SW Sapien"
+        }
+      ]
+    },
+    {
+      "key": "pac_api_key",
+      "type": "secret",
+      "label": "API Key del PAC"
+    }
+  ]
 }

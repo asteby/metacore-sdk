@@ -1,168 +1,258 @@
 {
-  "key": "tickets",
-  "name": "Tickets",
-  "description": "Registra y gestiona tickets de soporte directamente en Link, con modals para resolver y reasignar, y tools LLM para crear/actualizar.",
-  "version": "1.0.0",
-  "category": "productivity",
-  "icon": "Ticket",
-  "icon_type": "lucide",
-  "icon_slug": "Ticket",
-  "icon_color": "F59E0B",
-  "kernel": ">=2.0.0 <3.0.0",
-  "tenant_isolation": "schema-per-tenant",
-
-  "author": "Asteby",
-  "website": "https://asteby.com",
-  "license": "MIT",
-  "price": "free",
-
-  "features": [
-    "Gestión de tickets de soporte",
-    "Modals para resolver y reasignar",
-    "Herramientas LLM para agentes conversacionales"
-  ],
-
-  "navigation": [{
-    "title": "addons.tickets.sidebar.tickets",
-    "icon": "Ticket",
-    "target": "sidebar.operations",
-    "items": [{
-      "title": "addons.tickets.sidebar.tickets",
-      "url": "/m/tickets",
-      "icon": "Ticket",
-      "model": "tickets"
-    }]
-  }],
-
-  "model_definitions": [{
-    "table_name": "tickets",
-    "model_key": "tickets",
-    "label": "Tickets",
-    "org_scoped": true,
-    "soft_delete": true,
-    "columns": [
-      { "name": "title",            "type": "string",  "size": 255, "required": true, "index": true },
-      { "name": "description",      "type": "text" },
-      { "name": "status",           "type": "string",  "size": 24, "required": true, "default": "'open'", "index": true },
-      { "name": "priority",         "type": "string",  "size": 16, "default": "'medium'", "index": true },
-      { "name": "category",         "type": "string",  "size": 32 },
-      { "name": "assignee_id",      "type": "uuid",    "index": true },
-      { "name": "contact_id",       "type": "uuid",    "index": true },
-      { "name": "resolution_notes", "type": "text" },
-      { "name": "resolved_at",      "type": "timestamp" },
-      { "name": "tags",             "type": "jsonb" }
+  "apiVersion": "asteby.com/v3",
+  "kind": "Addon",
+  "metadata": {
+    "key": "tickets",
+    "name": "Tickets",
+    "version": "1.0.0",
+    "description": "Registra y gestiona tickets de soporte directamente en Link, con modals para resolver y reasignar, y tools LLM para crear/actualizar.",
+    "category": "productivity",
+    "icon": {
+      "type": "lucide",
+      "slug": "Ticket",
+      "color": "#F59E0B"
+    },
+    "author": "Asteby",
+    "website": "https://asteby.com",
+    "license": "MIT",
+    "features": [
+      "Gestión de tickets de soporte",
+      "Modals para resolver y reasignar",
+      "Herramientas LLM para agentes conversacionales"
     ]
-  }],
-
-  "actions": {
-    "tickets": [
+  },
+  "compatibility": {
+    "requires": [
       {
-        "key": "resolve",
-        "name": "Resolver",
-        "label": "addons.tickets.actions.resolve",
-        "icon": "CheckCircle",
-        "color": "green",
-        "modal": "tickets.resolve",
-        "requiresState": ["open", "in_progress"],
-        "fields": [
-          { "name": "resolution_notes", "label": "Notas de resolución", "type": "text", "required": true }
-        ]
-      },
-      {
-        "key": "reassign",
-        "name": "Reasignar",
-        "label": "addons.tickets.actions.reassign",
-        "icon": "UserCheck",
-        "color": "blue",
-        "modal": "tickets.reassign",
-        "requiresState": ["open", "in_progress"],
-        "fields": [
-          { "name": "assignee_id", "label": "Nuevo responsable (UUID)", "type": "text", "required": true }
-        ]
+        "key": "kernel",
+        "version": ">=3.0.0 <4.0.0"
       }
     ]
   },
-
-  "tools": [
-    {
-      "id": "create_ticket",
-      "name": "Crear ticket",
-      "description": "Registra un ticket de soporte a partir de la conversación.",
-      "category": "action",
-      "endpoint": "/webhooks/create_ticket",
-      "method": "POST",
-      "timeout": 15,
-      "trigger_keywords": ["crear ticket", "abrir ticket", "reportar problema"],
-      "trigger_intents": ["tickets.ticket.create"],
-      "input_schema": [
-        { "name": "title",       "type": "string", "required": true, "description": "Título corto del ticket" },
-        { "name": "description", "type": "string", "required": true },
-        { "name": "priority",    "type": "string", "required": false, "default_value": "medium" },
-        { "name": "category",    "type": "string", "required": false }
-      ]
-    },
-    {
-      "id": "update_ticket",
-      "name": "Actualizar ticket",
-      "description": "Actualiza el estado, prioridad o asignación de un ticket existente.",
-      "category": "action",
-      "endpoint": "/webhooks/update_ticket",
-      "method": "POST",
-      "timeout": 15,
-      "trigger_keywords": ["actualizar ticket", "cambiar estado", "cerrar ticket"],
-      "trigger_intents": ["tickets.ticket.update"],
-      "input_schema": [
-        { "name": "ticket_id",   "type": "string", "required": true },
-        { "name": "status",      "type": "string", "required": false },
-        { "name": "priority",    "type": "string", "required": false },
-        { "name": "assignee_id", "type": "string", "required": false },
-        { "name": "comment",     "type": "string", "required": false }
-      ]
-    }
-  ],
-
-  "events": ["tickets.ticket.created", "tickets.ticket.resolved", "tickets.ticket.reassigned"],
-
-  "backend": {
-    "runtime": "wasm",
-    "entry": "backend/backend.wasm",
-    "exports": ["resolve", "reassign", "create_ticket", "update_ticket"],
-    "memory_limit_mb": 64,
-    "timeout_ms": 10000
+  "tenancy": {
+    "isolation": "schema",
+    "rls_column": "organization_id"
   },
-
   "capabilities": [
-    { "kind": "event:emit", "target": "tickets.*", "reason": "Notificar eventos de tickets" }
+    {
+      "kind": "event:emit",
+      "target": "tickets.*",
+      "reason": "Notificar eventos de tickets"
+    }
   ],
-
-  "settings": [
-    { "key": "default_priority", "label": "Prioridad por defecto", "type": "select", "default_value": "medium",
-      "options": [
-        { "value": "low",    "label": "Baja" },
-        { "value": "medium", "label": "Media" },
-        { "value": "high",   "label": "Alta" },
-        { "value": "urgent", "label": "Urgente" }
+  "models": [
+    {
+      "key": "Tickets",
+      "table": "tickets",
+      "label": "Tickets",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "primary_key": true,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "organization_id",
+          "type": "uuid",
+          "not_null": true
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "not_null": true
+        },
+        {
+          "name": "description",
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "not_null": true,
+          "default": "open"
+        },
+        {
+          "name": "priority",
+          "type": "text",
+          "default": "medium"
+        },
+        {
+          "name": "category",
+          "type": "text"
+        },
+        {
+          "name": "assignee_id",
+          "type": "uuid"
+        },
+        {
+          "name": "contact_id",
+          "type": "uuid"
+        },
+        {
+          "name": "resolution_notes",
+          "type": "text"
+        },
+        {
+          "name": "resolved_at",
+          "type": "timestamptz"
+        },
+        {
+          "name": "tags",
+          "type": "jsonb"
+        }
       ]
     }
   ],
-
-  "i18n": {
-    "es": {
-      "addons.tickets.sidebar.tickets": "Tickets",
-      "addons.tickets.actions.resolve": "Resolver ticket",
-      "addons.tickets.actions.reassign": "Reasignar ticket"
-    },
-    "en": {
-      "addons.tickets.sidebar.tickets": "Tickets",
-      "addons.tickets.actions.resolve": "Resolve ticket",
-      "addons.tickets.actions.reassign": "Reassign ticket"
-    }
-  },
-
   "frontend": {
     "entry": "/api/metacore/addons/tickets/frontend/remoteEntry.js",
     "format": "federation",
     "expose": "./plugin",
     "container": "metacore_tickets"
-  }
+  },
+  "contributions": {
+    "navigation": [
+      {
+        "title": "addons.tickets.sidebar.tickets",
+        "icon": "Ticket",
+        "target": "sidebar.operations",
+        "items": [
+          {
+            "title": "addons.tickets.sidebar.tickets",
+            "model": "Tickets",
+            "icon": "Ticket"
+          }
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "key": "resolve",
+        "label": "addons.tickets.actions.resolve",
+        "icon": "CheckCircle",
+        "handler": {
+          "type": "wasm",
+          "function": "Resolve"
+        },
+        "target_model": "Tickets",
+        "modal": "tickets.resolve",
+        "fields": [
+          {
+            "key": "resolution_notes",
+            "type": "text",
+            "label": "Notas de resolución",
+            "required": true
+          }
+        ]
+      },
+      {
+        "key": "reassign",
+        "label": "addons.tickets.actions.reassign",
+        "icon": "UserCheck",
+        "handler": {
+          "type": "wasm",
+          "function": "Reassign"
+        },
+        "target_model": "Tickets",
+        "modal": "tickets.reassign",
+        "fields": [
+          {
+            "key": "assignee_id",
+            "type": "text",
+            "label": "Nuevo responsable (UUID)",
+            "required": true
+          }
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "key": "create_ticket",
+        "description": "Registra un ticket de soporte a partir de la conversación.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Título corto del ticket"
+            },
+            "description": {
+              "type": "string"
+            },
+            "priority": {
+              "type": "string"
+            },
+            "category": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title",
+            "description"
+          ]
+        },
+        "handler": {
+          "type": "webhook",
+          "url": "/webhooks/create_ticket"
+        }
+      },
+      {
+        "key": "update_ticket",
+        "description": "Actualiza el estado, prioridad o asignación de un ticket existente.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "ticket_id": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string"
+            },
+            "priority": {
+              "type": "string"
+            },
+            "assignee_id": {
+              "type": "string"
+            },
+            "comment": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "ticket_id"
+          ]
+        },
+        "handler": {
+          "type": "webhook",
+          "url": "/webhooks/update_ticket"
+        }
+      }
+    ]
+  },
+  "settings": [
+    {
+      "key": "default_priority",
+      "type": "select",
+      "label": "Prioridad por defecto",
+      "default": "medium",
+      "options": [
+        {
+          "value": "low",
+          "label": "Baja"
+        },
+        {
+          "value": "medium",
+          "label": "Media"
+        },
+        {
+          "value": "high",
+          "label": "Alta"
+        },
+        {
+          "value": "urgent",
+          "label": "Urgente"
+        }
+      ]
+    }
+  ]
 }

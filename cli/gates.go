@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/asteby/metacore-kernel/manifest"
+	v3 "github.com/asteby/metacore-kernel/manifest/v3"
 )
 
 // gateResult accumulates strict errors and non-strict warnings so the CLI can
@@ -23,7 +23,7 @@ func (g *gateResult) warnf(format string, args ...any) { g.warnings = append(g.w
 // runGates validates the manifest contract and scans backend/frontend/migrations
 // for parity with what the manifest declares. strict converts warnings into
 // errors.
-func runGates(srcDir string, m *manifest.Manifest, strict bool) error {
+func runGates(srcDir string, m *v3.Manifest, strict bool) error {
 	r := &gateResult{}
 	validateContract(m, r)
 	scanGo(srcDir, m, r)
@@ -46,51 +46,82 @@ func runGates(srcDir string, m *manifest.Manifest, strict bool) error {
 	return nil
 }
 
-// validateContract enforces the key ↔ modal ↔ hook ↔ tool invariants that tie
-// backend handlers, frontend modals and LLM-facing tools to a single addon key.
-func validateContract(m *manifest.Manifest, r *gateResult) {
-	for model, actions := range m.Actions {
-		for _, a := range actions {
-			if a.Modal != "" {
-				expected := m.Key + "." + a.Key
-				if a.Modal != expected {
-					r.errf("actions[%q][%q].modal = %q; must be %q to match addon_key.action_key", model, a.Key, a.Modal, expected)
-				}
+// actions returns every contributed action, or nil when the manifest has no
+// contributions block. Centralises the nil-guard the scans share.
+func actionsOf(m *v3.Manifest) []v3.Action {
+	if m.Contributions == nil {
+		return nil
+	}
+	return m.Contributions.Actions
+}
+
+func toolsOf(m *v3.Manifest) []v3.Tool {
+	if m.Contributions == nil {
+		return nil
+	}
+	return m.Contributions.Tools
+}
+
+func subscriptionsOf(m *v3.Manifest) []v3.Subscription {
+	if m.Contributions == nil {
+		return nil
+	}
+	return m.Contributions.Subscriptions
+}
+
+// validateContract enforces the key ↔ modal ↔ handler ↔ tool invariants that
+// tie federated modals, webhook handlers and LLM-facing tools to a single
+// addon key under the v3 contract.
+func validateContract(m *v3.Manifest, r *gateResult) {
+	key := m.Metadata.Key
+	for _, a := range actionsOf(m) {
+		// A custom federated modal must be addressed as <addon_key>.<action_key>
+		// so the host can resolve the slot to this addon's frontend bundle.
+		if a.Modal != "" {
+			expected := key + "." + a.Key
+			if a.Modal != expected {
+				r.errf("contributions.actions[%q].modal = %q; must be %q to match addon_key.action_key", a.Key, a.Modal, expected)
 			}
-			// A hook URL is required unless the action is confirm-only
-			// (no fields, no modal) — in which case the host handles it
-			// locally without calling out.
-			confirmOnly := a.Confirm && a.Modal == "" && len(a.Fields) == 0
-			hookKey := model + "::" + a.Key
-			if _, ok := m.Hooks[hookKey]; !ok && !confirmOnly {
-				r.errf("hooks[%q] missing — actions[%q][%q] needs a webhook endpoint", hookKey, model, a.Key)
+		}
+		// Every action that is more than a confirm-only click needs a handler.
+		// A webhook handler must carry a URL; a wasm handler must name a
+		// function (which doubles as the export the compiled module must ship).
+		confirmOnly := a.Confirm && a.Modal == "" && len(a.Fields) == 0
+		switch a.Handler.Type {
+		case "webhook":
+			if strings.TrimSpace(a.Handler.URL) == "" && !confirmOnly {
+				r.errf("contributions.actions[%q].handler.url is empty — a webhook action needs an endpoint", a.Key)
+			}
+		case "wasm":
+			if strings.TrimSpace(a.Handler.Function) == "" {
+				r.errf("contributions.actions[%q].handler.function is empty — a wasm action must name an exported function", a.Key)
+			}
+		case "":
+			if !confirmOnly {
+				r.errf("contributions.actions[%q].handler.type is empty — set wasm|webhook or make the action confirm-only", a.Key)
 			}
 		}
 	}
-	// Tools sharing a key with an action must point at the same endpoint so
-	// the backend handler doesn't need to branch on invocation type.
-	for _, t := range m.Tools {
-		for model, actions := range m.Actions {
-			for _, a := range actions {
-				if t.ID != a.Key {
-					continue
-				}
-				hookKey := model + "::" + a.Key
-				hookURL := m.Hooks[hookKey]
-				if hookURL == "" || t.Endpoint == "" {
-					continue
-				}
-				if !endpointsMatch(hookURL, t.Endpoint) {
-					r.errf("tools[%q].endpoint=%q differs from hooks[%q]=%q — twin tool/action must share the endpoint", t.ID, t.Endpoint, hookKey, hookURL)
-				}
+	// Tools that share a key with an action and dispatch by webhook must point
+	// at the same endpoint so the backend handler doesn't branch on invocation
+	// type.
+	for _, t := range toolsOf(m) {
+		if t.Handler.Type != "webhook" || t.Handler.URL == "" {
+			continue
+		}
+		for _, a := range actionsOf(m) {
+			if t.Key != a.Key || a.Handler.Type != "webhook" || a.Handler.URL == "" {
+				continue
+			}
+			if !endpointsMatch(a.Handler.URL, t.Handler.URL) {
+				r.errf("contributions.tools[%q].handler.url=%q differs from the twin action handler.url=%q — they must share the endpoint", t.Key, t.Handler.URL, a.Handler.URL)
 			}
 		}
 	}
 }
 
 func endpointsMatch(a, b string) bool {
-	ca, cb := canonicalPath(a), canonicalPath(b)
-	return ca == cb
+	return canonicalPath(a) == canonicalPath(b)
 }
 
 func canonicalPath(u string) string {
@@ -107,12 +138,35 @@ func canonicalPath(u string) string {
 	return strings.TrimRight(u, "/")
 }
 
+// webhookURLs collects every webhook handler URL declared across actions,
+// tools and subscriptions — the v3 replacement for the v2 Hooks map.
+func webhookURLs(m *v3.Manifest) []string {
+	var out []string
+	for _, a := range actionsOf(m) {
+		if a.Handler.Type == "webhook" && a.Handler.URL != "" {
+			out = append(out, a.Handler.URL)
+		}
+	}
+	for _, t := range toolsOf(m) {
+		if t.Handler.Type == "webhook" && t.Handler.URL != "" {
+			out = append(out, t.Handler.URL)
+		}
+	}
+	for _, s := range subscriptionsOf(m) {
+		if s.Handler.Type == "webhook" && s.Handler.URL != "" {
+			out = append(out, s.Handler.URL)
+		}
+	}
+	return out
+}
+
 // scanGo greps the backend/ directory for mux.HandleFunc("<method> <path>", ...)
-// registrations and ensures every hook path declared in the manifest is served.
-// When no backend/ exists the scan is skipped — some addons are frontend-only.
+// registrations and ensures every webhook handler path declared in the
+// manifest is served. When no backend/ exists the scan is skipped — some
+// addons are frontend-only or run their handlers as wasm.
 var goHandleFuncRe = regexp.MustCompile(`HandleFunc\s*\(\s*"(?:[A-Z]+\s+)?([^"]+)"`)
 
-func scanGo(srcDir string, m *manifest.Manifest, r *gateResult) {
+func scanGo(srcDir string, m *v3.Manifest, r *gateResult) {
 	backend := filepath.Join(srcDir, "backend")
 	if _, err := os.Stat(backend); err != nil {
 		return
@@ -126,15 +180,15 @@ func scanGo(srcDir string, m *manifest.Manifest, r *gateResult) {
 		if err != nil {
 			return nil
 		}
-		for _, m := range goHandleFuncRe.FindAllSubmatch(data, -1) {
-			registered[string(m[1])] = true
+		for _, mm := range goHandleFuncRe.FindAllSubmatch(data, -1) {
+			registered[string(mm[1])] = true
 		}
 		return nil
 	})
-	for key, hookURL := range m.Hooks {
+	for _, hookURL := range webhookURLs(m) {
 		path := canonicalPath(hookURL)
 		if !anyMatchesSuffix(registered, path) {
-			r.errf("hooks[%q] points at %q but no HandleFunc for that path found under backend/", key, path)
+			r.errf("webhook handler points at %q but no HandleFunc for that path found under backend/", path)
 		}
 	}
 }
@@ -143,9 +197,6 @@ func anyMatchesSuffix(registered map[string]bool, target string) bool {
 	if registered[target] {
 		return true
 	}
-	// Some handlers register the trailing path only (e.g. "/webhooks/resolve");
-	// the hook may be an absolute URL. We matched via canonicalPath already so
-	// this branch only tolerates extra leading segments in the hook URL.
 	for p := range registered {
 		if strings.HasSuffix(target, p) {
 			return true
@@ -159,11 +210,12 @@ func anyMatchesSuffix(registered map[string]bool, target string) bool {
 var tsRegisterModalRe = regexp.MustCompile(`registerModal\s*\(\s*\{\s*slug\s*:\s*["']([^"']+)["']`)
 var tsLegacyRegisterRe = regexp.MustCompile(`registerActionComponent\s*\(\s*["']([^"']+)["']\s*,\s*["']([^"']+)["']`)
 
-func scanTS(srcDir string, m *manifest.Manifest, r *gateResult) {
+func scanTS(srcDir string, m *v3.Manifest, r *gateResult) {
 	feSrc := filepath.Join(srcDir, "frontend", "src")
 	if _, err := os.Stat(feSrc); err != nil {
 		return
 	}
+	key := m.Metadata.Key
 	slugs := map[string]bool{}
 	_ = filepath.Walk(feSrc, func(p string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() {
@@ -180,21 +232,17 @@ func scanTS(srcDir string, m *manifest.Manifest, r *gateResult) {
 			slugs[string(match[1])] = true
 		}
 		for _, match := range tsLegacyRegisterRe.FindAllSubmatch(data, -1) {
-			// Legacy form registers (model, actionKey) — synthesize the slug.
-			slugs[m.Key+"."+string(match[2])] = true
-			// Also accept the bare "<model>::<action>" style as a hit.
+			slugs[key+"."+string(match[2])] = true
 			slugs[string(match[1])+"::"+string(match[2])] = true
 		}
 		return nil
 	})
-	for _, actions := range m.Actions {
-		for _, a := range actions {
-			if a.Modal == "" {
-				continue
-			}
-			if !slugs[a.Modal] {
-				r.errf("action.modal %q declared in manifest but no registerModal/registerActionComponent found under frontend/src/", a.Modal)
-			}
+	for _, a := range actionsOf(m) {
+		if a.Modal == "" {
+			continue
+		}
+		if !slugs[a.Modal] {
+			r.errf("action.modal %q declared in manifest but no registerModal/registerActionComponent found under frontend/src/", a.Modal)
 		}
 	}
 }
@@ -203,16 +251,17 @@ func scanTS(srcDir string, m *manifest.Manifest, r *gateResult) {
 // could sneak past the installer. Not bulletproof — a parser would be — but it
 // closes the cheap-exfiltration vectors.
 var sqlDenyRe = regexp.MustCompile(`(?i)\b(DROP\s+ROLE|ALTER\s+ROLE|CREATE\s+ROLE|GRANT\s+|REVOKE\s+|COPY\s+[^\n]*FROM\s+PROGRAM|pg_read_server_files|pg_ls_dir|\\copy\s+[^\n]*PROGRAM)\b`)
+
 // Match only DDL that targets a schema, not the word "schema" in comments.
 var sqlSchemaRe = regexp.MustCompile(`(?i)\b(?:CREATE|ALTER|DROP|SET\s+search_path\s*=)\s+SCHEMA\s+(?:IF\s+(?:NOT\s+)?EXISTS\s+)?([a-zA-Z_][a-zA-Z0-9_]*)`)
 
-func scanSQL(srcDir string, m *manifest.Manifest, r *gateResult) {
+func scanSQL(srcDir string, m *v3.Manifest, r *gateResult) {
 	migDir := filepath.Join(srcDir, "migrations")
 	entries, err := os.ReadDir(migDir)
 	if err != nil {
 		return
 	}
-	allowedSchema := "addon_" + strings.ToLower(m.Key)
+	allowedSchema := "addon_" + strings.ToLower(m.Metadata.Key)
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".sql") {
 			continue

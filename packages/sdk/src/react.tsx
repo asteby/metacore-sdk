@@ -30,7 +30,9 @@ import {
 
 import type { MarketplaceClient } from "./client.js";
 import type { Registry, SlotContribution } from "./registry.js";
-import type { Manifest, NavGroup } from "./types.js";
+// Runtime/host-facing manifest shape (the kernel's legacy/flat projection
+// served by MarketplaceClient.manifests()), not the v3 authoring contract.
+import type { LegacyManifest as Manifest, NavGroup } from "./types.js";
 
 interface Ctx {
   client: MarketplaceClient;

@@ -1,55 +1,31 @@
 {
-  "key": "dhl_tracking",
-  "name": "DHL Tracking",
-  "description": "Rastrea envíos de DHL Express en tiempo real.",
-  "version": "1.0.0",
-  "category": "logistics",
-  "icon": "https://www.google.com/s2/favicons?domain=dhl.com&sz=128",
-  "icon_type": "url",
-  "icon_slug": "https://www.google.com/s2/favicons?domain=dhl.com&sz=128",
-  "kernel": ">=2.0.0 <3.0.0",
-  "tenant_isolation": "shared",
-  "backend": {
-    "runtime": "webhook"
-  },
-  "settings": [
-    {
-      "key": "dhl_api_key",
-      "label": "DHL API Key",
-      "type": "password",
-      "secret": true
+  "apiVersion": "asteby.com/v3",
+  "kind": "Addon",
+  "metadata": {
+    "key": "dhl_tracking",
+    "name": "DHL Tracking",
+    "version": "1.0.0",
+    "description": "Rastrea envíos de DHL Express en tiempo real.",
+    "category": "logistics",
+    "icon": {
+      "type": "url",
+      "slug": "https://www.google.com/s2/favicons?domain=dhl.com&sz=128"
     },
-    {
-      "key": "dhl_region",
-      "label": "Región API",
-      "type": "select",
-      "default_value": "eu",
-      "options": [
-        { "value": "eu", "label": "Europa (api-eu.dhl.com)" },
-        { "value": "us", "label": "Américas (api-us.dhl.com)" }
-      ]
-    }
-  ],
-  "tools": [
-    {
-      "id": "track_shipment",
-      "name": "Rastrear Envío",
-      "description": "Rastrea un envío de DHL con el número de guía.",
-      "category": "query",
-      "input_schema": [
-        {
-          "name": "tracking_number",
-          "type": "string",
-          "description": "Número de guía o tracking de DHL",
-          "required": true,
-          "extraction_hint": "Número de rastreo del envío"
-        }
-      ],
-      "endpoint": "https://api-eu.dhl.com/track/shipments?trackingNumber={{tracking_number}}",
-      "method": "GET"
-    }
-  ],
-  "events": [],
+    "author": "asteby",
+    "license": "MIT"
+  },
+  "compatibility": {
+    "requires": [
+      {
+        "key": "kernel",
+        "version": ">=3.0.0 <4.0.0"
+      }
+    ]
+  },
+  "tenancy": {
+    "isolation": "shared",
+    "rls_column": "organization_id"
+  },
   "capabilities": [
     {
       "kind": "http:fetch",
@@ -62,6 +38,51 @@
       "reason": "Tracking DHL — región Américas"
     }
   ],
-  "author": "asteby",
-  "license": "MIT"
+  "contributions": {
+    "tools": [
+      {
+        "key": "track_shipment",
+        "description": "Rastrea un envío de DHL con el número de guía.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "tracking_number": {
+              "type": "string",
+              "description": "Número de guía o tracking de DHL"
+            }
+          },
+          "required": [
+            "tracking_number"
+          ]
+        },
+        "handler": {
+          "type": "webhook",
+          "url": "https://api-eu.dhl.com/track/shipments?trackingNumber={{tracking_number}}"
+        }
+      }
+    ]
+  },
+  "settings": [
+    {
+      "key": "dhl_api_key",
+      "type": "secret",
+      "label": "DHL API Key"
+    },
+    {
+      "key": "dhl_region",
+      "type": "select",
+      "label": "Región API",
+      "default": "eu",
+      "options": [
+        {
+          "value": "eu",
+          "label": "Europa (api-eu.dhl.com)"
+        },
+        {
+          "value": "us",
+          "label": "Américas (api-us.dhl.com)"
+        }
+      ]
+    }
+  ]
 }

@@ -1,0 +1,48 @@
+{
+  "apiVersion": "asteby.com/v3",
+  "kind": "Addon",
+  "metadata": {
+    "key": "tickets",
+    "name": "Tickets",
+    "description": "Demo v3 manifest exercising a wasm action handler.",
+    "version": "0.1.0",
+    "category": "utility",
+    "icon": { "type": "lucide", "slug": "TicketCheck", "color": "#6366F1" },
+    "author": "asteby",
+    "license": "MIT"
+  },
+  "compatibility": {
+    "requires": [{ "key": "kernel", "version": ">=3.0.0 <4.0.0" }]
+  },
+  "tenancy": { "isolation": "shared", "rls_column": "organization_id" },
+  "models": [
+    {
+      "key": "Ticket",
+      "table": "tickets",
+      "label": "Tickets",
+      "columns": [
+        { "name": "id", "type": "uuid", "primary_key": true, "default": "gen_random_uuid()" },
+        { "name": "organization_id", "type": "uuid", "not_null": true },
+        { "name": "title", "type": "text", "not_null": true },
+        { "name": "status", "type": "text", "not_null": true, "default": "open" },
+        { "name": "created_at", "type": "timestamptz", "not_null": true, "default": "now()" }
+      ]
+    }
+  ],
+  "contributions": {
+    "actions": [
+      {
+        "key": "escalate",
+        "label": "Escalate",
+        "handler": { "type": "wasm", "function": "EscalateTicket" },
+        "target_model": "Ticket"
+      },
+      {
+        "key": "resolve",
+        "label": "Resolve",
+        "handler": { "type": "wasm", "function": "ResolveTicket" },
+        "target_model": "Ticket"
+      }
+    ]
+  }
+}

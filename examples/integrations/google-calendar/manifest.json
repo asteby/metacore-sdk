@@ -1,108 +1,31 @@
 {
-  "key": "google_calendar",
-  "name": "Google Calendar",
-  "description": "Crea y consulta eventos en Google Calendar desde conversaciones.",
-  "version": "1.0.0",
-  "category": "productivity",
-  "icon": "googlecalendar",
-  "icon_type": "brand",
-  "icon_slug": "googlecalendar",
-  "icon_color": "4285F4",
-  "kernel": ">=2.0.0 <3.0.0",
-  "tenant_isolation": "shared",
-  "settings": [
-    {
-      "key": "gcal_token",
-      "label": "OAuth Access Token",
-      "type": "password",
-      "secret": true
+  "apiVersion": "asteby.com/v3",
+  "kind": "Addon",
+  "metadata": {
+    "key": "google_calendar",
+    "name": "Google Calendar",
+    "version": "1.0.0",
+    "description": "Crea y consulta eventos en Google Calendar desde conversaciones.",
+    "category": "productivity",
+    "icon": {
+      "type": "brand",
+      "slug": "googlecalendar",
+      "color": "#4285F4"
     },
-    {
-      "key": "gcal_calendar_id",
-      "label": "Calendario",
-      "type": "string"
-    }
-  ],
-  "tools": [
-    {
-      "id": "create_event",
-      "name": "Agendar Cita",
-      "description": "Crea un evento con los datos de la conversación.",
-      "input_schema": [
-        {
-          "name": "gcal_calendar_id",
-          "type": "string",
-          "description": "ID del calendario (default = settings.gcal_calendar_id)",
-          "required": true,
-          "extraction_hint": "Calendario destino"
-        },
-        {
-          "name": "title",
-          "type": "string",
-          "description": "Título de la cita",
-          "required": true
-        },
-        {
-          "name": "start_datetime",
-          "type": "string",
-          "description": "Inicio ISO 8601",
-          "required": true,
-          "example": "2026-03-15T10:00:00",
-          "extraction_hint": "Fecha y hora mencionadas"
-        },
-        {
-          "name": "end_datetime",
-          "type": "string",
-          "description": "Fin ISO 8601",
-          "required": true
-        },
-        {
-          "name": "attendee_email",
-          "type": "email",
-          "description": "Email del cliente"
-        },
-        {
-          "name": "description",
-          "type": "string",
-          "description": "Notas adicionales"
-        }
-      ],
-      "endpoint": "https://www.googleapis.com/calendar/v3/calendars/{{gcal_calendar_id}}/events",
-      "method": "POST",
-      "auto_create_record": "schedule"
-    },
-    {
-      "id": "list_events",
-      "name": "Ver Disponibilidad",
-      "description": "Consulta los eventos próximos para verificar disponibilidad.",
-      "input_schema": [
-        {
-          "name": "gcal_calendar_id",
-          "type": "string",
-          "description": "ID del calendario",
-          "required": true
-        },
-        {
-          "name": "time_min",
-          "type": "string",
-          "description": "Inicio del rango ISO 8601",
-          "required": true,
-          "extraction_hint": "Fecha desde la que consultar"
-        },
-        {
-          "name": "time_max",
-          "type": "string",
-          "description": "Fin del rango ISO 8601",
-          "required": true
-        }
-      ],
-      "endpoint": "https://www.googleapis.com/calendar/v3/calendars/{{gcal_calendar_id}}/events?timeMin={{time_min}}&timeMax={{time_max}}&singleEvents=true&orderBy=startTime",
-      "method": "GET"
-    }
-  ],
-  "events": [],
-  "backend": {
-    "runtime": "webhook"
+    "author": "asteby",
+    "license": "MIT"
+  },
+  "compatibility": {
+    "requires": [
+      {
+        "key": "kernel",
+        "version": ">=3.0.0 <4.0.0"
+      }
+    ]
+  },
+  "tenancy": {
+    "isolation": "shared",
+    "rls_column": "organization_id"
   },
   "capabilities": [
     {
@@ -111,6 +34,93 @@
       "reason": "Leer/escribir eventos en Google Calendar API"
     }
   ],
-  "author": "asteby",
-  "license": "MIT"
+  "contributions": {
+    "tools": [
+      {
+        "key": "create_event",
+        "description": "Crea un evento con los datos de la conversación.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "gcal_calendar_id": {
+              "type": "string",
+              "description": "ID del calendario (default = settings.gcal_calendar_id)"
+            },
+            "title": {
+              "type": "string",
+              "description": "Título de la cita"
+            },
+            "start_datetime": {
+              "type": "string",
+              "description": "Inicio ISO 8601"
+            },
+            "end_datetime": {
+              "type": "string",
+              "description": "Fin ISO 8601"
+            },
+            "attendee_email": {
+              "type": "string",
+              "description": "Email del cliente"
+            },
+            "description": {
+              "type": "string",
+              "description": "Notas adicionales"
+            }
+          },
+          "required": [
+            "gcal_calendar_id",
+            "title",
+            "start_datetime",
+            "end_datetime"
+          ]
+        },
+        "handler": {
+          "type": "webhook",
+          "url": "https://www.googleapis.com/calendar/v3/calendars/{{gcal_calendar_id}}/events"
+        }
+      },
+      {
+        "key": "list_events",
+        "description": "Consulta los eventos próximos para verificar disponibilidad.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "gcal_calendar_id": {
+              "type": "string",
+              "description": "ID del calendario"
+            },
+            "time_min": {
+              "type": "string",
+              "description": "Inicio del rango ISO 8601"
+            },
+            "time_max": {
+              "type": "string",
+              "description": "Fin del rango ISO 8601"
+            }
+          },
+          "required": [
+            "gcal_calendar_id",
+            "time_min",
+            "time_max"
+          ]
+        },
+        "handler": {
+          "type": "webhook",
+          "url": "https://www.googleapis.com/calendar/v3/calendars/{{gcal_calendar_id}}/events?timeMin={{time_min}}&timeMax={{time_max}}&singleEvents=true&orderBy=startTime"
+        }
+      }
+    ]
+  },
+  "settings": [
+    {
+      "key": "gcal_token",
+      "type": "secret",
+      "label": "OAuth Access Token"
+    },
+    {
+      "key": "gcal_calendar_id",
+      "type": "string",
+      "label": "Calendario"
+    }
+  ]
 }

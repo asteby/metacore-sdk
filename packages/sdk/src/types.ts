@@ -1,24 +1,95 @@
 /**
- * Mirror of pkg/manifest/manifest.go — AUTO-GENERATED via tygo.
- * Re-generate with: pnpm codegen (runs `go run github.com/gzuidhof/tygo generate`).
- * Do NOT hand-edit the Manifest types below; edit manifest.go and regenerate.
+ * Manifest types for the metacore SDK.
+ *
+ * The CANONICAL contract is Module Contract v3 — the SDK toolchain emits v3
+ * manifests (`apiVersion: "asteby.com/v3"`) and the types below re-export the
+ * tygo-generated v3 shapes from ./generated/manifest-v3.ts. Re-generate the
+ * generated files with: pnpm codegen (runs `tygo generate`). Do NOT hand-edit
+ * the generated files — edit the kernel's manifest/v3/types.go and regenerate.
+ *
+ * The legacy v2 types remain available as `Legacy*` aliases (and under their
+ * original names via ./generated/manifest) so consumers that still reference
+ * the v2 shape keep type-checking during the migration window. The kernel
+ * dual-reads v2 for backwards compatibility.
  */
 
-// Side-effect import so the declaration-merging block below resolves the
-// target module — TypeScript only honours `declare module "<rel-path>"` when
-// the referenced module is actually imported in the same source file.
+// Side-effect imports so declaration-merging blocks (if any) resolve.
+import "./generated/manifest-v3";
 import "./generated/manifest";
 
-export { APIVersion as METACORE_API_VERSION } from "./generated/manifest";
+// ---------------------------------------------------------------------------
+// Module Contract v3 — canonical surface.
+// ---------------------------------------------------------------------------
+
+export { APIVersion as METACORE_API_VERSION } from "./generated/manifest-v3";
 
 export type {
   Manifest,
-  Module,
+  Metadata,
+  MetadataLocale,
+  Icon,
+  Compatibility,
+  Requirement,
+  Tenancy,
+  Capability,
+  Model,
+  Column,
+  Index,
+  ForeignKey,
+  Reference,
+  ModelExtension,
+  Contributions,
   NavGroup,
   NavItem,
+  // Aliased: the SDK Registry (./registry.ts) owns a runtime `SlotContribution`
+  // type for slot registration; this is the v3 *manifest* contribution shape.
+  SlotContribution as ManifestSlotContribution,
+  Action,
+  ActionField,
+  FieldOption,
+  FieldValidation,
+  Tool,
+  Subscription,
+  Handler,
+  ExtensionPoints,
+  PublishedEvent,
+  PublishedSlot,
+  Lifecycle,
+  UpgradeStep,
+  I18n,
+  I18nBundle,
+  RBAC,
+  Role,
+  PermissionDef,
+  Setting,
+  SettingOption,
+  Billing,
+  MeteredEvent,
+  Preset,
+  PresetAddon,
+  Theme,
+  ConnectorPack,
+  ConnectorProvider,
+  Signature,
+  Frontend,
+} from "./generated/manifest-v3";
+
+// ---------------------------------------------------------------------------
+// Legacy Module Contract v2 — retained for backwards compatibility.
+//
+// These names predate the v3 contract. The kernel still dual-reads v2 so
+// already-published addons keep installing, and consumers that have not yet
+// migrated their typings can keep importing them. New code should use the v3
+// types above. The v2-only names are re-exported verbatim; the names that
+// also exist in v3 (Manifest, Capability, …) are exposed here under a
+// `Legacy*` alias to avoid clashing with the canonical v3 export.
+// ---------------------------------------------------------------------------
+
+export type {
+  // v2-only shapes (no v3 collision)
+  Module,
   FrontendSpec,
   BackendSpec,
-  Capability,
   Permission,
   SettingDef,
   Option,
@@ -29,13 +100,24 @@ export type {
   FieldDef,
   HookDef,
   HookTarget,
-  ModelExtension,
   ModelDefinition,
-  ColumnDef,
   RelationDef,
+  ColumnDef,
   ValidationRule,
-  Signature,
 } from "./generated/manifest";
+
+export type {
+  // v2 names that collide with v3 — exposed under a Legacy* alias.
+  Manifest as LegacyManifest,
+  Capability as LegacyCapability,
+  NavGroup as LegacyNavGroup,
+  NavItem as LegacyNavItem,
+  ModelExtension as LegacyModelExtension,
+  Signature as LegacySignature,
+  MetadataLocale as LegacyMetadataLocale,
+} from "./generated/manifest";
+
+export { APIVersion as METACORE_API_VERSION_V2 } from "./generated/manifest";
 
 /**
  * AddonLayout selects how the host shell wraps the federated addon when it
@@ -50,39 +132,26 @@ export type {
  *                 POS, kitchen-display, signage and any other addon that
  *                 owns the whole screen.
  *
- * Mirrors `manifest.FrontendSpec.Layout` (kernel ≥ TBD). Kept additive on the
- * TS side via declaration-merging extension of the auto-generated tygo type so
- * the new field is available to consumers ahead of the Go change landing in
- * the SDK's regen pipeline.
+ * Mirrors `v3.Frontend.layout`. The v3 `Frontend` interface already carries an
+ * optional `layout: string` field; this union narrows the accepted values for
+ * SDK consumers.
  */
 export type AddonLayout = "shell" | "immersive";
 
-/**
- * Augment the generated `FrontendSpec` so `manifest.frontend?.layout` is
- * visible to consumers ahead of tygo regeneration. Declaration merging is
- * purely additive: the regenerated interface remains the source of truth,
- * this block only contributes the optional `layout` field. When the
- * kernel-side change lands and tygo regenerates the file with `Layout
- * string`, this augmentation becomes redundant but stays in sync because the
- * field is optional and string-typed.
- */
-declare module "./generated/manifest" {
-  interface FrontendSpec {
-    /**
-     * Layout selects how the host shell renders the addon entry. See
-     * {@link AddonLayout}. `undefined` === `"shell"` (legacy default).
-     */
-    layout?: AddonLayout;
-  }
-}
-
 // CapabilityKind is a convenience union not present in Go (Go uses plain string).
+// Mirrors the closed set the kernel enforces, including the v3 additions.
 export type CapabilityKind =
   | "db:read"
   | "db:write"
   | "http:fetch"
   | "event:emit"
-  | "event:subscribe";
+  | "event:subscribe"
+  | "cron:register"
+  | "queue:produce"
+  | "queue:consume"
+  | "file-storage:write"
+  | "secrets:read"
+  | "time:wallclock";
 
 // Installation is a runtime record managed by the kernel host — not part of
 // the manifest contract, so it is not generated by tygo.
