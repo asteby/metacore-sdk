@@ -1,7 +1,8 @@
 /**
  * `useInstallAddon` — the full install mutation: Hub `initiateInstall`
  * then Ops `claimInstall`. Exposed as a single `mutate({key, version,
- * context})` so consumers don't have to choreograph the two-step dance.
+ * instance_id})` so consumers don't have to choreograph the two-step
+ * dance.
  *
  * The hook deliberately does NOT prompt for consent — the UI layer
  * (InstallConfirmModal) is responsible for showing the permissions diff
@@ -18,23 +19,23 @@ export interface InstallAddonInput {
   key: string
   /** Optional pinned version — defaults to latest on the Hub side. */
   version?: string
-  /** Echoed back to the kernel for environment tagging. */
-  context?: Record<string, string>
+  /**
+   * Optional Ops instance UUID. The hub records this on the install
+   * token so the redeem path can sanity-check the target box.
+   */
+  instance_id?: string
 }
 
 export function useInstallAddon() {
-  const { hub, ops, organizationId } = useMarketplace()
+  const { hub, ops } = useMarketplace()
   const qc = useQueryClient()
 
   return useMutation<Installation, Error, InstallAddonInput>({
-    mutationFn: async ({ key, version, context }) => {
+    mutationFn: async ({ key, version, instance_id }) => {
       // Step 1: ask the Hub to mint a token — the Hub does the auth +
-      // billing checks here.
-      const token = await hub.initiateInstall(key, {
-        version,
-        organization_id: organizationId,
-        context,
-      })
+      // billing/entitlement checks here. Tenant attribution is taken
+      // from the user JWT on the hub side, not from a body field.
+      const token = await hub.initiateInstall(key, { version, instance_id })
       // Step 2: redeem the token against the local kernel, which does
       // the actual download + lifecycle execution.
       return ops.claimInstall({ token: token.token })

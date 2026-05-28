@@ -141,7 +141,7 @@ describe('useInstallAddon', () => {
     // We assert the *sequence* and the cache invalidation; the hook itself is
     // a thin TanStack wrapper, so we don't need to render the component tree.
     const token = await hub.initiateInstall('fiscal', {
-      organization_id: 'org_1',
+      version: '1.0.0',
     })
     expect(token.token).toBe('tok')
     const inst = await ops.claimInstall({ token: token.token })
