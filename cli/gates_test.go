@@ -6,16 +6,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asteby/metacore-kernel/manifest"
+	v3 "github.com/asteby/metacore-kernel/manifest/v3"
 )
 
 func TestValidateContract_RejectsModalSlugMismatch(t *testing.T) {
-	m := &manifest.Manifest{
-		Key: "tickets",
-		Actions: map[string][]manifest.ActionDef{
-			"tickets": {{Key: "reassign", Modal: "wrong.slug"}},
+	m := &v3.Manifest{
+		Metadata: v3.Metadata{Key: "tickets"},
+		Contributions: &v3.Contributions{
+			Actions: []v3.Action{
+				{Key: "reassign", Modal: "wrong.slug", Handler: v3.Handler{Type: "webhook", URL: "/webhooks/reassign"}},
+			},
 		},
-		Hooks: map[string]string{"tickets::reassign": "/webhooks/reassign"},
 	}
 	r := &gateResult{}
 	validateContract(m, r)
@@ -24,25 +25,29 @@ func TestValidateContract_RejectsModalSlugMismatch(t *testing.T) {
 	}
 }
 
-func TestValidateContract_RequiresHookForNonConfirmAction(t *testing.T) {
-	m := &manifest.Manifest{
-		Key: "tickets",
-		Actions: map[string][]manifest.ActionDef{
-			"tickets": {{Key: "reassign", Modal: "tickets.reassign"}},
+func TestValidateContract_RejectsWebhookActionWithoutURL(t *testing.T) {
+	m := &v3.Manifest{
+		Metadata: v3.Metadata{Key: "tickets"},
+		Contributions: &v3.Contributions{
+			Actions: []v3.Action{
+				{Key: "reassign", Modal: "tickets.reassign", Handler: v3.Handler{Type: "webhook"}},
+			},
 		},
 	}
 	r := &gateResult{}
 	validateContract(m, r)
-	if len(r.errors) == 0 || !strings.Contains(r.errors[0], "hooks") {
-		t.Fatalf("expected missing hook error, got %v", r.errors)
+	if len(r.errors) == 0 || !strings.Contains(r.errors[0], "handler.url") {
+		t.Fatalf("expected missing handler.url error, got %v", r.errors)
 	}
 }
 
-func TestValidateContract_AllowsConfirmOnlyActionWithoutHook(t *testing.T) {
-	m := &manifest.Manifest{
-		Key: "tickets",
-		Actions: map[string][]manifest.ActionDef{
-			"tickets": {{Key: "archive", Confirm: true}},
+func TestValidateContract_AllowsConfirmOnlyActionWithoutHandler(t *testing.T) {
+	m := &v3.Manifest{
+		Metadata: v3.Metadata{Key: "tickets"},
+		Contributions: &v3.Contributions{
+			Actions: []v3.Action{
+				{Key: "archive", Confirm: true},
+			},
 		},
 	}
 	r := &gateResult{}
@@ -59,7 +64,7 @@ func TestScanSQL_RejectsDropRole(t *testing.T) {
 	}
 	_ = os.WriteFile(filepath.Join(dir, "migrations", "0001.sql"), []byte("DROP ROLE postgres;"), 0o644)
 	r := &gateResult{}
-	scanSQL(dir, &manifest.Manifest{Key: "demo"}, r)
+	scanSQL(dir, &v3.Manifest{Metadata: v3.Metadata{Key: "demo"}}, r)
 	if len(r.errors) == 0 {
 		t.Fatalf("expected rejection of DROP ROLE")
 	}
@@ -73,7 +78,7 @@ func TestScanSQL_AllowsBenignCreateTable(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(dir, "migrations", "0001.sql"),
 		[]byte("-- Initial schema for addon\nCREATE TABLE IF NOT EXISTS items (id uuid PRIMARY KEY);"), 0o644)
 	r := &gateResult{}
-	scanSQL(dir, &manifest.Manifest{Key: "demo"}, r)
+	scanSQL(dir, &v3.Manifest{Metadata: v3.Metadata{Key: "demo"}}, r)
 	if len(r.errors) != 0 {
 		t.Fatalf("unexpected errors: %v", r.errors)
 	}
@@ -91,9 +96,13 @@ func TestScanGo_DetectsMissingHandler(t *testing.T) {
 import "net/http"
 func init() { http.HandleFunc("POST /webhooks/other", nil) }`), 0o644)
 
-	m := &manifest.Manifest{
-		Key:   "demo",
-		Hooks: map[string]string{"items::resolve": "http://x/webhooks/resolve"},
+	m := &v3.Manifest{
+		Metadata: v3.Metadata{Key: "demo"},
+		Contributions: &v3.Contributions{
+			Actions: []v3.Action{
+				{Key: "resolve", Handler: v3.Handler{Type: "webhook", URL: "http://x/webhooks/resolve"}},
+			},
+		},
 	}
 	r := &gateResult{}
 	scanGo(dir, m, r)
@@ -111,9 +120,13 @@ func TestScanGo_AcceptsRegisteredHandler(t *testing.T) {
 import "net/http"
 func init() { http.HandleFunc("POST /webhooks/resolve", nil) }`), 0o644)
 
-	m := &manifest.Manifest{
-		Key:   "demo",
-		Hooks: map[string]string{"items::resolve": "http://x/webhooks/resolve"},
+	m := &v3.Manifest{
+		Metadata: v3.Metadata{Key: "demo"},
+		Contributions: &v3.Contributions{
+			Actions: []v3.Action{
+				{Key: "resolve", Handler: v3.Handler{Type: "webhook", URL: "http://x/webhooks/resolve"}},
+			},
+		},
 	}
 	r := &gateResult{}
 	scanGo(dir, m, r)
@@ -129,12 +142,13 @@ func TestScanTS_DetectsMissingModal(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(feSrc, "plugin.tsx"),
 		[]byte(`registerModal({ slug: "demo.other", component: X })`), 0o644)
 
-	m := &manifest.Manifest{
-		Key: "demo",
-		Actions: map[string][]manifest.ActionDef{
-			"items": {{Key: "reassign", Modal: "demo.reassign"}},
+	m := &v3.Manifest{
+		Metadata: v3.Metadata{Key: "demo"},
+		Contributions: &v3.Contributions{
+			Actions: []v3.Action{
+				{Key: "reassign", Modal: "demo.reassign", Handler: v3.Handler{Type: "webhook", URL: "/x"}},
+			},
 		},
-		Hooks: map[string]string{"items::reassign": "/x"},
 	}
 	r := &gateResult{}
 	scanTS(dir, m, r)

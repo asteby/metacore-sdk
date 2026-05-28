@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/asteby/metacore-kernel/manifest"
+	v3 "github.com/asteby/metacore-kernel/manifest/v3"
 )
 
 // buildMinimalWASM emits a syntactically valid WebAssembly module whose only
@@ -75,21 +75,24 @@ func writeWASM(t *testing.T, dir string, data []byte) {
 	}
 }
 
+// wasmActionsManifest builds a v3 manifest whose contributed actions dispatch
+// to the named wasm functions — the v3 replacement for backend.exports +
+// hooks. The declared handler functions ARE the exports the module must ship.
+func wasmActionsManifest(key string, fns ...string) *v3.Manifest {
+	m := &v3.Manifest{Metadata: v3.Metadata{Key: key}, Contributions: &v3.Contributions{}}
+	for _, fn := range fns {
+		m.Contributions.Actions = append(m.Contributions.Actions, v3.Action{
+			Key:     strings.ToLower(fn),
+			Handler: v3.Handler{Type: "wasm", Function: fn},
+		})
+	}
+	return m
+}
+
 func TestScanWASM_OK(t *testing.T) {
 	dir := t.TempDir()
 	writeWASM(t, dir, buildMinimalWASM([]string{"stamp_fiscal", "cancel_fiscal"}))
-	m := &manifest.Manifest{
-		Key: "fiscal",
-		Backend: &manifest.BackendSpec{
-			Runtime: "wasm",
-			Entry:   "backend/backend.wasm",
-			Exports: []string{"stamp_fiscal", "cancel_fiscal"},
-		},
-		Hooks: map[string]string{
-			"fiscal_documents::stamp_fiscal":  "/webhooks/stamp_fiscal",
-			"fiscal_documents::cancel_fiscal": "/webhooks/cancel_fiscal",
-		},
-	}
+	m := wasmActionsManifest("fiscal", "stamp_fiscal", "cancel_fiscal")
 	r := &gateResult{}
 	scanWASM(dir, m, r)
 	if len(r.errors) != 0 {
@@ -101,17 +104,7 @@ func TestScanWASM_MissingExport(t *testing.T) {
 	dir := t.TempDir()
 	// wasm only exports stamp_fiscal; manifest also declares cancel_fiscal.
 	writeWASM(t, dir, buildMinimalWASM([]string{"stamp_fiscal"}))
-	m := &manifest.Manifest{
-		Key: "fiscal",
-		Backend: &manifest.BackendSpec{
-			Runtime: "wasm",
-			Entry:   "backend/backend.wasm",
-			Exports: []string{"stamp_fiscal", "cancel_fiscal"},
-		},
-		Hooks: map[string]string{
-			"fiscal_documents::cancel_fiscal": "/webhooks/cancel_fiscal",
-		},
-	}
+	m := wasmActionsManifest("fiscal", "stamp_fiscal", "cancel_fiscal")
 	r := &gateResult{}
 	scanWASM(dir, m, r)
 	if len(r.errors) == 0 {
@@ -123,9 +116,9 @@ func TestScanWASM_MissingExport(t *testing.T) {
 	}
 }
 
-func TestScanWASM_NilBackendSkips(t *testing.T) {
+func TestScanWASM_NoWasmHandlersAndNoModuleSkips(t *testing.T) {
 	dir := t.TempDir()
-	m := &manifest.Manifest{Key: "frontend_only"}
+	m := &v3.Manifest{Metadata: v3.Metadata{Key: "frontend_only"}}
 	r := &gateResult{}
 	scanWASM(dir, m, r)
 	if len(r.errors) != 0 || len(r.warnings) != 0 {
@@ -133,15 +126,29 @@ func TestScanWASM_NilBackendSkips(t *testing.T) {
 	}
 }
 
-func TestScanWASM_WebhookRuntimeSkips(t *testing.T) {
+func TestScanWASM_WebhookHandlersAndNoModuleSkips(t *testing.T) {
 	dir := t.TempDir()
-	m := &manifest.Manifest{
-		Key:     "webhook_only",
-		Backend: &manifest.BackendSpec{Runtime: "webhook"},
+	m := &v3.Manifest{
+		Metadata: v3.Metadata{Key: "webhook_only"},
+		Contributions: &v3.Contributions{
+			Actions: []v3.Action{
+				{Key: "ping", Handler: v3.Handler{Type: "webhook", URL: "/webhooks/ping"}},
+			},
+		},
 	}
 	r := &gateResult{}
 	scanWASM(dir, m, r)
 	if len(r.errors) != 0 {
-		t.Fatalf("expected skip for webhook runtime, got %v", r.errors)
+		t.Fatalf("expected skip for webhook-only handlers, got %v", r.errors)
+	}
+}
+
+func TestScanWASM_DeclaredWasmHandlerButNoModule(t *testing.T) {
+	dir := t.TempDir()
+	m := wasmActionsManifest("fiscal", "stamp_fiscal")
+	r := &gateResult{}
+	scanWASM(dir, m, r)
+	if len(r.errors) == 0 {
+		t.Fatalf("expected error when a wasm handler is declared but no module exists")
 	}
 }

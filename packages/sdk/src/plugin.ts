@@ -5,7 +5,10 @@
 
 import type { MarketplaceClient } from "./client.js";
 import type { Registry } from "./registry.js";
-import type { Manifest } from "./types.js";
+// The register context carries the host-served runtime manifest (the kernel's
+// legacy/flat projection that MarketplaceClient.manifests() returns), not the
+// v3 authoring contract — so a federated addon reads `manifest.key` etc.
+import type { LegacyManifest as Manifest } from "./types.js";
 
 /** What the host hands each addon at registration time. */
 export interface AddonAPI {

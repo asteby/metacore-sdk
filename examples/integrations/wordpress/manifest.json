@@ -1,93 +1,105 @@
 {
-  "key": "wordpress",
-  "name": "WordPress",
-  "description": "Publica y gestiona contenido en tu sitio WordPress desde conversaciones.",
-  "version": "1.0.0",
-  "category": "productivity",
-  "icon": "wordpress",
-  "icon_type": "brand",
-  "icon_slug": "wordpress",
-  "icon_color": "21759B",
-  "kernel": ">=2.0.0 <3.0.0",
-  "tenant_isolation": "shared",
+  "apiVersion": "asteby.com/v3",
+  "kind": "Addon",
+  "metadata": {
+    "key": "wordpress",
+    "name": "WordPress",
+    "version": "1.0.0",
+    "description": "Publica y gestiona contenido en tu sitio WordPress desde conversaciones.",
+    "category": "productivity",
+    "icon": {
+      "type": "brand",
+      "slug": "wordpress",
+      "color": "#21759B"
+    },
+    "author": "asteby",
+    "license": "MIT"
+  },
+  "compatibility": {
+    "requires": [
+      {
+        "key": "kernel",
+        "version": ">=3.0.0 <4.0.0"
+      }
+    ]
+  },
+  "tenancy": {
+    "isolation": "shared",
+    "rls_column": "organization_id"
+  },
+  "contributions": {
+    "tools": [
+      {
+        "key": "create_post",
+        "description": "Publica un nuevo artículo en WordPress.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "wp_site_url": {
+              "type": "string",
+              "description": "URL base del sitio WordPress (default = settings.wp_site_url)"
+            },
+            "title": {
+              "type": "string",
+              "description": "Título del artículo"
+            },
+            "content": {
+              "type": "string",
+              "description": "Contenido del artículo en HTML"
+            },
+            "status": {
+              "type": "string",
+              "description": "Estado: publish (publicar) o draft (borrador)"
+            }
+          },
+          "required": [
+            "wp_site_url",
+            "title",
+            "content"
+          ]
+        },
+        "handler": {
+          "type": "webhook",
+          "url": "{{wp_site_url}}/wp-json/wp/v2/posts"
+        }
+      },
+      {
+        "key": "list_posts",
+        "description": "Busca artículos publicados en WordPress.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "wp_site_url": {
+              "type": "string",
+              "description": "URL base del sitio WordPress"
+            },
+            "query": {
+              "type": "string",
+              "description": "Término de búsqueda"
+            }
+          },
+          "required": [
+            "wp_site_url",
+            "query"
+          ]
+        },
+        "handler": {
+          "type": "webhook",
+          "url": "{{wp_site_url}}/wp-json/wp/v2/posts?search={{query}}&per_page=5"
+        }
+      }
+    ]
+  },
   "settings": [
     {
       "key": "wp_site_url",
-      "label": "URL del sitio (https://mi-sitio.com)",
-      "type": "string"
+      "type": "string",
+      "label": "URL del sitio (https://mi-sitio.com)"
     },
     {
       "key": "wp_basic_auth",
-      "label": "Auth Token (Base64)",
-      "type": "password",
-      "secret": true
+      "type": "secret",
+      "label": "Auth Token (Base64)"
     }
-  ],
-  "tools": [
-    {
-      "id": "create_post",
-      "name": "Crear Post",
-      "description": "Publica un nuevo artículo en WordPress.",
-      "input_schema": [
-        {
-          "name": "wp_site_url",
-          "type": "string",
-          "description": "URL base del sitio WordPress (default = settings.wp_site_url)",
-          "required": true
-        },
-        {
-          "name": "title",
-          "type": "string",
-          "description": "Título del artículo",
-          "required": true,
-          "extraction_hint": "Tema o título del post a publicar"
-        },
-        {
-          "name": "content",
-          "type": "string",
-          "description": "Contenido del artículo en HTML",
-          "required": true,
-          "extraction_hint": "Texto del artículo"
-        },
-        {
-          "name": "status",
-          "type": "string",
-          "description": "Estado: publish (publicar) o draft (borrador)",
-          "example": "draft",
-          "extraction_hint": "Si el usuario quiere publicar directamente usa publish, si no draft"
-        }
-      ],
-      "endpoint": "{{wp_site_url}}/wp-json/wp/v2/posts",
-      "method": "POST"
-    },
-    {
-      "id": "list_posts",
-      "name": "Listar Posts",
-      "description": "Busca artículos publicados en WordPress.",
-      "input_schema": [
-        {
-          "name": "wp_site_url",
-          "type": "string",
-          "description": "URL base del sitio WordPress",
-          "required": true
-        },
-        {
-          "name": "query",
-          "type": "string",
-          "description": "Término de búsqueda",
-          "required": true,
-          "extraction_hint": "Tema o título del post a buscar"
-        }
-      ],
-      "endpoint": "{{wp_site_url}}/wp-json/wp/v2/posts?search={{query}}&per_page=5",
-      "method": "GET"
-    }
-  ],
-  "events": [],
-  "backend": {
-    "runtime": "webhook"
-  },
-  "capabilities": [],
-  "author": "asteby",
-  "license": "MIT"
+  ]
 }

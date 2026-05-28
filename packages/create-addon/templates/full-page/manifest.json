@@ -1,38 +1,36 @@
 {
-  "key": "{{ADDON_KEY}}",
-  "name": "{{ADDON_NAME}}",
-  "description": "{{ADDON_DESCRIPTION}}",
-  "version": "0.1.0",
-  "category": "operations",
-  "icon": "Monitor",
-  "kernel": ">=2.0.0 <3.0.0",
-  "tenant_isolation": "shared",
-
-  "author": "{{AUTHOR}}",
-  "license": "{{LICENSE}}",
-
-  "navigation": [
-    {
-      "title": "{{ADDON_NAME}}",
-      "icon": "Monitor",
-      "target": "sidebar.operations",
-      "items": [
-        {
-          "title": "{{ADDON_NAME}}",
-          "url": "/m/{{ADDON_KEY}}",
-          "icon": "Monitor"
-        }
-      ]
-    }
-  ],
-
+  "apiVersion": "asteby.com/v3",
+  "kind": "Addon",
+  "metadata": {
+    "key": "{{ADDON_KEY}}",
+    "name": "{{ADDON_NAME}}",
+    "description": "{{ADDON_DESCRIPTION}}",
+    "version": "0.1.0",
+    "category": "operations",
+    "icon": { "type": "lucide", "slug": "Monitor", "color": "#6366F1" },
+    "author": "{{AUTHOR}}",
+    "license": "{{LICENSE}}"
+  },
+  "compatibility": {
+    "requires": [{ "key": "kernel", "version": ">=3.0.0 <4.0.0" }]
+  },
+  "tenancy": { "isolation": "shared", "rls_column": "organization_id" },
   "capabilities": [],
-
   "frontend": {
     "entry": "/api/metacore/addons/{{ADDON_KEY}}/frontend/remoteEntry.js",
     "format": "federation",
     "expose": "./plugin",
     "container": "metacore_{{ADDON_KEY}}",
     "layout": "immersive"
+  },
+  "contributions": {
+    "navigation": [
+      {
+        "title": "{{ADDON_NAME}}",
+        "icon": "Monitor",
+        "target": "sidebar.operations",
+        "items": [{ "title": "{{ADDON_NAME}}", "url": "/m/{{ADDON_KEY}}", "icon": "Monitor" }]
+      }
+    ]
   }
 }

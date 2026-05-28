@@ -26,35 +26,47 @@ Short recipes for the patterns that come up while building addons. Each entry is
 
 ## How do I add a foreign-key relation?
 
-Declare `ref` on the column. The host generates the `FOREIGN KEY` constraint and exposes a `/options/<model>` endpoint that the modal's relation picker uses.
+Declare a `foreign_keys[]` entry on the model. The host generates the
+`FOREIGN KEY` constraint and exposes a relation-picker options endpoint the
+edit modal uses.
 
 ```json
 {
-  "table_name": "ticket_comments",
+  "key": "TicketComment",
+  "table": "ticket_comments",
   "columns": [
-    { "name": "ticket_id", "type": "uuid", "required": true,
-      "ref": "addon_tickets.tickets" }
+    { "name": "id", "type": "uuid", "primary_key": true, "default": "gen_random_uuid()" },
+    { "name": "ticket_id", "type": "uuid", "not_null": true }
+  ],
+  "foreign_keys": [
+    {
+      "columns": ["ticket_id"],
+      "references": { "model": "tickets.Ticket", "columns": ["id"] },
+      "policy": "physical",
+      "on_delete": "cascade"
+    }
   ]
 }
 ```
 
-The edit dialog will render a searchable combobox for `ticket_id`. Targets can be cross-schema (`addon_<other>.<table>`) or core (`users`, `organizations`).
+The edit dialog renders a searchable combobox for `ticket_id`. `references.model` is the `<addon_key>.<ModelKey>` of the target; `policy` is `"physical"` (a real DB FK) or `"logical"` (app-enforced only).
 
 ## How do I make a column searchable?
 
-Two layers — column-level filterability (driven by metadata, surfaced as a per-column filter chip in the toolbar) and global search (driven by the toolbar's free-text input).
+Searchability is metadata the kernel derives for the model's list view —
+a global ILIKE search (the toolbar's free-text input) plus per-column filter
+chips. Declare the column normally and the kernel exposes it as a filter;
+text columns participate in the `?search=` global search.
 
 ```json
 {
-  "name": "title",
-  "type": "string",
-  "size": 255,
-  "searchable": true,
-  "filterable": true
+  "key": "Ticket",
+  "table": "tickets",
+  "columns": [
+    { "name": "title", "type": "text", "not_null": true }
+  ]
 }
 ```
-
-`searchable: true` includes the column in the global ILIKE-style search the toolbar emits as `?search=`. `filterable: true` lets the kernel produce a `FilterDefinition` for it so users see a per-column filter button.
 
 ## How do I add a custom validation?
 
@@ -72,25 +84,29 @@ For column constraints beyond what the manifest expresses (NOT NULL, UNIQUE, len
 
 ## How do I create a custom action with a modal?
 
-Declare the action under the model with `fields[]`:
+Declare the action under `contributions.actions[]` with `fields[]`. In v3 the
+action carries its own `handler` (the server side is wired *into the action*,
+not a separate `hooks{}` map), and `target_model` is the model `key` it acts on:
 
 ```json
-"actions": {
-  "tickets": [
+"contributions": {
+  "actions": [
     {
       "key": "reassign",
       "label": "Reassign",
       "icon": "UserPlus",
+      "target_model": "Ticket",
+      "handler": { "type": "webhook", "url": "/webhooks/reassign" },
       "fields": [
-        { "name": "assignee_id", "label": "New assignee", "type": "user", "required": true },
-        { "name": "note", "label": "Note", "type": "text" }
+        { "key": "assignee_id", "label": "New assignee", "type": "user", "required": true },
+        { "key": "note", "label": "Note", "type": "text" }
       ]
     }
   ]
 }
 ```
 
-`<DynamicTable>` adds "Reassign" to the row dropdown. Clicking it fires `<ActionModalDispatcher>`, which renders a modal with the declared inputs and POSTs to `/data/tickets/<id>/action/reassign`. Wire the server side via `hooks` (webhook), a WASM export, or a compiled `ActionInterceptor` — see [`manifest-spec.md`](./manifest-spec.md#8-hooks-and-lifecycle_hooks).
+`<DynamicTable>` adds "Reassign" to the row dropdown. Clicking it fires `<ActionModalDispatcher>`, which renders a modal with the declared inputs and dispatches to the action's `handler` — a `webhook` (`{ "type": "webhook", "url": "…" }`) or a `wasm` export (`{ "type": "wasm", "function": "Reassign" }`).
 
 For full custom UI register a component on the modal registry — the
 component must accept the canonical `ModalProps` and narrow `payload` at the
@@ -132,40 +148,59 @@ The kernel still enforces the same capability server-side — gating UI is purel
 
 ## How do I emit an event when a record changes?
 
-Declare the capability and the event topic:
+Declare the capability and publish the event under `extension_points.events[]`
+(v3 replaces the v2 free-form `events: [...]` list with typed published events
+that can carry a `payload_schema`):
 
 ```json
 "capabilities": [
-  { "kind": "event:emit", "target": "ticket.*", "reason": "Notify state changes" }
+  { "kind": "event:emit", "target": "ticket.created", "reason": "Notify creation" },
+  { "kind": "event:emit", "target": "ticket.resolved", "reason": "Notify resolution" }
 ],
-"events": ["ticket.created", "ticket.resolved"]
+"extension_points": {
+  "events": [
+    { "name": "ticket.created",  "description": "A ticket was created." },
+    { "name": "ticket.resolved", "description": "A ticket was resolved." }
+  ]
+}
 ```
 
-In a webhook / WASM export, call the host's event API with `{ topic: 'ticket.resolved', payload: {…} }`. The kernel checks the capability, persists the event, and fans out to subscribers.
+Event names are `<namespace>.<event>` (exactly two underscore-segments per
+side). In a webhook / WASM export, call the host's event API with
+`{ topic: 'ticket.resolved', payload: {…} }`. The kernel checks the
+capability, persists the event, and fans out to subscribers.
 
-For automatic events on every CRUD operation, use `lifecycle_hooks`:
+For automatic reactions on CRUD operations, declare a subscription under
+`contributions.subscriptions[]`:
 
 ```json
-"lifecycle_hooks": {
-  "tickets": [
-    { "event": "after_create",
-      "target": { "type": "webhook", "url": "/webhooks/ticket_created" },
-      "async": true }
+"contributions": {
+  "subscriptions": [
+    { "event": "ticket.created",
+      "handler": { "type": "webhook", "url": "/webhooks/ticket_created" } }
   ]
 }
 ```
 
 ## How do I subscribe to events from another addon?
 
-Declare the capability and pull events from the bus in your handler:
+Declare the capability and a subscription whose `handler` the kernel invokes
+when the event fires:
 
 ```json
 "capabilities": [
   { "kind": "event:subscribe", "target": "invoice.stamped" }
-]
+],
+"contributions": {
+  "subscriptions": [
+    { "event": "invoice.stamped",
+      "handler": { "type": "wasm", "function": "OnInvoiceStamped" } }
+  ]
+}
 ```
 
-The publishing addon must declare `events: ["invoice.stamped"]` so the host knows the schema. Subscribe via the kernel's bus API in your WASM module or via a webhook the kernel calls when the event fires.
+The publishing addon declares `invoice.stamped` under its
+`extension_points.events[]` so the host knows the schema.
 
 ## How do I show a different UI for create vs edit?
 
@@ -179,29 +214,42 @@ The publishing addon must declare `events: ["invoice.stamped"]` so the host know
 
 ## How do I add a soft-delete column?
 
+Declare a `deleted_at` column on the model:
+
 ```json
 {
-  "table_name": "tickets",
-  "soft_delete": true,
-  "columns": [ /* … */ ]
+  "key": "Ticket",
+  "table": "tickets",
+  "columns": [
+    { "name": "id", "type": "uuid", "primary_key": true, "default": "gen_random_uuid()" },
+    { "name": "deleted_at", "type": "timestamptz" }
+  ]
 }
 ```
 
-The host adds a `deleted_at timestamptz` column, filters it out from default queries, and routes `DELETE /data/tickets/<id>` to a `UPDATE … SET deleted_at = now()`. No app-level wiring required.
+The host filters `deleted_at IS NOT NULL` out of default queries and routes a delete to `UPDATE … SET deleted_at = now()`.
 
 ## How do I scope records per organization?
 
+Declare an `organization_id` column and set `tenancy` at the top level:
+
 ```json
-{
-  "table_name": "tickets",
-  "org_scoped": true,
-  "columns": [ /* … */ ]
-}
+"tenancy": { "isolation": "shared", "rls_column": "organization_id" },
+"models": [
+  {
+    "key": "Ticket",
+    "table": "tickets",
+    "columns": [
+      { "name": "id", "type": "uuid", "primary_key": true, "default": "gen_random_uuid()" },
+      { "name": "organization_id", "type": "uuid", "not_null": true }
+    ]
+  }
+]
 ```
 
-The host adds an `organization_id` column, sets a NOT NULL + index, applies a Postgres RLS policy, and stamps the column on insert. Cross-tenant reads are denied by the kernel even if a capability would otherwise allow them.
+The kernel applies a Postgres RLS policy on `tenancy.rls_column` and stamps it on insert. Cross-tenant reads are denied even if a capability would otherwise allow them.
 
-For regulated data prefer `tenant_isolation: "schema-per-tenant"` instead — see [`manifest-spec.md`](./manifest-spec.md#2-tenant-isolation).
+For regulated data prefer `tenancy.isolation: "schema"` (schema-per-tenant) — see [`manifest-spec.md`](./manifest-spec.md).
 
 ## How do I bundle a frontend extension with my addon?
 

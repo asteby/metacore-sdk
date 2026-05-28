@@ -5,8 +5,12 @@
   "type": "module",
   "description": "End-to-end fullstack starter: ~50 LOC backend + ~500 LOC frontend powered by metacore",
   "scripts": {
+    "gen:routes": "node ../../../scripts/gen-route-tree.mjs .",
+    "predev": "pnpm gen:routes",
     "dev": "vite",
+    "prebuild": "pnpm gen:routes",
     "build": "tsc -b && vite build",
+    "pretypecheck": "pnpm gen:routes",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "clean": "rm -rf dist node_modules/.vite"

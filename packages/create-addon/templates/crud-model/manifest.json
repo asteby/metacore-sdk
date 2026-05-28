@@ -1,93 +1,86 @@
 {
-  "key": "{{ADDON_KEY}}",
-  "name": "{{ADDON_NAME}}",
-  "description": "{{ADDON_DESCRIPTION}}",
-  "version": "0.1.0",
-  "category": "utility",
-  "icon": "Database",
-  "kernel": ">=2.0.0 <3.0.0",
-  "tenant_isolation": "shared",
-
-  "author": "{{AUTHOR}}",
-  "license": "{{LICENSE}}",
-
-  "navigation": [
-    {
-      "title": "{{ADDON_NAME}}",
-      "icon": "Database",
-      "target": "sidebar.operations",
-      "items": [
-        {
-          "title": "{{ADDON_NAME}} — Items",
-          "url": "/m/{{ADDON_KEY}}_items",
-          "icon": "List",
-          "model": "{{ADDON_KEY}}_items"
-        }
-      ]
-    }
-  ],
-
-  "model_definitions": [
-    {
-      "table_name": "{{ADDON_KEY}}_items",
-      "model_key": "{{ADDON_KEY}}_items",
-      "label": "Items",
-      "org_scoped": true,
-      "soft_delete": true,
-      "columns": [
-        { "name": "title", "type": "string", "size": 255, "required": true },
-        { "name": "status", "type": "string", "size": 20, "required": true, "default": "'pending'", "index": true },
-        { "name": "amount_cents", "type": "int8", "default": "0" },
-        { "name": "metadata", "type": "jsonb" }
-      ]
-    }
-  ],
-
-  "actions": {
-    "{{ADDON_KEY}}_items": [
-      {
-        "key": "mark_done",
-        "name": "Mark Done",
-        "label": "Mark as done",
-        "icon": "CheckCircle2",
-        "confirm": true,
-        "requiresState": ["pending"]
-      }
-    ]
+  "apiVersion": "asteby.com/v3",
+  "kind": "Addon",
+  "metadata": {
+    "key": "{{ADDON_KEY}}",
+    "name": "{{ADDON_NAME}}",
+    "description": "{{ADDON_DESCRIPTION}}",
+    "version": "0.1.0",
+    "category": "utility",
+    "icon": { "type": "lucide", "slug": "Database", "color": "#6366F1" },
+    "author": "{{AUTHOR}}",
+    "license": "{{LICENSE}}"
   },
-
-  "events": ["{{ADDON_KEY}}.item.created", "{{ADDON_KEY}}.item.completed"],
-
+  "compatibility": {
+    "requires": [{ "key": "kernel", "version": ">=3.0.0 <4.0.0" }]
+  },
+  "tenancy": { "isolation": "shared", "rls_column": "organization_id" },
   "capabilities": [
+    { "kind": "db:read", "target": "addon_{{ADDON_KEY}}.*", "reason": "Read the addon's own rows." },
+    { "kind": "db:write", "target": "addon_{{ADDON_KEY}}.*", "reason": "Persist the addon's rows." },
+    { "kind": "event:emit", "target": "{{ADDON_KEY}}.*", "reason": "Publish item lifecycle events" }
+  ],
+  "models": [
     {
-      "kind": "event:emit",
-      "target": "{{ADDON_KEY}}.*",
-      "reason": "Publish item lifecycle events"
+      "key": "Item",
+      "table": "{{ADDON_KEY}}_items",
+      "label": "Items",
+      "columns": [
+        { "name": "id", "type": "uuid", "primary_key": true, "default": "gen_random_uuid()" },
+        { "name": "organization_id", "type": "uuid", "not_null": true },
+        { "name": "title", "type": "text", "not_null": true },
+        { "name": "status", "type": "text", "not_null": true, "default": "pending" },
+        { "name": "amount_cents", "type": "bigint", "default": 0 },
+        { "name": "metadata", "type": "jsonb" },
+        { "name": "created_at", "type": "timestamptz", "not_null": true, "default": "now()" }
+      ],
+      "indices": [
+        { "name": "{{ADDON_KEY}}_items_status_idx", "columns": ["status"] }
+      ]
     }
   ],
-
-  "backend": {
-    "runtime": "wasm",
-    "entry": "backend/backend.wasm",
-    "exports": ["mark_done"],
-    "memory_limit_mb": 64,
-    "timeout_ms": 10000
-  },
-
-  "settings": [
-    {
-      "key": "default_currency",
-      "label": "Default currency",
-      "type": "text",
-      "default_value": "USD"
-    }
-  ],
-
   "frontend": {
     "entry": "/api/metacore/addons/{{ADDON_KEY}}/frontend/remoteEntry.js",
     "format": "federation",
     "expose": "./plugin",
     "container": "metacore_{{ADDON_KEY}}",
     "layout": "shell"
-  }
+  },
+  "contributions": {
+    "navigation": [
+      {
+        "title": "{{ADDON_NAME}}",
+        "icon": "Database",
+        "target": "sidebar.operations",
+        "items": [
+          { "title": "{{ADDON_NAME}} — Items", "model": "Item", "icon": "List", "permission": "{{ADDON_KEY}}.item.read" }
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "key": "mark_done",
+        "label": "Mark as done",
+        "icon": "CheckCircle2",
+        "handler": { "type": "wasm", "function": "mark_done" },
+        "target_model": "Item",
+        "confirm": true
+      }
+    ]
+  },
+  "extension_points": {
+    "events": [
+      { "name": "{{ADDON_KEY}}.item_created", "description": "A new item was created." },
+      { "name": "{{ADDON_KEY}}.item_completed", "description": "An item was marked done." }
+    ]
+  },
+  "rbac": {
+    "permissions": [
+      { "key": "{{ADDON_KEY}}.item.read", "label": "Read items" },
+      { "key": "{{ADDON_KEY}}.item.write", "label": "Create/update/delete items" }
+    ]
+  },
+  "settings": [
+    { "key": "default_currency", "type": "string", "label": "Default currency", "default": "USD" }
+  ]
 }

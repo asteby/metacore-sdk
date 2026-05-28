@@ -5,23 +5,33 @@
 <h1 align="center"><code>manifest.json</code> reference</h1>
 
 The manifest is the **single contract** between an addon and the metacore
-kernel. It is consumed by Go (`kernel/manifest`) and mirrored by the TS SDK
-via [`tygo`](https://github.com/gzuidhof/tygo). This document reflects
-`APIVersion = "2.0.0"` — the v2 manifest the `metacore` CLI in this repo
-validates and packages against.
+kernel. It is consumed by Go (`kernel/manifest/v3`) and mirrored by the TS SDK
+via [`tygo`](https://github.com/gzuidhof/tygo).
 
-> **v2 vs v3.** The production kernel has moved to the Module Contract v3
-> (`apiVersion: "asteby.com/v3"`), which restructures this document — `kind`,
-> a nested `metadata{}` block, a `compatibility{}` block, `models[]` (instead
-> of `model_definitions[]`), `contributions{}`, `extension_points{}` and
-> `rbac{}`. v3 is strict (unknown fields rejected). The CLI, generated TS
-> types and examples in this repo are still on v2; see the
-> [Manifest contract version](../README.md#manifest-contract-version) note for
-> the migration status before authoring a manifest for a v3 host.
-
-When this spec evolves, `APIVersion` is bumped and a migration path is
-documented. Addons opt into a compatibility window via the top-level
-`kernel` field.
+> **Canonical contract: Module Contract v3 (`apiVersion: "asteby.com/v3"`).**
+> The `metacore` CLI, the generated TS types and the examples in this repo now
+> **emit and validate v3**. A v3 manifest declares `apiVersion`, `kind`
+> (`Addon` | `Preset` | `Theme` | `ConnectorPack`), a nested `metadata{}`
+> block, a `compatibility{}` block (semver kernel range), `models[]` (full
+> column definitions, replacing `model_definitions[]`), `contributions{}`
+> (navigation, actions, tools, subscriptions, slots), `extension_points{}`,
+> `rbac{}` and top-level `settings[]`. v3 is **strict** — unknown fields are
+> rejected at validation time.
+>
+> The **authoritative grammar** lives in the kernel repo:
+> - `docs/spec/v3/manifest-v3.schema.json` — the JSON schema.
+> - `docs/spec/v3/migration-v2-to-v3.md` — the field-by-field v2→v3 mapping.
+> - `docs/spec/v3/examples/{addon,preset}-example.json` — canonical examples.
+>
+> Scaffold a v3 addon with `metacore init <key>` (or `create-metacore-addon`)
+> and see the [v3 example manifests](../examples/) in this repo (e.g.
+> `examples/tickets-addon/manifest.json`).
+>
+> **v2 compatibility.** The kernel still *dual-reads* legacy v2 manifests
+> (those without `apiVersion`) during the 3.x line — already-published addons
+> keep installing. The v2 field reference below is retained for that legacy
+> shape; **new addons should author v3**. v2 support is removed in the 4.x
+> kernel train.
 
 ## Table of contents
 

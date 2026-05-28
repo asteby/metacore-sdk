@@ -1,4 +1,21 @@
 packages:
+  # Module Contract v3 — the canonical manifest types the SDK toolchain emits.
+  - path: "github.com/asteby/metacore-kernel/manifest/v3"
+    output_path: "packages/sdk/src/generated/manifest-v3.ts"
+    type_mappings:
+      "time.Time": "string"
+      "json.RawMessage": "unknown"
+    frontmatter: |
+      /**
+       * AUTO-GENERATED — do not edit by hand.
+       * Re-generate with: pnpm codegen
+       * Source: github.com/asteby/metacore-kernel/manifest/v3 (Module Contract v3)
+       */
+
+  # Legacy v2 manifest types — retained for backwards compatibility while
+  # downstream consumers migrate. The kernel still dual-reads v2; the SDK
+  # surfaces these under the `Legacy*` / original names so existing imports
+  # keep type-checking until they move to the v3 shape.
   - path: "github.com/asteby/metacore-kernel/manifest"
     output_path: "packages/sdk/src/generated/manifest.ts"
     type_mappings:
@@ -8,5 +25,9 @@ packages:
       /**
        * AUTO-GENERATED — do not edit by hand.
        * Re-generate with: pnpm codegen
-       * Source: github.com/asteby/metacore-kernel/manifest
+       * Source: github.com/asteby/metacore-kernel/manifest (legacy v2 contract)
+       *
+       * DEPRECATED: the SDK emits Module Contract v3 (see manifest-v3.ts).
+       * These types remain only so consumers that still reference the v2 shape
+       * keep type-checking during the migration window.
        */

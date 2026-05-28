@@ -19,18 +19,20 @@ import {
   MarketplaceClient,
   Registry,
   type AddonAPI,
-  type Manifest,
+  type LegacyManifest,
 } from "@asteby/metacore-sdk";
 
 import plugin from "./plugin";
 
-// Mirror the on-disk manifest.json shape closely enough for the plugin to run.
-const manifest: Manifest = {
+// AddonAPI.manifest is the host's runtime (flat) manifest projection — the
+// LegacyManifest shape with top-level key/name/version — not the v3 authoring
+// contract. Mirror just enough for the plugin to run in the dev harness.
+const manifest: LegacyManifest = {
   key: "tickets",
   name: "Tickets & Pedidos",
   version: "1.0.0",
-  kernel: ">=2.0.0 <3.0.0",
-} as unknown as Manifest;
+  kernel: ">=3.0.0 <4.0.0",
+} as unknown as LegacyManifest;
 
 const registry = new Registry();
 

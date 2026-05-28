@@ -8,15 +8,15 @@ import (
 	"testing"
 )
 
-// TestCmdInit_ScaffoldPassesValidate is the literal acceptance test the night
-// task asked for: `metacore init <key> && metacore validate <key>` must pass
-// out of the box. The scaffold ships a Backend (runtime=wasm) plus one
-// ActionDef whose Trigger.Type=wasm references an entry in backend.exports —
-// so the cross-check enforced by both the kernel manifest validator and the
-// CLI's own validateActionTriggerExports is exercised by the default output.
+// TestCmdInit_ScaffoldPassesValidate is the acceptance test for the scaffolder:
+// `metacore init <key> && metacore validate <key>` must pass out of the box.
+// The scaffold emits a Module Contract v3 manifest (apiVersion: asteby.com/v3)
+// with one model, one wasm-backed action and a federated frontend, so the
+// strict v3 schema gate enforced by cmdValidate is exercised by the default
+// output.
 //
-// Keeping the test in-package means we can call cmdInit / cmdValidate
-// directly without spawning a subprocess and re-parsing argv.
+// Keeping the test in-package means we can call cmdInit / cmdValidate directly
+// without spawning a subprocess and re-parsing argv.
 func TestCmdInit_ScaffoldPassesValidate(t *testing.T) {
 	dir := t.TempDir()
 	cwd, err := os.Getwd()
@@ -63,48 +63,59 @@ func TestCmdInit_ScaffoldPassesValidate(t *testing.T) {
 		t.Fatalf("read scaffold manifest: %v", err)
 	}
 	var raw struct {
-		Backend struct {
-			Runtime string   `json:"runtime"`
-			Entry   string   `json:"entry"`
-			Exports []string `json:"exports"`
-		} `json:"backend"`
-		Actions map[string][]struct {
+		APIVersion string `json:"apiVersion"`
+		Kind       string `json:"kind"`
+		Metadata   struct {
 			Key     string `json:"key"`
-			Trigger *struct {
-				Type   string `json:"type"`
-				Export string `json:"export"`
-			} `json:"trigger"`
-		} `json:"actions"`
+			Version string `json:"version"`
+		} `json:"metadata"`
+		Models        []json.RawMessage `json:"models"`
+		Contributions struct {
+			Actions []struct {
+				Key     string `json:"key"`
+				Handler struct {
+					Type     string `json:"type"`
+					Function string `json:"function"`
+				} `json:"handler"`
+			} `json:"actions"`
+		} `json:"contributions"`
+		Frontend struct {
+			Format    string `json:"format"`
+			Container string `json:"container"`
+		} `json:"frontend"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("parse scaffold manifest: %v", err)
 	}
-	if raw.Backend.Runtime != "wasm" {
-		t.Fatalf("scaffold backend.runtime = %q, want wasm", raw.Backend.Runtime)
+	if raw.APIVersion != "asteby.com/v3" {
+		t.Fatalf("scaffold apiVersion = %q, want asteby.com/v3", raw.APIVersion)
 	}
-	if len(raw.Backend.Exports) == 0 {
-		t.Fatalf("scaffold backend.exports is empty")
+	if raw.Kind != "Addon" {
+		t.Fatalf("scaffold kind = %q, want Addon", raw.Kind)
 	}
-	exportSet := make(map[string]struct{}, len(raw.Backend.Exports))
-	for _, e := range raw.Backend.Exports {
-		exportSet[e] = struct{}{}
+	if raw.Metadata.Key != key {
+		t.Fatalf("scaffold metadata.key = %q, want %q", raw.Metadata.Key, key)
 	}
-	model := key + "_items"
-	defs := raw.Actions[model]
-	if len(defs) == 0 {
-		t.Fatalf("scaffold actions[%q] has no entries", model)
+	if len(raw.Models) == 0 {
+		t.Fatalf("scaffold models[] is empty")
+	}
+	if raw.Frontend.Format != "federation" {
+		t.Fatalf("scaffold frontend.format = %q, want federation", raw.Frontend.Format)
+	}
+	if raw.Frontend.Container != "metacore_"+key {
+		t.Fatalf("scaffold frontend.container = %q, want metacore_%s", raw.Frontend.Container, key)
 	}
 	found := false
-	for _, a := range defs {
-		if a.Trigger != nil && a.Trigger.Type == "wasm" {
-			if _, ok := exportSet[a.Trigger.Export]; !ok {
-				t.Fatalf("trigger.export %q on action %q not declared in backend.exports %v", a.Trigger.Export, a.Key, raw.Backend.Exports)
+	for _, a := range raw.Contributions.Actions {
+		if a.Handler.Type == "wasm" {
+			if a.Handler.Function == "" {
+				t.Fatalf("wasm action %q has an empty handler.function", a.Key)
 			}
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("scaffold actions[%q] has no entry with trigger.type=wasm", model)
+		t.Fatalf("scaffold contributions.actions has no entry with handler.type=wasm")
 	}
 
 	if err := cmdValidate([]string{key}); err != nil {

@@ -1,136 +1,145 @@
 {
-  "key": "tickets",
-  "name": "Tickets & Pedidos",
-  "description": "Sistema de tickets y pedidos con estados, prioridades y asignación.",
-  "version": "1.0.0",
-  "category": "utility",
-  "icon": "TicketCheck",
-  "kernel": ">=2.0.0 <3.0.0",
-  "tenant_isolation": "shared",
-
-  "author": "asteby",
-  "license": "MIT",
-  "features": [
-    "Tickets con estados (open, in_progress, resolved, closed)",
-    "Prioridades (low, normal, high, urgent)",
-    "Asignación a usuarios y menciones",
-    "Adjuntos y comentarios threaded",
-    "Sidebar + rutas dedicadas"
+  "apiVersion": "asteby.com/v3",
+  "kind": "Addon",
+  "metadata": {
+    "key": "tickets",
+    "name": "Tickets & Pedidos",
+    "description": "Sistema de tickets y pedidos con estados, prioridades y asignación.",
+    "version": "1.0.0",
+    "category": "utility",
+    "icon": { "type": "lucide", "slug": "TicketCheck", "color": "#6366F1" },
+    "author": "asteby",
+    "license": "MIT",
+    "features": [
+      "Tickets con estados (open, in_progress, resolved, closed)",
+      "Prioridades (low, normal, high, urgent)",
+      "Asignación a usuarios y menciones",
+      "Adjuntos y comentarios threaded",
+      "Sidebar + rutas dedicadas"
+    ]
+  },
+  "compatibility": {
+    "requires": [{ "key": "kernel", "version": ">=3.0.0 <4.0.0" }]
+  },
+  "tenancy": { "isolation": "shared", "rls_column": "organization_id" },
+  "capabilities": [
+    { "kind": "db:read", "target": "users", "reason": "Mostrar nombres de asignados y autores" },
+    { "kind": "db:read", "target": "addon_tickets.*", "reason": "Leer tickets y comentarios" },
+    { "kind": "db:write", "target": "addon_tickets.*", "reason": "Persistir tickets y comentarios" },
+    { "kind": "event:emit", "target": "ticket.created", "reason": "Notificar creación" },
+    { "kind": "event:emit", "target": "ticket.resolved", "reason": "Notificar resolución" },
+    { "kind": "event:emit", "target": "ticket.reassigned", "reason": "Notificar reasignación" },
+    { "kind": "http:fetch", "target": "https://api.slack.com/*", "reason": "Posteo opcional a Slack en resolución" }
   ],
-
-  "navigation": [
+  "models": [
     {
-      "title": "addons.tickets.sidebar.group",
-      "icon": "TicketCheck",
-      "target": "sidebar.operations",
-      "items": [
+      "key": "Ticket",
+      "table": "tickets",
+      "label": "Tickets",
+      "columns": [
+        { "name": "id", "type": "uuid", "primary_key": true, "default": "gen_random_uuid()" },
+        { "name": "organization_id", "type": "uuid", "not_null": true },
+        { "name": "number", "type": "text", "not_null": true },
+        { "name": "title", "type": "text", "not_null": true },
+        { "name": "description", "type": "text" },
+        { "name": "status", "type": "text", "not_null": true, "default": "open" },
+        { "name": "priority", "type": "text", "not_null": true, "default": "normal" },
+        { "name": "assignee_id", "type": "uuid" },
+        { "name": "reporter_id", "type": "uuid", "not_null": true },
+        { "name": "due_at", "type": "timestamptz" },
+        { "name": "resolved_at", "type": "timestamptz" },
+        { "name": "tags", "type": "jsonb" },
+        { "name": "created_at", "type": "timestamptz", "not_null": true, "default": "now()" }
+      ],
+      "indices": [
+        { "name": "tickets_org_number_uq", "columns": ["organization_id", "number"], "unique": true },
+        { "name": "tickets_status_idx", "columns": ["status"] },
+        { "name": "tickets_priority_idx", "columns": ["priority"] }
+      ]
+    },
+    {
+      "key": "TicketComment",
+      "table": "ticket_comments",
+      "label": "Comentarios",
+      "columns": [
+        { "name": "id", "type": "uuid", "primary_key": true, "default": "gen_random_uuid()" },
+        { "name": "organization_id", "type": "uuid", "not_null": true },
+        { "name": "ticket_id", "type": "uuid", "not_null": true },
+        { "name": "author_id", "type": "uuid", "not_null": true },
+        { "name": "body", "type": "text", "not_null": true },
+        { "name": "mentions", "type": "jsonb" },
+        { "name": "created_at", "type": "timestamptz", "not_null": true, "default": "now()" }
+      ],
+      "foreign_keys": [
         {
-          "title": "addons.tickets.sidebar.tickets",
-          "url": "/m/tickets",
-          "icon": "Ticket",
-          "model": "tickets"
-        },
-        {
-          "title": "addons.tickets.sidebar.comments",
-          "url": "/m/ticket_comments",
-          "icon": "MessageCircle",
-          "model": "ticket_comments"
+          "columns": ["ticket_id"],
+          "references": { "model": "tickets.Ticket", "columns": ["id"] },
+          "policy": "physical",
+          "on_delete": "cascade"
         }
       ]
     }
   ],
-
-  "model_definitions": [
-    {
-      "table_name": "tickets",
-      "model_key": "tickets",
-      "label": "Tickets",
-      "org_scoped": true,
-      "soft_delete": true,
-      "columns": [
-        { "name": "number", "type": "string", "size": 32, "required": true, "unique": true },
-        { "name": "title", "type": "string", "size": 255, "required": true },
-        { "name": "description", "type": "text" },
-        { "name": "status", "type": "string", "size": 20, "required": true, "default": "'open'", "index": true },
-        { "name": "priority", "type": "string", "size": 10, "required": true, "default": "'normal'", "index": true },
-        { "name": "assignee_id", "type": "uuid", "index": true },
-        { "name": "reporter_id", "type": "uuid", "required": true, "index": true },
-        { "name": "due_at", "type": "timestamp" },
-        { "name": "resolved_at", "type": "timestamp" },
-        { "name": "tags", "type": "jsonb" }
-      ]
-    },
-    {
-      "table_name": "ticket_comments",
-      "model_key": "ticket_comments",
-      "label": "Comentarios",
-      "org_scoped": true,
-      "columns": [
-        { "name": "ticket_id", "type": "uuid", "required": true, "index": true, "ref": "addon_tickets.tickets" },
-        { "name": "author_id", "type": "uuid", "required": true },
-        { "name": "body", "type": "text", "required": true },
-        { "name": "mentions", "type": "jsonb" }
-      ]
-    }
-  ],
-
-  "actions": {
-    "tickets": [
-      {
-        "key": "resolve",
-        "name": "Resolve",
-        "label": "addons.tickets.actions.resolve",
-        "icon": "CheckCircle2",
-        "confirm": true,
-        "confirmMessage": "addons.tickets.actions.resolve_confirm",
-        "requiresState": ["open", "in_progress"]
-      },
-      {
-        "key": "reassign",
-        "name": "Reassign",
-        "label": "addons.tickets.actions.reassign",
-        "icon": "UserPlus",
-        "modal": "tickets.reassign",
-        "fields": [
-          { "name": "assignee_id", "label": "Nuevo asignado", "type": "user", "required": true },
-          { "name": "note", "label": "Nota", "type": "text" }
-        ]
-      }
-    ]
-  },
-
-  "events": ["ticket.created", "ticket.resolved", "ticket.reassigned"],
-
-  "hooks": {
-    "tickets::resolve":  "http://localhost:7101/webhooks/resolve",
-    "tickets::reassign": "http://localhost:7101/webhooks/reassign"
-  },
-
-  "capabilities": [
-    { "kind": "db:read",   "target": "users",           "reason": "Mostrar nombres de asignados y autores" },
-    { "kind": "event:emit","target": "ticket.*",        "reason": "Notificar cambios de estado" },
-    { "kind": "http:fetch","target": "api.slack.com",   "reason": "Posteo opcional a Slack en resolución" }
-  ],
-
-  "settings": [
-    {
-      "key": "auto_assign_round_robin",
-      "label": "Auto-asignar round-robin",
-      "type": "boolean",
-      "default_value": false
-    },
-    {
-      "key": "slack_webhook",
-      "label": "Webhook de Slack",
-      "type": "text",
-      "secret": true
-    }
-  ],
-
   "frontend": {
     "entry": "/api/metacore/addons/tickets/frontend/remoteEntry.js",
     "format": "federation",
     "expose": "./plugin",
-    "container": "metacore_tickets"
-  }
+    "container": "metacore_tickets",
+    "layout": "shell"
+  },
+  "contributions": {
+    "navigation": [
+      {
+        "title": "addons.tickets.sidebar.group",
+        "icon": "TicketCheck",
+        "target": "sidebar.operations",
+        "items": [
+          { "title": "addons.tickets.sidebar.tickets", "model": "Ticket", "icon": "Ticket", "permission": "tickets.ticket.read" },
+          { "title": "addons.tickets.sidebar.comments", "model": "TicketComment", "icon": "MessageCircle", "permission": "tickets.comment.read" }
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "key": "resolve",
+        "label": "addons.tickets.actions.resolve",
+        "icon": "CheckCircle2",
+        "handler": { "type": "webhook", "url": "http://localhost:7101/webhooks/resolve" },
+        "target_model": "Ticket",
+        "confirm": true,
+        "confirm_message": "addons.tickets.actions.resolve_confirm"
+      },
+      {
+        "key": "reassign",
+        "label": "addons.tickets.actions.reassign",
+        "icon": "UserPlus",
+        "modal": "tickets.reassign",
+        "handler": { "type": "webhook", "url": "http://localhost:7101/webhooks/reassign" },
+        "target_model": "Ticket",
+        "fields": [
+          { "key": "assignee_id", "label": "Nuevo asignado", "type": "user", "required": true },
+          { "key": "note", "label": "Nota", "type": "text" }
+        ]
+      }
+    ]
+  },
+  "extension_points": {
+    "events": [
+      { "name": "ticket.created", "description": "Se creó un ticket." },
+      { "name": "ticket.resolved", "description": "Se resolvió un ticket." },
+      { "name": "ticket.reassigned", "description": "Se reasignó un ticket." }
+    ]
+  },
+  "rbac": {
+    "permissions": [
+      { "key": "tickets.ticket.read", "label": "Leer tickets" },
+      { "key": "tickets.ticket.write", "label": "Crear/editar tickets" },
+      { "key": "tickets.comment.read", "label": "Leer comentarios" },
+      { "key": "tickets.comment.write", "label": "Escribir comentarios" }
+    ]
+  },
+  "settings": [
+    { "key": "auto_assign_round_robin", "type": "boolean", "label": "Auto-asignar round-robin", "default": false },
+    { "key": "slack_webhook", "type": "secret", "label": "Webhook de Slack" }
+  ]
 }

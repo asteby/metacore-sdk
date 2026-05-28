@@ -1,0 +1,18 @@
+{
+  "apiVersion": "asteby.com/v2",
+  "kind": "Addon",
+  "metadata": {
+    "key": "tickets",
+    "name": "Tickets",
+    "description": "Invalid v3 manifest — wrong apiVersion and a stray top-level field the strict schema rejects.",
+    "version": "0.1.0",
+    "category": "utility"
+  },
+  "compatibility": {
+    "requires": [{ "key": "kernel", "version": ">=3.0.0 <4.0.0" }]
+  },
+  "backend": {
+    "runtime": "wasm",
+    "exports": ["EscalateTicket"]
+  }
+}

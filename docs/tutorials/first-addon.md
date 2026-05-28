@@ -46,9 +46,12 @@ safe within the declared semver window; downgrading is not.
 | Node                                   | `22+`      |
 | pnpm                                   | `10+`      |
 
-The manifest contract declares this with `"kernel": ">=2.0.0 <3.0.0"`
-(see [`manifest.APIVersion`](../../packages/sdk/src/types.ts) and
-`kernel/manifest/manifest.go:5`).
+The manifest declares its compat window in
+`compatibility.requires[]` — the `kernel` entry's range
+(`">=3.0.0 <4.0.0"`) is what the host version is checked against. This is a
+**Module Contract v3** manifest (`apiVersion: "asteby.com/v3"`); see the
+authoritative schema in `kernel/docs/spec/v3/manifest-v3.schema.json` and the
+TS types in [`@asteby/metacore-sdk`](../../packages/sdk/src/types.ts).
 
 ## Prerequisites
 
@@ -65,9 +68,9 @@ The manifest contract declares this with `"kernel": ">=2.0.0 <3.0.0"`
 - Signing the addon for marketplace publish — `signature.json` is left
   with `verified: false` and the dev-mode `ALLOW_UNSIGNED_BUNDLES` flag.
   The full signing path lives in [`docs/PUBLISHING.md`](../PUBLISHING.md).
-- `tenant_isolation: "schema-per-tenant"` — we use the default `"shared"`
-  (one schema, RLS by `organization_id`). The regulated-data layout is a
-  follow-up tutorial.
+- `tenancy.isolation: "schema"` (schema-per-tenant) — we use the default
+  `"shared"` (one schema, RLS by `organization_id`). The regulated-data layout
+  is a follow-up tutorial.
 - Declaring `http:fetch`, `event:subscribe` or any capability beyond DB
   read/write. See [`docs/capabilities.md`](../capabilities.md).
 - LLM tools (`manifest.tools`). They're optional; the notes addon does
@@ -124,62 +127,41 @@ Paste the file below into `notes/manifest.json`:
 
 ```json
 {
-  "key": "notes",
-  "name": "Notes",
-  "description": "Sticky notes for the metacore ERP — body becomes title via a WASM action.",
-  "version": "0.1.0",
-  "category": "productivity",
-  "icon": "StickyNote",
-  "kernel": ">=2.0.0 <3.0.0",
-  "tenant_isolation": "shared",
-  "author": "you",
-  "license": "MIT",
-
-  "model_definitions": [
-    {
-      "table_name": "note",
-      "model_key": "notes_note",
-      "label": "Notes",
-      "org_scoped": true,
-      "soft_delete": false,
-      "columns": [
-        { "name": "title",  "type": "string",  "size": 120, "required": true, "searchable": true },
-        { "name": "body",   "type": "text",    "required": true, "widget": "textarea" },
-        { "name": "pinned", "type": "bool",    "required": true, "default": false, "index": true }
-      ]
-    }
-  ],
-
-  "navigation": [
-    {
-      "title": "addons.notes.sidebar.group",
-      "icon": "StickyNote",
-      "items": [
-        {
-          "title": "addons.notes.sidebar.list",
-          "url":   "addon://notes/",
-          "icon":  "List",
-          "model": "notes_note"
-        }
-      ]
-    }
-  ],
-
-  "actions": {
-    "notes_note": [
-      {
-        "key":   "auto_title",
-        "name":  "auto_title",
-        "label": "addons.notes.actions.auto_title",
-        "icon":  "Sparkles",
-        "trigger": {
-          "type":      "wasm",
-          "export":    "auto_title",
-          "run_in_tx": true
-        }
-      }
-    ]
+  "apiVersion": "asteby.com/v3",
+  "kind": "Addon",
+  "metadata": {
+    "key": "notes",
+    "name": "Notes",
+    "description": "Sticky notes for the metacore ERP — body becomes title via a WASM action.",
+    "version": "0.1.0",
+    "category": "productivity",
+    "icon": { "type": "lucide", "slug": "StickyNote", "color": "#6366F1" },
+    "author": "you",
+    "license": "MIT"
   },
+  "compatibility": {
+    "requires": [{ "key": "kernel", "version": ">=3.0.0 <4.0.0" }]
+  },
+  "tenancy": { "isolation": "shared", "rls_column": "organization_id" },
+
+  "models": [
+    {
+      "key": "Note",
+      "table": "note",
+      "label": "Notes",
+      "columns": [
+        { "name": "id",              "type": "uuid",        "primary_key": true, "default": "gen_random_uuid()" },
+        { "name": "organization_id", "type": "uuid",        "not_null": true },
+        { "name": "title",           "type": "text",        "not_null": true },
+        { "name": "body",            "type": "text",        "not_null": true },
+        { "name": "pinned",          "type": "boolean",     "not_null": true, "default": false },
+        { "name": "created_at",      "type": "timestamptz", "not_null": true, "default": "now()" }
+      ],
+      "indices": [
+        { "name": "note_pinned_idx", "columns": ["pinned"] }
+      ]
+    }
+  ],
 
   "frontend": {
     "entry":     "/api/metacore/addons/notes/frontend/remoteEntry.js",
@@ -189,12 +171,37 @@ Paste the file below into `notes/manifest.json`:
     "layout":    "shell"
   },
 
-  "backend": {
-    "runtime":         "wasm",
-    "entry":           "backend/main.wasm",
-    "exports":         ["alloc", "free", "auto_title"],
-    "memory_limit_mb": 32,
-    "timeout_ms":      3000
+  "contributions": {
+    "navigation": [
+      {
+        "title": "addons.notes.sidebar.group",
+        "icon": "StickyNote",
+        "items": [
+          {
+            "title": "addons.notes.sidebar.list",
+            "icon":  "List",
+            "model": "Note",
+            "permission": "notes.note.read"
+          }
+        ]
+      }
+    ],
+    "actions": [
+      {
+        "key":          "auto_title",
+        "label":        "addons.notes.actions.auto_title",
+        "icon":         "Sparkles",
+        "target_model": "Note",
+        "handler":      { "type": "wasm", "function": "auto_title" }
+      }
+    ]
+  },
+
+  "rbac": {
+    "permissions": [
+      { "key": "notes.note.read",  "label": "Read notes" },
+      { "key": "notes.note.write", "label": "Create/update/delete notes" }
+    ]
   },
 
   "capabilities": [
@@ -204,42 +211,47 @@ Paste the file below into `notes/manifest.json`:
 }
 ```
 
-What each block does, with a pointer back to the Go source so you can
-read the validation rules:
+What each block does (this is a **Module Contract v3** manifest —
+`apiVersion: "asteby.com/v3"`; the authoritative grammar is the kernel's
+`docs/spec/v3/manifest-v3.schema.json`):
 
-- `key`, `name`, `version`, `kernel` — identity and compat window. The
-  kernel rejects any installed addon whose host version doesn't satisfy
-  the range. See `manifest.go:9-26`.
-- `tenant_isolation: "shared"` — single schema `addon_notes`,
-  RLS-scoped by `organization_id`. The other supported value is
-  `"schema-per-tenant"` for regulated data. See `manifest.go:31-40`.
-- `model_definitions[]` — each entry creates `addon_notes.note` at
-  install time. The `model_key` (`notes_note`) is what every API and SDK
-  call addresses the model by. The column shape matches what the two
-  pilot addons use (`ops/addons-wasm/fiscal_mexico/manifest.json:13-30`,
-  `ops/addons-wasm/kitchen-display/manifest.json:34-52`). `searchable`,
-  `widget` and the `default` value are part of the v0.10 column
-  metadata extension (kernel PR #45, GAP-1).
-- `navigation[]` — a sidebar group that opens the model's auto-generated
-  list page. With `model` set, the URL `addon://notes/` is resolved by
-  the runtime to the dynamic CRUD route bound to `notes_note`.
-- `actions.notes_note[]` — one per-row action. `trigger.type: "wasm"`
-  tells the kernel to dispatch to `Backend.Exports["auto_title"]`
-  instead of a webhook; `run_in_tx: true` keeps the export call inside
-  the same DB transaction as the row mutation that prompted the action,
-  so a failure rolls everything back. The trigger contract is at
-  `manifest.go:252-284`.
-- `frontend.layout: "shell"` — the host wraps our component in the
-  default chrome (sidebar + topbar). Switch to `"immersive"` in Step 8
-  to see the full-page mode kitchen-display uses
-  (`manifest.go:125-141`).
-- `backend.exports` must enumerate every symbol the host can dispatch
-  to. `alloc` and `free` are the ABI primitives (see Step 3); we add
-  `auto_title` for our action. See `manifest.go:151-158`.
+- `apiVersion` + `kind` + `metadata{}` — identity. `kind` is one of
+  `Addon`/`Preset`/`Theme`/`ConnectorPack`; `metadata.key`/`name`/`version`
+  are the addon's identity, and `metadata.icon` is the `{type,slug,color}`
+  triple the host renders.
+- `compatibility.requires[]` — the compat window. The `kernel` entry's
+  semver range is what the kernel checks the host version against at install
+  time (replaces the v2 top-level `kernel` string).
+- `tenancy` — `isolation: "shared"` is a single schema `addon_notes`,
+  RLS-scoped by `tenancy.rls_column` (`organization_id`). The other supported
+  values are `"schema"` (schema-per-tenant, for regulated data) and
+  `"database"`.
+- `models[]` — each entry creates `addon_notes.note` at install time. v3
+  declares the **full column set inline** (including `id` and
+  `organization_id`); the model `key` (`Note`, PascalCase) is what the API
+  and SDK address the model by.
+- `contributions.navigation[]` — a sidebar group that opens the model's
+  auto-generated list page. With `model: "Note"` set, the runtime resolves it
+  to the dynamic CRUD route bound to the model.
+- `contributions.actions[]` — one per-row action. `handler.type: "wasm"`
+  tells the kernel to dispatch to the module's `auto_title` export instead of
+  a webhook. In v3 the **handler function name IS the export** the compiled
+  module must ship (there is no separate `backend.exports` list).
+- `frontend.layout: "shell"` — the host wraps our component in the default
+  chrome (sidebar + topbar). Switch to `"immersive"` in Step 8 to see the
+  full-page mode kitchen-display uses. (`frontend` is the kernel-internal
+  federation pointer; it stays at the top level in v3.)
+- `rbac.permissions[]` — the permission keys the nav items and actions gate
+  on. Roles can bundle them under `rbac.roles[]`.
 - `capabilities[]` — declared scopes the runtime enforces. We only need
   read/write on our own schema. Adding e.g. `{"kind":"http:fetch",
   "target":"https://api.example.com/*"}` would route through the SSRF
   guard. See `docs/capabilities.md`.
+
+> The compiled WASM module still exports the ABI primitives `alloc` and
+> `free` (see Step 3) alongside `auto_title`. In v3 those exports are implied
+> by the ABI + the handler functions you declare; the manifest no longer
+> carries a `backend{}` block (runtime selection is a *bundle* concern).
 
 ---
 
@@ -833,12 +845,12 @@ Type a paragraph into the body of one card and click **Auto title**.
 What happens server-side:
 
 1. The browser POSTs to
-   `/api/dynamic/notes_note/<id>/action/auto_title`.
-2. The kernel's dynamic action handler resolves the ActionDef, sees
-   `trigger.type: "wasm"` and dispatches to the addon's wazero
-   instance.
-3. Because `run_in_tx: true`, the dispatch happens inside the same DB
-   transaction as the row read. The host marshals the row into the
+   `/api/dynamic/note/<id>/action/auto_title`.
+2. The kernel's dynamic action handler resolves the action, sees
+   `handler.type: "wasm"` and dispatches to the addon's wazero
+   instance (the named export `auto_title`).
+3. The dispatch happens inside the same DB transaction as the row read,
+   so a failure rolls everything back. The host marshals the row into the
    handler's JSON envelope (`{"row": {"id": "...", "title": "...",
    "body": "..."}}`), calls `auto_title(ptr, len)`, unpacks the
    returned slot.
@@ -935,9 +947,9 @@ the field, so existing addons keep their chrome.
 - [`docs/capabilities.md`](../capabilities.md) — declare `http:fetch`,
   `event:emit`, `event:subscribe`. The runtime mediates each one through
   the host imports listed in `kernel/runtime/wasm/abi.go:21-26`.
-- Switch `tenant_isolation` to `"schema-per-tenant"` for regulated data
-  — see `manifest.go:31-40` for the contract; the install path creates
-  one schema per installation and drops it on uninstall.
+- Switch `tenancy.isolation` to `"schema"` (schema-per-tenant) for
+  regulated data — the install path creates one schema per installation and
+  drops it on uninstall.
 
 Two real addons in production you can compare line-by-line with what we
 built — both live in the `ops` repo, both built with the same toolchain

@@ -1,46 +1,31 @@
 {
-  "key": "tavily_search",
-  "name": "Búsqueda Web (Tavily)",
-  "description": "Busca en Internet y obtiene resultados actualizados con IA. Ideal para responder preguntas que requieren información reciente o fuentes externas.",
-  "version": "1.0.0",
-  "category": "research",
-  "icon": "https://www.google.com/s2/favicons?domain=tavily.com&sz=128",
-  "icon_type": "url",
-  "icon_slug": "https://www.google.com/s2/favicons?domain=tavily.com&sz=128",
-  "kernel": ">=2.0.0 <3.0.0",
-  "tenant_isolation": "shared",
-  "backend": {
-    "runtime": "webhook"
+  "apiVersion": "asteby.com/v3",
+  "kind": "Addon",
+  "metadata": {
+    "key": "tavily_search",
+    "name": "Búsqueda Web (Tavily)",
+    "version": "1.0.0",
+    "description": "Busca en Internet y obtiene resultados actualizados con IA. Ideal para responder preguntas que requieren información reciente o fuentes externas.",
+    "category": "research",
+    "icon": {
+      "type": "url",
+      "slug": "https://www.google.com/s2/favicons?domain=tavily.com&sz=128"
+    },
+    "author": "asteby",
+    "license": "MIT"
   },
-  "settings": [
-    {
-      "key": "tavily_api_key",
-      "label": "Tavily API Key",
-      "type": "password",
-      "secret": true
-    }
-  ],
-  "tools": [
-    {
-      "id": "web_search",
-      "name": "Buscar en Internet",
-      "description": "Realiza una búsqueda web y devuelve los resultados más relevantes con una respuesta directa.",
-      "category": "query",
-      "input_schema": [
-        {
-          "name": "query",
-          "type": "string",
-          "description": "Consulta de búsqueda en lenguaje natural",
-          "required": true,
-          "example": "precio del dólar hoy México",
-          "extraction_hint": "Lo que el usuario quiere buscar o investigar"
-        }
-      ],
-      "endpoint": "https://api.tavily.com/search",
-      "method": "POST"
-    }
-  ],
-  "events": [],
+  "compatibility": {
+    "requires": [
+      {
+        "key": "kernel",
+        "version": ">=3.0.0 <4.0.0"
+      }
+    ]
+  },
+  "tenancy": {
+    "isolation": "shared",
+    "rls_column": "organization_id"
+  },
   "capabilities": [
     {
       "kind": "http:fetch",
@@ -48,6 +33,35 @@
       "reason": "Llamar a la API de búsqueda de Tavily"
     }
   ],
-  "author": "asteby",
-  "license": "MIT"
+  "contributions": {
+    "tools": [
+      {
+        "key": "web_search",
+        "description": "Realiza una búsqueda web y devuelve los resultados más relevantes con una respuesta directa.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "description": "Consulta de búsqueda en lenguaje natural"
+            }
+          },
+          "required": [
+            "query"
+          ]
+        },
+        "handler": {
+          "type": "webhook",
+          "url": "https://api.tavily.com/search"
+        }
+      }
+    ]
+  },
+  "settings": [
+    {
+      "key": "tavily_api_key",
+      "type": "secret",
+      "label": "Tavily API Key"
+    }
+  ]
 }

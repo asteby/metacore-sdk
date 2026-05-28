@@ -1,53 +1,31 @@
 {
-  "key": "discord",
-  "name": "Discord",
-  "description": "Envía alertas y notificaciones a canales de Discord.",
-  "version": "1.0.0",
-  "category": "communication",
-  "icon": "discord",
-  "icon_type": "brand",
-  "icon_slug": "discord",
-  "icon_color": "5865F2",
-  "kernel": ">=2.0.0 <3.0.0",
-  "tenant_isolation": "shared",
-  "author": "asteby",
-  "license": "MIT",
-  "settings": [
-    {
-      "key": "discord_webhook_url",
-      "label": "Webhook URL",
-      "type": "password",
-      "secret": true
-    }
-  ],
-  "tools": [
-    {
-      "id": "send_message",
-      "name": "Enviar Mensaje",
-      "description": "Envía un mensaje a un canal de Discord.",
-      "category": "communication",
-      "input_schema": [
-        {
-          "name": "discord_webhook_url",
-          "type": "string",
-          "description": "Webhook URL de Discord (provisto por settings)",
-          "required": true
-        },
-        {
-          "name": "message",
-          "type": "string",
-          "description": "Mensaje a enviar al canal de Discord",
-          "required": true,
-          "extraction_hint": "Contenido del mensaje o alerta"
-        }
-      ],
-      "endpoint": "{{discord_webhook_url}}",
-      "method": "POST"
-    }
-  ],
-  "events": [],
-  "backend": {
-    "runtime": "webhook"
+  "apiVersion": "asteby.com/v3",
+  "kind": "Addon",
+  "metadata": {
+    "key": "discord",
+    "name": "Discord",
+    "version": "1.0.0",
+    "description": "Envía alertas y notificaciones a canales de Discord.",
+    "category": "communication",
+    "icon": {
+      "type": "brand",
+      "slug": "discord",
+      "color": "#5865F2"
+    },
+    "author": "asteby",
+    "license": "MIT"
+  },
+  "compatibility": {
+    "requires": [
+      {
+        "key": "kernel",
+        "version": ">=3.0.0 <4.0.0"
+      }
+    ]
+  },
+  "tenancy": {
+    "isolation": "shared",
+    "rls_column": "organization_id"
   },
   "capabilities": [
     {
@@ -59,6 +37,42 @@
       "kind": "http:fetch",
       "target": "discordapp.com",
       "reason": "Dominio legado de webhooks Discord"
+    }
+  ],
+  "contributions": {
+    "tools": [
+      {
+        "key": "send_message",
+        "description": "Envía un mensaje a un canal de Discord.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "discord_webhook_url": {
+              "type": "string",
+              "description": "Webhook URL de Discord (provisto por settings)"
+            },
+            "message": {
+              "type": "string",
+              "description": "Mensaje a enviar al canal de Discord"
+            }
+          },
+          "required": [
+            "discord_webhook_url",
+            "message"
+          ]
+        },
+        "handler": {
+          "type": "webhook",
+          "url": "{{discord_webhook_url}}"
+        }
+      }
+    ]
+  },
+  "settings": [
+    {
+      "key": "discord_webhook_url",
+      "type": "secret",
+      "label": "Webhook URL"
     }
   ]
 }

@@ -1,55 +1,31 @@
 {
-  "key": "notion",
-  "name": "Notion",
-  "description": "Agrega registros a bases de datos de Notion desde conversaciones.",
-  "version": "1.0.0",
-  "category": "productivity",
-  "icon": "notion",
-  "icon_type": "brand",
-  "icon_slug": "notion",
-  "icon_color": "000000",
-  "kernel": ">=2.0.0 <3.0.0",
-  "tenant_isolation": "shared",
-  "settings": [
-    {
-      "key": "notion_api_key",
-      "label": "Integration Token",
-      "type": "password",
-      "secret": true
+  "apiVersion": "asteby.com/v3",
+  "kind": "Addon",
+  "metadata": {
+    "key": "notion",
+    "name": "Notion",
+    "version": "1.0.0",
+    "description": "Agrega registros a bases de datos de Notion desde conversaciones.",
+    "category": "productivity",
+    "icon": {
+      "type": "brand",
+      "slug": "notion",
+      "color": "#000000"
     },
-    {
-      "key": "notion_database_id",
-      "label": "Database ID",
-      "type": "string"
-    }
-  ],
-  "tools": [
-    {
-      "id": "create_entry",
-      "name": "Crear Registro",
-      "description": "Agrega una nueva entrada a la base de datos de Notion.",
-      "input_schema": [
-        {
-          "name": "title",
-          "type": "string",
-          "description": "Título de la entrada",
-          "required": true,
-          "extraction_hint": "Nombre o asunto principal"
-        },
-        {
-          "name": "notes",
-          "type": "string",
-          "description": "Notas o detalles adicionales",
-          "extraction_hint": "Contexto adicional de la conversación"
-        }
-      ],
-      "endpoint": "https://api.notion.com/v1/pages",
-      "method": "POST"
-    }
-  ],
-  "events": [],
-  "backend": {
-    "runtime": "webhook"
+    "author": "asteby",
+    "license": "MIT"
+  },
+  "compatibility": {
+    "requires": [
+      {
+        "key": "kernel",
+        "version": ">=3.0.0 <4.0.0"
+      }
+    ]
+  },
+  "tenancy": {
+    "isolation": "shared",
+    "rls_column": "organization_id"
   },
   "capabilities": [
     {
@@ -58,6 +34,44 @@
       "reason": "Crear y leer páginas en la API de Notion"
     }
   ],
-  "author": "asteby",
-  "license": "MIT"
+  "contributions": {
+    "tools": [
+      {
+        "key": "create_entry",
+        "description": "Agrega una nueva entrada a la base de datos de Notion.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string",
+              "description": "Título de la entrada"
+            },
+            "notes": {
+              "type": "string",
+              "description": "Notas o detalles adicionales"
+            }
+          },
+          "required": [
+            "title"
+          ]
+        },
+        "handler": {
+          "type": "webhook",
+          "url": "https://api.notion.com/v1/pages"
+        }
+      }
+    ]
+  },
+  "settings": [
+    {
+      "key": "notion_api_key",
+      "type": "secret",
+      "label": "Integration Token"
+    },
+    {
+      "key": "notion_database_id",
+      "type": "string",
+      "label": "Database ID"
+    }
+  ]
 }

@@ -4,7 +4,12 @@
  * `/api/metacore/*`. Swap the `fetcher` to run against any host or a mock.
  */
 
-import type { Installation, Manifest, NavGroup } from "./types.js";
+// The host serves the kernel's runtime (legacy/flat) manifest projection —
+// `key`/`version`/`frontend` at the top level, NOT the v3 authoring contract.
+// We alias LegacyManifest to Manifest locally so the runtime-facing client API
+// keeps the shape the host actually returns while the SDK's canonical authoring
+// type (./types.js Manifest) is the v3 contract.
+import type { LegacyManifest as Manifest, Installation, NavGroup } from "./types.js";
 
 export interface Fetcher {
   <T>(path: string, init?: RequestInit): Promise<T>;
