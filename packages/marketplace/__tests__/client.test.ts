@@ -107,26 +107,93 @@ describe('HubClient', () => {
     expect(fetcher.calls[0]?.path).toBe('/marketplace/addons/a%2Fb')
   })
 
-  it('initiateInstall posts the org id + version', async () => {
+  it('initiateInstall posts addonKey + optional version/instance_id to /install/initiate', async () => {
     const fetcher = makeFetcher()
-    const token: InstallToken = {
-      token: 't0',
-      expires_at: '2026-01-01T00:00:00Z',
+    // Hub wire shape — install_token + expires_in + verification_url.
+    fetcher.responses.set('POST /install/initiate', {
+      install_token: 'itk_abc',
+      expires_in: 600,
+      verification_url: 'https://hub.example/install?itk=itk_abc',
       addon_key: 'fiscal',
       version: '1.0.0',
-    }
-    fetcher.responses.set('POST /marketplace/addons/fiscal/install', token)
+    })
 
     const hub = new HubClient({ fetcher })
+    const before = Date.now()
     const res = await hub.initiateInstall('fiscal', {
-      organization_id: 'org_1',
+      version: '1.0.0',
+      instance_id: '11111111-1111-1111-1111-111111111111',
+    })
+    const after = Date.now()
+
+    // URL: the install handshake lives on its own path, addon key is in
+    // the body (NOT a URL segment).
+    expect(fetcher.calls[0]?.path).toBe('/install/initiate')
+    expect(fetcher.calls[0]?.body).toEqual({
+      addonKey: 'fiscal',
+      version: '1.0.0',
+      instance_id: '11111111-1111-1111-1111-111111111111',
+    })
+
+    // Response normalisation: install_token → token, expires_in →
+    // expires_at (absolute ISO), other fields passed through.
+    expect(res.token).toBe('itk_abc')
+    expect(res.addon_key).toBe('fiscal')
+    expect(res.version).toBe('1.0.0')
+    expect(res.verification_url).toBe(
+      'https://hub.example/install?itk=itk_abc',
+    )
+    const expMs = Date.parse(res.expires_at)
+    // 600s window, ±a few ms of test clock drift.
+    expect(expMs).toBeGreaterThanOrEqual(before + 600 * 1000 - 50)
+    expect(expMs).toBeLessThanOrEqual(after + 600 * 1000 + 50)
+  })
+
+  it('initiateInstall omits optional fields when not provided', async () => {
+    const fetcher = makeFetcher()
+    fetcher.responses.set('POST /install/initiate', {
+      install_token: 'itk_x',
+      expires_in: 600,
+      verification_url: 'https://hub.example/install?itk=itk_x',
+      addon_key: 'fiscal',
+      version: '2.0.0',
+    })
+
+    const hub = new HubClient({ fetcher })
+    await hub.initiateInstall('fiscal')
+    expect(fetcher.calls[0]?.body).toEqual({ addonKey: 'fiscal' })
+  })
+
+  it('initiateInstall unwraps an enveloped hub response', async () => {
+    const fetcher = makeFetcher()
+    fetcher.responses.set('POST /install/initiate', {
+      success: true,
+      data: {
+        install_token: 'itk_env',
+        expires_in: 600,
+        verification_url: 'https://hub.example/install?itk=itk_env',
+        addon_key: 'fiscal',
+        version: '1.0.0',
+      },
+    })
+    const hub = new HubClient({ fetcher })
+    const res = await hub.initiateInstall('fiscal', { version: '1.0.0' })
+    expect(res.token).toBe('itk_env')
+    expect(res.addon_key).toBe('fiscal')
+  })
+
+  it('installPath override is honored', async () => {
+    const fetcher = makeFetcher()
+    fetcher.responses.set('POST /custom/handshake', {
+      install_token: 'itk_y',
+      expires_in: 600,
+      verification_url: '',
+      addon_key: 'fiscal',
       version: '1.0.0',
     })
-    expect(res).toBe(token)
-    expect(fetcher.calls[0]?.body).toMatchObject({
-      organization_id: 'org_1',
-      version: '1.0.0',
-    })
+    const hub = new HubClient({ fetcher, installPath: '/custom/handshake' })
+    await hub.initiateInstall('fiscal')
+    expect(fetcher.calls[0]?.path).toBe('/custom/handshake')
   })
 
   it('unwraps enveloped responses transparently', async () => {
@@ -210,15 +277,15 @@ describe('createFetchFetcher', () => {
       headers: () => ({ authorization: 'Bearer x' }),
       fetchImpl: fetchSpy as unknown as typeof fetch,
     })
-    const res = await fetcher.post<{ ok: boolean }>('/addons/fiscal/install', {
-      organization_id: 'org_1',
+    const res = await fetcher.post<{ ok: boolean }>('/install/initiate', {
+      addonKey: 'fiscal',
     })
     expect(res).toEqual({ ok: true })
     const call = fetchSpy.mock.calls[0]
-    expect(call[0]).toBe('https://hub.example.com/api/addons/fiscal/install')
+    expect(call[0]).toBe('https://hub.example.com/api/install/initiate')
     expect(call[1].method).toBe('POST')
     expect(call[1].headers).toMatchObject({ authorization: 'Bearer x' })
-    expect(call[1].body).toBe('{"organization_id":"org_1"}')
+    expect(call[1].body).toBe('{"addonKey":"fiscal"}')
   })
 
   it('throws with status + body excerpt on non-2xx', async () => {

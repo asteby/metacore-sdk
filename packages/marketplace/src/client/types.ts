@@ -212,23 +212,42 @@ export interface CatalogQuery {
  * caller redeems against their local Ops kernel. The token encodes the
  * target organization + addon version so the kernel can re-verify before
  * actually installing.
+ *
+ * The wire response from the hub uses `install_token` / `expires_in` /
+ * `verification_url`; `HubClient.initiateInstall` normalises that into
+ * this shape (with `expires_at` resolved to an absolute ISO timestamp).
  */
 export interface InstallToken {
+  /** Opaque install token (`itk_…`) — pass to `OpsClient.claimInstall`. */
   token: string
+  /** Absolute expiry as ISO-8601 (derived from the hub's `expires_in` seconds). */
   expires_at: string
   /** Echo of the addon+version the token is bound to. */
   addon_key: string
   version: string
+  /**
+   * Hub-rendered verification URL the user can paste / be redirected to
+   * if they want to complete the handshake via the hub UI rather than
+   * a programmatic ops claim. Optional — older hub deploys may omit it.
+   */
+  verification_url?: string
 }
 
-/** Payload for `POST /addons/{key}/install`. */
+/**
+ * Payload for `POST /install/initiate`. Mirrors the hub's
+ * `initiateInstallRequest` contract — addon key is carried in the body,
+ * NOT the URL. The `key` argument to `HubClient.initiateInstall` is
+ * what becomes `addonKey` on the wire; consumers should not pass it in
+ * this struct.
+ */
 export interface InitiateInstallInput {
-  /** Version to install. Defaults to `latest_version` on the Hub side. */
+  /** Version to install. Defaults to the latest approved version. */
   version?: string
-  /** Caller's organization id — required by the Hub for billing/quota. */
-  organization_id: string
-  /** Opaque per-org context (e.g. environment tag) the kernel can echo back. */
-  context?: Record<string, string>
+  /**
+   * Optional Ops instance UUID to bind the token to. When set, the
+   * redeem path will sanity-check the instance matches.
+   */
+  instance_id?: string
 }
 
 // ---------------------------------------------------------------------------
