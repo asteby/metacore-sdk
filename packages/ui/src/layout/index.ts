@@ -5,6 +5,16 @@ export { NavUser } from './nav-user'
 export { NavGroup, type NavLinkComponent, type NavGroupProps } from './nav-group'
 export { TeamSwitcher } from './team-switcher'
 export { ProfileDropdown } from './profile-dropdown'
+export {
+  resolveIconName,
+  humanizeNavKey,
+  translateNavTitle,
+  addonGroupToCollapsibleItem,
+  FALLBACK_GROUP_ICON,
+  FALLBACK_ITEM_ICON,
+  type AddonNavItemLike,
+  type AddonNavGroupLike,
+} from './addon-nav'
 export type {
   NavItem,
   NavLinkItem,
