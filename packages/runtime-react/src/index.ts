@@ -11,6 +11,12 @@ export {
     ActionModalDispatcher,
     type ActionModalProps,
 } from './action-modal-dispatcher'
+export {
+    ModelActionToolbar,
+    useModelActions,
+    type ModelActionToolbarProps,
+    type ActionPlacement,
+} from './model-action-toolbar'
 export * from './addon-loader'
 export {
     AddonLayoutProvider,

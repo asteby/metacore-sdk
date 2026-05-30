@@ -162,6 +162,13 @@ export interface ActionDefinition {
     fields?: ActionFieldDef[]
     requiresState?: string[]
     executable?: boolean
+    /**
+     * Where the host surfaces the trigger. Mirrors manifest/v3 Action.placement.
+     *   "row" (default) — per-row table action.
+     *   "table"         — page toolbar button (no record context).
+     *   "create"        — toolbar button that replaces the generic create button.
+     */
+    placement?: 'row' | 'table' | 'create'
 }
 
 export interface ApiResponse<T> {
@@ -194,4 +201,5 @@ export interface ActionMetadata {
     fields?: ActionFieldDef[]
     requiresState?: string[]
     executable?: boolean
+    placement?: 'row' | 'table' | 'create'
 }

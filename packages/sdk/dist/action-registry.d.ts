@@ -24,6 +24,13 @@ export interface ActionMetadata {
     executable?: boolean;
     /** Optional modal slug "<addon_key>.<action_key>" pointing at a registered custom component. */
     modal?: string;
+    /**
+     * Where the host surfaces the trigger. Mirrors manifest/v3 Action.placement.
+     *   "row" (default) — per-row table action.
+     *   "table"         — page toolbar button (no record context).
+     *   "create"        — toolbar button that replaces the generic create button.
+     */
+    placement?: 'row' | 'table' | 'create';
 }
 export interface ActionModalProps {
     open: boolean;
