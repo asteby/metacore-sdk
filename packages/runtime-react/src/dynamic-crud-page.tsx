@@ -36,6 +36,7 @@ import { DynamicRecordDialog } from './dialogs/dynamic-record'
 import { ExportDialog } from './dialogs/export'
 import { ImportDialog } from './dialogs/import'
 import { getModelExtension } from './model-extension-registry'
+import { ModelActionToolbar } from './model-action-toolbar'
 import type { TableMetadata } from './types'
 
 export interface DynamicCRUDPageStrings {
@@ -153,7 +154,10 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
     }, [title])
 
     const enableCRUD = metadata?.enableCRUDActions ?? false
-    const effectiveHideCreate = hideCreate || ext?.hideCreate
+    // A "create"-placement action ships a custom create experience — it
+    // replaces the generic create button (the ModelActionToolbar renders it).
+    const hasCreateAction = metadata?.actions?.some((a) => a.placement === 'create') ?? false
+    const effectiveHideCreate = hideCreate || ext?.hideCreate || hasCreateAction
     const effectiveHideExport = hideExport || ext?.hideExport
     const effectiveHideImport = hideImport || ext?.hideImport
     // Refresh defaults to hidden in the page header — <DynamicTable> ships
@@ -222,6 +226,12 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
                         )}
                         {ext?.toolbarExtras && <ext.toolbarExtras model={model} onRefresh={handleRefresh} />}
                         {toolbarExtras}
+                        <ModelActionToolbar
+                            model={model}
+                            endpoint={dataEndpoint}
+                            actions={metadata?.actions}
+                            onChange={handleRefresh}
+                        />
                         {showCreate && (
                             <button
                                 type='button'

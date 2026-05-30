@@ -21,7 +21,7 @@
 import { type ReactNode } from "react";
 import type { MarketplaceClient } from "./client.js";
 import type { Registry } from "./registry.js";
-import type { Manifest, NavGroup } from "./types.js";
+import type { LegacyManifest as Manifest, NavGroup } from "./types.js";
 interface Ctx {
     client: MarketplaceClient;
     registry: Registry;

@@ -4,7 +4,7 @@
  */
 import type { MarketplaceClient } from "./client.js";
 import type { Registry } from "./registry.js";
-import type { Manifest } from "./types.js";
+import type { LegacyManifest as Manifest } from "./types.js";
 /** What the host hands each addon at registration time. */
 export interface AddonAPI {
     /** The installation's manifest (including merged settings). */

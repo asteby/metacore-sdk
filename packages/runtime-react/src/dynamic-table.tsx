@@ -569,7 +569,13 @@ export function DynamicTable({
 
     const columns = useMemo(() => {
         if (!metadata) return []
-        const baseColumns = getDynamicColumns(metadata, handleInternalAction, t, i18n.language, columnFilterConfigs)
+        // Row-action column only renders per-row actions. Table-level placements
+        // ("table"/"create") are surfaced by <ModelActionToolbar> at the page
+        // level, so strip them here to avoid a meaningless per-row button.
+        const rowMetadata = metadata.actions?.some((a) => a.placement === 'table' || a.placement === 'create')
+            ? { ...metadata, actions: metadata.actions.filter((a) => !a.placement || a.placement === 'row') }
+            : metadata
+        const baseColumns = getDynamicColumns(rowMetadata, handleInternalAction, t, i18n.language, columnFilterConfigs)
         const filteredBase = baseColumns.filter((col: ColumnDef<any>) => !hiddenColumns.includes(col.id as string))
         const actionsCol = filteredBase.find((c: ColumnDef<any>) => c.id === 'actions')
         const otherCols = filteredBase.filter((c: ColumnDef<any>) => c.id !== 'actions')

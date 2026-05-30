@@ -3,7 +3,7 @@
  * Mirrors the REST surface every kernel-consuming app exposes under
  * `/api/metacore/*`. Swap the `fetcher` to run against any host or a mock.
  */
-import type { Installation, Manifest, NavGroup } from "./types.js";
+import type { LegacyManifest as Manifest, Installation, NavGroup } from "./types.js";
 export interface Fetcher {
     <T>(path: string, init?: RequestInit): Promise<T>;
 }

@@ -31,7 +31,9 @@ export class Registry {
     registerSlot(c) {
         const list = this.slots.get(c.name) ?? [];
         list.push(c);
-        list.sort((a, b) => (a.priority ?? 0) - (b.priority ?? 0));
+        // Higher priority renders first — canonical across SDK and runtime-react.
+        // See docs/slot-priority.md.
+        list.sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
         this.slots.set(c.name, list);
         this.emit({ type: "slot", contribution: c });
     }

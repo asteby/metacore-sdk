@@ -1,11 +1,24 @@
 /**
- * Mirror of pkg/manifest/manifest.go — AUTO-GENERATED via tygo.
- * Re-generate with: pnpm codegen (runs `go run github.com/gzuidhof/tygo generate`).
- * Do NOT hand-edit the Manifest types below; edit manifest.go and regenerate.
+ * Manifest types for the metacore SDK.
+ *
+ * The CANONICAL contract is Module Contract v3 — the SDK toolchain emits v3
+ * manifests (`apiVersion: "asteby.com/v3"`) and the types below re-export the
+ * tygo-generated v3 shapes from ./generated/manifest-v3.ts. Re-generate the
+ * generated files with: pnpm codegen (runs `tygo generate`). Do NOT hand-edit
+ * the generated files — edit the kernel's manifest/v3/types.go and regenerate.
+ *
+ * The legacy v2 types remain available as `Legacy*` aliases (and under their
+ * original names via ./generated/manifest) so consumers that still reference
+ * the v2 shape keep type-checking during the migration window. The kernel
+ * dual-reads v2 for backwards compatibility.
  */
+import "./generated/manifest-v3";
 import "./generated/manifest";
-export { APIVersion as METACORE_API_VERSION } from "./generated/manifest";
-export type { Manifest, Module, NavGroup, NavItem, FrontendSpec, BackendSpec, Capability, Permission, SettingDef, Option, ToolDef, ToolInputParam, ActionDef, ActionTrigger, FieldDef, HookDef, HookTarget, ModelExtension, ModelDefinition, ColumnDef, RelationDef, ValidationRule, Signature, } from "./generated/manifest";
+export { APIVersion as METACORE_API_VERSION } from "./generated/manifest-v3";
+export type { Manifest, Metadata, MetadataLocale, Icon, Compatibility, Requirement, Tenancy, Capability, Model, Column, Index, ForeignKey, Reference, ModelExtension, Contributions, NavGroup, NavItem, SlotContribution as ManifestSlotContribution, Action, ActionField, FieldOption, FieldValidation, Tool, Subscription, Handler, ExtensionPoints, PublishedEvent, PublishedSlot, Lifecycle, UpgradeStep, I18n, I18nBundle, RBAC, Role, PermissionDef, Setting, SettingOption, Billing, MeteredEvent, Preset, PresetAddon, Theme, ConnectorPack, ConnectorProvider, Signature, Frontend, } from "./generated/manifest-v3";
+export type { Module, FrontendSpec, BackendSpec, Permission, SettingDef, Option, ToolDef, ToolInputParam, ActionDef, ActionTrigger, FieldDef, HookDef, HookTarget, ModelDefinition, RelationDef, ColumnDef, ValidationRule, } from "./generated/manifest";
+export type { Manifest as LegacyManifest, Capability as LegacyCapability, NavGroup as LegacyNavGroup, NavItem as LegacyNavItem, ModelExtension as LegacyModelExtension, Signature as LegacySignature, MetadataLocale as LegacyMetadataLocale, } from "./generated/manifest";
+export { APIVersion as METACORE_API_VERSION_V2 } from "./generated/manifest";
 /**
  * AddonLayout selects how the host shell wraps the federated addon when it
  * mounts. Default (undefined / "shell") keeps the legacy behaviour: the addon
@@ -19,31 +32,12 @@ export type { Manifest, Module, NavGroup, NavItem, FrontendSpec, BackendSpec, Ca
  *                 POS, kitchen-display, signage and any other addon that
  *                 owns the whole screen.
  *
- * Mirrors `manifest.FrontendSpec.Layout` (kernel ≥ TBD). Kept additive on the
- * TS side via declaration-merging extension of the auto-generated tygo type so
- * the new field is available to consumers ahead of the Go change landing in
- * the SDK's regen pipeline.
+ * Mirrors `v3.Frontend.layout`. The v3 `Frontend` interface already carries an
+ * optional `layout: string` field; this union narrows the accepted values for
+ * SDK consumers.
  */
 export type AddonLayout = "shell" | "immersive";
-/**
- * Augment the generated `FrontendSpec` so `manifest.frontend?.layout` is
- * visible to consumers ahead of tygo regeneration. Declaration merging is
- * purely additive: the regenerated interface remains the source of truth,
- * this block only contributes the optional `layout` field. When the
- * kernel-side change lands and tygo regenerates the file with `Layout
- * string`, this augmentation becomes redundant but stays in sync because the
- * field is optional and string-typed.
- */
-declare module "./generated/manifest" {
-    interface FrontendSpec {
-        /**
-         * Layout selects how the host shell renders the addon entry. See
-         * {@link AddonLayout}. `undefined` === `"shell"` (legacy default).
-         */
-        layout?: AddonLayout;
-    }
-}
-export type CapabilityKind = "db:read" | "db:write" | "http:fetch" | "event:emit" | "event:subscribe";
+export type CapabilityKind = "db:read" | "db:write" | "http:fetch" | "event:emit" | "event:subscribe" | "cron:register" | "queue:produce" | "queue:consume" | "file-storage:write" | "secrets:read" | "time:wallclock";
 export interface Installation {
     id: string;
     organization_id: string;
