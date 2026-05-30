@@ -43,6 +43,18 @@ export interface AddonLoaderProps {
     children?: React.ReactNode
 }
 
+interface FederationContainer {
+    init: (shareScope: unknown) => Promise<void>
+    get: (module: string) => Promise<() => any>
+}
+
+// Runtime dynamic import of an external URL. Wrapped in `new Function` so no
+// build tool (tsc here, Vite in the consuming host) tries to statically
+// analyse or rewrite the import — it stays a genuine runtime ESM fetch.
+const importModule = new Function('u', 'return import(u)') as (
+    u: string,
+) => Promise<Record<string, unknown>>
+
 const loadedScripts = new Map<string, Promise<void>>()
 
 function loadScript(url: string, scope: string): Promise<void> {
@@ -62,19 +74,53 @@ function loadScript(url: string, scope: string): Promise<void> {
     return promise
 }
 
-interface FederationContainer {
-    init: (shareScope: unknown) => Promise<void>
-    get: (module: string) => Promise<() => any>
+const esmContainers = new Map<string, Promise<FederationContainer | undefined>>()
+
+// Resolve a federation container for the remote. Vite/@originjs remotes built
+// with `format:"esm"` (our standard) are ES modules that top-level `import`
+// their preload helper and export `{ init, get }` — they MUST be loaded as a
+// module (a classic <script> throws "Cannot use import statement outside a
+// module"), so we dynamic-import them and use the module namespace as the
+// container. Legacy "var"/window remotes (which assign `window[scope]`) are
+// still supported via the classic <script> fallback.
+async function resolveContainer(scope: string, url: string): Promise<FederationContainer | undefined> {
+    const key = `${scope}::${url}`
+    const cached = esmContainers.get(key)
+    if (cached) return cached
+    const p = (async () => {
+        try {
+            const mod = await importModule(url)
+            if (mod && typeof mod.init === 'function' && typeof mod.get === 'function') {
+                return mod as unknown as FederationContainer
+            }
+        } catch {
+            // Not an importable module (legacy var-format remote) — fall back.
+        }
+        await loadScript(url, scope)
+        return (window as any)[scope] as FederationContainer | undefined
+    })()
+    esmContainers.set(key, p)
+    p.catch(() => esmContainers.delete(key))
+    return p
 }
 
-async function loadRemote(scope: string, module: string) {
+async function loadRemote(scope: string, url: string, module: string) {
     if (typeof window.__webpack_init_sharing__ === 'function') {
         await window.__webpack_init_sharing__('default')
     }
-    const container = window[scope] as FederationContainer | undefined
-    if (!container) throw new Error(`Addon container "${scope}" not found on window`)
-    if (typeof container.init === 'function' && window.__webpack_share_scopes__) {
-        await container.init(window.__webpack_share_scopes__.default)
+    const container = await resolveContainer(scope, url)
+    if (!container) {
+        throw new Error(`Addon container "${scope}" not found (neither ESM export nor window[scope])`)
+    }
+    if (typeof container.init === 'function') {
+        const shareScope =
+            window.__webpack_share_scopes__?.default ??
+            ((window as any).__METACORE_SHARE_SCOPE__ ??= {})
+        try {
+            await container.init(shareScope)
+        } catch {
+            // Container already initialized (re-entrant load) — safe to ignore.
+        }
     }
     const factory = await container.get(module)
     return factory()
@@ -105,9 +151,7 @@ export function AddonLoader({
         let cancelled = false
         ;(async () => {
             try {
-                await loadScript(url, scope)
-                if (cancelled) return
-                const mod = await loadRemote(scope, module)
+                const mod = await loadRemote(scope, url, module)
                 if (cancelled) return
                 if (!didRegister.current && typeof mod?.register === 'function') {
                     didRegister.current = true
