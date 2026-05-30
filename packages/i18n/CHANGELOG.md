@@ -1,5 +1,12 @@
 # @asteby/metacore-i18n
 
+## 7.0.0
+
+### Patch Changes
+
+- Updated dependencies [3b40ed5]
+  - @asteby/metacore-ui@2.1.0
+
 ## 6.0.0
 
 ### Patch Changes
