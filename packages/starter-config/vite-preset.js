@@ -27,12 +27,15 @@ const metacoreOptimizeDeps = {
 const METACORE_FEDERATION_SINGLETONS = [
   "react",
   "react-dom",
-  "@asteby/metacore-runtime-react",
-  "@asteby/metacore-theme",
-  "@asteby/metacore-app-providers",
-  "@asteby/metacore-auth",
+  "react/jsx-runtime",
+  "react-i18next",
+  "i18next",
   "@asteby/metacore-ui",
-  "@asteby/metacore-sdk"
+  "@asteby/metacore-runtime-react",
+  "@asteby/metacore-sdk",
+  "@asteby/metacore-app-providers",
+  "@asteby/metacore-theme",
+  "@asteby/metacore-auth"
 ];
 function metacoreFederationShared(opts) {
   const {
@@ -46,13 +49,13 @@ function metacoreFederationShared(opts) {
   } = opts;
   const shared = {};
   for (const name of METACORE_FEDERATION_SINGLETONS) {
-    shared[name] = { singleton: true, requiredVersion: false };
+    shared[name] = { singleton: true };
   }
   for (const name of extras) {
-    shared[name] ??= { singleton: true, requiredVersion: false };
+    shared[name] ??= { singleton: true };
   }
   for (const [name, cfg] of Object.entries(extra)) {
-    shared[name] = { singleton: true, requiredVersion: false, ...cfg };
+    shared[name] = { singleton: true, ...cfg };
   }
   for (const [name, override] of Object.entries(overrides)) {
     shared[name] = { ...shared[name] ?? {}, ...override };

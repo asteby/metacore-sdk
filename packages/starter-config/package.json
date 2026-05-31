@@ -35,6 +35,9 @@
     },
     "./package.json": "./package.json"
   },
+  "dependencies": {
+    "@module-federation/vite": "^1.16.2"
+  },
   "peerDependencies": {
     "@tailwindcss/vite": ">=4",
     "@tanstack/eslint-plugin-query": ">=5",

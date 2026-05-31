@@ -57,28 +57,39 @@ export const metacoreOptimizeDeps: DepOptimizationOptions = {
 
 /**
  * Lista canónica de paquetes que TODA app federada (host + addons) debe declarar
- * como `singleton: true` en `@originjs/vite-plugin-federation`. Sin esto, cada
- * remote bundlea su propia copia y se rompen los contextos compartidos
- * (Auth, Theme, Query, Router) además del clásico "Invalid hook call".
+ * como `singleton: true` en `@module-federation/vite`. Sin esto, cada remote
+ * bundlea su propia copia y se rompen los contextos compartidos (Auth, Theme,
+ * Query, Router) además del crash de React `useState`-null (hooks contra una
+ * segunda copia de React).
+ *
+ * Este contrato DEBE matchear exactamente el `shared` del addon (asteby-hq/addons
+ * PR #84) y el del host ops. Orden y miembros idénticos.
  *
  * Reasoning paquete por paquete: `docs/audits/2026-05-04-mf-shared-deps.md`.
+ *
+ * GOTCHA build-time: `@module-federation/vite` prebuildea y debe RESOLVER cada
+ * bare specifier compartido en build-time. Cualquier paquete en esta lista debe
+ * estar instalado como (dev)dependency del package que buildea (host o addon).
+ * El addon #84 tuvo que agregar `i18next`/`react-i18next` como devDeps por esto.
  */
 export const METACORE_FEDERATION_SINGLETONS = [
   'react',
   'react-dom',
-  '@asteby/metacore-runtime-react',
-  '@asteby/metacore-theme',
-  '@asteby/metacore-app-providers',
-  '@asteby/metacore-auth',
+  'react/jsx-runtime',
+  'react-i18next',
+  'i18next',
   '@asteby/metacore-ui',
+  '@asteby/metacore-runtime-react',
   '@asteby/metacore-sdk',
+  '@asteby/metacore-app-providers',
+  '@asteby/metacore-theme',
+  '@asteby/metacore-auth',
 ] as const
 
 /**
  * Forma estructural compatible con la entry de `shared` de
- * `@originjs/vite-plugin-federation`. Se replica acá para evitar un peer dep
- * obligatorio sobre el plugin: la helper sólo arma el objeto, el caller decide
- * si lo pasa a `federation()` o a otra implementación de Module Federation.
+ * `@module-federation/vite`. La helper sólo arma el objeto; el caller lo pasa a
+ * `federation()`.
  */
 export interface MetacoreFederationShareConfig {
   singleton?: boolean
@@ -87,7 +98,6 @@ export interface MetacoreFederationShareConfig {
   version?: string
   eager?: boolean
   shareScope?: string
-  packagePath?: string
 }
 
 export interface MetacoreFederationOptions {
@@ -107,12 +117,12 @@ export interface MetacoreFederationOptions {
   /** Módulos expuestos al host. Aplica al lado addon: `{ './plugin': './src/plugin.tsx' }`. */
   exposes?: Record<string, string>
   /**
-   * Paquetes adicionales a marcar como `singleton: true` con `requiredVersion: false`,
-   * por encima de los obligatorios. Para extras opcionales del ecosistema
-   * (`@tanstack/react-query`, `i18next`, `zustand`, `sonner`, ...).
+   * Paquetes adicionales a marcar como `singleton: true`, por encima de los
+   * obligatorios. Para extras opcionales del ecosistema
+   * (`@tanstack/react-query`, `zustand`, `sonner`, ...).
    *
-   * Forma simple — solo nombres, todos heredan `{ singleton: true, requiredVersion: false }`:
-   *   `extras: ['@tanstack/react-query', 'i18next']`
+   * Forma simple — solo nombres, todos heredan `{ singleton: true }`:
+   *   `extras: ['@tanstack/react-query', 'zustand']`
    */
   extras?: string[]
   /**
@@ -142,26 +152,49 @@ export interface MetacoreFederationConfig {
 }
 
 /**
- * Devuelve la config de Module Federation con los singletons obligatorios del
- * ecosistema metacore ya cableados. El resultado es un objeto plano que se pasa
- * directamente al plugin (`@originjs/vite-plugin-federation`).
+ * Opciones del federation plugin de `@module-federation/vite`. Esta es la forma
+ * que devuelve {@link metacoreFederationShared} y que se pasa directo a
+ * `federation(...)`. Tipado mínimo local para evitar un peer dep duro sobre el
+ * plugin (la firma real acepta más campos opcionales que acá no usamos).
+ */
+export interface ModuleFederationViteOptions {
+  name: string
+  filename: string
+  remotes?: Record<string, string>
+  exposes?: Record<string, string>
+  shared: Record<string, MetacoreFederationShareConfig>
+}
+
+/**
+ * Devuelve la config de `@module-federation/vite` con los singletons
+ * obligatorios del ecosistema metacore ya cableados. El resultado es un objeto
+ * plano que se pasa directo al plugin oficial `federation()`.
  *
- * Uso típico — host:
+ * Migración: reemplaza al broken `@originjs/vite-plugin-federation`. El plugin
+ * oficial resuelve bien los chunks (remoteEntry.js en la RAÍZ de `dist/`, sin
+ * placeholder `__v__css__`, sin doble `assets/`) y respeta el contrato de
+ * singletons (el remote usa el React del HOST en vez de bundlear el suyo → fixea
+ * el crash de `useState`-null).
+ *
+ * GOTCHA build-time: `@module-federation/vite` prebuildea y debe RESOLVER cada
+ * bare specifier de `shared` en build-time. Por eso TODO paquete del map
+ * (incluyendo `i18next`/`react-i18next`) debe ser (dev)dependency instalada del
+ * package que buildea.
+ *
+ * Uso típico — host (remotes vacíos: se registran en runtime vía
+ * `registerRemotes` del AddonLoader de runtime-react):
  * ```ts
- * import federation from '@originjs/vite-plugin-federation'
+ * import { federation } from '@module-federation/vite'
  * import { metacoreFederationShared } from '@asteby/metacore-starter-config/vite'
  *
- * federation(metacoreFederationShared({
- *   host: 'metacore_ops',
- *   apps: { metacore_tickets: 'https://addons.example.com/tickets/remoteEntry.js' },
- * }))
+ * federation(metacoreFederationShared({ host: 'metacore_ops' }))
  * ```
  *
- * Uso típico — addon:
+ * Uso típico — addon (remote):
  * ```ts
  * federation(metacoreFederationShared({
  *   host: 'metacore_tickets',
- *   exposes: { './plugin': './src/plugin.tsx' },
+ *   exposes: { './register': './src/register.tsx' },
  * }))
  * ```
  *
@@ -173,21 +206,15 @@ export interface MetacoreFederationConfig {
  * })
  * ```
  *
- * Los singletons obligatorios (`METACORE_FEDERATION_SINGLETONS`) se declaran
- * con `singleton: true, requiredVersion: false`:
- *
- *   - `singleton: true` — UNA copia compartida entre host y addon. Sin esto
- *     cada remote bundlea su propio React y se rompen los hooks ("Invalid hook
- *     call") además de los contextos (Auth, Theme, Query, Router).
- *   - `requiredVersion: false` — evita un 404 en runtime cuando addons quedan
- *     rezagados respecto al host. Module Federation no exige match exacto; el
- *     host gana al ser el primero en init the share scope, y los addons
- *     consumen su versión. Cuando los packages estabilicen su contrato
- *     federado pasamos a `^X` por package vía `overrides`.
+ * Los singletons obligatorios (`METACORE_FEDERATION_SINGLETONS`) se declaran con
+ * `{ singleton: true }` — UNA copia compartida entre host y addon. Sin esto cada
+ * remote bundlea su propio React y crashea en `useState` (hooks contra una
+ * segunda copia de React) además de romper los contextos (Auth, Theme, Query,
+ * Router). Matchea exactamente el `shared` del addon #84 y del host ops.
  */
 export function metacoreFederationShared(
   opts: MetacoreFederationOptions
-): MetacoreFederationConfig {
+): ModuleFederationViteOptions {
   const {
     host,
     apps,
@@ -199,24 +226,21 @@ export function metacoreFederationShared(
   } = opts
 
   const shared: Record<string, MetacoreFederationShareConfig> = {}
-  // Defaults canónicos: cada paquete del ecosistema se declara `singleton:true`
-  // para garantizar UNA sola copia entre host y addon — evita el clásico "Invalid
-  // hook call" cuando React se duplica, y mantiene contextos compartidos (Auth,
+  // Defaults canónicos: cada paquete del ecosistema se declara `{ singleton:true }`
+  // para garantizar UNA sola copia entre host y addon — fixea el crash de
+  // `useState`-null (React duplicado) y mantiene contextos compartidos (Auth,
   // Theme, Query, Router) entre módulos federados.
-  // `requiredVersion:false` evita un 404 en runtime cuando un addon queda
-  // rezagado de versiones del host: Module Federation no exige match exacto y el
-  // host gana al ser el primero en init the share scope.
   for (const name of METACORE_FEDERATION_SINGLETONS) {
-    shared[name] = { singleton: true, requiredVersion: false }
+    shared[name] = { singleton: true }
   }
-  // `extras` (string[]) — paquetes extra que solo necesitan los defaults.
+  // `extras` (string[]) — paquetes extra que solo necesitan el default singleton.
   for (const name of extras) {
-    shared[name] ??= { singleton: true, requiredVersion: false }
+    shared[name] ??= { singleton: true }
   }
-  // `extra` (Record) — paquetes nuevos con config explícita. Es la forma canónica
-  // cuando un caller quiere algo distinto al default (p.ej. forzar requiredVersion).
+  // `extra` (Record) — paquetes nuevos con config explícita. Forma canónica
+  // cuando un caller quiere algo distinto al default.
   for (const [name, cfg] of Object.entries(extra)) {
-    shared[name] = { singleton: true, requiredVersion: false, ...cfg }
+    shared[name] = { singleton: true, ...cfg }
   }
   // `overrides` — ajusta UN paquete existente sin alterar el resto. Se aplica
   // al final para que tenga la última palabra sobre defaults y `extra`.
@@ -227,6 +251,8 @@ export function metacoreFederationShared(
   return {
     name: host,
     filename,
+    // Host: remotes vacío por default (se registran dinámicamente en runtime).
+    // Si el caller pasa `apps`, se incluyen estáticamente.
     ...(apps ? { remotes: { ...apps } } : {}),
     ...(exposes ? { exposes: { ...exposes } } : {}),
     shared,
