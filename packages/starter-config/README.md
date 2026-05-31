@@ -98,55 +98,64 @@ export default defineConfig(
 ### Module Federation singletons (`metacoreFederationShared`)
 
 > `metacoreFederationShared()` is the **canonical way** to configure Module
-> Federation for any metacore host or addon. Authoring a `shared:` block by
-> hand against `@originjs/vite-plugin-federation`'s public `SharedConfig`
-> type breaks on plugin >= 1.4 (the `singleton` field was dropped from the
-> type, even though the runtime still honours it). See
-> [`docs/federation.md`](../../docs/federation.md) for the full rationale
-> and the escape hatch for the rare case where the helper does not fit.
+> Federation for any metacore host or addon. It now targets the official
+> [`@module-federation/vite`](https://module-federation.io) plugin (the broken
+> `@originjs/vite-plugin-federation` is gone — it leaked `__v__css__`
+> placeholders, double-`assets/` chunk refs and never wired the host's shared
+> React, crashing addons on `useState`). The helper emits a `federation()`
+> config object with the canonical shared singletons pre-wired.
 
 Toda app federada (host o addon) debe compartir las mismas instancias de React,
-de los providers (`@asteby/metacore-{runtime-react,theme,auth,ui}`) y del registry
-del SDK (`@asteby/metacore-sdk`). Caso contrario, los addons terminan con su propia
+de los providers (`@asteby/metacore-{runtime-react,theme,auth,ui,app-providers}`),
+de i18n (`react-i18next`, `i18next`) y del registry del SDK
+(`@asteby/metacore-sdk`). Caso contrario, los addons terminan con su propia
 copia de React y rompen `useApi()`, `useTheme()`, `useAuth()`, los Radix portals,
-el `Registry`, etc.
+el `Registry`, etc. (el clásico crash de `useState`-null).
 
-`metacoreFederationShared({ host, apps })` devuelve un bloque listo para pasar
-a `@originjs/vite-plugin-federation` con los **7 singletons obligatorios** ya
-cableados (`singleton: true, requiredVersion: false`):
+`metacoreFederationShared({ host })` (host) o
+`metacoreFederationShared({ host, exposes })` (addon) devuelve un bloque listo
+para pasar a `federation()` de `@module-federation/vite`, con los **11
+singletons obligatorios** ya cableados (`{ singleton: true }`):
 
 - `react`
 - `react-dom`
+- `react/jsx-runtime`
+- `react-i18next`
+- `i18next`
+- `@asteby/metacore-ui`
 - `@asteby/metacore-runtime-react`
+- `@asteby/metacore-sdk`
+- `@asteby/metacore-app-providers`
 - `@asteby/metacore-theme`
 - `@asteby/metacore-auth`
-- `@asteby/metacore-ui`
-- `@asteby/metacore-sdk`
+
+> **Gotcha build-time:** `@module-federation/vite` resuelve cada bare specifier
+> de `shared` en build-time, así que TODO paquete del map (incluyendo
+> `i18next`/`react-i18next`) debe estar instalado como (dev)dependency del
+> package que buildea.
 
 #### Host
 
+Los remotes se registran **dinámicamente en runtime** (vía `registerRemotes` del
+`AddonLoader` de `@asteby/metacore-runtime-react`), así que el host no declara
+`apps` — sólo su `name` y el `shared`:
+
 ```ts
-import federation from '@originjs/vite-plugin-federation'
+import { federation } from '@module-federation/vite'
 import { metacoreFederationShared } from '@asteby/metacore-starter-config/vite'
 
-federation(
-  metacoreFederationShared({
-    host: 'metacore_ops',
-    apps: {
-      metacore_tickets: 'https://addons.example.com/tickets/remoteEntry.js',
-      metacore_orders:  'https://addons.example.com/orders/remoteEntry.js',
-    },
-  }),
-)
+federation(metacoreFederationShared({ host: 'metacore_ops' }))
 ```
 
 #### Addon
 
 ```ts
+import { federation } from '@module-federation/vite'
+
 federation(
   metacoreFederationShared({
     host: 'metacore_tickets', // == containerName(manifest) del SDK
-    exposes: { './plugin': './src/plugin.tsx' },
+    exposes: { './register': './src/register.tsx' },
   }),
 )
 ```
@@ -163,11 +172,11 @@ federation(
 | `overrides` | `Record<string, MetacoreFederationShareConfig>`   | `{}`               | Forzar `requiredVersion: '^X'` u otro flag por package. Se mergea encima de la entry base. |
 
 La constante exportada `METACORE_FEDERATION_SINGLETONS` está disponible para tests
-o validaciones custom (ej. asegurarse de que un addon migrado declara las 7).
+o validaciones custom (ej. asegurarse de que un addon migrado declara las 11).
 
-> Peer suelto: `@originjs/vite-plugin-federation` debe estar instalado en la app
-> consumidora; no es peer dep obligatorio de este paquete porque la helper sólo
-> emite el objeto y no instancia el plugin.
+> `@module-federation/vite` es dependency de este paquete; la app consumidora lo
+> importa como `import { federation } from '@module-federation/vite'` e instancia
+> el plugin con el objeto que devuelve la helper.
 
 ### Pre-bundling linked SDK packages
 
