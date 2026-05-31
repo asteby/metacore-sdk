@@ -16,6 +16,8 @@
     "vite-preset.ts",
     "vite-preset.js",
     "vite-preset.d.ts",
+    "pwa-register-stub.js",
+    "pwa-register-stub.d.ts",
     "eslint-preset.js",
     "fonts.js",
     "fonts.d.ts",
@@ -27,6 +29,10 @@
     "./vite": {
       "types": "./vite-preset.d.ts",
       "import": "./vite-preset.js"
+    },
+    "./pwa-register-stub": {
+      "types": "./pwa-register-stub.d.ts",
+      "import": "./pwa-register-stub.js"
     },
     "./eslint": "./eslint-preset.js",
     "./fonts": {

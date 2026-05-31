@@ -11,6 +11,7 @@
  *     router: true,
  *   })
  */
+import { fileURLToPath } from 'node:url'
 import type { UserConfig, PluginOption, DepOptimizationOptions } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
@@ -257,6 +258,50 @@ export function metacoreFederationShared(
     ...(exposes ? { exposes: { ...exposes } } : {}),
     shared,
   }
+}
+
+/**
+ * `resolve.alias` entries that EVERY federated addon must inherit.
+ *
+ * Today this is a single alias: `virtual:pwa-register/react` → a no-op stub
+ * shipped inside this package (`./pwa-register-stub.js`).
+ *
+ * Why: `@asteby/metacore-app-providers` (consumed transitively by most addons,
+ * e.g. via `useOrgConfig`) imports `virtual:pwa-register/react` — the module
+ * `vite-plugin-pwa` auto-generates. That virtual module ONLY exists when an app
+ * actually runs `vite-plugin-pwa`. A FEDERATED addon bundle does not, so the
+ * bare `virtual:` specifier resolves to nothing at runtime (`ERR_FAILED` / CORS
+ * on the `virtual:` specifier), which tears down the whole addon module and
+ * silently drops the federated `register()` — the host then falls back to its
+ * generic declarative modal. Marking it `external` is the same trap: it stays
+ * unresolved in the browser.
+ *
+ * The addon is NEVER the PWA owner (the HOST shell registers the service
+ * worker), so aliasing it to a no-op stub is correct AND keeps every addon
+ * from copy-pasting its own stub + alias. The stub path is resolved relative to
+ * THIS module via `import.meta.url`, so it works for the published package
+ * (i.e. it does not depend on any path in the consumer's repo).
+ *
+ * Usage (addon `vite.config.ts`):
+ * ```ts
+ * import { defineConfig } from 'vite'
+ * import { metacoreFederationAliases } from '@asteby/metacore-starter-config/vite'
+ *
+ * export default defineConfig({
+ *   resolve: {
+ *     alias: {
+ *       ...metacoreFederationAliases,
+ *       // ...the addon's own aliases (e.g. '@')
+ *     },
+ *   },
+ *   // ...react(), federation(metacoreFederationShared(...)), etc.
+ * })
+ * ```
+ */
+export const metacoreFederationAliases: Record<string, string> = {
+  'virtual:pwa-register/react': fileURLToPath(
+    new URL('./pwa-register-stub.js', import.meta.url)
+  ),
 }
 
 export interface MetacorePwaOptions {
