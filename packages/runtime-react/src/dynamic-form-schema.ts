@@ -119,6 +119,9 @@ export function resolveWidget(field: ActionFieldDef): string {
     switch (field.type) {
         case 'textarea': return 'textarea'
         case 'select': return 'select'
+        // Async searchable single-select against /api/options/<ref>. The
+        // declarative replacement for typing a raw FK UUID.
+        case 'dynamic_select': return 'dynamic_select'
         case 'boolean': return 'switch'
         case 'number': return 'number'
         case 'date': return 'date'
