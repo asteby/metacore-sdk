@@ -1,22 +1,24 @@
-// Minimal federated-module addon loader. Injects a remoteEntry.js <script>,
-// waits for the `window[scope]` container to initialize, then calls the
-// addon's `register(api)` export with the AddonAPI injected by the host.
+// Federated-module addon loader, built on the official Module Federation
+// runtime (`@module-federation/runtime`). Per addon it registers the remote's
+// `remoteEntry.js` as an ESM container, loads the exposed `./register` module,
+// and calls `register(api)` with the AddonAPI injected by the host.
+//
+// Why @module-federation/runtime (not the old manual init/get machinery):
+// the host's Vite build uses `@module-federation/vite`'s `federation()` plugin,
+// which auto-initialises the shared scope at host boot. `registerRemotes` +
+// `loadRemote` then transparently wire the remote into that already-initialised
+// share scope — so the remote consumes the HOST's React/SDK singletons instead
+// of bundling its own. That's the whole point: it fixes the `useState`-null
+// crash WITHOUT this loader ever touching a share scope manually.
 import { useEffect, useRef, useState } from 'react'
+import { registerRemotes, loadRemote } from '@module-federation/runtime'
 import type { AddonAPI, AddonLayout } from '@asteby/metacore-sdk'
 import { useDeclareAddonLayout } from './addon-layout-context'
-
-declare global {
-    interface Window {
-        [key: string]: any
-        __webpack_init_sharing__?: (scope: string) => Promise<void>
-        __webpack_share_scopes__?: Record<string, unknown>
-    }
-}
 
 export interface AddonLoaderProps {
     /** Unique key of the addon — maps to the federation container name. */
     scope: string
-    /** URL of the addon's remoteEntry.js bundle. */
+    /** URL of the addon's remoteEntry.js bundle (may carry a `?v=` cache-bust). */
     url: string
     /** Exposed module to import from the remote (e.g. './register'). */
     module?: string
@@ -43,87 +45,47 @@ export interface AddonLoaderProps {
     children?: React.ReactNode
 }
 
-interface FederationContainer {
-    init: (shareScope: unknown) => Promise<void>
-    get: (module: string) => Promise<() => any>
+/** Shape of the exposed `./register` module. */
+interface AddonRegisterModule {
+    register?: (api: AddonAPI) => void | Promise<void>
+    default?: (api: AddonAPI) => void | Promise<void>
 }
 
-// Runtime dynamic import of an external URL. Wrapped in `new Function` so no
-// build tool (tsc here, Vite in the consuming host) tries to statically
-// analyse or rewrite the import — it stays a genuine runtime ESM fetch.
-const importModule = new Function('u', 'return import(u)') as (
-    u: string,
-) => Promise<Record<string, unknown>>
+// `registerRemotes` is additive + idempotent across re-mounts; we still track
+// which scopes we've registered to avoid redundant `force` churn (each `force`
+// re-register wipes that remote's module cache and logs a runtime warning).
+const registered = new Set<string>()
 
-const loadedScripts = new Map<string, Promise<void>>()
-
-function loadScript(url: string, scope: string): Promise<void> {
-    const key = `${scope}::${url}`
-    const existing = loadedScripts.get(key)
-    if (existing) return existing
-    const promise = new Promise<void>((resolve, reject) => {
-        const el = document.createElement('script')
-        el.src = url
-        el.type = 'text/javascript'
-        el.async = true
-        el.onload = () => resolve()
-        el.onerror = () => reject(new Error(`Failed to load addon script: ${url}`))
-        document.head.appendChild(el)
-    })
-    loadedScripts.set(key, promise)
-    return promise
+// Derive the `loadRemote` id from the scope + exposed module name. MF resolves
+// `"<remoteName>/<expose>"` — e.g. `metacore_tickets/register` for the
+// `"./register"` expose. We strip the leading `./` of the expose path.
+function remoteId(scope: string, module: string): string {
+    const expose = module.replace(/^\.\//, '')
+    return `${scope}/${expose}`
 }
 
-const esmContainers = new Map<string, Promise<FederationContainer | undefined>>()
-
-// Resolve a federation container for the remote. Vite/@originjs remotes built
-// with `format:"esm"` (our standard) are ES modules that top-level `import`
-// their preload helper and export `{ init, get }` — they MUST be loaded as a
-// module (a classic <script> throws "Cannot use import statement outside a
-// module"), so we dynamic-import them and use the module namespace as the
-// container. Legacy "var"/window remotes (which assign `window[scope]`) are
-// still supported via the classic <script> fallback.
-async function resolveContainer(scope: string, url: string): Promise<FederationContainer | undefined> {
-    const key = `${scope}::${url}`
-    const cached = esmContainers.get(key)
-    if (cached) return cached
-    const p = (async () => {
-        try {
-            const mod = await importModule(url)
-            if (mod && typeof mod.init === 'function' && typeof mod.get === 'function') {
-                return mod as unknown as FederationContainer
-            }
-        } catch {
-            // Not an importable module (legacy var-format remote) — fall back.
-        }
-        await loadScript(url, scope)
-        return (window as any)[scope] as FederationContainer | undefined
-    })()
-    esmContainers.set(key, p)
-    p.catch(() => esmContainers.delete(key))
-    return p
-}
-
-async function loadRemote(scope: string, url: string, module: string) {
-    if (typeof window.__webpack_init_sharing__ === 'function') {
-        await window.__webpack_init_sharing__('default')
+async function loadAddon(
+    scope: string,
+    url: string,
+    module: string,
+): Promise<AddonRegisterModule | null> {
+    // Register the remote container as an ES module. `type: 'module'` matches
+    // the `@module-federation/vite` remote (remoteEntry.js is an ESM bundle).
+    // The `url` already carries the `?v=` cache-bust the host computed, so the
+    // browser refetches a fresh remoteEntry when the addon version changes.
+    if (!registered.has(scope)) {
+        registerRemotes(
+            [{ name: scope, entry: url, type: 'module' }],
+            // `force: true` so a re-registration with a new `?v=` URL (addon
+            // hot-swap / version bump) overwrites the stale entry + cache.
+            { force: true },
+        )
+        registered.add(scope)
     }
-    const container = await resolveContainer(scope, url)
-    if (!container) {
-        throw new Error(`Addon container "${scope}" not found (neither ESM export nor window[scope])`)
-    }
-    if (typeof container.init === 'function') {
-        const shareScope =
-            window.__webpack_share_scopes__?.default ??
-            ((window as any).__METACORE_SHARE_SCOPE__ ??= {})
-        try {
-            await container.init(shareScope)
-        } catch {
-            // Container already initialized (re-entrant load) — safe to ignore.
-        }
-    }
-    const factory = await container.get(module)
-    return factory()
+    // loadRemote("<scope>/<expose>") returns the exposed module namespace (or
+    // null if it can't be resolved). No manual share-scope init — the host's
+    // federation runtime already initialised it.
+    return loadRemote<AddonRegisterModule>(remoteId(scope, module))
 }
 
 export function AddonLoader({
@@ -151,25 +113,35 @@ export function AddonLoader({
         let cancelled = false
         ;(async () => {
             try {
-                const mod = await loadRemote(scope, url, module)
+                const mod = await loadAddon(scope, url, module)
                 if (cancelled) return
-                if (!didRegister.current && typeof mod?.register === 'function') {
+                const register = mod?.register ?? mod?.default
+                if (typeof register !== 'function') {
+                    throw new Error(
+                        `Addon "${scope}" module "${module}" has no register() export`,
+                    )
+                }
+                if (!didRegister.current) {
                     didRegister.current = true
-                    await Promise.resolve(mod.register(api))
+                    await Promise.resolve(register(api))
                 }
                 setStatus('ready')
                 onReady?.()
-            } catch (e: any) {
+            } catch (e: unknown) {
                 if (cancelled) return
-                setError(e)
+                const err = e instanceof Error ? e : new Error(String(e))
+                setError(err)
                 setStatus('error')
-                onError?.(e)
+                onError?.(err)
             }
         })()
-        return () => { cancelled = true }
+        return () => {
+            cancelled = true
+        }
     }, [scope, url, module])
 
     if (status === 'loading') return <>{fallback}</>
-    if (status === 'error') return <div className="text-sm text-red-500">Addon load error: {error?.message}</div>
+    if (status === 'error')
+        return <div className="text-sm text-red-500">Addon load error: {error?.message}</div>
     return <>{children}</>
 }

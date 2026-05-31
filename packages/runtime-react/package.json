@@ -24,6 +24,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@module-federation/runtime": "^2.5.0",
     "zod": "^4.3.0"
   },
   "peerDependencies": {

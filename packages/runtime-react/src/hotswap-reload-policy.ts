@@ -44,21 +44,15 @@
 // ## Federation runtime caveat
 //
 // The `"rekey"` strategy re-fetches `remoteEntry.js` with a `?v=<hash8>` query
-// suffix (see {@link withVersionParam}). For the new container to replace the
-// old one, the federation loader **must** `delete window[Container]` before
-// loading the new script — otherwise the cached container object short-
-// circuits the loader and you get `Container already registered` style errors
-// or, worse, the old code silently keeps running. This module exports
-// {@link clearFederationContainer} for that purpose; the host's federation
-// loader should call it from its `onSwap` hook.
-//
-// We deliberately keep the `delete window[Container]` side-effect OUT of this
-// module's default behaviour. Some federation runtimes (vite-plugin-federation
-// in dev, webpack 5 with `runtime: false`) wrap the container in a `Proxy`
-// that mutates internal state on every access; blindly deleting it from
-// here would race against any unmounting consumer that still holds a
-// reference. Hosts that hit `Container already registered` should call
-// `clearFederationContainer(scope)` from `onSwap` as documented below.
+// suffix (see {@link withVersionParam}). With `@module-federation/runtime`, the
+// {@link AddonLoader} re-registers the remote on every rekey remount via
+// `registerRemotes([{ name, entry: <new ?v= url> }], { force: true })`. The
+// `force` flag overwrites the previously registered container AND wipes that
+// remote's loaded-module cache, so the new code takes effect without any manual
+// `window[scope]` deletion — the old `@originjs` requirement to `delete
+// window[Container]` no longer applies. {@link clearFederationContainer} is kept
+// for backward compatibility (legacy hosts may still call it from `onSwap`) but
+// is a no-op under the MF runtime.
 
 import { useMemo, useRef, useState } from 'react'
 import {
@@ -311,30 +305,23 @@ export function withVersionParam(url: string, hash: string | undefined): string 
 }
 
 /**
- * Remove the federation container previously registered on `window[scope]`.
- * Hosts call this from `onSwap` before letting the addon route re-mount
- * so the next `remoteEntry.js` injection creates a fresh container instead
- * of short-circuiting on the cached one.
+ * @deprecated Legacy `@originjs/vite-plugin-federation` helper. Under the
+ * current `@module-federation/runtime` loader ({@link AddonLoader}), container
+ * replacement on hot-swap is handled by `registerRemotes(..., { force: true })`
+ * with the new `?v=` URL — there is no `window[scope]` container to delete.
  *
- * Best-effort: if `window` is undefined (SSR) or the scope was never
- * registered, this is a no-op. Returns `true` if a container was actually
- * removed, `false` otherwise — useful for telemetry.
- *
- * **Caveat:** some federation runtimes wrap the container in a Proxy
- * whose internal state survives `delete`. If you hit `Container already
- * registered` after calling this, the federation runtime is holding the
- * reference internally and the only reliable swap is `"page-reload"`.
+ * Kept for backward compatibility so existing host `onSwap` wiring keeps
+ * compiling. Best-effort: removes a stale `window[scope]` if a legacy
+ * `@originjs` remote left one behind, otherwise a no-op. Returns `true` if a
+ * value was removed, `false` otherwise.
  */
 export function clearFederationContainer(scope: string): boolean {
     if (typeof window === 'undefined') return false
-    if (!(scope in window)) return false
+    if (!(scope in (window as Record<string, unknown>))) return false
     try {
         delete (window as Record<string, unknown>)[scope]
         return true
     } catch {
-        // Some browsers refuse to delete non-configurable globals. Set
-        // to undefined as a fallback so the loader's `if (!window[scope])`
-        // check still triggers a re-inject.
         ;(window as Record<string, unknown>)[scope] = undefined
         return true
     }
