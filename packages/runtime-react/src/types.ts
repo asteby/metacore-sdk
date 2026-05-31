@@ -116,6 +116,7 @@ export type FieldWidget =
     | 'number'
     | 'date'
     | 'select'
+    | 'dynamic_select'
     | 'switch'
 
 export interface ActionFieldDef {

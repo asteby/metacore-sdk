@@ -21,6 +21,7 @@ import {
 import { Plus, Trash2 } from 'lucide-react'
 import type { ActionFieldDef } from './types'
 import { resolveWidget, getItemFields } from './dynamic-form-schema'
+import { DynamicSelectField } from './dynamic-select-field'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 
 export interface DynamicLineItemsProps {
@@ -125,6 +126,11 @@ interface CellRendererProps {
 // a scalar widget).
 function CellRenderer({ field, value, onChange, disabled }: CellRendererProps) {
     const widget = resolveWidget(field)
+    // Async searchable picker per row cell — e.g. the account_id column of a
+    // journal entry's debit/credit lines. Same widget as the flat form.
+    if (widget === 'dynamic_select') {
+        return <DynamicSelectField field={field} value={value} onChange={onChange} />
+    }
     if (widget === 'select' && field.ref) {
         return <RefCell field={field} value={value} onChange={onChange} disabled={disabled} />
     }

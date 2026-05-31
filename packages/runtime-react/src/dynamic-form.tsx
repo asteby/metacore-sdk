@@ -18,9 +18,11 @@ import type { ActionFieldDef } from './types'
 import { buildZodSchema, resolveWidget, isLineItemsField } from './dynamic-form-schema'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { DynamicLineItems } from './dynamic-line-items'
+import { DynamicSelectField } from './dynamic-select-field'
 
 export { buildZodSchema, resolveWidget }
 export { DynamicLineItems } from './dynamic-line-items'
+export { DynamicSelectField } from './dynamic-select-field'
 
 export interface DynamicFormProps {
     fields: ActionFieldDef[]
@@ -123,6 +125,12 @@ function FieldRenderer({ field, value, onChange }: FieldRendererProps) {
         return <DynamicLineItems field={field} value={value} onChange={onChange} />
     }
     const widget = resolveWidget(field)
+    // Async searchable picker (typeahead against /api/options/<ref>?q=…).
+    // Preferred for FK fields with large option sets — no UUID typing, no
+    // dumping every row into a plain <select>.
+    if (widget === 'dynamic_select') {
+        return <DynamicSelectField field={field} value={value} onChange={onChange} />
+    }
     // Ref-driven select: hook into useOptionsResolver so the canonical
     // /api/options/<ref>?field=id endpoint feeds the dropdown. This is
     // the path the kernel auto-derives for FK columns; legacy callers
