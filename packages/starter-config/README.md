@@ -169,6 +169,57 @@ o validaciones custom (ej. asegurarse de que un addon migrado declara las 7).
 > consumidora; no es peer dep obligatorio de este paquete porque la helper sólo
 > emite el objeto y no instancia el plugin.
 
+### Federated addon aliases (`metacoreFederationAliases`)
+
+> Every federated addon must spread `metacoreFederationAliases` into its
+> `resolve.alias`. It is the **canonical, inherited** replacement for the
+> per-addon `virtual:pwa-register/react` stub.
+
+`@asteby/metacore-app-providers` (consumed transitively by most addons, e.g. via
+`useOrgConfig`) imports `virtual:pwa-register/react` — the module
+`vite-plugin-pwa` auto-generates. That virtual module **only exists when an app
+runs `vite-plugin-pwa`**. A federated addon bundle does not, so the bare
+`virtual:` specifier resolves to nothing at runtime (`ERR_FAILED` / CORS on the
+`virtual:` specifier), which tears down the whole addon module and silently
+drops the federated `register()` — the host then falls back to its generic
+declarative modal. Marking it `external` is the same trap: it stays unresolved
+in the browser.
+
+The addon is **never** the PWA owner (the host shell registers the service
+worker), so `metacoreFederationAliases` aliases `virtual:pwa-register/react` to
+a no-op stub shipped inside this package (`pwa-register-stub.js`, with the same
+`useRegisterSW` / `registerSW` surface as vite-plugin-pwa). The stub path is
+resolved relative to the published package via `import.meta.url`, so addons do
+**not** carry a local stub file or a relative path.
+
+```ts
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react-swc'
+import { federation } from '@module-federation/vite'
+import {
+  metacoreFederationAliases,
+  metacoreFederationShared,
+} from '@asteby/metacore-starter-config/vite'
+
+export default defineConfig({
+  resolve: {
+    alias: {
+      ...metacoreFederationAliases,
+      '@': new URL('./src', import.meta.url).pathname,
+    },
+  },
+  plugins: [
+    react(),
+    federation(
+      metacoreFederationShared({
+        host: 'metacore_<addonKey>',
+        exposes: { './register': './src/register.tsx' },
+      }),
+    ),
+  ],
+})
+```
+
 ### Pre-bundling linked SDK packages
 
 Apps that consume `@asteby/metacore-*` via `file:` or `workspace:` need Vite

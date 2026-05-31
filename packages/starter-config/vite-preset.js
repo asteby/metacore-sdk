@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react-swc";
 import tailwindcss from "@tailwindcss/vite";
 const metacoreOptimizeDepsInclude = [
@@ -65,6 +66,11 @@ function metacoreFederationShared(opts) {
     shared
   };
 }
+const metacoreFederationAliases = {
+  "virtual:pwa-register/react": fileURLToPath(
+    new URL("./pwa-register-stub.js", import.meta.url)
+  )
+};
 async function defineMetacoreConfig(options = {}) {
   const {
     router = true,
@@ -130,6 +136,7 @@ async function defineMetacoreConfig(options = {}) {
 export {
   METACORE_FEDERATION_SINGLETONS,
   defineMetacoreConfig,
+  metacoreFederationAliases,
   metacoreFederationShared,
   metacoreOptimizeDeps,
   metacoreOptimizeDepsInclude
