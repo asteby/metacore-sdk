@@ -1,5 +1,12 @@
 # @asteby/metacore-fullstack-example
 
+## 0.1.41
+
+### Patch Changes
+
+- Updated dependencies [a9db218]
+  - @asteby/metacore-i18n@7.0.1
+
 ## 0.1.40
 
 ### Patch Changes
