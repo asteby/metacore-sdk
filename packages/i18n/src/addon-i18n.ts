@@ -146,9 +146,18 @@ export function useAddonI18n(
     inflight
       .then((data) => {
         if (cancelled) return
-        setLabels(data)
+        // Only apply (and persist) a NON-EMPTY bundle. fetchAddonI18n returns
+        // {} on a 404 or an empty/garbage response — a transient hub hiccup
+        // must NOT overwrite a good cached bundle with nothing, because that
+        // both blanks the live sidebar AND poisons localStorage for 6h, making
+        // every contributed nav title fall back to its humanized key (e.g.
+        // "accounting.nav.group" → "Group") until a lucky refetch. Empty means
+        // "no update available right now", not "clear what you had".
+        if (data && Object.keys(data).length > 0) {
+          setLabels(data)
+          if (!options.disablePersistence) writeLocalStorage(cacheKey, data)
+        }
         setReady(true)
-        if (!options.disablePersistence) writeLocalStorage(cacheKey, data)
       })
       .catch(() => {
         if (cancelled) return
