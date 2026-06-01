@@ -15,7 +15,12 @@ import {
     SelectValue,
 } from '@asteby/metacore-ui/primitives'
 import type { ActionFieldDef } from './types'
-import { buildZodSchema, resolveWidget, isLineItemsField } from './dynamic-form-schema'
+import {
+    buildZodSchema,
+    resolveWidget,
+    isLineItemsField,
+    evaluateBalance,
+} from './dynamic-form-schema'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { DynamicLineItems } from './dynamic-line-items'
 import { DynamicSelectField } from './dynamic-select-field'
@@ -49,6 +54,18 @@ export function DynamicForm({
 
     const schema = useMemo(() => buildZodSchema(fields), [fields])
 
+    // Line-items fields carrying a balance rule gate submit: an unbalanced entry
+    // (Σdebit ≠ Σcredit, or all-zero when require_nonzero) can't be saved. This
+    // is fully declarative — `evaluateBalance` returns undefined for fields with
+    // no rule, so non-balanced forms are unaffected.
+    const balanceBlocked = useMemo(() => {
+        for (const f of fields) {
+            const state = evaluateBalance(f, values[f.key])
+            if (state && !state.balanced) return true
+        }
+        return false
+    }, [fields, values])
+
     useEffect(() => {
         const defaults: Record<string, any> = {}
         for (const f of fields) {
@@ -67,6 +84,7 @@ export function DynamicForm({
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
+        if (balanceBlocked) return
         const result = schema.safeParse(values)
         if (!result.success) {
             const next: Record<string, string> = {}
@@ -82,31 +100,48 @@ export function DynamicForm({
         try { await onSubmit(result.data as Record<string, any>) } finally { setSubmitting(false) }
     }
 
+    // Layout: scalar header fields flow through a responsive 2-column grid;
+    // line-items grids (and textareas) span the full width so the row table /
+    // memo gets room. Mirrors the pro look of the federated journal modal but
+    // stays fully declarative — driven only by field shape.
     return (
         <form onSubmit={handleSubmit} className="grid gap-4">
-            {fields.map((field) => (
-                <div key={field.key} className="grid gap-2">
-                    <Label htmlFor={field.key}>
-                        {field.label}
-                        {field.required && <span className="text-red-500 ml-1">*</span>}
-                    </Label>
-                    <FieldRenderer
-                        field={field}
-                        value={values[field.key]}
-                        onChange={(v: any) => update(field.key, v)}
-                    />
-                    {errors[field.key] && (
-                        <span className="text-red-500 text-sm" role="alert">{errors[field.key]}</span>
-                    )}
-                </div>
-            ))}
+            <div className="grid gap-4 sm:grid-cols-2">
+                {fields.map((field) => {
+                    const fullWidth =
+                        isLineItemsField(field) ||
+                        resolveWidget(field) === 'textarea' ||
+                        resolveWidget(field) === 'richtext'
+                    return (
+                        <div
+                            key={field.key}
+                            className={'grid gap-2 ' + (fullWidth ? 'sm:col-span-2' : '')}
+                        >
+                            <Label htmlFor={field.key}>
+                                {field.label}
+                                {field.required && <span className="text-red-500 ml-1">*</span>}
+                            </Label>
+                            <FieldRenderer
+                                field={field}
+                                value={values[field.key]}
+                                onChange={(v: any) => update(field.key, v)}
+                            />
+                            {errors[field.key] && (
+                                <span className="text-red-500 text-sm" role="alert">{errors[field.key]}</span>
+                            )}
+                        </div>
+                    )
+                })}
+            </div>
             <div className="flex justify-end gap-2 pt-2">
                 {onCancel && (
                     <Button type="button" variant="outline" onClick={onCancel} disabled={submitting || disabled}>
                         {cancelLabel}
                     </Button>
                 )}
-                <Button type="submit" disabled={submitting || disabled}>{submitLabel}</Button>
+                <Button type="submit" disabled={submitting || disabled || balanceBlocked}>
+                    {submitLabel}
+                </Button>
             </div>
         </form>
     )

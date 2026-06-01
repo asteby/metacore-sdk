@@ -18,9 +18,15 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@asteby/metacore-ui/primitives'
-import { Plus, Trash2 } from 'lucide-react'
+import { Plus, Trash2, Check } from 'lucide-react'
 import type { ActionFieldDef } from './types'
-import { resolveWidget, getItemFields } from './dynamic-form-schema'
+import {
+    resolveWidget,
+    getItemFields,
+    computeLineItemTotals,
+    evaluateBalance,
+    toNumber,
+} from './dynamic-form-schema'
 import { DynamicSelectField } from './dynamic-select-field'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 
@@ -29,6 +35,14 @@ export interface DynamicLineItemsProps {
     value: any[] | undefined
     onChange: (rows: any[]) => void
     disabled?: boolean
+}
+
+const fmtNumber = (n: number): string =>
+    n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+/** Numeric columns render right-aligned (debit/credit/amount feel). */
+function isNumericCol(col: ActionFieldDef): boolean {
+    return resolveWidget(col) === 'number'
 }
 
 function emptyRow(itemFields: ActionFieldDef[]): Record<string, any> {
@@ -43,10 +57,44 @@ export function DynamicLineItems({ field, value, onChange, disabled = false }: D
     const itemFields = getItemFields(field)
     const rows: any[] = Array.isArray(value) ? value : []
 
+    // Columns flagged `total` get a per-column sum in the footer; the balance
+    // rule (if any) reconciles two of them. Both are declarative & generic.
+    const totals = computeLineItemTotals(field, rows)
+    const totalKeys = itemFields.filter((c) => c.total).map((c) => c.key)
+    const hasTotals = totalKeys.length > 0
+    const balance = evaluateBalance(field, rows)
+
     const addRow = () => onChange([...rows, emptyRow(itemFields)])
     const removeRow = (idx: number) => onChange(rows.filter((_, i) => i !== idx))
     const updateCell = (idx: number, key: string, cellValue: any) =>
         onChange(rows.map((r, i) => (i === idx ? { ...r, [key]: cellValue } : r)))
+
+    // When a balance rule reconciles two columns (e.g. debit ↔ credit), typing
+    // into one clears the sibling on the same row — mirrors the federated modal
+    // UX so a line is never both a debit and a credit.
+    const balancePair: [string, string] | null = balance
+        ? (() => {
+              const f = getItemFields(field)
+              void f
+              const d = field.balance?.debitColumn ?? field.balance?.debit_column
+              const c = field.balance?.creditColumn ?? field.balance?.credit_column
+              return d && c ? [d, c] : null
+          })()
+        : null
+
+    const handleCell = (idx: number, key: string, cellValue: any) => {
+        if (balancePair && (key === balancePair[0] || key === balancePair[1])) {
+            const sibling = key === balancePair[0] ? balancePair[1] : balancePair[0]
+            const hasValue = toNumber(cellValue) > 0
+            onChange(
+                rows.map((r, i) =>
+                    i === idx ? { ...r, [key]: cellValue, ...(hasValue ? { [sibling]: '' } : {}) } : r,
+                ),
+            )
+            return
+        }
+        updateCell(idx, key, cellValue)
+    }
 
     return (
         <div className="grid gap-2" data-widget="line_items">
@@ -55,7 +103,13 @@ export function DynamicLineItems({ field, value, onChange, disabled = false }: D
                     <thead className="bg-muted/50">
                         <tr>
                             {itemFields.map((col) => (
-                                <th key={col.key} className="px-3 py-2 text-left font-medium">
+                                <th
+                                    key={col.key}
+                                    className={
+                                        'px-3 py-2 font-medium ' +
+                                        (isNumericCol(col) ? 'text-right' : 'text-left')
+                                    }
+                                >
                                     {col.label}
                                     {col.required && <span className="text-red-500 ml-1">*</span>}
                                 </th>
@@ -81,7 +135,7 @@ export function DynamicLineItems({ field, value, onChange, disabled = false }: D
                                         <CellRenderer
                                             field={col}
                                             value={row?.[col.key]}
-                                            onChange={(v: any) => updateCell(idx, col.key, v)}
+                                            onChange={(v: any) => handleCell(idx, col.key, v)}
                                             disabled={disabled}
                                         />
                                     </td>
@@ -101,15 +155,77 @@ export function DynamicLineItems({ field, value, onChange, disabled = false }: D
                             </tr>
                         ))}
                     </tbody>
+                    {hasTotals && rows.length > 0 && (
+                        <tfoot className="border-t bg-muted/30">
+                            <tr>
+                                {itemFields.map((col, ci) => {
+                                    if (ci === 0) {
+                                        return (
+                                            <td
+                                                key={col.key}
+                                                className="px-3 py-2 text-left font-medium text-muted-foreground"
+                                            >
+                                                Totales
+                                            </td>
+                                        )
+                                    }
+                                    return (
+                                        <td
+                                            key={col.key}
+                                            className={
+                                                'px-3 py-2 ' +
+                                                (col.total
+                                                    ? 'text-right font-semibold tabular-nums'
+                                                    : '')
+                                            }
+                                        >
+                                            {col.total ? fmtNumber(totals[col.key] ?? 0) : null}
+                                        </td>
+                                    )
+                                })}
+                                <td />
+                            </tr>
+                        </tfoot>
+                    )}
                 </table>
             </div>
-            <div>
+            <div className="flex items-center justify-between gap-2">
                 <Button type="button" variant="outline" size="sm" onClick={addRow} disabled={disabled}>
                     <Plus className="mr-1 h-4 w-4" />
                     Agregar renglón
                 </Button>
+                {balance && <BalanceBadge state={balance} />}
             </div>
         </div>
+    )
+}
+
+function BalanceBadge({
+    state,
+}: {
+    state: NonNullable<ReturnType<typeof evaluateBalance>>
+}) {
+    if (state.balanced) {
+        return (
+            <span
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2.5 py-1 text-sm font-medium text-primary"
+                data-balance="balanced"
+                role="status"
+            >
+                <Check className="h-4 w-4" />
+                Cuadrado
+            </span>
+        )
+    }
+    const diff = Math.abs(state.diff)
+    return (
+        <span
+            className="inline-flex items-center gap-1.5 rounded-md bg-destructive/10 px-2.5 py-1 text-sm font-medium text-destructive"
+            data-balance="unbalanced"
+            role="status"
+        >
+            {state.message ?? `Descuadre: ${fmtNumber(diff)}`}
+        </span>
     )
 }
 

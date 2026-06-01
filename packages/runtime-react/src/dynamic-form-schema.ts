@@ -63,6 +63,97 @@ export function isLineItemsField(field: ActionFieldDef): boolean {
     return getItemFields(field).length > 0
 }
 
+/**
+ * Resolves the balance rule of a line-items field, tolerating both the
+ * camelCase authored shape and the snake_case the kernel serves. Returns
+ * normalized `{ debitColumn, creditColumn, message, requireNonzero }` or
+ * `undefined` when the field declares no balance constraint.
+ */
+export function getBalanceRule(
+    field: ActionFieldDef,
+): { debitColumn: string; creditColumn: string; message?: string; requireNonzero: boolean } | undefined {
+    const b = field.balance
+    if (!b) return undefined
+    const debitColumn = b.debitColumn ?? b.debit_column ?? ''
+    const creditColumn = b.creditColumn ?? b.credit_column ?? ''
+    if (!debitColumn || !creditColumn) return undefined
+    const reqRaw = b.requireNonzero ?? b.require_nonzero
+    return {
+        debitColumn,
+        creditColumn,
+        message: b.message,
+        requireNonzero: reqRaw === undefined ? true : !!reqRaw,
+    }
+}
+
+/** Coerces a cell value to a finite number, treating blanks/garbage as 0. */
+export function toNumber(v: unknown): number {
+    if (typeof v === 'number') return Number.isFinite(v) ? v : 0
+    if (typeof v === 'string') {
+        const n = parseFloat(v)
+        return Number.isFinite(n) ? n : 0
+    }
+    return 0
+}
+
+/**
+ * Sums each `total`-flagged column of a line-items field across its rows.
+ * Pure — no React — so the renderer and unit tests share one implementation.
+ * Returns a map of column key → summed value. Rounds to cents to avoid float
+ * drift (0.1 + 0.2 noise) that would make a genuinely balanced entry look off.
+ */
+export function computeLineItemTotals(
+    field: ActionFieldDef,
+    rows: any[] | undefined,
+): Record<string, number> {
+    const cols = getItemFields(field).filter((c) => c.total)
+    const totals: Record<string, number> = {}
+    for (const c of cols) totals[c.key] = 0
+    if (Array.isArray(rows)) {
+        for (const row of rows) {
+            for (const c of cols) totals[c.key] += toNumber(row?.[c.key])
+        }
+    }
+    for (const k of Object.keys(totals)) totals[k] = Math.round(totals[k] * 100) / 100
+    return totals
+}
+
+export interface BalanceState {
+    debit: number
+    credit: number
+    /** credit − debit, rounded to cents. Zero when balanced. */
+    diff: number
+    balanced: boolean
+    message?: string
+}
+
+/**
+ * Evaluates a line-items field's balance rule against its rows. Returns
+ * `undefined` when the field declares no balance rule. `balanced` is true when
+ * the two summed columns are equal (and, unless `requireNonzero` is false,
+ * strictly positive). Pure — drives both the indicator and the submit gate.
+ */
+export function evaluateBalance(
+    field: ActionFieldDef,
+    rows: any[] | undefined,
+): BalanceState | undefined {
+    const rule = getBalanceRule(field)
+    if (!rule) return undefined
+    let debit = 0
+    let credit = 0
+    if (Array.isArray(rows)) {
+        for (const row of rows) {
+            debit += toNumber(row?.[rule.debitColumn])
+            credit += toNumber(row?.[rule.creditColumn])
+        }
+    }
+    debit = Math.round(debit * 100) / 100
+    credit = Math.round(credit * 100) / 100
+    const diff = Math.round((credit - debit) * 100) / 100
+    const balanced = diff === 0 && (!rule.requireNonzero || debit > 0)
+    return { debit, credit, diff, balanced, message: rule.message }
+}
+
 function fieldToZod(field: ActionFieldDef): ZodTypeAny {
     // Repeatable line-items group → array of row objects, each row built from
     // the item field columns. Required keeps at least one row.
