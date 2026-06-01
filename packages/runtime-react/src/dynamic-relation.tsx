@@ -86,6 +86,14 @@ const DEFAULT_STRINGS: DynamicRelationStrings = {
 interface CommonProps {
     /** id del registro padre. */
     parentId: string | number
+    /**
+     * Filtros estáticos extra (igualdad) aplicados ADEMÁS del foreign-key.
+     * Caso polimórfico: una tabla de hijos compartida (attachments,
+     * addresses) scopeada por `foreign_key=owner_id` Y `owner_model=Customer`.
+     * Cada entrada se thread-ea como `f_<col>=eq:<val>` junto al FK en la query
+     * de la lista hija. Aditivo: sin filters el comportamiento es idéntico.
+     */
+    filters?: Record<string, string>
     /** Hidden columns; el FK siempre se oculta automáticamente. */
     hiddenColumns?: string[]
     /** Permisos visibles. Default true. */
@@ -147,6 +155,7 @@ function OneToManyRelation({
     model,
     foreignKey,
     parentId,
+    filters,
     endpoint,
     hiddenColumns = [],
     canCreate = true,
@@ -170,11 +179,15 @@ function OneToManyRelation({
     const [submitting, setSubmitting] = useState(false)
 
     const dataEndpoint = endpoint || `/data/${model}`
+    // Stable dependency key for the filters object (callers usually pass a fresh
+    // literal each render). Keeps fetchAll from re-firing on identity churn while
+    // still reacting to real scope changes.
+    const filtersKey = useMemo(() => (filters ? JSON.stringify(filters) : ''), [filters])
 
     const fetchAll = useCallback(async () => {
         setLoading(true)
         try {
-            const params = buildRelationFilterParams(foreignKey, parentId)
+            const params = buildRelationFilterParams(foreignKey, parentId, filters)
             const [metaRes, dataRes] = await Promise.all([
                 metadata ? Promise.resolve(null) : api.get(`/metadata/table/${model}`),
                 api.get(dataEndpoint, { params }),
@@ -191,7 +204,8 @@ function OneToManyRelation({
         } finally {
             setLoading(false)
         }
-    }, [api, dataEndpoint, foreignKey, parentId, metadata, model, cacheMetadata])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [api, dataEndpoint, foreignKey, parentId, filtersKey, metadata, model, cacheMetadata])
 
     useEffect(() => { fetchAll() }, [fetchAll])
 
@@ -202,9 +216,11 @@ function OneToManyRelation({
 
     const visibleColumns = useMemo(() => {
         if (!metadata?.columns) return []
-        const hidden = new Set([foreignKey, ...hiddenColumns])
+        // Hide the FK and every scope column — they're fixed for this parent and
+        // would just render the same value on every row.
+        const hidden = new Set([foreignKey, ...Object.keys(filters || {}), ...hiddenColumns])
         return metadata.columns.filter(c => !hidden.has(c.key) && !c.hidden)
-    }, [metadata, foreignKey, hiddenColumns])
+    }, [metadata, foreignKey, filtersKey, hiddenColumns])
 
     const handleSubmit = useCallback(async (values: Record<string, any>) => {
         setSubmitting(true)
@@ -213,7 +229,10 @@ function OneToManyRelation({
                 const res = await api.put(`${dataEndpoint}/${editingRow.id}`, values)
                 if (!(res as any).data?.success) throw new Error('update failed')
             } else {
-                const payload = buildCreatePayload(foreignKey, parentId, values)
+                // Scope columns (polymorphic discriminators like owner_model)
+                // are fixed for this relation, so a newly created child must
+                // carry them too — otherwise it would not match the list filter.
+                const payload = { ...(filters || {}), ...buildCreatePayload(foreignKey, parentId, values) }
                 const res = await api.post(dataEndpoint, payload)
                 if (!(res as any).data?.success) throw new Error('create failed')
             }
@@ -226,7 +245,8 @@ function OneToManyRelation({
         } finally {
             setSubmitting(false)
         }
-    }, [api, dataEndpoint, editingRow, fetchAll, foreignKey, onChange, parentId])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [api, dataEndpoint, editingRow, fetchAll, foreignKey, filtersKey, onChange, parentId])
 
     const handleDelete = useCallback(async () => {
         if (!rowToDelete) return
@@ -366,6 +386,7 @@ function ManyToManyRelation({
     foreignKey,
     referencesKey,
     parentId,
+    filters,
     pivotEndpoint,
     referencesEndpoint,
     displayKey,
@@ -405,10 +426,12 @@ function ManyToManyRelation({
         enabled: useResolver,
     })
 
+    const filtersKey = useMemo(() => (filters ? JSON.stringify(filters) : ''), [filters])
+
     const fetchPivotAndMeta = useCallback(async () => {
         setLoading(true)
         try {
-            const params = buildRelationFilterParams(foreignKey, parentId)
+            const params = buildRelationFilterParams(foreignKey, parentId, filters)
             const tasks: Promise<unknown>[] = [
                 api.get(pivotPath, { params }),
             ]
@@ -437,7 +460,8 @@ function ManyToManyRelation({
         } finally {
             setLoading(false)
         }
-    }, [api, pivotPath, foreignKey, parentId, references, targetMeta, cacheMetadata, useResolver, legacyTargetPath])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [api, pivotPath, foreignKey, parentId, filtersKey, references, targetMeta, cacheMetadata, useResolver, legacyTargetPath])
 
     useEffect(() => { fetchPivotAndMeta() }, [fetchPivotAndMeta])
 
@@ -475,7 +499,7 @@ function ManyToManyRelation({
         setSyncing(true)
         try {
             for (const targetId of toAdd) {
-                const payload = buildPivotAttachPayload(foreignKey, parentId, refKey, targetId)
+                const payload = buildPivotAttachPayload(foreignKey, parentId, refKey, targetId, filters || undefined)
                 const res = await api.post(pivotPath, payload)
                 if (!(res as any).data?.success) throw new Error('attach failed')
             }
@@ -496,7 +520,8 @@ function ManyToManyRelation({
         } finally {
             setSyncing(false)
         }
-    }, [api, canCreate, canDelete, fetchPivotAndMeta, useResolver, resolved, foreignKey, onChange, parentId, pivotIndex, pivotPath, refKey, selectedIds, syncing])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [api, canCreate, canDelete, fetchPivotAndMeta, useResolver, resolved, foreignKey, filtersKey, onChange, parentId, pivotIndex, pivotPath, refKey, selectedIds, syncing])
 
     return (
         <div

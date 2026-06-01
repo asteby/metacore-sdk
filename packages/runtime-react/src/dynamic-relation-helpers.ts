@@ -24,12 +24,26 @@ export interface TargetRowLike {
 export function buildRelationFilterParams(
     foreignKey: string,
     parentId: string | number,
+    extraFilters?: Record<string, string> | null,
 ): Record<string, string> {
     if (!foreignKey) throw new Error('foreignKey requerido')
     if (parentId === undefined || parentId === null || parentId === '') {
         throw new Error('parentId requerido')
     }
-    return { [`f_${foreignKey}`]: `eq:${String(parentId)}` }
+    const params: Record<string, string> = {
+        [`f_${foreignKey}`]: `eq:${String(parentId)}`,
+    }
+    // Additional static-equality scope columns (polymorphic case: the FK plus
+    // e.g. owner_model=Customer). Each becomes its own `f_<col>=eq:<val>` param.
+    // The foreign-key entry above wins if a caller redundantly repeats it.
+    if (extraFilters) {
+        for (const [col, val] of Object.entries(extraFilters)) {
+            if (!col || col === foreignKey) continue
+            if (val === undefined || val === null) continue
+            params[`f_${col}`] = `eq:${String(val)}`
+        }
+    }
+    return params
 }
 
 /**

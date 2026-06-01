@@ -15,6 +15,42 @@ export interface TableMetadata {
     canExport?: boolean
     canImport?: boolean
     canCreate?: boolean
+    /**
+     * Child relations of this model, served by the kernel (>= v0.41.0). A
+     * generic detail page renders one `DynamicRelation` panel per entry via
+     * `<DynamicRelations>` to surface, e.g., a Customer's vehicles, addresses
+     * and attachments. Absent on hosts/older kernels — purely additive.
+     */
+    relations?: RelationMeta[]
+}
+
+/**
+ * Describes one child relation of a parent model, mirroring the kernel
+ * `RelationMeta` shape (>= v0.41.0). Drives the metadata-driven
+ * `<DynamicRelations>` panel list. All keys are snake_case as served by the
+ * kernel; the SDK reads them as-is.
+ */
+export interface RelationMeta {
+    /** Stable identifier for the relation (used as a React key / data attr). */
+    name: string
+    /** Cardinality. The SDK maps this onto `DynamicRelation.kind`. */
+    kind: 'one_to_many' | 'many_to_many'
+    /**
+     * Child model key (the `through` model). For one_to_many this is the model
+     * whose rows are listed; for many_to_many it is the pivot table.
+     */
+    through: string
+    /** Child column holding the FK back to the parent. */
+    foreign_key: string
+    /**
+     * Static equality filters applied on top of the foreign-key scope. Used for
+     * polymorphic children (e.g. `{ "owner_model": "Customer" }`) so a shared
+     * attachments/addresses table is narrowed to this parent's rows. Each entry
+     * becomes a `f_<col>=eq:<val>` query param.
+     */
+    scope?: Record<string, string>
+    /** Human-readable panel header. */
+    label?: string
 }
 
 export interface FilterDefinition {
@@ -118,6 +154,7 @@ export type FieldWidget =
     | 'select'
     | 'dynamic_select'
     | 'switch'
+    | 'upload'
 
 export interface ActionFieldDef {
     key: string
@@ -161,6 +198,27 @@ export interface ActionFieldDef {
      * reconcile. Mirrors kernel v3 `ActionField.balance`.
      */
     balance?: FieldBalanceRule
+    /**
+     * `upload` widget: comma-separated accept list forwarded to the file input
+     * `accept` attribute (e.g. `"image/*,.pdf"`). Tolerates the snake_case the
+     * kernel may serve. Optional — when absent any file type is allowed.
+     */
+    accept?: string
+    /**
+     * `upload` widget: maximum file size in bytes. The renderer rejects larger
+     * files client-side before POSTing. Tolerates kernel snake_case `max_size`.
+     */
+    maxSize?: number
+    /** snake_case alias served by the kernel manifest for `maxSize`. */
+    max_size?: number
+    /**
+     * `upload` widget: server-side storage bucket/prefix the host writes the
+     * file under, forwarded to the upload endpoint as `storage_path`. Tolerates
+     * kernel snake_case `storage_path`.
+     */
+    storagePath?: string
+    /** snake_case alias served by the kernel manifest for `storagePath`. */
+    storage_path?: string
 }
 
 /**

@@ -25,11 +25,13 @@ import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { DynamicLineItems } from './dynamic-line-items'
 import { DynamicSelectField } from './dynamic-select-field'
 import { DynamicDateField } from './dynamic-date-field'
+import { UploadField } from './upload-field'
 
 export { buildZodSchema, resolveWidget }
 export { DynamicLineItems } from './dynamic-line-items'
 export { DynamicSelectField } from './dynamic-select-field'
 export { DynamicDateField } from './dynamic-date-field'
+export { UploadField } from './upload-field'
 
 export interface DynamicFormProps {
     fields: ActionFieldDef[]
@@ -167,6 +169,11 @@ function FieldRenderer({ field, value, onChange }: FieldRendererProps) {
     // dumping every row into a plain <select>.
     if (widget === 'dynamic_select') {
         return <DynamicSelectField field={field} value={value} onChange={onChange} />
+    }
+    // File upload → themed picker that POSTs to the host upload endpoint and
+    // stores the returned file url/path as the field value.
+    if (widget === 'upload') {
+        return <UploadField field={field} value={value} onChange={onChange} />
     }
     // Ref-driven select: hook into useOptionsResolver so the canonical
     // /api/options/<ref>?field=id endpoint feeds the dropdown. This is
