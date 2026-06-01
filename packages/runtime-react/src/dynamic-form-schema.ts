@@ -216,6 +216,33 @@ export function resolveWidget(field: ActionFieldDef): string {
         case 'boolean': return 'switch'
         case 'number': return 'number'
         case 'date': return 'date'
+        // File upload: POSTs to the host upload endpoint and stores the returned
+        // file url/path as the field value. Rendered by `UploadField`.
+        case 'upload': return 'upload'
         default: return 'text'
+    }
+}
+
+/**
+ * Normalizes an upload field's config, tolerating both the camelCase authored
+ * SDK shape and the snake_case the kernel serves (`max_size`, `storage_path`).
+ * Pure — shared by both field renderers and unit tests.
+ */
+export function getUploadConfig(field: ActionFieldDef): {
+    accept?: string
+    maxSize?: number
+    storagePath?: string
+} {
+    const accept = field.accept
+    const maxSizeRaw = field.maxSize ?? field.max_size
+    const maxSize =
+        typeof maxSizeRaw === 'number' && Number.isFinite(maxSizeRaw) && maxSizeRaw > 0
+            ? maxSizeRaw
+            : undefined
+    const storagePath = field.storagePath ?? field.storage_path
+    return {
+        accept: accept || undefined,
+        maxSize,
+        storagePath: storagePath || undefined,
     }
 }

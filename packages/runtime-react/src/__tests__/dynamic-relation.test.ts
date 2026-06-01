@@ -25,6 +25,34 @@ describe('buildRelationFilterParams', () => {
         })
     })
 
+    it('agrega filtros de scope extra como f_<col>=eq:<val> (caso polimórfico)', () => {
+        expect(
+            buildRelationFilterParams('owner_id', 'cust_1', { owner_model: 'Customer' }),
+        ).toEqual({
+            f_owner_id: 'eq:cust_1',
+            f_owner_model: 'eq:Customer',
+        })
+    })
+
+    it('el foreign-key gana sobre un scope redundante con el mismo key', () => {
+        expect(
+            buildRelationFilterParams('owner_id', 'cust_1', { owner_id: 'evil', tier: 'gold' }),
+        ).toEqual({
+            f_owner_id: 'eq:cust_1',
+            f_tier: 'eq:gold',
+        })
+    })
+
+    it('ignora scope null/undefined sin romper', () => {
+        expect(
+            // @ts-expect-error testing runtime tolerance
+            buildRelationFilterParams('owner_id', 'c1', { a: null, b: undefined, c: 'ok' }),
+        ).toEqual({ f_owner_id: 'eq:c1', f_c: 'eq:ok' })
+        expect(buildRelationFilterParams('owner_id', 'c1', null)).toEqual({
+            f_owner_id: 'eq:c1',
+        })
+    })
+
     it('rechaza foreignKey vacío', () => {
         expect(() => buildRelationFilterParams('', 'x')).toThrow(/foreignKey/)
     })

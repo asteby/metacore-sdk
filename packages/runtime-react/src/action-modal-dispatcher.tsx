@@ -41,6 +41,7 @@ import { DynamicIcon } from './dynamic-icon'
 import { DynamicLineItems } from './dynamic-line-items'
 import { DynamicSelectField } from './dynamic-select-field'
 import { DynamicDateField } from './dynamic-date-field'
+import { UploadField } from './upload-field'
 import { isLineItemsField, resolveWidget } from './dynamic-form-schema'
 import type { ActionFieldDef } from './types'
 // Canonical registry lives in @asteby/metacore-sdk
@@ -321,6 +322,11 @@ function renderField(
     const widget = resolveWidget(field)
     if (widget === 'dynamic_select') {
         return <DynamicSelectField field={field} value={value} onChange={onChange} />
+    }
+    // File upload → themed picker that POSTs the file to the host upload
+    // endpoint and stores the returned url/path. Kept in sync with DynamicForm.
+    if (widget === 'upload') {
+        return <UploadField field={field} value={value} onChange={onChange} />
     }
     switch (widget) {
         case 'textarea':

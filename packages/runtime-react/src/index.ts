@@ -94,6 +94,12 @@ export {
     relationRowKey,
 } from './dynamic-relation'
 export {
+    DynamicRelations,
+    resolveParentId,
+    buildRelationFilters,
+    type DynamicRelationsProps,
+} from './dynamic-relations'
+export {
     registerModelExtension,
     getModelExtension,
     clearModelExtensions,
