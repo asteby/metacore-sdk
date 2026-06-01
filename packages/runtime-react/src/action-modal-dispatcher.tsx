@@ -246,23 +246,28 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
+            {/* Sticky header + footer, scrollable body: the form can grow tall
+                (many line-items rows) past the viewport, so cap the dialog at
+                90vh and let ONLY the field area scroll — the title and the
+                Cancel/Submit actions stay pinned and always reachable. maxHeight
+                is inline (guaranteed) since an arbitrary max-h-[90vh] class may be
+                dropped by a consuming app's Tailwind scan. */}
             <DialogContent
-                className={widthPx ? '' : 'sm:max-w-lg'}
-                style={widthPx ? { maxWidth: widthPx, width: '95vw' } : undefined}
+                className={'flex max-h-[90vh] flex-col overflow-hidden ' + (widthPx ? '' : 'sm:max-w-lg')}
+                style={{ maxHeight: '90vh', ...(widthPx ? { maxWidth: widthPx, width: '95vw' } : {}) }}
             >
-                <DialogHeader>
+                <DialogHeader className="shrink-0">
                     <DialogTitle className="flex items-center gap-2">
                         <DynamicIcon name={action.icon} className="h-5 w-5" />
                         {action.label}
                     </DialogTitle>
                     {action.confirmMessage && <DialogDescription>{action.confirmMessage}</DialogDescription>}
                 </DialogHeader>
-                {/* Responsive 2-column grid: scalar fields (journal, date,
-                    reference) flow side-by-side instead of one tall vertical
-                    stack; line-items grids and textareas span the full width so
-                    they get room. Mirrors DynamicForm's pro layout — driven only
-                    by field shape, fully declarative. */}
-                <div className="grid gap-4 py-4 sm:grid-cols-2">
+                {/* Scrollable body. Responsive 2-column grid: scalar fields
+                    (journal, date, reference) flow side-by-side instead of one
+                    tall vertical stack; line-items grids and textareas span the
+                    full width. Mirrors DynamicForm — driven only by field shape. */}
+                <div className="-mx-1 grid min-h-0 flex-1 gap-4 overflow-y-auto px-1 py-4 sm:grid-cols-2">
                     {action.fields?.map((field) => {
                         const fullWidth =
                             isLineItemsField(field) ||
@@ -282,7 +287,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                         )
                     })}
                 </div>
-                <DialogFooter>
+                <DialogFooter className="shrink-0">
                     <Button variant="outline" onClick={() => onOpenChange(false)} disabled={executing}>
                         {t('common.cancel')}
                     </Button>
