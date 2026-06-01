@@ -62,6 +62,26 @@ const defaultGetImageUrl = (path: string) => path
 const getNestedValue = (obj: any, path: string) =>
     path.split('.').reduce((acc, part) => acc && acc[part], obj)
 
+/**
+ * State-machine gate for per-row actions.
+ *
+ * An action that declares a non-empty `requiresState` (camelCase) / `requires_state`
+ * (snake_case, as served by some backends) is only surfaced for rows whose `status`
+ * field value is contained in that array. This hides e.g. an "Iniciar trabajo"
+ * action (requiresState: ['reception']) on an order already in `in_progress`.
+ *
+ * Null-safe & non-regressive:
+ *   - action without requiresState (or empty array)  → always shown.
+ *   - row with no `status` field                      → all actions shown.
+ */
+export const isActionAllowedForRowState = (action: any, row: any): boolean => {
+    const requires: unknown = action?.requiresState ?? action?.requires_state
+    if (!Array.isArray(requires) || requires.length === 0) return true
+    const status = row?.status
+    if (status === undefined || status === null || status === '') return true
+    return requires.map(String).includes(String(status))
+}
+
 const lowerFirst = (value?: string) => {
     if (!value) return value
     return value.charAt(0).toLowerCase() + value.slice(1)
@@ -519,6 +539,7 @@ export function makeDefaultGetDynamicColumns(
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 {resolvedActions
+                                    .filter((action) => isActionAllowedForRowState(action, row.original))
                                     .filter((action) => {
                                         if (!action.condition) return true
                                         const { field, operator, value } = action.condition
