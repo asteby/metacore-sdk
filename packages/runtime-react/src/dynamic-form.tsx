@@ -24,10 +24,12 @@ import {
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { DynamicLineItems } from './dynamic-line-items'
 import { DynamicSelectField } from './dynamic-select-field'
+import { DynamicDateField } from './dynamic-date-field'
 
 export { buildZodSchema, resolveWidget }
 export { DynamicLineItems } from './dynamic-line-items'
 export { DynamicSelectField } from './dynamic-select-field'
+export { DynamicDateField } from './dynamic-date-field'
 
 export interface DynamicFormProps {
     fields: ActionFieldDef[]
@@ -197,7 +199,7 @@ function FieldRenderer({ field, value, onChange }: FieldRendererProps) {
         case 'number':
             return <Input id={field.key} type="number" value={value ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.valueAsNumber || '')} placeholder={field.placeholder} />
         case 'date':
-            return <Input id={field.key} type="date" value={value || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} />
+            return <DynamicDateField field={field} value={value} onChange={onChange} />
         default:
             return <Input id={field.key} type={field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : 'text'} value={value || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} placeholder={field.placeholder} />
     }
