@@ -146,6 +146,40 @@ export interface ActionFieldDef {
      * keyed by these item field keys. Rendered by `DynamicLineItems`.
      */
     itemFields?: ActionFieldDef[]
+    /**
+     * On an `itemFields` column: flags the column for summation in the
+     * line-items footer. The SDK renders a totals row summing every numeric
+     * column marked `total` (e.g. the debit and credit columns of a journal
+     * entry). Ignored on flat fields. Mirrors kernel v3 `ActionField.total`.
+     */
+    total?: boolean
+    /**
+     * On a line-items (`type: "array"`) field: declares an optional, generic
+     * balance constraint between two summed columns. The SDK shows a balanced /
+     * out-of-balance indicator and blocks submit until the two sides match.
+     * Domain-agnostic — "debit"/"credit" are just the two column keys to
+     * reconcile. Mirrors kernel v3 `ActionField.balance`.
+     */
+    balance?: FieldBalanceRule
+}
+
+/**
+ * Declarative reconciliation constraint on a line-items field: the summed value
+ * of `debitColumn` across all rows must equal the summed value of
+ * `creditColumn`. Tolerates the snake_case shape the kernel serves
+ * (`debit_column` / `credit_column` / `require_nonzero`). Generic by design.
+ */
+export interface FieldBalanceRule {
+    debitColumn?: string
+    creditColumn?: string
+    /** snake_case alias served by the kernel manifest. */
+    debit_column?: string
+    /** snake_case alias served by the kernel manifest. */
+    credit_column?: string
+    message?: string
+    /** When true (default) an all-zero entry is treated as out of balance. */
+    requireNonzero?: boolean
+    require_nonzero?: boolean
 }
 
 export interface ActionDefinition {
