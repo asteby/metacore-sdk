@@ -39,7 +39,8 @@ import { toast } from 'sonner'
 import { useApi } from './api-context'
 import { DynamicIcon } from './dynamic-icon'
 import { DynamicLineItems } from './dynamic-line-items'
-import { isLineItemsField } from './dynamic-form-schema'
+import { DynamicSelectField } from './dynamic-select-field'
+import { isLineItemsField, resolveWidget } from './dynamic-form-schema'
 import type { ActionFieldDef } from './types'
 // Canonical registry lives in @asteby/metacore-sdk
 import {
@@ -271,7 +272,15 @@ function renderField(
     if (isLineItemsField(field)) {
         return <DynamicLineItems field={field} value={value} onChange={onChange} />
     }
-    switch (field.type) {
+    // Resolve the widget the same way DynamicForm does (explicit widget wins,
+    // else inferred from type) so action modals and the standalone form stay in
+    // lockstep — previously this switch keyed off `field.type` and silently
+    // dropped `dynamic_select` to a plain text input.
+    const widget = resolveWidget(field)
+    if (widget === 'dynamic_select') {
+        return <DynamicSelectField field={field} value={value} onChange={onChange} />
+    }
+    switch (widget) {
         case 'textarea':
             return <Textarea id={field.key} value={value || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)} placeholder={field.placeholder} />
         case 'select':
@@ -283,7 +292,7 @@ function renderField(
                     </SelectContent>
                 </Select>
             )
-        case 'boolean':
+        case 'switch':
             return <Switch id={field.key} checked={!!value} onCheckedChange={onChange} />
         case 'number':
             return <Input id={field.key} type="number" value={value ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.valueAsNumber || '')} placeholder={field.placeholder} />
