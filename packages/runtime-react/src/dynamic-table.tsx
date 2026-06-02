@@ -687,7 +687,10 @@ export function DynamicTable({
                         }
                     />
                 </div>
-                <div className='flex-1 min-h-0 overflow-auto border rounded-md bg-card'>
+                {/* Desktop: classic horizontal-scroll table. Hidden on phones —
+                    a 7-column table forces a wide horizontal scroll there, so we
+                    render a card-per-row list instead (see MobileCards below). */}
+                <div className='hidden sm:block flex-1 min-h-0 overflow-auto border rounded-md bg-card'>
                     <Table noWrapper className="min-w-max w-full">
                         <TableHeader className='sticky top-0 z-10'>
                             {table.getHeaderGroups().map((headerGroup: HeaderGroup<any>) => (
@@ -746,6 +749,63 @@ export function DynamicTable({
                         </TableBody>
                     </Table>
                 </div>
+
+                {/* Mobile: one card per row — no horizontal scroll. Each card
+                    stacks its columns as label : value pairs with the row actions
+                    pinned at the bottom. */}
+                <div className='flex flex-1 min-h-0 flex-col gap-2 overflow-y-auto sm:hidden'>
+                    {loadingData && data.length === 0 ? (
+                        Array.from({ length: 5 }).map((_, i) => (
+                            <div key={i} className='rounded-lg border bg-card p-3'>
+                                <Skeleton className='h-4 w-24' />
+                                <Skeleton className='mt-2 h-4 w-40' />
+                                <Skeleton className='mt-2 h-4 w-32' />
+                            </div>
+                        ))
+                    ) : table.getRowModel().rows?.length ? (
+                        table.getRowModel().rows.map((row: Row<any>) => {
+                            const cells = row.getVisibleCells()
+                            const actionsCell = cells.find((c: Cell<any, unknown>) => c.column.id === 'actions')
+                            const dataCells = cells.filter(
+                                (c: Cell<any, unknown>) => c.column.id !== 'actions' && c.column.id !== 'select',
+                            )
+                            return (
+                                <div
+                                    key={row.id}
+                                    data-state={row.getIsSelected() && 'selected'}
+                                    className='flex flex-col gap-1.5 rounded-lg border bg-card p-3 data-[state=selected]:border-primary/40'
+                                >
+                                    {dataCells.map((cell: Cell<any, unknown>) => {
+                                        const header = cell.column.columnDef.header
+                                        const label = typeof header === 'string' ? header : cell.column.id
+                                        return (
+                                            <div key={cell.id} className='flex items-start justify-between gap-3 text-sm'>
+                                                <span className='shrink-0 text-muted-foreground'>{label}</span>
+                                                <span className='min-w-0 break-words text-right font-medium'>
+                                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                                </span>
+                                            </div>
+                                        )
+                                    })}
+                                    {actionsCell && (
+                                        <div className='flex justify-end border-t pt-2'>
+                                            {flexRender(actionsCell.column.columnDef.cell, actionsCell.getContext())}
+                                        </div>
+                                    )}
+                                </div>
+                            )
+                        })
+                    ) : (
+                        <div className='flex flex-col items-center justify-center gap-2 rounded-lg border bg-card py-12 text-muted-foreground'>
+                            <div className='flex h-16 w-16 items-center justify-center rounded-full bg-muted/50'>
+                                <Inbox className='h-8 w-8' />
+                            </div>
+                            <h3 className='text-base font-semibold text-foreground'>No se encontraron resultados</h3>
+                            <p className='text-sm text-muted-foreground'>No hay datos para mostrar en este momento.</p>
+                        </div>
+                    )}
+                </div>
+
                 <div className='shrink-0 pt-4'>
                     <DataTablePagination
                         table={table}
