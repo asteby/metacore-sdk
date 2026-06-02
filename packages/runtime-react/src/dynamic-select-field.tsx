@@ -100,10 +100,9 @@ export function DynamicSelectField({ field, value, onChange }: DynamicSelectFiel
                     model: field.ref,
                     onCreated: (rec: any) => {
                         if (rec && rec.id != null) {
-                            handlePick({
-                                id: String(rec.id),
-                                label: String(rec.name ?? rec.label ?? rec.title ?? rec.id),
-                            })
+                            const id = String(rec.id)
+                            const label = String(rec.name ?? rec.label ?? rec.title ?? rec.id)
+                            handlePick({ id, value: id, label, name: label })
                         }
                     },
                 },
