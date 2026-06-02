@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 13.7.0
+
+### Minor Changes
+
+- 33165d2: feat(dynamic-table): card-per-row layout on mobile. On phones the multi-column data table forced a wide horizontal scroll; below the `sm` breakpoint the table is now replaced by a stacked card list (one card per row, columns shown as label : value pairs, row actions pinned at the bottom). Desktop keeps the classic table.
+
 ## 13.6.0
 
 ### Minor Changes
