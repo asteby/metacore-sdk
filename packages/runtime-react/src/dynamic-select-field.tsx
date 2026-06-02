@@ -120,7 +120,7 @@ export function DynamicSelectField({ field, value, onChange }: DynamicSelectFiel
                     role="combobox"
                     aria-expanded={open}
                     id={field.key}
-                    className="w-full justify-between font-normal"
+                    className="min-w-0 flex-1 justify-between font-normal"
                     data-empty={!value}
                 >
                     <span className={'truncate ' + (selectedLabel ? '' : 'text-muted-foreground')}>
