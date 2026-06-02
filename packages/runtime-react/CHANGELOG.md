@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 13.8.0
+
+### Minor Changes
+
+- ab80937: feat(dynamic-select): inline "+" to create the referenced record. A dynamic_select with a `ref` now shows a "+" button that opens the referenced model's OWN create modal (via a decoupled `metacore:create-record` window event the host handles) and auto-selects the newly created record. Lets users add a missing Category/Brand/etc. without leaving the form.
+
 ## 13.7.0
 
 ### Minor Changes
