@@ -34,7 +34,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@asteby/metacore-ui/primitives'
-import { Check, ChevronsUpDown, Loader2 } from 'lucide-react'
+import { Check, ChevronsUpDown, Loader2, Plus } from 'lucide-react'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import type { ActionFieldDef } from './types'
 
@@ -87,8 +87,33 @@ export function DynamicSelectField({ field, value, onChange }: DynamicSelectFiel
         setSearch('')
     }
 
+    // Inline-create: the "+" opens the REFERENCED model's own create modal (the
+    // real one the host renders for that model — full fields, not a duplicate),
+    // via a decoupled window event the host listens for. On success the host
+    // hands back the new record and we select it immediately. No host import →
+    // no circular dependency; works for ANY dynamic_select with a `ref`.
+    const openCreate = () => {
+        if (!field.ref || typeof window === 'undefined') return
+        window.dispatchEvent(
+            new CustomEvent('metacore:create-record', {
+                detail: {
+                    model: field.ref,
+                    onCreated: (rec: any) => {
+                        if (rec && rec.id != null) {
+                            handlePick({
+                                id: String(rec.id),
+                                label: String(rec.name ?? rec.label ?? rec.title ?? rec.id),
+                            })
+                        }
+                    },
+                },
+            }),
+        )
+    }
+
     return (
-        <Popover open={open} onOpenChange={setOpen}>
+        <div className="flex items-center gap-1.5">
+            <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                 <Button
                     type="button"
@@ -157,7 +182,21 @@ export function DynamicSelectField({ field, value, onChange }: DynamicSelectFiel
                     </CommandList>
                 </Command>
             </PopoverContent>
-        </Popover>
+            </Popover>
+            {field.ref && (
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-9 shrink-0"
+                    onClick={openCreate}
+                    title={`Crear ${field.label ?? field.ref}`}
+                    aria-label={`Crear ${field.label ?? field.ref}`}
+                >
+                    <Plus className="size-4" />
+                </Button>
+            )}
+        </div>
     )
 }
 
