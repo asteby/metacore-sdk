@@ -249,32 +249,65 @@ function SidebarMenuCollapsedDropdown({
   )
 }
 
+/**
+ * Splits a URL into its path and a normalized query-string for comparison.
+ * The query is normalized (params sorted, blanks dropped) so two equivalent
+ * query strings compare equal regardless of param order. `f_` filter params —
+ * transient data-table state, not navigation intent — are stripped so a
+ * filtered table view still highlights its base nav item.
+ */
+function splitHref(url: string): { path: string; query: string } {
+  const qIndex = url.indexOf('?')
+  if (qIndex === -1) return { path: url, query: '' }
+  const path = url.slice(0, qIndex)
+  const params = new URLSearchParams(url.slice(qIndex + 1))
+  const entries: [string, string][] = []
+  for (const [k, v] of params.entries()) {
+    if (k.startsWith('f_')) continue // transient table-filter state
+    entries.push([k, v])
+  }
+  entries.sort((a, b) => (a[0] === b[0] ? (a[1] < b[1] ? -1 : 1) : a[0] < b[0] ? -1 : 1))
+  return { path, query: entries.map(([k, v]) => `${k}=${v}`).join('&') }
+}
+
+/**
+ * Active-state matcher for a nav item against the current href.
+ *
+ * Query-aware so order-status style items that share a path but differ only by
+ * a query param (`/m/orders?status=reception` vs `?status=delivery`) light up
+ * ONE at a time instead of all together:
+ *   - When an item declares query params, they must match the current href's
+ *     query EXACTLY (after normalization) — a different (or absent) query is not
+ *     a match.
+ *   - When an item declares NO query, it matches on path alone, preserving the
+ *     prior behaviour for plain links (a filtered table still highlights its
+ *     base item because `f_` params are stripped).
+ */
 function checkIsActive(href: string, item: NavItem, mainNav = false) {
   const hasItems = 'items' in item && Array.isArray(item.items)
 
-  if (href === item.url) return true
+  const cur = splitHref(href)
+  const target = splitHref(item.url)
 
-  if (
-    !item.url.includes('?') &&
-    href.split('?')[0] === item.url &&
-    !href.includes('?f_') &&
-    !href.includes('&f_')
-  ) {
+  // Same path: an item with a query must match the query exactly; an item
+  // without a query matches the path regardless of the current href's query.
+  if (cur.path === target.path) {
+    if (target.query) return cur.query === target.query
     return true
   }
 
   if (
     hasItems &&
-    !!(item as NavCollapsibleItem).items.filter(
-      (i: NavLinkItem) => i.url === href
-    ).length
+    (item as NavCollapsibleItem).items.some(
+      (i: NavLinkItem) => checkIsActive(href, i)
+    )
   ) {
     return true
   }
 
   if (mainNav) {
-    const hrefParts = href.split('/')
-    const itemParts = item?.url?.split('/') ?? []
+    const hrefParts = cur.path.split('/')
+    const itemParts = target.path.split('/')
     const depth = hrefParts.length >= 3 && hrefParts[1] === 'm' ? 3 : 2
     const hrefPrefix = hrefParts.slice(0, depth).join('/')
     const itemPrefix = itemParts.slice(0, depth).join('/')
@@ -283,7 +316,7 @@ function checkIsActive(href: string, item: NavItem, mainNav = false) {
     }
     if (hasItems) {
       for (const sub of (item as NavCollapsibleItem).items) {
-        const subParts = sub.url?.split('/') ?? []
+        const subParts = splitHref(sub.url ?? '').path.split('/')
         if (subParts.slice(0, depth).join('/') === hrefPrefix) {
           return true
         }

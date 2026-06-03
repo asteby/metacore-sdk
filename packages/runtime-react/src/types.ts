@@ -200,6 +200,14 @@ export interface ActionFieldDef {
      */
     ref?: string
     /**
+     * snake_case aliases the kernel manifest may serve for a belongs_to FK
+     * target instead of `ref`. Treated as equivalent to `ref` by the SDK so a
+     * declared relation renders a searchable picker regardless of which key the
+     * backend emits.
+     */
+    source?: string
+    relation?: string
+    /**
      * Columns of a repeatable line-items group. Mirrors the kernel v3
      * `ActionField.item_fields` (json `item_fields`). Present on a field
      * with `type: "array"` — the multi-row container (e.g. the item rows
