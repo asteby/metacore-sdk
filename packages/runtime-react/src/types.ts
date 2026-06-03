@@ -77,7 +77,33 @@ export type ColumnVisibility = 'all' | 'table' | 'modal' | 'list' | (string & {}
 export interface ColumnDefinition {
     key: string
     label: string
-    type: 'text' | 'number' | 'date' | 'select' | 'search' | 'relation-badge-list' | 'avatar' | 'boolean' | 'phone' | 'media-gallery' | 'image'
+    type:
+        | 'text'
+        | 'number'
+        | 'date'
+        | 'select'
+        | 'search'
+        | 'relation-badge-list'
+        | 'avatar'
+        | 'boolean'
+        | 'phone'
+        | 'media-gallery'
+        | 'image'
+        // Declarative pro cell renderers (resolved via `cellStyle ?? type`).
+        | 'url'
+        | 'link'
+        | 'email'
+        | 'currency'
+        | 'percent'
+        | 'progress'
+        | 'badge'
+        | 'status'
+        | 'tags'
+        | 'color'
+        | 'code'
+        | 'truncate-text'
+        | 'creator'
+        | 'user'
     sortable: boolean
     filterable: boolean
     hidden?: boolean

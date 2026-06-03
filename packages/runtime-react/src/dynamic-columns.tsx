@@ -1,7 +1,10 @@
 // Default `getDynamicColumns` factory used by hosts that don't need a custom
 // renderer. Supports every cell type produced by kernel/dynamic metadata:
-// badge (static + endpoint-loaded options), avatar, phone, date, boolean,
-// relation-badge-list, media-gallery, image, plus a generic text fallback.
+// badge (static + endpoint-loaded options), avatar/search, creator/user,
+// phone, date, boolean, relation-badge-list, media-gallery, image, plus the
+// declarative pro renderers url/link, email, currency, number, percent/
+// progress, status, tags, color, code/truncate-text, and a generic text
+// fallback. The renderer resolves `cellStyle ?? type` for each column.
 //
 // The implementation was previously duplicated across multiple host apps
 // (~550 LOC each, drifting). It now lives here so a single fix propagates
@@ -32,6 +35,7 @@ import {
     type ColumnFilterMeta,
 } from '@asteby/metacore-ui/data-table'
 import { generateBadgeStyles, getInitials } from '@asteby/metacore-ui/lib'
+import { Progress } from './dialogs/_primitives'
 import { OptionsContext } from './options-context'
 import { DynamicIcon } from './dynamic-icon'
 import type { TableMetadata, ColumnDefinition } from './types'
@@ -61,6 +65,95 @@ const defaultGetImageUrl = (path: string) => path
 
 const getNestedValue = (obj: any, path: string) =>
     path.split('.').reduce((acc, part) => acc && acc[part], obj)
+
+/**
+ * Reads a styleConfig key tolerating both snake_case (emitted by the kernel)
+ * and camelCase (sometimes produced by compiled models). Returns the first
+ * defined match, e.g. `cfg('label_field', 'labelField')`.
+ */
+const styleCfg = (
+    col: ColumnDefinition,
+    ...keys: string[]
+): any => {
+    const cfg = col.styleConfig
+    if (!cfg) return undefined
+    for (const k of keys) {
+        if (cfg[k] !== undefined && cfg[k] !== null) return cfg[k]
+    }
+    return undefined
+}
+
+const EmptyCell = () => <span className="text-muted-foreground">-</span>
+
+/** Resolves the active org currency, defaulting to USD when no override. */
+const resolveCurrency = (col: ColumnDefinition): string =>
+    styleCfg(col, 'currency') || 'USD'
+
+const formatNumber = (
+    value: number,
+    opts: Intl.NumberFormatOptions,
+    locale?: string,
+) => new Intl.NumberFormat(locale || undefined, opts).format(value)
+
+/**
+ * Semantic status → badge color. Used by the `status` cell when no explicit
+ * `options` color is declared. Generic, value-driven mapping.
+ */
+const statusColorFor = (value: string): string => {
+    const v = value.toLowerCase()
+    if (
+        ['active', 'enabled', 'paid', 'completed', 'done', 'success', 'approved', 'open']
+            .includes(v)
+    )
+        return '#22c55e'
+    if (['pending', 'draft', 'processing', 'in_progress', 'review', 'waiting'].includes(v))
+        return '#eab308'
+    if (
+        ['inactive', 'disabled', 'cancelled', 'canceled', 'failed', 'rejected', 'error', 'closed']
+            .includes(v)
+    )
+        return '#ef4444'
+    return '#6b7280'
+}
+
+/** Copyable monospaced text cell (code/IDs/hashes). */
+const CodeCell: React.FC<{ text: string; maxLength?: number }> = ({ text, maxLength }) => {
+    const [copied, setCopied] = React.useState(false)
+    const display =
+        maxLength && text.length > maxLength ? `${text.slice(0, maxLength)}…` : text
+    const onCopy = () => {
+        try {
+            navigator.clipboard?.writeText(text)
+            setCopied(true)
+            setTimeout(() => setCopied(false), 1200)
+        } catch {
+            /* clipboard unavailable */
+        }
+    }
+    return (
+        <div className="group flex items-center gap-1.5">
+            <code
+                className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-foreground/80"
+                title={text}
+            >
+                {display}
+            </code>
+            <button
+                type="button"
+                onClick={onCopy}
+                className="opacity-0 transition-opacity group-hover:opacity-100 text-muted-foreground hover:text-foreground"
+                aria-label="Copiar"
+                title="Copiar"
+            >
+                {copied ? (
+                    <icons.Check className="h-3.5 w-3.5 text-green-500" />
+                ) : (
+                    <icons.Copy className="h-3.5 w-3.5" />
+                )}
+            </button>
+        </div>
+    )
+}
 
 /**
  * State-machine gate for per-row actions.
@@ -196,6 +289,42 @@ const BadgeWithEndpointOptions: React.FC<{ endpoint: string; value: any }> = ({ 
 }
 
 /**
+ * Generic avatar-style cell: round/rounded photo (or initials fallback) +
+ * primary name + optional subtitle. Backs the `avatar`/`search` columns as
+ * well as the `creator`/`user` cellStyles. Paths are parameterised so the same
+ * JSX serves every variant.
+ */
+const AvatarCell: React.FC<{
+    name: string
+    desc?: string
+    avatarSrc?: string
+    getImageUrl: (path: string) => string
+}> = ({ name, desc, avatarSrc, getImageUrl }) => (
+    <div className="flex items-center gap-3 min-w-0">
+        <Avatar className="h-8 w-8 rounded-lg ring-1 ring-border/50">
+            <AvatarImage
+                src={avatarSrc ? getImageUrl(avatarSrc) : ''}
+                alt={name}
+                className="object-cover"
+            />
+            <AvatarFallback className="text-[10px] font-bold bg-primary/5 text-primary rounded-lg">
+                {getInitials(name)}
+            </AvatarFallback>
+        </Avatar>
+        <div className="flex flex-col min-w-0 overflow-hidden">
+            <span className="font-medium text-sm truncate leading-none mb-0.5 text-foreground/90">
+                {name}
+            </span>
+            {desc && (
+                <span className="text-[11px] text-muted-foreground truncate leading-none">
+                    {desc}
+                </span>
+            )}
+        </div>
+    </div>
+)
+
+/**
  * Builds the canonical column factory used by `<DynamicTable>` when the host
  * does not supply its own. Pass `{ getImageUrl, apiBaseUrl }` to wire avatar
  * URL resolution.
@@ -301,7 +430,30 @@ export function makeDefaultGetDynamicColumns(
                         return renderRelationBadges(value, col)
                     }
 
-                    switch (col.type) {
+                    // Generic badge (no options/endpoint) — still pill it.
+                    if (renderAs === 'badge') {
+                        if (!value && value !== 0) return <EmptyCell />
+                        return <Badge variant="outline">{String(value)}</Badge>
+                    }
+
+                    // Status — semantic color by value, options color wins.
+                    if (renderAs === 'status') {
+                        if (!value && value !== 0) return <EmptyCell />
+                        const sv = String(value)
+                        const option = col.options?.find((o) => o.value === sv)
+                        if (option) return <OptionBadge option={option} fallback={sv} />
+                        const isDark =
+                            typeof document !== 'undefined' &&
+                            document.documentElement.classList.contains('dark')
+                        const styles = generateBadgeStyles(statusColorFor(sv), { isDark })
+                        return (
+                            <Badge variant="outline" className="border-0 capitalize" style={styles}>
+                                {sv}
+                            </Badge>
+                        )
+                    }
+
+                    switch (renderAs) {
                         case 'date': {
                             if (!value) return <span className="text-muted-foreground">-</span>
                             try {
@@ -323,62 +475,245 @@ export function makeDefaultGetDynamicColumns(
                         }
 
                         case 'search':
-                        case 'avatar': {
-                            const namePath = col.tooltip || col.key
+                        case 'avatar':
+                        case 'creator':
+                        case 'user': {
+                            // `creator`/`user` resolve the name from an explicit
+                            // styleConfig.name_field first, then the legacy
+                            // tooltip/displayField hints, then the column key.
+                            const namePath =
+                                styleCfg(col, 'name_field', 'nameField') ||
+                                col.tooltip ||
+                                col.displayField ||
+                                col.key
                             const name = getNestedValue(row.original, namePath) || 'N/A'
                             const desc = getNestedValue(row.original, col.description || '')
 
+                            const basePath = styleCfg(col, 'base_path', 'basePath') ?? col.basePath ?? ''
                             let avatarSrc: string | undefined
                             if (col.key.includes('.')) {
+                                // Look for a sibling `.avatar` or `.photo` field.
                                 const parentPath = col.key.split('.').slice(0, -1).join('.')
-                                const avatarPath = `${parentPath}.avatar`
-                                const possibleAvatar = getNestedValue(row.original, avatarPath)
-                                if (possibleAvatar) avatarSrc = String(possibleAvatar)
-                            } else if (
-                                value &&
-                                (String(value).startsWith('http') || String(value).startsWith('https'))
-                            ) {
-                                avatarSrc = String(value)
-                            } else if (value) {
-                                avatarSrc = `${apiBaseUrl}${col.basePath || ''}${value}`
+                                const sibling =
+                                    getNestedValue(row.original, `${parentPath}.avatar`) ||
+                                    getNestedValue(row.original, `${parentPath}.photo`)
+                                if (sibling) avatarSrc = String(sibling)
+                            }
+                            if (!avatarSrc && value) {
+                                if (String(value).startsWith('http')) {
+                                    avatarSrc = String(value)
+                                } else {
+                                    avatarSrc = `${apiBaseUrl}${basePath}${value}`
+                                }
                             }
 
                             return (
-                                <div className="flex items-center gap-3 min-w-0">
-                                    <Avatar className="h-8 w-8 rounded-lg ring-1 ring-border/50">
-                                        <AvatarImage
-                                            src={getImageUrl(avatarSrc || '')}
-                                            alt={String(name)}
-                                            className="object-cover"
-                                        />
-                                        <AvatarFallback className="text-[10px] font-bold bg-primary/5 text-primary rounded-lg">
-                                            {getInitials(String(name))}
-                                        </AvatarFallback>
-                                    </Avatar>
-                                    <div className="flex flex-col min-w-0 overflow-hidden">
-                                        <span className="font-medium text-sm truncate leading-none mb-0.5 text-foreground/90">
-                                            {String(name)}
-                                        </span>
-                                        {desc && (
-                                            <span className="text-[11px] text-muted-foreground truncate leading-none">
-                                                {String(desc)}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
+                                <AvatarCell
+                                    name={String(name)}
+                                    desc={desc ? String(desc) : undefined}
+                                    avatarSrc={avatarSrc}
+                                    getImageUrl={getImageUrl}
+                                />
                             )
                         }
 
                         case 'relation-badge-list':
                             return renderRelationBadges(value, col)
 
+                        case 'url':
+                        case 'link': {
+                            const labelField = styleCfg(col, 'label_field', 'labelField')
+                            const urlField = styleCfg(col, 'url_field', 'urlField')
+                            const rawUrl = urlField
+                                ? getNestedValue(row.original, urlField)
+                                : value
+                            if (!rawUrl) return <EmptyCell />
+                            const urlStr = String(rawUrl)
+                            const href = /^https?:\/\//i.test(urlStr) ? urlStr : `https://${urlStr}`
+                            let label: string
+                            if (labelField) {
+                                label = String(getNestedValue(row.original, labelField) ?? href)
+                            } else {
+                                try {
+                                    label = new URL(href).hostname
+                                } catch {
+                                    label = urlStr
+                                }
+                            }
+                            const isExternal = !/^https?:\/\/(localhost|127\.)/i.test(href)
+                            const newTab =
+                                styleCfg(col, 'new_tab', 'newTab') === true || isExternal
+                            const iconName = styleCfg(col, 'icon') || 'ExternalLink'
+                            return (
+                                <a
+                                    href={href}
+                                    {...(newTab
+                                        ? { target: '_blank', rel: 'noopener noreferrer' }
+                                        : {})}
+                                    className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <DynamicIcon name={iconName} className="h-3.5 w-3.5 shrink-0" />
+                                    <span className="truncate max-w-[260px]">{label}</span>
+                                </a>
+                            )
+                        }
+
+                        case 'email': {
+                            if (!value) return <EmptyCell />
+                            const email = String(value)
+                            return (
+                                <a
+                                    href={`mailto:${email}`}
+                                    className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <icons.Mail className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                                    <span className="truncate max-w-[260px]">{email}</span>
+                                </a>
+                            )
+                        }
+
+                        case 'currency': {
+                            const num =
+                                typeof value === 'number' ? value : Number(value)
+                            if (value === null || value === undefined || isNaN(num))
+                                return (
+                                    <div className="text-right">
+                                        <EmptyCell />
+                                    </div>
+                                )
+                            const decimals = styleCfg(col, 'decimals') ?? 2
+                            return (
+                                <span className="block text-right font-medium tabular-nums">
+                                    {formatNumber(
+                                        num,
+                                        {
+                                            style: 'currency',
+                                            currency: resolveCurrency(col),
+                                            minimumFractionDigits: decimals,
+                                            maximumFractionDigits: decimals,
+                                        },
+                                        currentLanguage,
+                                    )}
+                                </span>
+                            )
+                        }
+
+                        case 'number': {
+                            const num =
+                                typeof value === 'number' ? value : Number(value)
+                            if (value === null || value === undefined || isNaN(num))
+                                return (
+                                    <div className="text-right">
+                                        <EmptyCell />
+                                    </div>
+                                )
+                            const decimals = styleCfg(col, 'decimals')
+                            return (
+                                <span className="block text-right font-medium tabular-nums">
+                                    {formatNumber(
+                                        num,
+                                        decimals !== undefined
+                                            ? {
+                                                  minimumFractionDigits: decimals,
+                                                  maximumFractionDigits: decimals,
+                                              }
+                                            : {},
+                                        currentLanguage,
+                                    )}
+                                </span>
+                            )
+                        }
+
+                        case 'percent':
+                        case 'progress': {
+                            const num =
+                                typeof value === 'number' ? value : Number(value)
+                            if (value === null || value === undefined || isNaN(num))
+                                return <EmptyCell />
+                            const pct = Math.max(0, Math.min(100, num))
+                            return (
+                                <div className="flex items-center gap-2 min-w-[120px]">
+                                    <Progress value={pct} className="flex-1" />
+                                    <span className="text-xs font-medium tabular-nums text-muted-foreground w-9 text-right">
+                                        {Math.round(pct)}%
+                                    </span>
+                                </div>
+                            )
+                        }
+
+                        case 'tags': {
+                            const list: string[] = Array.isArray(value)
+                                ? value.map(String)
+                                : value
+                                  ? String(value)
+                                        .split(',')
+                                        .map((s) => s.trim())
+                                        .filter(Boolean)
+                                  : []
+                            if (list.length === 0) return <EmptyCell />
+                            return (
+                                <div className="flex flex-wrap gap-1">
+                                    {list.map((tag, i) => (
+                                        <Badge
+                                            key={`${col.key}-${i}`}
+                                            variant="secondary"
+                                            className="px-1.5 py-0 text-[10px]"
+                                        >
+                                            {tag}
+                                        </Badge>
+                                    ))}
+                                </div>
+                            )
+                        }
+
+                        case 'color': {
+                            if (!value) return <EmptyCell />
+                            const hex = String(value)
+                            return (
+                                <div className="flex items-center gap-2">
+                                    <span
+                                        className="h-4 w-4 rounded border border-border/60 shrink-0"
+                                        style={{ background: hex }}
+                                    />
+                                    <code className="font-mono text-xs text-muted-foreground">
+                                        {hex}
+                                    </code>
+                                </div>
+                            )
+                        }
+
+                        case 'code':
+                        case 'truncate-text': {
+                            if (value === null || value === undefined || value === '')
+                                return <EmptyCell />
+                            const maxLength = styleCfg(col, 'max_length', 'maxLength')
+                            return <CodeCell text={String(value)} maxLength={maxLength} />
+                        }
+
                         case 'phone': {
                             if (!value) return <span className="text-muted-foreground">-</span>
                             return <span className="font-medium text-sm">{String(value)}</span>
                         }
 
-                        case 'boolean':
-                            return value ? <Badge>Sí</Badge> : <Badge variant="secondary">No</Badge>
+                        case 'boolean': {
+                            const showText = styleCfg(col, 'show_text', 'showText') !== false
+                            return (
+                                <span className="inline-flex items-center gap-1.5">
+                                    {value ? (
+                                        <icons.Check className="h-4 w-4 text-green-500" />
+                                    ) : (
+                                        <icons.Minus className="h-4 w-4 text-muted-foreground" />
+                                    )}
+                                    {showText && (
+                                        <span className="text-sm text-muted-foreground">
+                                            {value ? 'Sí' : 'No'}
+                                        </span>
+                                    )}
+                                </span>
+                            )
+                        }
 
                         case 'media-gallery': {
                             if (!value || (Array.isArray(value) && value.length === 0)) {
