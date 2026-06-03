@@ -334,7 +334,7 @@ function renderField(
         case 'select':
             return (
                 <Select value={value || ''} onValueChange={onChange}>
-                    <SelectTrigger><SelectValue placeholder={field.placeholder || 'Seleccionar...'} /></SelectTrigger>
+                    <SelectTrigger className="w-full"><SelectValue placeholder={field.placeholder || 'Seleccionar...'} /></SelectTrigger>
                     <SelectContent>
                         {field.options?.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
                     </SelectContent>
