@@ -123,7 +123,7 @@ export function DynamicSelectField({ field, value, onChange }: DynamicSelectFiel
                     className="min-w-0 flex-1 justify-between font-normal"
                     data-empty={!value}
                 >
-                    <span className={'truncate ' + (selectedLabel ? '' : 'text-muted-foreground')}>
+                    <span className={'min-w-0 flex-1 truncate text-left ' + (selectedLabel ? '' : 'text-muted-foreground')}>
                         {selectedLabel || field.placeholder || 'Buscar…'}
                     </span>
                     <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
