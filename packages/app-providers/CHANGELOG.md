@@ -1,5 +1,23 @@
 # @asteby/metacore-app-providers
 
+## 19.0.0
+
+### Patch Changes
+
+- da8139d: fix(branding): foreground by luminance threshold, not max WCAG contrast
+
+  `readableForeground` picked black on mid-tone saturated brands (indigo/purple
+  at Y≈0.22) because pure max-contrast favors black there — but those deep colors
+  expect white text and black-on-dark-purple read as broken. Now it uses a
+  perceptual luminance threshold (Y > 0.3 → dark text): deep colors (blue/purple/
+  red) keep white, bright surfaces (lime/yellow/cyan + the inverted near-white
+  grey primary) get black. Adapts to light/dark automatically since the resolved
+  primary lightness already differs per mode.
+
+- Updated dependencies [da8139d]
+  - @asteby/metacore-runtime-react@13.10.0
+  - @asteby/metacore-ui@2.1.2
+
 ## 18.0.1
 
 ### Patch Changes
