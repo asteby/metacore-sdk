@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 13.8.4
+
+### Patch Changes
+
+- 7465943: fix(dynamic-form): basic `select` fields fill their column (`w-full`). shadcn's SelectTrigger defaults to `w-fit`, so enum/option selects shrank to their content instead of lining up with text inputs and FK comboboxes. Applies to both the plain `select` renderer and `RefSelect`.
+
 ## 13.8.3
 
 ### Patch Changes
