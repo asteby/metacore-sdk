@@ -1,5 +1,12 @@
 # @asteby/metacore-runtime-react
 
+## 13.8.3
+
+### Patch Changes
+
+- dc3d079: fix(dynamic-select): constrain the combobox+"+" row to its grid cell. The wrapper lacked `w-full min-w-0`, so in a 2-column form the row sized to its content (the long empty-state placeholder) and overflowed the column, pushing the inline-create "+" off-screen — it only fit once a short value was selected. Add `w-full min-w-0`.
+- 177415d: fix(dynamic-select): repair JSX syntax broken in #332 — the wrapper-row comment was a sibling of the root element inside `return (`, which is invalid and failed the release build (TS1005). Moved it to a `//` comment above `return`. The `w-full min-w-0` grid-cell constraint (the actual `+`-overlap fix) is unchanged.
+
 ## 13.8.2
 
 ### Patch Changes
