@@ -207,6 +207,12 @@ function fieldToZod(field: ActionFieldDef): ZodTypeAny {
 // same render as before).
 export function resolveWidget(field: ActionFieldDef): string {
     if (field.widget) return field.widget
+    // S1: any field that declares an FK target (`ref`, or the snake_case
+    // `source`/`relation` the kernel may serve) renders as an async searchable
+    // single-select — NOT a raw text input. This wins over the `type` switch so
+    // a declared FK column is a picker regardless of its SQL column type
+    // (uuid/text/etc), matching the kernel's option-resolution semantics.
+    if (fieldHasRef(field)) return 'dynamic_select'
     switch (field.type) {
         case 'textarea': return 'textarea'
         case 'select': return 'select'
@@ -219,8 +225,31 @@ export function resolveWidget(field: ActionFieldDef): string {
         // File upload: POSTs to the host upload endpoint and stores the returned
         // file url/path as the field value. Rendered by `UploadField`.
         case 'upload': return 'upload'
+        // S2: media-bearing types resolve to the upload widget so an `image`
+        // (logo/photo) or generic `file`/`media` field gets a real file picker
+        // instead of a free-text input.
+        case 'image': return 'upload'
+        case 'media': return 'upload'
+        case 'file': return 'upload'
         default: return 'text'
     }
+}
+
+/**
+ * Resolves a field's FK target, tolerating the camelCase `ref` (authored SDK
+ * shape) and the snake_case `source` / `relation` aliases the kernel manifest
+ * may serve for a belongs_to column. Returns the trimmed model key, or
+ * `undefined` when the field declares no relation.
+ */
+export function getFieldRef(field: ActionFieldDef): string | undefined {
+    const ref = field.ref ?? field.source ?? field.relation
+    if (typeof ref === 'string' && ref.trim() !== '') return ref.trim()
+    return undefined
+}
+
+/** True when a field declares an FK target the SDK can resolve options against. */
+export function fieldHasRef(field: ActionFieldDef): boolean {
+    return getFieldRef(field) !== undefined
 }
 
 /**

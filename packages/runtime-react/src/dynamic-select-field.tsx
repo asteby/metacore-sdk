@@ -34,9 +34,47 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@asteby/metacore-ui/primitives'
-import { Check, ChevronsUpDown, Loader2, Plus } from 'lucide-react'
+import { Check, ChevronsUpDown, ImageIcon, Loader2, Plus } from 'lucide-react'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
+import { getFieldRef } from './dynamic-form-schema'
 import type { ActionFieldDef } from './types'
+
+/**
+ * Small square thumbnail for an option's `image`. Falls back to a neutral
+ * placeholder icon when the option has no image so rows/triggers stay aligned.
+ * `size` is in pixels (kept small — 20–24px — so the picker reads as a list,
+ * not a gallery). Inline style for the box dimensions: arbitrary Tailwind
+ * classes from a federated addon don't always survive the host's class scan.
+ */
+function OptionThumb({ image, size = 20 }: { image?: string | null; size?: number }) {
+    const box = { width: size, height: size }
+    if (!image) {
+        return (
+            <span
+                className="text-muted-foreground bg-muted flex shrink-0 items-center justify-center rounded-sm"
+                style={box}
+                aria-hidden
+            >
+                <ImageIcon className="size-3 opacity-60" />
+            </span>
+        )
+    }
+    return (
+        <img
+            src={image}
+            alt=""
+            aria-hidden
+            loading="lazy"
+            className="shrink-0 rounded-sm object-cover"
+            style={box}
+            // A broken image url shouldn't leave a torn-icon glyph; collapse to
+            // the neutral placeholder background instead.
+            onError={(e) => {
+                e.currentTarget.style.visibility = 'hidden'
+            }}
+        />
+    )
+}
 
 function useDebounced<T>(value: T, ms: number): T {
     const [debounced, setDebounced] = useState(value)
@@ -61,13 +99,17 @@ export function DynamicSelectField({ field, value, onChange }: DynamicSelectFiel
     // shows a name (not a UUID) without a round-trip.
     const [picked, setPicked] = useState<ResolvedOption | null>(null)
 
+    // Tolerate the snake_case `source`/`relation` aliases the kernel may serve
+    // for the FK target, not just camelCase `ref`.
+    const fieldRef = getFieldRef(field)
+
     const { options, loading } = useOptionsResolver({
         modelKey: '',
         fieldKey: 'id',
-        ref: field.ref,
+        ref: fieldRef,
         // searchEndpoint only drives the URL when there's no ref — ref is the
         // canonical, kernel-derived path and wins.
-        endpoint: field.ref ? undefined : field.searchEndpoint,
+        endpoint: fieldRef ? undefined : field.searchEndpoint,
         query: debounced,
         limit: 20,
         // Don't fetch until the popover opens (and keep fetching as the query
@@ -75,10 +117,21 @@ export function DynamicSelectField({ field, value, onChange }: DynamicSelectFiel
         enabled: open,
     })
 
-    const selectedLabel =
-        (picked && String(picked.id) === String(value) ? picked.label : null) ??
-        options.find((o) => String(o.id) === String(value))?.label ??
-        (value ? String(value) : '')
+    // The currently-selected option, resolved either from what the user picked
+    // (cached in `picked`) or from the loaded page. Drives both the trigger
+    // label and its thumbnail.
+    const selectedOption =
+        (picked && String(picked.id) === String(value) ? picked : null) ??
+        options.find((o) => String(o.id) === String(value)) ??
+        null
+
+    const selectedLabel = selectedOption?.label ?? (value ? String(value) : '')
+
+    // Only switch the picker into "with thumbnails" mode when the data actually
+    // carries images — a relation whose options have no `image` keeps the plain
+    // text list it had before (no empty placeholder column).
+    const hasImages =
+        !!selectedOption?.image || options.some((o) => !!o.image)
 
     const handlePick = (opt: ResolvedOption) => {
         setPicked(opt)
@@ -93,11 +146,11 @@ export function DynamicSelectField({ field, value, onChange }: DynamicSelectFiel
     // hands back the new record and we select it immediately. No host import →
     // no circular dependency; works for ANY dynamic_select with a `ref`.
     const openCreate = () => {
-        if (!field.ref || typeof window === 'undefined') return
+        if (!fieldRef || typeof window === 'undefined') return
         window.dispatchEvent(
             new CustomEvent('metacore:create-record', {
                 detail: {
-                    model: field.ref,
+                    model: fieldRef,
                     onCreated: (rec: any) => {
                         if (rec && rec.id != null) {
                             const id = String(rec.id)
@@ -127,8 +180,13 @@ export function DynamicSelectField({ field, value, onChange }: DynamicSelectFiel
                     className="min-w-0 flex-1 justify-between font-normal"
                     data-empty={!value}
                 >
-                    <span className={'min-w-0 flex-1 truncate text-left ' + (selectedLabel ? '' : 'text-muted-foreground')}>
-                        {selectedLabel || field.placeholder || 'Buscar…'}
+                    <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                        {hasImages && value ? (
+                            <OptionThumb image={selectedOption?.image} size={20} />
+                        ) : null}
+                        <span className={'min-w-0 flex-1 truncate ' + (selectedLabel ? '' : 'text-muted-foreground')}>
+                            {selectedLabel || field.placeholder || 'Buscar…'}
+                        </span>
                     </span>
                     <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
                 </Button>
@@ -168,8 +226,11 @@ export function DynamicSelectField({ field, value, onChange }: DynamicSelectFiel
                                             value={String(opt.id)}
                                             onSelect={() => handlePick(opt)}
                                         >
-                                            <Check className={'mr-2 size-4 ' + (isSel ? 'opacity-100' : 'opacity-0')} />
-                                            <div className="flex min-w-0 flex-col">
+                                            <Check className={'mr-2 size-4 shrink-0 ' + (isSel ? 'opacity-100' : 'opacity-0')} />
+                                            {hasImages && (
+                                                <OptionThumb image={opt.image} size={24} />
+                                            )}
+                                            <div className="ml-2 flex min-w-0 flex-col">
                                                 <span className="truncate">{opt.label}</span>
                                                 {opt.description && (
                                                     <span className="text-muted-foreground truncate text-xs">
@@ -186,15 +247,15 @@ export function DynamicSelectField({ field, value, onChange }: DynamicSelectFiel
                 </Command>
             </PopoverContent>
             </Popover>
-            {field.ref && (
+            {fieldRef && (
                 <Button
                     type="button"
                     variant="outline"
                     size="icon"
                     className="size-9 shrink-0"
                     onClick={openCreate}
-                    title={`Crear ${field.label ?? field.ref}`}
-                    aria-label={`Crear ${field.label ?? field.ref}`}
+                    title={`Crear ${field.label ?? fieldRef}`}
+                    aria-label={`Crear ${field.label ?? fieldRef}`}
                 >
                     <Plus className="size-4" />
                 </Button>

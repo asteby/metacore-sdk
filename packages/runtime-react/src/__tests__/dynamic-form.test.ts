@@ -101,6 +101,34 @@ describe('resolveWidget', () => {
         expect(resolveWidget({ key: 'k', label: 'L', type: 'string' })).toBe('text')
         expect(resolveWidget({ key: 'k', label: 'L', type: 'email' })).toBe('text')
     })
+
+    // S1: a declared FK target makes the field a searchable picker regardless
+    // of its SQL column type — wins over the type→text fallback.
+    it('un field con ref (FK) resuelve a dynamic_select antes del switch por type', () => {
+        expect(resolveWidget({ key: 'k', label: 'L', type: 'string', ref: 'product' })).toBe('dynamic_select')
+        expect(resolveWidget({ key: 'k', label: 'L', type: 'uuid', ref: 'customer' })).toBe('dynamic_select')
+    })
+
+    it('tolera los alias snake_case source/relation como ref', () => {
+        expect(resolveWidget({ key: 'k', label: 'L', type: 'string', source: 'product' })).toBe('dynamic_select')
+        expect(resolveWidget({ key: 'k', label: 'L', type: 'string', relation: 'vendor' })).toBe('dynamic_select')
+    })
+
+    it('un ref en blanco NO fuerza dynamic_select', () => {
+        expect(resolveWidget({ key: 'k', label: 'L', type: 'string', ref: '' })).toBe('text')
+        expect(resolveWidget({ key: 'k', label: 'L', type: 'string', ref: '   ' })).toBe('text')
+    })
+
+    // S2: media-bearing types render the upload widget (file picker), not text.
+    it('image/media/file resuelven a upload', () => {
+        expect(resolveWidget({ key: 'k', label: 'L', type: 'image' })).toBe('upload')
+        expect(resolveWidget({ key: 'k', label: 'L', type: 'media' })).toBe('upload')
+        expect(resolveWidget({ key: 'k', label: 'L', type: 'file' })).toBe('upload')
+    })
+
+    it('widget explícito sigue ganando incluso con ref', () => {
+        expect(resolveWidget({ key: 'k', label: 'L', type: 'string', ref: 'product', widget: 'textarea' })).toBe('textarea')
+    })
 })
 
 describe('line-items (repeatable group)', () => {
