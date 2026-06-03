@@ -183,7 +183,12 @@ function generateThemeVars(primaryHex: string, accentHex: string) {
     // The floor (0.55) is what "inverts" an intrinsically dark/near-black
     // brand into a visible mid-light surface instead of vanishing into the
     // background; the ceiling (0.70) keeps lime/yellow from blowing out.
-    const lPrimary = clampL(p.l + 0.05, 0.55, 0.70)
+    // Chromatic brands keep their hue/chroma, just brightened for the dark
+    // canvas. An achromatic (grey/near-black) brand has nothing to brighten —
+    // a mid-grey primary on a dark-grey canvas reads as muddy, not branded.
+    // Invert it instead: a near-white primary, like a neutral dark theme, so
+    // buttons/active states are crisp light-on-dark.
+    const lPrimary = isAchromatic ? 0.92 : clampL(p.l + 0.05, 0.55, 0.7)
     const fgPrimary = readableForeground(lPrimary, isAchromatic ? 0 : p.c, p.h)
     vars['--primary'] = `oklch(${lPrimary.toFixed(4)} ${pc} ${h})`
     vars['--primary-foreground'] = fgPrimary
@@ -206,7 +211,10 @@ function generateThemeVars(primaryHex: string, accentHex: string) {
     vars['--sidebar-border'] = `oklch(0.33 ${sc(0.02)} ${h})`
     vars['--sidebar-ring'] = vars['--primary']
   } else {
-    const lPrimary = clampL(p.l, 0.45, 0.65)
+    // Symmetric to the dark branch: a grey/near-black brand inverts to a
+    // near-black primary on the light canvas (crisp dark-on-light), instead
+    // of a washed mid-grey.
+    const lPrimary = isAchromatic ? 0.21 : clampL(p.l, 0.45, 0.65)
     const primaryClamped = `oklch(${lPrimary.toFixed(4)} ${pc} ${h})`
     const fgPrimary = readableForeground(lPrimary, isAchromatic ? 0 : p.c, p.h)
     vars['--primary'] = primaryClamped
