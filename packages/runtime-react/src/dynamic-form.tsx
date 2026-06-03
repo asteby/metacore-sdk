@@ -195,7 +195,7 @@ function FieldRenderer({ field, value, onChange }: FieldRendererProps) {
         case 'select':
             return (
                 <Select value={value || ''} onValueChange={onChange}>
-                    <SelectTrigger><SelectValue placeholder={field.placeholder || 'Seleccionar...'} /></SelectTrigger>
+                    <SelectTrigger className="w-full"><SelectValue placeholder={field.placeholder || 'Seleccionar...'} /></SelectTrigger>
                     <SelectContent>
                         {field.options?.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
                     </SelectContent>
@@ -220,7 +220,7 @@ function RefSelect({ field, value, onChange }: FieldRendererProps) {
     })
     return (
         <Select value={value || ''} onValueChange={onChange} disabled={loading}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
                 <SelectValue placeholder={loading ? 'Cargando…' : (field.placeholder || 'Seleccionar...')} />
             </SelectTrigger>
             <SelectContent>
