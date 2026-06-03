@@ -112,8 +112,17 @@ export function ActionModalDispatcher({
     return null
 }
 
-function buildActionUrl(endpoint: string | undefined, model: string, recordId: string, actionKey: string) {
-    return endpoint ? `${endpoint}/${recordId}/action/${actionKey}` : `/data/${model}/me/${recordId}/action/${actionKey}`
+function buildActionUrl(endpoint: string | undefined, model: string, recordId: string | undefined, actionKey: string) {
+    // A create-placement (collection) action has no record yet, so `recordId`
+    // is undefined. Omit the `/{id}` segment so the request hits the collection
+    // route (`/data/:model/me/action/:action`) instead of the per-record route
+    // (`/data/:model/me/:id/action/:action`), which would reject the literal
+    // "undefined" as an invalid record ID (ops dynamic.go ExecuteAction → 400).
+    const hasRecord = recordId != null && recordId !== '' && recordId !== 'undefined'
+    if (endpoint) {
+        return hasRecord ? `${endpoint}/${recordId}/action/${actionKey}` : `${endpoint}/action/${actionKey}`
+    }
+    return hasRecord ? `/data/${model}/me/${recordId}/action/${actionKey}` : `/data/${model}/me/action/${actionKey}`
 }
 
 function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoint, onSuccess }: ActionModalProps) {
