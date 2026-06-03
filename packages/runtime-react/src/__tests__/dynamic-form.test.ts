@@ -101,6 +101,13 @@ describe('resolveWidget', () => {
         expect(resolveWidget({ key: 'k', label: 'L', type: 'string' })).toBe('text')
         expect(resolveWidget({ key: 'k', label: 'L', type: 'email' })).toBe('text')
     })
+
+    it('mapea tipos de media (image/file/media-gallery/upload) al widget upload', () => {
+        expect(resolveWidget({ key: 'logo', label: 'Logo', type: 'image' })).toBe('upload')
+        expect(resolveWidget({ key: 'doc', label: 'Doc', type: 'file' })).toBe('upload')
+        expect(resolveWidget({ key: 'gal', label: 'Galería', type: 'media-gallery' })).toBe('upload')
+        expect(resolveWidget({ key: 'u', label: 'U', type: 'upload' })).toBe('upload')
+    })
 })
 
 describe('line-items (repeatable group)', () => {

@@ -218,7 +218,14 @@ export function resolveWidget(field: ActionFieldDef): string {
         case 'date': return 'date'
         // File upload: POSTs to the host upload endpoint and stores the returned
         // file url/path as the field value. Rendered by `UploadField`.
-        case 'upload': return 'upload'
+        // `image`/`file`/`media-gallery` are the declarative field types the
+        // kernel/manifests author for media columns; without these cases they
+        // fell through to `default: 'text'` and rendered a raw text input
+        // (paste-a-URL) instead of the uploader.
+        case 'upload':
+        case 'image':
+        case 'file':
+        case 'media-gallery': return 'upload'
         default: return 'text'
     }
 }
