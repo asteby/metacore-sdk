@@ -99,18 +99,20 @@ function oklchLuminance(L: number, C: number, hDeg: number): number {
   return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb
 }
 
-// Pick near-black or near-white for text on a brand surface, whichever wins
-// WCAG contrast. This is what makes a dark/grey brand usable in dark mode:
-// a light-grey `--primary` gets dark text instead of the hardcoded white that
-// previously rendered invisible. `c`/`h` matter because chromatic surfaces of
-// the same L carry different luminance.
+// Pick near-black or near-white for text on a brand surface, by a perceptual
+// LUMINANCE THRESHOLD — not max WCAG contrast. Pure max-contrast picks black
+// on mid-tone saturated surfaces (e.g. indigo/purple at Y≈0.22), which is
+// technically higher contrast but looks wrong: those colors are "deep" and
+// expect white text. A luminance threshold keeps deep colors (blue/purple/red,
+// Y≲0.25) on white, while genuinely bright surfaces (lime/yellow/cyan and the
+// inverted near-white grey primary, Y≳0.33) get black. Because the resolved
+// primary L already differs per mode (darker in light theme, lighter/inverted
+// in dark), the same threshold adapts to light/dark automatically.
 const FG_LIGHT = 'oklch(0.985 0 0)'
 const FG_DARK = 'oklch(0.18 0 0)'
+const FG_LUMINANCE_THRESHOLD = 0.3
 function readableForeground(l: number, c: number, h: number): string {
-  const y = oklchLuminance(l, c, h)
-  const contrastWhite = (1.0 + 0.05) / (y + 0.05)
-  const contrastBlack = (y + 0.05) / 0.05
-  return contrastBlack > contrastWhite ? FG_DARK : FG_LIGHT
+  return oklchLuminance(l, c, h) > FG_LUMINANCE_THRESHOLD ? FG_DARK : FG_LIGHT
 }
 
 // The full set of CSS custom properties the branding system owns. Both
