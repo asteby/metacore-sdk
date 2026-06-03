@@ -111,7 +111,12 @@ export function DynamicSelectField({ field, value, onChange }: DynamicSelectFiel
     }
 
     return (
-        <div className="flex items-center gap-1.5">
+        {/* w-full + min-w-0: as a grid cell child, the row must be allowed to
+            shrink to the cell. Without min-w-0 the combobox+button row sizes to
+            its content (the long empty-state placeholder) and overflows the
+            column, pushing the "+" off-screen — it only "fit" once a short value
+            was selected. */}
+        <div className="flex w-full min-w-0 items-center gap-1.5">
             <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
                 <Button
