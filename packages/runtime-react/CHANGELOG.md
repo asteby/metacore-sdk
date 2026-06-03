@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 13.10.1
+
+### Patch Changes
+
+- 9107b10: Fix create-placement action submit hitting `/me/undefined/action/...` (400 Invalid record ID). `buildActionUrl` now omits the record segment when there is no record, posting to the collection route `/data/:model/me/action/:action`, so create modals declared as `placement:create` actions work.
+
 ## 13.10.0
 
 ### Minor Changes
