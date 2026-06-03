@@ -76,6 +76,43 @@ function hexToOklch(hex: string): string | null {
   return `oklch(${L.toFixed(4)} ${C.toFixed(4)} ${h.toFixed(4)})`
 }
 
+// oklch → linear-sRGB relative luminance (CIE Y, 0..1). Used to choose a
+// readable text color over an arbitrary brand surface. Inverse of the
+// matrices in hexToOklch.
+function oklchLuminance(L: number, C: number, hDeg: number): number {
+  const h = (hDeg * Math.PI) / 180
+  const a = C * Math.cos(h)
+  const b = C * Math.sin(h)
+
+  const l_ = L + 0.3963377774 * a + 0.2158037573 * b
+  const m_ = L - 0.1055613458 * a - 0.0638541728 * b
+  const s_ = L - 0.0894841775 * a - 1.291485548 * b
+
+  const l = l_ * l_ * l_
+  const m = m_ * m_ * m_
+  const s = s_ * s_ * s_
+
+  const lr = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s
+  const lg = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s
+  const lb = -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
+
+  return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb
+}
+
+// Pick near-black or near-white for text on a brand surface, whichever wins
+// WCAG contrast. This is what makes a dark/grey brand usable in dark mode:
+// a light-grey `--primary` gets dark text instead of the hardcoded white that
+// previously rendered invisible. `c`/`h` matter because chromatic surfaces of
+// the same L carry different luminance.
+const FG_LIGHT = 'oklch(0.985 0 0)'
+const FG_DARK = 'oklch(0.18 0 0)'
+function readableForeground(l: number, c: number, h: number): string {
+  const y = oklchLuminance(l, c, h)
+  const contrastWhite = (1.0 + 0.05) / (y + 0.05)
+  const contrastBlack = (y + 0.05) / 0.05
+  return contrastBlack > contrastWhite ? FG_DARK : FG_LIGHT
+}
+
 // The full set of CSS custom properties the branding system owns. Both
 // light and dark code paths MUST write a value for every key in this
 // list, otherwise toggling between modes leaves stale values from the
@@ -84,6 +121,7 @@ function hexToOklch(hex: string): string | null {
 // chrome floating on a black canvas. Keep dark and light symmetrical.
 const BRANDED_KEYS = [
   '--primary',
+  '--primary-foreground',
   '--ring',
   '--chart-2',
   '--secondary',
@@ -127,48 +165,64 @@ function generateThemeVars(primaryHex: string, accentHex: string) {
   if (!p) return null
 
   const isDark = document.documentElement.classList.contains('dark')
-  const h = p.h.toFixed(4)
+
+  // A grey/near-grey brand has no meaningful hue — hexToOklch returns float
+  // noise for it (e.g. #2b2b2b → h≈90). Applying the surfaces' fixed chroma
+  // at that bogus hue paints the whole UI a random tint (the warm/sepia cast
+  // a dark-grey brand produced before this). When achromatic, collapse hue
+  // and chroma to 0 so the theme stays cleanly neutral.
+  const isAchromatic = p.c < 0.02
+  const h = (isAchromatic ? 0 : p.h).toFixed(4)
+  const pc = (isAchromatic ? 0 : p.c).toFixed(4)
+  // surface-chroma: zeroed for grey brands, passthrough otherwise.
+  const sc = (c: number) => (isAchromatic ? 0 : c).toFixed(4)
   const vars: Record<string, string> = {}
 
   if (isDark) {
-    // Preserve the legacy +0.05 brighten for colors that need it (e.g. indigo
-    // L≈0.55 → 0.60), but clamp the upper bound so lime/yellow don't blow out.
+    // Brighten the brand so it reads as an accent on the ~0.22 dark canvas.
+    // The floor (0.55) is what "inverts" an intrinsically dark/near-black
+    // brand into a visible mid-light surface instead of vanishing into the
+    // background; the ceiling (0.70) keeps lime/yellow from blowing out.
     const lPrimary = clampL(p.l + 0.05, 0.55, 0.70)
-    vars['--primary'] = `oklch(${lPrimary.toFixed(4)} ${p.c.toFixed(4)} ${h})`
+    const fgPrimary = readableForeground(lPrimary, isAchromatic ? 0 : p.c, p.h)
+    vars['--primary'] = `oklch(${lPrimary.toFixed(4)} ${pc} ${h})`
+    vars['--primary-foreground'] = fgPrimary
     vars['--ring'] = vars['--primary']
     vars['--chart-2'] = vars['--primary']
-    vars['--secondary'] = `oklch(0.29 0.02 ${h})`
-    vars['--muted'] = `oklch(0.29 0.02 ${h})`
-    vars['--accent'] = `oklch(0.28 0.05 ${h})`
-    vars['--accent-foreground'] = `oklch(0.80 0.10 ${h})`
-    vars['--border'] = `oklch(0.33 0.02 ${h})`
-    vars['--input'] = `oklch(0.33 0.02 ${h})`
-    vars['--background'] = `oklch(0.22 0.01 ${h})`
-    vars['--card'] = `oklch(0.24 0.01 ${h})`
-    vars['--popover'] = `oklch(0.24 0.01 ${h})`
-    vars['--sidebar'] = `oklch(0.20 0.01 ${h})`
+    vars['--secondary'] = `oklch(0.29 ${sc(0.02)} ${h})`
+    vars['--muted'] = `oklch(0.29 ${sc(0.02)} ${h})`
+    vars['--accent'] = `oklch(0.28 ${sc(0.05)} ${h})`
+    vars['--accent-foreground'] = `oklch(0.80 ${sc(0.10)} ${h})`
+    vars['--border'] = `oklch(0.33 ${sc(0.02)} ${h})`
+    vars['--input'] = `oklch(0.33 ${sc(0.02)} ${h})`
+    vars['--background'] = `oklch(0.22 ${sc(0.01)} ${h})`
+    vars['--card'] = `oklch(0.24 ${sc(0.01)} ${h})`
+    vars['--popover'] = `oklch(0.24 ${sc(0.01)} ${h})`
+    vars['--sidebar'] = `oklch(0.20 ${sc(0.01)} ${h})`
     vars['--sidebar-primary'] = vars['--primary']
-    vars['--sidebar-primary-foreground'] = `oklch(1 0 0)`
-    vars['--sidebar-accent'] = `oklch(0.29 0.02 ${h})`
+    vars['--sidebar-primary-foreground'] = fgPrimary
+    vars['--sidebar-accent'] = `oklch(0.29 ${sc(0.02)} ${h})`
     vars['--sidebar-accent-foreground'] = vars['--primary']
-    vars['--sidebar-border'] = `oklch(0.33 0.02 ${h})`
+    vars['--sidebar-border'] = `oklch(0.33 ${sc(0.02)} ${h})`
     vars['--sidebar-ring'] = vars['--primary']
   } else {
     const lPrimary = clampL(p.l, 0.45, 0.65)
-    const primaryClamped = `oklch(${lPrimary.toFixed(4)} ${p.c.toFixed(4)} ${h})`
+    const primaryClamped = `oklch(${lPrimary.toFixed(4)} ${pc} ${h})`
+    const fgPrimary = readableForeground(lPrimary, isAchromatic ? 0 : p.c, p.h)
     vars['--primary'] = primaryClamped
+    vars['--primary-foreground'] = fgPrimary
     vars['--ring'] = `oklch(0 0 0)`
     vars['--chart-2'] = primaryClamped
-    vars['--secondary'] = `oklch(0.9540 0.0063 ${h})`
+    vars['--secondary'] = `oklch(0.9540 ${sc(0.0063)} ${h})`
     vars['--muted'] = `oklch(0.9702 0 0)`
-    vars['--accent'] = `oklch(0.94 0.03 ${h})`
-    vars['--accent-foreground'] = `oklch(0.5445 0.1903 ${h})`
-    vars['--border'] = `oklch(0.9300 0.0094 ${h})`
+    vars['--accent'] = `oklch(0.94 ${sc(0.03)} ${h})`
+    vars['--accent-foreground'] = `oklch(0.5445 ${sc(0.1903)} ${h})`
+    vars['--border'] = `oklch(0.9300 ${sc(0.0094)} ${h})`
     vars['--input'] = `oklch(0.9401 0 0)`
     vars['--background'] = `oklch(0.9940 0 0)`
     vars['--card'] = `oklch(0.9940 0 0)`
     vars['--popover'] = `oklch(0.9911 0 0)`
-    vars['--sidebar'] = `oklch(0.9777 0.0051 ${h})`
+    vars['--sidebar'] = `oklch(0.9777 ${sc(0.0051)} ${h})`
     vars['--sidebar-primary'] = `oklch(0 0 0)`
     vars['--sidebar-primary-foreground'] = `oklch(1 0 0)`
     vars['--sidebar-accent'] = `oklch(0.9401 0 0)`
@@ -192,28 +246,40 @@ function applyThemeVars(vars: Record<string, string>) {
   }
 }
 
+// Treat empty/whitespace strings as "not provided" so a tenant row with a
+// blank color column can't blank out the brand (or skip branding entirely,
+// dropping the UI back to the unstyled fallback theme).
+function clean(v: string | undefined): string | undefined {
+  const t = typeof v === 'string' ? v.trim() : ''
+  return t ? t : undefined
+}
+
 export function applyBranding(
   data: Partial<PlatformBranding>,
   defaults: PlatformBranding = FALLBACK_BRANDING,
 ) {
-  if (data.primary_color || data.accent_color) {
+  const primaryHex = clean(data.primary_color) ?? clean(defaults.primary_color)
+  const accentHex = clean(data.accent_color) ?? clean(defaults.accent_color)
+
+  if (primaryHex || accentHex) {
     const vars = generateThemeVars(
-      data.primary_color || defaults.primary_color,
-      data.accent_color || defaults.accent_color,
+      primaryHex ?? FALLBACK_BRANDING.primary_color,
+      accentHex ?? FALLBACK_BRANDING.accent_color,
     )
     if (vars) applyThemeVars(vars)
   }
 
-  if (data.platform_name) {
-    document.title = data.platform_name
+  const name = clean(data.platform_name)
+  if (name) {
+    document.title = name
   }
 
   const root = document.documentElement
-  if (data.primary_color) {
-    root.style.setProperty('--brand-primary', data.primary_color)
+  if (primaryHex) {
+    root.style.setProperty('--brand-primary', primaryHex)
   }
-  if (data.accent_color) {
-    root.style.setProperty('--brand-accent', data.accent_color)
+  if (accentHex) {
+    root.style.setProperty('--brand-accent', accentHex)
   }
 }
 
@@ -267,7 +333,16 @@ export function PlatformConfigProvider({
     queryKey: ['platform-branding', storageKey],
     queryFn: async () => {
       const res = await fetcher()
-      return { ...defaults, ...res } as PlatformBranding
+      // Merge only non-empty fields over defaults — an empty string from the
+      // API (unset DB column) must not overwrite a good default and blank the
+      // brand. Mirrors `clean()` used in applyBranding.
+      const merged = { ...defaults } as unknown as Record<string, unknown>
+      for (const [k, v] of Object.entries(res)) {
+        if (typeof v === 'string' ? v.trim() !== '' : v != null) {
+          merged[k] = v
+        }
+      }
+      return merged as unknown as PlatformBranding
     },
     staleTime,
     retry: 1,

@@ -274,7 +274,7 @@ function CellRenderer({ field, value, onChange, disabled }: CellRendererProps) {
         case 'select':
             return (
                 <Select value={value || ''} onValueChange={onChange} disabled={disabled}>
-                    <SelectTrigger>
+                    <SelectTrigger className="w-full">
                         <SelectValue placeholder={field.placeholder || 'Seleccionar...'} />
                     </SelectTrigger>
                     <SelectContent>
@@ -328,7 +328,7 @@ function RefCell({ field, value, onChange, disabled }: CellRendererProps) {
     })
     return (
         <Select value={value || ''} onValueChange={onChange} disabled={disabled || loading}>
-            <SelectTrigger>
+            <SelectTrigger className="w-full">
                 <SelectValue placeholder={loading ? 'Cargando…' : field.placeholder || 'Seleccionar...'} />
             </SelectTrigger>
             <SelectContent>

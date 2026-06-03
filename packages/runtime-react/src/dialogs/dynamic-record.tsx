@@ -581,7 +581,7 @@ function EditField({ field, value, onChange }: {
     if (field.type === 'select' && field.options?.length) {
         return (
             <Select value={String(value ?? '')} onValueChange={onChange}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                     <SelectValue placeholder="Seleccionar..." />
                 </SelectTrigger>
                 <SelectContent>
