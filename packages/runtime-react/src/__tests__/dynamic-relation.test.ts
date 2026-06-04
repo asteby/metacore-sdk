@@ -10,6 +10,7 @@ import {
     pickOptionLabel,
     relationRowKey,
 } from '../dynamic-relation-helpers'
+import { resolveWidget } from '../dynamic-form-schema'
 import type { ColumnDefinition, TableMetadata } from '../types'
 
 describe('buildRelationFilterParams', () => {
@@ -133,6 +134,36 @@ describe('deriveRelationFormFields', () => {
         expect(deriveRelationFormFields(null, 'invoice_id')).toEqual([])
         expect(deriveRelationFormFields(undefined, 'invoice_id')).toEqual([])
         expect(deriveRelationFormFields({ columns: [] }, 'invoice_id')).toEqual([])
+    })
+
+    // The column→field boundary must carry `ref` (FK target) so a belongs_to
+    // column renders the searchable picker instead of a raw uuid text input.
+    it('propaga el ref (FK target) de la columna al field', () => {
+        const meta: Pick<TableMetadata, 'columns'> = {
+            columns: [
+                { key: 'product_id', label: 'Producto', type: 'text', sortable: true, filterable: false, ref: 'product' },
+            ],
+        }
+        const fields = deriveRelationFormFields(meta, 'invoice_id')
+        const prod = fields.find(f => f.key === 'product_id')
+        expect(prod?.ref).toBe('product')
+        // …and that ref drives the widget to the async searchable picker.
+        expect(resolveWidget(prod!)).toBe('dynamic_select')
+    })
+
+    // Media columns must map to a media-bearing field type so the form renders
+    // the upload dropzone (resolveWidget → 'upload'), not a text input.
+    it('mapea columnas image/media-gallery a tipos que resuelven a upload', () => {
+        const meta: Pick<TableMetadata, 'columns'> = {
+            columns: [
+                { key: 'logo', label: 'Logo', type: 'image', sortable: false, filterable: false },
+                { key: 'gallery', label: 'Galería', type: 'media-gallery', sortable: false, filterable: false },
+            ],
+        }
+        const fields = deriveRelationFormFields(meta, 'invoice_id')
+        const byKey = Object.fromEntries(fields.map(f => [f.key, f]))
+        expect(resolveWidget(byKey['logo'])).toBe('upload')
+        expect(resolveWidget(byKey['gallery'])).toBe('upload')
     })
 })
 
