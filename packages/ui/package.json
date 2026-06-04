@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-ui",
-  "version": "2.1.2",
+  "version": "2.2.0",
   "description": "Metacore UI kit — data-table, layout shell, command-menu, hooks y primitives shadcn reutilizables",
   "license": "Apache-2.0",
   "repository": {
