@@ -52,6 +52,13 @@ export type ColumnFilterType =
   | 'text'
   | 'number_range'
   | 'date_range'
+  /**
+   * Like `select` but the options are resolved server-side from a relation
+   * (`filterSearchEndpoint = /options/<ref>`) rather than declared inline.
+   * Renders the same multi-value checkbox combobox; the host loads + caches
+   * the options into `filterOptions` before they arrive. See DynamicTable.
+   */
+  | 'dynamic_select'
 
 export interface ColumnFilterMeta {
   filterable?: boolean
@@ -94,10 +101,23 @@ export function FilterableColumnHeader<TData, TValue>({
     Record<string, unknown>
   const canSort = column.getCanSort()
   const filterType = meta.filterType || 'select'
+  // `select`, `boolean` and `dynamic_select` all render the same multi-value
+  // checkbox combobox; only the option source differs (inline vs relation
+  // endpoint). Treat them uniformly so a relation filter behaves like a static
+  // one once its options have loaded.
+  const isMultiSelect =
+    filterType === 'select' ||
+    filterType === 'boolean' ||
+    filterType === 'dynamic_select'
   const hasOptions = meta.filterOptions && meta.filterOptions.length > 0
   const canFilter =
     meta.filterable &&
-    (hasOptions || filterType === 'text' || filterType === 'number_range')
+    (hasOptions ||
+      filterType === 'text' ||
+      filterType === 'number_range' ||
+      // A relation filter is still actionable while its options stream in —
+      // surface the trigger (the combobox shows a loading/empty state).
+      (filterType === 'dynamic_select' && !!meta.filterSearchEndpoint))
   const filterKey = meta.filterKey || column.id
   const selectedValues = new Set(meta.selectedValues || [])
   const activeCount = selectedValues.size
@@ -191,7 +211,7 @@ export function FilterableColumnHeader<TData, TValue>({
   }
 
   const localHasChanges = (() => {
-    if (filterType === 'select' || filterType === 'boolean') {
+    if (isMultiSelect) {
       const current = new Set(meta.selectedValues || [])
       if (localSelected.size !== current.size) return true
       for (const v of localSelected) {
@@ -265,18 +285,14 @@ export function FilterableColumnHeader<TData, TValue>({
             >
               <div className='relative'>
                 <ListFilter className='h-3.5 w-3.5' />
-                {isActive &&
-                  (filterType === 'select' || filterType === 'boolean') &&
-                  activeCount > 0 && (
-                    <span className='absolute -top-1.5 -right-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground px-0.5'>
-                      {activeCount}
-                    </span>
-                  )}
-                {isActive &&
-                  filterType !== 'select' &&
-                  filterType !== 'boolean' && (
-                    <span className='absolute -top-1 -right-1 flex h-2 w-2 rounded-full bg-primary' />
-                  )}
+                {isActive && isMultiSelect && activeCount > 0 && (
+                  <span className='absolute -top-1.5 -right-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground px-0.5'>
+                    {activeCount}
+                  </span>
+                )}
+                {isActive && !isMultiSelect && (
+                  <span className='absolute -top-1 -right-1 flex h-2 w-2 rounded-full bg-primary' />
+                )}
               </div>
             </Button>
           </PopoverTrigger>
@@ -285,12 +301,13 @@ export function FilterableColumnHeader<TData, TValue>({
             align='start'
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
-            {(filterType === 'select' || filterType === 'boolean') &&
-              hasOptions && (
+            {isMultiSelect && (hasOptions || filterType === 'dynamic_select') && (
                 <Command>
                   <CommandInput placeholder='Buscar...' />
                   <CommandList>
-                    <CommandEmpty>Sin resultados.</CommandEmpty>
+                    <CommandEmpty>
+                      {meta.filterLoading ? 'Cargando…' : 'Sin resultados.'}
+                    </CommandEmpty>
                     <CommandGroup>
                       {displayOptions.map((option) => {
                         const isSelected = localSelected.has(option.value)

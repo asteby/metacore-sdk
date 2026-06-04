@@ -62,6 +62,8 @@ export type {
 export {
     defaultGetDynamicColumns,
     makeDefaultGetDynamicColumns,
+    relationKeyFor,
+    resolveRelationLabel,
     type DynamicColumnsHelpers,
 } from './dynamic-columns'
 export { DynamicRecordDialog } from './dialogs/dynamic-record'
