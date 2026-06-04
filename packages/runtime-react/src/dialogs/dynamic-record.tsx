@@ -40,6 +40,9 @@ import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { ExternalLink, Loader2, CalendarIcon, ChevronDown, Check, Upload, X as XIcon } from 'lucide-react'
 import { useApi } from '../api-context'
+import { DynamicSelectField } from '../dynamic-select-field'
+import { getFieldRef } from '../dynamic-form-schema'
+import type { ActionFieldDef } from '../types'
 
 interface FieldOption {
     value: string
@@ -58,6 +61,24 @@ interface FieldDef {
     hidden?: boolean
     searchEndpoint?: string
     filterBy?: string
+    /**
+     * FK target model the kernel auto-derives for a belongs_to column (>=
+     * v0.46.x serves it on modal fields, not just action fields). When present
+     * the native form renders an async searchable picker (`DynamicSelectField`)
+     * against `/api/options/<ref>?field=id` — with option thumbnails when the
+     * remote rows carry an `image` — instead of a raw FK text input. Tolerates
+     * the snake_case `source`/`relation` aliases the manifest may serve.
+     */
+    ref?: string
+    source?: string
+    relation?: string
+    /**
+     * Explicit renderer hint. Wins over the `type` switch: `dynamic_select`
+     * forces the searchable picker, `upload` forces the file dropzone. Lets the
+     * kernel opt a plain text/uuid column into a rich widget without changing
+     * its SQL type. Unknown values fall through to the `type`-based default.
+     */
+    widget?: string
 }
 
 // Permissive shape: the wire payload may omit some fields (e.g. `title` is
@@ -566,8 +587,21 @@ function EditField({ field, value, onChange }: {
         )
     }
 
-    if (field.type === 'image') {
+    // Media widgets: the kernel may serve an explicit `widget: 'upload'` (or the
+    // `image` type) for a file/photo column. Both render the themed dropzone
+    // that POSTs to the host upload endpoint — same control as the Brand logo.
+    if (field.type === 'image' || field.widget === 'upload') {
         return <ImageUploadField field={field} value={value} onChange={onChange} />
+    }
+
+    // FK columns: a `ref` (kernel-derived belongs_to target) or an explicit
+    // `widget: 'dynamic_select'` renders the async searchable picker against
+    // /api/options/<ref>?field=id — with option thumbnails when the remote rows
+    // carry an `image` — instead of a raw FK uuid text input. Static inline
+    // `options` are handled by the enum <Select> branch below; a ref column does
+    // not ship inline options, so this never shadows a static enum.
+    if ((getFieldRef(field as ActionFieldDef) || field.widget === 'dynamic_select') && !field.options?.length) {
+        return <DynamicSelectField field={field as ActionFieldDef} value={value} onChange={onChange} />
     }
 
     if (field.type === 'search' && field.searchEndpoint) {

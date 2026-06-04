@@ -82,6 +82,11 @@ export function deriveRelationFormFields(
             type: columnTypeToFieldType(col),
             required: false,
             options: col.options?.map(o => ({ value: String(o.value), label: o.label })),
+            // Carry the FK target through so a belongs_to column renders the
+            // async searchable picker (resolveWidget → 'dynamic_select') rather
+            // than a raw uuid text input. Without this the column lost its `ref`
+            // crossing the column→field boundary and degraded to plain text.
+            ref: col.ref,
         })
     }
     return out
@@ -93,6 +98,10 @@ function columnTypeToFieldType(col: ColumnDefinition): string {
         case 'boolean': return 'boolean'
         case 'date': return 'date'
         case 'select': return 'select'
+        // Media columns map to the upload widget (resolveWidget → 'upload') so an
+        // image/photo column gets the file dropzone instead of a text input.
+        case 'image': return 'image'
+        case 'media-gallery': return 'media'
         case 'text':
         default:
             return 'string'
