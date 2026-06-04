@@ -1,5 +1,14 @@
 # @asteby/metacore-starter-core
 
+## 24.0.0
+
+### Patch Changes
+
+- Updated dependencies [6299af7]
+  - @asteby/metacore-runtime-react@14.0.0
+  - @asteby/metacore-ui@2.2.0
+  - @asteby/metacore-auth@9.0.0
+
 ## 23.0.0
 
 ### Patch Changes
