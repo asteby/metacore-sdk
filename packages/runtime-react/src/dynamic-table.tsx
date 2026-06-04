@@ -300,24 +300,32 @@ export function DynamicTable({
             }
             if (!meta) return
             const columnEndpoints = meta.columns.filter(c => c.useOptions && c.searchEndpoint).map(c => c.searchEndpoint!)
-            const filterEndpoints = (meta.filters || []).filter(f => f.searchEndpoint && (f.type === 'select' || f.type === 'boolean')).map(f => f.searchEndpoint!)
-            const allEndpoints = [...columnEndpoints, ...filterEndpoints]
+            const filterEndpoints = (meta.filters || []).filter(f => f.searchEndpoint && (f.type === 'select' || f.type === 'dynamic_select' || f.type === 'boolean')).map(f => f.searchEndpoint!)
+            // Relation (`ref`/`dynamic_select`) columns flagged `filterable`
+            // also need their options preloaded so the per-column multi-select
+            // combobox has something to show. Mirrors the explicit-filter path
+            // above for columns that drive their filter off the column def.
+            const columnFilterEndpoints = meta.columns
+                .filter(c => c.filterable && c.searchEndpoint)
+                .map(c => c.searchEndpoint!)
+            const allEndpoints = [...columnEndpoints, ...filterEndpoints, ...columnFilterEndpoints]
             if (allEndpoints.length > 0) {
                 prefetchOptions(allEndpoints).then(fetchedMap => {
                     const colMap = new Map<string, any[]>()
                     columnEndpoints.forEach(ep => { if (fetchedMap.has(ep)) colMap.set(ep, fetchedMap.get(ep)!) })
                     setOptionsMap(colMap)
                     const fMap = new Map<string, DynamicFilterOption[]>()
-                    filterEndpoints.forEach(ep => {
-                        if (fetchedMap.has(ep)) {
-                            fMap.set(ep, (fetchedMap.get(ep) || []).map((item: any) => ({
-                                label: item.label || item.name || '',
-                                value: String(item.value ?? item.id ?? ''),
-                                icon: item.icon,
-                                color: item.color || item.class,
-                            })))
-                        }
-                    })
+                    const projectFilterOptions = (ep: string) => {
+                        if (!fetchedMap.has(ep) || fMap.has(ep)) return
+                        fMap.set(ep, (fetchedMap.get(ep) || []).map((item: any) => ({
+                            label: item.label || item.name || '',
+                            value: String(item.value ?? item.id ?? ''),
+                            icon: item.icon,
+                            color: item.color || item.class,
+                        })))
+                    }
+                    filterEndpoints.forEach(projectFilterOptions)
+                    columnFilterEndpoints.forEach(projectFilterOptions)
                     setFilterOptionsMap(fMap)
                 })
             }
@@ -531,14 +539,20 @@ export function DynamicTable({
             if (!c.filterable || map.has(c.key)) continue
             const hasStaticOptions = (c.options?.length ?? 0) > 0
             const hasEndpoint = !!c.searchEndpoint
-            // Pick the filter UI from column type:
-            //   - explicit options or searchEndpoint → multi-select dropdown
+            const isRelation = !!c.ref || c.filterType === 'dynamic_select'
+            // Pick the filter UI. The backend's explicit `filterType` wins; when
+            // absent we infer it from the column shape:
+            //   - ref/dynamic_select column        → relation multi-select
+            //     (options stream from searchEndpoint = /options/<ref>)
+            //   - inline options or searchEndpoint  → static multi-select
             //   - boolean → boolean toggle (renders as select under the hood)
             //   - number / number_range / numeric → number range
             //   - date → date range picker (start/end calendar)
             //   - everything else (text, email, phone, tags…) → text contains
-            let filterType: ColumnFilterConfig['filterType'] = 'select'
-            if (hasStaticOptions || hasEndpoint) filterType = 'select'
+            let filterType: ColumnFilterConfig['filterType']
+            if (c.filterType) filterType = c.filterType
+            else if (isRelation && hasEndpoint) filterType = 'dynamic_select'
+            else if (hasStaticOptions || hasEndpoint) filterType = 'select'
             else if (c.type === 'boolean') filterType = 'boolean'
             else if (c.type === 'number') filterType = 'number_range'
             else if (c.type === 'date') filterType = 'date_range'

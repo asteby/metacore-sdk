@@ -56,7 +56,13 @@ export interface RelationMeta {
 export interface FilterDefinition {
     key: string
     label: string
-    type: 'select' | 'boolean' | 'date_range' | 'number_range' | 'text'
+    /**
+     * `dynamic_select` resolves its options server-side from a relation
+     * (`searchEndpoint = /options/<ref>`) and renders the same multi-value
+     * combobox as `select`. The host loads + caches the options before they
+     * surface in the dropdown.
+     */
+    type: 'select' | 'dynamic_select' | 'boolean' | 'date_range' | 'number_range' | 'text'
     column: string
     options?: { value: string | boolean; label: string; icon?: string; color?: string }[]
     searchEndpoint?: string
@@ -104,8 +110,21 @@ export interface ColumnDefinition {
         | 'truncate-text'
         | 'creator'
         | 'user'
+        // Resolved FK relation chip. The data row carries a sibling
+        // `{ value, label }` object keyed by the column key with the trailing
+        // `_id` stripped (e.g. `category_id` → `row.category`). Also triggered
+        // implicitly whenever the column carries a `ref` (belongs_to FK).
+        | 'relation'
     sortable: boolean
     filterable: boolean
+    /**
+     * Explicit filter UI the backend wants for this column when `filterable`.
+     * When absent the SDK infers it from the column shape (options/endpoint →
+     * `select`, boolean/number/date → their range pickers, else `text`). A
+     * `ref` (belongs_to FK) column is served as `dynamic_select` so its options
+     * stream from `searchEndpoint = /options/<ref>` into a multi-value combobox.
+     */
+    filterType?: 'select' | 'dynamic_select' | 'boolean' | 'date_range' | 'number_range' | 'text'
     hidden?: boolean
     /**
      * Scopes where this column is rendered. When `'modal'` (or `'list'`) the

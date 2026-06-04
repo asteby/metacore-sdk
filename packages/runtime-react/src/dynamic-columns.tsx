@@ -3,8 +3,9 @@
 // badge (static + endpoint-loaded options), avatar/search, creator/user,
 // phone, date, boolean, relation-badge-list, media-gallery, image, plus the
 // declarative pro renderers url/link, email, currency, number, percent/
-// progress, status, tags, color, code/truncate-text, and a generic text
-// fallback. The renderer resolves `cellStyle ?? type` for each column.
+// progress, status, tags, color, code/truncate-text, relation (resolved FK
+// chip), option/select badges, and a generic text fallback. The renderer
+// resolves `cellStyle ?? type` for each column.
 //
 // The implementation was previously duplicated across multiple host apps
 // (~550 LOC each, drifting). It now lives here so a single fix propagates
@@ -289,6 +290,58 @@ const BadgeWithEndpointOptions: React.FC<{ endpoint: string; value: any }> = ({ 
 }
 
 /**
+ * Resolves the relation sibling object a backend serves alongside an FK column.
+ * For a column keyed `category_id` the data row also carries
+ * `row.category = { value, label }` (the FK key with the trailing `_id`
+ * stripped) — mirroring how `created_by` ships as a `{ name, avatar, email }`
+ * sibling consumed by the `creator` renderer. Returns the relation key so the
+ * cell can read `row[relationKeyFor(col)]`.
+ */
+export const relationKeyFor = (col: Pick<ColumnDefinition, 'key'>): string => {
+    const k = col.key
+    return k.endsWith('_id') ? k.slice(0, -3) : k
+}
+
+/**
+ * Reads the resolved relation/option label a backend serves for an FK or
+ * option column, falling back to the raw value. Pure so the cell renderers and
+ * tests share one resolution path:
+ *   - relation: prefer the sibling `{ value, label }` object's label.
+ *   - option:   prefer the matched `options[].label` (value compared as string).
+ *   - else:     the raw value coerced to string ('' when nullish).
+ */
+export const resolveRelationLabel = (col: ColumnDefinition, row: any): string => {
+    const sibling = getNestedValue(row, relationKeyFor(col))
+    const label =
+        sibling && typeof sibling === 'object'
+            ? sibling.label ?? sibling.name
+            : undefined
+    if (label !== undefined && label !== null && label !== '') return String(label)
+    const raw = getNestedValue(row, col.key)
+    return raw !== undefined && raw !== null ? String(raw) : ''
+}
+
+/**
+ * Renders a resolved FK relation as a clean, truncated chip. Reads the
+ * backend-resolved sibling `{ value, label }` (see `relationKeyFor`) and shows
+ * its `label`. Falls back to the raw id when no sibling was resolved, and to an
+ * empty marker when there is no value at all. Domain-agnostic: works for every
+ * `belongs_to` column (category, supplier, warehouse, …) without per-addon code.
+ */
+const RelationCell: React.FC<{ col: ColumnDefinition; row: any }> = ({ col, row }) => {
+    const display = resolveRelationLabel(col, row)
+    if (!display) return <EmptyCell />
+    return (
+        <span
+            className="inline-flex max-w-[220px] items-center truncate rounded-md bg-muted px-2 py-0.5 text-sm font-medium text-foreground/80"
+            title={display}
+        >
+            <span className="truncate">{display}</span>
+        </span>
+    )
+}
+
+/**
  * Generic avatar-style cell: round/rounded photo (or initials fallback) +
  * primary name + optional subtitle. Backs the `avatar`/`search` columns as
  * well as the `creator`/`user` cellStyles. Paths are parameterised so the same
@@ -451,6 +504,34 @@ export function makeDefaultGetDynamicColumns(
                                 {sv}
                             </Badge>
                         )
+                    }
+
+                    // Resolved FK relation chip. Triggers on an explicit
+                    // `cellStyle: 'relation'` or on any column carrying a `ref`
+                    // (a belongs_to FK) that isn't being rendered as an
+                    // option/badge. Reads the backend-resolved
+                    // `row[<key w/o _id>] = { value, label }` sibling.
+                    if (
+                        renderAs === 'relation' ||
+                        (col.ref && !col.options?.length && renderAs !== 'badge' && renderAs !== 'status')
+                    ) {
+                        return <RelationCell col={col} row={row.original} />
+                    }
+
+                    // Option/type column: a `select`-style column ships its
+                    // localized `options: [{value,label,color,icon}]` inline and
+                    // the cell value is the raw option value (e.g. "storable").
+                    // Render the matched option's label as a colored badge —
+                    // same OptionBadge the `badge`/`status` cells use.
+                    if (
+                        (renderAs === 'select' || renderAs === 'option' || col.type === 'select') &&
+                        col.options &&
+                        col.options.length > 0
+                    ) {
+                        if (!value && value !== 0) return <EmptyCell />
+                        const option = col.options.find((o) => o.value === String(value))
+                        if (option) return <OptionBadge option={option} fallback={String(value)} />
+                        return <Badge variant="outline">{String(value)}</Badge>
                     }
 
                     switch (renderAs) {
