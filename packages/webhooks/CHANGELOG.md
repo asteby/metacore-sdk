@@ -1,5 +1,12 @@
 # @asteby/metacore-webhooks
 
+## 10.0.0
+
+### Patch Changes
+
+- Updated dependencies [5f864d9]
+  - @asteby/metacore-ui@2.4.0
+
 ## 9.0.0
 
 ### Patch Changes
