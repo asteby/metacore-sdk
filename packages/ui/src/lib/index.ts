@@ -4,5 +4,9 @@ export {
   resolveColorHex,
   resolveColorCss,
   generateBadgeStyles,
+  optionColor,
+  optionColorBadgeStyles,
+  relationChipStyles,
+  OPTION_PALETTE,
 } from './option-colors'
 export { getInitials, type GetInitialsOptions } from './get-initials'

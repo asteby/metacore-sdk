@@ -35,7 +35,12 @@ import {
     FilterableColumnHeader,
     type ColumnFilterMeta,
 } from '@asteby/metacore-ui/data-table'
-import { generateBadgeStyles, getInitials } from '@asteby/metacore-ui/lib'
+import {
+    generateBadgeStyles,
+    getInitials,
+    optionColor,
+    relationChipStyles,
+} from '@asteby/metacore-ui/lib'
 import { Progress } from './dialogs/_primitives'
 import { OptionsContext } from './options-context'
 import { DynamicIcon } from './dynamic-icon'
@@ -272,7 +277,12 @@ interface OptionBadgeProps {
 
 const OptionBadge: React.FC<OptionBadgeProps> = ({ option }) => {
     const isDark = useIsDarkTheme()
-    const colorStyles = option.color ? generateBadgeStyles(option.color, { isDark }) : {}
+    // Explicit backend color wins; otherwise derive a stable, cohesive color
+    // from the option's value (fallback label) so "dead" gray badges come
+    // alive. Inline style (hex-derived) so it works regardless of the host's
+    // tailwind safelist — addon-arbitrary classes aren't in the host scan.
+    const colorSource = option.color || optionColor(option.value || option.label)
+    const colorStyles = generateBadgeStyles(colorSource, { isDark })
     return (
         <Badge variant="outline" className="flex items-center gap-1 border-0" style={colorStyles}>
             {option.icon && <DynamicIcon name={option.icon} className="h-3.5 w-3.5" />}
@@ -329,11 +339,18 @@ export const resolveRelationLabel = (col: ColumnDefinition, row: any): string =>
  * `belongs_to` column (category, supplier, warehouse, …) without per-addon code.
  */
 const RelationCell: React.FC<{ col: ColumnDefinition; row: any }> = ({ col, row }) => {
+    const isDark = useIsDarkTheme()
     const display = resolveRelationLabel(col, row)
     if (!display) return <EmptyCell />
+    // Deterministic, SUBTLE color keyed on the resolved label — lighter than
+    // enum badges (soft tint, no heavy fill) so category/brand chips read as
+    // alive yet stay visually distinct from option/status badges. Inline style
+    // (hex-derived) bypasses the host tailwind safelist.
+    const chipStyles = relationChipStyles(display, { isDark })
     return (
         <span
-            className="inline-flex max-w-[220px] items-center truncate rounded-md bg-muted px-2 py-0.5 text-sm font-medium text-foreground/80"
+            className="inline-flex max-w-[220px] items-center truncate rounded-md px-2 py-0.5 text-sm font-medium"
+            style={chipStyles}
             title={display}
         >
             <span className="truncate">{display}</span>
