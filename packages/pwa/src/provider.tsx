@@ -202,6 +202,51 @@ export function PWAProvider({
     }
   }, [])
 
+  // Independent SW update detection. A host may alias `virtual:pwa-register/react`
+  // to a no-op stub (e.g. ops's module-federation setup), in which case
+  // useRegisterSW.onRegistered never fires and the periodic update() above never
+  // runs — so on an SPA (no full navigation) a new deploy is never detected and
+  // the user stays on the stale build until a manual hard reload / cache clear.
+  // Drive the check from the LIVE registration instead so it works regardless of
+  // the stub: poll on an interval AND on every tab focus/visibility regain
+  // (immediate, so coming back to the tab picks up a fresh deploy at once). A
+  // detected update self-activates (sw.js skipWaiting + clientsClaim) →
+  // controllerchange → the reload effect above swaps to the new build by itself.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return
+    if (updateCheckIntervalMs <= 0) return
+
+    let reg: ServiceWorkerRegistration | undefined
+    let interval: ReturnType<typeof setInterval> | undefined
+    const check = () => {
+      void reg?.update().catch(() => {})
+    }
+
+    navigator.serviceWorker.ready
+      .then((registration) => {
+        reg = registration
+        check()
+        interval = setInterval(check, updateCheckIntervalMs)
+      })
+      .catch(() => {})
+
+    const onVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') check()
+    }
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisible)
+    }
+    window.addEventListener('focus', check)
+
+    return () => {
+      if (interval) clearInterval(interval)
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisible)
+      }
+      window.removeEventListener('focus', check)
+    }
+  }, [updateCheckIntervalMs])
+
   const installApp = async (): Promise<boolean> => {
     if (!deferredPrompt) {
       toast.error(msgs.cannotInstall)
