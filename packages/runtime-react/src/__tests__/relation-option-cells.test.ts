@@ -50,4 +50,17 @@ describe('resolveRelationLabel', () => {
         expect(resolveRelationLabel(col({ ref: 'categories' }), {})).toBe('')
         expect(resolveRelationLabel(col({ ref: 'categories' }), { category_id: null })).toBe('')
     })
+
+    it('treats an unresolved nil UUID FK as empty, not a string of zeros', () => {
+        const row = { category_id: '00000000-0000-0000-0000-000000000000' }
+        expect(resolveRelationLabel(col({ ref: 'categories' }), row)).toBe('')
+    })
+
+    it('still prefers a resolved sibling label even if the FK id is the nil UUID', () => {
+        const row = {
+            category_id: '00000000-0000-0000-0000-000000000000',
+            category: { value: '00000000-0000-0000-0000-000000000000', label: 'Sin categoría' },
+        }
+        expect(resolveRelationLabel(col({ ref: 'categories' }), row)).toBe('Sin categoría')
+    })
 })

@@ -42,6 +42,7 @@ import { ExternalLink, Loader2, CalendarIcon, ChevronDown, Check, Upload, X as X
 import { useApi } from '../api-context'
 import { DynamicSelectField } from '../dynamic-select-field'
 import { getFieldRef } from '../dynamic-form-schema'
+import { normalizeNilUuid } from '../nil-uuid'
 import type { ActionFieldDef } from '../types'
 
 interface FieldOption {
@@ -137,7 +138,9 @@ function resolvePath(obj: any, path: string): any {
     return path.split('.').reduce((acc, part) => acc?.[part], obj)
 }
 
-function formatDisplayValue(value: any, field: FieldDef): string {
+function formatDisplayValue(rawValue: any, field: FieldDef): string {
+    // Unset nullable FK serialized as the nil UUID renders as empty, not zeros.
+    const value = normalizeNilUuid(rawValue)
     if (value === null || value === undefined || value === '') return '—'
     if (field.type === 'boolean' || typeof value === 'boolean') return value ? 'Sí' : 'No'
 
@@ -489,7 +492,10 @@ function FieldRow({ field, record, value, mode, onChange }: FieldRowProps) {
     )
 }
 
-function ViewValue({ field, value }: { field: FieldDef; value: any; record: any }) {
+function ViewValue({ field, value: rawValue }: { field: FieldDef; value: any; record: any }) {
+    // Normalize the nil UUID to undefined up front so the search/url/color/
+    // image/select branches all fall through to their empty states.
+    const value = normalizeNilUuid(rawValue)
     if (field.type === 'search' && value) {
         return <SearchViewValue field={field} value={value} />
     }

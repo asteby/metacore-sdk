@@ -44,6 +44,7 @@ import {
 import { Progress } from './dialogs/_primitives'
 import { OptionsContext } from './options-context'
 import { DynamicIcon } from './dynamic-icon'
+import { isNilUuid, normalizeNilUuid } from './nil-uuid'
 import type { TableMetadata, ColumnDefinition } from './types'
 import { isColumnVisibleInTable } from './column-visibility'
 import type {
@@ -328,7 +329,9 @@ export const resolveRelationLabel = (col: ColumnDefinition, row: any): string =>
             : undefined
     if (label !== undefined && label !== null && label !== '') return String(label)
     const raw = getNestedValue(row, col.key)
-    return raw !== undefined && raw !== null ? String(raw) : ''
+    // An unresolved FK that arrived as the nil UUID reads as empty, not zeros.
+    if (raw === undefined || raw === null || isNilUuid(raw)) return ''
+    return String(raw)
 }
 
 /**
@@ -476,7 +479,10 @@ export function makeDefaultGetDynamicColumns(
                         <DataTableColumnHeader column={column} title={translatedLabel} />
                     ),
                 cell: ({ row }) => {
-                    const value = getNestedValue(row.original, col.key)
+                    // Treat the nil UUID (unset nullable FK serialized as
+                    // all-zeros) as no value, so every type below hits its
+                    // existing empty branch instead of printing the zeros.
+                    const value = normalizeNilUuid(getNestedValue(row.original, col.key))
                     // Kernel emits the renderer flag as `type`; older hosts used
                     // `cellStyle`. Accept both so a single backend works across
                     // SDK versions.
