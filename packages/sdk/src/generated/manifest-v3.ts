@@ -261,6 +261,14 @@ export interface NavItem {
   model?: string;
   permission?: string;
   items?: NavItem[];
+  /**
+   * Filter declares a static column→value filter the host applies when it
+   * renders this entry's list view, so an addon can publish one nav entry per
+   * status (e.g. {"status":"reception"} for an "En recepción" entry pointing
+   * at the same model). The host AND-combines these with any runtime filters.
+   * Empty/omitted means no filter (the default, unfiltered list).
+   */
+  filter?: { [key: string]: string};
 }
 /**
  * SlotContribution renders into a slot_kind published by another addon.
