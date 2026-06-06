@@ -1,6 +1,6 @@
 {
   "name": "@metacore-addons/fiscal-mx",
-  "version": "9.0.0",
+  "version": "10.0.0",
   "private": true,
   "description": "Sistema Fiscal de México — metacore addon frontend.",
   "type": "module",
@@ -12,7 +12,7 @@
   "peerDependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "@asteby/metacore-sdk": "^3.1.0"
+    "@asteby/metacore-sdk": "^3.2.0"
   },
   "devDependencies": {
     "@asteby/metacore-sdk": "workspace:*",
