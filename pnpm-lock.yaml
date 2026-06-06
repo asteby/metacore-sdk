@@ -117,7 +117,7 @@ importers:
         version: 1.16.1
       date-fns:
         specifier: ^4.1.0
-        version: 4.3.0
+        version: 4.4.0
       i18next:
         specifier: ^23.16.0
         version: 23.16.8
@@ -129,7 +129,7 @@ importers:
         version: 19.2.6
       react-day-picker:
         specifier: ^8.10.1
-        version: 8.10.2(date-fns@4.3.0)(react@19.2.6)
+        version: 8.10.2(date-fns@4.4.0)(react@19.2.6)
       react-dom:
         specifier: ^19.2.4
         version: 19.2.6(react@19.2.6)
@@ -458,7 +458,7 @@ importers:
         version: 19.2.15
       date-fns:
         specifier: ^4.1.0
-        version: 4.3.0
+        version: 4.4.0
       react:
         specifier: ^19.2.4
         version: 19.2.6
@@ -515,7 +515,7 @@ importers:
         version: 19.2.3(@types/react@19.2.15)
       date-fns:
         specifier: ^4.1.0
-        version: 4.3.0
+        version: 4.4.0
       lucide-react:
         specifier: ^1.0.0
         version: 1.17.0(react@19.2.6)
@@ -592,7 +592,7 @@ importers:
         version: 19.2.15
       date-fns:
         specifier: ^4.1.0
-        version: 4.3.0
+        version: 4.4.0
       i18next:
         specifier: ^26.0.0
         version: 26.3.0(typescript@6.0.3)
@@ -797,7 +797,7 @@ importers:
         version: 1.1.1(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       date-fns:
         specifier: ^4.1.0
-        version: 4.3.0
+        version: 4.4.0
       framer-motion:
         specifier: ^12.38.0
         version: 12.40.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -1021,7 +1021,7 @@ importers:
         version: 19.2.3(@types/react@19.2.15)
       date-fns:
         specifier: ^4.1.0
-        version: 4.3.0
+        version: 4.4.0
       react:
         specifier: ^19.2.4
         version: 19.2.6
@@ -1064,7 +1064,7 @@ importers:
         version: 19.2.3(@types/react@19.2.15)
       date-fns:
         specifier: ^4.1.0
-        version: 4.3.0
+        version: 4.4.0
       lucide-react:
         specifier: ^1.0.0
         version: 1.17.0(react@19.2.6)
@@ -1142,7 +1142,7 @@ importers:
         version: 1.16.1
       date-fns:
         specifier: ^4.1.0
-        version: 4.3.0
+        version: 4.4.0
       i18next:
         specifier: ^26.0.0
         version: 26.3.0(typescript@6.0.3)
@@ -4228,8 +4228,8 @@ packages:
   dataloader@1.4.0:
     resolution: {integrity: sha512-68s5jYdlvasItOJnCuI2Q9s4q98g0pCyL3HrcKJu8KNugUl8ahgmZYg38ysLTgQjjXX3H8CJLkAvWrclWfcalw==}
 
-  date-fns@4.3.0:
-    resolution: {integrity: sha512-OYcL+3N/jyWbYdFGqoMAhytDgxP9pbYPUUiRCOgn4Fewaadk9l/Wam4Avciiyp2BgkpfQyBV9B+ehnVJych+eQ==}
+  date-fns@4.4.0:
+    resolution: {integrity: sha512-+1UMbeh68lH1SegH83CGWwpb6OHHbpSgr3+s5Eww5M4CAgswBpoWS0AjTOfEJ33HiYKz1hdj/KTFprzXHmq/6w==}
 
   debug@4.4.3:
     resolution: {integrity: sha512-RGwwWnwQvkVfavKVt22FGLw+xYSdzARwm0ru6DhTVA3umU5hZc28V3kO4stgYryrTlLpuvgI9GiijltAjNbcqA==}
@@ -9640,7 +9640,7 @@ snapshots:
 
   dataloader@1.4.0: {}
 
-  date-fns@4.3.0: {}
+  date-fns@4.4.0: {}
 
   debug@4.4.3:
     dependencies:
@@ -11184,14 +11184,14 @@ snapshots:
   react-day-picker@10.0.1(@types/react@19.2.15)(react@19.2.6):
     dependencies:
       '@date-fns/tz': 1.5.0
-      date-fns: 4.3.0
+      date-fns: 4.4.0
       react: 19.2.6
     optionalDependencies:
       '@types/react': 19.2.15
 
-  react-day-picker@8.10.2(date-fns@4.3.0)(react@19.2.6):
+  react-day-picker@8.10.2(date-fns@4.4.0)(react@19.2.6):
     dependencies:
-      date-fns: 4.3.0
+      date-fns: 4.4.0
       react: 19.2.6
 
   react-dom@19.2.6(react@19.2.6):
