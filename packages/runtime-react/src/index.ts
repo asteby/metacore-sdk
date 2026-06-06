@@ -66,6 +66,7 @@ export {
     resolveRelationLabel,
     type DynamicColumnsHelpers,
 } from './dynamic-columns'
+export { NIL_UUID, isNilUuid, normalizeNilUuid } from './nil-uuid'
 export { DynamicRecordDialog } from './dialogs/dynamic-record'
 export { CreateRecordDialog } from './dialogs/create-record-dialog'
 export { ViewRecordDialog } from './dialogs/view-record-dialog'
