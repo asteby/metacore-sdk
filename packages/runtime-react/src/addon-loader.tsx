@@ -64,6 +64,37 @@ function remoteId(scope: string, module: string): string {
     return `${scope}/${expose}`
 }
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+// `@module-federation/vite` initialises the shared federation runtime instance
+// asynchronously at host boot (it injects an init call into the entry). If an
+// addon mounts before that init resolves — a real race on slow first paints,
+// route preloads, or HMR — `registerRemotes`/`loadRemote` throw
+// `[ Federation Runtime ]: Please call createInstance first. #RUNTIME-009`.
+// It's transient: the runtime IS coming, we just raced it. So we treat
+// RUNTIME-009 specifically as retryable and back off briefly until the host's
+// init lands, instead of surfacing a dead "Addon load error" to the user.
+function isRuntimeNotReady(e: unknown): boolean {
+    const msg = e instanceof Error ? e.message : String(e)
+    return msg.includes('#RUNTIME-009') || msg.includes('call createInstance')
+}
+
+// Retry an operation that may hit the boot race above. ~10 attempts × 60ms ≈
+// 600ms worst case — generous for the host init, imperceptible in the common
+// case (first attempt succeeds). Non-RUNTIME-009 errors (bad URL, 404, no
+// export) rethrow immediately so genuine failures still surface fast.
+async function withRuntimeReady<T>(op: () => T | Promise<T>): Promise<T> {
+    const maxAttempts = 10
+    for (let attempt = 1; ; attempt++) {
+        try {
+            return await op()
+        } catch (e) {
+            if (!isRuntimeNotReady(e) || attempt >= maxAttempts) throw e
+            await sleep(60)
+        }
+    }
+}
+
 async function loadAddon(
     scope: string,
     url: string,
@@ -73,19 +104,27 @@ async function loadAddon(
     // the `@module-federation/vite` remote (remoteEntry.js is an ESM bundle).
     // The `url` already carries the `?v=` cache-bust the host computed, so the
     // browser refetches a fresh remoteEntry when the addon version changes.
+    //
+    // Both calls are wrapped in `withRuntimeReady` because EITHER can throw
+    // RUNTIME-009 when an addon mounts ahead of the host's federation init —
+    // registration is what actually touches the (maybe-uninitialised) runtime.
     if (!registered.has(scope)) {
-        registerRemotes(
-            [{ name: scope, entry: url, type: 'module' }],
-            // `force: true` so a re-registration with a new `?v=` URL (addon
-            // hot-swap / version bump) overwrites the stale entry + cache.
-            { force: true },
+        await withRuntimeReady(() =>
+            registerRemotes(
+                [{ name: scope, entry: url, type: 'module' }],
+                // `force: true` so a re-registration with a new `?v=` URL (addon
+                // hot-swap / version bump) overwrites the stale entry + cache.
+                { force: true },
+            ),
         )
         registered.add(scope)
     }
     // loadRemote("<scope>/<expose>") returns the exposed module namespace (or
     // null if it can't be resolved). No manual share-scope init — the host's
     // federation runtime already initialised it.
-    return loadRemote<AddonRegisterModule>(remoteId(scope, module))
+    return withRuntimeReady(() =>
+        loadRemote<AddonRegisterModule>(remoteId(scope, module)),
+    )
 }
 
 export function AddonLoader({
