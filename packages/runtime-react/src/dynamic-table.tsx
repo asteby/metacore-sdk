@@ -65,7 +65,7 @@ import { Progress } from './dialogs/_primitives'
 import { useMetadataCache } from './metadata-cache'
 import { useApi, useCurrentBranch } from './api-context'
 import type { ColumnFilterConfig, GetDynamicColumns } from './dynamic-columns-shim'
-import { defaultGetDynamicColumns } from './dynamic-columns'
+import { defaultGetDynamicColumns, DATE_CELL_TYPES } from './dynamic-columns'
 import { OptionsContext } from './options-context'
 import { ActionModalDispatcher } from './action-modal-dispatcher'
 import type { TableMetadata, ApiResponse, ActionMetadata } from './types'
@@ -555,7 +555,8 @@ export function DynamicTable({
             else if (hasStaticOptions || hasEndpoint) filterType = 'select'
             else if (c.type === 'boolean') filterType = 'boolean'
             else if (c.type === 'number') filterType = 'number_range'
-            else if (c.type === 'date') filterType = 'date_range'
+            else if ((DATE_CELL_TYPES as readonly string[]).includes(c.type))
+                filterType = 'date_range'
             else filterType = 'text'
 
             const options = hasStaticOptions

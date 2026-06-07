@@ -1,6 +1,9 @@
 import * as React from 'react'
 import { CheckIcon } from '@radix-ui/react-icons'
 import { type Column } from '@tanstack/react-table'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
+import { type DateRange } from 'react-day-picker'
 import {
   ListFilter,
   ArrowUpDown,
@@ -33,6 +36,7 @@ import {
   CommandList,
 } from '@/primitives/command'
 import { Input } from '@/primitives/input'
+import { Calendar } from '@/primitives/calendar'
 
 export interface FilterOption {
   label: string
@@ -87,10 +91,11 @@ type FilterableColumnHeaderProps<TData, TValue> =
 /**
  * Pro column header combining sort + scoped per-column filter UI.
  *
- * Supports `select`, `boolean`, `text`, and `number_range` filter types from
- * `columnDef.meta`. The app-specific `date_range` and remote `filterSearchEndpoint`
- * variants were stripped when vendored into @asteby/metacore-ui to avoid pulling
- * in `react-day-picker` / HTTP client deps; extend locally in userland if needed.
+ * Supports `select`, `boolean`, `text`, `number_range`, and `date_range`
+ * filter types from `columnDef.meta`. The `date_range` variant renders a
+ * compact range calendar (react-day-picker, already a dep of this package) and
+ * emits a single `"YYYY-MM-DD_YYYY-MM-DD"` value. The remote
+ * `filterSearchEndpoint` lookups are wired by the host (DynamicTable).
  */
 export function FilterableColumnHeader<TData, TValue>({
   column,
@@ -115,6 +120,7 @@ export function FilterableColumnHeader<TData, TValue>({
     (hasOptions ||
       filterType === 'text' ||
       filterType === 'number_range' ||
+      filterType === 'date_range' ||
       // A relation filter is still actionable while its options stream in —
       // surface the trigger (the combobox shows a loading/empty state).
       (filterType === 'dynamic_select' && !!meta.filterSearchEndpoint))
@@ -142,10 +148,27 @@ export function FilterableColumnHeader<TData, TValue>({
   }
   const rangeValues = parseRangeValues()
 
+  // Date range is serialized as a single "YYYY-MM-DD_YYYY-MM-DD" value (same
+  // wire shape the backend expects from the legacy starter-core picker).
+  const parseDateRange = (): DateRange | undefined => {
+    const val =
+      meta.selectedValues && meta.selectedValues.length > 0
+        ? meta.selectedValues[0]
+        : ''
+    if (!val || !val.includes('_')) return undefined
+    const [from, to] = val.split('_')
+    const fromDate = new Date(`${from}T00:00:00`)
+    const toDate = new Date(`${to}T00:00:00`)
+    if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) return undefined
+    return { from: fromDate, to: toDate }
+  }
+
   const isActive = (() => {
     if (filterType === 'text') return rawTextValue !== ''
     if (filterType === 'number_range')
       return rangeValues.min !== '' || rangeValues.max !== ''
+    if (filterType === 'date_range')
+      return (meta.selectedValues || []).length > 0 && meta.selectedValues![0] !== ''
     return activeCount > 0
   })()
 
@@ -155,6 +178,9 @@ export function FilterableColumnHeader<TData, TValue>({
   const [localSelected, setLocalSelected] = React.useState<Set<string>>(
     new Set(selectedValues)
   )
+  const [localDateRange, setLocalDateRange] = React.useState<
+    DateRange | undefined
+  >(parseDateRange())
   const [filterOpen, setFilterOpen] = React.useState(false)
 
   const displayOptions = meta.filterOptions || []
@@ -166,6 +192,10 @@ export function FilterableColumnHeader<TData, TValue>({
     setLocalMin(rangeValues.min)
     setLocalMax(rangeValues.max)
   }, [rangeValues.min, rangeValues.max])
+  React.useEffect(() => {
+    setLocalDateRange(parseDateRange())
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [meta.selectedValues?.join(',')])
   React.useEffect(() => {
     if (filterOpen) {
       setLocalSelected(new Set(meta.selectedValues || []))
@@ -192,6 +222,18 @@ export function FilterableColumnHeader<TData, TValue>({
     setLocalMin('')
     setLocalMax('')
     setLocalSelected(new Set())
+    setLocalDateRange(undefined)
+  }
+
+  const handleDateRangeApply = () => {
+    if (localDateRange?.from) {
+      const from = format(localDateRange.from, 'yyyy-MM-dd')
+      const to = localDateRange.to
+        ? format(localDateRange.to, 'yyyy-MM-dd')
+        : from
+      meta.onFilterChange?.(filterKey, [`${from}_${to}`])
+    }
+    setFilterOpen(false)
   }
 
   const handleTextSubmit = () => {
@@ -297,7 +339,10 @@ export function FilterableColumnHeader<TData, TValue>({
             </Button>
           </PopoverTrigger>
           <PopoverContent
-            className='p-0 w-[220px]'
+            className={cn(
+              'p-0',
+              filterType === 'date_range' ? 'w-auto' : 'w-[220px]'
+            )}
             align='start'
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
@@ -319,10 +364,14 @@ export function FilterableColumnHeader<TData, TValue>({
                           >
                             <div
                               className={cn(
-                                'border-primary mr-2 flex size-4 shrink-0 items-center justify-center rounded-sm border',
+                                'mr-2 flex size-4 shrink-0 items-center justify-center rounded-sm border transition-colors',
                                 isSelected
-                                  ? 'bg-primary text-primary-foreground'
-                                  : 'opacity-50 [&_svg]:invisible'
+                                  ? // Foreground/background is contrast-guaranteed
+                                    // in both themes, so the checkmark stays legible
+                                    // even when a brand's primary/primary-foreground
+                                    // pair collapses to dark-on-dark in dark mode.
+                                    'border-foreground bg-foreground text-background'
+                                  : 'border-muted-foreground/50 opacity-70 [&_svg]:invisible'
                               )}
                             >
                               <CheckIcon className='h-3.5 w-3.5' />
@@ -447,6 +496,50 @@ export function FilterableColumnHeader<TData, TValue>({
                     size='sm'
                     className='h-7 flex-1 text-xs'
                     onClick={handleNumberRangeSubmit}
+                  >
+                    Aplicar
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {filterType === 'date_range' && (
+              <div>
+                <Calendar
+                  mode='range'
+                  selected={localDateRange}
+                  onSelect={setLocalDateRange}
+                  locale={es}
+                  numberOfMonths={1}
+                  className='p-2'
+                />
+                {localDateRange?.from && (
+                  <div className='px-2 pb-1 text-center text-[11px] text-muted-foreground'>
+                    {format(localDateRange.from, 'dd MMM yyyy', { locale: es })}
+                    {localDateRange.to &&
+                    localDateRange.to.getTime() !== localDateRange.from.getTime()
+                      ? ` — ${format(localDateRange.to, 'dd MMM yyyy', { locale: es })}`
+                      : ' (un día)'}
+                  </div>
+                )}
+                <div className='border-t p-1.5 flex gap-1.5'>
+                  <Button
+                    size='sm'
+                    variant='outline'
+                    className='h-7 flex-1 text-xs'
+                    onClick={() => {
+                      handleClearFilter()
+                      setFilterOpen(false)
+                    }}
+                    disabled={!isActive && !localDateRange}
+                  >
+                    Limpiar
+                  </Button>
+                  <Button
+                    size='sm'
+                    className='h-7 flex-1 text-xs'
+                    onClick={handleDateRangeApply}
+                    disabled={!localDateRange?.from}
                   >
                     Aplicar
                   </Button>

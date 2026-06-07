@@ -87,6 +87,11 @@ export interface ColumnDefinition {
         | 'text'
         | 'number'
         | 'date'
+        // Timestamp variants. They share the `date` cell renderer but append
+        // the time + a full-precision tooltip (see formatDateCell).
+        | 'datetime'
+        | 'timestamp'
+        | 'timestamptz'
         | 'select'
         | 'search'
         | 'relation-badge-list'
