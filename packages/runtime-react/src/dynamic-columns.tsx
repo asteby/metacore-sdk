@@ -14,7 +14,7 @@
 
 import * as React from 'react'
 import { ColumnDef } from '@tanstack/react-table'
-import { format } from 'date-fns'
+import { format, type Locale } from 'date-fns'
 import { es, enUS } from 'date-fns/locale'
 import * as icons from 'lucide-react'
 import { MoreHorizontal } from 'lucide-react'
@@ -313,6 +313,35 @@ export const relationKeyFor = (col: Pick<ColumnDefinition, 'key'>): string => {
     return k.endsWith('_id') ? k.slice(0, -3) : k
 }
 
+/** Cell renderers (`cellStyle`/`type`) that resolve to the date renderer. */
+export const DATE_CELL_TYPES = ['date', 'datetime', 'timestamp', 'timestamptz'] as const
+
+/**
+ * Pure formatter behind the date/datetime cell. Returns the display string and
+ * an optional full-precision `title` (tooltip), or `null` when the value is
+ * empty/invalid/the Go zero-time so the cell renders an em-dash.
+ *   - `date`: day only (`PPP`), no tooltip.
+ *   - `datetime`/`timestamp(tz)`: day + time (`Pp`) with a full-precision
+ *     tooltip (`PPpp`) — the 7Leguas pattern.
+ */
+export function formatDateCell(
+    value: unknown,
+    renderAs: string | undefined,
+    locale: Locale,
+): { display: string; title?: string } | null {
+    if (value === null || value === undefined || value === '') return null
+    const date = new Date(value as any)
+    if (isNaN(date.getTime()) || date.getFullYear() <= 1) return null
+    const withTime = renderAs !== 'date'
+    if (withTime) {
+        return {
+            display: format(date, 'Pp', { locale }),
+            title: format(date, 'PPpp', { locale }),
+        }
+    }
+    return { display: format(date, 'PPP', { locale }) }
+}
+
 /**
  * Reads the resolved relation/option label a backend serves for an FK or
  * option column, falling back to the raw value. Pure so the cell renderers and
@@ -558,24 +587,24 @@ export function makeDefaultGetDynamicColumns(
                     }
 
                     switch (renderAs) {
-                        case 'date': {
-                            if (!value) return <span className="text-muted-foreground">-</span>
-                            try {
-                                const date = new Date(value)
-                                if (isNaN(date.getTime()) || date.getFullYear() <= 1) {
-                                    return <span className="text-muted-foreground">-</span>
-                                }
-                                return (
-                                    <div className="flex items-center gap-1.5 text-muted-foreground">
-                                        <icons.Calendar className="h-3.5 w-3.5 opacity-70" />
-                                        <span className="text-sm font-medium">
-                                            {format(date, 'PPP', { locale: dateLocale })}
-                                        </span>
-                                    </div>
-                                )
-                            } catch {
-                                return <span>{String(value)}</span>
-                            }
+                        case 'date':
+                        case 'datetime':
+                        case 'timestamp':
+                        case 'timestamptz': {
+                            const formatted = formatDateCell(value, renderAs, dateLocale)
+                            if (!formatted)
+                                return <span className="text-muted-foreground">-</span>
+                            return (
+                                <div
+                                    className="flex items-center gap-1.5 text-muted-foreground"
+                                    title={formatted.title}
+                                >
+                                    <icons.Calendar className="h-3.5 w-3.5 opacity-70" />
+                                    <span className="text-sm font-medium">
+                                        {formatted.display}
+                                    </span>
+                                </div>
+                            )
                         }
 
                         case 'search':
