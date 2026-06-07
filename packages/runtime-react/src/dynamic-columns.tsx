@@ -42,6 +42,7 @@ import {
     relationChipStyles,
 } from '@asteby/metacore-ui/lib'
 import { Progress } from './dialogs/_primitives'
+import { humanizeToken } from './dynamic-columns-helpers'
 import { OptionsContext } from './options-context'
 import { DynamicIcon } from './dynamic-icon'
 import { isNilUuid, normalizeNilUuid } from './nil-uuid'
@@ -297,7 +298,9 @@ const BadgeWithEndpointOptions: React.FC<{ endpoint: string; value: any }> = ({ 
     const options = optionsMap.get(endpoint) || []
     const option = options.find((opt: any) => opt.value === value)
     if (option) return <OptionBadge option={option} fallback={String(value)} />
-    return <Badge variant="outline">{String(value)}</Badge>
+    // No declared option matched → humanize the raw token as a safety net so a
+    // cell never shows `in_progress` verbatim (option.label still wins above).
+    return <Badge variant="outline">{humanizeToken(value)}</Badge>
 }
 
 /**
@@ -499,17 +502,18 @@ export function makeDefaultGetDynamicColumns(
                         if (!value && value !== 0) return <span className="text-muted-foreground">-</span>
                         const option = col.options.find((o) => o.value === String(value))
                         if (option) return <OptionBadge option={option} fallback={String(value)} />
-                        return <Badge variant="outline">{String(value)}</Badge>
+                        return <Badge variant="outline">{humanizeToken(value)}</Badge>
                     }
 
                     if (renderAs === 'relation-badge-list') {
                         return renderRelationBadges(value, col)
                     }
 
-                    // Generic badge (no options/endpoint) — still pill it.
+                    // Generic badge (no options/endpoint) — still pill it, and
+                    // humanize raw enum tokens (no option exists to localize it).
                     if (renderAs === 'badge') {
                         if (!value && value !== 0) return <EmptyCell />
-                        return <Badge variant="outline">{String(value)}</Badge>
+                        return <Badge variant="outline">{humanizeToken(value)}</Badge>
                     }
 
                     // Status — semantic color by value, options color wins.
@@ -522,9 +526,11 @@ export function makeDefaultGetDynamicColumns(
                             typeof document !== 'undefined' &&
                             document.documentElement.classList.contains('dark')
                         const styles = generateBadgeStyles(statusColorFor(sv), { isDark })
+                        // No declared option → humanize the status token so
+                        // `in_progress` reads as "In Progress" instead of raw.
                         return (
-                            <Badge variant="outline" className="border-0 capitalize" style={styles}>
-                                {sv}
+                            <Badge variant="outline" className="border-0" style={styles}>
+                                {humanizeToken(sv)}
                             </Badge>
                         )
                     }
@@ -554,7 +560,7 @@ export function makeDefaultGetDynamicColumns(
                         if (!value && value !== 0) return <EmptyCell />
                         const option = col.options.find((o) => o.value === String(value))
                         if (option) return <OptionBadge option={option} fallback={String(value)} />
-                        return <Badge variant="outline">{String(value)}</Badge>
+                        return <Badge variant="outline">{humanizeToken(value)}</Badge>
                     }
 
                     switch (renderAs) {

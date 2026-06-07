@@ -43,6 +43,7 @@ import { useApi } from '../api-context'
 import { DynamicSelectField } from '../dynamic-select-field'
 import { getFieldRef } from '../dynamic-form-schema'
 import { normalizeNilUuid } from '../nil-uuid'
+import { humanizeToken } from '../dynamic-columns-helpers'
 import type { ActionFieldDef } from '../types'
 
 interface FieldOption {
@@ -156,7 +157,9 @@ function formatDisplayValue(rawValue: any, field: FieldDef): string {
 
     if (field.type === 'select' && field.options?.length) {
         const match = field.options.find(o => o.value === String(value))
-        return match?.label ?? String(value)
+        // Matched option label wins (localized); humanize the raw token only
+        // when no declared option matches the value.
+        return match?.label ?? humanizeToken(value)
     }
 
     return String(value)
