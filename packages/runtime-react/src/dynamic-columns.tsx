@@ -272,12 +272,42 @@ const renderRelationBadges = (items: any, col: ColumnDefinition) => {
     )
 }
 
+/**
+ * Tiny square thumbnail for a resolved relation/option that carries an `image`
+ * (brand logo, product photo, customer/user avatar). Uses the same Avatar
+ * primitive as the `avatar`/`creator` cells so a broken/loading image
+ * gracefully falls back to the record's initials. Sized small (the box is an
+ * inline style so an addon-arbitrary Tailwind class never gets dropped by a
+ * consuming app's class scan). Rendered inline alongside a label — never alone.
+ */
+const RelationThumbnail: React.FC<{
+    src: string
+    alt: string
+    getImageUrl?: (path: string) => string
+    size?: number
+}> = ({ src, alt, getImageUrl, size = 18 }) => (
+    <Avatar
+        className="shrink-0 rounded-sm ring-1 ring-border/40"
+        style={{ width: size, height: size }}
+    >
+        <AvatarImage
+            src={getImageUrl ? getImageUrl(src) : src}
+            alt={alt}
+            className="object-cover"
+        />
+        <AvatarFallback className="rounded-sm bg-primary/10 text-[8px] font-bold text-primary">
+            {getInitials(alt)}
+        </AvatarFallback>
+    </Avatar>
+)
+
 interface OptionBadgeProps {
-    option: { value: string; label: string; icon?: string; color?: string }
+    option: { value: string; label: string; icon?: string; color?: string; image?: string }
     fallback: string
+    getImageUrl?: (path: string) => string
 }
 
-const OptionBadge: React.FC<OptionBadgeProps> = ({ option }) => {
+const OptionBadge: React.FC<OptionBadgeProps> = ({ option, getImageUrl }) => {
     const isDark = useIsDarkTheme()
     // Explicit backend color wins; otherwise derive a stable, cohesive color
     // from the option's value (fallback label) so "dead" gray badges come
@@ -287,17 +317,30 @@ const OptionBadge: React.FC<OptionBadgeProps> = ({ option }) => {
     const colorStyles = generateBadgeStyles(colorSource, { isDark })
     return (
         <Badge variant="outline" className="flex items-center gap-1 border-0" style={colorStyles}>
-            {option.icon && <DynamicIcon name={option.icon} className="h-3.5 w-3.5" />}
+            {option.image ? (
+                <RelationThumbnail
+                    src={option.image}
+                    alt={option.label}
+                    getImageUrl={getImageUrl}
+                    size={16}
+                />
+            ) : (
+                option.icon && <DynamicIcon name={option.icon} className="h-3.5 w-3.5" />
+            )}
             <span>{option.label}</span>
         </Badge>
     )
 }
 
-const BadgeWithEndpointOptions: React.FC<{ endpoint: string; value: any }> = ({ endpoint, value }) => {
+const BadgeWithEndpointOptions: React.FC<{
+    endpoint: string
+    value: any
+    getImageUrl?: (path: string) => string
+}> = ({ endpoint, value, getImageUrl }) => {
     const { optionsMap } = React.useContext(OptionsContext)
     const options = optionsMap.get(endpoint) || []
     const option = options.find((opt: any) => opt.value === value)
-    if (option) return <OptionBadge option={option} fallback={String(value)} />
+    if (option) return <OptionBadge option={option} fallback={String(value)} getImageUrl={getImageUrl} />
     // No declared option matched → humanize the raw token as a safety net so a
     // cell never shows `in_progress` verbatim (option.label still wins above).
     return <Badge variant="outline">{humanizeToken(value)}</Badge>
@@ -367,16 +410,38 @@ export const resolveRelationLabel = (col: ColumnDefinition, row: any): string =>
 }
 
 /**
- * Renders a resolved FK relation as a clean, truncated chip. Reads the
- * backend-resolved sibling `{ value, label }` (see `relationKeyFor`) and shows
- * its `label`. Falls back to the raw id when no sibling was resolved, and to an
- * empty marker when there is no value at all. Domain-agnostic: works for every
- * `belongs_to` column (category, supplier, warehouse, …) without per-addon code.
+ * Reads the thumbnail URL a backend serves on a resolved FK sibling, when
+ * present. The backend stamps `image` onto the `{ value, label }` relation
+ * object when the referenced model carries an image column (brand logo,
+ * product photo, customer avatar). Returns '' when there is no sibling image —
+ * the chip then renders text-only, exactly as before.
  */
-const RelationCell: React.FC<{ col: ColumnDefinition; row: any }> = ({ col, row }) => {
+export const resolveRelationImage = (col: ColumnDefinition, row: any): string => {
+    const sibling = getNestedValue(row, relationKeyFor(col))
+    if (sibling && typeof sibling === 'object') {
+        const img = sibling.image ?? sibling.avatar ?? sibling.photo
+        if (img !== undefined && img !== null && img !== '') return String(img)
+    }
+    return ''
+}
+
+/**
+ * Renders a resolved FK relation as a clean, truncated chip. Reads the
+ * backend-resolved sibling `{ value, label[, image] }` (see `relationKeyFor`)
+ * and shows its `label`, prefixed with a small thumbnail when the sibling
+ * carries an `image`. Falls back to the raw id when no sibling was resolved, and
+ * to an empty marker when there is no value at all. Domain-agnostic: works for
+ * every `belongs_to` column (category, supplier, brand, …) without per-addon code.
+ */
+const RelationCell: React.FC<{
+    col: ColumnDefinition
+    row: any
+    getImageUrl?: (path: string) => string
+}> = ({ col, row, getImageUrl }) => {
     const isDark = useIsDarkTheme()
     const display = resolveRelationLabel(col, row)
     if (!display) return <EmptyCell />
+    const image = resolveRelationImage(col, row)
     // Deterministic, SUBTLE color keyed on the resolved label — lighter than
     // enum badges (soft tint, no heavy fill) so category/brand chips read as
     // alive yet stay visually distinct from option/status badges. Inline style
@@ -384,10 +449,13 @@ const RelationCell: React.FC<{ col: ColumnDefinition; row: any }> = ({ col, row 
     const chipStyles = relationChipStyles(display, { isDark })
     return (
         <span
-            className="inline-flex max-w-[220px] items-center truncate rounded-md px-2 py-0.5 text-sm font-medium"
+            className="inline-flex max-w-[220px] items-center gap-1.5 rounded-md px-2 py-0.5 text-sm font-medium"
             style={chipStyles}
             title={display}
         >
+            {image && (
+                <RelationThumbnail src={image} alt={display} getImageUrl={getImageUrl} size={18} />
+            )}
             <span className="truncate">{display}</span>
         </span>
     )
@@ -523,14 +591,14 @@ export function makeDefaultGetDynamicColumns(
                     // Endpoint-loaded badge options (preloaded into OptionsContext)
                     if (renderAs === 'badge' && col.useOptions && col.searchEndpoint) {
                         if (!value) return <span className="text-muted-foreground">-</span>
-                        return <BadgeWithEndpointOptions endpoint={col.searchEndpoint} value={value} />
+                        return <BadgeWithEndpointOptions endpoint={col.searchEndpoint} value={value} getImageUrl={getImageUrl} />
                     }
 
                     // Static badge options — map value → label/icon/color
                     if (renderAs === 'badge' && col.options && col.options.length > 0) {
                         if (!value && value !== 0) return <span className="text-muted-foreground">-</span>
                         const option = col.options.find((o) => o.value === String(value))
-                        if (option) return <OptionBadge option={option} fallback={String(value)} />
+                        if (option) return <OptionBadge option={option} fallback={String(value)} getImageUrl={getImageUrl} />
                         return <Badge variant="outline">{humanizeToken(value)}</Badge>
                     }
 
@@ -550,7 +618,7 @@ export function makeDefaultGetDynamicColumns(
                         if (!value && value !== 0) return <EmptyCell />
                         const sv = String(value)
                         const option = col.options?.find((o) => o.value === sv)
-                        if (option) return <OptionBadge option={option} fallback={sv} />
+                        if (option) return <OptionBadge option={option} fallback={sv} getImageUrl={getImageUrl} />
                         const isDark =
                             typeof document !== 'undefined' &&
                             document.documentElement.classList.contains('dark')
@@ -573,7 +641,7 @@ export function makeDefaultGetDynamicColumns(
                         renderAs === 'relation' ||
                         (col.ref && !col.options?.length && renderAs !== 'badge' && renderAs !== 'status')
                     ) {
-                        return <RelationCell col={col} row={row.original} />
+                        return <RelationCell col={col} row={row.original} getImageUrl={getImageUrl} />
                     }
 
                     // Option/type column: a `select`-style column ships its
@@ -588,7 +656,7 @@ export function makeDefaultGetDynamicColumns(
                     ) {
                         if (!value && value !== 0) return <EmptyCell />
                         const option = col.options.find((o) => o.value === String(value))
-                        if (option) return <OptionBadge option={option} fallback={String(value)} />
+                        if (option) return <OptionBadge option={option} fallback={String(value)} getImageUrl={getImageUrl} />
                         return <Badge variant="outline">{humanizeToken(value)}</Badge>
                     }
 

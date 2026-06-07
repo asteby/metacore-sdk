@@ -3,7 +3,7 @@
 // host's render tests); here we lock the value-resolution contract that drives
 // them so a backend shape change is caught without a DOM.
 import { describe, it, expect } from 'vitest'
-import { relationKeyFor, resolveRelationLabel } from '../dynamic-columns'
+import { relationKeyFor, resolveRelationImage, resolveRelationLabel } from '../dynamic-columns'
 import type { ColumnDefinition } from '../types'
 
 const col = (over: Partial<ColumnDefinition>): ColumnDefinition => ({
@@ -62,5 +62,46 @@ describe('resolveRelationLabel', () => {
             category: { value: '00000000-0000-0000-0000-000000000000', label: 'Sin categoría' },
         }
         expect(resolveRelationLabel(col({ ref: 'categories' }), row)).toBe('Sin categoría')
+    })
+})
+
+describe('resolveRelationImage', () => {
+    const brandCol = (over: Partial<ColumnDefinition> = {}): ColumnDefinition =>
+        col({ key: 'brand_id', label: 'Marca', ref: 'brands', ...over })
+
+    it('reads the thumbnail the backend stamps on the resolved sibling', () => {
+        const row = {
+            brand_id: 'uuid-1',
+            brand: { value: 'uuid-1', label: 'Michelin', image: 'https://cdn/x/m.png' },
+        }
+        expect(resolveRelationImage(brandCol(), row)).toBe('https://cdn/x/m.png')
+    })
+
+    it('also accepts avatar/photo aliases on the sibling', () => {
+        expect(
+            resolveRelationImage(brandCol(), {
+                brand: { value: 'u', label: 'X', avatar: 'a.png' },
+            }),
+        ).toBe('a.png')
+        expect(
+            resolveRelationImage(brandCol(), {
+                brand: { value: 'u', label: 'X', photo: 'p.png' },
+            }),
+        ).toBe('p.png')
+    })
+
+    it('returns empty string when the sibling carries no image (text-only chip)', () => {
+        const row = { brand_id: 'uuid-2', brand: { value: 'uuid-2', label: 'Genérica' } }
+        expect(resolveRelationImage(brandCol(), row)).toBe('')
+    })
+
+    it('returns empty string when there is no sibling at all', () => {
+        expect(resolveRelationImage(brandCol(), { brand_id: 'uuid-3' })).toBe('')
+        expect(resolveRelationImage(brandCol(), {})).toBe('')
+    })
+
+    it('ignores an empty-string image (no broken thumbnail)', () => {
+        const row = { brand: { value: 'u', label: 'X', image: '' } }
+        expect(resolveRelationImage(brandCol(), row)).toBe('')
     })
 })
