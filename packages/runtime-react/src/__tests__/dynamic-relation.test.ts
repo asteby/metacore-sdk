@@ -7,6 +7,8 @@ import {
     deriveRelationFormFields,
     diffSelection,
     extractSelectedTargetIds,
+    formatRelationCell,
+    objectLabel,
     pickOptionLabel,
     relationRowKey,
 } from '../dynamic-relation-helpers'
@@ -348,5 +350,68 @@ describe('pickOptionLabel', () => {
 
     it('ignora valores object al inferir', () => {
         expect(pickOptionLabel({ id: 1, name: { nested: true }, email: 'a@x' }, undefined, cols)).toBe('a@x')
+    })
+})
+
+describe('objectLabel', () => {
+    it('lee label de un sibling {value,label}', () => {
+        expect(objectLabel({ value: 'u1', label: 'Test' })).toBe('Test')
+    })
+
+    it('lee name de un objeto usuario y title como fallback', () => {
+        expect(objectLabel({ avatar: '', email: 'd@x', name: 'Danny Hernandez' })).toBe('Danny Hernandez')
+        expect(objectLabel({ title: 'Pedido 7' })).toBe('Pedido 7')
+    })
+
+    it('devuelve undefined para objetos vacíos, arrays o escalares', () => {
+        expect(objectLabel({})).toBeUndefined()
+        expect(objectLabel([1, 2])).toBeUndefined()
+        expect(objectLabel('x')).toBeUndefined()
+        expect(objectLabel(null)).toBeUndefined()
+    })
+})
+
+describe('formatRelationCell', () => {
+    const col = (key: string, type: ColumnDefinition['type'] = 'text'): ColumnDefinition =>
+        ({ key, label: key, type, sortable: false, filterable: false }) as ColumnDefinition
+    const NIL = '00000000-0000-0000-0000-000000000000'
+
+    it('prefiere el label del sibling resuelto de una FK *_id sobre el uuid crudo', () => {
+        const row = { product_id: '249915fe-aaaa', product: { value: '249915fe-aaaa', label: 'Test' } }
+        expect(formatRelationCell(row, col('product_id'))).toBe('Test')
+    })
+
+    it('usa un sibling string plano cuando no es objeto', () => {
+        expect(formatRelationCell({ product_id: 'x', product: 'Aceite' }, col('product_id'))).toBe('Aceite')
+    })
+
+    it('ignora el sibling cuando es nil-uuid o vacío y cae al valor', () => {
+        expect(formatRelationCell({ product_id: 'abc', product: NIL }, col('product_id'))).toBe('abc')
+    })
+
+    it('nil-uuid en la celda → "—" (FK nullable sin setear)', () => {
+        expect(formatRelationCell({ seller_id: NIL }, col('seller_id'))).toBe('—')
+    })
+
+    it('objeto usuario en la celda (created_by) → name, nunca JSON', () => {
+        const row = { created_by: { avatar: '', email: 'd@x', name: 'Danny Hernandez' } }
+        expect(formatRelationCell(row, col('created_by', 'creator'))).toBe('Danny Hernandez')
+    })
+
+    it('objeto {value,label} directo en la celda → label', () => {
+        expect(formatRelationCell({ status: { value: 'open', label: 'Abierto' } }, col('status'))).toBe('Abierto')
+    })
+
+    it('objeto sin label usable → "—", no [object Object] ni JSON', () => {
+        expect(formatRelationCell({ meta: { amount: 5 } }, col('meta'))).toBe('—')
+    })
+
+    it('escalares: booleans, números, strings y vacíos', () => {
+        expect(formatRelationCell({ taxable: true }, col('taxable', 'boolean'))).toBe('✓')
+        expect(formatRelationCell({ taxable: false }, col('taxable', 'boolean'))).toBe('—')
+        expect(formatRelationCell({ qty: 0 }, col('qty', 'number'))).toBe('0')
+        expect(formatRelationCell({ sku: 'ABC' }, col('sku'))).toBe('ABC')
+        expect(formatRelationCell({ sku: '' }, col('sku'))).toBe('—')
+        expect(formatRelationCell({ note: null }, col('note'))).toBe('—')
     })
 })

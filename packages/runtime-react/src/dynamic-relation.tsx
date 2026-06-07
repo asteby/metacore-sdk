@@ -35,6 +35,7 @@ import {
     deriveRelationFormFields,
     diffSelection,
     extractSelectedTargetIds,
+    formatRelationCell,
     pickOptionLabel,
     relationRowKey,
     type DynamicRelationKind,
@@ -49,6 +50,8 @@ export {
     deriveRelationFormFields,
     diffSelection,
     extractSelectedTargetIds,
+    formatRelationCell,
+    objectLabel,
     pickOptionLabel,
     relationRowKey,
 } from './dynamic-relation-helpers'
@@ -300,11 +303,14 @@ function OneToManyRelation({
                             className="flex items-center justify-between gap-3 px-3 py-2"
                         >
                             <div className="flex-1 grid grid-cols-[repeat(auto-fit,minmax(0,1fr))] gap-2 text-sm">
-                                {visibleColumns.map(col => (
-                                    <span key={col.key} className="truncate" title={String(row[col.key] ?? '')}>
-                                        {formatCell(row[col.key])}
-                                    </span>
-                                ))}
+                                {visibleColumns.map(col => {
+                                    const cell = formatRelationCell(row, col)
+                                    return (
+                                        <span key={col.key} className="truncate" title={cell}>
+                                            {cell}
+                                        </span>
+                                    )
+                                })}
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
                                 {canEdit && (
@@ -370,13 +376,6 @@ function OneToManyRelation({
             </AlertDialog>
         </div>
     )
-}
-
-function formatCell(value: unknown): string {
-    if (value === null || value === undefined) return '—'
-    if (typeof value === 'boolean') return value ? '✓' : '—'
-    if (typeof value === 'object') return JSON.stringify(value)
-    return String(value)
 }
 
 function ManyToManyRelation({
