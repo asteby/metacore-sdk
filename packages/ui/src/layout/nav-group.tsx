@@ -111,6 +111,16 @@ function NavBadge({ children }: { children: ReactNode }) {
   return <Badge className='rounded-full px-1 py-0 text-xs'>{children}</Badge>
 }
 
+/**
+ * A badge is shown when it's a non-empty string or a non-zero number. This
+ * guards the classic JSX footgun where `{0 && <Badge/>}` would render a
+ * literal `0`, letting consumers pass a raw count (0 == hide) safely.
+ */
+function hasBadge(badge: number | string | undefined): boolean {
+  if (typeof badge === 'number') return badge !== 0
+  return Boolean(badge)
+}
+
 function SidebarMenuLink({
   item,
   href,
@@ -137,7 +147,7 @@ function SidebarMenuLink({
         >
           {item.icon && <item.icon />}
           <span>{item.title}</span>
-          {item.badge && <NavBadge>{item.badge}</NavBadge>}
+          {hasBadge(item.badge) && <NavBadge>{item.badge}</NavBadge>}
         </LinkComponent>
       </SidebarMenuButton>
     </SidebarMenuItem>
@@ -167,7 +177,7 @@ function SidebarMenuCollapsible({
           <SidebarMenuButton tooltip={item.title}>
             {item.icon && <item.icon />}
             <span>{item.title}</span>
-            {item.badge && <NavBadge>{item.badge}</NavBadge>}
+            {hasBadge(item.badge) && <NavBadge>{item.badge}</NavBadge>}
             <ChevronRight className='ms-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 rtl:rotate-180' />
           </SidebarMenuButton>
         </CollapsibleTrigger>
@@ -186,7 +196,7 @@ function SidebarMenuCollapsible({
                   >
                     {subItem.icon && <subItem.icon />}
                     <span>{subItem.title}</span>
-                    {subItem.badge && <NavBadge>{subItem.badge}</NavBadge>}
+                    {hasBadge(subItem.badge) && <NavBadge>{subItem.badge}</NavBadge>}
                   </LinkComponent>
                 </SidebarMenuSubButton>
               </SidebarMenuSubItem>
@@ -219,7 +229,7 @@ function SidebarMenuCollapsedDropdown({
           >
             {item.icon && <item.icon />}
             <span>{item.title}</span>
-            {item.badge && <NavBadge>{item.badge}</NavBadge>}
+            {hasBadge(item.badge) && <NavBadge>{item.badge}</NavBadge>}
             <ChevronRight className='ms-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90' />
           </SidebarMenuButton>
         </DropdownMenuTrigger>
@@ -237,7 +247,7 @@ function SidebarMenuCollapsedDropdown({
               >
                 {sub.icon && <sub.icon />}
                 <span className='max-w-52 text-wrap'>{sub.title}</span>
-                {sub.badge && (
+                {hasBadge(sub.badge) && (
                   <span className='ms-auto text-xs'>{sub.badge}</span>
                 )}
               </LinkComponent>
