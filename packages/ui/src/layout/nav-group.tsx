@@ -250,38 +250,67 @@ function SidebarMenuCollapsedDropdown({
 }
 
 /**
- * Splits a URL into its path and a normalized query-string for comparison.
- * The query is normalized (params sorted, blanks dropped) so two equivalent
- * query strings compare equal regardless of param order. `f_` filter params —
- * transient data-table state, not navigation intent — are stripped so a
- * filtered table view still highlights its base nav item.
+ * Splits a URL into its path, a normalized non-`f_` query-string, and its
+ * normalized `f_` filter params (kept separate). Both query parts are sorted so
+ * equivalent strings compare equal regardless of param order.
+ *
+ * `f_` params are split out rather than discarded: a base nav item (no `f_` in
+ * its own URL) still ignores them — so a manually-filtered table highlights its
+ * base item — but a per-status nav item that DECLARES `f_` params in its URL
+ * (e.g. `/m/orders?f_status=eq:reception`) uses them as its identity so sibling
+ * status entries light up one at a time instead of all together.
  */
-function splitHref(url: string): { path: string; query: string } {
+function splitHref(url: string): {
+  path: string
+  query: string
+  filters: string
+} {
   const qIndex = url.indexOf('?')
-  if (qIndex === -1) return { path: url, query: '' }
+  if (qIndex === -1) return { path: url, query: '', filters: '' }
   const path = url.slice(0, qIndex)
   const params = new URLSearchParams(url.slice(qIndex + 1))
   const entries: [string, string][] = []
+  const filterEntries: [string, string][] = []
   for (const [k, v] of params.entries()) {
-    if (k.startsWith('f_')) continue // transient table-filter state
-    entries.push([k, v])
+    if (k.startsWith('f_')) filterEntries.push([k, v])
+    else entries.push([k, v])
   }
-  entries.sort((a, b) => (a[0] === b[0] ? (a[1] < b[1] ? -1 : 1) : a[0] < b[0] ? -1 : 1))
-  return { path, query: entries.map(([k, v]) => `${k}=${v}`).join('&') }
+  const norm = (e: [string, string][]) =>
+    e
+      .sort((a, b) =>
+        a[0] === b[0] ? (a[1] < b[1] ? -1 : 1) : a[0] < b[0] ? -1 : 1
+      )
+      .map(([k, v]) => `${k}=${v}`)
+      .join('&')
+  return { path, query: norm(entries), filters: norm(filterEntries) }
+}
+
+/**
+ * True when every `f_` filter the item declares is present (same value) in the
+ * current href's filters. An item that declares no filters always passes, so it
+ * keeps highlighting regardless of transient table filtering.
+ */
+function declaredFiltersMatch(
+  curFilters: string,
+  targetFilters: string
+): boolean {
+  if (!targetFilters) return true
+  const cur = new Set(curFilters ? curFilters.split('&') : [])
+  return targetFilters.split('&').every((f) => cur.has(f))
 }
 
 /**
  * Active-state matcher for a nav item against the current href.
  *
- * Query-aware so order-status style items that share a path but differ only by
- * a query param (`/m/orders?status=reception` vs `?status=delivery`) light up
- * ONE at a time instead of all together:
- *   - When an item declares query params, they must match the current href's
- *     query EXACTLY (after normalization) — a different (or absent) query is not
- *     a match.
- *   - When an item declares NO query, it matches on path alone, preserving the
- *     prior behaviour for plain links (a filtered table still highlights its
- *     base item because `f_` params are stripped).
+ * Query-aware AND filter-aware so order-status style items that share a path
+ * but differ only by a filter param (`/m/orders?f_status=eq:reception` vs
+ * `?f_status=eq:delivered`) light up ONE at a time instead of all together:
+ *   - Non-`f_` query params (real navigation intent) must match EXACTLY when the
+ *     item declares them — a different (or absent) query is not a match.
+ *   - `f_` filter params the item DECLARES in its own URL are its identity: they
+ *     must all be present in the current href. An item that declares NO filters
+ *     matches on path alone (a manually-filtered table still highlights its base
+ *     item), preserving the prior behaviour for plain links.
  */
 function checkIsActive(href: string, item: NavItem, mainNav = false) {
   const hasItems = 'items' in item && Array.isArray(item.items)
@@ -289,11 +318,12 @@ function checkIsActive(href: string, item: NavItem, mainNav = false) {
   const cur = splitHref(href)
   const target = splitHref(item.url)
 
-  // Same path: an item with a query must match the query exactly; an item
-  // without a query matches the path regardless of the current href's query.
+  // Same path: real (non-f_) query must match exactly when declared; declared
+  // f_ filters must all be present in the current href; an item with neither
+  // matches the path regardless of the current href's query/filters.
   if (cur.path === target.path) {
-    if (target.query) return cur.query === target.query
-    return true
+    if (target.query && cur.query !== target.query) return false
+    return declaredFiltersMatch(cur.filters, target.filters)
   }
 
   if (
