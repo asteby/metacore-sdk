@@ -90,6 +90,13 @@ interface DynamicTableProps {
      * Optional — a sensible default maps each column to { accessorKey, header }.
      */
     getDynamicColumns?: GetDynamicColumns
+    /**
+     * IANA timezone (e.g. the org's `America/Mexico_City`) used to render
+     * datetime/timestamp cells. When provided, instants are displayed in this
+     * zone instead of the viewer's browser zone, so the day/time never shifts.
+     * Optional — omitting it preserves the legacy browser-local formatting.
+     */
+    timeZone?: string
 }
 
 export function DynamicTable({
@@ -102,6 +109,7 @@ export function DynamicTable({
     defaultFilters,
     extraColumns = [],
     getDynamicColumns = defaultGetDynamicColumns,
+    timeZone,
 }: DynamicTableProps) {
     const { t, i18n } = useTranslation()
     const api = useApi()
@@ -590,12 +598,12 @@ export function DynamicTable({
         const rowMetadata = metadata.actions?.some((a) => a.placement === 'table' || a.placement === 'create')
             ? { ...metadata, actions: metadata.actions.filter((a) => !a.placement || a.placement === 'row') }
             : metadata
-        const baseColumns = getDynamicColumns(rowMetadata, handleInternalAction, t, i18n.language, columnFilterConfigs)
+        const baseColumns = getDynamicColumns(rowMetadata, handleInternalAction, t, i18n.language, columnFilterConfigs, timeZone)
         const filteredBase = baseColumns.filter((col: ColumnDef<any>) => !hiddenColumns.includes(col.id as string))
         const actionsCol = filteredBase.find((c: ColumnDef<any>) => c.id === 'actions')
         const otherCols = filteredBase.filter((c: ColumnDef<any>) => c.id !== 'actions')
         return [...otherCols, ...extraColumns, ...(actionsCol ? [actionsCol] : [])]
-    }, [metadata, handleInternalAction, hiddenColumns, extraColumns, t, i18n.language, columnFilterConfigs, getDynamicColumns])
+    }, [metadata, handleInternalAction, hiddenColumns, extraColumns, t, i18n.language, columnFilterConfigs, getDynamicColumns, timeZone])
 
     const filters = useMemo(() => [], [])
 

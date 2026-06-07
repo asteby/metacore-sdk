@@ -369,16 +369,60 @@ export const DATE_CELL_TYPES = ['date', 'datetime', 'timestamp', 'timestamptz'] 
  *   - `date`: day only (`PPP`), no tooltip.
  *   - `datetime`/`timestamp(tz)`: day + time (`Pp`) with a full-precision
  *     tooltip (`PPpp`) — the 7Leguas pattern.
+ *
+ * When a `timeZone` (IANA, e.g. the org's `America/Mexico_City`) is provided,
+ * instants are rendered in that zone via the native `Intl.DateTimeFormat` so
+ * the displayed day/time never shifts with the viewer's browser timezone:
+ *   - instant (datetime/timestamp(tz)): `dateStyle:'medium' timeStyle:'short'`
+ *     in the org zone, with a `dateStyle:'long' timeStyle:'medium'` +
+ *     `timeZoneName:'short'` tooltip.
+ *   - `date` (pure calendar day): rendered pinned to UTC so it never rolls to
+ *     the previous/next day, no tooltip.
+ * Without a `timeZone`, the exact date-fns behavior is preserved (back-compat).
  */
 export function formatDateCell(
     value: unknown,
     renderAs: string | undefined,
     locale: Locale,
+    timeZone?: string,
 ): { display: string; title?: string } | null {
     if (value === null || value === undefined || value === '') return null
     const date = new Date(value as any)
     if (isNaN(date.getTime()) || date.getFullYear() <= 1) return null
     const withTime = renderAs !== 'date'
+    if (timeZone) {
+        // `locale.code` is the BCP-47 tag date-fns ships (e.g. 'es', 'en-US').
+        const localeTag = locale?.code || undefined
+        if (withTime) {
+            return {
+                display: new Intl.DateTimeFormat(localeTag, {
+                    timeZone,
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                }).format(date),
+                // `dateStyle`/`timeStyle` can't be combined with explicit
+                // component options like `timeZoneName`, so spell the tooltip
+                // out: long date + seconds + the zone abbreviation.
+                title: new Intl.DateTimeFormat(localeTag, {
+                    timeZone,
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    timeZoneName: 'short',
+                }).format(date),
+            }
+        }
+        // Pure calendar date: pin to UTC so it never shifts across zones.
+        return {
+            display: new Intl.DateTimeFormat(localeTag, {
+                timeZone: 'UTC',
+                dateStyle: 'long',
+            }).format(date),
+        }
+    }
     if (withTime) {
         return {
             display: format(date, 'Pp', { locale }),
@@ -514,6 +558,7 @@ export function makeDefaultGetDynamicColumns(
         t?: (key: string, options?: any) => string,
         currentLanguage?: string,
         filterConfigs?: Map<string, ColumnFilterConfig>,
+        timeZone?: string,
     ): ColumnDef<any>[] {
         const dateLocale = currentLanguage === 'en' ? enUS : es
         const columns: ColumnDef<any>[] = [
@@ -665,7 +710,7 @@ export function makeDefaultGetDynamicColumns(
                         case 'datetime':
                         case 'timestamp':
                         case 'timestamptz': {
-                            const formatted = formatDateCell(value, renderAs, dateLocale)
+                            const formatted = formatDateCell(value, renderAs, dateLocale, timeZone)
                             if (!formatted)
                                 return <span className="text-muted-foreground">-</span>
                             return (

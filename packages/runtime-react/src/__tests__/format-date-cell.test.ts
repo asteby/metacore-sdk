@@ -49,4 +49,31 @@ describe('formatDateCell', () => {
     it('returns null for an unparseable value', () => {
         expect(formatDateCell('not-a-date', 'datetime', enUS)).toBeNull()
     })
+
+    describe('timeZone-aware (org IANA zone)', () => {
+        // 2026-06-07T00:00:00Z is the previous day, 19:00, in America/Mexico_City
+        // (UTC-5). A browser-local formatter in a UTC-2 zone would day-shift it;
+        // pinning to the org zone must show June 6.
+        const midnightUtc = '2026-06-07T00:00:00Z'
+
+        it('renders an instant in the provided zone, not the browser zone', () => {
+            const out = formatDateCell(midnightUtc, 'datetime', enUS, 'America/Mexico_City')
+            expect(out).not.toBeNull()
+            // Mexico City is UTC-5/-6 → the instant falls on June 6, 19:00.
+            expect(out!.display).toMatch(/Jun 6, 2026/)
+            expect(out!.display).toMatch(/\d{1,2}:\d{2}/)
+            // Tooltip carries full precision + the zone abbreviation.
+            expect(out!.title).toBeDefined()
+            expect(out!.title).toMatch(/2026/)
+        })
+
+        it('renders a pure `date` pinned to UTC so it never shifts', () => {
+            const out = formatDateCell(midnightUtc, 'date', enUS, 'America/Mexico_City')
+            expect(out).not.toBeNull()
+            // UTC-pinned: stays on June 7 regardless of zone, no time, no tooltip.
+            expect(out!.display).toMatch(/June 7, 2026/)
+            expect(out!.display).not.toMatch(/\d{1,2}:\d{2}/)
+            expect(out!.title).toBeUndefined()
+        })
+    })
 })
