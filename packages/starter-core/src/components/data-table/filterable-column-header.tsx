@@ -363,10 +363,14 @@ export function FilterableColumnHeader<TData, TValue>({
                         >
                           <div
                             className={cn(
-                              'border-primary mr-2 flex size-4 shrink-0 items-center justify-center rounded-sm border',
+                              'mr-2 flex size-4 shrink-0 items-center justify-center rounded-sm border transition-colors',
                               isSelected
-                                ? 'bg-primary text-primary-foreground'
-                                : 'opacity-50 [&_svg]:invisible'
+                                ? // Foreground/background is contrast-guaranteed
+                                  // in both themes, so the checkmark stays legible
+                                  // even when a brand's primary/primary-foreground
+                                  // pair collapses to dark-on-dark in dark mode.
+                                  'border-foreground bg-foreground text-background'
+                                : 'border-muted-foreground/50 opacity-70 [&_svg]:invisible'
                             )}
                           >
                             <CheckIcon className='h-3.5 w-3.5' />
