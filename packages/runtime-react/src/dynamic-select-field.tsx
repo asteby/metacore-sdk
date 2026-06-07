@@ -35,6 +35,8 @@ import {
     PopoverTrigger,
 } from '@asteby/metacore-ui/primitives'
 import { Check, ChevronsUpDown, ImageIcon, Loader2, Plus } from 'lucide-react'
+import { resolveColorCss } from '@asteby/metacore-ui/lib'
+import { DynamicIcon } from './dynamic-icon'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { getFieldRef } from './dynamic-form-schema'
 import type { ActionFieldDef } from './types'
@@ -74,6 +76,53 @@ function OptionThumb({ image, size = 20 }: { image?: string | null; size?: numbe
             }}
         />
     )
+}
+
+/**
+ * Leading visual for an option: a photo thumbnail (FK relations with an image),
+ * else a declared icon, else a color dot (enum/status options with a color).
+ * Returns null when the option carries none, so plain text options stay plain.
+ */
+function OptionLead({
+    option,
+    size = 20,
+}: {
+    option?: Pick<ResolvedOption, 'image' | 'color' | 'icon'> | null
+    size?: number
+}) {
+    if (!option) return null
+    if (option.image) return <OptionThumb image={option.image} size={size} />
+    if (option.icon) {
+        return (
+            <span
+                className="flex shrink-0 items-center justify-center"
+                style={{ width: size, height: size, color: option.color ? resolveColorCss(option.color) : undefined }}
+                aria-hidden
+            >
+                <DynamicIcon name={option.icon} className="size-4" />
+            </span>
+        )
+    }
+    if (option.color) {
+        return (
+            <span
+                className="shrink-0 rounded-full"
+                style={{ width: Math.round(size * 0.5), height: Math.round(size * 0.5), background: resolveColorCss(option.color) }}
+                aria-hidden
+            />
+        )
+    }
+    return null
+}
+
+/** True when any option (or the selected one) carries a renderable visual. */
+function optionsHaveVisual(
+    options: ReadonlyArray<Pick<ResolvedOption, 'image' | 'color' | 'icon'>>,
+    selected?: Pick<ResolvedOption, 'image' | 'color' | 'icon'> | null,
+): boolean {
+    const has = (o?: Pick<ResolvedOption, 'image' | 'color' | 'icon'> | null) =>
+        !!(o && (o.image || o.color || o.icon))
+    return has(selected) || options.some(has)
 }
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -130,8 +179,7 @@ export function DynamicSelectField({ field, value, onChange }: DynamicSelectFiel
     // Only switch the picker into "with thumbnails" mode when the data actually
     // carries images — a relation whose options have no `image` keeps the plain
     // text list it had before (no empty placeholder column).
-    const hasImages =
-        !!selectedOption?.image || options.some((o) => !!o.image)
+    const hasVisual = optionsHaveVisual(options, selectedOption)
 
     const handlePick = (opt: ResolvedOption) => {
         setPicked(opt)
@@ -181,8 +229,8 @@ export function DynamicSelectField({ field, value, onChange }: DynamicSelectFiel
                     data-empty={!value}
                 >
                     <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                        {hasImages && value ? (
-                            <OptionThumb image={selectedOption?.image} size={20} />
+                        {hasVisual && value ? (
+                            <OptionLead option={selectedOption} size={20} />
                         ) : null}
                         <span className={'min-w-0 flex-1 truncate ' + (selectedLabel ? '' : 'text-muted-foreground')}>
                             {selectedLabel || field.placeholder || 'Buscar…'}
@@ -227,8 +275,8 @@ export function DynamicSelectField({ field, value, onChange }: DynamicSelectFiel
                                             onSelect={() => handlePick(opt)}
                                         >
                                             <Check className={'mr-2 size-4 shrink-0 ' + (isSel ? 'opacity-100' : 'opacity-0')} />
-                                            {hasImages && (
-                                                <OptionThumb image={opt.image} size={24} />
+                                            {hasVisual && (
+                                                <OptionLead option={opt} size={24} />
                                             )}
                                             <div className="ml-2 flex min-w-0 flex-col">
                                                 <span className="truncate">{opt.label}</span>
