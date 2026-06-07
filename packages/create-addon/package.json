@@ -32,7 +32,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "commander": "^14.0.0",
+    "commander": "^15.0.0",
     "kolorist": "^1.8.0",
     "prompts": "^2.4.2",
     "tiny-glob": "^0.2.9"
