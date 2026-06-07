@@ -3,6 +3,20 @@
 // URL/payload conventions outside the component.
 import type { ActionFieldDef, ColumnDefinition, TableMetadata } from './types'
 import { isNilUuid } from './nil-uuid'
+import { humanizeToken } from './dynamic-columns-helpers'
+
+// An enum-like column renders a single token value (status/select/option/badge)
+// rather than free text, so an unmatched value should be humanized, not leaked.
+function isEnumLikeColumn(col: ColumnDefinition): boolean {
+    const renderAs = col.cellStyle ?? col.type
+    return (
+        renderAs === 'select' ||
+        renderAs === 'option' ||
+        renderAs === 'status' ||
+        renderAs === 'badge' ||
+        !!col.options?.length
+    )
+}
 
 export type DynamicRelationKind = 'one_to_many' | 'many_to_many'
 
@@ -49,7 +63,16 @@ export function formatRelationCell(row: Record<string, unknown>, col: ColumnDefi
     if (typeof value === 'object') return '—'
 
     const text = String(value)
-    return text === '' ? '—' : text
+    if (text === '') return '—'
+    // Enum/status/option columns: prefer the declared option label (localized
+    // source of truth), then humanize the raw token as a fallback so a status
+    // never reads as `in_progress`. Plain text columns are left untouched.
+    if (isEnumLikeColumn(col)) {
+        const match = col.options?.find((o) => String(o.value) === text)
+        if (match) return match.label
+        return humanizeToken(text)
+    }
+    return text
 }
 
 export interface PivotRowLike {
