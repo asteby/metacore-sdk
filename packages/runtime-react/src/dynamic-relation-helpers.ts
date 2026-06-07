@@ -2,8 +2,55 @@
 // run in node (no DOM, no metacore-ui primitives) and consumers can reuse the
 // URL/payload conventions outside the component.
 import type { ActionFieldDef, ColumnDefinition, TableMetadata } from './types'
+import { isNilUuid } from './nil-uuid'
 
 export type DynamicRelationKind = 'one_to_many' | 'many_to_many'
+
+// Pulls a human label off a resolved relation/user object a backend serves:
+// `{ value, label }` (FK sibling), `{ name, … }` (user object such as
+// created_by) or `{ title }`. Returns undefined for plain/empty objects so the
+// caller falls through to its empty marker instead of leaking raw JSON.
+export function objectLabel(value: unknown): string | undefined {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+    const obj = value as Record<string, unknown>
+    const label = obj.label ?? obj.name ?? obj.title
+    return label != null && label !== '' ? String(label) : undefined
+}
+
+// formatRelationCell renders one DynamicRelation row cell. Beyond coercing
+// scalars it resolves the pro siblings a backend serves so a line-item shows
+// "Test", not a raw uuid or `{"label":"Test",…}` JSON:
+//   1. an FK column (`product_id`) → the sibling `row.product = { value, label }`
+//      (the key with the trailing `_id` stripped), preferring its label/name;
+//   2. a value that is itself a resolved object (`{ value, label }` / a user
+//      `{ name }`) → its label/name, never `JSON.stringify`;
+//   3. the nil/zero UUID (unset nullable FK) → the empty marker "—".
+export function formatRelationCell(row: Record<string, unknown>, col: ColumnDefinition): string {
+    const value = row[col.key]
+
+    // Prefer the backend-resolved FK sibling keyed by the column key with the
+    // trailing `_id` stripped (`product_id` → `row.product`).
+    if (col.key.endsWith('_id')) {
+        const sibling = row[col.key.slice(0, -3)]
+        const siblingLabel =
+            objectLabel(sibling) ??
+            (typeof sibling === 'string' && sibling !== '' && !isNilUuid(sibling) ? sibling : undefined)
+        if (siblingLabel !== undefined) return siblingLabel
+    }
+
+    if (value === null || value === undefined) return '—'
+    if (isNilUuid(value)) return '—'
+    if (typeof value === 'boolean') return value ? '✓' : '—'
+
+    // The cell value is itself a resolved relation/user object → its label/name.
+    const inlineLabel = objectLabel(value)
+    if (inlineLabel !== undefined) return inlineLabel
+    // An object with no usable label (would JSON.stringify) → empty marker.
+    if (typeof value === 'object') return '—'
+
+    const text = String(value)
+    return text === '' ? '—' : text
+}
 
 export interface PivotRowLike {
     id?: string | number | null
