@@ -1,5 +1,24 @@
 # @asteby/metacore-starter-core
 
+## 27.0.1
+
+### Patch Changes
+
+- b5c8f5f: Data-table filter polish:
+  - The selected-option checkbox in the column filter dropdown now uses the
+    contrast-guaranteed `foreground`/`background` pair, so the checkmark stays
+    legible in dark mode even when a brand's `primary`/`primary-foreground` pair
+    collapses to dark-on-dark.
+  - `FilterableColumnHeader` (`@asteby/metacore-ui`) gains the `date_range`
+    filter: a compact range calendar for date/datetime columns (react-day-picker,
+    already a dependency), emitting a `"YYYY-MM-DD_YYYY-MM-DD"` value.
+
+- Updated dependencies [b5c8f5f]
+- Updated dependencies [b5c8f5f]
+  - @asteby/metacore-runtime-react@17.0.3
+  - @asteby/metacore-ui@2.4.2
+  - @asteby/metacore-auth@11.0.0
+
 ## 27.0.0
 
 ### Patch Changes

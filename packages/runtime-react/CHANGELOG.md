@@ -1,5 +1,18 @@
 # @asteby/metacore-runtime-react
 
+## 17.0.3
+
+### Patch Changes
+
+- b5c8f5f: Pro datetime columns: `datetime`/`timestamp`/`timestamptz` columns now use the
+  date cell renderer instead of falling through to the raw-ISO fallback. Datetime
+  variants show day + time with a full-precision tooltip on hover (the 7Leguas
+  pattern); plain `date` columns stay day-only. Null and the Go zero-time render
+  an em-dash. Date-typed columns (including the timestamp variants) now infer the
+  `date_range` filter. Adds a pure `formatDateCell` helper (+ tests).
+- Updated dependencies [b5c8f5f]
+  - @asteby/metacore-ui@2.4.2
+
 ## 17.0.2
 
 ### Patch Changes
