@@ -48,7 +48,7 @@ import type { ActionFieldDef } from './types'
  * not a gallery). Inline style for the box dimensions: arbitrary Tailwind
  * classes from a federated addon don't always survive the host's class scan.
  */
-function OptionThumb({ image, size = 20 }: { image?: string | null; size?: number }) {
+export function OptionThumb({ image, size = 20 }: { image?: string | null; size?: number }) {
     const box = { width: size, height: size }
     if (!image) {
         return (
@@ -83,7 +83,7 @@ function OptionThumb({ image, size = 20 }: { image?: string | null; size?: numbe
  * else a declared icon, else a color dot (enum/status options with a color).
  * Returns null when the option carries none, so plain text options stay plain.
  */
-function OptionLead({
+export function OptionLead({
     option,
     size = 20,
 }: {

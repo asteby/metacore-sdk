@@ -68,7 +68,8 @@ export {
 } from './dynamic-columns'
 export { humanizeToken } from './dynamic-columns-helpers'
 export { NIL_UUID, isNilUuid, normalizeNilUuid } from './nil-uuid'
-export { DynamicRecordDialog } from './dialogs/dynamic-record'
+export { DynamicRecordDialog, ViewValue } from './dialogs/dynamic-record'
+export type { DynamicRecordDialogProps, FieldDef, FieldOption, GetImageUrl } from './dialogs/dynamic-record'
 export { CreateRecordDialog } from './dialogs/create-record-dialog'
 export { ViewRecordDialog } from './dialogs/view-record-dialog'
 export type {

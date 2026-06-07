@@ -1,8 +1,16 @@
 // DynamicRecordDialog — renders a create/edit/view modal for a model based
-// on metadata fetched from `/metadata/modal/:model`. Ported from the ops
-// starter. Host-owned infra that was referenced by alias (axios client,
-// branch store) now flows through <ApiProvider> from runtime-react.
+// on metadata fetched from `/metadata/modal/:model`. This is the single,
+// SDK-owned source of truth for declarative record rendering (the ops fork was
+// consolidated back into here): tz-aware dates, FK image/label leads in both
+// view and edit, resolved relation/user-object labels (never raw JSON), nil-UUID
+// elision, pro option color/icon badges, and one_to_many child panels.
+//
+// Host-owned infra that was referenced by alias (axios client, branch store)
+// flows through <ApiProvider> from runtime-react. Host-specific runtime values —
+// the image-url resolver and the org IANA timezone — are passed as props so the
+// SDK stays transport- and host-agnostic.
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { ModelSchema } from './types'
 import {
     Dialog,
@@ -40,18 +48,34 @@ import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { ExternalLink, Loader2, CalendarIcon, ChevronDown, Check, Upload, X as XIcon } from 'lucide-react'
 import { useApi } from '../api-context'
-import { DynamicSelectField } from '../dynamic-select-field'
+import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-field'
+import { DynamicRelations } from '../dynamic-relations'
+import { useOptionsResolver, type ResolvedOption } from '../use-options-resolver'
 import { getFieldRef } from '../dynamic-form-schema'
-import { normalizeNilUuid } from '../nil-uuid'
+import { isNilUuid, normalizeNilUuid } from '../nil-uuid'
 import { humanizeToken } from '../dynamic-columns-helpers'
-import type { ActionFieldDef } from '../types'
+import { formatDateCell } from '../dynamic-columns'
+import type { ActionFieldDef, RelationMeta } from '../types'
 
-interface FieldOption {
+/** Resolves a (possibly relative) storage path into a fetchable URL. */
+export type GetImageUrl = (path: string | null | undefined) => string
+const identityImageUrl: GetImageUrl = (p) => p ?? ''
+
+export interface FieldOption {
     value: string
     label: string
+    /**
+     * Pro option metadata the backend serves for enum/option fields (e.g.
+     * `product_type`) so the view renders a colored/iconed badge instead of the
+     * raw value ("storable" → "Almacenable"). All optional and driven entirely
+     * by the served metadata — plain options stay plain.
+     */
+    color?: string
+    icon?: string
+    image?: string
 }
 
-interface FieldDef {
+export interface FieldDef {
     key: string
     label: string
     type: 'text' | 'textarea' | 'select' | 'search' | 'number' | 'date' | 'email' | 'url' | 'boolean' | 'image' | string
@@ -68,8 +92,9 @@ interface FieldDef {
      * v0.46.x serves it on modal fields, not just action fields). When present
      * the native form renders an async searchable picker (`DynamicSelectField`)
      * against `/api/options/<ref>?field=id` — with option thumbnails when the
-     * remote rows carry an `image` — instead of a raw FK text input. Tolerates
-     * the snake_case `source`/`relation` aliases the manifest may serve.
+     * remote rows carry an `image` — instead of a raw FK text input. View mode
+     * shows the resolved thumbnail + label. Tolerates the snake_case
+     * `source`/`relation` aliases the manifest may serve.
      */
     ref?: string
     source?: string
@@ -88,9 +113,30 @@ interface FieldDef {
 // `ModelSchema` (see ./types.ts) is structurally assignable here.
 interface ModalMetadata {
     title?: string
+    /**
+     * i18n key for the model name (e.g. "accounting.model.account"). The backend
+     * can't always localize it (the addon bundle is only registered at install
+     * time), so it ships the key and we translate here — the frontend loads each
+     * addon's i18n live from the hub, so it resolves without a reinstall.
+     */
+    titleKey?: string
     createTitle?: string
     editTitle?: string
     fields?: FieldDef[]
+    /**
+     * Backend-localized CRUD success messages (modal metadata). Preferred over
+     * the raw response message which is not localized.
+     */
+    messages?: { created?: string; updated?: string; deleted?: string }
+}
+
+type TFn = (key: string) => string
+
+// localizedModelName resolves the (possibly addon-i18n) model name: prefer the
+// translated titleKey, fall back to the backend-provided raw title.
+function localizedModelName(meta: ModalMetadata, t: TFn): string {
+    if (meta.titleKey && t(meta.titleKey) !== meta.titleKey) return t(meta.titleKey)
+    return meta.title || ''
 }
 
 export interface DynamicRecordDialogProps {
@@ -100,7 +146,10 @@ export interface DynamicRecordDialogProps {
     model: string
     recordId?: string | null
     endpoint?: string
-    onSaved?: () => void
+    /** Fired after a successful save; receives the persisted record (when the
+     * backend returns it) so callers — e.g. the inline-create bridge behind a
+     * dynamic_select "+" — can auto-select the new row. */
+    onSaved?: (record?: any) => void
     /**
      * Optional override invoked instead of the default `POST` when the dialog
      * is in `create` mode. Hosts may use this to route writes through custom
@@ -133,27 +182,110 @@ export interface DynamicRecordDialogProps {
      * the action.
      */
     onEdit?: () => void
+    /**
+     * Deliberate escape hatch: open the full `/m/:model/:id` detail page (with
+     * cross-module related records) for records too heavy for the modal.
+     * Rendered as a footer link in view mode when provided.
+     */
+    onOpenFullPage?: () => void
+    /**
+     * The row object the table already loaded. When provided, the dialog renders
+     * instantly from it (no spinner) and reuses the table's pro siblings — the
+     * resolved relation (`row.category = {value,label}`), served option lists and
+     * image urls. A background fetch only fills in fields the list row omitted.
+     */
+    initialRecord?: Record<string, any> | null
+    /**
+     * Host resolver turning a (possibly relative) storage path into a fetchable
+     * URL for images/avatars/thumbnails. Defaults to identity. Pass the host's
+     * `getImageUrl` so addon-served relative paths render.
+     */
+    getImageUrl?: GetImageUrl
+    /**
+     * Org IANA timezone (e.g. `America/Mexico_City`). Threaded into the tz-aware
+     * `formatDateCell` so datetime/timestamp instants render in the org zone
+     * regardless of the viewer's browser timezone. Pure `date` values pin to UTC.
+     */
+    timeZone?: string
 }
 
 function resolvePath(obj: any, path: string): any {
     return path.split('.').reduce((acc, part) => acc?.[part], obj)
 }
 
+// objectLabel pulls a human label off a resolved relation/user object the
+// backend serves: `{value,label}` (FK sibling), `{name,...}` (user object such
+// as created_by), or `{title}`. Returns undefined for plain/empty objects.
+function objectLabel(value: any): string | undefined {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+    const label = value.label ?? value.name ?? value.title
+    if (label != null && label !== '') return String(label)
+    return undefined
+}
+
+// pickImage reads an image-ish path off a resolved object (FK sibling, user).
+function pickImage(value: any): string | undefined {
+    if (!value || typeof value !== 'object') return undefined
+    const img = value.image ?? value.avatar ?? value.logo ?? value.thumbnail
+    return typeof img === 'string' && img !== '' ? img : undefined
+}
+
+// relationSiblingValue reads the resolved relation the table served alongside an
+// FK column. A field `category_id` (search/dynamic_select/ref) ships a sibling
+// `record.category = {value,label,image?}` (or a bare string/{name}); returns
+// the raw sibling (object or string) so the caller can extract label + image.
+function relationSiblingValue(field: FieldDef, record: any): any {
+    if (!record) return undefined
+    const candidates: string[] = []
+    const ref = getFieldRef(field as ActionFieldDef)
+    if (ref) candidates.push(ref)
+    if (typeof field.key === 'string' && field.key.endsWith('_id')) candidates.push(field.key.slice(0, -3))
+    for (const key of candidates) {
+        const sib = record[key]
+        if (sib === undefined || sib === null) continue
+        if (typeof sib === 'string') {
+            if (sib === '' || isNilUuid(sib)) continue
+            return sib
+        }
+        if (typeof sib === 'object') return sib
+    }
+    return undefined
+}
+
+// servedOption matches a field's served option list (enum/select with
+// {value,label,color,icon,image}) against the current value.
+function servedOption(field: FieldDef, value: any): FieldOption | undefined {
+    if (!field.options?.length) return undefined
+    return field.options.find(o => o.value === String(value ?? ''))
+}
+
+// createdBySibling reads the resolver object the backend serves for the
+// auto-injected `created_by` avatar column: {name, avatar, email}.
+function createdBySibling(value: any, record: any): { name?: string; avatar?: string; email?: string } | undefined {
+    const obj = (value && typeof value === 'object' ? value : undefined) ?? record?.created_by
+    if (obj && typeof obj === 'object' && (obj.name || obj.avatar || obj.email)) return obj
+    return undefined
+}
+
+// isRelationField — a field that resolves to another row (so view renders a lead
+// + label and edit renders the searchable picker).
+function isRelationField(field: FieldDef): boolean {
+    return (
+        field.type === 'search' ||
+        field.type === 'dynamic_select' ||
+        field.widget === 'dynamic_select' ||
+        !!getFieldRef(field as ActionFieldDef) ||
+        !!field.searchEndpoint
+    )
+}
+
 function formatDisplayValue(rawValue: any, field: FieldDef): string {
     // Unset nullable FK serialized as the nil UUID renders as empty, not zeros.
     const value = normalizeNilUuid(rawValue)
     if (value === null || value === undefined || value === '') return '—'
+    const objLabel = objectLabel(value)
+    if (objLabel !== undefined) return objLabel
     if (field.type === 'boolean' || typeof value === 'boolean') return value ? 'Sí' : 'No'
-
-    if (field.type === 'date') {
-        try {
-            return new Date(value).toLocaleDateString('es-MX', {
-                day: 'numeric', month: 'long', year: 'numeric',
-            })
-        } catch {
-            return String(value)
-        }
-    }
 
     if (field.type === 'select' && field.options?.length) {
         const match = field.options.find(o => o.value === String(value))
@@ -167,21 +299,27 @@ function formatDisplayValue(rawValue: any, field: FieldDef): string {
 
 const MODE_CONFIG = {
     create: {
-        getTitle: (meta: ModalMetadata) => meta.createTitle || meta.title || 'Nuevo registro',
+        getTitle: (meta: ModalMetadata, t: TFn) => {
+            const name = localizedModelName(meta, t)
+            return name ? `Crear ${name}` : (meta.createTitle || meta.title || 'Nuevo registro')
+        },
         description: 'Completa los campos para crear un nuevo registro.',
         submitLabel: 'Crear',
         submittingLabel: 'Creando...',
         cancelLabel: 'Cancelar',
     },
     edit: {
-        getTitle: (meta: ModalMetadata) => meta.editTitle || meta.title || 'Editar registro',
+        getTitle: (meta: ModalMetadata, t: TFn) => {
+            const name = localizedModelName(meta, t)
+            return name ? `Editar ${name}` : (meta.editTitle || meta.title || 'Editar registro')
+        },
         description: 'Modifica los campos y guarda los cambios.',
         submitLabel: 'Guardar cambios',
         submittingLabel: 'Guardando...',
         cancelLabel: 'Cancelar',
     },
     view: {
-        getTitle: (meta: ModalMetadata) => meta.title || 'Ver registro',
+        getTitle: (meta: ModalMetadata, t: TFn) => localizedModelName(meta, t) || meta.title || 'Ver registro',
         description: 'Información detallada del registro.',
         submitLabel: '',
         submittingLabel: '',
@@ -189,7 +327,11 @@ const MODE_CONFIG = {
     },
 }
 
+// Context threading host runtime values to nested field components (uploads,
+// image leads, tz-aware dates) without prop-drilling through every renderer.
 const ModelContext = createContext('')
+const ImageUrlContext = createContext<GetImageUrl>(identityImageUrl)
+const TimeZoneContext = createContext<string | undefined>(undefined)
 
 export function DynamicRecordDialog({
     open,
@@ -205,11 +347,17 @@ export function DynamicRecordDialog({
     schema,
     onDelete,
     onEdit,
+    onOpenFullPage,
+    initialRecord,
+    getImageUrl = identityImageUrl,
+    timeZone,
 }: DynamicRecordDialogProps) {
     const api = useApi()
+    const { t } = useTranslation()
     const [modalMeta, setModalMeta] = useState<ModalMetadata | null>(
         schema ? (schema as ModalMetadata) : null,
     )
+    const [relations, setRelations] = useState<RelationMeta[]>([])
     const [record, setRecord] = useState<any | null>(null)
     const [formValues, setFormValues] = useState<Record<string, any>>({})
     const [loading, setLoading] = useState(false)
@@ -221,14 +369,40 @@ export function DynamicRecordDialog({
     const isEditable = mode === 'create' || mode === 'edit'
     const config = MODE_CONFIG[mode]
 
+    // ── Fetch metadata + record when dialog opens ──────────────────────────
     useEffect(() => {
         if (!open) return
         if (!isCreate && !recordId) return
 
         let cancelled = false
 
+        // Seed instantly from the row the table already has so view/edit render
+        // without a spinner. The list row carries the pro siblings (resolved
+        // relation, served options, image url) the table cells used.
+        const seed = !isCreate && initialRecord ? initialRecord : null
+        if (seed) setRecord(seed)
+
+        const seedForm = (meta: ModalMetadata, rec: any) => {
+            const initial: Record<string, any> = {}
+            for (const field of meta.fields ?? []) {
+                initial[field.key] = resolvePath(rec, field.key) ?? field.defaultValue ?? ''
+            }
+            setFormValues(initial)
+        }
+
+        // A field value is "missing" from the seed row when the list omitted that
+        // column. Sibling pro fields aren't form fields, so we only check the
+        // declared field keys.
+        const seedIsComplete = (meta: ModalMetadata, rec: any) =>
+            (meta.fields ?? []).every(f => {
+                if (f.hidden) return true
+                const v = resolvePath(rec, f.key)
+                return v !== undefined
+            })
+
         const load = async () => {
-            setLoading(true)
+            // Only show the skeleton when we have nothing to render yet.
+            if (!seed) setLoading(true)
             try {
                 let meta: ModalMetadata | null = schema ? (schema as ModalMetadata) : null
                 if (!meta) {
@@ -247,7 +421,15 @@ export function DynamicRecordDialog({
                                 : field.defaultValue) ?? ''
                     }
                     setFormValues(initial)
-                } else {
+                    return
+                }
+
+                // Render immediately from the seed row.
+                if (seed && meta) seedForm(meta, seed)
+
+                // Only hit the record endpoint if the seed is absent or missing
+                // some declared field — keeps the modal instant for full rows.
+                if (!seed || (meta && !seedIsComplete(meta, seed))) {
                     const recordEndpoint = endpoint
                         ? `${endpoint}/${recordId}`
                         : `/dynamic/${model}/${recordId}`
@@ -256,17 +438,15 @@ export function DynamicRecordDialog({
                     if (cancelled) return
 
                     const rec = recRes.data?.data ?? recRes.data
-                    setRecord(rec)
-
-                    const initial: Record<string, any> = {}
-                    for (const field of meta?.fields ?? []) {
-                        initial[field.key] = resolvePath(rec, field.key) ?? field.defaultValue ?? ''
-                    }
-                    setFormValues(initial)
+                    // Merge so the fetched record fills gaps without dropping the
+                    // table's pro siblings (the detail endpoint may omit them).
+                    const merged = seed ? { ...seed, ...rec } : rec
+                    setRecord(merged)
+                    if (meta) seedForm(meta, merged)
                 }
             } catch (err) {
                 console.error('[DynamicRecordDialog] load error:', err)
-                toast.error('Error al cargar los datos')
+                if (!seed) toast.error('Error al cargar los datos')
             } finally {
                 if (!cancelled) setLoading(false)
             }
@@ -274,15 +454,54 @@ export function DynamicRecordDialog({
 
         load()
         return () => { cancelled = true }
-    }, [open, recordId, model, endpoint, isCreate, schema, defaults])
+    // initialRecord intentionally omitted: the row identity is captured per open
+    // via recordId; re-seeding mid-open would clobber edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, recordId, model, endpoint, isCreate, schema])
 
+    // Reset when closed
     useEffect(() => {
         if (!open) {
             setModalMeta(null)
+            setRelations([])
             setRecord(null)
             setFormValues({})
         }
     }, [open])
+
+    // Fetch the model's declared one_to_many/many_to_many edges so view AND edit
+    // show child records (e.g. a sales order's line items) below the scalar
+    // fields. The modal form is driven by MODAL metadata (fields); relations live
+    // on TABLE metadata, hence the separate fetch. Skipped on create (no parent
+    // record yet). View renders them read-only; edit lets the user add/edit/delete.
+    useEffect(() => {
+        if (!open || mode === 'create' || !recordId) {
+            setRelations([])
+            return
+        }
+        let cancelled = false
+        api.get(`/metadata/table/${model}`)
+            .then(res => {
+                if (cancelled) return
+                const meta = res.data?.data ?? res.data
+                const rels: RelationMeta[] = Array.isArray(meta?.relations) ? meta.relations : []
+                // Localize each panel header: the backend serves `label` as an
+                // i18n key (addon bundle, loaded live) and the SDK renders it verbatim.
+                setRelations(
+                    rels.map(rel => ({
+                        ...rel,
+                        label:
+                            rel.label && t(rel.label) !== rel.label
+                                ? t(rel.label)
+                                : rel.label || rel.name,
+                    })),
+                )
+            })
+            .catch(() => {
+                if (!cancelled) setRelations([])
+            })
+        return () => { cancelled = true }
+    }, [open, mode, model, recordId, api, t])
 
     const handleSubmit = async (e?: React.FormEvent) => {
         e?.preventDefault()
@@ -300,17 +519,17 @@ export function DynamicRecordDialog({
         setSaving(true)
         try {
             if (isCreate && onCreate) {
-                await onCreate(formValues)
-                toast.success('Registro creado correctamente')
-                onSaved?.()
+                const created = await onCreate(formValues)
+                toast.success(modalMeta?.messages?.created || 'Registro creado correctamente')
+                onSaved?.(created ?? undefined)
                 onOpenChange(false)
                 return
             }
 
             if (!isCreate && recordId && onUpdate) {
-                await onUpdate(String(recordId), formValues)
-                toast.success('Guardado correctamente')
-                onSaved?.()
+                const updated = await onUpdate(String(recordId), formValues)
+                toast.success(modalMeta?.messages?.updated || 'Guardado correctamente')
+                onSaved?.(updated ?? undefined)
                 onOpenChange(false)
                 return
             }
@@ -327,8 +546,15 @@ export function DynamicRecordDialog({
             }
 
             if (res.data?.success !== false) {
-                toast.success(res.data?.message || (isCreate ? 'Registro creado correctamente' : 'Guardado correctamente'))
-                onSaved?.()
+                // Prefer the addon's localized message (modal metadata), then a
+                // localized fallback. NOT res.data.message — the dynamic CRUD
+                // endpoint returns a raw English string that would leak into the toast.
+                toast.success(
+                    modalMeta?.messages?.[isCreate ? 'created' : 'updated']
+                        || (isCreate ? 'Registro creado correctamente' : 'Guardado correctamente'),
+                )
+                // Hand the persisted record back so callers can auto-select it.
+                onSaved?.(res.data?.data ?? res.data ?? undefined)
                 onOpenChange(false)
             } else {
                 toast.error(res.data?.message || 'Error al guardar')
@@ -354,7 +580,7 @@ export function DynamicRecordDialog({
         }
     }
 
-    const title = modalMeta ? config.getTitle(modalMeta) : ''
+    const title = modalMeta ? config.getTitle(modalMeta, t) : ''
 
     const visibleFields = modalMeta?.fields?.filter(f => {
         if (f.hidden) return false
@@ -375,6 +601,8 @@ export function DynamicRecordDialog({
                         <LoadingSkeleton />
                     ) : modalMeta ? (
                         <ModelContext.Provider value={model}>
+                        <ImageUrlContext.Provider value={getImageUrl}>
+                        <TimeZoneContext.Provider value={timeZone}>
                             <form
                                 id="dynamic-record-form"
                                 onSubmit={handleSubmit}
@@ -414,39 +642,68 @@ export function DynamicRecordDialog({
                                     </div>
                                 )}
                             </form>
+
+                            {/* Child records (line items, etc.) for declared relations.
+                                View = strictly read-only; edit = add/edit/delete. */}
+                            {!isCreate && record && relations.length > 0 && (
+                                <div className="mt-6">
+                                    <DynamicRelations
+                                        record={record}
+                                        relations={relations}
+                                        canCreate={mode === 'edit'}
+                                        canEdit={mode === 'edit'}
+                                        canDelete={mode === 'edit'}
+                                    />
+                                </div>
+                            )}
+                        </TimeZoneContext.Provider>
+                        </ImageUrlContext.Provider>
                         </ModelContext.Provider>
                     ) : null}
                 </div>
 
-                <DialogFooter className="p-4 border-t shrink-0">
-                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving || deleting}>
-                        {config.cancelLabel}
-                    </Button>
-                    {isView && onDelete && (
+                <DialogFooter className="p-4 border-t shrink-0 sm:justify-between">
+                    {isView && onOpenFullPage ? (
                         <Button
-                            variant="destructive"
-                            onClick={handleDelete}
-                            disabled={deleting || loading}
+                            variant="ghost"
+                            size="sm"
+                            className="text-muted-foreground"
+                            onClick={() => { onOpenChange(false); onOpenFullPage() }}
                         >
-                            {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            {deleting ? 'Eliminando...' : 'Eliminar'}
+                            <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                            Ver página completa
                         </Button>
-                    )}
-                    {isView && onEdit && (
-                        <Button onClick={onEdit} disabled={deleting || loading}>
-                            Editar
+                    ) : <span />}
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving || deleting}>
+                            {config.cancelLabel}
                         </Button>
-                    )}
-                    {isEditable && (
-                        <Button
-                            type="submit"
-                            form="dynamic-record-form"
-                            disabled={saving || loading}
-                        >
-                            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            {saving ? config.submittingLabel : config.submitLabel}
-                        </Button>
-                    )}
+                        {isView && onDelete && (
+                            <Button
+                                variant="destructive"
+                                onClick={handleDelete}
+                                disabled={deleting || loading}
+                            >
+                                {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                {deleting ? 'Eliminando...' : 'Eliminar'}
+                            </Button>
+                        )}
+                        {isView && onEdit && (
+                            <Button onClick={onEdit} disabled={deleting || loading}>
+                                Editar
+                            </Button>
+                        )}
+                        {isEditable && (
+                            <Button
+                                type="submit"
+                                form="dynamic-record-form"
+                                disabled={saving || loading}
+                            >
+                                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                                {saving ? config.submittingLabel : config.submitLabel}
+                            </Button>
+                        )}
+                    </div>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -495,12 +752,113 @@ function FieldRow({ field, record, value, mode, onChange }: FieldRowProps) {
     )
 }
 
-function ViewValue({ field, value: rawValue }: { field: FieldDef; value: any; record: any }) {
-    // Normalize the nil UUID to undefined up front so the search/url/color/
-    // image/select branches all fall through to their empty states.
+// RelationViewValue — read-only FK lead. Resolves the relation's label + image
+// from (1) the sibling object the table served, then (2) the canonical options
+// endpoint, and renders an OptionLead (thumbnail / icon / color dot) + label.
+function RelationViewValue({ field, value, record }: { field: FieldDef; value: any; record: any }) {
+    const getImageUrl = useContext(ImageUrlContext)
+    const sib = relationSiblingValue(field, record)
+    const sibLabel = typeof sib === 'string' ? sib : objectLabel(sib)
+    const sibImage = pickImage(sib)
+    // The raw FK id, tolerating an inline resolved object as the value itself.
+    const rawVal = value && typeof value === 'object' ? (value.value ?? value.id) : value
+    const inlineLabel = sibLabel ?? objectLabel(value)
+    const inlineImage = sibImage ?? pickImage(value)
+
+    const fieldRef = getFieldRef(field as ActionFieldDef)
+    // Only resolve over the network when we still lack both label and image and
+    // there is something to look up.
+    const needResolve = !inlineLabel && !inlineImage && !!(fieldRef || field.searchEndpoint) && rawVal != null && rawVal !== ''
+    const { options } = useOptionsResolver({
+        modelKey: '',
+        fieldKey: 'id',
+        ref: fieldRef,
+        endpoint: fieldRef ? undefined : field.searchEndpoint,
+        query: '',
+        limit: 50,
+        enabled: needResolve,
+    })
+    const resolved = options.find(o => String(o.id) === String(rawVal))
+
+    const label =
+        inlineLabel ??
+        resolved?.label ??
+        (rawVal != null && rawVal !== '' && !isNilUuid(rawVal) ? String(rawVal) : undefined)
+    const image = inlineImage ?? resolved?.image ?? undefined
+
+    if (!label && !image) {
+        return <p className="text-sm py-1 text-muted-foreground">—</p>
+    }
+
+    const lead: Pick<ResolvedOption, 'image' | 'color' | 'icon'> = {
+        image: image ? getImageUrl(image) : null,
+        color: resolved?.color ?? null,
+        icon: resolved?.icon ?? null,
+    }
+
+    return (
+        <div className="flex items-center gap-2 py-1">
+            <OptionLead option={lead} size={24} />
+            <span className="text-sm">{label ?? '—'}</span>
+        </div>
+    )
+}
+
+export function ViewValue({
+    field,
+    value: rawValue,
+    record,
+    getImageUrl: getImageUrlProp,
+    timeZone: timeZoneProp,
+}: {
+    field: FieldDef
+    value: any
+    record: any
+    /** Optional override; when omitted falls back to the nearest provider/identity. */
+    getImageUrl?: GetImageUrl
+    /** Optional override; when omitted falls back to the nearest provider. */
+    timeZone?: string
+}) {
+    const ctxImageUrl = useContext(ImageUrlContext)
+    const ctxTimeZone = useContext(TimeZoneContext)
+    const getImageUrl = getImageUrlProp ?? ctxImageUrl
+    const timeZone = timeZoneProp ?? ctxTimeZone
+
+    // created_by / avatar resolver sibling → name (+ avatar) instead of "—".
+    if (field.type === 'avatar' || field.key === 'created_by' || field.key === 'created_by_id') {
+        const user = createdBySibling(rawValue, record)
+        if (user) {
+            return (
+                <div className="flex items-center gap-2 py-1">
+                    {user.avatar ? (
+                        <img src={getImageUrl(String(user.avatar))} alt={user.name ?? ''} className="h-6 w-6 rounded-full object-cover" />
+                    ) : null}
+                    <span className="text-sm">{user.name ?? user.email ?? '—'}</span>
+                </div>
+            )
+        }
+        return <p className="text-sm py-1 text-muted-foreground">—</p>
+    }
+
+    // Nil/zero UUID (unset nullable FK serialized as all-zeros) → empty marker.
+    if (isNilUuid(rawValue)) {
+        return <p className="text-sm py-1 text-muted-foreground">—</p>
+    }
+
     const value = normalizeNilUuid(rawValue)
-    if (field.type === 'search' && value) {
-        return <SearchViewValue field={field} value={value} />
+
+    // Relation (search / dynamic_select / ref / any *_id) → resolved thumbnail +
+    // label. The *_id catch-all covers plain-typed FK columns not tagged as a
+    // relation field.
+    if (isRelationField(field) || (typeof field.key === 'string' && field.key.endsWith('_id'))) {
+        return <RelationViewValue field={field} value={value} record={record} />
+    }
+
+    // The value is itself a resolved object the backend served inline — render
+    // its label/name, never the raw JSON.
+    const inlineLabel = objectLabel(value)
+    if (inlineLabel !== undefined) {
+        return <p className="text-sm py-1">{inlineLabel}</p>
     }
 
     if (field.type === 'boolean' || typeof value === 'boolean') {
@@ -527,7 +885,7 @@ function ViewValue({ field, value: rawValue }: { field: FieldDef; value: any; re
 
     if (field.type === 'image') {
         return value ? (
-            <img src={value} alt={field.label} className="h-16 w-16 rounded-lg object-cover border" />
+            <img src={getImageUrl(String(value))} alt={field.label} className="h-16 w-16 rounded-lg object-cover border" />
         ) : (
             <p className="text-sm py-1 text-muted-foreground">Sin imagen</p>
         )
@@ -546,11 +904,40 @@ function ViewValue({ field, value: rawValue }: { field: FieldDef; value: any; re
         )
     }
 
-    if (field.type === 'select' && field.options?.length) {
-        const match = field.options.find(o => o.value === String(value ?? ''))
-        if (match) {
-            return <Badge variant="secondary" className="w-fit">{match.label}</Badge>
+    // Date/datetime/timestamp → tz-aware format. `date` pins to UTC (calendar
+    // day); instants render in the org timezone with a full-precision tooltip.
+    if (field.type === 'date' || field.type === 'datetime' || field.type === 'timestamp') {
+        const renderAs = field.type === 'date' ? 'date' : field.type
+        const formatted = formatDateCell(value, renderAs, es, timeZone)
+        if (formatted) {
+            return (
+                <p className="text-sm py-1" title={formatted.title}>
+                    {formatted.display}
+                </p>
+            )
         }
+        return <p className="text-sm py-1 text-muted-foreground">—</p>
+    }
+
+    // Enum/option field with served options → colored/iconed badge using the
+    // served label (e.g. "Almacenable" instead of "storable").
+    const opt = servedOption(field, value)
+    if (opt) {
+        const lead: Pick<ResolvedOption, 'image' | 'color' | 'icon'> = {
+            image: opt.image ? getImageUrl(opt.image) : null,
+            color: opt.color ?? null,
+            icon: opt.icon ?? null,
+        }
+        return (
+            <Badge
+                variant="secondary"
+                className="w-fit flex items-center gap-1"
+                style={opt.color && !opt.icon ? { backgroundColor: opt.color, color: '#fff', borderColor: 'transparent' } : undefined}
+            >
+                <OptionLead option={lead} size={16} />
+                {opt.label}
+            </Badge>
+        )
     }
 
     const display = formatDisplayValue(value, field)
@@ -597,18 +984,15 @@ function EditField({ field, value, onChange }: {
     }
 
     // Media widgets: the kernel may serve an explicit `widget: 'upload'` (or the
-    // `image` type) for a file/photo column. Both render the themed dropzone
-    // that POSTs to the host upload endpoint — same control as the Brand logo.
+    // `image` type) for a file/photo column.
     if (field.type === 'image' || field.widget === 'upload') {
         return <ImageUploadField field={field} value={value} onChange={onChange} />
     }
 
     // FK columns: a `ref` (kernel-derived belongs_to target) or an explicit
-    // `widget: 'dynamic_select'` renders the async searchable picker against
-    // /api/options/<ref>?field=id — with option thumbnails when the remote rows
-    // carry an `image` — instead of a raw FK uuid text input. Static inline
-    // `options` are handled by the enum <Select> branch below; a ref column does
-    // not ship inline options, so this never shadows a static enum.
+    // `widget: 'dynamic_select'` renders the SDK's async searchable picker — with
+    // option thumbnails and the inline-create "+" — against /api/options/<ref>.
+    // Static inline `options` are handled by the enum <Select> branch below.
     if ((getFieldRef(field as ActionFieldDef) || field.widget === 'dynamic_select') && !field.options?.length) {
         return <DynamicSelectField field={field as ActionFieldDef} value={value} onChange={onChange} />
     }
@@ -710,6 +1094,7 @@ function EditField({ field, value, onChange }: {
 function ImageUploadField({ field: _field, value, onChange }: { field: FieldDef; value: any; onChange: (val: any) => void }) {
     const api = useApi()
     const model = useContext(ModelContext)
+    const getImageUrl = useContext(ImageUrlContext)
     const [uploading, setUploading] = useState(false)
     const inputRef = useRef<HTMLInputElement>(null)
 
@@ -737,7 +1122,7 @@ function ImageUploadField({ field: _field, value, onChange }: { field: FieldDef;
         <div className="flex items-center gap-3">
             {value ? (
                 <div className="relative">
-                    <img src={value} alt="" className="h-16 w-16 rounded-lg object-cover border" />
+                    <img src={getImageUrl(String(value))} alt="" className="h-16 w-16 rounded-lg object-cover border" />
                     <button
                         type="button"
                         onClick={() => onChange('')}
@@ -775,29 +1160,6 @@ function extractArray(res: any): any[] {
 
 const searchCache = new Map<string, any[]>()
 
-function SearchViewValue({ field, value }: { field: FieldDef; value: any }) {
-    const api = useApi()
-    const [label, setLabel] = useState(String(value))
-
-    useEffect(() => {
-        if (!field.searchEndpoint || !value) return
-        const cacheKey = field.searchEndpoint
-        const cached = searchCache.get(cacheKey)
-        if (cached) {
-            const match = cached.find((item: any) => item.value === value || item.id === value)
-            if (match) { setLabel(match.label || match.name || String(value)); return }
-        }
-        api.get(field.searchEndpoint, { params: { search: '', limit: 50 } }).then(res => {
-            const items = extractArray(res)
-            searchCache.set(cacheKey, items)
-            const match = items.find((item: any) => item.value === value || item.id === value)
-            if (match) setLabel(match.label || match.name || String(value))
-        }).catch(() => {})
-    }, [value, field.searchEndpoint])
-
-    return <p className="text-sm py-1">{label}</p>
-}
-
 function SearchField({ field, value, onChange }: { field: FieldDef; value: any; onChange: (val: any) => void }) {
     const api = useApi()
     const [open, setOpen] = useState(false)
@@ -819,7 +1181,7 @@ function SearchField({ field, value, onChange }: { field: FieldDef; value: any; 
             const match = items.find((item: any) => item.value === value || item.id === value)
             if (match) setSelectedLabel(match.label || match.name || '')
         }).catch(() => {})
-    }, [value, field.searchEndpoint])
+    }, [value, field.searchEndpoint, api])
 
     useEffect(() => {
         if (!open || !field.searchEndpoint) return
@@ -837,7 +1199,7 @@ function SearchField({ field, value, onChange }: { field: FieldDef; value: any; 
                 .finally(() => setLoading(false))
         }, query ? 250 : 0)
         return () => clearTimeout(timer)
-    }, [query, open, field.searchEndpoint])
+    }, [query, open, field.searchEndpoint, api])
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
@@ -888,9 +1250,9 @@ function SearchField({ field, value, onChange }: { field: FieldDef; value: any; 
                                         >
                                             {isSelected && <Check className="mr-2 h-3.5 w-3.5 shrink-0 text-primary" />}
                                             {item.image && (
-                                                <img src={item.image} className="h-5 w-5 rounded mr-2 object-cover shrink-0" alt="" />
+                                                <OptionThumb image={item.image} size={20} />
                                             )}
-                                            <div className="flex flex-col min-w-0">
+                                            <div className="flex flex-col min-w-0 ml-2">
                                                 <span className="truncate">{itemLabel}</span>
                                                 {item.description && (
                                                     <span className="text-[11px] text-muted-foreground truncate">{item.description}</span>
