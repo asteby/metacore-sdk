@@ -1,5 +1,17 @@
 # @asteby/metacore-runtime-react
 
+## 18.0.0
+
+### Patch Changes
+
+- ce9dd72: `DynamicSelectField` (the searchable FK / option picker) now renders each
+  option's leading visual: a photo thumbnail (FK relations with an image), else a
+  declared icon, else a colored dot for enum/status options that carry a `color`.
+  Previously only image thumbnails showed, so enum selects (state, origin, …) read
+  as plain text. Plain options with no image/color/icon stay plain.
+- Updated dependencies [8439e9e]
+  - @asteby/metacore-ui@2.5.0
+
 ## 17.0.4
 
 ### Patch Changes
