@@ -4,6 +4,18 @@
 //   - "many_to_many": multi-select sobre la tabla destino con sync a la pivot.
 // La RFC completa vive en `packages/runtime-react/docs/relations.md`.
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import {
+    type ColumnDef,
+    type Row,
+    type Cell,
+    type HeaderGroup,
+    type Header,
+    flexRender,
+    getCoreRowModel,
+    useReactTable,
+} from '@tanstack/react-table'
+import { cn } from '@asteby/metacore-ui/lib'
 import {
     Button,
     Skeleton,
@@ -20,13 +32,20 @@ import {
     DialogHeader,
     DialogTitle,
     MultiSelect,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
 } from '@asteby/metacore-ui/primitives'
 import { Plus, Trash2, Pencil } from 'lucide-react'
 import { useApi } from './api-context'
 import { useMetadataCache } from './metadata-cache'
 import { DynamicForm } from './dynamic-form'
 import { useImageUrl } from './image-url-context'
-import { OptionThumb } from './dynamic-select-field'
+import { useTimeZone, useCurrency } from './org-runtime-context'
+import { makeDefaultGetDynamicColumns } from './dynamic-columns'
 import { useOptionsResolver } from './use-options-resolver'
 import type { ApiResponse, TableMetadata } from './types'
 import {
@@ -37,7 +56,6 @@ import {
     deriveRelationFormFields,
     diffSelection,
     extractSelectedTargetIds,
-    formatRelationCell,
     pickOptionLabel,
     relationRowKey,
     type DynamicRelationKind,
@@ -172,6 +190,9 @@ function OneToManyRelation({
 }: DynamicRelationOneToManyProps) {
     const api = useApi()
     const getImageUrl = useImageUrl()
+    const timeZone = useTimeZone()
+    const currency = useCurrency()
+    const { i18n } = useTranslation()
     const { getMetadata, setMetadata: cacheMetadata } = useMetadataCache()
     const cachedMeta = getMetadata(model)
     const labels = { ...DEFAULT_STRINGS, ...(strings || {}) }
@@ -227,6 +248,81 @@ function OneToManyRelation({
         const hidden = new Set([foreignKey, ...Object.keys(filters || {}), ...hiddenColumns])
         return metadata.columns.filter(c => !hidden.has(c.key) && !c.hidden)
     }, [metadata, foreignKey, filtersKey, hiddenColumns])
+
+    // Reuse the EXACT column factory the main `<DynamicTable>` uses so each cell
+    // renders identically — money in the org currency right-aligned, FK chips
+    // with thumbnails, dates in the org timezone, status/option badges, creator
+    // names — instead of a hand-rolled parallel formatting stack. Stable per
+    // image-url resolver.
+    const buildColumns = useMemo(
+        () => makeDefaultGetDynamicColumns({ getImageUrl }),
+        [getImageUrl],
+    )
+
+    const showActions = canEdit || canDelete
+
+    const columns = useMemo<ColumnDef<any>[]>(() => {
+        if (!metadata) return []
+        // Feed the factory a metadata view scoped to the visible columns only,
+        // with model-level actions stripped — the relation list owns its own
+        // inline edit/delete column (appended below), and the factory's
+        // select/actions columns don't belong in an embedded child list.
+        const scopedMeta = {
+            ...metadata,
+            columns: visibleColumns,
+            actions: [],
+            hasActions: false,
+            enableCRUDActions: false,
+        } as TableMetadata
+        const base = buildColumns(
+            scopedMeta,
+            () => {},
+            (key: string, opts?: any) => opts?.defaultValue ?? key,
+            i18n?.language || 'es',
+            new Map(),
+            timeZone,
+            currency,
+        ).filter((c) => c.id !== 'select' && c.id !== 'actions')
+
+        if (!showActions) return base
+
+        const actionsCol: ColumnDef<any> = {
+            id: 'actions',
+            header: () => <span className="sr-only">{labels.editLabel}</span>,
+            size: 80,
+            cell: ({ row }: { row: Row<any> }) => (
+                <div className="flex items-center justify-end gap-1">
+                    {canEdit && (
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => { setEditingRow(row.original); setFormOpen(true) }}
+                            aria-label={labels.editLabel}
+                        >
+                            <Pencil className="h-4 w-4" />
+                        </Button>
+                    )}
+                    {canDelete && (
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setRowToDelete(row.original)}
+                            aria-label={labels.removeLabel}
+                        >
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    )}
+                </div>
+            ),
+        }
+        return [...base, actionsCol]
+    }, [metadata, visibleColumns, buildColumns, i18n?.language, timeZone, currency, showActions, canEdit, canDelete, labels.editLabel, labels.removeLabel])
+
+    const table = useReactTable({
+        data: rows,
+        columns,
+        getCoreRowModel: getCoreRowModel(),
+    })
 
     const handleSubmit = useCallback(async (values: Record<string, any>) => {
         setSubmitting(true)
@@ -299,62 +395,46 @@ function OneToManyRelation({
                     {labels.emptyState}
                 </div>
             ) : (
-                <div className="border rounded-md divide-y bg-card">
-                    {rows.map((row, idx) => (
-                        <div
-                            key={relationRowKey(row, idx, foreignKey)}
-                            className="flex items-center justify-between gap-3 px-3 py-2"
-                        >
-                            <div className="flex-1 grid grid-cols-[repeat(auto-fit,minmax(0,1fr))] gap-2 text-sm">
-                                {visibleColumns.map(col => {
-                                    const cell = formatRelationCell(row, col)
-                                    // FK column whose backend-resolved sibling
-                                    // carries an image → render a thumbnail + label
-                                    // instead of plain text (e.g. a line item's
-                                    // product photo). The sibling is the column key
-                                    // with the trailing `_id` stripped.
-                                    const isFk = !!col.ref || col.key.endsWith('_id')
-                                    const sibling = isFk ? (row as any)[col.key.replace(/_id$/, '')] : undefined
-                                    if (sibling && typeof sibling === 'object' && sibling.image) {
-                                        const label = sibling.label ?? sibling.name ?? cell
+                // Real metadata-driven table — same metacore-ui primitives and
+                // cell renderers as `<DynamicTable>` so headers, money/currency,
+                // FK thumbnails, dates and badges all match the main table.
+                <div className="overflow-x-auto border rounded-md bg-card">
+                    <Table noWrapper className="w-full">
+                        <TableHeader>
+                            {table.getHeaderGroups().map((headerGroup: HeaderGroup<any>) => (
+                                <TableRow key={headerGroup.id} className="border-b-0 hover:bg-transparent">
+                                    {headerGroup.headers.map((header: Header<any, unknown>) => {
+                                        const isActions = header.id === 'actions'
                                         return (
-                                            <span key={col.key} className="flex min-w-0 items-center gap-2" title={String(label)}>
-                                                <OptionThumb image={getImageUrl(sibling.image)} size={20} />
-                                                <span className="truncate">{label}</span>
-                                            </span>
+                                            <TableHead
+                                                key={header.id}
+                                                colSpan={header.colSpan}
+                                                style={header.column.columnDef.size ? { width: header.column.columnDef.size } : undefined}
+                                                className={cn('bg-card border-b h-10', isActions && 'text-right')}
+                                            >
+                                                {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
+                                            </TableHead>
                                         )
-                                    }
-                                    return (
-                                        <span key={col.key} className="truncate" title={cell}>
-                                            {cell}
-                                        </span>
-                                    )
-                                })}
-                            </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                                {canEdit && (
-                                    <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => { setEditingRow(row); setFormOpen(true) }}
-                                        aria-label={labels.editLabel}
-                                    >
-                                        <Pencil className="h-4 w-4" />
-                                    </Button>
-                                )}
-                                {canDelete && (
-                                    <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => setRowToDelete(row)}
-                                        aria-label={labels.removeLabel}
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                )}
-                            </div>
-                        </div>
-                    ))}
+                                    })}
+                                </TableRow>
+                            ))}
+                        </TableHeader>
+                        <TableBody>
+                            {table.getRowModel().rows.map((row: Row<any>, idx: number) => (
+                                <TableRow key={relationRowKey(row.original, idx, foreignKey)}>
+                                    {row.getVisibleCells().map((cell: Cell<any, unknown>) => (
+                                        <TableCell
+                                            key={cell.id}
+                                            style={cell.column.columnDef.size ? { width: cell.column.columnDef.size } : undefined}
+                                            className="py-2"
+                                        >
+                                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                        </TableCell>
+                                    ))}
+                                </TableRow>
+                            ))}
+                        </TableBody>
+                    </Table>
                 </div>
             )}
 

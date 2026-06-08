@@ -57,6 +57,7 @@ import { humanizeToken } from '../dynamic-columns-helpers'
 import { formatDateCell } from '../dynamic-columns'
 import type { ActionFieldDef, RelationMeta } from '../types'
 import { ImageUrlContext, identityImageUrl, type GetImageUrl } from '../image-url-context'
+import { TimeZoneContext, CurrencyContext } from '../org-runtime-context'
 
 // Re-export the resolver type so `index.ts`'s
 // `export type { … GetImageUrl } from './dialogs/dynamic-record'` keeps working.
@@ -350,10 +351,6 @@ const MODE_CONFIG = {
 // Context threading host runtime values to nested field components (uploads,
 // image leads, tz-aware dates) without prop-drilling through every renderer.
 const ModelContext = createContext('')
-const TimeZoneContext = createContext<string | undefined>(undefined)
-// Org ISO-4217 currency (org config, like the timezone) used as the fallback
-// for money fields that don't carry an explicit per-field currency.
-const CurrencyContext = createContext<string | undefined>(undefined)
 
 // Money-key heuristic mirroring the backend's `inferDisplayCellStyle`: lets the
 // dialog format obvious money fields as currency even when the backend hasn't
