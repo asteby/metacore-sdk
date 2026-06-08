@@ -114,6 +114,23 @@ describe('deriveRelationFormFields', () => {
         expect(fields.find(f => f.key === 'id')).toBeUndefined()
     })
 
+    // Server-managed / audit columns ship as resolved objects (created_by =
+    // { name, avatar }) and must never become editable inputs ([object Object]).
+    it('omite columnas managed/audit aunque no estén hidden', () => {
+        const meta: Pick<TableMetadata, 'columns'> = {
+            columns: [
+                { key: 'sku', label: 'SKU', type: 'text', sortable: true, filterable: true },
+                { key: 'created_by', label: 'Creado por', type: 'text', sortable: false, filterable: false },
+                { key: 'created_by_id', label: 'Creado por id', type: 'text', sortable: false, filterable: false },
+                { key: 'created_at', label: 'Creado', type: 'date', sortable: true, filterable: false },
+                { key: 'updated_at', label: 'Actualizado', type: 'date', sortable: true, filterable: false },
+                { key: 'deleted_at', label: 'Eliminado', type: 'date', sortable: false, filterable: false },
+            ],
+        }
+        const fields = deriveRelationFormFields(meta, 'invoice_id')
+        expect(fields.map(f => f.key)).toEqual(['sku'])
+    })
+
     it('mapea types de ColumnDefinition al ActionFieldDef.type', () => {
         const fields = deriveRelationFormFields(baseMeta, 'invoice_id')
         const byKey = Object.fromEntries(fields.map(f => [f.key, f]))

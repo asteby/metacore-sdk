@@ -138,9 +138,16 @@ export interface DynamicSelectFieldProps {
     field: ActionFieldDef
     value: any
     onChange: (v: any) => void
+    /**
+     * Pre-resolved option for the CURRENT value (label + image/color/icon) the
+     * caller already has — e.g. the relation sibling the table served. Lets the
+     * trigger show the name + thumbnail for an existing value without waiting for
+     * a lookup (which only loads once the popover opens). Matched by id == value.
+     */
+    seedOption?: ResolvedOption | null
 }
 
-export function DynamicSelectField({ field, value, onChange }: DynamicSelectFieldProps) {
+export function DynamicSelectField({ field, value, onChange, seedOption }: DynamicSelectFieldProps) {
     const [open, setOpen] = useState(false)
     const [search, setSearch] = useState('')
     const debounced = useDebounced(search, 250)
@@ -172,6 +179,7 @@ export function DynamicSelectField({ field, value, onChange }: DynamicSelectFiel
     const selectedOption =
         (picked && String(picked.id) === String(value) ? picked : null) ??
         options.find((o) => String(o.id) === String(value)) ??
+        (seedOption && String(seedOption.id) === String(value) ? seedOption : null) ??
         null
 
     const selectedLabel = selectedOption?.label ?? (value ? String(value) : '')

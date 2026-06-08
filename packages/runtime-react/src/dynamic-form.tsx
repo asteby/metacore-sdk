@@ -129,6 +129,7 @@ export function DynamicForm({
                                 field={field}
                                 value={values[field.key]}
                                 onChange={(v: any) => update(field.key, v)}
+                                initialValues={initialValues}
                             />
                             {errors[field.key] && (
                                 <span className="text-red-500 text-sm" role="alert">{errors[field.key]}</span>
@@ -155,9 +156,38 @@ interface FieldRendererProps {
     field: ActionFieldDef
     value: any
     onChange: (v: any) => void
+    /** The form's initial record — used to seed an FK picker's existing label/image. */
+    initialValues?: Record<string, any>
 }
 
-function FieldRenderer({ field, value, onChange }: FieldRendererProps) {
+// seedOptionFromSibling builds a pre-resolved option for an FK field from the
+// resolved sibling the backend served on the initial record (e.g. a line item's
+// `product = { value, label, image }` alongside `product_id`). Lets the picker
+// show the name + thumbnail for an existing value without a lookup. Returns
+// undefined when the sibling carries nothing renderable.
+function seedOptionFromSibling(
+    field: ActionFieldDef,
+    value: any,
+    initialValues?: Record<string, any>,
+): ResolvedOption | undefined {
+    if (!field.key.endsWith('_id')) return undefined
+    const sib = initialValues?.[field.key.replace(/_id$/, '')]
+    if (!sib || typeof sib !== 'object') return undefined
+    const label = sib.label ?? sib.name ?? ''
+    if (!label && !sib.image) return undefined
+    const id = String(sib.value ?? sib.id ?? value ?? '')
+    return {
+        id,
+        value: id,
+        label: String(label),
+        name: String(label),
+        image: sib.image,
+        color: sib.color,
+        icon: sib.icon,
+    }
+}
+
+function FieldRenderer({ field, value, onChange, initialValues }: FieldRendererProps) {
     // Repeatable line-items group → render the row grid. Its value is an array
     // of row objects rather than a scalar.
     if (isLineItemsField(field)) {
@@ -168,7 +198,8 @@ function FieldRenderer({ field, value, onChange }: FieldRendererProps) {
     // Preferred for FK fields with large option sets — no UUID typing, no
     // dumping every row into a plain <select>.
     if (widget === 'dynamic_select') {
-        return <DynamicSelectField field={field} value={value} onChange={onChange} />
+        const seedOption = seedOptionFromSibling(field, value, initialValues)
+        return <DynamicSelectField field={field} value={value} onChange={onChange} seedOption={seedOption} />
     }
     // File upload → themed picker that POSTs to the host upload endpoint and
     // stores the returned file url/path as the field value.

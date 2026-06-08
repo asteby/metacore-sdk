@@ -25,6 +25,8 @@ import { Plus, Trash2, Pencil } from 'lucide-react'
 import { useApi } from './api-context'
 import { useMetadataCache } from './metadata-cache'
 import { DynamicForm } from './dynamic-form'
+import { useImageUrl } from './image-url-context'
+import { OptionThumb } from './dynamic-select-field'
 import { useOptionsResolver } from './use-options-resolver'
 import type { ApiResponse, TableMetadata } from './types'
 import {
@@ -169,6 +171,7 @@ function OneToManyRelation({
     onChange,
 }: DynamicRelationOneToManyProps) {
     const api = useApi()
+    const getImageUrl = useImageUrl()
     const { getMetadata, setMetadata: cacheMetadata } = useMetadataCache()
     const cachedMeta = getMetadata(model)
     const labels = { ...DEFAULT_STRINGS, ...(strings || {}) }
@@ -305,6 +308,22 @@ function OneToManyRelation({
                             <div className="flex-1 grid grid-cols-[repeat(auto-fit,minmax(0,1fr))] gap-2 text-sm">
                                 {visibleColumns.map(col => {
                                     const cell = formatRelationCell(row, col)
+                                    // FK column whose backend-resolved sibling
+                                    // carries an image → render a thumbnail + label
+                                    // instead of plain text (e.g. a line item's
+                                    // product photo). The sibling is the column key
+                                    // with the trailing `_id` stripped.
+                                    const isFk = !!col.ref || col.key.endsWith('_id')
+                                    const sibling = isFk ? (row as any)[col.key.replace(/_id$/, '')] : undefined
+                                    if (sibling && typeof sibling === 'object' && sibling.image) {
+                                        const label = sibling.label ?? sibling.name ?? cell
+                                        return (
+                                            <span key={col.key} className="flex min-w-0 items-center gap-2" title={String(label)}>
+                                                <OptionThumb image={getImageUrl(sibling.image)} size={20} />
+                                                <span className="truncate">{label}</span>
+                                            </span>
+                                        )
+                                    }
                                     return (
                                         <span key={col.key} className="truncate" title={cell}>
                                             {cell}
