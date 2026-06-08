@@ -102,7 +102,7 @@ importers:
         version: link:../../../packages/websocket
       '@hookform/resolvers':
         specifier: ^3.9.0
-        version: 3.10.0(react-hook-form@7.77.0(react@19.2.7))
+        version: 3.10.0(react-hook-form@7.78.0(react@19.2.7))
       '@tanstack/react-query':
         specifier: ^5.95.0
         version: 5.101.0(react@19.2.7)
@@ -135,7 +135,7 @@ importers:
         version: 19.2.7(react@19.2.7)
       react-hook-form:
         specifier: ^7.72.0
-        version: 7.77.0(react@19.2.7)
+        version: 7.78.0(react@19.2.7)
       react-i18next:
         specifier: ^15.1.0
         version: 15.7.4(i18next@23.16.8)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@5.9.3)
@@ -280,7 +280,7 @@ importers:
     dependencies:
       '@hookform/resolvers':
         specifier: ^5.0.0
-        version: 5.4.0(react-hook-form@7.77.0(react@19.2.7))
+        version: 5.4.0(react-hook-form@7.78.0(react@19.2.7))
       axios:
         specifier: ^1.7.7
         version: 1.17.0
@@ -289,7 +289,7 @@ importers:
         version: 1.17.0(react@19.2.7)
       react-hook-form:
         specifier: ^7.72.0
-        version: 7.77.0(react@19.2.7)
+        version: 7.78.0(react@19.2.7)
       zod:
         specifier: ^4.3.0
         version: 4.4.3
@@ -818,7 +818,7 @@ importers:
         version: 19.2.7(react@19.2.7)
       react-hook-form:
         specifier: ^7.72.0
-        version: 7.77.0(react@19.2.7)
+        version: 7.78.0(react@19.2.7)
       react-i18next:
         specifier: ^17.0.0
         version: 17.0.8(i18next@26.3.1(typescript@6.0.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@6.0.3)
@@ -1030,7 +1030,7 @@ importers:
         version: 19.2.7(react@19.2.7)
       react-hook-form:
         specifier: ^7.54.0
-        version: 7.77.0(react@19.2.7)
+        version: 7.78.0(react@19.2.7)
       react-i18next:
         specifier: ^17.0.0
         version: 17.0.8(i18next@26.3.1(typescript@6.0.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@6.0.3)
@@ -1045,7 +1045,7 @@ importers:
     dependencies:
       '@hookform/resolvers':
         specifier: ^5.0.0
-        version: 5.4.0(react-hook-form@7.77.0(react@19.2.7))
+        version: 5.4.0(react-hook-form@7.78.0(react@19.2.7))
       zod:
         specifier: ^4.3.0
         version: 4.4.3
@@ -1076,7 +1076,7 @@ importers:
         version: 19.2.7(react@19.2.7)
       react-hook-form:
         specifier: ^7.72.0
-        version: 7.77.0(react@19.2.7)
+        version: 7.78.0(react@19.2.7)
       react-i18next:
         specifier: ^17.0.0
         version: 17.0.8(i18next@26.3.1(typescript@6.0.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@6.0.3)
@@ -1127,7 +1127,7 @@ importers:
         version: link:../../packages/ui
       '@hookform/resolvers':
         specifier: ^5.0.0
-        version: 5.4.0(react-hook-form@7.77.0(react@19.2.7))
+        version: 5.4.0(react-hook-form@7.78.0(react@19.2.7))
       '@tanstack/react-query':
         specifier: ^5.95.0
         version: 5.101.0(react@19.2.7)
@@ -1160,7 +1160,7 @@ importers:
         version: 19.2.7(react@19.2.7)
       react-hook-form:
         specifier: ^7.72.0
-        version: 7.77.0(react@19.2.7)
+        version: 7.78.0(react@19.2.7)
       react-i18next:
         specifier: ^17.0.0
         version: 17.0.8(i18next@26.3.1(typescript@6.0.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@6.0.3)
@@ -5820,8 +5820,8 @@ packages:
     peerDependencies:
       react: ^19.2.7
 
-  react-hook-form@7.77.0:
-    resolution: {integrity: sha512-Sslh9YDYc0GDlWT/lxasnIduNo4v3yyvqRGvmGKUre5AFjDs/HV9/OafHGD8d+sB2yoL4UIL9L8X9i0WlZZebg==}
+  react-hook-form@7.78.0:
+    resolution: {integrity: sha512-EEZqc+N23moyzTlz61Pj+JvcXo76ICkpfOZo8JZw+sM4+wLQGh6nI2Ms+PdMOYNluFu0ghlM7B8mCzhRYtJCnA==}
     engines: {node: '>=18.0.0'}
     peerDependencies:
       react: ^16.8.0 || ^17 || ^18 || ^19
@@ -8102,14 +8102,14 @@ snapshots:
 
   '@floating-ui/utils@0.2.11': {}
 
-  '@hookform/resolvers@3.10.0(react-hook-form@7.77.0(react@19.2.7))':
+  '@hookform/resolvers@3.10.0(react-hook-form@7.78.0(react@19.2.7))':
     dependencies:
-      react-hook-form: 7.77.0(react@19.2.7)
+      react-hook-form: 7.78.0(react@19.2.7)
 
-  '@hookform/resolvers@5.4.0(react-hook-form@7.77.0(react@19.2.7))':
+  '@hookform/resolvers@5.4.0(react-hook-form@7.78.0(react@19.2.7))':
     dependencies:
       '@standard-schema/utils': 0.3.0
-      react-hook-form: 7.77.0(react@19.2.7)
+      react-hook-form: 7.78.0(react@19.2.7)
 
   '@humanfs/core@0.19.2':
     dependencies:
@@ -11567,7 +11567,7 @@ snapshots:
       react: 19.2.7
       scheduler: 0.27.0
 
-  react-hook-form@7.77.0(react@19.2.7):
+  react-hook-form@7.78.0(react@19.2.7):
     dependencies:
       react: 19.2.7
 
