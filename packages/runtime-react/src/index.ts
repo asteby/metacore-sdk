@@ -28,6 +28,8 @@ export {
 } from './addon-layout-context'
 export * from './slot'
 export * from './capability-gate'
+export * from './org-runtime-context'
+export * from './org-runtime-provider'
 export * from './navigation-builder'
 export * from './i18n-provider'
 export * from './api-context'
