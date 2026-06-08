@@ -20,6 +20,20 @@ function isEnumLikeColumn(col: ColumnDefinition): boolean {
 
 export type DynamicRelationKind = 'one_to_many' | 'many_to_many'
 
+// Server-managed / audit columns that must never become editable form inputs.
+// They're set by the backend and several ship as resolved objects (e.g.
+// `created_by = { name, avatar, email }`) that would render as `[object Object]`.
+const MANAGED_RELATION_COLUMNS = new Set([
+    'id',
+    'created_at',
+    'updated_at',
+    'deleted_at',
+    'created_by',
+    'created_by_id',
+    'updated_by',
+    'updated_by_id',
+])
+
 // Pulls a human label off a resolved relation/user object a backend serves:
 // `{ value, label }` (FK sibling), `{ name, … }` (user object such as
 // created_by) or `{ title }`. Returns undefined for plain/empty objects so the
@@ -146,6 +160,10 @@ export function deriveRelationFormFields(
     for (const col of metadata.columns) {
         if (col.key === foreignKey) continue
         if (col.hidden) continue
+        // Managed/audit columns are server-owned and ship resolved objects
+        // (`created_by = { name, avatar, … }`); making them editable inputs
+        // renders `[object Object]`. Never surface them in the inline form.
+        if (MANAGED_RELATION_COLUMNS.has(col.key.toLowerCase())) continue
         out.push({
             key: col.key,
             label: col.label,

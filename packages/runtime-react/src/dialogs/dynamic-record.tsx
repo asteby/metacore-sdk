@@ -56,10 +56,11 @@ import { isNilUuid, normalizeNilUuid } from '../nil-uuid'
 import { humanizeToken } from '../dynamic-columns-helpers'
 import { formatDateCell } from '../dynamic-columns'
 import type { ActionFieldDef, RelationMeta } from '../types'
+import { ImageUrlContext, identityImageUrl, type GetImageUrl } from '../image-url-context'
 
-/** Resolves a (possibly relative) storage path into a fetchable URL. */
-export type GetImageUrl = (path: string | null | undefined) => string
-const identityImageUrl: GetImageUrl = (p) => p ?? ''
+// Re-export the resolver type so `index.ts`'s
+// `export type { … GetImageUrl } from './dialogs/dynamic-record'` keeps working.
+export type { GetImageUrl }
 
 export interface FieldOption {
     value: string
@@ -330,7 +331,6 @@ const MODE_CONFIG = {
 // Context threading host runtime values to nested field components (uploads,
 // image leads, tz-aware dates) without prop-drilling through every renderer.
 const ModelContext = createContext('')
-const ImageUrlContext = createContext<GetImageUrl>(identityImageUrl)
 const TimeZoneContext = createContext<string | undefined>(undefined)
 
 export function DynamicRecordDialog({
