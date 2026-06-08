@@ -40,9 +40,9 @@ import {
     CommandInput,
     CommandItem,
     CommandList,
+    Calendar,
 } from '@asteby/metacore-ui/primitives'
 import { cn } from '@asteby/metacore-ui/lib'
-import { Calendar } from './_primitives'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -1108,9 +1108,14 @@ function EditField({ field, value, onChange }: {
         )
     }
 
-    if (field.type === 'date') {
+    if (field.type === 'date' || field.type === 'datetime' || field.type === 'timestamp' || field.type === 'timestamptz') {
         const dateValue = value ? (typeof value === 'string' ? parseISO(value) : new Date(value)) : undefined
-        const validDate = dateValue && !isNaN(dateValue.getTime()) ? dateValue : undefined
+        // Treat the Go zero-time (0001-01-01) as empty so an unset date shows the
+        // placeholder instead of "31 de diciembre de 1".
+        const validDate =
+            dateValue && !isNaN(dateValue.getTime()) && dateValue.getFullYear() > 1
+                ? dateValue
+                : undefined
 
         return (
             <Popover>
