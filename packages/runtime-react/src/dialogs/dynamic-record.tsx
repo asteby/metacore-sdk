@@ -9,7 +9,7 @@
 // flows through <ApiProvider> from runtime-react. Host-specific runtime values —
 // the image-url resolver and the org IANA timezone — are passed as props so the
 // SDK stays transport- and host-agnostic.
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ModelSchema } from './types'
 import {
@@ -228,6 +228,14 @@ export interface DynamicRecordDialogProps {
      * explicit per-field currency. Optional — defaults to 'USD'.
      */
     currency?: string
+    /**
+     * Fired after a child relation row (line item, etc.) is created/updated/
+     * deleted from within the dialog. The dialog ALREADY refetches its own
+     * parent record so server-recomputed rollups (sub_total, tax_amount, total)
+     * appear in place — this callback additionally lets the host invalidate its
+     * own list/detail query so the parent row's totals refresh underneath.
+     */
+    onChange?: () => void
 }
 
 function resolvePath(obj: any, path: string): any {
@@ -392,6 +400,7 @@ export function DynamicRecordDialog({
     getImageUrl = identityImageUrl,
     timeZone,
     currency,
+    onChange,
 }: DynamicRecordDialogProps) {
     const api = useApi()
     const { t } = useTranslation()
@@ -544,6 +553,37 @@ export function DynamicRecordDialog({
         return () => { cancelled = true }
     }, [open, mode, model, recordId, api, t])
 
+    // After a child relation mutation (add/edit/delete line item) the server
+    // recomputes the parent's declarative rollups (sub_total, tax_amount, total).
+    // Refetch the parent record so those fresh totals render in place — view mode
+    // reads `record`; edit mode also reseeds the form so derived fields update.
+    // Then bubble onChange so the host can refresh its own list/detail query.
+    const handleChildChange = useCallback(async () => {
+        if (!isCreate && recordId) {
+            try {
+                const recordEndpoint = endpoint
+                    ? `${endpoint}/${recordId}`
+                    : `/dynamic/${model}/${recordId}`
+                const recRes = await api.get(recordEndpoint)
+                const rec = recRes.data?.data ?? recRes.data
+                if (rec) {
+                    setRecord((prev: any) => (prev ? { ...prev, ...rec } : rec))
+                    setFormValues(prev => {
+                        const next = { ...prev }
+                        for (const field of modalMeta?.fields ?? []) {
+                            const v = resolvePath(rec, field.key)
+                            if (v !== undefined) next[field.key] = v
+                        }
+                        return next
+                    })
+                }
+            } catch (err) {
+                console.error('[DynamicRecordDialog] parent refetch error:', err)
+            }
+        }
+        onChange?.()
+    }, [api, endpoint, model, recordId, isCreate, modalMeta, onChange])
+
     const handleSubmit = async (e?: React.FormEvent) => {
         e?.preventDefault()
         if (!modalMeta) return
@@ -695,6 +735,7 @@ export function DynamicRecordDialog({
                                         canCreate={mode === 'edit'}
                                         canEdit={mode === 'edit'}
                                         canDelete={mode === 'edit'}
+                                        onChange={handleChildChange}
                                     />
                                 </div>
                             )}
