@@ -31,6 +31,7 @@ export type GetDynamicColumns = (
     language: string,
     columnFilterConfigs: Map<string, ColumnFilterConfig>,
     timeZone?: string,
+    currency?: string,
 ) => ColumnDef<any>[]
 
 /** Signature for the host-provided `DynamicIcon` renderer. */
