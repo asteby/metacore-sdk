@@ -107,6 +107,19 @@ export interface FieldDef {
      * its SQL type. Unknown values fall through to the `type`-based default.
      */
     widget?: string
+    /**
+     * Declarative display hint the backend stamps on the column/modal field
+     * (mirrors the table column's `cellStyle`). `'currency'` makes the view
+     * renderer format the numeric value in the org currency. Optional —
+     * absent, a money-key heuristic still detects obvious money fields.
+     */
+    cellStyle?: string
+    /**
+     * Per-field style overrides served alongside `cellStyle` (e.g.
+     * `{ currency: 'MXN' }`). When it carries an explicit `currency` it wins
+     * over the org fallback.
+     */
+    styleConfig?: Record<string, any>
 }
 
 // Permissive shape: the wire payload may omit some fields (e.g. `title` is
@@ -208,6 +221,12 @@ export interface DynamicRecordDialogProps {
      * regardless of the viewer's browser timezone. Pure `date` values pin to UTC.
      */
     timeZone?: string
+    /**
+     * Org ISO-4217 currency code (e.g. `MXN`) used as the fallback for money
+     * fields (`cellStyle:'currency'` or the money-key heuristic) that lack an
+     * explicit per-field currency. Optional — defaults to 'USD'.
+     */
+    currency?: string
 }
 
 function resolvePath(obj: any, path: string): any {
@@ -332,6 +351,30 @@ const MODE_CONFIG = {
 // image leads, tz-aware dates) without prop-drilling through every renderer.
 const ModelContext = createContext('')
 const TimeZoneContext = createContext<string | undefined>(undefined)
+// Org ISO-4217 currency (org config, like the timezone) used as the fallback
+// for money fields that don't carry an explicit per-field currency.
+const CurrencyContext = createContext<string | undefined>(undefined)
+
+// Money-key heuristic mirroring the backend's `inferDisplayCellStyle`: lets the
+// dialog format obvious money fields as currency even when the backend hasn't
+// stamped `cellStyle:'currency'` yet. Case-insensitive; matches a key that
+// equals one of these, or ends with `_<m>`, or starts with `<m>_`.
+const MONEY_KEY_HEURISTIC = ['price', 'amount', 'total', 'cost', 'subtotal', 'balance', 'paid']
+
+// isMoneyField decides whether a field should render as currency. The explicit
+// `cellStyle:'currency'` stamp always wins; otherwise a numeric value whose key
+// matches the money heuristic qualifies (robustness fallback).
+export function isMoneyField(field: FieldDef, value: any): boolean {
+    if (field.cellStyle === 'currency') return true
+    if (value === null || value === undefined || value === '') return false
+    const num = typeof value === 'number' ? value : Number(value)
+    if (isNaN(num)) return false
+    const key = String(field.key || '').toLowerCase()
+    if (!key) return false
+    return MONEY_KEY_HEURISTIC.some(
+        m => key === m || key.endsWith(`_${m}`) || key.startsWith(`${m}_`),
+    )
+}
 
 export function DynamicRecordDialog({
     open,
@@ -351,6 +394,7 @@ export function DynamicRecordDialog({
     initialRecord,
     getImageUrl = identityImageUrl,
     timeZone,
+    currency,
 }: DynamicRecordDialogProps) {
     const api = useApi()
     const { t } = useTranslation()
@@ -603,6 +647,7 @@ export function DynamicRecordDialog({
                         <ModelContext.Provider value={model}>
                         <ImageUrlContext.Provider value={getImageUrl}>
                         <TimeZoneContext.Provider value={timeZone}>
+                        <CurrencyContext.Provider value={currency}>
                             <form
                                 id="dynamic-record-form"
                                 onSubmit={handleSubmit}
@@ -656,6 +701,7 @@ export function DynamicRecordDialog({
                                     />
                                 </div>
                             )}
+                        </CurrencyContext.Provider>
                         </TimeZoneContext.Provider>
                         </ImageUrlContext.Provider>
                         </ModelContext.Provider>
@@ -810,6 +856,7 @@ export function ViewValue({
     record,
     getImageUrl: getImageUrlProp,
     timeZone: timeZoneProp,
+    currency: currencyProp,
 }: {
     field: FieldDef
     value: any
@@ -818,11 +865,16 @@ export function ViewValue({
     getImageUrl?: GetImageUrl
     /** Optional override; when omitted falls back to the nearest provider. */
     timeZone?: string
+    /** Optional override; when omitted falls back to the nearest provider. */
+    currency?: string
 }) {
+    const { i18n } = useTranslation()
     const ctxImageUrl = useContext(ImageUrlContext)
     const ctxTimeZone = useContext(TimeZoneContext)
+    const ctxCurrency = useContext(CurrencyContext)
     const getImageUrl = getImageUrlProp ?? ctxImageUrl
     const timeZone = timeZoneProp ?? ctxTimeZone
+    const currency = currencyProp ?? ctxCurrency
 
     // created_by / avatar resolver sibling → name (+ avatar) instead of "—".
     if (field.type === 'avatar' || field.key === 'created_by' || field.key === 'created_by_id') {
@@ -902,6 +954,24 @@ export function ViewValue({
                 {value}
             </a>
         )
+    }
+
+    // Money → org-currency string. Detected by the backend `cellStyle:'currency'`
+    // stamp or a numeric value whose key matches the money heuristic (fallback
+    // mirroring the table cell + backend `inferDisplayCellStyle`).
+    if (isMoneyField(field, value)) {
+        const num = typeof value === 'number' ? value : Number(value)
+        if (!isNaN(num)) {
+            const resolvedCurrency = field.styleConfig?.currency || currency || 'USD'
+            const localeTag = i18n.language || 'es'
+            const formatted = new Intl.NumberFormat(localeTag, {
+                style: 'currency',
+                currency: resolvedCurrency,
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            }).format(num)
+            return <p className="text-sm py-1 tabular-nums">{formatted}</p>
+        }
     }
 
     // Date/datetime/timestamp → tz-aware format. `date` pins to UTC (calendar

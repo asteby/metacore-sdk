@@ -97,6 +97,12 @@ interface DynamicTableProps {
      * Optional — omitting it preserves the legacy browser-local formatting.
      */
     timeZone?: string
+    /**
+     * ISO 4217 currency code (e.g. the org's `MXN`) used as the fallback for
+     * money cells (`type:'number'` + `cellStyle:'currency'`) that don't carry
+     * an explicit per-column currency. Optional — defaults to 'USD'.
+     */
+    currency?: string
 }
 
 export function DynamicTable({
@@ -110,6 +116,7 @@ export function DynamicTable({
     extraColumns = [],
     getDynamicColumns = defaultGetDynamicColumns,
     timeZone,
+    currency,
 }: DynamicTableProps) {
     const { t, i18n } = useTranslation()
     const api = useApi()
@@ -598,12 +605,12 @@ export function DynamicTable({
         const rowMetadata = metadata.actions?.some((a) => a.placement === 'table' || a.placement === 'create')
             ? { ...metadata, actions: metadata.actions.filter((a) => !a.placement || a.placement === 'row') }
             : metadata
-        const baseColumns = getDynamicColumns(rowMetadata, handleInternalAction, t, i18n.language, columnFilterConfigs, timeZone)
+        const baseColumns = getDynamicColumns(rowMetadata, handleInternalAction, t, i18n.language, columnFilterConfigs, timeZone, currency)
         const filteredBase = baseColumns.filter((col: ColumnDef<any>) => !hiddenColumns.includes(col.id as string))
         const actionsCol = filteredBase.find((c: ColumnDef<any>) => c.id === 'actions')
         const otherCols = filteredBase.filter((c: ColumnDef<any>) => c.id !== 'actions')
         return [...otherCols, ...extraColumns, ...(actionsCol ? [actionsCol] : [])]
-    }, [metadata, handleInternalAction, hiddenColumns, extraColumns, t, i18n.language, columnFilterConfigs, getDynamicColumns, timeZone])
+    }, [metadata, handleInternalAction, hiddenColumns, extraColumns, t, i18n.language, columnFilterConfigs, getDynamicColumns, timeZone, currency])
 
     const filters = useMemo(() => [], [])
 

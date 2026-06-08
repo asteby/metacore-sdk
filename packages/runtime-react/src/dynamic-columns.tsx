@@ -93,9 +93,13 @@ const styleCfg = (
 
 const EmptyCell = () => <span className="text-muted-foreground">-</span>
 
-/** Resolves the active org currency, defaulting to USD when no override. */
-const resolveCurrency = (col: ColumnDefinition): string =>
-    styleCfg(col, 'currency') || 'USD'
+/**
+ * Resolves the active currency for a column: the column's explicit currency
+ * style wins, then the org-level fallback (org config, like `timeZone`), then
+ * 'USD' as a last resort.
+ */
+export const resolveCurrency = (col: ColumnDefinition, orgCurrency?: string): string =>
+    styleCfg(col, 'currency') || orgCurrency || 'USD'
 
 const formatNumber = (
     value: number,
@@ -559,6 +563,7 @@ export function makeDefaultGetDynamicColumns(
         currentLanguage?: string,
         filterConfigs?: Map<string, ColumnFilterConfig>,
         timeZone?: string,
+        currency?: string,
     ): ColumnDef<any>[] {
         const dateLocale = currentLanguage === 'en' ? enUS : es
         const columns: ColumnDef<any>[] = [
@@ -842,7 +847,7 @@ export function makeDefaultGetDynamicColumns(
                                         num,
                                         {
                                             style: 'currency',
-                                            currency: resolveCurrency(col),
+                                            currency: resolveCurrency(col, currency),
                                             minimumFractionDigits: decimals,
                                             maximumFractionDigits: decimals,
                                         },
