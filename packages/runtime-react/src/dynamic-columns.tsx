@@ -510,6 +510,66 @@ const RelationCell: React.FC<{
 }
 
 /**
+ * Renders a SAP-style polymorphic source-document reference as a navigable
+ * chip. Reads the backend-resolved sibling `row[<key w/o _id>] =
+ * { value, label, kind, table }` (see `relationKeyFor`) — the discriminator
+ * (`source_kind`) selects the target model and the backend stamps the resolved
+ * SQL `table` so the cell can link to `/m/<table>/<value>` (the host router
+ * handles `/m/:model/:id`). Shows the resolved `label` when present, else a
+ * short id (first 8 chars of the value). Domain-agnostic: any polymorphic FK
+ * (`source_id`, `document_id`, …) carrying `display: "reference"` works without
+ * per-addon code. Mirrors `RelationCell`'s chip look (subtle tint, dark-mode
+ * aware) so references read consistently next to plain relations.
+ */
+const ReferenceCell: React.FC<{
+    col: ColumnDefinition
+    row: any
+}> = ({ col, row }) => {
+    const isDark = useIsDarkTheme()
+    const sibling = getNestedValue(row, relationKeyFor(col))
+    const value =
+        (sibling && typeof sibling === 'object' ? sibling.value : undefined) ??
+        getNestedValue(row, col.key)
+    if (value === undefined || value === null || value === '' || isNilUuid(value)) {
+        return <EmptyCell />
+    }
+    const label =
+        sibling && typeof sibling === 'object' ? sibling.label : undefined
+    const kind =
+        sibling && typeof sibling === 'object' ? sibling.kind : undefined
+    const table =
+        sibling && typeof sibling === 'object' ? sibling.table : undefined
+    const displayText =
+        label !== undefined && label !== null && label !== ''
+            ? String(label)
+            : `${String(value).slice(0, 8)}`
+    // Tint keyed on the discriminator (when present) so e.g. sale/transfer/
+    // adjustment chips read as visually distinct families; falls back to the
+    // display text. Same subtle relation-chip look + dark-mode handling.
+    const chipStyles = relationChipStyles(String(kind || displayText), { isDark })
+    const className =
+        'inline-flex max-w-[220px] items-center gap-1 rounded-md px-2 py-0.5 text-sm font-medium'
+    if (table && value) {
+        return (
+            <a
+                href={`/m/${table}/${value}`}
+                onClick={(e) => e.stopPropagation()}
+                className={`${className} hover:underline`}
+                style={chipStyles}
+                title={displayText}
+            >
+                <span className="truncate">{displayText}</span>
+            </a>
+        )
+    }
+    return (
+        <span className={className} style={chipStyles} title={displayText}>
+            <span className="truncate">{displayText}</span>
+        </span>
+    )
+}
+
+/**
  * Generic avatar-style cell: round/rounded photo (or initials fallback) +
  * primary name + optional subtitle. Backs the `avatar`/`search` columns as
  * well as the `creator`/`user` cellStyles. Paths are parameterised so the same
@@ -680,6 +740,15 @@ export function makeDefaultGetDynamicColumns(
                                 {humanizeToken(sv)}
                             </Badge>
                         )
+                    }
+
+                    // Polymorphic source-document reference (SAP-style). Reads
+                    // the backend-resolved `{ value, label, kind, table }`
+                    // sibling and renders a navigable `/m/<table>/<value>` chip.
+                    // Checked before the relation branch so a polymorphic FK
+                    // carrying a `ref` still routes here.
+                    if (renderAs === 'reference') {
+                        return <ReferenceCell col={col} row={row.original} />
                     }
 
                     // Resolved FK relation chip. Triggers on an explicit
