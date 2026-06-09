@@ -1,5 +1,12 @@
 # @asteby/metacore-runtime-react
 
+## 18.10.1
+
+### Patch Changes
+
+- ea5e587: The dynamic table totals footer is now sticky (pinned to the bottom of the
+  scroll area) so the column totals stay visible while scrolling the rows.
+
 ## 18.10.0
 
 ### Minor Changes
