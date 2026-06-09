@@ -812,19 +812,26 @@ export function DynamicTable({
                             )}
                         </TableBody>
                         {aggregateColumns.length > 0 && Object.keys(footerTotals).length > 0 && (
-                            <TableFooter>
+                            // Sticky footer: the totals row stays pinned to the bottom of
+                            // the scroll area instead of scrolling away with the rows. The
+                            // sticky lives on the cells (a <tr> can't be position:sticky
+                            // reliably); each carries an opaque bg + top border so the body
+                            // scrolls underneath cleanly.
+                            <TableFooter className="bg-transparent">
                                 <TableRow className="hover:bg-transparent">
                                     {table.getVisibleLeafColumns().map((leaf: any, idx: number) => {
                                         const col = (metadata?.columns ?? []).find(
                                             (c) => c.key === leaf.id,
                                         )
                                         const isFirst = idx === 0
+                                        const stickyBase =
+                                            'sticky bottom-0 z-10 border-t bg-background py-2 font-semibold'
                                         // Aggregate cell: render the SUM formatted like the body cell.
                                         if (col && aggregateOf(col as any)) {
                                             return (
                                                 <TableCell
                                                     key={leaf.id}
-                                                    className="py-2 text-right font-semibold tabular-nums"
+                                                    className={`${stickyBase} text-right tabular-nums`}
                                                 >
                                                     {formatAggregateTotal(
                                                         col as any,
@@ -837,7 +844,7 @@ export function DynamicTable({
                                         }
                                         // First non-aggregate column carries the "Total" label.
                                         return (
-                                            <TableCell key={leaf.id} className="py-2 font-semibold">
+                                            <TableCell key={leaf.id} className={stickyBase}>
                                                 {isFirst ? t('common.total', 'Total') : ''}
                                             </TableCell>
                                         )
