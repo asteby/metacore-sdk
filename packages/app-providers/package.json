@@ -33,7 +33,7 @@
     "react": ">=18",
     "react-dom": ">=18",
     "@asteby/metacore-pwa": ">=0.4.0",
-    "@asteby/metacore-runtime-react": ">=18.10.0",
+    "@asteby/metacore-runtime-react": ">=18.10.1",
     "@asteby/metacore-ui": ">=2.5.1",
     "sonner": ">=1.7"
   },
