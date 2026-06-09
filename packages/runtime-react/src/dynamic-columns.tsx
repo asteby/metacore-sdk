@@ -108,6 +108,56 @@ const formatNumber = (
 ) => new Intl.NumberFormat(locale || undefined, opts).format(value)
 
 /**
+ * Reads the column's footer-aggregate opt-in. A column opts into the table
+ * footer total via its manifest `display_config.aggregate` (mapped by the
+ * kernel to `styleConfig.aggregate` at runtime). Returns the aggregate kind
+ * (e.g. `'sum'`) or undefined when the column carries no footer total.
+ */
+export const aggregateOf = (col: ColumnDefinition): string | undefined => {
+    const v = styleCfg(col, 'aggregate')
+    return typeof v === 'string' && v !== '' ? v : undefined
+}
+
+/**
+ * Formats a footer aggregate total with the SAME rules the body cells use:
+ * currency columns render as the org currency (resolveCurrency), number
+ * columns honour `styleConfig.decimals`, everything else falls back to a
+ * locale-formatted number. Non-numeric/empty totals render as a dash so an
+ * empty filtered set reads cleanly.
+ */
+export const formatAggregateTotal = (
+    col: ColumnDefinition,
+    value: unknown,
+    currency?: string,
+    locale?: string,
+): string => {
+    const num = typeof value === 'number' ? value : Number(value)
+    if (value === null || value === undefined || isNaN(num)) return '—'
+    const renderAs = col.cellStyle ?? col.type
+    if (renderAs === 'currency') {
+        const decimals = styleCfg(col, 'decimals') ?? 2
+        return formatNumber(
+            num,
+            {
+                style: 'currency',
+                currency: resolveCurrency(col, currency),
+                minimumFractionDigits: decimals,
+                maximumFractionDigits: decimals,
+            },
+            locale,
+        )
+    }
+    const decimals = styleCfg(col, 'decimals')
+    return formatNumber(
+        num,
+        decimals !== undefined
+            ? { minimumFractionDigits: decimals, maximumFractionDigits: decimals }
+            : {},
+        locale,
+    )
+}
+
+/**
  * Semantic status → badge color. Used by the `status` cell when no explicit
  * `options` color is declared. Generic, value-driven mapping.
  */
