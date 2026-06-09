@@ -294,6 +294,12 @@ export function FilterableColumnHeader<TData, TValue>({
               <ArrowDown className='text-muted-foreground/70 size-3.5' />
               Descendente
             </DropdownMenuItem>
+            {column.getIsSorted() && (
+              <DropdownMenuItem onClick={() => column.clearSorting()}>
+                <ArrowUpDown className='text-muted-foreground/70 size-3.5' />
+                Quitar orden
+              </DropdownMenuItem>
+            )}
             {column.getCanHide() && (
               <>
                 <DropdownMenuSeparator />
