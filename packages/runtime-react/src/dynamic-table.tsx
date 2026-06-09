@@ -755,7 +755,7 @@ export function DynamicTable({
                     a 7-column table forces a wide horizontal scroll there, so we
                     render a card-per-row list instead (see MobileCards below). */}
                 <div className='hidden sm:block flex-1 min-h-0 overflow-auto border rounded-md bg-card'>
-                    <Table noWrapper className="min-w-max w-full">
+                    <Table noWrapper className={cn('min-w-max w-full', aggregateColumns.length > 0 && Object.keys(footerTotals).length > 0 && 'h-full')}>
                         <TableHeader className='sticky top-0 z-10'>
                             {table.getHeaderGroups().map((headerGroup: HeaderGroup<any>) => (
                                 <TableRow key={headerGroup.id} className='border-b-0 hover:bg-transparent'>
@@ -779,7 +779,8 @@ export function DynamicTable({
                             {loadingData && data.length === 0 ? (
                                 <TableSkeleton />
                             ) : table.getRowModel().rows?.length ? (
-                                table.getRowModel().rows.map((row: Row<any>) => (
+                                <>
+                                    {table.getRowModel().rows.map((row: Row<any>) => (
                                     <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
                                         {row.getVisibleCells().map((cell: Cell<any, unknown>) => {
                                             const isActionsColumn = cell.column.id === 'actions'
@@ -794,7 +795,16 @@ export function DynamicTable({
                                             )
                                         })}
                                     </TableRow>
-                                ))
+                                    ))}
+                                    {/* Spacer row: absorbs the table's leftover height (table is
+                                        h-full when a footer shows) so the totals footer is pinned to
+                                        the bottom of the box even with only a few rows. */}
+                                    {aggregateColumns.length > 0 && Object.keys(footerTotals).length > 0 && (
+                                        <TableRow className='border-0 hover:bg-transparent'>
+                                            <TableCell colSpan={columns.length} className='h-full p-0' />
+                                        </TableRow>
+                                    )}
+                                </>
                             ) : (
                                 <TableRow className='border-b-0 hover:bg-transparent'>
                                     <TableCell colSpan={columns.length} className='h-full p-0'>
