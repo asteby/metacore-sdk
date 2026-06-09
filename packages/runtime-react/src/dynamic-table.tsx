@@ -39,6 +39,7 @@ import {
     Table,
     TableBody,
     TableCell,
+    TableFooter,
     TableHead,
     TableHeader,
     TableRow,
@@ -65,7 +66,7 @@ import { Progress } from './dialogs/_primitives'
 import { useMetadataCache } from './metadata-cache'
 import { useApi, useCurrentBranch } from './api-context'
 import type { ColumnFilterConfig, GetDynamicColumns } from './dynamic-columns-shim'
-import { defaultGetDynamicColumns, DATE_CELL_TYPES } from './dynamic-columns'
+import { defaultGetDynamicColumns, DATE_CELL_TYPES, aggregateOf, formatAggregateTotal } from './dynamic-columns'
 import { OptionsContext } from './options-context'
 import { ActionModalDispatcher } from './action-modal-dispatcher'
 import type { TableMetadata, ApiResponse, ActionMetadata } from './types'
@@ -130,6 +131,9 @@ export function DynamicTable({
 
     const [metadata, setMetadata] = useState<TableMetadata | null>(cachedMeta || null)
     const [data, setData] = useState<any[]>([])
+    // Footer totals: per-column SUM over the FILTERED set, fetched from a
+    // separate /aggregate endpoint (NOT summed from the visible page).
+    const [footerTotals, setFooterTotals] = useState<Record<string, any>>({})
     const [loading, setLoading] = useState(!cachedMeta)
     const [loadingData, setLoadingData] = useState(true)
     const [optionsMap, setOptionsMap] = useState<Map<string, any[]>>(new Map())
@@ -424,19 +428,49 @@ export function DynamicTable({
         }
     }, [model, metadata, pagination, buildFilterParams, refreshTrigger, endpoint, currentBranch?.id, api])
 
+    // Columns whose metadata opts into a footer total (display_config.aggregate
+    // → styleConfig.aggregate). When empty, no footer row is rendered and no
+    // aggregate request is made.
+    const aggregateColumns = useMemo(
+        () => (metadata?.columns ?? []).filter((c) => aggregateOf(c as any)),
+        [metadata],
+    )
+
+    // fetchAggregates GETs the SUM of each aggregate-flagged column over the SAME
+    // filtered set as the list (reuses buildFilterParams), then stores the totals
+    // keyed by column. Sort/pagination are irrelevant to a footer total and are
+    // omitted (the backend ignores them); only filters/search drive the result.
+    const fetchAggregates = useCallback(async () => {
+        if (!metadata || aggregateColumns.length === 0) return
+        try {
+            const { sortBy, order, ...filterParams } = buildFilterParams()
+            const base = endpoint || `/data/${model}`
+            const res = (await api.get(`${base}/aggregate`, { params: filterParams })) as {
+                data: ApiResponse<Record<string, any>>
+            }
+            if (res.data.success) setFooterTotals(res.data.data || {})
+        } catch (error) {
+            console.error('Error al cargar los totales', error)
+        }
+    }, [model, metadata, aggregateColumns, buildFilterParams, endpoint, currentBranch?.id, api])
+
     const initialFetchDone = useRef(false)
     useEffect(() => {
         if (!metadata) return
         if (!initialFetchDone.current) {
             initialFetchDone.current = true
             fetchData()
+            fetchAggregates()
             return
         }
-        const timeoutId = setTimeout(fetchData, 300)
+        const timeoutId = setTimeout(() => {
+            fetchData()
+            fetchAggregates()
+        }, 300)
         return () => clearTimeout(timeoutId)
-    }, [fetchData, metadata])
+    }, [fetchData, fetchAggregates, metadata])
 
-    const handleRefresh = useCallback(() => { fetchData() }, [fetchData])
+    const handleRefresh = useCallback(() => { fetchData(); fetchAggregates() }, [fetchData, fetchAggregates])
 
     const handleInternalAction = useCallback(async (action: string, row: any) => {
         if (action === 'delete') { setRowToDelete(row); return }
@@ -777,6 +811,40 @@ export function DynamicTable({
                                 </TableRow>
                             )}
                         </TableBody>
+                        {aggregateColumns.length > 0 && Object.keys(footerTotals).length > 0 && (
+                            <TableFooter>
+                                <TableRow className="hover:bg-transparent">
+                                    {table.getVisibleLeafColumns().map((leaf: any, idx: number) => {
+                                        const col = (metadata?.columns ?? []).find(
+                                            (c) => c.key === leaf.id,
+                                        )
+                                        const isFirst = idx === 0
+                                        // Aggregate cell: render the SUM formatted like the body cell.
+                                        if (col && aggregateOf(col as any)) {
+                                            return (
+                                                <TableCell
+                                                    key={leaf.id}
+                                                    className="py-2 text-right font-semibold tabular-nums"
+                                                >
+                                                    {formatAggregateTotal(
+                                                        col as any,
+                                                        footerTotals[leaf.id],
+                                                        currency,
+                                                        i18n.language,
+                                                    )}
+                                                </TableCell>
+                                            )
+                                        }
+                                        // First non-aggregate column carries the "Total" label.
+                                        return (
+                                            <TableCell key={leaf.id} className="py-2 font-semibold">
+                                                {isFirst ? t('common.total', 'Total') : ''}
+                                            </TableCell>
+                                        )
+                                    })}
+                                </TableRow>
+                            </TableFooter>
+                        )}
                     </Table>
                 </div>
 
