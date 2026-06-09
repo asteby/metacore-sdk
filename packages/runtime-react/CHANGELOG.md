@@ -1,5 +1,13 @@
 # @asteby/metacore-runtime-react
 
+## 18.10.2
+
+### Patch Changes
+
+- 530ad31: The totals footer is now pinned to the bottom of the table box even with few
+  rows (the table fills its container height and a spacer row absorbs the slack),
+  instead of floating right under the last row.
+
 ## 18.10.1
 
 ### Patch Changes
