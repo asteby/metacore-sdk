@@ -1,5 +1,13 @@
 # @asteby/metacore-ui
 
+## 2.5.1
+
+### Patch Changes
+
+- 0d0d652: Column sort menu gains a "Quitar orden" item (shown only when the column is
+  sorted) that clears the column's sort via `column.clearSorting()`, returning it
+  to the neutral unsorted (↕) state.
+
 ## 2.5.0
 
 ### Minor Changes
