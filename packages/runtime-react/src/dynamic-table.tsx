@@ -75,12 +75,19 @@ import { DynamicRecordDialog } from './dialogs/dynamic-record'
 import { ExportDialog } from './dialogs/export'
 import { ImportDialog } from './dialogs/import'
 
-interface DynamicTableProps {
+export interface DynamicTableProps {
     model: string
     endpoint?: string
     enableUrlSync?: boolean
     hiddenColumns?: string[]
     onAction?: (action: string, row: any) => void
+    /**
+     * Called when the user clicks anywhere on a data row (not on a checkbox,
+     * action button, or interactive element inside the cell). When provided,
+     * each row becomes focusable (cursor-pointer). Absent → rows are not
+     * clickable and the behaviour is unchanged.
+     */
+    onRowClick?: (row: any) => void
     refreshTrigger?: any
     defaultFilters?: Record<string, any>
     extraColumns?: ColumnDef<any>[]
@@ -112,6 +119,7 @@ export function DynamicTable({
     enableUrlSync = true,
     hiddenColumns = [],
     onAction,
+    onRowClick,
     refreshTrigger,
     defaultFilters,
     extraColumns = [],
@@ -781,14 +789,21 @@ export function DynamicTable({
                             ) : table.getRowModel().rows?.length ? (
                                 <>
                                     {table.getRowModel().rows.map((row: Row<any>) => (
-                                    <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
+                                    <TableRow
+                                        key={row.id}
+                                        data-state={row.getIsSelected() && 'selected'}
+                                        className={cn(onRowClick && 'cursor-pointer')}
+                                        onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                                    >
                                         {row.getVisibleCells().map((cell: Cell<any, unknown>) => {
                                             const isActionsColumn = cell.column.id === 'actions'
+                                            const isSelectColumn = cell.column.id === 'select'
                                             return (
                                                 <TableCell
                                                     key={cell.id}
                                                     style={cell.column.columnDef.size ? { width: cell.column.columnDef.size } : undefined}
                                                     className={cn('py-2', isActionsColumn && 'sticky right-0 bg-card shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)]')}
+                                                    onClick={(isActionsColumn || isSelectColumn) ? (e: React.MouseEvent) => e.stopPropagation() : undefined}
                                                 >
                                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                 </TableCell>
@@ -888,7 +903,8 @@ export function DynamicTable({
                                 <div
                                     key={row.id}
                                     data-state={row.getIsSelected() && 'selected'}
-                                    className='flex flex-col gap-1.5 rounded-lg border bg-card p-3 data-[state=selected]:border-primary/40'
+                                    className={cn('flex flex-col gap-1.5 rounded-lg border bg-card p-3 data-[state=selected]:border-primary/40', onRowClick && 'cursor-pointer')}
+                                    onClick={onRowClick ? () => onRowClick(row.original) : undefined}
                                 >
                                     {dataCells.map((cell: Cell<any, unknown>) => {
                                         const header = cell.column.columnDef.header
@@ -903,7 +919,10 @@ export function DynamicTable({
                                         )
                                     })}
                                     {actionsCell && (
-                                        <div className='flex justify-end border-t pt-2'>
+                                        <div
+                                            className='flex justify-end border-t pt-2'
+                                            onClick={onRowClick ? (e: React.MouseEvent) => e.stopPropagation() : undefined}
+                                        >
                                             {flexRender(actionsCell.column.columnDef.cell, actionsCell.getContext())}
                                         </div>
                                     )}
