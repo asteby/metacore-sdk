@@ -268,7 +268,25 @@ export function PWAProvider({
   }
 
   const updateApp = () => {
+    // For autoUpdate SWs (skipWaiting + clientsClaim on install) there is no
+    // "waiting" worker at click-time — the new SW is already active and
+    // serving the updated assets.  updateServiceWorker(true) posts a
+    // SKIP_WAITING message which becomes a no-op in that case, leaving the
+    // user stuck on the old build.
+    //
+    // Strategy: call updateServiceWorker(true) for the prompt-strategy path,
+    // AND schedule a reload after a short grace window so that either path
+    // works:
+    //   - autoUpdate: SW is already active → reload immediately picks up
+    //     the new build.
+    //   - prompt: SKIP_WAITING → controllerchange → the controllerchange
+    //     handler reloads; if it fires within the grace window the setTimeout
+    //     is a harmless double-reload (browser dedupes it); if it doesn't fire
+    //     in time the setTimeout covers us.
     void updateServiceWorker(true)
+    setTimeout(() => {
+      window.location.reload()
+    }, 400)
   }
 
   const subscribeToPush = async (): Promise<boolean> => {
