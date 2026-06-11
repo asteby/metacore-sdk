@@ -105,7 +105,13 @@ function changedKeys(event: ActivityEvent): Set<string> {
 }
 
 function resolveColumn(key: string, columns?: ColumnDefinition[]): ColumnDefinition | undefined {
-    return columns?.find((c) => c.key === key)
+    if (!columns?.length) return undefined
+    const exact = columns.find((c) => c.key === key)
+    if (exact) return exact
+    // A diff key is the physical column (created_by); the served metadata may
+    // only carry the dotted display column for it (created_by.avatar). Match on
+    // the base segment so the diff cell inherits its label and rich renderer.
+    return columns.find((c) => typeof c.key === 'string' && c.key.includes('.') && c.key.split('.')[0] === key)
 }
 
 function resolveLabel(key: string, columns?: ColumnDefinition[]): string {

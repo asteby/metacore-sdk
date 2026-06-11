@@ -13,7 +13,7 @@
 import * as React from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { es, enUS } from 'date-fns/locale'
-import { ChevronDown, ChevronRight, User, Clock } from 'lucide-react'
+import { ChevronDown, ChevronRight, Clock, ExternalLink } from 'lucide-react'
 import { cn } from '@asteby/metacore-ui/lib'
 import {
     Avatar,
@@ -51,6 +51,12 @@ export interface RecordHistoryProps {
     locale?: string
     /** Class applied to the root element. */
     className?: string
+    /**
+     * When provided, each event header shows an "open in activity log" button
+     * that invokes this with the event — the host navigates to its activity
+     * detail page (e.g. `/activity/:id`). Omitted → no button.
+     */
+    onOpenEvent?: (event: ActivityEvent) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -99,6 +105,7 @@ export const RecordHistory: React.FC<RecordHistoryProps> = ({
     currency,
     locale = 'es',
     className,
+    onOpenEvent,
 }) => {
     const dateLocale = locale === 'en' ? enUS : es
 
@@ -208,6 +215,30 @@ export const RecordHistory: React.FC<RecordHistoryProps> = ({
                                                     )}
                                                 </div>
                                             </div>
+
+                                            {/* Open the event's detail page in the activity log */}
+                                            {onOpenEvent && (
+                                                <span
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    aria-label="Ver en registro de actividad"
+                                                    title="Ver en registro de actividad"
+                                                    className="shrink-0 rounded-md p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors cursor-pointer"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        onOpenEvent(event)
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' || e.key === ' ') {
+                                                            e.preventDefault()
+                                                            e.stopPropagation()
+                                                            onOpenEvent(event)
+                                                        }
+                                                    }}
+                                                >
+                                                    <ExternalLink className="h-3.5 w-3.5" />
+                                                </span>
+                                            )}
 
                                             {/* Expand/collapse chevron */}
                                             <span className="shrink-0 text-muted-foreground">

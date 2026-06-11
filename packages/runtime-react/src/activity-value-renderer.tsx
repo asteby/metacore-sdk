@@ -51,6 +51,31 @@ const statusColorFor = (value: string): string => {
     return '#6b7280'
 }
 
+// resolvedEntity — a diff snapshot value may be the backend-resolved sibling
+// object ({value,label} relation, {name,avatar,email} user). Surface its human
+// identity instead of raw JSON. Returns undefined for anything else.
+function resolvedEntity(value: unknown): { name: string; avatar?: string; email?: string } | undefined {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
+    const v = value as Record<string, unknown>
+    const name = v.name ?? v.label ?? v.title
+    if (typeof name !== 'string' || name === '') return undefined
+    const avatar = typeof v.avatar === 'string' && v.avatar !== '' ? v.avatar : undefined
+    const email = typeof v.email === 'string' && v.email !== '' ? v.email : undefined
+    return { name, avatar, email }
+}
+
+const EntityChip: React.FC<{ entity: { name: string; avatar?: string; email?: string } }> = ({ entity }) => (
+    <span className="inline-flex items-center gap-1.5" title={entity.email}>
+        <Avatar className="h-5 w-5 rounded-full">
+            <AvatarImage src={entity.avatar ?? ''} alt={entity.name} />
+            <AvatarFallback className="text-[8px] font-bold bg-primary/10 text-primary">
+                {getInitials(entity.name)}
+            </AvatarFallback>
+        </Avatar>
+        <span className="text-sm font-medium truncate" style={{ maxWidth: 180 }}>{entity.name}</span>
+    </span>
+)
+
 const useIsDarkTheme = () => {
     const [isDark, setIsDark] = React.useState(() =>
         typeof document !== 'undefined' && document.documentElement.classList.contains('dark'),
@@ -103,9 +128,12 @@ export const ActivityValueRenderer: React.FC<ActivityValueRendererProps> = ({
         return <span className="text-muted-foreground">—</span>
     }
 
-    // No column metadata → plain string
+    // No column metadata → entity chip when the value is a resolved object,
+    // plain string otherwise.
     if (!col) {
         if (typeof value === 'object') {
+            const entity = resolvedEntity(value)
+            if (entity) return <EntityChip entity={entity} />
             return (
                 <span className="text-muted-foreground text-xs font-mono">
                     {JSON.stringify(value)}
@@ -304,7 +332,7 @@ export const ActivityValueRenderer: React.FC<ActivityValueRendererProps> = ({
     // -----------------------------------------------------------------------
 
     if (renderAs === 'relation' || renderAs === 'reference' || col.ref) {
-        const sv = String(value)
+        const sv = resolvedEntity(value)?.name ?? (typeof value === 'object' ? JSON.stringify(value) : String(value))
         const chipStyles = relationChipStyles(sv, { isDark })
         return (
             <span
@@ -323,21 +351,8 @@ export const ActivityValueRenderer: React.FC<ActivityValueRendererProps> = ({
     // -----------------------------------------------------------------------
 
     if (renderAs === 'creator' || renderAs === 'user' || renderAs === 'avatar' || renderAs === 'search') {
-        const name =
-            typeof value === 'object' && value !== null
-                ? String((value as any).name ?? (value as any).label ?? JSON.stringify(value))
-                : String(value)
-        return (
-            <span className="inline-flex items-center gap-1.5">
-                <Avatar className="h-5 w-5 rounded-full">
-                    <AvatarImage src="" alt={name} />
-                    <AvatarFallback className="text-[8px] font-bold bg-primary/10 text-primary">
-                        {getInitials(name)}
-                    </AvatarFallback>
-                </Avatar>
-                <span className="text-sm font-medium truncate" style={{ maxWidth: 180 }}>{name}</span>
-            </span>
-        )
+        const entity = resolvedEntity(value) ?? { name: typeof value === 'object' ? JSON.stringify(value) : String(value) }
+        return <EntityChip entity={entity} />
     }
 
     // -----------------------------------------------------------------------
@@ -352,10 +367,13 @@ export const ActivityValueRenderer: React.FC<ActivityValueRendererProps> = ({
     }
 
     // -----------------------------------------------------------------------
-    // Generic object fallback
+    // Generic object fallback — resolved entities render as a chip, the rest
+    // as raw JSON.
     // -----------------------------------------------------------------------
 
     if (typeof value === 'object') {
+        const entity = resolvedEntity(value)
+        if (entity) return <EntityChip entity={entity} />
         return (
             <span className="text-muted-foreground text-xs font-mono">
                 {JSON.stringify(value)}
