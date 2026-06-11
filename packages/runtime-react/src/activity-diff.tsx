@@ -74,19 +74,41 @@ export interface ActivityDiffProps {
 // Helpers
 // ---------------------------------------------------------------------------
 
+// Meta-level keys that are always present and never meaningful in a
+// human-readable diff.
+const META_KEYS = new Set(['id', 'created_at', 'updated_at', 'organization_id', 'org_id', 'deleted_at'])
+
+/** True when an object is a backend-resolved sibling ({value,label} relation, {name,…} user). */
+function isResolvedObject(v: unknown): boolean {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return false
+    const o = v as Record<string, unknown>
+    return typeof o.label === 'string' || typeof o.name === 'string'
+}
+
 /** Returns all field keys that appear in the diff. */
 function diffKeys(event: ActivityEvent): string[] {
-    if (event.changes && Object.keys(event.changes).length > 0) {
-        return Object.keys(event.changes)
-    }
     const before = event.before ?? {}
     const after = event.after ?? {}
-    const keys = new Set([...Object.keys(before), ...Object.keys(after)])
-    // Filter out meta-level keys that are always present and rarely meaningful
-    // in a human-readable diff (id, created_at, updated_at, organization_id).
-    const META = new Set(['id', 'created_at', 'updated_at', 'organization_id', 'org_id'])
-    keys.forEach((k) => { if (META.has(k)) keys.delete(k) })
-    return Array.from(keys)
+    const source =
+        event.changes && Object.keys(event.changes).length > 0
+            ? new Set(Object.keys(event.changes))
+            : new Set([...Object.keys(before), ...Object.keys(after)])
+    META_KEYS.forEach((k) => source.delete(k))
+    // A resolved FK appears twice: the raw UUID key (created_by_id) and the
+    // resolved sibling (created_by: {name/label,…}). Drop the raw key — the
+    // sibling row already shows the human value. The sibling's value may live
+    // in before/after or inside changes[sibling] ({from,to}/{before,after}).
+    const siblingResolved = (sibling: string): boolean => {
+        if (isResolvedObject(before[sibling]) || isResolvedObject(after[sibling])) return true
+        const ch = (event.changes as Record<string, Record<string, unknown>> | undefined)?.[sibling]
+        if (!ch || typeof ch !== 'object') return false
+        return isResolvedObject(ch.from) || isResolvedObject(ch.to) || isResolvedObject(ch.before) || isResolvedObject(ch.after)
+    }
+    return Array.from(source).filter((k) => {
+        if (!k.endsWith('_id')) return true
+        const sibling = k.slice(0, -3)
+        return !(source.has(sibling) && siblingResolved(sibling))
+    })
 }
 
 /** Returns the set of keys where the value actually changed. */
