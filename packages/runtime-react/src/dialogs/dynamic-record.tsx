@@ -323,6 +323,9 @@ function formatDisplayValue(rawValue: any, field: FieldDef): string {
         return match?.label ?? humanizeToken(value)
     }
 
+    // Structured value with no label — JSON beats "[object Object]".
+    if (typeof value === 'object') return JSON.stringify(value)
+
     return String(value)
 }
 
@@ -1048,6 +1051,13 @@ export function ViewValue({
         )
     }
 
+    // Structured value (jsonb column, e.g. fiscal_data) with no label/name/title
+    // to surface — render readable key/value pairs instead of falling through to
+    // String(value) ("[object Object]").
+    if (value !== null && typeof value === 'object') {
+        return <StructuredViewValue value={value} />
+    }
+
     const display = formatDisplayValue(value, field)
 
     if (field.type === 'textarea') {
@@ -1059,6 +1069,44 @@ export function ViewValue({
     }
 
     return <p className="text-sm py-1">{display}</p>
+}
+
+// StructuredViewValue renders a jsonb object/array that has no resolvable label:
+// plain objects become a key→value list (keys humanized), primitive arrays a
+// comma-joined line, and anything deeper a pretty-printed JSON block. Empty
+// structures render the same "—" marker as null scalars.
+function StructuredViewValue({ value }: { value: any }) {
+    if (Array.isArray(value)) {
+        if (value.length === 0) {
+            return <p className="text-sm py-1 text-muted-foreground">—</p>
+        }
+        if (value.every(v => v === null || typeof v !== 'object')) {
+            return <p className="text-sm py-1">{value.map(v => String(v ?? '—')).join(', ')}</p>
+        }
+        return (
+            <pre className="text-xs whitespace-pre-wrap rounded-md bg-muted/40 p-3 overflow-x-auto">
+                {JSON.stringify(value, null, 2)}
+            </pre>
+        )
+    }
+    const entries = Object.entries(value).filter(
+        ([, v]) => v !== null && v !== undefined && v !== '',
+    )
+    if (entries.length === 0) {
+        return <p className="text-sm py-1 text-muted-foreground">—</p>
+    }
+    return (
+        <dl className="text-sm py-1 space-y-0.5">
+            {entries.map(([k, v]) => (
+                <div key={k} className="flex gap-2">
+                    <dt className="text-muted-foreground shrink-0">{humanizeToken(k)}:</dt>
+                    <dd className="break-words">
+                        {typeof v === 'object' ? JSON.stringify(v) : String(v)}
+                    </dd>
+                </div>
+            ))}
+        </dl>
+    )
 }
 
 function EditField({ field, value, onChange }: {
