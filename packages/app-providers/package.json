@@ -32,8 +32,8 @@
     "@tanstack/react-query": ">=5",
     "react": ">=18",
     "react-dom": ">=18",
-    "@asteby/metacore-pwa": ">=0.4.0",
-    "@asteby/metacore-runtime-react": ">=18.12.0",
+    "@asteby/metacore-pwa": ">=0.4.1",
+    "@asteby/metacore-runtime-react": ">=18.12.1",
     "@asteby/metacore-ui": ">=2.5.1",
     "sonner": ">=1.7"
   },
