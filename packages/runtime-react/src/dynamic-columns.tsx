@@ -44,7 +44,7 @@ import {
 import { Progress } from './dialogs/_primitives'
 import { humanizeToken } from './dynamic-columns-helpers'
 import { OptionsContext } from './options-context'
-import { DynamicIcon } from './dynamic-icon'
+import { DynamicIcon, isLucideIconName } from './dynamic-icon'
 import { isNilUuid, normalizeNilUuid } from './nil-uuid'
 import type { TableMetadata, ColumnDefinition } from './types'
 import { isColumnVisibleInTable } from './column-visibility'
@@ -1147,6 +1147,16 @@ export function makeDefaultGetDynamicColumns(
                                     ? row.original.media.find((m: any) => m.type === 'image')?.url
                                     : null)
                             if (!imageValue) return <span className="text-muted-foreground">-</span>
+                            // Lucide icon name, not an image path (e.g. an addon's
+                            // `icon` column seeded as "Banknote") — render the glyph;
+                            // an <img> here would 404 into an empty grey box.
+                            if (isLucideIconName(imageValue)) {
+                                return (
+                                    <div className="h-10 w-10 flex items-center justify-center rounded bg-muted">
+                                        <DynamicIcon name={imageValue} className="h-5 w-5" />
+                                    </div>
+                                )
+                            }
                             return (
                                 <div className="h-10 w-10 relative rounded overflow-hidden bg-muted flex items-center justify-center">
                                     <img

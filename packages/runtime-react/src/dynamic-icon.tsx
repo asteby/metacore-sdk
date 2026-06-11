@@ -13,3 +13,15 @@ export function DynamicIcon({ name, className }: DynamicIconProps) {
     if (!Icon) return null
     return <Icon className={className} />
 }
+
+// isLucideIconName — true when a string is a lucide-react icon name
+// ("Banknote", "CreditCard"). Lets image-ish renderers tell an icon name apart
+// from an image path/URL: addons declare icons by lucide slug (same convention
+// as OptionDef.icon), so a column inferred as `image` may carry one. Path-like
+// strings (slash, dot, scheme) are rejected before the registry lookup; "Icon"
+// itself is the generic base component, not a real glyph.
+export function isLucideIconName(value: unknown): value is string {
+    if (typeof value !== 'string' || value === '' || value === 'Icon') return false
+    if (!/^[A-Z][A-Za-z0-9]*$/.test(value)) return false
+    return Boolean((icons as unknown as Record<string, unknown>)[value])
+}

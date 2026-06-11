@@ -53,6 +53,7 @@ import { DynamicRelations } from '../dynamic-relations'
 import { useOptionsResolver, type ResolvedOption } from '../use-options-resolver'
 import { getFieldRef } from '../dynamic-form-schema'
 import { isNilUuid, normalizeNilUuid } from '../nil-uuid'
+import { DynamicIcon, isLucideIconName } from '../dynamic-icon'
 import { humanizeToken } from '../dynamic-columns-helpers'
 import { formatDateCell } from '../dynamic-columns'
 import type { ActionFieldDef, RelationMeta } from '../types'
@@ -977,11 +978,24 @@ export function ViewValue({
     }
 
     if (field.type === 'image') {
+        if (isLucideIconName(value)) {
+            return <IconNameViewValue name={value} />
+        }
         return value ? (
             <img src={getImageUrl(String(value))} alt={field.label} className="h-16 w-16 rounded-lg object-cover border" />
         ) : (
             <p className="text-sm py-1 text-muted-foreground">Sin imagen</p>
         )
+    }
+
+    // Icon-name column served as plain text (the table infers cellStyle image,
+    // but the detail/modal field keeps the storage type): render the glyph.
+    if (
+        isLucideIconName(value) &&
+        typeof field.key === 'string' &&
+        (field.key === 'icon' || field.key.endsWith('_icon'))
+    ) {
+        return <IconNameViewValue name={value} />
     }
 
     if (field.type === 'url' && value) {
@@ -1069,6 +1083,20 @@ export function ViewValue({
     }
 
     return <p className="text-sm py-1">{display}</p>
+}
+
+// IconNameViewValue — read view for a column whose value is a lucide icon name
+// (an addon's `icon` column): the glyph plus the name, so the value stays
+// copyable/recognizable next to its rendering.
+function IconNameViewValue({ name }: { name: string }) {
+    return (
+        <div className="flex items-center gap-2 py-1">
+            <div className="h-8 w-8 flex items-center justify-center rounded bg-muted">
+                <DynamicIcon name={name} className="h-4 w-4" />
+            </div>
+            <span className="text-sm text-muted-foreground">{name}</span>
+        </div>
+    )
 }
 
 // StructuredViewValue renders a jsonb object/array that has no resolvable label:
