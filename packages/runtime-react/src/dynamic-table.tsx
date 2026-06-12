@@ -71,6 +71,7 @@ import { OptionsContext } from './options-context'
 import { ActionModalDispatcher } from './action-modal-dispatcher'
 import type { TableMetadata, ApiResponse, ActionMetadata } from './types'
 import { getSearchableColumnKeys } from './column-visibility'
+import { useCan, usePermissionsActive, gateTableMetadata } from './permissions-context'
 import { DynamicRecordDialog } from './dialogs/dynamic-record'
 import { ExportDialog } from './dialogs/export'
 import { ImportDialog } from './dialogs/import'
@@ -369,6 +370,18 @@ export function DynamicTable({
         [metadata],
     )
 
+    // Permission gating — only active when the host mounts <PermissionsProvider>.
+    // Without it `viewMetadata === metadata` and nothing changes (everything
+    // stays visible, exactly the legacy behaviour). With it, export/import
+    // buttons and row actions (incl. the implicit View/Edit/Delete trio) are
+    // filtered by `can(lowercase(model).<action>)`.
+    const can = useCan()
+    const permissionsActive = usePermissionsActive()
+    const viewMetadata = useMemo(() => {
+        if (!metadata || !permissionsActive) return metadata
+        return gateTableMetadata(metadata, model, can, (key, fallback) => t(key, { defaultValue: fallback }))
+    }, [metadata, permissionsActive, can, model, t])
+
     const buildFilterParams = useCallback(() => {
         const params: Record<string, any> = {}
         if (sorting.length > 0) {
@@ -640,19 +653,19 @@ export function DynamicTable({
     }, [metadata, filterOptionsMap, dynamicFilters, handleDynamicFilterChange])
 
     const columns = useMemo(() => {
-        if (!metadata) return []
+        if (!viewMetadata) return []
         // Row-action column only renders per-row actions. Table-level placements
         // ("table"/"create") are surfaced by <ModelActionToolbar> at the page
         // level, so strip them here to avoid a meaningless per-row button.
-        const rowMetadata = metadata.actions?.some((a) => a.placement === 'table' || a.placement === 'create')
-            ? { ...metadata, actions: metadata.actions.filter((a) => !a.placement || a.placement === 'row') }
-            : metadata
+        const rowMetadata = viewMetadata.actions?.some((a) => a.placement === 'table' || a.placement === 'create')
+            ? { ...viewMetadata, actions: viewMetadata.actions.filter((a) => !a.placement || a.placement === 'row') }
+            : viewMetadata
         const baseColumns = getDynamicColumns(rowMetadata, handleInternalAction, t, i18n.language, columnFilterConfigs, timeZone, currency)
         const filteredBase = baseColumns.filter((col: ColumnDef<any>) => !hiddenColumns.includes(col.id as string))
         const actionsCol = filteredBase.find((c: ColumnDef<any>) => c.id === 'actions')
         const otherCols = filteredBase.filter((c: ColumnDef<any>) => c.id !== 'actions')
         return [...otherCols, ...extraColumns, ...(actionsCol ? [actionsCol] : [])]
-    }, [metadata, handleInternalAction, hiddenColumns, extraColumns, t, i18n.language, columnFilterConfigs, getDynamicColumns, timeZone, currency])
+    }, [viewMetadata, handleInternalAction, hiddenColumns, extraColumns, t, i18n.language, columnFilterConfigs, getDynamicColumns, timeZone, currency])
 
     const filters = useMemo(() => [], [])
 
@@ -745,12 +758,12 @@ export function DynamicTable({
                         onBulkDelete={() => setShowBulkDeleteConfirm(true)}
                         extraActions={
                             <>
-                                {metadata.canExport && (
+                                {viewMetadata?.canExport && (
                                     <Button variant="outline" size="sm" className="h-8" onClick={() => setExportOpen(true)}>
                                         <Download className="h-4 w-4 mr-1" /> Exportar
                                     </Button>
                                 )}
-                                {metadata.canImport && (
+                                {viewMetadata?.canImport && (
                                     <Button variant="outline" size="sm" className="h-8" onClick={() => setImportOpen(true)}>
                                         <Upload className="h-4 w-4 mr-1" /> Importar
                                     </Button>
@@ -997,10 +1010,10 @@ export function DynamicTable({
                 onSaved={handleRefresh}
             />
 
-            {metadata.canExport && (
+            {viewMetadata?.canExport && (
                 <ExportDialog open={exportOpen} onOpenChange={setExportOpen} model={model} metadata={metadata} currentFilters={buildFilterParams()} hasActiveFilters={hasActiveFilters} />
             )}
-            {metadata.canImport && (
+            {viewMetadata?.canImport && (
                 <ImportDialog open={importOpen} onOpenChange={setImportOpen} model={model} metadata={metadata} onImported={handleRefresh} />
             )}
             {actionModal.action && (

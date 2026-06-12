@@ -23,6 +23,7 @@ import { useApi } from './api-context'
 import { useMetadataCache } from './metadata-cache'
 import { DynamicIcon } from './dynamic-icon'
 import { ActionModalDispatcher } from './action-modal-dispatcher'
+import { useCan, modelCapability } from './permissions-context'
 import type { ActionDefinition, ActionMetadata, TableMetadata } from './types'
 
 export type ActionPlacement = 'row' | 'table' | 'create'
@@ -108,7 +109,14 @@ export function ModelActionToolbar({
     onChange,
     className,
 }: ModelActionToolbarProps) {
-    const surfaced = useModelActions(model, placements, actions)
+    const all = useModelActions(model, placements, actions)
+    // Capability gating — always-true without a <PermissionsProvider>. Custom
+    // table/create actions map onto `lowercase(model).<action_key>`.
+    const can = useCan()
+    const surfaced = useMemo(
+        () => all.filter((a) => can(modelCapability(model, a.key))),
+        [all, can, model],
+    )
     const [active, setActive] = useState<ActionMetadata | null>(null)
     const dataEndpoint = endpoint ?? `/data/${model}/me`
 

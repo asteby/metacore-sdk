@@ -37,6 +37,7 @@ import { ExportDialog } from './dialogs/export'
 import { ImportDialog } from './dialogs/import'
 import { getModelExtension } from './model-extension-registry'
 import { ModelActionToolbar } from './model-action-toolbar'
+import { useCan, modelCapability } from './permissions-context'
 import type { TableMetadata } from './types'
 
 export interface DynamicCRUDPageStrings {
@@ -165,9 +166,13 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
     // showing one in the page chrome is just visual duplication. Apps that
     // want it back can pass `hideRefresh={false}`.
     const effectiveHideRefresh = hideRefresh ?? ext?.hideRefresh ?? true
-    const showCreate = enableCRUD && !effectiveHideCreate
-    const showImport = enableCRUD && !effectiveHideImport
-    const showExport = !effectiveHideExport
+    // Capability gating — no-op unless the host mounts <PermissionsProvider>
+    // (useCan defaults to always-true), in which case create/export/import
+    // require `lowercase(model).create|export|import`.
+    const can = useCan()
+    const showCreate = enableCRUD && !effectiveHideCreate && can(modelCapability(model, 'create'))
+    const showImport = enableCRUD && !effectiveHideImport && can(modelCapability(model, 'import'))
+    const showExport = !effectiveHideExport && can(modelCapability(model, 'export'))
     const showRefresh = !effectiveHideRefresh
 
     const handleRefresh = useCallback(() => {

@@ -28,6 +28,32 @@ export {
 } from './addon-layout-context'
 export * from './slot'
 export * from './capability-gate'
+export {
+    PermissionsProvider,
+    useCan,
+    usePermissionsActive,
+    makeCan,
+    capabilityForActionKey,
+    modelCapability,
+    gateTableMetadata,
+    type CanFn,
+    type PermissionsProviderProps,
+} from './permissions-context'
+export {
+    PermissionsManager,
+    moduleActionCapability,
+    moduleCapabilities,
+    grantedCountForModule,
+    capabilitySetsEqual,
+    defaultActionIcon,
+    type PermissionsManagerProps,
+    type PermissionsCatalog,
+    type PermissionModuleDef,
+    type PermissionActionDef,
+    type GeneralPermissionDef,
+    type RoleDef,
+    type RoleInput,
+} from './permissions-manager'
 export * from './org-runtime-context'
 export * from './org-runtime-provider'
 export * from './navigation-builder'
