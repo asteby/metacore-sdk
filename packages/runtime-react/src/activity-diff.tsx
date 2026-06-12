@@ -35,6 +35,8 @@ export interface ActivityEvent {
     correlation_id?: string | null
     actor_id?: string | null
     actor_label?: string | null
+    /** Storage path of the actor's avatar image, when the backend resolves one. */
+    actor_avatar?: string | null
     addon_key: string
     model: string
     record_id: string
