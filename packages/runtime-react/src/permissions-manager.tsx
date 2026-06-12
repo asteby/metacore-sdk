@@ -3,16 +3,18 @@
 // Transport-agnostic: every read/write arrives via props (loaders/mutators),
 // so each host wires them to its own api client (ops → /api/permissions/*).
 // The capability universe (modules × actions + general flags) is derived from
-// the installed manifests server-side; this component only renders it.
+// the installed manifests + the real sidebar nav server/host-side; this
+// component only renders it.
 //
-// Layout (mirrors the app sidebar so admins recognise what they grant):
+// Layout — a *flat list* that mirrors the app sidebar (NO accordions/folders):
 //   header   — title + "Nuevo rol" (primary) + "Guardar permisos" (green).
 //   left     — Card "Rol": clean role combobox with inline Editar/Eliminar
 //              icons (no removable chip) + "Permisos Generales" flags.
-//            — Card "Módulos": a searchable, accordion *tree* grouped by
-//              `addon_label` (modules without one → "Sistema"). Each group
-//              lists its modules with their icon + a granted-count badge.
-//              Clicking a module selects it and reveals its action grid.
+//            — Card "Módulos": a searchable flat list. Each group renders a
+//              non-collapsible grey header (uppercase tracking, like "Módulos"
+//              / "Sistema" in the sidebar) followed by its modules as clickable
+//              rows (icon + label + granted-count badge). Clicking a row selects
+//              that module and reveals its action grid on the right.
 //   right    — Card "Acciones permitidas": granted counter N/M, mark-all /
 //              clear, checkbox grid (icon + label per action). Clear empty
 //              states for "pick a role" / "pick a module" / loading.
@@ -24,11 +26,9 @@
 import * as React from 'react'
 import {
     Check,
-    ChevronRight,
     ChevronsUpDown,
     CheckCheck,
     Eraser,
-    Folder,
     Pencil,
     Plus,
     Save,
@@ -55,9 +55,6 @@ import {
     CardHeader,
     CardTitle,
     Checkbox,
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
     Command,
     CommandEmpty,
     CommandGroup,
@@ -80,32 +77,50 @@ import {
 import { DynamicIcon } from './dynamic-icon'
 
 // ---------------------------------------------------------------------------
-// Types (mirror of `GET /api/permissions/modules` / `/api/permissions/roles`)
+// Types (mirror of `GET /api/permissions/modules` + the host sidebar nav)
 // ---------------------------------------------------------------------------
 
 export interface PermissionActionDef {
-    /** Canonical action key (`index`, `create`, …, or a custom key like `pagar`). */
+    /** Canonical action key (`index`, `create`, …, a custom `pagar`, or `access`). */
     key: string
-    /** Localized label ("Listar", "Pagar"). */
+    /** Localized label ("Listar", "Pagar", "Acceder"). */
     label: string
     /** Lucide icon name from the manifest action (optional). */
     icon?: string
-    /** `crud` for the derived CRUD set, `custom` for manifest actions. */
-    kind?: 'crud' | 'custom' | string
+    /**
+     * `crud` for the derived CRUD set, `custom` for manifest actions,
+     * `screen` for the single `access` action of a non-model screen.
+     */
+    kind?: 'crud' | 'custom' | 'screen' | string
 }
 
 export interface PermissionModuleDef {
-    /** Module key = lowercase model table (`pos_orders`). */
+    /**
+     * Module key.
+     * - model:  lowercase model table (`pos_orders`).
+     * - screen: `screen.<navKey>` (the host prefixes it).
+     */
     key: string
-    /** Localized module label ("Pedidos POS"). */
+    /** Localized module label ("Pedidos POS", "Terminal"). */
     label: string
     /** Module icon (lucide name) — mirrors the sidebar entry. */
     icon?: string
-    /** Owning addon key (`pos`). */
+    /** Whether this entry is a data model or a non-model screen. */
+    kind?: 'model' | 'screen'
+    /** Owning addon key (`pos`) — legacy shape only, used for grouping. */
     addon_key?: string
-    /** Localized addon label ("Punto de venta") — used to group the tree. */
+    /** Localized addon label ("Punto de venta") — legacy shape only. */
     addon_label?: string
     actions: PermissionActionDef[]
+}
+
+/**
+ * A sidebar-style group: a grey (non-collapsible) header + its modules.
+ * `title === ''` → no header (e.g. core/infra modules).
+ */
+export interface ModuleGroup {
+    title: string
+    modules: PermissionModuleDef[]
 }
 
 export interface GeneralPermissionDef {
@@ -115,10 +130,26 @@ export interface GeneralPermissionDef {
     description?: string
 }
 
-export interface PermissionsCatalog {
+/**
+ * What `loadModules()` may return.
+ *
+ * New (preferred) shape — pre-grouped flat list, mirrors the host sidebar:
+ *   { groups: ModuleGroup[], general }
+ *
+ * Legacy shape (still accepted, wrapped into a single untitled group) —
+ *   { modules: PermissionModuleDef[], general }
+ */
+export interface GroupedPermissionsCatalog {
+    groups: ModuleGroup[]
+    general: GeneralPermissionDef[]
+}
+
+export interface FlatPermissionsCatalog {
     modules: PermissionModuleDef[]
     general: GeneralPermissionDef[]
 }
+
+export type PermissionsCatalog = GroupedPermissionsCatalog | FlatPermissionsCatalog
 
 export interface RoleDef {
     id: string
@@ -137,7 +168,7 @@ export interface RoleInput {
 }
 
 export interface PermissionsManagerProps {
-    /** Loads the module×action universe + general flags. */
+    /** Loads the module×action universe + general flags (grouped or flat). */
     loadModules: () => Promise<PermissionsCatalog>
     /** Loads every assignable role. */
     loadRoles: () => Promise<RoleDef[]>
@@ -197,19 +228,23 @@ export function defaultActionIcon(actionKey: string, kind?: string): string {
             return 'Download'
         case 'import':
             return 'Upload'
+        case 'access':
+            return 'Eye'
         default:
-            return kind === 'crud' ? 'List' : 'Zap'
+            if (kind === 'crud') return 'List'
+            if (kind === 'screen') return 'Eye'
+            return 'Zap'
     }
 }
 
-/** Group label fallback when a module has no addon ("Sistema" = core/infra). */
+/** Group label fallback when a legacy module has no addon ("Sistema" = core). */
 const SYSTEM_GROUP = 'Sistema'
 
-function moduleGroupLabel(mod: PermissionModuleDef): string {
+function legacyGroupLabel(mod: PermissionModuleDef): string {
     return mod.addon_label || mod.addon_key || SYSTEM_GROUP
 }
 
-/** Accent-insensitive, lowercase fold for tree search. */
+/** Accent-insensitive, lowercase fold for search. */
 function fold(s: string): string {
     return s
         .normalize('NFD')
@@ -236,39 +271,59 @@ const ROLE_COLORS = [
     '#6b7280',
 ]
 
-/** [groupLabel, modules] buckets in stable insertion order. */
-export interface ModuleGroup {
-    label: string
-    modules: PermissionModuleDef[]
-}
+/**
+ * Normalize whatever `loadModules` returned into the canonical grouped shape.
+ *
+ * - New shape (`{ groups }`): passed through (modules default to kind:'model').
+ * - Legacy flat shape (`{ modules }`): grouped by `addon_label`/`addon_key`
+ *   (falling back to "Sistema") so old hosts keep their familiar buckets,
+ *   every module defaulting to kind:'model'. The grey headers still render,
+ *   just derived from the addon instead of the sidebar group.
+ */
+export function normalizeCatalogGroups(catalog: PermissionsCatalog): ModuleGroup[] {
+    const withKind = (m: PermissionModuleDef): PermissionModuleDef => ({
+        ...m,
+        kind: m.kind ?? 'model',
+    })
 
-export function groupModules(modules: PermissionModuleDef[]): ModuleGroup[] {
+    if ('groups' in catalog && Array.isArray(catalog.groups)) {
+        return catalog.groups.map((g) => ({
+            title: g.title ?? '',
+            modules: g.modules.map(withKind),
+        }))
+    }
+
+    const modules = ('modules' in catalog && catalog.modules) || []
     const order: string[] = []
     const byGroup = new Map<string, PermissionModuleDef[]>()
-    for (const mod of modules) {
-        const g = moduleGroupLabel(mod)
+    for (const raw of modules) {
+        const mod = withKind(raw)
+        const g = legacyGroupLabel(mod)
         if (!byGroup.has(g)) {
             byGroup.set(g, [])
             order.push(g)
         }
         byGroup.get(g)!.push(mod)
     }
-    return order.map((label) => ({ label, modules: byGroup.get(label)! }))
+    return order.map((title) => ({ title, modules: byGroup.get(title)! }))
 }
 
-/** Filter the grouped tree by a folded query against module + group labels. */
+/** Flat list of every module across groups, in render order. */
+export function flattenGroups(groups: ModuleGroup[]): PermissionModuleDef[] {
+    return groups.flatMap((g) => g.modules)
+}
+
+/** Filter the grouped flat list by a folded query against module + group titles. */
 export function filterModuleGroups(groups: ModuleGroup[], query: string): ModuleGroup[] {
     const q = fold(query).trim()
     if (!q) return groups
     const out: ModuleGroup[] = []
     for (const g of groups) {
-        const groupMatches = fold(g.label).includes(q)
+        const groupMatches = g.title.length > 0 && fold(g.title).includes(q)
         const mods = groupMatches
             ? g.modules
-            : g.modules.filter(
-                  (m) => fold(m.label).includes(q) || fold(m.key).includes(q),
-              )
-        if (mods.length) out.push({ label: g.label, modules: mods })
+            : g.modules.filter((m) => fold(m.label).includes(q) || fold(m.key).includes(q))
+        if (mods.length) out.push({ title: g.title, modules: mods })
     }
     return out
 }
@@ -335,8 +390,8 @@ function CapabilityCheck({
     )
 }
 
-/** One module row inside the tree. */
-function ModuleTreeItem({
+/** One clickable module row in the flat list (mirrors a sidebar item). */
+function ModuleRow({
     module,
     active,
     granted,
@@ -362,7 +417,7 @@ function ModuleTreeItem({
             )}
         >
             <DynamicIcon
-                name={module.icon || 'Square'}
+                name={module.icon || (module.kind === 'screen' ? 'Eye' : 'Square')}
                 className={cn('h-4 w-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground')}
             />
             <span className="min-w-0 flex-1 truncate">{module.label}</span>
@@ -393,7 +448,8 @@ export function PermissionsManager({
     title = 'Permisos y Roles',
     className,
 }: PermissionsManagerProps) {
-    const [catalog, setCatalog] = React.useState<PermissionsCatalog | null>(null)
+    const [groups, setGroups] = React.useState<ModuleGroup[] | null>(null)
+    const [general, setGeneral] = React.useState<GeneralPermissionDef[] | null>(null)
     const [roles, setRoles] = React.useState<RoleDef[] | null>(null)
     const [loadError, setLoadError] = React.useState(false)
 
@@ -408,8 +464,6 @@ export function PermissionsManager({
 
     const [roleOpen, setRoleOpen] = React.useState(false)
     const [moduleQuery, setModuleQuery] = React.useState('')
-    // Groups the user explicitly collapsed (default: every group open).
-    const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(new Set())
 
     // Pending role switch while there are unsaved changes.
     const [pendingRoleId, setPendingRoleId] = React.useState<string | null>(null)
@@ -424,7 +478,9 @@ export function PermissionsManager({
     const [deleteOpen, setDeleteOpen] = React.useState(false)
     const [deleting, setDeleting] = React.useState(false)
 
-    const loading = catalog === null || roles === null
+    const loading = groups === null || roles === null
+
+    const allModules = React.useMemo(() => (groups ? flattenGroups(groups) : []), [groups])
 
     // ---- initial load: catalog + roles in parallel -------------------------
     React.useEffect(() => {
@@ -432,10 +488,14 @@ export function PermissionsManager({
         Promise.all([loadModules(), loadRoles()])
             .then(([cat, rs]) => {
                 if (cancelled) return
-                setCatalog(cat)
+                const grouped = normalizeCatalogGroups(cat)
+                setGroups(grouped)
+                setGeneral(cat.general ?? [])
                 setRoles(rs)
                 setActiveRoleId((prev) => prev ?? rs[0]?.id ?? null)
-                setActiveModuleKey((prev) => prev ?? cat.modules[0]?.key ?? null)
+                setActiveModuleKey(
+                    (prev) => prev ?? flattenGroups(grouped)[0]?.key ?? null,
+                )
             })
             .catch(() => {
                 if (!cancelled) setLoadError(true)
@@ -481,19 +541,17 @@ export function PermissionsManager({
         [roles, activeRoleId],
     )
     const activeModule = React.useMemo(
-        () => catalog?.modules.find((m) => m.key === activeModuleKey) ?? null,
-        [catalog, activeModuleKey],
+        () => allModules.find((m) => m.key === activeModuleKey) ?? null,
+        [allModules, activeModuleKey],
     )
 
     const dirty = baseline !== null && draft !== null && !capabilitySetsEqual(baseline, draft)
 
-    // Module tree: grouped by addon label, optionally filtered by the search.
-    const allGroups = React.useMemo(() => groupModules(catalog?.modules ?? []), [catalog])
+    // Flat module list, optionally filtered by the search.
     const visibleGroups = React.useMemo(
-        () => filterModuleGroups(allGroups, moduleQuery),
-        [allGroups, moduleQuery],
+        () => filterModuleGroups(groups ?? [], moduleQuery),
+        [groups, moduleQuery],
     )
-    const searching = moduleQuery.trim().length > 0
 
     // ---- capability edits ---------------------------------------------------
     const toggleCapability = React.useCallback((cap: string) => {
@@ -543,14 +601,6 @@ export function PermissionsManager({
         if (dirty) setPendingRoleId(roleId)
         else setActiveRoleId(roleId)
     }
-
-    const toggleGroup = (label: string) =>
-        setCollapsedGroups((prev) => {
-            const next = new Set(prev)
-            if (next.has(label)) next.delete(label)
-            else next.add(label)
-            return next
-        })
 
     // ---- role CRUD -----------------------------------------------------------
     const refreshRoles = async (selectId?: string | null) => {
@@ -631,6 +681,11 @@ export function PermissionsManager({
     const moduleGranted = activeModule && draft ? grantedCountForModule(draft, activeModule) : 0
     const moduleTotal = activeModule?.actions.length ?? 0
     const checksDisabled = !activeRole || !draft || loadingPerms || saving
+    const activeModuleGroupTitle = React.useMemo(() => {
+        if (!activeModule || !groups) return ''
+        const g = groups.find((grp) => grp.modules.some((m) => m.key === activeModule.key))
+        return g?.title ?? ''
+    }, [activeModule, groups])
 
     // ---- render --------------------------------------------------------------
     if (loadError) {
@@ -809,13 +864,13 @@ export function PermissionsManager({
                                 )}
                             </div>
 
-                            {(catalog?.general.length ?? 0) > 0 && (
+                            {(general?.length ?? 0) > 0 && (
                                 <>
                                     <Separator />
                                     <div>
                                         <h3 className="mb-2 text-sm font-semibold">Permisos Generales</h3>
                                         <div className="flex flex-col gap-2">
-                                            {catalog!.general.map((g) => (
+                                            {general!.map((g) => (
                                                 <CapabilityCheck
                                                     key={g.key}
                                                     checked={draft?.has(g.key) ?? false}
@@ -832,7 +887,7 @@ export function PermissionsManager({
                         </CardContent>
                     </Card>
 
-                    {/* Card: Módulos (hierarchical tree, mirrors the sidebar) */}
+                    {/* Card: Módulos (flat list, mirrors the sidebar — no folders) */}
                     <Card>
                         <CardHeader>
                             <CardTitle className="text-base">Módulos</CardTitle>
@@ -855,72 +910,48 @@ export function PermissionsManager({
                             </div>
 
                             <div
-                                role="tree"
+                                role="list"
                                 aria-label="Módulos"
-                                className="-mx-1 max-h-[460px] overflow-y-auto px-1"
+                                className="-mx-1 flex max-h-[460px] flex-col gap-0.5 overflow-y-auto px-1"
                             >
                                 {visibleGroups.length === 0 ? (
                                     <p className="px-2 py-6 text-center text-sm text-muted-foreground">
                                         Sin módulos.
                                     </p>
                                 ) : (
-                                    visibleGroups.map((group) => {
-                                        // While searching, force every matching group open.
-                                        const open = searching || !collapsedGroups.has(group.label)
-                                        return (
-                                            <Collapsible
-                                                key={group.label}
-                                                open={open}
-                                                onOpenChange={() =>
-                                                    !searching && toggleGroup(group.label)
-                                                }
-                                            >
-                                                <CollapsibleTrigger asChild>
-                                                    <button
-                                                        type="button"
-                                                        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted/40"
-                                                    >
-                                                        <ChevronRight
-                                                            className={cn(
-                                                                'h-3.5 w-3.5 shrink-0 transition-transform',
-                                                                open && 'rotate-90',
-                                                            )}
-                                                        />
-                                                        <Folder className="h-3.5 w-3.5 shrink-0" />
-                                                        <span className="min-w-0 flex-1 truncate normal-case">
-                                                            {group.label}
-                                                        </span>
-                                                        <span className="shrink-0 text-[10px] tabular-nums opacity-70">
-                                                            {group.modules.length}
-                                                        </span>
-                                                    </button>
-                                                </CollapsibleTrigger>
-                                                <CollapsibleContent>
-                                                    <div className="ml-3 flex flex-col gap-0.5 border-l border-border/60 pl-1.5">
-                                                        {group.modules.map((mod) => (
-                                                            <ModuleTreeItem
-                                                                key={mod.key}
-                                                                module={mod}
-                                                                active={mod.key === activeModuleKey}
-                                                                granted={
-                                                                    draft
-                                                                        ? grantedCountForModule(
-                                                                              draft,
-                                                                              mod,
-                                                                          )
-                                                                        : 0
-                                                                }
-                                                                total={mod.actions.length}
-                                                                onSelect={() =>
-                                                                    setActiveModuleKey(mod.key)
-                                                                }
-                                                            />
-                                                        ))}
-                                                    </div>
-                                                </CollapsibleContent>
-                                            </Collapsible>
-                                        )
-                                    })
+                                    visibleGroups.map((group, gi) => (
+                                        <div
+                                            key={group.title || `__untitled_${gi}`}
+                                            className="flex flex-col gap-0.5"
+                                        >
+                                            {group.title && (
+                                                <div
+                                                    role="heading"
+                                                    aria-level={3}
+                                                    className={cn(
+                                                        'px-2 pb-1 pt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground',
+                                                        gi === 0 && 'pt-1',
+                                                    )}
+                                                >
+                                                    {group.title}
+                                                </div>
+                                            )}
+                                            {group.modules.map((mod) => (
+                                                <ModuleRow
+                                                    key={mod.key}
+                                                    module={mod}
+                                                    active={mod.key === activeModuleKey}
+                                                    granted={
+                                                        draft
+                                                            ? grantedCountForModule(draft, mod)
+                                                            : 0
+                                                    }
+                                                    total={mod.actions.length}
+                                                    onSelect={() => setActiveModuleKey(mod.key)}
+                                                />
+                                            ))}
+                                        </div>
+                                    ))
                                 )}
                             </div>
                         </CardContent>
@@ -935,7 +966,10 @@ export function PermissionsManager({
                                 <CardTitle className="flex items-center gap-2 text-base">
                                     {activeModule && (
                                         <DynamicIcon
-                                            name={activeModule.icon || 'Square'}
+                                            name={
+                                                activeModule.icon ||
+                                                (activeModule.kind === 'screen' ? 'Eye' : 'Square')
+                                            }
                                             className="h-4 w-4 shrink-0 text-primary"
                                         />
                                     )}
@@ -945,7 +979,9 @@ export function PermissionsManager({
                                 </CardTitle>
                                 <CardDescription>
                                     {activeModule
-                                        ? `${moduleGroupLabel(activeModule)} · configura las acciones permitidas`
+                                        ? `${
+                                              activeModuleGroupTitle || 'Sistema'
+                                          } · configura las acciones permitidas`
                                         : 'Configura los permisos del módulo seleccionado.'}
                                 </CardDescription>
                             </div>
@@ -986,7 +1022,7 @@ export function PermissionsManager({
                                 ))}
                             </div>
                         ) : !activeModule ? (
-                            <EmptyHint text="Selecciona un módulo del árbol para ver sus acciones." />
+                            <EmptyHint text="Selecciona un módulo de la lista para ver sus acciones." />
                         ) : (
                             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                                 {activeModule.actions.map((action) => {
