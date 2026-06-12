@@ -10,6 +10,8 @@ import {
     moduleCapabilities,
     grantedCountForModule,
     capabilitySetsEqual,
+    groupModules,
+    filterModuleGroups,
     type PermissionsCatalog,
     type RoleDef,
 } from '../permissions-manager'
@@ -19,6 +21,7 @@ const catalog: PermissionsCatalog = {
         {
             key: 'pos_orders',
             label: 'Pedidos POS',
+            icon: 'ShoppingCart',
             addon_key: 'pos',
             addon_label: 'Punto de venta',
             actions: [
@@ -26,6 +29,20 @@ const catalog: PermissionsCatalog = {
                 { key: 'create', label: 'Crear', icon: 'Plus', kind: 'crud' },
                 { key: 'pagar', label: 'Pagar', icon: 'CreditCard', kind: 'custom' },
             ],
+        },
+        {
+            key: 'pos_sessions',
+            label: 'Sesiones POS',
+            icon: 'Clock',
+            addon_key: 'pos',
+            addon_label: 'Punto de venta',
+            actions: [{ key: 'index', label: 'Listar', icon: 'List', kind: 'crud' }],
+        },
+        {
+            key: 'users',
+            label: 'Usuarios',
+            icon: 'Users',
+            actions: [{ key: 'index', label: 'Listar', icon: 'List', kind: 'crud' }],
         },
     ],
     general: [
@@ -68,6 +85,28 @@ describe('helpers puros', () => {
         expect(capabilitySetsEqual(new Set(['a', 'b']), new Set(['b', 'a']))).toBe(true)
         expect(capabilitySetsEqual(new Set(['a']), new Set(['a', 'b']))).toBe(false)
     })
+
+    it('groupModules agrupa por addon_label y manda los sin addon a "Sistema"', () => {
+        const groups = groupModules(catalog.modules)
+        expect(groups.map((g) => g.label)).toEqual(['Punto de venta', 'Sistema'])
+        expect(groups[0].modules.map((m) => m.key)).toEqual(['pos_orders', 'pos_sessions'])
+        expect(groups[1].modules.map((m) => m.key)).toEqual(['users'])
+    })
+
+    it('filterModuleGroups busca por módulo (accent/case-insensitive) o por grupo', () => {
+        const groups = groupModules(catalog.modules)
+        // Por nombre de módulo.
+        const bySession = filterModuleGroups(groups, 'sesiones')
+        expect(bySession).toHaveLength(1)
+        expect(bySession[0].modules.map((m) => m.key)).toEqual(['pos_sessions'])
+        // Por nombre de grupo trae todos sus módulos.
+        const byGroup = filterModuleGroups(groups, 'venta')
+        expect(byGroup[0].modules).toHaveLength(2)
+        // Query vacía = pasa todo.
+        expect(filterModuleGroups(groups, '  ')).toEqual(groups)
+        // Sin match = vacío.
+        expect(filterModuleGroups(groups, 'zzz')).toEqual([])
+    })
 })
 
 describe('PermissionsManager', () => {
@@ -76,9 +115,11 @@ describe('PermissionsManager', () => {
         render(<PermissionsManager {...props} />)
 
         // Auto-selección: primer rol + primer módulo, grid con las acciones.
-        expect(await screen.findByText('Acciones permitidas')).toBeTruthy()
+        // El panel derecho titula con el módulo activo ("Pedidos POS").
+        expect(await screen.findAllByText('Pedidos POS')).toBeTruthy()
         expect(await screen.findByText('Pagar')).toBeTruthy()
-        expect(screen.getByText('1/3')).toBeTruthy()
+        // El contador N/M del panel está presente (también lo refleja el árbol).
+        expect(screen.getAllByText('1/3').length).toBeGreaterThan(0)
         expect(props.loadRolePermissions).toHaveBeenCalledWith('r1')
 
         // Generales presentes con descripción.
@@ -125,7 +166,8 @@ describe('PermissionsManager', () => {
         await screen.findByText('Pagar')
 
         fireEvent.click(screen.getByRole('button', { name: /Marcar todo/ }))
-        expect(screen.getByText('3/3')).toBeTruthy()
+        // 3/3 aparece en el panel y en el badge del árbol.
+        expect(screen.getAllByText('3/3').length).toBeGreaterThan(0)
 
         fireEvent.click(screen.getByRole('button', { name: /Guardar permisos/ }))
         await waitFor(() =>
@@ -155,6 +197,50 @@ describe('PermissionsManager', () => {
         expect(screen.queryByRole('button', { name: /Nuevo rol/ })).toBeNull()
         expect(screen.queryByRole('button', { name: 'Editar rol' })).toBeNull()
         expect(screen.queryByRole('button', { name: 'Eliminar rol' })).toBeNull()
+    })
+
+    it('renderiza el árbol agrupado y permite seleccionar un módulo de otro grupo', async () => {
+        const props = makeProps()
+        render(<PermissionsManager {...props} />)
+        await screen.findByText('Pagar')
+
+        // Grupos visibles (encabezados del árbol).
+        expect(screen.getByText('Punto de venta')).toBeTruthy()
+        expect(screen.getByText('Sistema')).toBeTruthy()
+
+        // Click en "Usuarios" (grupo Sistema) cambia el grid de acciones.
+        fireEvent.click(screen.getByRole('button', { name: /Usuarios/ }))
+        // El grid ahora muestra solo la acción de users; "Pagar" (de pos_orders) ya no.
+        await waitFor(() => expect(screen.queryByText('Pagar')).toBeNull())
+        // "Usuarios" titula el panel derecho además del árbol.
+        expect(screen.getAllByText('Usuarios').length).toBeGreaterThan(0)
+    })
+
+    it('la búsqueda filtra el árbol de módulos', async () => {
+        const props = makeProps()
+        render(<PermissionsManager {...props} />)
+        await screen.findByText('Pagar')
+
+        fireEvent.change(screen.getByLabelText('Buscar módulo'), {
+            target: { value: 'sesiones' },
+        })
+        // Solo el grupo con match permanece.
+        expect(screen.getByText('Sesiones POS')).toBeTruthy()
+        expect(screen.queryByText('Usuarios')).toBeNull()
+    })
+
+    it('selector de rol limpio: edit/delete inline, sin chip removible', async () => {
+        const props = makeProps({
+            updateRole: vi.fn(async () => {}),
+            deleteRole: vi.fn(async () => {}),
+        })
+        render(<PermissionsManager {...props} />)
+        await screen.findByText('Pagar')
+        // No existe el botón de quitar rol del chip antiguo.
+        expect(screen.queryByRole('button', { name: 'Quitar rol seleccionado' })).toBeNull()
+        // Iconos inline presentes.
+        expect(screen.getByRole('button', { name: 'Editar rol' })).toBeTruthy()
+        expect(screen.getByRole('button', { name: 'Eliminar rol' })).toBeTruthy()
     })
 
     it('muestra los CRUD de rol cuando los mutators existen', async () => {
