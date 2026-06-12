@@ -233,17 +233,25 @@ export const ActivityDiff: React.FC<ActivityDiffProps> = ({
                 <p className="text-sm text-muted-foreground italic">{event.summary}</p>
             )}
 
-            {/* Diff table */}
+            {/* Diff table. Created/deleted events carry a single snapshot — no
+                before/after pair — so they collapse to two columns (Campo +
+                Valor); a third placeholder column would force the value cell
+                to wrap onto its own row. Updated keeps Campo/Antes/Después. */}
             {displayedKeys.length > 0 && (
                 <div className="rounded-lg border border-border/60 overflow-hidden text-sm">
                     {/* Column headers */}
-                    <div className="grid grid-cols-[1fr_1fr_1fr] border-b border-border/40 bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground">
-                        <span>Campo</span>
-                        {!isCreated && <span>{isDeleted ? 'Valor' : 'Antes'}</span>}
-                        {isCreated && <span></span>}
-                        {!isDeleted && <span>{isCreated ? 'Valor' : 'Después'}</span>}
-                        {isDeleted && <span></span>}
-                    </div>
+                    {isCreated || isDeleted ? (
+                        <div className="grid grid-cols-[1fr_2fr] border-b border-border/40 bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground gap-x-2">
+                            <span>Campo</span>
+                            <span>{isDeleted ? 'Valor anterior' : 'Valor'}</span>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-[1fr_1fr_1fr] border-b border-border/40 bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground gap-x-2">
+                            <span>Campo</span>
+                            <span>Antes</span>
+                            <span>Después</span>
+                        </div>
+                    )}
 
                     {displayedKeys.map((key, idx) => {
                         const col = resolveColumn(key, columns)
@@ -265,14 +273,39 @@ export const ActivityDiff: React.FC<ActivityDiffProps> = ({
                             ? ROW_STYLE.created
                             : isDeleted
                               ? ROW_STYLE.deleted
-                              : isChanged
-                                ? {}
-                                : {}
+                              : {}
+
+                        // Single-snapshot row: label + one value cell, aligned
+                        // with the two-column header above.
+                        if (isCreated || isDeleted) {
+                            return (
+                                <div
+                                    key={key}
+                                    style={rowStyle}
+                                    className={cn(
+                                        'grid grid-cols-[1fr_2fr] items-start px-3 py-2 gap-x-2',
+                                        idx !== displayedKeys.length - 1 && 'border-b border-border/30',
+                                    )}
+                                >
+                                    <span className="text-xs font-medium text-foreground/70 pt-0.5 truncate" title={label}>
+                                        {label}
+                                    </span>
+                                    <span className="min-w-0">
+                                        <ActivityValueRenderer
+                                            value={isDeleted ? fromVal : toVal}
+                                            col={col}
+                                            timeZone={timeZone}
+                                            currency={currency}
+                                            locale={locale}
+                                        />
+                                    </span>
+                                </div>
+                            )
+                        }
 
                         return (
                             <div
                                 key={key}
-                                style={rowStyle}
                                 className={cn(
                                     'grid grid-cols-[1fr_1fr_1fr] items-start px-3 py-2 gap-x-2',
                                     idx !== displayedKeys.length - 1 && 'border-b border-border/30',
@@ -284,40 +317,32 @@ export const ActivityDiff: React.FC<ActivityDiffProps> = ({
                                     {label}
                                 </span>
 
-                                {/* Before value (or value for deleted/created) */}
-                                {!isCreated ? (
-                                    <span className={cn(isDeleted ? 'col-span-2' : '')}>
-                                        <ActivityValueRenderer
-                                            value={isDeleted ? fromVal : fromVal}
-                                            col={col}
-                                            timeZone={timeZone}
-                                            currency={currency}
-                                            locale={locale}
-                                        />
-                                    </span>
-                                ) : (
-                                    <span />
-                                )}
+                                {/* Before value */}
+                                <span className="min-w-0">
+                                    <ActivityValueRenderer
+                                        value={fromVal}
+                                        col={col}
+                                        timeZone={timeZone}
+                                        currency={currency}
+                                        locale={locale}
+                                    />
+                                </span>
 
                                 {/* After value */}
-                                {!isDeleted ? (
-                                    <span className={cn(isCreated ? 'col-span-2' : '')}>
-                                        {isChanged && variant === 'updated' && (
-                                            <span className="inline-flex items-center gap-1 align-middle mr-1">
-                                                <ArrowRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
-                                            </span>
-                                        )}
-                                        <ActivityValueRenderer
-                                            value={isCreated ? toVal : toVal}
-                                            col={col}
-                                            timeZone={timeZone}
-                                            currency={currency}
-                                            locale={locale}
-                                        />
-                                    </span>
-                                ) : (
-                                    <span />
-                                )}
+                                <span className="min-w-0">
+                                    {isChanged && variant === 'updated' && (
+                                        <span className="inline-flex items-center gap-1 align-middle mr-1">
+                                            <ArrowRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+                                        </span>
+                                    )}
+                                    <ActivityValueRenderer
+                                        value={toVal}
+                                        col={col}
+                                        timeZone={timeZone}
+                                        currency={currency}
+                                        locale={locale}
+                                    />
+                                </span>
                             </div>
                         )
                     })}
