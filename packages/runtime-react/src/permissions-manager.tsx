@@ -5,14 +5,17 @@
 // The capability universe (modules × actions + general flags) is derived from
 // the installed manifests server-side; this component only renders it.
 //
-// Layout (reference: 7leguas "Permisos y Roles"):
+// Layout (mirrors the app sidebar so admins recognise what they grant):
 //   header   — title + "Nuevo rol" (primary) + "Guardar permisos" (green).
-//   left     — Card "Rol": searchable role selector with removable chip,
-//              Editar/Eliminar rol, "Permisos Generales" flag checkboxes.
-//            — Card "Módulo": searchable module selector grouped by addon,
-//              removable chip.
+//   left     — Card "Rol": clean role combobox with inline Editar/Eliminar
+//              icons (no removable chip) + "Permisos Generales" flags.
+//            — Card "Módulos": a searchable, accordion *tree* grouped by
+//              `addon_label` (modules without one → "Sistema"). Each group
+//              lists its modules with their icon + a granted-count badge.
+//              Clicking a module selects it and reveals its action grid.
 //   right    — Card "Acciones permitidas": granted counter N/M, mark-all /
-//              clear buttons, checkbox grid (icon + label per action).
+//              clear, checkbox grid (icon + label per action). Clear empty
+//              states for "pick a role" / "pick a module" / loading.
 //
 // Saving calls `syncRolePermissions(roleId, capabilities)` with the FULL
 // granted set of the active role (baseline + the edits made here). Dirty
@@ -21,15 +24,17 @@
 import * as React from 'react'
 import {
     Check,
+    ChevronRight,
     ChevronsUpDown,
     CheckCheck,
     Eraser,
+    Folder,
     Pencil,
     Plus,
     Save,
+    Search,
     Shield,
     Trash2,
-    X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@asteby/metacore-ui/lib'
@@ -50,6 +55,9 @@ import {
     CardHeader,
     CardTitle,
     Checkbox,
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
     Command,
     CommandEmpty,
     CommandGroup,
@@ -91,9 +99,11 @@ export interface PermissionModuleDef {
     key: string
     /** Localized module label ("Pedidos POS"). */
     label: string
+    /** Module icon (lucide name) — mirrors the sidebar entry. */
+    icon?: string
     /** Owning addon key (`pos`). */
     addon_key?: string
-    /** Localized addon label ("Punto de venta") — used to group the selector. */
+    /** Localized addon label ("Punto de venta") — used to group the tree. */
     addon_label?: string
     actions: PermissionActionDef[]
 }
@@ -135,7 +145,7 @@ export interface PermissionsManagerProps {
     loadRolePermissions: (roleId: string) => Promise<string[]>
     /** Persists the FULL granted capability set of a role. */
     syncRolePermissions: (roleId: string, capabilities: string[]) => Promise<void>
-    /** Optional role CRUD — omitting one hides its button. */
+    /** Optional role CRUD — omitting one hides its control. */
     createRole?: (input: RoleInput) => Promise<RoleDef | void>
     updateRole?: (roleId: string, input: RoleInput) => Promise<RoleDef | void>
     deleteRole?: (roleId: string) => Promise<void>
@@ -192,11 +202,23 @@ export function defaultActionIcon(actionKey: string, kind?: string): string {
     }
 }
 
-function slugify(label: string): string {
-    return label
+/** Group label fallback when a module has no addon ("Sistema" = core/infra). */
+const SYSTEM_GROUP = 'Sistema'
+
+function moduleGroupLabel(mod: PermissionModuleDef): string {
+    return mod.addon_label || mod.addon_key || SYSTEM_GROUP
+}
+
+/** Accent-insensitive, lowercase fold for tree search. */
+function fold(s: string): string {
+    return s
         .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[̀-ͯ]/g, '')
         .toLowerCase()
+}
+
+function slugify(label: string): string {
+    return fold(label)
         .trim()
         .replace(/[^a-z0-9]+/g, '_')
         .replace(/^_+|_+$/g, '')
@@ -213,6 +235,43 @@ const ROLE_COLORS = [
     '#ec4899',
     '#6b7280',
 ]
+
+/** [groupLabel, modules] buckets in stable insertion order. */
+export interface ModuleGroup {
+    label: string
+    modules: PermissionModuleDef[]
+}
+
+export function groupModules(modules: PermissionModuleDef[]): ModuleGroup[] {
+    const order: string[] = []
+    const byGroup = new Map<string, PermissionModuleDef[]>()
+    for (const mod of modules) {
+        const g = moduleGroupLabel(mod)
+        if (!byGroup.has(g)) {
+            byGroup.set(g, [])
+            order.push(g)
+        }
+        byGroup.get(g)!.push(mod)
+    }
+    return order.map((label) => ({ label, modules: byGroup.get(label)! }))
+}
+
+/** Filter the grouped tree by a folded query against module + group labels. */
+export function filterModuleGroups(groups: ModuleGroup[], query: string): ModuleGroup[] {
+    const q = fold(query).trim()
+    if (!q) return groups
+    const out: ModuleGroup[] = []
+    for (const g of groups) {
+        const groupMatches = fold(g.label).includes(q)
+        const mods = groupMatches
+            ? g.modules
+            : g.modules.filter(
+                  (m) => fold(m.label).includes(q) || fold(m.key).includes(q),
+              )
+        if (mods.length) out.push({ label: g.label, modules: mods })
+    }
+    return out
+}
 
 // ---------------------------------------------------------------------------
 // Internal sub-components
@@ -276,37 +335,46 @@ function CapabilityCheck({
     )
 }
 
-/** Removable selection chip (role / module). */
-function SelectionChip({
-    label,
-    color,
-    onRemove,
-    removeAriaLabel,
+/** One module row inside the tree. */
+function ModuleTreeItem({
+    module,
+    active,
+    granted,
+    total,
+    onSelect,
 }: {
-    label: string
-    color?: string
-    onRemove: () => void
-    removeAriaLabel: string
+    module: PermissionModuleDef
+    active: boolean
+    granted: number
+    total: number
+    onSelect: () => void
 }) {
     return (
-        <Badge variant="secondary" className="gap-1.5 pr-1 text-sm font-medium">
-            {color && (
-                <span
-                    className="h-2 w-2 rounded-full"
-                    style={{ background: color }}
-                    aria-hidden="true"
-                />
+        <button
+            type="button"
+            onClick={onSelect}
+            aria-current={active || undefined}
+            className={cn(
+                'group flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors',
+                active
+                    ? 'bg-primary/10 font-medium text-foreground'
+                    : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground',
             )}
-            <span className="max-w-[180px] truncate">{label}</span>
-            <button
-                type="button"
-                aria-label={removeAriaLabel}
-                onClick={onRemove}
-                className="rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-            >
-                <X className="h-3 w-3" />
-            </button>
-        </Badge>
+        >
+            <DynamicIcon
+                name={module.icon || 'Square'}
+                className={cn('h-4 w-4 shrink-0', active ? 'text-primary' : 'text-muted-foreground')}
+            />
+            <span className="min-w-0 flex-1 truncate">{module.label}</span>
+            {granted > 0 && (
+                <Badge
+                    variant={granted === total ? 'default' : 'secondary'}
+                    className="h-5 shrink-0 px-1.5 text-[10px] tabular-nums"
+                >
+                    {granted}/{total}
+                </Badge>
+            )}
+        </button>
     )
 }
 
@@ -339,7 +407,9 @@ export function PermissionsManager({
     const [saving, setSaving] = React.useState(false)
 
     const [roleOpen, setRoleOpen] = React.useState(false)
-    const [moduleOpen, setModuleOpen] = React.useState(false)
+    const [moduleQuery, setModuleQuery] = React.useState('')
+    // Groups the user explicitly collapsed (default: every group open).
+    const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(new Set())
 
     // Pending role switch while there are unsaved changes.
     const [pendingRoleId, setPendingRoleId] = React.useState<string | null>(null)
@@ -417,17 +487,13 @@ export function PermissionsManager({
 
     const dirty = baseline !== null && draft !== null && !capabilitySetsEqual(baseline, draft)
 
-    // Selector groups: modules bucketed by addon label, stable order.
-    const moduleGroups = React.useMemo(() => {
-        const groups = new Map<string, PermissionModuleDef[]>()
-        for (const mod of catalog?.modules ?? []) {
-            const group = mod.addon_label || mod.addon_key || 'Otros'
-            const list = groups.get(group) ?? []
-            list.push(mod)
-            groups.set(group, list)
-        }
-        return Array.from(groups.entries())
-    }, [catalog])
+    // Module tree: grouped by addon label, optionally filtered by the search.
+    const allGroups = React.useMemo(() => groupModules(catalog?.modules ?? []), [catalog])
+    const visibleGroups = React.useMemo(
+        () => filterModuleGroups(allGroups, moduleQuery),
+        [allGroups, moduleQuery],
+    )
+    const searching = moduleQuery.trim().length > 0
 
     // ---- capability edits ---------------------------------------------------
     const toggleCapability = React.useCallback((cap: string) => {
@@ -478,6 +544,14 @@ export function PermissionsManager({
         else setActiveRoleId(roleId)
     }
 
+    const toggleGroup = (label: string) =>
+        setCollapsedGroups((prev) => {
+            const next = new Set(prev)
+            if (next.has(label)) next.delete(label)
+            else next.add(label)
+            return next
+        })
+
     // ---- role CRUD -----------------------------------------------------------
     const refreshRoles = async (selectId?: string | null) => {
         const rs = await loadRoles()
@@ -518,7 +592,9 @@ export function PermissionsManager({
             }
             setRoleDialog((d) => ({ ...d, open: false }))
         } catch {
-            toast.error(roleDialog.mode === 'create' ? 'No se pudo crear el rol' : 'No se pudo actualizar el rol')
+            toast.error(
+                roleDialog.mode === 'create' ? 'No se pudo crear el rol' : 'No se pudo actualizar el rol',
+            )
         } finally {
             setRoleSaving(false)
         }
@@ -541,6 +617,16 @@ export function PermissionsManager({
         }
     }
 
+    const openEditRole = () => {
+        if (!activeRole) return
+        setRoleDialog({
+            open: true,
+            mode: 'edit',
+            label: activeRole.label || activeRole.name,
+            color: activeRole.color || ROLE_COLORS[5],
+        })
+    }
+
     // ---- derived for the right panel ----------------------------------------
     const moduleGranted = activeModule && draft ? grantedCountForModule(draft, activeModule) : 0
     const moduleTotal = activeModule?.actions.length ?? 0
@@ -549,7 +635,12 @@ export function PermissionsManager({
     // ---- render --------------------------------------------------------------
     if (loadError) {
         return (
-            <div className={cn('flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground', className)}>
+            <div
+                className={cn(
+                    'flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground',
+                    className,
+                )}
+            >
                 <Shield className="h-8 w-8 opacity-40" />
                 <p className="text-sm">No se pudo cargar el catálogo de permisos.</p>
             </div>
@@ -568,8 +659,8 @@ export function PermissionsManager({
                 </div>
                 <div className="grid gap-4 lg:grid-cols-[340px_1fr]">
                     <div className="flex flex-col gap-4">
-                        <Skeleton className="h-64 w-full" />
-                        <Skeleton className="h-28 w-full" />
+                        <Skeleton className="h-40 w-full" />
+                        <Skeleton className="h-80 w-full" />
                     </div>
                     <Skeleton className="h-96 w-full" />
                 </div>
@@ -596,7 +687,12 @@ export function PermissionsManager({
                     {createRole && (
                         <Button
                             onClick={() =>
-                                setRoleDialog({ open: true, mode: 'create', label: '', color: ROLE_COLORS[5] })
+                                setRoleDialog({
+                                    open: true,
+                                    mode: 'create',
+                                    label: '',
+                                    color: ROLE_COLORS[5],
+                                })
                             }
                         >
                             <Plus className="mr-1.5 h-4 w-4" /> Nuevo rol
@@ -623,93 +719,95 @@ export function PermissionsManager({
                             <CardDescription>Selecciona el rol a configurar.</CardDescription>
                         </CardHeader>
                         <CardContent className="flex flex-col gap-3">
-                            {activeRole ? (
-                                <div className="flex items-center justify-between gap-2">
-                                    <SelectionChip
-                                        label={activeRole.label || activeRole.name}
-                                        color={activeRole.color}
-                                        onRemove={() => requestRoleSwitch(null)}
-                                        removeAriaLabel="Quitar rol seleccionado"
-                                    />
-                                    <div className="flex items-center gap-1">
-                                        {updateRole && (
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 px-2"
-                                                aria-label="Editar rol"
-                                                onClick={() =>
-                                                    setRoleDialog({
-                                                        open: true,
-                                                        mode: 'edit',
-                                                        label: activeRole.label || activeRole.name,
-                                                        color: activeRole.color || ROLE_COLORS[5],
-                                                    })
-                                                }
-                                            >
-                                                <Pencil className="h-3.5 w-3.5" />
-                                            </Button>
-                                        )}
-                                        {deleteRole && (
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 px-2 text-destructive hover:text-destructive"
-                                                aria-label="Eliminar rol"
-                                                onClick={() => setDeleteOpen(true)}
-                                            >
-                                                <Trash2 className="h-3.5 w-3.5" />
-                                            </Button>
-                                        )}
-                                    </div>
-                                </div>
-                            ) : (
-                                <p className="text-sm text-muted-foreground">Ningún rol seleccionado.</p>
-                            )}
-
-                            <Popover open={roleOpen} onOpenChange={setRoleOpen}>
-                                <PopoverTrigger asChild>
+                            {/* Clean role combobox with inline edit/delete. */}
+                            <div className="flex items-center gap-1.5">
+                                <Popover open={roleOpen} onOpenChange={setRoleOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={roleOpen}
+                                            className="min-w-0 flex-1 justify-between font-normal"
+                                        >
+                                            <span className="flex min-w-0 items-center gap-2">
+                                                {activeRole && (
+                                                    <span
+                                                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                                        style={{
+                                                            background: activeRole.color || '#6b7280',
+                                                        }}
+                                                        aria-hidden="true"
+                                                    />
+                                                )}
+                                                <span className="truncate">
+                                                    {activeRole
+                                                        ? activeRole.label || activeRole.name
+                                                        : 'Seleccionar rol…'}
+                                                </span>
+                                            </span>
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[280px] p-0" align="start">
+                                        <Command>
+                                            <CommandInput placeholder="Buscar rol…" />
+                                            <CommandList>
+                                                <CommandEmpty>Sin resultados.</CommandEmpty>
+                                                <CommandGroup>
+                                                    {(roles ?? []).map((role) => (
+                                                        <CommandItem
+                                                            key={role.id}
+                                                            value={`${role.label || ''} ${role.name}`}
+                                                            onSelect={() => {
+                                                                requestRoleSwitch(role.id)
+                                                                setRoleOpen(false)
+                                                            }}
+                                                        >
+                                                            <span
+                                                                className="mr-2 h-2 w-2 shrink-0 rounded-full"
+                                                                style={{
+                                                                    background: role.color || '#6b7280',
+                                                                }}
+                                                                aria-hidden="true"
+                                                            />
+                                                            <span className="truncate">
+                                                                {role.label || role.name}
+                                                            </span>
+                                                            {role.id === activeRoleId && (
+                                                                <Check className="ml-auto h-4 w-4" />
+                                                            )}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                                {updateRole && (
                                     <Button
                                         variant="outline"
-                                        role="combobox"
-                                        aria-expanded={roleOpen}
-                                        className="w-full justify-between font-normal"
+                                        size="icon"
+                                        className="h-9 w-9 shrink-0"
+                                        aria-label="Editar rol"
+                                        disabled={!activeRole}
+                                        onClick={openEditRole}
                                     >
-                                        {activeRole ? activeRole.label || activeRole.name : 'Seleccionar rol…'}
-                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        <Pencil className="h-4 w-4" />
                                     </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-[300px] p-0" align="start">
-                                    <Command>
-                                        <CommandInput placeholder="Buscar rol…" />
-                                        <CommandList>
-                                            <CommandEmpty>Sin resultados.</CommandEmpty>
-                                            <CommandGroup>
-                                                {(roles ?? []).map((role) => (
-                                                    <CommandItem
-                                                        key={role.id}
-                                                        value={`${role.label || ''} ${role.name}`}
-                                                        onSelect={() => {
-                                                            requestRoleSwitch(role.id)
-                                                            setRoleOpen(false)
-                                                        }}
-                                                    >
-                                                        <span
-                                                            className="mr-2 h-2 w-2 shrink-0 rounded-full"
-                                                            style={{ background: role.color || '#6b7280' }}
-                                                            aria-hidden="true"
-                                                        />
-                                                        <span className="truncate">{role.label || role.name}</span>
-                                                        {role.id === activeRoleId && (
-                                                            <Check className="ml-auto h-4 w-4" />
-                                                        )}
-                                                    </CommandItem>
-                                                ))}
-                                            </CommandGroup>
-                                        </CommandList>
-                                    </Command>
-                                </PopoverContent>
-                            </Popover>
+                                )}
+                                {deleteRole && (
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-9 w-9 shrink-0 text-destructive hover:text-destructive"
+                                        aria-label="Eliminar rol"
+                                        disabled={!activeRole}
+                                        onClick={() => setDeleteOpen(true)}
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                )}
+                            </div>
 
                             {(catalog?.general.length ?? 0) > 0 && (
                                 <>
@@ -734,62 +832,97 @@ export function PermissionsManager({
                         </CardContent>
                     </Card>
 
-                    {/* Card: Módulo */}
+                    {/* Card: Módulos (hierarchical tree, mirrors the sidebar) */}
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-base">Módulo</CardTitle>
-                            <CardDescription>Elige el módulo cuyas acciones quieres configurar.</CardDescription>
+                            <CardTitle className="text-base">Módulos</CardTitle>
+                            <CardDescription>
+                                Elige el módulo cuyas acciones quieres configurar.
+                            </CardDescription>
                         </CardHeader>
                         <CardContent className="flex flex-col gap-3">
-                            {activeModule ? (
-                                <SelectionChip
-                                    label={activeModule.label}
-                                    onRemove={() => setActiveModuleKey(null)}
-                                    removeAriaLabel="Quitar módulo seleccionado"
+                            <div className="relative">
+                                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                    value={moduleQuery}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                        setModuleQuery(e.target.value)
+                                    }
+                                    placeholder="Buscar módulo…"
+                                    aria-label="Buscar módulo"
+                                    className="pl-8"
                                 />
-                            ) : (
-                                <p className="text-sm text-muted-foreground">Ningún módulo seleccionado.</p>
-                            )}
-                            <Popover open={moduleOpen} onOpenChange={setModuleOpen}>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        role="combobox"
-                                        aria-expanded={moduleOpen}
-                                        className="w-full justify-between font-normal"
-                                    >
-                                        {activeModule ? activeModule.label : 'Seleccionar módulo…'}
-                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-[300px] p-0" align="start">
-                                    <Command>
-                                        <CommandInput placeholder="Buscar módulo…" />
-                                        <CommandList>
-                                            <CommandEmpty>Sin resultados.</CommandEmpty>
-                                            {moduleGroups.map(([group, mods]) => (
-                                                <CommandGroup key={group} heading={group}>
-                                                    {mods.map((mod) => (
-                                                        <CommandItem
-                                                            key={mod.key}
-                                                            value={`${mod.label} ${mod.key} ${group}`}
-                                                            onSelect={() => {
-                                                                setActiveModuleKey(mod.key)
-                                                                setModuleOpen(false)
-                                                            }}
-                                                        >
-                                                            <span className="truncate">{mod.label}</span>
-                                                            {mod.key === activeModuleKey && (
-                                                                <Check className="ml-auto h-4 w-4" />
+                            </div>
+
+                            <div
+                                role="tree"
+                                aria-label="Módulos"
+                                className="-mx-1 max-h-[460px] overflow-y-auto px-1"
+                            >
+                                {visibleGroups.length === 0 ? (
+                                    <p className="px-2 py-6 text-center text-sm text-muted-foreground">
+                                        Sin módulos.
+                                    </p>
+                                ) : (
+                                    visibleGroups.map((group) => {
+                                        // While searching, force every matching group open.
+                                        const open = searching || !collapsedGroups.has(group.label)
+                                        return (
+                                            <Collapsible
+                                                key={group.label}
+                                                open={open}
+                                                onOpenChange={() =>
+                                                    !searching && toggleGroup(group.label)
+                                                }
+                                            >
+                                                <CollapsibleTrigger asChild>
+                                                    <button
+                                                        type="button"
+                                                        className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground transition-colors hover:bg-muted/40"
+                                                    >
+                                                        <ChevronRight
+                                                            className={cn(
+                                                                'h-3.5 w-3.5 shrink-0 transition-transform',
+                                                                open && 'rotate-90',
                                                             )}
-                                                        </CommandItem>
-                                                    ))}
-                                                </CommandGroup>
-                                            ))}
-                                        </CommandList>
-                                    </Command>
-                                </PopoverContent>
-                            </Popover>
+                                                        />
+                                                        <Folder className="h-3.5 w-3.5 shrink-0" />
+                                                        <span className="min-w-0 flex-1 truncate normal-case">
+                                                            {group.label}
+                                                        </span>
+                                                        <span className="shrink-0 text-[10px] tabular-nums opacity-70">
+                                                            {group.modules.length}
+                                                        </span>
+                                                    </button>
+                                                </CollapsibleTrigger>
+                                                <CollapsibleContent>
+                                                    <div className="ml-3 flex flex-col gap-0.5 border-l border-border/60 pl-1.5">
+                                                        {group.modules.map((mod) => (
+                                                            <ModuleTreeItem
+                                                                key={mod.key}
+                                                                module={mod}
+                                                                active={mod.key === activeModuleKey}
+                                                                granted={
+                                                                    draft
+                                                                        ? grantedCountForModule(
+                                                                              draft,
+                                                                              mod,
+                                                                          )
+                                                                        : 0
+                                                                }
+                                                                total={mod.actions.length}
+                                                                onSelect={() =>
+                                                                    setActiveModuleKey(mod.key)
+                                                                }
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                </CollapsibleContent>
+                                            </Collapsible>
+                                        )
+                                    })
+                                )}
+                            </div>
                         </CardContent>
                     </Card>
                 </div>
@@ -798,11 +931,25 @@ export function PermissionsManager({
                 <Card>
                     <CardHeader>
                         <div className="flex flex-wrap items-start justify-between gap-2">
-                            <div>
-                                <CardTitle className="text-base">Acciones permitidas</CardTitle>
-                                <CardDescription>Configura los permisos para este módulo.</CardDescription>
+                            <div className="min-w-0">
+                                <CardTitle className="flex items-center gap-2 text-base">
+                                    {activeModule && (
+                                        <DynamicIcon
+                                            name={activeModule.icon || 'Square'}
+                                            className="h-4 w-4 shrink-0 text-primary"
+                                        />
+                                    )}
+                                    <span className="truncate">
+                                        {activeModule ? activeModule.label : 'Acciones permitidas'}
+                                    </span>
+                                </CardTitle>
+                                <CardDescription>
+                                    {activeModule
+                                        ? `${moduleGroupLabel(activeModule)} · configura las acciones permitidas`
+                                        : 'Configura los permisos del módulo seleccionado.'}
+                                </CardDescription>
                             </div>
-                            {activeModule && (
+                            {activeRole && activeModule && (
                                 <div className="flex items-center gap-2">
                                     <Badge variant="secondary" className="tabular-nums">
                                         {moduleGranted}/{moduleTotal}
@@ -832,14 +979,14 @@ export function PermissionsManager({
                     <CardContent>
                         {!activeRole ? (
                             <EmptyHint text="Selecciona un rol para configurar sus permisos." />
-                        ) : !activeModule ? (
-                            <EmptyHint text="Selecciona un módulo para ver sus acciones." />
                         ) : loadingPerms ? (
                             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                                 {Array.from({ length: 6 }).map((_, i) => (
                                     <Skeleton key={i} className="h-11 w-full" />
                                 ))}
                             </div>
+                        ) : !activeModule ? (
+                            <EmptyHint text="Selecciona un módulo del árbol para ver sus acciones." />
                         ) : (
                             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                                 {activeModule.actions.map((action) => {
@@ -894,7 +1041,9 @@ export function PermissionsManager({
             >
                 <DialogContent className="sm:max-w-md">
                     <DialogHeader>
-                        <DialogTitle>{roleDialog.mode === 'create' ? 'Nuevo rol' : 'Editar rol'}</DialogTitle>
+                        <DialogTitle>
+                            {roleDialog.mode === 'create' ? 'Nuevo rol' : 'Editar rol'}
+                        </DialogTitle>
                     </DialogHeader>
                     <div className="flex flex-col gap-4 py-2">
                         <div className="flex flex-col gap-2">
@@ -937,22 +1086,32 @@ export function PermissionsManager({
                         >
                             Cancelar
                         </Button>
-                        <Button onClick={handleRoleSubmit} disabled={roleSaving || !roleDialog.label.trim()}>
-                            {roleSaving ? 'Guardando…' : roleDialog.mode === 'create' ? 'Crear rol' : 'Guardar'}
+                        <Button
+                            onClick={handleRoleSubmit}
+                            disabled={roleSaving || !roleDialog.label.trim()}
+                        >
+                            {roleSaving
+                                ? 'Guardando…'
+                                : roleDialog.mode === 'create'
+                                  ? 'Crear rol'
+                                  : 'Guardar'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
 
             {/* Role delete confirm */}
-            <AlertDialog open={deleteOpen} onOpenChange={(open: boolean) => !deleting && setDeleteOpen(open)}>
+            <AlertDialog
+                open={deleteOpen}
+                onOpenChange={(open: boolean) => !deleting && setDeleteOpen(open)}
+            >
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>¿Eliminar el rol?</AlertDialogTitle>
                         <AlertDialogDescription>
                             Se eliminará el rol{' '}
-                            <strong>{activeRole ? activeRole.label || activeRole.name : ''}</strong> y sus
-                            asignaciones de permisos. Esta acción no se puede deshacer.
+                            <strong>{activeRole ? activeRole.label || activeRole.name : ''}</strong> y
+                            sus asignaciones de permisos. Esta acción no se puede deshacer.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
