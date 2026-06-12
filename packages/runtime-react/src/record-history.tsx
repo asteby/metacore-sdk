@@ -18,6 +18,7 @@ import { cn } from '@asteby/metacore-ui/lib'
 import {
     Avatar,
     AvatarFallback,
+    AvatarImage,
     Badge,
     Collapsible,
     CollapsibleContent,
@@ -57,6 +58,12 @@ export interface RecordHistoryProps {
      * detail page (e.g. `/activity/:id`). Omitted → no button.
      */
     onOpenEvent?: (event: ActivityEvent) => void
+    /**
+     * Resolves an event's `actor_avatar` storage path to a fetchable URL
+     * (e.g. ops' `getStorageUrl(path, 'avatars')`). Identity when omitted —
+     * fine for absolute same-origin paths.
+     */
+    resolveAvatarUrl?: (path: string) => string
 }
 
 // ---------------------------------------------------------------------------
@@ -106,6 +113,7 @@ export const RecordHistory: React.FC<RecordHistoryProps> = ({
     locale = 'es',
     className,
     onOpenEvent,
+    resolveAvatarUrl,
 }) => {
     const dateLocale = locale === 'en' ? enUS : es
 
@@ -187,8 +195,15 @@ export const RecordHistory: React.FC<RecordHistoryProps> = ({
                                             type="button"
                                             className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
                                         >
-                                            {/* Actor avatar */}
+                                            {/* Actor avatar — the photo when the event carries one,
+                                                initials otherwise */}
                                             <Avatar className="h-7 w-7 rounded-full shrink-0">
+                                                {event.actor_avatar ? (
+                                                    <AvatarImage
+                                                        src={resolveAvatarUrl ? resolveAvatarUrl(event.actor_avatar) : event.actor_avatar}
+                                                        alt={actor}
+                                                    />
+                                                ) : null}
                                                 <AvatarFallback className="text-[9px] font-bold bg-primary/10 text-primary">
                                                     {getInitials(actor)}
                                                 </AvatarFallback>
