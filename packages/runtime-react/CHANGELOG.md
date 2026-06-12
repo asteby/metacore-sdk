@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 18.13.2
+
+### Patch Changes
+
+- b37e1d7: RecordHistory: event headers show the actor's photo, not just initials — `ActivityEvent` gains `actor_avatar` and the component renders it via the new `resolveAvatarUrl` prop (host resolves the storage path, e.g. ops' `getStorageUrl(path, 'avatars')`; identity fallback for absolute paths).
+
 ## 18.13.1
 
 ### Patch Changes
