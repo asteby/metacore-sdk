@@ -64,6 +64,11 @@ export interface RecordHistoryProps {
      * fine for absolute same-origin paths.
      */
     resolveAvatarUrl?: (path: string) => string
+    /**
+     * Localized label for the badge on each event header (e.g. "Clientes").
+     * Falls back to the event's raw `addon_key` when omitted.
+     */
+    moduleLabel?: string
 }
 
 // ---------------------------------------------------------------------------
@@ -114,6 +119,7 @@ export const RecordHistory: React.FC<RecordHistoryProps> = ({
     className,
     onOpenEvent,
     resolveAvatarUrl,
+    moduleLabel,
 }) => {
     const dateLocale = locale === 'en' ? enUS : es
 
@@ -223,9 +229,9 @@ export const RecordHistory: React.FC<RecordHistoryProps> = ({
                                                     <span className="text-xs text-muted-foreground" title={fullDate}>
                                                         {timeAgo}
                                                     </span>
-                                                    {event.addon_key && (
+                                                    {(moduleLabel || event.addon_key) && (
                                                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 ml-1">
-                                                            {event.addon_key}
+                                                            {moduleLabel || event.addon_key}
                                                         </Badge>
                                                     )}
                                                 </div>
