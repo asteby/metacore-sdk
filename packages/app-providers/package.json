@@ -34,7 +34,7 @@
     "react-dom": ">=18",
     "@asteby/metacore-pwa": ">=0.4.1",
     "@asteby/metacore-runtime-react": ">=18.16.0",
-    "@asteby/metacore-ui": ">=2.5.1",
+    "@asteby/metacore-ui": ">=2.5.2",
     "sonner": ">=1.7"
   },
   "peerDependenciesMeta": {

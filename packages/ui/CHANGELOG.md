@@ -1,5 +1,11 @@
 # @asteby/metacore-ui
 
+## 2.5.2
+
+### Patch Changes
+
+- 28e1939: Header: hide the vertical separator next to the sidebar trigger on phones — in the compressed mobile header it sat visually glued to the next control (search, icons) and read as a stray line behind it.
+
 ## 2.5.1
 
 ### Patch Changes
