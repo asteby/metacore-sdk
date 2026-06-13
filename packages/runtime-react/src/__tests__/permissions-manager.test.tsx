@@ -184,50 +184,59 @@ describe('helpers puros', () => {
     })
 })
 
-describe('PermissionsManager (lista plana, shape nuevo)', () => {
+describe('PermissionsManager (módulo como combobox agrupado)', () => {
+    // The module picker is a grouped combobox (same pattern as the role
+    // selector): open it, then click the module's option.
+    const moduleTrigger = () => {
+        // Two role="combobox" triggers: [0] role selector, [1] module selector.
+        const triggers = screen.getAllByRole('combobox')
+        return triggers[triggers.length - 1]
+    }
+    const selectModule = async (name: RegExp) => {
+        fireEvent.click(moduleTrigger())
+        fireEvent.click(await screen.findByRole('option', { name }))
+    }
+
     it('renderiza catálogo, auto-selecciona rol y primer módulo, contador N/M', async () => {
         const props = makeProps()
         render(<PermissionsManager {...props} />)
 
-        // Primer módulo = "Usuarios" (grupo sin título, va primero).
-        expect(await screen.findAllByText('Usuarios')).toBeTruthy()
+        // Primer módulo = "Usuarios" (auto-seleccionado) → su nombre en el trigger.
+        await waitFor(() => expect(moduleTrigger().textContent).toMatch(/Usuarios/))
         expect(props.loadRolePermissions).toHaveBeenCalledWith('r1')
 
-        // Headers de grupo grises (no colapsables): el del grupo con título.
-        expect(screen.getByText('Punto de venta')).toBeTruthy()
-        // Filas de módulo de la lista plana.
-        expect(screen.getByRole('button', { name: /Pedidos POS/ })).toBeTruthy()
-        expect(screen.getByRole('button', { name: /Terminal/ })).toBeTruthy()
+        // Al abrir el combobox: grupos (CommandGroup heading) + opciones.
+        fireEvent.click(moduleTrigger())
+        expect(await screen.findByText('Punto de venta')).toBeTruthy()
+        expect(screen.getByRole('option', { name: /Pedidos POS/ })).toBeTruthy()
+        expect(screen.getByRole('option', { name: /Terminal/ })).toBeTruthy()
 
         // Generales presentes con descripción.
         expect(screen.getByText('Permisos Generales')).toBeTruthy()
         expect(screen.getByText('Trabajar fuera de horario')).toBeTruthy()
     })
 
-    it('CERO acordeones: el header de grupo es un heading, no un botón colapsable', async () => {
+    it('CERO acordeones: el módulo es un combobox, no un folder colapsable', async () => {
         const props = makeProps()
         render(<PermissionsManager {...props} />)
-        await screen.findAllByText('Usuarios')
-        // El header gris "Punto de venta" es un heading, NO un button (sin folder/acordeón).
-        const header = screen.getByText('Punto de venta')
-        expect(header.closest('button')).toBeNull()
-        expect(header.getAttribute('role')).toBe('heading')
-        // No existe ningún botón cuyo accesible name sea el título del grupo
-        // (lo que delataría un CollapsibleTrigger).
+        await waitFor(() => expect(moduleTrigger().textContent).toMatch(/Usuarios/))
+        // El header de grupo "Punto de venta" vive DENTRO del popover (no en la
+        // columna), así que no existe hasta abrir el combobox — nada de folders.
+        expect(screen.queryByText('Punto de venta')).toBeNull()
         expect(screen.queryByRole('button', { name: 'Punto de venta' })).toBeNull()
+        // El trigger del módulo es un combobox accesible.
+        expect(moduleTrigger().getAttribute('role')).toBe('combobox')
     })
 
-    it('click directo en una fila selecciona el módulo y muestra su grid', async () => {
+    it('seleccionar un módulo en el combobox muestra su grid', async () => {
         const props = makeProps()
         render(<PermissionsManager {...props} />)
-        await screen.findAllByText('Usuarios')
+        await waitFor(() => expect(moduleTrigger().textContent).toMatch(/Usuarios/))
 
-        // Selecciono "Pedidos POS" → su grid aparece a la derecha.
-        fireEvent.click(screen.getByRole('button', { name: /Pedidos POS/ }))
+        await selectModule(/Pedidos POS/)
         expect(await screen.findByText('Pagar')).toBeTruthy()
 
-        // Selecciono el screen "Terminal" → acción "Acceder".
-        fireEvent.click(screen.getByRole('button', { name: /Terminal/ }))
+        await selectModule(/Terminal/)
         expect(await screen.findByText('Acceder')).toBeTruthy()
         await waitFor(() => expect(screen.queryByText('Pagar')).toBeNull())
     })
@@ -235,9 +244,9 @@ describe('PermissionsManager (lista plana, shape nuevo)', () => {
     it('marcar el screen "Acceder" produce capability screen.<navKey>.access', async () => {
         const props = makeProps()
         render(<PermissionsManager {...props} />)
-        await screen.findAllByText('Usuarios')
+        await waitFor(() => expect(moduleTrigger().textContent).toMatch(/Usuarios/))
 
-        fireEvent.click(screen.getByRole('button', { name: /Terminal/ }))
+        await selectModule(/Terminal/)
         await screen.findByText('Acceder')
         fireEvent.click(screen.getByRole('checkbox', { name: /Acceder/ }))
         fireEvent.click(screen.getByRole('button', { name: /Guardar permisos/ }))
@@ -252,9 +261,9 @@ describe('PermissionsManager (lista plana, shape nuevo)', () => {
     it('marcar una acción + un general y guardar llama sync con el set completo', async () => {
         const props = makeProps()
         render(<PermissionsManager {...props} />)
-        await screen.findAllByText('Usuarios')
+        await waitFor(() => expect(moduleTrigger().textContent).toMatch(/Usuarios/))
 
-        fireEvent.click(screen.getByRole('button', { name: /Pedidos POS/ }))
+        await selectModule(/Pedidos POS/)
         await screen.findByText('Pagar')
         fireEvent.click(screen.getByRole('checkbox', { name: /Pagar/ }))
         fireEvent.click(screen.getByRole('checkbox', { name: /Trabajar fuera de horario/ }))
@@ -275,8 +284,8 @@ describe('PermissionsManager (lista plana, shape nuevo)', () => {
     it('marcar todo / limpiar operan sobre el módulo activo', async () => {
         const props = makeProps()
         render(<PermissionsManager {...props} />)
-        await screen.findAllByText('Usuarios')
-        fireEvent.click(screen.getByRole('button', { name: /Pedidos POS/ }))
+        await waitFor(() => expect(moduleTrigger().textContent).toMatch(/Usuarios/))
+        await selectModule(/Pedidos POS/)
         await screen.findByText('Pagar')
 
         fireEvent.click(screen.getByRole('button', { name: /Marcar todo/ }))
@@ -297,29 +306,31 @@ describe('PermissionsManager (lista plana, shape nuevo)', () => {
     it('guardar deshabilitado sin cambios', async () => {
         const props = makeProps()
         render(<PermissionsManager {...props} />)
-        await screen.findAllByText('Usuarios')
+        await waitFor(() => expect(moduleTrigger().textContent).toMatch(/Usuarios/))
         const save = screen.getByRole('button', { name: /Guardar permisos/ }) as HTMLButtonElement
         expect(save.disabled).toBe(true)
     })
 
-    it('la búsqueda filtra las filas de la lista plana', async () => {
+    it('el combobox de módulo filtra por búsqueda', async () => {
         const props = makeProps()
         render(<PermissionsManager {...props} />)
-        await screen.findAllByText('Usuarios')
+        await waitFor(() => expect(moduleTrigger().textContent).toMatch(/Usuarios/))
 
-        fireEvent.change(screen.getByLabelText('Buscar módulo'), {
+        fireEvent.click(moduleTrigger())
+        fireEvent.change(await screen.findByPlaceholderText('Buscar módulo…'), {
             target: { value: 'terminal' },
         })
-        // Solo el módulo con match permanece como fila; otros se ocultan.
-        expect(screen.getByRole('button', { name: /Terminal/ })).toBeTruthy()
-        expect(screen.queryByRole('button', { name: /Pedidos POS/ })).toBeNull()
-        expect(screen.queryByRole('button', { name: /Usuarios/ })).toBeNull()
+        await waitFor(() =>
+            expect(screen.getByRole('option', { name: /Terminal/ })).toBeTruthy(),
+        )
+        expect(screen.queryByRole('option', { name: /Pedidos POS/ })).toBeNull()
+        expect(screen.queryByRole('option', { name: /Usuarios/ })).toBeNull()
     })
 
     it('oculta Nuevo rol / Editar / Eliminar cuando no hay mutators de rol', async () => {
         const props = makeProps()
         render(<PermissionsManager {...props} />)
-        await screen.findAllByText('Usuarios')
+        await waitFor(() => expect(moduleTrigger().textContent).toMatch(/Usuarios/))
         expect(screen.queryByRole('button', { name: /Nuevo rol/ })).toBeNull()
         expect(screen.queryByRole('button', { name: 'Editar rol' })).toBeNull()
         expect(screen.queryByRole('button', { name: 'Eliminar rol' })).toBeNull()
@@ -331,7 +342,7 @@ describe('PermissionsManager (lista plana, shape nuevo)', () => {
             deleteRole: vi.fn(async () => {}),
         })
         render(<PermissionsManager {...props} />)
-        await screen.findAllByText('Usuarios')
+        await waitFor(() => expect(moduleTrigger().textContent).toMatch(/Usuarios/))
         expect(screen.queryByRole('button', { name: 'Quitar rol seleccionado' })).toBeNull()
         expect(screen.getByRole('button', { name: 'Editar rol' })).toBeTruthy()
         expect(screen.getByRole('button', { name: 'Eliminar rol' })).toBeTruthy()
@@ -344,7 +355,7 @@ describe('PermissionsManager (lista plana, shape nuevo)', () => {
             deleteRole: vi.fn(async () => {}),
         })
         render(<PermissionsManager {...props} />)
-        await screen.findAllByText('Usuarios')
+        await waitFor(() => expect(moduleTrigger().textContent).toMatch(/Usuarios/))
         expect(screen.getByRole('button', { name: /Nuevo rol/ })).toBeTruthy()
         expect(screen.getByRole('button', { name: 'Editar rol' })).toBeTruthy()
         expect(screen.getByRole('button', { name: 'Eliminar rol' })).toBeTruthy()
@@ -358,11 +369,13 @@ describe('PermissionsManager (retrocompat shape viejo {modules})', () => {
 
         // Auto-selección del primer módulo legacy (pos_orders → grupo "Punto de venta").
         expect(await screen.findByText('Pagar')).toBeTruthy()
-        // Header gris derivado del addon.
-        expect(screen.getByText('Punto de venta')).toBeTruthy()
+        // Los grupos derivados del addon viven dentro del combobox de módulo.
+        const triggers = screen.getAllByRole('combobox')
+        fireEvent.click(triggers[triggers.length - 1])
+        expect(await screen.findByText('Punto de venta')).toBeTruthy()
         // El grupo Sistema (users sin addon) también.
         expect(screen.getByText('Sistema')).toBeTruthy()
-        expect(screen.getByRole('button', { name: /Usuarios/ })).toBeTruthy()
+        expect(screen.getByRole('option', { name: /Usuarios/ })).toBeTruthy()
     })
 
     it('legacy: click + guardar produce capabilities correctas', async () => {

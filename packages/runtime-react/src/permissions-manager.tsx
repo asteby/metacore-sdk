@@ -463,7 +463,7 @@ export function PermissionsManager({
     const [saving, setSaving] = React.useState(false)
 
     const [roleOpen, setRoleOpen] = React.useState(false)
-    const [moduleQuery, setModuleQuery] = React.useState('')
+    const [moduleOpen, setModuleOpen] = React.useState(false)
 
     // Pending role switch while there are unsaved changes.
     const [pendingRoleId, setPendingRoleId] = React.useState<string | null>(null)
@@ -546,12 +546,6 @@ export function PermissionsManager({
     )
 
     const dirty = baseline !== null && draft !== null && !capabilitySetsEqual(baseline, draft)
-
-    // Flat module list, optionally filtered by the search.
-    const visibleGroups = React.useMemo(
-        () => filterModuleGroups(groups ?? [], moduleQuery),
-        [groups, moduleQuery],
-    )
 
     // ---- capability edits ---------------------------------------------------
     const toggleCapability = React.useCallback((cap: string) => {
@@ -887,73 +881,104 @@ export function PermissionsManager({
                         </CardContent>
                     </Card>
 
-                    {/* Card: Módulos (flat list, mirrors the sidebar — no folders) */}
+                    {/* Card: Módulo — a grouped combobox, same pattern as the role
+                        selector above (compact; the long flat list felt heavy). */}
                     <Card>
                         <CardHeader>
-                            <CardTitle className="text-base">Módulos</CardTitle>
+                            <CardTitle className="text-base">Módulo</CardTitle>
                             <CardDescription>
                                 Elige el módulo cuyas acciones quieres configurar.
                             </CardDescription>
                         </CardHeader>
-                        <CardContent className="flex flex-col gap-3">
-                            <div className="relative">
-                                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                                <Input
-                                    value={moduleQuery}
-                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                                        setModuleQuery(e.target.value)
-                                    }
-                                    placeholder="Buscar módulo…"
-                                    aria-label="Buscar módulo"
-                                    className="pl-8"
-                                />
-                            </div>
-
-                            <div
-                                role="list"
-                                aria-label="Módulos"
-                                className="-mx-1 flex max-h-[460px] flex-col gap-0.5 overflow-y-auto px-1"
-                            >
-                                {visibleGroups.length === 0 ? (
-                                    <p className="px-2 py-6 text-center text-sm text-muted-foreground">
-                                        Sin módulos.
-                                    </p>
-                                ) : (
-                                    visibleGroups.map((group, gi) => (
-                                        <div
-                                            key={group.title || `__untitled_${gi}`}
-                                            className="flex flex-col gap-0.5"
-                                        >
-                                            {group.title && (
-                                                <div
-                                                    role="heading"
-                                                    aria-level={3}
-                                                    className={cn(
-                                                        'px-2 pb-1 pt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground',
-                                                        gi === 0 && 'pt-1',
-                                                    )}
-                                                >
-                                                    {group.title}
-                                                </div>
-                                            )}
-                                            {group.modules.map((mod) => (
-                                                <ModuleRow
-                                                    key={mod.key}
-                                                    module={mod}
-                                                    active={mod.key === activeModuleKey}
-                                                    granted={
-                                                        draft
-                                                            ? grantedCountForModule(draft, mod)
-                                                            : 0
+                        <CardContent>
+                            <Popover open={moduleOpen} onOpenChange={setModuleOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={moduleOpen}
+                                        className="w-full justify-between font-normal"
+                                    >
+                                        <span className="flex min-w-0 items-center gap-2">
+                                            {activeModule && (
+                                                <DynamicIcon
+                                                    name={
+                                                        activeModule.icon ||
+                                                        (activeModule.kind === 'screen'
+                                                            ? 'Eye'
+                                                            : 'Square')
                                                     }
-                                                    total={mod.actions.length}
-                                                    onSelect={() => setActiveModuleKey(mod.key)}
+                                                    className="h-4 w-4 shrink-0 opacity-70"
                                                 />
+                                            )}
+                                            <span className="truncate">
+                                                {activeModule
+                                                    ? activeModule.label
+                                                    : 'Seleccionar módulo…'}
+                                            </span>
+                                        </span>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                    className="w-[var(--radix-popover-trigger-width)] min-w-[280px] p-0"
+                                    align="start"
+                                >
+                                    <Command>
+                                        <CommandInput placeholder="Buscar módulo…" />
+                                        <CommandList className="max-h-[360px]">
+                                            <CommandEmpty>Sin módulos.</CommandEmpty>
+                                            {(groups ?? []).map((group, gi) => (
+                                                <CommandGroup
+                                                    key={group.title || `__untitled_${gi}`}
+                                                    heading={group.title || undefined}
+                                                >
+                                                    {group.modules.map((mod) => (
+                                                        <CommandItem
+                                                            key={mod.key}
+                                                            value={`${group.title} ${mod.label} ${mod.key}`}
+                                                            onSelect={() => {
+                                                                setActiveModuleKey(mod.key)
+                                                                setModuleOpen(false)
+                                                            }}
+                                                        >
+                                                            <DynamicIcon
+                                                                name={
+                                                                    mod.icon ||
+                                                                    (mod.kind === 'screen'
+                                                                        ? 'Eye'
+                                                                        : 'Square')
+                                                                }
+                                                                className="mr-2 h-4 w-4 shrink-0 opacity-70"
+                                                            />
+                                                            <span className="truncate">
+                                                                {mod.label}
+                                                            </span>
+                                                            {draft &&
+                                                                grantedCountForModule(draft, mod) >
+                                                                    0 && (
+                                                                    <Badge
+                                                                        variant="secondary"
+                                                                        className="ml-auto shrink-0 tabular-nums"
+                                                                    >
+                                                                        {grantedCountForModule(
+                                                                            draft,
+                                                                            mod,
+                                                                        )}
+                                                                        /{mod.actions.length}
+                                                                    </Badge>
+                                                                )}
+                                                            {mod.key === activeModuleKey && (
+                                                                <Check className="ml-2 h-4 w-4 shrink-0" />
+                                                            )}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
                                             ))}
-                                        </div>
-                                    ))
-                                )}
-                            </div>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
                         </CardContent>
                     </Card>
                 </div>
