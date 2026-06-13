@@ -181,3 +181,59 @@ export {
     ActivityTimeline,
     type ActivityTimelineProps,
 } from './activity-timeline'
+export {
+    DashboardGrid,
+    normalizeGroups,
+} from './dashboard-grid'
+export type {
+    WidgetKind,
+    WidgetSize,
+    WidgetFormat,
+    WidgetAccent,
+    WidgetAggregate,
+    WidgetWhereOp,
+    DashboardWidgetQuery,
+    DashboardWidgetCompare,
+    DashboardWidgetSpec,
+    WidgetSeriesPoint,
+    WidgetData,
+    DashboardWidgetGroup,
+    LoadWidgetData,
+    DashboardGridProps,
+    DashboardGridStrings,
+} from './dashboard-types'
+export {
+    StatWidget,
+    BarWidget,
+    LineWidget,
+    AreaWidget,
+    PieWidget,
+    DonutWidget,
+    ListWidget,
+    ProgressWidget,
+    type WidgetRenderProps,
+} from './widgets/renderers'
+export {
+    WidgetRenderer,
+    WidgetSkeleton,
+    SIZE_SPAN,
+    SIZE_CLASS,
+    type WidgetRendererProps,
+} from './widgets/widget-renderer'
+export {
+    WidgetCard,
+    DeltaChip,
+    WidgetEmpty,
+    WidgetError,
+    type WidgetCardProps,
+} from './widgets/widget-card'
+export {
+    formatWidgetValue,
+    formatAxisTick,
+    formatDelta,
+    accentClasses,
+    paletteColor,
+    CHART_PALETTE,
+    type AccentClasses,
+    type WidgetFormatCtx,
+} from './widgets/widget-format'
