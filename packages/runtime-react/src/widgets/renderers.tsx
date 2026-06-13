@@ -53,7 +53,18 @@ const fmtCtx = (
 const hasSeries = (d?: WidgetData): d is WidgetData & { series: NonNullable<WidgetData['series']> } =>
     Array.isArray(d?.series) && d!.series!.length > 0
 
-const CHART_HEIGHT = 132
+// Chart body that fills the card's flexible height. The dashboard grid gives
+// each chart cell a definite height (fixed auto-rows × row-span), so height:100%
+// resolves cleanly and charts scale with the card instead of a fixed stub.
+function ChartArea({ children }: { children: React.ReactElement }) {
+    return (
+        <div className="min-h-0 flex-1">
+            <ResponsiveContainer width="100%" height="100%">
+                {children}
+            </ResponsiveContainer>
+        </div>
+    )
+}
 
 // Compact recharts tooltip styled with theme tokens.
 function ChartTooltip({ ctx }: { ctx: WidgetFormatCtx }) {
@@ -94,8 +105,10 @@ export function StatWidget(p: WidgetRenderProps) {
             }
         >
             {hasValue ? (
-                <div className="text-3xl font-semibold tabular-nums tracking-tight text-foreground">
-                    {formatWidgetValue(value!, ctx)}
+                <div className="flex min-h-0 flex-1 flex-col justify-center">
+                    <div className="text-[2rem] font-semibold leading-none tabular-nums tracking-tight text-foreground">
+                        {formatWidgetValue(value!, ctx)}
+                    </div>
                 </div>
             ) : (
                 <WidgetEmpty message={p.emptyText} />
@@ -117,7 +130,7 @@ export function BarWidget(p: WidgetRenderProps) {
             accent={p.spec.accent}
         >
             {hasSeries(p.data) ? (
-                <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+                <ChartArea>
                     <BarChart data={p.data.series} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
                         <CartesianGrid vertical={false} stroke={CHART_GRID} strokeDasharray="3 3" />
                         <XAxis
@@ -135,9 +148,9 @@ export function BarWidget(p: WidgetRenderProps) {
                             tickFormatter={(v: number) => formatAxisTick(v, ctx)}
                         />
                         <ChartTooltip ctx={ctx} />
-                        <Bar dataKey="value" fill={a.chartVar} radius={[4, 4, 0, 0]} maxBarSize={40} />
+                        <Bar dataKey="value" fill={a.chartVar} radius={[4, 4, 0, 0]} maxBarSize={48} />
                     </BarChart>
-                </ResponsiveContainer>
+                </ChartArea>
             ) : (
                 <WidgetEmpty message={p.emptyText} />
             )}
@@ -159,7 +172,7 @@ function TimeSeriesWidget(p: WidgetRenderProps & { variant: 'line' | 'area' }) {
             accent={p.spec.accent}
         >
             {hasSeries(p.data) ? (
-                <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
+                <ChartArea>
                     {p.variant === 'area' ? (
                         <AreaChart data={p.data.series} margin={{ top: 4, right: 6, left: -16, bottom: 0 }}>
                             <defs>
@@ -183,7 +196,7 @@ function TimeSeriesWidget(p: WidgetRenderProps & { variant: 'line' | 'area' }) {
                             <Line type="monotone" dataKey="value" stroke={a.chartVar} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
                         </LineChart>
                     )}
-                </ResponsiveContainer>
+                </ChartArea>
             ) : (
                 <WidgetEmpty message={p.emptyText} />
             )}
@@ -210,26 +223,28 @@ function CircularWidget(p: WidgetRenderProps & { variant: 'pie' | 'donut' }) {
             accent={p.spec.accent}
         >
             {hasSeries(p.data) ? (
-                <div className="flex items-center gap-3">
-                    <ResponsiveContainer width="50%" height={CHART_HEIGHT}>
-                        <PieChart>
-                            <ChartTooltip ctx={ctx} />
-                            <Pie
-                                data={p.data.series}
-                                dataKey="value"
-                                nameKey="label"
-                                innerRadius={p.variant === 'donut' ? 32 : 0}
-                                outerRadius={56}
-                                paddingAngle={p.variant === 'donut' ? 2 : 0}
-                                stroke="var(--background, #fff)"
-                                strokeWidth={2}
-                            >
-                                {p.data.series.map((_, i) => (
-                                    <Cell key={i} fill={paletteColor(i)} />
-                                ))}
-                            </Pie>
-                        </PieChart>
-                    </ResponsiveContainer>
+                <div className="flex min-h-0 flex-1 items-center gap-3">
+                    <div className="h-full min-h-0 w-[46%] shrink-0">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <ChartTooltip ctx={ctx} />
+                                <Pie
+                                    data={p.data.series}
+                                    dataKey="value"
+                                    nameKey="label"
+                                    innerRadius={p.variant === 'donut' ? '55%' : 0}
+                                    outerRadius="92%"
+                                    paddingAngle={p.variant === 'donut' ? 2 : 0}
+                                    stroke="var(--background, #fff)"
+                                    strokeWidth={2}
+                                >
+                                    {p.data.series.map((_, i) => (
+                                        <Cell key={i} fill={paletteColor(i)} />
+                                    ))}
+                                </Pie>
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
                     <ul className="flex min-w-0 flex-1 flex-col gap-1.5">
                         {p.data.series.slice(0, 6).map((pt, i) => (
                             <li key={pt.key} className="flex items-center gap-2 text-xs">

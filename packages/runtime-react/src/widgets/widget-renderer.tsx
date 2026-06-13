@@ -26,12 +26,31 @@ export const SIZE_SPAN: Record<WidgetSize, number> = {
     full: 4,
 }
 
-/** Tailwind col-span class per size (static → scanned in this package build). */
+/** Tailwind col-span class per size (static → scanned in this package build).
+ * Grid is 2 cols on mobile, 4 on lg: sm=quarter, md=half, lg=¾, full=row. */
 export const SIZE_CLASS: Record<WidgetSize, string> = {
-    sm: 'sm:col-span-2 lg:col-span-1',
-    md: 'sm:col-span-2 lg:col-span-2',
-    lg: 'sm:col-span-2 lg:col-span-3',
-    full: 'sm:col-span-2 lg:col-span-4',
+    sm: 'col-span-1 lg:col-span-1',
+    md: 'col-span-2 lg:col-span-2',
+    lg: 'col-span-2 lg:col-span-3',
+    full: 'col-span-2 lg:col-span-4',
+}
+
+/** Kinds that render a chart/list and want extra vertical room (2 grid rows).
+ * Stat/progress stay a single compact row so KPIs read like KPIs, not slabs. */
+const TALL_KINDS = new Set(['bar', 'line', 'area', 'pie', 'donut', 'list', 'custom'])
+
+/** Default footprint when a spec omits `size`: charts go half-width, stats a
+ * quarter — so a tablero of mixed widgets packs densely without manual sizing. */
+export function defaultSize(spec: DashboardWidgetSpec): WidgetSize {
+    if (spec.size) return spec.size
+    return TALL_KINDS.has(spec.kind) ? 'md' : 'sm'
+}
+
+/** Combined col + row span for a widget's grid cell. Row-span drives the
+ * height contrast (chart=2, stat=1) that makes the layout feel designed. */
+export function spanClass(spec: DashboardWidgetSpec): string {
+    const col = SIZE_CLASS[defaultSize(spec)]
+    return `${col} ${TALL_KINDS.has(spec.kind) ? 'row-span-2' : 'row-span-1'}`
 }
 
 const RENDERERS: Record<
