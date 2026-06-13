@@ -40,7 +40,10 @@ export function Header({ className, fixed, children, ...props }: HeaderProps) {
         )}
       >
         <SidebarTrigger className='shrink-0 max-md:scale-125' />
-        <Separator orientation='vertical' className='h-6 shrink-0' />
+        {/* On phones the compressed header reads cleaner without a divider —
+            the separator sat visually glued to whatever control came next
+            (search, icons) and looked like a stray line behind it. */}
+        <Separator orientation='vertical' className='hidden h-6 shrink-0 sm:block' />
         {children}
       </div>
     </header>
