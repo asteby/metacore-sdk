@@ -15,7 +15,7 @@ import type {
     DashboardWidgetGroup,
     DashboardWidgetSpec,
 } from './dashboard-types'
-import { WidgetRenderer, WidgetSkeleton, SIZE_CLASS } from './widgets/widget-renderer'
+import { WidgetRenderer, WidgetSkeleton, spanClass } from './widgets/widget-renderer'
 
 const DEFAULT_STRINGS: DashboardGridStrings = {
     emptyTitle: 'Your dashboard is empty',
@@ -164,11 +164,10 @@ export function DashboardGrid({
                             {tr(group.title, group.title)}
                         </h2>
                     )}
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="grid grid-flow-row-dense auto-rows-[116px] grid-cols-2 gap-4 lg:grid-cols-4">
                         {group.widgets.map((spec) => {
-                            const size = spec.size ?? 'sm'
                             return (
-                                <div key={spec.key} className={SIZE_CLASS[size]}>
+                                <div key={spec.key} className={cn(spanClass(spec), 'min-h-0')}>
                                     {loading ? (
                                         <WidgetSkeleton
                                             spec={{

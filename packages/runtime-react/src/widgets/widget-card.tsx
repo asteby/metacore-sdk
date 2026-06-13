@@ -78,7 +78,7 @@ export function WidgetCard({
                 </div>
                 {headerExtra && <div className="shrink-0">{headerExtra}</div>}
             </CardHeader>
-            <CardContent className="flex flex-1 flex-col justify-end pt-1">
+            <CardContent className="flex min-h-0 flex-1 flex-col pt-1">
                 {children}
             </CardContent>
         </Card>
