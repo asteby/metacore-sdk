@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 18.17.2
+
+### Patch Changes
+
+- 714cc34: Dashboard: masonry (balanced CSS columns) layout — no blank cells; charts fixed-height, compact stat cards
+
 ## 18.17.1
 
 ### Patch Changes
