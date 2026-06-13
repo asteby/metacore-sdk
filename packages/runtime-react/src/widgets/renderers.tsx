@@ -53,12 +53,14 @@ const fmtCtx = (
 const hasSeries = (d?: WidgetData): d is WidgetData & { series: NonNullable<WidgetData['series']> } =>
     Array.isArray(d?.series) && d!.series!.length > 0
 
-// Chart body that fills the card's flexible height. The dashboard grid gives
-// each chart cell a definite height (fixed auto-rows × row-span), so height:100%
-// resolves cleanly and charts scale with the card instead of a fixed stub.
+// Fixed-height chart body. In the masonry (CSS columns) layout cards take their
+// natural height, so charts need a definite height for ResponsiveContainer to
+// resolve. This height + the card chrome gives every chart card a consistent,
+// taller footprint that balances cleanly against compact stat cards.
+const CHART_H = 'h-[190px]'
 function ChartArea({ children }: { children: React.ReactElement }) {
     return (
-        <div className="min-h-0 flex-1">
+        <div className={cn(CHART_H, 'w-full')}>
             <ResponsiveContainer width="100%" height="100%">
                 {children}
             </ResponsiveContainer>
@@ -105,13 +107,15 @@ export function StatWidget(p: WidgetRenderProps) {
             }
         >
             {hasValue ? (
-                <div className="flex min-h-0 flex-1 flex-col justify-center">
+                <div className="flex min-h-[2.5rem] items-end">
                     <div className="text-[2rem] font-semibold leading-none tabular-nums tracking-tight text-foreground">
                         {formatWidgetValue(value!, ctx)}
                     </div>
                 </div>
             ) : (
-                <WidgetEmpty message={p.emptyText} />
+                <div className="flex min-h-[2.5rem] items-center text-sm text-muted-foreground">
+                    {p.emptyText}
+                </div>
             )}
         </WidgetCard>
     )
@@ -223,7 +227,7 @@ function CircularWidget(p: WidgetRenderProps & { variant: 'pie' | 'donut' }) {
             accent={p.spec.accent}
         >
             {hasSeries(p.data) ? (
-                <div className="flex min-h-0 flex-1 items-center gap-3">
+                <div className={cn(CHART_H, 'flex items-center gap-3')}>
                     <div className="h-full min-h-0 w-[46%] shrink-0">
                         <ResponsiveContainer width="100%" height="100%">
                             <PieChart>

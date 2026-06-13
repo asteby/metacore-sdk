@@ -15,7 +15,7 @@ import type {
     DashboardWidgetGroup,
     DashboardWidgetSpec,
 } from './dashboard-types'
-import { WidgetRenderer, WidgetSkeleton, spanClass } from './widgets/widget-renderer'
+import { WidgetRenderer, WidgetSkeleton, isTallWidget } from './widgets/widget-renderer'
 
 const DEFAULT_STRINGS: DashboardGridStrings = {
     emptyTitle: 'Your dashboard is empty',
@@ -155,51 +155,58 @@ export function DashboardGrid({
         )
     }
 
+    // ONE unified dense grid across every group. Per-group sections used to
+    // break the layout into rows, so a lone-widget group (e.g. a single KPI)
+    // left the rest of its row blank. Flattening + `grid-flow-row-dense`
+    // backfills those holes; ordering compact KPIs before charts makes the top
+    // read as a metric band and the charts mosaic below it. No blank space.
+    const ordered = React.useMemo(() => {
+        const flat = visibleGroups.flatMap((g) => g.widgets)
+        return flat
+            .map((w, i) => ({ w, i }))
+            .sort(
+                (a, b) =>
+                    (isTallWidget(a.w) ? 1 : 0) - (isTallWidget(b.w) ? 1 : 0) ||
+                    a.i - b.i,
+            )
+            .map((x) => x.w)
+    }, [visibleGroups])
+
     return (
-        <div data-testid="dashboard-grid" className={cn('flex flex-col gap-8', className)}>
-            {visibleGroups.map((group) => (
-                <section key={group.title || '__default'} className="flex flex-col gap-3">
-                    {group.title && (
-                        <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                            {tr(group.title, group.title)}
-                        </h2>
-                    )}
-                    <div className="grid grid-flow-row-dense auto-rows-[116px] grid-cols-2 gap-4 lg:grid-cols-4">
-                        {group.widgets.map((spec) => {
-                            return (
-                                <div key={spec.key} className={cn(spanClass(spec), 'min-h-0')}>
-                                    {loading ? (
-                                        <WidgetSkeleton
-                                            spec={{
-                                                ...spec,
-                                                title: tr(spec.title, spec.title),
-                                                subtitle: tr(spec.subtitle, spec.subtitle),
-                                            }}
-                                        />
-                                    ) : (
-                                        <WidgetRenderer
-                                            spec={{
-                                                ...spec,
-                                                title: tr(spec.title, spec.title),
-                                                subtitle: tr(spec.subtitle, spec.subtitle),
-                                            }}
-                                            data={data?.[spec.key]}
-                                            locale={locale}
-                                            currency={currency}
-                                            emptyText={
-                                                spec.empty
-                                                    ? tr(spec.empty, spec.empty)
-                                                    : s.widgetEmpty
-                                            }
-                                            errorText={s.widgetError}
-                                        />
-                                    )}
-                                </div>
-                            )
-                        })}
+        <div
+            data-testid="dashboard-grid"
+            className={cn(
+                // Masonry: balanced CSS columns. Cards take their natural height
+                // (compact stats, taller charts) and flow to equalize column
+                // height, so there are NO blank cells — the gaps a fixed grid
+                // leaves around mixed 1×1 / 2×2 tiles simply don't exist here.
+                'columns-1 gap-4 md:columns-2 xl:columns-3',
+                className,
+            )}
+        >
+            {ordered.map((spec) => {
+                const rspec = {
+                    ...spec,
+                    title: tr(spec.title, spec.title),
+                    subtitle: tr(spec.subtitle, spec.subtitle),
+                }
+                return (
+                    <div key={spec.key} className="mb-4 break-inside-avoid">
+                        {loading ? (
+                            <WidgetSkeleton spec={rspec} />
+                        ) : (
+                            <WidgetRenderer
+                                spec={rspec}
+                                data={data?.[spec.key]}
+                                locale={locale}
+                                currency={currency}
+                                emptyText={spec.empty ? tr(spec.empty, spec.empty) : s.widgetEmpty}
+                                errorText={s.widgetError}
+                            />
+                        )}
                     </div>
-                </section>
-            ))}
+                )
+            })}
         </div>
     )
 }

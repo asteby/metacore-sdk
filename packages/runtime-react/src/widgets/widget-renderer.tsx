@@ -53,6 +53,12 @@ export function spanClass(spec: DashboardWidgetSpec): string {
     return `${col} ${TALL_KINDS.has(spec.kind) ? 'row-span-2' : 'row-span-1'}`
 }
 
+/** True for chart/list widgets that occupy 2 rows. Used to order compact KPIs
+ * before charts in the unified grid so the top reads as a metric band. */
+export function isTallWidget(spec: DashboardWidgetSpec): boolean {
+    return TALL_KINDS.has(spec.kind)
+}
+
 const RENDERERS: Record<
     string,
     (p: WidgetRenderProps) => React.ReactElement
