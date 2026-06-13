@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 18.17.1
+
+### Patch Changes
+
+- 211484b: Dashboard grid: compact KPI stat cards, dense fixed-row packing (charts span 2 rows), charts fill card height
+
 ## 18.17.0
 
 ### Minor Changes
