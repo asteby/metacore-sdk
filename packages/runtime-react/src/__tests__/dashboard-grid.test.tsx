@@ -155,6 +155,24 @@ describe('DashboardGrid render', () => {
         render(<DashboardGrid widgets={[]} loadData={loaderOf({})} />)
         expect(screen.getByTestId('dashboard-empty')).toBeTruthy()
     })
+
+    it('survives an empty → populated transition (React #310 regression)', async () => {
+        // The flatten/order useMemo must run BEFORE the empty-state early return.
+        // When it sat after the return, an empty render called one fewer hook
+        // than the populated render → "Rendered more hooks" (React #310) crash.
+        const { rerender } = render(
+            <DashboardGrid widgets={[]} loadData={loaderOf({})} />,
+        )
+        expect(screen.getByTestId('dashboard-empty')).toBeTruthy()
+        rerender(
+            <DashboardGrid
+                widgets={[spec({ key: 'rev', kind: 'stat' })]}
+                loadData={loaderOf({ rev: { value: 5 } })}
+            />,
+        )
+        await waitFor(() => expect(screen.getByTestId('widget-rev')).toBeTruthy())
+        expect(screen.getByText('5')).toBeTruthy()
+    })
 })
 
 describe('DashboardGrid permission gating', () => {
