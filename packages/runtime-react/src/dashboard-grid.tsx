@@ -132,6 +132,22 @@ export function DashboardGrid({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [keySig, loadData])
 
+    // Flatten every group into ONE ordered list (compact KPIs before charts) for
+    // the masonry grid. MUST run before any early return — it is a hook, and a
+    // conditional hook (placed after the empty-state return) trips React #310
+    // when the dashboard transitions empty → populated.
+    const ordered = React.useMemo(() => {
+        const flat = visibleGroups.flatMap((g) => g.widgets)
+        return flat
+            .map((w, i) => ({ w, i }))
+            .sort(
+                (a, b) =>
+                    (isTallWidget(a.w) ? 1 : 0) - (isTallWidget(b.w) ? 1 : 0) ||
+                    a.i - b.i,
+            )
+            .map((x) => x.w)
+    }, [visibleGroups])
+
     // Global empty state (no widgets at all / none visible after gating).
     if (visibleGroups.length === 0) {
         return (
@@ -154,23 +170,6 @@ export function DashboardGrid({
             </div>
         )
     }
-
-    // ONE unified dense grid across every group. Per-group sections used to
-    // break the layout into rows, so a lone-widget group (e.g. a single KPI)
-    // left the rest of its row blank. Flattening + `grid-flow-row-dense`
-    // backfills those holes; ordering compact KPIs before charts makes the top
-    // read as a metric band and the charts mosaic below it. No blank space.
-    const ordered = React.useMemo(() => {
-        const flat = visibleGroups.flatMap((g) => g.widgets)
-        return flat
-            .map((w, i) => ({ w, i }))
-            .sort(
-                (a, b) =>
-                    (isTallWidget(a.w) ? 1 : 0) - (isTallWidget(b.w) ? 1 : 0) ||
-                    a.i - b.i,
-            )
-            .map((x) => x.w)
-    }, [visibleGroups])
 
     return (
         <div
