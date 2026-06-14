@@ -1,5 +1,13 @@
 # @asteby/metacore-fullstack-example
 
+## 0.1.98
+
+### Patch Changes
+
+- Updated dependencies [d2c92e1]
+  - @asteby/metacore-runtime-react@18.17.3
+  - @asteby/metacore-app-providers@41.0.0
+
 ## 0.1.97
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 18.17.3
+
+### Patch Changes
+
+- d2c92e1: Fix React #310: move flatten/order useMemo before the empty-state early return (conditional hook crashed on empty→populated)
+
 ## 18.17.2
 
 ### Patch Changes
