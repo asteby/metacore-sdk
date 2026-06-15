@@ -18,6 +18,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@asteby/metacore-ui/primitives'
+import { useEffect, useRef } from 'react'
 import { Plus, Trash2, Check } from 'lucide-react'
 import type { ActionFieldDef } from './types'
 import {
@@ -26,8 +27,10 @@ import {
     computeLineItemTotals,
     evaluateBalance,
     toNumber,
+    getDependsOn,
+    resolveDependsValue,
 } from './dynamic-form-schema'
-import { DynamicSelectField } from './dynamic-select-field'
+import { DynamicSelectField, DEFAULT_DEPENDS_HINT } from './dynamic-select-field'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 
 export interface DynamicLineItemsProps {
@@ -35,6 +38,12 @@ export interface DynamicLineItemsProps {
     value: any[] | undefined
     onChange: (rows: any[]) => void
     disabled?: boolean
+    /**
+     * Current values of the surrounding (header) form. Threaded into each cell
+     * so a cell field with `dependsOn` can scope its options by a HEADER field
+     * (e.g. `source_warehouse_id`), not just a sibling cell on the same row.
+     */
+    formValues?: Record<string, any>
 }
 
 const fmtNumber = (n: number): string =>
@@ -53,7 +62,7 @@ function emptyRow(itemFields: ActionFieldDef[]): Record<string, any> {
     return row
 }
 
-export function DynamicLineItems({ field, value, onChange, disabled = false }: DynamicLineItemsProps) {
+export function DynamicLineItems({ field, value, onChange, disabled = false, formValues }: DynamicLineItemsProps) {
     const itemFields = getItemFields(field)
     const rows: any[] = Array.isArray(value) ? value : []
 
@@ -137,6 +146,8 @@ export function DynamicLineItems({ field, value, onChange, disabled = false }: D
                                             value={row?.[col.key]}
                                             onChange={(v: any) => handleCell(idx, col.key, v)}
                                             disabled={disabled}
+                                            formValues={formValues}
+                                            rowValues={row}
                                         />
                                     </td>
                                 ))}
@@ -234,21 +245,39 @@ interface CellRendererProps {
     value: any
     onChange: (v: any) => void
     disabled?: boolean
+    /** Header form values — for resolving a cell's `dependsOn` to a header field. */
+    formValues?: Record<string, any>
+    /** This row's values — for resolving a cell's `dependsOn` to a sibling cell. */
+    rowValues?: Record<string, any>
 }
 
 // Per-cell widget. Mirrors the flat FieldRenderer in dynamic-form.tsx but
 // without the per-field Label (the column header is the label) and sized for a
 // table cell. Nested line-items inside a row are not supported (a row column is
 // a scalar widget).
-function CellRenderer({ field, value, onChange, disabled }: CellRendererProps) {
+function CellRenderer({ field, value, onChange, disabled, formValues, rowValues }: CellRendererProps) {
     const widget = resolveWidget(field)
+    // Cascade scope for a cell with `dependsOn`: resolved from this row first
+    // (a sibling cell) then the header form (e.g. `source_warehouse_id`).
+    const dependsValue = getDependsOn(field)
+        ? resolveDependsValue(field, formValues, rowValues)
+        : undefined
     // Async searchable picker per row cell — e.g. the account_id column of a
     // journal entry's debit/credit lines. Same widget as the flat form.
     if (widget === 'dynamic_select') {
-        return <DynamicSelectField field={field} value={value} onChange={onChange} />
+        return <DynamicSelectField field={field} value={value} onChange={onChange} dependsValue={dependsValue} />
     }
     if (widget === 'select' && field.ref) {
-        return <RefCell field={field} value={value} onChange={onChange} disabled={disabled} />
+        return (
+            <RefCell
+                field={field}
+                value={value}
+                onChange={onChange}
+                disabled={disabled}
+                formValues={formValues}
+                rowValues={rowValues}
+            />
+        )
     }
     switch (widget) {
         case 'textarea':
@@ -320,21 +349,58 @@ function CellRenderer({ field, value, onChange, disabled }: CellRendererProps) {
     }
 }
 
-function RefCell({ field, value, onChange, disabled }: CellRendererProps) {
+function RefCell({ field, value, onChange, disabled, formValues, rowValues }: CellRendererProps) {
+    // Cascade: resolve the value of the field this cell `dependsOn` from the
+    // row (sibling) first, then the header form. While empty, the picker is
+    // disabled with a hint instead of listing the whole (unscoped) table.
+    const dependsOn = getDependsOn(field)
+    const scope = dependsOn ? resolveDependsValue(field, formValues, rowValues) : ''
+    const blockedByDependency = !!dependsOn && scope === ''
+
     const { options, loading } = useOptionsResolver({
         modelKey: '',
         fieldKey: 'id',
         ref: field.ref,
+        filterValue: dependsOn ? scope : undefined,
+        enabled: !blockedByDependency,
     })
+
+    // Clear the selection when the parent scope changes (skip initial mount).
+    const prevScopeRef = useRef<string>(scope)
+    useEffect(() => {
+        if (!dependsOn) return
+        if (prevScopeRef.current !== scope) {
+            prevScopeRef.current = scope
+            if (value) onChange('')
+        }
+    }, [dependsOn, scope, value, onChange])
+
+    const placeholder = blockedByDependency
+        ? DEFAULT_DEPENDS_HINT
+        : loading
+          ? 'Cargando…'
+          : field.placeholder || 'Seleccionar...'
+
     return (
-        <Select value={value || ''} onValueChange={onChange} disabled={disabled || loading}>
-            <SelectTrigger className="w-full">
-                <SelectValue placeholder={loading ? 'Cargando…' : field.placeholder || 'Seleccionar...'} />
+        <Select
+            value={value || ''}
+            onValueChange={onChange}
+            disabled={disabled || loading || blockedByDependency}
+        >
+            <SelectTrigger className="w-full" data-depends-blocked={blockedByDependency ? '' : undefined}>
+                <SelectValue placeholder={placeholder} />
             </SelectTrigger>
             <SelectContent>
                 {options.map((opt: ResolvedOption) => (
                     <SelectItem key={String(opt.id)} value={String(opt.id)}>
-                        {opt.label}
+                        <span className="flex flex-col">
+                            <span className="truncate">{opt.label}</span>
+                            {opt.description && (
+                                <span className="text-muted-foreground truncate text-xs">
+                                    {opt.description}
+                                </span>
+                            )}
+                        </span>
                     </SelectItem>
                 ))}
             </SelectContent>

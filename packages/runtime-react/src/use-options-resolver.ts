@@ -59,6 +59,15 @@ export interface UseOptionsResolverArgs {
      */
     query?: string
     /**
+     * Cascade scope forwarded as `?filter_value=`. Set by a dependent picker
+     * from the current value of the field it `dependsOn` (e.g. a product
+     * picker scoped to the header's `source_warehouse_id`). When empty/undefined
+     * the param is omitted (no scope — the picker lists everything). Changing it
+     * re-fetches; an empty string is treated as "not set" so a cleared parent
+     * does not query for the empty-string scope.
+     */
+    filterValue?: string
+    /**
      * Server-side pagination cap. Defaults to 50 (kernel
      * DefaultOptionsLimit) if omitted.
      */
@@ -105,6 +114,7 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
         limit,
         enabled = true,
         endpoint,
+        filterValue,
     } = args
 
     const api = useApi()
@@ -159,6 +169,10 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
         const params: Record<string, string | number> = { field: effectiveField }
         if (query) params.q = query
         if (typeof limit === 'number' && limit > 0) params.limit = limit
+        // Cascade scope: a dependent picker passes the value of the field it
+        // `dependsOn`. Skip empty strings so a cleared parent omits the param
+        // (no scope) rather than querying for the empty-string filter_value.
+        if (filterValue) params.filter_value = filterValue
 
         api.get(url, { params, signal: controller.signal })
             .then((res) => {
@@ -200,7 +214,7 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
         return () => {
             controller.abort()
         }
-    }, [api, url, effectiveField, query, limit, enabled, refreshKey])
+    }, [api, url, effectiveField, query, limit, enabled, filterValue, refreshKey])
 
     return {
         options,

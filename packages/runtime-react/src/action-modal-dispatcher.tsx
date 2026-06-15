@@ -42,7 +42,7 @@ import { DynamicLineItems } from './dynamic-line-items'
 import { DynamicSelectField } from './dynamic-select-field'
 import { DynamicDateField } from './dynamic-date-field'
 import { UploadField } from './upload-field'
-import { isLineItemsField, resolveWidget } from './dynamic-form-schema'
+import { isLineItemsField, resolveWidget, resolveDependsValue, getDependsOn } from './dynamic-form-schema'
 import type { ActionFieldDef } from './types'
 // Canonical registry lives in @asteby/metacore-sdk
 import {
@@ -292,7 +292,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                                     {field.label}
                                     {field.required && <span className="text-red-500 ml-1">*</span>}
                                 </Label>
-                                {renderField(field, formData[field.key], (v: any) => updateField(field.key, v))}
+                                {renderField(field, formData[field.key], (v: any) => updateField(field.key, v), formData)}
                             </div>
                         )
                     })}
@@ -319,10 +319,16 @@ function renderField(
     field: ActionFieldDef,
     value: any,
     onChange: (value: any) => void,
+    // Full current form values — lets a line-items grid (and any cascading
+    // header picker) resolve a `dependsOn` reference against sibling header
+    // fields. Omitted by callers that have no surrounding form (the field is
+    // then treated as having no resolvable dependency).
+    formValues?: Record<string, any>,
 ) {
     // Repeatable line-items group → row grid (value is an array of row objects).
+    // The header form values flow in so a cell can depend on a header field.
     if (isLineItemsField(field)) {
-        return <DynamicLineItems field={field} value={value} onChange={onChange} />
+        return <DynamicLineItems field={field} value={value} onChange={onChange} formValues={formValues} />
     }
     // Resolve the widget the same way DynamicForm does (explicit widget wins,
     // else inferred from type) so action modals and the standalone form stay in
@@ -330,7 +336,12 @@ function renderField(
     // dropped `dynamic_select` to a plain text input.
     const widget = resolveWidget(field)
     if (widget === 'dynamic_select') {
-        return <DynamicSelectField field={field} value={value} onChange={onChange} />
+        // A header-level dynamic_select may itself depend on another header
+        // field; resolve its filter_value from the form context.
+        const dependsValue = getDependsOn(field)
+            ? resolveDependsValue(field, formValues)
+            : undefined
+        return <DynamicSelectField field={field} value={value} onChange={onChange} dependsValue={dependsValue} />
     }
     // File upload → themed picker that POSTs the file to the host upload
     // endpoint and stores the returned url/path. Kept in sync with DynamicForm.

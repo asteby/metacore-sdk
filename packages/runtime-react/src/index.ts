@@ -163,7 +163,11 @@ export {
     resolveValidatorToken,
     type OrgConfigBridge,
 } from './use-org-config-bridge'
-export { registerValidator } from './dynamic-form-schema'
+export {
+    registerValidator,
+    getDependsOn,
+    resolveDependsValue,
+} from './dynamic-form-schema'
 export {
     ActivityValueRenderer,
     type ActivityValueRendererProps,

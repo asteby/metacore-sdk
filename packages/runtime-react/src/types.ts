@@ -232,6 +232,18 @@ export interface ActionFieldDef {
     source?: string
     relation?: string
     /**
+     * Cascade dependency: the key of ANOTHER field in the same action form
+     * (a header field or a sibling item-field) whose current value supplies
+     * this picker's `filter_value`. While the depended-on field is empty the
+     * picker is disabled with a hint; once it has a value the picker fetches
+     * options scoped by it and re-fetches whenever it changes (clearing the
+     * current selection). Without `dependsOn` the picker lists everything
+     * (retrocompat). Tolerates the snake_case `depends_on` the kernel serves.
+     */
+    dependsOn?: string
+    /** snake_case alias served by the kernel manifest for `dependsOn`. */
+    depends_on?: string
+    /**
      * Columns of a repeatable line-items group. Mirrors the kernel v3
      * `ActionField.item_fields` (json `item_fields`). Present on a field
      * with `type: "array"` — the multi-row container (e.g. the item rows
