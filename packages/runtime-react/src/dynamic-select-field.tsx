@@ -21,7 +21,7 @@
 // in a fetched page (we match by id against loaded options, else show the raw
 // value). A dedicated `?ids=` lookup is a follow-up; create flows — the common
 // case — start empty and never hit this.
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
     Button,
     Command,
@@ -38,8 +38,15 @@ import { Check, ChevronsUpDown, ImageIcon, Loader2, Plus } from 'lucide-react'
 import { resolveColorCss } from '@asteby/metacore-ui/lib'
 import { DynamicIcon } from './dynamic-icon'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
-import { getFieldRef } from './dynamic-form-schema'
+import { getDependsOn, getFieldRef, resolveOptionsSource } from './dynamic-form-schema'
 import type { ActionFieldDef } from './types'
+
+/**
+ * Default hint shown when a cascading picker's depended-on field is still
+ * empty. Domain-neutral on purpose; a caller may override it per field via
+ * `dependsHint`.
+ */
+export const DEFAULT_DEPENDS_HINT = 'Selecciona primero el campo del que depende'
 
 /**
  * Small square thumbnail for an option's `image`. Falls back to a neutral
@@ -145,9 +152,26 @@ export interface DynamicSelectFieldProps {
      * a lookup (which only loads once the popover opens). Matched by id == value.
      */
     seedOption?: ResolvedOption | null
+    /**
+     * Cascade scope: the current value of the field this picker `dependsOn`
+     * (the caller resolves it from the form context). Forwarded as
+     * `filter_value`. When the field declares a `dependsOn` and this is empty,
+     * the picker is disabled with `dependsHint` and the current selection is
+     * cleared. Changing it re-fetches and clears the selection.
+     */
+    dependsValue?: string
+    /** Overrides the disabled-state hint shown while `dependsValue` is empty. */
+    dependsHint?: string
 }
 
-export function DynamicSelectField({ field, value, onChange, seedOption }: DynamicSelectFieldProps) {
+export function DynamicSelectField({
+    field,
+    value,
+    onChange,
+    seedOption,
+    dependsValue,
+    dependsHint,
+}: DynamicSelectFieldProps) {
     const [open, setOpen] = useState(false)
     const [search, setSearch] = useState('')
     const debounced = useDebounced(search, 250)
@@ -159,19 +183,48 @@ export function DynamicSelectField({ field, value, onChange, seedOption }: Dynam
     // for the FK target, not just camelCase `ref`.
     const fieldRef = getFieldRef(field)
 
+    // Options routing: an `optionsConfig.source` (dependent/scoped picker) wins
+    // over the field's `ref` — query the SOURCE model with `field=<value>`;
+    // otherwise keep the canonical `ref`-based resolution.
+    const source = resolveOptionsSource(field)
+
+    // Cascade: a `dependsOn` field whose value is still empty leaves this
+    // picker disabled until the parent is set. `dependsValue` is the resolved
+    // value the caller threaded from the form context.
+    const dependsOn = getDependsOn(field)
+    const scope = dependsValue ? String(dependsValue) : ''
+    const blockedByDependency = !!dependsOn && scope === ''
+
     const { options, loading } = useOptionsResolver({
         modelKey: '',
-        fieldKey: 'id',
-        ref: fieldRef,
-        // searchEndpoint only drives the URL when there's no ref — ref is the
-        // canonical, kernel-derived path and wins.
-        endpoint: fieldRef ? undefined : field.searchEndpoint,
+        fieldKey: source.fieldKey,
+        ref: source.ref,
+        // optionsConfig.source → `/options/<source>`. Else searchEndpoint only
+        // drives the URL when there's no ref — ref is the canonical,
+        // kernel-derived path and wins.
+        endpoint: source.endpoint ?? (source.ref ? undefined : field.searchEndpoint),
         query: debounced,
         limit: 20,
+        // Cascade scope forwarded as filter_value (only when this field
+        // declares a dependency). Re-fetches when the parent value changes.
+        filterValue: dependsOn ? scope : undefined,
         // Don't fetch until the popover opens (and keep fetching as the query
-        // changes while open).
-        enabled: open,
+        // changes while open). A picker blocked by an unset dependency never
+        // fetches.
+        enabled: open && !blockedByDependency,
     })
+
+    // When the depended-on value changes, the previously-picked option no longer
+    // belongs to the new scope, so clear the selection (skip the initial mount).
+    const prevScopeRef = useRef<string>(scope)
+    useEffect(() => {
+        if (!dependsOn) return
+        if (prevScopeRef.current !== scope) {
+            prevScopeRef.current = scope
+            setPicked(null)
+            if (value) onChange('')
+        }
+    }, [dependsOn, scope, value, onChange])
 
     // The currently-selected option, resolved either from what the user picked
     // (cached in `picked`) or from the loaded page. Drives both the trigger
@@ -225,7 +278,7 @@ export function DynamicSelectField({ field, value, onChange, seedOption }: Dynam
     // "+" off-screen — it only "fit" once a short value was selected.
     return (
         <div className="flex w-full min-w-0 items-center gap-1.5">
-            <Popover open={open} onOpenChange={setOpen}>
+            <Popover open={open && !blockedByDependency} onOpenChange={(o: boolean) => { if (!blockedByDependency) setOpen(o) }}>
             <PopoverTrigger asChild>
                 <Button
                     type="button"
@@ -233,15 +286,19 @@ export function DynamicSelectField({ field, value, onChange, seedOption }: Dynam
                     role="combobox"
                     aria-expanded={open}
                     id={field.key}
+                    disabled={blockedByDependency}
                     className="min-w-0 flex-1 justify-between font-normal"
                     data-empty={!value}
+                    data-depends-blocked={blockedByDependency ? '' : undefined}
                 >
                     <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
                         {hasVisual && value ? (
                             <OptionLead option={selectedOption} size={20} />
                         ) : null}
                         <span className={'min-w-0 flex-1 truncate ' + (selectedLabel ? '' : 'text-muted-foreground')}>
-                            {selectedLabel || field.placeholder || 'Buscar…'}
+                            {blockedByDependency
+                                ? (dependsHint || DEFAULT_DEPENDS_HINT)
+                                : selectedLabel || field.placeholder || 'Buscar…'}
                         </span>
                     </span>
                     <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
