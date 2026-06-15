@@ -29,6 +29,8 @@ import {
     toNumber,
     getDependsOn,
     resolveDependsValue,
+    getOptionsConfig,
+    resolveOptionsSource,
 } from './dynamic-form-schema'
 import { DynamicSelectField, DEFAULT_DEPENDS_HINT } from './dynamic-select-field'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
@@ -267,7 +269,7 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues 
     if (widget === 'dynamic_select') {
         return <DynamicSelectField field={field} value={value} onChange={onChange} dependsValue={dependsValue} />
     }
-    if (widget === 'select' && field.ref) {
+    if (widget === 'select' && (field.ref || getOptionsConfig(field)?.source)) {
         return (
             <RefCell
                 field={field}
@@ -357,10 +359,15 @@ function RefCell({ field, value, onChange, disabled, formValues, rowValues }: Ce
     const scope = dependsOn ? resolveDependsValue(field, formValues, rowValues) : ''
     const blockedByDependency = !!dependsOn && scope === ''
 
+    // optionsConfig.source → query the source model (`/options/<source>` with
+    // `field=<value>`); else fall back to the field's `ref`.
+    const optSource = resolveOptionsSource(field)
+
     const { options, loading } = useOptionsResolver({
         modelKey: '',
-        fieldKey: 'id',
-        ref: field.ref,
+        fieldKey: optSource.fieldKey,
+        ref: optSource.ref,
+        endpoint: optSource.endpoint,
         filterValue: dependsOn ? scope : undefined,
         enabled: !blockedByDependency,
     })

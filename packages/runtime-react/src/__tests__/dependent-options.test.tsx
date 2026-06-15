@@ -16,7 +16,12 @@ vi.mock('react-i18next', () => ({
     useTranslation: () => ({ t: (k: string) => k }),
 }))
 
-import { resolveDependsValue, getDependsOn } from '../dynamic-form-schema'
+import {
+    resolveDependsValue,
+    getDependsOn,
+    getOptionsConfig,
+    resolveOptionsSource,
+} from '../dynamic-form-schema'
 import { useOptionsResolver } from '../use-options-resolver'
 import { DynamicLineItems } from '../dynamic-line-items'
 import { ApiProvider, type ApiClient } from '../api-context'
@@ -59,6 +64,44 @@ describe('getDependsOn / resolveDependsValue', () => {
         const f = field({ dependsOn: 'warehouse_id' })
         expect(resolveDependsValue(f, {})).toBe('')
         expect(resolveDependsValue(field({}), { a: 1 })).toBe('')
+    })
+})
+
+describe('getOptionsConfig / resolveOptionsSource', () => {
+    const field = (over: Partial<ActionFieldDef>): ActionFieldDef =>
+        ({ key: 'product_id', label: 'Producto', type: 'dynamic_select', ...over })
+
+    it('reads camelCase optionsConfig and snake_case options_config', () => {
+        expect(getOptionsConfig(field({ optionsConfig: { source: 'stock' } }))?.source).toBe('stock')
+        expect(getOptionsConfig(field({ options_config: { source: 'stock' } }))?.source).toBe('stock')
+        expect(getOptionsConfig(field({}))).toBeUndefined()
+    })
+
+    it('routes to the source model with field=value when optionsConfig.source is present', () => {
+        const f = field({
+            ref: 'products.Product',
+            options_config: { source: 'stock', filter_by: 'warehouse_id', value: 'product_id', description: 'quantity' },
+        })
+        const out = resolveOptionsSource(f)
+        expect(out.endpoint).toBe('/options/stock')
+        expect(out.fieldKey).toBe('product_id')
+        // source wins over ref — the ref pointer is not used for routing.
+        expect(out.ref).toBeUndefined()
+    })
+
+    it('falls back to the field key when optionsConfig.value is absent', () => {
+        const f = field({ key: 'item_id', options_config: { source: 'stock' } })
+        const out = resolveOptionsSource(f)
+        expect(out.endpoint).toBe('/options/stock')
+        expect(out.fieldKey).toBe('item_id')
+    })
+
+    it('keeps ref-based resolution when there is no optionsConfig.source', () => {
+        const f = field({ ref: 'products.Product' })
+        const out = resolveOptionsSource(f)
+        expect(out.endpoint).toBeUndefined()
+        expect(out.ref).toBe('products.Product')
+        expect(out.fieldKey).toBe('id')
     })
 })
 
@@ -205,6 +248,90 @@ describe('DynamicLineItems cascading cell', () => {
         await waitFor(() => {
             const last = get.mock.calls[get.mock.calls.length - 1][1]?.params
             expect(last.filter_value).toBe('W2')
+        })
+    })
+})
+
+// ---------------------------------------------------------------------------
+// optionsConfig.source routing — the picker queries the SOURCE model, not `ref`
+// ---------------------------------------------------------------------------
+const sourceLineItemsField: ActionFieldDef = {
+    key: 'items',
+    label: 'Renglones',
+    type: 'array',
+    itemFields: [
+        {
+            key: 'product_id',
+            label: 'Producto',
+            type: 'dynamic_select',
+            // A `ref` is present but optionsConfig.source MUST win for routing.
+            ref: 'products.Product',
+            depends_on: 'source_warehouse_id',
+            options_config: {
+                type: 'dynamic',
+                source: 'stock',
+                filter_by: 'warehouse_id',
+                value: 'product_id',
+                label_ref: 'products.Product',
+                description: 'quantity',
+            },
+        },
+    ],
+}
+
+function SourceLineItemsHost({ headerValue }: { headerValue: string }) {
+    const [rows, setRows] = useState<any[]>([{ product_id: '' }])
+    return (
+        <DynamicLineItems
+            field={sourceLineItemsField}
+            value={rows}
+            onChange={setRows}
+            formValues={{ source_warehouse_id: headerValue }}
+        />
+    )
+}
+
+describe('DynamicLineItems cell with optionsConfig.source', () => {
+    it('queries /options/<source>?field=<value>&filter_value=<dependsOn> and re-fetches on parent change', async () => {
+        const get = vi.fn(async () => ({
+            data: {
+                success: true,
+                data: [{ id: 'p1', label: 'Tornillo', description: 'disp. 12' }],
+                meta: { type: 'dynamic', count: 1 },
+            },
+        }))
+        const client = { get } as unknown as ApiClient
+
+        const { rerender } = render(
+            <ApiProvider client={client}>
+                <SourceLineItemsHost headerValue="W1" />
+            </ApiProvider>,
+        )
+
+        const trigger = screen.getByRole('combobox')
+        expect((trigger as HTMLButtonElement).disabled).toBe(false)
+        await act(async () => {
+            trigger.click()
+        })
+        await waitFor(() => expect(get).toHaveBeenCalled())
+
+        // URL hits the SOURCE model, not the `ref`.
+        const [firstUrl, firstCfg] = get.mock.calls[0]
+        expect(firstUrl).toBe('/options/stock')
+        expect(firstCfg?.params.field).toBe('product_id')
+        expect(firstCfg?.params.filter_value).toBe('W1')
+
+        // Parent change → re-fetch, still routed to the source, new filter_value.
+        rerender(
+            <ApiProvider client={client}>
+                <SourceLineItemsHost headerValue="W2" />
+            </ApiProvider>,
+        )
+        await waitFor(() => {
+            const [url, cfg] = get.mock.calls[get.mock.calls.length - 1]
+            expect(url).toBe('/options/stock')
+            expect(cfg?.params.field).toBe('product_id')
+            expect(cfg?.params.filter_value).toBe('W2')
         })
     })
 })

@@ -2,7 +2,7 @@
 // callers (and unit tests) can use the zod schema without pulling in React or
 // metacore-ui primitives.
 import { z, type ZodTypeAny } from 'zod'
-import type { ActionFieldDef, FieldValidation } from './types'
+import type { ActionFieldDef, FieldValidation, FieldOptionsConfig } from './types'
 import { resolveValidatorToken } from './use-org-config-bridge'
 
 /**
@@ -285,6 +285,42 @@ export function resolveDependsValue(
         (formValues ? formValues[dep] : undefined)
     if (raw == null || raw === '') return ''
     return String(raw)
+}
+
+/**
+ * Reads a field's enriched options-resolution config, tolerating the camelCase
+ * `optionsConfig` (authored SDK shape) and the snake_case `options_config` the
+ * kernel manifest serves. Returns `undefined` when the field declares none.
+ */
+export function getOptionsConfig(field: ActionFieldDef): FieldOptionsConfig | undefined {
+    const cfg = field.optionsConfig ?? field.options_config
+    return cfg && typeof cfg === 'object' ? cfg : undefined
+}
+
+/**
+ * Resolves where a picker should fetch its options from, honouring an
+ * `optionsConfig.source` (the dependent/scoped routing the kernel serves) and
+ * falling back to the field's `ref` for retrocompat.
+ *
+ * - With `optionsConfig.source`: query the SOURCE model →
+ *   `{ endpoint: '/options/<source>', fieldKey: <value ?? field.key> }`.
+ * - Without it: keep `ref`-based resolution → `{ ref }` (the hook's canonical
+ *   path), `fieldKey` defaulting to `'id'`.
+ *
+ * The returned shape feeds straight into `useOptionsResolver` args.
+ */
+export function resolveOptionsSource(field: ActionFieldDef): {
+    endpoint?: string
+    ref?: string
+    fieldKey: string
+} {
+    const cfg = getOptionsConfig(field)
+    const source = typeof cfg?.source === 'string' ? cfg.source.trim() : ''
+    if (source) {
+        const value = typeof cfg?.value === 'string' && cfg.value.trim() !== '' ? cfg.value.trim() : field.key
+        return { endpoint: `/options/${source}`, fieldKey: value }
+    }
+    return { ref: getFieldRef(field), fieldKey: 'id' }
 }
 
 /**

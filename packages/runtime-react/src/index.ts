@@ -167,6 +167,8 @@ export {
     registerValidator,
     getDependsOn,
     resolveDependsValue,
+    getOptionsConfig,
+    resolveOptionsSource,
 } from './dynamic-form-schema'
 export {
     ActivityValueRenderer,

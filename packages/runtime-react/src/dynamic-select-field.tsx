@@ -38,7 +38,7 @@ import { Check, ChevronsUpDown, ImageIcon, Loader2, Plus } from 'lucide-react'
 import { resolveColorCss } from '@asteby/metacore-ui/lib'
 import { DynamicIcon } from './dynamic-icon'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
-import { getDependsOn, getFieldRef } from './dynamic-form-schema'
+import { getDependsOn, getFieldRef, resolveOptionsSource } from './dynamic-form-schema'
 import type { ActionFieldDef } from './types'
 
 /**
@@ -183,6 +183,11 @@ export function DynamicSelectField({
     // for the FK target, not just camelCase `ref`.
     const fieldRef = getFieldRef(field)
 
+    // Options routing: an `optionsConfig.source` (dependent/scoped picker) wins
+    // over the field's `ref` — query the SOURCE model with `field=<value>`;
+    // otherwise keep the canonical `ref`-based resolution.
+    const source = resolveOptionsSource(field)
+
     // Cascade: a `dependsOn` field whose value is still empty leaves this
     // picker disabled until the parent is set. `dependsValue` is the resolved
     // value the caller threaded from the form context.
@@ -192,11 +197,12 @@ export function DynamicSelectField({
 
     const { options, loading } = useOptionsResolver({
         modelKey: '',
-        fieldKey: 'id',
-        ref: fieldRef,
-        // searchEndpoint only drives the URL when there's no ref — ref is the
-        // canonical, kernel-derived path and wins.
-        endpoint: fieldRef ? undefined : field.searchEndpoint,
+        fieldKey: source.fieldKey,
+        ref: source.ref,
+        // optionsConfig.source → `/options/<source>`. Else searchEndpoint only
+        // drives the URL when there's no ref — ref is the canonical,
+        // kernel-derived path and wins.
+        endpoint: source.endpoint ?? (source.ref ? undefined : field.searchEndpoint),
         query: debounced,
         limit: 20,
         // Cascade scope forwarded as filter_value (only when this field

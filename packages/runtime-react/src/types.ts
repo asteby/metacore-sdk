@@ -244,6 +244,18 @@ export interface ActionFieldDef {
     /** snake_case alias served by the kernel manifest for `dependsOn`. */
     depends_on?: string
     /**
+     * Enriched options routing the kernel serves for a dependent/scoped picker.
+     * When it carries a `source`, the picker queries that source MODEL (not the
+     * field's `ref`): URL `/options/<source>`, query field = `value` (falling
+     * back to the field's own key), and the cascade `filter_value` is the value
+     * of the `dependsOn` field. `description` is projected into the option
+     * subtitle. Tolerates the snake_case `options_config` the kernel emits.
+     * Absent → the picker keeps its `ref`-based behaviour (retrocompat).
+     */
+    optionsConfig?: FieldOptionsConfig
+    /** snake_case alias served by the kernel manifest for `optionsConfig`. */
+    options_config?: FieldOptionsConfig
+    /**
      * Columns of a repeatable line-items group. Mirrors the kernel v3
      * `ActionField.item_fields` (json `item_fields`). Present on a field
      * with `type: "array"` — the multi-row container (e.g. the item rows
@@ -308,6 +320,31 @@ export interface FieldBalanceRule {
     /** When true (default) an all-zero entry is treated as out of balance. */
     requireNonzero?: boolean
     require_nonzero?: boolean
+}
+
+/**
+ * Enriched options-resolution config the kernel attaches to a dependent/scoped
+ * picker field (json `options_config`). When `source` is present the SDK queries
+ * the source model instead of the field's `ref`. All keys are snake_case as the
+ * kernel serves them; the SDK reads them as-is via `getOptionsConfig`.
+ */
+export interface FieldOptionsConfig {
+    /** Discriminator the kernel sets (e.g. `'dynamic'`). Informational. */
+    type?: string
+    /** Source MODEL the candidates come from → URL `/options/<source>`. */
+    source?: string
+    /** Column of `source` compared against the cascade `filter_value`. */
+    filter_by?: string
+    /** Column of `source` used as the option value → query `?field=<value>`. */
+    value?: string
+    /** Related model used to resolve the option label by id (host-side enrich). */
+    label_ref?: string
+    /** Column of `source` projected into `option.description` (e.g. qty). */
+    description?: string
+    /** Optional ordering column. */
+    order_by?: string
+    /** Optional column projected into `option.image`. */
+    image?: string
 }
 
 export interface ActionDefinition {
