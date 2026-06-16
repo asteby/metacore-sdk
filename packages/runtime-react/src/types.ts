@@ -170,6 +170,33 @@ export interface ColumnDefinition {
      * reference resolved through the OrgConfigProvider.
      */
     validation?: FieldValidation
+    /**
+     * Declared schema for a jsonb line-items column (kernel v3 `item_fields`).
+     * Each entry describes one sub-field of the array's row objects: a `key`
+     * (the jsonb key), an already-LOCALIZED `label` (backend-translated), an
+     * optional `type` hint and an optional `ref` (FK target). When present the
+     * `CollectionCell` renders the popover mini-table with these headers in
+     * order and resolves `ref` columns to the backend-injected sibling label
+     * (the FK key without `_id`, else `<key>_label`) instead of the raw uuid.
+     * Tolerates the snake_case `item_fields` the kernel serves.
+     */
+    itemFields?: ColumnItemField[]
+    /** snake_case alias served by the kernel for `itemFields`. */
+    item_fields?: ColumnItemField[]
+}
+
+/**
+ * One declared sub-field of a jsonb line-items column (see
+ * `ColumnDefinition.itemFields`). `label` is already localized by the backend
+ * and consumed verbatim; a non-empty `ref` flags the column for resolved-label
+ * rendering against the injected sibling. Structurally compatible with the
+ * `ItemField` consumed by `collection-cell`.
+ */
+export interface ColumnItemField {
+    key: string
+    label: string
+    type?: string
+    ref?: string
 }
 
 export interface ActionCondition {

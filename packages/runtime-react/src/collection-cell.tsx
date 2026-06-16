@@ -28,6 +28,59 @@ const UUID_LIKE_RE =
 /** Host i18n translator (react-i18next `t`), as threaded into the columns factory. */
 export type Translate = (key: string, options?: any) => string
 
+/**
+ * Declared schema for one column of a jsonb line-items array. Mirrors the
+ * kernel v3 `item_fields` entry the backend serves on the column metadata
+ * (`col.itemFields` / snake `col.item_fields`). When present it drives the
+ * popover mini-table: headers come from `label` (already LOCALIZED by the
+ * backend — never re-translated here) and `ref` columns resolve to the
+ * backend-injected sibling label instead of the raw uuid.
+ */
+export interface ItemField {
+    /** jsonb key this column maps to (e.g. `product_id`, `quantity`). */
+    key: string
+    /** Header text — ALREADY localized by the backend. Used verbatim. */
+    label: string
+    /** Declarative cell type hint (informational; not branched on today). */
+    type?: string
+    /** FK target model. When set, the cell renders the resolved sibling label. */
+    ref?: string
+}
+
+/**
+ * Resolves the backend-injected resolved sibling key for a ref item-field,
+ * mirroring `relationKeyFor` in dynamic-columns: the raw key with a trailing
+ * `_id` stripped (`product_id` → `product`), else `<key>_label`.
+ */
+function siblingKeyFor(key: string): string {
+    return key.endsWith('_id') ? key.slice(0, -3) : `${key}_label`
+}
+
+/**
+ * Renders the cell value for one declared item-field of a jsonb row. For a
+ * `ref` field it prefers the backend-injected resolved sibling (the FK key
+ * without `_id`, else `<key>_label`): a `{ value, label }` object shows its
+ * `label`, a bare string shows itself; absent → the raw value via
+ * `formatScalar` (truncated uuid). Non-ref fields render `formatScalar(value)`.
+ */
+function renderItemFieldValue(
+    field: ItemField,
+    row: Record<string, unknown>,
+): string {
+    if (field.ref) {
+        const sibling = row[siblingKeyFor(field.key)]
+        if (sibling && typeof sibling === 'object' && !Array.isArray(sibling)) {
+            const label = (sibling as Record<string, unknown>).label
+            if (label !== undefined && label !== null && label !== '') {
+                return String(label)
+            }
+        } else if (typeof sibling === 'string' && sibling !== '') {
+            return sibling
+        }
+    }
+    return formatScalar(row[field.key])
+}
+
 /** Normalize an org/UI language tag to a base language code (`es-MX` → `es`). */
 function baseLang(locale?: string): string {
     return (locale || 'en').toLowerCase().split('-')[0]
@@ -204,11 +257,51 @@ function MiniTable({
     rows,
     locale,
     t,
+    itemFields,
 }: {
     rows: Record<string, unknown>[]
     locale?: string
     t?: Translate
+    itemFields?: ItemField[]
 }) {
+    // Schema-driven path: a declared `item_fields` schema fixes the column
+    // order + headers (already localized by the backend, used VERBATIM) and
+    // resolves ref columns to the injected sibling label instead of the raw
+    // uuid. Sibling/raw keys not covered by the schema are dropped from the
+    // table (the schema is the source of truth for what to surface).
+    if (itemFields && itemFields.length > 0) {
+        return (
+            <Table>
+                <TableHeader>
+                    <TableRow>
+                        {itemFields.map((field) => (
+                            <TableHead
+                                key={field.key}
+                                className="text-xs whitespace-nowrap"
+                            >
+                                {field.label}
+                            </TableHead>
+                        ))}
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {rows.map((row, i) => (
+                        <TableRow key={i}>
+                            {itemFields.map((field) => (
+                                <TableCell
+                                    key={field.key}
+                                    className="text-xs whitespace-nowrap"
+                                >
+                                    {renderItemFieldValue(field, row)}
+                                </TableCell>
+                            ))}
+                        </TableRow>
+                    ))}
+                </TableBody>
+            </Table>
+        )
+    }
+
     const keys = unionKeys(rows)
     if (keys.length === 0) {
         return <div className="p-3 text-xs text-muted-foreground">-</div>
@@ -319,6 +412,15 @@ export interface CollectionCellProps {
     locale?: string
     /** Host i18n translator; takes precedence over the built-in dictionary. */
     t?: Translate
+    /**
+     * Declared schema for the jsonb line-items columns (kernel v3 `item_fields`,
+     * read from `col.itemFields ?? col.item_fields` at the callsite). When
+     * present AND the value is an array of objects, the popover mini-table uses
+     * these (already-localized) headers in order and resolves `ref` columns to
+     * the backend-injected sibling label. Absent → the generic dict/prettify
+     * behaviour is unchanged.
+     */
+    itemFields?: ItemField[]
 }
 
 /**
@@ -330,6 +432,7 @@ export function CollectionCell({
     maxInline = 3,
     locale,
     t,
+    itemFields,
 }: CollectionCellProps) {
     const parsed = parseValue(value)
 
@@ -364,19 +467,39 @@ export function CollectionCell({
             const rows = parsed as Record<string, unknown>[]
             const count = rows.length
             const label = countLabel(count, locale, t)
-            const title = rows
-                .map((row) =>
-                    Object.entries(row)
-                        .map(
-                            ([k, v]) =>
-                                `${prettifyKey(k, locale, t)}: ${formatScalar(v)}`
-                        )
-                        .join(', ')
-                )
-                .join(' | ')
+            const hasSchema = !!(itemFields && itemFields.length > 0)
+            // The no-JS tooltip mirrors the rendered table: schema-driven
+            // labels + resolved ref values when a schema is present, else the
+            // generic prettify/scalar pairs.
+            const title = hasSchema
+                ? rows
+                      .map((row) =>
+                          itemFields!
+                              .map(
+                                  (field) =>
+                                      `${field.label}: ${renderItemFieldValue(field, row)}`
+                              )
+                              .join(', ')
+                      )
+                      .join(' | ')
+                : rows
+                      .map((row) =>
+                          Object.entries(row)
+                              .map(
+                                  ([k, v]) =>
+                                      `${prettifyKey(k, locale, t)}: ${formatScalar(v)}`
+                              )
+                              .join(', ')
+                      )
+                      .join(' | ')
             return (
                 <PopoverShell label={label} title={title}>
-                    <MiniTable rows={rows} locale={locale} t={t} />
+                    <MiniTable
+                        rows={rows}
+                        locale={locale}
+                        t={t}
+                        itemFields={itemFields}
+                    />
                 </PopoverShell>
             )
         }
