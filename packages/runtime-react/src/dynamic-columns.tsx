@@ -45,6 +45,7 @@ import { Progress } from './dialogs/_primitives'
 import { humanizeToken } from './dynamic-columns-helpers'
 import { OptionsContext } from './options-context'
 import { DynamicIcon, isLucideIconName } from './dynamic-icon'
+import { CollectionCell } from './collection-cell'
 import { isNilUuid, normalizeNilUuid } from './nil-uuid'
 import type { TableMetadata, ColumnDefinition } from './types'
 import { isColumnVisibleInTable } from './column-visibility'
@@ -1173,11 +1174,7 @@ export function makeDefaultGetDynamicColumns(
 
                         default: {
                             if (typeof value === 'object' && value !== null) {
-                                return (
-                                    <span className="text-muted-foreground text-xs">
-                                        {JSON.stringify(value)}
-                                    </span>
-                                )
+                                return <CollectionCell value={value} />
                             }
                             if (
                                 col.key === 'description' ||
