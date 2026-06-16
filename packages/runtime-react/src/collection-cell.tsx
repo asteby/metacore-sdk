@@ -421,11 +421,26 @@ export interface CollectionCellProps {
      * behaviour is unchanged.
      */
     itemFields?: ItemField[]
+    /**
+     * Presentation mode.
+     *   - `'badge'` (default): the compact count/preview badge that opens a
+     *     popover with the mini-table / pair-list. Used in dense table cells.
+     *   - `'inline'`: render the mini-table / pair-list DIRECTLY, with no badge
+     *     or popover. Used by the read-only record detail view, which has full
+     *     width and shows one field per row. All schema/locale logic is shared.
+     */
+    variant?: 'badge' | 'inline'
 }
 
 /**
  * Generic renderer for jsonb / array / object cell values. Brand-neutral,
  * compact, dark-mode friendly, locale-aware. Never throws on unexpected shapes.
+ *
+ * `variant` selects the surface: the default `'badge'` shows a compact trigger
+ * + popover (dense table cells); `'inline'` renders the mini-table / pair-list
+ * directly for the full-width record detail view. Both paths share the
+ * itemFields schema (localized headers + resolved ref labels) and the
+ * locale-aware generic fallback.
  */
 export function CollectionCell({
     value,
@@ -433,8 +448,10 @@ export function CollectionCell({
     locale,
     t,
     itemFields,
+    variant = 'badge',
 }: CollectionCellProps) {
     const parsed = parseValue(value)
+    const inline = variant === 'inline'
 
     // Empty-ish → muted dash.
     if (
@@ -465,6 +482,18 @@ export function CollectionCell({
         const allObjects = parsed.every((item) => isPlainObject(item))
         if (allObjects) {
             const rows = parsed as Record<string, unknown>[]
+            // Inline mode (detail view): render the mini-table directly, no
+            // badge/popover. The same schema-driven path applies.
+            if (inline) {
+                return (
+                    <MiniTable
+                        rows={rows}
+                        locale={locale}
+                        t={t}
+                        itemFields={itemFields}
+                    />
+                )
+            }
             const count = rows.length
             const label = countLabel(count, locale, t)
             const hasSchema = !!(itemFields && itemFields.length > 0)
@@ -504,7 +533,11 @@ export function CollectionCell({
             )
         }
 
-        // Array of scalars (or mixed): preview first N joined, "+N" overflow.
+        // Array of scalars (or mixed). Inline mode renders the full list; badge
+        // mode previews the first N joined with a "+N" overflow trigger.
+        if (inline) {
+            return <ScalarList values={parsed} />
+        }
         const preview = parsed.slice(0, maxInline).map(formatScalar).join(', ')
         const overflow = parsed.length - maxInline
         const label =
@@ -519,12 +552,16 @@ export function CollectionCell({
 
     // PLAIN OBJECT -----------------------------------------------------------
     const entries = Object.entries(parsed)
-    const inline = entries
+    // Inline mode renders the full key→value pair list directly.
+    if (inline) {
+        return <PairList entries={entries} locale={locale} t={t} />
+    }
+    const previewPairs = entries
         .slice(0, maxInline)
         .map(([k, v]) => `${prettifyKey(k, locale, t)}: ${formatScalar(v)}`)
         .join(', ')
     const overflow = entries.length - maxInline
-    const label = overflow > 0 ? `${inline} +${overflow}` : inline
+    const label = overflow > 0 ? `${previewPairs} +${overflow}` : previewPairs
     const title = entries
         .map(([k, v]) => `${prettifyKey(k, locale, t)}: ${formatScalar(v)}`)
         .join(', ')

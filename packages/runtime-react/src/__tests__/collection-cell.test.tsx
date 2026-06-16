@@ -329,3 +329,97 @@ describe('CollectionCell with itemFields schema', () => {
         expect(title).toContain('Cantidad: 2')
     })
 })
+
+describe('CollectionCell variant="inline" (detail view)', () => {
+    const itemFields = [
+        { key: 'product_id', label: 'Producto', ref: 'Product' },
+        { key: 'quantity', label: 'Cantidad' },
+    ]
+
+    it('renders the mini-table DIRECTLY with no popover trigger / badge', () => {
+        render(
+            <CollectionCell
+                variant="inline"
+                value={[{ product_id: 'a', quantity: 2 }]}
+            />
+        )
+        // The table is in the DOM immediately — no click needed.
+        expect(screen.getByRole('table')).toBeTruthy()
+        // No count-badge trigger ("1 item") is rendered in inline mode.
+        expect(screen.queryByText('1 item')).toBeNull()
+    })
+
+    it('uses localized schema headers + resolved ref labels (no raw uuid/JSON)', () => {
+        const { container } = render(
+            <CollectionCell
+                variant="inline"
+                locale="es"
+                itemFields={itemFields}
+                value={[
+                    {
+                        product_id: '550e8400-e29b-41d4-a716-446655440000',
+                        product: { value: 'x', label: 'Test' },
+                        quantity: 10,
+                    },
+                ]}
+            />
+        )
+        // "Producto | Cantidad / Test | 10"
+        expect(screen.getByRole('columnheader', { name: 'Producto' })).toBeTruthy()
+        expect(screen.getByRole('columnheader', { name: 'Cantidad' })).toBeTruthy()
+        expect(screen.getByRole('cell', { name: 'Test' })).toBeTruthy()
+        expect(screen.getByRole('cell', { name: '10' })).toBeTruthy()
+        // The raw uuid must not leak, and there is no JSON.stringify <pre> block.
+        expect(screen.queryByText('550e8400…')).toBeNull()
+        expect(container.querySelector('pre')).toBeNull()
+        expect(container.textContent).not.toContain('550e8400-e29b')
+    })
+
+    it('falls back to a generic localized mini-table when no itemFields (no raw JSON)', () => {
+        const { container } = render(
+            <CollectionCell
+                variant="inline"
+                locale="es"
+                value={[{ product_id: 'abc', quantity: 2 }]}
+            />
+        )
+        // Generic dict path still drives the header; no JSON dump.
+        expect(screen.getByRole('columnheader', { name: 'Producto' })).toBeTruthy()
+        expect(screen.getByRole('cell', { name: '2' })).toBeTruthy()
+        expect(container.querySelector('pre')).toBeNull()
+    })
+
+    it('renders a plain object as an inline localized pair list (no popover)', () => {
+        render(
+            <CollectionCell
+                variant="inline"
+                locale="es"
+                value={{ price: 10, quantity: 20 }}
+            />
+        )
+        // Pair list is rendered directly; the badge "+N" preview is not used.
+        expect(screen.getByText('Precio:')).toBeTruthy()
+        expect(screen.getByText('Cantidad:')).toBeTruthy()
+        expect(screen.queryByRole('table')).toBeNull()
+    })
+
+    it('renders a scalar array as an inline list directly', () => {
+        render(
+            <CollectionCell variant="inline" value={['a', 'b', 'c', 'd', 'e']} />
+        )
+        // Full list, no "+2" overflow badge.
+        expect(screen.getByText('e')).toBeTruthy()
+        expect(screen.queryByText('a, b, c +2')).toBeNull()
+    })
+
+    it('keeps the muted dash for empty / null values', () => {
+        const { container: empty } = render(
+            <CollectionCell variant="inline" value={[]} />
+        )
+        expect(empty.textContent).toBe('-')
+        const { container: nul } = render(
+            <CollectionCell variant="inline" value={null} />
+        )
+        expect(nul.textContent).toBe('-')
+    })
+})
