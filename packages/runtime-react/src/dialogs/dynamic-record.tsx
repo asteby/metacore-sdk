@@ -56,6 +56,7 @@ import { isNilUuid, normalizeNilUuid } from '../nil-uuid'
 import { DynamicIcon, isLucideIconName } from '../dynamic-icon'
 import { humanizeToken } from '../dynamic-columns-helpers'
 import { formatDateCell } from '../dynamic-columns'
+import { CollectionCell, type ItemField } from '../collection-cell'
 import type { ActionFieldDef, RelationMeta } from '../types'
 import { ImageUrlContext, identityImageUrl, type GetImageUrl } from '../image-url-context'
 import { TimeZoneContext, CurrencyContext } from '../org-runtime-context'
@@ -122,6 +123,17 @@ export interface FieldDef {
      * over the org fallback.
      */
     styleConfig?: Record<string, any>
+    /**
+     * Declared schema for a jsonb line-items field (kernel v3 `item_fields`).
+     * The backend serves this on modal/detail fields the same way it does on
+     * table columns. When present the read-only detail view renders the
+     * `CollectionCell` mini-table with these (already-localized) headers in
+     * order and resolves `ref` columns to the backend-injected sibling label.
+     * Tolerates the snake_case `item_fields` the kernel serves.
+     */
+    itemFields?: ItemField[]
+    /** snake_case alias served by the kernel for `itemFields`. */
+    item_fields?: ItemField[]
 }
 
 // Permissive shape: the wire payload may omit some fields (e.g. `title` is
@@ -910,7 +922,7 @@ export function ViewValue({
     /** Optional override; when omitted falls back to the nearest provider. */
     currency?: string
 }) {
-    const { i18n } = useTranslation()
+    const { t, i18n } = useTranslation()
     const ctxImageUrl = useContext(ImageUrlContext)
     const ctxTimeZone = useContext(TimeZoneContext)
     const ctxCurrency = useContext(CurrencyContext)
@@ -1069,7 +1081,14 @@ export function ViewValue({
     // to surface — render readable key/value pairs instead of falling through to
     // String(value) ("[object Object]").
     if (value !== null && typeof value === 'object') {
-        return <StructuredViewValue value={value} />
+        return (
+            <StructuredViewValue
+                value={value}
+                field={field}
+                locale={i18n.language}
+                t={t}
+            />
+        )
     }
 
     const display = formatDisplayValue(value, field)
@@ -1099,41 +1118,46 @@ function IconNameViewValue({ name }: { name: string }) {
     )
 }
 
-// StructuredViewValue renders a jsonb object/array that has no resolvable label:
-// plain objects become a key→value list (keys humanized), primitive arrays a
-// comma-joined line, and anything deeper a pretty-printed JSON block. Empty
-// structures render the same "—" marker as null scalars.
-function StructuredViewValue({ value }: { value: any }) {
-    if (Array.isArray(value)) {
-        if (value.length === 0) {
-            return <p className="text-sm py-1 text-muted-foreground">—</p>
-        }
-        if (value.every(v => v === null || typeof v !== 'object')) {
-            return <p className="text-sm py-1">{value.map(v => String(v ?? '—')).join(', ')}</p>
-        }
-        return (
-            <pre className="text-xs whitespace-pre-wrap rounded-md bg-muted/40 p-3 overflow-x-auto">
-                {JSON.stringify(value, null, 2)}
-            </pre>
-        )
-    }
-    const entries = Object.entries(value).filter(
-        ([, v]) => v !== null && v !== undefined && v !== '',
-    )
-    if (entries.length === 0) {
+// StructuredViewValue renders a jsonb object/array that has no resolvable label.
+// It delegates to the shared `CollectionCell` in `'inline'` mode so the detail
+// view gets the SAME pro rendering as the table: a declared `item_fields` schema
+// drives localized headers + resolved ref labels (the injected `{value,label}`
+// sibling) for line-items; without a schema it falls back to a localized
+// key→value pair list / mini-table — never raw `JSON.stringify`. Empty arrays /
+// empty objects keep the "—" marker (CollectionCell renders a muted dash, which
+// we normalize to the em-dash the detail view uses elsewhere).
+function StructuredViewValue({
+    value,
+    field,
+    locale,
+    t,
+}: {
+    value: any
+    field?: FieldDef
+    locale?: string
+    t?: (key: string, options?: any) => string
+}) {
+    const isEmpty =
+        value === null ||
+        value === undefined ||
+        value === '' ||
+        (Array.isArray(value) && value.length === 0) ||
+        (typeof value === 'object' &&
+            !Array.isArray(value) &&
+            Object.keys(value).length === 0)
+    if (isEmpty) {
         return <p className="text-sm py-1 text-muted-foreground">—</p>
     }
     return (
-        <dl className="text-sm py-1 space-y-0.5">
-            {entries.map(([k, v]) => (
-                <div key={k} className="flex gap-2">
-                    <dt className="text-muted-foreground shrink-0">{humanizeToken(k)}:</dt>
-                    <dd className="break-words">
-                        {typeof v === 'object' ? JSON.stringify(v) : String(v)}
-                    </dd>
-                </div>
-            ))}
-        </dl>
+        <div className="text-sm py-1">
+            <CollectionCell
+                value={value}
+                itemFields={field?.itemFields ?? field?.item_fields}
+                variant="inline"
+                locale={locale}
+                t={t}
+            />
+        </div>
     )
 }
 
