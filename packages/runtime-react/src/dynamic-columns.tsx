@@ -1174,7 +1174,13 @@ export function makeDefaultGetDynamicColumns(
 
                         default: {
                             if (typeof value === 'object' && value !== null) {
-                                return <CollectionCell value={value} />
+                                return (
+                                    <CollectionCell
+                                        value={value}
+                                        locale={currentLanguage}
+                                        t={t}
+                                    />
+                                )
                             }
                             if (
                                 col.key === 'description' ||

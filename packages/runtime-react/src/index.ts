@@ -105,7 +105,9 @@ export {
     CollectionCell,
     formatScalar,
     prettifyKey,
+    countLabel,
     type CollectionCellProps,
+    type Translate as CollectionCellTranslate,
 } from './collection-cell'
 export { NIL_UUID, isNilUuid, normalizeNilUuid } from './nil-uuid'
 export { DynamicRecordDialog, ViewValue } from './dialogs/dynamic-record'
