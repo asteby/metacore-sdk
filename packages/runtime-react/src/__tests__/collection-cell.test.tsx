@@ -6,6 +6,8 @@
 //   - plain object → inline key: value pairs
 //   - null / empty → "-"
 //   - JSON-string value is defensively parsed
+//   - locale-aware: count noun + header keys render in the org language; the
+//     host `t` overrides; unknown keys fall back to snake→Title prettify.
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 
@@ -14,6 +16,7 @@ afterEach(cleanup)
 
 import {
     CollectionCell,
+    countLabel,
     formatScalar,
     prettifyKey,
 } from '../collection-cell'
@@ -41,14 +44,50 @@ describe('formatScalar', () => {
 })
 
 describe('prettifyKey', () => {
-    it('snake_case → Title Case with acronyms', () => {
-        expect(prettifyKey('product_id')).toBe('Product ID')
-        expect(prettifyKey('quantity')).toBe('Quantity')
+    it('localizes common data/commerce keys to Spanish', () => {
+        expect(prettifyKey('product_id', 'es')).toBe('Producto')
+        expect(prettifyKey('quantity', 'es')).toBe('Cantidad')
+    })
+
+    it('localizes common keys to English (default locale)', () => {
+        expect(prettifyKey('product_id')).toBe('Product')
+        expect(prettifyKey('product_id', 'en')).toBe('Product')
+        expect(prettifyKey('quantity', 'en')).toBe('Quantity')
+    })
+
+    it('accepts a regional tag and normalizes to base language', () => {
+        expect(prettifyKey('quantity', 'es-MX')).toBe('Cantidad')
+    })
+
+    it('prefers a host `t` translation over the built-in dictionary', () => {
+        const t = (k: string) => (k === 'quantity' ? 'Piezas' : k)
+        expect(prettifyKey('quantity', 'es', t)).toBe('Piezas')
+    })
+
+    it('falls back to snake→Title prettify for unknown keys', () => {
+        expect(prettifyKey('shelf_position', 'es')).toBe('Shelf Position')
+        expect(prettifyKey('warehouse_bin', 'en')).toBe('Warehouse Bin')
+    })
+})
+
+describe('countLabel', () => {
+    it('pluralizes the count noun per locale', () => {
+        expect(countLabel(1, 'es')).toBe('1 ítem')
+        expect(countLabel(2, 'es')).toBe('2 ítems')
+        expect(countLabel(1, 'en')).toBe('1 item')
+        expect(countLabel(3, 'en')).toBe('3 items')
+        expect(countLabel(1)).toBe('1 item') // default → en
+    })
+
+    it('prefers a host `t` count plural', () => {
+        const t = (_k: string, o?: any) =>
+            o?.count === 1 ? '1 renglón' : `${o?.count} renglones`
+        expect(countLabel(2, 'es', t)).toBe('2 renglones')
     })
 })
 
 describe('CollectionCell', () => {
-    it('renders a count badge for an array of objects', () => {
+    it('renders an English count badge by default for an array of objects', () => {
         render(
             <CollectionCell
                 value={[
@@ -57,20 +96,43 @@ describe('CollectionCell', () => {
                 ]}
             />
         )
-        // Count badge (plural).
-        expect(screen.getByText('2 ítems')).toBeTruthy()
-        // The trigger's title carries the formatted rows for the no-JS fallback.
-        const badge = screen.getByText('2 ítems').closest('[title]')
+        // Default locale → English plural.
+        expect(screen.getByText('2 items')).toBeTruthy()
+        // The trigger's title carries the localized rows for the no-JS fallback.
+        const badge = screen.getByText('2 items').closest('[title]')
         expect(badge).toBeTruthy()
         const title = badge!.getAttribute('title') ?? ''
         expect(title).toContain('Quantity: 2')
         expect(title).toContain('Quantity: 5')
-        expect(title).toContain('Product ID')
+        expect(title).toContain('Product:') // product_id → "Product" (en)
     })
 
-    it('renders singular label for a single-item array', () => {
-        render(<CollectionCell value={[{ sku: 'A1' }]} />)
+    it('renders Spanish count + headers when locale is es', () => {
+        render(
+            <CollectionCell
+                locale="es"
+                value={[
+                    { product_id: 'abc', quantity: 2 },
+                    { product_id: 'def', quantity: 5 },
+                ]}
+            />
+        )
+        expect(screen.getByText('2 ítems')).toBeTruthy()
+        const title =
+            screen.getByText('2 ítems').closest('[title]')!.getAttribute('title') ??
+            ''
+        expect(title).toContain('Producto:')
+        expect(title).toContain('Cantidad: 2')
+    })
+
+    it('renders the singular Spanish noun for a single-item array', () => {
+        render(<CollectionCell locale="es" value={[{ sku: 'A1' }]} />)
         expect(screen.getByText('1 ítem')).toBeTruthy()
+    })
+
+    it('renders the singular English noun for a single-item array', () => {
+        render(<CollectionCell value={[{ sku: 'A1' }]} />)
+        expect(screen.getByText('1 item')).toBeTruthy()
     })
 
     it('previews the first scalars with overflow for a scalar array', () => {
@@ -78,11 +140,11 @@ describe('CollectionCell', () => {
         expect(screen.getByText('a, b, c +2')).toBeTruthy()
     })
 
-    it('renders inline key: value pairs for a plain object', () => {
-        render(<CollectionCell value={{ width: 10, height: 20 }} />)
-        expect(
-            screen.getByText(/Width: 10, Height: 20/)
-        ).toBeTruthy()
+    it('renders inline key: value pairs (localized) for a plain object', () => {
+        render(
+            <CollectionCell locale="es" value={{ price: 10, quantity: 20 }} />
+        )
+        expect(screen.getByText(/Precio: 10, Cantidad: 20/)).toBeTruthy()
     })
 
     it('renders a dash for null / empty values', () => {
@@ -98,12 +160,13 @@ describe('CollectionCell', () => {
     it('parses a JSON-string value into a collection', () => {
         render(
             <CollectionCell
+                locale="es"
                 value={'[{"product_id":"abc","quantity":1}]'}
             />
         )
         expect(screen.getByText('1 ítem')).toBeTruthy()
         const badge = screen.getByText('1 ítem').closest('[title]')
-        expect(badge!.getAttribute('title')).toContain('Quantity: 1')
+        expect(badge!.getAttribute('title')).toContain('Cantidad: 1')
     })
 
     it('truncates an unparseable string instead of crashing', () => {
