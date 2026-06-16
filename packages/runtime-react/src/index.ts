@@ -101,6 +101,12 @@ export {
     type DynamicColumnsHelpers,
 } from './dynamic-columns'
 export { humanizeToken } from './dynamic-columns-helpers'
+export {
+    CollectionCell,
+    formatScalar,
+    prettifyKey,
+    type CollectionCellProps,
+} from './collection-cell'
 export { NIL_UUID, isNilUuid, normalizeNilUuid } from './nil-uuid'
 export { DynamicRecordDialog, ViewValue } from './dialogs/dynamic-record'
 export type { DynamicRecordDialogProps, FieldDef, FieldOption, GetImageUrl } from './dialogs/dynamic-record'
