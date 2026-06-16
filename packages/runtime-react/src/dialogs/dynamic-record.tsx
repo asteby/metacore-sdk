@@ -294,6 +294,51 @@ function relationSiblingValue(field: FieldDef, record: any): any {
     return undefined
 }
 
+// fieldItemFields reads the declared jsonb line-items schema off a field,
+// tolerating the snake_case `item_fields` alias the kernel serves.
+function fieldItemFields(field: FieldDef): ItemField[] | undefined {
+    return field.itemFields ?? field.item_fields
+}
+
+// isLineItemsField — a jsonb line-items column (e.g. Transfer.items): it either
+// declares an `item_fields` schema, or its value is a structured array/object.
+// These are action-built documents; field-by-field editing of the array is out
+// of scope, so the edit dialog renders them read-only (the inline table) rather
+// than an input that would stringify to "[object Object]". Scalars and known
+// editable widgets (media/upload, color, dates) are NOT line-items.
+export function isLineItemsField(field: FieldDef, value: any): boolean {
+    if (field.type === 'image' || field.widget === 'upload') return false
+    if (fieldItemFields(field)?.length) return true
+    if (Array.isArray(value)) return true
+    return (
+        value !== null &&
+        typeof value === 'object' &&
+        !(value instanceof Date)
+    )
+}
+
+// fkSeedOption builds the pre-resolved option for a FK select's CURRENT value
+// from the relation sibling the backend injected alongside the column
+// (`source_warehouse_id` → `source_warehouse = {value,label,image?}`, the key
+// without `_id`; same convention as the jsonb refs). Lets the edit picker show
+// the related record's NAME instead of the raw uuid without waiting for a
+// network lookup. Returns null when there is no usable sibling (the picker then
+// falls back to its existing typeahead/lookup behaviour).
+export function fkSeedOption(field: FieldDef, value: any, record: any): ResolvedOption | null {
+    if (value === undefined || value === null || value === '') return null
+    const sib = relationSiblingValue(field, record)
+    const label = typeof sib === 'string' ? sib : objectLabel(sib)
+    if (!label) return null
+    const id = String(value)
+    return {
+        id,
+        value: id,
+        label,
+        name: label,
+        image: pickImage(sib) ?? null,
+    }
+}
+
 // servedOption matches a field's served option list (enum/select with
 // {value,label,color,icon,image}) against the current value.
 function servedOption(field: FieldDef, value: any): FieldOption | undefined {
@@ -846,7 +891,7 @@ function FieldRow({ field, record, value, mode, onChange }: FieldRowProps) {
             {isReadonly ? (
                 <ViewValue field={field} value={value} record={record} />
             ) : (
-                <EditField field={field} value={value} onChange={onChange} />
+                <EditField field={field} value={value} onChange={onChange} record={record} />
             )}
         </div>
     )
@@ -1161,11 +1206,38 @@ function StructuredViewValue({
     )
 }
 
-function EditField({ field, value, onChange }: {
+export function EditField({ field, value, onChange, record }: {
     field: FieldDef
     value: any
     onChange: (val: any) => void
+    /** The full record being edited — supplies FK relation siblings + line-items. */
+    record?: any
 }) {
+    const { t, i18n } = useTranslation()
+
+    // Jsonb line-items columns (e.g. Transfer.items) are action-built documents:
+    // editing the array field-by-field is out of scope. Render them READ-ONLY
+    // with the same inline table the detail view uses — a localized, ref-resolved
+    // mini-table — instead of an input that stringifies to "[object Object]".
+    if (isLineItemsField(field, value)) {
+        return (
+            <div className="space-y-1">
+                <div className="rounded-md border bg-muted/30 p-2">
+                    <CollectionCell
+                        value={value}
+                        itemFields={fieldItemFields(field)}
+                        variant="inline"
+                        locale={i18n.language}
+                        t={t}
+                    />
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                    {t('datatable.readOnly', { defaultValue: 'Solo lectura' })}
+                </p>
+            </div>
+        )
+    }
+
     if (field.type === 'boolean') {
         return (
             <div className="flex items-center gap-2 py-1">
@@ -1202,7 +1274,18 @@ function EditField({ field, value, onChange }: {
     // option thumbnails and the inline-create "+" — against /api/options/<ref>.
     // Static inline `options` are handled by the enum <Select> branch below.
     if ((getFieldRef(field as ActionFieldDef) || field.widget === 'dynamic_select') && !field.options?.length) {
-        return <DynamicSelectField field={field as ActionFieldDef} value={value} onChange={onChange} />
+        return (
+            <DynamicSelectField
+                field={field as ActionFieldDef}
+                value={value}
+                onChange={onChange}
+                // Seed the trigger with the related record's NAME (from the
+                // backend-injected FK sibling, key without `_id`) so an existing
+                // selection shows the label, not the raw uuid — without waiting
+                // for the popover to open and fetch a page.
+                seedOption={fkSeedOption(field, value, record)}
+            />
+        )
     }
 
     if (field.type === 'search' && field.searchEndpoint) {
