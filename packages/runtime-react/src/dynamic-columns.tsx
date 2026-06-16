@@ -1179,6 +1179,7 @@ export function makeDefaultGetDynamicColumns(
                                         value={value}
                                         locale={currentLanguage}
                                         t={t}
+                                        itemFields={col.itemFields ?? col.item_fields}
                                     />
                                 )
                             }
