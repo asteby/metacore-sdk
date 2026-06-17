@@ -6,8 +6,11 @@
 // mini-table — no per-addon config required, safe on any shape.
 
 import * as React from 'react'
-import { List } from 'lucide-react'
+import { Box, List } from 'lucide-react'
 import {
+    Avatar,
+    AvatarFallback,
+    AvatarImage,
     Badge,
     Popover,
     PopoverContent,
@@ -20,7 +23,34 @@ import {
     TableRow,
     cn,
 } from '@asteby/metacore-ui'
+import { getInitials, relationChipStyles } from '@asteby/metacore-ui/lib'
 import { humanizeToken } from './dynamic-columns-helpers'
+
+/**
+ * Tracks the host's dark-mode class on <html> so relation chips pick a tint
+ * tuned for the active theme. Replicated from dynamic-columns (kept local to
+ * avoid a cross-module import); mirror changes if that one evolves.
+ */
+function useIsDarkTheme(): boolean {
+    const [isDark, setIsDark] = React.useState(
+        () =>
+            typeof document !== 'undefined' &&
+            document.documentElement.classList.contains('dark')
+    )
+    React.useEffect(() => {
+        if (typeof document === 'undefined') return
+        const sync = () =>
+            setIsDark(document.documentElement.classList.contains('dark'))
+        sync()
+        const observer = new MutationObserver(sync)
+        observer.observe(document.documentElement, {
+            attributes: true,
+            attributeFilter: ['class'],
+        })
+        return () => observer.disconnect()
+    }, [])
+    return isDark
+}
 
 const UUID_LIKE_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -56,29 +86,103 @@ function siblingKeyFor(key: string): string {
     return key.endsWith('_id') ? key.slice(0, -3) : `${key}_label`
 }
 
+/** The backend-injected resolved sibling for a ref item-field. */
+interface ResolvedRef {
+    label?: string
+    value?: unknown
+    /** Optional thumbnail (product photo, logo, avatar) resolved by the backend. */
+    image?: string
+}
+
 /**
- * Renders the cell value for one declared item-field of a jsonb row. For a
- * `ref` field it prefers the backend-injected resolved sibling (the FK key
- * without `_id`, else `<key>_label`): a `{ value, label }` object shows its
- * `label`, a bare string shows itself; absent → the raw value via
- * `formatScalar` (truncated uuid). Non-ref fields render `formatScalar(value)`.
+ * Reads the backend-injected resolved sibling for a `ref` item-field (the FK
+ * key without `_id`, else `<key>_label`). Returns the normalized `{label,
+ * image}` when present, a `{label}` for a bare-string sibling, or null when the
+ * ref is unresolved (so the caller falls back to the raw value).
  */
-function renderItemFieldValue(
+function resolvedRefFor(
     field: ItemField,
     row: Record<string, unknown>,
-): string {
-    if (field.ref) {
-        const sibling = row[siblingKeyFor(field.key)]
-        if (sibling && typeof sibling === 'object' && !Array.isArray(sibling)) {
-            const label = (sibling as Record<string, unknown>).label
-            if (label !== undefined && label !== null && label !== '') {
-                return String(label)
+): ResolvedRef | null {
+    if (!field.ref) return null
+    const sibling = row[siblingKeyFor(field.key)]
+    if (sibling && typeof sibling === 'object' && !Array.isArray(sibling)) {
+        const obj = sibling as Record<string, unknown>
+        const label = obj.label
+        if (label !== undefined && label !== null && label !== '') {
+            return {
+                label: String(label),
+                value: obj.value,
+                image:
+                    typeof obj.image === 'string' && obj.image !== ''
+                        ? obj.image
+                        : undefined,
             }
-        } else if (typeof sibling === 'string' && sibling !== '') {
-            return sibling
         }
+    } else if (typeof sibling === 'string' && sibling !== '') {
+        return { label: sibling }
     }
+    return null
+}
+
+/**
+ * Plain-text value for one declared item-field — used for the no-JS popover
+ * `title` tooltip (which can't render JSX). Ref fields show the resolved label;
+ * everything else uses `formatScalar` (truncated uuid for unresolved ids).
+ */
+function itemFieldText(field: ItemField, row: Record<string, unknown>): string {
+    const ref = resolvedRefFor(field, row)
+    if (ref?.label) return ref.label
     return formatScalar(row[field.key])
+}
+
+/**
+ * Visual cell for one declared item-field. A resolved `ref` renders as a
+ * relation chip (subtle deterministic tint + product thumbnail or a generic
+ * entity icon + name) — the same "pro" look the table FK columns use — so jsonb
+ * line items read like first-class relations instead of raw uuids. Non-ref (or
+ * unresolved) fields render the plain scalar.
+ */
+function ItemFieldCell({
+    field,
+    row,
+    getImageUrl,
+}: {
+    field: ItemField
+    row: Record<string, unknown>
+    getImageUrl?: (path: string) => string
+}): React.ReactElement {
+    const isDark = useIsDarkTheme()
+    const ref = resolvedRefFor(field, row)
+    if (ref?.label) {
+        return (
+            <span
+                className="inline-flex max-w-[220px] items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
+                style={relationChipStyles(ref.label, { isDark })}
+                title={ref.label}
+            >
+                {ref.image ? (
+                    <Avatar
+                        className="shrink-0 rounded-sm ring-1 ring-border/40"
+                        style={{ width: 18, height: 18 }}
+                    >
+                        <AvatarImage
+                            src={getImageUrl ? getImageUrl(ref.image) : ref.image}
+                            alt={ref.label}
+                            className="object-cover"
+                        />
+                        <AvatarFallback className="rounded-sm bg-primary/10 text-[8px] font-bold text-primary">
+                            {getInitials(ref.label)}
+                        </AvatarFallback>
+                    </Avatar>
+                ) : (
+                    <Box className="h-3 w-3 shrink-0 opacity-70" />
+                )}
+                <span className="truncate">{ref.label}</span>
+            </span>
+        )
+    }
+    return <>{formatScalar(row[field.key])}</>
 }
 
 /** Normalize an org/UI language tag to a base language code (`es-MX` → `es`). */
@@ -258,11 +362,13 @@ function MiniTable({
     locale,
     t,
     itemFields,
+    getImageUrl,
 }: {
     rows: Record<string, unknown>[]
     locale?: string
     t?: Translate
     itemFields?: ItemField[]
+    getImageUrl?: (path: string) => string
 }) {
     // Schema-driven path: a declared `item_fields` schema fixes the column
     // order + headers (already localized by the backend, used VERBATIM) and
@@ -292,7 +398,11 @@ function MiniTable({
                                     key={field.key}
                                     className="text-xs whitespace-nowrap"
                                 >
-                                    {renderItemFieldValue(field, row)}
+                                    <ItemFieldCell
+                                        field={field}
+                                        row={row}
+                                        getImageUrl={getImageUrl}
+                                    />
                                 </TableCell>
                             ))}
                         </TableRow>
@@ -422,6 +532,12 @@ export interface CollectionCellProps {
      */
     itemFields?: ItemField[]
     /**
+     * Resolves a stored image path to a displayable URL (same resolver the table
+     * columns use). Threaded to the ref-chip thumbnails so resolved line-item
+     * relations show a product photo / logo / avatar like the FK columns do.
+     */
+    getImageUrl?: (path: string) => string
+    /**
      * Presentation mode.
      *   - `'badge'` (default): the compact count/preview badge that opens a
      *     popover with the mini-table / pair-list. Used in dense table cells.
@@ -448,6 +564,7 @@ export function CollectionCell({
     locale,
     t,
     itemFields,
+    getImageUrl,
     variant = 'badge',
 }: CollectionCellProps) {
     const parsed = parseValue(value)
@@ -491,6 +608,7 @@ export function CollectionCell({
                         locale={locale}
                         t={t}
                         itemFields={itemFields}
+                        getImageUrl={getImageUrl}
                     />
                 )
             }
@@ -506,7 +624,7 @@ export function CollectionCell({
                           itemFields!
                               .map(
                                   (field) =>
-                                      `${field.label}: ${renderItemFieldValue(field, row)}`
+                                      `${field.label}: ${itemFieldText(field, row)}`
                               )
                               .join(', ')
                       )
@@ -528,6 +646,7 @@ export function CollectionCell({
                         locale={locale}
                         t={t}
                         itemFields={itemFields}
+                        getImageUrl={getImageUrl}
                     />
                 </PopoverShell>
             )

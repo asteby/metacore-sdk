@@ -1182,6 +1182,7 @@ function StructuredViewValue({
     locale?: string
     t?: (key: string, options?: any) => string
 }) {
+    const getImageUrl = useContext(ImageUrlContext)
     const isEmpty =
         value === null ||
         value === undefined ||
@@ -1201,6 +1202,7 @@ function StructuredViewValue({
                 variant="inline"
                 locale={locale}
                 t={t}
+                getImageUrl={getImageUrl}
             />
         </div>
     )
@@ -1214,6 +1216,7 @@ export function EditField({ field, value, onChange, record }: {
     record?: any
 }) {
     const { t, i18n } = useTranslation()
+    const editFieldImageUrl = useContext(ImageUrlContext)
 
     // Jsonb line-items columns (e.g. Transfer.items) are action-built documents:
     // editing the array field-by-field is out of scope. Render them READ-ONLY
@@ -1229,6 +1232,7 @@ export function EditField({ field, value, onChange, record }: {
                         variant="inline"
                         locale={i18n.language}
                         t={t}
+                        getImageUrl={editFieldImageUrl}
                     />
                 </div>
                 <p className="text-[11px] text-muted-foreground">
