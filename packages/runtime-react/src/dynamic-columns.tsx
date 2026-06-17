@@ -1180,6 +1180,7 @@ export function makeDefaultGetDynamicColumns(
                                         locale={currentLanguage}
                                         t={t}
                                         itemFields={col.itemFields ?? col.item_fields}
+                                        getImageUrl={getImageUrl}
                                     />
                                 )
                             }
