@@ -132,6 +132,13 @@ function resolveColumn(key: string, columns?: ColumnDefinition[]): ColumnDefinit
     if (!columns?.length) return undefined
     const exact = columns.find((c) => c.key === key)
     if (exact) return exact
+    // A resolved relation key is the FK column minus `_id` (the backend injects a
+    // `destination_warehouse` sibling next to `destination_warehouse_id`). The
+    // served metadata carries the LOCALIZED label on the `*_id` column, so match
+    // it — else the label falls back to humanizing the key in English
+    // ("Destination Warehouse" instead of "Almacén destino").
+    const fk = columns.find((c) => c.key === `${key}_id`)
+    if (fk) return fk
     // A diff key is the physical column (created_by); the served metadata may
     // only carry the dotted display column for it (created_by.avatar). Match on
     // the base segment so the diff cell inherits its label and rich renderer.

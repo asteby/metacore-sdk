@@ -23,6 +23,33 @@ import { generateBadgeStyles, getInitials, optionColor, relationChipStyles } fro
 import type { ColumnDefinition } from './types'
 import { formatDateCell } from './dynamic-columns'
 import { humanizeToken } from './dynamic-columns-helpers'
+import { CollectionCell, type ItemField } from './collection-cell'
+
+/**
+ * Parses a value into a jsonb line-items array (array of plain objects) when it
+ * is one — directly, or from a JSON-encoded string. Returns null otherwise, so
+ * scalars / resolved-entity objects keep their existing renderers.
+ */
+function asLineItemsArray(value: unknown): Record<string, unknown>[] | null {
+    let arr: unknown = value
+    if (typeof value === 'string') {
+        const t = value.trim()
+        if (!t.startsWith('[')) return null
+        try {
+            arr = JSON.parse(t)
+        } catch {
+            return null
+        }
+    }
+    if (
+        Array.isArray(arr) &&
+        arr.length > 0 &&
+        arr.every((v) => v !== null && typeof v === 'object' && !Array.isArray(v))
+    ) {
+        return arr as Record<string, unknown>[]
+    }
+    return null
+}
 
 // ---------------------------------------------------------------------------
 // Internal helpers (mirror dynamic-columns.tsx private helpers)
@@ -126,6 +153,26 @@ export const ActivityValueRenderer: React.FC<ActivityValueRendererProps> = ({
     // null / undefined → dash
     if (value === null || value === undefined || value === '') {
         return <span className="text-muted-foreground">—</span>
+    }
+
+    // jsonb line-items (array of objects, e.g. a transfer's `items`) → the shared
+    // CollectionCell mini-table (localized headers + resolved ref chips) instead
+    // of raw JSON. Uses the column's declared item_fields when present.
+    const lineItems = asLineItemsArray(value)
+    if (lineItems) {
+        return (
+            <CollectionCell
+                value={lineItems}
+                variant="inline"
+                itemFields={
+                    (col as { itemFields?: ItemField[]; item_fields?: ItemField[] })
+                        ?.itemFields ??
+                    (col as { itemFields?: ItemField[]; item_fields?: ItemField[] })
+                        ?.item_fields
+                }
+                locale={locale}
+            />
+        )
     }
 
     // No column metadata → entity chip when the value is a resolved object,
