@@ -137,10 +137,73 @@ function itemFieldText(field: ItemField, row: Record<string, unknown>): string {
 }
 
 /**
+ * A backend-resolved relation reference shaped `{ value, label, image? }` — the
+ * sibling the backend injects for a ref (FK column or jsonb item-field), the
+ * SAME shape the relation table columns use. Lets a jsonb line item read as a
+ * first-class relation, not a raw uuid.
+ */
+function resolvedRefObject(
+    v: unknown,
+): (ResolvedRef & { label: string }) | null {
+    if (!isPlainObject(v)) return null
+    const label = v.label
+    if (label === undefined || label === null || label === '') return null
+    return {
+        label: String(label),
+        value: v.value,
+        image:
+            typeof v.image === 'string' && v.image !== '' ? v.image : undefined,
+    }
+}
+
+/**
+ * The "pro" relation chip — subtle deterministic tint + the related record's
+ * thumbnail (product photo / logo / avatar) or a generic entity icon + the
+ * resolved name. The exact look the FK table columns use, so resolved relations
+ * read consistently everywhere (table popover, detail view, edit, line items).
+ */
+function RefChip({
+    label,
+    image,
+    getImageUrl,
+}: {
+    label: string
+    image?: string
+    getImageUrl?: (path: string) => string
+}): React.ReactElement {
+    const isDark = useIsDarkTheme()
+    return (
+        <span
+            className="inline-flex max-w-[220px] items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
+            style={relationChipStyles(label, { isDark })}
+            title={label}
+        >
+            {image ? (
+                <Avatar
+                    className="shrink-0 rounded-sm ring-1 ring-border/40"
+                    style={{ width: 18, height: 18 }}
+                >
+                    <AvatarImage
+                        src={getImageUrl ? getImageUrl(image) : image}
+                        alt={label}
+                        className="object-cover"
+                    />
+                    <AvatarFallback className="rounded-sm bg-primary/10 text-[8px] font-bold text-primary">
+                        {getInitials(label)}
+                    </AvatarFallback>
+                </Avatar>
+            ) : (
+                <Box className="h-3 w-3 shrink-0 opacity-70" />
+            )}
+            <span className="truncate">{label}</span>
+        </span>
+    )
+}
+
+/**
  * Visual cell for one declared item-field. A resolved `ref` renders as a
- * relation chip (subtle deterministic tint + product thumbnail or a generic
- * entity icon + name) — the same "pro" look the table FK columns use — so jsonb
- * line items read like first-class relations instead of raw uuids. Non-ref (or
+ * relation chip (foto/ícono + nombre) — the "pro" FK-column look — so jsonb line
+ * items read like first-class relations instead of raw uuids. Non-ref (or
  * unresolved) fields render the plain scalar.
  */
 function ItemFieldCell({
@@ -152,34 +215,10 @@ function ItemFieldCell({
     row: Record<string, unknown>
     getImageUrl?: (path: string) => string
 }): React.ReactElement {
-    const isDark = useIsDarkTheme()
     const ref = resolvedRefFor(field, row)
     if (ref?.label) {
         return (
-            <span
-                className="inline-flex max-w-[220px] items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
-                style={relationChipStyles(ref.label, { isDark })}
-                title={ref.label}
-            >
-                {ref.image ? (
-                    <Avatar
-                        className="shrink-0 rounded-sm ring-1 ring-border/40"
-                        style={{ width: 18, height: 18 }}
-                    >
-                        <AvatarImage
-                            src={getImageUrl ? getImageUrl(ref.image) : ref.image}
-                            alt={ref.label}
-                            className="object-cover"
-                        />
-                        <AvatarFallback className="rounded-sm bg-primary/10 text-[8px] font-bold text-primary">
-                            {getInitials(ref.label)}
-                        </AvatarFallback>
-                    </Avatar>
-                ) : (
-                    <Box className="h-3 w-3 shrink-0 opacity-70" />
-                )}
-                <span className="truncate">{ref.label}</span>
-            </span>
+            <RefChip label={ref.label} image={ref.image} getImageUrl={getImageUrl} />
         )
     }
     return <>{formatScalar(row[field.key])}</>
@@ -412,7 +451,20 @@ function MiniTable({
         )
     }
 
-    const keys = unionKeys(rows)
+    // Generic (no-schema) path — still relation-AWARE. The backend injects a
+    // resolved-ref sibling object (`{value,label,image}`) next to each FK id
+    // inside the items (e.g. `product` next to `product_id`). Without a declared
+    // schema we'd otherwise dump that object as "{…}" AND the raw uuid in a
+    // duplicate column. Instead: detect those sibling objects, render them as
+    // relation chips, and HIDE their raw `<key>_id` twin — so even an
+    // unconfigured jsonb blob reads "pro" (foto/nombre, no uuid soup).
+    const allKeys = unionKeys(rows)
+    const refKeys = new Set(
+        allKeys.filter((k) => rows.some((r) => resolvedRefObject(r[k]) !== null))
+    )
+    const hiddenTwins = new Set<string>()
+    for (const rk of refKeys) hiddenTwins.add(`${rk}_id`)
+    const keys = allKeys.filter((k) => !hiddenTwins.has(k))
     if (keys.length === 0) {
         return <div className="p-3 text-xs text-muted-foreground">-</div>
     }
@@ -430,14 +482,27 @@ function MiniTable({
             <TableBody>
                 {rows.map((row, i) => (
                     <TableRow key={i}>
-                        {keys.map((key) => (
-                            <TableCell
-                                key={key}
-                                className="text-xs whitespace-nowrap"
-                            >
-                                {formatScalar(row[key])}
-                            </TableCell>
-                        ))}
+                        {keys.map((key) => {
+                            const ref = refKeys.has(key)
+                                ? resolvedRefObject(row[key])
+                                : null
+                            return (
+                                <TableCell
+                                    key={key}
+                                    className="text-xs whitespace-nowrap"
+                                >
+                                    {ref ? (
+                                        <RefChip
+                                            label={ref.label}
+                                            image={ref.image}
+                                            getImageUrl={getImageUrl}
+                                        />
+                                    ) : (
+                                        formatScalar(row[key])
+                                    )}
+                                </TableCell>
+                            )
+                        })}
                     </TableRow>
                 ))}
             </TableBody>
