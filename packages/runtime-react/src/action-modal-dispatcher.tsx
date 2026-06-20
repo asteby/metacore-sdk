@@ -53,6 +53,70 @@ import {
 
 export type { ActionMetadata, ActionModalProps }
 
+// ---- line-items prefill from the acted-on record ----------------------------
+//
+// A line-items action field can seed its rows from the record being acted on,
+// instead of opening empty. The manifest declares this by setting the field's
+// `default`/`defaultValue` to a PrefillSpec object: the modal reads the record's
+// `$prefillFromRecord` array, copies the mapped keys, and (for a receive-style
+// flow) computes a `remaining` quantity = of - minus, dropping fully-satisfied
+// rows. Decoupled + generic: the SDK knows nothing about transfers, only how to
+// project a record array into the field's item_fields. Example (receive goods):
+//
+//   "default": {
+//     "$prefillFromRecord": "items",
+//     "map": { "product_id": "product_id" },
+//     "remaining": { "target": "qty_received", "of": "quantity", "minus": "received" }
+//   }
+interface PrefillSpec {
+    $prefillFromRecord: string
+    map?: Record<string, string>
+    remaining?: { target: string; of: string; minus?: string }
+}
+
+function isPrefillSpec(v: unknown): v is PrefillSpec {
+    return (
+        typeof v === 'object' &&
+        v !== null &&
+        typeof (v as { $prefillFromRecord?: unknown }).$prefillFromRecord === 'string'
+    )
+}
+
+// lineItemsDefault reads the field's declared default tolerating BOTH the
+// camelCase `defaultValue` the host serves and the snake/legacy `default` the
+// raw manifest carries (the kernel maps action-field `default` through without
+// renaming it to `defaultValue`).
+function lineItemsDefault(field: ActionFieldDef): unknown {
+    const f = field as { defaultValue?: unknown; default?: unknown }
+    return f.defaultValue ?? f.default
+}
+
+function toNum(v: unknown): number {
+    const n = typeof v === 'number' ? v : parseFloat(String(v ?? ''))
+    return Number.isFinite(n) ? n : 0
+}
+
+// buildPrefillRows projects record[spec.$prefillFromRecord] into modal rows.
+function buildPrefillRows(spec: PrefillSpec, record: any): Array<Record<string, any>> {
+    const src = record?.[spec.$prefillFromRecord]
+    if (!Array.isArray(src)) return []
+    const rows: Array<Record<string, any>> = []
+    for (const item of src) {
+        if (!item || typeof item !== 'object') continue
+        const row: Record<string, any> = {}
+        if (spec.map) {
+            for (const [target, from] of Object.entries(spec.map)) row[target] = item[from]
+        }
+        if (spec.remaining) {
+            const remaining = toNum(item[spec.remaining.of]) - (spec.remaining.minus ? toNum(item[spec.remaining.minus]) : 0)
+            if (remaining <= 0) continue // line already fully satisfied → omit
+            row[spec.remaining.target] = remaining
+        }
+        rows.push(row)
+    }
+    return rows
+}
+
 export function ActionModalDispatcher({
     open,
     onOpenChange,
@@ -188,14 +252,19 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
             const defaults: Record<string, any> = {}
             for (const field of action.fields) {
                 if (isLineItemsField(field)) {
-                    defaults[field.key] = field.defaultValue ?? []
+                    const dv = lineItemsDefault(field)
+                    defaults[field.key] = isPrefillSpec(dv)
+                        ? buildPrefillRows(dv, record)
+                        : Array.isArray(dv)
+                          ? dv
+                          : []
                     continue
                 }
                 defaults[field.key] = field.defaultValue ?? (field.type === 'boolean' ? false : '')
             }
             setFormData(defaults)
         }
-    }, [open, action.fields])
+    }, [open, action.fields, record])
 
     const updateField = (key: string, value: any) => setFormData((prev: Record<string, any>) => ({ ...prev, [key]: value }))
 
