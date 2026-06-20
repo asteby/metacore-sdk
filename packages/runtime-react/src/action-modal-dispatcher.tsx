@@ -72,6 +72,13 @@ interface PrefillSpec {
     $prefillFromRecord: string
     map?: Record<string, string>
     remaining?: { target: string; of: string; minus?: string }
+    /**
+     * Item-field keys to lock (render read-only) in the prefilled rows — e.g. the
+     * product of a receive-goods line is dictated by the source document, so it
+     * is shown as a resolved name but cannot be changed. Editable in the create
+     * flow (which carries no prefill spec); only the prefilled action locks them.
+     */
+    lock?: string[]
 }
 
 function isPrefillSpec(v: unknown): v is PrefillSpec {
@@ -94,6 +101,23 @@ function lineItemsDefault(field: ActionFieldDef): unknown {
 function toNum(v: unknown): number {
     const n = typeof v === 'number' ? v : parseFloat(String(v ?? ''))
     return Number.isFinite(n) ? n : 0
+}
+
+// applyPrefillLock marks the item-field columns named in a line-items field's
+// PrefillSpec.lock as read-only, so the prefilled cells (e.g. the product of a
+// receive line) render as a resolved, non-editable name. Returns the field
+// untouched when there is no prefill spec or no lock list (the create flow,
+// which carries no prefill, stays fully editable). The readonly flag is set on
+// BOTH itemFields aliases the renderers tolerate.
+function applyPrefillLock(field: ActionFieldDef): ActionFieldDef {
+    const spec = lineItemsDefault(field)
+    if (!isPrefillSpec(spec) || !spec.lock || spec.lock.length === 0) return field
+    const lock = new Set(spec.lock)
+    const f = field as ActionFieldDef & { itemFields?: any[]; item_fields?: any[] }
+    const items: any[] | undefined = f.itemFields ?? f.item_fields
+    if (!Array.isArray(items)) return field
+    const patched: any[] = items.map((c) => (c && c.key && lock.has(c.key) ? { ...c, readonly: true } : c))
+    return { ...(field as any), itemFields: patched, item_fields: patched } as ActionFieldDef
 }
 
 // buildPrefillRows projects record[spec.$prefillFromRecord] into modal rows.
@@ -397,7 +421,7 @@ function renderField(
     // Repeatable line-items group → row grid (value is an array of row objects).
     // The header form values flow in so a cell can depend on a header field.
     if (isLineItemsField(field)) {
-        return <DynamicLineItems field={field} value={value} onChange={onChange} formValues={formValues} />
+        return <DynamicLineItems field={applyPrefillLock(field)} value={value} onChange={onChange} formValues={formValues} />
     }
     // Resolve the widget the same way DynamicForm does (explicit widget wins,
     // else inferred from type) so action modals and the standalone form stay in

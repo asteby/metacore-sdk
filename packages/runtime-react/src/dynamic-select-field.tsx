@@ -162,6 +162,14 @@ export interface DynamicSelectFieldProps {
     dependsValue?: string
     /** Overrides the disabled-state hint shown while `dependsValue` is empty. */
     dependsHint?: string
+    /**
+     * Renders the picker as a locked, non-interactive display of the current
+     * value's resolved label (no popover, no inline-create). Used when the value
+     * is fixed by context — e.g. the product of a receive-goods line is dictated
+     * by the source document, not chosen. Options are fetched eagerly (not just
+     * on open) so the label resolves to the NAME instead of showing the raw id.
+     */
+    readonly?: boolean
 }
 
 export function DynamicSelectField({
@@ -171,6 +179,7 @@ export function DynamicSelectField({
     seedOption,
     dependsValue,
     dependsHint,
+    readonly = false,
 }: DynamicSelectFieldProps) {
     const [open, setOpen] = useState(false)
     const [search, setSearch] = useState('')
@@ -210,8 +219,9 @@ export function DynamicSelectField({
         filterValue: dependsOn ? scope : undefined,
         // Don't fetch until the popover opens (and keep fetching as the query
         // changes while open). A picker blocked by an unset dependency never
-        // fetches.
-        enabled: open && !blockedByDependency,
+        // fetches. A readonly cell fetches eagerly so its value's label resolves
+        // to the name without the user ever opening it.
+        enabled: (open || readonly) && !blockedByDependency,
     })
 
     // When the depended-on value changes, the previously-picked option no longer
@@ -269,6 +279,31 @@ export function DynamicSelectField({
                     },
                 },
             }),
+        )
+    }
+
+    // Locked display: the value is fixed by context, so render the resolved
+    // label (name) as a disabled control — no popover, no inline-create. While
+    // the eager fetch is in flight the label falls back to the seed/raw value,
+    // then snaps to the name once options arrive.
+    if (readonly) {
+        return (
+            <Button
+                type="button"
+                variant="outline"
+                role="combobox"
+                id={field.key}
+                disabled
+                aria-readonly="true"
+                className="w-full min-w-0 cursor-default justify-start font-normal opacity-100"
+            >
+                <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                    {hasVisual && value ? <OptionLead option={selectedOption} size={20} /> : null}
+                    <span className={'min-w-0 flex-1 truncate ' + (selectedLabel ? '' : 'text-muted-foreground')}>
+                        {selectedLabel || (loading ? 'Cargando…' : field.placeholder || '—')}
+                    </span>
+                </span>
+            </Button>
         )
     }
 
