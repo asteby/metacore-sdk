@@ -267,7 +267,9 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues 
     // Async searchable picker per row cell — e.g. the account_id column of a
     // journal entry's debit/credit lines. Same widget as the flat form.
     if (widget === 'dynamic_select') {
-        return <DynamicSelectField field={field} value={value} onChange={onChange} dependsValue={dependsValue} />
+        const ro = !!(field as { readonly?: boolean; read_only?: boolean }).readonly ||
+            !!(field as { readonly?: boolean; read_only?: boolean }).read_only
+        return <DynamicSelectField field={field} value={value} onChange={onChange} dependsValue={dependsValue} readonly={ro} />
     }
     if (widget === 'select' && (field.ref || getOptionsConfig(field)?.source)) {
         return (
