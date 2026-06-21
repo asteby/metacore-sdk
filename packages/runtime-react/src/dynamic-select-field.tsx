@@ -298,9 +298,11 @@ export function DynamicSelectField({
                 className="w-full min-w-0 cursor-default justify-start font-normal opacity-100"
             >
                 <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                    {hasVisual && value ? <OptionLead option={selectedOption} size={20} /> : null}
-                    <span className={'min-w-0 flex-1 truncate ' + (selectedLabel ? '' : 'text-muted-foreground')}>
-                        {selectedLabel || (loading ? 'Cargando…' : field.placeholder || '—')}
+                    {selectedOption ? <OptionLead option={selectedOption} size={20} /> : null}
+                    <span className={'min-w-0 flex-1 truncate ' + (selectedOption ? '' : 'text-muted-foreground')}>
+                        {/* Never flash the raw id: until the eager fetch resolves the
+                            option, show a loading hint instead of String(value). */}
+                        {selectedOption?.label ?? (loading ? 'Cargando…' : field.placeholder || '—')}
                     </span>
                 </span>
             </Button>
