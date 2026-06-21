@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 18.28.1
+
+### Patch Changes
+
+- f346352: fix(line-items): a locked dynamic_select no longer flashes the raw id while its label is resolving — it shows a loading hint, then the name + thumbnail, instead of String(value).
+
 ## 18.28.0
 
 ### Minor Changes
