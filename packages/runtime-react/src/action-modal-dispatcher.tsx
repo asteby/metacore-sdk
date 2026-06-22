@@ -39,6 +39,7 @@ import { toast } from 'sonner'
 import { useApi } from './api-context'
 import { DynamicIcon } from './dynamic-icon'
 import { DynamicLineItems } from './dynamic-line-items'
+import { DynamicRelations } from './dynamic-relations'
 import { DynamicSelectField } from './dynamic-select-field'
 import { DynamicDateField } from './dynamic-date-field'
 import { UploadField } from './upload-field'
@@ -270,6 +271,32 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
     const api = useApi()
     const [formData, setFormData] = useState<Record<string, any>>({})
     const [executing, setExecuting] = useState(false)
+    // Related records to surface BELOW the form, as read-only context for the
+    // record being acted on — e.g. the reception history of a transfer while
+    // receiving against it. Sourced from the model's metadata.relations (the
+    // same declarative relations the detail view renders). Only row actions on a
+    // real record show them; create actions (no record.id) render nothing.
+    const [relations, setRelations] = useState<any[]>([])
+    const recordId = record?.id
+    useEffect(() => {
+        let cancelled = false
+        if (!open || recordId == null) {
+            setRelations([])
+            return
+        }
+        api.get(`/metadata/table/${model}`)
+            .then((res) => {
+                if (cancelled) return
+                const rels = res?.data?.relations ?? res?.data?.data?.relations ?? []
+                setRelations(Array.isArray(rels) ? rels : [])
+            })
+            .catch(() => {
+                if (!cancelled) setRelations([])
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [open, model, recordId, api])
 
     useEffect(() => {
         if (open && action.fields) {
@@ -389,6 +416,11 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                             </div>
                         )
                     })}
+                    {relations.length > 0 && (
+                        <div className="sm:col-span-2">
+                            <DynamicRelations record={record} relations={relations} />
+                        </div>
+                    )}
                 </div>
                 <DialogFooter className="shrink-0">
                     <Button variant="outline" onClick={() => onOpenChange(false)} disabled={executing}>
