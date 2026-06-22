@@ -259,6 +259,13 @@ interface CellRendererProps {
 // a scalar widget).
 function CellRenderer({ field, value, onChange, disabled, formValues, rowValues }: CellRendererProps) {
     const widget = resolveWidget(field)
+    // Per-field read-only: a column locked by a PrefillSpec.lock (e.g. the
+    // "ordered" / "already received" progress columns of a receive-goods modal)
+    // renders disabled so it shows context without being editable. Tolerates the
+    // snake_case alias the kernel may serve.
+    const ro = !!(field as { readonly?: boolean; read_only?: boolean }).readonly ||
+        !!(field as { readonly?: boolean; read_only?: boolean }).read_only
+    const off = disabled || ro
     // Cascade scope for a cell with `dependsOn`: resolved from this row first
     // (a sibling cell) then the header form (e.g. `source_warehouse_id`).
     const dependsValue = getDependsOn(field)
@@ -267,8 +274,6 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues 
     // Async searchable picker per row cell — e.g. the account_id column of a
     // journal entry's debit/credit lines. Same widget as the flat form.
     if (widget === 'dynamic_select') {
-        const ro = !!(field as { readonly?: boolean; read_only?: boolean }).readonly ||
-            !!(field as { readonly?: boolean; read_only?: boolean }).read_only
         return <DynamicSelectField field={field} value={value} onChange={onChange} dependsValue={dependsValue} readonly={ro} />
     }
     if (widget === 'select' && (field.ref || getOptionsConfig(field)?.source)) {
@@ -291,7 +296,7 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues 
                     value={value || ''}
                     onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)}
                     placeholder={field.placeholder}
-                    disabled={disabled}
+                    disabled={off}
                     rows={2}
                 />
             )
@@ -301,12 +306,12 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues 
                     type="color"
                     value={value || '#000000'}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
-                    disabled={disabled}
+                    disabled={off}
                 />
             )
         case 'select':
             return (
-                <Select value={value || ''} onValueChange={onChange} disabled={disabled}>
+                <Select value={value || ''} onValueChange={onChange} disabled={off}>
                     <SelectTrigger className="w-full">
                         <SelectValue placeholder={field.placeholder || 'Seleccionar...'} />
                     </SelectTrigger>
@@ -320,7 +325,7 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues 
                 </Select>
             )
         case 'switch':
-            return <Switch checked={!!value} onCheckedChange={onChange} disabled={disabled} />
+            return <Switch checked={!!value} onCheckedChange={onChange} disabled={off} />
         case 'number':
             return (
                 <Input
@@ -328,7 +333,7 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues 
                     value={value ?? ''}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.valueAsNumber || '')}
                     placeholder={field.placeholder}
-                    disabled={disabled}
+                    disabled={off}
                 />
             )
         case 'date':
@@ -337,7 +342,7 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues 
                     type="date"
                     value={value || ''}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
-                    disabled={disabled}
+                    disabled={off}
                 />
             )
         default:
@@ -347,7 +352,7 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues 
                     value={value || ''}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
                     placeholder={field.placeholder}
-                    disabled={disabled}
+                    disabled={off}
                 />
             )
     }
