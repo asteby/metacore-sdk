@@ -22,6 +22,54 @@ export interface TableMetadata {
      * and attachments. Absent on hosts/older kernels — purely additive.
      */
     relations?: RelationMeta[]
+    /**
+     * Which renderer the host should use for this view. `'table'` (default, or
+     * absent) → `DynamicTable`; `'kanban'` → `DynamicKanban`. Served by the
+     * kernel from the nav item's `view_type` (RFC §1.2). Purely additive — older
+     * kernels omit it and the SDK falls back to the table renderer.
+     */
+    view_type?: 'table' | 'kanban' | (string & {})
+    /**
+     * Column key the board groups by when `view_type === 'kanban'` (the stage
+     * column, e.g. `'stage'`). Each distinct value of this column becomes a board
+     * lane. Mirrors the nav item's `group_by` (RFC §1.2).
+     */
+    group_by?: string
+    /**
+     * Board lanes (the stage machine of the `group_by`/`stage_field` column).
+     * When present the kanban renders one lane per stage in `order`. When absent
+     * the SDK derives lanes from the `group_by` column's `options` (the kernel
+     * already projects `stages[]` onto the status display — RFC §1.1). Snake_case
+     * keys as the kernel serves them.
+     */
+    stages?: StageMeta[]
+    /**
+     * Allowed stage transitions (RFC §1.1). When present, the kanban only lets a
+     * card drop into a lane reachable from its current stage; disallowed lanes
+     * are dimmed and reject the drop. `from`/`to` accept `'*'` as a wildcard.
+     * Absent → any move is allowed (the kernel still validates server-side).
+     */
+    transitions?: StageTransition[]
+}
+
+/**
+ * One board lane / pipeline stage. Mirrors the kernel v3 `Stage` (RFC §1.1).
+ * `color` is a semantic palette name (`'slate'`, `'blue'`, `'amber'`, `'green'`)
+ * or a hex literal — resolved through the same `generateBadgeStyles` helper as
+ * option badges. `is_final` flags a terminal stage (e.g. "Done").
+ */
+export interface StageMeta {
+    key: string
+    label: string
+    color?: string
+    order?: number
+    is_final?: boolean
+}
+
+/** Allowed `from → to` stage transition (RFC §1.1). `'*'` is a wildcard. */
+export interface StageTransition {
+    from: string
+    to: string
 }
 
 /**
