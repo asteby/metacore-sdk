@@ -74,35 +74,78 @@ export class PushNotificationService {
     }
   }
 
-  async subscribe(): Promise<boolean> {
-    if (!this.isSupportedFlag) {
-      toast.error('Tu navegador no soporta notificaciones push')
+  /**
+   * Subscribe to Web Push and register the subscription with the backend.
+   *
+   * Robust against the two ways this used to fail in production:
+   *  - A stale/rotated subscription (or one created under a different
+   *    applicationServerKey / legacy gcm_sender_id) makes pushManager.subscribe
+   *    throw "A subscription with a different applicationServerKey already
+   *    exists" → surfaced as "Error al activar notificaciones push". We now drop
+   *    any existing subscription whose key doesn't match and re-subscribe.
+   *  - Push silently dying after the subscription expires: we always re-POST to
+   *    the backend (re-activating the server-side row) and re-create the
+   *    subscription when it's missing, so returning to the app restores it.
+   *
+   * @param opts.silent       suppress toasts (auto/background refresh paths)
+   * @param opts.allowPrompt  may call Notification.requestPermission() (true for
+   *                          user-initiated; false for auto paths so we never
+   *                          prompt unexpectedly)
+   */
+  async subscribe(opts: { silent?: boolean; allowPrompt?: boolean } = {}): Promise<boolean> {
+    const { silent = false, allowPrompt = true } = opts
+    const fail = (msg: string) => {
+      if (!silent) toast.error(msg)
       return false
+    }
+
+    if (!this.isSupportedFlag) {
+      return fail('Tu navegador no soporta notificaciones push')
     }
 
     if (!this.vapidPublicKey) {
       await this.init()
       if (!this.vapidPublicKey) {
-        toast.error('No se pudo obtener la clave del servidor')
-        return false
+        return fail('No se pudo obtener la clave del servidor')
       }
     }
 
     try {
-      const permission = await Notification.requestPermission()
-      if (permission !== 'granted') {
-        toast.error('Permiso de notificaciones denegado')
-        return false
+      if (Notification.permission !== 'granted') {
+        if (!allowPrompt) return false // auto path: never prompt
+        const permission = await Notification.requestPermission()
+        if (permission !== 'granted') {
+          return fail('Permiso de notificaciones denegado')
+        }
       }
 
+      const appKey = this.urlBase64ToUint8Array(this.vapidPublicKey)
       const registration = await navigator.serviceWorker.ready
-      const subscription = await registration.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: this.urlBase64ToUint8Array(this.vapidPublicKey) as BufferSource,
-      })
+
+      // Reuse an existing subscription only if it was created with the SAME
+      // VAPID key; otherwise drop it (rotated key / legacy gcm_sender_id) so the
+      // subscribe below doesn't throw.
+      let subscription = await registration.pushManager.getSubscription()
+      if (subscription && !this.keyMatches(subscription, appKey)) {
+        try {
+          await subscription.unsubscribe()
+        } catch {
+          /* ignore — we'll try to subscribe fresh anyway */
+        }
+        subscription = null
+      }
+
+      if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: appKey as BufferSource,
+        })
+      }
 
       this.subscription = subscription
 
+      // Always (re-)register with the backend so an expired/deactivated row is
+      // reactivated when the user comes back.
       const keys = subscription.toJSON().keys as unknown as PushSubscriptionKeys
       await this.api.post(this.opts.subscribePath, {
         endpoint: subscription.endpoint,
@@ -111,14 +154,25 @@ export class PushNotificationService {
         device_type: this.detectDeviceType(),
       })
 
-      toast.success('Notificaciones push activadas')
+      if (!silent) toast.success('Notificaciones push activadas')
       return true
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to subscribe to push:', error)
-      toast.error('Error al activar notificaciones push')
-      return false
+      return fail('Error al activar notificaciones push')
     }
+  }
+
+  /** True if the existing subscription's applicationServerKey equals `appKey`. */
+  private keyMatches(subscription: PushSubscription, appKey: Uint8Array): boolean {
+    const existing = subscription.options?.applicationServerKey
+    if (!existing) return false // legacy sub (no VAPID key) → treat as mismatch
+    const a = new Uint8Array(existing as ArrayBuffer)
+    if (a.length !== appKey.length) return false
+    for (let i = 0; i < a.length; i++) {
+      if (a[i] !== appKey[i]) return false
+    }
+    return true
   }
 
   async unsubscribe(): Promise<boolean> {

@@ -155,7 +155,7 @@ export function PWAProvider({
       // receives background/mobile push because nothing ever created the
       // PushSubscription the server sends to.
       if (autoSubscribeOnGranted && !subscribed && pushService.getSupported() && hasPermission()) {
-        subscribed = await pushService.subscribe()
+        subscribed = await pushService.subscribe({ silent: true, allowPrompt: false })
       }
       if (!cancelled) setIsPushSubscribed(subscribed)
     }
@@ -169,16 +169,42 @@ export function PWAProvider({
       poll = setInterval(() => {
         if (cancelled) return
         if (hasPermission() && !pushService.isSubscribed()) {
-          void pushService.subscribe().then((ok) => {
+          void pushService.subscribe({ silent: true, allowPrompt: false }).then((ok) => {
             if (!cancelled) setIsPushSubscribed(ok)
           })
         }
       }, 3000)
     }
 
+    // Re-validate the subscription whenever the user returns to the app (tab
+    // visible / window focus). Web Push subscriptions silently expire/rotate
+    // after a while (e.g. hours idle); on return we re-POST/re-create so push
+    // keeps working without forcing a full reload. Silent + re-POST reactivates
+    // a server-side row that was deactivated after an expired-endpoint send.
+    const onVisible = () => {
+      if (cancelled || !autoSubscribeOnGranted) return
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      if (!pushService.getSupported() || !hasPermission()) return
+      void pushService.subscribe({ silent: true, allowPrompt: false }).then((ok) => {
+        if (!cancelled) setIsPushSubscribed(ok)
+      })
+    }
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisible)
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', onVisible)
+    }
+
     return () => {
       cancelled = true
       if (poll) clearInterval(poll)
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisible)
+      }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', onVisible)
+      }
     }
   }, [autoSubscribeOnGranted])
 
