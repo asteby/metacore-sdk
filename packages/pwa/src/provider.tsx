@@ -74,6 +74,15 @@ export interface PWAProviderProps {
   /** Interval in ms between SW update checks. Default: 1 hour. Set to 0 to disable. */
   updateCheckIntervalMs?: number
   /**
+   * Automatically create the push subscription once notification permission is
+   * granted (default: true). Having permission is NOT enough — without a
+   * PushSubscription saved on the server, background/mobile push never arrives.
+   * The provider subscribes on mount if permission is already granted, and
+   * watches for a later grant, so apps don't have to wire subscribeToPush()
+   * themselves. Set to false to manage subscription manually.
+   */
+  autoSubscribeOnGranted?: boolean
+  /**
    * Called with the registration once the SW is ready. Useful for instrumentation.
    */
   onRegistered?: (registration: ServiceWorkerRegistration | undefined) => void
@@ -87,6 +96,7 @@ export function PWAProvider({
   pushOptions,
   messages,
   updateCheckIntervalMs = 60 * 60 * 1000,
+  autoSubscribeOnGranted = true,
   onRegistered,
   onRegisterError,
 }: PWAProviderProps) {
@@ -131,13 +141,46 @@ export function PWAProvider({
     const pushService = pushServiceRef.current
     if (!pushService) return
 
+    let cancelled = false
+    const hasPermission = () =>
+      typeof Notification !== 'undefined' && Notification.permission === 'granted'
+
     const initPush = async () => {
       setIsPushSupported(pushService.getSupported())
       await pushService.init()
-      setIsPushSubscribed(pushService.isSubscribed())
+      if (cancelled) return
+      let subscribed = pushService.isSubscribed()
+      // Auto-subscribe when permission is already granted but no subscription
+      // exists yet. Without this, an app that "has permission" still never
+      // receives background/mobile push because nothing ever created the
+      // PushSubscription the server sends to.
+      if (autoSubscribeOnGranted && !subscribed && pushService.getSupported() && hasPermission()) {
+        subscribed = await pushService.subscribe()
+      }
+      if (!cancelled) setIsPushSubscribed(subscribed)
     }
     void initPush()
-  }, [])
+
+    // Watch for a permission grant that happens AFTER mount (browser UI or a
+    // custom prompt that only calls Notification.requestPermission). Subscribe
+    // automatically so hosts don't have to wire subscribeToPush() themselves.
+    let poll: ReturnType<typeof setInterval> | undefined
+    if (autoSubscribeOnGranted && pushService.getSupported() && typeof Notification !== 'undefined') {
+      poll = setInterval(() => {
+        if (cancelled) return
+        if (hasPermission() && !pushService.isSubscribed()) {
+          void pushService.subscribe().then((ok) => {
+            if (!cancelled) setIsPushSubscribed(ok)
+          })
+        }
+      }, 3000)
+    }
+
+    return () => {
+      cancelled = true
+      if (poll) clearInterval(poll)
+    }
+  }, [autoSubscribeOnGranted])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
