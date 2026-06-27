@@ -232,49 +232,105 @@ function SidebarMenuCollapsedDropdown({
   )
 }
 
+// Query params that select WHICH surface a model renders (table vs board) and
+// how it's grouped — the *identity* of a view-style nav item. Two navs over the
+// same model/path ("Board" `?view=kanban&group_by=stage` vs "Issues"
+// `?view=list`) are mutually exclusive, so exactly one may be active.
+const VIEW_PARAMS = new Set(['view', 'group_by'])
+
+/**
+ * Splits a URL into its path and three normalized, sorted query buckets:
+ * `view` (view/group_by surface identity — exclusive), `filters` (`f_` params —
+ * subset semantics) and `query` (everything else — transient page/sort/search).
+ */
+function splitHref(url: string): {
+  path: string
+  view: string
+  query: string
+  filters: string
+} {
+  const qIndex = url.indexOf('?')
+  if (qIndex === -1) return { path: url, view: '', query: '', filters: '' }
+  const path = url.slice(0, qIndex)
+  const params = new URLSearchParams(url.slice(qIndex + 1))
+  const entries: [string, string][] = []
+  const viewEntries: [string, string][] = []
+  const filterEntries: [string, string][] = []
+  for (const [k, v] of params.entries()) {
+    if (k.startsWith('f_')) filterEntries.push([k, v])
+    else if (VIEW_PARAMS.has(k)) viewEntries.push([k, v])
+    else entries.push([k, v])
+  }
+  const norm = (e: [string, string][]) =>
+    e
+      .sort((a, b) =>
+        a[0] === b[0] ? (a[1] < b[1] ? -1 : 1) : a[0] < b[0] ? -1 : 1
+      )
+      .map(([k, v]) => `${k}=${v}`)
+      .join('&')
+  return {
+    path,
+    view: norm(viewEntries),
+    query: norm(entries),
+    filters: norm(filterEntries),
+  }
+}
+
+/** Every `f_` filter the item declares must be present in the current href. */
+function declaredFiltersMatch(curFilters: string, targetFilters: string): boolean {
+  if (!targetFilters) return true
+  const cur = new Set(curFilters ? curFilters.split('&') : [])
+  return targetFilters.split('&').every((f) => cur.has(f))
+}
+
+/**
+ * Active-state matcher. View-aware, query-aware AND filter-aware so sibling
+ * navs over the same model light up ONE at a time:
+ *   - `view`/`group_by` must match EXACTLY in both directions (Board vs Issues).
+ *   - other non-`f_` query (page/sort/search) must match only when declared.
+ *   - declared `f_` filters must all be present; an item with none matches the
+ *     path alone (a manually-filtered table still highlights its base item).
+ */
 function checkIsActive(href: string, item: NavItem, mainNav = false) {
-  // Type guard for NavCollapsible
   const hasItems = 'items' in item && Array.isArray(item.items)
 
-  // 1. Exact match
-  if (href === item.url) return true
+  const cur = splitHref(href)
+  const target = splitHref(item.url)
 
-  // 2. Base path match
-  // Should not match if item has query params (exact match required then)
-  // Should not match if href has specific filter params (f_) that weren't in item.url (distinguishes 'All' from 'Filtered')
+  // Same path matches only on exact view-identity + declared query + declared
+  // f_ filters; otherwise fall through so a collapsible parent can still be
+  // active via a matching child.
   if (
-    !item.url.includes('?') &&
-    href.split('?')[0] === item.url &&
-    !href.includes('?f_') &&
-    !href.includes('&f_')
+    cur.path === target.path &&
+    cur.view === target.view &&
+    (!target.query || cur.query === target.query) &&
+    declaredFiltersMatch(cur.filters, target.filters)
   ) {
     return true
   }
 
-  // 3. Child active
+  // Child active
   if (
     hasItems &&
-    !!(item as NavCollapsible).items.filter((i: NavLink) => i.url === href)
-      .length
+    (item as NavCollapsible).items.some((i: NavLink) => checkIsActive(href, i))
   ) {
     return true
   }
 
-  // 4. Main nav loose matching — compare up to 2 path segments
-  // to avoid all /m/* groups opening together
+  // Main nav loose matching — compare up to 2-3 path segments to avoid all
+  // /m/* groups opening together.
   if (mainNav) {
-    const hrefParts = href.split('/')
-    const itemParts = item?.url?.split('/') ?? []
+    const hrefParts = cur.path.split('/')
+    const itemParts = target.path.split('/')
     const depth = hrefParts.length >= 3 && hrefParts[1] === 'm' ? 3 : 2
     const hrefPrefix = hrefParts.slice(0, depth).join('/')
     const itemPrefix = itemParts.slice(0, depth).join('/')
     if (hrefPrefix !== '' && hrefPrefix === itemPrefix) {
       return true
     }
-    // Also check children for match
     if (hasItems) {
       for (const sub of (item as NavCollapsible).items) {
-        const subParts = sub.url?.split('/') ?? []
+        const subParts = splitHref(sub.url ?? '').path.split('/')
         if (subParts.slice(0, depth).join('/') === hrefPrefix) {
           return true
         }
