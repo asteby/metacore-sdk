@@ -9,6 +9,11 @@
   Drag-to-move (via `@dnd-kit/core`) is **optimistic**: dropping a card into another lane mutates local state immediately and fires `PUT /data/:model/me/:id { <group_by>: <dest> }`; on failure the move reverts and a toast surfaces — sidestepping the "refetch loses scroll/selection" gap. When the metadata declares `transitions[]`, a card may only drop into a stage reachable from its current one (disallowed lanes dim and reject the drop; the kernel still validates server-side).
 
   Also adds `DynamicView`, a metadata-driven dispatcher that routes `view_type === 'kanban'` → `DynamicKanban`, else → `DynamicTable`, plus the pure helpers `deriveStages`, `groupByStage`, `isTransitionAllowed`, `applyOptimisticMove`, `selectCardColumns`, `resolveViewRenderer`. New `TableMetadata` fields (`view_type`, `group_by`, `stages`, `transitions`) and `StageMeta`/`StageTransition` types are purely additive. New deps: `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`.
+## 18.28.3
+
+### Patch Changes
+
+- e5e9fca: feat(action-modal): a field-action modal now renders the acted-on record's related-lists (model metadata.relations) below the form, as read-only context — e.g. the reception history of a transfer shown right inside the "Recibir" modal. Create actions (no record) render nothing; reuses the same DynamicRelations the detail view uses.
 
 ## 18.28.2
 
