@@ -6,6 +6,21 @@
 export * from './types'
 export * from './options-context'
 export * from './dynamic-table'
+export {
+    DynamicKanban,
+    type DynamicKanbanProps,
+    deriveStages,
+    groupByStage,
+    isTransitionAllowed,
+    applyOptimisticMove,
+    selectCardColumns,
+    UNASSIGNED_LANE,
+} from './dynamic-kanban'
+export {
+    DynamicView,
+    resolveViewRenderer,
+    type DynamicViewProps,
+} from './dynamic-view'
 export * from './dynamic-form'
 export {
     ActionModalDispatcher,

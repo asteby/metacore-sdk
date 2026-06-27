@@ -1,5 +1,14 @@
 # @asteby/metacore-runtime-react
 
+## 19.0.0
+
+### Major Changes
+
+- feat(kanban): new `DynamicKanban` view-type renderer, a sibling of `DynamicTable` sharing the same contract (`model` + `endpoint` + injected `ApiProvider`). Reads `view_type`/`group_by` from the table metadata (RFC §1.2) and derives board lanes from the model-level `stages[]` (or, as a fallback, the `group_by` column's status `options`). Records are fetched through the same `/data/:model` path and bucketed by `row[group_by]`; cards render through the existing `ActivityValueRenderer` (title + 2-3 fields) and reuse the `ActionModalDispatcher`/`useModelActions('row')` plumbing for the per-card action menu.
+
+  Drag-to-move (via `@dnd-kit/core`) is **optimistic**: dropping a card into another lane mutates local state immediately and fires `PUT /data/:model/me/:id { <group_by>: <dest> }`; on failure the move reverts and a toast surfaces — sidestepping the "refetch loses scroll/selection" gap. When the metadata declares `transitions[]`, a card may only drop into a stage reachable from its current one (disallowed lanes dim and reject the drop; the kernel still validates server-side).
+
+  Also adds `DynamicView`, a metadata-driven dispatcher that routes `view_type === 'kanban'` → `DynamicKanban`, else → `DynamicTable`, plus the pure helpers `deriveStages`, `groupByStage`, `isTransitionAllowed`, `applyOptimisticMove`, `selectCardColumns`, `resolveViewRenderer`. New `TableMetadata` fields (`view_type`, `group_by`, `stages`, `transitions`) and `StageMeta`/`StageTransition` types are purely additive. New deps: `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`.
 ## 18.28.3
 
 ### Patch Changes
