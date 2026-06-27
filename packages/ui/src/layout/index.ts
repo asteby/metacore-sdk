@@ -3,6 +3,13 @@ export { AppSidebar, OrganizationCard } from './app-sidebar'
 export { Header } from './header'
 export { NavUser } from './nav-user'
 export { NavGroup, type NavLinkComponent, type NavGroupProps } from './nav-group'
+export {
+  checkIsActive,
+  splitHref,
+  declaredFiltersMatch,
+  VIEW_PARAMS,
+  type SplitHref,
+} from './nav-active'
 export { TeamSwitcher } from './team-switcher'
 export { ProfileDropdown } from './profile-dropdown'
 export {

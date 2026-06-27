@@ -76,17 +76,18 @@
     "build": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json",
     "dev": "tsc -w -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
     "clean": "rm -rf dist"
   },
   "peerDependencies": {
+    "@tanstack/react-query": ">=5",
+    "@tanstack/react-router": ">=1.100",
+    "@tanstack/react-table": ">=8",
+    "date-fns": ">=3",
     "react": ">=18",
     "react-dom": ">=18",
     "react-hook-form": ">=7",
     "react-i18next": ">=13",
-    "@tanstack/react-table": ">=8",
-    "@tanstack/react-query": ">=5",
-    "@tanstack/react-router": ">=1.100",
-    "date-fns": ">=3",
     "tailwindcss": ">=4"
   },
   "peerDependenciesMeta": {
@@ -136,16 +137,17 @@
   "devDependencies": {
     "@tanstack/react-query": "^5.95.0",
     "@tanstack/react-router": "^1.168.0",
-    "date-fns": "^4.1.0",
     "@tanstack/react-table": "^8.20.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "date-fns": "^4.1.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-hook-form": "^7.54.0",
     "react-i18next": "^17.0.0",
     "tsc-alias": "^1.8.10",
-    "typescript": "^6.0.0"
+    "typescript": "^6.0.0",
+    "vitest": "4.1.8"
   },
   "publishConfig": {
     "access": "public"

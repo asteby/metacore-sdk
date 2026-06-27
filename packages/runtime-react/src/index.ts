@@ -19,6 +19,8 @@ export {
 export {
     DynamicView,
     resolveViewRenderer,
+    readViewFromSearch,
+    resolveActiveView,
     type DynamicViewProps,
 } from './dynamic-view'
 export * from './dynamic-form'
