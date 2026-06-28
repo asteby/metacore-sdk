@@ -568,6 +568,7 @@ interface KanbanLaneProps {
 }
 
 function KanbanLane({ stage, count, isDark, dimmed, disabled, children }: KanbanLaneProps) {
+    const { t } = useTranslation()
     const { setNodeRef, isOver } = useDroppable({ id: stage.key, disabled })
     const headerStyle = generateBadgeStyles(stage.color || optionColor(stage.key), {
         isDark,
@@ -590,13 +591,13 @@ function KanbanLane({ stage, count, isDark, dimmed, disabled, children }: Kanban
                     className="border-0 text-xs font-semibold"
                     style={headerStyle}
                 >
-                    {stage.label}
+                    {t(stage.label, { defaultValue: stage.label })}
                 </Badge>
                 <span className="text-xs font-medium tabular-nums text-muted-foreground">
                     {count}
                 </span>
             </div>
-            <ScrollArea className="max-h-[70vh]">
+            <ScrollArea className="min-h-[55vh] max-h-[70vh]">
                 <div className="flex flex-col gap-2 px-2 pb-3">{children}</div>
             </ScrollArea>
         </div>
