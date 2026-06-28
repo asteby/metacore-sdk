@@ -1,5 +1,38 @@
 # @asteby/metacore-runtime-react
 
+## 20.0.0
+
+### Minor Changes
+
+- dcd95c3: DynamicKanban: traduce el label de cada etapa via i18n (`t(stage.label)` con fallback al valor crudo) — antes mostraba la key cruda (ej. `integration_github.stage.backlog`) en vez de "Backlog". Y da min-height a las lanes para que el scroll horizontal del board quede abajo en vez de flotar cuando las columnas están vacías.
+- 3f41073: Sidebar nav: exact, view-aware active-state so sibling navs over the same model light up one at a time
+
+  The `NavGroup` active-state matcher (`checkIsActive`) now treats `view`/`group_by`
+  query params as the _identity_ of a view-style nav item. Two navs over the same
+  model that differ only by their view — e.g. a "Board" (`?view=kanban&group_by=stage`)
+  and an "Issues" (`?view=list`, or a query-less default list) — are mutually
+  exclusive: only the item whose view identity equals `currentHref` stays active,
+  fixing the bug where both lit up at once.
+  - `@asteby/metacore-ui`: the matcher is extracted into a pure, React-free
+    `layout/nav-active` module (`checkIsActive`, `splitHref`, `declaredFiltersMatch`,
+    `VIEW_PARAMS`) and re-exported from `@asteby/metacore-ui/layout` for hosts and
+    unit tests. `f_` filter and transient (page/sort/search) highlight behaviour is
+    unchanged — a query-less link still highlights under filters/pagination, and
+    per-status entries still light up one at a time.
+  - `@asteby/metacore-starter-core`: the scaffold's `nav-group` matcher gains the
+    same view/query/filter-aware logic.
+  - `@asteby/metacore-runtime-react`: `DynamicView` now reads the active view from
+    the per-nav signal — an explicit `view` prop (host router) or the `?view=`
+    query — and prefers it over the model-level `metadata.view_type`, so the same
+    model can route `?view=kanban` to `DynamicKanban` and `?view=list` to
+    `DynamicTable` with no per-model metadata change. New pure helpers
+    `readViewFromSearch` / `resolveActiveView` are exported.
+
+### Patch Changes
+
+- Updated dependencies [3f41073]
+  - @asteby/metacore-ui@2.6.0
+
 ## 19.0.0
 
 ### Major Changes
@@ -9,6 +42,7 @@
   Drag-to-move (via `@dnd-kit/core`) is **optimistic**: dropping a card into another lane mutates local state immediately and fires `PUT /data/:model/me/:id { <group_by>: <dest> }`; on failure the move reverts and a toast surfaces — sidestepping the "refetch loses scroll/selection" gap. When the metadata declares `transitions[]`, a card may only drop into a stage reachable from its current one (disallowed lanes dim and reject the drop; the kernel still validates server-side).
 
   Also adds `DynamicView`, a metadata-driven dispatcher that routes `view_type === 'kanban'` → `DynamicKanban`, else → `DynamicTable`, plus the pure helpers `deriveStages`, `groupByStage`, `isTransitionAllowed`, `applyOptimisticMove`, `selectCardColumns`, `resolveViewRenderer`. New `TableMetadata` fields (`view_type`, `group_by`, `stages`, `transitions`) and `StageMeta`/`StageTransition` types are purely additive. New deps: `@dnd-kit/core`, `@dnd-kit/sortable`, `@dnd-kit/utilities`.
+
 ## 18.28.3
 
 ### Patch Changes
