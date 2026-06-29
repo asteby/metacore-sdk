@@ -705,10 +705,10 @@ function KanbanCard({
                 {fieldCols.map((col) => (
                     <div
                         key={col.key}
-                        className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
+                        className="flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground"
                     >
                         <span className="shrink-0 opacity-70">{col.label}:</span>
-                        <span className="min-w-0 truncate">
+                        <span className="line-clamp-2 min-w-0 break-words">
                             <ActivityValueRenderer
                                 value={card[col.key]}
                                 col={col}
@@ -752,10 +752,10 @@ function CardPreview({
                 {fieldCols.map((col) => (
                     <div
                         key={col.key}
-                        className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
+                        className="flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground"
                     >
                         <span className="shrink-0 opacity-70">{col.label}:</span>
-                        <span className="min-w-0 truncate">
+                        <span className="line-clamp-2 min-w-0 break-words">
                             <ActivityValueRenderer
                                 value={card[col.key]}
                                 col={col}
