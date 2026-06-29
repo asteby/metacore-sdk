@@ -238,8 +238,8 @@ export interface DynamicKanbanProps {
     /** Model key as registered on the backend (e.g. "issue"). */
     model: string
     /**
-     * Data endpoint base. Defaults to `/data/<model>`. The optimistic update
-     * PUTs to `<base>/me/<id>`.
+     * Data endpoint base — the org-scoped LIST endpoint (e.g.
+     * `/data/<model>/me`). The optimistic update PUTs to `<base>/<id>`.
      */
     endpoint?: string
     /** Bump to force a metadata + records refetch (same contract as DynamicTable). */
@@ -411,7 +411,11 @@ export function DynamicKanban({
 
             try {
                 const base = endpoint || `/data/${model}`
-                const res = (await api.put(`${base}/me/${cardId}`, {
+                // `base` is the org-scoped list endpoint (e.g. `/data/<model>/me`),
+                // so the per-record update is just `<base>/<id>` — same convention
+                // as DynamicTable/DynamicRelation. Appending an extra `/me` here
+                // produced `/data/<model>/me/me/<id>` → 404 on drag-to-move.
+                const res = (await api.put(`${base}/${cardId}`, {
                     [groupByKey]: destStage,
                 })) as { data?: ApiResponse<any> }
                 if (res?.data && res.data.success === false) {
@@ -473,7 +477,7 @@ export function DynamicKanban({
 
     return (
         <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-            <div className="flex gap-4 overflow-x-auto p-1" data-testid="kanban-board">
+            <div className="flex min-w-0 gap-4 overflow-x-auto p-1" data-testid="kanban-board">
                 {lanes.map((stage) => {
                     const cards = grouped.get(stage.key) ?? []
                     const droppableAllowed =
