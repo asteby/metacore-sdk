@@ -1,5 +1,18 @@
 # @asteby/metacore-fullstack-example
 
+## 0.1.118
+
+### Patch Changes
+
+- Updated dependencies [cefba67]
+  - @asteby/metacore-ui@2.6.2
+  - @asteby/metacore-app-providers@55.0.0
+  - @asteby/metacore-auth@13.0.0
+  - @asteby/metacore-i18n@12.0.0
+  - @asteby/metacore-notifications@13.0.0
+  - @asteby/metacore-runtime-react@20.1.1
+  - @asteby/metacore-webhooks@12.0.0
+
 ## 0.1.117
 
 ### Patch Changes
