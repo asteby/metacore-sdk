@@ -67,6 +67,38 @@ describe('checkIsActive — query-less default vs query-bearing sibling', () => 
   })
 })
 
+describe('checkIsActive — default-view landing with transient query (FIX 2)', () => {
+  // The reported bug: landing on `/m/github_issues?per_page=15` (no `view`, just
+  // a transient list param) lit NEITHER the Tablero (`?view=kanban`) NOR the
+  // Issues (`?view=list`) item, because the empty view bucket matched neither.
+  // The list/table view is the default surface, so the Issues item must light.
+  const tablero = link('Tablero', '/m/github_issues?view=kanban')
+  const issues = link('Issues', '/m/github_issues?view=list')
+
+  it('?per_page=15 (no view) → only the list/default item is active', () => {
+    const href = '/m/github_issues?per_page=15'
+    expect(checkIsActive(href, issues)).toBe(true)
+    expect(checkIsActive(href, tablero)).toBe(false)
+  })
+
+  it('bare path (no query) → only the list/default item is active', () => {
+    const href = '/m/github_issues'
+    expect(checkIsActive(href, issues)).toBe(true)
+    expect(checkIsActive(href, tablero)).toBe(false)
+  })
+
+  it('?view=table is treated as the same default surface as ?view=list', () => {
+    const tableItem = link('Issues', '/m/github_issues?view=table')
+    expect(checkIsActive('/m/github_issues?view=list', tableItem)).toBe(true)
+    expect(checkIsActive('/m/github_issues?per_page=15', tableItem)).toBe(true)
+  })
+
+  it('does NOT light the board when only a transient query is present', () => {
+    expect(checkIsActive('/m/github_issues?per_page=15', tablero)).toBe(false)
+    expect(checkIsActive('/m/github_issues?page=2&sort=name', tablero)).toBe(false)
+  })
+})
+
 describe('checkIsActive — singleton + filter (f_) behaviour preserved', () => {
   it('a query-less link stays highlighted under transient f_ filters', () => {
     const all = link('All Orders', '/m/orders')
