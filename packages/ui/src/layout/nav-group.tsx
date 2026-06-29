@@ -141,7 +141,7 @@ function SidebarMenuLink({
     <SidebarMenuItem>
       <SidebarMenuButton
         asChild
-        isActive={checkIsActive(href, item)}
+        isActive={checkIsActive(href, item, false, item.defaultView)}
         tooltip={item.title}
       >
         <LinkComponent
@@ -173,7 +173,7 @@ function SidebarMenuCollapsible({
   return (
     <Collapsible
       asChild
-      defaultOpen={checkIsActive(href, item, true)}
+      defaultOpen={checkIsActive(href, item, true, item.defaultView)}
       className='group/collapsible'
     >
       <SidebarMenuItem>
@@ -191,7 +191,7 @@ function SidebarMenuCollapsible({
               <SidebarMenuSubItem key={subItem.title}>
                 <SidebarMenuSubButton
                   asChild
-                  isActive={checkIsActive(href, subItem)}
+                  isActive={checkIsActive(href, subItem, false, subItem.defaultView ?? item.defaultView)}
                 >
                   <LinkComponent
                     to={subItem.url}
@@ -229,7 +229,7 @@ function SidebarMenuCollapsedDropdown({
         <DropdownMenuTrigger asChild>
           <SidebarMenuButton
             tooltip={item.title}
-            isActive={checkIsActive(href, item)}
+            isActive={checkIsActive(href, item, false, item.defaultView)}
           >
             {item.icon && <item.icon />}
             <span>{item.title}</span>
@@ -246,7 +246,7 @@ function SidebarMenuCollapsedDropdown({
             <DropdownMenuItem key={`${sub.title}-${sub.url}`} asChild>
               <LinkComponent
                 to={sub.url}
-                className={`${checkIsActive(href, sub) ? 'bg-secondary' : ''}`}
+                className={`${checkIsActive(href, sub, false, sub.defaultView ?? item.defaultView) ? 'bg-secondary' : ''}`}
                 onMouseEnter={() => onItemHover?.(sub.url)}
               >
                 {sub.icon && <sub.icon />}

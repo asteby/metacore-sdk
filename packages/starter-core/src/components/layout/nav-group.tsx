@@ -71,6 +71,8 @@ interface NavLink {
   url: string
   icon?: LucideIcon
   badge?: string
+  /** Model default `view_type` (e.g. 'kanban'); resolves a view-less URL. */
+  defaultView?: string
 }
 
 interface NavCollapsible extends NavLink {
@@ -126,7 +128,7 @@ function SidebarMenuLink({ item, href }: { item: NavLink; href: string }) {
     <SidebarMenuItem>
       <SidebarMenuButton
         asChild
-        isActive={checkIsActive(href, item)}
+        isActive={checkIsActive(href, item, false, item.defaultView)}
         tooltip={item.title}
       >
         <Link to={item.url} onClick={() => setOpenMobile(false)} onMouseEnter={() => prefetchModel(item.url)}>
@@ -150,7 +152,7 @@ function SidebarMenuCollapsible({
   return (
     <Collapsible
       asChild
-      defaultOpen={checkIsActive(href, item, true)}
+      defaultOpen={checkIsActive(href, item, true, item.defaultView)}
       className='group/collapsible'
     >
       <SidebarMenuItem>
@@ -168,7 +170,7 @@ function SidebarMenuCollapsible({
               <SidebarMenuSubItem key={subItem.title}>
                 <SidebarMenuSubButton
                   asChild
-                  isActive={checkIsActive(href, subItem)}
+                  isActive={checkIsActive(href, subItem, false, subItem.defaultView ?? item.defaultView)}
                 >
                   <Link to={subItem.url} onClick={() => setOpenMobile(false)} onMouseEnter={() => prefetchModel(subItem.url)}>
                     {subItem.icon && <subItem.icon />}
@@ -198,7 +200,7 @@ function SidebarMenuCollapsedDropdown({
         <DropdownMenuTrigger asChild>
           <SidebarMenuButton
             tooltip={item.title}
-            isActive={checkIsActive(href, item)}
+            isActive={checkIsActive(href, item, false, item.defaultView)}
           >
             {item.icon && <item.icon />}
             <span>{item.title}</span>
@@ -215,7 +217,7 @@ function SidebarMenuCollapsedDropdown({
             <DropdownMenuItem key={`${sub.title}-${sub.url}`} asChild>
               <Link
                 to={sub.url}
-                className={`${checkIsActive(href, sub) ? 'bg-secondary' : ''}`}
+                className={`${checkIsActive(href, sub, false, sub.defaultView ?? item.defaultView) ? 'bg-secondary' : ''}`}
                 onMouseEnter={() => prefetchModel(sub.url)}
               >
                 {sub.icon && <sub.icon />}
@@ -238,13 +240,18 @@ function SidebarMenuCollapsedDropdown({
 // `?view=list`) are mutually exclusive, so exactly one may be active.
 const VIEW_PARAMS = new Set(['view', 'group_by'])
 
-// View buckets that all denote the same DEFAULT surface a model paints when the
-// URL carries no explicit `view` (a bare landing, `?view=list` and `?view=table`
-// are interchangeable). Two buckets are "default-equivalent" when both are here,
-// so the Issues/list nav lights on the bare landing while the Board
-// (`?view=kanban`, never here) stays mutually exclusive.
-const DEFAULT_VIEW_BUCKETS = new Set(['', 'view=list', 'view=table'])
-const isDefaultViewBucket = (view: string) => DEFAULT_VIEW_BUCKETS.has(view)
+// Extracts the `view=` value from a normalized view bucket; resolves an absent
+// `?view=` to the model default (mirrors DynamicView.resolveActiveView), so a
+// view-less URL lights the board on a kanban-default model and the list on a
+// list-default one — never both.
+const viewValueOf = (viewBucket: string) => {
+  for (const part of viewBucket.split('&')) {
+    if (part.startsWith('view=')) return part.slice('view='.length)
+  }
+  return ''
+}
+const resolveView = (viewValue: string, defaultView?: string) =>
+  viewValue || defaultView || ''
 
 /**
  * Splits a URL into its path and three normalized, sorted query buckets:
@@ -299,18 +306,23 @@ function declaredFiltersMatch(curFilters: string, targetFilters: string): boolea
  *   - declared `f_` filters must all be present; an item with none matches the
  *     path alone (a manually-filtered table still highlights its base item).
  */
-function checkIsActive(href: string, item: NavItem, mainNav = false) {
+function checkIsActive(
+  href: string,
+  item: NavItem,
+  mainNav = false,
+  defaultView?: string
+) {
   const hasItems = 'items' in item && Array.isArray(item.items)
 
   const cur = splitHref(href)
   const target = splitHref(item.url)
 
-  // Same path matches only on exact view-identity + declared query + declared
-  // f_ filters; otherwise fall through so a collapsible parent can still be
-  // active via a matching child.
+  // Same path matches only on EFFECTIVE view (absent `?view=` resolves to the
+  // model default) + declared query + declared f_ filters; otherwise fall
+  // through so a collapsible parent can still be active via a matching child.
   const viewMatches =
-    cur.view === target.view ||
-    (isDefaultViewBucket(cur.view) && isDefaultViewBucket(target.view))
+    resolveView(viewValueOf(cur.view), defaultView) ===
+    resolveView(viewValueOf(target.view), defaultView)
 
   if (
     cur.path === target.path &&
@@ -324,7 +336,9 @@ function checkIsActive(href: string, item: NavItem, mainNav = false) {
   // Child active
   if (
     hasItems &&
-    (item as NavCollapsible).items.some((i: NavLink) => checkIsActive(href, i))
+    (item as NavCollapsible).items.some((i: NavLink) =>
+      checkIsActive(href, i, false, defaultView)
+    )
   ) {
     return true
   }

@@ -12,6 +12,15 @@ export interface NavLinkItem {
    */
   badge?: number | string
   role?: string
+  /**
+   * The model's default `view_type` for this entry's path (e.g. `'kanban'` or
+   * `'list'`). Lets the active-state matcher resolve a view-less current URL
+   * (`/m/x?per_page=15`, no `?view`) to the surface the model actually paints,
+   * so exactly one of sibling view items (Board vs List) lights up. Hosts thread
+   * it from `metadata.view_type`; omit it and a view-less URL only matches a
+   * view-less item.
+   */
+  defaultView?: string
 }
 
 export interface NavCollapsibleItem extends NavLinkItem {
