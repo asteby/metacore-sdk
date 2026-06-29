@@ -257,6 +257,19 @@ export function DynamicTable({
     useEffect(() => {
         if (!enableUrlSync || !initializedFromUrl.current) return
         const params = new URLSearchParams()
+        // Preserve the route-owned view params. The table rebuilds the query
+        // string from scratch (it only knows its own page/sort/filter keys), but
+        // `view`/`group_by` belong to the renderer choice + the sidebar's
+        // active-state matcher. Carrying them over keeps `?view=table` (vs
+        // `?view=kanban`) in the URL so the open sibling stays highlighted and a
+        // deep-link survives — without this the table wipes `?view` on mount,
+        // the URL goes bare, and the sidebar falls back to the model default
+        // (the "click twice to move the active to the right entry" bug).
+        const current = new URLSearchParams(window.location.search)
+        for (const key of ['view', 'group_by']) {
+            const v = current.get(key)
+            if (v) params.set(key, v)
+        }
         if (pagination.pageIndex > 0) params.set('page', String(pagination.pageIndex + 1))
         if (pagination.pageSize !== 10) params.set('per_page', String(pagination.pageSize))
         if (sorting.length > 0) {
