@@ -238,6 +238,14 @@ function SidebarMenuCollapsedDropdown({
 // `?view=list`) are mutually exclusive, so exactly one may be active.
 const VIEW_PARAMS = new Set(['view', 'group_by'])
 
+// View buckets that all denote the same DEFAULT surface a model paints when the
+// URL carries no explicit `view` (a bare landing, `?view=list` and `?view=table`
+// are interchangeable). Two buckets are "default-equivalent" when both are here,
+// so the Issues/list nav lights on the bare landing while the Board
+// (`?view=kanban`, never here) stays mutually exclusive.
+const DEFAULT_VIEW_BUCKETS = new Set(['', 'view=list', 'view=table'])
+const isDefaultViewBucket = (view: string) => DEFAULT_VIEW_BUCKETS.has(view)
+
 /**
  * Splits a URL into its path and three normalized, sorted query buckets:
  * `view` (view/group_by surface identity — exclusive), `filters` (`f_` params —
@@ -300,9 +308,13 @@ function checkIsActive(href: string, item: NavItem, mainNav = false) {
   // Same path matches only on exact view-identity + declared query + declared
   // f_ filters; otherwise fall through so a collapsible parent can still be
   // active via a matching child.
+  const viewMatches =
+    cur.view === target.view ||
+    (isDefaultViewBucket(cur.view) && isDefaultViewBucket(target.view))
+
   if (
     cur.path === target.path &&
-    cur.view === target.view &&
+    viewMatches &&
     (!target.query || cur.query === target.query) &&
     declaredFiltersMatch(cur.filters, target.filters)
   ) {

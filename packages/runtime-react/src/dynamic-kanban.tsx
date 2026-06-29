@@ -441,7 +441,7 @@ export function DynamicKanban({
         return (
             <div className="flex gap-4 overflow-x-auto p-1">
                 {[0, 1, 2, 3].map((i) => (
-                    <div key={i} className="w-72 shrink-0 space-y-3">
+                    <div key={i} className="min-w-[220px] max-w-[320px] flex-1 space-y-3">
                         <Skeleton className="h-8 w-full" />
                         <Skeleton className="h-24 w-full" />
                         <Skeleton className="h-24 w-full" />
@@ -580,7 +580,7 @@ function KanbanLane({ stage, count, isDark, dimmed, disabled, children }: Kanban
     return (
         <div
             ref={setNodeRef}
-            className="flex w-72 shrink-0 flex-col rounded-lg border bg-muted/30 transition-opacity"
+            className="flex min-w-[220px] max-w-[320px] flex-1 flex-col rounded-lg border bg-muted/30 transition-opacity"
             style={{
                 opacity: dimmed ? 0.45 : 1,
                 outline: isOver && !disabled ? '2px solid var(--ring, #3b82f6)' : 'none',
@@ -655,7 +655,7 @@ function KanbanCard({
         >
             <CardContent className="space-y-1.5 p-3">
                 <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1 text-sm font-medium leading-snug">
+                    <div className="line-clamp-2 min-w-0 flex-1 break-words text-sm font-medium leading-snug">
                         {titleCol ? (
                             <ActivityValueRenderer
                                 value={card[titleCol.key]}
@@ -705,7 +705,7 @@ function KanbanCard({
                 {fieldCols.map((col) => (
                     <div
                         key={col.key}
-                        className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                        className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
                     >
                         <span className="shrink-0 opacity-70">{col.label}:</span>
                         <span className="min-w-0 truncate">
@@ -736,7 +736,7 @@ function CardPreview({
     return (
         <Card className="w-72 cursor-grabbing border-primary/40 shadow-lg">
             <CardContent className="space-y-1.5 p-3">
-                <div className="text-sm font-medium leading-snug">
+                <div className="line-clamp-2 break-words text-sm font-medium leading-snug">
                     {titleCol ? (
                         <ActivityValueRenderer
                             value={card[titleCol.key]}
@@ -752,7 +752,7 @@ function CardPreview({
                 {fieldCols.map((col) => (
                     <div
                         key={col.key}
-                        className="flex items-center gap-1.5 text-xs text-muted-foreground"
+                        className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground"
                     >
                         <span className="shrink-0 opacity-70">{col.label}:</span>
                         <span className="min-w-0 truncate">

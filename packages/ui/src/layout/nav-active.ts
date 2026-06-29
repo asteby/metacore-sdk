@@ -15,6 +15,25 @@ import type { NavItem, NavLinkItem, NavCollapsibleItem } from './types'
  */
 export const VIEW_PARAMS = new Set(['view', 'group_by'])
 
+/**
+ * The view-bucket strings that all denote the SAME default surface a model
+ * paints when the current URL declares no explicit `view`. `DynamicView`
+ * resolves a missing `?view=` to the model's `metadata.view_type`, whose
+ * non-kanban catch-all is the table/list (`resolveViewRenderer`). So a bare
+ * landing (`/m/x?per_page=15`, no `view`), an explicit `?view=list` and an
+ * explicit `?view=table` are interchangeable identities of the default item.
+ *
+ * Two view buckets are "default-equivalent" when BOTH are in this set: this is
+ * what lets the Issues/list nav light up on the bare default landing while the
+ * Board (`?view=kanban`) — never in this set — stays mutually exclusive, so the
+ * board is never lit by a view-less URL and vice-versa.
+ */
+const DEFAULT_VIEW_BUCKETS = new Set(['', 'view=list', 'view=table'])
+
+function isDefaultViewBucket(view: string): boolean {
+  return DEFAULT_VIEW_BUCKETS.has(view)
+}
+
 export interface SplitHref {
   path: string
   view: string
@@ -107,9 +126,18 @@ export function checkIsActive(href: string, item: NavItem, mainNav = false): boo
   // matches when declared, and declared f_ filters are all present. A same-path
   // item that DOESN'T match falls through (a collapsible parent can still be
   // active via a matching child below) rather than returning early.
+  // View-identity match: exact in both directions, OR both buckets are
+  // "default-equivalent" (bare/`?view=list`/`?view=table`). The latter is what
+  // lights the Issues/list item on the bare default landing (`?per_page=15`, no
+  // `view`) without ever lighting the Board (`?view=kanban`), which is not a
+  // default bucket — so siblings stay mutually exclusive.
+  const viewMatches =
+    cur.view === target.view ||
+    (isDefaultViewBucket(cur.view) && isDefaultViewBucket(target.view))
+
   if (
     cur.path === target.path &&
-    cur.view === target.view &&
+    viewMatches &&
     (!target.query || cur.query === target.query) &&
     declaredFiltersMatch(cur.filters, target.filters)
   ) {
