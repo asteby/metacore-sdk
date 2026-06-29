@@ -16,22 +16,30 @@ import type { NavItem, NavLinkItem, NavCollapsibleItem } from './types'
 export const VIEW_PARAMS = new Set(['view', 'group_by'])
 
 /**
- * The view-bucket strings that all denote the SAME default surface a model
- * paints when the current URL declares no explicit `view`. `DynamicView`
- * resolves a missing `?view=` to the model's `metadata.view_type`, whose
- * non-kanban catch-all is the table/list (`resolveViewRenderer`). So a bare
- * landing (`/m/x?per_page=15`, no `view`), an explicit `?view=list` and an
- * explicit `?view=table` are interchangeable identities of the default item.
- *
- * Two view buckets are "default-equivalent" when BOTH are in this set: this is
- * what lets the Issues/list nav light up on the bare default landing while the
- * Board (`?view=kanban`) — never in this set — stays mutually exclusive, so the
- * board is never lit by a view-less URL and vice-versa.
+ * Extracts the `view=` value from a normalized view bucket (e.g. `'kanban'`
+ * from `'group_by=stage&view=kanban'`, `'list'` from `'view=list'`, `''` when
+ * the bucket declares no `view`). The `view` param is the surface identity
+ * (table vs board); `group_by` only refines a board, so it never makes a nav
+ * item identity on its own.
  */
-const DEFAULT_VIEW_BUCKETS = new Set(['', 'view=list', 'view=table'])
+function viewValueOf(viewBucket: string): string {
+  for (const part of viewBucket.split('&')) {
+    if (part.startsWith('view=')) return part.slice('view='.length)
+  }
+  return ''
+}
 
-function isDefaultViewBucket(view: string): boolean {
-  return DEFAULT_VIEW_BUCKETS.has(view)
+/**
+ * Resolves a (possibly empty) `view` value to the EFFECTIVE surface, mirroring
+ * `DynamicView.resolveActiveView`: an absent `?view=` falls back to the model's
+ * default `view_type`. This is why the matcher must be told the model default —
+ * a view-less landing on a kanban-default model paints (and must light) the
+ * board, while on a list-default model it paints (and must light) the list.
+ * Without a known default we resolve to `''` (no assumption) so a view-less URL
+ * only matches a view-less item — never both siblings.
+ */
+function resolveView(viewValue: string, defaultView?: string): string {
+  return viewValue || defaultView || ''
 }
 
 export interface SplitHref {
@@ -103,10 +111,14 @@ export function declaredFiltersMatch(
  *
  * View-aware, query-aware AND filter-aware so sibling navs over the same model
  * light up ONE at a time:
- *   - `view`/`group_by` surface params must match EXACTLY in both directions.
- *     This is what keeps "Board" (`?view=kanban&group_by=stage`) and "Issues"
- *     (`?view=list`, or a query-less default) mutually exclusive — only the item
- *     whose view identity equals the current href stays active.
+ *   - The `view` surface param is the item's identity, but it is matched on the
+ *     EFFECTIVE view: an absent `?view=` resolves to the model's default
+ *     `view_type` (`defaultView`, the same fallback `DynamicView` uses to pick a
+ *     renderer). So a view-less landing (`/m/x?per_page=15`) lights ONLY the
+ *     item whose view equals the model default — the board on a kanban-default
+ *     model, the list on a list-default model — and never both. Explicit
+ *     `?view=kanban`/`?view=list` URLs match their item directly. `group_by`
+ *     only refines a board, so it is not part of the identity.
  *   - Other non-`f_` query params (page/sort/search) must match EXACTLY only
  *     when the item declares them — transient query never un-highlights a plain
  *     link.
@@ -114,26 +126,31 @@ export function declaredFiltersMatch(
  *     must all be present in the current href. An item that declares NO filters
  *     matches on path alone (a manually-filtered table still highlights its base
  *     item), preserving the prior behaviour for plain links.
+ *
+ * `defaultView` is the model's default `view_type` for this path (e.g.
+ * `'kanban'`). Hosts thread it from `metadata.view_type`; when omitted the
+ * absent-view fallback is `''` (a view-less URL then only matches a view-less
+ * item).
  */
-export function checkIsActive(href: string, item: NavItem, mainNav = false): boolean {
+export function checkIsActive(
+  href: string,
+  item: NavItem,
+  mainNav = false,
+  defaultView?: string
+): boolean {
   const hasItems = 'items' in item && Array.isArray(item.items)
 
   const cur = splitHref(href)
   const target = splitHref(item.url)
 
-  // Same path: this item matches only when the view-identity (view/group_by)
-  // matches exactly (sibling surfaces are mutually exclusive), transient query
-  // matches when declared, and declared f_ filters are all present. A same-path
-  // item that DOESN'T match falls through (a collapsible parent can still be
-  // active via a matching child below) rather than returning early.
-  // View-identity match: exact in both directions, OR both buckets are
-  // "default-equivalent" (bare/`?view=list`/`?view=table`). The latter is what
-  // lights the Issues/list item on the bare default landing (`?per_page=15`, no
-  // `view`) without ever lighting the Board (`?view=kanban`), which is not a
-  // default bucket — so siblings stay mutually exclusive.
+  // Same path: this item matches only when the EFFECTIVE view (resolving an
+  // absent `?view=` to the model default) matches, transient query matches when
+  // declared, and declared f_ filters are all present. A same-path item that
+  // DOESN'T match falls through (a collapsible parent can still be active via a
+  // matching child below) rather than returning early.
   const viewMatches =
-    cur.view === target.view ||
-    (isDefaultViewBucket(cur.view) && isDefaultViewBucket(target.view))
+    resolveView(viewValueOf(cur.view), defaultView) ===
+    resolveView(viewValueOf(target.view), defaultView)
 
   if (
     cur.path === target.path &&
@@ -147,7 +164,7 @@ export function checkIsActive(href: string, item: NavItem, mainNav = false): boo
   if (
     hasItems &&
     (item as NavCollapsibleItem).items.some((i: NavLinkItem) =>
-      checkIsActive(href, i)
+      checkIsActive(href, i, false, defaultView)
     )
   ) {
     return true

@@ -1,6 +1,7 @@
 export { AuthenticatedLayout } from './authenticated-layout'
 export { AppSidebar, OrganizationCard } from './app-sidebar'
 export { Header } from './header'
+export { HeaderActions, type HeaderActionsProps } from './header-actions'
 export { NavUser } from './nav-user'
 export { NavGroup, type NavLinkComponent, type NavGroupProps } from './nav-group'
 export {

@@ -67,35 +67,60 @@ describe('checkIsActive — query-less default vs query-bearing sibling', () => 
   })
 })
 
-describe('checkIsActive — default-view landing with transient query (FIX 2)', () => {
-  // The reported bug: landing on `/m/github_issues?per_page=15` (no `view`, just
-  // a transient list param) lit NEITHER the Tablero (`?view=kanban`) NOR the
-  // Issues (`?view=list`) item, because the empty view bucket matched neither.
-  // The list/table view is the default surface, so the Issues item must light.
+describe('checkIsActive — view-less landing resolves to the model default view_type', () => {
+  // The reported "both green" bug: github_issues has metadata.view_type=kanban,
+  // so the bare landing `/m/github_issues?per_page=15` (no ?view) RENDERS the
+  // kanban board. The matcher must resolve the absent ?view to the model's
+  // ACTUAL default (kanban here) so EXACTLY ONE sibling lights — never both,
+  // and never the wrong one. The default is threaded as the 4th arg (hosts pass
+  // it from metadata.view_type / NavItem.defaultView).
   const tablero = link('Tablero', '/m/github_issues?view=kanban')
   const issues = link('Issues', '/m/github_issues?view=list')
 
-  it('?per_page=15 (no view) → only the list/default item is active', () => {
+  describe('(a) model default = kanban', () => {
+    const href = '/m/github_issues?per_page=15' // view-less landing → kanban
+    it('bare landing → ONLY the kanban/Tablero item is active', () => {
+      expect(checkIsActive(href, tablero, false, 'kanban')).toBe(true)
+      expect(checkIsActive(href, issues, false, 'kanban')).toBe(false)
+    })
+    it('bare path (no query) → ONLY the kanban/Tablero item', () => {
+      expect(checkIsActive('/m/github_issues', tablero, false, 'kanban')).toBe(true)
+      expect(checkIsActive('/m/github_issues', issues, false, 'kanban')).toBe(false)
+    })
+  })
+
+  describe('(b) model default = list', () => {
+    const href = '/m/github_issues?per_page=15' // view-less landing → list
+    it('bare landing → ONLY the list/Issues item is active', () => {
+      expect(checkIsActive(href, issues, false, 'list')).toBe(true)
+      expect(checkIsActive(href, tablero, false, 'list')).toBe(false)
+    })
+    it('bare path (no query) → ONLY the list/Issues item', () => {
+      expect(checkIsActive('/m/github_issues', issues, false, 'list')).toBe(true)
+      expect(checkIsActive('/m/github_issues', tablero, false, 'list')).toBe(false)
+    })
+  })
+
+  it('(c) explicit ?view=kanban → only the kanban item, regardless of default', () => {
+    const href = '/m/github_issues?view=kanban'
+    expect(checkIsActive(href, tablero, false, 'list')).toBe(true)
+    expect(checkIsActive(href, issues, false, 'list')).toBe(false)
+    expect(checkIsActive(href, tablero, false, 'kanban')).toBe(true)
+    expect(checkIsActive(href, issues, false, 'kanban')).toBe(false)
+  })
+
+  it('(d) explicit ?view=list → only the list item, regardless of default', () => {
+    const href = '/m/github_issues?view=list'
+    expect(checkIsActive(href, issues, false, 'kanban')).toBe(true)
+    expect(checkIsActive(href, tablero, false, 'kanban')).toBe(false)
+    expect(checkIsActive(href, issues, false, 'list')).toBe(true)
+    expect(checkIsActive(href, tablero, false, 'list')).toBe(false)
+  })
+
+  it('with NO default supplied, a view-less URL matches neither explicit-view sibling (never both)', () => {
     const href = '/m/github_issues?per_page=15'
-    expect(checkIsActive(href, issues)).toBe(true)
     expect(checkIsActive(href, tablero)).toBe(false)
-  })
-
-  it('bare path (no query) → only the list/default item is active', () => {
-    const href = '/m/github_issues'
-    expect(checkIsActive(href, issues)).toBe(true)
-    expect(checkIsActive(href, tablero)).toBe(false)
-  })
-
-  it('?view=table is treated as the same default surface as ?view=list', () => {
-    const tableItem = link('Issues', '/m/github_issues?view=table')
-    expect(checkIsActive('/m/github_issues?view=list', tableItem)).toBe(true)
-    expect(checkIsActive('/m/github_issues?per_page=15', tableItem)).toBe(true)
-  })
-
-  it('does NOT light the board when only a transient query is present', () => {
-    expect(checkIsActive('/m/github_issues?per_page=15', tablero)).toBe(false)
-    expect(checkIsActive('/m/github_issues?page=2&sort=name', tablero)).toBe(false)
+    expect(checkIsActive(href, issues)).toBe(false)
   })
 })
 
