@@ -440,7 +440,7 @@ export function DynamicKanban({
         return (
             <div className="flex gap-4 overflow-x-auto p-1">
                 {[0, 1, 2, 3].map((i) => (
-                    <div key={i} className="min-w-[220px] max-w-[320px] flex-1 space-y-3">
+                    <div key={i} className="w-[300px] shrink-0 space-y-3">
                         <Skeleton className="h-8 w-full" />
                         <Skeleton className="h-24 w-full" />
                         <Skeleton className="h-24 w-full" />
@@ -579,7 +579,7 @@ function KanbanLane({ stage, count, isDark, dimmed, disabled, children }: Kanban
     return (
         <div
             ref={setNodeRef}
-            className="flex min-w-[220px] max-w-[320px] flex-1 flex-col rounded-lg border bg-muted/30 transition-opacity"
+            className="flex w-[300px] shrink-0 flex-col rounded-lg border bg-muted/30 transition-opacity"
             style={{
                 opacity: dimmed ? 0.45 : 1,
                 outline: isOver && !disabled ? '2px solid var(--ring, #3b82f6)' : 'none',
@@ -739,7 +739,7 @@ function CardPreview({
     currency,
 }: Omit<KanbanCardProps, 'actions' | 'onClick' | 'onAction'>) {
     return (
-        <Card className="w-72 cursor-grabbing border-primary/40 shadow-lg">
+        <Card className="w-[284px] cursor-grabbing border-primary/40 shadow-lg">
             <CardContent className="space-y-1.5 p-3">
                 <div className="break-words text-sm font-medium leading-snug">
                     {titleCol ? (
