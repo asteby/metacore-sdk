@@ -48,7 +48,6 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
-    ScrollArea,
     Skeleton,
 } from '@asteby/metacore-ui/primitives'
 import { generateBadgeStyles, optionColor } from '@asteby/metacore-ui/lib'
@@ -601,9 +600,15 @@ function KanbanLane({ stage, count, isDark, dimmed, disabled, children }: Kanban
                     {count}
                 </span>
             </div>
-            <ScrollArea className="min-h-[55vh] max-h-[70vh]">
-                <div className="flex flex-col gap-2 px-2 pb-3">{children}</div>
-            </ScrollArea>
+            {/* Plain vertical-scroll column, NOT a Radix ScrollArea: the
+                ScrollArea viewport wraps its content in a `display:table`
+                element that shrink-to-fits the WIDEST card, so once the card
+                text wraps freely (no line-clamp) the cards grew past the lane
+                and spilled out of the stage. A normal `overflow-y-auto` block
+                constrains every card to the lane width so text wraps inside it. */}
+            <div className="flex min-h-[55vh] max-h-[70vh] min-w-0 flex-col gap-2 overflow-y-auto px-2 pb-3">
+                {children}
+            </div>
         </div>
     )
 }
@@ -648,7 +653,7 @@ function KanbanCard({
             ref={setNodeRef}
             {...attributes}
             {...listeners}
-            className="cursor-grab active:cursor-grabbing border-border/70 shadow-sm"
+            className="w-full min-w-0 cursor-grab active:cursor-grabbing border-border/70 shadow-sm"
             style={{ opacity: isDragging ? 0.4 : 1 }}
             onClick={() => onClick?.(card)}
             data-card-id={String(card.id)}
