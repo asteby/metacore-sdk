@@ -11,8 +11,9 @@
 //     single-value renderer that mirrors `defaultGetDynamicColumns`' display
 //     logic (currency, status, date, relation chip, …) — so a card cell and a
 //     table cell look identical.
-//   - Per-card actions reuse `useModelActions(model, ['row'])` +
-//     `ActionModalDispatcher`, the exact plumbing DynamicTable's row menu uses.
+//   - Per-card actions reuse `resolveRowActions` (capability-gated, same as the
+//     table's action column) + `useDynamicRowActions`, the EXACT shared handler
+//     DynamicTable's row menu dispatches through (view/edit/delete/link/custom).
 //
 // The one thing it owns that the table doesn't: an OPTIMISTIC drag-to-move.
 // Dropping a card into another lane mutates local state immediately and fires
@@ -54,16 +55,16 @@ import { generateBadgeStyles, optionColor } from '@asteby/metacore-ui/lib'
 import { useApi } from './api-context'
 import { useMetadataCache } from './metadata-cache'
 import { ActivityValueRenderer } from './activity-value-renderer'
-import { ActionModalDispatcher } from './action-modal-dispatcher'
-import { useModelActions } from './model-action-toolbar'
 import { DynamicIcon } from './dynamic-icon'
 import { isColumnVisibleInTable } from './column-visibility'
-import { isActionAllowedForRowState } from './dynamic-columns'
+import { isRowActionVisible } from './dynamic-columns'
+import { useCan, usePermissionsActive, resolveRowActions } from './permissions-context'
+import { useDynamicRowActions } from './dynamic-row-actions'
 import type {
     TableMetadata,
     ColumnDefinition,
     ApiResponse,
-    ActionMetadata,
+    ActionDefinition,
     StageMeta,
     StageTransition,
 } from './types'
@@ -246,6 +247,13 @@ export interface DynamicKanbanProps {
     /** Called when a card is clicked (outside its action menu). */
     onCardClick?: (row: any) => void
     /**
+     * Host hook for `view`/`edit` card actions (STRING contract — same as
+     * DynamicTable's `onAction`). When provided, `view`/`edit` route to the host
+     * (e.g. its seeded record modal); when omitted they open the SDK's built-in
+     * record dialog. `delete`/link/custom actions are always handled in-SDK.
+     */
+    onAction?: (action: string, row: any) => void
+    /**
      * Max cards fetched per lane render. Kanban shows all cards at once (no
      * pagination UI), so it requests a single large page. Defaults to 200.
      */
@@ -261,6 +269,7 @@ export function DynamicKanban({
     endpoint,
     refreshTrigger,
     onCardClick,
+    onAction,
     pageSize = 200,
     timeZone,
     currency,
@@ -279,11 +288,6 @@ export function DynamicKanban({
 
     // Active drag card id (for the DragOverlay + drop-zone highlighting).
     const [activeId, setActiveId] = useState<string | null>(null)
-
-    const [actionModal, setActionModal] = useState<{
-        action: ActionMetadata | null
-        record: any | null
-    }>({ action: null, record: null })
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -360,8 +364,32 @@ export function DynamicKanban({
         [metadata],
     )
 
-    // Row-placement actions reused verbatim from the table's plumbing.
-    const rowActions = useModelActions(model, ['row'], metadata?.actions)
+    // Row-placement actions resolved EXACTLY like DynamicTable's action column:
+    // capability-gated (when a <PermissionsProvider> is mounted) and with the
+    // implicit View/Edit/Delete trio materialized for CRUD models. An action the
+    // user lacks permission for never appears.
+    const can = useCan()
+    const permissionsActive = usePermissionsActive()
+    const rowActions = useMemo(
+        () =>
+            metadata
+                ? resolveRowActions(metadata, model, can, permissionsActive, (k, fb) =>
+                      t(k, { defaultValue: fb }),
+                  )
+                : [],
+        [metadata, model, can, permissionsActive, t],
+    )
+
+    // Shared row-action dispatch + dialogs — view/edit/delete/link/custom behave
+    // identically to a table row (the card menu used to forward the raw action
+    // object to the host and silently no-op).
+    const { handleInternalAction, dialogs: rowActionDialogs } = useDynamicRowActions({
+        model,
+        endpoint,
+        metadata,
+        onAction,
+        onRefresh: fetchData,
+    })
 
     const cardById = useMemo(() => {
         const m = new Map<string, any>()
@@ -513,9 +541,7 @@ export function DynamicKanban({
                                         timeZone={timeZone}
                                         currency={currency}
                                         onClick={onCardClick}
-                                        onAction={(action, record) =>
-                                            setActionModal({ action, record })
-                                        }
+                                        onAction={handleInternalAction}
                                     />
                                 ))
                             )}
@@ -537,22 +563,7 @@ export function DynamicKanban({
                 ) : null}
             </DragOverlay>
 
-            {actionModal.action && (
-                <ActionModalDispatcher
-                    open={!!actionModal.action}
-                    onOpenChange={(open) => {
-                        if (!open) setActionModal({ action: null, record: null })
-                    }}
-                    action={actionModal.action}
-                    model={model}
-                    record={actionModal.record ?? {}}
-                    endpoint={endpoint ?? `/data/${model}/me`}
-                    onSuccess={() => {
-                        setActionModal({ action: null, record: null })
-                        void fetchData()
-                    }}
-                />
-            )}
+            {rowActionDialogs}
         </DndContext>
     )
 }
@@ -621,12 +632,13 @@ interface KanbanCardProps {
     card: any
     titleCol: ColumnDefinition | null
     fieldCols: ColumnDefinition[]
-    actions: ActionMetadata[] | any[]
+    actions: ActionDefinition[]
     locale: string
     timeZone?: string
     currency?: string
     onClick?: (row: any) => void
-    onAction: (action: ActionMetadata, record: any) => void
+    /** STRING contract — dispatch the action by its key (see useDynamicRowActions). */
+    onAction: (actionKey: string, record: any) => void
 }
 
 function KanbanCard({
@@ -644,9 +656,7 @@ function KanbanCard({
         id: String(card.id),
     })
 
-    const visibleActions = (actions as any[]).filter((a) =>
-        isActionAllowedForRowState(a, card),
-    )
+    const visibleActions = actions.filter((a) => isRowActionVisible(a, card))
 
     return (
         <Card
@@ -693,7 +703,7 @@ function KanbanCard({
                                         key={a.key}
                                         onClick={(e) => {
                                             e.stopPropagation()
-                                            onAction(a as ActionMetadata, card)
+                                            onAction(a.key, card)
                                         }}
                                     >
                                         <DynamicIcon

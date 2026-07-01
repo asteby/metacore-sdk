@@ -156,3 +156,42 @@ export function gateTableMetadata(
             metadata.canCreate === undefined ? undefined : metadata.canCreate && allowed('create'),
     }
 }
+
+/**
+ * Resolves the per-row (`placement: 'row'`) action list for a model exactly the
+ * way DynamicTable's action column does, so the kanban card menu shows the SAME
+ * actions:
+ *   - when a <PermissionsProvider> is active, the metadata is run through
+ *     `gateTableMetadata` first (filters by capability + materializes the CRUD
+ *     trio), otherwise the raw metadata is used.
+ *   - explicit actions win; absent them, the implicit View/Edit/Delete trio is
+ *     materialized when `enableCRUDActions` is on.
+ *   - table/create-placement actions are stripped (they belong to the toolbar).
+ *
+ * Pure. `tx` resolves the trio's i18n labels (defaults to the Spanish fallbacks).
+ */
+export function resolveRowActions(
+    metadata: TableMetadata,
+    model: string,
+    can: CanFn,
+    permissionsActive: boolean,
+    tx: (i18nKey: string, fallback: string) => string = (_k, fallback) => fallback,
+): ActionDefinition[] {
+    const gated = permissionsActive ? gateTableMetadata(metadata, model, can, tx) : metadata
+    const explicit = gated.actions ?? []
+    const hasExplicit = (gated.hasActions ?? explicit.length > 0) && explicit.length > 0
+    const base: ActionDefinition[] = hasExplicit
+        ? explicit
+        : gated.enableCRUDActions
+          ? DEFAULT_TRIO.map(
+                (a) =>
+                    ({
+                        key: a.key,
+                        name: a.key,
+                        label: tx(a.i18nKey, a.fallback),
+                        icon: a.icon,
+                    }) as ActionDefinition,
+            )
+          : []
+    return base.filter((a) => ((a.placement ?? 'row') as string) === 'row')
+}
