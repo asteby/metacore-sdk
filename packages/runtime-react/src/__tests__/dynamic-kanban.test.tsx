@@ -14,12 +14,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
 
 // react-i18next: identity translator returning the defaultValue so card field
-// labels and lane labels surface verbatim.
+// labels and lane labels surface verbatim. The `t`/`i18n` references are STABLE
+// (module-scope singletons) — real react-i18next memoizes them, and the card's
+// shared record dialog subtree keys effects off `t`/`i18n`, so returning a fresh
+// object per render would spin an infinite render loop.
+const I18N_T = (_k: string, opts?: { defaultValue?: string }) => opts?.defaultValue ?? _k
+const I18N = { language: 'es' }
+const USE_TRANSLATION = { t: I18N_T, i18n: I18N }
 vi.mock('react-i18next', () => ({
-    useTranslation: () => ({
-        t: (_k: string, opts?: { defaultValue?: string }) => opts?.defaultValue ?? _k,
-        i18n: { language: 'es' },
-    }),
+    useTranslation: () => USE_TRANSLATION,
 }))
 
 // The card menu's shared action handler (useDynamicRowActions) calls
