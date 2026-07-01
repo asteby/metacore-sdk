@@ -23,6 +23,11 @@ export {
     resolveActiveView,
     type DynamicViewProps,
 } from './dynamic-view'
+export {
+    useDynamicFilters,
+    type UseDynamicFiltersOptions,
+    type UseDynamicFiltersResult,
+} from './use-dynamic-filters'
 export * from './dynamic-form'
 export {
     ActionModalDispatcher,

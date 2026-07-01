@@ -38,7 +38,7 @@ import {
     type DragStartEvent,
     type DragEndEvent,
 } from '@dnd-kit/core'
-import { MoreHorizontal } from 'lucide-react'
+import { MoreHorizontal, Search, X } from 'lucide-react'
 import { toast } from 'sonner'
 import {
     Badge,
@@ -49,10 +49,13 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
+    Input,
     Skeleton,
 } from '@asteby/metacore-ui/primitives'
+import { ColumnFilterControl, type ColumnFilterType } from '@asteby/metacore-ui/data-table'
 import { generateBadgeStyles, optionColor } from '@asteby/metacore-ui/lib'
 import { useApi } from './api-context'
+import { useDynamicFilters } from './use-dynamic-filters'
 import { useMetadataCache } from './metadata-cache'
 import { ActivityValueRenderer } from './activity-value-renderer'
 import { DynamicIcon } from './dynamic-icon'
@@ -262,6 +265,11 @@ export interface DynamicKanbanProps {
     timeZone?: string
     /** ISO 4217 currency for money card fields (org config). */
     currency?: string
+    /**
+     * Static equality filters always applied to the board (never shown as a
+     * removable chip). Same contract as DynamicTable's `defaultFilters`.
+     */
+    defaultFilters?: Record<string, any>
 }
 
 export function DynamicKanban({
@@ -273,6 +281,7 @@ export function DynamicKanban({
     pageSize = 200,
     timeZone,
     currency,
+    defaultFilters,
 }: DynamicKanbanProps) {
     const { t, i18n } = useTranslation()
     const api = useApi()
@@ -326,13 +335,25 @@ export function DynamicKanban({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [model])
 
+    // Shared metadata-driven filter engine — the SAME configs, option prefetch
+    // and `f_<key>` serialization DynamicTable uses, so the board filters
+    // identically to its table sibling.
+    const {
+        globalFilter,
+        setGlobalFilter,
+        columnFilterConfigs,
+        filterParams,
+        activeFilterCount,
+        clearAll,
+    } = useDynamicFilters(metadata, { defaultFilters })
+
     // ---- records fetch (same path as DynamicTable, single large page) ----
     const fetchData = useCallback(async () => {
         if (!metadata) return
         setLoadingData(true)
         try {
             const res = (await api.get(endpoint || `/data/${model}`, {
-                params: { page: 1, per_page: pageSize },
+                params: { page: 1, per_page: pageSize, ...filterParams },
             })) as { data: ApiResponse<any[]> }
             if (res.data.success) setRecords(res.data.data || [])
         } catch (err) {
@@ -340,12 +361,37 @@ export function DynamicKanban({
         } finally {
             setLoadingData(false)
         }
-    }, [api, endpoint, model, metadata, pageSize])
+    }, [api, endpoint, model, metadata, pageSize, filterParams])
 
+    // Refetch when metadata resolves, on an explicit refresh, or when the
+    // filters change. `fetchData` is stable while `filterParams` is unchanged
+    // (both memoized), so this only re-runs on real input changes. Debounced so
+    // typing in the search box doesn't fire a request per keystroke.
     useEffect(() => {
-        if (metadata) void fetchData()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [metadata, refreshTrigger])
+        if (!metadata) return
+        const handle = setTimeout(() => {
+            void fetchData()
+        }, 200)
+        return () => clearTimeout(handle)
+    }, [fetchData, metadata, refreshTrigger])
+
+    // Filterable fields for the toolbar, in metadata order (explicit filters
+    // first, then filterable columns), each labeled from its metadata source.
+    const filterFields = useMemo(() => {
+        if (!metadata) return []
+        const out: {
+            key: string
+            label: string
+            config: NonNullable<ReturnType<typeof columnFilterConfigs.get>>
+        }[] = []
+        for (const [key, config] of columnFilterConfigs) {
+            const f = metadata.filters?.find((x) => x.key === key)
+            const c = metadata.columns.find((x) => x.key === key)
+            const rawLabel = f?.label || c?.label || key
+            out.push({ key, label: t(rawLabel, { defaultValue: rawLabel }), config })
+        }
+        return out
+    }, [metadata, columnFilterConfigs, t])
 
     const stages = useMemo(
         () => (metadata ? deriveStages(metadata) : []),
@@ -503,8 +549,51 @@ export function DynamicKanban({
     }
 
     return (
-        <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-            <div className="flex min-w-0 gap-4 overflow-x-auto p-1" data-testid="kanban-board">
+        <div className="flex flex-col gap-3">
+            {/* Filter bar — global search + one chip per filterable field, the
+                SAME set the DynamicTable exposes in its column headers. Changing
+                any control refetches the board server-side (debounced) via the
+                shared useDynamicFilters engine. */}
+            <div className="flex flex-wrap items-center gap-2" data-testid="kanban-filters">
+                <div className="relative">
+                    <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                        value={globalFilter}
+                        onChange={(e) => setGlobalFilter(e.target.value)}
+                        placeholder={t('kanban.searchPlaceholder', { defaultValue: 'Buscar...' })}
+                        className="h-8 w-52 pl-8 text-sm"
+                    />
+                </div>
+                {filterFields.map((field) => (
+                    <ColumnFilterControl
+                        key={field.key}
+                        showLabel
+                        label={field.label}
+                        filterKey={field.config.filterKey}
+                        filterType={field.config.filterType as ColumnFilterType}
+                        filterOptions={field.config.options}
+                        filterLoading={field.config.loading}
+                        filterSearchEndpoint={field.config.searchEndpoint}
+                        selectedValues={field.config.selectedValues}
+                        onFilterChange={field.config.onFilterChange}
+                    />
+                ))}
+                {activeFilterCount > 0 && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 gap-1 text-xs text-muted-foreground"
+                        onClick={clearAll}
+                    >
+                        <X className="h-3.5 w-3.5" />
+                        {t('kanban.clearFilters', { defaultValue: 'Limpiar' })}
+                        {` (${activeFilterCount})`}
+                    </Button>
+                )}
+            </div>
+
+            <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+                <div className="flex min-w-0 gap-4 overflow-x-auto p-1" data-testid="kanban-board">
                 {lanes.map((stage) => {
                     const cards = grouped.get(stage.key) ?? []
                     const droppableAllowed =
@@ -564,7 +653,8 @@ export function DynamicKanban({
             </DragOverlay>
 
             {rowActionDialogs}
-        </DndContext>
+            </DndContext>
+        </div>
     )
 }
 

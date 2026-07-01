@@ -11,7 +11,7 @@
 //      and the destination payload is `{ <group_by>: <dest> }`; an invalid
 //      transition is rejected before any PUT.
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react'
 
 // react-i18next: identity translator returning the defaultValue so card field
 // labels and lane labels surface verbatim. The `t`/`i18n` references are STABLE
@@ -274,5 +274,56 @@ describe('optimistic drag contract', () => {
         const to = 'done'
         expect(isTransitionAllowed(TRANSITIONS, from, to)).toBe(false)
         // handler returns early — no applyOptimisticMove, no PUT.
+    })
+})
+
+// ---------------------------------------------------------------------------
+// 4. Filter bar — the DynamicKanban parity with DynamicTable column filters.
+//    The bar renders a search box + one chip per filterable field, and any
+//    control refetches the board server-side through useDynamicFilters
+//    (debounced), carrying the same `f_<key>` / `search` params.
+// ---------------------------------------------------------------------------
+
+describe('DynamicKanban filter bar', () => {
+    it('renders a search box and a chip for each filterable field', async () => {
+        useMetadataCache.getState().setMetadata('issue', meta())
+        render(
+            <ApiProvider client={fakeApi()}>
+                <DynamicKanban model="issue" />
+            </ApiProvider>,
+        )
+        // search box
+        expect(await screen.findByPlaceholderText('Buscar...')).toBeTruthy()
+        // the only `filterable: true` column is `stage` → a "Stage" filter chip.
+        // (Lane headers use the STAGE labels Backlog/In Progress/… — never "Stage".)
+        expect(screen.getByText('Stage')).toBeTruthy()
+    })
+
+    it('typing in the search box refetches the board with the search param', async () => {
+        useMetadataCache.getState().setMetadata('issue', meta())
+        const get = vi.fn(async (url: string) => {
+            if (url.startsWith('/metadata/table/'))
+                return { data: { success: true, data: meta() } }
+            return { data: { success: true, data: CARDS } }
+        })
+        render(
+            <ApiProvider client={fakeApi({ get })}>
+                <DynamicKanban model="issue" />
+            </ApiProvider>,
+        )
+        const box = await screen.findByPlaceholderText('Buscar...')
+        fireEvent.change(box, { target: { value: 'login' } })
+        await waitFor(() =>
+            expect(get).toHaveBeenCalledWith(
+                '/data/issue',
+                expect.objectContaining({
+                    params: expect.objectContaining({
+                        search: 'login',
+                        // `title` is the only `searchable: true` column in the fixture.
+                        search_columns: 'title',
+                    }),
+                }),
+            ),
+        )
     })
 })
