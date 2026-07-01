@@ -10,3 +10,7 @@ export {
   type ColumnFilterMeta,
   type ColumnFilterType,
 } from './filterable-column-header'
+export {
+  ColumnFilterControl,
+  type ColumnFilterControlProps,
+} from './column-filter-control'
