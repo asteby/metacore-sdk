@@ -38,7 +38,7 @@ import {
     type DragStartEvent,
     type DragEndEvent,
 } from '@dnd-kit/core'
-import { MoreHorizontal, Search, X } from 'lucide-react'
+import { ListFilter, MoreHorizontal, Search, X } from 'lucide-react'
 import { toast } from 'sonner'
 import {
     Badge,
@@ -50,6 +50,19 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
     Input,
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
     Skeleton,
 } from '@asteby/metacore-ui/primitives'
 import { ColumnFilterControl, type ColumnFilterType } from '@asteby/metacore-ui/data-table'
@@ -393,6 +406,27 @@ export function DynamicKanban({
         return out
     }, [metadata, columnFilterConfigs, t])
 
+    // Sheet (grouped global filters) open state + per-lane client-side filters.
+    // A lane filter narrows ONLY that stage's already-fetched cards by a field
+    // value — instant, no refetch — so a user can drill into one column without
+    // touching the rest of the board (the global filters, by contrast, refetch
+    // the whole board server-side).
+    const [filtersOpen, setFiltersOpen] = useState(false)
+    const [laneFilters, setLaneFilters] = useState<
+        Record<string, { field: string; value: string }>
+    >({})
+    const setLaneFilter = useCallback(
+        (stageKey: string, filter: { field: string; value: string } | null) => {
+            setLaneFilters((prev) => {
+                const next = { ...prev }
+                if (filter) next[stageKey] = filter
+                else delete next[stageKey]
+                return next
+            })
+        },
+        [],
+    )
+
     const stages = useMemo(
         () => (metadata ? deriveStages(metadata) : []),
         [metadata],
@@ -564,38 +598,87 @@ export function DynamicKanban({
                         className="h-8 w-52 pl-8 text-sm"
                     />
                 </div>
-                {filterFields.map((field) => (
-                    <ColumnFilterControl
-                        key={field.key}
-                        showLabel
-                        label={field.label}
-                        filterKey={field.config.filterKey}
-                        filterType={field.config.filterType as ColumnFilterType}
-                        filterOptions={field.config.options}
-                        filterLoading={field.config.loading}
-                        filterSearchEndpoint={field.config.searchEndpoint}
-                        selectedValues={field.config.selectedValues}
-                        onFilterChange={field.config.onFilterChange}
-                    />
-                ))}
-                {activeFilterCount > 0 && (
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 gap-1 text-xs text-muted-foreground"
-                        onClick={clearAll}
-                    >
-                        <X className="h-3.5 w-3.5" />
-                        {t('kanban.clearFilters', { defaultValue: 'Limpiar' })}
-                        {` (${activeFilterCount})`}
-                    </Button>
+                {filterFields.length > 0 && (
+                    <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+                        <SheetTrigger asChild>
+                            <Button variant="outline" size="sm" className="h-8 gap-1.5">
+                                <ListFilter className="h-3.5 w-3.5" />
+                                {t('kanban.filters', { defaultValue: 'Filtros' })}
+                                {activeFilterCount > 0 && (
+                                    <Badge
+                                        variant="secondary"
+                                        className="ml-0.5 h-4 min-w-4 justify-center rounded-full px-1 text-[10px] tabular-nums"
+                                    >
+                                        {activeFilterCount}
+                                    </Badge>
+                                )}
+                            </Button>
+                        </SheetTrigger>
+                        <SheetContent
+                            side="right"
+                            className="flex w-80 flex-col gap-4 sm:max-w-sm"
+                        >
+                            <SheetHeader className="space-y-0">
+                                <SheetTitle>
+                                    {t('kanban.filters', { defaultValue: 'Filtros' })}
+                                </SheetTitle>
+                            </SheetHeader>
+                            {/* One labeled control per filterable field, stacked. Same
+                                configs / server-side engine as the inline chips were,
+                                just grouped so they never spill across the board. */}
+                            <div className="flex flex-1 flex-col gap-2 overflow-y-auto pr-1">
+                                {filterFields.map((field) => (
+                                    <ColumnFilterControl
+                                        key={field.key}
+                                        showLabel
+                                        label={field.label}
+                                        filterKey={field.config.filterKey}
+                                        filterType={
+                                            field.config.filterType as ColumnFilterType
+                                        }
+                                        filterOptions={field.config.options}
+                                        filterLoading={field.config.loading}
+                                        filterSearchEndpoint={field.config.searchEndpoint}
+                                        selectedValues={field.config.selectedValues}
+                                        onFilterChange={field.config.onFilterChange}
+                                    />
+                                ))}
+                            </div>
+                            {activeFilterCount > 0 && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="gap-1 text-xs text-muted-foreground"
+                                    onClick={clearAll}
+                                >
+                                    <X className="h-3.5 w-3.5" />
+                                    {t('kanban.clearFilters', { defaultValue: 'Limpiar' })}
+                                    {` (${activeFilterCount})`}
+                                </Button>
+                            )}
+                        </SheetContent>
+                    </Sheet>
                 )}
             </div>
 
             <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
                 <div className="flex min-w-0 gap-4 overflow-x-auto p-1" data-testid="kanban-board">
                 {lanes.map((stage) => {
-                    const cards = grouped.get(stage.key) ?? []
+                    const allCards = grouped.get(stage.key) ?? []
+                    // Per-lane client-side narrowing: substring match on the
+                    // chosen field over the already-fetched cards. Instant, and
+                    // scoped to this stage only.
+                    const laneFilter = laneFilters[stage.key]
+                    const cards =
+                        laneFilter && laneFilter.value.trim()
+                            ? allCards.filter((c) =>
+                                  String(c[laneFilter.field] ?? '')
+                                      .toLowerCase()
+                                      .includes(
+                                          laneFilter.value.trim().toLowerCase(),
+                                      ),
+                              )
+                            : allCards
                     const droppableAllowed =
                         !activeId ||
                         stage.key === activeStage ||
@@ -605,6 +688,12 @@ export function DynamicKanban({
                             key={stage.key}
                             stage={stage}
                             count={cards.length}
+                            totalCount={allCards.length}
+                            filterFields={filterFields}
+                            laneFilter={laneFilter}
+                            onLaneFilterChange={(f) =>
+                                setLaneFilter(stage.key, f)
+                            }
                             isDark={isDark}
                             dimmed={!!activeId && !droppableAllowed}
                             disabled={!!activeId && !droppableAllowed}
@@ -665,18 +754,37 @@ export function DynamicKanban({
 interface KanbanLaneProps {
     stage: StageMeta
     count: number
+    totalCount: number
+    filterFields: { key: string; label: string }[]
+    laneFilter: { field: string; value: string } | undefined
+    onLaneFilterChange: (filter: { field: string; value: string } | null) => void
     isDark: boolean
     dimmed: boolean
     disabled: boolean
     children: React.ReactNode
 }
 
-function KanbanLane({ stage, count, isDark, dimmed, disabled, children }: KanbanLaneProps) {
+function KanbanLane({
+    stage,
+    count,
+    totalCount,
+    filterFields,
+    laneFilter,
+    onLaneFilterChange,
+    isDark,
+    dimmed,
+    disabled,
+    children,
+}: KanbanLaneProps) {
     const { t } = useTranslation()
     const { setNodeRef, isOver } = useDroppable({ id: stage.key, disabled })
     const headerStyle = generateBadgeStyles(stage.color || optionColor(stage.key), {
         isDark,
     })
+    const laneActive = !!(laneFilter && laneFilter.value.trim())
+    const activeFieldLabel =
+        filterFields.find((f) => f.key === laneFilter?.field)?.label ??
+        laneFilter?.field
     return (
         <div
             ref={setNodeRef}
@@ -697,10 +805,35 @@ function KanbanLane({ stage, count, isDark, dimmed, disabled, children }: Kanban
                 >
                     {t(stage.label, { defaultValue: stage.label })}
                 </Badge>
-                <span className="text-xs font-medium tabular-nums text-muted-foreground">
-                    {count}
-                </span>
+                <div className="flex items-center gap-1">
+                    <span className="text-xs font-medium tabular-nums text-muted-foreground">
+                        {laneActive ? `${count}/${totalCount}` : count}
+                    </span>
+                    <LaneFilterButton
+                        fields={filterFields}
+                        value={laneFilter}
+                        onChange={onLaneFilterChange}
+                    />
+                </div>
             </div>
+            {laneActive && (
+                <div className="flex items-center gap-1 px-3 pb-1.5 text-[11px] text-muted-foreground">
+                    <ListFilter className="h-3 w-3 shrink-0" />
+                    <span className="truncate">
+                        {activeFieldLabel}: {laneFilter!.value}
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => onLaneFilterChange(null)}
+                        className="ml-auto rounded p-0.5 hover:bg-muted"
+                        aria-label={t('kanban.clearFilters', {
+                            defaultValue: 'Limpiar',
+                        })}
+                    >
+                        <X className="h-3 w-3" />
+                    </button>
+                </div>
+            )}
             {/* Plain vertical-scroll column, NOT a Radix ScrollArea: the
                 ScrollArea viewport wraps its content in a `display:table`
                 element that shrink-to-fits the WIDEST card, so once the card
@@ -711,6 +844,95 @@ function KanbanLane({ stage, count, isDark, dimmed, disabled, children }: Kanban
                 {children}
             </div>
         </div>
+    )
+}
+
+// LaneFilterButton — the per-column funnel. Picks a field + a value and narrows
+// ONLY this lane's cards (client-side, in the parent). Draft state lives here so
+// typing doesn't refilter mid-keystroke; Apply/Enter commits, Limpiar clears.
+function LaneFilterButton({
+    fields,
+    value,
+    onChange,
+}: {
+    fields: { key: string; label: string }[]
+    value: { field: string; value: string } | undefined
+    onChange: (filter: { field: string; value: string } | null) => void
+}) {
+    const { t } = useTranslation()
+    const [open, setOpen] = useState(false)
+    const [field, setField] = useState(value?.field ?? fields[0]?.key ?? '')
+    const [text, setText] = useState(value?.value ?? '')
+    // Re-seed the draft from the committed filter each time the popover opens.
+    useEffect(() => {
+        if (open) {
+            setField(value?.field ?? fields[0]?.key ?? '')
+            setText(value?.value ?? '')
+        }
+    }, [open, value, fields])
+    if (fields.length === 0) return null
+    const active = !!(value && value.value.trim())
+    const apply = () => {
+        if (field && text.trim()) onChange({ field, value: text })
+        else onChange(null)
+        setOpen(false)
+    }
+    return (
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <button
+                    type="button"
+                    className={`rounded p-1 transition-colors hover:bg-muted hover:text-foreground ${
+                        active ? 'text-primary' : 'text-muted-foreground'
+                    }`}
+                    aria-label={t('kanban.filterLane', {
+                        defaultValue: 'Filtrar columna',
+                    })}
+                >
+                    <ListFilter className="h-3.5 w-3.5" />
+                </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-56 space-y-2 p-2">
+                <Select value={field} onValueChange={setField}>
+                    <SelectTrigger className="h-8 text-xs">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {fields.map((f) => (
+                            <SelectItem key={f.key} value={f.key} className="text-xs">
+                                {f.label}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Input
+                    autoFocus
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') apply()
+                    }}
+                    placeholder={t('kanban.filterValue', { defaultValue: 'Valor...' })}
+                    className="h-8 text-xs"
+                />
+                <div className="flex justify-between gap-2">
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => {
+                            onChange(null)
+                            setOpen(false)
+                        }}
+                    >
+                        {t('kanban.clearFilters', { defaultValue: 'Limpiar' })}
+                    </Button>
+                    <Button size="sm" className="h-7 text-xs" onClick={apply}>
+                        {t('kanban.apply', { defaultValue: 'Aplicar' })}
+                    </Button>
+                </div>
+            </PopoverContent>
+        </Popover>
     )
 }
 
