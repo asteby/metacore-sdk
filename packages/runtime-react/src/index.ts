@@ -53,9 +53,15 @@ export {
     capabilityForActionKey,
     modelCapability,
     gateTableMetadata,
+    resolveRowActions,
     type CanFn,
     type PermissionsProviderProps,
 } from './permissions-context'
+export {
+    useDynamicRowActions,
+    type UseDynamicRowActionsParams,
+    type DynamicRowActions,
+} from './dynamic-row-actions'
 export {
     PermissionsManager,
     moduleActionCapability,

@@ -238,6 +238,38 @@ export const isActionAllowedForRowState = (action: any, row: any): boolean => {
     return requires.map(String).includes(String(status))
 }
 
+/**
+ * Declarative `condition` gate for a per-row action: shows the action only when
+ * the row's `field` satisfies the `eq | neq | in | not_in` operator. No
+ * condition declared → always shown. Unknown operator → permissive.
+ */
+export const isActionConditionMet = (action: any, row: any): boolean => {
+    if (!action?.condition) return true
+    const { field, operator, value } = action.condition
+    const rowValue = String(row?.[field] ?? '')
+    const values = Array.isArray(value) ? value : [value]
+    switch (operator) {
+        case 'eq':
+            return rowValue === values[0]
+        case 'neq':
+            return rowValue !== values[0]
+        case 'in':
+            return values.includes(rowValue)
+        case 'not_in':
+            return !values.includes(rowValue)
+        default:
+            return true
+    }
+}
+
+/**
+ * Whether a per-row action should appear for `row`: both the state-machine gate
+ * (`requiresState`) AND the declarative `condition` must pass. Shared by the
+ * table's action column and the kanban card menu so they hide/show identically.
+ */
+export const isRowActionVisible = (action: any, row: any): boolean =>
+    isActionAllowedForRowState(action, row) && isActionConditionMet(action, row)
+
 const lowerFirst = (value?: string) => {
     if (!value) return value
     return value.charAt(0).toLowerCase() + value.slice(1)
@@ -1265,25 +1297,7 @@ export function makeDefaultGetDynamicColumns(
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 {resolvedActions
-                                    .filter((action) => isActionAllowedForRowState(action, row.original))
-                                    .filter((action) => {
-                                        if (!action.condition) return true
-                                        const { field, operator, value } = action.condition
-                                        const rowValue = String((row.original as any)[field] ?? '')
-                                        const values = Array.isArray(value) ? value : [value]
-                                        switch (operator) {
-                                            case 'eq':
-                                                return rowValue === values[0]
-                                            case 'neq':
-                                                return rowValue !== values[0]
-                                            case 'in':
-                                                return values.includes(rowValue)
-                                            case 'not_in':
-                                                return !values.includes(rowValue)
-                                            default:
-                                                return true
-                                        }
-                                    })
+                                    .filter((action) => isRowActionVisible(action, row.original))
                                     .map((action) => (
                                         <DropdownMenuItem
                                             key={action.key}

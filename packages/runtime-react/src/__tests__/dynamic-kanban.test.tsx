@@ -22,6 +22,13 @@ vi.mock('react-i18next', () => ({
     }),
 }))
 
+// The card menu's shared action handler (useDynamicRowActions) calls
+// useNavigate for `link` actions; the board never navigates in these tests, so
+// a stub is enough (mirrors dynamic-table-permissions.test).
+vi.mock('@tanstack/react-router', () => ({
+    useNavigate: () => () => {},
+}))
+
 import {
     deriveStages,
     groupByStage,

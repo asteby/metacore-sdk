@@ -11,7 +11,6 @@
 //     `getDynamicColumns` prop (hosts retain ownership because the rendered
 //     column cells are tightly coupled to their design system).
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
-import { useNavigate } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { format } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
@@ -68,11 +67,10 @@ import { useApi, useCurrentBranch } from './api-context'
 import type { ColumnFilterConfig, GetDynamicColumns } from './dynamic-columns-shim'
 import { defaultGetDynamicColumns, DATE_CELL_TYPES, aggregateOf, formatAggregateTotal } from './dynamic-columns'
 import { OptionsContext } from './options-context'
-import { ActionModalDispatcher } from './action-modal-dispatcher'
-import type { TableMetadata, ApiResponse, ActionMetadata } from './types'
+import type { TableMetadata, ApiResponse } from './types'
 import { getSearchableColumnKeys } from './column-visibility'
 import { useCan, usePermissionsActive, gateTableMetadata } from './permissions-context'
-import { DynamicRecordDialog } from './dialogs/dynamic-record'
+import { useDynamicRowActions } from './dynamic-row-actions'
 import { ExportDialog } from './dialogs/export'
 import { ImportDialog } from './dialogs/import'
 
@@ -131,7 +129,6 @@ export function DynamicTable({
     const { t, i18n } = useTranslation()
     const api = useApi()
     const currentBranch = useCurrentBranch()
-    const navigate = useNavigate()
 
     const prevBranchId = useRef(currentBranch?.id)
 
@@ -147,23 +144,8 @@ export function DynamicTable({
     const [loadingData, setLoadingData] = useState(true)
     const [optionsMap, setOptionsMap] = useState<Map<string, any[]>>(new Map())
 
-    const [recordDialog, setRecordDialog] = useState<{
-        open: boolean
-        mode: 'view' | 'edit' | 'create'
-        recordId: string | null
-    }>({ open: false, mode: 'view', recordId: null })
-
-    const [rowToDelete, setRowToDelete] = useState<any | null>(null)
-    const [isDeleting, setIsDeleting] = useState(false)
-
     const [exportOpen, setExportOpen] = useState(false)
     const [importOpen, setImportOpen] = useState(false)
-
-    const [actionModal, setActionModal] = useState<{
-        open: boolean
-        action: ActionMetadata | null
-        record: any | null
-    }>({ open: false, action: null, record: null })
 
     const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false)
     const [isBulkDeleting, setIsBulkDeleting] = useState(false)
@@ -506,58 +488,15 @@ export function DynamicTable({
 
     const handleRefresh = useCallback(() => { fetchData(); fetchAggregates() }, [fetchData, fetchAggregates])
 
-    const handleInternalAction = useCallback(async (action: string, row: any) => {
-        if (action === 'delete') { setRowToDelete(row); return }
-        if (action === 'view' || action === 'edit') {
-            if (onAction) await Promise.resolve(onAction(action, row))
-            else setRecordDialog({ open: true, mode: action, recordId: row.id })
-            return
-        }
-        const linkDef = metadata?.actions?.find((a) => a.key === action && a.type === 'link')
-        if (linkDef?.linkUrl) {
-            const url = linkDef.linkUrl.replace(/\{(\w+)\}/g, (_: string, field: string) => String(row[field] ?? ''))
-            navigate({ to: url })
-            return
-        }
-        const actionDef = metadata?.actions?.find((a) => a.key === action)
-        if (actionDef && (actionDef.fields?.length || actionDef.confirm || actionDef.executable)) {
-            setActionModal({
-                open: true,
-                action: {
-                    key: actionDef.key,
-                    label: actionDef.label,
-                    icon: actionDef.icon || 'Zap',
-                    color: actionDef.color,
-                    confirm: actionDef.confirm,
-                    confirmMessage: actionDef.confirmMessage,
-                    fields: actionDef.fields,
-                    requiresState: actionDef.requiresState,
-                    executable: actionDef.executable,
-                },
-                record: row,
-            })
-            return
-        }
-        if (onAction) { await Promise.resolve(onAction(action, row)); handleRefresh() }
-        else handleRefresh()
-    }, [onAction, handleRefresh, metadata, navigate])
-
-    const confirmDelete = async () => {
-        if (!rowToDelete) return
-        setIsDeleting(true)
-        try {
-            const deleteEndpoint = endpoint ? `${endpoint}/${rowToDelete.id}` : `/data/${model}/${rowToDelete.id}`
-            const res = await api.delete(deleteEndpoint)
-            if (res.data.success) { toast.success(res.data.message || 'Eliminado correctamente'); handleRefresh() }
-            else toast.error(res.data.message || 'Error al eliminar')
-        } catch (error) {
-            console.error('Error al eliminar', error)
-            toast.error('Error al eliminar el registro')
-        } finally {
-            setIsDeleting(false)
-            setRowToDelete(null)
-        }
-    }
+    // Per-row action dispatch (view/edit/delete/link/custom) + its dialogs live
+    // in the shared hook so DynamicKanban's card menu behaves identically.
+    const { handleInternalAction, dialogs: rowActionDialogs } = useDynamicRowActions({
+        model,
+        endpoint,
+        metadata,
+        onAction,
+        onRefresh: handleRefresh,
+    })
 
     const confirmBulkDelete = async () => {
         const selectedRows = table.getFilteredSelectedRowModel().rows
@@ -974,20 +913,7 @@ export function DynamicTable({
                 </div>
             </div>
 
-            <AlertDialog open={!!rowToDelete} onOpenChange={(open: boolean) => !open && setRowToDelete(null)}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>¿Está absolutamente seguro?</AlertDialogTitle>
-                        <AlertDialogDescription>Esta acción no se puede deshacer. Esto eliminará permanentemente el registro seleccionado de nuestros servidores.</AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel disabled={isDeleting}>{t('common.cancel')}</AlertDialogCancel>
-                        <AlertDialogAction onClick={(e: React.MouseEvent) => { e.preventDefault(); confirmDelete() }} className="bg-red-600 hover:bg-red-700" disabled={isDeleting}>
-                            {isDeleting ? 'Eliminando...' : 'Eliminar'}
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+            {rowActionDialogs}
 
             <AlertDialog open={showBulkDeleteConfirm} onOpenChange={(open: boolean) => !open && !isBulkDeleting && setShowBulkDeleteConfirm(false)}>
                 <AlertDialogContent>
@@ -1013,32 +939,11 @@ export function DynamicTable({
                 </AlertDialogContent>
             </AlertDialog>
 
-            <DynamicRecordDialog
-                open={recordDialog.open}
-                onOpenChange={(open: boolean) => setRecordDialog((prev) => ({ ...prev, open }))}
-                mode={recordDialog.mode}
-                model={model}
-                recordId={recordDialog.recordId}
-                endpoint={endpoint}
-                onSaved={handleRefresh}
-            />
-
             {viewMetadata?.canExport && (
                 <ExportDialog open={exportOpen} onOpenChange={setExportOpen} model={model} metadata={metadata} currentFilters={buildFilterParams()} hasActiveFilters={hasActiveFilters} />
             )}
             {viewMetadata?.canImport && (
                 <ImportDialog open={importOpen} onOpenChange={setImportOpen} model={model} metadata={metadata} onImported={handleRefresh} />
-            )}
-            {actionModal.action && (
-                <ActionModalDispatcher
-                    open={actionModal.open}
-                    onOpenChange={(open: boolean) => setActionModal((prev) => ({ ...prev, open }))}
-                    action={actionModal.action}
-                    model={model}
-                    record={actionModal.record}
-                    endpoint={endpoint}
-                    onSuccess={handleRefresh}
-                />
             )}
             <DataTableBulkActions table={table} entityName="registro">
                 <Button variant="destructive" size="sm" className="h-8" onClick={() => setShowBulkDeleteConfirm(true)}>
