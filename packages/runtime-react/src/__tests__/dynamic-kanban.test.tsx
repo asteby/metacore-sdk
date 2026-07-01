@@ -285,18 +285,23 @@ describe('optimistic drag contract', () => {
 // ---------------------------------------------------------------------------
 
 describe('DynamicKanban filter bar', () => {
-    it('renders a search box and a chip for each filterable field', async () => {
+    it('renders a search box and groups filters behind a Filtros sheet', async () => {
         useMetadataCache.getState().setMetadata('issue', meta())
         render(
             <ApiProvider client={fakeApi()}>
                 <DynamicKanban model="issue" />
             </ApiProvider>,
         )
-        // search box
+        // search box stays inline
         expect(await screen.findByPlaceholderText('Buscar...')).toBeTruthy()
-        // the only `filterable: true` column is `stage` → a "Stage" filter chip.
-        // (Lane headers use the STAGE labels Backlog/In Progress/… — never "Stage".)
-        expect(screen.getByText('Stage')).toBeTruthy()
+        // filters are grouped behind a "Filtros" button (no longer spilling as
+        // inline chips), so "Stage" is NOT in the DOM until the sheet opens.
+        const filtersBtn = screen.getByText('Filtros')
+        expect(filtersBtn).toBeTruthy()
+        expect(screen.queryByText('Stage')).toBeNull()
+        // opening the sheet reveals the "Stage" filter (the only filterable column)
+        fireEvent.click(filtersBtn)
+        expect(await screen.findByText('Stage')).toBeTruthy()
     })
 
     it('typing in the search box refetches the board with the search param', async () => {
