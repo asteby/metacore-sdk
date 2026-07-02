@@ -131,6 +131,15 @@ function stageCalls(api: ApiClient, stage: string) {
         (c: any[]) => c[1]?.params?.f_stage === stage,
     )
 }
+// A lane's real page-load (per_page 25), as opposed to the eager per_page=1
+// total probe fired on the initial board load.
+function stagePageCalls(api: ApiClient, stage: string) {
+    return stageCalls(api, stage).filter((c: any[]) => c[1]?.params?.per_page === 25)
+}
+// The eager total probe (per_page 1) for a stage.
+function stageTotalCalls(api: ApiClient, stage: string) {
+    return stageCalls(api, stage).filter((c: any[]) => c[1]?.params?.per_page === 1)
+}
 function globalDataCalls(api: ApiClient) {
     return (api.get as any).mock.calls.filter(
         (c: any[]) =>
@@ -171,15 +180,20 @@ describe('DynamicKanban per-lane infinite scroll', () => {
         )
         // Initial board page painted its single backlog card.
         expect(await screen.findByText('Backlog One')).toBeTruthy()
-        expect(stageCalls(api, 'backlog')).toHaveLength(0)
+        // No real page-load fired yet — only the eager per_page=1 total probe.
+        expect(stagePageCalls(api, 'backlog')).toHaveLength(0)
+        // The eager total lands, so the header shows the real stage count (1/5)
+        // BEFORE the user scrolls.
+        await waitFor(() => expect(stageTotalCalls(api, 'backlog').length).toBeGreaterThan(0))
+        expect(await screen.findByText('1/5')).toBeTruthy()
 
         // Sentinels enter view → each declared lane tops up its OWN stage.
         expect(observers.length).toBeGreaterThan(0)
         observers.forEach((o) => o.fire(true))
 
         // The backlog top-up ran with the right scoped params...
-        await waitFor(() => expect(stageCalls(api, 'backlog').length).toBeGreaterThan(0))
-        const call = stageCalls(api, 'backlog')[0]
+        await waitFor(() => expect(stagePageCalls(api, 'backlog').length).toBeGreaterThan(0))
+        const call = stagePageCalls(api, 'backlog')[0]
         expect(call[1].params).toMatchObject({ f_stage: 'backlog', page: 1, per_page: 25 })
 
         // ...its rows were appended and the header shows count/serverTotal (3/5).
