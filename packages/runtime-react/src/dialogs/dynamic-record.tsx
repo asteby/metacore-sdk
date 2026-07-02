@@ -557,7 +557,7 @@ export function DynamicRecordDialog({
                 }
             } catch (err) {
                 console.error('[DynamicRecordDialog] load error:', err)
-                if (!seed) toast.error('Error al cargar los datos')
+                if (!seed) toast.error(t('dynamic.load_error', { defaultValue: 'No se pudieron cargar los datos' }))
             } finally {
                 if (!cancelled) setLoading(false)
             }
@@ -662,7 +662,7 @@ export function DynamicRecordDialog({
         try {
             if (isCreate && onCreate) {
                 const created = await onCreate(formValues)
-                toast.success(modalMeta?.messages?.created || 'Registro creado correctamente')
+                toast.success(modalMeta?.messages?.created || t('dynamic.create_success', { defaultValue: 'Registro creado correctamente' }))
                 onSaved?.(created ?? undefined)
                 onOpenChange(false)
                 return
@@ -670,7 +670,7 @@ export function DynamicRecordDialog({
 
             if (!isCreate && recordId && onUpdate) {
                 const updated = await onUpdate(String(recordId), formValues)
-                toast.success(modalMeta?.messages?.updated || 'Guardado correctamente')
+                toast.success(modalMeta?.messages?.updated || t('dynamic.update_success', { defaultValue: 'Guardado correctamente' }))
                 onSaved?.(updated ?? undefined)
                 onOpenChange(false)
                 return
@@ -693,16 +693,18 @@ export function DynamicRecordDialog({
                 // endpoint returns a raw English string that would leak into the toast.
                 toast.success(
                     modalMeta?.messages?.[isCreate ? 'created' : 'updated']
-                        || (isCreate ? 'Registro creado correctamente' : 'Guardado correctamente'),
+                        || (isCreate
+                            ? t('dynamic.create_success', { defaultValue: 'Registro creado correctamente' })
+                            : t('dynamic.update_success', { defaultValue: 'Guardado correctamente' })),
                 )
                 // Hand the persisted record back so callers can auto-select it.
                 onSaved?.(res.data?.data ?? res.data ?? undefined)
                 onOpenChange(false)
             } else {
-                toast.error(res.data?.message || 'Error al guardar')
+                toast.error(res.data?.message || t('dynamic.save_error', { defaultValue: 'No se pudo guardar' }))
             }
         } catch (err: any) {
-            toast.error(err?.response?.data?.message || 'Error al guardar')
+            toast.error(err?.response?.data?.message || t('dynamic.save_error', { defaultValue: 'No se pudo guardar' }))
         } finally {
             setSaving(false)
         }
@@ -716,7 +718,7 @@ export function DynamicRecordDialog({
             onOpenChange(false)
         } catch (err: any) {
             console.error('[DynamicRecordDialog] delete error:', err)
-            toast.error(err?.response?.data?.message || err?.message || 'Error al eliminar')
+            toast.error(err?.response?.data?.message || err?.message || t('dynamic.delete_error', { defaultValue: 'No se pudo eliminar el registro' }))
         } finally {
             setDeleting(false)
         }
@@ -1392,6 +1394,7 @@ export function EditField({ field, value, onChange, record }: {
 }
 
 function ImageUploadField({ field: _field, value, onChange }: { field: FieldDef; value: any; onChange: (val: any) => void }) {
+    const { t } = useTranslation()
     const api = useApi()
     const model = useContext(ModelContext)
     const getImageUrl = useContext(ImageUrlContext)
@@ -1411,7 +1414,7 @@ function ImageUploadField({ field: _field, value, onChange }: { field: FieldDef;
             const url = res.data?.data?.url || res.data?.url
             if (url) onChange(url)
         } catch {
-            toast.error('Error al subir imagen')
+            toast.error(t('dynamic.image_upload_error', { defaultValue: 'No se pudo subir la imagen' }))
         } finally {
             setUploading(false)
             if (inputRef.current) inputRef.current.value = ''

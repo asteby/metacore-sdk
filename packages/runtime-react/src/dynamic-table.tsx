@@ -628,8 +628,8 @@ export function DynamicTable({
         setBulkDeleteProgress(0)
         setBulkDeleteTotal(0)
         setRowSelection({})
-        if (successCount > 0) toast.success(`${successCount} registro(s) eliminado(s) correctamente`)
-        if (errorCount > 0) toast.error(`${errorCount} registro(s) no pudieron ser eliminados`)
+        if (successCount > 0) toast.success(t('dynamic.bulk_delete_success', { count: successCount, defaultValue: '{{count}} registro(s) eliminado(s) correctamente' }))
+        if (errorCount > 0) toast.error(t('dynamic.bulk_delete_error', { count: errorCount, defaultValue: '{{count}} registro(s) no pudieron ser eliminados' }))
         handleRefresh()
     }
 

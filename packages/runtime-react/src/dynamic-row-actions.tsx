@@ -139,11 +139,13 @@ export function useDynamicRowActions({
         try {
             const deleteEndpoint = endpoint ? `${endpoint}/${rowToDelete.id}` : `/data/${model}/${rowToDelete.id}`
             const res = await api.delete(deleteEndpoint)
-            if (res.data.success) { toast.success(res.data.message || 'Eliminado correctamente'); onRefresh() }
-            else toast.error(res.data.message || 'Error al eliminar')
+            // CRUD estándar: no usar res.data.message (el endpoint dinámico
+            // devuelve texto en inglés que se filtraría al toast). String localizado.
+            if (res.data.success) { toast.success(t('dynamic.delete_success', { defaultValue: 'Registro eliminado correctamente' })); onRefresh() }
+            else toast.error(t('dynamic.delete_error', { defaultValue: 'No se pudo eliminar el registro' }))
         } catch (error) {
             console.error('Error al eliminar', error)
-            toast.error('Error al eliminar el registro')
+            toast.error(t('dynamic.delete_error', { defaultValue: 'No se pudo eliminar el registro' }))
         } finally {
             setIsDeleting(false)
             setRowToDelete(null)

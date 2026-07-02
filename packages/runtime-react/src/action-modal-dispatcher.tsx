@@ -225,11 +225,11 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
             const url = buildActionUrl(endpoint, model, record.id, action.key)
             const res = await api.post(url, {})
             if (res.data.success) {
-                toast.success(res.data.message || t('common.success'))
+                toast.success(res.data.message ? t(res.data.message, { defaultValue: res.data.message }) : t('common.success'))
                 onOpenChange(false)
                 onSuccess()
             } else {
-                toast.error(res.data.message || t('common.error'))
+                toast.error(res.data.message ? t(res.data.message, { defaultValue: res.data.message }) : t('common.error'))
             }
         } catch (err: any) {
             toast.error(err?.response?.data?.message || t('common.error'))
@@ -342,11 +342,11 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
             const url = buildActionUrl(endpoint, model, record.id, action.key)
             const res = await api.post(url, formData)
             if (res.data.success) {
-                toast.success(res.data.message || t('common.success'))
+                toast.success(res.data.message ? t(res.data.message, { defaultValue: res.data.message }) : t('common.success'))
                 onOpenChange(false)
                 onSuccess()
             } else {
-                toast.error(res.data.message || t('common.error'))
+                toast.error(res.data.message ? t(res.data.message, { defaultValue: res.data.message }) : t('common.error'))
             }
         } catch (err: any) {
             toast.error(err?.response?.data?.message || t('common.error'))
