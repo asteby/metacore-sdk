@@ -11,16 +11,24 @@ export interface FilterOption {
     value: string
     icon?: string
     color?: string
+    /** Occurrence count for `facet` options (rendered muted, right-aligned). */
+    count?: number
 }
 
 export interface ColumnFilterConfig {
-    filterType: 'select' | 'boolean' | 'date_range' | 'number_range' | 'text' | string
+    filterType: 'select' | 'boolean' | 'date_range' | 'number_range' | 'text' | 'facet' | string
     filterKey: string
     options: FilterOption[]
     selectedValues: string[]
     onFilterChange: (filterKey: string, values: string[]) => void
     loading?: boolean
     searchEndpoint?: string
+    /**
+     * Lazy option loader for `facet` filters — resolves the column's distinct
+     * values + counts from the `/facets` endpoint. Passed straight through to
+     * `ColumnFilterControl.loadOptions`.
+     */
+    loadOptions?: (q?: string) => Promise<FilterOption[]>
 }
 
 /** Signature for the host-provided `getDynamicColumns` factory. */

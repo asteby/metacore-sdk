@@ -107,6 +107,7 @@ export function FilterableColumnHeader<TData, TValue>({
           filterSearchEndpoint={meta.filterSearchEndpoint}
           selectedValues={meta.selectedValues}
           onFilterChange={meta.onFilterChange}
+          loadOptions={meta.loadOptions}
         />
       )}
     </div>

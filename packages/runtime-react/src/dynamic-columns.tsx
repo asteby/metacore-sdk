@@ -757,6 +757,7 @@ export function makeDefaultGetDynamicColumns(
                     filterSearchEndpoint: filterConfig.searchEndpoint,
                     selectedValues: filterConfig.selectedValues,
                     onFilterChange: filterConfig.onFilterChange,
+                    loadOptions: filterConfig.loadOptions,
                 }
                 Object.assign(columnMeta, fm)
             }

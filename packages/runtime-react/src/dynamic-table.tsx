@@ -66,6 +66,7 @@ import { useMetadataCache } from './metadata-cache'
 import { useApi, useCurrentBranch } from './api-context'
 import type { ColumnFilterConfig, GetDynamicColumns } from './dynamic-columns-shim'
 import { defaultGetDynamicColumns, DATE_CELL_TYPES, aggregateOf, formatAggregateTotal } from './dynamic-columns'
+import { useFacetLoaders, isLongTextColumn } from './use-facet-loaders'
 import { OptionsContext } from './options-context'
 import type { TableMetadata, ApiResponse } from './types'
 import { getSearchableColumnKeys } from './column-visibility'
@@ -530,21 +531,50 @@ export function DynamicTable({
         setPagination((prev: PaginationState) => ({ ...prev, pageIndex: 0 }))
     }, [])
 
+    // Same facet loader machinery the board uses, so a text column filters
+    // identically in the table header and the kanban Sheet (the host's
+    // getDynamicColumns forwards `loadOptions` into the column meta). Facets base
+    // derived off the list endpoint exactly like the aggregate endpoint below.
+    const facetsBase = endpoint ? `${endpoint}/facets` : model ? `/data/${model}/facets` : null
+    const getFacetLoader = useFacetLoaders(facetsBase)
+
     const columnFilterConfigs = useMemo(() => {
         const map = new Map<string, ColumnFilterConfig>()
         if (!metadata) return map
+        const stageOptions = (metadata.stages ?? []).map((s) => ({
+            label: s.label,
+            value: s.key,
+            color: s.color,
+        }))
+        const groupBy = metadata.group_by
         // Explicit `metadata.filters` wins. When the backend does not emit
         // them, derive a filter chip from every column flagged
         // `filterable: true` — keeps the kernel API minimal (one flag on the
         // column) while still rendering the FilterableColumnHeader.
         for (const f of metadata.filters ?? []) {
-            const fType = f.type as ColumnFilterConfig['filterType']
+            let fType = f.type as ColumnFilterConfig['filterType']
             let options: { label: string; value: string; icon?: string; color?: string }[] = []
             if (f.options && f.options.length > 0) {
                 options = f.options.map(o => ({ label: o.label, value: String(o.value), icon: o.icon, color: o.color }))
             }
             if (f.searchEndpoint && filterOptionsMap.has(f.searchEndpoint)) {
                 options = filterOptionsMap.get(f.searchEndpoint) || []
+            }
+            // (A) A stage column with no options of its own inherits the
+            // pipeline stages (with their colors) as a real select.
+            if (options.length === 0 && !f.searchEndpoint && (f.column || f.key) === groupBy && stageOptions.length > 0) {
+                fType = 'select'
+                options = stageOptions
+            }
+            // (B) A plain text filter becomes a facet value-picker when a facets
+            // endpoint is available (degrades to "Contiene..." if it yields nothing).
+            let loadOptions: ColumnFilterConfig['loadOptions']
+            if (fType === 'text' && facetsBase) {
+                const loader = getFacetLoader(f.column || f.key)
+                if (loader) {
+                    fType = 'facet'
+                    loadOptions = loader
+                }
             }
             if (fType === 'select' && options.length === 0 && !f.searchEndpoint) continue
             map.set(f.key, {
@@ -555,6 +585,7 @@ export function DynamicTable({
                 onFilterChange: handleDynamicFilterChange,
                 loading: f.searchEndpoint ? !filterOptionsMap.has(f.searchEndpoint) : false,
                 searchEndpoint: f.searchEndpoint,
+                loadOptions,
             })
         }
         for (const c of metadata.columns ?? []) {
@@ -571,8 +602,11 @@ export function DynamicTable({
             //   - number / number_range / numeric → number range
             //   - date → date range picker (start/end calendar)
             //   - everything else (text, email, phone, tags…) → text contains
+            // (A) Stage column with no options of its own → colored select.
+            const isStageColumn = c.key === groupBy && !hasStaticOptions && !hasEndpoint && !c.filterType && stageOptions.length > 0
             let filterType: ColumnFilterConfig['filterType']
-            if (c.filterType) filterType = c.filterType
+            if (isStageColumn) filterType = 'select'
+            else if (c.filterType) filterType = c.filterType
             else if (isRelation && hasEndpoint) filterType = 'dynamic_select'
             else if (hasStaticOptions || hasEndpoint) filterType = 'select'
             else if (c.type === 'boolean') filterType = 'boolean'
@@ -581,7 +615,7 @@ export function DynamicTable({
                 filterType = 'date_range'
             else filterType = 'text'
 
-            const options = hasStaticOptions
+            let options = hasStaticOptions
                 ? c.options!.map(o => ({
                       label: o.label,
                       value: String(o.value),
@@ -591,6 +625,19 @@ export function DynamicTable({
                 : hasEndpoint && filterOptionsMap.has(c.searchEndpoint!)
                   ? filterOptionsMap.get(c.searchEndpoint!) || []
                   : []
+            if (isStageColumn) options = stageOptions
+
+            // (B) Upgrade a plain text filter to a facet value-picker unless it's
+            // a long-text/body column (too many unique values to enumerate).
+            let loadOptions: ColumnFilterConfig['loadOptions']
+            if (filterType === 'text' && facetsBase && !isLongTextColumn(c)) {
+                const loader = getFacetLoader(c.key)
+                if (loader) {
+                    filterType = 'facet'
+                    loadOptions = loader
+                }
+            }
+
             map.set(c.key, {
                 filterType,
                 filterKey: c.key,
@@ -599,10 +646,11 @@ export function DynamicTable({
                 onFilterChange: handleDynamicFilterChange,
                 loading: hasEndpoint && !filterOptionsMap.has(c.searchEndpoint!),
                 searchEndpoint: c.searchEndpoint,
+                loadOptions,
             })
         }
         return map
-    }, [metadata, filterOptionsMap, dynamicFilters, handleDynamicFilterChange])
+    }, [metadata, filterOptionsMap, dynamicFilters, handleDynamicFilterChange, facetsBase, getFacetLoader])
 
     const columns = useMemo(() => {
         if (!viewMetadata) return []
