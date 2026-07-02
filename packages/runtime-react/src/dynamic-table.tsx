@@ -536,7 +536,7 @@ export function DynamicTable({
     // getDynamicColumns forwards `loadOptions` into the column meta). Facets base
     // derived off the list endpoint exactly like the aggregate endpoint below.
     const facetsBase = endpoint ? `${endpoint}/facets` : model ? `/data/${model}/facets` : null
-    const getFacetLoader = useFacetLoaders(facetsBase)
+    const { getFacetLoader } = useFacetLoaders(facetsBase)
 
     const columnFilterConfigs = useMemo(() => {
         const map = new Map<string, ColumnFilterConfig>()

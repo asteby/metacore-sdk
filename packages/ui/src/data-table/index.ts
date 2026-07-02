@@ -14,3 +14,7 @@ export {
   ColumnFilterControl,
   type ColumnFilterControlProps,
 } from './column-filter-control'
+export {
+  FilterValueCombobox,
+  type FilterValueComboboxProps,
+} from './filter-value-combobox'
