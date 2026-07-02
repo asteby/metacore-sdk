@@ -449,6 +449,21 @@ export function isMoneyField(field: FieldDef, value: any): boolean {
     )
 }
 
+// filterVisibleFields decides which declared fields render in the form for a
+// given mode. `hidden` fields never render. A `readonly` (server/system-
+// generated) field is EXCLUDED on create — the user can't set a value the
+// server will overwrite — but stays visible on edit/view (rendered disabled).
+export function filterVisibleFields(
+    fields: FieldDef[] | undefined,
+    mode: 'view' | 'edit' | 'create',
+): FieldDef[] {
+    return (fields ?? []).filter(f => {
+        if (f.hidden) return false
+        if (mode === 'create' && f.readonly) return false
+        return true
+    })
+}
+
 export function DynamicRecordDialog({
     open,
     onOpenChange,
@@ -733,11 +748,7 @@ export function DynamicRecordDialog({
 
     const title = modalMeta ? config.getTitle(modalMeta, t) : ''
 
-    const visibleFields = modalMeta?.fields?.filter(f => {
-        if (f.hidden) return false
-        if (isCreate && f.readonly) return false
-        return true
-    }) ?? []
+    const visibleFields = filterVisibleFields(modalMeta?.fields, mode)
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -886,24 +897,50 @@ interface FieldRowProps {
 }
 
 function FieldRow({ field, record, value, mode, onChange }: FieldRowProps) {
-    const isReadonly = field.readonly || mode === 'view'
+    // A `readonly` field is server/system-generated (e.g. the GitHub addon's
+    // `number`/`github_url`, filled by the API after the outbound create). On
+    // CREATE it is excluded from the form entirely (see `visibleFields`); on EDIT
+    // it stays visible but is NOT editable — rendered as a disabled, muted input
+    // so the user sees its value without being able to change it. View mode keeps
+    // the rich read-only renderer.
+    const isEditReadonly = mode === 'edit' && !!field.readonly
 
     return (
         <div className="flex flex-col gap-1.5">
             <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 {field.label}
-                {field.required && mode !== 'view' && (
+                {field.required && mode !== 'view' && !isEditReadonly && (
                     <span className="text-destructive ml-0.5">*</span>
                 )}
             </Label>
 
-            {isReadonly ? (
+            {mode === 'view' ? (
                 <ViewValue field={field} value={value} record={record} />
+            ) : isEditReadonly ? (
+                <ReadonlyEditField field={field} value={value} />
             ) : (
                 <EditField field={field} value={value} onChange={onChange} record={record} />
             )}
         </div>
     )
+}
+
+// ReadonlyEditField — the edit-mode rendering of a `readonly` (system-generated)
+// field: a disabled, muted input that shows the current value without allowing
+// edits. Booleans render as a disabled switch to match their editable
+// counterpart; everything else renders the formatted display value in a disabled
+// text input.
+export function ReadonlyEditField({ field, value }: { field: FieldDef; value: any }) {
+    if (field.type === 'boolean' || typeof value === 'boolean') {
+        return (
+            <div className="flex items-center gap-2 py-1">
+                <Switch checked={!!value} disabled />
+                <span className="text-sm text-muted-foreground">{value ? 'Sí' : 'No'}</span>
+            </div>
+        )
+    }
+    const display = formatDisplayValue(value, field)
+    return <Input value={display === '—' ? '' : display} disabled readOnly className="text-muted-foreground" />
 }
 
 // RelationViewValue — read-only FK lead. Resolves the relation's label + image
