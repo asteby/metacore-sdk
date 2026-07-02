@@ -239,6 +239,28 @@ export function applyLaneTotalsOnMove<T extends { total: number | null }>(
 }
 
 /**
+ * Formats a lane header's count badge. Three cases:
+ *   - A lane filter/search is active → `shown/loaded` (the client-side narrowed
+ *     count over what this lane has loaded).
+ *   - Otherwise, when the stage's server total is known → `shown` alone once
+ *     everything is loaded (`shown >= total`), else `shown/total` (partial).
+ *   - Total still unknown → just `shown`.
+ * Pure — exported for unit tests.
+ */
+export function formatLaneCount(
+    shown: number,
+    loaded: number,
+    serverTotal: number | null,
+    laneActive: boolean,
+): string {
+    if (laneActive) return `${shown}/${loaded}`
+    if (serverTotal != null) {
+        return shown >= serverTotal ? String(serverTotal) : `${shown}/${serverTotal}`
+    }
+    return String(shown)
+}
+
+/**
  * Picks the columns shown on a card: a `title` column (first searchable column,
  * else first text-ish column) and up to `maxFields` secondary columns. Excludes
  * the group_by column (it's the lane itself) and any column hidden from the
@@ -450,6 +472,11 @@ export function DynamicKanban({
     // Active drag card id (for the DragOverlay + drop-zone highlighting).
     const [activeId, setActiveId] = useState<string | null>(null)
 
+    // Monotonic token for the current board load. Bumped on every fetchData so a
+    // slow eager-totals response from a superseded filter set can't inject stale
+    // stage totals into the fresh board.
+    const fetchGenRef = useRef(0)
+
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     )
@@ -507,6 +534,7 @@ export function DynamicKanban({
     // change (fetchData's identity changes with filterParams).
     const fetchData = useCallback(async () => {
         if (!metadata) return
+        const gen = ++fetchGenRef.current
         setLoadingData(true)
         try {
             const res = (await api.get(endpoint || `/data/${model}`, {
@@ -519,6 +547,49 @@ export function DynamicKanban({
             setLoadingData(false)
         }
         setLanePagination({})
+        // Eager per-lane totals: so every lane header shows the REAL stage count
+        // on first render (not just what the global page happened to load), fire
+        // one lightweight `per_page=1` request per declared stage — in parallel,
+        // scoped by the SAME active filters/search (`f_<group_by>=<stage>` on top
+        // of filterParams). We read only `meta.total`; the row itself is ignored
+        // (the lane loads its real cards via loadMoreLane on scroll). The
+        // "unassigned" lane can't be stage-scoped, so it keeps its loaded count.
+        const gb = metadata.group_by
+        const declaredStages = deriveStages(metadata)
+        if (gb && declaredStages.length > 0) {
+            void Promise.all(
+                declaredStages.map(async (stage) => {
+                    try {
+                        const r = (await api.get(endpoint || `/data/${model}`, {
+                            params: {
+                                ...filterParams,
+                                page: 1,
+                                per_page: 1,
+                                [`f_${gb}`]: stage.key,
+                            },
+                        })) as { data: ApiResponse<any[]> & { meta?: any } }
+                        const total = r.data.meta?.total ?? r.data.meta?.count ?? null
+                        if (total == null || gen !== fetchGenRef.current) return
+                        setLanePagination((p) => {
+                            const existing = p[stage.key]
+                            // A real page fetch already learned this lane's total.
+                            if (existing?.total != null) return p
+                            return {
+                                ...p,
+                                [stage.key]: {
+                                    nextPage: existing?.nextPage ?? 1,
+                                    total,
+                                    loading: existing?.loading ?? false,
+                                    done: existing?.done ?? total === 0,
+                                },
+                            }
+                        })
+                    } catch (err) {
+                        // A failed total just leaves the header on the loaded count.
+                    }
+                }),
+            )
+        }
     }, [api, endpoint, model, metadata, pageSize, filterParams])
 
     // Load the next page for ONE lane/stage and append it (deduped by id) into
@@ -1257,11 +1328,7 @@ function KanbanLane({
                         {t(stage.label, { defaultValue: stage.label })}
                     </Badge>
                     <span className="text-xs font-medium tabular-nums text-muted-foreground">
-                        {laneActive
-                            ? `${count}/${totalCount}`
-                            : serverTotal != null
-                              ? `${count}/${serverTotal}`
-                              : count}
+                        {formatLaneCount(count, totalCount, serverTotal, laneActive)}
                     </span>
                 </div>
                 {/* Lane actions — always visible in muted (a hidden hover-reveal
