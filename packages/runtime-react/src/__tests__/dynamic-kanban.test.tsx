@@ -39,6 +39,8 @@ import {
     applyOptimisticMove,
     selectCardColumns,
     cardMatchesLaneQuery,
+    cardMatchesLaneFunnel,
+    translateOptionLabels,
     summarizeFilterValues,
     UNASSIGNED_LANE,
     DynamicKanban,
@@ -229,6 +231,80 @@ describe('cardMatchesLaneQuery', () => {
     it('an empty query matches everything', () => {
         expect(cardMatchesLaneQuery(CARDS[0], cols, '')).toBe(true)
         expect(cardMatchesLaneQuery(CARDS[0], cols, '   ')).toBe(true)
+    })
+})
+
+describe('cardMatchesLaneFunnel', () => {
+    // card 4: title "Refactor api", assignee "ana", priority "mid", stage "in_progress"
+    const card = CARDS[3]
+
+    it('matches picked select/facet values by equality (IN), not substring', () => {
+        // exact value matches
+        expect(
+            cardMatchesLaneFunnel(card, { field: 'assignee', values: ['ana'] }),
+        ).toBe(true)
+        // a substring of the value must NOT match under equality
+        expect(
+            cardMatchesLaneFunnel(card, { field: 'assignee', values: ['an'] }),
+        ).toBe(false)
+        // IN semantics: any of the picked values
+        expect(
+            cardMatchesLaneFunnel(card, {
+                field: 'assignee',
+                values: ['dani', 'ana'],
+            }),
+        ).toBe(true)
+        expect(
+            cardMatchesLaneFunnel(card, {
+                field: 'assignee',
+                values: ['dani', 'eva'],
+            }),
+        ).toBe(false)
+    })
+
+    it('matches free text by case-insensitive substring', () => {
+        expect(cardMatchesLaneFunnel(card, { field: 'title', text: 'refac' })).toBe(
+            true,
+        )
+        expect(cardMatchesLaneFunnel(card, { field: 'title', text: 'REFAC' })).toBe(
+            true,
+        )
+        expect(cardMatchesLaneFunnel(card, { field: 'title', text: 'zzz' })).toBe(
+            false,
+        )
+    })
+
+    it('passes when there is no field or no criteria', () => {
+        expect(cardMatchesLaneFunnel(card, undefined)).toBe(true)
+        expect(cardMatchesLaneFunnel(card, { field: 'assignee' })).toBe(true)
+        expect(
+            cardMatchesLaneFunnel(card, { field: 'assignee', values: [] }),
+        ).toBe(true)
+    })
+})
+
+describe('translateOptionLabels', () => {
+    it('runs option labels through the translator (stage i18n keys → localized)', () => {
+        const opts = [
+            { value: 'backlog', label: 'issue.stage.backlog', color: 'slate' },
+            { value: 'done', label: 'issue.stage.done', color: 'green' },
+        ]
+        const dict: Record<string, string> = {
+            'issue.stage.backlog': 'Pendiente',
+            'issue.stage.done': 'Hecho',
+        }
+        const out = translateOptionLabels(opts, (k) => dict[k] ?? k)
+        expect(out.map((o) => o.label)).toEqual(['Pendiente', 'Hecho'])
+        // value + color preserved
+        expect(out[0]).toMatchObject({ value: 'backlog', color: 'slate' })
+    })
+
+    it('leaves raw values (no matching key) untouched', () => {
+        const out = translateOptionLabels(
+            [{ value: 'acme/repo', label: 'acme/repo' }],
+            (k) => k,
+        )
+        expect(out[0].label).toBe('acme/repo')
     })
 })
 
@@ -426,5 +502,30 @@ describe('DynamicKanban lane search', () => {
         fireEvent.change(input, { target: { value: 'ana' } })
         await waitFor(() => expect(screen.queryByText('Dark mode')).toBeNull())
         expect(screen.getByText('Fix login bug')).toBeTruthy()
+    })
+})
+
+// ---------------------------------------------------------------------------
+// 6. Lane funnel — for a field with options (the Stage select), the value step
+//    renders the pro multi-select combobox, NOT a raw text input.
+// ---------------------------------------------------------------------------
+
+describe('DynamicKanban lane funnel', () => {
+    it('renders the value combobox for a field that has options', async () => {
+        useMetadataCache.getState().setMetadata('issue', meta())
+        render(
+            <ApiProvider client={fakeApi()}>
+                <DynamicKanban model="issue" />
+            </ApiProvider>,
+        )
+        await screen.findByText('Fix login bug')
+        // open the first lane's funnel (the only filterable field is Stage → select)
+        const funnelButtons = screen.getAllByLabelText('Filtrar columna')
+        fireEvent.click(funnelButtons[0])
+        // the value step is the searchable combobox, not the old raw text box
+        expect(
+            await screen.findByPlaceholderText('Buscar valores...'),
+        ).toBeTruthy()
+        expect(screen.queryByPlaceholderText('Contiene...')).toBeNull()
     })
 })

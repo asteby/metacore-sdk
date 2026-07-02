@@ -76,7 +76,7 @@ import {
     SheetTrigger,
     Skeleton,
 } from '@asteby/metacore-ui/primitives'
-import { ColumnFilterControl, type ColumnFilterType } from '@asteby/metacore-ui/data-table'
+import { ColumnFilterControl, FilterValueCombobox, type ColumnFilterType } from '@asteby/metacore-ui/data-table'
 import { generateBadgeStyles, optionColor, resolveColorCss } from '@asteby/metacore-ui/lib'
 import { useApi } from './api-context'
 import { useDynamicFilters } from './use-dynamic-filters'
@@ -299,6 +299,38 @@ function chipValueColor(config: {
 }
 
 /**
+ * Whether a card passes a lane funnel. Picked select/facet `values` match by
+ * equality (IN — the card's field value must be one of them); a free-text
+ * `text` matches by case-insensitive substring. No field / no criteria → passes.
+ * Pure — exported for unit tests.
+ */
+export function cardMatchesLaneFunnel(
+    card: any,
+    filter: { field?: string; values?: string[]; text?: string } | undefined,
+): boolean {
+    if (!filter?.field) return true
+    const raw = String(card?.[filter.field] ?? '')
+    if (filter.values && filter.values.length > 0) {
+        return filter.values.includes(raw)
+    }
+    if (filter.text?.trim()) {
+        return raw.toLowerCase().includes(filter.text.trim().toLowerCase())
+    }
+    return true
+}
+
+/**
+ * Translates option labels through the app translator (manifest i18n keys →
+ * localized text). A raw value with no matching key falls through to itself via
+ * `defaultValue`. Pure — exported for unit tests.
+ */
+export function translateOptionLabels<
+    T extends { label: string },
+>(options: T[], translate: (key: string) => string): T[] {
+    return options.map((o) => ({ ...o, label: translate(o.label) }))
+}
+
+/**
  * Whether a card matches a free-text lane search: a case-insensitive substring
  * over the card's title + every visible field value (`String(v)`). Empty query
  * matches everything. Pure — exported for unit tests.
@@ -345,10 +377,17 @@ function useIsDarkTheme(): boolean {
 // Component
 // ---------------------------------------------------------------------------
 
-/** Per-lane client-side filter: an optional field funnel + an optional search. */
+/**
+ * Per-lane client-side filter. Two AND-combined dimensions:
+ *   - The funnel: a `field` plus EITHER `values` (chosen from a select/facet —
+ *     matched by equality/IN against the card's field value) OR `text` (a
+ *     free-text substring for text-only fields).
+ *   - `query`: the lane search — a substring over the card title + field values.
+ */
 interface LaneFilterState {
     field?: string
-    value?: string
+    values?: string[]
+    text?: string
     query?: string
 }
 
@@ -501,11 +540,32 @@ export function DynamicKanban({
             label: string
             config: NonNullable<ReturnType<typeof columnFilterConfigs.get>>
         }[] = []
+        // Option labels come from the manifest as i18n keys (e.g.
+        // "integration_github.stage.backlog"). ColumnFilterControl lives in the
+        // ui package (no i18n), so translate labels HERE — on the static options
+        // and on whatever the facet loader resolves — before they ever reach a
+        // control, chip or value summary. A raw value (a repo name) has no key,
+        // so t() returns it verbatim via defaultValue.
+        const tr = (label: string) => t(label, { defaultValue: label })
         for (const [key, config] of columnFilterConfigs) {
             const f = metadata.filters?.find((x) => x.key === key)
             const c = metadata.columns.find((x) => x.key === key)
             const rawLabel = f?.label || c?.label || key
-            out.push({ key, label: t(rawLabel, { defaultValue: rawLabel }), config })
+            const translatedConfig = {
+                ...config,
+                options: translateOptionLabels(config.options, tr),
+                loadOptions: config.loadOptions
+                    ? (q?: string) =>
+                          config.loadOptions!(q).then((opts) =>
+                              translateOptionLabels(opts, tr),
+                          )
+                    : undefined,
+            }
+            out.push({
+                key,
+                label: tr(rawLabel),
+                config: translatedConfig,
+            })
         }
         return out
     }, [metadata, columnFilterConfigs, t])
@@ -542,7 +602,11 @@ export function DynamicKanban({
             setLaneFilters((prev) => {
                 const merged: LaneFilterState = { ...prev[stageKey], ...patch }
                 const next = { ...prev }
-                const hasFunnel = !!(merged.field && merged.value?.trim())
+                const hasFunnel = !!(
+                    merged.field &&
+                    ((merged.values && merged.values.length > 0) ||
+                        merged.text?.trim())
+                )
                 const hasQuery = !!merged.query?.trim()
                 if (hasFunnel || hasQuery) next[stageKey] = merged
                 else delete next[stageKey]
@@ -882,13 +946,9 @@ export function DynamicKanban({
                     // (query) are AND-combined.
                     const laneFilter = laneFilters[stage.key]
                     let cards = allCards
-                    if (laneFilter?.field && laneFilter.value?.trim()) {
-                        const v = laneFilter.value.trim().toLowerCase()
-                        const field = laneFilter.field
+                    if (laneFilter?.field) {
                         cards = cards.filter((c) =>
-                            String(c[field] ?? '')
-                                .toLowerCase()
-                                .includes(v),
+                            cardMatchesLaneFunnel(c, laneFilter),
                         )
                     }
                     if (laneFilter?.query?.trim()) {
@@ -911,7 +971,8 @@ export function DynamicKanban({
                             onFunnelChange={(f) =>
                                 updateLaneFilter(stage.key, {
                                     field: f?.field,
-                                    value: f?.value,
+                                    values: f?.values,
+                                    text: f?.text,
                                 })
                             }
                             onQueryChange={(q) =>
@@ -1056,7 +1117,17 @@ interface LaneFilterField {
 interface ColumnFilterConfigLike {
     filterType?: string
     filterKey?: string
-    options?: { label: string; value: string; color?: string }[]
+    options?: { label: string; value: string; color?: string; count?: number }[]
+    loadOptions?: (q?: string) => Promise<
+        { label: string; value: string; color?: string; count?: number }[]
+    >
+}
+
+/** The funnel's committed value: a field + either picked `values` or free `text`. */
+interface LaneFunnelValue {
+    field: string
+    values?: string[]
+    text?: string
 }
 
 interface KanbanLaneProps {
@@ -1065,7 +1136,7 @@ interface KanbanLaneProps {
     totalCount: number
     filterFields: LaneFilterField[]
     laneFilter: LaneFilterState | undefined
-    onFunnelChange: (filter: { field: string; value: string } | null) => void
+    onFunnelChange: (filter: LaneFunnelValue | null) => void
     onQueryChange: (query: string) => void
     isDark: boolean
     dimmed: boolean
@@ -1091,12 +1162,21 @@ function KanbanLane({
     const headerStyle = generateBadgeStyles(stage.color || optionColor(stage.key), {
         isDark,
     })
-    const funnelActive = !!(laneFilter?.field && laneFilter.value?.trim())
+    const funnelField = filterFields.find((f) => f.key === laneFilter?.field)
+    const funnelActive = !!(
+        laneFilter?.field &&
+        ((laneFilter.values && laneFilter.values.length > 0) ||
+            laneFilter.text?.trim())
+    )
     const queryActive = !!laneFilter?.query?.trim()
     const laneActive = funnelActive || queryActive
-    const activeFieldLabel =
-        filterFields.find((f) => f.key === laneFilter?.field)?.label ??
-        laneFilter?.field
+    const activeFieldLabel = funnelField?.label ?? laneFilter?.field
+    // Human summary of the funnel value: resolved option labels for picked
+    // values, or the raw free text.
+    const funnelSummary =
+        laneFilter?.values && laneFilter.values.length > 0
+            ? summarizeFilterValues(laneFilter.values, funnelField?.config?.options)
+            : laneFilter?.text ?? ''
 
     // Inline lane search: a Search icon expands an Input; Escape or blur-while-
     // empty collapses it. The query itself lives in the parent's laneFilters so
@@ -1106,10 +1186,13 @@ function KanbanLane({
     useEffect(() => {
         if (searchOpen) searchRef.current?.focus()
     }, [searchOpen])
-    const funnelValue =
-        laneFilter?.field && laneFilter.value
-            ? { field: laneFilter.field, value: laneFilter.value }
-            : undefined
+    const funnelValue: LaneFunnelValue | undefined = laneFilter?.field
+        ? {
+              field: laneFilter.field,
+              values: laneFilter.values,
+              text: laneFilter.text,
+          }
+        : undefined
 
     return (
         <div
@@ -1192,7 +1275,7 @@ function KanbanLane({
                 <div className="flex items-center gap-1 px-3 pb-1.5 text-[11px] text-muted-foreground">
                     <ListFilter className="h-3 w-3 shrink-0" />
                     <span className="truncate">
-                        {activeFieldLabel}: {laneFilter!.value}
+                        {activeFieldLabel}: {funnelSummary}
                     </span>
                     <button
                         type="button"
@@ -1228,31 +1311,45 @@ function LaneFilterButton({
     onChange,
 }: {
     fields: LaneFilterField[]
-    value: { field: string; value: string } | undefined
-    onChange: (filter: { field: string; value: string } | null) => void
+    value: LaneFunnelValue | undefined
+    onChange: (filter: LaneFunnelValue | null) => void
 }) {
     const { t } = useTranslation()
     const [open, setOpen] = useState(false)
     const [field, setField] = useState(value?.field ?? fields[0]?.key ?? '')
-    const [text, setText] = useState(value?.value ?? '')
+    const [values, setValues] = useState<string[]>(value?.values ?? [])
+    const [text, setText] = useState(value?.text ?? '')
     // Re-seed the draft from the committed filter each time the popover opens.
     useEffect(() => {
         if (open) {
             setField(value?.field ?? fields[0]?.key ?? '')
-            setText(value?.value ?? '')
+            setValues(value?.values ?? [])
+            setText(value?.text ?? '')
         }
     }, [open, value, fields])
     if (fields.length === 0) return null
-    const active = !!(value && value.value.trim())
-    // When the chosen field carries a known option set (select/facet with
-    // pre-loaded values), offer those values as a Select instead of a raw text
-    // box — so the funnel picks real values, not free strings.
-    const selectedFieldCfg = fields.find((f) => f.key === field)?.config
-    const valueOptions = selectedFieldCfg?.options ?? []
-    const hasValueOptions = valueOptions.length > 0
+    const active = !!(
+        value &&
+        ((value.values && value.values.length > 0) || value.text?.trim())
+    )
+    // The value step mirrors the sheet: when the chosen field is a select or a
+    // facet (static options OR a lazy loader), render the SAME pro combobox —
+    // multi-select, searchable, with counts. Only a genuinely free-text field
+    // (no options, no loader) falls back to a raw "Contiene..." input.
+    const cfg = fields.find((f) => f.key === field)?.config
+    const hasValuePicker = (cfg?.options?.length ?? 0) > 0 || !!cfg?.loadOptions
+    const toggle = (v: string) =>
+        setValues((prev) =>
+            prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v],
+        )
     const apply = () => {
-        if (field && text.trim()) onChange({ field, value: text })
+        if (field && values.length > 0) onChange({ field, values })
+        else if (field && text.trim()) onChange({ field, text: text.trim() })
         else onChange(null)
+        setOpen(false)
+    }
+    const clear = () => {
+        onChange(null)
         setOpen(false)
     }
     return (
@@ -1270,17 +1367,21 @@ function LaneFilterButton({
                     <ListFilter className="h-3.5 w-3.5" />
                 </button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-56 space-y-2 p-2">
+            <PopoverContent
+                align="end"
+                className="w-72 space-y-2.5 rounded-xl p-2.5 shadow-lg"
+            >
                 <Select
                     value={field}
                     onValueChange={(f) => {
                         setField(f)
                         // Reset the value when switching fields — a value picked
                         // for one field is meaningless for another.
+                        setValues([])
                         setText('')
                     }}
                 >
-                    <SelectTrigger className="h-8 text-xs">
+                    <SelectTrigger className="h-8 w-full text-xs">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -1291,34 +1392,18 @@ function LaneFilterButton({
                         ))}
                     </SelectContent>
                 </Select>
-                {hasValueOptions ? (
-                    <Select
-                        value={text || undefined}
-                        onValueChange={(v) => {
-                            setText(v)
-                            if (field && v) onChange({ field, value: v })
-                            setOpen(false)
-                        }}
-                    >
-                        <SelectTrigger className="h-8 text-xs">
-                            <SelectValue
-                                placeholder={t('kanban.filterValue', {
-                                    defaultValue: 'Valor...',
-                                })}
-                            />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {valueOptions.map((o) => (
-                                <SelectItem
-                                    key={o.value}
-                                    value={o.value}
-                                    className="text-xs"
-                                >
-                                    {o.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                {hasValuePicker ? (
+                    // `key={field}` remounts the combobox on field switch so it
+                    // reloads that field's values from scratch (no stale list).
+                    <div className="overflow-hidden rounded-lg border">
+                        <FilterValueCombobox
+                            key={field}
+                            staticOptions={cfg?.options}
+                            loadOptions={cfg?.loadOptions}
+                            selected={values}
+                            onToggle={toggle}
+                        />
+                    </div>
                 ) : (
                     <Input
                         autoFocus
@@ -1328,25 +1413,29 @@ function LaneFilterButton({
                             if (e.key === 'Enter') apply()
                         }}
                         placeholder={t('kanban.filterValue', {
-                            defaultValue: 'Valor...',
+                            defaultValue: 'Contiene...',
                         })}
-                        className="h-8 text-xs"
+                        className="h-8 w-full text-xs"
                     />
                 )}
-                <div className="flex justify-between gap-2">
+                <div className="flex gap-1.5">
                     <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
-                        className="h-7 text-xs"
-                        onClick={() => {
-                            onChange(null)
-                            setOpen(false)
-                        }}
+                        className="h-7 flex-1 text-xs"
+                        onClick={clear}
+                        disabled={!active && values.length === 0 && !text.trim()}
                     >
                         {t('kanban.clearFilters', { defaultValue: 'Limpiar' })}
                     </Button>
-                    <Button size="sm" className="h-7 text-xs" onClick={apply}>
+                    <Button
+                        size="sm"
+                        className="h-7 flex-1 text-xs"
+                        onClick={apply}
+                        disabled={values.length === 0 && !text.trim()}
+                    >
                         {t('kanban.apply', { defaultValue: 'Aplicar' })}
+                        {values.length > 0 ? ` (${values.length})` : ''}
                     </Button>
                 </div>
             </PopoverContent>
