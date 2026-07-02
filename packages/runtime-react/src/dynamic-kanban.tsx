@@ -38,7 +38,18 @@ import {
     type DragStartEvent,
     type DragEndEvent,
 } from '@dnd-kit/core'
-import { ListFilter, MoreHorizontal, Search, X } from 'lucide-react'
+import {
+    Calendar,
+    CircleDot,
+    Hash,
+    ListFilter,
+    MoreHorizontal,
+    Search,
+    Tag,
+    ToggleLeft,
+    Type,
+    X,
+} from 'lucide-react'
 import { toast } from 'sonner'
 import {
     Badge,
@@ -66,7 +77,7 @@ import {
     Skeleton,
 } from '@asteby/metacore-ui/primitives'
 import { ColumnFilterControl, type ColumnFilterType } from '@asteby/metacore-ui/data-table'
-import { generateBadgeStyles, optionColor } from '@asteby/metacore-ui/lib'
+import { generateBadgeStyles, optionColor, resolveColorCss } from '@asteby/metacore-ui/lib'
 import { useApi } from './api-context'
 import { useDynamicFilters } from './use-dynamic-filters'
 import { useMetadataCache } from './metadata-cache'
@@ -268,6 +279,26 @@ function summarizeList(
 }
 
 /**
+ * The color of a filter's first selected value (for the chip's dot) — e.g. a
+ * stage's palette color. Returns a resolved CSS color, or undefined for
+ * operator/range/free-text values that carry no option color.
+ */
+function chipValueColor(config: {
+    selectedValues: string[]
+    options: { value: string; color?: string }[]
+}): string | undefined {
+    const sel = config.selectedValues
+    if (!sel || sel.length === 0) return undefined
+    const first = sel[0]
+    let value = first
+    if (first.startsWith('IN:')) value = first.slice(3).split(',')[0]
+    else if (/^(ILIKE|RANGE|GTE|LTE):/.test(first)) return undefined
+    else if (/^\d{4}-\d{2}-\d{2}_/.test(first)) return undefined
+    const opt = config.options.find((o) => o.value === value)
+    return opt?.color ? resolveColorCss(opt.color) : undefined
+}
+
+/**
  * Whether a card matches a free-text lane search: a case-insensitive substring
  * over the card's title + every visible field value (`String(v)`). Empty query
  * matches everything. Pure — exported for unit tests.
@@ -431,7 +462,7 @@ export function DynamicKanban({
         activeFilterCount,
         handleDynamicFilterChange,
         clearAll,
-    } = useDynamicFilters(metadata, { defaultFilters, model })
+    } = useDynamicFilters(metadata, { defaultFilters, model, endpoint })
 
     // ---- records fetch (same path as DynamicTable, single large page) ----
     const fetchData = useCallback(async () => {
@@ -736,7 +767,11 @@ export function DynamicKanban({
                                             })}
                                         </p>
                                         {activeFields.map((field) => (
-                                            <SheetFilterRow key={field.key} field={field} />
+                                            <SheetFilterRow
+                                                key={field.key}
+                                                field={field}
+                                                isStage={field.key === groupByKey}
+                                            />
                                         ))}
                                         {inactiveFields.length > 0 && (
                                             <div className="my-2 border-t" />
@@ -744,7 +779,11 @@ export function DynamicKanban({
                                     </>
                                 )}
                                 {inactiveFields.map((field) => (
-                                    <SheetFilterRow key={field.key} field={field} />
+                                    <SheetFilterRow
+                                        key={field.key}
+                                        field={field}
+                                        isStage={field.key === groupByKey}
+                                    />
                                 ))}
                             </div>
                             <div className="sticky bottom-0 flex items-center justify-between gap-2 border-t bg-background px-4 py-3">
@@ -788,12 +827,19 @@ export function DynamicKanban({
                             field.config.selectedValues,
                             field.config.options,
                         )
+                        const dot = chipValueColor(field.config)
                         return (
                             <Badge
                                 key={field.key}
                                 variant="secondary"
-                                className="h-6 gap-1 pl-2 pr-1 text-xs font-normal"
+                                className="h-6 gap-1.5 rounded-md pl-2 pr-1 text-xs font-normal"
                             >
+                                {dot && (
+                                    <span
+                                        className="size-2 shrink-0 rounded-full"
+                                        style={{ backgroundColor: dot }}
+                                    />
+                                )}
                                 <span className="font-medium">{field.label}:</span>
                                 <span className="max-w-[180px] truncate text-muted-foreground">
                                     {summary}
@@ -943,22 +989,56 @@ interface SheetFilterField {
     }
 }
 
-function SheetFilterRow({ field }: { field: SheetFilterField }) {
+/**
+ * A per-data-type glyph for the Filtros panel rows (and their popover header):
+ * Hash for numbers, Calendar for dates, CircleDot for the pipeline stage, Tag
+ * for value pickers, ToggleLeft for booleans, Type for free text.
+ */
+function filterTypeIcon(filterType: string, isStage: boolean): React.ReactNode {
+    if (isStage) return <CircleDot className="h-3.5 w-3.5" />
+    switch (filterType) {
+        case 'number_range':
+            return <Hash className="h-3.5 w-3.5" />
+        case 'date_range':
+            return <Calendar className="h-3.5 w-3.5" />
+        case 'boolean':
+            return <ToggleLeft className="h-3.5 w-3.5" />
+        case 'select':
+        case 'dynamic_select':
+        case 'facet':
+            return <Tag className="h-3.5 w-3.5" />
+        default:
+            return <Type className="h-3.5 w-3.5" />
+    }
+}
+
+function SheetFilterRow({
+    field,
+    isStage,
+}: {
+    field: SheetFilterField
+    isStage: boolean
+}) {
+    const summary = summarizeFilterValues(
+        field.config.selectedValues,
+        field.config.options,
+    )
     return (
-        <div className="[&>button]:w-full [&>button]:justify-start">
-            <ColumnFilterControl
-                showLabel
-                label={field.label}
-                filterKey={field.config.filterKey}
-                filterType={field.config.filterType as ColumnFilterType}
-                filterOptions={field.config.options}
-                filterLoading={field.config.loading}
-                filterSearchEndpoint={field.config.searchEndpoint}
-                selectedValues={field.config.selectedValues}
-                onFilterChange={field.config.onFilterChange}
-                loadOptions={field.config.loadOptions}
-            />
-        </div>
+        <ColumnFilterControl
+            variant="row"
+            align="end"
+            icon={filterTypeIcon(field.config.filterType, isStage)}
+            label={field.label}
+            valueSummary={summary}
+            filterKey={field.config.filterKey}
+            filterType={field.config.filterType as ColumnFilterType}
+            filterOptions={field.config.options}
+            filterLoading={field.config.loading}
+            filterSearchEndpoint={field.config.searchEndpoint}
+            selectedValues={field.config.selectedValues}
+            onFilterChange={field.config.onFilterChange}
+            loadOptions={field.config.loadOptions}
+        />
     )
 }
 
@@ -1034,7 +1114,7 @@ function KanbanLane({
     return (
         <div
             ref={setNodeRef}
-            className="flex w-[300px] shrink-0 flex-col rounded-lg border bg-muted/30 transition-opacity"
+            className="group/lane flex w-[300px] shrink-0 flex-col rounded-xl border bg-muted/30 transition-opacity"
             style={{
                 opacity: dimmed ? 0.45 : 1,
                 outline: isOver && !disabled ? '2px solid var(--ring, #3b82f6)' : 'none',
@@ -1044,21 +1124,30 @@ function KanbanLane({
             data-disabled={disabled || undefined}
         >
             <div className="flex items-center justify-between gap-2 px-3 py-2.5">
-                <Badge
-                    variant="outline"
-                    className="border-0 text-xs font-semibold"
-                    style={headerStyle}
-                >
-                    {t(stage.label, { defaultValue: stage.label })}
-                </Badge>
-                <div className="flex items-center gap-1">
+                <div className="flex min-w-0 items-center gap-2">
+                    <Badge
+                        variant="outline"
+                        className="border-0 text-xs font-semibold"
+                        style={headerStyle}
+                    >
+                        {t(stage.label, { defaultValue: stage.label })}
+                    </Badge>
                     <span className="text-xs font-medium tabular-nums text-muted-foreground">
                         {laneActive ? `${count}/${totalCount}` : count}
                     </span>
+                </div>
+                {/* Lane actions — dimmed until the lane (or the board row) is
+                    hovered/focused, so an idle board stays clean. Stay lit when a
+                    lane filter is active. */}
+                <div
+                    className={`flex items-center gap-0.5 transition-opacity focus-within:opacity-100 group-hover/lane:opacity-100 ${
+                        laneActive || searchOpen ? 'opacity-100' : 'opacity-0'
+                    }`}
+                >
                     <button
                         type="button"
                         onClick={() => setSearchOpen((o) => !o)}
-                        className={`rounded p-1 transition-colors hover:bg-muted hover:text-foreground ${
+                        className={`flex size-6 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground ${
                             queryActive ? 'text-primary' : 'text-muted-foreground'
                         }`}
                         aria-label={t('kanban.searchLane', {
@@ -1171,7 +1260,7 @@ function LaneFilterButton({
             <PopoverTrigger asChild>
                 <button
                     type="button"
-                    className={`rounded p-1 transition-colors hover:bg-muted hover:text-foreground ${
+                    className={`flex size-6 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground ${
                         active ? 'text-primary' : 'text-muted-foreground'
                     }`}
                     aria-label={t('kanban.filterLane', {

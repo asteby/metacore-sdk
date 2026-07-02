@@ -533,8 +533,9 @@ export function DynamicTable({
 
     // Same facet loader machinery the board uses, so a text column filters
     // identically in the table header and the kanban Sheet (the host's
-    // getDynamicColumns forwards `loadOptions` into the column meta).
-    const facetsBase = model ? `/data/${model}/facets` : null
+    // getDynamicColumns forwards `loadOptions` into the column meta). Facets base
+    // derived off the list endpoint exactly like the aggregate endpoint below.
+    const facetsBase = endpoint ? `${endpoint}/facets` : model ? `/data/${model}/facets` : null
     const getFacetLoader = useFacetLoaders(facetsBase)
 
     const columnFilterConfigs = useMemo(() => {

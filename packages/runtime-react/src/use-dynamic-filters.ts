@@ -25,15 +25,22 @@ export interface UseDynamicFiltersOptions {
    */
   defaultFilters?: Record<string, any>
   /**
-   * Model key used to derive the per-field `facets` endpoint
-   * (`/data/<model>/facets`) that upgrades plain text filters into value
-   * pickers. Omit (or pass `facetsEndpoint`) to keep text filters as bare
-   * "Contiene..." boxes.
+   * Model key — the fallback base for the per-field `facets` endpoint when no
+   * `endpoint` is given. Omit all of `endpoint`/`model`/`facetsEndpoint` to keep
+   * text filters as bare "Contiene..." boxes.
    */
   model?: string
   /**
-   * Explicit `facets` endpoint override — wins over the `model`-derived path.
-   * The loader appends `?field=<key>&q=<text>&limit=50`.
+   * The org-scoped LIST endpoint (e.g. `/data/<model>/me`). The facets base is
+   * derived from it EXACTLY like DynamicTable derives the aggregate endpoint —
+   * `<endpoint>/facets` — so the board and its table sibling hit the same route
+   * (the backend registers both `/data/:model/facets` and
+   * `/data/:model/me/facets`).
+   */
+  endpoint?: string
+  /**
+   * Explicit `facets` endpoint override — wins over `endpoint`/`model`. The
+   * loader appends `?field=<key>&q=<text>&limit=50`.
    */
   facetsEndpoint?: string
 }
@@ -70,7 +77,7 @@ export function useDynamicFilters(
   metadata: TableMetadata | null,
   opts: UseDynamicFiltersOptions = {},
 ): UseDynamicFiltersResult {
-  const { defaultFilters, model, facetsEndpoint } = opts
+  const { defaultFilters, model, endpoint, facetsEndpoint } = opts
   const api = useApi()
 
   const [dynamicFilters, setDynamicFilters] = useState<Record<string, string[]>>({})
@@ -79,9 +86,16 @@ export function useDynamicFilters(
     Map<string, FilterOption[]>
   >(new Map())
 
-  // Where a `facet` filter loads its distinct values from. Explicit endpoint
-  // wins; otherwise derive it from the model. Null → text filters stay plain.
-  const facetsBase = facetsEndpoint ?? (model ? `/data/${model}/facets` : null)
+  // Where a `facet` filter loads its distinct values from. Explicit override
+  // wins; otherwise `<endpoint>/facets` (same derivation as the aggregate
+  // endpoint), falling back to the model. Null → text filters stay plain.
+  const facetsBase =
+    facetsEndpoint ??
+    (endpoint
+      ? `${endpoint}/facets`
+      : model
+        ? `/data/${model}/facets`
+        : null)
   const getFacetLoader = useFacetLoaders(facetsBase)
 
   // Prefetch the option lists for relation/select filters (once per model). The

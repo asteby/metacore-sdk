@@ -23,7 +23,20 @@ Filtros pro para tabla y kanban dinámicos.
   las tarjetas de esa columna por título y valores de campo visibles. Convive y
   se combina (AND) con el embudo por campo, que ahora ofrece un select de
   valores cuando el campo tiene opciones conocidas.
-- **Panel de filtros rediseñado:** fila de chips activos removibles bajo la
-  toolbar (con "Limpiar todo"), y dentro del Sheet los filtros con selección se
-  agrupan arriba, el resto ordenado alfabéticamente, con footer sticky y conteo
-  de activos.
+- **Panel de filtros rediseñado (nivel Linear/Notion):** el Sheet deja de ser
+  una lista de botones grises idénticos: cada campo es una fila tipo settings
+  con icono por tipo de dato (Hash número, Calendar fecha, CircleDot etapa, Tag
+  select/facet, ToggleLeft boolean, Type texto), label y resumen del valor
+  activo a la derecha ("Cualquiera" en muted si no hay). Nueva variante
+  `ColumnFilterControl` `variant='row'` con props `icon` y `valueSummary`.
+  Popovers con `rounded-xl`, sombra, header del campo (el input "Contiene..."
+  nunca es contenido crudo sin jerarquía), opciones con checkbox + dot de color
+  + count a la derecha. Filtros con selección agrupados arriba, resto
+  alfabético, footer sticky con conteo. Fila de chips activos removibles bajo la
+  toolbar (con dot de color del valor, p.ej. color de la etapa) y "Limpiar
+  todo". Header de lane del kanban con acciones (buscar/embudo) en hover-reveal
+  para un board limpio. Pensado dark-mode-first (muted/accent del theme).
+
+La URL del endpoint de facetas se deriva como el endpoint de agregados de
+DynamicTable: `<endpoint>/facets` (o `/data/<model>/facets` como fallback), así
+funciona tanto con `endpoint="/data/:model/me"` como sin él.

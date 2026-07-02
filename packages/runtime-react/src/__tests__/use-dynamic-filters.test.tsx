@@ -125,6 +125,25 @@ describe('useDynamicFilters — facet upgrade + fallback (B)', () => {
         ])
     })
 
+    it('derives the facets URL from the list endpoint (like the aggregate endpoint)', async () => {
+        const api = fakeApi()
+        const { result } = renderHook(
+            () =>
+                useDynamicFilters(meta(), {
+                    model: 'issue',
+                    endpoint: '/data/issue/me',
+                }),
+            { wrapper: wrapper(api) },
+        )
+        await result.current.columnFilterConfigs.get('title')!.loadOptions!()
+        expect(api.get).toHaveBeenCalledWith(
+            '/data/issue/me/facets',
+            expect.objectContaining({
+                params: expect.objectContaining({ field: 'title', limit: 50 }),
+            }),
+        )
+    })
+
     it('keeps long-text/body columns as a plain text filter (no faceting)', () => {
         const { result } = renderHook(
             () => useDynamicFilters(meta(), { model: 'issue' }),

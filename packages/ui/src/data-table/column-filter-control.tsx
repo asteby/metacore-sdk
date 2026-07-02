@@ -3,7 +3,7 @@ import { CheckIcon } from '@radix-ui/react-icons'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { type DateRange } from 'react-day-picker'
-import { ListFilter } from 'lucide-react'
+import { ChevronRight, ListFilter } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { resolveColorCss } from '@/lib/option-colors'
 import { Button } from '@/primitives/button'
@@ -115,6 +115,21 @@ export interface ColumnFilterControlProps {
    * instead of the icon-only header button. Use on the kanban filter bar.
    */
   showLabel?: boolean
+  /**
+   * Trigger style.
+   *   - `'chip'` (default): the compact labeled/icon button (`showLabel` picks
+   *     labeled vs icon-only) used in table headers + the kanban toolbar.
+   *   - `'row'`: a full-width settings-style row — leading type `icon`, `label`,
+   *     and a right-aligned value summary — for the redesigned Filtros panel.
+   */
+  variant?: 'chip' | 'row'
+  /** Leading icon node for the `'row'` variant (a per-data-type glyph). */
+  icon?: React.ReactNode
+  /**
+   * Pre-computed human summary of the active value(s) for the `'row'` variant's
+   * right side. Empty → the row shows "Cualquiera" in muted.
+   */
+  valueSummary?: string
   align?: React.ComponentProps<typeof PopoverContent>['align']
   /** Extra classes on the trigger button. */
   className?: string
@@ -139,6 +154,9 @@ export function ColumnFilterControl({
   loadOptions,
   label,
   showLabel = false,
+  variant = 'chip',
+  icon,
+  valueSummary,
   align = 'start',
   className,
 }: ColumnFilterControlProps) {
@@ -308,7 +326,45 @@ export function ColumnFilterControl({
     return false
   })()
 
-  const trigger = showLabel ? (
+  const trigger = variant === 'row' ? (
+    <button
+      type='button'
+      data-active={isActive || undefined}
+      className={cn(
+        'group/row flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors',
+        'hover:bg-accent focus-visible:bg-accent focus-visible:outline-none',
+        isActive && 'bg-accent/50',
+        className
+      )}
+    >
+      <span
+        className={cn(
+          'flex size-7 shrink-0 items-center justify-center rounded-md transition-colors',
+          isActive
+            ? 'bg-primary/15 text-primary'
+            : 'bg-muted text-muted-foreground group-hover/row:text-foreground'
+        )}
+      >
+        {icon ?? <ListFilter className='h-3.5 w-3.5' />}
+      </span>
+      <span className='flex-1 truncate text-sm font-medium'>
+        {label || filterKey}
+      </span>
+      <span
+        className={cn(
+          'max-w-[46%] truncate text-xs',
+          isActive ? 'font-medium text-foreground' : 'text-muted-foreground'
+        )}
+      >
+        {isActive && valueSummary
+          ? valueSummary
+          : isActive && (isMultiSelect || isFacet) && activeCount > 0
+            ? `${activeCount} seleccionados`
+            : 'Cualquiera'}
+      </span>
+      <ChevronRight className='size-3.5 shrink-0 text-muted-foreground/60 transition-transform group-hover/row:translate-x-0.5' />
+    </button>
+  ) : showLabel ? (
     <Button
       variant='outline'
       size='sm'
@@ -360,16 +416,27 @@ export function ColumnFilterControl({
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent
         className={cn(
-          'p-0',
+          'overflow-hidden rounded-xl p-0 shadow-lg',
           filterType === 'date_range'
             ? 'w-auto'
             : isFacet
-              ? 'w-[248px]'
-              : 'w-[220px]'
+              ? 'w-[256px]'
+              : 'w-[228px]'
         )}
         align={align}
         onCloseAutoFocus={(e) => e.preventDefault()}
       >
+        {/* Field header — gives every popover a title + type glyph so a raw
+            "Contiene..." box is never the only content (row/toolbar surfaces
+            pass `label`; the icon-only table header omits it and stays compact). */}
+        {label && (
+          <div className='flex items-center gap-2 border-b bg-muted/40 px-3 py-2'>
+            {icon && (
+              <span className='text-muted-foreground [&>svg]:size-3.5'>{icon}</span>
+            )}
+            <span className='truncate text-xs font-semibold'>{label}</span>
+          </div>
+        )}
         {isMultiSelect && (hasOptions || filterType === 'dynamic_select') && (
           <Command>
             <CommandInput placeholder='Buscar...' />
@@ -409,6 +476,11 @@ export function ColumnFilterControl({
                         />
                       )}
                       <span className='truncate'>{option.label}</span>
+                      {typeof option.count === 'number' && (
+                        <span className='ml-auto pl-2 text-xs tabular-nums text-muted-foreground'>
+                          {option.count}
+                        </span>
+                      )}
                     </CommandItem>
                   )
                 })}
