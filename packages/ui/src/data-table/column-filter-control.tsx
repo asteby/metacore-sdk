@@ -3,7 +3,7 @@ import { CheckIcon } from '@radix-ui/react-icons'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { type DateRange } from 'react-day-picker'
-import { ChevronRight, ListFilter } from 'lucide-react'
+import { ChevronRight, ListFilter, Search as SearchIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { resolveColorCss } from '@/lib/option-colors'
 import { Button } from '@/primitives/button'
@@ -63,7 +63,7 @@ export type ColumnFilterType =
    * the popover opens, and renders them as a multi-select combobox. Always
    * degrades gracefully: if `loadOptions` is missing / fails / returns nothing
    * it falls back to the plain "Contiene..." text input, and even when options
-   * exist it keeps a "Contiene texto…" affordance that emits an `ILIKE:` match.
+   * exist the search box doubles as the "contains" free-text affordance.
    * Selected values serialize as equality/`IN:` just like `select`.
    */
   | 'facet'
@@ -675,8 +675,9 @@ interface FacetFilterBodyProps {
 /**
  * Lazy value picker for `facet` filters. Loads the column's distinct values +
  * counts when it mounts (the popover just opened), lets the user multi-select
- * them (emitted as equality/`IN:`), and always keeps a free-text "Contiene…"
- * affordance that emits an `ILIKE:` match. Degrades to a bare text input when
+ * them (emitted as equality/`IN:`). The search box doubles as the free-text
+ * "contains" affordance (a `Contiene: “…”` row emits an `ILIKE:` match) so
+ * there is a single text input. Degrades to a bare text input when
  * `loadOptions` is missing, rejects, or returns nothing — so a facet is never a
  * dead end. Its own hooks live here (not in the parent) so they only run while
  * the popover is open.
@@ -690,13 +691,14 @@ function FacetFilterBody({
   onClose,
 }: FacetFilterBodyProps) {
   // A single `ILIKE:` value means the field is in free-text mode; anything else
-  // is a set of picked facet values.
+  // is a set of picked facet values. The search box doubles as the free-text
+  // "contains" input (one box, not two), so seed it with the active match.
   const seededFree =
     selectedValues.length === 1 && selectedValues[0].startsWith(ILIKE_PREFIX)
       ? selectedValues[0].slice(ILIKE_PREFIX.length)
       : ''
 
-  const [query, setQuery] = React.useState('')
+  const [query, setQuery] = React.useState(seededFree)
   const [options, setOptions] = React.useState<FilterOption[]>(
     staticOptions ?? []
   )
@@ -705,7 +707,6 @@ function FacetFilterBody({
   const [localSelected, setLocalSelected] = React.useState<Set<string>>(
     () => new Set(seededFree ? [] : selectedValues)
   )
-  const [freeText, setFreeText] = React.useState(seededFree)
 
   // Load (and reload on debounced typing). No loader → straight to degraded
   // text mode.
@@ -750,18 +751,21 @@ function FacetFilterBody({
       else next.add(value)
       return next
     })
-    // Picking a value and typing free text are mutually exclusive on the wire
-    // (a single `f_<key>` can't be both `IN:` and `ILIKE:`), so a pick clears
-    // any pending free text.
-    setFreeText('')
   }
 
-  const apply = () => {
-    const trimmed = freeText.trim()
+  // Picking values and free text are mutually exclusive on the wire (a single
+  // `f_<key>` can't be both `IN:` and `ILIKE:`): selected values win, otherwise
+  // whatever is typed in the search box applies as a "contains" match.
+  const apply = (contains?: string) => {
+    const trimmed = (contains ?? '').trim()
     if (trimmed) {
       onFilterChange?.(filterKey, [`${ILIKE_PREFIX}${trimmed}`])
-    } else {
+    } else if (localSelected.size > 0) {
       onFilterChange?.(filterKey, Array.from(localSelected))
+    } else if (query.trim()) {
+      onFilterChange?.(filterKey, [`${ILIKE_PREFIX}${query.trim()}`])
+    } else {
+      onFilterChange?.(filterKey, [])
     }
     onClose()
   }
@@ -769,11 +773,11 @@ function FacetFilterBody({
   const clear = () => {
     onFilterChange?.(filterKey, [])
     setLocalSelected(new Set())
-    setFreeText('')
+    setQuery('')
     onClose()
   }
 
-  const canApply = localSelected.size > 0 || freeText.trim() !== ''
+  const canApply = localSelected.size > 0 || query.trim() !== ''
 
   // Degraded → just the text box (the original "Contiene..." experience).
   if (degraded) {
@@ -781,8 +785,8 @@ function FacetFilterBody({
       <div className='p-2.5 space-y-2'>
         <Input
           placeholder='Contiene...'
-          value={freeText}
-          onChange={(e) => setFreeText(e.target.value)}
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') apply()
           }}
@@ -795,14 +799,14 @@ function FacetFilterBody({
             variant='outline'
             className='h-7 flex-1 text-xs'
             onClick={clear}
-            disabled={selectedValues.length === 0 && freeText === ''}
+            disabled={selectedValues.length === 0 && query === ''}
           >
             Limpiar
           </Button>
           <Button
             size='sm'
             className='h-7 flex-1 text-xs'
-            onClick={apply}
+            onClick={() => apply()}
           >
             Aplicar
           </Button>
@@ -822,6 +826,23 @@ function FacetFilterBody({
         <CommandEmpty>
           {loading ? 'Cargando…' : 'Sin resultados.'}
         </CommandEmpty>
+        {/* Free-text affordance folded into the search box: with a query
+            typed, the first row applies it as a raw "contains" match — one
+            input, not two. */}
+        {query.trim() !== '' && (
+          <CommandGroup forceMount>
+            <CommandItem
+              value={`__contains__:${query}`}
+              onSelect={() => apply(query)}
+              onPointerDown={(e) => e.preventDefault()}
+            >
+              <SearchIcon className='mr-2 h-3.5 w-3.5 shrink-0 text-muted-foreground' />
+              <span className='truncate'>
+                Contiene: “{query.trim()}”
+              </span>
+            </CommandItem>
+          </CommandGroup>
+        )}
         {hasOptions && (
           <CommandGroup>
             {options.map((option) => {
@@ -861,18 +882,7 @@ function FacetFilterBody({
           </CommandGroup>
         )}
       </CommandList>
-      {/* Free-text affordance: even with facet options present, a user can fall
-          back to a raw "contains" match. */}
-      <div className='border-t p-2 space-y-2'>
-        <Input
-          placeholder='Contiene texto…'
-          value={freeText}
-          onChange={(e) => setFreeText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') apply()
-          }}
-          className='h-7 text-xs'
-        />
+      <div className='border-t p-2'>
         <div className='flex gap-1.5'>
           <Button
             size='sm'
@@ -886,7 +896,7 @@ function FacetFilterBody({
           <Button
             size='sm'
             className='h-7 flex-1 text-xs'
-            onClick={apply}
+            onClick={() => apply()}
             disabled={!canApply}
           >
             Aplicar
