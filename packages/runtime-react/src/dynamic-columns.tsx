@@ -48,6 +48,7 @@ import {
     statusColorFor,
     useIsDarkTheme,
 } from './display-value'
+import { MediaValue } from './rich-url'
 import { OptionsContext } from './options-context'
 import { DynamicIcon, isLucideIconName } from './dynamic-icon'
 import { CollectionCell } from './collection-cell'
@@ -843,33 +844,24 @@ export function makeDefaultGetDynamicColumns(
                                 : value
                             if (!rawUrl) return <EmptyCell />
                             const urlStr = String(rawUrl)
-                            const href = /^https?:\/\//i.test(urlStr) ? urlStr : `https://${urlStr}`
-                            let label: string
-                            if (labelField) {
-                                label = String(getNestedValue(row.original, labelField) ?? href)
-                            } else {
-                                try {
-                                    label = new URL(href).hostname
-                                } catch {
-                                    label = urlStr
-                                }
-                            }
-                            const isExternal = !/^https?:\/\/(localhost|127\.)/i.test(href)
-                            const newTab =
-                                styleCfg(col, 'new_tab', 'newTab') === true || isExternal
-                            const iconName = styleCfg(col, 'icon') || 'ExternalLink'
+                            // Explicit label from a `label_field` wins; otherwise
+                            // the shared primitive derives a smart label (hostname
+                            // / file name). Images render as a small (~h-8) inline
+                            // thumbnail, files as a chip, else a link chip. Same
+                            // renderer as the detail dialog.
+                            const label = labelField
+                                ? String(getNestedValue(row.original, labelField) ?? '')
+                                : undefined
+                            const iconName = styleCfg(col, 'icon')
                             return (
-                                <a
-                                    href={href}
-                                    {...(newTab
-                                        ? { target: '_blank', rel: 'noopener noreferrer' }
-                                        : {})}
-                                    className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-                                    onClick={(e) => e.stopPropagation()}
-                                >
-                                    <DynamicIcon name={iconName} className="h-3.5 w-3.5 shrink-0" />
-                                    <span className="truncate max-w-[260px]">{label}</span>
-                                </a>
+                                <MediaValue
+                                    url={urlStr}
+                                    getImageUrl={getImageUrl}
+                                    label={label || undefined}
+                                    icon={iconName || undefined}
+                                    thumbHeight={32}
+                                    maxLabelWidth={260}
+                                />
                             )
                         }
 

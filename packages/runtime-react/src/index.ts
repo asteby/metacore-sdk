@@ -130,6 +130,23 @@ export {
 } from './dynamic-columns'
 export { humanizeToken } from './dynamic-columns-helpers'
 export {
+    UrlChip,
+    FileChip,
+    ImageThumbnail,
+    MediaValue,
+    RichText,
+    linkifyText,
+    classifyUrl,
+    isImageUrl,
+    isFileUrl,
+    ensureHref,
+    smartUrlLabel,
+    fileNameFromUrl,
+    splitTrailingPunct,
+    type UrlKind,
+    type LinkifyOptions,
+} from './rich-url'
+export {
     CollectionCell,
     formatScalar,
     prettifyKey,
