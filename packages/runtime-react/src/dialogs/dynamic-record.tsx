@@ -56,6 +56,13 @@ import { isNilUuid, normalizeNilUuid } from '../nil-uuid'
 import { DynamicIcon, isLucideIconName } from '../dynamic-icon'
 import { humanizeToken } from '../dynamic-columns-helpers'
 import { formatDateCell } from '../dynamic-columns'
+import {
+    OptionBadge,
+    statusColorFor,
+    useIsDarkTheme,
+    type DisplayOption,
+} from '../display-value'
+import { generateBadgeStyles } from '@asteby/metacore-ui/lib'
 import { CollectionCell, type ItemField } from '../collection-cell'
 import type { ActionFieldDef, RelationMeta } from '../types'
 import { ImageUrlContext, identityImageUrl, type GetImageUrl } from '../image-url-context'
@@ -977,8 +984,22 @@ export function ViewValue({
     const timeZone = timeZoneProp ?? ctxTimeZone
     const currency = currencyProp ?? ctxCurrency
 
+    // Declarative display hint the backend stamps (mirrors the table column's
+    // `cellStyle`). The table renders each cell off `cellStyle ?? type`; the
+    // detail view keys off the SAME resolved renderer so both stay in lock-step
+    // (a `datetime` display on a numeric column, a `url` display on a text
+    // column, a `status`/`badge` pill, …).
+    const renderAs = field.cellStyle ?? field.type
+
     // created_by / avatar resolver sibling → name (+ avatar) instead of "—".
-    if (field.type === 'avatar' || field.key === 'created_by' || field.key === 'created_by_id') {
+    if (
+        field.type === 'avatar' ||
+        renderAs === 'avatar' ||
+        renderAs === 'creator' ||
+        renderAs === 'user' ||
+        field.key === 'created_by' ||
+        field.key === 'created_by_id'
+    ) {
         const user = createdBySibling(rawValue, record)
         if (user) {
             return (
@@ -1057,15 +1078,22 @@ export function ViewValue({
         return <IconNameViewValue name={value} />
     }
 
-    if (field.type === 'url' && value) {
+    // URL/link display (matches the table's `url`/`link` cell). Triggers on the
+    // stamped display type — not just the storage `type` — so a text column
+    // carrying `cellStyle:'url'` (e.g. `github_url`) renders as a clickable
+    // external link, opening in a new tab, truncated.
+    if ((renderAs === 'url' || renderAs === 'link') && value) {
+        const urlStr = String(value)
+        const href = /^https?:\/\//i.test(urlStr) ? urlStr : `https://${urlStr}`
         return (
             <a
-                href={value}
+                href={href}
                 target="_blank"
-                rel="noreferrer"
-                className="text-sm text-primary hover:underline truncate"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
             >
-                {value}
+                <ExternalLink className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate max-w-[360px]">{urlStr}</span>
             </a>
         )
     }
@@ -1090,9 +1118,16 @@ export function ViewValue({
 
     // Date/datetime/timestamp → tz-aware format. `date` pins to UTC (calendar
     // day); instants render in the org timezone with a full-precision tooltip.
-    if (field.type === 'date' || field.type === 'datetime' || field.type === 'timestamp') {
-        const renderAs = field.type === 'date' ? 'date' : field.type
-        const formatted = formatDateCell(value, renderAs, es, timeZone)
+    // Keys off the display type (`cellStyle ?? type`) so a numeric/epoch column
+    // stamped `datetime` (e.g. `synced_at`) formats as a date, never raw digits.
+    if (
+        renderAs === 'date' ||
+        renderAs === 'datetime' ||
+        renderAs === 'timestamp' ||
+        renderAs === 'timestamptz'
+    ) {
+        const dateRenderAs = renderAs === 'date' ? 'date' : renderAs
+        const formatted = formatDateCell(value, dateRenderAs, es, timeZone)
         if (formatted) {
             return (
                 <p className="text-sm py-1" title={formatted.title}>
@@ -1103,25 +1138,54 @@ export function ViewValue({
         return <p className="text-sm py-1 text-muted-foreground">—</p>
     }
 
-    // Enum/option field with served options → colored/iconed badge using the
-    // served label (e.g. "Almacenable" instead of "storable").
+    // Enum/option field with served options → the SAME colored/iconed pill the
+    // table renders (shared `OptionBadge`): resolved color, thumbnail/icon and
+    // the localized option label (e.g. "Almacenable" instead of "storable").
     const opt = servedOption(field, value)
     if (opt) {
-        const lead: Pick<ResolvedOption, 'image' | 'color' | 'icon'> = {
-            image: opt.image ? getImageUrl(opt.image) : null,
-            color: opt.color ?? null,
-            icon: opt.icon ?? null,
-        }
         return (
-            <Badge
-                variant="secondary"
-                className="w-fit flex items-center gap-1"
-                style={opt.color && !opt.icon ? { backgroundColor: opt.color, color: '#fff', borderColor: 'transparent' } : undefined}
-            >
-                <OptionLead option={lead} size={16} />
-                {opt.label}
-            </Badge>
+            <div className="py-1">
+                <OptionBadge
+                    option={{
+                        value: String(opt.value ?? value ?? ''),
+                        label: opt.label,
+                        color: opt.color ?? undefined,
+                        icon: opt.icon ?? undefined,
+                        image: opt.image ?? undefined,
+                    }}
+                    getImageUrl={getImageUrl}
+                />
+            </div>
         )
+    }
+
+    // Array of scalars / label objects (e.g. github `labels`, tags, a
+    // group-badge list) → a row of pills, mirroring the table's `tags` /
+    // `relation-badge-list` cells. Checked before the structured-object branch
+    // so a flat label array never renders as a mini-table.
+    if (
+        Array.isArray(value) &&
+        (renderAs === 'tags' ||
+            renderAs === 'relation-badge-list' ||
+            value.every((v) => v === null || typeof v !== 'object' || 'label' in v || 'name' in v))
+    ) {
+        return <BadgeListViewValue items={value} getImageUrl={getImageUrl} />
+    }
+
+    // Status / badge / select display with no served option list — a bare enum
+    // token (e.g. a kanban `stage` like "backlog"). Render a colored pill with a
+    // semantic/value-derived color and a localized-or-humanized label, matching
+    // the table's `status`/`badge` cells.
+    if (
+        (renderAs === 'status' ||
+            renderAs === 'badge' ||
+            renderAs === 'select' ||
+            renderAs === 'option') &&
+        value !== null &&
+        value !== undefined &&
+        typeof value !== 'object'
+    ) {
+        return <StatusBadgeViewValue field={field} value={value} t={t} />
     }
 
     // Structured value (jsonb column, e.g. fiscal_data) with no label/name/title
@@ -1161,6 +1225,79 @@ function IconNameViewValue({ name }: { name: string }) {
                 <DynamicIcon name={name} className="h-4 w-4" />
             </div>
             <span className="text-sm text-muted-foreground">{name}</span>
+        </div>
+    )
+}
+
+// StatusBadgeViewValue — a bare enum/status token (no served option list) as a
+// colored pill: a semantic/value-derived color (same `statusColorFor` the table
+// uses) plus a localized-or-humanized label. Mirrors the table's `status`/
+// `badge` cell so a kanban `stage` ("backlog") reads as a colored, translated
+// badge instead of the raw token.
+function StatusBadgeViewValue({
+    field,
+    value,
+    t,
+}: {
+    field: FieldDef
+    value: any
+    t: (key: string, options?: any) => string
+}) {
+    const isDark = useIsDarkTheme()
+    const token = String(value)
+    // Prefer an explicit per-option color served on the field (metadata.stages /
+    // options), else derive a semantic color from the token.
+    const declared = field.options?.find((o) => String(o.value) === token)
+    const color = declared?.color || statusColorFor(token)
+    // Localized label: the option's already-localized label wins, then a manifest
+    // i18n key matching the raw token, then a humanized fallback.
+    const label =
+        declared?.label ?? t(token, { defaultValue: humanizeToken(token) })
+    return (
+        <div className="py-1">
+            <Badge
+                variant="outline"
+                className="border-0 flex w-fit items-center gap-1"
+                style={generateBadgeStyles(color, { isDark })}
+            >
+                {label}
+            </Badge>
+        </div>
+    )
+}
+
+// BadgeListViewValue — an array of scalars / label objects as a row of pills
+// (github `labels`, tags, a group-badge list). Objects carrying a `color` render
+// as colored `OptionBadge`s; plain strings render as neutral secondary pills.
+function BadgeListViewValue({
+    items,
+    getImageUrl,
+}: {
+    items: any[]
+    getImageUrl: GetImageUrl
+}) {
+    if (!items || items.length === 0) {
+        return <p className="text-sm py-1 text-muted-foreground">—</p>
+    }
+    return (
+        <div className="flex flex-wrap gap-1 py-1">
+            {items.map((item, i) => {
+                if (item !== null && typeof item === 'object') {
+                    const opt: DisplayOption = {
+                        value: String(item.value ?? item.id ?? item.name ?? item.label ?? i),
+                        label: String(item.label ?? item.name ?? item.value ?? ''),
+                        color: item.color ?? undefined,
+                        icon: item.icon ?? undefined,
+                        image: item.image ?? item.avatar ?? undefined,
+                    }
+                    return <OptionBadge key={i} option={opt} getImageUrl={getImageUrl} />
+                }
+                return (
+                    <Badge key={i} variant="secondary" className="w-fit">
+                        {String(item)}
+                    </Badge>
+                )
+            })}
         </div>
     )
 }

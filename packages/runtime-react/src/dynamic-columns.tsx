@@ -38,11 +38,16 @@ import {
 import {
     generateBadgeStyles,
     getInitials,
-    optionColor,
     relationChipStyles,
 } from '@asteby/metacore-ui/lib'
 import { Progress } from './dialogs/_primitives'
 import { humanizeToken } from './dynamic-columns-helpers'
+import {
+    OptionBadge,
+    RelationThumbnail,
+    statusColorFor,
+    useIsDarkTheme,
+} from './display-value'
 import { OptionsContext } from './options-context'
 import { DynamicIcon, isLucideIconName } from './dynamic-icon'
 import { CollectionCell } from './collection-cell'
@@ -156,27 +161,6 @@ export const formatAggregateTotal = (
             : {},
         locale,
     )
-}
-
-/**
- * Semantic status → badge color. Used by the `status` cell when no explicit
- * `options` color is declared. Generic, value-driven mapping.
- */
-const statusColorFor = (value: string): string => {
-    const v = value.toLowerCase()
-    if (
-        ['active', 'enabled', 'paid', 'completed', 'done', 'success', 'approved', 'open']
-            .includes(v)
-    )
-        return '#22c55e'
-    if (['pending', 'draft', 'processing', 'in_progress', 'review', 'waiting'].includes(v))
-        return '#eab308'
-    if (
-        ['inactive', 'disabled', 'cancelled', 'canceled', 'failed', 'rejected', 'error', 'closed']
-            .includes(v)
-    )
-        return '#ef4444'
-    return '#6b7280'
 }
 
 /** Copyable monospaced text cell (code/IDs/hashes). */
@@ -293,26 +277,6 @@ const getValueFromPathVariants = (obj: any, path?: string) => {
     return undefined
 }
 
-const useIsDarkTheme = () => {
-    const [isDark, setIsDark] = React.useState(() =>
-        typeof document !== 'undefined' &&
-        document.documentElement.classList.contains('dark')
-    )
-    React.useEffect(() => {
-        if (typeof document === 'undefined') return
-        const sync = () =>
-            setIsDark(document.documentElement.classList.contains('dark'))
-        sync()
-        const observer = new MutationObserver(sync)
-        observer.observe(document.documentElement, {
-            attributes: true,
-            attributeFilter: ['class'],
-        })
-        return () => observer.disconnect()
-    }, [])
-    return isDark
-}
-
 const renderRelationBadges = (items: any, col: ColumnDefinition) => {
     if (!Array.isArray(items) || items.length === 0) {
         return <span className="text-muted-foreground">-</span>
@@ -356,66 +320,6 @@ const renderRelationBadges = (items: any, col: ColumnDefinition) => {
                 )
             })}
         </div>
-    )
-}
-
-/**
- * Tiny square thumbnail for a resolved relation/option that carries an `image`
- * (brand logo, product photo, customer/user avatar). Uses the same Avatar
- * primitive as the `avatar`/`creator` cells so a broken/loading image
- * gracefully falls back to the record's initials. Sized small (the box is an
- * inline style so an addon-arbitrary Tailwind class never gets dropped by a
- * consuming app's class scan). Rendered inline alongside a label — never alone.
- */
-const RelationThumbnail: React.FC<{
-    src: string
-    alt: string
-    getImageUrl?: (path: string) => string
-    size?: number
-}> = ({ src, alt, getImageUrl, size = 18 }) => (
-    <Avatar
-        className="shrink-0 rounded-sm ring-1 ring-border/40"
-        style={{ width: size, height: size }}
-    >
-        <AvatarImage
-            src={getImageUrl ? getImageUrl(src) : src}
-            alt={alt}
-            className="object-cover"
-        />
-        <AvatarFallback className="rounded-sm bg-primary/10 text-[8px] font-bold text-primary">
-            {getInitials(alt)}
-        </AvatarFallback>
-    </Avatar>
-)
-
-interface OptionBadgeProps {
-    option: { value: string; label: string; icon?: string; color?: string; image?: string }
-    fallback: string
-    getImageUrl?: (path: string) => string
-}
-
-const OptionBadge: React.FC<OptionBadgeProps> = ({ option, getImageUrl }) => {
-    const isDark = useIsDarkTheme()
-    // Explicit backend color wins; otherwise derive a stable, cohesive color
-    // from the option's value (fallback label) so "dead" gray badges come
-    // alive. Inline style (hex-derived) so it works regardless of the host's
-    // tailwind safelist — addon-arbitrary classes aren't in the host scan.
-    const colorSource = option.color || optionColor(option.value || option.label)
-    const colorStyles = generateBadgeStyles(colorSource, { isDark })
-    return (
-        <Badge variant="outline" className="flex items-center gap-1 border-0" style={colorStyles}>
-            {option.image ? (
-                <RelationThumbnail
-                    src={option.image}
-                    alt={option.label}
-                    getImageUrl={getImageUrl}
-                    size={16}
-                />
-            ) : (
-                option.icon && <DynamicIcon name={option.icon} className="h-3.5 w-3.5" />
-            )}
-            <span>{option.label}</span>
-        </Badge>
     )
 }
 
