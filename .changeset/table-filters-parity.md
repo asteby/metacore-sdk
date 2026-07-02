@@ -22,3 +22,8 @@ módulos dinámicos), igualando al kanban.
 - **Stage-select en la tabla:** la columna `group_by`/stage sin opciones propias
   ofrece el select con las etapas del pipeline (traducidas, con color), no un
   cuadro de texto — sale del motor compartido; confirmado con test.
+- **Header de lane del kanban:** los botones de búsqueda y embudo se ven SIEMPRE
+  (se quitó el hover-reveal, que nadie descubría) en muted con hover a foreground.
+  El embudo muestra un badge numérico con la cantidad de valores/filtros
+  aplicados en esa lane (como el badge del botón Filtros de la toolbar); la lupa
+  tiñe a primary + dot cuando hay búsqueda activa.

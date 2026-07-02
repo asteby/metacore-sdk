@@ -264,6 +264,19 @@ export function cardMatchesLaneFunnel(
 }
 
 /**
+ * Count of applied criteria on a lane funnel: the number of picked select/facet
+ * `values`, else 1 for a free-text `text`, else 0. Drives the funnel's count
+ * badge. Pure — exported for unit tests.
+ */
+export function laneFunnelCount(
+    value: { values?: string[]; text?: string } | undefined,
+): number {
+    if (value?.values?.length) return value.values.length
+    if (value?.text?.trim()) return 1
+    return 0
+}
+
+/**
  * Whether a card matches a free-text lane search: a case-insensitive substring
  * over the card's title + every visible field value (`String(v)`). Empty query
  * matches everything. Pure — exported for unit tests.
@@ -1101,18 +1114,14 @@ function KanbanLane({
                         {laneActive ? `${count}/${totalCount}` : count}
                     </span>
                 </div>
-                {/* Lane actions — dimmed until the lane (or the board row) is
-                    hovered/focused, so an idle board stays clean. Stay lit when a
-                    lane filter is active. */}
-                <div
-                    className={`flex items-center gap-0.5 transition-opacity focus-within:opacity-100 group-hover/lane:opacity-100 ${
-                        laneActive || searchOpen ? 'opacity-100' : 'opacity-0'
-                    }`}
-                >
+                {/* Lane actions — always visible in muted (a hidden hover-reveal
+                    was undiscoverable); active state is a primary tint + a count
+                    badge on the funnel. */}
+                <div className="flex items-center gap-0.5">
                     <button
                         type="button"
                         onClick={() => setSearchOpen((o) => !o)}
-                        className={`flex size-6 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground ${
+                        className={`relative flex size-6 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground ${
                             queryActive ? 'text-primary' : 'text-muted-foreground'
                         }`}
                         aria-label={t('kanban.searchLane', {
@@ -1120,6 +1129,9 @@ function KanbanLane({
                         })}
                     >
                         <Search className="h-3.5 w-3.5" />
+                        {queryActive && (
+                            <span className="absolute -right-0.5 -top-0.5 size-1.5 rounded-full bg-primary" />
+                        )}
                     </button>
                     <LaneFilterButton
                         fields={filterFields}
@@ -1214,6 +1226,8 @@ function LaneFilterButton({
         value &&
         ((value.values && value.values.length > 0) || value.text?.trim())
     )
+    // Number of applied criteria on this lane's funnel (drives the count badge).
+    const activeCount = laneFunnelCount(value)
     // The value step mirrors the sheet: when the chosen field is a select or a
     // facet (static options OR a lazy loader), render the SAME pro combobox —
     // multi-select, searchable, with counts. Only a genuinely free-text field
@@ -1239,7 +1253,7 @@ function LaneFilterButton({
             <PopoverTrigger asChild>
                 <button
                     type="button"
-                    className={`flex size-6 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground ${
+                    className={`relative flex size-6 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground ${
                         active ? 'text-primary' : 'text-muted-foreground'
                     }`}
                     aria-label={t('kanban.filterLane', {
@@ -1247,6 +1261,11 @@ function LaneFilterButton({
                     })}
                 >
                     <ListFilter className="h-3.5 w-3.5" />
+                    {activeCount > 0 && (
+                        <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-bold leading-none text-primary-foreground tabular-nums">
+                            {activeCount}
+                        </span>
+                    )}
                 </button>
             </PopoverTrigger>
             <PopoverContent

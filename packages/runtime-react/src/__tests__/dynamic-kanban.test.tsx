@@ -40,6 +40,7 @@ import {
     selectCardColumns,
     cardMatchesLaneQuery,
     cardMatchesLaneFunnel,
+    laneFunnelCount,
     translateOptionLabels,
     summarizeFilterValues,
     UNASSIGNED_LANE,
@@ -280,6 +281,18 @@ describe('cardMatchesLaneFunnel', () => {
         expect(
             cardMatchesLaneFunnel(card, { field: 'assignee', values: [] }),
         ).toBe(true)
+    })
+})
+
+describe('laneFunnelCount', () => {
+    it('counts picked values, else 1 for free text, else 0', () => {
+        expect(laneFunnelCount(undefined)).toBe(0)
+        expect(laneFunnelCount({})).toBe(0)
+        expect(laneFunnelCount({ values: ['a', 'b', 'c'] })).toBe(3)
+        expect(laneFunnelCount({ text: 'foo' })).toBe(1)
+        expect(laneFunnelCount({ text: '  ' })).toBe(0)
+        // picked values win over stray text
+        expect(laneFunnelCount({ values: ['a'], text: 'x' })).toBe(1)
     })
 })
 
@@ -527,5 +540,32 @@ describe('DynamicKanban lane funnel', () => {
             await screen.findByPlaceholderText('Buscar valores...'),
         ).toBeTruthy()
         expect(screen.queryByPlaceholderText('Contiene...')).toBeNull()
+    })
+
+    it('shows a count badge on the funnel with the number of picked values', async () => {
+        useMetadataCache.getState().setMetadata('issue', meta())
+        render(
+            <ApiProvider client={fakeApi()}>
+                <DynamicKanban model="issue" />
+            </ApiProvider>,
+        )
+        await screen.findByText('Fix login bug')
+        fireEvent.click(screen.getAllByLabelText('Filtrar columna')[0])
+        await screen.findByPlaceholderText('Buscar valores...')
+
+        // pick two stage values from the combobox
+        const options = screen.getAllByRole('option')
+        expect(options.length).toBeGreaterThanOrEqual(2)
+        fireEvent.click(options[0])
+        fireEvent.click(options[1])
+        // apply
+        fireEvent.click(screen.getByText(/Aplicar/))
+
+        // the first lane's funnel button now carries a "2" count badge
+        await waitFor(() =>
+            expect(
+                screen.getAllByLabelText('Filtrar columna')[0].textContent,
+            ).toContain('2'),
+        )
     })
 })
