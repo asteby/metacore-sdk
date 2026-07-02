@@ -38,6 +38,8 @@ import {
     isTransitionAllowed,
     applyOptimisticMove,
     selectCardColumns,
+    cardMatchesLaneQuery,
+    summarizeFilterValues,
     UNASSIGNED_LANE,
     DynamicKanban,
 } from '../dynamic-kanban'
@@ -208,6 +210,54 @@ describe('selectCardColumns', () => {
     })
 })
 
+describe('cardMatchesLaneQuery', () => {
+    const cols = [
+        { key: 'title', label: 'Title', type: 'text', sortable: false, filterable: false },
+        { key: 'assignee', label: 'Assignee', type: 'text', sortable: false, filterable: false },
+    ] as any
+
+    it('matches on the title (case-insensitive)', () => {
+        expect(cardMatchesLaneQuery(CARDS[0], cols, 'LOGIN')).toBe(true)
+        expect(cardMatchesLaneQuery(CARDS[0], cols, 'dark')).toBe(false)
+    })
+
+    it('matches on any visible field value, not just the title', () => {
+        // card 1: title "Fix login bug", assignee "ana"
+        expect(cardMatchesLaneQuery(CARDS[0], cols, 'ana')).toBe(true)
+    })
+
+    it('an empty query matches everything', () => {
+        expect(cardMatchesLaneQuery(CARDS[0], cols, '')).toBe(true)
+        expect(cardMatchesLaneQuery(CARDS[0], cols, '   ')).toBe(true)
+    })
+})
+
+describe('summarizeFilterValues', () => {
+    const opts = [
+        { value: 'backlog', label: 'Backlog' },
+        { value: 'done', label: 'Done' },
+        { value: 'review', label: 'Review' },
+    ]
+    it('resolves a single value to its option label', () => {
+        expect(summarizeFilterValues(['done'], opts)).toBe('Done')
+    })
+    it('unwraps IN: and caps at 2 with a +n overflow', () => {
+        expect(summarizeFilterValues(['IN:backlog,done,review'], opts)).toBe(
+            'Backlog, Done +1',
+        )
+    })
+    it('renders a free-text ILIKE: match quoted', () => {
+        expect(summarizeFilterValues(['ILIKE:urgent'], opts)).toBe('"urgent"')
+    })
+    it('renders a numeric GTE/LTE range', () => {
+        expect(summarizeFilterValues(['GTE:10', 'LTE:20'], opts)).toBe('10 – 20')
+    })
+    it('is empty for no selection', () => {
+        expect(summarizeFilterValues([], opts)).toBe('')
+        expect(summarizeFilterValues(undefined, opts)).toBe('')
+    })
+})
+
 // ---------------------------------------------------------------------------
 // 2. Render smoke + 3. optimistic PUT contract
 // ---------------------------------------------------------------------------
@@ -330,5 +380,51 @@ describe('DynamicKanban filter bar', () => {
                 }),
             ),
         )
+    })
+})
+
+// ---------------------------------------------------------------------------
+// 5. Per-lane search — the inline lane header search narrows ONLY that lane's
+//    already-fetched cards, client-side, by title + field values.
+// ---------------------------------------------------------------------------
+
+describe('DynamicKanban lane search', () => {
+    it('filters a single lane by card title, leaving the card set narrowed', async () => {
+        useMetadataCache.getState().setMetadata('issue', meta())
+        render(
+            <ApiProvider client={fakeApi()}>
+                <DynamicKanban model="issue" />
+            </ApiProvider>,
+        )
+        // all backlog cards present up front
+        expect(await screen.findByText('Fix login bug')).toBeTruthy()
+        expect(screen.getByText('Dark mode')).toBeTruthy()
+
+        // open the first lane's (backlog) inline search and type
+        const searchButtons = screen.getAllByLabelText('Buscar en la columna')
+        fireEvent.click(searchButtons[0])
+        const input = await screen.findByPlaceholderText('Buscar tarjetas...')
+        fireEvent.change(input, { target: { value: 'dark' } })
+
+        // backlog now shows only "Dark mode"; the other backlog cards are hidden
+        await waitFor(() => expect(screen.queryByText('Fix login bug')).toBeNull())
+        expect(screen.getByText('Dark mode')).toBeTruthy()
+    })
+
+    it('matches on a field value, not only the title', async () => {
+        useMetadataCache.getState().setMetadata('issue', meta())
+        render(
+            <ApiProvider client={fakeApi()}>
+                <DynamicKanban model="issue" />
+            </ApiProvider>,
+        )
+        expect(await screen.findByText('Fix login bug')).toBeTruthy()
+        const searchButtons = screen.getAllByLabelText('Buscar en la columna')
+        fireEvent.click(searchButtons[0])
+        const input = await screen.findByPlaceholderText('Buscar tarjetas...')
+        // card 1 (backlog) has assignee "ana"; card 2/3 do not.
+        fireEvent.change(input, { target: { value: 'ana' } })
+        await waitFor(() => expect(screen.queryByText('Dark mode')).toBeNull())
+        expect(screen.getByText('Fix login bug')).toBeTruthy()
     })
 })

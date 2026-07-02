@@ -222,6 +222,70 @@ export function selectCardColumns(
     return { title, fields }
 }
 
+/**
+ * Human-readable summary of a field's selected filter values for the removable
+ * chip row. Resolves option labels, unwraps the wire operators
+ * (`IN:`/`ILIKE:`/`RANGE:`/`GTE:`/`LTE:`/date `from_to`), and caps the list at
+ * `maxShown` values with a `+n` overflow. Pure — exported for unit tests.
+ */
+export function summarizeFilterValues(
+    values: string[] | undefined,
+    options: { label: string; value: string }[] | undefined,
+    maxShown = 2,
+): string {
+    if (!values || values.length === 0) return ''
+    const opts = options ?? []
+    const labelFor = (v: string) =>
+        opts.find((o) => o.value === v)?.label ?? v
+    const first = values[0]
+    if (values.length === 1) {
+        if (first.startsWith('ILIKE:')) return `"${first.slice(6)}"`
+        if (first.startsWith('IN:')) {
+            return summarizeList(first.slice(3).split(','), labelFor, maxShown)
+        }
+        if (first.startsWith('RANGE:')) {
+            const [min, max] = first.slice(6).split(',')
+            return `${min || '…'} – ${max || '…'}`
+        }
+        if (/^\d{4}-\d{2}-\d{2}_/.test(first)) return first.replace('_', ' – ')
+    }
+    if (first.startsWith('GTE:') || first.startsWith('LTE:')) {
+        const min = values.find((v) => v.startsWith('GTE:'))?.slice(4) ?? ''
+        const max = values.find((v) => v.startsWith('LTE:'))?.slice(4) ?? ''
+        return `${min || '…'} – ${max || '…'}`
+    }
+    return summarizeList(values, labelFor, maxShown)
+}
+
+function summarizeList(
+    items: string[],
+    labelFor: (v: string) => string,
+    maxShown: number,
+): string {
+    const labels = items.map(labelFor)
+    if (labels.length <= maxShown) return labels.join(', ')
+    return `${labels.slice(0, maxShown).join(', ')} +${labels.length - maxShown}`
+}
+
+/**
+ * Whether a card matches a free-text lane search: a case-insensitive substring
+ * over the card's title + every visible field value (`String(v)`). Empty query
+ * matches everything. Pure — exported for unit tests.
+ */
+export function cardMatchesLaneQuery(
+    card: any,
+    cols: ColumnDefinition[],
+    query: string,
+): boolean {
+    const q = query.trim().toLowerCase()
+    if (!q) return true
+    return cols.some((c) =>
+        String(card?.[c.key] ?? '')
+            .toLowerCase()
+            .includes(q),
+    )
+}
+
 // ---------------------------------------------------------------------------
 // Theme hook (mirrors the private one in dynamic-columns / activity-renderer)
 // ---------------------------------------------------------------------------
@@ -249,6 +313,13 @@ function useIsDarkTheme(): boolean {
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
+
+/** Per-lane client-side filter: an optional field funnel + an optional search. */
+interface LaneFilterState {
+    field?: string
+    value?: string
+    query?: string
+}
 
 export interface DynamicKanbanProps {
     /** Model key as registered on the backend (e.g. "issue"). */
@@ -352,13 +423,15 @@ export function DynamicKanban({
     // and `f_<key>` serialization DynamicTable uses, so the board filters
     // identically to its table sibling.
     const {
+        dynamicFilters,
         globalFilter,
         setGlobalFilter,
         columnFilterConfigs,
         filterParams,
         activeFilterCount,
+        handleDynamicFilterChange,
         clearAll,
-    } = useDynamicFilters(metadata, { defaultFilters })
+    } = useDynamicFilters(metadata, { defaultFilters, model })
 
     // ---- records fetch (same path as DynamicTable, single large page) ----
     const fetchData = useCallback(async () => {
@@ -406,20 +479,41 @@ export function DynamicKanban({
         return out
     }, [metadata, columnFilterConfigs, t])
 
+    // Split filters into active (with a selection) and the rest — the Sheet
+    // groups the active ones on top, the rest alphabetically. Also drives the
+    // removable chip row below the toolbar.
+    const { activeFields, inactiveFields } = useMemo(() => {
+        const active = filterFields.filter(
+            (f) => (f.config.selectedValues?.length ?? 0) > 0,
+        )
+        const inactive = filterFields
+            .filter((f) => (f.config.selectedValues?.length ?? 0) === 0)
+            .sort((a, b) => a.label.localeCompare(b.label))
+        return { activeFields: active, inactiveFields: inactive }
+    }, [filterFields])
+
     // Sheet (grouped global filters) open state + per-lane client-side filters.
     // A lane filter narrows ONLY that stage's already-fetched cards by a field
     // value — instant, no refetch — so a user can drill into one column without
     // touching the rest of the board (the global filters, by contrast, refetch
     // the whole board server-side).
     const [filtersOpen, setFiltersOpen] = useState(false)
+    // Per-lane client-side narrowing. Two independent, AND-combined dimensions:
+    //   - `field`/`value`: the funnel — a field-scoped substring match.
+    //   - `query`: the lane search — a substring over the card title + every
+    //     visible field value.
+    // A lane with neither is dropped from the map (so it reads as "unfiltered").
     const [laneFilters, setLaneFilters] = useState<
-        Record<string, { field: string; value: string }>
+        Record<string, LaneFilterState>
     >({})
-    const setLaneFilter = useCallback(
-        (stageKey: string, filter: { field: string; value: string } | null) => {
+    const updateLaneFilter = useCallback(
+        (stageKey: string, patch: Partial<LaneFilterState>) => {
             setLaneFilters((prev) => {
+                const merged: LaneFilterState = { ...prev[stageKey], ...patch }
                 const next = { ...prev }
-                if (filter) next[stageKey] = filter
+                const hasFunnel = !!(merged.field && merged.value?.trim())
+                const hasQuery = !!merged.query?.trim()
+                if (hasFunnel || hasQuery) next[stageKey] = merged
                 else delete next[stageKey]
                 return next
             })
@@ -442,6 +536,12 @@ export function DynamicKanban({
     const { title: titleCol, fields: fieldCols } = useMemo(
         () => (metadata ? selectCardColumns(metadata) : { title: null, fields: [] }),
         [metadata],
+    )
+
+    // Columns the lane search scans: the card title + its visible field cells.
+    const searchCols = useMemo(
+        () => [titleCol, ...fieldCols].filter(Boolean) as ColumnDefinition[],
+        [titleCol, fieldCols],
     )
 
     // Row-placement actions resolved EXACTLY like DynamicTable's action column:
@@ -616,69 +716,140 @@ export function DynamicKanban({
                         </SheetTrigger>
                         <SheetContent
                             side="right"
-                            className="flex w-80 flex-col gap-4 sm:max-w-sm"
+                            className="flex w-80 flex-col gap-0 p-0 sm:max-w-sm"
                         >
-                            <SheetHeader className="space-y-0">
-                                <SheetTitle>
+                            <SheetHeader className="space-y-0 border-b px-4 py-3">
+                                <SheetTitle className="text-sm">
                                     {t('kanban.filters', { defaultValue: 'Filtros' })}
                                 </SheetTitle>
                             </SheetHeader>
-                            {/* One labeled control per filterable field, stacked. Same
-                                configs / server-side engine as the inline chips were,
-                                just grouped so they never spill across the board. */}
-                            <div className="flex flex-1 flex-col gap-2 overflow-y-auto pr-1">
-                                {filterFields.map((field) => (
-                                    <ColumnFilterControl
-                                        key={field.key}
-                                        showLabel
-                                        label={field.label}
-                                        filterKey={field.config.filterKey}
-                                        filterType={
-                                            field.config.filterType as ColumnFilterType
-                                        }
-                                        filterOptions={field.config.options}
-                                        filterLoading={field.config.loading}
-                                        filterSearchEndpoint={field.config.searchEndpoint}
-                                        selectedValues={field.config.selectedValues}
-                                        onFilterChange={field.config.onFilterChange}
-                                    />
+                            {/* Active filters grouped on top, the rest alphabetical
+                                below a separator. Each row: label + its control; the
+                                active field is highlighted by ColumnFilterControl's
+                                own active styling. Same server-side engine as before. */}
+                            <div className="flex flex-1 flex-col gap-1 overflow-y-auto px-4 py-3">
+                                {activeFields.length > 0 && (
+                                    <>
+                                        <p className="px-0.5 pb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                                            {t('kanban.activeFilters', {
+                                                defaultValue: 'Con filtros activos',
+                                            })}
+                                        </p>
+                                        {activeFields.map((field) => (
+                                            <SheetFilterRow key={field.key} field={field} />
+                                        ))}
+                                        {inactiveFields.length > 0 && (
+                                            <div className="my-2 border-t" />
+                                        )}
+                                    </>
+                                )}
+                                {inactiveFields.map((field) => (
+                                    <SheetFilterRow key={field.key} field={field} />
                                 ))}
                             </div>
-                            {activeFilterCount > 0 && (
+                            <div className="sticky bottom-0 flex items-center justify-between gap-2 border-t bg-background px-4 py-3">
+                                <span className="text-xs text-muted-foreground tabular-nums">
+                                    {activeFilterCount > 0
+                                        ? t('kanban.activeCount', {
+                                              defaultValue: '{{count}} activos',
+                                              count: activeFilterCount,
+                                          })
+                                        : t('kanban.noActiveFilters', {
+                                              defaultValue: 'Sin filtros',
+                                          })}
+                                </span>
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="gap-1 text-xs text-muted-foreground"
+                                    className="h-7 gap-1 text-xs"
                                     onClick={clearAll}
+                                    disabled={activeFilterCount === 0}
                                 >
                                     <X className="h-3.5 w-3.5" />
-                                    {t('kanban.clearFilters', { defaultValue: 'Limpiar' })}
-                                    {` (${activeFilterCount})`}
+                                    {t('kanban.clearAll', { defaultValue: 'Limpiar todo' })}
+                                    {activeFilterCount > 0 ? ` (${activeFilterCount})` : ''}
                                 </Button>
-                            )}
+                            </div>
                         </SheetContent>
                     </Sheet>
                 )}
             </div>
 
+            {/* Removable chip row — one chip per active field filter, plus a
+                "Limpiar todo" at the end. Instant feedback without opening the
+                Sheet; clicking a chip's X clears that field server-side. */}
+            {activeFields.length > 0 && (
+                <div
+                    className="flex flex-wrap items-center gap-1.5"
+                    data-testid="kanban-filter-chips"
+                >
+                    {activeFields.map((field) => {
+                        const summary = summarizeFilterValues(
+                            field.config.selectedValues,
+                            field.config.options,
+                        )
+                        return (
+                            <Badge
+                                key={field.key}
+                                variant="secondary"
+                                className="h-6 gap-1 pl-2 pr-1 text-xs font-normal"
+                            >
+                                <span className="font-medium">{field.label}:</span>
+                                <span className="max-w-[180px] truncate text-muted-foreground">
+                                    {summary}
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        field.config.onFilterChange(
+                                            field.config.filterKey,
+                                            [],
+                                        )
+                                    }
+                                    className="ml-0.5 rounded-sm p-0.5 transition-colors hover:bg-muted-foreground/20"
+                                    aria-label={t('kanban.removeFilter', {
+                                        defaultValue: 'Quitar filtro',
+                                    })}
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
+                            </Badge>
+                        )
+                    })}
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 gap-1 px-2 text-xs text-muted-foreground"
+                        onClick={clearAll}
+                    >
+                        {t('kanban.clearAll', { defaultValue: 'Limpiar todo' })}
+                    </Button>
+                </div>
+            )}
+
             <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
                 <div className="flex min-w-0 gap-4 overflow-x-auto p-1" data-testid="kanban-board">
                 {lanes.map((stage) => {
                     const allCards = grouped.get(stage.key) ?? []
-                    // Per-lane client-side narrowing: substring match on the
-                    // chosen field over the already-fetched cards. Instant, and
-                    // scoped to this stage only.
+                    // Per-lane client-side narrowing (instant, scoped to this
+                    // stage). The funnel (field/value) and the lane search
+                    // (query) are AND-combined.
                     const laneFilter = laneFilters[stage.key]
-                    const cards =
-                        laneFilter && laneFilter.value.trim()
-                            ? allCards.filter((c) =>
-                                  String(c[laneFilter.field] ?? '')
-                                      .toLowerCase()
-                                      .includes(
-                                          laneFilter.value.trim().toLowerCase(),
-                                      ),
-                              )
-                            : allCards
+                    let cards = allCards
+                    if (laneFilter?.field && laneFilter.value?.trim()) {
+                        const v = laneFilter.value.trim().toLowerCase()
+                        const field = laneFilter.field
+                        cards = cards.filter((c) =>
+                            String(c[field] ?? '')
+                                .toLowerCase()
+                                .includes(v),
+                        )
+                    }
+                    if (laneFilter?.query?.trim()) {
+                        cards = cards.filter((c) =>
+                            cardMatchesLaneQuery(c, searchCols, laneFilter.query!),
+                        )
+                    }
                     const droppableAllowed =
                         !activeId ||
                         stage.key === activeStage ||
@@ -691,8 +862,14 @@ export function DynamicKanban({
                             totalCount={allCards.length}
                             filterFields={filterFields}
                             laneFilter={laneFilter}
-                            onLaneFilterChange={(f) =>
-                                setLaneFilter(stage.key, f)
+                            onFunnelChange={(f) =>
+                                updateLaneFilter(stage.key, {
+                                    field: f?.field,
+                                    value: f?.value,
+                                })
+                            }
+                            onQueryChange={(q) =>
+                                updateLaneFilter(stage.key, { query: q })
                             }
                             isDark={isDark}
                             dimmed={!!activeId && !droppableAllowed}
@@ -748,16 +925,68 @@ export function DynamicKanban({
 }
 
 // ---------------------------------------------------------------------------
+// Sheet filter row — a labeled ColumnFilterControl for the Filtros panel.
+// ---------------------------------------------------------------------------
+
+interface SheetFilterField {
+    key: string
+    label: string
+    config: {
+        filterType: string
+        filterKey: string
+        options: { label: string; value: string; icon?: string; color?: string }[]
+        selectedValues: string[]
+        onFilterChange: (filterKey: string, values: string[]) => void
+        loading?: boolean
+        searchEndpoint?: string
+        loadOptions?: (q?: string) => Promise<any[]>
+    }
+}
+
+function SheetFilterRow({ field }: { field: SheetFilterField }) {
+    return (
+        <div className="[&>button]:w-full [&>button]:justify-start">
+            <ColumnFilterControl
+                showLabel
+                label={field.label}
+                filterKey={field.config.filterKey}
+                filterType={field.config.filterType as ColumnFilterType}
+                filterOptions={field.config.options}
+                filterLoading={field.config.loading}
+                filterSearchEndpoint={field.config.searchEndpoint}
+                selectedValues={field.config.selectedValues}
+                onFilterChange={field.config.onFilterChange}
+                loadOptions={field.config.loadOptions}
+            />
+        </div>
+    )
+}
+
+// ---------------------------------------------------------------------------
 // Lane (droppable column)
 // ---------------------------------------------------------------------------
+
+interface LaneFilterField {
+    key: string
+    label: string
+    config?: ColumnFilterConfigLike
+}
+
+/** Minimal shape the lane funnel reads off a shared filter config. */
+interface ColumnFilterConfigLike {
+    filterType?: string
+    filterKey?: string
+    options?: { label: string; value: string; color?: string }[]
+}
 
 interface KanbanLaneProps {
     stage: StageMeta
     count: number
     totalCount: number
-    filterFields: { key: string; label: string }[]
-    laneFilter: { field: string; value: string } | undefined
-    onLaneFilterChange: (filter: { field: string; value: string } | null) => void
+    filterFields: LaneFilterField[]
+    laneFilter: LaneFilterState | undefined
+    onFunnelChange: (filter: { field: string; value: string } | null) => void
+    onQueryChange: (query: string) => void
     isDark: boolean
     dimmed: boolean
     disabled: boolean
@@ -770,7 +999,8 @@ function KanbanLane({
     totalCount,
     filterFields,
     laneFilter,
-    onLaneFilterChange,
+    onFunnelChange,
+    onQueryChange,
     isDark,
     dimmed,
     disabled,
@@ -781,10 +1011,26 @@ function KanbanLane({
     const headerStyle = generateBadgeStyles(stage.color || optionColor(stage.key), {
         isDark,
     })
-    const laneActive = !!(laneFilter && laneFilter.value.trim())
+    const funnelActive = !!(laneFilter?.field && laneFilter.value?.trim())
+    const queryActive = !!laneFilter?.query?.trim()
+    const laneActive = funnelActive || queryActive
     const activeFieldLabel =
         filterFields.find((f) => f.key === laneFilter?.field)?.label ??
         laneFilter?.field
+
+    // Inline lane search: a Search icon expands an Input; Escape or blur-while-
+    // empty collapses it. The query itself lives in the parent's laneFilters so
+    // it survives collapse and combines with the funnel.
+    const [searchOpen, setSearchOpen] = useState(queryActive)
+    const searchRef = useRef<HTMLInputElement | null>(null)
+    useEffect(() => {
+        if (searchOpen) searchRef.current?.focus()
+    }, [searchOpen])
+    const funnelValue =
+        laneFilter?.field && laneFilter.value
+            ? { field: laneFilter.field, value: laneFilter.value }
+            : undefined
+
     return (
         <div
             ref={setNodeRef}
@@ -809,14 +1055,51 @@ function KanbanLane({
                     <span className="text-xs font-medium tabular-nums text-muted-foreground">
                         {laneActive ? `${count}/${totalCount}` : count}
                     </span>
+                    <button
+                        type="button"
+                        onClick={() => setSearchOpen((o) => !o)}
+                        className={`rounded p-1 transition-colors hover:bg-muted hover:text-foreground ${
+                            queryActive ? 'text-primary' : 'text-muted-foreground'
+                        }`}
+                        aria-label={t('kanban.searchLane', {
+                            defaultValue: 'Buscar en la columna',
+                        })}
+                    >
+                        <Search className="h-3.5 w-3.5" />
+                    </button>
                     <LaneFilterButton
                         fields={filterFields}
-                        value={laneFilter}
-                        onChange={onLaneFilterChange}
+                        value={funnelValue}
+                        onChange={onFunnelChange}
                     />
                 </div>
             </div>
-            {laneActive && (
+            {searchOpen && (
+                <div className="px-3 pb-1.5">
+                    <div className="relative">
+                        <Search className="pointer-events-none absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                            ref={searchRef}
+                            value={laneFilter?.query ?? ''}
+                            onChange={(e) => onQueryChange(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Escape') {
+                                    onQueryChange('')
+                                    setSearchOpen(false)
+                                }
+                            }}
+                            onBlur={() => {
+                                if (!laneFilter?.query?.trim()) setSearchOpen(false)
+                            }}
+                            placeholder={t('kanban.searchLanePlaceholder', {
+                                defaultValue: 'Buscar tarjetas...',
+                            })}
+                            className="h-7 pl-7 text-xs"
+                        />
+                    </div>
+                </div>
+            )}
+            {funnelActive && (
                 <div className="flex items-center gap-1 px-3 pb-1.5 text-[11px] text-muted-foreground">
                     <ListFilter className="h-3 w-3 shrink-0" />
                     <span className="truncate">
@@ -824,7 +1107,7 @@ function KanbanLane({
                     </span>
                     <button
                         type="button"
-                        onClick={() => onLaneFilterChange(null)}
+                        onClick={() => onFunnelChange(null)}
                         className="ml-auto rounded p-0.5 hover:bg-muted"
                         aria-label={t('kanban.clearFilters', {
                             defaultValue: 'Limpiar',
@@ -855,7 +1138,7 @@ function LaneFilterButton({
     value,
     onChange,
 }: {
-    fields: { key: string; label: string }[]
+    fields: LaneFilterField[]
     value: { field: string; value: string } | undefined
     onChange: (filter: { field: string; value: string } | null) => void
 }) {
@@ -872,6 +1155,12 @@ function LaneFilterButton({
     }, [open, value, fields])
     if (fields.length === 0) return null
     const active = !!(value && value.value.trim())
+    // When the chosen field carries a known option set (select/facet with
+    // pre-loaded values), offer those values as a Select instead of a raw text
+    // box — so the funnel picks real values, not free strings.
+    const selectedFieldCfg = fields.find((f) => f.key === field)?.config
+    const valueOptions = selectedFieldCfg?.options ?? []
+    const hasValueOptions = valueOptions.length > 0
     const apply = () => {
         if (field && text.trim()) onChange({ field, value: text })
         else onChange(null)
@@ -893,7 +1182,15 @@ function LaneFilterButton({
                 </button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-56 space-y-2 p-2">
-                <Select value={field} onValueChange={setField}>
+                <Select
+                    value={field}
+                    onValueChange={(f) => {
+                        setField(f)
+                        // Reset the value when switching fields — a value picked
+                        // for one field is meaningless for another.
+                        setText('')
+                    }}
+                >
                     <SelectTrigger className="h-8 text-xs">
                         <SelectValue />
                     </SelectTrigger>
@@ -905,16 +1202,48 @@ function LaneFilterButton({
                         ))}
                     </SelectContent>
                 </Select>
-                <Input
-                    autoFocus
-                    value={text}
-                    onChange={(e) => setText(e.target.value)}
-                    onKeyDown={(e) => {
-                        if (e.key === 'Enter') apply()
-                    }}
-                    placeholder={t('kanban.filterValue', { defaultValue: 'Valor...' })}
-                    className="h-8 text-xs"
-                />
+                {hasValueOptions ? (
+                    <Select
+                        value={text || undefined}
+                        onValueChange={(v) => {
+                            setText(v)
+                            if (field && v) onChange({ field, value: v })
+                            setOpen(false)
+                        }}
+                    >
+                        <SelectTrigger className="h-8 text-xs">
+                            <SelectValue
+                                placeholder={t('kanban.filterValue', {
+                                    defaultValue: 'Valor...',
+                                })}
+                            />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {valueOptions.map((o) => (
+                                <SelectItem
+                                    key={o.value}
+                                    value={o.value}
+                                    className="text-xs"
+                                >
+                                    {o.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                ) : (
+                    <Input
+                        autoFocus
+                        value={text}
+                        onChange={(e) => setText(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') apply()
+                        }}
+                        placeholder={t('kanban.filterValue', {
+                            defaultValue: 'Valor...',
+                        })}
+                        className="h-8 text-xs"
+                    />
+                )}
                 <div className="flex justify-between gap-2">
                     <Button
                         variant="ghost"
