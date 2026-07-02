@@ -85,6 +85,7 @@ import {
     summarizeFilterValues,
     translateOptionLabels,
 } from './filter-chips'
+import { dedupeById, useInfiniteScrollSentinel } from './use-infinite-scroll'
 import { useMetadataCache } from './metadata-cache'
 import { ActivityValueRenderer } from './activity-value-renderer'
 import { DynamicIcon } from './dynamic-icon'
@@ -214,6 +215,30 @@ export function applyOptimisticMove(
 }
 
 /**
+ * Returns a NEW per-lane pagination map with the server totals adjusted for a
+ * card moving `fromStage` → `toStage`: the source loses one, the destination
+ * gains one. Lanes whose `total` is still unknown (`null`, not yet topped up)
+ * are left alone. Pure — backs the optimistic drag so a partial lane's
+ * `count/total` header stays truthful, and can be restored on PUT failure.
+ */
+export function applyLaneTotalsOnMove<T extends { total: number | null }>(
+    pagination: Record<string, T>,
+    fromStage: string,
+    toStage: string,
+): Record<string, T> {
+    const next = { ...pagination }
+    const bump = (key: string, delta: number) => {
+        const st = next[key]
+        if (st && st.total != null) {
+            next[key] = { ...st, total: Math.max(0, st.total + delta) }
+        }
+    }
+    bump(fromStage, -1)
+    bump(toStage, +1)
+    return next
+}
+
+/**
  * Picks the columns shown on a card: a `title` column (first searchable column,
  * else first text-ish column) and up to `maxFields` secondary columns. Excludes
  * the group_by column (it's the lane itself) and any column hidden from the
@@ -337,6 +362,18 @@ interface LaneFilterState {
     query?: string
 }
 
+/** Incremental pagination bookkeeping for one lane/stage. */
+interface LanePageState {
+    /** Next stage-scoped page to request. */
+    nextPage: number
+    /** Server total for the stage (from response meta), or null if unknown. */
+    total: number | null
+    /** A top-up request is in flight. */
+    loading: boolean
+    /** No more pages for this stage. */
+    done: boolean
+}
+
 export interface DynamicKanbanProps {
     /** Model key as registered on the backend (e.g. "issue"). */
     model: string
@@ -357,10 +394,16 @@ export interface DynamicKanbanProps {
      */
     onAction?: (action: string, row: any) => void
     /**
-     * Max cards fetched per lane render. Kanban shows all cards at once (no
-     * pagination UI), so it requests a single large page. Defaults to 200.
+     * Size of the INITIAL board page (one request, grouped into lanes). Each
+     * lane then tops up incrementally on scroll (see `lanePageSize`). Defaults
+     * to 50 — enough to fill the visible lanes without loading the whole board.
      */
     pageSize?: number
+    /**
+     * Page size for a lane's incremental top-up fetch (scoped by
+     * `f_<group_by>=<stage>`). Defaults to 25.
+     */
+    lanePageSize?: number
     /** IANA timezone for datetime card fields (org config). */
     timeZone?: string
     /** ISO 4217 currency for money card fields (org config). */
@@ -378,7 +421,8 @@ export function DynamicKanban({
     refreshTrigger,
     onCardClick,
     onAction,
-    pageSize = 200,
+    pageSize = 50,
+    lanePageSize = 25,
     timeZone,
     currency,
     defaultFilters,
@@ -394,6 +438,14 @@ export function DynamicKanban({
     const [records, setRecords] = useState<any[]>([])
     const [loading, setLoading] = useState(!cachedMeta)
     const [loadingData, setLoadingData] = useState(true)
+    // Per-stage incremental pagination for infinite scroll. The initial board
+    // page (grouped into lanes) is fetched once; each lane then tops up its OWN
+    // stage via `f_<group_by>=<stage>&page=n`, appended (deduped by id) into the
+    // shared `records`. `total` is the stage's server count when the response
+    // meta carries it. Reset whenever the filters/search change.
+    const [lanePagination, setLanePagination] = useState<
+        Record<string, LanePageState>
+    >({})
 
     // Active drag card id (for the DragOverlay + drop-zone highlighting).
     const [activeId, setActiveId] = useState<string | null>(null)
@@ -449,7 +501,10 @@ export function DynamicKanban({
         clearAll,
     } = useDynamicFilters(metadata, { defaultFilters, model, endpoint })
 
-    // ---- records fetch (same path as DynamicTable, single large page) ----
+    // ---- initial board page (one request, grouped into lanes) ----
+    // Resets the per-lane pagination so every lane restarts its incremental
+    // top-up from scratch — called on mount, refresh, and any filter/search
+    // change (fetchData's identity changes with filterParams).
     const fetchData = useCallback(async () => {
         if (!metadata) return
         setLoadingData(true)
@@ -463,7 +518,66 @@ export function DynamicKanban({
         } finally {
             setLoadingData(false)
         }
+        setLanePagination({})
     }, [api, endpoint, model, metadata, pageSize, filterParams])
+
+    // Load the next page for ONE lane/stage and append it (deduped by id) into
+    // the shared records. Scoped by `f_<group_by>=<stage>` on top of the active
+    // filterParams (the stage scope wins over any global group_by filter).
+    const groupByKey = metadata?.group_by || ''
+    const loadMoreLane = useCallback(
+        async (stageKey: string) => {
+            if (!metadata || !groupByKey) return
+            const current = lanePagination[stageKey]
+            if (current?.loading || current?.done) return
+            const nextPage = current?.nextPage ?? 1
+            setLanePagination((p) => ({
+                ...p,
+                [stageKey]: {
+                    nextPage,
+                    total: current?.total ?? null,
+                    loading: true,
+                    done: false,
+                },
+            }))
+            try {
+                const res = (await api.get(endpoint || `/data/${model}`, {
+                    params: {
+                        ...filterParams,
+                        page: nextPage,
+                        per_page: lanePageSize,
+                        [`f_${groupByKey}`]: stageKey,
+                    },
+                })) as { data: ApiResponse<any[]> & { meta?: any } }
+                const rows = res.data.success ? res.data.data || [] : []
+                const total =
+                    res.data.meta?.total ?? res.data.meta?.count ?? null
+                setRecords((prev) => dedupeById(prev, rows))
+                setLanePagination((p) => ({
+                    ...p,
+                    [stageKey]: {
+                        nextPage: nextPage + 1,
+                        total,
+                        loading: false,
+                        // Exhausted when the server returned a short page.
+                        done: rows.length < lanePageSize,
+                    },
+                }))
+            } catch (err) {
+                console.error(`Error al cargar más tarjetas de ${stageKey}`, err)
+                setLanePagination((p) => ({
+                    ...p,
+                    [stageKey]: {
+                        nextPage,
+                        total: current?.total ?? null,
+                        loading: false,
+                        done: false,
+                    },
+                }))
+            }
+        },
+        [api, endpoint, model, metadata, groupByKey, filterParams, lanePageSize, lanePagination],
+    )
 
     // Refetch when metadata resolves, on an explicit refresh, or when the
     // filters change. `fetchData` is stable while `filterParams` is unchanged
@@ -566,7 +680,6 @@ export function DynamicKanban({
         () => (metadata ? deriveStages(metadata) : []),
         [metadata],
     )
-    const groupByKey = metadata?.group_by || ''
     const transitions = metadata?.transitions
 
     const grouped = useMemo(
@@ -651,11 +764,16 @@ export function DynamicKanban({
 
             // OPTIMISTIC: move the card in local state immediately.
             const prevRecords = records
+            const prevPagination = lanePagination
             setRecords((rs) =>
                 rs.map((r) =>
                     String(r.id) === cardId ? { ...r, [groupByKey]: destStage } : r,
                 ),
             )
+            // Keep the server totals consistent with the moved card so a lane's
+            // `count/total` header stays truthful with partial lanes: one leaves
+            // the source stage, one joins the destination.
+            setLanePagination((p) => applyLaneTotalsOnMove(p, srcStage, destStage))
 
             try {
                 const base = endpoint || `/data/${model}`
@@ -672,6 +790,7 @@ export function DynamicKanban({
             } catch (err: any) {
                 // REVERT + toast on failure.
                 setRecords(prevRecords)
+                setLanePagination(prevPagination)
                 toast.error(
                     t('kanban.moveFailed', {
                         defaultValue: 'No se pudo mover la tarjeta',
@@ -682,7 +801,7 @@ export function DynamicKanban({
                 )
             }
         },
-        [api, endpoint, groupByKey, model, records, stageOfCard, t, transitions],
+        [api, endpoint, groupByKey, lanePagination, model, records, stageOfCard, t, transitions],
     )
 
     if (loading) {
@@ -855,12 +974,21 @@ export function DynamicKanban({
                         !activeId ||
                         stage.key === activeStage ||
                         isTransitionAllowed(transitions, activeStage, stage.key)
+                    // Infinite scroll is per declared stage; the synthetic
+                    // "unassigned" lane can't be stage-scoped, so it never tops up.
+                    const laneState = lanePagination[stage.key]
+                    const isUnassigned = stage.key === UNASSIGNED_LANE
+                    const laneHasMore = !isUnassigned && !laneState?.done
                     return (
                         <KanbanLane
                             key={stage.key}
                             stage={stage}
                             count={cards.length}
                             totalCount={allCards.length}
+                            serverTotal={laneState?.total ?? null}
+                            hasMore={laneHasMore}
+                            loadingMore={!!laneState?.loading}
+                            onLoadMore={() => loadMoreLane(stage.key)}
                             filterFields={filterFields}
                             laneFilter={laneFilter}
                             onFunnelChange={(f) =>
@@ -1029,6 +1157,14 @@ interface KanbanLaneProps {
     stage: StageMeta
     count: number
     totalCount: number
+    /** Server-reported total for the stage (from response meta), or null. */
+    serverTotal: number | null
+    /** More server pages available for this stage. */
+    hasMore: boolean
+    /** A top-up request for this stage is in flight. */
+    loadingMore: boolean
+    /** Request the next page for this stage. */
+    onLoadMore: () => void
     filterFields: LaneFilterField[]
     laneFilter: LaneFilterState | undefined
     onFunnelChange: (filter: LaneFunnelValue | null) => void
@@ -1043,6 +1179,10 @@ function KanbanLane({
     stage,
     count,
     totalCount,
+    serverTotal,
+    hasMore,
+    loadingMore,
+    onLoadMore,
     filterFields,
     laneFilter,
     onFunnelChange,
@@ -1054,6 +1194,12 @@ function KanbanLane({
 }: KanbanLaneProps) {
     const { t } = useTranslation()
     const { setNodeRef, isOver } = useDroppable({ id: stage.key, disabled })
+    // Infinite scroll: the sentinel lives at the bottom of the lane's own scroll
+    // container; a load in flight or an exhausted stage disables it.
+    const { rootRef, sentinelRef } = useInfiniteScrollSentinel({
+        onLoadMore,
+        disabled: !hasMore || loadingMore,
+    })
     const headerStyle = generateBadgeStyles(stage.color || optionColor(stage.key), {
         isDark,
     })
@@ -1111,7 +1257,11 @@ function KanbanLane({
                         {t(stage.label, { defaultValue: stage.label })}
                     </Badge>
                     <span className="text-xs font-medium tabular-nums text-muted-foreground">
-                        {laneActive ? `${count}/${totalCount}` : count}
+                        {laneActive
+                            ? `${count}/${totalCount}`
+                            : serverTotal != null
+                              ? `${count}/${serverTotal}`
+                              : count}
                     </span>
                 </div>
                 {/* Lane actions — always visible in muted (a hidden hover-reveal
@@ -1189,8 +1339,18 @@ function KanbanLane({
                 text wraps freely (no line-clamp) the cards grew past the lane
                 and spilled out of the stage. A normal `overflow-y-auto` block
                 constrains every card to the lane width so text wraps inside it. */}
-            <div className="flex min-h-[55vh] max-h-[70vh] min-w-0 flex-col gap-2 overflow-y-auto px-2 pb-3">
+            <div
+                ref={rootRef}
+                className="flex min-h-[55vh] max-h-[70vh] min-w-0 flex-col gap-2 overflow-y-auto px-2 pb-3"
+            >
                 {children}
+                {loadingMore && (
+                    <Skeleton className="h-16 w-full shrink-0" data-testid="lane-loading-more" />
+                )}
+                {/* Sentinel: entering view triggers the next stage page. */}
+                {hasMore && (
+                    <div ref={sentinelRef} className="h-1 w-full shrink-0" aria-hidden />
+                )}
             </div>
         </div>
     )

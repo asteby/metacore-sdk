@@ -68,6 +68,7 @@ import type { ColumnFilterConfig, GetDynamicColumns } from './dynamic-columns-sh
 import { defaultGetDynamicColumns, DATE_CELL_TYPES, aggregateOf, formatAggregateTotal } from './dynamic-columns'
 import { useFacetLoaders, isLongTextColumn } from './use-facet-loaders'
 import { FilterChipsRow, translateOptionLabels, type FilterChipField } from './filter-chips'
+import { dedupeById, useInfiniteScrollSentinel } from './use-infinite-scroll'
 import { OptionsContext } from './options-context'
 import type { TableMetadata, ApiResponse } from './types'
 import { getSearchableColumnKeys } from './column-visibility'
@@ -112,6 +113,14 @@ export interface DynamicTableProps {
      * an explicit per-column currency. Optional — defaults to 'USD'.
      */
     currency?: string
+    /**
+     * Opt into infinite scroll: instead of the classic pager, rows accumulate as
+     * the user scrolls (a sentinel at the bottom fetches + appends the next
+     * page, deduped by id, respecting the active filters/search). Changing any
+     * filter/sort/search resets to page 1. Default false — existing hosts keep
+     * the classic pagination untouched.
+     */
+    infiniteScroll?: boolean
 }
 
 export function DynamicTable({
@@ -127,6 +136,7 @@ export function DynamicTable({
     getDynamicColumns = defaultGetDynamicColumns,
     timeZone,
     currency,
+    infiniteScroll = false,
 }: DynamicTableProps) {
     const { t, i18n } = useTranslation()
     const api = useApi()
@@ -144,6 +154,10 @@ export function DynamicTable({
     const [footerTotals, setFooterTotals] = useState<Record<string, any>>({})
     const [loading, setLoading] = useState(!cachedMeta)
     const [loadingData, setLoadingData] = useState(true)
+    // Infinite-scroll: a top-up page is in flight (distinct from the initial
+    // page load so only a small bottom spinner shows, not the whole-table one).
+    const [loadingMore, setLoadingMore] = useState(false)
+    const infPageRef = useRef(1)
     const [optionsMap, setOptionsMap] = useState<Map<string, any[]>>(new Map())
 
     const [exportOpen, setExportOpen] = useState(false)
@@ -472,9 +486,69 @@ export function DynamicTable({
         }
     }, [model, metadata, aggregateColumns, buildFilterParams, endpoint, currentBranch?.id, api])
 
+    // ---- infinite scroll: page fetch that REPLACES (page 1) or APPENDS ----
+    const infPageSize = 30
+    const fetchPage = useCallback(
+        async (page: number, append: boolean) => {
+            if (!metadata) return
+            if (append) setLoadingMore(true)
+            else setLoadingData(true)
+            try {
+                const params: Record<string, any> = {
+                    page,
+                    per_page: infPageSize,
+                    ...buildFilterParams(),
+                }
+                const res = (await api.get(endpoint || `/data/${model}`, {
+                    params,
+                })) as { data: ApiResponse<any[]> }
+                if (res.data.success) {
+                    const rows = res.data.data || []
+                    setData((prev) => (append ? dedupeById(prev, rows) : rows))
+                    if (res.data.meta) setRowCount(res.data.meta.total)
+                }
+            } catch (error) {
+                console.error('Error al cargar los datos', error)
+            } finally {
+                if (append) setLoadingMore(false)
+                else setLoadingData(false)
+            }
+        },
+        [metadata, buildFilterParams, endpoint, model, api, currentBranch?.id],
+    )
+
+    // Signature of everything that must reset the incremental list to page 1:
+    // the filters/search AND the sort (both live in buildFilterParams).
+    const filterSignature = useMemo(
+        () => JSON.stringify(buildFilterParams()),
+        [buildFilterParams],
+    )
+
+    const loadNextPage = useCallback(() => {
+        if (loadingMore || loadingData) return
+        if (data.length >= rowCount) return
+        infPageRef.current += 1
+        void fetchPage(infPageRef.current, true)
+    }, [loadingMore, loadingData, data.length, rowCount, fetchPage])
+
+    // Infinite-scroll sentinels. There are two scroll containers (desktop
+    // table + mobile card list) but only one is laid out at a time — the CSS
+    // `hidden`/`sm:hidden` container has no box, so its observer never fires.
+    // Each sentinel drives the SAME `loadNextPage`; its internal guards + the
+    // `disabled` flag keep concurrent/exhausted fetches from doubling up.
+    const infScrollDisabled =
+        !infiniteScroll || loadingMore || loadingData || data.length >= rowCount
+    const { rootRef: infDesktopRoot, sentinelRef: infDesktopSentinel } =
+        useInfiniteScrollSentinel({ onLoadMore: loadNextPage, disabled: infScrollDisabled })
+    const { rootRef: infMobileRoot, sentinelRef: infMobileSentinel } =
+        useInfiniteScrollSentinel({ onLoadMore: loadNextPage, disabled: infScrollDisabled })
+
     const initialFetchDone = useRef(false)
     useEffect(() => {
         if (!metadata) return
+        // Infinite mode owns its own fetching (reset-to-page-1 effect below);
+        // the classic pagination-driven path is skipped entirely.
+        if (infiniteScroll) return
         if (!initialFetchDone.current) {
             initialFetchDone.current = true
             fetchData()
@@ -486,9 +560,41 @@ export function DynamicTable({
             fetchAggregates()
         }, 300)
         return () => clearTimeout(timeoutId)
-    }, [fetchData, fetchAggregates, metadata])
+    }, [fetchData, fetchAggregates, metadata, infiniteScroll])
 
-    const handleRefresh = useCallback(() => { fetchData(); fetchAggregates() }, [fetchData, fetchAggregates])
+    // Infinite mode: (re)load page 1 on mount and whenever the filters/sort/
+    // search change (or an explicit refreshTrigger) — replacing the accumulated
+    // rows and resetting the cursor.
+    useEffect(() => {
+        if (!infiniteScroll || !metadata) return
+        infPageRef.current = 1
+        const first = !initialFetchDone.current
+        initialFetchDone.current = true
+        if (first) {
+            void fetchPage(1, false)
+            void fetchAggregates()
+            return
+        }
+        const timeoutId = setTimeout(() => {
+            void fetchPage(1, false)
+            void fetchAggregates()
+        }, 300)
+        return () => clearTimeout(timeoutId)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [infiniteScroll, metadata, filterSignature])
+
+    const handleRefresh = useCallback(() => {
+        // Infinite mode owns its own list: refresh reloads page 1 and drops the
+        // accumulated pages (a classic fetchData would collapse it to one small
+        // pagination page). Classic mode keeps the pagination-driven refetch.
+        if (infiniteScroll) {
+            infPageRef.current = 1
+            void fetchPage(1, false)
+        } else {
+            fetchData()
+        }
+        fetchAggregates()
+    }, [infiniteScroll, fetchPage, fetchData, fetchAggregates])
 
     // Per-row action dispatch (view/edit/delete/link/custom) + its dialogs live
     // in the shared hook so DynamicKanban's card menu behaves identically.
@@ -838,7 +944,7 @@ export function DynamicTable({
                 {/* Desktop: classic horizontal-scroll table. Hidden on phones —
                     a 7-column table forces a wide horizontal scroll there, so we
                     render a card-per-row list instead (see MobileCards below). */}
-                <div className='hidden sm:block flex-1 min-h-0 overflow-auto border rounded-md bg-card'>
+                <div ref={infDesktopRoot} className='hidden sm:block flex-1 min-h-0 overflow-auto border rounded-md bg-card'>
                     <Table noWrapper className={cn('min-w-max w-full', aggregateColumns.length > 0 && Object.keys(footerTotals).length > 0 && 'h-full')}>
                         <TableHeader className='sticky top-0 z-10'>
                             {table.getHeaderGroups().map((headerGroup: HeaderGroup<any>) => (
@@ -954,12 +1060,25 @@ export function DynamicTable({
                             </TableFooter>
                         )}
                     </Table>
+                    {infiniteScroll && (
+                        <>
+                            {loadingMore && (
+                                <div className='p-2'>
+                                    <Skeleton className='h-8 w-full' data-testid='table-loading-more' />
+                                </div>
+                            )}
+                            {/* Sentinel stays mounted for the whole infinite-scroll
+                                session so its observer attaches once; `disabled`
+                                (no more pages / load in flight) gates the fetch. */}
+                            <div ref={infDesktopSentinel} className='h-1 w-full' aria-hidden />
+                        </>
+                    )}
                 </div>
 
                 {/* Mobile: one card per row — no horizontal scroll. Each card
                     stacks its columns as label : value pairs with the row actions
                     pinned at the bottom. */}
-                <div className='flex flex-1 min-h-0 flex-col gap-2 overflow-y-auto sm:hidden'>
+                <div ref={infMobileRoot} className='flex flex-1 min-h-0 flex-col gap-2 overflow-y-auto sm:hidden'>
                     {loadingData && data.length === 0 ? (
                         Array.from({ length: 5 }).map((_, i) => (
                             <div key={i} className='rounded-lg border bg-card p-3'>
@@ -1014,13 +1133,33 @@ export function DynamicTable({
                             <p className='text-sm text-muted-foreground'>No hay datos para mostrar en este momento.</p>
                         </div>
                     )}
+                    {infiniteScroll && (
+                        <>
+                            {loadingMore && (
+                                <Skeleton className='h-16 w-full shrink-0' data-testid='table-loading-more-mobile' />
+                            )}
+                            <div ref={infMobileSentinel} className='h-1 w-full shrink-0' aria-hidden />
+                        </>
+                    )}
                 </div>
 
                 <div className='shrink-0 pt-4'>
-                    <DataTablePagination
-                        table={table}
-                        pageSizeOptions={metadata.perPageOptions}
-                    />
+                    {infiniteScroll ? (
+                        data.length > 0 && (
+                            <p className='text-center text-xs text-muted-foreground tabular-nums'>
+                                {t('common.showingCount', {
+                                    defaultValue: '{{count}} de {{total}}',
+                                    count: data.length,
+                                    total: rowCount,
+                                })}
+                            </p>
+                        )
+                    ) : (
+                        <DataTablePagination
+                            table={table}
+                            pageSizeOptions={metadata.perPageOptions}
+                        />
+                    )}
                 </div>
             </div>
 
