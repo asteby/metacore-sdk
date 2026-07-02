@@ -22,3 +22,10 @@ Fixes del embudo por columna del kanban (LaneFilterButton).
 - **Diseño del popover del embudo:** select de campo y control de valor a ancho
   completo, popover más ancho (`w-72`), combobox con borde redondeado, botones
   Limpiar/Aplicar full-width en fila — al nivel del resto del rediseño.
+- **Prefetch de facetas:** al resolver la metadata se precargan en paralelo las
+  facetas de TODOS los campos facet (un `api.get` por campo, dedupeado por firma,
+  `allSettled` para que un campo con error no rompa el resto), sembrando el cache
+  del loader y poblando las `options` del `ColumnFilterConfig`. Así el popover
+  del Sheet y el value-picker del lane abren instantáneos con valores + counts,
+  sin "Cargando…"; el spinner queda solo para el refetch con búsqueda (`q`).
+  `useFacetLoaders` ahora expone `prefetchFacets` y `facetOptions`.

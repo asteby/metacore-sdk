@@ -169,14 +169,75 @@ describe('useDynamicFilters — facet upgrade + fallback (B)', () => {
             () => useDynamicFilters(meta(), { model: 'issue' }),
             { wrapper: wrapper(api) },
         )
+        const titleFacetCalls = () =>
+            (api.get as any).mock.calls.filter(
+                (c: any[]) =>
+                    String(c[0]).endsWith('/facets') &&
+                    c[1]?.params?.field === 'title' &&
+                    !c[1]?.params?.q,
+            ).length
+        // Let the prewarm settle first, then reopening (empty query) is cached.
+        await waitFor(() => expect(titleFacetCalls()).toBe(1))
         const load = result.current.columnFilterConfigs.get('title')!.loadOptions!
         await load('')
         await load('')
-        // Second call served from cache → only one network hit for that key.
-        await waitFor(() =>
-            expect((api.get as any).mock.calls.filter((c: any[]) =>
-                String(c[0]).endsWith('/facets'),
-            ).length).toBe(1),
+        expect(titleFacetCalls()).toBe(1)
+    })
+})
+
+describe('useDynamicFilters — facet prefetch', () => {
+    it('prewarms facet options on mount so the config carries them (no lazy open)', async () => {
+        const api = fakeApi()
+        const { result } = renderHook(
+            () => useDynamicFilters(meta(), { model: 'issue' }),
+            { wrapper: wrapper(api) },
         )
+        // The prefetch burst fires an empty-query request per facet field.
+        await waitFor(() =>
+            expect(
+                (api.get as any).mock.calls.some(
+                    (c: any[]) =>
+                        String(c[0]) === '/data/issue/facets' &&
+                        c[1]?.params?.field === 'title' &&
+                        c[1]?.params?.q === undefined,
+                ),
+            ).toBe(true),
+        )
+        // …and those values land directly on the config (popover opens instantly).
+        await waitFor(() =>
+            expect(
+                result.current.columnFilterConfigs.get('title')?.options,
+            ).toEqual([
+                { value: 'ana', label: 'Ana', count: 3 },
+                { value: 'beto', label: 'Beto', count: 1 },
+            ]),
+        )
+    })
+
+    it('opening a prewarmed facet is a cache hit (no extra request)', async () => {
+        const api = fakeApi()
+        const { result } = renderHook(
+            () => useDynamicFilters(meta(), { model: 'issue' }),
+            { wrapper: wrapper(api) },
+        )
+        // wait for prefetch to settle
+        await waitFor(() =>
+            expect(
+                result.current.columnFilterConfigs.get('title')?.options?.length,
+            ).toBe(2),
+        )
+        const before = (api.get as any).mock.calls.filter(
+            (c: any[]) =>
+                String(c[0]).endsWith('/facets') &&
+                c[1]?.params?.field === 'title',
+        ).length
+        // the popover's empty-query load reuses the prewarmed cache
+        await result.current.columnFilterConfigs.get('title')!.loadOptions!('')
+        const after = (api.get as any).mock.calls.filter(
+            (c: any[]) =>
+                String(c[0]).endsWith('/facets') &&
+                c[1]?.params?.field === 'title',
+        ).length
+        expect(after).toBe(before)
     })
 })

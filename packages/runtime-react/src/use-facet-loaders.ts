@@ -4,9 +4,29 @@
 // per-field option loader + result cache lives here to guarantee they facet
 // identically (one board and its table sibling hit the same `/facets` endpoint
 // with the same caching).
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useApi } from './api-context'
 import type { FilterOption } from './dynamic-columns-shim'
+
+export interface UseFacetLoadersResult {
+  /**
+   * Stable per-field loader → `<facetsBase>?field=&q=&limit=`. Cached per
+   * `field+query`. Null `facetsBase` → yields `undefined` (column stays text).
+   */
+  getFacetLoader: (
+    field: string,
+  ) => ((q?: string) => Promise<FilterOption[]>) | undefined
+  /**
+   * Warms the caches for a set of facet fields in ONE parallel burst (called
+   * when metadata resolves), so a popover opens instantly with values + counts
+   * instead of showing "Cargando…". Deduped by the field set; a field whose
+   * request fails is simply omitted (it degrades to lazy/text — the rest are
+   * unaffected). Resolved options also land in `facetOptions`.
+   */
+  prefetchFacets: (fields: string[]) => void
+  /** Prefetched options per field (empty until `prefetchFacets` resolves). */
+  facetOptions: Map<string, FilterOption[]>
+}
 
 /**
  * Long-text / body columns aren't worth faceting (thousands of unique values,
@@ -29,26 +49,39 @@ export function isLongTextColumn(c: {
 }
 
 /**
- * Returns `getFacetLoader(field)` — a stable per-field loader that resolves the
- * column's distinct values + counts from `<facetsBase>?field=&q=&limit=`. Loader
- * identity is memoized per field (so it doesn't churn the config memo that
- * depends on it) and results are cached per `field+query`. Both caches reset
- * when `facetsBase` changes (model switch). A null `facetsBase` returns a
- * factory that yields `undefined` — the caller keeps the column as plain text.
+ * Facet option machinery: a stable per-field lazy loader (`getFacetLoader`, with
+ * a `field+query` result cache) plus `prefetchFacets` to warm every facet
+ * field's values up front and `facetOptions` holding those prewarmed results.
+ * Loader identity is memoized per field (so it doesn't churn the config memo
+ * that depends on it). Caches reset when `facetsBase` changes (model switch).
  */
-export function useFacetLoaders(facetsBase: string | null) {
+export function useFacetLoaders(facetsBase: string | null): UseFacetLoadersResult {
   const api = useApi()
   const loaderCache = useRef<
     Map<string, (q?: string) => Promise<FilterOption[]>>
   >(new Map())
   const resultCache = useRef<Map<string, FilterOption[]>>(new Map())
+  const prefetchSig = useRef<string | null>(null)
+  const mountedRef = useRef(true)
+  const [facetOptions, setFacetOptions] = useState<Map<string, FilterOption[]>>(
+    new Map(),
+  )
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+    }
+  }, [])
 
   useEffect(() => {
     loaderCache.current.clear()
     resultCache.current.clear()
+    prefetchSig.current = null
+    setFacetOptions(new Map())
   }, [facetsBase])
 
-  return useCallback(
+  const getFacetLoader = useCallback(
     (field: string) => {
       if (!facetsBase) return undefined
       const existing = loaderCache.current.get(field)
@@ -76,4 +109,38 @@ export function useFacetLoaders(facetsBase: string | null) {
     },
     [api, facetsBase],
   )
+
+  const prefetchFacets = useCallback(
+    (fields: string[]) => {
+      if (!facetsBase || fields.length === 0) return
+      const sig = [...fields].sort().join('|')
+      if (prefetchSig.current === sig) return
+      prefetchSig.current = sig
+      // One parallel burst; the loader seeds its own `${field}::` cache so the
+      // subsequent lazy open (q === '') is a cache hit. allSettled so one bad
+      // field never blocks the others.
+      void Promise.allSettled(
+        fields.map(async (field) => {
+          const loader = getFacetLoader(field)
+          if (!loader) return null
+          const opts = await loader()
+          return { field, opts }
+        }),
+      ).then((results) => {
+        if (!mountedRef.current) return
+        setFacetOptions((prev) => {
+          const next = new Map(prev)
+          for (const r of results) {
+            if (r.status === 'fulfilled' && r.value) {
+              next.set(r.value.field, r.value.opts)
+            }
+          }
+          return next
+        })
+      })
+    },
+    [facetsBase, getFacetLoader],
+  )
+
+  return { getFacetLoader, prefetchFacets, facetOptions }
 }

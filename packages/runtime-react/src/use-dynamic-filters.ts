@@ -96,7 +96,8 @@ export function useDynamicFilters(
       : model
         ? `/data/${model}/facets`
         : null)
-  const getFacetLoader = useFacetLoaders(facetsBase)
+  const { getFacetLoader, prefetchFacets, facetOptions } =
+    useFacetLoaders(facetsBase)
 
   // Prefetch the option lists for relation/select filters (once per model). The
   // combobox needs these before the user opens it; mirrors DynamicTable's
@@ -227,6 +228,9 @@ export function useDynamicFilters(
         if (loader) {
           fType = 'facet'
           loadOptions = loader
+          // Prewarmed values (from prefetchFacets) → the popover opens with the
+          // list already there, no "Cargando…" flash.
+          options = facetOptions.get(f.column || f.key) ?? []
         }
       }
       if (fType === 'select' && options.length === 0 && !f.searchEndpoint) continue
@@ -285,6 +289,8 @@ export function useDynamicFilters(
         if (loader) {
           filterType = 'facet'
           loadOptions = loader
+          // Prewarmed values (from prefetchFacets) → instant open.
+          options = facetOptions.get(c.key) ?? []
         }
       }
 
@@ -307,7 +313,26 @@ export function useDynamicFilters(
     handleDynamicFilterChange,
     facetsBase,
     getFacetLoader,
+    facetOptions,
   ])
+
+  // Prewarm every facet field in one burst once the configs settle, so the
+  // Sheet popover and the lane value-picker open instantly (values + counts)
+  // instead of flashing "Cargando…". Deduped inside prefetchFacets by field set.
+  const facetFieldsSig = useMemo(() => {
+    const keys: string[] = []
+    // Key on `filterKey` (the column the loader queries), not the config map key
+    // — they differ when an explicit filter sets a distinct `column`.
+    for (const config of columnFilterConfigs.values()) {
+      if (config.filterType === 'facet') keys.push(config.filterKey)
+    }
+    return keys.join('|')
+  }, [columnFilterConfigs])
+
+  useEffect(() => {
+    if (!facetFieldsSig) return
+    prefetchFacets(facetFieldsSig.split('|'))
+  }, [facetFieldsSig, prefetchFacets])
 
   const searchableKeys = useMemo(
     () => (metadata ? getSearchableColumnKeys(metadata) : null),
