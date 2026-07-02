@@ -67,6 +67,7 @@ import { useApi, useCurrentBranch } from './api-context'
 import type { ColumnFilterConfig, GetDynamicColumns } from './dynamic-columns-shim'
 import { defaultGetDynamicColumns, DATE_CELL_TYPES, aggregateOf, formatAggregateTotal } from './dynamic-columns'
 import { useFacetLoaders, isLongTextColumn } from './use-facet-loaders'
+import { FilterChipsRow, translateOptionLabels, type FilterChipField } from './filter-chips'
 import { OptionsContext } from './options-context'
 import type { TableMetadata, ApiResponse } from './types'
 import { getSearchableColumnKeys } from './column-visibility'
@@ -536,11 +537,15 @@ export function DynamicTable({
     // getDynamicColumns forwards `loadOptions` into the column meta). Facets base
     // derived off the list endpoint exactly like the aggregate endpoint below.
     const facetsBase = endpoint ? `${endpoint}/facets` : model ? `/data/${model}/facets` : null
-    const { getFacetLoader } = useFacetLoaders(facetsBase)
+    const { getFacetLoader, prefetchFacets, facetOptions } = useFacetLoaders(facetsBase)
 
     const columnFilterConfigs = useMemo(() => {
         const map = new Map<string, ColumnFilterConfig>()
         if (!metadata) return map
+        // Option labels arrive as manifest i18n keys; translate them here (the ui
+        // package has no i18n) so header filters, chips and value summaries show
+        // localized text. A raw value with no key falls through via defaultValue.
+        const tr = (label: string) => t(label, { defaultValue: label })
         const stageOptions = (metadata.stages ?? []).map((s) => ({
             label: s.label,
             value: s.key,
@@ -574,18 +579,23 @@ export function DynamicTable({
                 if (loader) {
                     fType = 'facet'
                     loadOptions = loader
+                    // Prewarmed values (from prefetchFacets) → the header filter
+                    // opens with the list already there, no "Cargando…" flash.
+                    options = facetOptions.get(f.column || f.key) ?? []
                 }
             }
             if (fType === 'select' && options.length === 0 && !f.searchEndpoint) continue
             map.set(f.key, {
                 filterType: fType,
                 filterKey: f.column || f.key,
-                options,
+                options: translateOptionLabels(options, tr),
                 selectedValues: dynamicFilters[f.column || f.key] || [],
                 onFilterChange: handleDynamicFilterChange,
                 loading: f.searchEndpoint ? !filterOptionsMap.has(f.searchEndpoint) : false,
                 searchEndpoint: f.searchEndpoint,
-                loadOptions,
+                loadOptions: loadOptions
+                    ? (q?: string) => loadOptions!(q).then((o) => translateOptionLabels(o, tr))
+                    : undefined,
             })
         }
         for (const c of metadata.columns ?? []) {
@@ -635,22 +645,64 @@ export function DynamicTable({
                 if (loader) {
                     filterType = 'facet'
                     loadOptions = loader
+                    // Prewarmed values (from prefetchFacets) → instant open.
+                    options = facetOptions.get(c.key) ?? []
                 }
             }
 
             map.set(c.key, {
                 filterType,
                 filterKey: c.key,
-                options,
+                options: translateOptionLabels(options, tr),
                 selectedValues: dynamicFilters[c.key] || [],
                 onFilterChange: handleDynamicFilterChange,
                 loading: hasEndpoint && !filterOptionsMap.has(c.searchEndpoint!),
                 searchEndpoint: c.searchEndpoint,
-                loadOptions,
+                loadOptions: loadOptions
+                    ? (q?: string) => loadOptions!(q).then((o) => translateOptionLabels(o, tr))
+                    : undefined,
             })
         }
         return map
-    }, [metadata, filterOptionsMap, dynamicFilters, handleDynamicFilterChange, facetsBase, getFacetLoader])
+    }, [metadata, filterOptionsMap, dynamicFilters, handleDynamicFilterChange, facetsBase, getFacetLoader, facetOptions, t])
+
+    // Prewarm every facet field once the configs settle, so a text column's
+    // header filter opens instantly with values + counts (same as the kanban).
+    const facetFieldsSig = useMemo(() => {
+        const keys: string[] = []
+        for (const config of columnFilterConfigs.values()) {
+            if (config.filterType === 'facet') keys.push(config.filterKey)
+        }
+        return keys.join('|')
+    }, [columnFilterConfigs])
+    useEffect(() => {
+        if (!facetFieldsSig) return
+        prefetchFacets(facetFieldsSig.split('|'))
+    }, [facetFieldsSig, prefetchFacets])
+
+    // Active-filter chips (shared row with the kanban). One chip per field with a
+    // selection; the label is the translated filter/column label.
+    const activeFilterChips = useMemo<FilterChipField[]>(() => {
+        if (!metadata) return []
+        const out: FilterChipField[] = []
+        for (const [key, config] of columnFilterConfigs) {
+            if ((config.selectedValues?.length ?? 0) === 0) continue
+            const f = metadata.filters?.find((x) => x.key === key)
+            const c = metadata.columns?.find((x) => x.key === key)
+            const rawLabel = f?.label || c?.label || key
+            out.push({
+                key,
+                label: t(rawLabel, { defaultValue: rawLabel }),
+                config,
+            })
+        }
+        return out
+    }, [metadata, columnFilterConfigs, t])
+
+    const clearAllDynamicFilters = useCallback(() => {
+        setDynamicFilters({})
+        setPagination((prev: PaginationState) => ({ ...prev, pageIndex: 0 }))
+    }, [])
 
     const columns = useMemo(() => {
         if (!viewMetadata) return []
@@ -771,6 +823,17 @@ export function DynamicTable({
                             </>
                         }
                     />
+                    {/* Active-filter chips — shared with the kanban. Quick
+                        visibility + one-click removal of the header filters. */}
+                    {activeFilterChips.length > 0 && (
+                        <div className='pt-2'>
+                            <FilterChipsRow
+                                fields={activeFilterChips}
+                                onClearAll={clearAllDynamicFilters}
+                                data-testid='table-filter-chips'
+                            />
+                        </div>
+                    )}
                 </div>
                 {/* Desktop: classic horizontal-scroll table. Hidden on phones —
                     a 7-column table forces a wide horizontal scroll there, so we

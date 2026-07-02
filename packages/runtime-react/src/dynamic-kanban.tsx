@@ -77,9 +77,14 @@ import {
     Skeleton,
 } from '@asteby/metacore-ui/primitives'
 import { ColumnFilterControl, FilterValueCombobox, type ColumnFilterType } from '@asteby/metacore-ui/data-table'
-import { generateBadgeStyles, optionColor, resolveColorCss } from '@asteby/metacore-ui/lib'
+import { generateBadgeStyles, optionColor } from '@asteby/metacore-ui/lib'
 import { useApi } from './api-context'
 import { useDynamicFilters } from './use-dynamic-filters'
+import {
+    FilterChipsRow,
+    summarizeFilterValues,
+    translateOptionLabels,
+} from './filter-chips'
 import { useMetadataCache } from './metadata-cache'
 import { ActivityValueRenderer } from './activity-value-renderer'
 import { DynamicIcon } from './dynamic-icon'
@@ -95,6 +100,10 @@ import type {
     StageMeta,
     StageTransition,
 } from './types'
+
+// Re-exported for tests + backward-compat: these live in ./filter-chips now
+// (shared with DynamicTable) but were historically imported from here.
+export { summarizeFilterValues, translateOptionLabels }
 
 // ---------------------------------------------------------------------------
 // Pure helpers (exported for unit tests — no React, no transport)
@@ -234,71 +243,6 @@ export function selectCardColumns(
 }
 
 /**
- * Human-readable summary of a field's selected filter values for the removable
- * chip row. Resolves option labels, unwraps the wire operators
- * (`IN:`/`ILIKE:`/`RANGE:`/`GTE:`/`LTE:`/date `from_to`), and caps the list at
- * `maxShown` values with a `+n` overflow. Pure — exported for unit tests.
- */
-export function summarizeFilterValues(
-    values: string[] | undefined,
-    options: { label: string; value: string }[] | undefined,
-    maxShown = 2,
-): string {
-    if (!values || values.length === 0) return ''
-    const opts = options ?? []
-    const labelFor = (v: string) =>
-        opts.find((o) => o.value === v)?.label ?? v
-    const first = values[0]
-    if (values.length === 1) {
-        if (first.startsWith('ILIKE:')) return `"${first.slice(6)}"`
-        if (first.startsWith('IN:')) {
-            return summarizeList(first.slice(3).split(','), labelFor, maxShown)
-        }
-        if (first.startsWith('RANGE:')) {
-            const [min, max] = first.slice(6).split(',')
-            return `${min || '…'} – ${max || '…'}`
-        }
-        if (/^\d{4}-\d{2}-\d{2}_/.test(first)) return first.replace('_', ' – ')
-    }
-    if (first.startsWith('GTE:') || first.startsWith('LTE:')) {
-        const min = values.find((v) => v.startsWith('GTE:'))?.slice(4) ?? ''
-        const max = values.find((v) => v.startsWith('LTE:'))?.slice(4) ?? ''
-        return `${min || '…'} – ${max || '…'}`
-    }
-    return summarizeList(values, labelFor, maxShown)
-}
-
-function summarizeList(
-    items: string[],
-    labelFor: (v: string) => string,
-    maxShown: number,
-): string {
-    const labels = items.map(labelFor)
-    if (labels.length <= maxShown) return labels.join(', ')
-    return `${labels.slice(0, maxShown).join(', ')} +${labels.length - maxShown}`
-}
-
-/**
- * The color of a filter's first selected value (for the chip's dot) — e.g. a
- * stage's palette color. Returns a resolved CSS color, or undefined for
- * operator/range/free-text values that carry no option color.
- */
-function chipValueColor(config: {
-    selectedValues: string[]
-    options: { value: string; color?: string }[]
-}): string | undefined {
-    const sel = config.selectedValues
-    if (!sel || sel.length === 0) return undefined
-    const first = sel[0]
-    let value = first
-    if (first.startsWith('IN:')) value = first.slice(3).split(',')[0]
-    else if (/^(ILIKE|RANGE|GTE|LTE):/.test(first)) return undefined
-    else if (/^\d{4}-\d{2}-\d{2}_/.test(first)) return undefined
-    const opt = config.options.find((o) => o.value === value)
-    return opt?.color ? resolveColorCss(opt.color) : undefined
-}
-
-/**
  * Whether a card passes a lane funnel. Picked select/facet `values` match by
  * equality (IN — the card's field value must be one of them); a free-text
  * `text` matches by case-insensitive substring. No field / no criteria → passes.
@@ -317,17 +261,6 @@ export function cardMatchesLaneFunnel(
         return raw.toLowerCase().includes(filter.text.trim().toLowerCase())
     }
     return true
-}
-
-/**
- * Translates option labels through the app translator (manifest i18n keys →
- * localized text). A raw value with no matching key falls through to itself via
- * `defaultValue`. Pure — exported for unit tests.
- */
-export function translateOptionLabels<
-    T extends { label: string },
->(options: T[], translate: (key: string) => string): T[] {
-    return options.map((o) => ({ ...o, label: translate(o.label) }))
 }
 
 /**
@@ -878,64 +811,13 @@ export function DynamicKanban({
                 )}
             </div>
 
-            {/* Removable chip row — one chip per active field filter, plus a
-                "Limpiar todo" at the end. Instant feedback without opening the
-                Sheet; clicking a chip's X clears that field server-side. */}
-            {activeFields.length > 0 && (
-                <div
-                    className="flex flex-wrap items-center gap-1.5"
-                    data-testid="kanban-filter-chips"
-                >
-                    {activeFields.map((field) => {
-                        const summary = summarizeFilterValues(
-                            field.config.selectedValues,
-                            field.config.options,
-                        )
-                        const dot = chipValueColor(field.config)
-                        return (
-                            <Badge
-                                key={field.key}
-                                variant="secondary"
-                                className="h-6 gap-1.5 rounded-md pl-2 pr-1 text-xs font-normal"
-                            >
-                                {dot && (
-                                    <span
-                                        className="size-2 shrink-0 rounded-full"
-                                        style={{ backgroundColor: dot }}
-                                    />
-                                )}
-                                <span className="font-medium">{field.label}:</span>
-                                <span className="max-w-[180px] truncate text-muted-foreground">
-                                    {summary}
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        field.config.onFilterChange(
-                                            field.config.filterKey,
-                                            [],
-                                        )
-                                    }
-                                    className="ml-0.5 rounded-sm p-0.5 transition-colors hover:bg-muted-foreground/20"
-                                    aria-label={t('kanban.removeFilter', {
-                                        defaultValue: 'Quitar filtro',
-                                    })}
-                                >
-                                    <X className="h-3 w-3" />
-                                </button>
-                            </Badge>
-                        )
-                    })}
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 gap-1 px-2 text-xs text-muted-foreground"
-                        onClick={clearAll}
-                    >
-                        {t('kanban.clearAll', { defaultValue: 'Limpiar todo' })}
-                    </Button>
-                </div>
-            )}
+            {/* Removable chip row — shared with DynamicTable. Instant feedback
+                without opening the Sheet; a chip's X clears that field. */}
+            <FilterChipsRow
+                fields={activeFields}
+                onClearAll={clearAll}
+                data-testid="kanban-filter-chips"
+            />
 
             <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
                 <div className="flex min-w-0 gap-4 overflow-x-auto p-1" data-testid="kanban-board">
