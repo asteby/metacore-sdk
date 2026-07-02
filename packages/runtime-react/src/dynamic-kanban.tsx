@@ -877,9 +877,9 @@ export function DynamicKanban({
 
     if (loading) {
         return (
-            <div className="flex gap-4 overflow-x-auto p-1">
+            <div className="flex w-full gap-4 overflow-x-auto p-1">
                 {[0, 1, 2, 3].map((i) => (
-                    <div key={i} className="w-[300px] shrink-0 space-y-3">
+                    <div key={i} className="min-w-[280px] max-w-[420px] flex-1 shrink-0 space-y-3">
                         <Skeleton className="h-8 w-full" />
                         <Skeleton className="h-24 w-full" />
                         <Skeleton className="h-24 w-full" />
@@ -1023,7 +1023,7 @@ export function DynamicKanban({
             />
 
             <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
-                <div className="flex min-w-0 gap-4 overflow-x-auto p-1" data-testid="kanban-board">
+                <div className="flex w-full min-w-0 gap-4 overflow-x-auto p-1" data-testid="kanban-board">
                 {lanes.map((stage) => {
                     const allCards = grouped.get(stage.key) ?? []
                     // Per-lane client-side narrowing (instant, scoped to this
@@ -1309,7 +1309,11 @@ function KanbanLane({
     return (
         <div
             ref={setNodeRef}
-            className="group/lane flex w-[300px] shrink-0 flex-col rounded-xl border bg-muted/30 transition-opacity"
+            // Fluid width: lanes grow (flex-1) to fill the board when they all
+            // fit, capped at max-w so a couple of lanes don't stretch absurdly
+            // wide. Below min-w the board's overflow-x-auto takes over and the
+            // lanes scroll horizontally at their minimum width.
+            className="group/lane flex min-w-[280px] max-w-[420px] flex-1 shrink-0 flex-col rounded-xl border bg-muted/30 transition-opacity"
             style={{
                 opacity: dimmed ? 0.45 : 1,
                 outline: isOver && !disabled ? '2px solid var(--ring, #3b82f6)' : 'none',

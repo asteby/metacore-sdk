@@ -383,6 +383,29 @@ describe('DynamicKanban render', () => {
         // a secondary field label is present
         expect(screen.getAllByText('Assignee:').length).toBeGreaterThan(0)
     })
+
+    it('lays out fluid lanes: the board fills the width and lanes grow (flex-1) with a min/max width', async () => {
+        useMetadataCache.getState().setMetadata('issue', meta())
+        const { container } = render(
+            <ApiProvider client={fakeApi()}>
+                <DynamicKanban model="issue" />
+            </ApiProvider>,
+        )
+        await screen.findByText('Backlog')
+        // The board fills the container and scrolls horizontally only on overflow.
+        const board = container.querySelector('[data-testid="kanban-board"]')!
+        expect(board.className).toContain('w-full')
+        expect(board.className).toContain('overflow-x-auto')
+        // Each lane grows to fill the available width but never shrinks past a
+        // readable min-width nor stretches beyond a sane max-width.
+        const lanes = container.querySelectorAll('[data-stage]')
+        expect(lanes.length).toBe(4)
+        lanes.forEach((lane) => {
+            expect(lane.className).toContain('flex-1')
+            expect(lane.className).toContain('min-w-[280px]')
+            expect(lane.className).toContain('max-w-[420px]')
+        })
+    })
 })
 
 // The drag itself is wired by dnd-kit (pointer + layout), which happy-dom can't
