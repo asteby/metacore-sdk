@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 23.2.1
+
+### Patch Changes
+
+- d578fe0: Localiza los toasts de CRUD estándar (eliminar, crear, actualizar, borrado masivo, subida de imagen) al español vía i18n con `defaultValue`, en lugar de mostrar el `message` en inglés que devuelve el backend. Los mensajes de acciones declarativas de addons ahora pasan por `t()` por si son claves i18n.
+
 ## 23.2.0
 
 ### Minor Changes
