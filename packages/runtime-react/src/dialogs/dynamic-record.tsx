@@ -62,6 +62,7 @@ import {
     useIsDarkTheme,
     type DisplayOption,
 } from '../display-value'
+import { MediaValue, RichText } from '../rich-url'
 import { generateBadgeStyles } from '@asteby/metacore-ui/lib'
 import { CollectionCell, type ItemField } from '../collection-cell'
 import type { ActionFieldDef, RelationMeta } from '../types'
@@ -1120,18 +1121,20 @@ export function ViewValue({
     // carrying `cellStyle:'url'` (e.g. `github_url`) renders as a clickable
     // external link, opening in a new tab, truncated.
     if ((renderAs === 'url' || renderAs === 'link') && value) {
-        const urlStr = String(value)
-        const href = /^https?:\/\//i.test(urlStr) ? urlStr : `https://${urlStr}`
+        // Shared media renderer (same as the table cell): an image URL shows a
+        // larger inline thumbnail, a file a chip, else a compact link chip with
+        // a smart label — never the raw 120-char URL.
         return (
-            <a
-                href={href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-            >
-                <ExternalLink className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate max-w-[360px]">{urlStr}</span>
-            </a>
+            <div className="py-1">
+                <MediaValue
+                    url={String(value)}
+                    getImageUrl={getImageUrl}
+                    label={field.styleConfig?.label as string | undefined}
+                    icon={field.styleConfig?.icon as string | undefined}
+                    thumbHeight={200}
+                    maxLabelWidth={360}
+                />
+            </div>
         )
     }
 
@@ -1240,16 +1243,32 @@ export function ViewValue({
     }
 
     const display = formatDisplayValue(value, field)
+    // Free text may embed URLs (a github body, notes, a long-text field). Turn
+    // them into rich chips / inline thumbnails with the shared linkifier instead
+    // of showing raw URLs — the rest of the text is preserved verbatim.
+    const hasUrl = display !== '—' && /(https?:\/\/|www\.)\S/i.test(display)
 
-    if (field.type === 'textarea') {
+    if (field.type === 'textarea' || renderAs === 'textarea' || renderAs === 'long-text') {
         return (
-            <p className="text-sm whitespace-pre-wrap rounded-md bg-muted/40 p-3 min-h-[60px]">
-                {display}
+            <p className="text-sm whitespace-pre-wrap rounded-md bg-muted/40 p-3 min-h-[60px] [&_img]:my-1">
+                {hasUrl ? (
+                    <RichText text={display} getImageUrl={getImageUrl} imageHeight={200} />
+                ) : (
+                    display
+                )}
             </p>
         )
     }
 
-    return <p className="text-sm py-1">{display}</p>
+    return (
+        <p className="text-sm py-1">
+            {hasUrl ? (
+                <RichText text={display} getImageUrl={getImageUrl} imageHeight={160} />
+            ) : (
+                display
+            )}
+        </p>
+    )
 }
 
 // IconNameViewValue — read view for a column whose value is a lucide icon name
