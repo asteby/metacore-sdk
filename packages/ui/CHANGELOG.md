@@ -1,5 +1,13 @@
 # @asteby/metacore-ui
 
+## 2.9.1
+
+### Patch Changes
+
+- 68a6844: El popover de facetas ya no muestra dos inputs de texto: el buscador de
+  valores dobla como filtro "contiene" (fila `Contiene: "…"` que aplica un
+  match ILIKE), eliminando el input "Contiene texto…" duplicado.
+
 ## 2.9.0
 
 ### Minor Changes
