@@ -1,5 +1,15 @@
 # @asteby/metacore-runtime-react
 
+## 23.7.0
+
+### Minor Changes
+
+- 7611284: DynamicKanban: etapas personalizadas estilo Bitrix. Columna fantasma "+ Agregar etapa", diálogo de nombre/color/tipo y constructor de condiciones para etapas inteligentes (lanes virtuales por filtros, solo lectura), menú Editar/Eliminar en lanes custom, e integración con las automatizaciones de etapa. No intrusivo: sin el endpoint `/custom-stages` la UI no se renderiza y el tablero queda intacto.
+
+  Alineado al contrato del backend (ops #704): las lanes se pintan desde la metadata (`stages[]` con `custom: true` y `smart_lanes[]`), con el CRUD `/custom-stages` como fuente del diálogo de gestión. Los filtros de las etapas inteligentes se serializan como `f_<field>=OP:valor` (`EQ`, `NEQ`, `HAS` para membresía en arrays jsonb, `IN` para listas). En edición, `model`/`type`/`key` son inmutables. El borrado de una etapa real con tarjetas responde 409 con `meta.cards`; el diálogo muestra el conteo y ofrece reasignar las tarjetas a otra columna vía `?reassign_to=<key>`.
+
+- 20cb58f: Pule el layout de los modales de create/acción: grid responsivo de dos columnas compartido (`FieldGrid`/`FieldCell`/`FieldLabel`) para el modal de `placement:create` (p. ej. "Crear Issue" del addon github) y el create/edit automático (CRUD). Los campos escalares fluyen en dos columnas (una sola en móvil), textareas/line-items ocupan el ancho completo, y cada celda lleva `min-w-0` para que un valor largo de select/input no reviente las columnas ni genere scroll horizontal. Ancho del dialog de acción a `sm:max-w-xl`, labels con estilo consistente y asterisco de requerido unificado.
+
 ## 23.6.0
 
 ### Minor Changes

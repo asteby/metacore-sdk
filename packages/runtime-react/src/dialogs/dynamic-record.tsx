@@ -52,6 +52,7 @@ import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-f
 import { DynamicRelations } from '../dynamic-relations'
 import { useOptionsResolver, type ResolvedOption } from '../use-options-resolver'
 import { getFieldRef } from '../dynamic-form-schema'
+import { FieldCell } from '../field-grid'
 import { isNilUuid, normalizeNilUuid } from '../nil-uuid'
 import { DynamicIcon, isLucideIconName } from '../dynamic-icon'
 import { humanizeToken } from '../dynamic-columns-helpers'
@@ -767,18 +768,22 @@ export function DynamicRecordDialog({
                         <ImageUrlContext.Provider value={getImageUrl}>
                         <TimeZoneContext.Provider value={timeZone}>
                         <CurrencyContext.Provider value={currency}>
+                            {/* The grid IS the form element (the footer submit
+                                button targets it by id). FieldCell gives each
+                                cell `min-w-0` so a long select/input value can't
+                                blow the two columns past the dialog width. */}
                             <form
                                 id="dynamic-record-form"
                                 onSubmit={handleSubmit}
-                                className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4"
+                                className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2"
                             >
                                 {visibleFields.map(field => {
-                                    const isFullWidth = field.type === 'textarea'
+                                    const isFullWidth =
+                                        field.type === 'textarea' ||
+                                        field.widget === 'textarea' ||
+                                        field.widget === 'richtext'
                                     return (
-                                        <div
-                                            key={field.key}
-                                            className={isFullWidth ? 'sm:col-span-2' : ''}
-                                        >
+                                        <FieldCell key={field.key} fullWidth={isFullWidth}>
                                             <FieldRow
                                                 field={field}
                                                 record={record}
@@ -788,12 +793,12 @@ export function DynamicRecordDialog({
                                                     setFormValues((prev: Record<string, any>) => ({ ...prev, [field.key]: val }))
                                                 }
                                             />
-                                        </div>
+                                        </FieldCell>
                                     )
                                 })}
 
                                 {record?.external_url && (
-                                    <div className="sm:col-span-2">
+                                    <div className="sm:col-span-2 min-w-0">
                                         <a
                                             href={record.external_url}
                                             target="_blank"
@@ -806,6 +811,7 @@ export function DynamicRecordDialog({
                                     </div>
                                 )}
                             </form>
+
 
                             {/* Child records (line items, etc.) for declared relations.
                                 View = strictly read-only; edit = add/edit/delete. */}

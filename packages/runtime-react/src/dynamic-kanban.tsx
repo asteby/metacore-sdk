@@ -85,6 +85,18 @@ import {
     type StageAutomation,
     type NewStageAutomation,
 } from './stage-automations'
+import {
+    useCustomStages,
+    splitCustomStages,
+    mergeLaneStages,
+    resolveSmartLanes,
+    AddStageColumn,
+    CustomStageLaneMenu,
+    CustomStageDialog,
+    CustomStageDeleteDialog,
+    SmartLane,
+    type CustomStage,
+} from './custom-stages'
 import { useDynamicFilters } from './use-dynamic-filters'
 import {
     FilterChipsRow,
@@ -463,6 +475,26 @@ export function DynamicKanban({
     // the host has no `/stage-automations` endpoint — the ⚡ affordance hides.
     const automations = useStageAutomations(model)
 
+    // Custom stages (Bitrix-style user-defined columns). Degrades to no-op when
+    // the host has no `/custom-stages` endpoint — the "+ Agregar etapa" column
+    // and lane menus simply don't render.
+    const customStages = useCustomStages(model)
+    // Dialog state: create/edit a stage, and the delete confirmation.
+    const [stageDialogOpen, setStageDialogOpen] = useState(false)
+    const [editingStage, setEditingStage] = useState<CustomStage | null>(null)
+    const [deletingStage, setDeletingStage] = useState<CustomStage | null>(null)
+    const openCreateStage = useCallback(() => {
+        setEditingStage(null)
+        setStageDialogOpen(true)
+    }, [])
+    const openEditStage = useCallback((s: CustomStage) => {
+        setEditingStage(s)
+        setStageDialogOpen(true)
+    }, [])
+    const openDeleteStage = useCallback((s: CustomStage) => {
+        setDeletingStage(s)
+    }, [])
+
     const { getMetadata, setMetadata: cacheMetadata } = useMetadataCache()
     const cachedMeta = getMetadata(model)
 
@@ -757,10 +789,34 @@ export function DynamicKanban({
         [],
     )
 
-    const stages = useMemo(
+    const declaredStages = useMemo(
         () => (metadata ? deriveStages(metadata) : []),
         [metadata],
     )
+    // The kernel merges custom real stages into `metadata.stages` (custom: true)
+    // and serves smart lanes in `metadata.smart_lanes` — the metadata is the
+    // painting source (ops #704). The CRUD list (`customStages.stages`) only
+    // backs the management dialog: it carries the `id`/filters the metadata
+    // omits, so we still split it to build `customByKey` (and to fall back when
+    // the metadata hasn't caught up yet).
+    const { laneStages: customLaneStages, smartStages: crudSmartStages } =
+        useMemo(() => splitCustomStages(customStages.stages), [customStages.stages])
+    const { lanes: stages, customByKey } = useMemo(
+        () => mergeLaneStages(declaredStages, customLaneStages),
+        [declaredStages, customLaneStages],
+    )
+    // Smart lanes to paint: metadata first, folding in CRUD ids by key.
+    const smartStages = useMemo(
+        () =>
+            resolveSmartLanes(metadata?.smart_lanes, crudSmartStages, model),
+        [metadata?.smart_lanes, crudSmartStages, model],
+    )
+    // Position a newly created stage after every existing lane (real + smart).
+    const nextStagePosition = useMemo(() => {
+        const positions = customStages.stages.map((s) => s.position ?? 0)
+        const base = stages.length + smartStages.length
+        return Math.max(base, ...positions, 0) + 1
+    }, [customStages.stages, stages.length, smartStages.length])
     const transitions = metadata?.transitions
 
     const grouped = useMemo(
@@ -1094,6 +1150,13 @@ export function DynamicKanban({
                             onAutomationCreate={automations.create}
                             onAutomationUpdate={automations.update}
                             onAutomationRemove={automations.remove}
+                            customStage={
+                                customStages.available
+                                    ? customByKey.get(stage.key)
+                                    : undefined
+                            }
+                            onEditStage={openEditStage}
+                            onDeleteStage={openDeleteStage}
                         >
                             {loadingData && cards.length === 0 ? (
                                 <>
@@ -1123,6 +1186,42 @@ export function DynamicKanban({
                         </KanbanLane>
                     )
                 })}
+
+                {/* Smart (virtual) lanes — each runs its own filtered query and
+                    renders read-only cards (no drag target). */}
+                {smartStages.map((smart) => (
+                    <SmartLane
+                        key={`smart-${smart.key}`}
+                        stage={smart}
+                        model={model}
+                        endpoint={endpoint}
+                        defaultFilters={defaultFilters}
+                        pageSize={pageSize}
+                        isDark={isDark}
+                        refreshTrigger={refreshTrigger}
+                        onEdit={openEditStage}
+                        onDelete={openDeleteStage}
+                        renderCard={(card) => (
+                            <KanbanCard
+                                card={card}
+                                titleCol={titleCol}
+                                fieldCols={fieldCols}
+                                actions={rowActions}
+                                locale={i18n.language}
+                                timeZone={timeZone}
+                                currency={currency}
+                                onClick={onCardClick}
+                                onAction={handleInternalAction}
+                                draggable={false}
+                            />
+                        )}
+                    />
+                ))}
+
+                {/* "+ Agregar etapa" — only when the host wired /custom-stages. */}
+                {customStages.available && (
+                    <AddStageColumn onClick={openCreateStage} />
+                )}
             </div>
 
             <DragOverlay>
@@ -1140,6 +1239,35 @@ export function DynamicKanban({
 
             {rowActionDialogs}
             </DndContext>
+
+            {customStages.available && (
+                <>
+                    <CustomStageDialog
+                        open={stageDialogOpen}
+                        onOpenChange={setStageDialogOpen}
+                        model={model}
+                        columns={metadata?.columns ?? []}
+                        initial={editingStage}
+                        nextPosition={nextStagePosition}
+                        onCreate={customStages.create}
+                        onUpdate={customStages.update}
+                    />
+                    <CustomStageDeleteDialog
+                        open={!!deletingStage}
+                        onOpenChange={(o) => {
+                            if (!o) setDeletingStage(null)
+                        }}
+                        stage={deletingStage}
+                        reassignTargets={stages.map((s) => ({
+                            key: s.key,
+                            label: s.label,
+                        }))}
+                        onConfirm={(s, reassignTo) =>
+                            customStages.remove(s.id, reassignTo)
+                        }
+                    />
+                </>
+            )}
         </div>
     )
 }
@@ -1274,6 +1402,10 @@ interface KanbanLaneProps {
         patch: Partial<StageAutomation>,
     ) => Promise<void>
     onAutomationRemove: (id: StageAutomation['id']) => Promise<void>
+    /** When set, this lane is a user-defined custom stage → show ⋮ Editar/Eliminar. */
+    customStage?: CustomStage
+    onEditStage?: (stage: CustomStage) => void
+    onDeleteStage?: (stage: CustomStage) => void
     children: React.ReactNode
 }
 
@@ -1299,6 +1431,9 @@ function KanbanLane({
     onAutomationCreate,
     onAutomationUpdate,
     onAutomationRemove,
+    customStage,
+    onEditStage,
+    onDeleteStage,
     children,
 }: KanbanLaneProps) {
     const { t } = useTranslation()
@@ -1407,6 +1542,13 @@ function KanbanLane({
                             onCreate={onAutomationCreate}
                             onUpdate={onAutomationUpdate}
                             onRemove={onAutomationRemove}
+                        />
+                    )}
+                    {customStage && onEditStage && onDeleteStage && (
+                        <CustomStageLaneMenu
+                            stage={customStage}
+                            onEdit={onEditStage}
+                            onDelete={onDeleteStage}
                         />
                     )}
                 </div>
@@ -1640,6 +1782,8 @@ interface KanbanCardProps {
     onClick?: (row: any) => void
     /** STRING contract — dispatch the action by its key (see useDynamicRowActions). */
     onAction: (actionKey: string, record: any) => void
+    /** When false the card is static (no drag) — used by read-only smart lanes. */
+    draggable?: boolean
 }
 
 function KanbanCard({
@@ -1652,19 +1796,23 @@ function KanbanCard({
     currency,
     onClick,
     onAction,
+    draggable = true,
 }: KanbanCardProps) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: String(card.id),
+        disabled: !draggable,
     })
 
     const visibleActions = actions.filter((a) => isRowActionVisible(a, card))
 
     return (
         <Card
-            ref={setNodeRef}
-            {...attributes}
-            {...listeners}
-            className="w-full min-w-0 cursor-grab active:cursor-grabbing border-border/70 shadow-sm"
+            ref={draggable ? setNodeRef : undefined}
+            {...(draggable ? attributes : {})}
+            {...(draggable ? listeners : {})}
+            className={`w-full min-w-0 border-border/70 shadow-sm ${
+                draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
+            }`}
             style={{ opacity: isDragging ? 0.4 : 1 }}
             onClick={() => onClick?.(card)}
             data-card-id={String(card.id)}
