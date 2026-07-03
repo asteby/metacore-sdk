@@ -218,6 +218,10 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
     const { t } = useTranslation()
     const api = useApi()
     const [executing, setExecuting] = useState(false)
+    // `action.label` is an addon-contributed i18n key; its locale bundle loads
+    // asynchronously, so translate at render (defaultValue keeps an already
+    // localized label unchanged).
+    const label = t(action.label, { defaultValue: action.label })
 
     const execute = async () => {
         setExecuting(true)
@@ -244,10 +248,10 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
                 <AlertDialogHeader>
                     <AlertDialogTitle className="flex items-center gap-2">
                         <DynamicIcon name={action.icon} className="h-5 w-5" />
-                        {action.label}
+                        {label}
                     </AlertDialogTitle>
                     <AlertDialogDescription>
-                        {action.confirmMessage || `${action.label}?`}
+                        {action.confirmMessage || `${label}?`}
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
@@ -258,7 +262,7 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
                         style={action.color ? { backgroundColor: action.color } : undefined}
                     >
                         {executing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DynamicIcon name={action.icon} className="mr-2 h-4 w-4" />}
-                        {action.label}
+                        {label}
                     </AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>
@@ -268,6 +272,10 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
 
 function GenericActionModal({ open, onOpenChange, action, model, record, endpoint, onSuccess }: ActionModalProps) {
     const { t } = useTranslation()
+    // Addon-contributed labels (action + fields) are i18n keys whose locale
+    // bundle loads asynchronously; translate at render so they don't render raw.
+    // defaultValue keeps an already-localized string unchanged.
+    const tl = (s: string) => t(s, { defaultValue: s })
     const api = useApi()
     const [formData, setFormData] = useState<Record<string, any>>({})
     const [executing, setExecuting] = useState(false)
@@ -326,13 +334,13 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                 if (isLineItemsField(field)) {
                     const rows = formData[field.key]
                     if (!Array.isArray(rows) || rows.length === 0) {
-                        toast.error(`${field.label} requiere al menos un renglón`)
+                        toast.error(`${tl(field.label)} requiere al menos un renglón`)
                         return
                     }
                     continue
                 }
                 if (!formData[field.key] && formData[field.key] !== false) {
-                    toast.error(`${field.label} es requerido`)
+                    toast.error(`${tl(field.label)} es requerido`)
                     return
                 }
             }
@@ -389,7 +397,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                 <DialogHeader className="shrink-0">
                     <DialogTitle className="flex items-center gap-2">
                         <DynamicIcon name={action.icon} className="h-5 w-5" />
-                        {action.label}
+                        {tl(action.label)}
                     </DialogTitle>
                     {action.confirmMessage && <DialogDescription>{action.confirmMessage}</DialogDescription>}
                 </DialogHeader>
@@ -409,7 +417,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                                 className={'grid gap-2 ' + (fullWidth ? 'sm:col-span-2' : '')}
                             >
                                 <Label htmlFor={field.key}>
-                                    {field.label}
+                                    {tl(field.label)}
                                     {field.required && <span className="text-red-500 ml-1">*</span>}
                                 </Label>
                                 {renderField(field, formData[field.key], (v: any) => updateField(field.key, v), formData)}
@@ -432,7 +440,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                         style={action.color ? { backgroundColor: action.color, color: 'white' } : undefined}
                     >
                         {executing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DynamicIcon name={action.icon} className="mr-2 h-4 w-4" />}
-                        {action.label}
+                        {tl(action.label)}
                     </Button>
                 </DialogFooter>
             </DialogContent>

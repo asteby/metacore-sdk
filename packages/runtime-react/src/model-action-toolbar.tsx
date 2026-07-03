@@ -18,6 +18,7 @@
 // it internally, and bespoke host pages (e.g. ops `/m/$model`) mount it directly
 // next to their own toolbar. Hosts never reimplement action-button plumbing.
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@asteby/metacore-ui/primitives'
 import { useApi } from './api-context'
 import { useMetadataCache } from './metadata-cache'
@@ -109,6 +110,7 @@ export function ModelActionToolbar({
     onChange,
     className,
 }: ModelActionToolbarProps) {
+    const { t } = useTranslation()
     const all = useModelActions(model, placements, actions)
     // Capability gating — always-true without a <PermissionsProvider>. Custom
     // table/create actions map onto `lowercase(model).<action_key>`.
@@ -135,7 +137,13 @@ export function ModelActionToolbar({
                             style={a.color && !isCreate ? { borderColor: a.color, color: a.color } : undefined}
                         >
                             <DynamicIcon name={a.icon || (isCreate ? 'Plus' : 'Zap')} className="mr-2 h-4 w-4" />
-                            {a.label}
+                            {/* `a.label` is an addon-contributed i18n key (e.g.
+                                "integration_github.action.create_issue.label"); the addon's
+                                locale bundle loads asynchronously, so translate at render — a
+                                bare `{a.label}` prints the raw key until (and after) the bundle
+                                lands because nothing re-derives it. defaultValue keeps an
+                                already-localized label untouched. */}
+                            {t(a.label, { defaultValue: a.label })}
                         </Button>
                     )
                 })}
