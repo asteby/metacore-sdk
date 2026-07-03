@@ -34,6 +34,7 @@ export {
     useCustomStages,
     splitCustomStages,
     mergeLaneStages,
+    resolveSmartLanes,
     smartLaneParams,
     customStageFilterFields,
     isCustomStageDraftValid,

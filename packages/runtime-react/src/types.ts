@@ -44,6 +44,13 @@ export interface TableMetadata {
      */
     stages?: StageMeta[]
     /**
+     * Virtual "smart" lanes (ops #704): read-only board columns defined by a set
+     * of filters rather than a stored stage value. When present the kanban paints
+     * one lane per entry (querying the list with the lane's filters) after the
+     * real stages. Purely additive — absent on hosts without custom stages.
+     */
+    smart_lanes?: SmartLaneMeta[]
+    /**
      * Allowed stage transitions (RFC §1.1). When present, the kanban only lets a
      * card drop into a lane reachable from its current stage; disallowed lanes
      * are dimmed and reject the drop. `from`/`to` accept `'*'` as a wildcard.
@@ -64,6 +71,25 @@ export interface StageMeta {
     color?: string
     order?: number
     is_final?: boolean
+    /**
+     * True when the kernel merged a user-defined custom stage into `stages[]`
+     * (ops #704). Behaves as a normal droppable lane; the SDK just grows an
+     * Editar/Eliminar menu on it.
+     */
+    custom?: boolean
+}
+
+/**
+ * A virtual "smart" lane (ops #704) served in `TableMetadata.smart_lanes`. It's
+ * defined by `filters` (never a stored stage value), so the board paints it by
+ * querying the list with those conditions. Read-only — not a drop target.
+ */
+export interface SmartLaneMeta {
+    key: string
+    label: string
+    color?: string
+    order?: number
+    filters: { field: string; op: string; value: string }[]
 }
 
 /** Allowed `from → to` stage transition (RFC §1.1). `'*'` is a wildcard. */

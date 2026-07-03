@@ -46,7 +46,12 @@ import {
 import { generateBadgeStyles, optionColor } from '@asteby/metacore-ui/lib'
 import { useApi } from './api-context'
 import type { ApiClient } from './api-context'
-import type { ColumnDefinition, StageMeta, ApiResponse } from './types'
+import type {
+    ColumnDefinition,
+    StageMeta,
+    SmartLaneMeta,
+    ApiResponse,
+} from './types'
 
 // ---------------------------------------------------------------------------
 // Contract (matches the ops backend; envelope is {success, data} → read .data)
@@ -157,15 +162,15 @@ export function mergeLaneStages(
 }
 
 /**
- * Serializes a smart lane's filters into the board's list query params. Mirrors
- * the `f_<field>=value` convention the kanban already uses for stage scoping:
- *   - eq       → `f_<field>=value`
- *   - neq      → `f_<field>__neq=value`
- *   - contains → `f_<field>__contains=value`
- *   - in       → `f_<field>=v1,v2` (comma-separated — the backend already
- *                splits multi-value stage filters this way)
- * Empty fields/values are skipped. Provisional operator suffixes: kept in this
- * one pure function so the ops-confirmed syntax is a one-line change + a test.
+ * Serializes a smart lane's filters into the board's list query params. The ops
+ * list endpoint (ops #704) takes a SINGLE `f_<field>` param whose value carries
+ * the operator as a `OP:value` prefix:
+ *   - eq       → `f_<field>=EQ:value`
+ *   - neq      → `f_<field>=NEQ:value`
+ *   - contains → `f_<field>=HAS:value` (membership in a jsonb array — NOT the
+ *                text-substring ILIKE; that's why it's HAS, not CONTAINS)
+ *   - in       → `f_<field>=IN:v1,v2,...` (comma-separated after `IN:`)
+ * Empty fields/values are skipped.
  */
 export function smartLaneParams(
     filters: CustomStageFilter[] | undefined,
@@ -176,18 +181,55 @@ export function smartLaneParams(
         const v = String(f.value).trim()
         switch (f.op) {
             case 'neq':
-                params[`f_${f.field}__neq`] = v
+                params[`f_${f.field}`] = `NEQ:${v}`
                 break
             case 'contains':
-                params[`f_${f.field}__contains`] = v
+                params[`f_${f.field}`] = `HAS:${v}`
                 break
             case 'in':
+                params[`f_${f.field}`] = `IN:${v}`
+                break
             case 'eq':
             default:
-                params[`f_${f.field}`] = v
+                params[`f_${f.field}`] = `EQ:${v}`
         }
     }
     return params
+}
+
+/**
+ * Resolves the smart lanes to paint. The kernel's `metadata.smart_lanes` is the
+ * source of truth for rendering (ops #704); the CRUD list only backs the
+ * management dialog. So when metadata carries smart lanes we map those, folding
+ * in the CRUD entry's `id` (matched by key) so the Editar menu can PUT/DELETE.
+ * When metadata omits them (older host / metadata lag) we tolerate the gap and
+ * fall back to the CRUD smart stages. Returns `CustomStage[]` either way.
+ */
+export function resolveSmartLanes(
+    metaSmartLanes: SmartLaneMeta[] | undefined,
+    crudSmartStages: CustomStage[],
+    model: string,
+): CustomStage[] {
+    if (!metaSmartLanes?.length) return crudSmartStages
+    const crudByKey = new Map(crudSmartStages.map((s) => [s.key, s]))
+    return metaSmartLanes.map((lane, i) => {
+        const match = crudByKey.get(lane.key)
+        return {
+            id: match?.id ?? lane.key,
+            model,
+            key: lane.key,
+            label: lane.label,
+            color: lane.color ?? match?.color ?? 'slate',
+            position: lane.order ?? match?.position ?? i,
+            type: 'smart',
+            filters: (lane.filters ?? []).map((f) => ({
+                field: f.field,
+                op: f.op as CustomStageFilterOp,
+                value: f.value,
+            })),
+            enabled: true,
+        }
+    })
 }
 
 /** Columns offered in the condition builder: visible, non-id model columns. */
@@ -242,8 +284,12 @@ export interface UseCustomStagesResult {
     stages: CustomStage[]
     create: (draft: NewCustomStage) => Promise<void>
     update: (id: CustomStage['id'], patch: Partial<CustomStage>) => Promise<void>
-    /** Throws on 409 (cards still on the stage) so the caller can offer a fix. */
-    remove: (id: CustomStage['id']) => Promise<void>
+    /**
+     * Deletes a stage. Pass `reassignTo` (a target lane key) to move a real
+     * stage's cards first. Throws on 409 (cards still present, no reassign) so
+     * the caller can read `meta.cards` and offer a reassignment target.
+     */
+    remove: (id: CustomStage['id'], reassignTo?: string) => Promise<void>
 }
 
 /**
@@ -316,9 +362,14 @@ export function useCustomStages(model: string): UseCustomStagesResult {
     )
 
     const remove = useCallback(
-        async (id: CustomStage['id']) => {
+        async (id: CustomStage['id'], reassignTo?: string) => {
             try {
-                await api.delete(`/custom-stages/${id}`)
+                await api.delete(
+                    `/custom-stages/${id}`,
+                    reassignTo
+                        ? { params: { reassign_to: reassignTo } }
+                        : undefined,
+                )
                 await load()
             } catch (e: any) {
                 // 409 = the stage still holds cards; let the caller decide how to
@@ -499,10 +550,11 @@ export function CustomStageDialog({
                 : []
         try {
             if (initial) {
+                // PUT only accepts label/color/position/filters/enabled — model,
+                // type and key are immutable (ops #704), so we never send them.
                 await onUpdate(initial.id, {
                     label: label.trim(),
                     color,
-                    type,
                     filters: cleanFilters,
                 })
                 toast.success(
@@ -620,8 +672,12 @@ export function CustomStageDialog({
                         <Select
                             value={type}
                             onValueChange={(v) => setType(v as CustomStageType)}
+                            disabled={!!initial}
                         >
-                            <SelectTrigger data-testid="custom-stage-type">
+                            <SelectTrigger
+                                data-testid="custom-stage-type"
+                                disabled={!!initial}
+                            >
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -770,35 +826,49 @@ export interface CustomStageDeleteDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
     stage: CustomStage | null
-    onConfirm: (stage: CustomStage) => Promise<void>
+    /** Other lanes a real stage's cards can be reassigned to (key excluded). */
+    reassignTargets?: { key: string; label: string }[]
+    /** `reassignTo` is set on retry after a 409 (real stage with cards). */
+    onConfirm: (stage: CustomStage, reassignTo?: string) => Promise<void>
 }
 
 /**
  * Confirms deleting a custom lane. A 409 (the backend rejected because cards
- * still sit on the stage) doesn't close the dialog — it surfaces a targeted
- * message so the user can move the cards out first.
+ * still sit on a real stage) doesn't close the dialog — it reads `meta.cards`
+ * from the response, shows the count, and offers a target lane to reassign the
+ * cards to; confirming again retries the delete with `reassign_to`.
  */
 export function CustomStageDeleteDialog({
     open,
     onOpenChange,
     stage,
+    reassignTargets = [],
     onConfirm,
 }: CustomStageDeleteDialogProps) {
     const { t } = useTranslation()
     const [busy, setBusy] = useState(false)
     const [conflict, setConflict] = useState(false)
+    const [cardCount, setCardCount] = useState<number | null>(null)
+    const [reassignTo, setReassignTo] = useState<string>('')
 
     useEffect(() => {
-        if (open) setConflict(false)
+        if (open) {
+            setConflict(false)
+            setCardCount(null)
+            setReassignTo('')
+        }
     }, [open])
 
     if (!stage) return null
 
+    const targets = reassignTargets.filter((tg) => tg.key !== stage.key)
+
     const confirm = async () => {
+        // In conflict mode the delete only proceeds once a target is chosen.
+        if (conflict && !reassignTo) return
         setBusy(true)
-        setConflict(false)
         try {
-            await onConfirm(stage)
+            await onConfirm(stage, conflict ? reassignTo : undefined)
             toast.success(
                 t('dynamic.custom_stages.deleted', {
                     defaultValue: 'Etapa eliminada',
@@ -807,7 +877,9 @@ export function CustomStageDeleteDialog({
             onOpenChange(false)
         } catch (e: any) {
             if (e?.response?.status === 409) {
-                // Cards still on the stage — keep the dialog open with guidance.
+                // Cards still on the stage — surface the count and let the user
+                // pick a lane to move them to, then retry with reassign_to.
+                setCardCount(e?.response?.data?.meta?.cards ?? null)
                 setConflict(true)
             } else {
                 onOpenChange(false)
@@ -830,7 +902,8 @@ export function CustomStageDeleteDialog({
                         {conflict
                             ? t('dynamic.custom_stages.delete_conflict', {
                                   defaultValue:
-                                      'La etapa tiene tarjetas. Muévelas a otra columna antes de eliminarla.',
+                                      'La etapa tiene {{count}} tarjeta(s). Elige a qué columna moverlas antes de eliminarla.',
+                                  count: cardCount ?? 0,
                               })
                             : t('dynamic.custom_stages.delete_confirm', {
                                   defaultValue:
@@ -839,6 +912,34 @@ export function CustomStageDeleteDialog({
                               })}
                     </DialogDescription>
                 </DialogHeader>
+
+                {conflict && (
+                    <div className="flex flex-col gap-1.5">
+                        <Label className="text-xs">
+                            {t('dynamic.custom_stages.reassign_label', {
+                                defaultValue: 'Mover tarjetas a',
+                            })}
+                        </Label>
+                        <Select value={reassignTo} onValueChange={setReassignTo}>
+                            <SelectTrigger data-testid="custom-stage-reassign">
+                                <SelectValue
+                                    placeholder={t(
+                                        'dynamic.custom_stages.reassign_placeholder',
+                                        { defaultValue: 'Elige una columna' },
+                                    )}
+                                />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {targets.map((tg) => (
+                                    <SelectItem key={tg.key} value={tg.key}>
+                                        {t(tg.label, { defaultValue: tg.label })}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                )}
+
                 <DialogFooter>
                     <Button
                         variant="outline"
@@ -850,10 +951,16 @@ export function CustomStageDeleteDialog({
                     <Button
                         variant="destructive"
                         onClick={() => void confirm()}
-                        disabled={busy || conflict}
+                        disabled={busy || (conflict && !reassignTo)}
                         data-testid="custom-stage-delete-confirm"
                     >
-                        {t('dynamic.custom_stages.delete', { defaultValue: 'Eliminar' })}
+                        {conflict
+                            ? t('dynamic.custom_stages.reassign_and_delete', {
+                                  defaultValue: 'Mover y eliminar',
+                              })
+                            : t('dynamic.custom_stages.delete', {
+                                  defaultValue: 'Eliminar',
+                              })}
                     </Button>
                 </DialogFooter>
             </DialogContent>

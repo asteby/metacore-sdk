@@ -89,6 +89,7 @@ import {
     useCustomStages,
     splitCustomStages,
     mergeLaneStages,
+    resolveSmartLanes,
     AddStageColumn,
     CustomStageLaneMenu,
     CustomStageDialog,
@@ -792,15 +793,23 @@ export function DynamicKanban({
         () => (metadata ? deriveStages(metadata) : []),
         [metadata],
     )
-    // Split enabled custom stages into real lanes (merged with the declared
-    // stages) and smart/virtual lanes (rendered separately, read-only).
-    const { laneStages: customLaneStages, smartStages } = useMemo(
-        () => splitCustomStages(customStages.stages),
-        [customStages.stages],
-    )
+    // The kernel merges custom real stages into `metadata.stages` (custom: true)
+    // and serves smart lanes in `metadata.smart_lanes` — the metadata is the
+    // painting source (ops #704). The CRUD list (`customStages.stages`) only
+    // backs the management dialog: it carries the `id`/filters the metadata
+    // omits, so we still split it to build `customByKey` (and to fall back when
+    // the metadata hasn't caught up yet).
+    const { laneStages: customLaneStages, smartStages: crudSmartStages } =
+        useMemo(() => splitCustomStages(customStages.stages), [customStages.stages])
     const { lanes: stages, customByKey } = useMemo(
         () => mergeLaneStages(declaredStages, customLaneStages),
         [declaredStages, customLaneStages],
+    )
+    // Smart lanes to paint: metadata first, folding in CRUD ids by key.
+    const smartStages = useMemo(
+        () =>
+            resolveSmartLanes(metadata?.smart_lanes, crudSmartStages, model),
+        [metadata?.smart_lanes, crudSmartStages, model],
     )
     // Position a newly created stage after every existing lane (real + smart).
     const nextStagePosition = useMemo(() => {
@@ -1249,7 +1258,13 @@ export function DynamicKanban({
                             if (!o) setDeletingStage(null)
                         }}
                         stage={deletingStage}
-                        onConfirm={(s) => customStages.remove(s.id)}
+                        reassignTargets={stages.map((s) => ({
+                            key: s.key,
+                            label: s.label,
+                        }))}
+                        onConfirm={(s, reassignTo) =>
+                            customStages.remove(s.id, reassignTo)
+                        }
                     />
                 </>
             )}

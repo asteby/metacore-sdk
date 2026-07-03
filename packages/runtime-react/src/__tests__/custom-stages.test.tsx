@@ -37,6 +37,7 @@ vi.mock('@tanstack/react-router', () => ({
 import {
     splitCustomStages,
     mergeLaneStages,
+    resolveSmartLanes,
     smartLaneParams,
     isCustomStageDraftValid,
     slugifyStageKey,
@@ -44,10 +45,12 @@ import {
     emptyCustomStageFilter,
     AddStageColumn,
     CustomStageDialog,
+    CustomStageDeleteDialog,
     SmartLane,
     useCustomStages,
     type CustomStage,
 } from '../custom-stages'
+import type { SmartLaneMeta } from '../types'
 import { ApiProvider, type ApiClient } from '../api-context'
 import type { ColumnDefinition, StageMeta } from '../types'
 import React from 'react'
@@ -139,7 +142,7 @@ describe('mergeLaneStages', () => {
 })
 
 describe('smartLaneParams', () => {
-    it('maps operators to f_<field> params', () => {
+    it('encodes the operator as an OP: prefix on a single f_<field> param', () => {
         expect(
             smartLaneParams([
                 { field: 'priority', op: 'eq', value: 'high' },
@@ -148,10 +151,10 @@ describe('smartLaneParams', () => {
                 { field: 'label', op: 'in', value: 'a,b' },
             ]),
         ).toEqual({
-            f_priority: 'high',
-            f_title__contains: 'bug',
-            f_state__neq: 'closed',
-            f_label: 'a,b',
+            f_priority: 'EQ:high',
+            f_title: 'HAS:bug',
+            f_state: 'NEQ:closed',
+            f_label: 'IN:a,b',
         })
     })
     it('skips empty fields/values and tolerates undefined', () => {
@@ -279,12 +282,30 @@ describe('CustomStageDialog', () => {
         fireEvent.change(valueInput, { target: { value: 'critical' } })
         fireEvent.click(screen.getByTestId('custom-stage-save'))
         await waitFor(() => expect(onUpdate).toHaveBeenCalledTimes(1))
+        // type/model/key are immutable → the patch omits them (ops #704).
         expect(onUpdate).toHaveBeenCalledWith('c2', {
             label: 'Urgentes',
             color: 'red',
-            type: 'smart',
             filters: [{ field: 'priority', op: 'eq', value: 'critical' }],
         })
+    })
+
+    it('disables the type field when editing (type is immutable)', () => {
+        render(
+            <CustomStageDialog
+                open
+                onOpenChange={() => {}}
+                model="issue"
+                columns={COLUMNS}
+                initial={CUSTOM[1]}
+                nextPosition={0}
+                onCreate={vi.fn()}
+                onUpdate={vi.fn()}
+            />,
+        )
+        expect(
+            (screen.getByTestId('custom-stage-type') as HTMLButtonElement).disabled,
+        ).toBe(true)
     })
 
     it('adds and removes condition rows for a smart lane', () => {
@@ -344,8 +365,76 @@ describe('SmartLane', () => {
         await waitFor(() => expect(get).toHaveBeenCalled())
         const [url, cfg] = get.mock.calls[0] as [string, any]
         expect(url).toBe('/data/issue/me')
-        expect(cfg.params).toMatchObject({ archived: false, f_priority: 'high' })
+        expect(cfg.params).toMatchObject({ archived: false, f_priority: 'EQ:high' })
         await waitFor(() => expect(screen.getByTestId('smart-card-1')).toBeTruthy())
+    })
+})
+
+// ---------------------------------------------------------------------------
+// 4b. resolveSmartLanes — metadata-first with CRUD id fold-in
+// ---------------------------------------------------------------------------
+
+describe('resolveSmartLanes', () => {
+    const metaLanes: SmartLaneMeta[] = [
+        {
+            key: 'urgent',
+            label: 'Urgentes',
+            color: 'red',
+            order: 3,
+            filters: [{ field: 'priority', op: 'eq', value: 'high' }],
+        },
+    ]
+    it('maps metadata smart lanes, folding in the CRUD id by key', () => {
+        const out = resolveSmartLanes(metaLanes, [CUSTOM[1]], 'issue')
+        expect(out).toHaveLength(1)
+        expect(out[0]).toMatchObject({
+            id: 'c2', // folded in from the CRUD entry (metadata omits it)
+            key: 'urgent',
+            type: 'smart',
+            filters: [{ field: 'priority', op: 'eq', value: 'high' }],
+        })
+    })
+    it('synthesizes an id from the key when no CRUD match exists', () => {
+        expect(resolveSmartLanes(metaLanes, [], 'issue')[0].id).toBe('urgent')
+    })
+    it('falls back to CRUD smart stages when metadata omits smart_lanes', () => {
+        expect(resolveSmartLanes(undefined, [CUSTOM[1]], 'issue')).toEqual([CUSTOM[1]])
+        expect(resolveSmartLanes([], [CUSTOM[1]], 'issue')).toEqual([CUSTOM[1]])
+    })
+})
+
+// ---------------------------------------------------------------------------
+// 4c. Delete dialog — 409 surfaces the card count + reassignment target
+// ---------------------------------------------------------------------------
+
+describe('CustomStageDeleteDialog', () => {
+    it('on 409 shows the card count and retries with a reassign target', async () => {
+        const onConfirm = vi
+            .fn()
+            .mockRejectedValueOnce({ response: { status: 409, data: { meta: { cards: 4 } } } })
+            .mockResolvedValueOnce(undefined)
+        render(
+            <CustomStageDeleteDialog
+                open
+                onOpenChange={() => {}}
+                stage={CUSTOM[0]}
+                reassignTargets={[
+                    { key: 'review', label: 'En revisión' }, // same key → filtered out
+                    { key: 'done', label: 'Done' },
+                ]}
+                onConfirm={onConfirm}
+            />,
+        )
+        // First attempt: plain delete, no reassign target.
+        fireEvent.click(screen.getByTestId('custom-stage-delete-confirm'))
+        await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1))
+        expect(onConfirm).toHaveBeenLastCalledWith(CUSTOM[0], undefined)
+        // Conflict mode: the reassign select appears; the count is surfaced.
+        await waitFor(() => expect(screen.getByTestId('custom-stage-reassign')).toBeTruthy())
+        expect(screen.getByText(/4/)).toBeTruthy()
+        // Without a chosen target the confirm button stays a no-op (guarded).
+        fireEvent.click(screen.getByTestId('custom-stage-delete-confirm'))
+        expect(onConfirm).toHaveBeenCalledTimes(1)
     })
 })
 
