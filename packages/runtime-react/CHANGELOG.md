@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 23.5.1
+
+### Patch Changes
+
+- 36e7cb8: DynamicKanban: las lanes ahora aprovechan el ancho del viewport. Crecen (flex-1) para llenar el contenedor cuando todas caben, con un ancho mínimo legible (280px) y un máximo razonable (420px); el scroll horizontal solo aparece cuando ya no caben. Elimina el espacio muerto a la derecha y las columnas angostas al reducir la ventana.
+
 ## 23.5.0
 
 ### Minor Changes
