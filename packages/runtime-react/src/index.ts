@@ -17,6 +17,20 @@ export {
     UNASSIGNED_LANE,
 } from './dynamic-kanban'
 export {
+    useStageAutomations,
+    StageAutomationsButton,
+    isTagColumn,
+    automationFieldOptions,
+    groupAutomationsByStage,
+    activeAutomationCount,
+    type StageAutomation,
+    type StageAutomationAction,
+    type StageAutomationActionType,
+    type NewStageAutomation,
+    type UseStageAutomationsResult,
+    type StageAutomationsButtonProps,
+} from './stage-automations'
+export {
     DynamicView,
     resolveViewRenderer,
     readViewFromSearch,
