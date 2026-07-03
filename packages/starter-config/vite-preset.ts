@@ -79,6 +79,16 @@ export const METACORE_FEDERATION_SINGLETONS = [
   'react/jsx-runtime',
   'react-i18next',
   'i18next',
+  // @tanstack/react-query MUST be a singleton: it carries a React context
+  // (the QueryClient). The host renders `<QueryClientProvider>` and the shared
+  // `@asteby/metacore-app-providers` calls `useQueryClient`/`useQuery` inside
+  // it (org-config, platform-config providers). Without sharing react-query,
+  // the host provider and the app-providers consumer can resolve DIFFERENT
+  // copies of react-query — different context — and the app crashes with
+  // "No QueryClient set, use QueryClientProvider to set one" thrown from the
+  // app-providers loadShare chunk. Intermittent because it depends on which
+  // container wins the app-providers share negotiation / chunk load order.
+  '@tanstack/react-query',
   '@asteby/metacore-ui',
   '@asteby/metacore-runtime-react',
   '@asteby/metacore-sdk',
