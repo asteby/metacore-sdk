@@ -26,7 +26,6 @@ import {
     Button,
     Input,
     Textarea,
-    Label,
     Select,
     SelectContent,
     SelectItem,
@@ -44,6 +43,7 @@ import { DynamicSelectField } from './dynamic-select-field'
 import { DynamicDateField } from './dynamic-date-field'
 import { UploadField } from './upload-field'
 import { isLineItemsField, resolveWidget, resolveDependsValue, getDependsOn } from './dynamic-form-schema'
+import { FieldGrid, FieldCell, FieldLabel } from './field-grid'
 import type { ActionFieldDef } from './types'
 // Canonical registry lives in @asteby/metacore-sdk
 import {
@@ -383,7 +383,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                 is inline (guaranteed) since an arbitrary max-h-[90vh] class may be
                 dropped by a consuming app's Tailwind scan. */}
             <DialogContent
-                className={'flex max-h-[90vh] flex-col overflow-hidden ' + (widthPx ? '' : 'sm:max-w-lg')}
+                className={'flex max-h-[90vh] flex-col overflow-hidden ' + (widthPx ? '' : 'sm:max-w-xl')}
                 style={{ maxHeight: '90vh', ...(widthPx ? { maxWidth: widthPx, width: '95vw' } : {}) }}
             >
                 <DialogHeader className="shrink-0">
@@ -393,34 +393,33 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                     </DialogTitle>
                     {action.confirmMessage && <DialogDescription>{action.confirmMessage}</DialogDescription>}
                 </DialogHeader>
-                {/* Scrollable body. Responsive 2-column grid: scalar fields
-                    (journal, date, reference) flow side-by-side instead of one
-                    tall vertical stack; line-items grids and textareas span the
-                    full width. Mirrors DynamicForm — driven only by field shape. */}
-                <div className="-mx-1 grid min-h-0 flex-1 gap-4 overflow-y-auto px-1 py-4 sm:grid-cols-2">
-                    {action.fields?.map((field) => {
-                        const fullWidth =
-                            isLineItemsField(field) ||
-                            resolveWidget(field) === 'textarea' ||
-                            resolveWidget(field) === 'richtext'
-                        return (
-                            <div
-                                key={field.key}
-                                className={'grid gap-2 ' + (fullWidth ? 'sm:col-span-2' : '')}
-                            >
-                                <Label htmlFor={field.key}>
-                                    {field.label}
-                                    {field.required && <span className="text-red-500 ml-1">*</span>}
-                                </Label>
-                                {renderField(field, formData[field.key], (v: any) => updateField(field.key, v), formData)}
-                            </div>
-                        )
-                    })}
-                    {relations.length > 0 && (
-                        <div className="sm:col-span-2">
-                            <DynamicRelations record={record} relations={relations} />
-                        </div>
-                    )}
+                {/* Scrollable body. The shared FieldGrid lays scalar fields out
+                    in two responsive columns (single column on phones); line-items
+                    grids and textareas span the full width. `min-w-0` on each cell
+                    (in FieldCell) keeps a long select/input value from blowing the
+                    grid past the dialog and spawning a horizontal scrollbar. */}
+                <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 py-4">
+                    <FieldGrid>
+                        {action.fields?.map((field) => {
+                            const fullWidth =
+                                isLineItemsField(field) ||
+                                resolveWidget(field) === 'textarea' ||
+                                resolveWidget(field) === 'richtext'
+                            return (
+                                <FieldCell key={field.key} fullWidth={fullWidth}>
+                                    <FieldLabel htmlFor={field.key} required={field.required}>
+                                        {field.label}
+                                    </FieldLabel>
+                                    {renderField(field, formData[field.key], (v: any) => updateField(field.key, v), formData)}
+                                </FieldCell>
+                            )
+                        })}
+                        {relations.length > 0 && (
+                            <FieldCell fullWidth>
+                                <DynamicRelations record={record} relations={relations} />
+                            </FieldCell>
+                        )}
+                    </FieldGrid>
                 </div>
                 <DialogFooter className="shrink-0">
                     <Button variant="outline" onClick={() => onOpenChange(false)} disabled={executing}>
