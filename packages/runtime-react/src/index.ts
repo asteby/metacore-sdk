@@ -55,6 +55,11 @@ export {
     type UseCustomStagesResult,
 } from './custom-stages'
 export {
+    useStageLayout,
+    type StageLayout,
+    type UseStageLayoutResult,
+} from './stage-layout'
+export {
     DynamicView,
     resolveViewRenderer,
     readViewFromSearch,

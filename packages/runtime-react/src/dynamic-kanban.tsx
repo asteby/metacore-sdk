@@ -39,11 +39,20 @@ import {
     type DragEndEvent,
 } from '@dnd-kit/core'
 import {
+    SortableContext,
+    horizontalListSortingStrategy,
+    useSortable,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { arrayMove } from '@dnd-kit/sortable'
+import {
     Calendar,
     CircleDot,
+    GripVertical,
     Hash,
     ListFilter,
     MoreHorizontal,
+    RotateCcw,
     Search,
     Tag,
     ToggleLeft,
@@ -111,6 +120,7 @@ import { isColumnVisibleInTable } from './column-visibility'
 import { isRowActionVisible } from './dynamic-columns'
 import { useCan, usePermissionsActive, resolveRowActions } from './permissions-context'
 import { useDynamicRowActions } from './dynamic-row-actions'
+import { useStageLayout } from './stage-layout'
 import type {
     TableMetadata,
     ColumnDefinition,
@@ -513,6 +523,19 @@ export function DynamicKanban({
 
     // Active drag card id (for the DragOverlay + drop-zone highlighting).
     const [activeId, setActiveId] = useState<string | null>(null)
+    // Active drag LANE id — a header drag reorders columns (Trello/Bitrix-style)
+    // rather than moving a card. Kept apart so onDragEnd routes by draggable type.
+    const [activeLaneId, setActiveLaneId] = useState<string | null>(null)
+
+    // Per-org lane order. `useStageLayout` reports whether the host wired the
+    // `/stage-layout` endpoint (→ lane drag turns on) and persists the chosen
+    // order. `laneOrderOverride` is the OPTIMISTIC session order applied on top of
+    // the metadata (the backend also stamps `stages[]/smart_lanes[].order`, so the
+    // board already paints ordered on load — this only backs the live drag + the
+    // revert-on-failure). Null → follow the metadata order.
+    const stageLayout = useStageLayout(model)
+    const [laneOrderOverride, setLaneOrderOverride] = useState<string[] | null>(null)
+    const laneReorderEnabled = stageLayout.available
 
     // Monotonic token for the current board load. Bumped on every fetchData so a
     // slow eager-totals response from a superseded filter set can't inject stale
@@ -819,6 +842,68 @@ export function DynamicKanban({
     }, [customStages.stages, stages.length, smartStages.length])
     const transitions = metadata?.transitions
 
+    // Unified, ordered list of the DRAGGABLE lanes (real stages + smart lanes) —
+    // the sortable sequence the header drag reorders. Real stages and smart lanes
+    // are merged by their `order` (the backend stamps a global sequence once a
+    // custom order exists); a `laneOrderOverride` from the live drag wins. Ties
+    // (the default, un-customized case where both sets start at 0) keep stages
+    // before smart lanes, matching the pre-reorder layout.
+    const renderLanes = useMemo<
+        Array<
+            | { kind: 'stage'; stage: StageMeta }
+            | { kind: 'smart'; stage: CustomStage }
+        >
+    >(() => {
+        const arr: Array<{
+            kind: 'stage' | 'smart'
+            stage: any
+            order: number
+        }> = [
+            ...stages.map((s, i) => ({
+                kind: 'stage' as const,
+                stage: s,
+                order: s.order ?? i,
+            })),
+            ...smartStages.map((s, i) => ({
+                kind: 'smart' as const,
+                stage: s,
+                order: s.position ?? 1000 + i,
+            })),
+        ]
+        if (laneOrderOverride) {
+            const idx = new Map(laneOrderOverride.map((k, i) => [k, i]))
+            arr.sort(
+                (a, b) =>
+                    (idx.get(a.stage.key) ?? Number.MAX_SAFE_INTEGER) -
+                    (idx.get(b.stage.key) ?? Number.MAX_SAFE_INTEGER),
+            )
+        } else {
+            arr.sort(
+                (a, b) =>
+                    a.order - b.order ||
+                    (a.kind === b.kind ? 0 : a.kind === 'stage' ? -1 : 1),
+            )
+        }
+        return arr.map(({ kind, stage: s }) =>
+            kind === 'stage'
+                ? { kind: 'stage' as const, stage: s as StageMeta }
+                : { kind: 'smart' as const, stage: s as CustomStage },
+        )
+    }, [stages, smartStages, laneOrderOverride])
+
+    // The sortable ids, in current visual order — SortableContext items + the
+    // basis for the arrayMove the drop computes.
+    const boardLaneKeys = useMemo(
+        () => renderLanes.map((l) => l.stage.key),
+        [renderLanes],
+    )
+    // Real (card-droppable) stage keys — guards a card drop from ever landing on
+    // a smart lane (a saved view, never a stored stage value).
+    const realStageKeys = useMemo(
+        () => new Set(stages.map((s) => s.key)),
+        [stages],
+    )
+
     const grouped = useMemo(
         () => groupByStage(records, groupByKey, stages),
         [records, groupByKey, stages],
@@ -878,16 +963,53 @@ export function DynamicKanban({
     )
 
     const onDragStart = useCallback((e: DragStartEvent) => {
-        setActiveId(String(e.active.id))
+        if (e.active.data.current?.type === 'lane') {
+            setActiveLaneId(String(e.active.id))
+        } else {
+            setActiveId(String(e.active.id))
+        }
     }, [])
+
+    // Optimistic lane reorder: reorder the columns in local state immediately,
+    // PUT the full new order, and revert + toast on failure. Keys mix real
+    // stages and smart lanes (the backend applies the order to both).
+    const reorderLanes = useCallback(
+        async (activeKey: string, overKey: string) => {
+            const from = boardLaneKeys.indexOf(activeKey)
+            const to = boardLaneKeys.indexOf(overKey)
+            if (from === -1 || to === -1 || from === to) return
+            const next = arrayMove(boardLaneKeys, from, to)
+            const prev = laneOrderOverride
+            setLaneOrderOverride(next)
+            try {
+                await stageLayout.save(next)
+            } catch {
+                setLaneOrderOverride(prev)
+                toast.error(
+                    t('dynamic.stage_layout.save_error', {
+                        defaultValue: 'No se pudo guardar el orden',
+                    }),
+                )
+            }
+        },
+        [boardLaneKeys, laneOrderOverride, stageLayout, t],
+    )
 
     const onDragEnd = useCallback(
         async (e: DragEndEvent) => {
             setActiveId(null)
+            setActiveLaneId(null)
             const { active, over } = e
+            // A header drag reorders columns rather than moving a card.
+            if (active.data.current?.type === 'lane') {
+                if (over) await reorderLanes(String(active.id), String(over.id))
+                return
+            }
             if (!over) return
             const cardId = String(active.id)
             const destStage = String(over.id)
+            // Never drop a card onto a smart lane (a saved view, not a stage).
+            if (!realStageKeys.has(destStage) && destStage !== UNASSIGNED_LANE) return
             const srcStage = stageOfCard(cardId)
             if (srcStage === destStage) return
             if (!isTransitionAllowed(transitions, srcStage, destStage)) {
@@ -938,8 +1060,32 @@ export function DynamicKanban({
                 )
             }
         },
-        [api, endpoint, groupByKey, lanePagination, model, records, stageOfCard, t, transitions],
+        [api, endpoint, groupByKey, lanePagination, model, records, stageOfCard, t, transitions, realStageKeys, reorderLanes],
     )
+
+    // Board-level "Restablecer orden": drop the stored order and refetch the
+    // metadata so the lanes fall back to the DECLARED order. Optimistic — reverts
+    // its local override on failure.
+    const resetLaneOrder = useCallback(async () => {
+        const prev = laneOrderOverride
+        setLaneOrderOverride(null)
+        try {
+            await stageLayout.reset()
+            const res = await api.get(`/metadata/table/${model}`)
+            const body = res.data as ApiResponse<TableMetadata>
+            if (body.success) {
+                setMetadata(body.data)
+                cacheMetadata(model, body.data)
+            }
+        } catch {
+            setLaneOrderOverride(prev)
+            toast.error(
+                t('dynamic.stage_layout.reset_error', {
+                    defaultValue: 'No se pudo restablecer el orden',
+                }),
+            )
+        }
+    }, [api, cacheMetadata, laneOrderOverride, model, stageLayout, t])
 
     if (loading) {
         return (
@@ -969,15 +1115,135 @@ export function DynamicKanban({
     const activeCard = activeId ? cardById.get(activeId) : null
     const activeStage = activeId ? stageOfCard(activeId) : ''
 
-    const lanes: StageMeta[] = [...stages]
-    if (grouped.has(UNASSIGNED_LANE)) {
-        lanes.push({
-            key: UNASSIGNED_LANE,
-            label: t('kanban.unassigned', { defaultValue: 'Sin etapa' }),
-            color: 'slate',
-            order: Number.MAX_SAFE_INTEGER,
-        })
+    // The synthetic "Sin etapa" lane (only when some record's stage matches no
+    // declared lane). Rendered after the sortable lanes, never draggable itself.
+    const unassignedStage: StageMeta | null = grouped.has(UNASSIGNED_LANE)
+        ? {
+              key: UNASSIGNED_LANE,
+              label: t('kanban.unassigned', { defaultValue: 'Sin etapa' }),
+              color: 'slate',
+              order: Number.MAX_SAFE_INTEGER,
+          }
+        : null
+
+    // Whether a card may drop into a lane given the active card's stage + the
+    // declared transitions (a same-stage or unrestricted move always passes).
+    const droppableAllowedFor = (stageKey: string) =>
+        !activeId ||
+        stageKey === activeStage ||
+        isTransitionAllowed(transitions, activeStage, stageKey)
+
+    // Builds every `KanbanLane` prop (minus the dnd wiring) for one stage —
+    // shared by the sortable real stages and the plain-droppable unassigned lane.
+    const buildLaneProps = (stage: StageMeta): Omit<KanbanLaneProps, 'dnd'> => {
+        const allCards = grouped.get(stage.key) ?? []
+        // Per-lane client-side narrowing (instant, scoped to this stage). The
+        // funnel (field/value) and the lane search (query) are AND-combined.
+        const laneFilter = laneFilters[stage.key]
+        let cards = allCards
+        if (laneFilter?.field) {
+            cards = cards.filter((c) => cardMatchesLaneFunnel(c, laneFilter))
+        }
+        if (laneFilter?.query?.trim()) {
+            cards = cards.filter((c) =>
+                cardMatchesLaneQuery(c, searchCols, laneFilter.query!),
+            )
+        }
+        const laneState = lanePagination[stage.key]
+        const isUnassigned = stage.key === UNASSIGNED_LANE
+        const laneHasMore = !isUnassigned && !laneState?.done
+        return {
+            stage,
+            count: cards.length,
+            totalCount: allCards.length,
+            serverTotal: laneState?.total ?? null,
+            hasMore: laneHasMore,
+            loadingMore: !!laneState?.loading,
+            onLoadMore: () => loadMoreLane(stage.key),
+            filterFields,
+            laneFilter,
+            onFunnelChange: (f) =>
+                updateLaneFilter(stage.key, {
+                    field: f?.field,
+                    values: f?.values,
+                    text: f?.text,
+                }),
+            onQueryChange: (q) => updateLaneFilter(stage.key, { query: q }),
+            isDark,
+            dimmed: !!activeId && !droppableAllowedFor(stage.key),
+            model,
+            columns: metadata?.columns ?? [],
+            automationsAvailable:
+                automations.available && stage.key !== UNASSIGNED_LANE,
+            automationRules: automations.byStage.get(stage.key) ?? [],
+            onAutomationCreate: automations.create,
+            onAutomationUpdate: automations.update,
+            onAutomationRemove: automations.remove,
+            customStage: customStages.available
+                ? customByKey.get(stage.key)
+                : undefined,
+            onEditStage: openEditStage,
+            onDeleteStage: openDeleteStage,
+            children:
+                loadingData && cards.length === 0 ? (
+                    <>
+                        <Skeleton className="h-20 w-full" />
+                        <Skeleton className="h-20 w-full" />
+                    </>
+                ) : cards.length === 0 ? (
+                    <p className="px-1 py-6 text-center text-xs text-muted-foreground">
+                        {t('kanban.emptyLane', { defaultValue: 'Sin tarjetas' })}
+                    </p>
+                ) : (
+                    cards.map((card) => (
+                        <KanbanCard
+                            key={String(card.id)}
+                            card={card}
+                            titleCol={titleCol}
+                            fieldCols={fieldCols}
+                            actions={rowActions}
+                            locale={i18n.language}
+                            timeZone={timeZone}
+                            currency={currency}
+                            onClick={onCardClick}
+                            onAction={handleInternalAction}
+                        />
+                    ))
+                ),
+        }
     }
+
+    // Props for one smart (virtual) lane — a read-only, filter-defined column.
+    const buildSmartProps = (
+        smart: CustomStage,
+    ): React.ComponentProps<typeof SmartLane> => ({
+        stage: smart,
+        model,
+        endpoint,
+        defaultFilters,
+        pageSize,
+        isDark,
+        refreshTrigger,
+        onEdit: openEditStage,
+        onDelete: openDeleteStage,
+        renderCard: (card: any) => (
+            <KanbanCard
+                card={card}
+                titleCol={titleCol}
+                fieldCols={fieldCols}
+                actions={rowActions}
+                locale={i18n.language}
+                timeZone={timeZone}
+                currency={currency}
+                onClick={onCardClick}
+                onAction={handleInternalAction}
+                draggable={false}
+            />
+        ),
+    })
+
+    const showResetOrder =
+        laneReorderEnabled && (stageLayout.hasCustomLayout || !!laneOrderOverride)
 
     return (
         <div className="flex flex-col gap-3">
@@ -1078,6 +1344,20 @@ export function DynamicKanban({
                         </SheetContent>
                     </Sheet>
                 )}
+                {showResetOrder && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 gap-1.5 text-xs text-muted-foreground"
+                        onClick={() => void resetLaneOrder()}
+                        data-testid="kanban-reset-order"
+                    >
+                        <RotateCcw className="h-3.5 w-3.5" />
+                        {t('dynamic.stage_layout.reset', {
+                            defaultValue: 'Restablecer orden',
+                        })}
+                    </Button>
+                )}
             </div>
 
             {/* Removable chip row — shared with DynamicTable. Instant feedback
@@ -1089,140 +1369,53 @@ export function DynamicKanban({
             />
 
             <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+                {/* Horizontal SortableContext over the draggable lanes (real
+                    stages + smart lanes). Card drags don't touch it — their
+                    active id isn't a sortable item, so the lanes never shift when
+                    moving a card; a `data.type` tag routes drop handling. */}
+                <SortableContext items={boardLaneKeys} strategy={horizontalListSortingStrategy}>
                 <div className="flex w-full min-w-0 gap-4 overflow-x-auto p-1" data-testid="kanban-board">
-                {lanes.map((stage) => {
-                    const allCards = grouped.get(stage.key) ?? []
-                    // Per-lane client-side narrowing (instant, scoped to this
-                    // stage). The funnel (field/value) and the lane search
-                    // (query) are AND-combined.
-                    const laneFilter = laneFilters[stage.key]
-                    let cards = allCards
-                    if (laneFilter?.field) {
-                        cards = cards.filter((c) =>
-                            cardMatchesLaneFunnel(c, laneFilter),
-                        )
-                    }
-                    if (laneFilter?.query?.trim()) {
-                        cards = cards.filter((c) =>
-                            cardMatchesLaneQuery(c, searchCols, laneFilter.query!),
-                        )
-                    }
-                    const droppableAllowed =
-                        !activeId ||
-                        stage.key === activeStage ||
-                        isTransitionAllowed(transitions, activeStage, stage.key)
-                    // Infinite scroll is per declared stage; the synthetic
-                    // "unassigned" lane can't be stage-scoped, so it never tops up.
-                    const laneState = lanePagination[stage.key]
-                    const isUnassigned = stage.key === UNASSIGNED_LANE
-                    const laneHasMore = !isUnassigned && !laneState?.done
-                    return (
-                        <KanbanLane
-                            key={stage.key}
-                            stage={stage}
-                            count={cards.length}
-                            totalCount={allCards.length}
-                            serverTotal={laneState?.total ?? null}
-                            hasMore={laneHasMore}
-                            loadingMore={!!laneState?.loading}
-                            onLoadMore={() => loadMoreLane(stage.key)}
-                            filterFields={filterFields}
-                            laneFilter={laneFilter}
-                            onFunnelChange={(f) =>
-                                updateLaneFilter(stage.key, {
-                                    field: f?.field,
-                                    values: f?.values,
-                                    text: f?.text,
-                                })
+                {renderLanes.map((lane) =>
+                    lane.kind === 'stage' ? (
+                        <SortableStageLane
+                            key={lane.stage.key}
+                            reorderEnabled={laneReorderEnabled}
+                            droppableDisabled={
+                                !!activeId && !droppableAllowedFor(lane.stage.key)
                             }
-                            onQueryChange={(q) =>
-                                updateLaneFilter(stage.key, { query: q })
-                            }
-                            isDark={isDark}
-                            dimmed={!!activeId && !droppableAllowed}
-                            disabled={!!activeId && !droppableAllowed}
-                            model={model}
-                            columns={metadata?.columns ?? []}
-                            automationsAvailable={
-                                automations.available && stage.key !== UNASSIGNED_LANE
-                            }
-                            automationRules={automations.byStage.get(stage.key) ?? []}
-                            onAutomationCreate={automations.create}
-                            onAutomationUpdate={automations.update}
-                            onAutomationRemove={automations.remove}
-                            customStage={
-                                customStages.available
-                                    ? customByKey.get(stage.key)
-                                    : undefined
-                            }
-                            onEditStage={openEditStage}
-                            onDeleteStage={openDeleteStage}
-                        >
-                            {loadingData && cards.length === 0 ? (
-                                <>
-                                    <Skeleton className="h-20 w-full" />
-                                    <Skeleton className="h-20 w-full" />
-                                </>
-                            ) : cards.length === 0 ? (
-                                <p className="px-1 py-6 text-center text-xs text-muted-foreground">
-                                    {t('kanban.emptyLane', { defaultValue: 'Sin tarjetas' })}
-                                </p>
-                            ) : (
-                                cards.map((card) => (
-                                    <KanbanCard
-                                        key={String(card.id)}
-                                        card={card}
-                                        titleCol={titleCol}
-                                        fieldCols={fieldCols}
-                                        actions={rowActions}
-                                        locale={i18n.language}
-                                        timeZone={timeZone}
-                                        currency={currency}
-                                        onClick={onCardClick}
-                                        onAction={handleInternalAction}
-                                    />
-                                ))
-                            )}
-                        </KanbanLane>
-                    )
-                })}
+                            laneProps={buildLaneProps(lane.stage)}
+                        />
+                    ) : laneReorderEnabled ? (
+                        <SortableSmartLane
+                            key={`smart-${lane.stage.key}`}
+                            droppableDisabled={!!activeId}
+                            smartProps={buildSmartProps(lane.stage)}
+                        />
+                    ) : (
+                        <SmartLane
+                            key={`smart-${lane.stage.key}`}
+                            {...buildSmartProps(lane.stage)}
+                        />
+                    ),
+                )}
 
-                {/* Smart (virtual) lanes — each runs its own filtered query and
-                    renders read-only cards (no drag target). */}
-                {smartStages.map((smart) => (
-                    <SmartLane
-                        key={`smart-${smart.key}`}
-                        stage={smart}
-                        model={model}
-                        endpoint={endpoint}
-                        defaultFilters={defaultFilters}
-                        pageSize={pageSize}
-                        isDark={isDark}
-                        refreshTrigger={refreshTrigger}
-                        onEdit={openEditStage}
-                        onDelete={openDeleteStage}
-                        renderCard={(card) => (
-                            <KanbanCard
-                                card={card}
-                                titleCol={titleCol}
-                                fieldCols={fieldCols}
-                                actions={rowActions}
-                                locale={i18n.language}
-                                timeZone={timeZone}
-                                currency={currency}
-                                onClick={onCardClick}
-                                onAction={handleInternalAction}
-                                draggable={false}
-                            />
-                        )}
+                {/* Synthetic "Sin etapa" lane — a card drop target, not sortable. */}
+                {unassignedStage && (
+                    <DroppableStageLane
+                        key={UNASSIGNED_LANE}
+                        droppableDisabled={
+                            !!activeId && !droppableAllowedFor(UNASSIGNED_LANE)
+                        }
+                        laneProps={buildLaneProps(unassignedStage)}
                     />
-                ))}
+                )}
 
                 {/* "+ Agregar etapa" — only when the host wired /custom-stages. */}
                 {customStages.available && (
                     <AddStageColumn onClick={openCreateStage} />
                 )}
-            </div>
+                </div>
+                </SortableContext>
 
             <DragOverlay>
                 {activeCard ? (
@@ -1345,8 +1538,128 @@ function SheetFilterRow({
 }
 
 // ---------------------------------------------------------------------------
-// Lane (droppable column)
+// Lane (droppable + sortable column)
 // ---------------------------------------------------------------------------
+
+/**
+ * The drag-and-drop wiring a lane wrapper hands to `KanbanLane`. Card drops use
+ * `setNodeRef`/`isOver`; the header drag (lane reorder) uses `handleRef` +
+ * `handleProps` on the lane's title cluster and `style` (the sortable
+ * transform). `draggable` gates whether the reorder grip + listeners render.
+ */
+interface LaneDnd {
+    setNodeRef: (el: HTMLElement | null) => void
+    isOver: boolean
+    draggable: boolean
+    isDragging?: boolean
+    style?: React.CSSProperties
+    handleRef?: (el: HTMLElement | null) => void
+    handleProps?: Record<string, any>
+}
+
+// A real stage lane: sortable (header drag reorders) AND a card drop target.
+// One `useSortable` provides both roles; `disabled.draggable` follows whether
+// lane reordering is available, `disabled.droppable` follows the per-card
+// transition gate.
+function SortableStageLane({
+    reorderEnabled,
+    droppableDisabled,
+    laneProps,
+}: {
+    reorderEnabled: boolean
+    droppableDisabled: boolean
+    laneProps: Omit<KanbanLaneProps, 'dnd'>
+}) {
+    const {
+        setNodeRef,
+        setActivatorNodeRef,
+        attributes,
+        listeners,
+        transform,
+        transition,
+        isDragging,
+        isOver,
+    } = useSortable({
+        id: laneProps.stage.key,
+        data: { type: 'lane' },
+        disabled: { draggable: !reorderEnabled, droppable: droppableDisabled },
+    })
+    const dnd: LaneDnd = {
+        setNodeRef,
+        isOver,
+        isDragging,
+        draggable: reorderEnabled,
+        handleRef: setActivatorNodeRef,
+        handleProps: { ...attributes, ...listeners },
+        style: {
+            transform: CSS.Translate.toString(transform),
+            transition,
+            zIndex: isDragging ? 30 : undefined,
+            position: isDragging ? 'relative' : undefined,
+        },
+    }
+    return <KanbanLane {...laneProps} dnd={dnd} />
+}
+
+// The synthetic "Sin etapa" lane: a card drop target, never draggable.
+function DroppableStageLane({
+    droppableDisabled,
+    laneProps,
+}: {
+    droppableDisabled: boolean
+    laneProps: Omit<KanbanLaneProps, 'dnd'>
+}) {
+    const { setNodeRef, isOver } = useDroppable({
+        id: laneProps.stage.key,
+        disabled: droppableDisabled,
+    })
+    return (
+        <KanbanLane
+            {...laneProps}
+            dnd={{ setNodeRef, isOver, draggable: false }}
+        />
+    )
+}
+
+// A smart lane: sortable (header drag reorders) but NOT a card drop target — its
+// droppable is disabled while a card is dragged, enabled while a lane is dragged
+// (so a stage/smart lane can be reordered relative to it).
+function SortableSmartLane({
+    droppableDisabled,
+    smartProps,
+}: {
+    droppableDisabled: boolean
+    smartProps: React.ComponentProps<typeof SmartLane>
+}) {
+    const {
+        setNodeRef,
+        setActivatorNodeRef,
+        attributes,
+        listeners,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({
+        id: smartProps.stage.key,
+        data: { type: 'lane' },
+        disabled: { draggable: false, droppable: droppableDisabled },
+    })
+    const dnd: LaneDnd = {
+        setNodeRef,
+        isOver: false,
+        isDragging,
+        draggable: true,
+        handleRef: setActivatorNodeRef,
+        handleProps: { ...attributes, ...listeners },
+        style: {
+            transform: CSS.Translate.toString(transform),
+            transition,
+            zIndex: isDragging ? 30 : undefined,
+            position: isDragging ? 'relative' : undefined,
+        },
+    }
+    return <SmartLane {...smartProps} dnd={dnd} />
+}
 
 interface LaneFilterField {
     key: string
@@ -1389,7 +1702,8 @@ interface KanbanLaneProps {
     onQueryChange: (query: string) => void
     isDark: boolean
     dimmed: boolean
-    disabled: boolean
+    /** Drag-and-drop wiring from the lane's sortable/droppable wrapper. */
+    dnd: LaneDnd
     /** Model key + columns for the stage-automations editor. */
     model: string
     columns: ColumnDefinition[]
@@ -1423,7 +1737,7 @@ function KanbanLane({
     onQueryChange,
     isDark,
     dimmed,
-    disabled,
+    dnd,
     model,
     columns,
     automationsAvailable,
@@ -1437,7 +1751,6 @@ function KanbanLane({
     children,
 }: KanbanLaneProps) {
     const { t } = useTranslation()
-    const { setNodeRef, isOver } = useDroppable({ id: stage.key, disabled })
     // Infinite scroll: the sentinel lives at the bottom of the lane's own scroll
     // container; a load in flight or an exhausted stage disables it.
     const { rootRef, sentinelRef } = useInfiniteScrollSentinel({
@@ -1481,22 +1794,38 @@ function KanbanLane({
 
     return (
         <div
-            ref={setNodeRef}
+            ref={dnd.setNodeRef}
             // Fluid width: lanes grow (flex-1) to fill the board when they all
             // fit, capped at max-w so a couple of lanes don't stretch absurdly
             // wide. Below min-w the board's overflow-x-auto takes over and the
             // lanes scroll horizontally at their minimum width.
             className="group/lane flex min-w-[280px] max-w-[420px] flex-1 shrink-0 flex-col rounded-xl border bg-muted/30 transition-opacity"
             style={{
-                opacity: dimmed ? 0.45 : 1,
-                outline: isOver && !disabled ? '2px solid var(--ring, #3b82f6)' : 'none',
+                opacity: dnd.isDragging ? 0.6 : dimmed ? 0.45 : 1,
+                outline: dnd.isOver ? '2px solid var(--ring, #3b82f6)' : 'none',
                 outlineOffset: 2,
+                ...dnd.style,
             }}
             data-stage={stage.key}
-            data-disabled={disabled || undefined}
         >
             <div className="flex items-center justify-between gap-2 px-3 py-2.5">
-                <div className="flex min-w-0 items-center gap-2">
+                {/* Title cluster doubles as the reorder handle (Trello/Bitrix):
+                    grabbing the label drags the whole column. A subtle grip fades
+                    in on hover; the lane action buttons stay outside so they never
+                    initiate a drag. */}
+                <div
+                    ref={dnd.draggable ? dnd.handleRef : undefined}
+                    {...(dnd.draggable ? dnd.handleProps : {})}
+                    className={`flex min-w-0 items-center gap-1.5 ${
+                        dnd.draggable ? 'cursor-grab active:cursor-grabbing' : ''
+                    }`}
+                >
+                    {dnd.draggable && (
+                        <GripVertical
+                            className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 opacity-0 transition-opacity group-hover/lane:opacity-70"
+                            aria-hidden
+                        />
+                    )}
                     <Badge
                         variant="outline"
                         className="border-0 text-xs font-semibold"
@@ -1800,6 +2129,7 @@ function KanbanCard({
 }: KanbanCardProps) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: String(card.id),
+        data: { type: 'card' },
         disabled: !draggable,
     })
 
