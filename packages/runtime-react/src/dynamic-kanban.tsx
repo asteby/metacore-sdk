@@ -79,6 +79,12 @@ import {
 import { ColumnFilterControl, FilterValueCombobox, type ColumnFilterType } from '@asteby/metacore-ui/data-table'
 import { generateBadgeStyles, optionColor } from '@asteby/metacore-ui/lib'
 import { useApi } from './api-context'
+import {
+    useStageAutomations,
+    StageAutomationsButton,
+    type StageAutomation,
+    type NewStageAutomation,
+} from './stage-automations'
 import { useDynamicFilters } from './use-dynamic-filters'
 import {
     FilterChipsRow,
@@ -452,6 +458,10 @@ export function DynamicKanban({
     const { t, i18n } = useTranslation()
     const api = useApi()
     const isDark = useIsDarkTheme()
+
+    // Stage automations (Bitrix-style per-lane rules). Degrades to no-op when
+    // the host has no `/stage-automations` endpoint — the ⚡ affordance hides.
+    const automations = useStageAutomations(model)
 
     const { getMetadata, setMetadata: cacheMetadata } = useMetadataCache()
     const cachedMeta = getMetadata(model)
@@ -1075,6 +1085,15 @@ export function DynamicKanban({
                             isDark={isDark}
                             dimmed={!!activeId && !droppableAllowed}
                             disabled={!!activeId && !droppableAllowed}
+                            model={model}
+                            columns={metadata?.columns ?? []}
+                            automationsAvailable={
+                                automations.available && stage.key !== UNASSIGNED_LANE
+                            }
+                            automationRules={automations.byStage.get(stage.key) ?? []}
+                            onAutomationCreate={automations.create}
+                            onAutomationUpdate={automations.update}
+                            onAutomationRemove={automations.remove}
                         >
                             {loadingData && cards.length === 0 ? (
                                 <>
@@ -1243,6 +1262,18 @@ interface KanbanLaneProps {
     isDark: boolean
     dimmed: boolean
     disabled: boolean
+    /** Model key + columns for the stage-automations editor. */
+    model: string
+    columns: ColumnDefinition[]
+    /** Whether the ⚡ automations affordance should render for this lane. */
+    automationsAvailable: boolean
+    automationRules: StageAutomation[]
+    onAutomationCreate: (draft: NewStageAutomation) => Promise<void>
+    onAutomationUpdate: (
+        id: StageAutomation['id'],
+        patch: Partial<StageAutomation>,
+    ) => Promise<void>
+    onAutomationRemove: (id: StageAutomation['id']) => Promise<void>
     children: React.ReactNode
 }
 
@@ -1261,6 +1292,13 @@ function KanbanLane({
     isDark,
     dimmed,
     disabled,
+    model,
+    columns,
+    automationsAvailable,
+    automationRules,
+    onAutomationCreate,
+    onAutomationUpdate,
+    onAutomationRemove,
     children,
 }: KanbanLaneProps) {
     const { t } = useTranslation()
@@ -1359,6 +1397,18 @@ function KanbanLane({
                         value={funnelValue}
                         onChange={onFunnelChange}
                     />
+                    {automationsAvailable && (
+                        <StageAutomationsButton
+                            model={model}
+                            stageKey={stage.key}
+                            stageLabel={stage.label}
+                            columns={columns}
+                            rules={automationRules}
+                            onCreate={onAutomationCreate}
+                            onUpdate={onAutomationUpdate}
+                            onRemove={onAutomationRemove}
+                        />
+                    )}
                 </div>
             </div>
             {searchOpen && (
