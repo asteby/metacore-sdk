@@ -19,7 +19,7 @@
 // All UI text goes through t() with a Spanish defaultValue.
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Trash2, Pencil, MoreVertical, Filter, X } from 'lucide-react'
+import { Plus, Trash2, Pencil, MoreVertical, Filter, GripVertical, X } from 'lucide-react'
 import { toast } from 'sonner'
 import {
     Badge,
@@ -987,6 +987,18 @@ export interface SmartLaneProps {
     refreshTrigger?: any
     onEdit: (stage: CustomStage) => void
     onDelete: (stage: CustomStage) => void
+    /**
+     * Optional drag-and-drop wiring (from the kanban's sortable wrapper) so a
+     * smart lane can be reordered by its header like a real stage. Absent → the
+     * lane is static.
+     */
+    dnd?: {
+        setNodeRef: (el: HTMLElement | null) => void
+        style?: React.CSSProperties
+        isDragging?: boolean
+        handleRef?: (el: HTMLElement | null) => void
+        handleProps?: Record<string, any>
+    }
 }
 
 /**
@@ -1006,6 +1018,7 @@ export function SmartLane({
     refreshTrigger,
     onEdit,
     onDelete,
+    dnd,
 }: SmartLaneProps) {
     const { t } = useTranslation()
     const api = useApi()
@@ -1054,12 +1067,26 @@ export function SmartLane({
 
     return (
         <div
-            className="flex min-w-[280px] max-w-[420px] flex-1 shrink-0 flex-col rounded-xl border border-dashed bg-muted/20"
+            ref={dnd?.setNodeRef}
+            className="group/lane flex min-w-[280px] max-w-[420px] flex-1 shrink-0 flex-col rounded-xl border border-dashed bg-muted/20"
+            style={{ opacity: dnd?.isDragging ? 0.6 : 1, ...dnd?.style }}
             data-smart-stage={stage.key}
             data-testid={`smart-lane-${stage.key}`}
         >
             <div className="flex items-center justify-between gap-2 px-3 py-2.5">
-                <div className="flex min-w-0 items-center gap-2">
+                <div
+                    ref={dnd ? dnd.handleRef : undefined}
+                    {...(dnd ? dnd.handleProps : {})}
+                    className={`flex min-w-0 items-center gap-1.5 ${
+                        dnd ? 'cursor-grab active:cursor-grabbing' : ''
+                    }`}
+                >
+                    {dnd && (
+                        <GripVertical
+                            className="h-3.5 w-3.5 shrink-0 text-muted-foreground/40 opacity-0 transition-opacity group-hover/lane:opacity-70"
+                            aria-hidden
+                        />
+                    )}
                     <Badge
                         variant="outline"
                         className="border-0 text-xs font-semibold"
