@@ -335,12 +335,46 @@ export type FieldWidget =
     | 'switch'
     | 'upload'
 
+/**
+ * Per-option visibility gate for a STATIC enum (`options[]`). The option is only
+ * offered when the value of a sibling field (`field`, defaulting to the
+ * containing field's `dependsOn`) passes: value ∈ `in` and value ∉ `notIn`.
+ * Comparison is by string. Mirrors the kernel v3 `option.when` block; the SDK
+ * tolerates both the snake_case (`not_in`) the kernel serves and camelCase.
+ * An option WITHOUT a `when` always applies (retrocompat).
+ */
+export interface OptionWhen {
+    /** Sibling field whose value gates this option. Falls back to `dependsOn`. */
+    field?: string
+    /** The option applies when the gating field's value is in this list. */
+    in?: string[]
+    /** The option applies when the gating field's value is NOT in this list. */
+    notIn?: string[]
+    /** snake_case alias served by the kernel manifest for `notIn`. */
+    not_in?: string[]
+}
+
+/**
+ * A single static enum option. `value`/`label` are the core pair; `icon`,
+ * `color` and `image` drive the option's leading visual where the renderer
+ * supports it. `when` gates the option's visibility by a sibling field's value
+ * (see {@link OptionWhen}) — used for dependent/cascading STATIC enums.
+ */
+export interface OptionDef {
+    value: string
+    label: string
+    icon?: string
+    color?: string
+    image?: string
+    when?: OptionWhen
+}
+
 export interface ActionFieldDef {
     key: string
     label: string
     type: string
     required?: boolean
-    options?: { value: string; label: string }[]
+    options?: OptionDef[]
     defaultValue?: any
     placeholder?: string
     searchEndpoint?: string

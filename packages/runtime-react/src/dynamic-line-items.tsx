@@ -31,6 +31,7 @@ import {
     resolveDependsValue,
     getOptionsConfig,
     resolveOptionsSource,
+    applyOptionWhen,
 } from './dynamic-form-schema'
 import { DynamicSelectField, DEFAULT_DEPENDS_HINT } from './dynamic-select-field'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
@@ -271,6 +272,25 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues 
     const dependsValue = getDependsOn(field)
         ? resolveDependsValue(field, formValues, rowValues)
         : undefined
+
+    // STATIC enum options gated per-cell by a sibling (row) or header value.
+    // Row values win over the header when a key exists in both, matching
+    // `resolveDependsValue`. Filtered against each option's `when`.
+    const isStaticSelect =
+        widget === 'select' && !field.ref && !getOptionsConfig(field)?.source && Array.isArray(field.options)
+    const gateValues = isStaticSelect ? { ...(formValues ?? {}), ...(rowValues ?? {}) } : undefined
+    const effectiveOptions = isStaticSelect
+        ? applyOptionWhen(field.options, gateValues, getDependsOn(field))
+        : undefined
+
+    // Reset a selection the current sibling value no longer permits.
+    useEffect(() => {
+        if (!isStaticSelect || !effectiveOptions) return
+        if (value && !effectiveOptions.some((o) => String(o.value) === String(value))) {
+            onChange('')
+        }
+    }, [isStaticSelect, effectiveOptions, value, onChange])
+
     // Async searchable picker per row cell — e.g. the account_id column of a
     // journal entry's debit/credit lines. Same widget as the flat form.
     if (widget === 'dynamic_select') {
@@ -309,14 +329,17 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues 
                     disabled={off}
                 />
             )
-        case 'select':
+        case 'select': {
+            const opts = effectiveOptions ?? field.options
+            // No option applies under the current sibling value → hide the cell.
+            if (effectiveOptions && effectiveOptions.length === 0) return null
             return (
                 <Select value={value || ''} onValueChange={onChange} disabled={off}>
                     <SelectTrigger className="w-full">
                         <SelectValue placeholder={field.placeholder || 'Seleccionar...'} />
                     </SelectTrigger>
                     <SelectContent>
-                        {field.options?.map((opt) => (
+                        {opts?.map((opt) => (
                             <SelectItem key={opt.value} value={opt.value}>
                                 {opt.label}
                             </SelectItem>
@@ -324,6 +347,7 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues 
                     </SelectContent>
                 </Select>
             )
+        }
         case 'switch':
             return <Switch checked={!!value} onCheckedChange={onChange} disabled={off} />
         case 'number':
