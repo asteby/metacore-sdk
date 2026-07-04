@@ -45,14 +45,13 @@ export function DataTableToolbar<TData>({
   children,
   extraActions,
 }: DataTableToolbarProps<TData>) {
-  const hasActiveColumnFilters = Object.values(activeFilters).some((v) => v.length > 0)
-  const activeFilterCount =
-    Object.values(activeFilters).filter((v) => v.length > 0).length +
-    table.getState().columnFilters.length
+  // Dynamic (server-side) filters render their own chip row with a
+  // "Limpiar todo" below the toolbar, so this button only covers the
+  // table's own client-side state (column filters + global search) —
+  // otherwise both clear affordances show for the same filter.
   const isFiltered =
     table.getState().columnFilters.length > 0 ||
-    table.getState().globalFilter ||
-    hasActiveColumnFilters
+    table.getState().globalFilter
 
   return (
     <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
@@ -104,11 +103,6 @@ export function DataTableToolbar<TData>({
             className='h-8 px-2 lg:px-3 text-muted-foreground hover:text-foreground'
           >
             Limpiar filtros
-            {activeFilterCount > 0 && (
-              <span className='ml-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-muted text-[11px] font-semibold px-1'>
-                {activeFilterCount}
-              </span>
-            )}
             <Cross2Icon className='ms-1 h-3.5 w-3.5' />
           </Button>
         )}

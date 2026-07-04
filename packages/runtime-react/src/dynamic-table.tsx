@@ -209,6 +209,10 @@ export function DynamicTable({
         if (colonIdx === -1) return value
         const prefix = value.substring(0, colonIdx).toLowerCase()
         const rest = value.substring(colonIdx + 1)
+        // `eq:` is the wire's explicit equality operator, but internally a
+        // select stores the bare value — unwrap it so `f_status=eq:reception`
+        // matches the option "reception" (header filter + chip label).
+        if (prefix === 'eq') return rest
         const operator = urlAliasToOperator[prefix]
         return operator ? `${operator}:${rest}` : value
     }
