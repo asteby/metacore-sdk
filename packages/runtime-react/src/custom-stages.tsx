@@ -19,7 +19,7 @@
 // All UI text goes through t() with a Spanish defaultValue.
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Trash2, Pencil, MoreVertical, Filter, GripVertical, RotateCcw, X } from 'lucide-react'
+import { Plus, Trash2, Pencil, MoreVertical, Filter, Flag, GripVertical, Lock, RotateCcw, X } from 'lucide-react'
 import { toast } from 'sonner'
 import {
     Badge,
@@ -1058,12 +1058,40 @@ export interface StageConfigTarget {
     color: string
     filters: CustomStageFilter[]
     /**
-     * Declared kind: an override is currently applied → enables "Restablecer
-     * etapa". Ignored for custom stages (they reset via their own delete flow).
+     * Declared kind: an override is currently applied → shows a "Personalizada"
+     * badge + "Restablecer al original". Ignored for custom stages (they reset
+     * via their own delete flow).
      */
     overridden?: boolean
+    /** Terminal stage (e.g. "Done") — surfaces an "Etapa final" chip + tooltip. */
+    isFinal?: boolean
+    /**
+     * The manifest ORIGINAL (pre-override) values, when the host serves them
+     * (`metadata.stages[].original`). Drives the "Restablecer al original" confirm
+     * so the user sees exactly what reverts. Absent → a generic confirm.
+     */
+    original?: {
+        label?: string
+        color?: string
+        filters?: CustomStageFilter[]
+    }
     /** The backing CustomStage (custom kind) so "Eliminar" can trigger delete. */
     customStage?: CustomStage
+}
+
+/** A legible operator glyph for a condition chip: = / ≠ / contiene / en. */
+export function stageFilterOpSymbol(op: string): string {
+    switch (op) {
+        case 'neq':
+            return '≠'
+        case 'contains':
+            return 'contiene'
+        case 'in':
+            return 'en'
+        case 'eq':
+        default:
+            return '='
+    }
 }
 
 export interface StageConfigDialogProps {
@@ -1121,13 +1149,19 @@ export function StageConfigDialog({
     const [filters, setFilters] = useState<CustomStageFilter[]>([])
     const [saving, setSaving] = useState(false)
     const [resetting, setResetting] = useState(false)
+    // Two-step reset: the first click reveals a confirm panel listing exactly
+    // what reverts (the manifest original), the second actually drops the override.
+    const [confirmingReset, setConfirmingReset] = useState(false)
 
-    // Re-seed the form each time the dialog opens against a lane.
+    // Re-seed the WHOLE form from the lane's current (already-override-applied)
+    // metadata each time the dialog opens — the user always sees the live state,
+    // never a blank form. Label, color and every extra condition pre-fill editable.
     useEffect(() => {
         if (!open || !target) return
         setLabel(target.label)
         setColor(target.color || CUSTOM_STAGE_COLORS[0])
         setFilters(target.filters?.map((f) => ({ ...f })) ?? [])
+        setConfirmingReset(false)
     }, [open, target])
 
     if (!target) return null
@@ -1136,6 +1170,14 @@ export function StageConfigDialog({
     // Only complete conditions are persisted; empty rows are dropped.
     const cleanFilters = () =>
         filters.filter((f) => f.field && String(f.value).trim() !== '')
+    // The conditions that make up the lane's EFFECTIVE query, for the chip row:
+    // the immovable stage scope first, then each extra (removable) condition.
+    const chipFilters = filters.filter(
+        (f) => f.field && String(f.value).trim() !== '',
+    )
+
+    const removeFilterAt = (i: number) =>
+        setFilters((prev) => prev.filter((_, idx) => idx !== i))
 
     const submit = async () => {
         if (!valid || saving) return
@@ -1189,14 +1231,55 @@ export function StageConfigDialog({
         }
     }
 
+    const headerDot = generateBadgeStyles(
+        color || optionColor(target.stageKey),
+        { isDark },
+    )
+    // A one-line, human summary of the manifest original (for the reset confirm).
+    const original = target.original
+    const originalConditions =
+        original?.filters && original.filters.length > 0
+            ? original.filters
+                  .map(
+                      (f) =>
+                          `${f.field} ${stageFilterOpSymbol(f.op)} ${f.value}`,
+                  )
+                  .join(', ')
+            : t('dynamic.stage_config.original_no_conditions', {
+                  defaultValue: 'sin condiciones',
+              })
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
-                    <DialogTitle>
+                    <DialogTitle className="flex items-center gap-2">
+                        <span
+                            className="inline-block size-3 shrink-0 rounded-full"
+                            style={{
+                                backgroundColor:
+                                    headerDot.backgroundColor ||
+                                    (headerDot as any).background,
+                            }}
+                            aria-hidden
+                        />
                         {t('dynamic.stage_config.title', {
                             defaultValue: 'Configurar etapa',
                         })}
+                        <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] font-normal text-muted-foreground">
+                            {target.stageKey}
+                        </code>
+                        {target.kind === 'declared' && target.overridden && (
+                            <Badge
+                                variant="secondary"
+                                className="ml-auto text-[10px] font-medium"
+                                data-testid="stage-config-personalizada"
+                            >
+                                {t('dynamic.stage_config.customized', {
+                                    defaultValue: 'Personalizada',
+                                })}
+                            </Badge>
+                        )}
                     </DialogTitle>
                     <DialogDescription>
                         {t('dynamic.stage_config.description', {
@@ -1207,6 +1290,87 @@ export function StageConfigDialog({
                 </DialogHeader>
 
                 <div className="flex flex-col gap-4">
+                    {/* "Condiciones actuales" — the lane's EFFECTIVE query as chips.
+                        The base "Etapa = <label>" chip is always present, locked and
+                        dimmed (it's the stage scope, never removable); the terminal
+                        chip appears for a final stage; each extra condition is an
+                        editable/removable chip mirroring the builder below. */}
+                    <div className="flex flex-col gap-1.5">
+                        <Label className="text-xs text-muted-foreground">
+                            {t('dynamic.stage_config.current_conditions_label', {
+                                defaultValue: 'Condiciones actuales',
+                            })}
+                        </Label>
+                        <div
+                            className="flex flex-wrap items-center gap-1.5"
+                            data-testid="stage-config-current-conditions"
+                        >
+                            <Badge
+                                variant="outline"
+                                className="cursor-default gap-1 border-dashed text-[11px] font-normal text-muted-foreground opacity-80"
+                                title={t('dynamic.stage_config.base_chip_hint', {
+                                    defaultValue:
+                                        'Alcance base de la etapa: no se puede quitar.',
+                                })}
+                                data-testid="stage-config-base-chip"
+                            >
+                                <Lock className="h-3 w-3" />
+                                {t('dynamic.stage_config.base_chip', {
+                                    defaultValue: 'Etapa = {{label}}',
+                                    label: label || target.label,
+                                })}
+                            </Badge>
+                            {target.isFinal && (
+                                <Badge
+                                    variant="outline"
+                                    className="cursor-default gap-1 text-[11px] font-normal text-muted-foreground"
+                                    title={t('dynamic.stage_config.final_chip_hint', {
+                                        defaultValue:
+                                            'Etapa terminal: al mover una tarjeta aquí se marca como cerrada (p. ej. en GitHub cierra el issue).',
+                                    })}
+                                    data-testid="stage-config-final-chip"
+                                >
+                                    <Flag className="h-3 w-3" />
+                                    {t('dynamic.stage_config.final_chip', {
+                                        defaultValue: 'Etapa final',
+                                    })}
+                                </Badge>
+                            )}
+                            {chipFilters.map((f) => {
+                                // Chip index maps back to its position in `filters`.
+                                const i = filters.indexOf(f)
+                                return (
+                                    <Badge
+                                        key={i}
+                                        variant="secondary"
+                                        className="gap-1 pr-1 text-[11px] font-normal"
+                                        data-testid={`stage-config-filter-chip-${i}`}
+                                    >
+                                        <span className="font-mono">{f.field}</span>
+                                        <span className="opacity-70">
+                                            {stageFilterOpSymbol(f.op)}
+                                        </span>
+                                        <span>{f.value}</span>
+                                        <button
+                                            type="button"
+                                            onClick={() => removeFilterAt(i)}
+                                            className="ml-0.5 rounded p-0.5 hover:bg-background/60"
+                                            aria-label={t(
+                                                'dynamic.stage_config.remove_chip',
+                                                { defaultValue: 'Quitar condición' },
+                                            )}
+                                            data-testid={`stage-config-filter-chip-remove-${i}`}
+                                        >
+                                            <X className="h-2.5 w-2.5" />
+                                        </button>
+                                    </Badge>
+                                )
+                            })}
+                        </div>
+                    </div>
+
+                    <div className="border-t" />
+
                     {/* Name */}
                     <div className="flex flex-col gap-1.5">
                         <Label className="text-xs">
@@ -1260,7 +1424,7 @@ export function StageConfigDialog({
                         </div>
                     </div>
 
-                    {/* Conditions — optional extra scoping on top of the stage */}
+                    {/* Conditions — the editable builder (pre-filled from the lane) */}
                     <StageConditionBuilder
                         filters={filters}
                         onChange={setFilters}
@@ -1287,22 +1451,83 @@ export function StageConfigDialog({
                             })}
                         </Button>
                     )}
+
+                    {/* Reset confirm — spells out exactly what reverts to the
+                        manifest original before dropping the override. */}
+                    {confirmingReset && (
+                        <div
+                            className="flex flex-col gap-2 rounded-md border border-dashed bg-muted/30 p-3 text-xs"
+                            data-testid="stage-config-reset-confirm-panel"
+                        >
+                            <p className="font-medium">
+                                {t('dynamic.stage_config.reset_confirm_title', {
+                                    defaultValue:
+                                        'Se restablecerá la etapa a su versión original:',
+                                })}
+                            </p>
+                            <ul className="list-inside list-disc text-muted-foreground">
+                                <li>
+                                    {t('dynamic.stage_config.reset_confirm_label', {
+                                        defaultValue: 'Nombre: {{label}}',
+                                        label: original?.label ?? target.stageKey,
+                                    })}
+                                </li>
+                                <li>
+                                    {t('dynamic.stage_config.reset_confirm_color', {
+                                        defaultValue: 'Color: {{color}}',
+                                        color: original?.color ?? '—',
+                                    })}
+                                </li>
+                                <li>
+                                    {t('dynamic.stage_config.reset_confirm_conditions', {
+                                        defaultValue: 'Condiciones: {{list}}',
+                                        list: originalConditions,
+                                    })}
+                                </li>
+                            </ul>
+                            <div className="flex justify-end gap-2 pt-1">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 text-xs"
+                                    onClick={() => setConfirmingReset(false)}
+                                    disabled={resetting}
+                                >
+                                    {t('dynamic.stage_config.cancel', {
+                                        defaultValue: 'Cancelar',
+                                    })}
+                                </Button>
+                                <Button
+                                    variant="destructive"
+                                    size="sm"
+                                    className="h-7 text-xs"
+                                    onClick={() => void reset()}
+                                    disabled={resetting}
+                                    data-testid="stage-config-reset-confirm"
+                                >
+                                    {t('dynamic.stage_config.reset_confirm', {
+                                        defaultValue: 'Restablecer al original',
+                                    })}
+                                </Button>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <DialogFooter className="sm:justify-between">
-                    {/* Destructive/reset affordance on the left. */}
+                    {/* Reset (declared+overridden) / delete (custom) on the left. */}
                     <div>
                         {target.kind === 'declared' && target.overridden && (
                             <Button
                                 variant="ghost"
                                 className="gap-1.5 text-muted-foreground"
-                                onClick={() => void reset()}
-                                disabled={saving || resetting}
+                                onClick={() => setConfirmingReset(true)}
+                                disabled={saving || resetting || confirmingReset}
                                 data-testid="stage-config-reset"
                             >
                                 <RotateCcw className="h-4 w-4" />
                                 {t('dynamic.stage_config.reset', {
-                                    defaultValue: 'Restablecer etapa',
+                                    defaultValue: 'Restablecer al original',
                                 })}
                             </Button>
                         )}

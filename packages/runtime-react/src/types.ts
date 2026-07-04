@@ -94,6 +94,17 @@ export interface StageMeta {
      * plain declared stage. Snake_case ops as the kernel serves them.
      */
     filters?: { field: string; op: string; value: string }[]
+    /**
+     * The manifest ORIGINAL (pre-override) label/color/conditions, served
+     * alongside an overridden declared lane so the "Restablecer al original"
+     * confirm can spell out exactly what reverts. Optional — hosts that don't
+     * snapshot the original simply omit it and the SDK shows a generic confirm.
+     */
+    original?: {
+        label?: string
+        color?: string
+        filters?: { field: string; op: string; value: string }[]
+    }
 }
 
 /**

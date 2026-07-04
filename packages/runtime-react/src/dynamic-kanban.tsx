@@ -1196,6 +1196,17 @@ export function DynamicKanban({
                 customStage: custom,
             })
         } else {
+            const original = stage.original
+                ? {
+                      label: stage.original.label,
+                      color: stage.original.color,
+                      filters: stage.original.filters?.map((f) => ({
+                          field: f.field,
+                          op: f.op as CustomStageFilter['op'],
+                          value: f.value,
+                      })),
+                  }
+                : undefined
             setConfigTarget({
                 kind: 'declared',
                 stageKey: stage.key,
@@ -1203,6 +1214,8 @@ export function DynamicKanban({
                 color: stage.color ?? 'slate',
                 filters,
                 overridden: !!stage.overridden,
+                isFinal: stage.is_final,
+                original,
             })
         }
     }

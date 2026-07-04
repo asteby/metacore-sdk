@@ -47,6 +47,7 @@ export {
     CustomStageDeleteDialog,
     StageConditionBuilder,
     StageConfigDialog,
+    stageFilterOpSymbol,
     SmartLane,
     CUSTOM_STAGE_COLORS,
     CUSTOM_STAGE_FILTER_OPS,

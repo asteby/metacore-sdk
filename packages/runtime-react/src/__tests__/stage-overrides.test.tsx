@@ -192,14 +192,80 @@ describe('StageConfigDialog', () => {
         expect(patch.filters).toEqual([{ field: 'title', op: 'eq', value: 'high' }])
     })
 
-    it('shows "Restablecer etapa" only when the declared lane is overridden', () => {
+    it('pre-populates the WHOLE form from the lane (label, color, existing conditions)', () => {
+        renderConfig({
+            ...DECLARED_TARGET,
+            label: 'En revisión',
+            color: 'amber',
+            filters: [{ field: 'priority', op: 'eq', value: 'high' }],
+        })
+        // Name + color pre-filled from the current lane state.
+        expect((screen.getByTestId('stage-config-name') as HTMLInputElement).value).toBe('En revisión')
+        expect(screen.getByTestId('stage-config-color-amber').getAttribute('aria-pressed')).toBe('true')
+        // The existing condition is loaded into the builder, editable.
+        expect((screen.getByTestId('custom-stage-condition-value-0') as HTMLInputElement).value).toBe('high')
+    })
+
+    it('renders the current-conditions chips: locked base chip, final chip, removable filter chips', () => {
+        renderConfig({
+            ...DECLARED_TARGET,
+            label: 'Hecho',
+            isFinal: true,
+            filters: [
+                { field: 'state', op: 'eq', value: 'open' },
+                { field: 'priority', op: 'neq', value: 'low' },
+            ],
+        })
+        // Base chip is always present and shows the stage scope.
+        const base = screen.getByTestId('stage-config-base-chip')
+        expect(base.textContent).toContain('Etapa = Hecho')
+        // Final chip renders for a terminal stage.
+        expect(screen.getByTestId('stage-config-final-chip')).toBeTruthy()
+        // One editable chip per extra condition, with legible operators.
+        expect(screen.getByTestId('stage-config-filter-chip-0').textContent).toContain('state')
+        expect(screen.getByTestId('stage-config-filter-chip-0').textContent).toContain('=')
+        expect(screen.getByTestId('stage-config-filter-chip-1').textContent).toContain('≠')
+    })
+
+    it('removing a condition chip drops it from the builder', () => {
+        renderConfig({
+            ...DECLARED_TARGET,
+            filters: [
+                { field: 'state', op: 'eq', value: 'open' },
+                { field: 'priority', op: 'neq', value: 'low' },
+            ],
+        })
+        expect(screen.getByTestId('stage-config-filter-chip-1')).toBeTruthy()
+        fireEvent.click(screen.getByTestId('stage-config-filter-chip-remove-1'))
+        expect(screen.queryByTestId('stage-config-filter-chip-1')).toBeNull()
+        // The first condition survives.
+        expect(screen.getByTestId('stage-config-filter-chip-0')).toBeTruthy()
+    })
+
+    it('shows the "Personalizada" badge and a reset confirm listing the original values', async () => {
         renderConfig({ ...DECLARED_TARGET, overridden: false })
         expect(screen.queryByTestId('stage-config-reset')).toBeNull()
         cleanup()
-        const props = renderConfig({ ...DECLARED_TARGET, overridden: true })
-        const reset = screen.getByTestId('stage-config-reset')
-        fireEvent.click(reset)
-        expect(props.onResetOverride).toHaveBeenCalledWith('backlog')
+        const props = renderConfig({
+            ...DECLARED_TARGET,
+            overridden: true,
+            original: {
+                label: 'Backlog',
+                color: 'slate',
+                filters: [{ field: 'state', op: 'eq', value: 'todo' }],
+            },
+        })
+        expect(screen.getByTestId('stage-config-personalizada')).toBeTruthy()
+        // First click reveals the confirm panel spelling out what reverts.
+        fireEvent.click(screen.getByTestId('stage-config-reset'))
+        const panel = screen.getByTestId('stage-config-reset-confirm-panel')
+        expect(panel.textContent).toContain('Backlog')
+        expect(panel.textContent).toContain('slate')
+        expect(panel.textContent).toContain('state = todo')
+        expect(props.onResetOverride).not.toHaveBeenCalled()
+        // The confirm button actually drops the override.
+        fireEvent.click(screen.getByTestId('stage-config-reset-confirm'))
+        await waitFor(() => expect(props.onResetOverride).toHaveBeenCalledWith('backlog'))
     })
 
     it('a CUSTOM lane saves via onUpdateCustom and deletes via onDeleteCustom', async () => {
