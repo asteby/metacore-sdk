@@ -54,6 +54,7 @@ import {
     MoreHorizontal,
     RotateCcw,
     Search,
+    Settings2,
     Tag,
     ToggleLeft,
     Type,
@@ -99,13 +100,18 @@ import {
     splitCustomStages,
     mergeLaneStages,
     resolveSmartLanes,
+    cardMatchesStageFilters,
+    smartLaneParams,
     AddStageColumn,
-    CustomStageLaneMenu,
     CustomStageDialog,
     CustomStageDeleteDialog,
+    StageConfigDialog,
     SmartLane,
     type CustomStage,
+    type CustomStageFilter,
+    type StageConfigTarget,
 } from './custom-stages'
+import { useStageOverrides } from './stage-overrides'
 import { useDynamicFilters } from './use-dynamic-filters'
 import {
     FilterChipsRow,
@@ -489,10 +495,16 @@ export function DynamicKanban({
     // the host has no `/custom-stages` endpoint — the "+ Agregar etapa" column
     // and lane menus simply don't render.
     const customStages = useCustomStages(model)
+    // Per-org overrides for DECLARED lanes (rename/recolor/conditions). Degrades
+    // to no-op when the host has no `/stage-overrides` endpoint — the ⚙ gear then
+    // hides on declared lanes (custom lanes keep it via /custom-stages).
+    const stageOverrides = useStageOverrides(model)
     // Dialog state: create/edit a stage, and the delete confirmation.
     const [stageDialogOpen, setStageDialogOpen] = useState(false)
     const [editingStage, setEditingStage] = useState<CustomStage | null>(null)
     const [deletingStage, setDeletingStage] = useState<CustomStage | null>(null)
+    // The gear (⚙) "Configurar etapa" dialog — one UI for declared + custom lanes.
+    const [configTarget, setConfigTarget] = useState<StageConfigTarget | null>(null)
     const openCreateStage = useCallback(() => {
         setEditingStage(null)
         setStageDialogOpen(true)
@@ -628,6 +640,7 @@ export function DynamicKanban({
                         const r = (await api.get(endpoint || `/data/${model}`, {
                             params: {
                                 ...filterParams,
+                                ...smartLaneParams(stage.filters),
                                 page: 1,
                                 per_page: 1,
                                 [`f_${gb}`]: stage.key,
@@ -661,6 +674,27 @@ export function DynamicKanban({
     // the shared records. Scoped by `f_<group_by>=<stage>` on top of the active
     // filterParams (the stage scope wins over any global group_by filter).
     const groupByKey = metadata?.group_by || ''
+    // Extra per-lane conditions (stage overrides) keyed by stage. A real lane
+    // that carries these queries its data — and counts its header — with the
+    // stage scope PLUS these filters (serialized like a smart lane's), so the
+    // top-up + eager-total requests below layer them on. Sourced from
+    // `metadata.stages` (the kernel applies declared + custom-real overrides).
+    const stageExtraFilters = useMemo(() => {
+        const m = new Map<string, CustomStageFilter[]>()
+        for (const s of metadata?.stages ?? []) {
+            if (s.filters && s.filters.length > 0) {
+                m.set(
+                    s.key,
+                    s.filters.map((f) => ({
+                        field: f.field,
+                        op: f.op as CustomStageFilter['op'],
+                        value: f.value,
+                    })),
+                )
+            }
+        }
+        return m
+    }, [metadata?.stages])
     const loadMoreLane = useCallback(
         async (stageKey: string) => {
             if (!metadata || !groupByKey) return
@@ -680,6 +714,7 @@ export function DynamicKanban({
                 const res = (await api.get(endpoint || `/data/${model}`, {
                     params: {
                         ...filterParams,
+                        ...smartLaneParams(stageExtraFilters.get(stageKey)),
                         page: nextPage,
                         per_page: lanePageSize,
                         [`f_${groupByKey}`]: stageKey,
@@ -712,7 +747,7 @@ export function DynamicKanban({
                 }))
             }
         },
-        [api, endpoint, model, metadata, groupByKey, filterParams, lanePageSize, lanePagination],
+        [api, endpoint, model, metadata, groupByKey, filterParams, lanePageSize, lanePagination, stageExtraFilters],
     )
 
     // Refetch when metadata resolves, on an explicit refresh, or when the
@@ -1133,14 +1168,69 @@ export function DynamicKanban({
         stageKey === activeStage ||
         isTransitionAllowed(transitions, activeStage, stageKey)
 
+    // Opens the gear (⚙) "Configurar etapa" dialog for a lane, routing to the
+    // right backend by kind: a custom real stage edits through /custom-stages, a
+    // declared stage through /stage-overrides. Seeds the current label/color and
+    // any extra conditions the lane already carries.
+    const openConfigStage = (stage: StageMeta) => {
+        const custom = customStages.available
+            ? customByKey.get(stage.key)
+            : undefined
+        const raw =
+            stageExtraFilters.get(stage.key) ??
+            (custom?.filters as CustomStageFilter[] | undefined) ??
+            []
+        const filters: CustomStageFilter[] = raw.map((f) => ({
+            field: f.field,
+            op: f.op as CustomStageFilter['op'],
+            value: f.value,
+        }))
+        if (custom) {
+            setConfigTarget({
+                kind: 'custom',
+                stageKey: stage.key,
+                id: custom.id,
+                label: custom.label,
+                color: custom.color,
+                filters,
+                customStage: custom,
+            })
+        } else {
+            setConfigTarget({
+                kind: 'declared',
+                stageKey: stage.key,
+                label: t(stage.label, { defaultValue: stage.label }),
+                color: stage.color ?? 'slate',
+                filters,
+                overridden: !!stage.overridden,
+            })
+        }
+    }
+    // Whether a lane offers the gear: custom real stages always (their CRUD is
+    // wired); declared lanes only when the host wired /stage-overrides. Never on
+    // the synthetic "Sin etapa" lane.
+    const isConfigurable = (stage: StageMeta): boolean => {
+        if (stage.key === UNASSIGNED_LANE) return false
+        return customByKey.has(stage.key)
+            ? customStages.available
+            : stageOverrides.available
+    }
+
     // Builds every `KanbanLane` prop (minus the dnd wiring) for one stage —
     // shared by the sortable real stages and the plain-droppable unassigned lane.
     const buildLaneProps = (stage: StageMeta): Omit<KanbanLaneProps, 'dnd'> => {
         const allCards = grouped.get(stage.key) ?? []
+        // Extra lane conditions (stage override): the server already scopes this
+        // lane's top-up + total queries by them, but the shared INITIAL board page
+        // is unscoped, so narrow those cards client-side too (belt-and-suspenders).
+        const extraFilters = stageExtraFilters.get(stage.key) ?? []
         // Per-lane client-side narrowing (instant, scoped to this stage). The
         // funnel (field/value) and the lane search (query) are AND-combined.
         const laneFilter = laneFilters[stage.key]
         let cards = allCards
+        if (extraFilters.length > 0) {
+            cards = cards.filter((c) => cardMatchesStageFilters(c, extraFilters))
+        }
         if (laneFilter?.field) {
             cards = cards.filter((c) => cardMatchesLaneFunnel(c, laneFilter))
         }
@@ -1179,11 +1269,9 @@ export function DynamicKanban({
             onAutomationCreate: automations.create,
             onAutomationUpdate: automations.update,
             onAutomationRemove: automations.remove,
-            customStage: customStages.available
-                ? customByKey.get(stage.key)
-                : undefined,
-            onEditStage: openEditStage,
-            onDeleteStage: openDeleteStage,
+            extraFilters,
+            configurable: isConfigurable(stage),
+            onConfigure: () => openConfigStage(stage),
             children:
                 loadingData && cards.length === 0 ? (
                     <>
@@ -1461,6 +1549,50 @@ export function DynamicKanban({
                     />
                 </>
             )}
+
+            {/* Unified "Configurar etapa" dialog opened by the per-lane ⚙ gear —
+                routes saves to /stage-overrides (declared) or /custom-stages
+                (custom) by the target's kind. */}
+            <StageConfigDialog
+                open={!!configTarget}
+                onOpenChange={(o) => {
+                    if (!o) setConfigTarget(null)
+                }}
+                columns={metadata?.columns ?? []}
+                target={configTarget}
+                onSaveOverride={async (stageKey, patch) => {
+                    await stageOverrides.save(stageKey, patch)
+                    // The override changes the served label/color/filters — refetch
+                    // metadata so the board repaints, and reload the cards.
+                    try {
+                        const res = await api.get(`/metadata/table/${model}`)
+                        const body = res.data as ApiResponse<TableMetadata>
+                        if (body.success) {
+                            setMetadata(body.data)
+                            cacheMetadata(model, body.data)
+                        }
+                    } catch {
+                        /* keep the current metadata on a refetch miss */
+                    }
+                    void fetchData()
+                }}
+                onResetOverride={async (stageKey) => {
+                    await stageOverrides.reset(stageKey)
+                    try {
+                        const res = await api.get(`/metadata/table/${model}`)
+                        const body = res.data as ApiResponse<TableMetadata>
+                        if (body.success) {
+                            setMetadata(body.data)
+                            cacheMetadata(model, body.data)
+                        }
+                    } catch {
+                        /* keep the current metadata on a refetch miss */
+                    }
+                    void fetchData()
+                }}
+                onUpdateCustom={customStages.update}
+                onDeleteCustom={openDeleteStage}
+            />
         </div>
     )
 }
@@ -1716,10 +1848,12 @@ interface KanbanLaneProps {
         patch: Partial<StageAutomation>,
     ) => Promise<void>
     onAutomationRemove: (id: StageAutomation['id']) => Promise<void>
-    /** When set, this lane is a user-defined custom stage → show ⋮ Editar/Eliminar. */
-    customStage?: CustomStage
-    onEditStage?: (stage: CustomStage) => void
-    onDeleteStage?: (stage: CustomStage) => void
+    /** Extra lane conditions (stage override) — drives the header filter dot + tooltip. */
+    extraFilters: CustomStageFilter[]
+    /** Whether the ⚙ "Configurar etapa" gear should render for this lane. */
+    configurable: boolean
+    /** Opens the gear config dialog for this lane. */
+    onConfigure: () => void
     children: React.ReactNode
 }
 
@@ -1745,9 +1879,9 @@ function KanbanLane({
     onAutomationCreate,
     onAutomationUpdate,
     onAutomationRemove,
-    customStage,
-    onEditStage,
-    onDeleteStage,
+    extraFilters,
+    configurable,
+    onConfigure,
     children,
 }: KanbanLaneProps) {
     const { t } = useTranslation()
@@ -1791,6 +1925,25 @@ function KanbanLane({
               text: laneFilter.text,
           }
         : undefined
+
+    // Stage-override conditions active on this lane → a small filter dot in the
+    // header, its `title` listing the conditions (e.g. "priority es igual high").
+    const hasConditions = extraFilters.length > 0
+    const conditionsSummary = extraFilters
+        .map((f) => {
+            const opLabel = t(`dynamic.custom_stages.op.${f.op}`, {
+                defaultValue:
+                    f.op === 'eq'
+                        ? 'es igual'
+                        : f.op === 'neq'
+                        ? 'distinto'
+                        : f.op === 'contains'
+                        ? 'contiene'
+                        : 'en lista',
+            })
+            return `${f.field} ${opLabel} ${f.value}`
+        })
+        .join(' · ')
 
     return (
         <div
@@ -1836,6 +1989,22 @@ function KanbanLane({
                     <span className="text-xs font-medium tabular-nums text-muted-foreground">
                         {formatLaneCount(count, totalCount, serverTotal, laneActive)}
                     </span>
+                    {hasConditions && (
+                        <span
+                            className="flex items-center text-primary"
+                            title={t('dynamic.stage_config.conditions_active', {
+                                defaultValue: 'Condiciones: {{list}}',
+                                list: conditionsSummary,
+                            })}
+                            data-testid={`lane-conditions-${stage.key}`}
+                            aria-label={t('dynamic.stage_config.conditions_active', {
+                                defaultValue: 'Condiciones: {{list}}',
+                                list: conditionsSummary,
+                            })}
+                        >
+                            <ListFilter className="h-3 w-3" />
+                        </span>
+                    )}
                 </div>
                 {/* Lane actions — always visible in muted (a hidden hover-reveal
                     was undiscoverable); active state is a primary tint + a count
@@ -1873,12 +2042,20 @@ function KanbanLane({
                             onRemove={onAutomationRemove}
                         />
                     )}
-                    {customStage && onEditStage && onDeleteStage && (
-                        <CustomStageLaneMenu
-                            stage={customStage}
-                            onEdit={onEditStage}
-                            onDelete={onDeleteStage}
-                        />
+                    {configurable && (
+                        <button
+                            type="button"
+                            onClick={onConfigure}
+                            className={`relative flex size-6 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-foreground ${
+                                hasConditions ? 'text-primary' : 'text-muted-foreground'
+                            }`}
+                            aria-label={t('dynamic.stage_config.open', {
+                                defaultValue: 'Configurar etapa',
+                            })}
+                            data-testid={`lane-config-${stage.key}`}
+                        >
+                            <Settings2 className="h-3.5 w-3.5" />
+                        </button>
                     )}
                 </div>
             </div>

@@ -36,6 +36,7 @@ export {
     mergeLaneStages,
     resolveSmartLanes,
     smartLaneParams,
+    cardMatchesStageFilters,
     customStageFilterFields,
     isCustomStageDraftValid,
     slugifyStageKey,
@@ -44,6 +45,8 @@ export {
     CustomStageLaneMenu,
     CustomStageDialog,
     CustomStageDeleteDialog,
+    StageConditionBuilder,
+    StageConfigDialog,
     SmartLane,
     CUSTOM_STAGE_COLORS,
     CUSTOM_STAGE_FILTER_OPS,
@@ -53,12 +56,21 @@ export {
     type CustomStageFilter,
     type CustomStageFilterOp,
     type UseCustomStagesResult,
+    type StageConfigTarget,
+    type StageConfigKind,
+    type StageConditionBuilderProps,
+    type StageConfigDialogProps,
 } from './custom-stages'
 export {
     useStageLayout,
     type StageLayout,
     type UseStageLayoutResult,
 } from './stage-layout'
+export {
+    useStageOverrides,
+    type StageOverridePatch,
+    type UseStageOverridesResult,
+} from './stage-overrides'
 export {
     DynamicView,
     resolveViewRenderer,

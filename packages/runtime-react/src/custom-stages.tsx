@@ -19,7 +19,7 @@
 // All UI text goes through t() with a Spanish defaultValue.
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Trash2, Pencil, MoreVertical, Filter, GripVertical, X } from 'lucide-react'
+import { Plus, Trash2, Pencil, MoreVertical, Filter, GripVertical, RotateCcw, X } from 'lucide-react'
 import { toast } from 'sonner'
 import {
     Badge,
@@ -151,6 +151,8 @@ export function mergeLaneStages(
             label: cs.label,
             color: cs.color,
             order: cs.position,
+            custom: true,
+            filters: cs.filters,
         })
     }
     lanes.sort((a, b) => {
@@ -173,7 +175,7 @@ export function mergeLaneStages(
  * Empty fields/values are skipped.
  */
 export function smartLaneParams(
-    filters: CustomStageFilter[] | undefined,
+    filters: { field: string; op: string; value: string }[] | undefined,
 ): Record<string, string> {
     const params: Record<string, string> = {}
     for (const f of filters ?? []) {
@@ -252,6 +254,43 @@ export function isCustomStageDraftValid(draft: {
         )
     }
     return true
+}
+
+/**
+ * Whether a card passes a set of extra lane `filters` (the same conditions a
+ * smart lane uses, layered on top of a real stage). Ops:
+ *   - eq       → equal (string compare)
+ *   - neq      → not equal
+ *   - contains → the card's value (array or string) includes the value
+ *   - in       → the card's value is one of the comma-separated candidates
+ * Empty/absent filters pass. Pure — a client-side belt-and-suspenders over the
+ * initial (unscoped) board page; the server scopes the per-lane top-up queries.
+ */
+export function cardMatchesStageFilters(
+    card: any,
+    filters: CustomStageFilter[] | undefined,
+): boolean {
+    if (!filters || filters.length === 0) return true
+    return filters.every((f) => {
+        if (!f.field || String(f.value ?? '').trim() === '') return true
+        const target = String(f.value).trim()
+        const raw = card?.[f.field]
+        switch (f.op) {
+            case 'neq':
+                return String(raw ?? '') !== target
+            case 'contains':
+                if (Array.isArray(raw)) return raw.map(String).includes(target)
+                return String(raw ?? '').includes(target)
+            case 'in':
+                return target
+                    .split(',')
+                    .map((s) => s.trim())
+                    .includes(String(raw ?? ''))
+            case 'eq':
+            default:
+                return String(raw ?? '') === target
+        }
+    })
 }
 
 /** Slugify a label into a stable-ish lane key (used only when creating). */
@@ -464,6 +503,141 @@ export function CustomStageLaneMenu({
 }
 
 // ---------------------------------------------------------------------------
+// Condition builder (field / operator / value rows) — shared by the smart-lane
+// editor and the declared-stage config dialog.
+// ---------------------------------------------------------------------------
+
+export interface StageConditionBuilderProps {
+    /** The current filter rows. */
+    filters: CustomStageFilter[]
+    /** Called with the next filter rows on any add/remove/patch. */
+    onChange: (filters: CustomStageFilter[]) => void
+    /** Columns offered in the field dropdown (visible, non-id). */
+    fieldChoices: ColumnDefinition[]
+    /** Optional heading shown above the rows. */
+    label?: string
+}
+
+/**
+ * The reusable field/operator/value condition builder. Emits `CustomStageFilter[]`
+ * through `onChange`. Same ops (eq/neq/contains/in) and testids the smart-lane
+ * editor has always used, so it drops in for both the custom-stage smart lane
+ * and the declared-stage config dialog.
+ */
+export function StageConditionBuilder({
+    filters,
+    onChange,
+    fieldChoices,
+    label,
+}: StageConditionBuilderProps) {
+    const { t } = useTranslation()
+    const patchFilter = (i: number, patch: Partial<CustomStageFilter>) =>
+        onChange(filters.map((f, idx) => (idx === i ? { ...f, ...patch } : f)))
+    const addFilter = () =>
+        onChange([...filters, emptyCustomStageFilter(fieldChoices[0]?.key ?? '')])
+    const removeFilter = (i: number) =>
+        onChange(filters.filter((_, idx) => idx !== i))
+    return (
+        <div className="flex flex-col gap-2 rounded-md border bg-muted/30 p-3">
+            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Filter className="h-3.5 w-3.5" />
+                {label ??
+                    t('dynamic.custom_stages.conditions_label', {
+                        defaultValue: 'Condiciones',
+                    })}
+            </div>
+            {filters.map((f, i) => (
+                <div
+                    key={i}
+                    className="grid grid-cols-[1fr_auto_1fr_auto] items-center gap-1.5"
+                    data-testid={`custom-stage-condition-${i}`}
+                >
+                    <Select
+                        value={f.field}
+                        onValueChange={(v) => patchFilter(i, { field: v })}
+                    >
+                        <SelectTrigger className="h-8 text-xs" data-testid={`custom-stage-condition-field-${i}`}>
+                            <SelectValue
+                                placeholder={t(
+                                    'dynamic.custom_stages.field_placeholder',
+                                    { defaultValue: 'Campo' },
+                                )}
+                            />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {fieldChoices.map((c) => (
+                                <SelectItem key={c.key} value={c.key} className="text-xs">
+                                    {t(c.label, { defaultValue: c.label })}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Select
+                        value={f.op}
+                        onValueChange={(v) =>
+                            patchFilter(i, { op: v as CustomStageFilterOp })
+                        }
+                    >
+                        <SelectTrigger className="h-8 w-[104px] text-xs" data-testid={`custom-stage-condition-op-${i}`}>
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {CUSTOM_STAGE_FILTER_OPS.map((op) => (
+                                <SelectItem key={op} value={op} className="text-xs">
+                                    {t(`dynamic.custom_stages.op.${op}`, {
+                                        defaultValue:
+                                            op === 'eq'
+                                                ? 'es igual'
+                                                : op === 'neq'
+                                                ? 'distinto'
+                                                : op === 'contains'
+                                                ? 'contiene'
+                                                : 'en lista',
+                                    })}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Input
+                        value={f.value}
+                        onChange={(e) => patchFilter(i, { value: e.target.value })}
+                        placeholder={t('dynamic.custom_stages.value_placeholder', {
+                            defaultValue: 'Valor',
+                        })}
+                        className="h-8 text-xs"
+                        data-testid={`custom-stage-condition-value-${i}`}
+                    />
+                    <button
+                        type="button"
+                        onClick={() => removeFilter(i)}
+                        disabled={filters.length === 1}
+                        className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-destructive disabled:opacity-40"
+                        aria-label={t('dynamic.custom_stages.remove_condition', {
+                            defaultValue: 'Quitar condición',
+                        })}
+                        data-testid={`custom-stage-condition-remove-${i}`}
+                    >
+                        <X className="h-3.5 w-3.5" />
+                    </button>
+                </div>
+            ))}
+            <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 justify-start gap-1 text-xs"
+                onClick={addFilter}
+                data-testid="custom-stage-add-condition"
+            >
+                <Plus className="h-3.5 w-3.5" />
+                {t('dynamic.custom_stages.add_condition', {
+                    defaultValue: 'Agregar condición',
+                })}
+            </Button>
+        </div>
+    )
+}
+
+// ---------------------------------------------------------------------------
 // Create / edit dialog
 // ---------------------------------------------------------------------------
 
@@ -525,18 +699,6 @@ export function CustomStageDialog({
             setFilters([emptyCustomStageFilter(fieldChoices[0]?.key ?? '')])
         }
     }, [open, initial, fieldChoices])
-
-    const patchFilter = (i: number, patch: Partial<CustomStageFilter>) =>
-        setFilters((prev) =>
-            prev.map((f, idx) => (idx === i ? { ...f, ...patch } : f)),
-        )
-    const addFilter = () =>
-        setFilters((prev) => [
-            ...prev,
-            emptyCustomStageFilter(fieldChoices[0]?.key ?? ''),
-        ])
-    const removeFilter = (i: number) =>
-        setFilters((prev) => prev.filter((_, idx) => idx !== i))
 
     const valid = isCustomStageDraftValid({ label, type, filters })
 
@@ -697,101 +859,11 @@ export function CustomStageDialog({
 
                     {/* Condition builder — smart lanes only */}
                     {type === 'smart' && (
-                        <div className="flex flex-col gap-2 rounded-md border bg-muted/30 p-3">
-                            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                                <Filter className="h-3.5 w-3.5" />
-                                {t('dynamic.custom_stages.conditions_label', {
-                                    defaultValue: 'Condiciones',
-                                })}
-                            </div>
-                            {filters.map((f, i) => (
-                                <div
-                                    key={i}
-                                    className="grid grid-cols-[1fr_auto_1fr_auto] items-center gap-1.5"
-                                    data-testid={`custom-stage-condition-${i}`}
-                                >
-                                    <Select
-                                        value={f.field}
-                                        onValueChange={(v) => patchFilter(i, { field: v })}
-                                    >
-                                        <SelectTrigger className="h-8 text-xs" data-testid={`custom-stage-condition-field-${i}`}>
-                                            <SelectValue
-                                                placeholder={t(
-                                                    'dynamic.custom_stages.field_placeholder',
-                                                    { defaultValue: 'Campo' },
-                                                )}
-                                            />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {fieldChoices.map((c) => (
-                                                <SelectItem key={c.key} value={c.key} className="text-xs">
-                                                    {t(c.label, { defaultValue: c.label })}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <Select
-                                        value={f.op}
-                                        onValueChange={(v) =>
-                                            patchFilter(i, { op: v as CustomStageFilterOp })
-                                        }
-                                    >
-                                        <SelectTrigger className="h-8 w-[104px] text-xs" data-testid={`custom-stage-condition-op-${i}`}>
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {CUSTOM_STAGE_FILTER_OPS.map((op) => (
-                                                <SelectItem key={op} value={op} className="text-xs">
-                                                    {t(`dynamic.custom_stages.op.${op}`, {
-                                                        defaultValue:
-                                                            op === 'eq'
-                                                                ? 'es igual'
-                                                                : op === 'neq'
-                                                                ? 'distinto'
-                                                                : op === 'contains'
-                                                                ? 'contiene'
-                                                                : 'en lista',
-                                                    })}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                    <Input
-                                        value={f.value}
-                                        onChange={(e) => patchFilter(i, { value: e.target.value })}
-                                        placeholder={t('dynamic.custom_stages.value_placeholder', {
-                                            defaultValue: 'Valor',
-                                        })}
-                                        className="h-8 text-xs"
-                                        data-testid={`custom-stage-condition-value-${i}`}
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={() => removeFilter(i)}
-                                        disabled={filters.length === 1}
-                                        className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-destructive disabled:opacity-40"
-                                        aria-label={t('dynamic.custom_stages.remove_condition', {
-                                            defaultValue: 'Quitar condición',
-                                        })}
-                                        data-testid={`custom-stage-condition-remove-${i}`}
-                                    >
-                                        <X className="h-3.5 w-3.5" />
-                                    </button>
-                                </div>
-                            ))}
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-7 justify-start gap-1 text-xs"
-                                onClick={addFilter}
-                                data-testid="custom-stage-add-condition"
-                            >
-                                <Plus className="h-3.5 w-3.5" />
-                                {t('dynamic.custom_stages.add_condition', {
-                                    defaultValue: 'Agregar condición',
-                                })}
-                            </Button>
-                        </div>
+                        <StageConditionBuilder
+                            filters={filters}
+                            onChange={setFilters}
+                            fieldChoices={fieldChoices}
+                        />
                     )}
                 </div>
 
@@ -962,6 +1034,316 @@ export function CustomStageDeleteDialog({
                                   defaultValue: 'Eliminar',
                               })}
                     </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+// ---------------------------------------------------------------------------
+// Stage config dialog (the per-lane gear ⚙) — unifies DECLARED-lane overrides
+// and CUSTOM real-stage editing behind one "Configurar etapa" UI.
+// ---------------------------------------------------------------------------
+
+export type StageConfigKind = 'declared' | 'custom'
+
+/** What the gear opens the config dialog against — a declared or custom lane. */
+export interface StageConfigTarget {
+    kind: StageConfigKind
+    /** Stable lane key. */
+    stageKey: string
+    /** Custom-stage id — required (and only used) when `kind === 'custom'`. */
+    id?: CustomStage['id']
+    label: string
+    color: string
+    filters: CustomStageFilter[]
+    /**
+     * Declared kind: an override is currently applied → enables "Restablecer
+     * etapa". Ignored for custom stages (they reset via their own delete flow).
+     */
+    overridden?: boolean
+    /** The backing CustomStage (custom kind) so "Eliminar" can trigger delete. */
+    customStage?: CustomStage
+}
+
+export interface StageConfigDialogProps {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    /** Columns for the condition builder. */
+    columns: ColumnDefinition[]
+    /** The lane being configured, or null. */
+    target: StageConfigTarget | null
+    /** Declared: upsert the lane override (PUT /stage-overrides). */
+    onSaveOverride: (
+        stageKey: string,
+        patch: { label: string; color: string; filters: CustomStageFilter[] },
+    ) => Promise<void>
+    /** Declared: reset the lane to its manifest default (DELETE /stage-overrides). */
+    onResetOverride: (stageKey: string) => Promise<void>
+    /** Custom: update the stage via its own CRUD (PUT /custom-stages/:id). */
+    onUpdateCustom: (
+        id: CustomStage['id'],
+        patch: Partial<CustomStage>,
+    ) => Promise<void>
+    /** Custom: hand off to the existing delete (reassign) flow. */
+    onDeleteCustom: (stage: CustomStage) => void
+}
+
+/**
+ * The gear (⚙) dialog. Renames, recolors and attaches extra CONDITIONS to a
+ * lane. One UI, two backends: a DECLARED lane persists through `/stage-overrides`
+ * (with a "Restablecer etapa" that drops the override); a CUSTOM real stage
+ * persists through its own `/custom-stages` CRUD (and deletes via that flow). The
+ * conditions narrow which cards the lane shows/counts but never stop it being a
+ * drop target — dropping a card only sets the stage value.
+ */
+export function StageConfigDialog({
+    open,
+    onOpenChange,
+    columns,
+    target,
+    onSaveOverride,
+    onResetOverride,
+    onUpdateCustom,
+    onDeleteCustom,
+}: StageConfigDialogProps) {
+    const { t } = useTranslation()
+    const isDark =
+        typeof document !== 'undefined' &&
+        document.documentElement.classList.contains('dark')
+    const fieldChoices = useMemo(
+        () => customStageFilterFields(columns),
+        [columns],
+    )
+
+    const [label, setLabel] = useState('')
+    const [color, setColor] = useState<string>(CUSTOM_STAGE_COLORS[0])
+    const [filters, setFilters] = useState<CustomStageFilter[]>([])
+    const [saving, setSaving] = useState(false)
+    const [resetting, setResetting] = useState(false)
+
+    // Re-seed the form each time the dialog opens against a lane.
+    useEffect(() => {
+        if (!open || !target) return
+        setLabel(target.label)
+        setColor(target.color || CUSTOM_STAGE_COLORS[0])
+        setFilters(target.filters?.map((f) => ({ ...f })) ?? [])
+    }, [open, target])
+
+    if (!target) return null
+
+    const valid = label.trim().length > 0
+    // Only complete conditions are persisted; empty rows are dropped.
+    const cleanFilters = () =>
+        filters.filter((f) => f.field && String(f.value).trim() !== '')
+
+    const submit = async () => {
+        if (!valid || saving) return
+        setSaving(true)
+        try {
+            if (target.kind === 'declared') {
+                await onSaveOverride(target.stageKey, {
+                    label: label.trim(),
+                    color,
+                    filters: cleanFilters(),
+                })
+            } else if (target.id != null) {
+                await onUpdateCustom(target.id, {
+                    label: label.trim(),
+                    color,
+                    filters: cleanFilters(),
+                })
+            }
+            toast.success(
+                t('dynamic.stage_config.saved', {
+                    defaultValue: 'Etapa configurada',
+                }),
+            )
+            onOpenChange(false)
+        } catch {
+            // toast already surfaced by the caller's hook; keep the draft open.
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const reset = async () => {
+        if (resetting) return
+        setResetting(true)
+        try {
+            await onResetOverride(target.stageKey)
+            toast.success(
+                t('dynamic.stage_config.reset_done', {
+                    defaultValue: 'Etapa restablecida',
+                }),
+            )
+            onOpenChange(false)
+        } catch {
+            toast.error(
+                t('dynamic.stage_config.reset_error', {
+                    defaultValue: 'No se pudo restablecer la etapa',
+                }),
+            )
+        } finally {
+            setResetting(false)
+        }
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                    <DialogTitle>
+                        {t('dynamic.stage_config.title', {
+                            defaultValue: 'Configurar etapa',
+                        })}
+                    </DialogTitle>
+                    <DialogDescription>
+                        {t('dynamic.stage_config.description', {
+                            defaultValue:
+                                'Renombra la columna, cambia su color y agrega condiciones para acotar qué tarjetas muestra y cuenta.',
+                        })}
+                    </DialogDescription>
+                </DialogHeader>
+
+                <div className="flex flex-col gap-4">
+                    {/* Name */}
+                    <div className="flex flex-col gap-1.5">
+                        <Label className="text-xs">
+                            {t('dynamic.stage_config.name_label', {
+                                defaultValue: 'Nombre',
+                            })}
+                        </Label>
+                        <Input
+                            value={label}
+                            onChange={(e) => setLabel(e.target.value)}
+                            placeholder={t('dynamic.stage_config.name_placeholder', {
+                                defaultValue: 'Nombre de la etapa',
+                            })}
+                            data-testid="stage-config-name"
+                            autoFocus
+                        />
+                    </div>
+
+                    {/* Color palette */}
+                    <div className="flex flex-col gap-1.5">
+                        <Label className="text-xs">
+                            {t('dynamic.stage_config.color_label', {
+                                defaultValue: 'Color',
+                            })}
+                        </Label>
+                        <div className="flex flex-wrap gap-1.5" data-testid="stage-config-colors">
+                            {CUSTOM_STAGE_COLORS.map((c) => {
+                                const style = generateBadgeStyles(c, { isDark })
+                                const selected = c === color
+                                return (
+                                    <button
+                                        key={c}
+                                        type="button"
+                                        onClick={() => setColor(c)}
+                                        className={`size-6 rounded-full border-2 transition-transform hover:scale-110 ${
+                                            selected
+                                                ? 'border-foreground'
+                                                : 'border-transparent'
+                                        }`}
+                                        style={{
+                                            backgroundColor:
+                                                style.backgroundColor ||
+                                                (style as any).background,
+                                        }}
+                                        aria-label={c}
+                                        aria-pressed={selected}
+                                        data-testid={`stage-config-color-${c}`}
+                                    />
+                                )
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Conditions — optional extra scoping on top of the stage */}
+                    <StageConditionBuilder
+                        filters={filters}
+                        onChange={setFilters}
+                        fieldChoices={fieldChoices}
+                        label={t('dynamic.stage_config.conditions_label', {
+                            defaultValue: 'Condiciones (opcional)',
+                        })}
+                    />
+                    {filters.length === 0 && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="-mt-2 h-7 justify-start gap-1 text-xs"
+                            onClick={() =>
+                                setFilters([
+                                    emptyCustomStageFilter(fieldChoices[0]?.key ?? ''),
+                                ])
+                            }
+                            data-testid="stage-config-add-first-condition"
+                        >
+                            <Plus className="h-3.5 w-3.5" />
+                            {t('dynamic.stage_config.add_condition', {
+                                defaultValue: 'Agregar condición',
+                            })}
+                        </Button>
+                    )}
+                </div>
+
+                <DialogFooter className="sm:justify-between">
+                    {/* Destructive/reset affordance on the left. */}
+                    <div>
+                        {target.kind === 'declared' && target.overridden && (
+                            <Button
+                                variant="ghost"
+                                className="gap-1.5 text-muted-foreground"
+                                onClick={() => void reset()}
+                                disabled={saving || resetting}
+                                data-testid="stage-config-reset"
+                            >
+                                <RotateCcw className="h-4 w-4" />
+                                {t('dynamic.stage_config.reset', {
+                                    defaultValue: 'Restablecer etapa',
+                                })}
+                            </Button>
+                        )}
+                        {target.kind === 'custom' && target.customStage && (
+                            <Button
+                                variant="ghost"
+                                className="gap-1.5 text-destructive hover:text-destructive"
+                                onClick={() => {
+                                    onOpenChange(false)
+                                    onDeleteCustom(target.customStage!)
+                                }}
+                                disabled={saving}
+                                data-testid="stage-config-delete"
+                            >
+                                <Trash2 className="h-4 w-4" />
+                                {t('dynamic.stage_config.delete', {
+                                    defaultValue: 'Eliminar etapa',
+                                })}
+                            </Button>
+                        )}
+                    </div>
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => onOpenChange(false)}
+                            disabled={saving || resetting}
+                        >
+                            {t('dynamic.stage_config.cancel', {
+                                defaultValue: 'Cancelar',
+                            })}
+                        </Button>
+                        <Button
+                            onClick={() => void submit()}
+                            disabled={!valid || saving || resetting}
+                            data-testid="stage-config-save"
+                        >
+                            {t('dynamic.stage_config.save', {
+                                defaultValue: 'Guardar',
+                            })}
+                        </Button>
+                    </div>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
