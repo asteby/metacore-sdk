@@ -397,17 +397,9 @@ export function ColumnFilterControl({
         className
       )}
     >
-      <div className='relative'>
-        <ListFilter className='h-3.5 w-3.5' />
-        {isActive && (isMultiSelect || isFacet) && activeCount > 0 && (
-          <span className='absolute -top-1.5 -right-1.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary text-[9px] font-bold text-primary-foreground px-0.5'>
-            {activeCount}
-          </span>
-        )}
-        {isActive && !isMultiSelect && !isFacet && (
-          <span className='absolute -top-1 -right-1 flex h-2 w-2 rounded-full bg-primary' />
-        )}
-      </div>
+      {/* The primary-colored icon is the whole active indicator — a
+          floating count badge on top reads as a double signal. */}
+      <ListFilter className='h-3.5 w-3.5' />
     </Button>
   )
 

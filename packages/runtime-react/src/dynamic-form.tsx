@@ -20,6 +20,8 @@ import {
     resolveWidget,
     isLineItemsField,
     evaluateBalance,
+    applyOptionWhen,
+    getDependsOn,
 } from './dynamic-form-schema'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { DynamicLineItems } from './dynamic-line-items'
@@ -111,32 +113,17 @@ export function DynamicForm({
     return (
         <form onSubmit={handleSubmit} className="grid gap-4">
             <div className="grid gap-4 sm:grid-cols-2">
-                {fields.map((field) => {
-                    const fullWidth =
-                        isLineItemsField(field) ||
-                        resolveWidget(field) === 'textarea' ||
-                        resolveWidget(field) === 'richtext'
-                    return (
-                        <div
-                            key={field.key}
-                            className={'grid gap-2 ' + (fullWidth ? 'sm:col-span-2' : '')}
-                        >
-                            <Label htmlFor={field.key}>
-                                {field.label}
-                                {field.required && <span className="text-red-500 ml-1">*</span>}
-                            </Label>
-                            <FieldRenderer
-                                field={field}
-                                value={values[field.key]}
-                                onChange={(v: any) => update(field.key, v)}
-                                initialValues={initialValues}
-                            />
-                            {errors[field.key] && (
-                                <span className="text-red-500 text-sm" role="alert">{errors[field.key]}</span>
-                            )}
-                        </div>
-                    )
-                })}
+                {fields.map((field) => (
+                    <FieldRow
+                        key={field.key}
+                        field={field}
+                        value={values[field.key]}
+                        onChange={(v: any) => update(field.key, v)}
+                        values={values}
+                        error={errors[field.key]}
+                        initialValues={initialValues}
+                    />
+                ))}
             </div>
             <div className="flex justify-end gap-2 pt-2">
                 {onCancel && (
@@ -158,6 +145,61 @@ interface FieldRendererProps {
     onChange: (v: any) => void
     /** The form's initial record — used to seed an FK picker's existing label/image. */
     initialValues?: Record<string, any>
+    /**
+     * The full flat map of current form values — read by a STATIC enum select to
+     * gate its options by a sibling field's value (`applyOptionWhen`).
+     */
+    values?: Record<string, any>
+}
+
+interface FieldRowProps extends FieldRendererProps {
+    error?: string
+}
+
+// One form field row: label + renderer + inline error. Encapsulated as its own
+// component so a STATIC enum select whose options are all gated out by a sibling
+// value (`when`) can hide the ENTIRE row (label included) and run its reset
+// effect with valid hook ordering.
+function FieldRow({ field, value, onChange, values, error, initialValues }: FieldRowProps) {
+    const isStaticSelect =
+        resolveWidget(field) === 'select' && !field.ref && Array.isArray(field.options)
+    const effectiveOptions = isStaticSelect
+        ? applyOptionWhen(field.options, values, getDependsOn(field))
+        : undefined
+
+    // Reset a selection that the current sibling value no longer permits (e.g.
+    // the parent switched away from the value that made this option valid).
+    useEffect(() => {
+        if (!isStaticSelect || !effectiveOptions) return
+        if (value && !effectiveOptions.some((o) => String(o.value) === String(value))) {
+            onChange('')
+        }
+    }, [isStaticSelect, effectiveOptions, value, onChange])
+
+    // No option applies under the current sibling value → hide the whole field.
+    if (isStaticSelect && effectiveOptions && effectiveOptions.length === 0) return null
+
+    const fullWidth =
+        isLineItemsField(field) ||
+        resolveWidget(field) === 'textarea' ||
+        resolveWidget(field) === 'richtext'
+    return (
+        <div className={'grid gap-2 ' + (fullWidth ? 'sm:col-span-2' : '')}>
+            <Label htmlFor={field.key}>
+                {field.label}
+                {field.required && <span className="text-red-500 ml-1">*</span>}
+            </Label>
+            <FieldRenderer
+                field={field}
+                value={value}
+                onChange={onChange}
+                initialValues={initialValues}
+                values={values}
+                effectiveOptions={effectiveOptions}
+            />
+            {error && <span className="text-red-500 text-sm" role="alert">{error}</span>}
+        </div>
+    )
 }
 
 // seedOptionFromSibling builds a pre-resolved option for an FK field from the
@@ -187,7 +229,13 @@ function seedOptionFromSibling(
     }
 }
 
-function FieldRenderer({ field, value, onChange, initialValues }: FieldRendererProps) {
+function FieldRenderer({
+    field,
+    value,
+    onChange,
+    initialValues,
+    effectiveOptions,
+}: FieldRendererProps & { effectiveOptions?: import('./types').OptionDef[] }) {
     // Repeatable line-items group → render the row grid. Its value is an array
     // of row objects rather than a scalar.
     if (isLineItemsField(field)) {
@@ -228,7 +276,7 @@ function FieldRenderer({ field, value, onChange, initialValues }: FieldRendererP
                 <Select value={value || ''} onValueChange={onChange}>
                     <SelectTrigger className="w-full"><SelectValue placeholder={field.placeholder || 'Seleccionar...'} /></SelectTrigger>
                     <SelectContent>
-                        {field.options?.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                        {(effectiveOptions ?? field.options)?.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
                     </SelectContent>
                 </Select>
             )

@@ -123,7 +123,7 @@ import { useMetadataCache } from './metadata-cache'
 import { ActivityValueRenderer } from './activity-value-renderer'
 import { DynamicIcon } from './dynamic-icon'
 import { isColumnVisibleInTable } from './column-visibility'
-import { isRowActionVisible } from './dynamic-columns'
+import { isRowActionVisible, relationKeyFor } from './dynamic-columns'
 import { useCan, usePermissionsActive, resolveRowActions } from './permissions-context'
 import { useDynamicRowActions } from './dynamic-row-actions'
 import { useStageLayout } from './stage-layout'
@@ -321,6 +321,27 @@ export function selectCardColumns(
         .filter((c) => c.key !== title?.key)
         .slice(0, maxFields)
     return { title, fields }
+}
+
+/** The all-zeros UUID — a Go zero-value FK serialized as "set" when it isn't. */
+const ZERO_UUID = /^0{8}-0{4}-0{4}-0{4}-0{12}$/
+
+/**
+ * The value a card cell should render for a column — same resolution the
+ * table's cells apply. An FK column (`<rel>_id`) prefers the backend-resolved
+ * sibling object (`card.<rel>`, e.g. `{ name }` / `{ value, label }`) over the
+ * raw UUID; a zero-UUID FK counts as unset (renders the em-dash). Pure —
+ * exported for unit tests.
+ */
+export function cardCellValue(card: any, col: ColumnDefinition): unknown {
+    const raw = card?.[col.key]
+    if (typeof raw === 'string' && ZERO_UUID.test(raw)) return null
+    const relKey = relationKeyFor(col)
+    if (relKey !== col.key) {
+        const sibling = card?.[relKey]
+        if (sibling && typeof sibling === 'object') return sibling
+    }
+    return raw
 }
 
 /**
@@ -2342,7 +2363,7 @@ function KanbanCard({
                     <div className="min-w-0 flex-1 break-words text-sm font-medium leading-snug">
                         {titleCol ? (
                             <ActivityValueRenderer
-                                value={card[titleCol.key]}
+                                value={cardCellValue(card, titleCol)}
                                 col={titleCol}
                                 locale={locale}
                                 timeZone={timeZone}
@@ -2394,7 +2415,7 @@ function KanbanCard({
                         <span className="shrink-0 opacity-70">{col.label}:</span>
                         <span className="min-w-0 break-words">
                             <ActivityValueRenderer
-                                value={card[col.key]}
+                                value={cardCellValue(card, col)}
                                 col={col}
                                 locale={locale}
                                 timeZone={timeZone}
@@ -2423,7 +2444,7 @@ function CardPreview({
                 <div className="break-words text-sm font-medium leading-snug">
                     {titleCol ? (
                         <ActivityValueRenderer
-                            value={card[titleCol.key]}
+                            value={cardCellValue(card, titleCol)}
                             col={titleCol}
                             locale={locale}
                             timeZone={timeZone}
@@ -2441,7 +2462,7 @@ function CardPreview({
                         <span className="shrink-0 opacity-70">{col.label}:</span>
                         <span className="min-w-0 break-words">
                             <ActivityValueRenderer
-                                value={card[col.key]}
+                                value={cardCellValue(card, col)}
                                 col={col}
                                 locale={locale}
                                 timeZone={timeZone}
