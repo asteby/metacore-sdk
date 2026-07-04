@@ -77,6 +77,34 @@ export interface StageMeta {
      * Editar/Eliminar menu on it.
      */
     custom?: boolean
+    /**
+     * True when a per-org stage override (label/color/conditions) has been
+     * applied to this DECLARED lane (ops stage-overrides). The kernel serves the
+     * lane already carrying the overridden label/color; this flag only drives the
+     * "Restablecer etapa" affordance in the config dialog. Absent on hosts without
+     * stage overrides — purely additive.
+     */
+    overridden?: boolean
+    /**
+     * Extra per-lane conditions layered on top of the stage's own `group_by`
+     * scope (ops stage-overrides). When present the lane queries its data — and
+     * counts its header — with the stage filter PLUS these conditions (serialized
+     * the same way as smart-lane filters). The lane stays a normal drop target;
+     * dropping a card only sets the stage value. Absent → the lane behaves as a
+     * plain declared stage. Snake_case ops as the kernel serves them.
+     */
+    filters?: { field: string; op: string; value: string }[]
+    /**
+     * The manifest ORIGINAL (pre-override) label/color/conditions, served
+     * alongside an overridden declared lane so the "Restablecer al original"
+     * confirm can spell out exactly what reverts. Optional — hosts that don't
+     * snapshot the original simply omit it and the SDK shows a generic confirm.
+     */
+    original?: {
+        label?: string
+        color?: string
+        filters?: { field: string; op: string; value: string }[]
+    }
 }
 
 /**

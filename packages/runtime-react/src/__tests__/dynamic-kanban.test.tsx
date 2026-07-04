@@ -496,6 +496,81 @@ describe('DynamicKanban filter bar', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Stage config gear (⚙) + stage-override conditions on a declared lane
+// ---------------------------------------------------------------------------
+
+describe('DynamicKanban stage config', () => {
+    it('renders the ⚙ gear on declared lanes when /stage-overrides is wired', async () => {
+        useMetadataCache.getState().setMetadata('issue', meta())
+        render(
+            <ApiProvider client={fakeApi()}>
+                <DynamicKanban model="issue" />
+            </ApiProvider>,
+        )
+        // fakeApi answers every GET ok, so /stage-overrides resolves → gear shows.
+        expect(await screen.findByTestId('lane-config-backlog')).toBeTruthy()
+        expect(screen.getByTestId('lane-config-done')).toBeTruthy()
+    })
+
+    it('hides the gear on declared lanes when /stage-overrides 404s', async () => {
+        useMetadataCache.getState().setMetadata('issue', meta())
+        const get = vi.fn(async (url: string) => {
+            if (url.startsWith('/metadata/table/'))
+                return { data: { success: true, data: meta() } }
+            if (url.startsWith('/stage-overrides'))
+                return Promise.reject(new Error('404'))
+            return { data: { success: true, data: CARDS } }
+        })
+        render(
+            <ApiProvider client={fakeApi({ get })}>
+                <DynamicKanban model="issue" />
+            </ApiProvider>,
+        )
+        await screen.findByText('Backlog')
+        await waitFor(() =>
+            expect(screen.queryByTestId('lane-config-backlog')).toBeNull(),
+        )
+    })
+
+    it('queries a lane that carries override filters with the extra f_ params + shows the conditions indicator', async () => {
+        // A declared "backlog" lane with an extra condition (priority = high).
+        const withFilters = meta({
+            stages: [
+                { key: 'backlog', label: 'Backlog', color: 'slate', order: 0, overridden: true, filters: [{ field: 'priority', op: 'eq', value: 'high' }] },
+                { key: 'done', label: 'Done', color: 'green', order: 1 },
+            ],
+        })
+        useMetadataCache.getState().setMetadata('issue', withFilters)
+        const get = vi.fn(async (url: string) => {
+            if (url.startsWith('/metadata/table/'))
+                return { data: { success: true, data: withFilters } }
+            return { data: { success: true, data: CARDS, meta: { total: 1 } } }
+        })
+        render(
+            <ApiProvider client={fakeApi({ get })}>
+                <DynamicKanban model="issue" />
+            </ApiProvider>,
+        )
+        await screen.findByText('Backlog')
+        // The eager per-lane total request for backlog carries BOTH the stage
+        // scope and the override condition serialized like a smart-lane filter.
+        await waitFor(() =>
+            expect(get).toHaveBeenCalledWith(
+                '/data/issue',
+                expect.objectContaining({
+                    params: expect.objectContaining({
+                        f_stage: 'backlog',
+                        f_priority: 'EQ:high',
+                    }),
+                }),
+            ),
+        )
+        // The header carries the conditions indicator (dot + tooltip).
+        expect(screen.getByTestId('lane-conditions-backlog')).toBeTruthy()
+    })
+})
+
+// ---------------------------------------------------------------------------
 // 5. Per-lane search — the inline lane header search narrows ONLY that lane's
 //    already-fetched cards, client-side, by title + field values.
 // ---------------------------------------------------------------------------
