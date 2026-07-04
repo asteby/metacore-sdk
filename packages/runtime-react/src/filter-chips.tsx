@@ -13,6 +13,23 @@ import { resolveColorCss } from '@asteby/metacore-ui/lib'
  * (`IN:`/`ILIKE:`/`RANGE:`/`GTE:`/`LTE:`/date `from_to`), and caps the list at
  * `maxShown` values with a `+n` overflow. Pure — exported for unit tests.
  */
+// Operators the SDK carries on a filter value that are NOT the value itself.
+// `IN`/`ILIKE`/`RANGE`/`GTE`/`LTE` are handled explicitly by the callers; this
+// set covers the equality-style operators (`eq`/`neq`/`has`, any case) whose
+// remainder is a plain comparison value that should map to an option label.
+const EQUALITY_OPERATORS = new Set(['EQ', 'NEQ', 'HAS'])
+
+/**
+ * Strips a leading equality-style operator token from a filter value, returning
+ * the bare comparison value (`eq:reception` → `reception`). Values without such
+ * a prefix are returned unchanged. Pure — exported for unit tests.
+ */
+export function unwrapOperator(value: string): string {
+    const m = /^([A-Za-z]+):(.*)$/.exec(value)
+    if (m && EQUALITY_OPERATORS.has(m[1].toUpperCase())) return m[2]
+    return value
+}
+
 export function summarizeFilterValues(
     values: string[] | undefined,
     options: { label: string; value: string }[] | undefined,
@@ -20,7 +37,16 @@ export function summarizeFilterValues(
 ): string {
     if (!values || values.length === 0) return ''
     const opts = options ?? []
-    const labelFor = (v: string) => opts.find((o) => o.value === v)?.label ?? v
+    const labelFor = (v: string) => {
+        const exact = opts.find((o) => o.value === v)
+        if (exact) return exact.label
+        // Unwrap a leading operator token (`eq:`/`EQ:`/`NEQ:`/`HAS:`/…) so an
+        // option-backed value still resolves to its human label instead of
+        // leaking the raw wire value (e.g. `eq:reception` → "Recepción").
+        const stripped = unwrapOperator(v)
+        if (stripped !== v) return opts.find((o) => o.value === stripped)?.label ?? stripped
+        return v
+    }
     const first = values[0]
     if (values.length === 1) {
         if (first.startsWith('ILIKE:')) return `"${first.slice(6)}"`
@@ -62,7 +88,7 @@ export function chipValueColor(config: {
 }): string | undefined {
     const sel = config.selectedValues
     if (!sel || sel.length === 0) return undefined
-    const first = sel[0]
+    const first = unwrapOperator(sel[0])
     let value = first
     if (first.startsWith('IN:')) value = first.slice(3).split(',')[0]
     else if (/^(ILIKE|RANGE|GTE|LTE):/.test(first)) return undefined

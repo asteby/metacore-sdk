@@ -52,6 +52,18 @@ describe('summarizeFilterValues / chipValueColor', () => {
             chipValueColor({ selectedValues: ['ILIKE:foo'], options: opts }),
         ).toBeUndefined()
     })
+    it('humanizes an equality-operator value to its option label', () => {
+        // A raw wire value with the default `eq:` operator (lower or upper case)
+        // resolves to the option label, not the prefixed string.
+        expect(summarizeFilterValues(['eq:done'], opts)).toBe('Hecho')
+        expect(summarizeFilterValues(['EQ:backlog'], opts)).toBe('Pendiente')
+        expect(summarizeFilterValues(['NEQ:done'], opts)).toBe('Hecho')
+    })
+    it('resolves the dot color through an equality-operator prefix', () => {
+        expect(
+            chipValueColor({ selectedValues: ['eq:done'], options: opts }),
+        ).toBeTruthy()
+    })
 })
 
 describe('FilterChipsRow', () => {

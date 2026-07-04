@@ -99,4 +99,28 @@ describe('DynamicTable facet prefetch + stage-select', () => {
         // body → long-text, stays plain text, never faceted
         expect(fields).not.toContain('body')
     })
+
+    it('hydrates a select filter from an `eq:` URL param as the bare value', async () => {
+        // ?f_stage=eq:done must load as the plain option value `done` (green
+        // funnel + checked option on reopen), not the raw `eq:done` string —
+        // so the outgoing data request carries the bare value the backend maps
+        // to equality.
+        window.history.replaceState(null, '', '/x?f_stage=eq:done')
+        useMetadataCache.getState().setMetadata('issue', meta())
+        const api = fakeApi()
+        render(
+            <ApiProvider client={api}>
+                <DynamicTable model="issue" />
+            </ApiProvider>,
+        )
+        await waitFor(() => {
+            const dataCall = (api.get as any).mock.calls.find(
+                (c: any[]) =>
+                    String(c[0]) === '/data/issue' && c[1]?.params?.f_stage != null,
+            )
+            expect(dataCall).toBeTruthy()
+            expect(dataCall[1].params.f_stage).toBe('done')
+        })
+        window.history.replaceState(null, '', '/x')
+    })
 })

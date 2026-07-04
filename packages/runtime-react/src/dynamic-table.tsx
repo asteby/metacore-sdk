@@ -67,7 +67,7 @@ import { useApi, useCurrentBranch } from './api-context'
 import type { ColumnFilterConfig, GetDynamicColumns } from './dynamic-columns-shim'
 import { defaultGetDynamicColumns, DATE_CELL_TYPES, aggregateOf, formatAggregateTotal } from './dynamic-columns'
 import { useFacetLoaders, isLongTextColumn } from './use-facet-loaders'
-import { FilterChipsRow, translateOptionLabels, type FilterChipField } from './filter-chips'
+import { translateOptionLabels } from './filter-chips'
 import { dedupeById, useInfiniteScrollSentinel } from './use-infinite-scroll'
 import { OptionsContext } from './options-context'
 import type { TableMetadata, ApiResponse } from './types'
@@ -209,6 +209,11 @@ export function DynamicTable({
         if (colonIdx === -1) return value
         const prefix = value.substring(0, colonIdx).toLowerCase()
         const rest = value.substring(colonIdx + 1)
+        // `eq:` is the default equality operator. The SDK represents an equality
+        // (select) filter as the BARE value — buildFilterParams re-sends it with
+        // no prefix — so unwrap `?f_status=eq:ready` to `ready`, the value the
+        // column options match on (green funnel + checked option on reopen).
+        if (prefix === 'eq') return rest
         const operator = urlAliasToOperator[prefix]
         return operator ? `${operator}:${rest}` : value
     }
@@ -786,30 +791,6 @@ export function DynamicTable({
         prefetchFacets(facetFieldsSig.split('|'))
     }, [facetFieldsSig, prefetchFacets])
 
-    // Active-filter chips (shared row with the kanban). One chip per field with a
-    // selection; the label is the translated filter/column label.
-    const activeFilterChips = useMemo<FilterChipField[]>(() => {
-        if (!metadata) return []
-        const out: FilterChipField[] = []
-        for (const [key, config] of columnFilterConfigs) {
-            if ((config.selectedValues?.length ?? 0) === 0) continue
-            const f = metadata.filters?.find((x) => x.key === key)
-            const c = metadata.columns?.find((x) => x.key === key)
-            const rawLabel = f?.label || c?.label || key
-            out.push({
-                key,
-                label: t(rawLabel, { defaultValue: rawLabel }),
-                config,
-            })
-        }
-        return out
-    }, [metadata, columnFilterConfigs, t])
-
-    const clearAllDynamicFilters = useCallback(() => {
-        setDynamicFilters({})
-        setPagination((prev: PaginationState) => ({ ...prev, pageIndex: 0 }))
-    }, [])
-
     const columns = useMemo(() => {
         if (!viewMetadata) return []
         // Row-action column only renders per-row actions. Table-level placements
@@ -929,17 +910,10 @@ export function DynamicTable({
                             </>
                         }
                     />
-                    {/* Active-filter chips — shared with the kanban. Quick
-                        visibility + one-click removal of the header filters. */}
-                    {activeFilterChips.length > 0 && (
-                        <div className='pt-2'>
-                            <FilterChipsRow
-                                fields={activeFilterChips}
-                                onClearAll={clearAllDynamicFilters}
-                                data-testid='table-filter-chips'
-                            />
-                        </div>
-                    )}
+                    {/* No active-filter chip row here by design: each column's
+                        funnel icon already turns green with a count when a filter
+                        is active, and the toolbar's "Limpiar filtros (n)" clears
+                        them — a chip row would be a duplicate affordance. */}
                 </div>
                 {/* Desktop: classic horizontal-scroll table. Hidden on phones —
                     a 7-column table forces a wide horizontal scroll there, so we
