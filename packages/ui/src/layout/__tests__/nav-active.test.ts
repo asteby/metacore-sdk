@@ -4,7 +4,7 @@
 // identity equals the current href. Filter (`f_`) and transient (page/sort)
 // behaviour must be preserved.
 import { describe, expect, it } from 'vitest'
-import { checkIsActive, splitHref } from '../nav-active'
+import { checkIsActive, splitHref, declaredFiltersMatch } from '../nav-active'
 import type { NavLinkItem, NavCollapsibleItem } from '../types'
 
 const link = (title: string, url: string): NavLinkItem => ({ title, url })
@@ -14,8 +14,16 @@ describe('splitHref', () => {
     const s = splitHref('/m/orders?view=kanban&group_by=stage&f_status=eq:x&page=2')
     expect(s.path).toBe('/m/orders')
     expect(s.view).toBe('group_by=stage&view=kanban') // sorted, exclusive
-    expect(s.filters).toBe('f_status=eq:x')
+    // `eq:` (explicit equality) normalizes to the bare value, so a nav item
+    // declaring `f_status=eq:x` matches a URL rewritten to `f_status=x`.
+    expect(s.filters).toBe('f_status=x')
     expect(s.query).toBe('page=2')
+  })
+
+  it('treats eq:-prefixed and bare filter values as the same filter', () => {
+    const cur = splitHref('/m/orders?view=list&f_status=reception')
+    const target = splitHref('/m/orders?view=list&f_status=eq:reception')
+    expect(declaredFiltersMatch(cur.filters, target.filters)).toBe(true)
   })
 
   it('is param-order independent', () => {
