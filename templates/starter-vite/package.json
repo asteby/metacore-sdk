@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-starter-vite",
-  "version": "0.1.127",
+  "version": "0.1.128",
   "private": true,
   "type": "module",
   "description": "Thin Vite+React template wiring together all @asteby/metacore-* packages",
