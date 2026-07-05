@@ -73,7 +73,11 @@ export function splitHref(url: string): SplitHref {
   const viewEntries: [string, string][] = []
   const filterEntries: [string, string][] = []
   for (const [k, v] of params.entries()) {
-    if (k.startsWith('f_')) filterEntries.push([k, v])
+    // `eq:` is the wire's EXPLICIT equality operator and the bare value is the
+    // implicit one — `f_status=eq:reception` and `f_status=reception` are the
+    // same filter. Normalize here so a nav item declaring the explicit form
+    // still matches after the table rewrites the URL with the bare value.
+    if (k.startsWith('f_')) filterEntries.push([k, v.replace(/^eq:/i, '')])
     else if (VIEW_PARAMS.has(k)) viewEntries.push([k, v])
     else entries.push([k, v])
   }
