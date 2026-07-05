@@ -1,5 +1,11 @@
 # @asteby/metacore-ui
 
+## 2.9.3
+
+### Patch Changes
+
+- 1b0ac90: fix(nav): el matcher activo del sidebar trata `f_col=eq:valor` y `f_col=valor` como el mismo filtro — las entradas por estado vuelven a pintarse activas después de que la tabla normaliza la URL.
+
 ## 2.9.2
 
 ### Patch Changes
