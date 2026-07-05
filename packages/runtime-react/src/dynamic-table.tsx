@@ -67,7 +67,7 @@ import { useApi, useCurrentBranch } from './api-context'
 import type { ColumnFilterConfig, GetDynamicColumns } from './dynamic-columns-shim'
 import { defaultGetDynamicColumns, DATE_CELL_TYPES, aggregateOf, formatAggregateTotal } from './dynamic-columns'
 import { useFacetLoaders, isLongTextColumn } from './use-facet-loaders'
-import { FilterChipsRow, translateOptionLabels, type FilterChipField } from './filter-chips'
+import { translateOptionLabels } from './filter-chips'
 import { dedupeById, useInfiniteScrollSentinel } from './use-infinite-scroll'
 import { OptionsContext } from './options-context'
 import type { TableMetadata, ApiResponse } from './types'
@@ -256,6 +256,11 @@ export function DynamicTable({
         if (Object.keys(filters).length > 0) setDynamicFilters(filters)
     }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+    // The exact query string this table last wrote to the URL — lets the
+    // resync effect below tell "our own replaceState" apart from an external
+    // rewrite by the host router.
+    const lastSelfSearch = useRef<string | null>(null)
+
     useEffect(() => {
         if (!enableUrlSync || !initializedFromUrl.current) return
         const params = new URLSearchParams()
@@ -287,8 +292,39 @@ export function DynamicTable({
         })
         const search = params.toString()
         const newUrl = search ? `${window.location.pathname}?${search}` : window.location.pathname
+        lastSelfSearch.current = search ? `?${search}` : ''
         window.history.replaceState(null, '', newUrl)
     }, [enableUrlSync, pagination, sorting, globalFilter, dynamicFilters, defaultFilters])
+
+    // The host router can rewrite the query string WITHOUT remounting the
+    // table — e.g. sidebar sibling entries deep-link different `f_` filters
+    // into the same model route. The mount-time init above never re-runs, so
+    // the table kept showing the previous filter. On every render where the
+    // location's search differs from the last URL we ourselves wrote,
+    // re-parse the `f_` params and adopt them.
+    const locationSearch = typeof window !== 'undefined' ? window.location.search : ''
+    useEffect(() => {
+        if (!enableUrlSync || !initializedFromUrl.current) return
+        if (locationSearch === lastSelfSearch.current) return
+        lastSelfSearch.current = locationSearch
+        const params = new URLSearchParams(locationSearch)
+        const filters: Record<string, string[]> = {}
+        params.forEach((rawValue, key) => {
+            if (!key.startsWith('f_')) return
+            const filterKey = key.substring(2)
+            if (defaultFilters && filterKey in defaultFilters) return
+            const value = urlValueToInternal(rawValue)
+            if (value.startsWith('IN:')) filters[filterKey] = value.substring(3).split(',')
+            else filters[filterKey] = [value]
+        })
+        setDynamicFilters((prev: Record<string, string[]>) => {
+            if (JSON.stringify(prev) === JSON.stringify(filters)) return prev
+            setPagination((p: PaginationState) => ({ ...p, pageIndex: 0 }))
+            return filters
+        })
+        const search = params.get('search')
+        if (search !== null) setGlobalFilter(search)
+    })
 
     const prefetchOptions = useCallback(async (endpoints: string[]) => {
         if (endpoints.length === 0) return new Map<string, any[]>()
@@ -790,30 +826,6 @@ export function DynamicTable({
         prefetchFacets(facetFieldsSig.split('|'))
     }, [facetFieldsSig, prefetchFacets])
 
-    // Active-filter chips (shared row with the kanban). One chip per field with a
-    // selection; the label is the translated filter/column label.
-    const activeFilterChips = useMemo<FilterChipField[]>(() => {
-        if (!metadata) return []
-        const out: FilterChipField[] = []
-        for (const [key, config] of columnFilterConfigs) {
-            if ((config.selectedValues?.length ?? 0) === 0) continue
-            const f = metadata.filters?.find((x) => x.key === key)
-            const c = metadata.columns?.find((x) => x.key === key)
-            const rawLabel = f?.label || c?.label || key
-            out.push({
-                key,
-                label: t(rawLabel, { defaultValue: rawLabel }),
-                config,
-            })
-        }
-        return out
-    }, [metadata, columnFilterConfigs, t])
-
-    const clearAllDynamicFilters = useCallback(() => {
-        setDynamicFilters({})
-        setPagination((prev: PaginationState) => ({ ...prev, pageIndex: 0 }))
-    }, [])
-
     const columns = useMemo(() => {
         if (!viewMetadata) return []
         // Row-action column only renders per-row actions. Table-level placements
@@ -933,17 +945,6 @@ export function DynamicTable({
                             </>
                         }
                     />
-                    {/* Active-filter chips — shared with the kanban. Quick
-                        visibility + one-click removal of the header filters. */}
-                    {activeFilterChips.length > 0 && (
-                        <div className='pt-2'>
-                            <FilterChipsRow
-                                fields={activeFilterChips}
-                                onClearAll={clearAllDynamicFilters}
-                                data-testid='table-filter-chips'
-                            />
-                        </div>
-                    )}
                 </div>
                 {/* Desktop: classic horizontal-scroll table. Hidden on phones —
                     a 7-column table forces a wide horizontal scroll there, so we

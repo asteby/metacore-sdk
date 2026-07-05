@@ -64,6 +64,7 @@ export function useInfiniteScrollSentinel<
   const sentinelRef = useRef<S | null>(null)
   const cb = useRef(onLoadMore)
   const disabledRef = useRef(disabled)
+  const intersectingRef = useRef(false)
   cb.current = onLoadMore
   disabledRef.current = disabled
 
@@ -78,6 +79,7 @@ export function useInfiniteScrollSentinel<
     const observer = new IntersectionObserver(
       (entries) => {
         for (const entry of entries) {
+          intersectingRef.current = entry.isIntersecting
           if (entry.isIntersecting && !disabledRef.current) {
             cb.current()
           }
@@ -89,6 +91,16 @@ export function useInfiniteScrollSentinel<
     return () => observer.disconnect()
     // Re-create only when the margin changes; onLoadMore/disabled are read live.
   }, [rootMargin])
+
+  // IntersectionObserver only fires on intersection CHANGES. If a loaded page
+  // is too short to push the sentinel out of view (small screens, short
+  // lanes), the sentinel stays intersecting and no further event ever comes —
+  // the list stalls until the user jiggles the scroll. When a load finishes
+  // (disabled flips back to false) and the sentinel is still in view, chain
+  // the next page.
+  useEffect(() => {
+    if (!disabled && intersectingRef.current) cb.current()
+  }, [disabled])
 
   return { rootRef, sentinelRef }
 }
