@@ -27,6 +27,7 @@
 import * as React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useI18nResourceVersion } from './use-i18n-resource-version'
 import {
     DndContext,
     DragOverlay,
@@ -1919,6 +1920,11 @@ function KanbanLane({
     children,
 }: KanbanLaneProps) {
     const { t } = useTranslation()
+    // Re-resolve the lane label when an addon i18n bundle lands after the board
+    // painted (async addResourceBundle) — otherwise a manifest-key label like
+    // "integration_github.stage.in_progress" stays raw until an unrelated
+    // re-render. Independent of the host's react-i18next bindI18nStore config.
+    useI18nResourceVersion()
     // Infinite scroll: the sentinel lives at the bottom of the lane's own scroll
     // container; a load in flight or an exhausted stage disables it.
     const { rootRef, sentinelRef } = useInfiniteScrollSentinel({
