@@ -554,6 +554,13 @@ export interface PaginationMeta {
 // ActionMetadata re-exported from the sdk's action-registry. We mirror the
 // subset needed for the dispatcher so consumers of runtime-react don't have to
 // import the sdk directly for prop typings.
+/** One page of a multi-step (wizard) action. Mirrors the sdk's ActionStep. */
+export interface ActionStep {
+    title: string
+    description?: string
+    fields: ActionFieldDef[]
+}
+
 export interface ActionMetadata {
     key: string
     label: string
@@ -562,6 +569,8 @@ export interface ActionMetadata {
     confirm?: boolean
     confirmMessage?: string
     fields?: ActionFieldDef[]
+    /** Multi-step wizard form; when present the dispatcher renders a wizard. */
+    steps?: ActionStep[]
     requiresState?: string[]
     executable?: boolean
     placement?: 'row' | 'table' | 'create'

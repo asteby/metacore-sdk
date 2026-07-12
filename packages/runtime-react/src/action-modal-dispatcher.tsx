@@ -170,6 +170,20 @@ export function ActionModalDispatcher({
         )
     }
 
+    if (action.steps && action.steps.length > 0) {
+        return (
+            <WizardActionModal
+                open={open}
+                onOpenChange={onOpenChange}
+                action={action}
+                model={model}
+                record={record}
+                endpoint={endpoint}
+                onSuccess={onSuccess}
+            />
+        )
+    }
+
     if (action.fields && action.fields.length > 0) {
         return (
             <GenericActionModal
@@ -441,6 +455,225 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                         {executing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DynamicIcon name={action.icon} className="mr-2 h-4 w-4" />}
                         {tl(action.label)}
                     </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+// buildFieldDefaults seeds formData for a set of action fields, honoring the
+// same line-items prefill spec + boolean/empty rules GenericActionModal uses, so
+// wizard steps and single-page forms initialize identically.
+function buildFieldDefaults(fields: ActionFieldDef[], record: any): Record<string, any> {
+    const defaults: Record<string, any> = {}
+    for (const field of fields) {
+        if (isLineItemsField(field)) {
+            const dv = lineItemsDefault(field)
+            defaults[field.key] = isPrefillSpec(dv)
+                ? buildPrefillRows(dv, record)
+                : Array.isArray(dv)
+                  ? dv
+                  : []
+            continue
+        }
+        defaults[field.key] = field.defaultValue ?? (field.type === 'boolean' ? false : '')
+    }
+    return defaults
+}
+
+// validateFields returns the first validation error for a set of required
+// fields, or null when they all pass. Shared by the wizard (per-step gate) and
+// mirrors GenericActionModal's inline checks. `tl` localizes the field label.
+function validateFields(
+    fields: ActionFieldDef[],
+    formData: Record<string, any>,
+    tl: (s: string) => string,
+): string | null {
+    for (const field of fields) {
+        if (!field.required) continue
+        if (isLineItemsField(field)) {
+            const rows = formData[field.key]
+            if (!Array.isArray(rows) || rows.length === 0) {
+                return `${tl(field.label)} requiere al menos un renglón`
+            }
+            continue
+        }
+        if (!formData[field.key] && formData[field.key] !== false) {
+            return `${tl(field.label)} es requerido`
+        }
+    }
+    return null
+}
+
+// WizardActionModal — the third render-path: a multi-step form. It accumulates
+// every step's fields into ONE formData object and, on the final step, POSTs all
+// of them to the same endpoint GenericActionModal uses (buildActionUrl). Each
+// step is validated before "Siguiente" advances; a progress/step bar shows where
+// the user is. Widgets are rendered by the same renderField/resolveWidget path,
+// so line-items, dynamic_select, uploads and dates behave identically to a
+// single-page action form — no widget is duplicated.
+function WizardActionModal({ open, onOpenChange, action, model, record, endpoint, onSuccess }: ActionModalProps) {
+    const { t } = useTranslation()
+    const tl = (s: string) => t(s, { defaultValue: s })
+    const api = useApi()
+    const steps = action.steps ?? []
+    const [stepIndex, setStepIndex] = useState(0)
+    const [formData, setFormData] = useState<Record<string, any>>({})
+    const [executing, setExecuting] = useState(false)
+
+    // Reset to the first step and seed defaults for EVERY step's fields whenever
+    // the modal (re)opens, so accumulated values from a prior run don't leak.
+    useEffect(() => {
+        if (!open) return
+        const allFields = steps.flatMap((s) => s.fields ?? [])
+        setFormData(buildFieldDefaults(allFields, record))
+        setStepIndex(0)
+    }, [open, action.steps, record])
+
+    const updateField = (key: string, value: any) =>
+        setFormData((prev: Record<string, any>) => ({ ...prev, [key]: value }))
+
+    const step = steps[stepIndex]
+    const isLast = stepIndex === steps.length - 1
+    const stepFields = step?.fields ?? []
+
+    const hasLineItems = useMemo(
+        () => stepFields.some(isLineItemsField),
+        [stepFields],
+    )
+    const widthPx = hasLineItems ? '820px' : undefined
+
+    const goNext = () => {
+        const err = validateFields(stepFields, formData, tl)
+        if (err) {
+            toast.error(err)
+            return
+        }
+        setStepIndex((i) => Math.min(i + 1, steps.length - 1))
+    }
+
+    const goBack = () => setStepIndex((i) => Math.max(i - 1, 0))
+
+    const submit = async () => {
+        // Guard every step's required fields on final submit (a user could reach
+        // the last step with an untouched earlier line-items grid otherwise).
+        for (const s of steps) {
+            const err = validateFields(s.fields ?? [], formData, tl)
+            if (err) {
+                toast.error(err)
+                return
+            }
+        }
+        setExecuting(true)
+        try {
+            const url = buildActionUrl(endpoint, model, record?.id, action.key)
+            const res = await api.post(url, formData)
+            if (res.data.success) {
+                toast.success(res.data.message ? t(res.data.message, { defaultValue: res.data.message }) : t('common.success'))
+                onOpenChange(false)
+                onSuccess()
+            } else {
+                toast.error(res.data.message ? t(res.data.message, { defaultValue: res.data.message }) : t('common.error'))
+            }
+        } catch (err: any) {
+            toast.error(err?.response?.data?.message || t('common.error'))
+        } finally {
+            setExecuting(false)
+        }
+    }
+
+    if (steps.length === 0) return null
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent
+                className={'flex max-h-[90vh] flex-col overflow-hidden ' + (widthPx ? '' : 'sm:max-w-xl')}
+                style={{ maxHeight: '90vh', ...(widthPx ? { maxWidth: widthPx, width: '95vw' } : {}) }}
+            >
+                <DialogHeader className="shrink-0">
+                    <DialogTitle className="flex items-center gap-2">
+                        <DynamicIcon name={action.icon} className="h-5 w-5" />
+                        {tl(action.label)}
+                    </DialogTitle>
+                    {/* Progress/step bar: one segment per step. The current and
+                        completed segments are filled; a numbered marker + the
+                        current step's title tell the user where they are. Inline
+                        styles for the fill color guarantee it shows even if the
+                        host's Tailwind scan drops an arbitrary class. */}
+                    <div className="pt-2">
+                        <div className="flex items-center gap-1.5" role="list" aria-label="progress">
+                            {steps.map((s, i) => (
+                                <div
+                                    key={i}
+                                    role="listitem"
+                                    aria-current={i === stepIndex ? 'step' : undefined}
+                                    className="h-1.5 flex-1 rounded-full"
+                                    style={{
+                                        backgroundColor: i <= stepIndex ? (action.color || 'hsl(var(--primary))') : 'hsl(var(--muted))',
+                                    }}
+                                />
+                            ))}
+                        </div>
+                        <DialogDescription className="pt-2">
+                            {t('common.step', { defaultValue: 'Paso' })} {stepIndex + 1}/{steps.length}
+                            {step?.title ? ` · ${tl(step.title)}` : ''}
+                        </DialogDescription>
+                        {step?.description && (
+                            <p className="pt-1 text-sm text-muted-foreground">{tl(step.description)}</p>
+                        )}
+                    </div>
+                </DialogHeader>
+                {/* Body: only the current step's fields, laid out on the same
+                    shared FieldGrid the single-page form uses. Every step's values
+                    persist in the one formData object, so navigating back and
+                    forth keeps entries intact. */}
+                <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 py-4">
+                    <FieldGrid>
+                        {stepFields.map((field) => {
+                            const fullWidth =
+                                isLineItemsField(field) ||
+                                resolveWidget(field) === 'textarea' ||
+                                resolveWidget(field) === 'richtext'
+                            return (
+                                <FieldCell key={field.key} fullWidth={fullWidth}>
+                                    <FieldLabel htmlFor={field.key} required={field.required}>
+                                        {tl(field.label)}
+                                    </FieldLabel>
+                                    {renderField(field, formData[field.key], (v: any) => updateField(field.key, v), formData)}
+                                </FieldCell>
+                            )
+                        })}
+                    </FieldGrid>
+                </div>
+                <DialogFooter className="shrink-0">
+                    {/* Back is available from the second step on; Cancel closes. */}
+                    {stepIndex > 0 ? (
+                        <Button variant="outline" onClick={goBack} disabled={executing}>
+                            {t('common.back', { defaultValue: 'Atrás' })}
+                        </Button>
+                    ) : (
+                        <Button variant="outline" onClick={() => onOpenChange(false)} disabled={executing}>
+                            {t('common.cancel')}
+                        </Button>
+                    )}
+                    {isLast ? (
+                        <Button
+                            onClick={submit}
+                            disabled={executing}
+                            style={action.color ? { backgroundColor: action.color, color: 'white' } : undefined}
+                        >
+                            {executing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DynamicIcon name={action.icon} className="mr-2 h-4 w-4" />}
+                            {tl(action.label)}
+                        </Button>
+                    ) : (
+                        <Button
+                            onClick={goNext}
+                            disabled={executing}
+                            style={action.color ? { backgroundColor: action.color, color: 'white' } : undefined}
+                        >
+                            {t('common.next', { defaultValue: 'Siguiente' })}
+                        </Button>
+                    )}
                 </DialogFooter>
             </DialogContent>
         </Dialog>
