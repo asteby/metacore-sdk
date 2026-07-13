@@ -49,6 +49,13 @@ export interface LicenseGateProps {
     branding?: LicenseBranding
     /** Acción "Gestionar licencia" del banner degradado (opcional). */
     onManage?: () => void
+    /** Si el usuario actual puede activar la licencia (p. ej. Platform Root /
+     * superadmin). Default true — backward-compatible. Cuando es false, el modal
+     * bloqueante se muestra SIN el formulario de activación y en su lugar
+     * aparece `readOnlyMessage`. */
+    canActivate?: boolean
+    /** Mensaje mostrado en el modal bloqueante cuando `canActivate` es false. */
+    readOnlyMessage?: string
     className?: string
 }
 
@@ -58,6 +65,8 @@ export function LicenseGate({
     children,
     branding,
     onManage,
+    canActivate = true,
+    readOnlyMessage,
     className,
 }: LicenseGateProps) {
     const blocking = isLicenseBlocking(state)
@@ -75,6 +84,8 @@ export function LicenseGate({
                     state={state}
                     onActivate={onActivate}
                     branding={branding}
+                    canActivate={canActivate}
+                    readOnlyMessage={readOnlyMessage}
                     className={className}
                 />
             )}
@@ -86,6 +97,8 @@ interface LicenseGateModalProps {
     state: LicenseState
     onActivate: (code: string) => Promise<void>
     branding?: LicenseBranding
+    canActivate: boolean
+    readOnlyMessage?: string
     className?: string
 }
 
@@ -93,6 +106,8 @@ function LicenseGateModal({
     state,
     onActivate,
     branding,
+    canActivate,
+    readOnlyMessage,
     className,
 }: LicenseGateModalProps) {
     const { t } = useTranslation()
@@ -214,6 +229,18 @@ function LicenseGateModal({
                         </p>
                     )}
 
+                    {!canActivate ? (
+                        <p
+                            role="note"
+                            className="border-border bg-muted/40 text-muted-foreground rounded-md border px-3 py-3 text-sm"
+                        >
+                            {readOnlyMessage ??
+                                t('license.gate.read_only', {
+                                    defaultValue:
+                                        'Contacta al administrador de la plataforma para activar la licencia.',
+                                })}
+                        </p>
+                    ) : (
                     <form
                         className="flex flex-col gap-2"
                         onSubmit={(e) => {
@@ -270,6 +297,7 @@ function LicenseGateModal({
                                   })}
                         </Button>
                     </form>
+                    )}
                 </div>
             </div>
         </div>
