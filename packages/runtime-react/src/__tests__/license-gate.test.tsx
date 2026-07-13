@@ -168,6 +168,46 @@ describe('LicenseGate', () => {
         expect(btn.disabled).toBe(true)
     })
 
+    it('sin canActivate oculta el form y muestra el mensaje read-only por defecto', () => {
+        render(
+            <LicenseGate state={make({ status: 'missing' })} onActivate={noop} canActivate={false}>
+                {CHILD}
+            </LicenseGate>,
+        )
+        expect(screen.getByRole('dialog')).toBeTruthy()
+        expect(screen.queryByLabelText('Clave o token de licencia')).toBeNull()
+        expect(screen.queryByText('Activar licencia')).toBeNull()
+        expect(
+            screen.getByText('Contacta al administrador de la plataforma para activar la licencia.'),
+        ).toBeTruthy()
+    })
+
+    it('sin canActivate respeta el readOnlyMessage custom, incl. trial vencido', () => {
+        render(
+            <LicenseGate
+                state={make({ status: 'expired', plan: 'trial' })}
+                onActivate={noop}
+                canActivate={false}
+                readOnlyMessage="Pídele a Ana que active la licencia."
+            >
+                {CHILD}
+            </LicenseGate>,
+        )
+        expect(screen.getByText('Tu prueba gratuita terminó')).toBeTruthy()
+        expect(screen.queryByLabelText('Clave o token de licencia')).toBeNull()
+        expect(screen.getByText('Pídele a Ana que active la licencia.')).toBeTruthy()
+    })
+
+    it('canActivate true (default) mantiene el form de activación', () => {
+        render(
+            <LicenseGate state={make({ status: 'invalid' })} onActivate={noop}>
+                {CHILD}
+            </LicenseGate>,
+        )
+        expect(screen.getByLabelText('Clave o token de licencia')).toBeTruthy()
+        expect(screen.getByText('Activar licencia')).toBeTruthy()
+    })
+
     it('grace degrada con banner en vez de bloquear', () => {
         render(
             <LicenseGate

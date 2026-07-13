@@ -73,6 +73,7 @@ export function Shell({ children }) {
 - Enforcement && `missing`/`invalid`/`expired` → modal **bloqueante** con el formulario de activación.
   `plan === 'trial'` + `expired` → copy *"Tu prueba gratuita terminó"*.
 - Activación exitosa desbloquea **sin recargar**: el host refresca el `state` y el gate se desmonta.
+- **Gateo por rol** con `canActivate` (default `true`): cuando es `false`, el modal bloqueante se muestra **sin formulario** de activación y en su lugar aparece `readOnlyMessage` (default: *"Contacta al administrador de la plataforma para activar la licencia."*). Así solo el Platform Root/superadmin activa; los demás usuarios ven el bloqueo con la indicación de a quién contactar.
 
 ## Minimal usage
 
