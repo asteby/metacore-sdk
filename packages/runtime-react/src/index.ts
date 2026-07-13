@@ -4,6 +4,21 @@
 // duplicate-symbol conflict; consumers who want the canonical SDK type
 // should import from `@asteby/metacore-sdk` directly.
 export * from './types'
+export {
+    LicenseGate,
+    LicenseExpiryBanner,
+    LicenseStatusBadge,
+    isLicenseOperable,
+    isLicenseBlocking,
+    isPresetEntitled,
+    isTrialExpired,
+    type LicenseGateProps,
+    type LicenseExpiryBannerProps,
+    type LicenseStatusBadgeProps,
+    type LicenseState,
+    type LicenseStatus,
+    type LicenseBranding,
+} from './license'
 export * from './options-context'
 export * from './dynamic-table'
 export {
