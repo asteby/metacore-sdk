@@ -30,6 +30,49 @@ Peers: `react`, `react-dom`, `react-i18next`, `i18next`, `@tanstack/react-router
 | `useMetadataCache()` | Zustand store for table/modal metadata, persisted to LocalStorage. `prefetchAll(api)` warms it from `/metadata/all`. |
 | `defaultGetDynamicColumns` / `makeDefaultGetDynamicColumns(helpers)` | The factory `<DynamicTable>` uses to convert metadata into TanStack column defs. The default reads from `col.key` (matching the kernel contract). |
 | `DynamicIcon` | Lucide icon resolver by name. |
+| `<LicenseGate state={…} onActivate={…}>` | El blindaje del negocio: envuelve la app; bloquea con un modal full-screen no descartable cuando la licencia de instancia falta/venció, degrada con banner en `grace`/`stale`. Branding-aware. |
+| `<LicenseExpiryBanner state={…} />` / `<LicenseStatusBadge status={…} />` | Piezas sueltas del gate para Ajustes u otros lugares. |
+| `isLicenseOperable` / `isLicenseBlocking` / `isPresetEntitled` / `isTrialExpired` | Helpers puros sobre `LicenseState`, espejo de `State.Operable()/Blocking()` del backend. |
+
+## Blindaje de licencia (`LicenseGate`)
+
+El gate de licencia es un **primitivo del SDK**: ops y todos los verticales lo montan
+en una línea. Reparto de responsabilidades:
+
+- **kernel** → *enforcement* (qué está permitido; firma/verifica el estado).
+- **SDK** (este módulo) → *UX* (gate, banner, badge).
+- **hub** → *emisión* (mintea el token Ed25519).
+- **hosts** → *wiring* (resuelven el `LicenseState` con su propio transporte y montan el gate).
+
+Es **independiente del kernel**: no importa su cliente ni fija su versión. El host
+resuelve el estado (p. ej. `GET /admin/license`) y pasa una promesa `onActivate`.
+
+```tsx
+import { LicenseGate } from '@asteby/metacore-runtime-react'
+import { useLicenseState, useActivateLicense } from './features/license'
+
+export function Shell({ children }) {
+  const { data: state } = useLicenseState()          // GET /admin/license
+  const activate = useActivateLicense()              // POST /admin/license/activate
+
+  return (
+    <LicenseGate
+      state={state}
+      onActivate={(code) => activate.mutateAsync(code)}
+      branding={{ name: brand.name, logo: brand.logo }}
+      onManage={() => navigate('/settings/license')}
+    >
+      {children}
+    </LicenseGate>
+  )
+}
+```
+
+- Sin enforcement o estado operable (`valid`/`stale`/`grace`) → renderiza children.
+  `stale`/`grace` montan además el banner degradado (`expired` no es descartable, el resto sí con TTL en localStorage).
+- Enforcement && `missing`/`invalid`/`expired` → modal **bloqueante** con el formulario de activación.
+  `plan === 'trial'` + `expired` → copy *"Tu prueba gratuita terminó"*.
+- Activación exitosa desbloquea **sin recargar**: el host refresca el `state` y el gate se desmonta.
 
 ## Minimal usage
 
