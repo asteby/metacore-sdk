@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 23.11.2
+
+### Patch Changes
+
+- 990bb63: DynamicForm oculta los campos readonly (estado de conexión, valores escritos por sync): el servidor los posee, el form no los captura ni los envía en el submit.
+
 ## 23.11.1
 
 ### Patch Changes
