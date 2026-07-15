@@ -157,6 +157,10 @@ export function DynamicTable({
     // Infinite-scroll: a top-up page is in flight (distinct from the initial
     // page load so only a small bottom spinner shows, not the whole-table one).
     const [loadingMore, setLoadingMore] = useState(false)
+    // True once the backend returned a short/empty page: no more rows exist
+    // even if meta.total says otherwise (count/list drift would otherwise
+    // keep the sentinel re-firing forever). Reset by any page-1 fetch.
+    const [infExhausted, setInfExhausted] = useState(false)
     const infPageRef = useRef(1)
     const [optionsMap, setOptionsMap] = useState<Map<string, any[]>>(new Map())
 
@@ -546,6 +550,11 @@ export function DynamicTable({
                     const rows = res.data.data || []
                     setData((prev) => (append ? dedupeById(prev, rows) : rows))
                     if (res.data.meta) setRowCount(res.data.meta.total)
+                    // A short page means the backend has no more rows, even if
+                    // meta.total disagrees with the visible count (count query
+                    // vs list query drift, dedupe). Without this the sentinel
+                    // re-fires forever on empty pages.
+                    setInfExhausted(rows.length < infPageSize)
                 }
             } catch (error) {
                 console.error('Error al cargar los datos', error)
@@ -565,11 +574,11 @@ export function DynamicTable({
     )
 
     const loadNextPage = useCallback(() => {
-        if (loadingMore || loadingData) return
+        if (loadingMore || loadingData || infExhausted) return
         if (data.length >= rowCount) return
         infPageRef.current += 1
         void fetchPage(infPageRef.current, true)
-    }, [loadingMore, loadingData, data.length, rowCount, fetchPage])
+    }, [loadingMore, loadingData, infExhausted, data.length, rowCount, fetchPage])
 
     // Infinite-scroll sentinels. There are two scroll containers (desktop
     // table + mobile card list) but only one is laid out at a time — the CSS
@@ -577,7 +586,7 @@ export function DynamicTable({
     // Each sentinel drives the SAME `loadNextPage`; its internal guards + the
     // `disabled` flag keep concurrent/exhausted fetches from doubling up.
     const infScrollDisabled =
-        !infiniteScroll || loadingMore || loadingData || data.length >= rowCount
+        !infiniteScroll || loadingMore || loadingData || infExhausted || data.length >= rowCount
     const { rootRef: infDesktopRoot, sentinelRef: infDesktopSentinel } =
         useInfiniteScrollSentinel({ onLoadMore: loadNextPage, disabled: infScrollDisabled })
     const { rootRef: infMobileRoot, sentinelRef: infMobileSentinel } =
