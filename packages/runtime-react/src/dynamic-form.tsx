@@ -58,23 +58,33 @@ export function DynamicForm({
     const [errors, setErrors] = useState<Record<string, string>>({})
     const [submitting, setSubmitting] = useState(false)
 
-    const schema = useMemo(() => buildZodSchema(fields), [fields])
+    // Readonly fields are system-owned (connection state, sync-written values):
+    // the server writes them, so the form never captures them — hidden outright
+    // instead of rendered disabled, matching the metadata contract
+    // (ColumnDef.Readonly). They are also excluded from defaults/submit so a
+    // create never posts e.g. `status: ""` over the column default.
+    const editableFields = useMemo(
+        () => fields.filter((f) => !(f as { readonly?: boolean }).readonly),
+        [fields],
+    )
+
+    const schema = useMemo(() => buildZodSchema(editableFields), [editableFields])
 
     // Line-items fields carrying a balance rule gate submit: an unbalanced entry
     // (Σdebit ≠ Σcredit, or all-zero when require_nonzero) can't be saved. This
     // is fully declarative — `evaluateBalance` returns undefined for fields with
     // no rule, so non-balanced forms are unaffected.
     const balanceBlocked = useMemo(() => {
-        for (const f of fields) {
+        for (const f of editableFields) {
             const state = evaluateBalance(f, values[f.key])
             if (state && !state.balanced) return true
         }
         return false
-    }, [fields, values])
+    }, [editableFields, values])
 
     useEffect(() => {
         const defaults: Record<string, any> = {}
-        for (const f of fields) {
+        for (const f of editableFields) {
             if (isLineItemsField(f)) {
                 defaults[f.key] = initialValues?.[f.key] ?? f.defaultValue ?? []
                 continue
@@ -83,7 +93,7 @@ export function DynamicForm({
         }
         setValues(defaults)
         setErrors({})
-    }, [fields, initialValues])
+    }, [editableFields, initialValues])
 
     const update = (k: string, v: any) =>
         setValues((prev: Record<string, any>) => ({ ...prev, [k]: v }))
@@ -113,7 +123,7 @@ export function DynamicForm({
     return (
         <form onSubmit={handleSubmit} className="grid gap-4">
             <div className="grid gap-4 sm:grid-cols-2">
-                {fields.map((field) => (
+                {editableFields.map((field) => (
                     <FieldRow
                         key={field.key}
                         field={field}
