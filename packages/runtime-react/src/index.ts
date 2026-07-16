@@ -165,6 +165,7 @@ export * from './org-runtime-provider'
 export * from './navigation-builder'
 export * from './i18n-provider'
 export * from './api-context'
+export * from './use-addon-settings'
 export * from './metadata-cache'
 export {
     ADDON_MANIFEST_CHANGED_TYPE,
