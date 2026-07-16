@@ -197,6 +197,17 @@ export function DynamicTable({
     // which reads as a URL flicker and fights the router's spelling. Starts at 10
     // to match the initial pagination state until metadata arrives.
     const defaultPerPage = useRef(10)
+    // Has the table finished adopting its state FROM the URL yet? The write
+    // effect must not run before this flips true. `initializedFromUrl` is a ref
+    // set synchronously at the top of the init effect, so on the very first
+    // commit the write effect (which runs right after, in the SAME commit) sees
+    // `initialized=true` but `dynamicFilters` still EMPTY — the init effect's
+    // setState hasn't re-rendered yet — and writes a URL WITHOUT `f_status`,
+    // stripping a deep-linked filter (the "recarga quita el filtro y parpadea"
+    // bug). A STATE flag defers the first write to the render AFTER the URL has
+    // been adopted, where `dynamicFilters`/`pagination` already mirror the URL,
+    // so the write is a no-op and the filter never gets stripped.
+    const [urlSynced, setUrlSynced] = useState(false)
 
     useEffect(() => {
         if (prevBranchId.current !== currentBranch?.id) {
@@ -289,6 +300,9 @@ export function DynamicTable({
             }
         })
         if (Object.keys(filters).length > 0) setDynamicFilters(filters)
+        // Adopted everything the URL carries; the write effect may now run on the
+        // NEXT render (where the setState above has landed) without clobbering it.
+        setUrlSynced(true)
     }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
     // The exact query string this table last wrote to the URL — lets the
@@ -297,7 +311,7 @@ export function DynamicTable({
     const lastSelfSearch = useRef<string | null>(null)
 
     useEffect(() => {
-        if (!enableUrlSync || !initializedFromUrl.current) return
+        if (!enableUrlSync || !urlSynced) return
         const params = new URLSearchParams()
         // Preserve the route-owned view params. The table rebuilds the query
         // string from scratch (it only knows its own page/sort/filter keys), but
@@ -343,7 +357,7 @@ export function DynamicTable({
         const newUrl = search ? `${window.location.pathname}?${search}` : window.location.pathname
         lastSelfSearch.current = search ? `?${search}` : ''
         window.history.replaceState(null, '', newUrl)
-    }, [enableUrlSync, pagination, sorting, globalFilter, dynamicFilters, defaultFilters])
+    }, [enableUrlSync, urlSynced, pagination, sorting, globalFilter, dynamicFilters, defaultFilters])
 
     // The host router can rewrite the query string WITHOUT remounting the
     // table — e.g. sidebar sibling entries deep-link different `f_` filters
