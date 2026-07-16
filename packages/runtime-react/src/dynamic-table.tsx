@@ -190,6 +190,13 @@ export function DynamicTable({
 
     const initializedFromUrl = useRef(false)
     const urlHadPerPage = useRef(false)
+    // The model's server-declared default page size. When the current page size
+    // is just this default (the user hasn't paged/resized and the URL didn't
+    // pin one), we deliberately DON'T stamp `per_page` into the URL — otherwise
+    // the table appends `per_page=15` to the sidebar's clean deep-link on mount,
+    // which reads as a URL flicker and fights the router's spelling. Starts at 10
+    // to match the initial pagination state until metadata arrives.
+    const defaultPerPage = useRef(10)
 
     useEffect(() => {
         if (prevBranchId.current !== currentBranch?.id) {
@@ -229,18 +236,26 @@ export function DynamicTable({
         return alias ? `${alias}:${rest}` : value
     }
 
-    // Order- and encoding-independent fingerprint of a query string. The host
-    // router (TanStack) re-serializes the same params in its own canonical form
-    // — different key order and percent-encoded operator colons
-    // (`f_status=eq%3Areception`) — than the table writes (`f_status=eq:reception`).
-    // Comparing raw strings then NEVER matches, so the table's write effect and
-    // the router's re-serialize fight forever ("Throttling navigation…" +
-    // React #185). URLSearchParams decodes values, so a sorted `key=value` list
-    // is stable across both spellings and lets us detect real no-ops.
+    // Order-, encoding- and operator-independent fingerprint of a query string.
+    // The host router (TanStack) and the sidebar deep-link the filter in THEIR
+    // canonical form — different key order, percent-encoded operator colons, and
+    // the explicit `eq:` operator (`f_status=eq%3Ain_progress`) — while the table
+    // internally unwraps `eq:` for selects and would write the bare value
+    // (`f_status=in_progress`). Comparing raw (or even just decoded) strings then
+    // NEVER matches, so the table rewrites the URL on every navigation and the
+    // two spellings visibly ping-pong ("parpadeo", "Throttling navigation…" +
+    // React #185). Normalising each `f_` value through `urlValueToInternal`
+    // collapses `eq:X` and `X` to the same token, so a sorted `key=value` list is
+    // a true semantic fingerprint and the write effect can detect real no-ops —
+    // leaving the router's own spelling untouched (so the sidebar active-state
+    // match on the exact href keeps working too).
     const canonicalSearch = (searchStr: string): string => {
         const p = new URLSearchParams(searchStr)
         const entries: string[] = []
-        p.forEach((value, key) => entries.push(`${key}=${value}`))
+        p.forEach((value, key) => {
+            const norm = key.startsWith('f_') ? urlValueToInternal(value) : value
+            entries.push(`${key}=${norm}`)
+        })
         entries.sort()
         return entries.join('&')
     }
@@ -298,7 +313,11 @@ export function DynamicTable({
             if (v) params.set(key, v)
         }
         if (pagination.pageIndex > 0) params.set('page', String(pagination.pageIndex + 1))
-        if (pagination.pageSize !== 10) params.set('per_page', String(pagination.pageSize))
+        // Only pin per_page when it deviates from the model's default (an explicit
+        // user page-size change) or the URL already carried one — not for the
+        // plain server default, which would needlessly mutate a clean deep-link.
+        if (pagination.pageSize !== defaultPerPage.current || urlHadPerPage.current)
+            params.set('per_page', String(pagination.pageSize))
         if (sorting.length > 0) {
             params.set('sortBy', sorting[0].id)
             params.set('order', sorting[0].desc ? 'desc' : 'asc')
@@ -389,6 +408,7 @@ export function DynamicTable({
             // localStorage.
             if (cached) {
                 setMetadata(cached)
+                defaultPerPage.current = cached.defaultPerPage || 10
                 if (!urlHadPerPage.current) setPagination((prev: PaginationState) => ({ ...prev, pageSize: cached.defaultPerPage || 10 }))
                 setLoading(false)
             } else {
@@ -402,6 +422,7 @@ export function DynamicTable({
                     meta = fresh
                     setMetadata(fresh)
                     cacheMetadata(model, fresh)
+                    defaultPerPage.current = fresh.defaultPerPage || 10
                     if (!urlHadPerPage.current) setPagination((prev: PaginationState) => ({ ...prev, pageSize: fresh.defaultPerPage || 10 }))
                 }
             } catch (error) {
