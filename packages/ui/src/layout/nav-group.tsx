@@ -27,7 +27,7 @@ import {
   DropdownMenuTrigger,
 } from '@/primitives/dropdown-menu'
 import type { NavGroupData, NavItem, NavLinkItem, NavCollapsibleItem } from './types'
-import { checkIsActive } from './nav-active'
+import { checkIsActive, resolveActiveItemUrls } from './nav-active'
 
 export { checkIsActive, splitHref, declaredFiltersMatch, VIEW_PARAMS } from './nav-active'
 export type { SplitHref } from './nav-active'
@@ -187,11 +187,13 @@ function SidebarMenuCollapsible({
         </CollapsibleTrigger>
         <CollapsibleContent className='CollapsibleContent'>
           <SidebarMenuSub>
-            {item.items.map((subItem: NavLinkItem) => (
+            {(() => {
+              const activeUrls = resolveActiveItemUrls(href, item.items, item.defaultView)
+              return item.items.map((subItem: NavLinkItem) => (
               <SidebarMenuSubItem key={subItem.title}>
                 <SidebarMenuSubButton
                   asChild
-                  isActive={checkIsActive(href, subItem, false, subItem.defaultView ?? item.defaultView)}
+                  isActive={activeUrls.has(subItem.url)}
                 >
                   <LinkComponent
                     to={subItem.url}
@@ -204,7 +206,8 @@ function SidebarMenuCollapsible({
                   </LinkComponent>
                 </SidebarMenuSubButton>
               </SidebarMenuSubItem>
-            ))}
+            ))
+            })()}
           </SidebarMenuSub>
         </CollapsibleContent>
       </SidebarMenuItem>
@@ -242,11 +245,13 @@ function SidebarMenuCollapsedDropdown({
             {item.title} {item.badge ? `(${item.badge})` : ''}
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
-          {item.items.map((sub: NavLinkItem) => (
+          {(() => {
+            const activeUrls = resolveActiveItemUrls(href, item.items, item.defaultView)
+            return item.items.map((sub: NavLinkItem) => (
             <DropdownMenuItem key={`${sub.title}-${sub.url}`} asChild>
               <LinkComponent
                 to={sub.url}
-                className={`${checkIsActive(href, sub, false, sub.defaultView ?? item.defaultView) ? 'bg-secondary' : ''}`}
+                className={`${activeUrls.has(sub.url) ? 'bg-secondary' : ''}`}
                 onMouseEnter={() => onItemHover?.(sub.url)}
               >
                 {sub.icon && <sub.icon />}
@@ -256,7 +261,8 @@ function SidebarMenuCollapsedDropdown({
                 )}
               </LinkComponent>
             </DropdownMenuItem>
-          ))}
+          ))
+          })()}
         </DropdownMenuContent>
       </DropdownMenu>
     </SidebarMenuItem>

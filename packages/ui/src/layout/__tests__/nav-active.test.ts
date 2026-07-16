@@ -4,7 +4,7 @@
 // identity equals the current href. Filter (`f_`) and transient (page/sort)
 // behaviour must be preserved.
 import { describe, expect, it } from 'vitest'
-import { checkIsActive, splitHref, declaredFiltersMatch } from '../nav-active'
+import { checkIsActive, splitHref, declaredFiltersMatch, resolveActiveItemUrls } from '../nav-active'
 import type { NavLinkItem, NavCollapsibleItem } from '../types'
 
 const link = (title: string, url: string): NavLinkItem => ({ title, url })
@@ -177,5 +177,36 @@ describe('checkIsActive — collapsible parent + mainNav loose matching', () => 
 
   it('mainNav does not open an unrelated model group', () => {
     expect(checkIsActive('/m/customers', parent, true)).toBe(false)
+  })
+})
+
+describe('resolveActiveItemUrls — sibling "most specific wins"', () => {
+  const siblings: NavLinkItem[] = [
+    link('Traspasos', '/m/transfers?view=list'),
+    link('Traspasos completados', '/m/transfers?f_status=eq:completed&view=list'),
+  ]
+
+  it('lights only the per-status sibling on a matching filtered URL', () => {
+    const active = resolveActiveItemUrls(
+      '/m/transfers?f_status=eq:completed&view=list',
+      siblings,
+    )
+    expect(active.has('/m/transfers?f_status=eq:completed&view=list')).toBe(true)
+    expect(active.has('/m/transfers?view=list')).toBe(false)
+  })
+
+  it('lights only the bare sibling on the unfiltered URL', () => {
+    const active = resolveActiveItemUrls('/m/transfers?view=list', siblings)
+    expect(active.has('/m/transfers?view=list')).toBe(true)
+    expect(active.has('/m/transfers?f_status=eq:completed&view=list')).toBe(false)
+  })
+
+  it('keeps the base lit for a manual filter no sibling declares', () => {
+    const active = resolveActiveItemUrls(
+      '/m/transfers?f_status=eq:draft&view=list',
+      siblings,
+    )
+    // No sibling declares f_status=draft → only the base matches, stays lit.
+    expect(active.has('/m/transfers?view=list')).toBe(true)
   })
 })

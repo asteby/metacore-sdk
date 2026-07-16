@@ -136,6 +136,46 @@ export function declaredFiltersMatch(
  * absent-view fallback is `''` (a view-less URL then only matches a view-less
  * item).
  */
+/**
+ * Sibling-aware "most specific wins" resolution over a list of nav items.
+ *
+ * `checkIsActive` is per-item and, by design, keeps a filter-LESS item lit when
+ * the table is filtered (so a MANUALLY filtered table still highlights its base
+ * item). But when a SIBLING declares exactly the active filter (e.g. "Traspasos
+ * completados" `?f_status=eq:completed` next to the bare "Traspasos"), BOTH
+ * match and light up. Here we break that tie: among items that match and share
+ * the same path + view surface, only the most filter-specific ones stay active,
+ * so a per-status entry wins over the bare model entry. Items with no
+ * filter-declaring sibling that matches are unaffected (manual filtering still
+ * lights the base). Returns the set of URLs that should render active.
+ */
+export function resolveActiveItemUrls(
+  href: string,
+  items: NavItem[],
+  defaultView?: string
+): Set<string> {
+  const active = items.filter((i) =>
+    checkIsActive(href, i, false, (i as NavLinkItem).defaultView ?? defaultView)
+  )
+  if (active.length <= 1) return new Set(active.map((i) => i.url ?? ''))
+  // Group matches by path + raw view bucket; keep only the max filter count.
+  const groups = new Map<string, { url: string; spec: number }[]>()
+  for (const i of active) {
+    const s = splitHref(i.url ?? '')
+    const spec = s.filters ? s.filters.split('&').length : 0
+    const key = `${s.path}|${s.view}`
+    const arr = groups.get(key) ?? []
+    arr.push({ url: i.url ?? '', spec })
+    groups.set(key, arr)
+  }
+  const keep = new Set<string>()
+  for (const arr of groups.values()) {
+    const max = Math.max(...arr.map((a) => a.spec))
+    for (const a of arr) if (a.spec === max) keep.add(a.url)
+  }
+  return keep
+}
+
 export function checkIsActive(
   href: string,
   item: NavItem,
