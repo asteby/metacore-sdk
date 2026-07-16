@@ -229,6 +229,22 @@ export function DynamicTable({
         return alias ? `${alias}:${rest}` : value
     }
 
+    // Order- and encoding-independent fingerprint of a query string. The host
+    // router (TanStack) re-serializes the same params in its own canonical form
+    // — different key order and percent-encoded operator colons
+    // (`f_status=eq%3Areception`) — than the table writes (`f_status=eq:reception`).
+    // Comparing raw strings then NEVER matches, so the table's write effect and
+    // the router's re-serialize fight forever ("Throttling navigation…" +
+    // React #185). URLSearchParams decodes values, so a sorted `key=value` list
+    // is stable across both spellings and lets us detect real no-ops.
+    const canonicalSearch = (searchStr: string): string => {
+        const p = new URLSearchParams(searchStr)
+        const entries: string[] = []
+        p.forEach((value, key) => entries.push(`${key}=${value}`))
+        entries.sort()
+        return entries.join('&')
+    }
+
     useEffect(() => {
         if (!enableUrlSync || initializedFromUrl.current) return
         initializedFromUrl.current = true
@@ -295,6 +311,16 @@ export function DynamicTable({
             else params.set(`f_${key}`, `in:${values.join(',')}`)
         })
         const search = params.toString()
+        // If what we'd write is semantically identical to what's already in the
+        // bar (only key order / colon-encoding differ from the router's form),
+        // skip the write entirely. Rewriting would flip the raw string, the
+        // router would re-serialize back to its form, and the two would ping-pong
+        // forever. We still adopt the current location as "ours" so the resync
+        // effect below doesn't treat the router's spelling as an external change.
+        if (canonicalSearch(search) === canonicalSearch(window.location.search)) {
+            lastSelfSearch.current = window.location.search
+            return
+        }
         const newUrl = search ? `${window.location.pathname}?${search}` : window.location.pathname
         lastSelfSearch.current = search ? `?${search}` : ''
         window.history.replaceState(null, '', newUrl)
@@ -309,7 +335,9 @@ export function DynamicTable({
     const locationSearch = typeof window !== 'undefined' ? window.location.search : ''
     useEffect(() => {
         if (!enableUrlSync || !initializedFromUrl.current) return
-        if (locationSearch === lastSelfSearch.current) return
+        // Semantic compare: the router's spelling of the query string we just
+        // wrote (different order/encoding) is NOT an external change.
+        if (canonicalSearch(locationSearch) === canonicalSearch(lastSelfSearch.current ?? '')) return
         lastSelfSearch.current = locationSearch
         const params = new URLSearchParams(locationSearch)
         const filters: Record<string, string[]> = {}
