@@ -19,12 +19,57 @@ import { jsx as _jsx, Fragment as _Fragment } from "react/jsx-runtime";
  *
  *   <Slot name="invoice.header.right" payload={{ invoiceId }} />
  */
-import { createContext, useContext, useEffect, useMemo, useState, } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState, } from "react";
+// The installed-addon catalog (manifests + navigation) drives the host's addon
+// modules (sidebar module items, dynamic routes). It's fetched into state, so a
+// full page reload starts empty and the addon modules pop in only once the two
+// network calls resolve — the sidebar visibly gains its "Módulos" late. Persist
+// the last result to localStorage and hydrate the initial state from it so a
+// reload paints the addon modules instantly and revalidates in the background
+// (stale-while-revalidate). The payload is plain serialisable data (manifests +
+// nav groups whose icons are string slugs, not components).
+const CATALOG_CACHE_KEY = "mc:sdk:catalog:v1";
+function readCatalogCache() {
+    try {
+        if (typeof localStorage === "undefined")
+            return null;
+        const raw = localStorage.getItem(CATALOG_CACHE_KEY);
+        if (!raw)
+            return null;
+        const parsed = JSON.parse(raw);
+        return parsed &&
+            Array.isArray(parsed.manifests) &&
+            Array.isArray(parsed.navigation)
+            ? parsed
+            : null;
+    }
+    catch {
+        return null;
+    }
+}
+function writeCatalogCache(manifests, navigation) {
+    try {
+        if (typeof localStorage === "undefined")
+            return;
+        localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify({ manifests, navigation }));
+    }
+    catch {
+        // quota / private mode — the cache is a nicety, never fatal
+    }
+}
 const MetacoreCtx = createContext(null);
 export function MetacoreProvider({ client, registry, children }) {
-    const [manifests, setManifests] = useState([]);
-    const [navigation, setNavigation] = useState([]);
-    const [loading, setLoading] = useState(true);
+    // Read the persisted catalog ONCE so the first render already has the addon
+    // modules instead of an empty sidebar until the fetch resolves.
+    const bootRef = useRef(undefined);
+    if (bootRef.current === undefined)
+        bootRef.current = readCatalogCache();
+    const boot = bootRef.current;
+    const [manifests, setManifests] = useState(boot?.manifests ?? []);
+    const [navigation, setNavigation] = useState(boot?.navigation ?? []);
+    // Seeded from cache → don't block on the initial load; the fetch below still
+    // runs and revalidates.
+    const [loading, setLoading] = useState(!boot);
     useEffect(() => {
         let cancelled = false;
         (async () => {
@@ -34,6 +79,7 @@ export function MetacoreProvider({ client, registry, children }) {
             setManifests(m);
             setNavigation(n);
             setLoading(false);
+            writeCatalogCache(m, n);
         })();
         return () => {
             cancelled = true;
