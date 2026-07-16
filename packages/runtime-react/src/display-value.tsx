@@ -98,6 +98,15 @@ export interface DisplayOption {
     icon?: string
     color?: string
     image?: string
+    /**
+     * Secondary identifier shown UNDER the label (muted, smaller) — a product's
+     * SKU/barcode, a user's email, etc. Lets a reference chip read like
+     * "Camiseta / SKU-001" instead of a bare name, so a resolved record is
+     * unambiguous. Populated declaratively: the backend projects it as the
+     * option/relation `description` (SearchConfig/FieldOptionsConfig.Description,
+     * or a column's `label_description`). Absent → single-line label as before.
+     */
+    subtitle?: string
 }
 
 /**
@@ -123,12 +132,23 @@ export const OptionBadge: React.FC<{
                     src={option.image}
                     alt={option.label}
                     getImageUrl={getImageUrl}
-                    size={16}
+                    size={option.subtitle ? 22 : 16}
                 />
             ) : (
                 option.icon && <DynamicIcon name={option.icon} className="h-3.5 w-3.5" />
             )}
-            <span>{option.label}</span>
+            {option.subtitle ? (
+                // Two-line identity: label on top, the secondary identifier
+                // (SKU/email/…) muted underneath. `leading-tight` keeps the pill
+                // compact; the subtitle inherits the badge's fg at reduced opacity
+                // so it reads as secondary on any color.
+                <span className="flex flex-col leading-tight text-start">
+                    <span>{option.label}</span>
+                    <span className="text-[0.7rem] opacity-70">{option.subtitle}</span>
+                </span>
+            ) : (
+                <span>{option.label}</span>
+            )}
         </Badge>
     )
 }

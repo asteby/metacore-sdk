@@ -332,7 +332,10 @@ const BadgeWithEndpointOptions: React.FC<{
     const { optionsMap } = React.useContext(OptionsContext)
     const options = optionsMap.get(endpoint) || []
     const option = options.find((opt: any) => opt.value === value)
-    if (option) return <OptionBadge option={option} fallback={String(value)} getImageUrl={getImageUrl} />
+    // Reference options carry the backend-projected `description` (the SKU/email
+    // the author pointed the options config at) — surface it as the chip subtitle
+    // so a resolved record reads "Name / SKU" instead of a bare name.
+    if (option) return <OptionBadge option={{ ...option, subtitle: option.subtitle ?? (option as any).description }} fallback={String(value)} getImageUrl={getImageUrl} />
     // No declared option matched → humanize the raw token as a safety net so a
     // cell never shows `in_progress` verbatim (option.label still wins above).
     return <Badge variant="outline">{humanizeToken(value)}</Badge>
@@ -462,6 +465,23 @@ export const resolveRelationImage = (col: ColumnDefinition, row: any): string =>
 }
 
 /**
+ * Reads a secondary identifier the backend stamps on a resolved FK sibling — a
+ * product's SKU, a user's email — projected as `subtitle`/`description` (the
+ * relational twin of `image` via the column's `label_description`). Rendered
+ * muted under the label so a reference chip reads "Name / SKU". Domain-agnostic:
+ * only the generic `subtitle`/`description` keys are read (never a hardcoded
+ * `sku`/`code`), so the author picks the column declaratively. '' when absent.
+ */
+export const resolveRelationSubtitle = (col: ColumnDefinition, row: any): string => {
+    const sibling = getNestedValue(row, relationKeyFor(col))
+    if (sibling && typeof sibling === 'object') {
+        const sub = sibling.subtitle ?? sibling.description
+        if (sub !== undefined && sub !== null && sub !== '') return String(sub)
+    }
+    return ''
+}
+
+/**
  * Renders a resolved FK relation as a clean, truncated chip. Reads the
  * backend-resolved sibling `{ value, label[, image] }` (see `relationKeyFor`)
  * and shows its `label`, prefixed with a small thumbnail when the sibling
@@ -478,6 +498,7 @@ const RelationCell: React.FC<{
     const display = resolveRelationLabel(col, row)
     if (!display) return <EmptyCell />
     const image = resolveRelationImage(col, row)
+    const subtitle = resolveRelationSubtitle(col, row)
     // Deterministic, SUBTLE color keyed on the resolved label — lighter than
     // enum badges (soft tint, no heavy fill) so category/brand chips read as
     // alive yet stay visually distinct from option/status badges. Inline style
@@ -487,12 +508,19 @@ const RelationCell: React.FC<{
         <span
             className="inline-flex max-w-[220px] items-center gap-1.5 rounded-md px-2 py-0.5 text-sm font-medium"
             style={chipStyles}
-            title={display}
+            title={subtitle ? `${display} · ${subtitle}` : display}
         >
             {image && (
-                <RelationThumbnail src={image} alt={display} getImageUrl={getImageUrl} size={18} />
+                <RelationThumbnail src={image} alt={display} getImageUrl={getImageUrl} size={subtitle ? 24 : 18} />
             )}
-            <span className="truncate">{display}</span>
+            {subtitle ? (
+                <span className="flex flex-col leading-tight min-w-0">
+                    <span className="truncate">{display}</span>
+                    <span className="truncate text-[0.7rem] opacity-70">{subtitle}</span>
+                </span>
+            ) : (
+                <span className="truncate">{display}</span>
+            )}
         </span>
     )
 }
