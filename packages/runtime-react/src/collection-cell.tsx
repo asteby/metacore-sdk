@@ -92,6 +92,8 @@ interface ResolvedRef {
     value?: unknown
     /** Optional thumbnail (product photo, logo, avatar) resolved by the backend. */
     image?: string
+    /** Optional secondary identifier (SKU/email) shown muted under the label. */
+    subtitle?: string
 }
 
 /**
@@ -110,12 +112,17 @@ function resolvedRefFor(
         const obj = sibling as Record<string, unknown>
         const label = obj.label
         if (label !== undefined && label !== null && label !== '') {
+            const sub = obj.subtitle ?? obj.description
             return {
                 label: String(label),
                 value: obj.value,
                 image:
                     typeof obj.image === 'string' && obj.image !== ''
                         ? obj.image
+                        : undefined,
+                subtitle:
+                    sub !== undefined && sub !== null && sub !== ''
+                        ? String(sub)
                         : undefined,
             }
         }
@@ -148,11 +155,14 @@ function resolvedRefObject(
     if (!isPlainObject(v)) return null
     const label = v.label
     if (label === undefined || label === null || label === '') return null
+    const sub = v.subtitle ?? v.description
     return {
         label: String(label),
         value: v.value,
         image:
             typeof v.image === 'string' && v.image !== '' ? v.image : undefined,
+        subtitle:
+            sub !== undefined && sub !== null && sub !== '' ? String(sub) : undefined,
     }
 }
 
@@ -165,23 +175,26 @@ function resolvedRefObject(
 function RefChip({
     label,
     image,
+    subtitle,
     getImageUrl,
 }: {
     label: string
     image?: string
+    subtitle?: string
     getImageUrl?: (path: string) => string
 }): React.ReactElement {
     const isDark = useIsDarkTheme()
+    const size = subtitle ? 24 : 18
     return (
         <span
             className="inline-flex max-w-[220px] items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium"
             style={relationChipStyles(label, { isDark })}
-            title={label}
+            title={subtitle ? `${label} · ${subtitle}` : label}
         >
             {image ? (
                 <Avatar
                     className="shrink-0 rounded-sm ring-1 ring-border/40"
-                    style={{ width: 18, height: 18 }}
+                    style={{ width: size, height: size }}
                 >
                     <AvatarImage
                         src={getImageUrl ? getImageUrl(image) : image}
@@ -195,7 +208,14 @@ function RefChip({
             ) : (
                 <Box className="h-3 w-3 shrink-0 opacity-70" />
             )}
-            <span className="truncate">{label}</span>
+            {subtitle ? (
+                <span className="flex flex-col leading-tight min-w-0">
+                    <span className="truncate">{label}</span>
+                    <span className="truncate text-[0.65rem] opacity-70">{subtitle}</span>
+                </span>
+            ) : (
+                <span className="truncate">{label}</span>
+            )}
         </span>
     )
 }
@@ -218,7 +238,7 @@ function ItemFieldCell({
     const ref = resolvedRefFor(field, row)
     if (ref?.label) {
         return (
-            <RefChip label={ref.label} image={ref.image} getImageUrl={getImageUrl} />
+            <RefChip label={ref.label} image={ref.image} subtitle={ref.subtitle} getImageUrl={getImageUrl} />
         )
     }
     return <>{formatScalar(row[field.key])}</>
@@ -495,6 +515,7 @@ function MiniTable({
                                         <RefChip
                                             label={ref.label}
                                             image={ref.image}
+                                            subtitle={ref.subtitle}
                                             getImageUrl={getImageUrl}
                                         />
                                     ) : (
