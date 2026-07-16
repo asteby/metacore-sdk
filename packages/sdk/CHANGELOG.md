@@ -1,5 +1,17 @@
 # @asteby/metacore-sdk
 
+## 3.2.1
+
+### Patch Changes
+
+- 9e59bb0: feat(react): cache installed-addon catalog for instant reload
+
+  `MetacoreProvider` fetched manifests + navigation into empty state, so a full
+  reload showed the sidebar without its addon modules ("Módulos") until both calls
+  resolved. Persist the catalog to localStorage and hydrate the initial state from
+  it so a reload paints the addon modules instantly and revalidates in the
+  background (stale-while-revalidate).
+
 ## 3.2.0
 
 ### Minor Changes
