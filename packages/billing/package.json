@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-billing",
-  "version": "9.0.0",
+  "version": "10.0.0",
   "description": "Metacore billing — subscription state, Stripe checkout/portal hooks, and the BillingSettings UI shared across host apps.",
   "license": "Apache-2.0",
   "repository": {

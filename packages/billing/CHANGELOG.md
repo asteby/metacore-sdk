@@ -1,5 +1,12 @@
 # @asteby/metacore-billing
 
+## 10.0.0
+
+### Patch Changes
+
+- Updated dependencies [0704d54]
+  - @asteby/metacore-ui@2.10.0
+
 ## 9.0.0
 
 ### Patch Changes
