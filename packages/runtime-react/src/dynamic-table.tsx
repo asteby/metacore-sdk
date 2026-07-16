@@ -77,6 +77,58 @@ import { useDynamicRowActions } from './dynamic-row-actions'
 import { ExportDialog } from './dialogs/export'
 import { ImportDialog } from './dialogs/import'
 
+// ---------------------------------------------------------------------------
+// Row-data cache (perceived performance).
+//
+// The table fetches rows into local state, so a full page reload starts empty
+// and shows a full skeleton until `/data/:model` resolves — even for a view the
+// user just looked at. We stash the last first-page result and seed the initial
+// state from it so a reload paints the previous rows instantly and the fetch
+// below revalidates in the background (stale-while-revalidate).
+//
+// Deliberately `sessionStorage`, NOT localStorage: row data is org/user-scoped,
+// so it must not outlive the tab session (a browser restart or a different login
+// starts clean). The key includes model+endpoint+branch+URL params so a
+// different filter / sort / page never paints the wrong rows. Only the first
+// page is cached (capped) — infinite-scroll top-ups re-fetch on scroll.
+const TBL_DATA_CACHE_PREFIX = 'mc:tbl:data:v1'
+interface TableDataCacheEntry { rows: any[]; rowCount: number; ts: number }
+
+function tableDataCacheKey(
+    model: string | undefined,
+    endpoint: string | undefined,
+    branchId: string | number | null | undefined,
+    search: string,
+): string {
+    const p = new URLSearchParams(search)
+    const parts: string[] = []
+    p.forEach((v, k) => parts.push(`${k}=${v}`))
+    parts.sort()
+    return `${TBL_DATA_CACHE_PREFIX}|${model || ''}|${endpoint || ''}|${branchId || ''}|${parts.join('&')}`
+}
+
+function readTableDataCache(key: string): TableDataCacheEntry | null {
+    try {
+        const raw = sessionStorage.getItem(key)
+        if (!raw) return null
+        const parsed = JSON.parse(raw)
+        return parsed && Array.isArray(parsed.rows) ? parsed : null
+    } catch {
+        return null
+    }
+}
+
+function writeTableDataCache(key: string, rows: any[], rowCount: number): void {
+    try {
+        sessionStorage.setItem(
+            key,
+            JSON.stringify({ rows: rows.slice(0, 50), rowCount, ts: Date.now() }),
+        )
+    } catch {
+        // quota / private mode — the cache is a nicety, never fatal
+    }
+}
+
 export interface DynamicTableProps {
     model: string
     endpoint?: string
@@ -148,12 +200,27 @@ export function DynamicTable({
     const cachedMeta = getMetadata(model)
 
     const [metadata, setMetadata] = useState<TableMetadata | null>(cachedMeta || null)
-    const [data, setData] = useState<any[]>([])
+    // Read the row-data cache ONCE at mount (before the fetch effects run) so the
+    // first paint uses the previous rows for this exact view instead of skeletons.
+    const bootDataKey = tableDataCacheKey(
+        model,
+        endpoint,
+        currentBranch?.id,
+        typeof window !== 'undefined' ? window.location.search : '',
+    )
+    const bootDataRef = useRef<TableDataCacheEntry | null | undefined>(undefined)
+    if (bootDataRef.current === undefined) {
+        bootDataRef.current = enableUrlSync ? readTableDataCache(bootDataKey) : null
+    }
+    const bootData = bootDataRef.current
+    const [data, setData] = useState<any[]>(bootData?.rows ?? [])
     // Footer totals: per-column SUM over the FILTERED set, fetched from a
     // separate /aggregate endpoint (NOT summed from the visible page).
     const [footerTotals, setFooterTotals] = useState<Record<string, any>>({})
     const [loading, setLoading] = useState(!cachedMeta)
-    const [loadingData, setLoadingData] = useState(true)
+    // Cached rows → no full-table skeleton on reload; the background fetch still
+    // runs and swaps in fresh data.
+    const [loadingData, setLoadingData] = useState(!(bootData?.rows?.length))
     // Infinite-scroll: a top-up page is in flight (distinct from the initial
     // page load so only a small bottom spinner shows, not the whole-table one).
     const [loadingMore, setLoadingMore] = useState(false)
@@ -182,7 +249,7 @@ export function DynamicTable({
     const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
     const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 })
     const [globalFilter, setGlobalFilter] = useState('')
-    const [rowCount, setRowCount] = useState(0)
+    const [rowCount, setRowCount] = useState(bootData?.rowCount ?? 0)
 
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
     const [dynamicFilters, setDynamicFilters] = useState<Record<string, string[]>>({})
@@ -557,15 +624,25 @@ export function DynamicTable({
             }
             const res = await api.get(endpoint || `/data/${model}`, { params }) as { data: ApiResponse<any[]> }
             if (res.data.success) {
-                setData(res.data.data || [])
+                const rows = res.data.data || []
+                setData(rows)
                 if (res.data.meta) setRowCount(res.data.meta.total)
+                // Cache the first page for an instant reload paint (see the cache
+                // helpers). Keyed off the live URL so it matches the next mount.
+                if (enableUrlSync && pagination.pageIndex === 0) {
+                    writeTableDataCache(
+                        tableDataCacheKey(model, endpoint, currentBranch?.id, window.location.search),
+                        rows,
+                        res.data.meta?.total ?? rows.length,
+                    )
+                }
             }
         } catch (error) {
             console.error('Error al cargar los datos', error)
         } finally {
             setLoadingData(false)
         }
-    }, [model, metadata, pagination, buildFilterParams, refreshTrigger, endpoint, currentBranch?.id, api])
+    }, [model, metadata, pagination, buildFilterParams, refreshTrigger, endpoint, currentBranch?.id, api, enableUrlSync])
 
     // Columns whose metadata opts into a footer total (display_config.aggregate
     // → styleConfig.aggregate). When empty, no footer row is rendered and no
@@ -613,6 +690,14 @@ export function DynamicTable({
                     const rows = res.data.data || []
                     setData((prev) => (append ? dedupeById(prev, rows) : rows))
                     if (res.data.meta) setRowCount(res.data.meta.total)
+                    // Cache the first (replace) page for an instant reload paint.
+                    if (!append && enableUrlSync) {
+                        writeTableDataCache(
+                            tableDataCacheKey(model, endpoint, currentBranch?.id, window.location.search),
+                            rows,
+                            res.data.meta?.total ?? rows.length,
+                        )
+                    }
                     // A short page means the backend has no more rows, even if
                     // meta.total disagrees with the visible count (count query
                     // vs list query drift, dedupe). Without this the sentinel
@@ -626,7 +711,7 @@ export function DynamicTable({
                 else setLoadingData(false)
             }
         },
-        [metadata, buildFilterParams, endpoint, model, api, currentBranch?.id],
+        [metadata, buildFilterParams, endpoint, model, api, currentBranch?.id, enableUrlSync],
     )
 
     // Signature of everything that must reset the incremental list to page 1:
