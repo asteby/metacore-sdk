@@ -42,9 +42,17 @@ import { DynamicRelations } from './dynamic-relations'
 import { DynamicSelectField } from './dynamic-select-field'
 import { DynamicDateField } from './dynamic-date-field'
 import { UploadField } from './upload-field'
-import { isLineItemsField, resolveWidget, resolveDependsValue, getDependsOn } from './dynamic-form-schema'
+import { isLineItemsField, resolveWidget, resolveDependsValue, getDependsOn, getFieldRef } from './dynamic-form-schema'
 import { FieldGrid, FieldCell, FieldLabel } from './field-grid'
-import type { ActionFieldDef } from './types'
+import { useMetadataCache } from './metadata-cache'
+import {
+    ViewValue,
+    objectLabel,
+    relationSiblingValue,
+    fieldItemFields,
+    isLineItemsField as isRecordLineItemsField,
+} from './dialogs/dynamic-record'
+import type { ActionFieldDef, TableMetadata, ColumnDefinition } from './types'
 // Canonical registry lives in @asteby/metacore-sdk
 import {
     type ActionMetadata,
@@ -228,6 +236,172 @@ function buildActionUrl(endpoint: string | undefined, model: string, recordId: s
     return hasRecord ? `/data/${model}/me/${recordId}/action/${actionKey}` : `/data/${model}/me/action/${actionKey}`
 }
 
+// ── Preview automático del registro en el modal de confirmación ─────────────
+//
+// Antes de confirmar una row-action (aceptar/rechazar un traspaso, etc.) el
+// usuario ve un resumen compacto y read-only de QUÉ registro va a afectar, para
+// no confirmar a ciegas. Es 100% del SDK y genérico: se apoya en la metadata de
+// tabla del modelo (labels + display hints) y en los siblings de relación que la
+// tabla ya resolvió sobre el `record`. Se degrada solo — si no hay ni un campo
+// ni líneas útiles que mostrar, no renderiza nada (ni una caja vacía).
+
+// Claves de sistema/infra que nunca aportan contexto al preview.
+const PREVIEW_SKIP_KEYS = new Set([
+    'id',
+    'organization_id',
+    'org_id',
+    'created_at',
+    'updated_at',
+    'deleted_at',
+    'created_by',
+    'created_by_id',
+    'updated_by',
+    'updated_by_id',
+])
+
+// Campos escalares "de identidad" que sí vale la pena anclar en el preview
+// aunque no sean relación ni line-items (nombre, folio, estado, etc.).
+const PREVIEW_INTEREST_KEYS = new Set([
+    'name',
+    'title',
+    'code',
+    'reference',
+    'folio',
+    'number',
+    'status',
+    'stage',
+    'state',
+])
+const PREVIEW_INTEREST_STYLES = new Set(['status', 'badge', 'currency'])
+
+const MAX_PREVIEW_FIELD_ROWS = 6
+
+function isEmptyPreviewValue(value: any): boolean {
+    if (value === null || value === undefined || value === '') return true
+    if (Array.isArray(value)) return value.length === 0
+    if (typeof value === 'object' && !(value instanceof Date)) return Object.keys(value).length === 0
+    return false
+}
+
+interface PreviewRow {
+    col: ColumnDefinition
+    value: any
+    lineItems: boolean
+}
+
+// selectPreviewColumns aplica la heurística compacta sobre las columnas del
+// modelo: relaciones resueltas a su label, campos line-items (jsonb) y un puñado
+// de escalares de identidad. Omite id/org/timestamps y los *_id crudos cuya
+// relación no resolvió a un label legible.
+function selectPreviewColumns(columns: ColumnDefinition[] | undefined, record: any): PreviewRow[] {
+    if (!columns || !record) return []
+    const lineItemRows: PreviewRow[] = []
+    const fieldRows: PreviewRow[] = []
+
+    for (const col of columns) {
+        if (!col || !col.key) continue
+        if (col.hidden) continue
+        if (PREVIEW_SKIP_KEYS.has(col.key)) continue
+        const value = record[col.key]
+
+        // Line-items (jsonb array como Transfer.items) → mini-tabla producto×cantidad.
+        if (isRecordLineItemsField(col as any, value)) {
+            if (isEmptyPreviewValue(value)) continue
+            lineItemRows.push({ col, value, lineItems: true })
+            continue
+        }
+
+        // Relación (ref / search / dynamic_select / *_id): solo si el sibling
+        // resolvió a un label legible; si es un *_id crudo sin resolver, se omite.
+        const isRelation =
+            !!getFieldRef(col as ActionFieldDef) ||
+            col.type === 'search' ||
+            col.type === 'relation' ||
+            (col as { widget?: string }).widget === 'dynamic_select' ||
+            (typeof col.key === 'string' && col.key.endsWith('_id'))
+        if (isRelation) {
+            const sib = relationSiblingValue(col as any, record)
+            const label = typeof sib === 'string' ? sib : objectLabel(sib)
+            if (!label) continue
+            fieldRows.push({ col, value, lineItems: false })
+            continue
+        }
+
+        // Escalar de identidad (nombre/folio/estado/moneda…) con valor.
+        const styleKey = col.cellStyle ?? col.type
+        const interesting =
+            PREVIEW_INTEREST_KEYS.has(col.key) || PREVIEW_INTEREST_STYLES.has(String(styleKey))
+        if (interesting && !isEmptyPreviewValue(value)) {
+            fieldRows.push({ col, value, lineItems: false })
+        }
+    }
+
+    return [...fieldRows.slice(0, MAX_PREVIEW_FIELD_ROWS), ...lineItemRows]
+}
+
+function RecordPreview({ model, record }: { model: string; record: any }) {
+    const { t } = useTranslation()
+    const api = useApi()
+    const cached = useMetadataCache((s) => s.getMetadata(model))
+    const setMetadata = useMetadataCache((s) => s.setMetadata)
+    const [fetched, setFetched] = useState<TableMetadata | null>(null)
+
+    // Sin metadata cacheada → UN fetch a /metadata/table/<model> (mismo patrón
+    // que model-action-toolbar). Se guarda en el store para próximos usos.
+    useEffect(() => {
+        if (cached || !model) return
+        let cancelled = false
+        api
+            .get(`/metadata/table/${model}`)
+            .then((res) => {
+                if (cancelled) return
+                const meta = (res.data?.data ?? res.data) as TableMetadata
+                if (meta && Array.isArray(meta.columns)) {
+                    setFetched(meta)
+                    setMetadata(model, meta)
+                }
+            })
+            .catch(() => {
+                if (!cancelled) setFetched(null)
+            })
+        return () => {
+            cancelled = true
+        }
+    }, [cached, model, api, setMetadata])
+
+    const meta = cached ?? fetched
+    const rows = useMemo(() => selectPreviewColumns(meta?.columns, record), [meta, record])
+
+    // Degradación: nada útil que mostrar → no renderiza la sección.
+    if (rows.length === 0) return null
+
+    return (
+        <div className="mt-1 overflow-hidden rounded-md border bg-muted/30 text-sm">
+            {rows.map(({ col, value, lineItems }) => {
+                const label = t(col.label, { defaultValue: col.label })
+                if (lineItems) {
+                    return (
+                        <div key={col.key} className="border-t px-3 py-2 first:border-t-0">
+                            <div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                                {label}
+                            </div>
+                            <ViewValue field={col as any} value={value} record={record} />
+                        </div>
+                    )
+                }
+                return (
+                    <div key={col.key} className="flex items-baseline gap-3 border-t px-3 py-1.5 first:border-t-0">
+                        <span className="w-1/3 shrink-0 truncate text-muted-foreground">{label}</span>
+                        <div className="min-w-0 flex-1 [&_p]:py-0">
+                            <ViewValue field={col as any} value={value} record={record} />
+                        </div>
+                    </div>
+                )
+            })}
+        </div>
+    )
+}
+
 function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoint, onSuccess }: ActionModalProps) {
     const { t } = useTranslation()
     const api = useApi()
@@ -268,6 +442,7 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
                         {action.confirmMessage || `${label}?`}
                     </AlertDialogDescription>
                 </AlertDialogHeader>
+                {record ? <RecordPreview model={model} record={record} /> : null}
                 <AlertDialogFooter>
                     <AlertDialogCancel disabled={executing}>{t('common.cancel')}</AlertDialogCancel>
                     <AlertDialogAction

@@ -267,7 +267,7 @@ function resolvePath(obj: any, path: string): any {
 // objectLabel pulls a human label off a resolved relation/user object the
 // backend serves: `{value,label}` (FK sibling), `{name,...}` (user object such
 // as created_by), or `{title}`. Returns undefined for plain/empty objects.
-function objectLabel(value: any): string | undefined {
+export function objectLabel(value: any): string | undefined {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined
     const label = value.label ?? value.name ?? value.title
     if (label != null && label !== '') return String(label)
@@ -285,7 +285,7 @@ function pickImage(value: any): string | undefined {
 // FK column. A field `category_id` (search/dynamic_select/ref) ships a sibling
 // `record.category = {value,label,image?}` (or a bare string/{name}); returns
 // the raw sibling (object or string) so the caller can extract label + image.
-function relationSiblingValue(field: FieldDef, record: any): any {
+export function relationSiblingValue(field: FieldDef, record: any): any {
     if (!record) return undefined
     const candidates: string[] = []
     const ref = getFieldRef(field as ActionFieldDef)
@@ -305,7 +305,7 @@ function relationSiblingValue(field: FieldDef, record: any): any {
 
 // fieldItemFields reads the declared jsonb line-items schema off a field,
 // tolerating the snake_case `item_fields` alias the kernel serves.
-function fieldItemFields(field: FieldDef): ItemField[] | undefined {
+export function fieldItemFields(field: FieldDef): ItemField[] | undefined {
     return field.itemFields ?? field.item_fields
 }
 
