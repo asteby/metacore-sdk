@@ -35,6 +35,14 @@
       "types": "./dist/dialogs/index.d.ts",
       "import": "./dist/dialogs/index.js"
     },
+    "./modal": {
+      "types": "./dist/modal/index.d.ts",
+      "import": "./dist/modal/index.js"
+    },
+    "./wizard": {
+      "types": "./dist/wizard/index.d.ts",
+      "import": "./dist/wizard/index.js"
+    },
     "./command-menu": {
       "types": "./dist/command-menu/index.d.ts",
       "import": "./dist/command-menu/index.js"
