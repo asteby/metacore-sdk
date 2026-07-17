@@ -1,6 +1,6 @@
 {
   "name": "@metacore-addons/tickets",
-  "version": "10.0.0",
+  "version": "11.0.0",
   "private": true,
   "description": "Tickets & Pedidos — metacore reference addon frontend.",
   "type": "module",
@@ -12,7 +12,7 @@
   "peerDependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "@asteby/metacore-sdk": "^3.2.1"
+    "@asteby/metacore-sdk": "^3.3.0"
   },
   "devDependencies": {
     "@asteby/metacore-sdk": "workspace:*",
