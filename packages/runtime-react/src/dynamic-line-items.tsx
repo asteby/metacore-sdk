@@ -69,6 +69,11 @@ export function DynamicLineItems({ field, value, onChange, disabled = false, for
     const itemFields = getItemFields(field)
     const rows: any[] = Array.isArray(value) ? value : []
 
+    // `lock_rows` fixes the row set: no add-row button, no per-row delete. Rows
+    // stay editable cell-by-cell. Snake_case is what the kernel serves; tolerate
+    // the camelCase alias too. Derived once.
+    const lockRows = field.lock_rows ?? (field as any).lockRows ?? false
+
     // Columns flagged `total` get a per-column sum in the footer; the balance
     // rule (if any) reconciles two of them. Both are declarative & generic.
     const totals = computeLineItemTotals(field, rows)
@@ -126,14 +131,14 @@ export function DynamicLineItems({ field, value, onChange, disabled = false, for
                                     {col.required && <span className="text-red-500 ml-1">*</span>}
                                 </th>
                             ))}
-                            <th className="w-12 px-3 py-2" aria-label="acciones" />
+                            {!lockRows && <th className="w-12 px-3 py-2" aria-label="acciones" />}
                         </tr>
                     </thead>
                     <tbody>
                         {rows.length === 0 && (
                             <tr>
                                 <td
-                                    colSpan={itemFields.length + 1}
+                                    colSpan={itemFields.length + (lockRows ? 0 : 1)}
                                     className="px-3 py-4 text-center text-muted-foreground"
                                 >
                                     Sin renglones
@@ -154,18 +159,20 @@ export function DynamicLineItems({ field, value, onChange, disabled = false, for
                                         />
                                     </td>
                                 ))}
-                                <td className="px-2 py-1.5 text-center">
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => removeRow(idx)}
-                                        disabled={disabled}
-                                        aria-label="Eliminar renglón"
-                                    >
-                                        <Trash2 className="h-4 w-4 text-red-500" />
-                                    </Button>
-                                </td>
+                                {!lockRows && (
+                                    <td className="px-2 py-1.5 text-center">
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => removeRow(idx)}
+                                            disabled={disabled}
+                                            aria-label="Eliminar renglón"
+                                        >
+                                            <Trash2 className="h-4 w-4 text-red-500" />
+                                        </Button>
+                                    </td>
+                                )}
                             </tr>
                         ))}
                     </tbody>
@@ -197,17 +204,21 @@ export function DynamicLineItems({ field, value, onChange, disabled = false, for
                                         </td>
                                     )
                                 })}
-                                <td />
+                                {!lockRows && <td />}
                             </tr>
                         </tfoot>
                     )}
                 </table>
             </div>
             <div className="flex items-center justify-between gap-2">
-                <Button type="button" variant="outline" size="sm" onClick={addRow} disabled={disabled}>
-                    <Plus className="mr-1 h-4 w-4" />
-                    Agregar renglón
-                </Button>
+                {lockRows ? (
+                    <span />
+                ) : (
+                    <Button type="button" variant="outline" size="sm" onClick={addRow} disabled={disabled}>
+                        <Plus className="mr-1 h-4 w-4" />
+                        Agregar renglón
+                    </Button>
+                )}
                 {balance && <BalanceBadge state={balance} />}
             </div>
         </div>

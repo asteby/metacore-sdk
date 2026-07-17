@@ -444,6 +444,16 @@ export interface ActionFieldDef {
      */
     balance?: FieldBalanceRule
     /**
+     * On a line-items (`type: "array"`) field: fixes the set of rows. When true
+     * the SDK hides the "Agregar renglón" button and the per-row delete control,
+     * so the rows served (e.g. a prefilled set of allocations) can only have
+     * their cells edited — never added to or removed. Generic & domain-agnostic.
+     * Mirrors kernel v3 `ActionField.lock_rows`. Tolerates the camelCase alias.
+     */
+    lock_rows?: boolean
+    /** camelCase alias for `lock_rows`. */
+    lockRows?: boolean
+    /**
      * `upload` widget: comma-separated accept list forwarded to the file input
      * `accept` attribute (e.g. `"image/*,.pdf"`). Tolerates the snake_case the
      * kernel may serve. Optional — when absent any file type is allowed.

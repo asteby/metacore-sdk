@@ -341,6 +341,12 @@ export interface ActionField {
    * (dynamic-line-items) renders a row grid with add/remove controls.
    */
   item_fields?: ActionField[];
+  /**
+   * LockRows fixes the set of rows of a line-items (type "array") field. When
+   * true the SDK hides the add-row and per-row delete controls, so the served
+   * rows can only have their cells edited — never added to or removed.
+   */
+  lock_rows?: boolean;
 }
 /**
  * FieldOption is a value/label choice for select-typed action fields.
