@@ -7,7 +7,7 @@ settings:
 packageExtensionsChecksum: sha256-LupEPbJQb5/L/p/Q5zAeQytm6QmUNXwZmVKvuOVWLWg=
 
 patchedDependencies:
-  '@changesets/cli@2.31.0': fd46b35ea112fa0b09f18204478a1802aeacba0ad95bca1ee89f162674c529fa
+  '@changesets/cli@2.31.1': 1234b0781d15c616ad7759f390accf6f0214bbb45fb5ee656332b3390e125fb2
 
 importers:
 
@@ -17,8 +17,8 @@ importers:
         specifier: ^0.7.0
         version: 0.7.0
       '@changesets/cli':
-        specifier: ^2.27.9
-        version: 2.31.0(patch_hash=fd46b35ea112fa0b09f18204478a1802aeacba0ad95bca1ee89f162674c529fa)(@types/node@22.19.20)
+        specifier: 2.31.1
+        version: 2.31.1(patch_hash=1234b0781d15c616ad7759f390accf6f0214bbb45fb5ee656332b3390e125fb2)(@types/node@22.19.20)
       tsup:
         specifier: ^8.3.5
         version: 8.5.1(@swc/core@1.15.40)(jiti@2.7.0)(postcss@8.5.15)(tsx@4.22.4)(typescript@6.0.3)
@@ -1873,8 +1873,8 @@ packages:
   '@changesets/changelog-github@0.7.0':
     resolution: {integrity: sha512-rBsbRvc4TVn+FvFnOVM3LxlFJfTXXCp8gfVJ+0BubxWNSVnLuAzowi5j+IEraLLP52w8AAs9QfKbPS3MMiXQJA==}
 
-  '@changesets/cli@2.31.0':
-    resolution: {integrity: sha512-AhI4enNTgHu2IZr6K4WZyf0EPch4XVMn1yOMFmCD9gsfBGqMYaHXls5HyDv6/CL5axVQABz68eG30eCtbr2wFg==}
+  '@changesets/cli@2.31.1':
+    resolution: {integrity: sha512-uO05WTcRBwuVOJVSW8Cmpqw6q0WDL53ajGCMyszutvOe5toOnunbpM4jZzf+qxBOz7i0AzopZ8diBuewjmF40w==}
     hasBin: true
 
   '@changesets/config@3.1.4':
@@ -7923,7 +7923,7 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  '@changesets/cli@2.31.0(patch_hash=fd46b35ea112fa0b09f18204478a1802aeacba0ad95bca1ee89f162674c529fa)(@types/node@22.19.20)':
+  '@changesets/cli@2.31.1(patch_hash=1234b0781d15c616ad7759f390accf6f0214bbb45fb5ee656332b3390e125fb2)(@types/node@22.19.20)':
     dependencies:
       '@changesets/apply-release-plan': 7.1.1
       '@changesets/assemble-release-plan': 6.0.10
