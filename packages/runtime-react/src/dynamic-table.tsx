@@ -432,14 +432,28 @@ export function DynamicTable({
     // the table kept showing the previous filter. On every render where the
     // location's search differs from the last URL we ourselves wrote,
     // re-parse the `f_` params and adopt them.
-    const locationSearch = typeof window !== 'undefined' ? window.location.search : ''
     useEffect(() => {
         if (!enableUrlSync || !initializedFromUrl.current) return
+        // Read the URL FRESH inside the effect — NOT a value captured during
+        // render. The write effect above mutates the URL imperatively via
+        // `history.replaceState`, which does NOT trigger a re-render, so a search
+        // string snapshotted at render time lags one commit behind what we just
+        // wrote. Comparing that stale snapshot against `lastSelfSearch` (which the
+        // write effect updated in this same commit) always mismatched, so the
+        // resync "adopted" a phantom external change and reset the filters — the
+        // write effect then re-wrote them, and the two effects ping-ponged the
+        // filters `{almacen:['Test']} <-> {}` on every render, spinning the
+        // infinite-scroll fetch forever the instant any column filter was applied.
+        // Reading fresh here means that right after our own write, `now` already
+        // equals `lastSelfSearch` and we bail out early. Only a genuine external
+        // rewrite (router deep-link from a sidebar sibling, browser back/forward)
+        // makes `now` diverge, which is exactly when we want to adopt it.
+        const now = typeof window !== 'undefined' ? window.location.search : ''
         // Semantic compare: the router's spelling of the query string we just
         // wrote (different order/encoding) is NOT an external change.
-        if (canonicalSearch(locationSearch) === canonicalSearch(lastSelfSearch.current ?? '')) return
-        lastSelfSearch.current = locationSearch
-        const params = new URLSearchParams(locationSearch)
+        if (canonicalSearch(now) === canonicalSearch(lastSelfSearch.current ?? '')) return
+        lastSelfSearch.current = now
+        const params = new URLSearchParams(now)
         const filters: Record<string, string[]> = {}
         params.forEach((rawValue, key) => {
             if (!key.startsWith('f_')) return
@@ -449,13 +463,16 @@ export function DynamicTable({
             if (value.startsWith('IN:')) filters[filterKey] = value.substring(3).split(',')
             else filters[filterKey] = [value]
         })
-        setDynamicFilters((prev: Record<string, string[]>) => {
-            if (JSON.stringify(prev) === JSON.stringify(filters)) return prev
+        // Compare against the current filters directly (the effect re-runs every
+        // render, so this closure is always fresh) and only touch state on a real
+        // change — resetting pagination OUTSIDE any updater, never nested inside
+        // another setState's updater.
+        if (JSON.stringify(dynamicFilters) !== JSON.stringify(filters)) {
+            setDynamicFilters(filters)
             setPagination((p: PaginationState) => ({ ...p, pageIndex: 0 }))
-            return filters
-        })
+        }
         const search = params.get('search')
-        if (search !== null) setGlobalFilter(search)
+        if (search !== null && search !== globalFilter) setGlobalFilter(search)
     })
 
     const prefetchOptions = useCallback(async (endpoints: string[]) => {
