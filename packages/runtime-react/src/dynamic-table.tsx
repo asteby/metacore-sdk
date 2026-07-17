@@ -777,8 +777,13 @@ export function DynamicTable({
             void fetchAggregates()
         }, 300)
         return () => clearTimeout(timeoutId)
+        // refreshTrigger is included so an external bump (e.g. a create/edit/
+        // delete elsewhere on the page) reloads page 1 in infinite mode too —
+        // matching the classic path (fetchData carries refreshTrigger in its
+        // deps). Without it the comment above lied: infinite lists silently
+        // failed to reload after a create ("a veces no recarga la tabla").
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [infiniteScroll, metadata, filterSignature])
+    }, [infiniteScroll, metadata, filterSignature, refreshTrigger])
 
     const handleRefresh = useCallback(() => {
         // Infinite mode owns its own list: refresh reloads page 1 and drops the
