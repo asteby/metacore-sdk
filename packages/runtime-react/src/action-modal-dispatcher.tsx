@@ -35,6 +35,7 @@ import {
 } from '@asteby/metacore-ui/primitives'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { toastServerError, toastServerSuccess } from './server-error'
 import { useApi } from './api-context'
 import { DynamicIcon } from './dynamic-icon'
 import { DynamicLineItems } from './dynamic-line-items'
@@ -417,14 +418,14 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
             const url = buildActionUrl(endpoint, model, record.id, action.key)
             const res = await api.post(url, {})
             if (res.data.success) {
-                toast.success(res.data.message ? t(res.data.message, { defaultValue: res.data.message }) : t('common.success'))
+                toastServerSuccess(res.data, { t })
                 onOpenChange(false)
                 onSuccess()
             } else {
-                toast.error(res.data.message ? t(res.data.message, { defaultValue: res.data.message }) : t('common.error'))
+                toastServerError({ response: { data: res.data } }, { t })
             }
         } catch (err: any) {
-            toast.error(err?.response?.data?.message || t('common.error'))
+            toastServerError(err, { t })
         } finally {
             setExecuting(false)
         }
@@ -539,14 +540,14 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
             const url = buildActionUrl(endpoint, model, record.id, action.key)
             const res = await api.post(url, formData)
             if (res.data.success) {
-                toast.success(res.data.message ? t(res.data.message, { defaultValue: res.data.message }) : t('common.success'))
+                toastServerSuccess(res.data, { t })
                 onOpenChange(false)
                 onSuccess()
             } else {
-                toast.error(res.data.message ? t(res.data.message, { defaultValue: res.data.message }) : t('common.error'))
+                toastServerError({ response: { data: res.data } }, { t })
             }
         } catch (err: any) {
-            toast.error(err?.response?.data?.message || t('common.error'))
+            toastServerError(err, { t })
         } finally {
             setExecuting(false)
         }
@@ -744,14 +745,14 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
             const url = buildActionUrl(endpoint, model, record?.id, action.key)
             const res = await api.post(url, formData)
             if (res.data.success) {
-                toast.success(res.data.message ? t(res.data.message, { defaultValue: res.data.message }) : t('common.success'))
+                toastServerSuccess(res.data, { t })
                 onOpenChange(false)
                 onSuccess()
             } else {
-                toast.error(res.data.message ? t(res.data.message, { defaultValue: res.data.message }) : t('common.error'))
+                toastServerError({ response: { data: res.data } }, { t })
             }
         } catch (err: any) {
-            toast.error(err?.response?.data?.message || t('common.error'))
+            toastServerError(err, { t })
         } finally {
             setExecuting(false)
         }
