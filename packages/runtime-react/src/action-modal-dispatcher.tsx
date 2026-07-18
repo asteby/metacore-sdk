@@ -35,7 +35,8 @@ import {
 } from '@asteby/metacore-ui/primitives'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { toastServerError, toastServerSuccess } from './server-error'
+import { toastServerError, toastServerSuccess, extractFieldErrors, localizeFieldIssue } from './server-error'
+import type { Translate } from './server-error'
 import { useApi } from './api-context'
 import { DynamicIcon } from './dynamic-icon'
 import { DynamicLineItems } from './dynamic-line-items'
@@ -403,6 +404,44 @@ function RecordPreview({ model, record }: { model: string; record: any }) {
     )
 }
 
+/** Humanize a field key for a label fallback ("unit_price" → "Unit Price"). */
+function humanizeKey(k: string): string {
+    return k.replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+}
+
+/** Localize a failed action submit's per-field `errors` (422 map or `{errors}`
+ *  body) into `{ [fieldKey]: localizedMessage }`, using each field's label.
+ *  Returns undefined when there is no usable per-field map. */
+function localizeActionFieldErrors(
+    err: unknown,
+    fields: readonly ActionFieldDef[] | undefined,
+    t: Translate,
+): Record<string, string> | undefined {
+    const map = extractFieldErrors(err)
+    if (!map) return undefined
+    const labelFor = (k: string) => {
+        const f = (fields ?? []).find(x => x.key === k)
+        return f?.label ? t(f.label, { defaultValue: f.label }) : humanizeKey(k)
+    }
+    const out: Record<string, string> = {}
+    for (const [k, issues] of Object.entries(map)) out[k] = localizeFieldIssue(issues[0], labelFor(k), t)
+    return out
+}
+
+/** Toast a failed action: a summary + localized per-field lines when the server
+ *  returned a per-field `errors` map, else the standard cause-carrying toast.
+ *  Used where inline rendering isn't wired (confirm / multi-step wizard). */
+function toastActionError(err: unknown, fields: readonly ActionFieldDef[] | undefined, t: Translate): void {
+    const localized = localizeActionFieldErrors(err, fields, t)
+    if (localized) {
+        toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }), {
+            description: Object.values(localized).join('\n'),
+        })
+        return
+    }
+    toastServerError(err, { t })
+}
+
 function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoint, onSuccess }: ActionModalProps) {
     const { t } = useTranslation()
     const api = useApi()
@@ -422,10 +461,10 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
                 onOpenChange(false)
                 onSuccess()
             } else {
-                toastServerError({ response: { data: res.data } }, { t })
+                toastActionError({ response: { data: res.data } }, action.fields, t)
             }
         } catch (err: any) {
-            toastServerError(err, { t })
+            toastActionError(err, action.fields, t)
         } finally {
             setExecuting(false)
         }
@@ -469,6 +508,8 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
     const api = useApi()
     const [formData, setFormData] = useState<Record<string, any>>({})
     const [executing, setExecuting] = useState(false)
+    // Per-field validation errors (localized), shown inline under each input.
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
     // Related records to surface BELOW the form, as read-only context for the
     // record being acted on — e.g. the reception history of a transfer while
     // receiving against it. Sourced from the model's metadata.relations (the
@@ -512,29 +553,57 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                 defaults[field.key] = field.defaultValue ?? (field.type === 'boolean' ? false : '')
             }
             setFormData(defaults)
+            setFieldErrors({})
         }
     }, [open, action.fields, record])
 
-    const updateField = (key: string, value: any) => setFormData((prev: Record<string, any>) => ({ ...prev, [key]: value }))
+    const updateField = (key: string, value: any) => {
+        setFormData((prev: Record<string, any>) => ({ ...prev, [key]: value }))
+        setFieldErrors(prev => {
+            if (!prev[key]) return prev
+            const next = { ...prev }
+            delete next[key]
+            return next
+        })
+    }
+
+    const handleActionError = (err: unknown) => {
+        const localized = localizeActionFieldErrors(err, action.fields, t)
+        if (localized) {
+            setFieldErrors(localized)
+            toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }))
+            return
+        }
+        toastServerError(err, { t })
+    }
 
     const execute = async () => {
         if (action.fields) {
+            // Client-side required check → mark ALL missing fields inline.
+            const missing: Record<string, string> = {}
             for (const field of action.fields) {
                 if (!field.required) continue
                 if (isLineItemsField(field)) {
                     const rows = formData[field.key]
                     if (!Array.isArray(rows) || rows.length === 0) {
-                        toast.error(`${tl(field.label)} requiere al menos un renglón`)
-                        return
+                        missing[field.key] = t('validation.line_items_required', {
+                            defaultValue: '{{label}} requiere al menos un renglón',
+                            label: tl(field.label),
+                        })
                     }
                     continue
                 }
                 if (!formData[field.key] && formData[field.key] !== false) {
-                    toast.error(`${tl(field.label)} es requerido`)
-                    return
+                    missing[field.key] = localizeFieldIssue({ code: 'required' }, tl(field.label), t)
                 }
             }
+            if (Object.keys(missing).length) {
+                setFieldErrors(missing)
+                toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }))
+                return
+            }
         }
+        setFieldErrors({})
         setExecuting(true)
         try {
             const url = buildActionUrl(endpoint, model, record.id, action.key)
@@ -544,10 +613,10 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                 onOpenChange(false)
                 onSuccess()
             } else {
-                toastServerError({ response: { data: res.data } }, { t })
+                handleActionError({ response: { data: res.data } })
             }
         } catch (err: any) {
-            toastServerError(err, { t })
+            handleActionError(err)
         } finally {
             setExecuting(false)
         }
@@ -609,6 +678,9 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                                         {tl(field.label)}
                                     </FieldLabel>
                                     {renderField(field, formData[field.key], (v: any) => updateField(field.key, v), formData)}
+                                    {fieldErrors[field.key] && (
+                                        <p className="text-destructive text-xs mt-1">{fieldErrors[field.key]}</p>
+                                    )}
                                 </FieldCell>
                             )
                         })}
@@ -749,10 +821,10 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
                 onOpenChange(false)
                 onSuccess()
             } else {
-                toastServerError({ response: { data: res.data } }, { t })
+                toastActionError({ response: { data: res.data } }, steps.flatMap(s => s.fields ?? []), t)
             }
         } catch (err: any) {
-            toastServerError(err, { t })
+            toastActionError(err, steps.flatMap(s => s.fields ?? []), t)
         } finally {
             setExecuting(false)
         }
