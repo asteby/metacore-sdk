@@ -48,6 +48,7 @@ import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { ExternalLink, Loader2, CalendarIcon, ChevronDown, Check, Upload, X as XIcon } from 'lucide-react'
 import { useApi } from '../api-context'
+import { toastServerError } from '../server-error'
 import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-field'
 import { DynamicRelations } from '../dynamic-relations'
 import { useOptionsResolver, type ResolvedOption } from '../use-options-resolver'
@@ -725,10 +726,13 @@ export function DynamicRecordDialog({
                 onSaved?.(res.data?.data ?? res.data ?? undefined)
                 onOpenChange(false)
             } else {
-                toast.error(res.data?.message || t('dynamic.save_error', { defaultValue: 'No se pudo guardar' }))
+                // Surface the server's real cause (`details`) as the toast
+                // description, not just the generic headline. `res.data` is the
+                // `{ success:false, message, details }` envelope.
+                toastServerError(res.data, { t, fallback: t('dynamic.save_error', { defaultValue: 'No se pudo guardar' }) })
             }
         } catch (err: any) {
-            toast.error(err?.response?.data?.message || t('dynamic.save_error', { defaultValue: 'No se pudo guardar' }))
+            toastServerError(err, { t, fallback: t('dynamic.save_error', { defaultValue: 'No se pudo guardar' }) })
         } finally {
             setSaving(false)
         }
@@ -742,7 +746,7 @@ export function DynamicRecordDialog({
             onOpenChange(false)
         } catch (err: any) {
             console.error('[DynamicRecordDialog] delete error:', err)
-            toast.error(err?.response?.data?.message || err?.message || t('dynamic.delete_error', { defaultValue: 'No se pudo eliminar el registro' }))
+            toastServerError(err, { t, fallback: t('dynamic.delete_error', { defaultValue: 'No se pudo eliminar el registro' }) })
         } finally {
             setDeleting(false)
         }
