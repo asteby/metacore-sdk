@@ -71,8 +71,93 @@ export function extractServerError(err: unknown, fallbackTitle: string): Extract
     return { title: fallbackTitle }
 }
 
-/** i18n translator, tolerant of non-keys (returns `defaultValue`/the input). */
-export type Translate = (key: string, opts?: { defaultValue?: string }) => string
+/** i18n translator, tolerant of non-keys (returns `defaultValue`/the input).
+ *  Accepts arbitrary interpolation values (e.g. `label`, plus a code's `params`)
+ *  so `localizeFieldIssue` can pass `{{label}}` and friends through i18next. */
+export type Translate = (key: string, opts?: { defaultValue?: string; [k: string]: unknown }) => string
+
+// ── Per-field validation errors ────────────────────────────────────────────
+// The kernel answers a failed create/edit with HTTP 422 and a per-field map:
+//   { success:false, message:"validation failed",
+//     errors: { "<fieldKey>": [ { code, params } ] } }
+// Codes are locale-agnostic; the SDK localizes them to Spanish using the field
+// label. Some endpoints (7leguas-style) instead send pre-localized STRINGS —
+// so a value entry may be an object `{code,params}` OR a plain string.
+
+/** A single normalized validation issue for one field: either a machine `code`
+ *  (+ optional `params`) to localize, or a ready-to-show `message` string. */
+export interface FieldIssue {
+    code?: string
+    params?: Record<string, any>
+    message?: string
+}
+
+/** Spanish defaults per known validation code. `{{label}}` (and code params like
+ *  `allowed`/`ref`/`expected`) are interpolated by i18next, so a host can override
+ *  any of these via its addon i18n bundle under `validation.<code>`. */
+const VALIDATION_DEFAULTS: Record<string, string> = {
+    required: 'El campo {{label}} es obligatorio',
+    invalid_option: 'El valor de {{label}} no es válido',
+    not_found: 'El {{label}} seleccionado no existe',
+    duplicate: 'Ya existe un registro con ese {{label}}',
+    invalid_type: 'El campo {{label}} tiene un formato inválido',
+}
+const VALIDATION_FALLBACK = '{{label}}: valor inválido'
+
+/** Normalize one raw `errors` value entry into a `FieldIssue`.
+ *  A string → `{message}` (pre-localized, shown verbatim); an object → `{code,params}`. */
+function toFieldIssue(entry: unknown): FieldIssue | undefined {
+    if (typeof entry === 'string') {
+        const s = entry.trim()
+        return s ? { message: s } : undefined
+    }
+    if (entry && typeof entry === 'object') {
+        const e = entry as { code?: unknown; params?: unknown; message?: unknown }
+        if (typeof e.message === 'string' && e.message.trim()) return { message: e.message.trim() }
+        if (typeof e.code === 'string' && e.code) {
+            return {
+                code: e.code,
+                params: e.params && typeof e.params === 'object' ? (e.params as Record<string, any>) : undefined,
+            }
+        }
+    }
+    return undefined
+}
+
+/**
+ * Pull the per-field `errors` map out of an axios error (`err.response.data.errors`)
+ * or a bare response body (`{ errors }`), normalizing each field's value to a
+ * `FieldIssue[]`. A value may be a single entry or an array; string entries become
+ * `{message}`, object entries `{code,params}`. Returns `undefined` when there is no
+ * usable map (no `errors`, or nothing normalized). Pure — no i18n, no toast.
+ */
+export function extractFieldErrors(err: unknown): Record<string, FieldIssue[]> | undefined {
+    const maybeAxios = (err as { response?: { data?: unknown } } | undefined)?.response?.data
+    const data = maybeAxios ?? err
+    const errors = (data as { errors?: unknown } | undefined)?.errors
+    if (!errors || typeof errors !== 'object' || Array.isArray(errors)) return undefined
+
+    const out: Record<string, FieldIssue[]> = {}
+    for (const [key, raw] of Object.entries(errors as Record<string, unknown>)) {
+        const entries = Array.isArray(raw) ? raw : [raw]
+        const issues = entries.map(toFieldIssue).filter((i): i is FieldIssue => !!i)
+        if (issues.length) out[key] = issues
+    }
+    return Object.keys(out).length ? out : undefined
+}
+
+/**
+ * Localize a single `FieldIssue` to a human, Spanish-by-default string using the
+ * field `label`. A pre-localized `message` passes through verbatim. Otherwise the
+ * `code` is translated via `t('validation.'+code, { defaultValue, label, ...params })`
+ * so hosts can override the copy and `{{label}}`/param interpolation still works.
+ */
+export function localizeFieldIssue(issue: FieldIssue, label: string, t: Translate): string {
+    if (issue.message) return issue.message
+    const code = issue.code ?? ''
+    const defaultValue = VALIDATION_DEFAULTS[code] ?? VALIDATION_FALLBACK
+    return t(`validation.${code}`, { defaultValue, label, ...(issue.params ?? {}) })
+}
 
 /** A dotted, space-free token (e.g. "pos.rate.created") — the shape of an i18n
  *  key, as opposed to human prose ("Record created successfully"). Used to

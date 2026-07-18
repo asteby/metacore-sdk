@@ -48,7 +48,7 @@ import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { ExternalLink, Loader2, CalendarIcon, ChevronDown, Check, Upload, X as XIcon } from 'lucide-react'
 import { useApi } from '../api-context'
-import { toastServerError } from '../server-error'
+import { toastServerError, extractFieldErrors, localizeFieldIssue } from '../server-error'
 import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-field'
 import { DynamicRelations } from '../dynamic-relations'
 import { useOptionsResolver, type ResolvedOption } from '../use-options-resolver'
@@ -497,6 +497,10 @@ export function DynamicRecordDialog({
     const [relations, setRelations] = useState<RelationMeta[]>([])
     const [record, setRecord] = useState<any | null>(null)
     const [formValues, setFormValues] = useState<Record<string, any>>({})
+    // Per-field validation errors (localized strings), keyed by field.key. Shown
+    // inline under each input; populated from a 422 `errors` map or the client
+    // required-field check, cleared per-field on change and wholesale on reopen.
+    const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
     const [deleting, setDeleting] = useState(false)
@@ -510,6 +514,9 @@ export function DynamicRecordDialog({
     useEffect(() => {
         if (!open) return
         if (!isCreate && !recordId) return
+
+        // Fresh open → drop any validation errors from a prior submit.
+        setFieldErrors({})
 
         let cancelled = false
 
@@ -671,18 +678,54 @@ export function DynamicRecordDialog({
         onChange?.()
     }, [api, endpoint, model, recordId, isCreate, modalMeta, onChange])
 
+    // The human label for a field key, for localizing validation errors. Falls
+    // back to a humanized key when the field is unknown (e.g. a server-side key
+    // with no matching form field).
+    const labelForKey = (key: string): string => {
+        const f = (modalMeta?.fields ?? []).find(x => x.key === key)
+        if (f?.label) return f.label
+        return key.replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+    }
+
+    // Turn a failed submit (422 `errors` map, or a bare `{errors}` body) into
+    // inline field errors + a summary toast. When there is no field map, fall
+    // back to the existing single cause-carrying toast.
+    const handleSubmitError = (err: unknown) => {
+        const map = extractFieldErrors(err)
+        if (map) {
+            const next: Record<string, string> = {}
+            for (const [key, issues] of Object.entries(map)) {
+                next[key] = localizeFieldIssue(issues[0], labelForKey(key), t)
+            }
+            setFieldErrors(next)
+            toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }))
+            return
+        }
+        toastServerError(err, { t, fallback: t('dynamic.save_error', { defaultValue: 'No se pudo guardar' }) })
+    }
+
     const handleSubmit = async (e?: React.FormEvent) => {
         e?.preventDefault()
         if (!modalMeta) return
 
         if (isEditable) {
+            // Collect ALL missing required fields (not just the first) and mark
+            // each inline instead of a single toast.
+            const missing: Record<string, string> = {}
             for (const field of modalMeta.fields ?? []) {
                 if (field.required && !formValues[field.key] && formValues[field.key] !== 0 && formValues[field.key] !== false) {
-                    toast.error(`El campo "${field.label}" es obligatorio`)
-                    return
+                    missing[field.key] = localizeFieldIssue({ code: 'required' }, field.label, t)
                 }
             }
+            if (Object.keys(missing).length) {
+                setFieldErrors(missing)
+                toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }))
+                return
+            }
         }
+
+        // Required check passed → clear any prior validation errors.
+        setFieldErrors({})
 
         // Empty reference pickers → null (not "" / nil-UUID) so nullable FK
         // columns accept them instead of raising a 23503 FK violation.
@@ -734,10 +777,10 @@ export function DynamicRecordDialog({
                 // Surface the server's real cause (`details`) as the toast
                 // description, not just the generic headline. `res.data` is the
                 // `{ success:false, message, details }` envelope.
-                toastServerError(res.data, { t, fallback: t('dynamic.save_error', { defaultValue: 'No se pudo guardar' }) })
+                handleSubmitError(res.data)
             }
         } catch (err: any) {
-            toastServerError(err, { t, fallback: t('dynamic.save_error', { defaultValue: 'No se pudo guardar' }) })
+            handleSubmitError(err)
         } finally {
             setSaving(false)
         }
@@ -798,9 +841,17 @@ export function DynamicRecordDialog({
                                                 record={record}
                                                 value={formValues[field.key] ?? ''}
                                                 mode={mode}
-                                                onChange={val =>
+                                                error={fieldErrors[field.key]}
+                                                onChange={val => {
                                                     setFormValues((prev: Record<string, any>) => ({ ...prev, [field.key]: val }))
-                                                }
+                                                    // Clear this field's error as soon as the user edits it.
+                                                    setFieldErrors(prev => {
+                                                        if (!prev[field.key]) return prev
+                                                        const next = { ...prev }
+                                                        delete next[field.key]
+                                                        return next
+                                                    })
+                                                }}
                                             />
                                         </FieldCell>
                                     )
@@ -910,9 +961,11 @@ interface FieldRowProps {
     value: any
     mode: 'view' | 'edit' | 'create'
     onChange: (val: any) => void
+    /** Localized validation error for this field, shown in red under the input. */
+    error?: string
 }
 
-function FieldRow({ field, record, value, mode, onChange }: FieldRowProps) {
+function FieldRow({ field, record, value, mode, onChange, error }: FieldRowProps) {
     // A `readonly` field is server/system-generated (e.g. the GitHub addon's
     // `number`/`github_url`, filled by the API after the outbound create). On
     // CREATE it is excluded from the form entirely (see `visibleFields`); on EDIT
@@ -936,6 +989,10 @@ function FieldRow({ field, record, value, mode, onChange }: FieldRowProps) {
                 <ReadonlyEditField field={field} value={value} />
             ) : (
                 <EditField field={field} value={value} onChange={onChange} record={record} />
+            )}
+
+            {error && mode !== 'view' && (
+                <p className="text-destructive text-xs mt-1">{error}</p>
             )}
         </div>
     )
