@@ -5,14 +5,9 @@ import { isNilUuid } from '../nil-uuid'
 import { getFieldRef } from '../dynamic-form-schema'
 import type { ActionFieldDef } from '../types'
 
-/** Minimal field-metadata shape the normalizer reads. */
-interface RefFieldMeta {
-    key: string
-    type?: string
-    widget?: string
-    ref?: unknown
-    [k: string]: unknown
-}
+/** Minimal field-metadata shape the normalizer reads. Kept permissive so any
+ *  caller's field type (e.g. the dialog's `FieldDef[]`) is accepted. */
+type RefFieldMeta = Record<string, any>
 
 /**
  * Normalize a submit payload so that EMPTY reference fields go to the server as
