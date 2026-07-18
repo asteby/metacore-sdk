@@ -1,5 +1,12 @@
 # @asteby/metacore-runtime-react
 
+## 25.1.3
+
+### Patch Changes
+
+- 2f117ad: Fix FK violation (SQLSTATE 23503) when creating/updating a record with an empty optional relation. DynamicRecordDialog now normalizes the submit payload so empty reference pickers (and any nil-UUID value) are sent as `null` instead of `""`/"00000000-…", which a nullable FK column (e.g. products.category_id) would otherwise reject. Generic across all addons — keyed off field metadata (ref / dynamic_select / search). Exposed as `normalizeRefFieldsForSubmit`.
+- 579ab21: DynamicRecordDialog now surfaces the server's real error cause (`details`) in the create/update/delete error toast via `toastServerError`, instead of showing only the generic headline ("Error creating record"). This is the modal the generic model CRUD page uses, so a failed create now shows the underlying Postgres/validation reason as the toast description.
+
 ## 25.1.2
 
 ### Patch Changes
