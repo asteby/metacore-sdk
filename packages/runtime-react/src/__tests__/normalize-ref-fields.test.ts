@@ -60,4 +60,49 @@ describe('normalizeRefFieldsForSubmit', () => {
         normalizeRefFieldsForSubmit(input, fields)
         expect(input.category_id).toBe('')
     })
+
+    // --- Fase 4: explicit `nullable` flag from the kernel contract ---
+
+    it('nulls an empty ref when the explicit nullable:true flag is present', () => {
+        const out = normalizeRefFieldsForSubmit(
+            { supplier_id: '' },
+            [{ key: 'supplier_id', ref: 'suppliers', nullable: true }],
+        )
+        expect(out.supplier_id).toBeNull()
+    })
+
+    it('respects an empty value when nullable:false (does not null)', () => {
+        const out = normalizeRefFieldsForSubmit(
+            { supplier_id: '' },
+            [{ key: 'supplier_id', ref: 'suppliers', nullable: false }],
+        )
+        expect(out.supplier_id).toBe('')
+    })
+
+    it('nulls an empty NON-uuid optional ref via explicit nullable:true', () => {
+        // A ref over a non-uuid column: the uuid-only heuristic never covered
+        // this, but the explicit flag + ref-shape does.
+        const out = normalizeRefFieldsForSubmit(
+            { warehouse_code: '' },
+            [{ key: 'warehouse_code', type: 'dynamic_select', nullable: true }],
+        )
+        expect(out.warehouse_code).toBeNull()
+    })
+
+    it('does NOT null a nullable:true plain-text field (empty string stays)', () => {
+        const out = normalizeRefFieldsForSubmit(
+            { note: '' },
+            [{ key: 'note', type: 'text', nullable: true }],
+        )
+        expect(out.note).toBe('')
+    })
+
+    it('falls back to the heuristic when the flag is undefined (older host)', () => {
+        const out = normalizeRefFieldsForSubmit(
+            { category_id: '', name: '' },
+            fields, // fields carry no `nullable` flag
+        )
+        expect(out.category_id).toBeNull() // ref → heuristic nulls it
+        expect(out.name).toBe('') // plain text stays
+    })
 })

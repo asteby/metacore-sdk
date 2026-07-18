@@ -374,6 +374,14 @@ export interface ActionFieldDef {
     label: string
     type: string
     required?: boolean
+    /**
+     * Explicit nullability flag served by the kernel (v0.77.1+) from
+     * `modelbase.FieldDef.Nullable` (populated as `!Required`). An optional `ref`
+     * arrives as `nullable: true`. When present it authoritatively decides whether
+     * an empty value should be submitted as `null`; when absent (older hosts) the
+     * SDK falls back to type-based heuristics. Additive / optional.
+     */
+    nullable?: boolean
     options?: OptionDef[]
     defaultValue?: any
     placeholder?: string
