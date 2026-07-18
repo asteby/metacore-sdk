@@ -55,6 +55,7 @@ import { useOptionsResolver, type ResolvedOption } from '../use-options-resolver
 import { getFieldRef } from '../dynamic-form-schema'
 import { FieldCell } from '../field-grid'
 import { isNilUuid, normalizeNilUuid } from '../nil-uuid'
+import { normalizeRefFieldsForSubmit } from './normalize-submit'
 import { DynamicIcon, isLucideIconName } from '../dynamic-icon'
 import { humanizeToken } from '../dynamic-columns-helpers'
 import { formatDateCell } from '../dynamic-columns'
@@ -683,10 +684,14 @@ export function DynamicRecordDialog({
             }
         }
 
+        // Empty reference pickers → null (not "" / nil-UUID) so nullable FK
+        // columns accept them instead of raising a 23503 FK violation.
+        const payload = normalizeRefFieldsForSubmit(formValues, modalMeta.fields)
+
         setSaving(true)
         try {
             if (isCreate && onCreate) {
-                const created = await onCreate(formValues)
+                const created = await onCreate(payload)
                 toast.success(modalMeta?.messages?.created || t('dynamic.create_success', { defaultValue: 'Registro creado correctamente' }))
                 onSaved?.(created ?? undefined)
                 onOpenChange(false)
@@ -694,7 +699,7 @@ export function DynamicRecordDialog({
             }
 
             if (!isCreate && recordId && onUpdate) {
-                const updated = await onUpdate(String(recordId), formValues)
+                const updated = await onUpdate(String(recordId), payload)
                 toast.success(modalMeta?.messages?.updated || t('dynamic.update_success', { defaultValue: 'Guardado correctamente' }))
                 onSaved?.(updated ?? undefined)
                 onOpenChange(false)
@@ -704,12 +709,12 @@ export function DynamicRecordDialog({
             let res
             if (isCreate) {
                 const createEndpoint = endpoint || `/dynamic/${model}`
-                res = await api.post(createEndpoint, formValues)
+                res = await api.post(createEndpoint, payload)
             } else {
                 const updateEndpoint = endpoint
                     ? `${endpoint}/${recordId}`
                     : `/dynamic/${model}/${recordId}`
-                res = await api.put(updateEndpoint, formValues)
+                res = await api.put(updateEndpoint, payload)
             }
 
             if (res.data?.success !== false) {

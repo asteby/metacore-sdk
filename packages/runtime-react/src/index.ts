@@ -236,6 +236,7 @@ export {
 } from './collection-cell'
 export { NIL_UUID, isNilUuid, normalizeNilUuid } from './nil-uuid'
 export { DynamicRecordDialog, ViewValue } from './dialogs/dynamic-record'
+export { normalizeRefFieldsForSubmit } from './dialogs/normalize-submit'
 export type { DynamicRecordDialogProps, FieldDef, FieldOption, GetImageUrl } from './dialogs/dynamic-record'
 export { CreateRecordDialog } from './dialogs/create-record-dialog'
 export { ViewRecordDialog } from './dialogs/view-record-dialog'
