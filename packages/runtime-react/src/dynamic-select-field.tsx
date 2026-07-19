@@ -33,8 +33,9 @@ import {
     Popover,
     PopoverContent,
     PopoverTrigger,
+    InitialsAvatar,
 } from '@asteby/metacore-ui/primitives'
-import { Check, ChevronsUpDown, ImageIcon, Loader2, Plus } from 'lucide-react'
+import { Check, ChevronsUpDown, Loader2, Plus } from 'lucide-react'
 import { resolveColorCss } from '@asteby/metacore-ui/lib'
 import { DynamicIcon } from './dynamic-icon'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
@@ -49,24 +50,26 @@ import type { ActionFieldDef } from './types'
 export const DEFAULT_DEPENDS_HINT = 'Selecciona primero el campo del que depende'
 
 /**
- * Small square thumbnail for an option's `image`. Falls back to a neutral
- * placeholder icon when the option has no image so rows/triggers stay aligned.
- * `size` is in pixels (kept small — 20–24px — so the picker reads as a list,
- * not a gallery). Inline style for the box dimensions: arbitrary Tailwind
- * classes from a federated addon don't always survive the host's class scan.
+ * Small square thumbnail for an option's `image`. When the option has no image
+ * it falls back to a deterministic initials avatar (shared `InitialsAvatar`)
+ * derived from `name`, so an imageless reference reads as a colored badge rather
+ * than an empty placeholder — and rows/triggers stay aligned. `size` is in
+ * pixels (kept small — 20–24px — so the picker reads as a list, not a gallery).
+ * Inline style for the box dimensions: arbitrary Tailwind classes from a
+ * federated addon don't always survive the host's class scan.
  */
-export function OptionThumb({ image, size = 20 }: { image?: string | null; size?: number }) {
+export function OptionThumb({
+    image,
+    name,
+    size = 20,
+}: {
+    image?: string | null
+    name?: string | null
+    size?: number
+}) {
     const box = { width: size, height: size }
     if (!image) {
-        return (
-            <span
-                className="text-muted-foreground bg-muted flex shrink-0 items-center justify-center rounded-sm"
-                style={box}
-                aria-hidden
-            >
-                <ImageIcon className="size-3 opacity-60" />
-            </span>
-        )
+        return <InitialsAvatar name={name} size={size} rounded="sm" />
     }
     return (
         <img
@@ -94,11 +97,11 @@ export function OptionLead({
     option,
     size = 20,
 }: {
-    option?: Pick<ResolvedOption, 'image' | 'color' | 'icon'> | null
+    option?: Pick<ResolvedOption, 'image' | 'color' | 'icon' | 'label'> | null
     size?: number
 }) {
     if (!option) return null
-    if (option.image) return <OptionThumb image={option.image} size={size} />
+    if (option.image) return <OptionThumb image={option.image} name={option.label} size={size} />
     if (option.icon) {
         return (
             <span
@@ -119,6 +122,10 @@ export function OptionLead({
             />
         )
     }
+    // No image/icon/color: an imageless reference option. Show its initials
+    // (shared InitialsAvatar) so it stays visually aligned with the sibling
+    // options that DO carry a thumbnail, rather than a blank gap.
+    if (option.label) return <InitialsAvatar name={option.label} size={size} rounded="sm" />
     return null
 }
 

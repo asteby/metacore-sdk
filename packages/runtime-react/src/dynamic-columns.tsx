@@ -29,6 +29,7 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
+    InitialsAvatar,
 } from '@asteby/metacore-ui'
 import {
     DataTableColumnHeader,
@@ -510,8 +511,14 @@ const RelationCell: React.FC<{
             style={chipStyles}
             title={subtitle ? `${display} · ${subtitle}` : display}
         >
-            {image && (
+            {image ? (
                 <RelationThumbnail src={image} alt={display} getImageUrl={getImageUrl} size={subtitle ? 24 : 18} />
+            ) : (
+                // No image on the resolved sibling: a deterministic initials avatar
+                // (shared InitialsAvatar) keyed on the label, so the "producto"-style
+                // cross-addon relation reads as a colored badge instead of text-only —
+                // matching the picker and detail surfaces.
+                <InitialsAvatar name={display} size={subtitle ? 24 : 18} rounded="sm" />
             )}
             {subtitle ? (
                 <span className="flex flex-col leading-tight min-w-0">
