@@ -1,5 +1,37 @@
 # @asteby/metacore-runtime-react
 
+## 26.0.0
+
+### Minor Changes
+
+- ee5f7e8: feat(ui): InitialsAvatar — deterministic initials fallback for imageless references
+
+  New shared `InitialsAvatar` primitive: when a reference/option has no image it now
+  shows 1–2 uppercase initials on a background color derived deterministically from
+  the name (stable per name via the existing `optionColor` hash → curated palette),
+  instead of an empty placeholder box.
+
+  Wired into the three surfaces through ONE component so they never diverge: the
+  relation picker (`OptionThumb`/`OptionLead`), the dynamic-table relation cell
+  (`RelationCell`), and the read-only detail dialog. Existing image, icon, and color
+  rendering is unchanged; the avatar is purely the imageless fallback. Respects the
+  existing sizes (24px table, 22px detail, the picker's).
+
+### Patch Changes
+
+- a8f94ba: fix(runtime-react): render `dynamic_select` por `type`, no solo por `ref`/`widget`
+
+  El renderer editable del `DynamicRecordDialog` solo pintaba el picker cuando
+  `getFieldRef(field)` o `field.widget === 'dynamic_select'`. Un campo con
+  `type: 'dynamic_select'` cuya fuente vive en `optionsConfig.source` (sin `ref`
+  FK — p. ej. `currency_code` → `currencies` / `POSOrgCurrency`) degradaba a un
+  input de texto libre. Se agrega `field.type === 'dynamic_select'` a la
+  condición; `DynamicSelectField` ya resuelve la fuente vía `resolveOptionsSource`
+  (ref o `optionsConfig.source`).
+
+- Updated dependencies [ee5f7e8]
+  - @asteby/metacore-ui@2.11.0
+
 ## 25.2.0
 
 ### Minor Changes
