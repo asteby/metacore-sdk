@@ -38,8 +38,8 @@ import (
 	"github.com/asteby/metacore-sdk/billing/models"
 
 	"github.com/google/uuid"
-	stripe "github.com/stripe/stripe-go/v85"
-	webhook "github.com/stripe/stripe-go/v85/webhook"
+	stripe "github.com/stripe/stripe-go/v86"
+	webhook "github.com/stripe/stripe-go/v86/webhook"
 	"gorm.io/gorm"
 )
 
