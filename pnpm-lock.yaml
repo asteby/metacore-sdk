@@ -579,7 +579,7 @@ importers:
         version: 3.2.2(react@19.2.7)
       '@module-federation/runtime':
         specifier: ^2.5.0
-        version: 2.5.1(node-fetch@2.7.0)
+        version: 2.8.0
       recharts:
         specifier: ^2.15.0
         version: 2.15.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -2538,14 +2538,23 @@ packages:
   '@module-federation/error-codes@2.5.1':
     resolution: {integrity: sha512-3KIR8XbEW0Y+Fn8IAnxzDWMvXQWiS40Z1TE/Fft9aTeXP9dDAM7AiVhjTh5yF2csAwHSt/1LJVZbiCmS13mE8A==}
 
+  '@module-federation/error-codes@2.8.0':
+    resolution: {integrity: sha512-Gaog9904EmxYOQV0hli3XQ7jXeFaADfh5bnBtTCtbZ37Qd/Sz9kQfd+gYQRyIj7RGmkv9DPiN/SsmrTMrTymKw==}
+
   '@module-federation/managers@2.5.1':
     resolution: {integrity: sha512-AWbkH/U76FJDbdwBOodQ1An40WOdrDGAgqUMc8RD62+Ec/ocPfda0NhFcJbPxlUIvSFPTvBv6DwTnygmNC7GPA==}
 
   '@module-federation/runtime-core@2.5.1':
     resolution: {integrity: sha512-UMuMsWHXeMrm8Isl8YD6/s1jmTVau3SQhp9RO4Ln+eD2lrjM4hQSwOX2xPtfT1C1I4/E6hgyZQV1K1Q/3Zpr0Q==}
 
+  '@module-federation/runtime-core@2.8.0':
+    resolution: {integrity: sha512-Tf98+epGGiPSHqmQHuXa2uXZMMvjGf1IqJDR1/FpXfmobv5ECN0mGZCjUHGNSyxvoDyXKIkKwJu7IwEoh0ouQA==}
+
   '@module-federation/runtime@2.5.1':
     resolution: {integrity: sha512-Tf33FIpnQMn8FjIUAQMtSTYQgGibfh5vEvJihFO3q/hG9LiWwLMErZvOz/+wcPsE81gzHjYPxQgMKGSP3BuG8g==}
+
+  '@module-federation/runtime@2.8.0':
+    resolution: {integrity: sha512-cGtUBQ1/TVy7KrXy6xPgy3FEmOGyIYkBA2T4iGH3ZH5PNPPTmqN9jF2AfneTSOj0RtBr7Pxq3CUt81E/UCvK1A==}
 
   '@module-federation/sdk@2.5.1':
     resolution: {integrity: sha512-FDhCx81ZCxX1oT/fyt/bW+gpPt287GR156E/Thv1yhb9XyNHGNkqe8zqJOipOMfb07E22OMzSzOulCBvAOgn3g==}
@@ -2554,6 +2563,9 @@ packages:
     peerDependenciesMeta:
       node-fetch:
         optional: true
+
+  '@module-federation/sdk@2.8.0':
+    resolution: {integrity: sha512-yBP+9+0Z8nlvKEXAZS3AsQVy7bFbZf8eMivGk4q4ZdwG3TsLMlsPjb1dQb2i7gcAG6ux9y2LWLkj/0LVk74cnQ==}
 
   '@module-federation/third-party-dts-extractor@2.5.1':
     resolution: {integrity: sha512-/jD/o2IivDgg6jGUgdb9NZtlJWeoz1uKcblGL2BxYVzzlKT+1YS7Y2idTl1tqp4hNdFnDlPpQv6WLdKiLoOPNw==}
@@ -8674,6 +8686,8 @@ snapshots:
 
   '@module-federation/error-codes@2.5.1': {}
 
+  '@module-federation/error-codes@2.8.0': {}
+
   '@module-federation/managers@2.5.1(node-fetch@2.7.0)':
     dependencies:
       '@module-federation/sdk': 2.5.1(node-fetch@2.7.0)
@@ -8688,6 +8702,11 @@ snapshots:
     transitivePeerDependencies:
       - node-fetch
 
+  '@module-federation/runtime-core@2.8.0':
+    dependencies:
+      '@module-federation/error-codes': 2.8.0
+      '@module-federation/sdk': 2.8.0
+
   '@module-federation/runtime@2.5.1(node-fetch@2.7.0)':
     dependencies:
       '@module-federation/error-codes': 2.5.1
@@ -8696,9 +8715,17 @@ snapshots:
     transitivePeerDependencies:
       - node-fetch
 
+  '@module-federation/runtime@2.8.0':
+    dependencies:
+      '@module-federation/error-codes': 2.8.0
+      '@module-federation/runtime-core': 2.8.0
+      '@module-federation/sdk': 2.8.0
+
   '@module-federation/sdk@2.5.1(node-fetch@2.7.0)':
     optionalDependencies:
       node-fetch: 2.7.0
+
+  '@module-federation/sdk@2.8.0': {}
 
   '@module-federation/third-party-dts-extractor@2.5.1':
     dependencies:
