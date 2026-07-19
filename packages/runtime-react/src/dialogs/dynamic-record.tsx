@@ -1054,10 +1054,13 @@ function RelationViewValue({ field, value, record }: { field: FieldDef; value: a
         return <p className="text-sm py-1 text-muted-foreground">—</p>
     }
 
-    const lead: Pick<ResolvedOption, 'image' | 'color' | 'icon'> = {
+    const lead: Pick<ResolvedOption, 'image' | 'color' | 'icon' | 'label'> = {
         image: image ? getImageUrl(image) : null,
         color: resolved?.color ?? null,
         icon: resolved?.icon ?? null,
+        // Carry the label so an imageless reference falls back to its initials
+        // avatar (shared InitialsAvatar via OptionLead) instead of a blank lead.
+        label: label ?? '',
     }
 
     return (
@@ -1817,9 +1820,7 @@ function SearchField({ field, value, onChange }: { field: FieldDef; value: any; 
                                             }}
                                         >
                                             {isSelected && <Check className="mr-2 h-3.5 w-3.5 shrink-0 text-primary" />}
-                                            {item.image && (
-                                                <OptionThumb image={item.image} size={20} />
-                                            )}
+                                            <OptionThumb image={item.image} name={itemLabel} size={20} />
                                             <div className="flex flex-col min-w-0 ml-2">
                                                 <span className="truncate">{itemLabel}</span>
                                                 {item.description && (
