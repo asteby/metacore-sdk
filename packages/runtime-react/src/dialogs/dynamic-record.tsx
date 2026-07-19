@@ -1540,11 +1540,21 @@ export function EditField({ field, value, onChange, record }: {
         return <ImageUploadField field={field} value={value} onChange={onChange} />
     }
 
-    // FK columns: a `ref` (kernel-derived belongs_to target) or an explicit
-    // `widget: 'dynamic_select'` renders the SDK's async searchable picker — with
-    // option thumbnails and the inline-create "+" — against /api/options/<ref>.
-    // Static inline `options` are handled by the enum <Select> branch below.
-    if ((getFieldRef(field as ActionFieldDef) || field.widget === 'dynamic_select') && !field.options?.length) {
+    // Dynamic pickers: a `ref` (kernel-derived belongs_to target), an explicit
+    // `widget: 'dynamic_select'`, OR a `type: 'dynamic_select'` (the kernel maps
+    // any column carrying an `optionsConfig` source — e.g. `currencies` /
+    // `POSOrgCurrency` — to this type) renders the SDK's async searchable picker,
+    // with option thumbnails and the inline-create "+", against the options
+    // endpoint resolved by `resolveOptionsSource` (ref → /api/options/<ref>,
+    // else optionsConfig.source → /api/options/<source>). Without the `type`
+    // check a source-backed picker with no `ref` silently degraded to a raw text
+    // input. Static inline `options` are handled by the enum <Select> branch below.
+    if (
+        (getFieldRef(field as ActionFieldDef) ||
+            field.type === 'dynamic_select' ||
+            field.widget === 'dynamic_select') &&
+        !field.options?.length
+    ) {
         return (
             <DynamicSelectField
                 field={field as ActionFieldDef}
