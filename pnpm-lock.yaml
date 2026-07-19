@@ -123,7 +123,7 @@ importers:
         version: 23.16.8
       lucide-react:
         specifier: ^0.460.0
-        version: 1.25.0(react@19.2.7)
+        version: 0.460.0(react@19.2.7)
       react:
         specifier: ^19.2.4
         version: 19.2.7
@@ -449,7 +449,7 @@ importers:
         version: 17.0.10(i18next@26.3.6(typescript@6.0.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@6.0.3)
       tsc-alias:
         specifier: ^1.8.10
-        version: 1.8.17
+        version: 1.9.1
       typescript:
         specifier: ^6.0.0
         version: 6.0.3
@@ -1061,7 +1061,7 @@ importers:
         version: 17.0.10(i18next@26.3.6(typescript@6.0.3))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@6.0.3)
       tsc-alias:
         specifier: ^1.8.10
-        version: 1.8.17
+        version: 1.9.1
       typescript:
         specifier: ^6.0.0
         version: 6.0.3
@@ -5792,6 +5792,11 @@ packages:
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
 
+  lucide-react@0.460.0:
+    resolution: {integrity: sha512-BVtq/DykVeIvRTJvRAgCsOwaGL8Un3Bxh8MbDxMhEWlZay3T4IpEKDEpwt5KZ0KJMHzgm6jrltxlT5eXOWXDHg==}
+    peerDependencies:
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0-rc
+
   lucide-react@1.25.0:
     resolution: {integrity: sha512-/mdJTRbiwcLOQ1NZZK1amZF9rIZyvO18D6r9TngE6TG1NmqHgFuT4eE7Xrkm9UsXMbBJD1NlfwHVltCDWHrOTw==}
     peerDependencies:
@@ -6807,8 +6812,8 @@ packages:
   ts-interface-checker@0.1.13:
     resolution: {integrity: sha512-Y/arvbn+rrz3JCKl9C4kVNfTfSm2/mEp5FSz5EsZSANGPSlQrpRI5M4PKF+mJnE52jOO90PnPSc3Ur3bTQw0gA==}
 
-  tsc-alias@1.8.17:
-    resolution: {integrity: sha512-EIduCZHqbNwPm8BZYfq1aD7BQ697A4h6uSGMOFQfYGoQwfrYFTKwYfy9Bv42YxHkduVBcn9Zx0DkX111DKskyg==}
+  tsc-alias@1.9.1:
+    resolution: {integrity: sha512-sFZdVFthH8uvdplPJrOYGOHcxu6UPtcAcY678JPwEQiMzgLZYFO7Qc/rzELp7ingTc+OxtzH6n+8Pn2eVQep6w==}
     engines: {node: '>=16.20.2'}
     hasBin: true
 
@@ -11863,6 +11868,10 @@ snapshots:
     dependencies:
       yallist: 3.1.1
 
+  lucide-react@0.460.0(react@19.2.7):
+    dependencies:
+      react: 19.2.7
+
   lucide-react@1.25.0(react@19.2.7):
     dependencies:
       react: 19.2.7
@@ -13080,7 +13089,7 @@ snapshots:
 
   ts-interface-checker@0.1.13: {}
 
-  tsc-alias@1.8.17:
+  tsc-alias@1.9.1:
     dependencies:
       chokidar: 3.6.0
       commander: 9.5.0
