@@ -153,6 +153,16 @@ export interface RelationMeta {
     scope?: Record<string, string>
     /** Human-readable panel header. */
     label?: string
+    /**
+     * Read-only relation: when true the SDK forces canCreate/canEdit/canDelete
+     * = false on the rendered `<DynamicRelation>` panel, hiding the "Agregar"
+     * button and the per-row edit (Pencil) / delete (Trash2) controls — no
+     * matter what perms the host passes. Generic & domain-agnostic. Read from
+     * the kernel relation metadata. Tolerates the camelCase alias.
+     */
+    readonly?: boolean
+    /** camelCase alias for `readonly`. */
+    readOnly?: boolean
 }
 
 export interface FilterDefinition {

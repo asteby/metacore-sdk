@@ -123,6 +123,15 @@ interface CommonProps {
     canCreate?: boolean
     canDelete?: boolean
     canEdit?: boolean
+    /**
+     * Relación de solo lectura. Cuando es true fuerza canCreate/canEdit/canDelete
+     * = false (AND con lo que pase el host: readonly siempre gana), escondiendo el
+     * botón "Agregar", el ícono editar (Pencil) y el de eliminar (Trash2). Tolera
+     * el alias camelCase `readOnly`.
+     */
+    readonly?: boolean
+    /** Alias camelCase de `readonly`. */
+    readOnly?: boolean
     /** Strings traducibles. */
     strings?: Partial<DynamicRelationStrings>
     /** Wrapper className. */
@@ -184,10 +193,20 @@ function OneToManyRelation({
     canCreate = true,
     canDelete = true,
     canEdit = true,
+    readonly,
+    readOnly,
     strings,
     className,
     onChange,
 }: DynamicRelationOneToManyProps) {
+    // Read-only relation always wins over host-passed perms (AND). Tolerates the
+    // camelCase alias the same way lock_rows/lockRows does.
+    const isReadonly = readonly === true || readOnly === true
+    if (isReadonly) {
+        canCreate = false
+        canDelete = false
+        canEdit = false
+    }
     const api = useApi()
     const getImageUrl = useImageUrl()
     const timeZone = useTimeZone()
@@ -490,10 +509,17 @@ function ManyToManyRelation({
     displayKey,
     canCreate = true,
     canDelete = true,
+    readonly,
+    readOnly,
     strings,
     className,
     onChange,
 }: DynamicRelationManyToManyProps) {
+    // Read-only relation always wins over host-passed perms (AND).
+    if (readonly === true || readOnly === true) {
+        canCreate = false
+        canDelete = false
+    }
     const api = useApi()
     const { getMetadata, setMetadata: cacheMetadata } = useMetadataCache()
     const labels = { ...DEFAULT_STRINGS, ...(strings || {}) }

@@ -115,6 +115,10 @@ export function DynamicRelations({
                     ...(strings || {}),
                     ...(rel.label ? { title: rel.label } : {}),
                 }
+                // A relation flagged read-only in the kernel metadata forces the
+                // panel's mutation controls off regardless of the host perms.
+                // Tolerates the camelCase alias.
+                const relReadonly = rel.readonly === true || rel.readOnly === true
                 if (rel.kind === 'many_to_many') {
                     return (
                         <DynamicRelation
@@ -133,6 +137,7 @@ export function DynamicRelations({
                             className={panelClassName}
                             canCreate={canCreate}
                             canDelete={canDelete}
+                            readonly={relReadonly}
                             strings={panelStrings}
                             onChange={onChange ? () => onChange(rel) : undefined}
                         />
@@ -150,6 +155,7 @@ export function DynamicRelations({
                         canCreate={canCreate}
                         canDelete={canDelete}
                         canEdit={canEdit}
+                        readonly={relReadonly}
                         strings={panelStrings}
                         onChange={onChange ? () => onChange(rel) : undefined}
                     />
