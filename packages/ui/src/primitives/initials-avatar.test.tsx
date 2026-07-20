@@ -30,6 +30,21 @@ describe('InitialsAvatar', () => {
     expect(html).toContain('height:24px')
   })
 
+  it('drops the per-name color under tone="neutral" so a listing reads as one surface', () => {
+    const a = renderToStaticMarkup(<InitialsAvatar name="Test" tone="neutral" />)
+    const b = renderToStaticMarkup(<InitialsAvatar name="Filtro" tone="neutral" />)
+    // No inline palette color at all — the muted tokens carry the background.
+    expect(a).not.toContain('background-color')
+    expect(a).toContain('bg-muted')
+    // Two different names now render an identical swatch, initials aside.
+    expect(a.replace('>T<', '>X<')).toBe(b.replace('>F<', '>X<'))
+  })
+
+  it('still shows the initials under tone="neutral"', () => {
+    const html = renderToStaticMarkup(<InitialsAvatar name="Aceite Motor" tone="neutral" />)
+    expect(html).toContain('AM')
+  })
+
   it('falls back to the "?" glyph for an empty name rather than an empty box', () => {
     const html = renderToStaticMarkup(<InitialsAvatar name="" />)
     expect(html).toContain('?')
