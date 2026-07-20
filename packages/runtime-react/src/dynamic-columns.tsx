@@ -518,7 +518,7 @@ const RelationCell: React.FC<{
                 // (shared InitialsAvatar) keyed on the label, so the "producto"-style
                 // cross-addon relation reads as a colored badge instead of text-only —
                 // matching the picker and detail surfaces.
-                <InitialsAvatar name={display} size={subtitle ? 24 : 18} rounded="sm" />
+                <InitialsAvatar name={display} size={subtitle ? 24 : 18} rounded="sm" tone="neutral" />
             )}
             {subtitle ? (
                 <span className="flex flex-col leading-tight min-w-0">

@@ -69,7 +69,7 @@ export function OptionThumb({
 }) {
     const box = { width: size, height: size }
     if (!image) {
-        return <InitialsAvatar name={name} size={size} rounded="sm" />
+        return <InitialsAvatar name={name} size={size} rounded="sm" tone="neutral" />
     }
     return (
         <img
@@ -125,7 +125,7 @@ export function OptionLead({
     // No image/icon/color: an imageless reference option. Show its initials
     // (shared InitialsAvatar) so it stays visually aligned with the sibling
     // options that DO carry a thumbnail, rather than a blank gap.
-    if (option.label) return <InitialsAvatar name={option.label} size={size} rounded="sm" />
+    if (option.label) return <InitialsAvatar name={option.label} size={size} rounded="sm" tone="neutral" />
     return null
 }
 
