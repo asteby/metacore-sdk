@@ -1,5 +1,12 @@
 # @asteby/metacore-auth
 
+## 19.0.0
+
+### Patch Changes
+
+- Updated dependencies [9bd4d4e]
+  - @asteby/metacore-ui@2.12.0
+
 ## 18.0.0
 
 ### Patch Changes
