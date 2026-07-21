@@ -3,12 +3,27 @@ import { create } from 'zustand'
 const ACCESS_TOKEN = 'auth_token'
 const USER_STORAGE = 'auth_user'
 
-export interface AuthUser {
+/**
+ * Minimal identity contract every host shares. This is the ONLY shape the
+ * SDK's own packages (pwa, websocket, notifications, runtime-react) may rely
+ * on. Hosts with richer users type theirs via `getTypedAuthStore<TUser>()`.
+ */
+export interface BaseAuthUser {
   id: string
   email: string
   name: string
   role: string
   avatar?: string
+}
+
+/**
+ * Default user shape kept for back-compat. The commerce/POS fields below are
+ * host-domain leakage (belong to the app layer, not the SDK — see
+ * metacore-kernel ARCHITECTURE.md Law 0). Deprecated: hosts should type
+ * their own user via `getTypedAuthStore<MyUser>()`; these extras will move
+ * out of the SDK in the next major.
+ */
+export interface AuthUser extends BaseAuthUser {
   organization_id?: string
   organization_name?: string
   organization_logo?: string
@@ -90,3 +105,39 @@ export const AUTH_STORAGE_KEYS = {
   ACCESS_TOKEN,
   USER_STORAGE,
 } as const
+
+/**
+ * Auth state parameterized by the host's user type. Same shape as
+ * `AuthState`, with `user`/`setUser` narrowed to `TUser`.
+ */
+export interface AuthStateOf<TUser extends BaseAuthUser> {
+  auth: {
+    user: TUser | null
+    setUser: (user: TUser | null) => void
+    accessToken: string
+    setAccessToken: (accessToken: string) => void
+    resetAccessToken: () => void
+    reset: () => void
+  }
+}
+
+/**
+ * Typed view over the ONE auth store singleton.
+ *
+ * Every `@asteby/*` package reads the same `useAuthStore` instance; hosts
+ * whose user carries domain fields (numeric ids serialized to string,
+ * patient/doctor refs, onboarding flags, …) get full typing without forking
+ * the store or leaking their domain into the SDK:
+ *
+ *   interface DoctoresUser extends BaseAuthUser { doctor_id?: number }
+ *   export const useAppAuthStore = getTypedAuthStore<DoctoresUser>()
+ *
+ * Runtime identity: `getTypedAuthStore() === useAuthStore` — it is only a
+ * type-level cast, so subscriptions, persistence and cross-package
+ * visibility are unaffected.
+ */
+export function getTypedAuthStore<TUser extends BaseAuthUser>() {
+  return useAuthStore as unknown as typeof useAuthStore extends infer _S
+    ? import('zustand').UseBoundStore<import('zustand').StoreApi<AuthStateOf<TUser>>>
+    : never
+}
