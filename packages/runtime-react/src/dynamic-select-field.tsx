@@ -129,16 +129,6 @@ export function OptionLead({
     return null
 }
 
-/** True when any option (or the selected one) carries a renderable visual. */
-function optionsHaveVisual(
-    options: ReadonlyArray<Pick<ResolvedOption, 'image' | 'color' | 'icon'>>,
-    selected?: Pick<ResolvedOption, 'image' | 'color' | 'icon'> | null,
-): boolean {
-    const has = (o?: Pick<ResolvedOption, 'image' | 'color' | 'icon'> | null) =>
-        !!(o && (o.image || o.color || o.icon))
-    return has(selected) || options.some(has)
-}
-
 function useDebounced<T>(value: T, ms: number): T {
     const [debounced, setDebounced] = useState(value)
     useEffect(() => {
@@ -257,7 +247,6 @@ export function DynamicSelectField({
     // Only switch the picker into "with thumbnails" mode when the data actually
     // carries images — a relation whose options have no `image` keeps the plain
     // text list it had before (no empty placeholder column).
-    const hasVisual = optionsHaveVisual(options, selectedOption)
 
     const handlePick = (opt: ResolvedOption) => {
         setPicked(opt)
@@ -336,7 +325,7 @@ export function DynamicSelectField({
                     data-depends-blocked={blockedByDependency ? '' : undefined}
                 >
                     <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                        {hasVisual && value ? (
+                        {value && selectedOption ? (
                             <OptionLead option={selectedOption} size={20} />
                         ) : null}
                         <span className={'min-w-0 flex-1 truncate ' + (selectedLabel ? '' : 'text-muted-foreground')}>
@@ -384,9 +373,7 @@ export function DynamicSelectField({
                                             onSelect={() => handlePick(opt)}
                                         >
                                             <Check className={'mr-2 size-4 shrink-0 ' + (isSel ? 'opacity-100' : 'opacity-0')} />
-                                            {hasVisual && (
-                                                <OptionLead option={opt} size={24} />
-                                            )}
+                                            <OptionLead option={opt} size={24} />
                                             <div className="ml-2 flex min-w-0 flex-col">
                                                 <span className="truncate">{opt.label}</span>
                                                 {opt.description && (
