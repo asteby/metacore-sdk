@@ -1,5 +1,12 @@
 # @asteby/metacore-notifications
 
+## 20.0.0
+
+### Patch Changes
+
+- Updated dependencies [46f4cce]
+  - @asteby/metacore-websocket@0.5.0
+
 ## 19.0.0
 
 ### Patch Changes

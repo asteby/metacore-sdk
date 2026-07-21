@@ -1,5 +1,16 @@
 # @asteby/metacore-fullstack-example
 
+## 0.1.173
+
+### Patch Changes
+
+- Updated dependencies [46f4cce]
+- Updated dependencies [676f116]
+  - @asteby/metacore-auth@19.1.0
+  - @asteby/metacore-websocket@0.5.0
+  - @asteby/metacore-theme@2.12.2
+  - @asteby/metacore-notifications@20.0.0
+
 ## 0.1.172
 
 ### Patch Changes
