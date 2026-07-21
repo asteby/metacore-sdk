@@ -78,7 +78,7 @@ export const RelationThumbnail: React.FC<{
     size?: number
 }> = ({ src, alt, getImageUrl, size = 18 }) => (
     <Avatar
-        className="shrink-0 rounded-sm ring-1 ring-border/40"
+        className="shrink-0 rounded-md ring-1 ring-border/40"
         style={{ width: size, height: size }}
     >
         <AvatarImage
@@ -86,7 +86,7 @@ export const RelationThumbnail: React.FC<{
             alt={alt}
             className="object-cover"
         />
-        <AvatarFallback className="rounded-sm bg-primary/10 text-[8px] font-bold text-primary">
+        <AvatarFallback className="rounded-md bg-primary/10 text-[8px] font-bold text-primary">
             {getInitials(alt)}
         </AvatarFallback>
     </Avatar>
