@@ -1,83 +1,129 @@
 // DashboardEmptyMockup — the animated empty state for the modular dashboard.
 //
-// Instead of a static "nothing here" card, we paint a silhouette of the
-// dashboard itself and let it BUILD ITSELF: skeleton tiles (a big chart, stat
-// cards, a bar, lists) that live in a full-bleed grid and visibly slide past
-// each other, swapping places like pieces reorganizing into a layout. The
-// metaphor is "your board is assembling", not "empty".
+// The whole grid REORGANIZES on a loop: skeleton widget cards grow, shrink and
+// reflow through four dashboard compositions (A → B → C → D → A), as if the
+// board were trying out arrangements while it loads. No "empty" copy — the
+// motion carries the meaning.
 //
-// Design constraints (kept simple so it ships from a package):
-//   - Full-bleed: fills the whole dashboard area (100% w/h), NOT a centered
-//     illustration. A responsive grid so it reads like the real dashboard.
-//   - Pure CSS keyframes, no dependencies. One slow loop (~13s). Motion is
-//     PERCEPTIBLE — tiles translate a real distance and swap in pairs — but
-//     never opacity-strobing, and eased so it feels like settling.
-//   - Theme tokens only (bg-muted / border tokens) → light & dark for free.
-//   - `prefers-reduced-motion: reduce` freezes everything (tiles rest in place).
-//   - No caption text — the animation carries the meaning, and shipping copy
-//     from the package risks un-localized strings. The whole mock is
-//     decorative → aria-hidden.
+// ── The zero-overlap invariant (hard requirement) ──────────────────────────
+// Two earlier takes let tiles cross and overlap; the user rejected them. This
+// version makes overlap IMPOSSIBLE by construction, not by tuning:
 //
-// Keyframes ship inline in a <style> tag rather than as Tailwind utilities:
-// consumer apps scan only their OWN source for Tailwind classes, so arbitrary
-// animation utilities declared here would never be generated in their build.
-// Static tokens (bg-muted, rounded-lg…) are standard classes the host emits
-// anyway, so those stay as className.
+//   The board is 3 COLUMNS in a FIXED left-to-right order, each split into a
+//   TOP and BOTTOM tile — 6 tiles total. Every layout only changes the column
+//   WIDTHS and the per-column top/bottom SPLIT. Because column order never
+//   changes and top is always above bottom, EVERY pair of tiles keeps a
+//   consistent separating axis in every layout, with a constant `gap` between
+//   neighbours. Under linear interpolation a gap that is `gap` at both ends of
+//   a transition stays exactly `gap` throughout — so no two tiles can ever
+//   touch, at any frame, during any transition. (Verified independently by the
+//   interpolation check in dashboard-empty-mockup.test — 0 overlaps.)
+//
+// Design constraints kept from the spec:
+//   - Full-bleed (fills the whole dashboard area).
+//   - Pure CSS keyframes, no dependencies; injected once per document.
+//   - Synchronised reflow: all tiles share one duration / easing / timing, so
+//     A→B reads as a single reorganisation. ~2s rest per layout, ~1.2s glide.
+//   - Theme tokens only (bg-card / border / muted) → light & dark for free.
+//   - `prefers-reduced-motion: reduce` → the static A layout, no motion.
+//   - Decorative → aria-hidden, no text.
 
 import * as React from 'react'
 import { cn } from '@asteby/metacore-ui/lib'
 
-// Scoped, collision-proof keyframe + class names (prefixed, unlikely to clash).
 const STYLE_ID = 'mc-dashboard-empty-mockup-style'
 
-// Each tile lives in a grid cell and animates on a shared ~13s loop. Pairs move
-// in opposite directions at the same phase so it reads as a SWAP, and the phases
-// are staggered (via negative delays) so 2-3 tiles are always in motion at
-// different moments of the cycle — never a frozen frame.
-const MOCKUP_CSS = `
-.mc-demock{--mc-demock-dur:13s}
-.mc-demock-tile{will-change:transform;transform-origin:center;
-  animation-duration:var(--mc-demock-dur);animation-timing-function:cubic-bezier(.65,0,.35,1);
-  animation-iteration-count:infinite}
-/* Horizontal swap pair (col A <-> col B) */
-.mc-demock-swapL{animation-name:mc-demock-swap-left}
-.mc-demock-swapR{animation-name:mc-demock-swap-right;animation-delay:-.2s}
-/* Vertical swap pair */
-.mc-demock-swapU{animation-name:mc-demock-swap-up;animation-delay:-4.3s}
-.mc-demock-swapD{animation-name:mc-demock-swap-down;animation-delay:-4.5s}
-/* Diagonal reshuffle pair */
-.mc-demock-shuffleA{animation-name:mc-demock-shuffle-a;animation-delay:-8.1s}
-.mc-demock-shuffleB{animation-name:mc-demock-shuffle-b;animation-delay:-8.3s}
-/* Gentle drifters filling the rhythm between swaps */
-.mc-demock-driftA{animation-name:mc-demock-drift-a;animation-delay:-2.4s}
-.mc-demock-driftB{animation-name:mc-demock-drift-b;animation-delay:-6.7s}
-.mc-demock-shimmer{position:relative;overflow:hidden}
+/** A tile's rectangle in percent of the container (both axes 0–100). */
+export interface MockupRect {
+    x: number
+    y: number
+    w: number
+    h: number
+}
+
+// Each layout = three column width weights + each column's top-tile height
+// fraction. Weights are relative (normalised below), so they read as intent
+// ("this column is the wide one") rather than exact percentages.
+interface LayoutSpec {
+    widths: [number, number, number]
+    splits: [number, number, number]
+}
+
+// Four visibly different compositions: balanced → left-heavy → centre-heavy →
+// right-heavy. The loop returns to A, so it is seamless.
+export const MOCKUP_LAYOUTS: LayoutSpec[] = [
+    { widths: [40, 32, 28], splits: [0.5, 0.6, 0.45] },
+    { widths: [52, 24, 24], splits: [0.62, 0.4, 0.55] },
+    { widths: [24, 52, 24], splits: [0.4, 0.55, 0.62] },
+    { widths: [26, 28, 46], splits: [0.55, 0.5, 0.4] },
+]
+
+/** Horizontal/vertical gap between tiles, in percent. */
+export const MOCKUP_GAP = 3
+
+/**
+ * Computes the six tile rects for one layout. Tile order is
+ * [c0-top, c0-bottom, c1-top, c1-bottom, c2-top, c2-bottom].
+ *
+ * Columns keep a constant `gap` between them and top/bottom keep a constant
+ * `gap` between them — this is what makes every transition overlap-free.
+ */
+export function computeLayoutRects(layout: LayoutSpec, gap = MOCKUP_GAP): MockupRect[] {
+    const usableW = 100 - 2 * gap
+    const usableH = 100 - gap
+    const sum = layout.widths[0] + layout.widths[1] + layout.widths[2]
+    const colW = layout.widths.map((w) => (w / sum) * usableW) as [number, number, number]
+    const colX = [0, colW[0] + gap, colW[0] + colW[1] + 2 * gap]
+
+    const rects: MockupRect[] = []
+    for (let c = 0; c < 3; c++) {
+        const topH = layout.splits[c] * usableH
+        const botH = usableH - topH
+        rects.push({ x: colX[c], y: 0, w: colW[c], h: topH })
+        rects.push({ x: colX[c], y: topH + gap, w: colW[c], h: botH })
+    }
+    return rects
+}
+
+/** The precomputed rects for all four layouts (exported for the overlap test). */
+export function mockupLayoutRects(gap = MOCKUP_GAP): MockupRect[][] {
+    return MOCKUP_LAYOUTS.map((l) => computeLayoutRects(l, gap))
+}
+
+// Keyframe stops. Cycle = 12.8s: per layout ~2s rest + ~1.2s glide. The stops
+// hold each layout, then glide to the next; 100% == 0% (layout A) → seamless.
+const STOPS = [0, 15.625, 25, 40.625, 50, 65.625, 75, 90.625, 100]
+const STOP_LAYOUT = [0, 0, 1, 1, 2, 2, 3, 3, 0] // which layout at each stop
+
+const fmt = (n: number) => `${Math.round(n * 1000) / 1000}%`
+
+/** Builds the full <style> text: per-tile keyframes cycling through the rects. */
+function buildCss(): string {
+    const layouts = mockupLayoutRects()
+    const tiles = layouts[0].length
+    let css = `
+.mc-demock{position:relative;height:100%;width:100%}
+.mc-demock-tile{position:absolute;
+  animation-duration:12.8s;animation-timing-function:cubic-bezier(.65,0,.35,1);
+  animation-iteration-count:infinite;will-change:top,left,width,height}
+.mc-demock-shimmer{overflow:hidden}
 .mc-demock-shimmer::after{content:"";position:absolute;inset:0;
   background:linear-gradient(105deg,transparent 35%,currentColor 50%,transparent 65%);
-  opacity:.05;transform:translateX(-120%);
-  animation:mc-demock-sheen var(--mc-demock-dur) ease-in-out infinite}
-/* Swaps: hold home -> travel a full cell (+gap) to the partner's slot -> hold
-   -> travel back. ~108% of own size clears the tile plus the grid gap. */
-@keyframes mc-demock-swap-left{
-  0%,12%{transform:translate(0,0)}38%,62%{transform:translate(108%,0)}88%,100%{transform:translate(0,0)}}
-@keyframes mc-demock-swap-right{
-  0%,12%{transform:translate(0,0)}38%,62%{transform:translate(-108%,0)}88%,100%{transform:translate(0,0)}}
-@keyframes mc-demock-swap-up{
-  0%,12%{transform:translate(0,0)}38%,62%{transform:translate(0,112%)}88%,100%{transform:translate(0,0)}}
-@keyframes mc-demock-swap-down{
-  0%,12%{transform:translate(0,0)}38%,62%{transform:translate(0,-112%)}88%,100%{transform:translate(0,0)}}
-@keyframes mc-demock-shuffle-a{
-  0%,15%{transform:translate(0,0) scale(1)}45%,60%{transform:translate(106%,110%) scale(.96)}90%,100%{transform:translate(0,0) scale(1)}}
-@keyframes mc-demock-shuffle-b{
-  0%,15%{transform:translate(0,0) scale(1)}45%,60%{transform:translate(-106%,-110%) scale(1.04)}90%,100%{transform:translate(0,0) scale(1)}}
-@keyframes mc-demock-drift-a{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(4%,-5%) scale(1.02)}}
-@keyframes mc-demock-drift-b{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-5%,4%) scale(.98)}}
+  opacity:.045;transform:translateX(-120%);
+  animation:mc-demock-sheen 12.8s ease-in-out infinite}
 @keyframes mc-demock-sheen{0%,100%{transform:translateX(-120%)}55%,72%{transform:translateX(120%)}}
-@media (prefers-reduced-motion:reduce){
-  .mc-demock-tile{animation:none!important}
-  .mc-demock-shimmer::after{animation:none!important;opacity:0}
-}
 `
+    for (let i = 0; i < tiles; i++) {
+        css += `.mc-demock-t${i}{animation-name:mc-demock-k${i}}\n@keyframes mc-demock-k${i}{`
+        for (let s = 0; s < STOPS.length; s++) {
+            const r = layouts[STOP_LAYOUT[s]][i]
+            css += `${fmt(STOPS[s])}{left:${fmt(r.x)};top:${fmt(r.y)};width:${fmt(r.w)};height:${fmt(r.h)}}`
+        }
+        css += `}\n`
+    }
+    css += `@media (prefers-reduced-motion:reduce){.mc-demock-tile{animation:none!important}.mc-demock-shimmer::after{animation:none!important;opacity:0}}\n`
+    return css
+}
 
 /** Injects the keyframes once per document (idempotent, SSR-safe). */
 function useMockupStyles() {
@@ -86,109 +132,118 @@ function useMockupStyles() {
         if (document.getElementById(STYLE_ID)) return
         const el = document.createElement('style')
         el.id = STYLE_ID
-        el.textContent = MOCKUP_CSS
+        el.textContent = buildCss()
         document.head.appendChild(el)
     }, [])
 }
 
 const tileBase =
-    'rounded-lg bg-muted mc-demock-tile mc-demock-shimmer text-foreground overflow-hidden'
+    'rounded-lg border border-border/60 bg-card mc-demock-tile mc-demock-shimmer text-foreground'
 
-/** A skeleton "chart" tile: a row of bars. */
-function ChartGlyph() {
-    return (
-        <div className="flex h-full items-end gap-1.5 p-3">
-            {[6, 10, 7, 12, 9, 11, 8].map((h, i) => (
-                <div
-                    key={i}
-                    className="w-full rounded-sm bg-foreground/10"
-                    style={{ height: `${h * 8}%` }}
-                />
-            ))}
-        </div>
-    )
-}
+type Glyph = 'chart' | 'stat' | 'list' | 'bar'
 
-/** A skeleton "stat card": label + big number. */
-function StatGlyph() {
+// Header shared by every card kind — icon chip + title bar + subtitle bar,
+// mirroring the real WidgetCard chrome (widgets/widget-card.tsx).
+function SkeletonHeader() {
     return (
-        <div className="flex h-full flex-col justify-center gap-2 p-3">
-            <div className="h-2 w-1/2 rounded-full bg-foreground/15" />
-            <div className="h-4 w-2/3 rounded bg-foreground/15" />
-        </div>
-    )
-}
-
-/** A skeleton "list" tile: stacked rows. */
-function ListGlyph() {
-    return (
-        <div className="flex h-full flex-col justify-center gap-2 p-3">
-            <div className="h-2 w-full rounded-full bg-foreground/12" />
-            <div className="h-2 w-4/5 rounded-full bg-foreground/12" />
-            <div className="h-2 w-2/3 rounded-full bg-foreground/12" />
-        </div>
-    )
-}
-
-/** A skeleton "progress bar" tile. */
-function BarGlyph() {
-    return (
-        <div className="flex h-full items-center px-3">
-            <div className="h-2.5 w-full rounded-full bg-foreground/10">
-                <div className="h-full w-2/5 rounded-full bg-foreground/20" />
+        <div className="flex items-start gap-2.5">
+            <div className="size-8 shrink-0 rounded-lg bg-foreground/10" />
+            <div className="flex-1 space-y-1.5 pt-0.5">
+                <div className="h-2.5 w-2/3 rounded bg-foreground/12" />
+                <div className="h-2 w-2/5 rounded bg-foreground/[.07]" />
             </div>
         </div>
     )
 }
 
-// The board: a 4-col x 4-row grid that fills the container. Each tile declares
-// its cell (via inline gridColumn/gridRow) and a motion class. Swap pairs sit in
-// adjacent cells and move toward each other, so the eye reads a reshuffle.
-type Tile = { area: React.CSSProperties; motion: string; glyph: React.ReactNode }
+// Bodies copy the anatomy of the matching real renderers (renderers.tsx).
+function TileGlyph({ kind }: { kind: Glyph }) {
+    return (
+        <div className="flex h-full flex-col gap-3 overflow-hidden p-3">
+            <SkeletonHeader />
+            <div className="min-h-0 flex-1">
+                {kind === 'stat' && (
+                    <div className="flex h-full flex-col justify-center gap-2">
+                        <div className="h-6 w-1/2 rounded-md bg-foreground/15" />
+                        <div className="h-4 w-14 rounded-full bg-foreground/10" />
+                    </div>
+                )}
+                {kind === 'chart' && (
+                    <div className="flex h-full items-end gap-1.5">
+                        {[46, 72, 38, 84, 58, 92, 50].map((h, i) => (
+                            <div
+                                key={i}
+                                className="w-full rounded-sm bg-foreground/10"
+                                style={{ height: `${h}%` }}
+                            />
+                        ))}
+                    </div>
+                )}
+                {kind === 'list' && (
+                    <div className="flex h-full flex-col justify-center gap-2.5">
+                        {[28, 40, 34].map((w, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                                <div className="size-5 shrink-0 rounded-full bg-foreground/10" />
+                                <div className="h-2 flex-1 rounded-full bg-foreground/10" />
+                                <div
+                                    className="h-2 shrink-0 rounded-full bg-foreground/12"
+                                    style={{ width: w }}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {kind === 'bar' && (
+                    <div className="flex h-full flex-col justify-center gap-3">
+                        <div className="h-2.5 w-full rounded-full bg-foreground/10">
+                            <div className="h-full w-3/5 rounded-full bg-foreground/20" />
+                        </div>
+                        <div className="h-2.5 w-full rounded-full bg-foreground/10">
+                            <div className="h-full w-2/5 rounded-full bg-foreground/20" />
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
 
-const TILES: Tile[] = [
-    // Big chart (top-left 2x2) — diagonal shuffle with the bottom stat.
-    { area: { gridColumn: '1 / 3', gridRow: '1 / 3' }, motion: 'mc-demock-shuffleA', glyph: <ChartGlyph /> },
-    // Horizontal swap pair, top-right.
-    { area: { gridColumn: '3 / 4', gridRow: '1 / 2' }, motion: 'mc-demock-swapL', glyph: <StatGlyph /> },
-    { area: { gridColumn: '4 / 5', gridRow: '1 / 2' }, motion: 'mc-demock-swapR', glyph: <StatGlyph /> },
-    // Vertical swap pair, right column.
-    { area: { gridColumn: '3 / 5', gridRow: '2 / 3' }, motion: 'mc-demock-swapU', glyph: <ListGlyph /> },
-    { area: { gridColumn: '3 / 5', gridRow: '3 / 4' }, motion: 'mc-demock-swapD', glyph: <BarGlyph /> },
-    // Bottom-left cluster: shuffle partner + drifter.
-    { area: { gridColumn: '1 / 2', gridRow: '3 / 4' }, motion: 'mc-demock-shuffleB', glyph: <StatGlyph /> },
-    { area: { gridColumn: '2 / 3', gridRow: '3 / 4' }, motion: 'mc-demock-driftA', glyph: <StatGlyph /> },
-    // Full-width footer bar + trailing stat.
-    { area: { gridColumn: '1 / 4', gridRow: '4 / 5' }, motion: 'mc-demock-driftB', glyph: <BarGlyph /> },
-    { area: { gridColumn: '4 / 5', gridRow: '4 / 5' }, motion: 'mc-demock-driftA', glyph: <StatGlyph /> },
-]
+// Kind per tile, in the [c0-top, c0-bottom, c1-top, c1-bottom, c2-top, c2-bottom]
+// order used by computeLayoutRects.
+const TILE_KINDS: Glyph[] = ['stat', 'chart', 'chart', 'list', 'stat', 'bar']
 
 /**
- * Full-bleed animated skeleton of a dashboard whose tiles slide and swap places,
- * as if the layout were assembling itself. Purely decorative — always
- * `aria-hidden`, no text.
+ * Full-bleed skeleton dashboard that reflows through four layouts on a loop.
+ * Overlap-free by construction (see the invariant note above). Purely
+ * decorative — always `aria-hidden`, no text.
+ *
+ * Contract: tiles are positioned with percentage heights, so the CONTAINER
+ * must have a DEFINITE height (e.g. `h-[…]`, or a flex child with `flex-1`).
+ * A parent with only `min-height` leaves the box auto-height and the tiles
+ * collapse into a strip. The dashboard empty state mounts it inside a
+ * definite-height box for exactly this reason.
  */
 export function DashboardEmptyMockup({ className }: { className?: string }) {
     useMockupStyles()
+    const layoutA = React.useMemo(() => computeLayoutRects(MOCKUP_LAYOUTS[0]), [])
     return (
         <div
             aria-hidden="true"
             data-testid="dashboard-empty-mockup"
-            className={cn('mc-demock pointer-events-none h-full w-full select-none', className)}
+            className={cn('mc-demock pointer-events-none select-none', className)}
         >
-            <div
-                className="grid h-full w-full gap-3"
-                style={{
-                    gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-                    gridTemplateRows: 'repeat(4, minmax(0, 1fr))',
-                }}
-            >
-                {TILES.map((t, i) => (
-                    <div key={i} style={t.area} className={cn(tileBase, t.motion)}>
-                        {t.glyph}
-                    </div>
-                ))}
-            </div>
+            {layoutA.map((r, i) => (
+                <div
+                    key={i}
+                    data-mockup-tile="tile"
+                    className={cn(tileBase, `mc-demock-t${i}`)}
+                    // Base position = layout A, so reduced-motion (animation off)
+                    // shows the full static composition.
+                    style={{ left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%` }}
+                >
+                    <TileGlyph kind={TILE_KINDS[i]} />
+                </div>
+            ))}
         </div>
     )
 }
