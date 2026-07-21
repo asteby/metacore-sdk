@@ -1,81 +1,83 @@
 // DashboardEmptyMockup — the animated empty state for the modular dashboard.
 //
-// Instead of a static "nothing here" card, we paint a silhouette of the
-// dashboard itself and let it BUILD ITSELF: skeleton tiles (a big chart, stat
-// cards, a bar, lists) that live in a full-bleed grid and visibly slide past
-// each other, swapping places like pieces reorganizing into a layout. The
-// metaphor is "your board is assembling", not "empty".
+// A sliding-tile puzzle (15-puzzle) built from dashboard skeleton tiles. The
+// board is a fixed 4×3 grid of equal slots with ONE empty slot; the only motion
+// allowed is a tile ADJACENT to the gap sliding one slot into it. One tile
+// moves at a time, exactly one slot, so tiles NEVER cross or overlap — the
+// no-overlap invariant holds by construction, not by luck. The metaphor is a
+// board quietly organizing itself, not "empty".
 //
-// Design constraints (kept simple so it ships from a package):
-//   - Full-bleed: fills the whole dashboard area (100% w/h), NOT a centered
-//     illustration. A responsive grid so it reads like the real dashboard.
-//   - Pure CSS keyframes, no dependencies. One slow loop (~13s). Motion is
-//     PERCEPTIBLE — tiles translate a real distance and swap in pairs — but
-//     never opacity-strobing, and eased so it feels like settling.
-//   - Theme tokens only (bg-muted / border tokens) → light & dark for free.
-//   - `prefers-reduced-motion: reduce` freezes everything (tiles rest in place).
-//   - No caption text — the animation carries the meaning, and shipping copy
-//     from the package risks un-localized strings. The whole mock is
-//     decorative → aria-hidden.
+// Choreography (closed loop, seamless):
+//   The gap starts at slot (col4,row1). It wanders a 5-step path and then
+//   retraces that exact path in reverse, which returns every tile to its home
+//   slot — so frame 0 and frame 100% are identical and the loop never jumps.
+//   Only 5 tiles ever move; each slides out once and back once. Between moves
+//   there is a ~1.4s pause (calm "settling" rhythm).
+//
+// Design constraints:
+//   - Full-bleed: the grid fills the whole dashboard area (100% w/h).
+//   - Pure CSS keyframes, no dependencies; injected once per document.
+//   - One move = translate of exactly one slot (100% of a cell + the gap),
+//     ~0.6s ease-in-out. Never two tiles in transit at once.
+//   - Theme tokens only (bg-muted / foreground) → light & dark for free.
+//   - `prefers-reduced-motion: reduce` → the full static grid, gap filled, no
+//     motion. Decorative → aria-hidden, no text.
 //
 // Keyframes ship inline in a <style> tag rather than as Tailwind utilities:
 // consumer apps scan only their OWN source for Tailwind classes, so arbitrary
 // animation utilities declared here would never be generated in their build.
-// Static tokens (bg-muted, rounded-lg…) are standard classes the host emits
-// anyway, so those stay as className.
 
 import * as React from 'react'
 import { cn } from '@asteby/metacore-ui/lib'
 
-// Scoped, collision-proof keyframe + class names (prefixed, unlikely to clash).
 const STYLE_ID = 'mc-dashboard-empty-mockup-style'
 
-// Each tile lives in a grid cell and animates on a shared ~13s loop. Pairs move
-// in opposite directions at the same phase so it reads as a SWAP, and the phases
-// are staggered (via negative delays) so 2-3 tiles are always in motion at
-// different moments of the cycle — never a frozen frame.
+// One slot step = a full cell (100%) plus the grid gap (0.75rem = gap-3).
+// The cycle is split into 10 equal windows (10 moves: 5 out, 5 back). Each move
+// slides during the first ~3% of its window, then holds — so at every instant
+// at most ONE tile is mid-slide. dur 20s → each slide ≈ 0.6s, pauses ≈ 1.4s.
 const MOCKUP_CSS = `
-.mc-demock{--mc-demock-dur:13s}
-.mc-demock-tile{will-change:transform;transform-origin:center;
-  animation-duration:var(--mc-demock-dur);animation-timing-function:cubic-bezier(.65,0,.35,1);
+.mc-demock{--mc-demock-step:calc(100% + 0.75rem)}
+.mc-demock-tile{will-change:transform;
+  animation-duration:20s;animation-timing-function:ease-in-out;
   animation-iteration-count:infinite}
-/* Horizontal swap pair (col A <-> col B) */
-.mc-demock-swapL{animation-name:mc-demock-swap-left}
-.mc-demock-swapR{animation-name:mc-demock-swap-right;animation-delay:-.2s}
-/* Vertical swap pair */
-.mc-demock-swapU{animation-name:mc-demock-swap-up;animation-delay:-4.3s}
-.mc-demock-swapD{animation-name:mc-demock-swap-down;animation-delay:-4.5s}
-/* Diagonal reshuffle pair */
-.mc-demock-shuffleA{animation-name:mc-demock-shuffle-a;animation-delay:-8.1s}
-.mc-demock-shuffleB{animation-name:mc-demock-shuffle-b;animation-delay:-8.3s}
-/* Gentle drifters filling the rhythm between swaps */
-.mc-demock-driftA{animation-name:mc-demock-drift-a;animation-delay:-2.4s}
-.mc-demock-driftB{animation-name:mc-demock-drift-b;animation-delay:-6.7s}
 .mc-demock-shimmer{position:relative;overflow:hidden}
 .mc-demock-shimmer::after{content:"";position:absolute;inset:0;
   background:linear-gradient(105deg,transparent 35%,currentColor 50%,transparent 65%);
-  opacity:.05;transform:translateX(-120%);
-  animation:mc-demock-sheen var(--mc-demock-dur) ease-in-out infinite}
-/* Swaps: hold home -> travel a full cell (+gap) to the partner's slot -> hold
-   -> travel back. ~108% of own size clears the tile plus the grid gap. */
-@keyframes mc-demock-swap-left{
-  0%,12%{transform:translate(0,0)}38%,62%{transform:translate(108%,0)}88%,100%{transform:translate(0,0)}}
-@keyframes mc-demock-swap-right{
-  0%,12%{transform:translate(0,0)}38%,62%{transform:translate(-108%,0)}88%,100%{transform:translate(0,0)}}
-@keyframes mc-demock-swap-up{
-  0%,12%{transform:translate(0,0)}38%,62%{transform:translate(0,112%)}88%,100%{transform:translate(0,0)}}
-@keyframes mc-demock-swap-down{
-  0%,12%{transform:translate(0,0)}38%,62%{transform:translate(0,-112%)}88%,100%{transform:translate(0,0)}}
-@keyframes mc-demock-shuffle-a{
-  0%,15%{transform:translate(0,0) scale(1)}45%,60%{transform:translate(106%,110%) scale(.96)}90%,100%{transform:translate(0,0) scale(1)}}
-@keyframes mc-demock-shuffle-b{
-  0%,15%{transform:translate(0,0) scale(1)}45%,60%{transform:translate(-106%,-110%) scale(1.04)}90%,100%{transform:translate(0,0) scale(1)}}
-@keyframes mc-demock-drift-a{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(4%,-5%) scale(1.02)}}
-@keyframes mc-demock-drift-b{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(-5%,4%) scale(.98)}}
+  opacity:.045;transform:translateX(-120%);
+  animation:mc-demock-sheen 20s ease-in-out infinite}
+/* Gap fills the empty slot only when motion is reduced (static full grid). */
+.mc-demock-hole{display:none}
+/* Move 1 / 10: tile slides RIGHT into the start gap, back at the very end. */
+.mc-demock-m1{animation-name:mc-demock-m1}
+@keyframes mc-demock-m1{
+  0%{transform:translateX(0)}3%{transform:translateX(var(--mc-demock-step))}
+  90%{transform:translateX(var(--mc-demock-step))}93%,100%{transform:translateX(0)}}
+/* Move 2 / 9: slides UP, back later. */
+.mc-demock-m2{animation-name:mc-demock-m2}
+@keyframes mc-demock-m2{
+  0%,10%{transform:translateY(0)}13%{transform:translateY(calc(-1 * var(--mc-demock-step)))}
+  80%{transform:translateY(calc(-1 * var(--mc-demock-step)))}83%,100%{transform:translateY(0)}}
+/* Move 3 / 8: slides RIGHT. */
+.mc-demock-m3{animation-name:mc-demock-m3}
+@keyframes mc-demock-m3{
+  0%,20%{transform:translateX(0)}23%{transform:translateX(var(--mc-demock-step))}
+  70%{transform:translateX(var(--mc-demock-step))}73%,100%{transform:translateX(0)}}
+/* Move 4 / 7: slides UP. */
+.mc-demock-m4{animation-name:mc-demock-m4}
+@keyframes mc-demock-m4{
+  0%,30%{transform:translateY(0)}33%{transform:translateY(calc(-1 * var(--mc-demock-step)))}
+  60%{transform:translateY(calc(-1 * var(--mc-demock-step)))}63%,100%{transform:translateY(0)}}
+/* Move 5 / 6: slides RIGHT (the turnaround — shortest hold). */
+.mc-demock-m5{animation-name:mc-demock-m5}
+@keyframes mc-demock-m5{
+  0%,40%{transform:translateX(0)}43%{transform:translateX(var(--mc-demock-step))}
+  50%{transform:translateX(var(--mc-demock-step))}53%,100%{transform:translateX(0)}}
 @keyframes mc-demock-sheen{0%,100%{transform:translateX(-120%)}55%,72%{transform:translateX(120%)}}
 @media (prefers-reduced-motion:reduce){
   .mc-demock-tile{animation:none!important}
   .mc-demock-shimmer::after{animation:none!important;opacity:0}
+  .mc-demock-hole{display:flex!important}
 }
 `
 
@@ -91,82 +93,111 @@ function useMockupStyles() {
     }, [])
 }
 
+// The frame mirrors the real WidgetCard chrome (see widgets/widget-card.tsx):
+// subtle border, rounded-xl, card background — so the puzzle reads as the actual
+// dashboard cards rendering in skeleton form, not generic grey boxes.
 const tileBase =
-    'rounded-lg bg-muted mc-demock-tile mc-demock-shimmer text-foreground overflow-hidden'
+    'rounded-xl border border-border/60 bg-card mc-demock-tile mc-demock-shimmer text-foreground overflow-hidden'
 
-/** A skeleton "chart" tile: a row of bars. */
-function ChartGlyph() {
-    return (
-        <div className="flex h-full items-end gap-1.5 p-3">
-            {[6, 10, 7, 12, 9, 11, 8].map((h, i) => (
-                <div
-                    key={i}
-                    className="w-full rounded-sm bg-foreground/10"
-                    style={{ height: `${h * 8}%` }}
-                />
-            ))}
-        </div>
-    )
-}
+type Glyph = 'chart' | 'stat' | 'list' | 'bar'
 
-/** A skeleton "stat card": label + big number. */
-function StatGlyph() {
+// Skeleton header shared by every card kind: an icon chip + title bar + a
+// shorter subtitle bar, matching WidgetCard's header anatomy.
+function SkeletonHeader() {
     return (
-        <div className="flex h-full flex-col justify-center gap-2 p-3">
-            <div className="h-2 w-1/2 rounded-full bg-foreground/15" />
-            <div className="h-4 w-2/3 rounded bg-foreground/15" />
-        </div>
-    )
-}
-
-/** A skeleton "list" tile: stacked rows. */
-function ListGlyph() {
-    return (
-        <div className="flex h-full flex-col justify-center gap-2 p-3">
-            <div className="h-2 w-full rounded-full bg-foreground/12" />
-            <div className="h-2 w-4/5 rounded-full bg-foreground/12" />
-            <div className="h-2 w-2/3 rounded-full bg-foreground/12" />
-        </div>
-    )
-}
-
-/** A skeleton "progress bar" tile. */
-function BarGlyph() {
-    return (
-        <div className="flex h-full items-center px-3">
-            <div className="h-2.5 w-full rounded-full bg-foreground/10">
-                <div className="h-full w-2/5 rounded-full bg-foreground/20" />
+        <div className="flex items-start gap-2.5">
+            <div className="size-8 shrink-0 rounded-lg bg-foreground/10" />
+            <div className="flex-1 space-y-1.5 pt-0.5">
+                <div className="h-2.5 w-2/3 rounded bg-foreground/12" />
+                <div className="h-2 w-2/5 rounded bg-foreground/[.07]" />
             </div>
         </div>
     )
 }
 
-// The board: a 4-col x 4-row grid that fills the container. Each tile declares
-// its cell (via inline gridColumn/gridRow) and a motion class. Swap pairs sit in
-// adjacent cells and move toward each other, so the eye reads a reshuffle.
-type Tile = { area: React.CSSProperties; motion: string; glyph: React.ReactNode }
+// Each body copies the anatomy of the matching real renderer (renderers.tsx):
+//   stat  → big number block + delta chip
+//   chart → row of variable-height bars
+//   list  → rows of dot + label bar + value
+//   bar   → progress track with a filled portion
+function TileGlyph({ kind }: { kind: Glyph }) {
+    return (
+        <div className="flex h-full flex-col gap-3 p-3">
+            <SkeletonHeader />
+            <div className="min-h-0 flex-1">
+                {kind === 'stat' && (
+                    <div className="flex h-full flex-col justify-center gap-2">
+                        <div className="h-7 w-1/2 rounded-md bg-foreground/15" />
+                        <div className="h-4 w-14 rounded-full bg-foreground/10" />
+                    </div>
+                )}
+                {kind === 'chart' && (
+                    <div className="flex h-full items-end gap-1.5">
+                        {[46, 72, 38, 84, 58, 92, 50].map((h, i) => (
+                            <div
+                                key={i}
+                                className="w-full rounded-sm bg-foreground/10"
+                                style={{ height: `${h}%` }}
+                            />
+                        ))}
+                    </div>
+                )}
+                {kind === 'list' && (
+                    <div className="flex h-full flex-col justify-center gap-2.5">
+                        {[28, 40, 34].map((w, i) => (
+                            <div key={i} className="flex items-center gap-2">
+                                <div className="size-5 shrink-0 rounded-full bg-foreground/10" />
+                                <div className="h-2 flex-1 rounded-full bg-foreground/10" />
+                                <div
+                                    className="h-2 shrink-0 rounded-full bg-foreground/12"
+                                    style={{ width: w }}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {kind === 'bar' && (
+                    <div className="flex h-full flex-col justify-center gap-3">
+                        <div className="h-2.5 w-full rounded-full bg-foreground/10">
+                            <div className="h-full w-3/5 rounded-full bg-foreground/20" />
+                        </div>
+                        <div className="h-2.5 w-full rounded-full bg-foreground/10">
+                            <div className="h-full w-2/5 rounded-full bg-foreground/20" />
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
 
-const TILES: Tile[] = [
-    // Big chart (top-left 2x2) — diagonal shuffle with the bottom stat.
-    { area: { gridColumn: '1 / 3', gridRow: '1 / 3' }, motion: 'mc-demock-shuffleA', glyph: <ChartGlyph /> },
-    // Horizontal swap pair, top-right.
-    { area: { gridColumn: '3 / 4', gridRow: '1 / 2' }, motion: 'mc-demock-swapL', glyph: <StatGlyph /> },
-    { area: { gridColumn: '4 / 5', gridRow: '1 / 2' }, motion: 'mc-demock-swapR', glyph: <StatGlyph /> },
-    // Vertical swap pair, right column.
-    { area: { gridColumn: '3 / 5', gridRow: '2 / 3' }, motion: 'mc-demock-swapU', glyph: <ListGlyph /> },
-    { area: { gridColumn: '3 / 5', gridRow: '3 / 4' }, motion: 'mc-demock-swapD', glyph: <BarGlyph /> },
-    // Bottom-left cluster: shuffle partner + drifter.
-    { area: { gridColumn: '1 / 2', gridRow: '3 / 4' }, motion: 'mc-demock-shuffleB', glyph: <StatGlyph /> },
-    { area: { gridColumn: '2 / 3', gridRow: '3 / 4' }, motion: 'mc-demock-driftA', glyph: <StatGlyph /> },
-    // Full-width footer bar + trailing stat.
-    { area: { gridColumn: '1 / 4', gridRow: '4 / 5' }, motion: 'mc-demock-driftB', glyph: <BarGlyph /> },
-    { area: { gridColumn: '4 / 5', gridRow: '4 / 5' }, motion: 'mc-demock-driftA', glyph: <StatGlyph /> },
+// 4 cols × 3 rows. The gap starts at (col4,row1) → that slot has no puzzle tile
+// (only the reduced-motion filler). Each tile declares its HOME cell; the 5
+// movers carry a motion class. Static tiles never move.
+type Cell = { col: number; row: number; kind: Glyph; motion?: string; hole?: boolean }
+
+const CELLS: Cell[] = [
+    // Row 1
+    { col: 1, row: 1, kind: 'stat' },
+    { col: 2, row: 1, kind: 'chart' },
+    { col: 3, row: 1, kind: 'stat', motion: 'mc-demock-m1' }, // slides right into the gap
+    { col: 4, row: 1, kind: 'bar', hole: true }, // the gap (filler only under reduced-motion)
+    // Row 2
+    { col: 1, row: 2, kind: 'list' },
+    { col: 2, row: 2, kind: 'stat', motion: 'mc-demock-m3' },
+    { col: 3, row: 2, kind: 'bar', motion: 'mc-demock-m2' },
+    { col: 4, row: 2, kind: 'chart' },
+    // Row 3
+    { col: 1, row: 3, kind: 'stat', motion: 'mc-demock-m5' },
+    { col: 2, row: 3, kind: 'list', motion: 'mc-demock-m4' },
+    { col: 3, row: 3, kind: 'chart' },
+    { col: 4, row: 3, kind: 'bar' },
 ]
 
 /**
- * Full-bleed animated skeleton of a dashboard whose tiles slide and swap places,
- * as if the layout were assembling itself. Purely decorative — always
- * `aria-hidden`, no text.
+ * Full-bleed sliding-tile puzzle of dashboard skeletons. One tile slides one
+ * slot at a time into the single gap; tiles never overlap. Purely decorative —
+ * always `aria-hidden`, no text.
  */
 export function DashboardEmptyMockup({ className }: { className?: string }) {
     useMockupStyles()
@@ -180,12 +211,17 @@ export function DashboardEmptyMockup({ className }: { className?: string }) {
                 className="grid h-full w-full gap-3"
                 style={{
                     gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-                    gridTemplateRows: 'repeat(4, minmax(0, 1fr))',
+                    gridTemplateRows: 'repeat(3, minmax(0, 1fr))',
                 }}
             >
-                {TILES.map((t, i) => (
-                    <div key={i} style={t.area} className={cn(tileBase, t.motion)}>
-                        {t.glyph}
+                {CELLS.map((c, i) => (
+                    <div
+                        key={i}
+                        data-mockup-tile={c.hole ? 'hole' : 'tile'}
+                        style={{ gridColumn: c.col, gridRow: c.row }}
+                        className={cn(tileBase, c.motion, c.hole && 'mc-demock-hole')}
+                    >
+                        <TileGlyph kind={c.kind} />
                     </div>
                 ))}
             </div>
