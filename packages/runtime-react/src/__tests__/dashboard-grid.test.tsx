@@ -156,6 +156,16 @@ describe('DashboardGrid render', () => {
         expect(screen.getByTestId('dashboard-empty')).toBeTruthy()
     })
 
+    it('renders the animated mockup (decorative) in the empty state', () => {
+        render(<DashboardGrid widgets={[]} loadData={loaderOf({})} />)
+        const mock = screen.getByTestId('dashboard-empty-mockup')
+        expect(mock).toBeTruthy()
+        // Purely decorative → hidden from the a11y tree.
+        expect(mock.getAttribute('aria-hidden')).toBe('true')
+        // Keyframes are injected once into the document head.
+        expect(document.getElementById('mc-dashboard-empty-mockup-style')).toBeTruthy()
+    })
+
     it('survives an empty → populated transition (React #310 regression)', async () => {
         // The flatten/order useMemo must run BEFORE the empty-state early return.
         // When it sat after the return, an empty render called one fewer hook

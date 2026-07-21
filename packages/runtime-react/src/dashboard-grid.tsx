@@ -8,7 +8,6 @@ import * as React from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@asteby/metacore-ui/lib'
 import { useCan, usePermissionsActive } from './permissions-context'
-import { DynamicIcon } from './dynamic-icon'
 import type {
     DashboardGridProps,
     DashboardGridStrings,
@@ -16,11 +15,12 @@ import type {
     DashboardWidgetSpec,
 } from './dashboard-types'
 import { WidgetRenderer, WidgetSkeleton, isTallWidget } from './widgets/widget-renderer'
+import { DashboardEmptyMockup } from './dashboard-empty-mockup'
 
 const DEFAULT_STRINGS: DashboardGridStrings = {
-    emptyTitle: 'Your dashboard is empty',
+    emptyTitle: 'Your dashboard is taking shape',
     emptyDescription:
-        'Install an addon with dashboard widgets to start seeing metrics here.',
+        'Install an addon with dashboard widgets and your metrics will start living here.',
     widgetError: 'Could not load this widget.',
     widgetEmpty: 'No data yet.',
 }
@@ -154,19 +154,19 @@ export function DashboardGrid({
             <div
                 data-testid="dashboard-empty"
                 className={cn(
-                    'flex min-h-[40vh] flex-col items-center justify-center rounded-xl border border-dashed border-border/60 p-10 text-center',
+                    'flex min-h-[40vh] flex-col items-center justify-center gap-6 rounded-xl border border-dashed border-border/60 p-10 text-center',
                     className,
                 )}
             >
-                <div className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
-                    <DynamicIcon name="LayoutDashboard" className="size-7" />
+                <DashboardEmptyMockup />
+                <div className="flex flex-col items-center">
+                    <h3 className="text-base font-semibold text-foreground">
+                        {tr(undefined, s.emptyTitle) || s.emptyTitle}
+                    </h3>
+                    <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                        {s.emptyDescription}
+                    </p>
                 </div>
-                <h3 className="text-base font-semibold text-foreground">
-                    {tr(undefined, s.emptyTitle) || s.emptyTitle}
-                </h3>
-                <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                    {s.emptyDescription}
-                </p>
             </div>
         )
     }
