@@ -8,3 +8,13 @@ export type {
   SendPayload,
   TokenGetter,
 } from './types'
+
+// Multi-channel imperative client (one socket per logical channel, routed
+// by query params). Complements the single-socket WebSocketProvider.
+export { createChannelClient } from './channels'
+export type {
+  ChannelClient,
+  ChannelClientOptions,
+  ChannelMessageHandler,
+  ChannelConnectionState,
+} from './channels'
