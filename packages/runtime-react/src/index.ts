@@ -325,6 +325,7 @@ export {
     DashboardGrid,
     normalizeGroups,
 } from './dashboard-grid'
+export { DashboardEmptyMockup } from './dashboard-empty-mockup'
 export type {
     WidgetKind,
     WidgetSize,
