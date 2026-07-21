@@ -495,29 +495,24 @@ const RelationCell: React.FC<{
     row: any
     getImageUrl?: (path: string) => string
 }> = ({ col, row, getImageUrl }) => {
-    const isDark = useIsDarkTheme()
     const display = resolveRelationLabel(col, row)
     if (!display) return <EmptyCell />
     const image = resolveRelationImage(col, row)
     const subtitle = resolveRelationSubtitle(col, row)
-    // Deterministic, SUBTLE color keyed on the resolved label — lighter than
-    // enum badges (soft tint, no heavy fill) so category/brand chips read as
-    // alive yet stay visually distinct from option/status badges. Inline style
-    // (hex-derived) bypasses the host tailwind safelist.
-    const chipStyles = relationChipStyles(display, { isDark })
+    // FLAT reference cell: no tinted capsule around the pair. A reference is
+    // data, not a status — the pill treatment (and its per-label tint) made a
+    // products/warehouses listing read as a wall of badges. What identifies the
+    // record is the ROUNDED-SQUARE thumb (the record's image, or the neutral
+    // initials fallback) next to plain text; enum/status badges keep their
+    // colored pill so the two vocabularies stay distinct.
     return (
         <span
-            className="inline-flex max-w-[220px] items-center gap-1.5 rounded-md px-2 py-0.5 text-sm font-medium"
-            style={chipStyles}
+            className="inline-flex max-w-[220px] items-center gap-1.5 text-sm font-medium"
             title={subtitle ? `${display} · ${subtitle}` : display}
         >
             {image ? (
                 <RelationThumbnail src={image} alt={display} getImageUrl={getImageUrl} size={subtitle ? 24 : 18} />
             ) : (
-                // No image on the resolved sibling: a deterministic initials avatar
-                // (shared InitialsAvatar) keyed on the label, so the "producto"-style
-                // cross-addon relation reads as a colored badge instead of text-only —
-                // matching the picker and detail surfaces.
                 <InitialsAvatar name={display} size={subtitle ? 24 : 18} rounded="sm" tone="neutral" />
             )}
             {subtitle ? (
