@@ -154,19 +154,14 @@ export function DashboardGrid({
             <div
                 data-testid="dashboard-empty"
                 className={cn(
-                    'flex min-h-[40vh] flex-col items-center justify-center gap-6 rounded-xl border border-dashed border-border/60 p-10 text-center',
+                    // Full-bleed: the mockup fills the whole dashboard area, not a
+                    // centered illustration. No caption — the animation speaks for
+                    // itself (and dodges shipping un-localized copy).
+                    'min-h-[60vh] w-full rounded-xl border border-dashed border-border/60 p-4',
                     className,
                 )}
             >
-                <DashboardEmptyMockup />
-                <div className="flex flex-col items-center">
-                    <h3 className="text-base font-semibold text-foreground">
-                        {tr(undefined, s.emptyTitle) || s.emptyTitle}
-                    </h3>
-                    <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                        {s.emptyDescription}
-                    </p>
-                </div>
+                <DashboardEmptyMockup className="h-full min-h-[inherit]" />
             </div>
         )
     }

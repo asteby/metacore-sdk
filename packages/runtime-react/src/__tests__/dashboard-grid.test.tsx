@@ -164,6 +164,9 @@ describe('DashboardGrid render', () => {
         expect(mock.getAttribute('aria-hidden')).toBe('true')
         // Keyframes are injected once into the document head.
         expect(document.getElementById('mc-dashboard-empty-mockup-style')).toBeTruthy()
+        // No caption text — the animation carries the meaning (and avoids
+        // shipping un-localized copy from the package).
+        expect(screen.queryByText(/dashboard/i)).toBeNull()
     })
 
     it('survives an empty → populated transition (React #310 regression)', async () => {
