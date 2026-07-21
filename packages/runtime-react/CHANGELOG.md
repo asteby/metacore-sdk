@@ -1,5 +1,16 @@
 # @asteby/metacore-runtime-react
 
+## 27.1.1
+
+### Patch Changes
+
+- 33e0e3b: Avatares de referencia con esquina visible: `rounded-sm` (2px) a 24px se percibe
+  como círculo; pasa a `rounded-md` en la inicial (`InitialsAvatar`) y en el thumb
+  de imagen (`RelationThumbnail`), para que imagen e inicial lean como cuadrado
+  redondeado. `rounded='full'` queda para avatares de persona/marca.
+- Updated dependencies [33e0e3b]
+  - @asteby/metacore-ui@2.12.1
+
 ## 27.1.0
 
 ### Minor Changes
