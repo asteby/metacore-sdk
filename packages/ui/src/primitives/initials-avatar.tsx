@@ -67,7 +67,7 @@ export const InitialsAvatar: React.FC<InitialsAvatarProps> = ({
         // Neutral rides the theme tokens so it tracks light/dark on its own;
         // auto keeps white-on-500 which reads against every palette hue.
         isNeutral ? 'bg-muted text-muted-foreground' : 'text-white',
-        rounded === 'full' ? 'rounded-full' : 'rounded-sm',
+        rounded === 'full' ? 'rounded-full' : 'rounded-md',
         className
       )}
       style={{
