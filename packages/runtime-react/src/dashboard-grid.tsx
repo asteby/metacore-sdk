@@ -157,11 +157,18 @@ export function DashboardGrid({
                     // Full-bleed: the mockup fills the whole dashboard area, not a
                     // centered illustration. No caption — the animation speaks for
                     // itself (and dodges shipping un-localized copy).
-                    'min-h-[60vh] w-full rounded-xl border border-dashed border-border/60 p-4',
+                    //
+                    // DEFINITE height (clamp), not min-height: the mockup positions
+                    // its tiles with percentage heights, which only resolve against a
+                    // parent whose height is definite. A min-height alone leaves the
+                    // box auto-height and the tiles collapse into a strip — so we own
+                    // the height here instead of hoping the dashboard layout supplies
+                    // one.
+                    'h-[clamp(420px,60vh,720px)] w-full rounded-xl border border-dashed border-border/60 p-4',
                     className,
                 )}
             >
-                <DashboardEmptyMockup className="h-full min-h-[inherit]" />
+                <DashboardEmptyMockup className="h-full" />
             </div>
         )
     }

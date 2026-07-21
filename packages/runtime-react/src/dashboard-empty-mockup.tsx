@@ -216,6 +216,12 @@ const TILE_KINDS: Glyph[] = ['stat', 'chart', 'chart', 'list', 'stat', 'bar']
  * Full-bleed skeleton dashboard that reflows through four layouts on a loop.
  * Overlap-free by construction (see the invariant note above). Purely
  * decorative — always `aria-hidden`, no text.
+ *
+ * Contract: tiles are positioned with percentage heights, so the CONTAINER
+ * must have a DEFINITE height (e.g. `h-[…]`, or a flex child with `flex-1`).
+ * A parent with only `min-height` leaves the box auto-height and the tiles
+ * collapse into a strip. The dashboard empty state mounts it inside a
+ * definite-height box for exactly this reason.
  */
 export function DashboardEmptyMockup({ className }: { className?: string }) {
     useMockupStyles()
