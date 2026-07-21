@@ -1,6 +1,6 @@
 // Store
-export { useAuthStore, AUTH_STORAGE_KEYS } from './store'
-export type { AuthUser, AuthState } from './store'
+export { useAuthStore, AUTH_STORAGE_KEYS, getTypedAuthStore } from './store'
+export type { AuthUser, AuthState, BaseAuthUser, AuthStateOf } from './store'
 
 // Provider — thin wrapper around the store, kept for back-compat.
 // New code should consume `useAuthStore` directly.
