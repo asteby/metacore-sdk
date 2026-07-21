@@ -1,5 +1,16 @@
 # @asteby/metacore-runtime-react
 
+## 27.1.0
+
+### Minor Changes
+
+- 056e231: La celda de relación en tablas dinámicas queda PLANA: se elimina la cápsula
+  redondeada con tinte por label alrededor de [avatar + nombre + subtítulo]. Una
+  referencia es dato, no estado — la pastilla hacía que un listado de productos o
+  almacenes se lea como una pared de badges. Identifica al registro el thumb
+  cuadrado-redondeado (imagen del registro, o inicial neutra como fallback) junto
+  a texto plano. Los badges de enum/estado conservan su pastilla de color.
+
 ## 27.0.0
 
 ### Minor Changes
