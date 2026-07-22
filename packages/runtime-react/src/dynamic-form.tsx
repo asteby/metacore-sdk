@@ -28,12 +28,14 @@ import { DynamicLineItems } from './dynamic-line-items'
 import { DynamicSelectField } from './dynamic-select-field'
 import { DynamicDateField } from './dynamic-date-field'
 import { UploadField } from './upload-field'
+import { IconPickerField } from './icon-picker-field'
 
 export { buildZodSchema, resolveWidget }
 export { DynamicLineItems } from './dynamic-line-items'
 export { DynamicSelectField } from './dynamic-select-field'
 export { DynamicDateField } from './dynamic-date-field'
 export { UploadField } from './upload-field'
+export { IconPickerField } from './icon-picker-field'
 
 export interface DynamicFormProps {
     fields: ActionFieldDef[]
@@ -263,6 +265,12 @@ function FieldRenderer({
     // stores the returned file url/path as the field value.
     if (widget === 'upload') {
         return <UploadField field={field} value={value} onChange={onChange} />
+    }
+    // Icon picker → lucide glyph search grid, with an "Imagen" mode that
+    // delegates to the same UploadField as `upload`. Stores a plain string:
+    // lucide name or uploaded url/path.
+    if (widget === 'icon') {
+        return <IconPickerField field={field} value={value} onChange={onChange} />
     }
     // Ref-driven select: hook into useOptionsResolver so the canonical
     // /api/options/<ref>?field=id endpoint feeds the dropdown. This is

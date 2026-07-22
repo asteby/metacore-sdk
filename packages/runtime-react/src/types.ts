@@ -344,6 +344,7 @@ export type FieldWidget =
     | 'dynamic_select'
     | 'switch'
     | 'upload'
+    | 'icon'
 
 /**
  * Per-option visibility gate for a STATIC enum (`options[]`). The option is only

@@ -37,7 +37,7 @@ import {
 } from '@asteby/metacore-ui/primitives'
 import { Check, ChevronsUpDown, Loader2, Plus } from 'lucide-react'
 import { resolveColorCss } from '@asteby/metacore-ui/lib'
-import { DynamicIcon } from './dynamic-icon'
+import { DynamicIcon, isLucideIconName } from './dynamic-icon'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { getDependsOn, getFieldRef, resolveOptionsSource } from './dynamic-form-schema'
 import type { ActionFieldDef } from './types'
@@ -70,6 +70,15 @@ export function OptionThumb({
     const box = { width: size, height: size }
     if (!image) {
         return <InitialsAvatar name={name} size={size} rounded="sm" tone="neutral" />
+    }
+    // A lucide icon name stored where an image url/path is expected (the `icon`
+    // form widget's icon mode) → render the glyph instead of a broken <img>.
+    if (isLucideIconName(image)) {
+        return (
+            <span className="flex shrink-0 items-center justify-center rounded-sm bg-muted" style={box} aria-hidden>
+                <DynamicIcon name={image} className="size-4" />
+            </span>
+        )
     }
     return (
         <img
