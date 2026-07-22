@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-marketplace",
-  "version": "76.0.0",
+  "version": "77.0.0",
   "description": "Metacore marketplace SDK — Hub catalog + Ops install/upgrade client, React hooks, and headless UI primitives shared across host apps (Ops, link).",
   "license": "Apache-2.0",
   "repository": {
@@ -48,7 +48,7 @@
     "react": ">=18",
     "react-dom": ">=18",
     "@tanstack/react-query": ">=5",
-    "@asteby/metacore-app-providers": "^80.0.0"
+    "@asteby/metacore-app-providers": "^81.0.0"
   },
   "peerDependenciesMeta": {
     "@asteby/metacore-app-providers": {
