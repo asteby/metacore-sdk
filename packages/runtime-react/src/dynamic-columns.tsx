@@ -940,18 +940,47 @@ export function makeDefaultGetDynamicColumns(
                                     </div>
                                 )
                             const decimals = styleCfg(col, 'decimals') ?? 2
+                            // Per-row currency: `display_config.currency_field`
+                            // names a sibling column carrying the ISO code of
+                            // THIS row's amount (multi-currency tables: a Bs
+                            // tender must not render as the org's USD). Falls
+                            // back to the column/org currency; if the code is
+                            // not a valid ISO 4217 code, prefix it verbatim.
+                            const currencyField = styleCfg(col, 'currency_field')
+                            const rowCode =
+                                typeof currencyField === 'string' && currencyField
+                                    ? String(
+                                          getNestedValue(row.original, currencyField) ?? '',
+                                      ).trim()
+                                    : ''
+                            const activeCode = rowCode || resolveCurrency(col, currency)
+                            let formatted: string
+                            try {
+                                formatted = formatNumber(
+                                    num,
+                                    {
+                                        style: 'currency',
+                                        currency: activeCode,
+                                        minimumFractionDigits: decimals,
+                                        maximumFractionDigits: decimals,
+                                    },
+                                    currentLanguage,
+                                )
+                            } catch {
+                                // Non-ISO code (e.g. a custom tender label):
+                                // render "<code> 1,234.56" instead of crashing.
+                                formatted = `${activeCode} ${formatNumber(
+                                    num,
+                                    {
+                                        minimumFractionDigits: decimals,
+                                        maximumFractionDigits: decimals,
+                                    },
+                                    currentLanguage,
+                                )}`
+                            }
                             return (
                                 <span className="block text-right font-medium tabular-nums">
-                                    {formatNumber(
-                                        num,
-                                        {
-                                            style: 'currency',
-                                            currency: resolveCurrency(col, currency),
-                                            minimumFractionDigits: decimals,
-                                            maximumFractionDigits: decimals,
-                                        },
-                                        currentLanguage,
-                                    )}
+                                    {formatted}
                                 </span>
                             )
                         }
