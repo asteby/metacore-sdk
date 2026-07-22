@@ -205,6 +205,7 @@ export {
     defaultGetDynamicColumns,
     makeDefaultGetDynamicColumns,
     relationKeyFor,
+    resolveAvatarSrc,
     resolveRelationLabel,
     type DynamicColumnsHelpers,
 } from './dynamic-columns'

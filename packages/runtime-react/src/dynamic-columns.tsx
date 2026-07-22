@@ -466,6 +466,42 @@ export const resolveRelationImage = (col: ColumnDefinition, row: any): string =>
 }
 
 /**
+ * Resolves the image source for `avatar`/`search`/`creator`/`user` cells.
+ * Priority: sibling `.avatar`/`.photo` next to a nested key (`user.name` →
+ * `user.avatar`), then the cell's own value. Bare filenames (backends often
+ * store just `"2.png"`) are prefixed with `apiBaseUrl` + the column's declared
+ * basePath (`styleConfig.base_path` or `col.basePath`).
+ *
+ * Contract (applies to both branches, so hosts get one predictable rule):
+ *   1. absolute `http(s)://` URL → untouched
+ *   2. rooted `/path` → untouched; the host's `getImageUrl` prepends its origin
+ *   3. bare filename → `apiBaseUrl + basePath + filename`
+ * Previously the sibling branch returned bare filenames untouched (broken for
+ * any backend that stores just `"2.png"` next to a nested key) and the value
+ * branch injected basePath into already-rooted paths (junk URLs).
+ */
+export const resolveAvatarSrc = (
+    col: ColumnDefinition,
+    row: any,
+    value: any,
+    apiBaseUrl = '',
+): string | undefined => {
+    let raw: string | undefined
+    if (col.key.includes('.')) {
+        const parentPath = col.key.split('.').slice(0, -1).join('.')
+        const sibling =
+            getNestedValue(row, `${parentPath}.avatar`) ||
+            getNestedValue(row, `${parentPath}.photo`)
+        if (sibling) raw = String(sibling)
+    }
+    if (!raw && value !== undefined && value !== null && value !== '') raw = String(value)
+    if (!raw) return undefined
+    if (raw.startsWith('http') || raw.startsWith('/')) return raw
+    const basePath = styleCfg(col, 'base_path', 'basePath') ?? col.basePath ?? ''
+    return `${apiBaseUrl}${basePath}${raw}`
+}
+
+/**
  * Reads a secondary identifier the backend stamps on a resolved FK sibling — a
  * product's SKU, a user's email — projected as `subtitle`/`description` (the
  * relational twin of `image` via the column's `label_description`). Rendered
@@ -834,23 +870,7 @@ export function makeDefaultGetDynamicColumns(
                             const name = getNestedValue(row.original, namePath) || 'N/A'
                             const desc = getNestedValue(row.original, col.description || '')
 
-                            const basePath = styleCfg(col, 'base_path', 'basePath') ?? col.basePath ?? ''
-                            let avatarSrc: string | undefined
-                            if (col.key.includes('.')) {
-                                // Look for a sibling `.avatar` or `.photo` field.
-                                const parentPath = col.key.split('.').slice(0, -1).join('.')
-                                const sibling =
-                                    getNestedValue(row.original, `${parentPath}.avatar`) ||
-                                    getNestedValue(row.original, `${parentPath}.photo`)
-                                if (sibling) avatarSrc = String(sibling)
-                            }
-                            if (!avatarSrc && value) {
-                                if (String(value).startsWith('http')) {
-                                    avatarSrc = String(value)
-                                } else {
-                                    avatarSrc = `${apiBaseUrl}${basePath}${value}`
-                                }
-                            }
+                            const avatarSrc = resolveAvatarSrc(col, row.original, value, apiBaseUrl)
 
                             return (
                                 <AvatarCell
