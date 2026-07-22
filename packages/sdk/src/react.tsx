@@ -77,15 +77,40 @@ function writeCatalogCache(manifests: Manifest[], navigation: NavGroup[]): void 
   }
 }
 
+/** An installed addon whose served version changed after this window loaded it. */
+export interface AddonUpdate {
+  key: string;
+  /** Version this window is running (first seen after mount). */
+  from: string;
+  /** Version the host is now serving. */
+  to: string;
+}
+
 interface Ctx {
   client: MarketplaceClient;
   registry: Registry;
   manifests: Manifest[];
   navigation: NavGroup[];
   loading: boolean;
+  /**
+   * Addons updated since this window loaded them. The provider revalidates the
+   * catalog on tab focus and every 5 minutes; when a manifest's version differs
+   * from the one first seen, it lands here so the host can prompt a reload
+   * (federation containers are loaded once per page lifetime — a running window
+   * never applies a new bundle without reloading).
+   */
+  updatedAddons: AddonUpdate[];
 }
 
 const MetacoreCtx = createContext<Ctx | null>(null);
+
+function seedVersions(manifests: Manifest[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const m of manifests) {
+    if (m.key && m.version) map.set(m.key, m.version);
+  }
+  return map;
+}
 
 export interface MetacoreProviderProps {
   client: MarketplaceClient;
@@ -106,24 +131,68 @@ export function MetacoreProvider({ client, registry, children }: MetacoreProvide
   // runs and revalidates.
   const [loading, setLoading] = useState(!boot);
 
+  // Versions this window is actually RUNNING: seeded from the first manifest
+  // list that renders (cache or first fetch). Revalidations compare against
+  // this baseline — not the previous fetch — so an update stays flagged until
+  // the window reloads.
+  const runningVersions = useRef<Map<string, string> | null>(
+    boot ? seedVersions(boot.manifests) : null,
+  );
+  const [updatedAddons, setUpdatedAddons] = useState<AddonUpdate[]>([]);
+
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      const [m, n] = await Promise.all([client.manifests(), client.navigation()]);
-      if (cancelled) return;
-      setManifests(m);
-      setNavigation(n);
-      setLoading(false);
-      writeCatalogCache(m, n);
-    })();
+    const revalidate = async () => {
+      try {
+        const [m, n] = await Promise.all([client.manifests(), client.navigation()]);
+        if (cancelled) return;
+        setManifests(m);
+        setNavigation(n);
+        setLoading(false);
+        writeCatalogCache(m, n);
+        if (!runningVersions.current) {
+          runningVersions.current = seedVersions(m);
+          return;
+        }
+        const changed: AddonUpdate[] = [];
+        for (const mf of m) {
+          const from = runningVersions.current.get(mf.key);
+          if (from && mf.version && mf.version !== from) {
+            changed.push({ key: mf.key, from, to: mf.version });
+          }
+        }
+        setUpdatedAddons((prev) =>
+          changed.length === prev.length &&
+          changed.every((c, i) => prev[i]?.key === c.key && prev[i]?.to === c.to)
+            ? prev
+            : changed,
+        );
+      } catch {
+        // network blip — keep serving the current state; next tick retries
+      }
+    };
+    void revalidate();
+    const onFocus = () => {
+      if (typeof document === "undefined" || document.visibilityState === "visible") {
+        void revalidate();
+      }
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", onFocus);
+    }
+    const interval = setInterval(revalidate, 5 * 60 * 1000);
     return () => {
       cancelled = true;
+      clearInterval(interval);
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", onFocus);
+      }
     };
   }, [client]);
 
   const value = useMemo<Ctx>(
-    () => ({ client, registry, manifests, navigation, loading }),
-    [client, registry, manifests, navigation, loading],
+    () => ({ client, registry, manifests, navigation, loading, updatedAddons }),
+    [client, registry, manifests, navigation, loading, updatedAddons],
   );
 
   return <MetacoreCtx.Provider value={value}>{children}</MetacoreCtx.Provider>;
