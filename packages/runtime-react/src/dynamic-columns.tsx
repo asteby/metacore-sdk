@@ -664,6 +664,38 @@ const AvatarCell: React.FC<{
  * does not supply its own. Pass `{ getImageUrl, apiBaseUrl }` to wire avatar
  * URL resolution.
  */
+/**
+ * `image`-type cell body. A value that is a lucide icon name (PascalCase or
+ * kebab slug, e.g. "Banknote" / "credit-card") — the convention the `icon`
+ * form widget stores — renders the glyph instead of an <img> that would 404
+ * into an empty grey box. Exported for tests.
+ */
+export const ImageCell: React.FC<{
+    value: unknown
+    getImageUrl: (path: string) => string
+}> = ({ value, getImageUrl }) => {
+    if (!value) return <span className="text-muted-foreground">-</span>
+    if (isLucideIconName(value)) {
+        return (
+            <div className="h-10 w-10 flex items-center justify-center rounded bg-muted">
+                <DynamicIcon name={value} className="h-5 w-5" />
+            </div>
+        )
+    }
+    return (
+        <div className="h-10 w-10 relative rounded overflow-hidden bg-muted flex items-center justify-center">
+            <img
+                src={getImageUrl(String(value))}
+                alt="Thumbnail"
+                className="h-full w-full object-contain"
+                onError={(e) => {
+                    ;(e.currentTarget as HTMLImageElement).style.display = 'none'
+                }}
+            />
+        </div>
+    )
+}
+
 export function makeDefaultGetDynamicColumns(
     helpers: DynamicColumnsHelpers = {},
 ): GetDynamicColumns {
@@ -1155,29 +1187,7 @@ export function makeDefaultGetDynamicColumns(
                                 (Array.isArray(row.original.media)
                                     ? row.original.media.find((m: any) => m.type === 'image')?.url
                                     : null)
-                            if (!imageValue) return <span className="text-muted-foreground">-</span>
-                            // Lucide icon name, not an image path (e.g. an addon's
-                            // `icon` column seeded as "Banknote") — render the glyph;
-                            // an <img> here would 404 into an empty grey box.
-                            if (isLucideIconName(imageValue)) {
-                                return (
-                                    <div className="h-10 w-10 flex items-center justify-center rounded bg-muted">
-                                        <DynamicIcon name={imageValue} className="h-5 w-5" />
-                                    </div>
-                                )
-                            }
-                            return (
-                                <div className="h-10 w-10 relative rounded overflow-hidden bg-muted flex items-center justify-center">
-                                    <img
-                                        src={getImageUrl(String(imageValue))}
-                                        alt="Thumbnail"
-                                        className="h-full w-full object-contain"
-                                        onError={(e) => {
-                                            ;(e.currentTarget as HTMLImageElement).style.display = 'none'
-                                        }}
-                                    />
-                                </div>
-                            )
+                            return <ImageCell value={imageValue} getImageUrl={getImageUrl} />
                         }
 
                         default: {
