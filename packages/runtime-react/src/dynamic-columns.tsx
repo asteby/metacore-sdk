@@ -1143,24 +1143,30 @@ export function makeDefaultGetDynamicColumns(
                                     />
                                 )
                             }
-                            if (
+                            const text =
+                                value !== null && value !== undefined ? String(value) : '-'
+                            // Clamp de texto largo GENÉRICO: un `truncate` en un
+                            // span suelto no limita nada dentro de una celda de
+                            // tabla (la celda crece con el contenido). Cualquier
+                            // texto largo — biografías, notas, direcciones — se
+                            // acota a 350px con tooltip del valor completo. La
+                            // heurística por longitud cubre lo que la heurística
+                            // por nombre ('description') dejaba pasar.
+                            const isLongText =
+                                text.length > 60 ||
                                 col.key === 'description' ||
                                 col.key === 'features' ||
                                 col.key.includes('description')
-                            ) {
+                            if (isLongText) {
                                 return (
-                                    <div className="max-w-[350px]" title={String(value)}>
+                                    <div className="max-w-[350px]" title={text}>
                                         <span className="truncate font-medium block">
-                                            {value !== null && value !== undefined ? String(value) : '-'}
+                                            {text}
                                         </span>
                                     </div>
                                 )
                             }
-                            return (
-                                <span className="truncate font-medium">
-                                    {value !== null && value !== undefined ? String(value) : '-'}
-                                </span>
-                            )
+                            return <span className="truncate font-medium">{text}</span>
                         }
                     }
                 },

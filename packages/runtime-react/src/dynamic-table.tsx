@@ -1286,8 +1286,18 @@ export function DynamicTable({
                                     onClick={onRowClick ? () => onRowClick(row.original) : undefined}
                                 >
                                     {dataCells.map((cell: Cell<any, unknown>) => {
+                                        // El label humano vive en columnDef.meta.label (lo
+                                        // adjunta la fábrica de columnas); el header casi
+                                        // nunca es string (es un componente), así que caer a
+                                        // column.id mostraba keys crudas ('user.avatar',
+                                        // 'created_at') en las cards móviles.
+                                        const cellMeta = cell.column.columnDef.meta as
+                                            | { label?: string }
+                                            | undefined
                                         const header = cell.column.columnDef.header
-                                        const label = typeof header === 'string' ? header : cell.column.id
+                                        const label =
+                                            cellMeta?.label ??
+                                            (typeof header === 'string' ? header : cell.column.id)
                                         return (
                                             <div key={cell.id} className='flex items-start justify-between gap-3 text-sm'>
                                                 <span className='shrink-0 text-muted-foreground'>{label}</span>
