@@ -1301,7 +1301,11 @@ export function DynamicTable({
                                         return (
                                             <div key={cell.id} className='flex items-start justify-between gap-3 text-sm'>
                                                 <span className='shrink-0 text-muted-foreground'>{label}</span>
-                                                <span className='min-w-0 break-words text-right font-medium'>
+                                                {/* overflow-hidden + badges envueltos: un badge largo
+                                                    (whitespace-nowrap por defecto) no puede encoger y
+                                                    empuja el ancho de TODA la página en móvil. Dentro
+                                                    de la card se le permite multilínea y max-w-full. */}
+                                                <span className='min-w-0 overflow-hidden break-words text-right font-medium [&_[data-slot=badge]]:max-w-full [&_[data-slot=badge]]:whitespace-normal [&_[data-slot=badge]]:text-start'>
                                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                 </span>
                                             </div>
