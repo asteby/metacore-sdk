@@ -129,6 +129,32 @@ function writeTableDataCache(key: string, rows: any[], rowCount: number): void {
     }
 }
 
+// Chosen page size, persisted per table so a user's preferred density survives
+// reloads. localStorage ON PURPOSE (unlike the row-data cache above): a page
+// size is a UI preference, not org/user-scoped data, so outliving the tab is
+// desired. Keyed by model.
+const TBL_PAGE_SIZE_PREFIX = 'mc:tbl:pageSize:v1'
+
+function readStoredPageSize(model: string): number | null {
+    try {
+        const raw = localStorage.getItem(`${TBL_PAGE_SIZE_PREFIX}|${model}`)
+        if (!raw) return null
+        const n = parseInt(raw, 10)
+        return Number.isFinite(n) && n > 0 ? n : null
+    } catch {
+        return null
+    }
+}
+
+function writeStoredPageSize(model: string, size: number | null): void {
+    try {
+        if (size === null) localStorage.removeItem(`${TBL_PAGE_SIZE_PREFIX}|${model}`)
+        else localStorage.setItem(`${TBL_PAGE_SIZE_PREFIX}|${model}`, String(size))
+    } catch {
+        // quota / private mode — persistence is a nicety, never fatal
+    }
+}
+
 export interface DynamicTableProps {
     model: string
     endpoint?: string
@@ -166,11 +192,24 @@ export interface DynamicTableProps {
      */
     currency?: string
     /**
-     * Opt into infinite scroll: instead of the classic pager, rows accumulate as
-     * the user scrolls (a sentinel at the bottom fetches + appends the next
-     * page, deduped by id, respecting the active filters/search). Changing any
-     * filter/sort/search resets to page 1. Default false — existing hosts keep
-     * the classic pagination untouched.
+     * Pagination mode.
+     *   - 'pages' (default): classic pager footer (DataTablePagination — rows
+     *     per page selector, "página X de Y", first/prev/next/last). Each page
+     *     change fetches and REPLACES the visible rows (page/per_page against
+     *     the same server params the infinite mode uses; pageCount derives
+     *     from meta.total). The chosen page size persists per table in
+     *     localStorage (keyed by model). Changing any filter/sort/search
+     *     resets to page 1.
+     *   - 'infinite': rows accumulate as the user scrolls (a sentinel at the
+     *     bottom fetches + appends the next page, deduped by id, respecting
+     *     the active filters/search). Changing any filter/sort/search resets
+     *     to page 1.
+     */
+    pagination?: 'pages' | 'infinite'
+    /**
+     * @deprecated Use `pagination="infinite"`. Kept for back-compat: when the
+     * new `pagination` prop is not provided, `infiniteScroll` still selects the
+     * mode exactly as before.
      */
     infiniteScroll?: boolean
 }
@@ -188,8 +227,12 @@ export function DynamicTable({
     getDynamicColumns = defaultGetDynamicColumns,
     timeZone,
     currency,
-    infiniteScroll = false,
+    pagination: paginationMode,
+    infiniteScroll: infiniteScrollProp = false,
 }: DynamicTableProps) {
+    // The explicit `pagination` prop wins; the legacy `infiniteScroll` boolean
+    // still selects the mode when `pagination` is absent (back-compat).
+    const infiniteScroll = paginationMode ? paginationMode === 'infinite' : infiniteScrollProp
     const { t, i18n } = useTranslation()
     const api = useApi()
     const currentBranch = useCurrentBranch()
@@ -247,7 +290,17 @@ export function DynamicTable({
         return initial
     })
     const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
-    const [pagination, setPagination] = useState<PaginationState>({ pageIndex: 0, pageSize: 10 })
+    // The user's persisted page-size preference for this table (pages mode).
+    // Read once at mount; a URL `per_page` still wins over it (deep-links stay
+    // exact), and it wins over the model's server default.
+    const storedPageSizeRef = useRef<number | null | undefined>(undefined)
+    if (storedPageSizeRef.current === undefined) {
+        storedPageSizeRef.current = readStoredPageSize(model)
+    }
+    const [pagination, setPagination] = useState<PaginationState>({
+        pageIndex: 0,
+        pageSize: storedPageSizeRef.current ?? 10,
+    })
     const [globalFilter, setGlobalFilter] = useState('')
     const [rowCount, setRowCount] = useState(bootData?.rowCount ?? 0)
 
@@ -507,7 +560,7 @@ export function DynamicTable({
             if (cached) {
                 setMetadata(cached)
                 defaultPerPage.current = cached.defaultPerPage || 10
-                if (!urlHadPerPage.current) setPagination((prev: PaginationState) => ({ ...prev, pageSize: cached.defaultPerPage || 10 }))
+                if (!urlHadPerPage.current && storedPageSizeRef.current == null) setPagination((prev: PaginationState) => ({ ...prev, pageSize: cached.defaultPerPage || 10 }))
                 setLoading(false)
             } else {
                 setLoading(true)
@@ -521,7 +574,7 @@ export function DynamicTable({
                     setMetadata(fresh)
                     cacheMetadata(model, fresh)
                     defaultPerPage.current = fresh.defaultPerPage || 10
-                    if (!urlHadPerPage.current) setPagination((prev: PaginationState) => ({ ...prev, pageSize: fresh.defaultPerPage || 10 }))
+                    if (!urlHadPerPage.current && storedPageSizeRef.current == null) setPagination((prev: PaginationState) => ({ ...prev, pageSize: fresh.defaultPerPage || 10 }))
                 }
             } catch (error) {
                 if (!cached) console.error('Error al cargar la configuración de la tabla', error)
@@ -737,6 +790,35 @@ export function DynamicTable({
         () => JSON.stringify(buildFilterParams()),
         [buildFilterParams],
     )
+
+    // Pages mode: any filter/search/sort change snaps back to page 1 (same
+    // contract as the infinite reset above — a filtered set has its own page
+    // space). Ref-compared so paging itself never triggers it, and armed only
+    // AFTER the URL adoption has settled so a deep-linked `?page=3&sortBy=...`
+    // is not immediately reset by its own sort arriving.
+    const pagesSigArmed = useRef(false)
+    const pagesPrevSig = useRef<string | null>(null)
+    useEffect(() => {
+        if (infiniteScroll) return
+        if (enableUrlSync && !urlSynced) return
+        if (!pagesSigArmed.current) {
+            pagesSigArmed.current = true
+            pagesPrevSig.current = filterSignature
+            return
+        }
+        if (pagesPrevSig.current === filterSignature) return
+        pagesPrevSig.current = filterSignature
+        setPagination((p: PaginationState) => (p.pageIndex === 0 ? p : { ...p, pageIndex: 0 }))
+    }, [infiniteScroll, enableUrlSync, urlSynced, filterSignature])
+
+    // Persist the chosen page size per table (localStorage, keyed by model).
+    // The server default is stored as an explicit removal so a later backend
+    // change of `defaultPerPage` still propagates to users who never deviated.
+    useEffect(() => {
+        if (!metadata) return
+        const chosen = pagination.pageSize
+        writeStoredPageSize(model, chosen === defaultPerPage.current ? null : chosen)
+    }, [metadata, model, pagination.pageSize])
 
     const loadNextPage = useCallback(() => {
         if (loadingMore || loadingData || infExhausted) return
