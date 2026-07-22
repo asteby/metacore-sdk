@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 27.3.3
+
+### Patch Changes
+
+- 31ba021: DynamicTable: clamp genérico de texto largo en celdas (max-width 350px + tooltip con el valor completo) y las cards móviles muestran el label traducido de la columna en vez de la key cruda.
+
 ## 27.3.2
 
 ### Patch Changes
