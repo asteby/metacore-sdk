@@ -158,6 +158,12 @@ function writeStoredPageSize(model: string, size: number | null): void {
 export interface DynamicTableProps {
     model: string
     endpoint?: string
+    /**
+     * Endpoint base for WRITES (row delete, bulk delete) when it differs from
+     * the list endpoint — e.g. listing from a role-scoped `/dynamic/<model>/me`
+     * while deleting against `/dynamic/<model>/<id>`. Falls back to `endpoint`.
+     */
+    mutationEndpoint?: string
     enableUrlSync?: boolean
     hiddenColumns?: string[]
     onAction?: (action: string, row: any) => void
@@ -217,6 +223,7 @@ export interface DynamicTableProps {
 export function DynamicTable({
     model,
     endpoint,
+    mutationEndpoint,
     enableUrlSync = true,
     hiddenColumns = [],
     onAction,
@@ -902,6 +909,7 @@ export function DynamicTable({
     const { handleInternalAction, dialogs: rowActionDialogs } = useDynamicRowActions({
         model,
         endpoint,
+        mutationEndpoint,
         metadata,
         onAction,
         onRefresh: handleRefresh,
@@ -917,7 +925,8 @@ export function DynamicTable({
         for (let i = 0; i < selectedRows.length; i++) {
             const row = selectedRows[i]
             try {
-                const deleteEndpoint = endpoint ? `${endpoint}/${row.original.id}` : `/data/${model}/${row.original.id}`
+                const writeBase = mutationEndpoint ?? endpoint
+                const deleteEndpoint = writeBase ? `${writeBase}/${row.original.id}` : `/data/${model}/${row.original.id}`
                 const res = await api.delete(deleteEndpoint)
                 if (res.data.success) successCount++; else errorCount++
             } catch (e) { console.error('Error al eliminar', e); errorCount++ }
