@@ -225,6 +225,11 @@ export function resolveWidget(field: ActionFieldDef): string {
         // File upload: POSTs to the host upload endpoint and stores the returned
         // file url/path as the field value. Rendered by `UploadField`.
         case 'upload': return 'upload'
+        // Icon picker (lucide catalog search or image upload). The kernel's
+        // DeriveFormFields projects a manifest `widget:"icon"` onto the served
+        // field TYPE, so the type switch must map it too — otherwise the field
+        // degrades to a raw text input.
+        case 'icon': return 'icon'
         // S2: media-bearing types resolve to the upload widget so an `image`
         // (logo/photo) or generic `file`/`media` field gets a real file picker
         // instead of a free-text input.
