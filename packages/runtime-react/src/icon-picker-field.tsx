@@ -13,7 +13,14 @@
 // means image, anything else means icon.
 import { useMemo, useState } from 'react'
 import { icons } from 'lucide-react'
-import { Button, Input } from '@asteby/metacore-ui/primitives'
+import { ChevronsUpDown } from 'lucide-react'
+import {
+    Button,
+    Input,
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@asteby/metacore-ui/primitives'
 import { DynamicIcon, resolveLucideIconName } from './dynamic-icon'
 import { UploadField } from './upload-field'
 import type { ActionFieldDef } from './types'
@@ -24,8 +31,9 @@ export interface IconPickerFieldProps {
     onChange: (v: any) => void
 }
 
-/** Max glyphs shown in the grid at once — keeps the DOM light while searching. */
-const MAX_RESULTS = 48
+/** Icons rendered per "page" — grows as the user scrolls to the bottom. Keeps
+ * the DOM light: the lucide catalog is ~1500 glyphs, so we never mount them all. */
+const PAGE = 60
 
 const ALL_ICON_NAMES = Object.keys(icons)
 
@@ -38,21 +46,27 @@ export function IconPickerField({ field, value, onChange }: IconPickerFieldProps
     const [mode, setMode] = useState<'icon' | 'image'>(() =>
         looksLikeImageValue(value) ? 'image' : 'icon',
     )
+    const [open, setOpen] = useState(false)
     const [query, setQuery] = useState('')
+    const [limit, setLimit] = useState(PAGE)
 
     const selected = mode === 'icon' ? resolveLucideIconName(value) : null
 
-    const results = useMemo(() => {
+    // Full match list (names only) — filtered by query, not yet capped.
+    const matches = useMemo(() => {
         const q = query.trim().toLowerCase().replace(/[\s_-]/g, '')
-        const names = q
+        return q
             ? ALL_ICON_NAMES.filter((n) => n.toLowerCase().includes(q))
             : ALL_ICON_NAMES
-        // Keep the current selection visible even when it doesn't match the query.
-        if (selected && !names.slice(0, MAX_RESULTS).includes(selected)) {
-            return [selected, ...names.filter((n) => n !== selected)].slice(0, MAX_RESULTS)
-        }
-        return names.slice(0, MAX_RESULTS)
-    }, [query, selected])
+    }, [query])
+
+    // Visible slice — grows on scroll (see onScroll below).
+    const visible = matches.slice(0, limit)
+
+    const pick = (name: string) => {
+        onChange(name)
+        setOpen(false)
+    }
 
     return (
         <div className="flex flex-col gap-2">
@@ -81,53 +95,94 @@ export function IconPickerField({ field, value, onChange }: IconPickerFieldProps
             {mode === 'image' ? (
                 <UploadField field={field} value={value} onChange={onChange} />
             ) : (
-                <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-3">
-                        <Input
+                <Popover
+                    open={open}
+                    onOpenChange={(o: boolean) => {
+                        setOpen(o)
+                        if (o) {
+                            // Fresh open: reset the search + paging.
+                            setQuery('')
+                            setLimit(PAGE)
+                        }
+                    }}
+                >
+                    <PopoverTrigger asChild>
+                        <Button
                             id={field.key}
-                            value={query}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setQuery(e.target.value)}
-                            placeholder="Buscar ícono..."
-                            aria-label="Buscar ícono"
-                        />
-                        {selected && (
-                            <div
-                                data-testid="icon-picker-preview"
-                                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border bg-muted"
-                                title={selected}
-                            >
-                                <DynamicIcon name={selected} className="h-6 w-6" />
-                            </div>
-                        )}
-                    </div>
-                    <div
-                        className="grid max-h-56 grid-cols-8 gap-1 overflow-y-auto rounded-md border p-2"
-                        role="listbox"
-                        aria-label="Íconos"
-                    >
-                        {results.map((name) => (
-                            <button
-                                key={name}
-                                type="button"
-                                role="option"
-                                aria-selected={name === selected}
-                                aria-label={name}
-                                title={name}
-                                onClick={() => onChange(name)}
-                                className={`flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent ${
-                                    name === selected ? 'bg-accent ring-1 ring-primary' : ''
-                                }`}
-                            >
-                                <DynamicIcon name={name} className="h-4 w-4" />
-                            </button>
-                        ))}
-                        {results.length === 0 && (
-                            <span className="col-span-8 py-4 text-center text-sm text-muted-foreground">
-                                Sin resultados
+                            type="button"
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={open}
+                            className="w-full justify-between font-normal"
+                        >
+                            <span className="flex min-w-0 items-center gap-2">
+                                {selected ? (
+                                    <>
+                                        <DynamicIcon name={selected} className="h-4 w-4 shrink-0" />
+                                        <span className="truncate">{selected}</span>
+                                    </>
+                                ) : (
+                                    <span className="text-muted-foreground">Selecciona un ícono…</span>
+                                )}
                             </span>
-                        )}
-                    </div>
-                </div>
+                            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                    </PopoverTrigger>
+                    <PopoverContent
+                        className="w-[--radix-popover-trigger-width] p-0"
+                        align="start"
+                    >
+                        <div className="p-2">
+                            <Input
+                                autoFocus
+                                value={query}
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                    setQuery(e.target.value)
+                                    setLimit(PAGE)
+                                }}
+                                placeholder="Buscar ícono..."
+                                aria-label="Buscar ícono"
+                            />
+                        </div>
+                        <div
+                            className="max-h-64 overflow-y-auto"
+                            role="listbox"
+                            aria-label="Íconos"
+                            onScroll={(e: React.UIEvent<HTMLDivElement>) => {
+                                const el = e.currentTarget
+                                // Near the bottom → reveal the next page.
+                                if (
+                                    el.scrollTop + el.clientHeight >= el.scrollHeight - 24 &&
+                                    limit < matches.length
+                                ) {
+                                    setLimit((n) => n + PAGE)
+                                }
+                            }}
+                        >
+                            {visible.map((name) => (
+                                <button
+                                    key={name}
+                                    type="button"
+                                    role="option"
+                                    aria-selected={name === selected}
+                                    aria-label={name}
+                                    onClick={() => pick(name)}
+                                    className={`flex w-full items-center gap-2.5 px-3 py-1.5 text-left text-sm hover:bg-accent ${
+                                        name === selected ? 'bg-accent' : ''
+                                    }`}
+                                >
+                                    <DynamicIcon name={name} className="h-4 w-4 shrink-0" />
+                                    <span className="truncate">{name}</span>
+                                </button>
+                            ))}
+                            {visible.length === 0 && (
+                                <div className="py-6 text-center text-sm text-muted-foreground">
+                                    Sin resultados
+                                </div>
+                            )}
+                        </div>
+                    </PopoverContent>
+                </Popover>
             )}
         </div>
     )

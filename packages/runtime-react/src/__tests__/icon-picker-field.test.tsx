@@ -20,26 +20,31 @@ afterEach(cleanup)
 const field: ActionFieldDef = { key: 'icon', label: 'Ícono', type: 'text', widget: 'icon' }
 
 describe('IconPickerField', () => {
-    it('busca "credit", muestra CreditCard y al click emite onChange con el nombre', () => {
+    // The icon mode is a combobox: the list lives in a popover that opens on
+    // click. Open it, then search, then pick.
+    const openPopover = () =>
+        fireEvent.click(screen.getByRole('combobox'))
+
+    it('abre el popover, busca "credit" y al click emite onChange con el nombre', () => {
         const onChange = vi.fn()
         render(<IconPickerField field={field} value="" onChange={onChange} />)
+        openPopover()
         fireEvent.change(screen.getByLabelText('Buscar ícono'), { target: { value: 'credit' } })
         const option = screen.getByRole('option', { name: 'CreditCard' })
         fireEvent.click(option)
         expect(onChange).toHaveBeenCalledWith('CreditCard')
     })
 
-    it('resalta el seleccionado y muestra el preview grande', () => {
+    it('el trigger muestra el ícono y nombre seleccionado', () => {
         render(<IconPickerField field={field} value="CreditCard" onChange={() => {}} />)
-        expect(screen.getByTestId('icon-picker-preview')).toBeTruthy()
-        expect(
-            screen.getByRole('option', { name: 'CreditCard' }).getAttribute('aria-selected'),
-        ).toBe('true')
+        // The combobox trigger shows the selected name even before opening.
+        expect(screen.getByRole('combobox').textContent).toContain('CreditCard')
     })
 
-    it('limita el grid a 48 resultados', () => {
+    it('pagina: arranca con a lo sumo 60 opciones visibles', () => {
         render(<IconPickerField field={field} value="" onChange={() => {}} />)
-        expect(screen.getAllByRole('option').length).toBeLessThanOrEqual(48)
+        openPopover()
+        expect(screen.getAllByRole('option').length).toBeLessThanOrEqual(60)
     })
 
     it('modo imagen delega a UploadField con los mismos props', () => {
