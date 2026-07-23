@@ -45,6 +45,13 @@ export interface UseDynamicRowActionsParams {
      * caller lists from (e.g. `/data/<model>/me`) so writes stay org-scoped.
      */
     endpoint?: string
+    /**
+     * Endpoint base for WRITES when it differs from the list endpoint. Some
+     * hosts list from a role-scoped path (`/dynamic/<model>/me`) that does NOT
+     * accept `DELETE <base>/<id>` — pass the mutable base here (e.g.
+     * `/dynamic/<model>`). Falls back to `endpoint`.
+     */
+    mutationEndpoint?: string
     /** Raw model metadata — used to resolve link/custom action definitions. */
     metadata: TableMetadata | null
     /**
@@ -74,10 +81,12 @@ export interface DynamicRowActions {
 export function useDynamicRowActions({
     model,
     endpoint,
+    mutationEndpoint,
     metadata,
     onAction,
     onRefresh,
 }: UseDynamicRowActionsParams): DynamicRowActions {
+    const writeBase = mutationEndpoint ?? endpoint
     const { t } = useTranslation()
     const api = useApi()
     const navigate = useNavigate()
@@ -137,7 +146,7 @@ export function useDynamicRowActions({
         if (!rowToDelete) return
         setIsDeleting(true)
         try {
-            const deleteEndpoint = endpoint ? `${endpoint}/${rowToDelete.id}` : `/data/${model}/${rowToDelete.id}`
+            const deleteEndpoint = writeBase ? `${writeBase}/${rowToDelete.id}` : `/data/${model}/${rowToDelete.id}`
             const res = await api.delete(deleteEndpoint)
             // CRUD estándar: no usar res.data.message (el endpoint dinámico
             // devuelve texto en inglés que se filtraría al toast). String localizado.
