@@ -129,10 +129,16 @@ export function IconPickerField({ field, value, onChange }: IconPickerFieldProps
                         </Button>
                     </PopoverTrigger>
                     <PopoverContent
-                        className="w-[--radix-popover-trigger-width] p-0"
+                        // Cap the panel to the space Radix measured between the
+                        // trigger and the viewport edge so it can NEVER overflow
+                        // off-screen (the old fixed max-h clipped inside tall
+                        // modals). Prefer opening downward; flip only if needed.
+                        className="flex max-h-[min(24rem,var(--radix-popover-content-available-height))] w-[--radix-popover-trigger-width] flex-col overflow-hidden p-0"
                         align="start"
+                        side="bottom"
+                        sideOffset={4}
                     >
-                        <div className="p-2">
+                        <div className="shrink-0 p-2">
                             <Input
                                 autoFocus
                                 value={query}
@@ -145,7 +151,7 @@ export function IconPickerField({ field, value, onChange }: IconPickerFieldProps
                             />
                         </div>
                         <div
-                            className="max-h-64 overflow-y-auto"
+                            className="min-h-0 flex-1 overflow-y-auto"
                             role="listbox"
                             aria-label="Íconos"
                             onScroll={(e: React.UIEvent<HTMLDivElement>) => {
