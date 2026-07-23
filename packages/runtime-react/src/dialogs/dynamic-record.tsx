@@ -57,6 +57,7 @@ import { FieldCell } from '../field-grid'
 import { isNilUuid, normalizeNilUuid } from '../nil-uuid'
 import { normalizeRefFieldsForSubmit } from './normalize-submit'
 import { DynamicIcon, isLucideIconName } from '../dynamic-icon'
+import { IconPickerField } from '../icon-picker-field'
 import { humanizeToken } from '../dynamic-columns-helpers'
 import { formatDateCell } from '../dynamic-columns'
 import {
@@ -1533,6 +1534,23 @@ export function EditField({ field, value, onChange, record }: {
                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)}
                 placeholder={field.placeholder}
                 rows={4}
+            />
+        )
+    }
+
+    // Icon picker: the kernel serves `type: 'icon'` (or an explicit
+    // `widget: 'icon'`) when the manifest column declares `widget: "icon"`.
+    // This modal renderer is SEPARATE from dynamic-form's FieldRenderer, so it
+    // needs its own branch — without it the field fell through to a raw text
+    // input. Same lucide-search-or-upload picker used elsewhere.
+    if (field.type === 'icon' || field.widget === 'icon') {
+        // IconPickerField types `field` as ActionFieldDef; the modal's FieldDef
+        // is structurally compatible for the props it reads (key/label/etc).
+        return (
+            <IconPickerField
+                field={field as unknown as ActionFieldDef}
+                value={value}
+                onChange={onChange}
             />
         )
     }
