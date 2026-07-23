@@ -1,5 +1,14 @@
 # @asteby/metacore-runtime-react
 
+## 28.3.4
+
+### Patch Changes
+
+- 85ba41b: El popover del selector de íconos ya no se corta dentro de modales altos: su
+  alto se limita al espacio disponible que mide Radix (min 24rem / available
+  height) con layout flex (buscador fijo + lista que scrollea), abriendo hacia
+  abajo.
+
 ## 28.3.3
 
 ### Patch Changes
