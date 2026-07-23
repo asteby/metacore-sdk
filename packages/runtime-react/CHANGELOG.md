@@ -1,5 +1,13 @@
 # @asteby/metacore-runtime-react
 
+## 28.3.1
+
+### Patch Changes
+
+- f1ab155: El campo con tipo "icon" (así lo sirve el kernel cuando el manifest declara
+  widget:"icon") ahora resuelve al selector de íconos en vez de degradar a un
+  input de texto.
+
 ## 28.3.0
 
 ### Minor Changes
