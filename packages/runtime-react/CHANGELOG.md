@@ -1,5 +1,14 @@
 # @asteby/metacore-runtime-react
 
+## 28.3.3
+
+### Patch Changes
+
+- 99c476a: El selector de íconos es ahora un combobox: un botón que muestra el ícono y
+  nombre elegido y abre un popover al click (no la grilla siempre abierta), con
+  buscador, cada opción con su glifo y su nombre, y carga incremental al hacer
+  scroll (el catálogo lucide son ~1500 íconos).
+
 ## 28.3.2
 
 ### Patch Changes
