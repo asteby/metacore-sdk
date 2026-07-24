@@ -164,7 +164,11 @@ export function DashboardGrid({
                     // box auto-height and the tiles collapse into a strip — so we own
                     // the height here instead of hoping the dashboard layout supplies
                     // one.
-                    'h-[clamp(420px,60vh,720px)] w-full rounded-xl border border-dashed border-border/60 p-4',
+                    // No dashed border / padding wrapper: the skeleton tiles ARE
+                    // cards (same anatomy as the real widgets), so the mockup
+                    // should float exactly like the loaded dashboard, not sit
+                    // inside a boxed placeholder. Keep only the definite height.
+                    'h-[clamp(420px,60vh,720px)] w-full',
                     className,
                 )}
             >

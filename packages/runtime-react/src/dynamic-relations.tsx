@@ -11,6 +11,7 @@
 //     { owner_model: "Customer" }) into the panel's `filters` so the child list
 //     is scoped by the FK AND every scope column.
 import { useMemo } from 'react'
+import { cn } from '@asteby/metacore-ui/lib'
 import { DynamicRelation, type DynamicRelationStrings } from './dynamic-relation'
 import type { RelationMeta } from './types'
 
@@ -117,7 +118,10 @@ export function DynamicRelations({
     }
 
     return (
-        <div className={className} data-dynamic-relations="">
+        // `space-y-6` separates stacked relation panels (e.g. "Líneas del
+        // pedido" and "Facturas" in the view modal) — without it consecutive
+        // panels sat flush against each other with no breathing room.
+        <div className={cn('space-y-6', className)} data-dynamic-relations="">
             {relations.map((rel, idx) => {
                 const filters = buildRelationFilters(rel, parentId)
                 const panelStrings: Partial<DynamicRelationStrings> = {
