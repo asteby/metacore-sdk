@@ -24,7 +24,7 @@ export interface UploadFieldProps {
 }
 
 /** Default host upload endpoint. Overridable per-field via `searchEndpoint`. */
-const DEFAULT_UPLOAD_ENDPOINT = '/uploads'
+const DEFAULT_UPLOAD_ENDPOINT = '/upload'
 
 /**
  * Pulls the stored file url/path out of an upload response envelope, tolerating
@@ -79,7 +79,14 @@ export function UploadField({ field, value, onChange }: UploadFieldProps) {
             }
             const form = new FormData()
             form.append('file', file)
-            if (storagePath) form.append('storage_path', storagePath)
+            // The destination subfolder, declared per field via the manifest
+            // (`storage_path`). Sent under BOTH keys: `folder` is what the ops
+            // host reads (`c.FormValue("folder")`), `storage_path` is the
+            // canonical SDK name kept for hosts that read it.
+            if (storagePath) {
+                form.append('folder', storagePath)
+                form.append('storage_path', storagePath)
+            }
             setUploading(true)
             try {
                 const res = await api.post(endpoint, form, {
