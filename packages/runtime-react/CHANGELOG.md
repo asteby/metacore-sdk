@@ -1,5 +1,43 @@
 # @asteby/metacore-runtime-react
 
+## 28.4.0
+
+### Minor Changes
+
+- f1f66cb: feat: `visible_when` conditional field visibility in both form renderers
+
+  Add support for the kernel's new `visible_when` primitive: a create/edit form
+  field is rendered — and validated — only while a sibling field's current value
+  matches the declared predicate (`{ field, equals | in }`). A hidden field never
+  gates submit (its required-check is dropped along with it).
+
+  Wired into BOTH form renderers off a shared helper `evaluateVisibleWhen`
+  (exported alongside `getVisibleWhen`):
+
+  - `DynamicForm` (`dynamic-form.tsx`) — drives the zod schema, the balance gate
+    and the render off a `visibleFields` list filtered on the live values.
+  - `DynamicRecordDialog` (`dialogs/dynamic-record.tsx`) — `filterVisibleFields`
+    gains an optional `formValues` arg applying the predicate; the render and the
+    required-gate loop both use it.
+
+  `ActionFieldDef` and `ColumnDefinition` gain `visible_when` / `visibleWhen`
+  (snake + camel aliases). Fields without `visible_when` are always visible
+  (retro-compatible). Requires a kernel/ops bump that serves the field.
+
+### Patch Changes
+
+- 9bc8bd1: runtime-react: scope audit-column hiding in `DynamicRelation` to the view-modal line-subtable context
+
+  PR #659 started dropping audit/system columns (`created_by`, timestamps,
+  `organization_id`) and `visibility: "table"` columns in every one-to-many
+  `DynamicRelation` panel — including standalone detail pages
+  (`/m/<model>/<id>`, `m/invoices/<id>`), where those columns are useful. Add an
+  explicit `lineSubtable` prop (default `false`) that gates
+  `isColumnVisibleInLineSubtable`; outside that context the panel keeps the
+  previous behaviour and only hides the FK, scope and `hidden` columns. The view
+  modal (`DynamicRecordDialog`, action-modal dispatcher) opts in via
+  `<DynamicRelations lineSubtable>`.
+
 ## 28.3.7
 
 ### Patch Changes
