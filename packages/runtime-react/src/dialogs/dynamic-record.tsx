@@ -52,7 +52,8 @@ import { toastServerError, extractFieldErrors, localizeFieldIssue } from '../ser
 import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-field'
 import { DynamicRelations } from '../dynamic-relations'
 import { useOptionsResolver, type ResolvedOption } from '../use-options-resolver'
-import { getFieldRef } from '../dynamic-form-schema'
+import { getFieldRef, getVisibleWhen, evaluateVisibleWhen } from '../dynamic-form-schema'
+import type { VisibleWhen } from '../types'
 import { FieldCell } from '../field-grid'
 import { isNilUuid, normalizeNilUuid } from '../nil-uuid'
 import { normalizeRefFieldsForSubmit } from './normalize-submit'
@@ -146,6 +147,17 @@ export interface FieldDef {
     itemFields?: ItemField[]
     /** snake_case alias served by the kernel for `itemFields`. */
     item_fields?: ItemField[]
+    /**
+     * Conditional visibility: render — and required-check — this field only
+     * while a sibling field's current value matches the predicate. Mirrors the
+     * kernel v3 `visible_when` (projected onto the served modal FieldDef).
+     * Tolerates the camelCase alias. Absent = always visible; a hidden field is
+     * dropped from the required-gate so it never blocks submit. Evaluated by
+     * `evaluateVisibleWhen` against the live form values.
+     */
+    visible_when?: VisibleWhen
+    /** camelCase alias for `visible_when`. */
+    visibleWhen?: VisibleWhen
 }
 
 // Permissive shape: the wire payload may omit some fields (e.g. `title` is
@@ -458,13 +470,22 @@ export function isMoneyField(field: FieldDef, value: any): boolean {
 // given mode. `hidden` fields never render. A `readonly` (server/system-
 // generated) field is EXCLUDED on create — the user can't set a value the
 // server will overwrite — but stays visible on edit/view (rendered disabled).
+//
+// `formValues`, when provided, additionally applies each field's `visible_when`
+// predicate against the live form values (conditional visibility): a field is
+// dropped while the referenced sibling's value does not match. Driving both the
+// render and the required-gate off this same list means a hidden field never
+// blocks submit. Omitting `formValues` keeps the legacy (always-visible)
+// behaviour for callers that only gate on mode.
 export function filterVisibleFields(
     fields: FieldDef[] | undefined,
     mode: 'view' | 'edit' | 'create',
+    formValues?: Record<string, any>,
 ): FieldDef[] {
     return (fields ?? []).filter(f => {
         if (f.hidden) return false
         if (mode === 'create' && f.readonly) return false
+        if (formValues && !evaluateVisibleWhen(getVisibleWhen(f), formValues)) return false
         return true
     })
 }
@@ -711,9 +732,12 @@ export function DynamicRecordDialog({
 
         if (isEditable) {
             // Collect ALL missing required fields (not just the first) and mark
-            // each inline instead of a single toast.
+            // each inline instead of a single toast. Only CURRENTLY-VISIBLE
+            // fields are gated: a field hidden by its `visible_when` predicate
+            // must not block submit even when it is declared required (matching
+            // the render, which drops it via the same filter).
             const missing: Record<string, string> = {}
-            for (const field of modalMeta.fields ?? []) {
+            for (const field of filterVisibleFields(modalMeta.fields, mode, formValues)) {
                 if (field.required && !formValues[field.key] && formValues[field.key] !== 0 && formValues[field.key] !== false) {
                     missing[field.key] = localizeFieldIssue({ code: 'required' }, field.label, t)
                 }
@@ -803,7 +827,7 @@ export function DynamicRecordDialog({
 
     const title = modalMeta ? config.getTitle(modalMeta, t) : ''
 
-    const visibleFields = filterVisibleFields(modalMeta?.fields, mode)
+    const visibleFields = filterVisibleFields(modalMeta?.fields, mode, formValues)
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>

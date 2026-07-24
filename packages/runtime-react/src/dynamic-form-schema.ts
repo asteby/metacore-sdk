@@ -2,7 +2,7 @@
 // callers (and unit tests) can use the zod schema without pulling in React or
 // metacore-ui primitives.
 import { z, type ZodTypeAny } from 'zod'
-import type { ActionFieldDef, FieldValidation, FieldOptionsConfig, OptionDef } from './types'
+import type { ActionFieldDef, FieldValidation, FieldOptionsConfig, OptionDef, VisibleWhen } from './types'
 import { resolveValidatorToken } from './use-org-config-bridge'
 
 /**
@@ -333,6 +333,52 @@ export function applyOptionWhen(
         }
         return true
     })
+}
+
+/**
+ * Reads a field's `visible_when` predicate, tolerating the camelCase alias
+ * (`visibleWhen`) an app may author and the snake_case (`visible_when`) the
+ * kernel serves. Returns `undefined` when the field declares neither.
+ */
+export function getVisibleWhen(
+    field: { visible_when?: VisibleWhen; visibleWhen?: VisibleWhen } | null | undefined,
+): VisibleWhen | undefined {
+    if (!field) return undefined
+    const vw = field.visible_when ?? field.visibleWhen
+    return vw && typeof vw === 'object' && typeof vw.field === 'string' ? vw : undefined
+}
+
+/**
+ * Evaluates a `visible_when` predicate against the current flat form values.
+ * Pure — no React, no side effects.
+ *
+ * - No predicate → `true` (the field is always visible; retrocompat).
+ * - With a predicate: read the value of the sibling `cond.field` from
+ *   `formValues` (as string, null/undefined → ''). Visible when it is a member
+ *   of `cond.in` (any-of, wins when present) OR equals `cond.equals`. A
+ *   predicate with an empty `field` is a no-op (visible). A predicate that
+ *   names a field but declares neither `in` nor `equals` hides nothing
+ *   (visible) — nothing to gate on.
+ *
+ * `cond` may be the raw block off either the snake_case or camelCase slot; use
+ * `getVisibleWhen` to normalize first.
+ */
+export function evaluateVisibleWhen(
+    cond: VisibleWhen | null | undefined,
+    formValues: Record<string, any> | null | undefined,
+): boolean {
+    if (!cond || typeof cond.field !== 'string' || cond.field.trim() === '') return true
+    const raw = formValues ? formValues[cond.field.trim()] : undefined
+    const current = raw == null ? '' : String(raw)
+    const inList = cond.in
+    if (Array.isArray(inList) && inList.length > 0) {
+        return inList.some((v) => String(v) === current)
+    }
+    if (typeof cond.equals === 'string') {
+        return cond.equals === current
+    }
+    // Named a field but declared no comparison → nothing to gate on.
+    return true
 }
 
 /**

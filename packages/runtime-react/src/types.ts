@@ -295,6 +295,17 @@ export interface ColumnDefinition {
     itemFields?: ColumnItemField[]
     /** snake_case alias served by the kernel for `itemFields`. */
     item_fields?: ColumnItemField[]
+    /**
+     * Conditional visibility in the create/edit modal: render this field only
+     * when a sibling field's current value matches the predicate. Mirrors the
+     * kernel v3 `Column.visible_when` (projected onto the served ColumnDef).
+     * Tolerates the camelCase alias. Absent = always visible; a hidden field is
+     * skipped by the required-gate so it never blocks submit. See
+     * `evaluateVisibleWhen`.
+     */
+    visible_when?: VisibleWhen
+    /** camelCase alias for `visible_when`. */
+    visibleWhen?: VisibleWhen
 }
 
 /**
@@ -315,6 +326,21 @@ export interface ActionCondition {
     field: string
     operator: 'eq' | 'neq' | 'in' | 'not_in'
     value: string | string[]
+}
+
+/**
+ * Conditional-visibility predicate for a create/edit form field. Mirrors the
+ * kernel v3 `visible_when` block (json `visible_when`): the owning field is
+ * rendered only when the SIBLING field named by `field` holds a value that
+ * matches — either equal to `equals` (exact string) OR a member of `in`
+ * (any-of). When both are set `in` wins. Absent = the field is always visible
+ * (retrocompat). Evaluated by `evaluateVisibleWhen` against the live form
+ * values; a hidden field never gates submit (its required-check is skipped).
+ */
+export interface VisibleWhen {
+    field: string
+    equals?: string
+    in?: string[]
 }
 
 // Mirrors `ValidationRule` from packages/sdk/src/generated/manifest.ts. Kept
@@ -493,6 +519,16 @@ export interface ActionFieldDef {
     storagePath?: string
     /** snake_case alias served by the kernel manifest for `storagePath`. */
     storage_path?: string
+    /**
+     * Conditional visibility: render this field only when a sibling field's
+     * current value matches the predicate. Mirrors the kernel v3
+     * `ActionField.visible_when`. Tolerates the camelCase alias. Absent = always
+     * visible; a hidden field is skipped by the required-gate so it never blocks
+     * submit. See `evaluateVisibleWhen`.
+     */
+    visible_when?: VisibleWhen
+    /** camelCase alias for `visible_when`. */
+    visibleWhen?: VisibleWhen
 }
 
 /**
