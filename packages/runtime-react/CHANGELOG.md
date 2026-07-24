@@ -1,5 +1,14 @@
 # @asteby/metacore-runtime-react
 
+## 28.4.1
+
+### Patch Changes
+
+- 0075ae0: Pulido: (1) el mockup animado del tablero vacío ya no lleva borde punteado ni
+  padding — las skeleton cards flotan como las reales; (2) las secciones de
+  relaciones apiladas en el modal de vista (ej. "Líneas del pedido" y "Facturas")
+  tienen separación (space-y-6) en vez de ir pegadas.
+
 ## 28.4.0
 
 ### Minor Changes
