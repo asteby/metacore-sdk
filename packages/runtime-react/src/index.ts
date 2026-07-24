@@ -282,6 +282,9 @@ export {
 } from './model-extension-registry'
 export {
     isColumnVisibleInTable,
+    isColumnVisibleInModal,
+    isColumnVisibleInLineSubtable,
+    AUDIT_SUBTABLE_COLUMN_KEYS,
     getSearchableColumnKeys,
 } from './column-visibility'
 export {
