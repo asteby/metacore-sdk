@@ -1,5 +1,15 @@
 # @asteby/metacore-runtime-react
 
+## 28.3.5
+
+### Patch Changes
+
+- ca3b27f: Subida de imágenes arreglada: el UploadField posteaba a `/uploads` (el host
+  sirve `/upload`) → 404. Además el subfolder declarado por campo
+  (`storage_path` en el manifest) ahora se manda también como `folder`, que es
+  el parámetro que lee el host — antes toda subida caía en la carpeta por
+  defecto.
+
 ## 28.3.4
 
 ### Patch Changes
