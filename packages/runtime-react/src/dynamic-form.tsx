@@ -22,6 +22,8 @@ import {
     evaluateBalance,
     applyOptionWhen,
     getDependsOn,
+    getVisibleWhen,
+    evaluateVisibleWhen,
 } from './dynamic-form-schema'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { DynamicLineItems } from './dynamic-line-items'
@@ -70,19 +72,30 @@ export function DynamicForm({
         [fields],
     )
 
-    const schema = useMemo(() => buildZodSchema(editableFields), [editableFields])
+    // Conditional visibility: a field carrying `visible_when` is rendered — and
+    // validated — only while the referenced sibling field's current value
+    // matches the predicate. Driving BOTH the schema and the render off the same
+    // filtered list means a hidden field never blocks submit (its required-gate
+    // is dropped with it), matching the primitive's contract. Fields with no
+    // `visible_when` are always kept (retrocompat).
+    const visibleFields = useMemo(
+        () => editableFields.filter((f) => evaluateVisibleWhen(getVisibleWhen(f), values)),
+        [editableFields, values],
+    )
+
+    const schema = useMemo(() => buildZodSchema(visibleFields), [visibleFields])
 
     // Line-items fields carrying a balance rule gate submit: an unbalanced entry
     // (Σdebit ≠ Σcredit, or all-zero when require_nonzero) can't be saved. This
     // is fully declarative — `evaluateBalance` returns undefined for fields with
     // no rule, so non-balanced forms are unaffected.
     const balanceBlocked = useMemo(() => {
-        for (const f of editableFields) {
+        for (const f of visibleFields) {
             const state = evaluateBalance(f, values[f.key])
             if (state && !state.balanced) return true
         }
         return false
-    }, [editableFields, values])
+    }, [visibleFields, values])
 
     useEffect(() => {
         const defaults: Record<string, any> = {}
@@ -125,7 +138,7 @@ export function DynamicForm({
     return (
         <form onSubmit={handleSubmit} className="grid gap-4">
             <div className="grid gap-4 sm:grid-cols-2">
-                {editableFields.map((field) => (
+                {visibleFields.map((field) => (
                     <FieldRow
                         key={field.key}
                         field={field}

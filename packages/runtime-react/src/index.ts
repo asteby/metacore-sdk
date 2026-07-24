@@ -307,6 +307,8 @@ export {
     resolveDependsValue,
     getOptionsConfig,
     resolveOptionsSource,
+    getVisibleWhen,
+    evaluateVisibleWhen,
 } from './dynamic-form-schema'
 export {
     ActivityValueRenderer,
