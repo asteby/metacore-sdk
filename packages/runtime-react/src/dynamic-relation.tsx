@@ -46,6 +46,7 @@ import { DynamicForm } from './dynamic-form'
 import { useImageUrl } from './image-url-context'
 import { useTimeZone, useCurrency } from './org-runtime-context'
 import { makeDefaultGetDynamicColumns } from './dynamic-columns'
+import { isColumnVisibleInLineSubtable } from './column-visibility'
 import { useOptionsResolver } from './use-options-resolver'
 import type { ApiResponse, TableMetadata } from './types'
 import {
@@ -265,7 +266,12 @@ function OneToManyRelation({
         // Hide the FK and every scope column — they're fixed for this parent and
         // would just render the same value on every row.
         const hidden = new Set([foreignKey, ...Object.keys(filters || {}), ...hiddenColumns])
-        return metadata.columns.filter(c => !hidden.has(c.key) && !c.hidden)
+        // isColumnVisibleInLineSubtable additionally drops `hidden`/table-scoped
+        // columns AND the audit/system noise (created_by, timestamps, org_id)
+        // that's redundant under a parent record — see column-visibility.ts.
+        return metadata.columns.filter(
+            c => !hidden.has(c.key) && isColumnVisibleInLineSubtable(c),
+        )
     }, [metadata, foreignKey, filtersKey, hiddenColumns])
 
     // Reuse the EXACT column factory the main `<DynamicTable>` uses so each cell

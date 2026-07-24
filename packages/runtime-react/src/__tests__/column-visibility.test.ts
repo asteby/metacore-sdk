@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest'
 
 import {
     isColumnVisibleInTable,
+    isColumnVisibleInModal,
+    isColumnVisibleInLineSubtable,
     getSearchableColumnKeys,
 } from '../column-visibility'
 import type { ColumnDefinition, TableMetadata } from '../types'
@@ -54,6 +56,64 @@ describe('isColumnVisibleInTable', () => {
 
     it('hides columns with an unknown visibility value (fail-closed)', () => {
         expect(isColumnVisibleInTable(baseCol({ visibility: 'detail' as any }))).toBe(false)
+    })
+})
+
+describe('isColumnVisibleInModal', () => {
+    it('keeps columns with no visibility flag (legacy zero-value)', () => {
+        expect(isColumnVisibleInModal(baseCol())).toBe(true)
+    })
+
+    it('keeps columns with visibility="all" or "modal"', () => {
+        expect(isColumnVisibleInModal(baseCol({ visibility: 'all' }))).toBe(true)
+        expect(isColumnVisibleInModal(baseCol({ visibility: 'modal' }))).toBe(true)
+    })
+
+    it('hides columns scoped to the table or the API payload', () => {
+        expect(isColumnVisibleInModal(baseCol({ visibility: 'table' }))).toBe(false)
+        expect(isColumnVisibleInModal(baseCol({ visibility: 'list' }))).toBe(false)
+    })
+
+    it('hides columns with the legacy hidden boolean even if visibility="all"', () => {
+        expect(isColumnVisibleInModal(baseCol({ hidden: true, visibility: 'all' }))).toBe(false)
+    })
+})
+
+describe('isColumnVisibleInLineSubtable', () => {
+    it('keeps a plain column with no visibility flag', () => {
+        expect(isColumnVisibleInLineSubtable(baseCol({ key: 'quantity' }))).toBe(true)
+    })
+
+    it('hides audit/system columns by default', () => {
+        for (const key of [
+            'created_by',
+            'updated_by',
+            'created_at',
+            'updated_at',
+            'deleted_at',
+            'organization_id',
+        ]) {
+            expect(isColumnVisibleInLineSubtable(baseCol({ key }))).toBe(false)
+        }
+    })
+
+    it('lets a manifest opt an audit column back in via explicit visibility', () => {
+        expect(
+            isColumnVisibleInLineSubtable(baseCol({ key: 'created_by', visibility: 'all' })),
+        ).toBe(true)
+        expect(
+            isColumnVisibleInLineSubtable(baseCol({ key: 'created_by', visibility: 'modal' })),
+        ).toBe(true)
+    })
+
+    it('hides a redundant column declared visibility="table" (table-only)', () => {
+        expect(
+            isColumnVisibleInLineSubtable(baseCol({ key: 'status', visibility: 'table' })),
+        ).toBe(false)
+    })
+
+    it('still respects the legacy hidden boolean', () => {
+        expect(isColumnVisibleInLineSubtable(baseCol({ key: 'quantity', hidden: true }))).toBe(false)
     })
 })
 

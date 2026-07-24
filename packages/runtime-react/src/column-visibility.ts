@@ -25,6 +25,56 @@ export function isColumnVisibleInTable(col: ColumnDefinition): boolean {
 }
 
 /**
+ * Whether a column should render in a MODAL context — the create/edit/view
+ * dialog. Mirror image of {@link isColumnVisibleInTable}: a column scoped to
+ * `'table'` (list-only) or `'list'` (API-only) is hidden here, while empty /
+ * `'all'` / `'modal'` keep it visible. Preserves zero-value behaviour for
+ * metadata emitted by older kernels that never set `visibility`.
+ */
+export function isColumnVisibleInModal(col: ColumnDefinition): boolean {
+    if (col.hidden) return false
+    const v = col.visibility
+    if (!v) return true
+    return v === 'all' || v === 'modal'
+}
+
+/**
+ * Audit / system columns that are pure noise inside a child line list rendered
+ * under a parent record (line items, one_to_many panels in the view modal):
+ * they are either constant for the parent (`organization_id`) or already
+ * obvious from the parent record (`created_by`, timestamps). Hidden by default
+ * in that context — see {@link isColumnVisibleInLineSubtable}.
+ */
+export const AUDIT_SUBTABLE_COLUMN_KEYS: readonly string[] = [
+    'created_by',
+    'updated_by',
+    'created_at',
+    'updated_at',
+    'deleted_at',
+    'organization_id',
+]
+
+/**
+ * Column visibility decision for a sub-table of lines/relations rendered inside
+ * the view modal of a parent record. Two rules on top of the modal criterion:
+ *
+ *   1. Respect `visibility`: a column scoped to `'table'`/`'list'` never shows
+ *      here (reuses {@link isColumnVisibleInModal}), so a manifest hides a
+ *      redundant column from the sub-table with `visibility: "table"`.
+ *   2. Audit columns ({@link AUDIT_SUBTABLE_COLUMN_KEYS}) are hidden BY DEFAULT
+ *      — unless the manifest explicitly opts them back in by declaring a
+ *      `visibility` (`'all'`/`'modal'`) on that column.
+ *
+ * Only applies to the embedded child-list context; the main `/m/<model>` table
+ * uses {@link isColumnVisibleInTable} and is unaffected.
+ */
+export function isColumnVisibleInLineSubtable(col: ColumnDefinition): boolean {
+    if (!isColumnVisibleInModal(col)) return false
+    if (!col.visibility && AUDIT_SUBTABLE_COLUMN_KEYS.includes(col.key)) return false
+    return true
+}
+
+/**
  * Returns the keys of columns that opt into the model's full-text search,
  * or `null` when no column declares `searchable` at all.
  *
