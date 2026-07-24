@@ -48,7 +48,7 @@ import { useTimeZone, useCurrency } from './org-runtime-context'
 import { makeDefaultGetDynamicColumns } from './dynamic-columns'
 import { isColumnVisibleInLineSubtable } from './column-visibility'
 import { useOptionsResolver } from './use-options-resolver'
-import type { ApiResponse, TableMetadata } from './types'
+import type { ApiResponse, ColumnDefinition, TableMetadata } from './types'
 import {
     buildCreatePayload,
     buildPivotAttachPayload,
@@ -120,6 +120,18 @@ interface CommonProps {
     filters?: Record<string, string>
     /** Hidden columns; el FK siempre se oculta automáticamente. */
     hiddenColumns?: string[]
+    /**
+     * Contexto de sub-tabla de líneas dentro del MODAL de vista de un registro
+     * padre. Cuando es true se aplican las reglas de {@link isColumnVisibleInLineSubtable}
+     * — se ocultan por defecto las columnas de auditoría/sistema (created_by,
+     * timestamps, organization_id) y las scopeadas a `visibility: "table"`, que
+     * son ruido redundante bajo el registro padre.
+     *
+     * Default false: en una página de detalle autónoma (`/m/<model>/<id>`) el
+     * panel de relación conserva el comportamiento previo (solo oculta FK, scope
+     * y columnas `hidden`), donde esas columnas SÍ son útiles.
+     */
+    lineSubtable?: boolean
     /** Permisos visibles. Default true. */
     canCreate?: boolean
     canDelete?: boolean
@@ -191,6 +203,7 @@ function OneToManyRelation({
     filters,
     endpoint,
     hiddenColumns = [],
+    lineSubtable = false,
     canCreate = true,
     canDelete = true,
     canEdit = true,
@@ -266,13 +279,17 @@ function OneToManyRelation({
         // Hide the FK and every scope column — they're fixed for this parent and
         // would just render the same value on every row.
         const hidden = new Set([foreignKey, ...Object.keys(filters || {}), ...hiddenColumns])
-        // isColumnVisibleInLineSubtable additionally drops `hidden`/table-scoped
-        // columns AND the audit/system noise (created_by, timestamps, org_id)
-        // that's redundant under a parent record — see column-visibility.ts.
-        return metadata.columns.filter(
-            c => !hidden.has(c.key) && isColumnVisibleInLineSubtable(c),
-        )
-    }, [metadata, foreignKey, filtersKey, hiddenColumns])
+        // In the view-modal line-subtable context, isColumnVisibleInLineSubtable
+        // additionally drops `hidden`/table-scoped columns AND the audit/system
+        // noise (created_by, timestamps, org_id) that's redundant under a parent
+        // record — see column-visibility.ts. Outside that context (standalone
+        // detail page) we keep the previous behaviour and only drop `hidden`
+        // columns, so those columns still show where they're useful.
+        const keep = lineSubtable
+            ? (c: ColumnDefinition) => !hidden.has(c.key) && isColumnVisibleInLineSubtable(c)
+            : (c: ColumnDefinition) => !hidden.has(c.key) && !c.hidden
+        return metadata.columns.filter(keep)
+    }, [metadata, foreignKey, filtersKey, hiddenColumns, lineSubtable])
 
     // Reuse the EXACT column factory the main `<DynamicTable>` uses so each cell
     // renders identically — money in the org currency right-aligned, FK chips

@@ -881,6 +881,7 @@ export function DynamicRecordDialog({
                                     <DynamicRelations
                                         record={record}
                                         relations={relations}
+                                        lineSubtable
                                         canCreate={mode === 'edit'}
                                         canEdit={mode === 'edit'}
                                         canDelete={mode === 'edit'}

@@ -40,6 +40,14 @@ export interface DynamicRelationsProps {
     canEdit?: boolean
     /** Translatable strings forwarded to each DynamicRelation. */
     strings?: Partial<DynamicRelationStrings>
+    /**
+     * True cuando estos paneles se renderizan como sub-tablas de líneas dentro
+     * del MODAL de vista de un registro. Propaga `lineSubtable` a cada
+     * `<DynamicRelation>` para ocultar por defecto las columnas de auditoría/
+     * sistema redundantes bajo el padre. Default false — una página de detalle
+     * autónoma conserva todas las columnas.
+     */
+    lineSubtable?: boolean
     /** Bubble up when any panel's data changes (create/delete/attach/detach). */
     onChange?: (relation: RelationMeta) => void
 }
@@ -96,6 +104,7 @@ export function DynamicRelations({
     canDelete = true,
     canEdit = true,
     strings,
+    lineSubtable = false,
     onChange,
 }: DynamicRelationsProps) {
     const parentId = useMemo(
@@ -135,6 +144,7 @@ export function DynamicRelations({
                             parentId={parentId}
                             filters={filters}
                             className={panelClassName}
+                            lineSubtable={lineSubtable}
                             canCreate={canCreate}
                             canDelete={canDelete}
                             readonly={relReadonly}
@@ -152,6 +162,7 @@ export function DynamicRelations({
                         parentId={parentId}
                         filters={filters}
                         className={panelClassName}
+                        lineSubtable={lineSubtable}
                         canCreate={canCreate}
                         canDelete={canDelete}
                         canEdit={canEdit}
