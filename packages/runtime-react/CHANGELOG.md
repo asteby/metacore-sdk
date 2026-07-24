@@ -1,5 +1,14 @@
 # @asteby/metacore-runtime-react
 
+## 28.3.7
+
+### Patch Changes
+
+- ba40a57: Las columnas de auditoría resueltas como relación (created_by servido como
+  `created_by.avatar`) ahora también se ocultan en las sub-tablas del modal: el
+  filtro matchea la clave base y sus proyecciones `<key>.<subcampo>`, no solo el
+  match exacto.
+
 ## 28.3.6
 
 ### Patch Changes
