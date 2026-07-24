@@ -68,9 +68,22 @@ export const AUDIT_SUBTABLE_COLUMN_KEYS: readonly string[] = [
  * Only applies to the embedded child-list context; the main `/m/<model>` table
  * uses {@link isColumnVisibleInTable} and is unaffected.
  */
+/**
+ * True when a column key is (or belongs to) an audit column. Matches the plain
+ * key AND its resolved-relation projections: a `created_by` user relation is
+ * served as `created_by.avatar` / `created_by.name` (avatar+name+email cell),
+ * so an exact-match check missed it and the column still showed. We match the
+ * base key or any `<key>.<subfield>` projection.
+ */
+function isAuditColumnKey(key: string): boolean {
+    return AUDIT_SUBTABLE_COLUMN_KEYS.some(
+        (k) => key === k || key.startsWith(k + '.'),
+    )
+}
+
 export function isColumnVisibleInLineSubtable(col: ColumnDefinition): boolean {
     if (!isColumnVisibleInModal(col)) return false
-    if (!col.visibility && AUDIT_SUBTABLE_COLUMN_KEYS.includes(col.key)) return false
+    if (!col.visibility && isAuditColumnKey(col.key)) return false
     return true
 }
 
