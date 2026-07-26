@@ -54,6 +54,8 @@ import { DynamicRelations } from '../dynamic-relations'
 import { useOptionsResolver, type ResolvedOption } from '../use-options-resolver'
 import { getFieldRef, getVisibleWhen, evaluateVisibleWhen } from '../dynamic-form-schema'
 import type { VisibleWhen } from '../types'
+import { groupFieldsBySection, type FormLayout } from '../form-layout'
+import { FieldSection, WizardProgress } from '../form-layout-ui'
 import { FieldCell } from '../field-grid'
 import { isNilUuid, normalizeNilUuid } from '../nil-uuid'
 import { normalizeRefFieldsForSubmit } from './normalize-submit'
@@ -158,6 +160,12 @@ export interface FieldDef {
     visible_when?: VisibleWhen
     /** camelCase alias for `visible_when`. */
     visibleWhen?: VisibleWhen
+    /**
+     * Form-layout membership: the key of the `form_layout` section this field
+     * belongs to (kernel PR #230). Absent → the default group. See
+     * `groupFieldsBySection`.
+     */
+    section?: string
 }
 
 // Permissive shape: the wire payload may omit some fields (e.g. `title` is
@@ -175,6 +183,15 @@ interface ModalMetadata {
     createTitle?: string
     editTitle?: string
     fields?: FieldDef[]
+    /**
+     * Declarative form layout (kernel PR #230): groups the fields into named
+     * sections rendered stacked (`mode:"sections"`) or as a wizard
+     * (`mode:"steps"`). Absent → the legacy flat two-column grid. Tolerates the
+     * camelCase alias an app might author.
+     */
+    form_layout?: FormLayout
+    /** camelCase alias for `form_layout`. */
+    formLayout?: FormLayout
     /**
      * Backend-localized CRUD success messages (modal metadata). Preferred over
      * the raw response message which is not localized.
@@ -549,6 +566,8 @@ export function DynamicRecordDialog({
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
     const [deleting, setDeleting] = useState(false)
+    // Wizard step cursor (form_layout mode:"steps" only).
+    const [stepIndex, setStepIndex] = useState(0)
 
     const isCreate = mode === 'create'
     const isView = mode === 'view'
@@ -560,8 +579,10 @@ export function DynamicRecordDialog({
         if (!open) return
         if (!isCreate && !recordId) return
 
-        // Fresh open → drop any validation errors from a prior submit.
+        // Fresh open → drop any validation errors from a prior submit and reset
+        // the wizard to its first step.
         setFieldErrors({})
+        setStepIndex(0)
 
         let cancelled = false
 
@@ -859,6 +880,65 @@ export function DynamicRecordDialog({
 
     const visibleFields = filterVisibleFields(modalMeta?.fields, mode, formValues)
 
+    // Declarative form layout: group the (already visibility-filtered) fields by
+    // their section. Empty sections drop out for free. Steps mode only drives a
+    // wizard in editable modes — view mode always stacks the sections.
+    const formLayout = modalMeta?.form_layout ?? modalMeta?.formLayout
+    const groups = groupFieldsBySection(visibleFields, formLayout)
+    const isSteps = isEditable && formLayout?.mode === 'steps' && groups.length > 1
+    const clampedStep = Math.min(stepIndex, Math.max(groups.length - 1, 0))
+    const isLastStep = clampedStep === groups.length - 1
+
+    // Renders a list of fields into the shared two-column grid (each FieldCell
+    // gives min-w-0 so long values can't blow the columns past the dialog).
+    const renderFields = (groupFields: FieldDef[]) =>
+        groupFields.map(field => {
+            const isFullWidth =
+                field.type === 'textarea' ||
+                field.widget === 'textarea' ||
+                field.widget === 'richtext'
+            return (
+                <FieldCell key={field.key} fullWidth={isFullWidth}>
+                    <FieldRow
+                        field={field}
+                        record={record}
+                        value={formValues[field.key] ?? ''}
+                        mode={mode}
+                        error={fieldErrors[field.key]}
+                        onChange={val => {
+                            setFormValues((prev: Record<string, any>) => ({ ...prev, [field.key]: val }))
+                            setFieldErrors(prev => {
+                                if (!prev[field.key]) return prev
+                                const next = { ...prev }
+                                delete next[field.key]
+                                return next
+                            })
+                        }}
+                    />
+                </FieldCell>
+            )
+        })
+
+    // Wizard "Siguiente": gate only the CURRENT step's required (visible) fields,
+    // then advance. Mirrors handleSubmit's required check but scoped to the step.
+    const goNextStep = () => {
+        const step = groups[clampedStep]
+        const missing: Record<string, string> = {}
+        for (const field of step?.fields ?? []) {
+            if (field.required && !formValues[field.key] && formValues[field.key] !== 0 && formValues[field.key] !== false) {
+                missing[field.key] = localizeFieldIssue({ code: 'required' }, field.label, t)
+            }
+        }
+        if (Object.keys(missing).length) {
+            setFieldErrors(missing)
+            toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }))
+            return
+        }
+        setFieldErrors({})
+        setStepIndex(Math.min(clampedStep + 1, groups.length - 1))
+    }
+    const goBackStep = () => setStepIndex(Math.max(clampedStep - 1, 0))
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
@@ -875,54 +955,42 @@ export function DynamicRecordDialog({
                         <ImageUrlContext.Provider value={getImageUrl}>
                         <TimeZoneContext.Provider value={timeZone}>
                         <CurrencyContext.Provider value={currency}>
-                            {/* The grid IS the form element (the footer submit
-                                button targets it by id). FieldCell gives each
+                            {/* The form element groups its fields by the declared
+                                form_layout (sections stacked, or the current
+                                wizard step). Without a layout this is a single
+                                default group rendered with no chrome — the legacy
+                                two-column grid, unchanged. FieldCell gives each
                                 cell `min-w-0` so a long select/input value can't
                                 blow the two columns past the dialog width. */}
                             <form
                                 id="dynamic-record-form"
                                 onSubmit={handleSubmit}
-                                className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2"
+                                className="grid gap-y-4"
                             >
-                                {visibleFields.map(field => {
-                                    const isFullWidth =
-                                        field.type === 'textarea' ||
-                                        field.widget === 'textarea' ||
-                                        field.widget === 'richtext'
-                                    return (
-                                        <FieldCell key={field.key} fullWidth={isFullWidth}>
-                                            <FieldRow
-                                                field={field}
-                                                record={record}
-                                                value={formValues[field.key] ?? ''}
-                                                mode={mode}
-                                                error={fieldErrors[field.key]}
-                                                onChange={val => {
-                                                    setFormValues((prev: Record<string, any>) => ({ ...prev, [field.key]: val }))
-                                                    // Clear this field's error as soon as the user edits it.
-                                                    setFieldErrors(prev => {
-                                                        if (!prev[field.key]) return prev
-                                                        const next = { ...prev }
-                                                        delete next[field.key]
-                                                        return next
-                                                    })
-                                                }}
-                                            />
-                                        </FieldCell>
-                                    )
-                                })}
+                                {isSteps && (
+                                    <WizardProgress groups={groups} stepIndex={clampedStep} />
+                                )}
+                                {(isSteps ? [groups[clampedStep]] : groups).map(group => (
+                                    <FieldSection key={group.key} group={group}>
+                                        <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+                                            {renderFields(group.fields)}
+                                        </div>
+                                    </FieldSection>
+                                ))}
 
                                 {record?.external_url && (
-                                    <div className="sm:col-span-2 min-w-0">
-                                        <a
-                                            href={record.external_url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline mt-1"
-                                        >
-                                            <ExternalLink className="h-3.5 w-3.5" />
-                                            Ver en {record.external_provider ?? 'proveedor externo'}
-                                        </a>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2">
+                                        <div className="sm:col-span-2 min-w-0">
+                                            <a
+                                                href={record.external_url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline mt-1"
+                                            >
+                                                <ExternalLink className="h-3.5 w-3.5" />
+                                                Ver en {record.external_provider ?? 'proveedor externo'}
+                                            </a>
+                                        </div>
                                     </div>
                                 )}
                             </form>
@@ -963,9 +1031,17 @@ export function DynamicRecordDialog({
                         </Button>
                     ) : <span />}
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving || deleting}>
-                            {config.cancelLabel}
-                        </Button>
+                        {/* Wizard "Anterior" replaces Cancel from the second step
+                            on; the first step still shows Cancel. */}
+                        {isSteps && clampedStep > 0 ? (
+                            <Button variant="outline" onClick={goBackStep} disabled={saving || deleting}>
+                                Anterior
+                            </Button>
+                        ) : (
+                            <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving || deleting}>
+                                {config.cancelLabel}
+                            </Button>
+                        )}
                         {isView && onDelete && (
                             <Button
                                 variant="destructive"
@@ -981,7 +1057,15 @@ export function DynamicRecordDialog({
                                 Editar
                             </Button>
                         )}
-                        {isEditable && (
+                        {/* Non-final wizard step → "Siguiente" validates the step
+                            and advances instead of submitting. The last step (and
+                            every non-wizard form) keeps the real submit button. */}
+                        {isEditable && isSteps && !isLastStep && (
+                            <Button type="button" onClick={goNextStep} disabled={saving || loading}>
+                                Siguiente
+                            </Button>
+                        )}
+                        {isEditable && (!isSteps || isLastStep) && (
                             <Button
                                 type="submit"
                                 form="dynamic-record-form"
