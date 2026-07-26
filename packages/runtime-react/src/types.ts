@@ -306,6 +306,12 @@ export interface ColumnDefinition {
     visible_when?: VisibleWhen
     /** camelCase alias for `visible_when`. */
     visibleWhen?: VisibleWhen
+    /**
+     * Form-layout membership: the key of the `form_layout` section this column's
+     * modal field belongs to (kernel PR #230). Absent → the default group. See
+     * `groupFieldsBySection`.
+     */
+    section?: string
 }
 
 /**
@@ -529,6 +535,12 @@ export interface ActionFieldDef {
     visible_when?: VisibleWhen
     /** camelCase alias for `visible_when`. */
     visibleWhen?: VisibleWhen
+    /**
+     * Form-layout membership: the key of the `form_layout` section this field
+     * belongs to (kernel PR #230). Absent → the field lands in the default
+     * group. See `groupFieldsBySection`.
+     */
+    section?: string
 }
 
 /**

@@ -2,6 +2,8 @@
 // pattern + ActionFieldDef renderer so callers can reuse the form layout
 // outside the full record-edit modal.
 import { useEffect, useMemo, useState } from 'react'
+import { groupFieldsBySection, type FormLayout } from './form-layout'
+import { FieldSection, WizardProgress } from './form-layout-ui'
 import {
     Input,
     Textarea,
@@ -47,6 +49,14 @@ export interface DynamicFormProps {
     submitLabel?: string
     cancelLabel?: string
     disabled?: boolean
+    /**
+     * Declarative form layout served on the model metadata (kernel PR #230).
+     * When present the visible fields are grouped by their `section` respecting
+     * `sections` order: `mode:"sections"` stacks (optionally collapsible)
+     * sections; `mode:"steps"` renders a Anterior/Siguiente wizard. Absent → the
+     * legacy flat list (unchanged).
+     */
+    formLayout?: FormLayout
 }
 
 export function DynamicForm({
@@ -57,6 +67,7 @@ export function DynamicForm({
     submitLabel = 'Guardar',
     cancelLabel = 'Cancelar',
     disabled = false,
+    formLayout,
 }: DynamicFormProps) {
     const [values, setValues] = useState<Record<string, any>>({})
     const [errors, setErrors] = useState<Record<string, string>>({})
@@ -97,6 +108,23 @@ export function DynamicForm({
         return false
     }, [visibleFields, values])
 
+    // Group visible fields by their form_layout section (empty sections drop out
+    // because visibleFields is already visibility-filtered). Without a layout
+    // this is a single default group → the render below collapses to the legacy
+    // flat grid, byte-for-byte.
+    const groups = useMemo(
+        () => groupFieldsBySection(visibleFields, formLayout),
+        [visibleFields, formLayout],
+    )
+    const isSteps = formLayout?.mode === 'steps' && groups.length > 1
+
+    // Wizard step cursor (steps mode only). Clamped whenever the group count
+    // shrinks (a visible_when flip can empty a trailing step's section).
+    const [stepIndex, setStepIndex] = useState(0)
+    useEffect(() => {
+        setStepIndex((i) => Math.min(i, Math.max(groups.length - 1, 0)))
+    }, [groups.length])
+
     useEffect(() => {
         const defaults: Record<string, any> = {}
         for (const f of editableFields) {
@@ -131,25 +159,93 @@ export function DynamicForm({
         try { await onSubmit(result.data as Record<string, any>) } finally { setSubmitting(false) }
     }
 
+    // Renders one group's fields into the responsive 2-column grid: scalar
+    // header fields flow through it; line-items grids (and textareas) span full
+    // width so the row table / memo gets room. Shared by every layout mode.
+    const renderGrid = (groupFields: ActionFieldDef[]) => (
+        <div className="grid gap-4 sm:grid-cols-2">
+            {groupFields.map((field) => (
+                <FieldRow
+                    key={field.key}
+                    field={field}
+                    value={values[field.key]}
+                    onChange={(v: any) => update(field.key, v)}
+                    values={values}
+                    error={errors[field.key]}
+                    initialValues={initialValues}
+                />
+            ))}
+        </div>
+    )
+
+    // ── Steps (wizard) mode ────────────────────────────────────────────────
+    // One step per section; Anterior/Siguiente navigate, submit only on the
+    // last step. Advancing validates just the current step's fields so a later
+    // step can't be blocked by an earlier untouched one and vice-versa.
+    if (isSteps) {
+        const step = groups[stepIndex]
+        const isLast = stepIndex === groups.length - 1
+
+        const goNext = () => {
+            const stepSchema = buildZodSchema(step.fields)
+            const result = stepSchema.safeParse(values)
+            if (!result.success) {
+                const next: Record<string, string> = {}
+                for (const issue of result.error.issues) {
+                    const key = issue.path[0]
+                    if (typeof key === 'string' && !next[key]) next[key] = issue.message
+                }
+                setErrors(next)
+                return
+            }
+            setErrors({})
+            setStepIndex((i) => Math.min(i + 1, groups.length - 1))
+        }
+        const goBack = () => setStepIndex((i) => Math.max(i - 1, 0))
+
+        return (
+            <form onSubmit={handleSubmit} className="grid gap-4">
+                <WizardProgress groups={groups} stepIndex={stepIndex} />
+                {renderGrid(step.fields)}
+                <div className="flex justify-between gap-2 pt-2">
+                    {stepIndex > 0 ? (
+                        <Button type="button" variant="outline" onClick={goBack} disabled={submitting || disabled}>
+                            Anterior
+                        </Button>
+                    ) : onCancel ? (
+                        <Button type="button" variant="outline" onClick={onCancel} disabled={submitting || disabled}>
+                            {cancelLabel}
+                        </Button>
+                    ) : (
+                        <span />
+                    )}
+                    {isLast ? (
+                        <Button type="submit" disabled={submitting || disabled || balanceBlocked}>
+                            {submitLabel}
+                        </Button>
+                    ) : (
+                        <Button type="button" onClick={goNext} disabled={submitting || disabled}>
+                            Siguiente
+                        </Button>
+                    )}
+                </div>
+            </form>
+        )
+    }
+
+    // ── Sections / flat mode ───────────────────────────────────────────────
     // Layout: scalar header fields flow through a responsive 2-column grid;
     // line-items grids (and textareas) span the full width so the row table /
     // memo gets room. Mirrors the pro look of the federated journal modal but
-    // stays fully declarative — driven only by field shape.
+    // stays fully declarative — driven only by field shape. With no layout this
+    // is a single default group rendered without section chrome (unchanged).
     return (
         <form onSubmit={handleSubmit} className="grid gap-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-                {visibleFields.map((field) => (
-                    <FieldRow
-                        key={field.key}
-                        field={field}
-                        value={values[field.key]}
-                        onChange={(v: any) => update(field.key, v)}
-                        values={values}
-                        error={errors[field.key]}
-                        initialValues={initialValues}
-                    />
-                ))}
-            </div>
+            {groups.map((group) => (
+                <FieldSection key={group.key} group={group}>
+                    {renderGrid(group.fields)}
+                </FieldSection>
+            ))}
             <div className="flex justify-end gap-2 pt-2">
                 {onCancel && (
                     <Button type="button" variant="outline" onClick={onCancel} disabled={submitting || disabled}>
