@@ -490,6 +490,29 @@ export function filterVisibleFields(
     })
 }
 
+// stripHiddenFieldValues drops from a flat form-values object the keys of any
+// declared field currently hidden by its `visible_when` predicate, so the
+// submit never POSTs a value the form isn't showing (e.g. a DiscountRule with
+// rule_scope=category must not send the product_id / customer_id it hides).
+// This mirrors dynamic-form.tsx, which builds its Zod schema only over the
+// visible fields — hidden fields are dropped from BOTH the render/required-gate
+// AND the submitted values. Keys with no matching declared field, or whose
+// field carries no `visible_when`, always pass through (retrocompat).
+export function stripHiddenFieldValues(
+    values: Record<string, any>,
+    fields: FieldDef[] | undefined,
+    mode: 'view' | 'edit' | 'create',
+): Record<string, any> {
+    const visibleKeys = new Set(filterVisibleFields(fields, mode, values).map(f => f.key))
+    const out: Record<string, any> = {}
+    for (const [key, value] of Object.entries(values)) {
+        const field = (fields ?? []).find(f => f.key === key)
+        if (field && !visibleKeys.has(key) && getVisibleWhen(field)) continue
+        out[key] = value
+    }
+    return out
+}
+
 export function DynamicRecordDialog({
     open,
     onOpenChange,
@@ -752,9 +775,16 @@ export function DynamicRecordDialog({
         // Required check passed → clear any prior validation errors.
         setFieldErrors({})
 
+        // Fields hidden by their `visible_when` predicate must not be POSTed:
+        // the render, the required-gate and the payload all drive off the same
+        // filter, so a DiscountRule with scope=category never submits the
+        // product_id / customer_id it isn't showing. Mirrors dynamic-form.tsx,
+        // which builds its Zod only over visibleFields.
+        const submittedValues = stripHiddenFieldValues(formValues, modalMeta.fields, mode)
+
         // Empty reference pickers → null (not "" / nil-UUID) so nullable FK
         // columns accept them instead of raising a 23503 FK violation.
-        const payload = normalizeRefFieldsForSubmit(formValues, modalMeta.fields)
+        const payload = normalizeRefFieldsForSubmit(submittedValues, modalMeta.fields)
 
         setSaving(true)
         try {
