@@ -884,7 +884,7 @@ export function DynamicRecordDialog({
     // their section. Empty sections drop out for free. Steps mode only drives a
     // wizard in editable modes — view mode always stacks the sections.
     const formLayout = modalMeta?.form_layout ?? modalMeta?.formLayout
-    const groups = groupFieldsBySection(visibleFields, formLayout)
+    const groups = groupFieldsBySection(visibleFields, formLayout, formValues)
     const isSteps = isEditable && formLayout?.mode === 'steps' && groups.length > 1
     const clampedStep = Math.min(stepIndex, Math.max(groups.length - 1, 0))
     const isLastStep = clampedStep === groups.length - 1

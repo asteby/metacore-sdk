@@ -113,8 +113,8 @@ export function DynamicForm({
     // this is a single default group → the render below collapses to the legacy
     // flat grid, byte-for-byte.
     const groups = useMemo(
-        () => groupFieldsBySection(visibleFields, formLayout),
-        [visibleFields, formLayout],
+        () => groupFieldsBySection(visibleFields, formLayout, values),
+        [visibleFields, formLayout, values],
     )
     const isSteps = formLayout?.mode === 'steps' && groups.length > 1
 
