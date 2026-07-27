@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 28.7.0
+
+### Minor Changes
+
+- 1c8c4fe: Unifica el flujo de importación alrededor de la `ImportSpec` que sirve el kernel. `starter-core` traía una copia byte a byte del `ImportDialog` de `runtime-react` (414 líneas) que nadie importaba y cuyos endpoints ya habían divergido (`/data/` vs `/dynamic/`): se elimina y el de `runtime-react` queda canónico. El diálogo acepta `.xlsx` además de CSV/JSON, y normaliza los errores por fila del backend nuevo (`{row, column, message}` en validate, `{row, column, error}` en import) sin romper el formato anterior (`{row, field, message}`), que antes renderizaba celdas vacías. `TableMetadata.import` queda tipado (`ImportSpecMeta`/`ImportColumnMeta`): cuando el kernel sirve la spec, la acción de importar aparece sin que el host encienda ninguna bandera, porque el modelo declaró sus columnas o el kernel las derivó de su formulario. Se agregan `hideImport` y `hideExport` por vista, para las tablas con alcance por rol que no quieren el punto de entrada masivo aunque el modelo lo soporte.
+
 ## 28.6.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @asteby/metacore-marketplace
 
+## 84.0.0
+
+### Patch Changes
+
+- @asteby/metacore-app-providers@88.0.0
+
 ## 83.0.0
 
 ### Patch Changes
