@@ -14,6 +14,9 @@
 // implementation and the modal-render machinery never has to be booted under
 // happy-dom just to assert the grouping (same approach as PR #673).
 
+import type { VisibleWhen } from './types'
+import { evaluateVisibleWhen, getVisibleWhen } from './dynamic-form-schema'
+
 /** One declared section of a model form. `title`/`description` arrive already
  * localized from the kernel and are rendered verbatim. */
 export interface FormSection {
@@ -22,6 +25,12 @@ export interface FormSection {
     description?: string
     /** Sections mode only: render this section collapsed on first paint. */
     collapsed?: boolean
+    /** Section-level visibility gate (kernel v0.84.0). When present and its
+     * predicate evaluates false against the live form values, the whole section
+     * is omitted (and in steps mode its wizard step drops from the sequence).
+     * Tolerates the camelCase alias, same as fields. */
+    visible_when?: VisibleWhen
+    visibleWhen?: VisibleWhen
 }
 
 /** Model-level layout directive. `mode` defaults to `"sections"`. */
@@ -71,16 +80,35 @@ export function getFieldSection(
  *    section whose only members are hidden by `visible_when` never renders an
  *    empty shell (and never yields an empty wizard step). Because the caller
  *    passes the already visibility-filtered list, this falls out for free.
+ *  - A section declaring its OWN `visible_when` is dropped whole (before its
+ *    fields are even collected) whenever the predicate evaluates false against
+ *    `values`, reusing the SAME evaluator the fields use. In steps mode the
+ *    caller derives the wizard sequence from these groups, so a hidden section
+ *    simply never becomes a step. Section-less / unknown-section fields are
+ *    never gated by any section predicate. Without a section `visible_when`
+ *    (or without `values`), behaviour is byte-for-byte the legacy path.
  */
 export function groupFieldsBySection<F extends { section?: string }>(
     fields: F[],
     layout: FormLayout | undefined,
+    values?: Record<string, any> | null,
 ): FieldGroup<F>[] {
     if (!layout?.sections?.length) {
         return [{ key: DEFAULT_SECTION_KEY, isDefault: true, fields }]
     }
 
-    const known = new Set(layout.sections.map((s) => s.key))
+    // Sections whose own `visible_when` predicate evaluates false are hidden
+    // WHOLESALE: the section never emits a group/step AND its member fields are
+    // dropped (they must not leak into the default group). Reuses the same
+    // field-level evaluator — no duplicated logic. A `declared` set keeps a
+    // field targeting a hidden section from being treated as "unknown section"
+    // and orphaned.
+    const declared = new Set(layout.sections.map((s) => s.key))
+    const visibleSections = layout.sections.filter((s) =>
+        evaluateVisibleWhen(getVisibleWhen(s), values),
+    )
+
+    const known = new Set(visibleSections.map((s) => s.key))
     const bySection = new Map<string, F[]>()
     const orphans: F[] = []
 
@@ -90,6 +118,9 @@ export function groupFieldsBySection<F extends { section?: string }>(
             const arr = bySection.get(sec)
             if (arr) arr.push(f)
             else bySection.set(sec, [f])
+        } else if (sec && declared.has(sec)) {
+            // Belongs to a declared-but-hidden section → drop the field.
+            continue
         } else {
             orphans.push(f)
         }
@@ -100,7 +131,7 @@ export function groupFieldsBySection<F extends { section?: string }>(
     if (orphans.length) {
         groups.push({ key: DEFAULT_SECTION_KEY, isDefault: true, fields: orphans })
     }
-    for (const s of layout.sections) {
+    for (const s of visibleSections) {
         const secFields = bySection.get(s.key)
         if (!secFields || secFields.length === 0) continue // hide empty section
         groups.push({

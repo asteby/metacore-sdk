@@ -111,3 +111,91 @@ describe('groupFieldsBySection — steps', () => {
         expect(groups.map(g => g.key)).toEqual(['who', 'pay'])
     })
 })
+
+describe('groupFieldsBySection — section-level visible_when (kernel v0.84.0)', () => {
+    // A discriminator field `kind` gates the `company` section: only visible for
+    // business customers. Tolerate both snake_case and camelCase authoring.
+    const gatedLayout: FormLayout = {
+        mode: 'sections',
+        sections: [
+            { key: 'general', title: 'General' },
+            {
+                key: 'company',
+                title: 'Empresa',
+                visible_when: { field: 'kind', equals: 'business' },
+            },
+        ],
+    }
+
+    const fields: F[] = [
+        { key: 'name', section: 'general' },
+        { key: 'tax_id', section: 'company' },
+    ]
+
+    it('hides the section AND its fields when the predicate is false', () => {
+        const groups = groupFieldsBySection(fields, gatedLayout, { kind: 'person' })
+        // `company` never appears, and `tax_id` is not leaked into any group.
+        expect(groups.map(g => g.key)).toEqual(['general'])
+        const allFields = groups.flatMap(g => g.fields.map(f => f.key))
+        expect(allFields).toEqual(['name'])
+    })
+
+    it('shows the section when the predicate is satisfied', () => {
+        const groups = groupFieldsBySection(fields, gatedLayout, { kind: 'business' })
+        expect(groups.map(g => g.key)).toEqual(['general', 'company'])
+        expect(groups[1].fields.map(f => f.key)).toEqual(['tax_id'])
+    })
+
+    it('tolerates the camelCase visibleWhen alias', () => {
+        const camelLayout: FormLayout = {
+            mode: 'sections',
+            sections: [
+                { key: 'general', title: 'General' },
+                { key: 'company', visibleWhen: { field: 'kind', in: ['business'] } },
+            ],
+        }
+        expect(groupFieldsBySection(fields, camelLayout, { kind: 'person' }).map(g => g.key)).toEqual([
+            'general',
+        ])
+        expect(groupFieldsBySection(fields, camelLayout, { kind: 'business' }).map(g => g.key)).toEqual([
+            'general',
+            'company',
+        ])
+    })
+
+    it('without values (or without a section predicate) behaves exactly like before', () => {
+        // No values passed → a predicated section reads its gate field as '' and
+        // stays hidden (equals miss), while an ungated layout is untouched.
+        const plain = groupFieldsBySection(fields, {
+            mode: 'sections',
+            sections: [{ key: 'general' }, { key: 'company' }],
+        })
+        expect(plain.map(g => g.key)).toEqual(['general', 'company'])
+    })
+
+    it('drops a wizard step whose section is gated off, preserving navigable order', () => {
+        const stepsGated: FormLayout = {
+            mode: 'steps',
+            sections: [
+                { key: 'who', title: 'Cliente' },
+                {
+                    key: 'company',
+                    title: 'Empresa',
+                    visible_when: { field: 'kind', equals: 'business' },
+                },
+                { key: 'pay', title: 'Pago' },
+            ],
+        }
+        const stepFields: F[] = [
+            { key: 'customer_id', section: 'who' },
+            { key: 'tax_id', section: 'company' },
+            { key: 'amount', section: 'pay' },
+        ]
+        // person → company step removed: wizard is who → pay, submit still on last.
+        const hidden = groupFieldsBySection(stepFields, stepsGated, { kind: 'person' })
+        expect(hidden.map(g => g.key)).toEqual(['who', 'pay'])
+        // business → all three steps in order.
+        const shown = groupFieldsBySection(stepFields, stepsGated, { kind: 'business' })
+        expect(shown.map(g => g.key)).toEqual(['who', 'company', 'pay'])
+    })
+})
