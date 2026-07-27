@@ -165,6 +165,15 @@ export interface DynamicTableProps {
      */
     mutationEndpoint?: string
     enableUrlSync?: boolean
+    /**
+     * Hide the import action on THIS view even when the model supports it.
+     * A role-scoped view (e.g. a rep seeing only their own records) usually
+     * wants the table without a bulk-import entry point, while the same model
+     * keeps it on the admin view. Absent → the model's metadata decides.
+     */
+    hideImport?: boolean
+    /** Hide the export action on this view. See `hideImport`. */
+    hideExport?: boolean
     hiddenColumns?: string[]
     onAction?: (action: string, row: any) => void
     /**
@@ -225,6 +234,8 @@ export function DynamicTable({
     endpoint,
     mutationEndpoint,
     enableUrlSync = true,
+    hideImport,
+    hideExport,
     hiddenColumns = [],
     onAction,
     onRowClick,
@@ -643,6 +654,15 @@ export function DynamicTable({
         if (!metadata || !permissionsActive) return metadata
         return gateTableMetadata(metadata, model, can, (key, fallback) => t(key, { defaultValue: fallback }))
     }, [metadata, permissionsActive, can, model, t])
+
+    // Importing is offered when the host opts in explicitly (`canImport`) or,
+    // when it says nothing, whenever the kernel served an import spec for the
+    // model — which it does for every model with at least one importable form
+    // field. That makes the flow work out of the box instead of requiring each
+    // host to flip a flag per view.
+    const importEnabled =
+        !hideImport && (viewMetadata?.canImport ?? Boolean(viewMetadata?.import?.columns?.length))
+    const exportEnabled = !hideExport && Boolean(viewMetadata?.canExport)
 
     const buildFilterParams = useCallback(() => {
         const params: Record<string, any> = {}
@@ -1202,12 +1222,12 @@ export function DynamicTable({
                         onBulkDelete={() => setShowBulkDeleteConfirm(true)}
                         extraActions={
                             <>
-                                {viewMetadata?.canExport && (
+                                {exportEnabled && (
                                     <Button variant="outline" size="sm" className="h-8" onClick={() => setExportOpen(true)}>
                                         <Download className="h-4 w-4 mr-1" /> Exportar
                                     </Button>
                                 )}
-                                {viewMetadata?.canImport && (
+                                {importEnabled && (
                                     <Button variant="outline" size="sm" className="h-8" onClick={() => setImportOpen(true)}>
                                         <Upload className="h-4 w-4 mr-1" /> Importar
                                     </Button>
@@ -1478,10 +1498,10 @@ export function DynamicTable({
                 </AlertDialogContent>
             </AlertDialog>
 
-            {viewMetadata?.canExport && (
+            {exportEnabled && (
                 <ExportDialog open={exportOpen} onOpenChange={setExportOpen} model={model} metadata={metadata} currentFilters={buildFilterParams()} hasActiveFilters={hasActiveFilters} />
             )}
-            {viewMetadata?.canImport && (
+            {importEnabled && (
                 <ImportDialog open={importOpen} onOpenChange={setImportOpen} model={model} metadata={metadata} onImported={handleRefresh} />
             )}
             <DataTableBulkActions table={table} entityName="registro">
