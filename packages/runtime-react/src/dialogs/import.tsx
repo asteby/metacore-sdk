@@ -1,5 +1,8 @@
-// ImportDialog — three-step CSV/JSON import flow (upload → validate → import
-// with per-row error report). Axios-like client is provided by <ApiProvider>.
+// ImportDialog — three-step XLSX/CSV/JSON import flow (upload → validate →
+// import with per-row error report). The template, the accepted columns and
+// the validation rules all come from the model's ImportSpec served by the
+// kernel, so this dialog carries no per-model knowledge. Axios-like client is
+// provided by <ApiProvider>.
 import { useState, useEffect, useRef } from 'react'
 import {
     Dialog,
@@ -32,20 +35,37 @@ interface ImportDialogProps {
     onImported?: () => void
 }
 
-interface ValidationError {
+// RowError is one problem the backend reports against one spreadsheet row.
+// The kernel returns `{row, column, message}` on validate and
+// `{row, column, error}` on import; older backends returned `{row, field,
+// message}`. Normalising here keeps the dialog working against every one of
+// them instead of rendering blank cells.
+interface RowError {
     row: number
-    field: string
-    message: string
+    column?: string
+    field?: string
+    message?: string
+    error?: string
+}
+
+function errorColumn(e: RowError): string {
+    return e.column ?? e.field ?? ''
+}
+
+function errorMessage(e: RowError): string {
+    return e.message ?? e.error ?? ''
 }
 
 interface ValidationResult {
     valid: number
-    errors: ValidationError[]
+    skipped: number
+    errors: RowError[]
 }
 
 interface ImportResult {
     created: number
-    errors: ValidationError[]
+    skipped: number
+    errors: RowError[]
 }
 
 type Step = 'upload' | 'validation' | 'results'
@@ -93,7 +113,7 @@ export function ImportDialog({
             const url = window.URL.createObjectURL(response.data)
             const link = document.createElement('a')
             link.href = url
-            link.download = `${model}-plantilla.csv`
+            link.download = `${model}-plantilla.xlsx`
             document.body.appendChild(link)
             link.click()
             document.body.removeChild(link)
@@ -120,7 +140,8 @@ export function ImportDialog({
 
             const data = res.data?.data ?? res.data
             setValidationResult({
-                valid: data.valid ?? 0,
+                valid: data.rowCount ?? data.valid ?? 0,
+                skipped: data.skipped ?? 0,
                 errors: data.errors ?? [],
             })
             setStep('validation')
@@ -157,7 +178,8 @@ export function ImportDialog({
             const data = res.data?.data ?? res.data
             setImportResult({
                 created: data.created ?? 0,
-                errors: data.errors ?? [],
+                skipped: data.skipped ?? 0,
+                errors: data.failures ?? data.errors ?? [],
             })
             setStep('results')
 
@@ -206,10 +228,11 @@ export function ImportDialog({
                                     onClick={handleDownloadTemplate}
                                 >
                                     <FileDown className="h-4 w-4 mr-1" />
-                                    Descargar plantilla CSV
+                                    Descargar plantilla
                                 </Button>
                                 <p className="text-xs text-muted-foreground mt-1">
-                                    Descarga la plantilla para asegurar el formato correcto.
+                                    La plantilla trae las columnas, un ejemplo y las
+                                    instrucciones. Borra la fila de ejemplo antes de subir.
                                 </p>
                             </div>
 
@@ -221,12 +244,12 @@ export function ImportDialog({
                                     ref={fileInputRef}
                                     id="import-file"
                                     type="file"
-                                    accept=".csv,.json"
+                                    accept=".xlsx,.xls,.csv,.json"
                                     onChange={handleFileChange}
                                     className="cursor-pointer"
                                 />
                                 <p className="text-xs text-muted-foreground">
-                                    Formatos aceptados: CSV, JSON
+                                    Formatos aceptados: Excel, CSV, JSON
                                 </p>
                             </div>
                         </div>
@@ -251,6 +274,13 @@ export function ImportDialog({
                                 )}
                             </div>
 
+                            {validationResult.skipped > 0 && (
+                                <p className="text-xs text-muted-foreground">
+                                    Se ignoraron {validationResult.skipped} fila(s) de ejemplo
+                                    de la plantilla.
+                                </p>
+                            )}
+
                             {validationResult.errors.length > 0 && (
                                 <div className="border rounded-md max-h-60 overflow-auto">
                                     <Table>
@@ -268,10 +298,10 @@ export function ImportDialog({
                                                         {error.row}
                                                     </TableCell>
                                                     <TableCell className="text-sm">
-                                                        {error.field}
+                                                        {errorColumn(error)}
                                                     </TableCell>
                                                     <TableCell className="text-sm text-destructive">
-                                                        {error.message}
+                                                        {errorMessage(error)}
                                                     </TableCell>
                                                 </TableRow>
                                             ))}
@@ -336,10 +366,10 @@ export function ImportDialog({
                                                         {error.row}
                                                     </TableCell>
                                                     <TableCell className="text-sm">
-                                                        {error.field}
+                                                        {errorColumn(error)}
                                                     </TableCell>
                                                     <TableCell className="text-sm text-destructive">
-                                                        {error.message}
+                                                        {errorMessage(error)}
                                                     </TableCell>
                                                 </TableRow>
                                             ))}

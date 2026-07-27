@@ -1,6 +1,27 @@
 // Shared metadata shape consumed by every host. Some hosts add a `link`
 // action type with a `linkUrl` template — represented here as part of the
 // `type` union so the SDK can render it uniformly.
+/** One spreadsheet column of a model's import template. Mirrors the kernel's
+ *  `modelbase.ImportColumn`. */
+export interface ImportColumnMeta {
+    key: string
+    header: string
+    aliases?: string[]
+    required?: boolean
+    type?: string
+    example?: string
+    hint?: string
+    generator?: string
+}
+
+/** A model's spreadsheet-import declaration. Mirrors `modelbase.ImportSpec`. */
+export interface ImportSpecMeta {
+    columns: ImportColumnMeta[]
+    maxRows?: number
+    sheetName?: string
+    instructions?: string[]
+}
+
 export interface TableMetadata {
     title: string
     endpoint: string
@@ -15,6 +36,16 @@ export interface TableMetadata {
     canExport?: boolean
     canImport?: boolean
     canCreate?: boolean
+    /**
+     * The model's spreadsheet-import declaration, served by the kernel: the
+     * columns of the generated template and the headers accepted when parsing
+     * a filled file back in. The kernel derives it from the model's form
+     * fields when the model declares nothing, and omits the field entirely
+     * when the model has no importable column — so its presence is the signal
+     * that importing is meaningful for this model. Purely additive; older
+     * kernels omit it.
+     */
+    import?: ImportSpecMeta
     /**
      * Child relations of this model, served by the kernel (>= v0.41.0). A
      * generic detail page renders one `DynamicRelation` panel per entry via
