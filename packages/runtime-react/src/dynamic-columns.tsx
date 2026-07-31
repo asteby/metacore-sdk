@@ -899,7 +899,20 @@ export function makeDefaultGetDynamicColumns(
                                 col.tooltip ||
                                 col.displayField ||
                                 col.key
-                            const name = getNestedValue(row.original, namePath) || 'N/A'
+                            // A `creator` cell with no resolved actor means the
+                            // record was created by the SYSTEM (e.g. an owner /
+                            // seed row whose `created_by` is null), not a missing
+                            // value — show "Sistema" rather than "N/A". Matches
+                            // the record-history actor fallback. `user`/`avatar`/
+                            // `search` keep "N/A" (empty there means unassigned).
+                            const resolvedName = getNestedValue(row.original, namePath)
+                            const name =
+                                resolvedName ||
+                                (renderAs === 'creator'
+                                    ? t
+                                        ? t('common.system', { defaultValue: 'Sistema' })
+                                        : 'Sistema'
+                                    : 'N/A')
                             const desc = getNestedValue(row.original, col.description || '')
 
                             const avatarSrc = resolveAvatarSrc(col, row.original, value, apiBaseUrl)
