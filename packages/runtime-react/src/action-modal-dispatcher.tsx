@@ -686,7 +686,9 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                         })}
                         {relations.length > 0 && (
                             <FieldCell fullWidth>
-                                <DynamicRelations record={record} relations={relations} lineSubtable />
+                                {/* Igual que el modal de registro: solo las
+                                    relaciones de composición se embeben. */}
+                                <DynamicRelations record={record} relations={relations} lineSubtable embedOnly />
                             </FieldCell>
                         )}
                     </FieldGrid>
