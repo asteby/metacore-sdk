@@ -1,5 +1,31 @@
 # @asteby/metacore-runtime-react
 
+## 28.8.0
+
+### Minor Changes
+
+- 3db2705: Nuevo primitivo `EntitySelect`: combobox async de un modelo relacionado con las dos affordances del modal dinámico — "+" para CREAR (sin selección) que auto-selecciona el creado, y lápiz para EDITAR el seleccionado. Ambas gateadas por permisos del kernel (useCan: `<model>.create`/`.update`) y 100% dinámicas (el form sale de `/metadata/modal/:model` vía CreateRecordDialog). Reemplaza los pickers bespoke duplicados en POS/purchases por una sola implementación reusable.
+- 8346d8d: PrintDocumentButton: botón reusable de impresión de documentos
+
+  Componente drop-in sobre usePrintDocument: renderiza un <button> (estilable con
+  className) que imprime/descarga/abre un documento del servidor, se deshabilita
+  mientras baja el PDF (aria-busy) y reporta errores por onError. Evita recablear
+  el hook + estado de carga en cada addon.
+
+- 05bc470: usePrintDocument: primitivo reusable para imprimir documentos del servidor
+
+  Nuevo hook que cualquier addon federado usa para imprimir/descargar/abrir un
+  documento renderizado por el motor de docs de ops (ticket, comprobante, orden):
+  GET /api/data/:model/:id/documents/:key.pdf. Fetch con auth vía el ApiClient
+  inyectado (el endpoint es Bearer-gated, no se puede window.open directo), blob →
+  iframe print (modo default, ideal para ticket térmico), download u open. Era el
+  primitivo de impresión que faltaba en el SDK (había 0). Habilita el auto-print del
+  POS al cerrar venta.
+
+### Patch Changes
+
+- 233d63b: DynamicTable: una celda `creator` sin actor resuelto (registro creado por el sistema, `created_by` null) muestra "Sistema" en vez de "N/A", consistente con el fallback del historial de actividad. `user`/`avatar`/`search` mantienen "N/A" (vacío = sin asignar).
+
 ## 28.7.0
 
 ### Minor Changes
