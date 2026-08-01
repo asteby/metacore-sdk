@@ -244,6 +244,8 @@ export { DynamicRecordDialog, ViewValue } from './dialogs/dynamic-record'
 export { normalizeRefFieldsForSubmit } from './dialogs/normalize-submit'
 export type { DynamicRecordDialogProps, FieldDef, FieldOption, GetImageUrl } from './dialogs/dynamic-record'
 export { CreateRecordDialog } from './dialogs/create-record-dialog'
+export { EntitySelect } from './entity-select'
+export type { EntitySelectProps, EntitySelectOption } from './entity-select'
 export { ViewRecordDialog } from './dialogs/view-record-dialog'
 export type {
     ModelKey,
