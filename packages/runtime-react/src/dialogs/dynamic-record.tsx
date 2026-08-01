@@ -996,7 +996,11 @@ export function DynamicRecordDialog({
                             </form>
 
 
-                            {/* Child records (line items, etc.) for declared relations.
+                            {/* Líneas del documento: SOLO las relaciones de
+                                composición (`embed`). El resto de las 1:N —
+                                existencias, traspasos, cualquier colección grande
+                                de gestión independiente — vive en su propia
+                                página, no adentro de este formulario.
                                 View = strictly read-only; edit = add/edit/delete. */}
                             {!isCreate && record && relations.length > 0 && (
                                 <div className="mt-6">
@@ -1004,6 +1008,7 @@ export function DynamicRecordDialog({
                                         record={record}
                                         relations={relations}
                                         lineSubtable
+                                        embedOnly
                                         canCreate={mode === 'edit'}
                                         canEdit={mode === 'edit'}
                                         canDelete={mode === 'edit'}

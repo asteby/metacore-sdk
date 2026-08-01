@@ -194,6 +194,15 @@ export interface RelationMeta {
     readonly?: boolean
     /** camelCase alias for `readonly`. */
     readOnly?: boolean
+    /**
+     * Composition relation: its children are PART of the parent record (a
+     * document's lines), so the record MODAL embeds them as a sub-table.
+     * Opt-in — a modal renders only the relations carrying this flag, which is
+     * what keeps opening a warehouse from loading every stock movement it has.
+     * Served by the kernel from the manifest relation's `embed`. Absent (older
+     * kernels) = not embedded.
+     */
+    embed?: boolean
 }
 
 export interface FilterDefinition {

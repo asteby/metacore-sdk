@@ -3,7 +3,7 @@
 //   - "one_to_many": lista inline editable que cuelga del registro padre.
 //   - "many_to_many": multi-select sobre la tabla destino con sync a la pivot.
 // La RFC completa vive en `packages/runtime-react/docs/relations.md`.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
     type ColumnDef,
@@ -31,6 +31,7 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
+    Input,
     MultiSelect,
     Table,
     TableBody,
@@ -39,7 +40,7 @@ import {
     TableHeader,
     TableRow,
 } from '@asteby/metacore-ui/primitives'
-import { Plus, Trash2, Pencil } from 'lucide-react'
+import { Plus, Trash2, Pencil, Search } from 'lucide-react'
 import { useApi } from './api-context'
 import { useMetadataCache } from './metadata-cache'
 import { DynamicForm } from './dynamic-form'
@@ -48,6 +49,7 @@ import { useTimeZone, useCurrency } from './org-runtime-context'
 import { makeDefaultGetDynamicColumns } from './dynamic-columns'
 import { isColumnVisibleInLineSubtable } from './column-visibility'
 import { useOptionsResolver } from './use-options-resolver'
+import { dedupeById, useInfiniteScrollSentinel } from './use-infinite-scroll'
 import type { ApiResponse, ColumnDefinition, TableMetadata } from './types'
 import {
     buildCreatePayload,
@@ -90,6 +92,10 @@ export interface DynamicRelationStrings {
     selectPlaceholder: string
     selectSearchPlaceholder: string
     selectEmpty: string
+    /** Placeholder del buscador de la sub-tabla 1:N. */
+    searchPlaceholder: string
+    /** Pie de la sub-tabla: "{{loaded}} de {{total}}". */
+    countLabel: string
 }
 
 const DEFAULT_STRINGS: DynamicRelationStrings = {
@@ -105,7 +111,14 @@ const DEFAULT_STRINGS: DynamicRelationStrings = {
     selectPlaceholder: 'Seleccionar…',
     selectSearchPlaceholder: 'Buscar…',
     selectEmpty: 'Sin resultados.',
+    searchPlaceholder: 'Buscar…',
+    countLabel: '{{loaded}} de {{total}}',
 }
+
+// Tamaño de página de la sub-tabla 1:N. Antes la lista pedía el hijo COMPLETO
+// (sin page/per_page), así que abrir un almacén traía todas sus existencias y
+// traspasos. Se pagina de a 25 y el resto entra por scroll infinito.
+const REL_PAGE_SIZE = 25
 
 interface CommonProps {
     /** id del registro padre. */
@@ -233,6 +246,15 @@ function OneToManyRelation({
     const [metadata, setMetadata] = useState<TableMetadata | null>(cachedMeta || null)
     const [rows, setRows] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
+    // Paginación server-side + scroll infinito, igual que <DynamicTable>.
+    const [total, setTotal] = useState(0)
+    const [page, setPage] = useState(1)
+    const [loadingMore, setLoadingMore] = useState(false)
+    // El backend devolvió una página corta: no hay más filas aunque meta.total
+    // diga otra cosa (drift count/list dispararía el sentinel para siempre).
+    const [exhausted, setExhausted] = useState(false)
+    const [search, setSearch] = useState('')
+    const [debouncedSearch, setDebouncedSearch] = useState('')
     const [formOpen, setFormOpen] = useState(false)
     const [editingRow, setEditingRow] = useState<any | null>(null)
     const [rowToDelete, setRowToDelete] = useState<any | null>(null)
@@ -244,12 +266,31 @@ function OneToManyRelation({
     // still reacting to real scope changes.
     const filtersKey = useMemo(() => (filters ? JSON.stringify(filters) : ''), [filters])
 
-    const fetchAll = useCallback(async () => {
-        setLoading(true)
+    // La metadata se lee por ref dentro del fetch: si entrara como dependencia,
+    // resolverla dispararía un segundo fetch de datos por cada montaje.
+    const metadataRef = useRef<TableMetadata | null>(metadata)
+    metadataRef.current = metadata
+
+    // Debounce del buscador: cada tecla no puede pegarle al servidor.
+    useEffect(() => {
+        const id = setTimeout(() => setDebouncedSearch(search.trim()), 300)
+        return () => clearTimeout(id)
+    }, [search])
+
+    // fetchPage REEMPLAZA (página 1) o ANEXA (scroll infinito). Antes esta lista
+    // pedía el modelo hijo entero sin page/per_page.
+    const fetchPage = useCallback(async (nextPage: number, append: boolean) => {
+        if (append) setLoadingMore(true)
+        else setLoading(true)
         try {
-            const params = buildRelationFilterParams(foreignKey, parentId, filters)
+            const params: Record<string, any> = {
+                ...buildRelationFilterParams(foreignKey, parentId, filters),
+                page: nextPage,
+                per_page: REL_PAGE_SIZE,
+            }
+            if (debouncedSearch) params.search = debouncedSearch
             const [metaRes, dataRes] = await Promise.all([
-                metadata ? Promise.resolve(null) : api.get(`/metadata/table/${model}`),
+                metadataRef.current ? Promise.resolve(null) : api.get(`/metadata/table/${model}`),
                 api.get(dataEndpoint, { params }),
             ])
             if (metaRes && (metaRes as any).data?.success) {
@@ -258,16 +299,41 @@ function OneToManyRelation({
                 cacheMetadata(model, fresh)
             }
             const list = (dataRes as { data: ApiResponse<any[]> }).data
-            if (list.success) setRows(list.data || [])
+            if (list.success) {
+                const fetched = list.data || []
+                setRows((prev) => (append ? dedupeById(prev, fetched) : fetched))
+                setPage(nextPage)
+                if (list.meta?.total !== undefined) setTotal(list.meta.total)
+                else if (!append) setTotal(fetched.length)
+                setExhausted(fetched.length < REL_PAGE_SIZE)
+            }
         } catch (err) {
             console.error('DynamicRelation fetch error', err)
         } finally {
-            setLoading(false)
+            if (append) setLoadingMore(false)
+            else setLoading(false)
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [api, dataEndpoint, foreignKey, parentId, filtersKey, metadata, model, cacheMetadata])
+    }, [api, dataEndpoint, foreignKey, parentId, filtersKey, model, cacheMetadata, debouncedSearch])
 
-    useEffect(() => { fetchAll() }, [fetchAll])
+    // Recarga desde la primera página. Es lo que corren create/edit/delete.
+    const fetchAll = useCallback(async () => {
+        await fetchPage(1, false)
+    }, [fetchPage])
+
+    // Un cambio de padre/scope/búsqueda vuelve a la página 1.
+    useEffect(() => { fetchPage(1, false) }, [fetchPage])
+
+    const canLoadMore = !loading && !loadingMore && !exhausted && rows.length < total
+    const { rootRef, sentinelRef } = useInfiniteScrollSentinel<HTMLDivElement, HTMLDivElement>({
+        onLoadMore: () => { if (canLoadMore) fetchPage(page + 1, true) },
+        disabled: !canLoadMore,
+    })
+
+    // El buscador solo aparece cuando hay algo que buscar: una sub-tabla de 3
+    // líneas no necesita chrome extra. Se queda visible mientras haya término
+    // activo para no dejar al usuario sin forma de limpiarlo.
+    const showSearch = debouncedSearch !== '' || search !== '' || total > REL_PAGE_SIZE
 
     const formFields = useMemo(
         () => deriveRelationFormFields(metadata, foreignKey),
@@ -410,19 +476,32 @@ function OneToManyRelation({
 
     return (
         <div className={className} data-relation-kind={kind} data-relation-model={model}>
-            {(labels.title || canCreate) && (
-                <div className="flex items-center justify-between pb-3">
+            {(labels.title || canCreate || showSearch) && (
+                <div className="flex items-center justify-between gap-2 pb-3">
                     {labels.title ? <h3 className="text-sm font-medium">{labels.title}</h3> : <span />}
-                    {canCreate && (
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => { setEditingRow(null); setFormOpen(true) }}
-                        >
-                            <Plus className="h-4 w-4 mr-1" />
-                            {labels.addLabel}
-                        </Button>
-                    )}
+                    <div className="flex items-center gap-2">
+                        {showSearch && (
+                            <div className="relative">
+                                <Search className="absolute start-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                    value={search}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearch(e.target.value)}
+                                    placeholder={labels.searchPlaceholder}
+                                    className="h-8 w-40 ps-7 sm:w-56"
+                                />
+                            </div>
+                        )}
+                        {canCreate && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => { setEditingRow(null); setFormOpen(true) }}
+                            >
+                                <Plus className="h-4 w-4 mr-1" />
+                                {labels.addLabel}
+                            </Button>
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -440,7 +519,10 @@ function OneToManyRelation({
                 // Real metadata-driven table — same metacore-ui primitives and
                 // cell renderers as `<DynamicTable>` so headers, money/currency,
                 // FK thumbnails, dates and badges all match the main table.
-                <div className="overflow-x-auto border rounded-md bg-card">
+                // `max-h` + scroll propio: la sub-tabla no puede estirar el modal
+                // del padre a lo alto de cientos de filas. El sentinel del fondo
+                // pide la página siguiente al entrar en vista.
+                <div ref={rootRef} className="overflow-auto max-h-[60vh] border rounded-md bg-card">
                     <Table noWrapper className="w-full">
                         <TableHeader>
                             {table.getHeaderGroups().map((headerGroup: HeaderGroup<any>) => (
@@ -477,6 +559,22 @@ function OneToManyRelation({
                             ))}
                         </TableBody>
                     </Table>
+                    {loadingMore && (
+                        <div className="p-2">
+                            <Skeleton className="h-8 w-full" />
+                        </div>
+                    )}
+                    <div ref={sentinelRef} aria-hidden className="h-px w-full" />
+                </div>
+            )}
+
+            {/* Cuánto de la relación se ve. Sin esto una sub-tabla paginada
+                miente: parece completa cuando solo trae la primera página. */}
+            {!loading && rows.length > 0 && total > rows.length && (
+                <div className="pt-2 text-end text-xs text-muted-foreground">
+                    {labels.countLabel
+                        .replace('{{loaded}}', String(rows.length))
+                        .replace('{{total}}', String(total))}
                 </div>
             )}
 

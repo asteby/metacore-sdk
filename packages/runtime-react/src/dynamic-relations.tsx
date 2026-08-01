@@ -49,6 +49,19 @@ export interface DynamicRelationsProps {
      * autónoma conserva todas las columnas.
      */
     lineSubtable?: boolean
+    /**
+     * Solo renderiza las relaciones de COMPOSICIÓN — las que el kernel marca
+     * con `embed: true` (las líneas de un documento). Es lo que usan los MODALES
+     * de registro: antes embebían TODAS las relaciones one_to_many del modelo,
+     * así que abrir "Editar Almacén" arrastraba miles de existencias y traspasos
+     * al formulario. Las relaciones no embebidas siguen accesibles desde su
+     * propia página / la vista de detalle, que renderiza el listado completo.
+     *
+     * Default false: una página de detalle autónoma sigue mostrando todas.
+     * Una relación sin `embed` (kernel viejo) NO se embebe — el gate falla del
+     * lado seguro.
+     */
+    embedOnly?: boolean
     /** Bubble up when any panel's data changes (create/delete/attach/detach). */
     onChange?: (relation: RelationMeta) => void
 }
@@ -90,6 +103,17 @@ export function buildRelationFilters(
     return out
 }
 
+/**
+ * ¿La relación es de COMPOSICIÓN (embebible en un modal)? Solo `embed: true`
+ * califica: la ausencia del flag — un kernel viejo que todavía no lo sirve —
+ * significa NO embeber, que es el lado seguro (el costo de un falso negativo
+ * es un panel de menos en el modal; el de un falso positivo, miles de filas
+ * dentro de un formulario).
+ */
+export function isEmbedded(rel: Pick<RelationMeta, 'embed'>): boolean {
+    return rel.embed === true
+}
+
 /** Stable React key for a relation panel. */
 function relationKey(rel: RelationMeta, idx: number): string {
     return rel.name || `${rel.through}-${rel.foreign_key}-${idx}`
@@ -106,6 +130,7 @@ export function DynamicRelations({
     canEdit = true,
     strings,
     lineSubtable = false,
+    embedOnly = false,
     onChange,
 }: DynamicRelationsProps) {
     const parentId = useMemo(
@@ -113,7 +138,14 @@ export function DynamicRelations({
         [record, parentIdKey],
     )
 
-    if (parentId === undefined || !relations || relations.length === 0) {
+    // Gate de composición: en un modal solo entran las relaciones marcadas
+    // `embed` por el kernel. Fuera del modal la lista pasa entera.
+    const visible = useMemo(
+        () => (embedOnly ? (relations || []).filter(isEmbedded) : relations || []),
+        [relations, embedOnly],
+    )
+
+    if (parentId === undefined || visible.length === 0) {
         return null
     }
 
@@ -122,7 +154,7 @@ export function DynamicRelations({
         // pedido" and "Facturas" in the view modal) — without it consecutive
         // panels sat flush against each other with no breathing room.
         <div className={cn('space-y-6', className)} data-dynamic-relations="">
-            {relations.map((rel, idx) => {
+            {visible.map((rel, idx) => {
                 const filters = buildRelationFilters(rel, parentId)
                 const panelStrings: Partial<DynamicRelationStrings> = {
                     ...(strings || {}),

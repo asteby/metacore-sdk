@@ -277,6 +277,7 @@ export {
     DynamicRelations,
     resolveParentId,
     buildRelationFilters,
+    isEmbedded,
     type DynamicRelationsProps,
 } from './dynamic-relations'
 export {
