@@ -1,5 +1,14 @@
 # @asteby/metacore-app-providers
 
+## 90.0.0
+
+### Patch Changes
+
+- Updated dependencies [13ef5ed]
+- Updated dependencies [e801041]
+  - @asteby/metacore-runtime-react@29.0.0
+  - @asteby/metacore-ui@2.13.0
+
 ## 89.0.0
 
 ### Patch Changes
