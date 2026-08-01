@@ -90,6 +90,23 @@ export function buildRelationFilters(
     return out
 }
 
+/**
+ * Whether a relation may be EMBEDDED as an inline subtable inside a record
+ * modal. Embedding a one_to_many is opt-in (`embed: true` on the manifest
+ * relation): the modal must show a document's own lines, not a warehouse's
+ * whole stock ledger. Relations without the flag stay reachable from the child
+ * model's own page and from a standalone detail page, which lists them all.
+ *
+ * many_to_many panels are a bounded multi-select rather than an unbounded row
+ * list, so they keep rendering as before — the flag only gates one_to_many.
+ */
+export function isEmbeddableRelation(
+    rel: Pick<RelationMeta, 'kind' | 'embed'>,
+): boolean {
+    if (rel.kind !== 'one_to_many') return true
+    return rel.embed === true
+}
+
 /** Stable React key for a relation panel. */
 function relationKey(rel: RelationMeta, idx: number): string {
     return rel.name || `${rel.through}-${rel.foreign_key}-${idx}`

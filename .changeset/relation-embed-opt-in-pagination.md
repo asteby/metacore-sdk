@@ -1,0 +1,7 @@
+---
+'@asteby/metacore-runtime-react': minor
+---
+
+Las subtablas de relación dentro de un modal pasan a ser opt-in y paginadas. Hasta ahora el modal de ver/editar un registro embebía TODAS las relaciones `one_to_many` del modelo, y cada subtabla pedía la lista hija completa sin `page`/`per_page`: abrir "Editar Almacén" arrastraba miles de existencias y traspasos a un diálogo. Ahora sólo se embebe la relación que el manifest declara como composición del padre (`embed: true` en la relación, kernel ≥ el release que lo proyecta en `meta.relations[]`); el resto sigue accesible desde la página del modelo hijo y desde la página de detalle autónoma, que las lista todas. Una relación sin el flag no se embebe, así que un kernel viejo que no sirve `embed` degrada a "no embebe" en vez de traer todo. El gate se aplica en el modal de registro y en el modal de acción, y se expone como `isEmbeddableRelation` para hosts que rendericen `<DynamicRelations>` a mano.
+
+`<DynamicRelation kind="one_to_many">` pagina server-side: pide `page`/`per_page` (25 por defecto, configurable con `perPage`), acumula páginas con el mismo sentinel de scroll infinito que usa `<DynamicTable>` — deduplicando por `id` — y muestra un contador `cargadas / total` mientras queden filas. Cuando la lista supera una página aparece un buscador que manda `search`/`search_columns` según las columnas buscables del modelo hijo. `buildRelationFilterParams` acepta un cuarto argumento opcional (`RelationQueryOptions`) con esos parámetros; sin él devuelve exactamente el set anterior.

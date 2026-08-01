@@ -50,7 +50,7 @@ import { ExternalLink, Loader2, CalendarIcon, ChevronDown, Check, Upload, X as X
 import { useApi } from '../api-context'
 import { toastServerError, extractFieldErrors, localizeFieldIssue } from '../server-error'
 import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-field'
-import { DynamicRelations } from '../dynamic-relations'
+import { DynamicRelations, isEmbeddableRelation } from '../dynamic-relations'
 import { useOptionsResolver, type ResolvedOption } from '../use-options-resolver'
 import { getFieldRef, getVisibleWhen, evaluateVisibleWhen } from '../dynamic-form-schema'
 import type { VisibleWhen } from '../types'
@@ -694,7 +694,15 @@ export function DynamicRecordDialog({
             .then(res => {
                 if (cancelled) return
                 const meta = res.data?.data ?? res.data
-                const rels: RelationMeta[] = Array.isArray(meta?.relations) ? meta.relations : []
+                const all: RelationMeta[] = Array.isArray(meta?.relations) ? meta.relations : []
+                // Only COMPOSITION relations belong inside the modal: a
+                // one_to_many must declare `embed: true` in its manifest to be
+                // rendered here (see isEmbeddableRelation). Without the gate the
+                // modal auto-embedded every child list, so "Editar Almacén"
+                // pulled thousands of stock/transfer rows into a dialog. The
+                // rest stay reachable from their own model page and from the
+                // standalone detail page, which still lists them all.
+                const rels = all.filter(isEmbeddableRelation)
                 // Localize each panel header: the backend serves `label` as an
                 // i18n key (addon bundle, loaded live) and the SDK renders it verbatim.
                 setRelations(

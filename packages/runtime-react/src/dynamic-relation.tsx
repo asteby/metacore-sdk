@@ -3,7 +3,7 @@
 //   - "one_to_many": lista inline editable que cuelga del registro padre.
 //   - "many_to_many": multi-select sobre la tabla destino con sync a la pivot.
 // La RFC completa vive en `packages/runtime-react/docs/relations.md`.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
     type ColumnDef,
@@ -31,6 +31,7 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
+    Input,
     MultiSelect,
     Table,
     TableBody,
@@ -39,14 +40,15 @@ import {
     TableHeader,
     TableRow,
 } from '@asteby/metacore-ui/primitives'
-import { Plus, Trash2, Pencil } from 'lucide-react'
+import { Plus, Trash2, Pencil, Search } from 'lucide-react'
 import { useApi } from './api-context'
 import { useMetadataCache } from './metadata-cache'
 import { DynamicForm } from './dynamic-form'
 import { useImageUrl } from './image-url-context'
 import { useTimeZone, useCurrency } from './org-runtime-context'
 import { makeDefaultGetDynamicColumns } from './dynamic-columns'
-import { isColumnVisibleInLineSubtable } from './column-visibility'
+import { isColumnVisibleInLineSubtable, getSearchableColumnKeys } from './column-visibility'
+import { dedupeById, useInfiniteScrollSentinel } from './use-infinite-scroll'
 import { useOptionsResolver } from './use-options-resolver'
 import type { ApiResponse, ColumnDefinition, TableMetadata } from './types'
 import {
@@ -62,7 +64,7 @@ import {
     type DynamicRelationKind,
 } from './dynamic-relation-helpers'
 
-export type { DynamicRelationKind } from './dynamic-relation-helpers'
+export type { DynamicRelationKind, RelationQueryOptions } from './dynamic-relation-helpers'
 export {
     buildCreatePayload,
     buildPivotAttachPayload,
@@ -90,6 +92,8 @@ export interface DynamicRelationStrings {
     selectPlaceholder: string
     selectSearchPlaceholder: string
     selectEmpty: string
+    /** Placeholder of the child-list search box (one_to_many only). */
+    searchPlaceholder: string
 }
 
 const DEFAULT_STRINGS: DynamicRelationStrings = {
@@ -105,7 +109,16 @@ const DEFAULT_STRINGS: DynamicRelationStrings = {
     selectPlaceholder: 'Seleccionar…',
     selectSearchPlaceholder: 'Buscar…',
     selectEmpty: 'Sin resultados.',
+    searchPlaceholder: 'Buscar en la lista…',
 }
+
+/**
+ * Rows fetched per page by an embedded child list. Small on purpose: a
+ * subtable lives inside a dialog, and the sentinel pulls the next page as the
+ * user scrolls, so the first paint stays cheap even for a parent with
+ * thousands of children.
+ */
+export const DEFAULT_RELATION_PAGE_SIZE = 25
 
 interface CommonProps {
     /** id del registro padre. */
@@ -161,6 +174,12 @@ export interface DynamicRelationOneToManyProps extends CommonProps {
     foreignKey: string
     /** Endpoint override; default `/data/${model}`. */
     endpoint?: string
+    /**
+     * Rows fetched per page. Default {@link DEFAULT_RELATION_PAGE_SIZE}. The
+     * list pages server-side and appends the next page on scroll instead of
+     * pulling every child row at once.
+     */
+    perPage?: number
 }
 
 export interface DynamicRelationManyToManyProps extends CommonProps {
@@ -202,6 +221,7 @@ function OneToManyRelation({
     parentId,
     filters,
     endpoint,
+    perPage,
     hiddenColumns = [],
     lineSubtable = false,
     canCreate = true,
@@ -237,17 +257,49 @@ function OneToManyRelation({
     const [editingRow, setEditingRow] = useState<any | null>(null)
     const [rowToDelete, setRowToDelete] = useState<any | null>(null)
     const [submitting, setSubmitting] = useState(false)
+    // Server-side paging. The list used to fetch EVERY child row in one shot,
+    // so a parent with thousands of children (a warehouse's stock) froze the
+    // dialog. Now it pulls one page at a time and appends on scroll.
+    const [total, setTotal] = useState(0)
+    const [loadingMore, setLoadingMore] = useState(false)
+    // True once the server returned a short/empty page: no more rows exist even
+    // if `total` says otherwise (count/list drift would re-fire the sentinel
+    // forever). Reset by every page-1 fetch.
+    const [exhausted, setExhausted] = useState(false)
+    const pageRef = useRef(1)
+    // Free-text query over the child list, debounced into `search`.
+    const [searchInput, setSearchInput] = useState('')
+    const [search, setSearch] = useState('')
 
+    const pageSize = perPage ?? DEFAULT_RELATION_PAGE_SIZE
     const dataEndpoint = endpoint || `/data/${model}`
     // Stable dependency key for the filters object (callers usually pass a fresh
     // literal each render). Keeps fetchAll from re-firing on identity churn while
     // still reacting to real scope changes.
     const filtersKey = useMemo(() => (filters ? JSON.stringify(filters) : ''), [filters])
+    // Columns the search runs against, per the model metadata. `null` = let the
+    // server decide; `[]` = every column opted out, so no search is sent.
+    const searchableKeys = useMemo(
+        () => (metadata ? getSearchableColumnKeys(metadata) : null),
+        [metadata],
+    )
 
-    const fetchAll = useCallback(async () => {
-        setLoading(true)
+    useEffect(() => {
+        const handle = setTimeout(() => setSearch(searchInput.trim()), 250)
+        return () => clearTimeout(handle)
+    }, [searchInput])
+
+    const fetchPage = useCallback(async (page: number) => {
+        const first = page <= 1
+        if (first) setLoading(true)
+        else setLoadingMore(true)
         try {
-            const params = buildRelationFilterParams(foreignKey, parentId, filters)
+            const params = buildRelationFilterParams(foreignKey, parentId, filters, {
+                page,
+                perPage: pageSize,
+                search,
+                searchColumns: searchableKeys,
+            })
             const [metaRes, dataRes] = await Promise.all([
                 metadata ? Promise.resolve(null) : api.get(`/metadata/table/${model}`),
                 api.get(dataEndpoint, { params }),
@@ -258,16 +310,45 @@ function OneToManyRelation({
                 cacheMetadata(model, fresh)
             }
             const list = (dataRes as { data: ApiResponse<any[]> }).data
-            if (list.success) setRows(list.data || [])
+            if (list.success) {
+                const incoming = list.data || []
+                pageRef.current = page
+                setRows(prev => (first ? incoming : dedupeById(prev, incoming)))
+                // A server that ignores `per_page` returns everything on page 1;
+                // treating a full-length page as "maybe more" is harmless since
+                // the next page then comes back empty and sets `exhausted`.
+                if (incoming.length < pageSize) setExhausted(true)
+                else if (first) setExhausted(false)
+                setTotal(list.meta?.total ?? incoming.length)
+            }
         } catch (err) {
             console.error('DynamicRelation fetch error', err)
         } finally {
             setLoading(false)
+            setLoadingMore(false)
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [api, dataEndpoint, foreignKey, parentId, filtersKey, metadata, model, cacheMetadata])
+    }, [api, dataEndpoint, foreignKey, parentId, filtersKey, metadata, model, cacheMetadata, pageSize, search, searchableKeys])
+
+    /** Reload from page 1, dropping the accumulated pages. */
+    const fetchAll = useCallback(async () => {
+        pageRef.current = 1
+        setExhausted(false)
+        await fetchPage(1)
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fetchPage])
 
     useEffect(() => { fetchAll() }, [fetchAll])
+
+    const canLoadMore = !loading && !loadingMore && !exhausted && rows.length < total
+    const { rootRef, sentinelRef } = useInfiniteScrollSentinel<HTMLDivElement, HTMLDivElement>({
+        onLoadMore: () => { if (canLoadMore) fetchPage(pageRef.current + 1) },
+        disabled: !canLoadMore,
+    })
+
+    // The search box is noise on a three-line order; it appears once the child
+    // list outgrows a page (or while a query is active, so it can be cleared).
+    const showSearch = search !== '' || searchInput !== '' || total > pageSize
 
     const formFields = useMemo(
         () => deriveRelationFormFields(metadata, foreignKey),
@@ -426,6 +507,19 @@ function OneToManyRelation({
                 </div>
             )}
 
+            {showSearch && (
+                <div className="relative pb-3">
+                    <Search className="pointer-events-none absolute start-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        value={searchInput}
+                        onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchInput(e.target.value)}
+                        placeholder={labels.searchPlaceholder}
+                        className="h-9 ps-8"
+                        aria-label={labels.searchPlaceholder}
+                    />
+                </div>
+            )}
+
             {loading ? (
                 <div className="space-y-2">
                     {Array.from({ length: 3 }).map((_, i) => (
@@ -440,7 +534,11 @@ function OneToManyRelation({
                 // Real metadata-driven table — same metacore-ui primitives and
                 // cell renderers as `<DynamicTable>` so headers, money/currency,
                 // FK thumbnails, dates and badges all match the main table.
-                <div className="overflow-x-auto border rounded-md bg-card">
+                // Own scroll container: the subtable is capped in height so a
+                // long child list scrolls INSIDE the dialog instead of pushing
+                // it off-screen, and so the sentinel below has a root to
+                // intersect with. Short lists never reach the cap.
+                <div ref={rootRef} className="max-h-96 overflow-auto border rounded-md bg-card">
                     <Table noWrapper className="w-full">
                         <TableHeader>
                             {table.getHeaderGroups().map((headerGroup: HeaderGroup<any>) => (
@@ -477,6 +575,20 @@ function OneToManyRelation({
                             ))}
                         </TableBody>
                     </Table>
+                    {/* Infinite-scroll sentinel: entering view pulls the next
+                        page and appends it (deduped by id). */}
+                    <div ref={sentinelRef} className="h-1" aria-hidden="true" />
+                    {loadingMore && (
+                        <div className="p-2">
+                            <Skeleton className="h-8 w-full" />
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {!loading && rows.length > 0 && total > rows.length && (
+                <div className="pt-2 text-xs text-muted-foreground text-end" data-relation-count="">
+                    {rows.length} / {total}
                 </div>
             )}
 

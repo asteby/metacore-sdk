@@ -194,6 +194,17 @@ export interface RelationMeta {
     readonly?: boolean
     /** camelCase alias for `readonly`. */
     readOnly?: boolean
+    /**
+     * Composition relation: the child rows are PART of the parent record (an
+     * order and its lines), so they are embedded as an inline subtable inside
+     * the record modal. Opt-in — a relation that omits it is NOT embedded in
+     * the modal, which keeps a warehouse from dragging its whole stock ledger
+     * into an edit dialog. Projected from the kernel manifest v3
+     * `relations[].embed`; absent (older kernel) reads as false, so the safe
+     * behaviour is the default. Standalone detail pages ignore the flag and
+     * keep listing every relation.
+     */
+    embed?: boolean
 }
 
 export interface FilterDefinition {

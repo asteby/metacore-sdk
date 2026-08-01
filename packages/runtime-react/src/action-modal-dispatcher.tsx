@@ -40,7 +40,7 @@ import type { Translate } from './server-error'
 import { useApi } from './api-context'
 import { DynamicIcon } from './dynamic-icon'
 import { DynamicLineItems } from './dynamic-line-items'
-import { DynamicRelations } from './dynamic-relations'
+import { DynamicRelations, isEmbeddableRelation } from './dynamic-relations'
 import { DynamicSelectField } from './dynamic-select-field'
 import { DynamicDateField } from './dynamic-date-field'
 import { UploadField } from './upload-field'
@@ -527,7 +527,10 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
             .then((res) => {
                 if (cancelled) return
                 const rels = res?.data?.relations ?? res?.data?.data?.relations ?? []
-                setRelations(Array.isArray(rels) ? rels : [])
+                // Same opt-in gate as the record modal: only composition
+                // relations (`embed: true`) may be embedded in a dialog, so an
+                // action modal never drags an unbounded child list along.
+                setRelations(Array.isArray(rels) ? rels.filter(isEmbeddableRelation) : [])
             })
             .catch(() => {
                 if (!cancelled) setRelations([])

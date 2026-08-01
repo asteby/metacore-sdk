@@ -100,15 +100,39 @@ export interface TargetRowLike {
 }
 
 /**
+ * Server-side paging / search knobs for a child list. Same wire vocabulary the
+ * main `<DynamicTable>` uses (`page`, `per_page`, `search`, `search_columns`),
+ * so the kernel handler needs nothing new.
+ */
+export interface RelationQueryOptions {
+    /** 1-based page number. Omitted/`undefined` → no `page` param. */
+    page?: number
+    /** Rows per page. Omitted/`undefined` → no `per_page` param (legacy: all). */
+    perPage?: number
+    /** Free-text query. Empty/blank → no `search` param. */
+    search?: string
+    /**
+     * Columns the search runs against. `null`/`undefined` lets the server pick;
+     * an EMPTY array means every column opted out, so the search is dropped.
+     */
+    searchColumns?: string[] | null
+}
+
+/**
  * Builds the query params used by `<DynamicRelation kind="one_to_many">` to
  * scope a child list to a single parent record. Mirrors the
  * `f_<column>=eq:<value>` convention enforced by `query/params.go` in the
  * kernel.
+ *
+ * `options` adds server-side paging and search on top of the scope. Callers
+ * that omit it get the exact legacy param set (scope only), so an unpaginated
+ * caller is unchanged.
  */
 export function buildRelationFilterParams(
     foreignKey: string,
     parentId: string | number,
     extraFilters?: Record<string, string> | null,
+    options?: RelationQueryOptions | null,
 ): Record<string, string> {
     if (!foreignKey) throw new Error('foreignKey requerido')
     if (parentId === undefined || parentId === null || parentId === '') {
@@ -125,6 +149,25 @@ export function buildRelationFilterParams(
             if (!col || col === foreignKey) continue
             if (val === undefined || val === null) continue
             params[`f_${col}`] = `eq:${String(val)}`
+        }
+    }
+    if (options) {
+        if (options.page !== undefined && options.page !== null) {
+            params.page = String(Math.max(1, Math.trunc(options.page)))
+        }
+        if (options.perPage !== undefined && options.perPage !== null) {
+            params.per_page = String(Math.max(1, Math.trunc(options.perPage)))
+        }
+        const search = (options.search ?? '').trim()
+        // searchColumns === [] means every column opted out of search: sending
+        // `search` with no columns would ask the server to match on nothing.
+        const columnsOptedOut =
+            Array.isArray(options.searchColumns) && options.searchColumns.length === 0
+        if (search && !columnsOptedOut) {
+            params.search = search
+            if (options.searchColumns && options.searchColumns.length > 0) {
+                params.search_columns = options.searchColumns.join(',')
+            }
         }
     }
     return params
