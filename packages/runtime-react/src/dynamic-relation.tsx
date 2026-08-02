@@ -43,6 +43,7 @@ import {
 import { Plus, Trash2, Pencil, Search } from 'lucide-react'
 import { useApi } from './api-context'
 import { useMetadataCache } from './metadata-cache'
+import { OptionsContext } from './options-context'
 import { DynamicForm } from './dynamic-form'
 import { useImageUrl } from './image-url-context'
 import { useTimeZone, useCurrency } from './org-runtime-context'
@@ -244,6 +245,11 @@ function OneToManyRelation({
     const labels = { ...DEFAULT_STRINGS, ...(strings || {}) }
 
     const [metadata, setMetadata] = useState<TableMetadata | null>(cachedMeta || null)
+    // Options for the ref/relation columns so their cells render the record's
+    // NAME (+ SKU subtitle) instead of the raw uuid. The main <DynamicTable>
+    // preloads these into OptionsContext; a sub-table skipped it, so a `ref`
+    // column (e.g. a purchase order line's Product) showed the bare uuid.
+    const [optionsMap, setOptionsMap] = useState<Map<string, any[]>>(new Map())
     const [rows, setRows] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     // Paginación server-side + scroll infinito, igual que <DynamicTable>.
@@ -276,6 +282,42 @@ function OneToManyRelation({
         const id = setTimeout(() => setDebouncedSearch(search.trim()), 300)
         return () => clearTimeout(id)
     }, [search])
+
+    // Preload the options of the ref/relation columns (same shape <DynamicTable>
+    // uses: `useOptions && searchEndpoint`) so their cells resolve the referenced
+    // record's name via OptionsContext instead of printing the raw uuid.
+    const refEndpointsKey = useMemo(() => {
+        const eps = (metadata?.columns || [])
+            .filter((c) => (c as any).useOptions && (c as any).searchEndpoint)
+            .map((c) => (c as any).searchEndpoint as string)
+        return Array.from(new Set(eps)).sort().join('|')
+    }, [metadata])
+
+    useEffect(() => {
+        if (!refEndpointsKey) {
+            setOptionsMap((prev) => (prev.size ? new Map() : prev))
+            return
+        }
+        const endpoints = refEndpointsKey.split('|')
+        let cancelled = false
+        void Promise.all(
+            endpoints.map(async (ep) => {
+                try {
+                    const res = (await api.get(ep)) as { data: ApiResponse<any[]> }
+                    return [ep, res.data?.success ? res.data.data || [] : []] as const
+                } catch {
+                    return [ep, [] as any[]] as const
+                }
+            }),
+        ).then((entries) => {
+            if (!cancelled) setOptionsMap(new Map(entries))
+        })
+        return () => {
+            cancelled = true
+        }
+    }, [api, refEndpointsKey])
+
+    const optionsCtx = useMemo(() => ({ optionsMap }), [optionsMap])
 
     // fetchPage REEMPLAZA (página 1) o ANEXA (scroll infinito). Antes esta lista
     // pedía el modelo hijo entero sin page/per_page.
@@ -522,6 +564,7 @@ function OneToManyRelation({
                 // `max-h` + scroll propio: la sub-tabla no puede estirar el modal
                 // del padre a lo alto de cientos de filas. El sentinel del fondo
                 // pide la página siguiente al entrar en vista.
+                <OptionsContext.Provider value={optionsCtx}>
                 <div ref={rootRef} className="overflow-auto max-h-[60vh] border rounded-md bg-card">
                     <Table noWrapper className="w-full">
                         <TableHeader>
@@ -566,6 +609,7 @@ function OneToManyRelation({
                     )}
                     <div ref={sentinelRef} aria-hidden className="h-px w-full" />
                 </div>
+                </OptionsContext.Provider>
             )}
 
             {/* Cuánto de la relación se ve. Sin esto una sub-tabla paginada
