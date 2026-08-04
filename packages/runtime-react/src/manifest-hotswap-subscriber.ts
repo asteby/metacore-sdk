@@ -97,7 +97,9 @@ export interface WireHotSwapInvalidationOptions {
      * Useful for hosts that want to log/observe hot-swaps or trigger a
      * `window.location.reload()` when the running addon's bundle hash
      * changes (see the module-level comment above for the trade-off).
-     * `removed` is the number of cache entries flushed for this addon.
+     * `removed` is the number of cache entries flushed for this addon, or
+     * `-1` when the scoped matcher found nothing and the whole metadata
+     * cache was cleared as a fallback (see `wireHotSwapInvalidation`).
      */
     onSwap?: (msg: AddonManifestChangedMessage, removed: number) => void
 }
@@ -128,9 +130,25 @@ export function wireHotSwapInvalidation(
         (message) => {
             const addonKey = message?.payload?.addonKey
             if (!addonKey) return
-            const removed = useMetadataCache
-                .getState()
-                .invalidateAddon(addonKey, matcher)
+            const store = useMetadataCache.getState()
+            let removed = store.invalidateAddon(addonKey, matcher)
+            // Matcher-miss fallback. `invalidateAddon`'s default matcher only
+            // recognises cache keys that carry the addon prefix
+            // (`purchases`, `purchases.Model`, `purchases:Model`). But most
+            // hosts cache metadata under the model's TABLE name
+            // (`purchase_order_items`, `suppliers`) — which has no `purchases.`
+            // prefix — so a scoped invalidation removes 0 entries and the
+            // stale label/ref survives (the "why did I have to clear site
+            // data" bug). A manifest change is rare (addon install/upgrade),
+            // so when scoping matched nothing we drop the WHOLE metadata cache:
+            // correctness over a micro-optimisation. Entries refetch lazily on
+            // the next DynamicTable/relation mount, picking up the new
+            // fields/refs/labels. Hosts that DO namespace their keys keep the
+            // cheap scoped path (removed > 0).
+            if (removed === 0) {
+                store.clearAll()
+                removed = -1 // sentinel: "cleared all" (distinct from 0 = no-op)
+            }
             onSwap?.(message, removed)
         },
     )

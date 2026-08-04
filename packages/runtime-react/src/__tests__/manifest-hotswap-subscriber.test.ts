@@ -118,6 +118,36 @@ describe('manifest-hotswap-subscriber', () => {
         expect(onSwap).toHaveBeenCalledWith(message, 2)
     })
 
+    it('clears the WHOLE cache when the scoped matcher finds nothing (table-named keys)', () => {
+        // Real-world case: metadata is cached under TABLE names, which carry no
+        // addon prefix. `invalidateAddon('purchases')` matches none of them, so
+        // without the fallback the stale label/ref would survive an upgrade.
+        const cache = useMetadataCache.getState()
+        cache.setMetadata('purchase_order_items', fakeMeta('items-old'))
+        cache.setMetadata('suppliers', fakeMeta('suppliers-old'))
+        cache.setModalMetadata('purchase_orders', fakeMeta('po-old'))
+
+        const onSwap = vi.fn()
+        const client = makeFakeClient()
+        wireHotSwapInvalidation(client, { onSwap })
+
+        const message: AddonManifestChangedMessage = {
+            type: 'ADDON_MANIFEST_CHANGED',
+            payload: { addonKey: 'purchases', newHash: 'sha256:new' },
+        }
+        client.emit(message)
+
+        const after = useMetadataCache.getState()
+        // Everything dropped — next mount refetches fresh metadata.
+        expect(after.cache).toEqual({})
+        expect(after.modalCache).toEqual({})
+        expect(after.prefetched).toBe(false)
+        // metadataVersion reset so prefetchAll re-seeds from the server.
+        expect(after.metadataVersion).toBe('')
+        // Sentinel -1 tells the host "cleared all" (vs 0 = genuine no-op).
+        expect(onSwap).toHaveBeenCalledWith(message, -1)
+    })
+
     it('honours a custom matcher when the host uses a different key convention', () => {
         const cache = useMetadataCache.getState()
         cache.setMetadata('addons/pos/cart', fakeMeta('cart'))
