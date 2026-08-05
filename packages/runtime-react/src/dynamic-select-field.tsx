@@ -35,8 +35,9 @@ import {
     PopoverTrigger,
     InitialsAvatar,
 } from '@asteby/metacore-ui/primitives'
-import { Check, ChevronsUpDown, Loader2, Plus } from 'lucide-react'
+import { Check, ChevronsUpDown, Loader2, Plus, ScanLine } from 'lucide-react'
 import { resolveColorCss } from '@asteby/metacore-ui/lib'
+import { BarcodeScanner, isCameraScanSupported } from './barcode-scanner'
 import { DynamicIcon, isLucideIconName } from './dynamic-icon'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { getDependsOn, getFieldRef, resolveOptionsSource } from './dynamic-form-schema'
@@ -189,7 +190,17 @@ export function DynamicSelectField({
 }: DynamicSelectFieldProps) {
     const [open, setOpen] = useState(false)
     const [search, setSearch] = useState('')
+    const [scanOpen, setScanOpen] = useState(false)
     const debounced = useDebounced(search, 250)
+
+    // Escaneo por cámara para "llenar rápido": opt-in por campo (`scan`) y sólo
+    // si el navegador soporta BarcodeDetector. Un código escaneado alimenta la
+    // búsqueda y abre el picker para elegir la referencia sin tipear el UUID.
+    const scanEnabled = !!(field.scan ?? field.scannable) && isCameraScanSupported()
+    const handleScanDetected = (code: string) => {
+        setSearch(code)
+        setOpen(true)
+    }
     // Remember the label of the option the user actually picked so the trigger
     // shows a name (not a UUID) without a round-trip.
     const [picked, setPicked] = useState<ResolvedOption | null>(null)
@@ -400,6 +411,19 @@ export function DynamicSelectField({
                 </Command>
             </PopoverContent>
             </Popover>
+            {scanEnabled && (
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-9 shrink-0"
+                    onClick={() => setScanOpen(true)}
+                    title="Escanear con la cámara"
+                    aria-label="Escanear código de barras con la cámara"
+                >
+                    <ScanLine className="size-4" />
+                </Button>
+            )}
             {fieldRef && (
                 <Button
                     type="button"
@@ -412,6 +436,16 @@ export function DynamicSelectField({
                 >
                     <Plus className="size-4" />
                 </Button>
+            )}
+            {scanEnabled && (
+                <BarcodeScanner
+                    open={scanOpen}
+                    onClose={() => setScanOpen(false)}
+                    onDetected={handleScanDetected}
+                    continuous={false}
+                    position="fixed"
+                    title={`Escanear ${field.label ?? ''}`.trim()}
+                />
             )}
         </div>
     )
