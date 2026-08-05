@@ -236,9 +236,12 @@ export function DashboardEmptyMockup({ className }: { className?: string }) {
                 en un teléfono. Un STACK vertical de cards a ancho completo se lee
                 claro. Toggle por CSS (sin JS, SSR-safe): el reflow animado sólo
                 aparece de sm hacia arriba, donde hay ancho para las 3 columnas. */}
-            <div className="flex h-full flex-col gap-3 sm:hidden">
+            <div className="flex min-h-full flex-col gap-3 sm:hidden">
                 {MOBILE_TILE_KINDS.map((kind, i) => (
-                    <div key={i} className={cn(tileBase, 'mc-demock-shimmer relative flex-1')}>
+                    <div
+                        key={i}
+                        className={cn(tileBase, 'mc-demock-shimmer relative min-h-[132px] flex-1')}
+                    >
                         <TileGlyph kind={kind} />
                     </div>
                 ))}
