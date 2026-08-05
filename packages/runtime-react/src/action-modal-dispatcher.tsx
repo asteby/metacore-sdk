@@ -645,13 +645,13 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
         <Dialog open={open} onOpenChange={onOpenChange}>
             {/* Sticky header + footer, scrollable body: the form can grow tall
                 (many line-items rows) past the viewport, so cap the dialog at
-                90vh and let ONLY the field area scroll — the title and the
+                90dvh and let ONLY the field area scroll — the title and the
                 Cancel/Submit actions stay pinned and always reachable. maxHeight
-                is inline (guaranteed) since an arbitrary max-h-[90vh] class may be
+                is inline (guaranteed) since an arbitrary max-h-[90dvh] class may be
                 dropped by a consuming app's Tailwind scan. */}
             <DialogContent
-                className={'flex max-h-[90vh] flex-col overflow-hidden ' + (widthPx ? '' : 'sm:max-w-xl')}
-                style={{ maxHeight: '90vh', ...(widthPx ? { maxWidth: widthPx, width: '95vw' } : {}) }}
+                className={'flex max-h-[90dvh] flex-col overflow-hidden ' + (widthPx ? '' : 'sm:max-w-xl')}
+                style={{ maxHeight: '90dvh', ...(widthPx ? { maxWidth: widthPx, width: '95vw' } : {}) }}
             >
                 <DialogHeader className="shrink-0">
                     <DialogTitle className="flex items-center gap-2">
@@ -837,8 +837,8 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                className={'flex max-h-[90vh] flex-col overflow-hidden ' + (widthPx ? '' : 'sm:max-w-xl')}
-                style={{ maxHeight: '90vh', ...(widthPx ? { maxWidth: widthPx, width: '95vw' } : {}) }}
+                className={'flex max-h-[90dvh] flex-col overflow-hidden ' + (widthPx ? '' : 'sm:max-w-xl')}
+                style={{ maxHeight: '90dvh', ...(widthPx ? { maxWidth: widthPx, width: '95vw' } : {}) }}
             >
                 <DialogHeader className="shrink-0">
                     <DialogTitle className="flex items-center gap-2">
