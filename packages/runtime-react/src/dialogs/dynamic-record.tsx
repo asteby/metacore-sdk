@@ -941,7 +941,7 @@ export function DynamicRecordDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+            <DialogContent className="sm:max-w-2xl max-h-[90dvh] flex flex-col p-0 gap-0 overflow-hidden" style={{ maxHeight: '90dvh' }}>
                 <DialogHeader className="p-6 pb-4 border-b shrink-0">
                     <DialogTitle>{title}</DialogTitle>
                     <DialogDescription>{config.description}</DialogDescription>
