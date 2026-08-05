@@ -1,5 +1,15 @@
 # @asteby/metacore-runtime-react
 
+## 29.1.0
+
+### Minor Changes
+
+- fb4d354: Nuevo primitivo reusable **BarcodeScanner** (+ `useScanBeep`, `isCameraScanSupported`, `RETAIL_BARCODE_FORMATS`) para escaneo por cámara en todo el ecosistema — API nativa `BarcodeDetector`, cero dependencias/assets, CSP-safe, con beep de confirmación y overlay `absolute`/`fixed`. Los campos `dynamic_select` aceptan un flag opt-in `scan` (alias `scannable`): cuando el navegador lo soporta, el picker muestra un botón de cámara que alimenta la búsqueda para "llenar rápido" una referencia (variante de producto, renglón de orden de compra) sin tipear el UUID/SKU. País/negocio-agnóstico.
+
+### Patch Changes
+
+- 1f9ec92: Empty/skeleton del Tablero en móvil: los tiles apilados ahora tienen altura intrínseca (`min-h`) para no colapsar en una franja chaparra cuando el contenedor no propaga una altura definida.
+
 ## 29.0.3
 
 ### Patch Changes
