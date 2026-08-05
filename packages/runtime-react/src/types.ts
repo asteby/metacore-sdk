@@ -510,6 +510,17 @@ export interface ActionFieldDef {
     /** snake_case alias served by the kernel manifest for `optionsConfig`. */
     options_config?: FieldOptionsConfig
     /**
+     * Opt-in: ofrecer escaneo por cámara para LLENAR RÁPIDO este campo. Cuando
+     * es `true` y el navegador soporta `BarcodeDetector`, el picker searchable
+     * muestra un botón de cámara: el código escaneado alimenta la búsqueda para
+     * elegir la referencia sin tipear el UUID/SKU (ideal para renglones de
+     * orden de compra, variantes de producto, etc.). País/negocio-agnóstico.
+     * Additive / opcional; los hosts viejos lo ignoran. Tolera `scannable`.
+     */
+    scan?: boolean
+    /** Alias tolerado para `scan`. */
+    scannable?: boolean
+    /**
      * Columns of a repeatable line-items group. Mirrors the kernel v3
      * `ActionField.item_fields` (json `item_fields`). Present on a field
      * with `type: "array"` — the multi-row container (e.g. the item rows
