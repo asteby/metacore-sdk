@@ -1,5 +1,14 @@
 # @asteby/metacore-runtime-react
 
+## 29.0.3
+
+### Patch Changes
+
+- 14dcf25: Dashboard: el skeleton/empty del tablero (`DashboardEmptyMockup`) se veía
+  apretado y raro en móvil (3 columnas absolutas angostas en un teléfono). En
+  `<sm` ahora renderiza un stack vertical de cards a ancho completo; el reflow
+  animado de 3 columnas se conserva de `sm` hacia arriba. Toggle por CSS, sin JS.
+
 ## 29.0.2
 
 ### Patch Changes
