@@ -27,6 +27,8 @@ import {
     getVisibleWhen,
     evaluateVisibleWhen,
 } from './dynamic-form-schema'
+import { ScanLine } from 'lucide-react'
+import { BarcodeScanner, isCameraScanSupported } from './barcode-scanner'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { DynamicLineItems } from './dynamic-line-items'
 import { DynamicSelectField } from './dynamic-select-field'
@@ -414,8 +416,69 @@ function FieldRenderer({
         case 'date':
             return <DynamicDateField field={field} value={value} onChange={onChange} />
         default:
-            return <Input id={field.key} type={field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : 'text'} value={value || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} placeholder={field.placeholder} />
+            return (
+                <ScannableInput
+                    field={field}
+                    value={value}
+                    onChange={onChange}
+                    type={field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : 'text'}
+                />
+            )
     }
+}
+
+/**
+ * Input de texto/número con opción de ESCANEO por cámara para "llenar rápido".
+ * Cuando el campo declara `scan` (alias `scannable`) y el navegador soporta
+ * `BarcodeDetector`, agrega un botón de cámara: el código escaneado se escribe
+ * en el input y el escáner SE QUEDA ABIERTO (continuo) por si querés corregir o
+ * escanear otro — lo cerrás con la X. Sin el flag o sin soporte, es un Input
+ * normal (retrocompat total).
+ */
+function ScannableInput({
+    field,
+    value,
+    onChange,
+    type,
+}: FieldRendererProps & { type: string }) {
+    const [scanOpen, setScanOpen] = useState(false)
+    const scanEnabled = !!(field.scan ?? field.scannable) && isCameraScanSupported()
+    const input = (
+        <Input
+            id={field.key}
+            type={type}
+            value={value ?? ''}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                onChange(type === 'number' ? e.target.valueAsNumber || '' : e.target.value)
+            }
+            placeholder={field.placeholder}
+        />
+    )
+    if (!scanEnabled) return input
+    return (
+        <div className="flex w-full min-w-0 items-center gap-1.5">
+            <div className="min-w-0 flex-1">{input}</div>
+            <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-9 shrink-0"
+                onClick={() => setScanOpen(true)}
+                title="Escanear con la cámara"
+                aria-label="Escanear código de barras con la cámara"
+            >
+                <ScanLine className="size-4" />
+            </Button>
+            <BarcodeScanner
+                open={scanOpen}
+                onClose={() => setScanOpen(false)}
+                onDetected={(code) => onChange(code)}
+                continuous
+                position="fixed"
+                title={`Escanear ${field.label ?? ''}`.trim()}
+            />
+        </div>
+    )
 }
 
 function RefSelect({ field, value, onChange }: FieldRendererProps) {
