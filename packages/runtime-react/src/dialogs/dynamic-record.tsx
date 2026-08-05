@@ -46,7 +46,8 @@ import { cn } from '@asteby/metacore-ui/lib'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ExternalLink, Loader2, CalendarIcon, ChevronDown, Check, Upload, X as XIcon } from 'lucide-react'
+import { ExternalLink, Loader2, CalendarIcon, ChevronDown, Check, Upload, X as XIcon, ScanLine } from 'lucide-react'
+import { BarcodeScanner, isCameraScanSupported } from '../barcode-scanner'
 import { useApi } from '../api-context'
 import { toastServerError, extractFieldErrors, localizeFieldIssue } from '../server-error'
 import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-field'
@@ -1821,15 +1822,72 @@ export function EditField({ field, value, onChange, record }: {
             ? 'email'
             : 'text'
 
-    return (
+    return <ScannableRecordInput field={field} value={value} onChange={onChange} inputType={inputType} />
+}
+
+/**
+ * Input de texto/número del modal de crear/editar registro con opción de ESCANEO
+ * por cámara. Cuando el campo declara `scan` (alias `scannable`) y el navegador
+ * lo soporta, agrega un botón de cámara: el código escaneado LLENA el input (ej.
+ * el SKU/CÓDIGO al crear producto o variante) y el escáner queda abierto para
+ * corregir/reintentar. Sin el flag o sin soporte, es un Input normal.
+ *
+ * NOTA: este modal renderer es SEPARADO del FieldRenderer de dynamic-form, por
+ * eso el escaneo se cablea también acá (si no, el auto-CRUD de crear producto
+ * nunca mostraba el botón).
+ */
+function ScannableRecordInput({
+    field,
+    value,
+    onChange,
+    inputType,
+}: {
+    field: FieldDef
+    value: any
+    onChange: (val: any) => void
+    inputType: string
+}) {
+    const [scanOpen, setScanOpen] = useState(false)
+    const scanEnabled =
+        !!((field as { scan?: boolean; scannable?: boolean }).scan ??
+            (field as { scan?: boolean; scannable?: boolean }).scannable) &&
+        isCameraScanSupported()
+    const input = (
         <Input
             type={inputType}
             value={value ?? ''}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(
-                field.type === 'number' ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value
-            )}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                onChange(
+                    inputType === 'number' ? (e.target.value === '' ? '' : Number(e.target.value)) : e.target.value,
+                )
+            }
             placeholder={field.placeholder}
         />
+    )
+    if (!scanEnabled) return input
+    return (
+        <div className="flex w-full min-w-0 items-center gap-1.5">
+            <div className="min-w-0 flex-1">{input}</div>
+            <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                className="size-9 shrink-0"
+                onClick={() => setScanOpen(true)}
+                title="Escanear con la cámara"
+                aria-label="Escanear código de barras con la cámara"
+            >
+                <ScanLine className="size-4" />
+            </Button>
+            <BarcodeScanner
+                open={scanOpen}
+                onClose={() => setScanOpen(false)}
+                onDetected={(code) => onChange(code)}
+                continuous
+                position="fixed"
+                title={`Escanear ${field.label ?? ''}`.trim()}
+            />
+        </div>
     )
 }
 
