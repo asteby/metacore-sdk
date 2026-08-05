@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 29.2.2
+
+### Patch Changes
+
+- b07391e: El escaneo por cámara (`scan` opt-in) ahora también funciona en el modal de **crear/editar registro** (auto-CRUD), no solo en los modales de acción. Su renderer de campos es SEPARADO del de dynamic-form, así que el botón de escaneo en el input de texto (ej. el CÓDIGO/SKU al crear producto o variante) se cableó también ahí — antes nunca aparecía en ese modal.
+
 ## 29.2.1
 
 ### Patch Changes
