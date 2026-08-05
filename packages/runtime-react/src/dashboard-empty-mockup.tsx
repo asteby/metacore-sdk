@@ -230,20 +230,39 @@ export function DashboardEmptyMockup({ className }: { className?: string }) {
         <div
             aria-hidden="true"
             data-testid="dashboard-empty-mockup"
-            className={cn('mc-demock pointer-events-none select-none', className)}
+            className={cn('pointer-events-none select-none', className)}
         >
-            {layoutA.map((r, i) => (
-                <div
-                    key={i}
-                    data-mockup-tile="tile"
-                    className={cn(tileBase, `mc-demock-t${i}`)}
-                    // Base position = layout A, so reduced-motion (animation off)
-                    // shows the full static composition.
-                    style={{ left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%` }}
-                >
-                    <TileGlyph kind={TILE_KINDS[i]} />
-                </div>
-            ))}
+            {/* Móvil (<sm): las 3 columnas absolutas quedan angostas y apretadas
+                en un teléfono. Un STACK vertical de cards a ancho completo se lee
+                claro. Toggle por CSS (sin JS, SSR-safe): el reflow animado sólo
+                aparece de sm hacia arriba, donde hay ancho para las 3 columnas. */}
+            <div className="flex h-full flex-col gap-3 sm:hidden">
+                {MOBILE_TILE_KINDS.map((kind, i) => (
+                    <div key={i} className={cn(tileBase, 'mc-demock-shimmer relative flex-1')}>
+                        <TileGlyph kind={kind} />
+                    </div>
+                ))}
+            </div>
+
+            {/* Tablet/escritorio: el mockup de 3 columnas que reorganiza en bucle. */}
+            <div className="mc-demock hidden h-full sm:block">
+                {layoutA.map((r, i) => (
+                    <div
+                        key={i}
+                        data-mockup-tile="tile"
+                        className={cn(tileBase, `mc-demock-t${i}`)}
+                        // Base position = layout A, so reduced-motion (animation off)
+                        // shows the full static composition.
+                        style={{ left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%` }}
+                    >
+                        <TileGlyph kind={TILE_KINDS[i]} />
+                    </div>
+                ))}
+            </div>
         </div>
     )
 }
+
+// En móvil mostramos 3 cards apiladas (stat + chart + list) a ancho completo —
+// suficiente para comunicar "tablero cargando/ vacío" sin apretar 6 tiles.
+const MOBILE_TILE_KINDS: Glyph[] = ['stat', 'chart', 'list']
