@@ -37,7 +37,7 @@ import {
 } from '@asteby/metacore-ui/primitives'
 import { Check, ChevronsUpDown, Loader2, Plus, ScanLine } from 'lucide-react'
 import { resolveColorCss } from '@asteby/metacore-ui/lib'
-import { BarcodeScanner, isCameraScanSupported } from './barcode-scanner'
+import { BarcodeScanner } from './barcode-scanner'
 import { DynamicIcon, isLucideIconName } from './dynamic-icon'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { getDependsOn, getFieldRef, resolveOptionsSource } from './dynamic-form-schema'
@@ -193,10 +193,13 @@ export function DynamicSelectField({
     const [scanOpen, setScanOpen] = useState(false)
     const debounced = useDebounced(search, 250)
 
-    // Escaneo por cámara para "llenar rápido": opt-in por campo (`scan`) y sólo
-    // si el navegador soporta BarcodeDetector. Un código escaneado alimenta la
-    // búsqueda y abre el picker para elegir la referencia sin tipear el UUID.
-    const scanEnabled = !!(field.scan ?? field.scannable) && isCameraScanSupported()
+    // Escaneo por cámara para "llenar rápido": opt-in por campo (`scan`). El
+    // botón aparece SIEMPRE que el campo lo declara (igual que el POS), sin
+    // esconderse por `isCameraScanSupported()` — en escritorio el botón no salía
+    // aunque el campo lo pidiera. El BarcodeScanner ya degrada con un mensaje
+    // cuando no hay cámara. Un código escaneado alimenta la búsqueda y abre el
+    // picker para elegir la referencia sin tipear el UUID.
+    const scanEnabled = !!(field.scan ?? field.scannable)
     const handleScanDetected = (code: string) => {
         setSearch(code)
         setOpen(true)
