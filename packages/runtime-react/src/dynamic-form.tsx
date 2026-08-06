@@ -28,7 +28,7 @@ import {
     evaluateVisibleWhen,
 } from './dynamic-form-schema'
 import { ScanLine } from 'lucide-react'
-import { BarcodeScanner, isCameraScanSupported } from './barcode-scanner'
+import { BarcodeScanner } from './barcode-scanner'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { DynamicLineItems } from './dynamic-line-items'
 import { DynamicSelectField } from './dynamic-select-field'
@@ -442,7 +442,14 @@ function ScannableInput({
     type,
 }: FieldRendererProps & { type: string }) {
     const [scanOpen, setScanOpen] = useState(false)
-    const scanEnabled = !!(field.scan ?? field.scannable) && isCameraScanSupported()
+    // El botón aparece SIEMPRE que el campo declara `scan`, igual que el POS
+    // (que gatea por su handler, no por soporte). No lo escondemos por
+    // `isCameraScanSupported()`: en un navegador sin `BarcodeDetector` el botón
+    // seguía sin verse en escritorio aunque el campo lo pidiera, y el usuario no
+    // entendía por qué el POS sí lo mostraba y el form no. El BarcodeScanner ya
+    // degrada con un mensaje ("usá un lector físico / escribí a mano") cuando no
+    // hay soporte, así que mostrar el botón es seguro y consistente.
+    const scanEnabled = !!(field.scan ?? field.scannable)
     const input = (
         <Input
             id={field.key}
