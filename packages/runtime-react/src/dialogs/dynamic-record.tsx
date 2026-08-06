@@ -47,7 +47,7 @@ import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { ExternalLink, Loader2, CalendarIcon, ChevronDown, Check, Upload, X as XIcon, ScanLine } from 'lucide-react'
-import { BarcodeScanner, isCameraScanSupported } from '../barcode-scanner'
+import { BarcodeScanner } from '../barcode-scanner'
 import { useApi } from '../api-context'
 import { toastServerError, extractFieldErrors, localizeFieldIssue } from '../server-error'
 import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-field'
@@ -1848,10 +1848,13 @@ function ScannableRecordInput({
     inputType: string
 }) {
     const [scanOpen, setScanOpen] = useState(false)
-    const scanEnabled =
-        !!((field as { scan?: boolean; scannable?: boolean }).scan ??
-            (field as { scan?: boolean; scannable?: boolean }).scannable) &&
-        isCameraScanSupported()
+    // El botón de escaneo aparece siempre que el campo declara `scan` (como el
+    // POS), sin esconderse por `isCameraScanSupported()`. El BarcodeScanner ya
+    // muestra un mensaje amable cuando el navegador no tiene cámara.
+    const scanEnabled = !!(
+        (field as { scan?: boolean; scannable?: boolean }).scan ??
+        (field as { scan?: boolean; scannable?: boolean }).scannable
+    )
     const input = (
         <Input
             type={inputType}
