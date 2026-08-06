@@ -113,9 +113,81 @@ export function DynamicLineItems({ field, value, onChange, disabled = false, for
         updateCell(idx, key, cellValue)
     }
 
+    const totalCols = itemFields.filter((c) => c.total)
+
     return (
         <div className="grid gap-2" data-widget="line_items">
-            <div className="overflow-x-auto rounded-md border">
+            {/* Móvil (<sm): una tabla de N columnas no cabe en un teléfono —
+                obliga a scroll horizontal renglón por renglón. Cada renglón se
+                vuelve una CARD apilada con sus columnas como campos etiquetados
+                (mismo CellRenderer), legible y editable con el pulgar. La tabla
+                se conserva de sm en adelante. */}
+            <div className="grid gap-2 sm:hidden">
+                {rows.length === 0 && (
+                    <div className="text-muted-foreground rounded-md border px-3 py-4 text-center text-sm">
+                        Sin renglones
+                    </div>
+                )}
+                {rows.map((row, idx) => (
+                    <div key={idx} className="rounded-md border p-3">
+                        <div className="mb-2 flex items-center justify-between">
+                            <span className="text-muted-foreground text-xs font-medium">
+                                Renglón {idx + 1}
+                            </span>
+                            {!lockRows && (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-7"
+                                    onClick={() => removeRow(idx)}
+                                    disabled={disabled}
+                                    aria-label="Eliminar renglón"
+                                >
+                                    <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                            )}
+                        </div>
+                        <div className="grid gap-2.5">
+                            {itemFields.map((col) => (
+                                <div key={col.key} className="grid gap-1">
+                                    <span className="text-xs font-medium">
+                                        {col.label}
+                                        {col.required && (
+                                            <span className="ml-1 text-red-500">*</span>
+                                        )}
+                                    </span>
+                                    <CellRenderer
+                                        field={col}
+                                        value={row?.[col.key]}
+                                        onChange={(v: any) => handleCell(idx, col.key, v)}
+                                        disabled={disabled}
+                                        formValues={formValues}
+                                        rowValues={row}
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+                {hasTotals && rows.length > 0 && (
+                    <div className="bg-muted/30 grid gap-1.5 rounded-md border p-3">
+                        {totalCols.map((col) => (
+                            <div
+                                key={col.key}
+                                className="flex items-center justify-between text-sm"
+                            >
+                                <span className="text-muted-foreground">{col.label}</span>
+                                <span className="font-semibold tabular-nums">
+                                    {fmtNumber(totals[col.key] ?? 0)}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            <div className="hidden overflow-x-auto rounded-md border sm:block">
                 <table className="w-full text-sm">
                     <thead className="bg-muted/50">
                         <tr>
@@ -210,11 +282,18 @@ export function DynamicLineItems({ field, value, onChange, disabled = false, for
                     )}
                 </table>
             </div>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between">
                 {lockRows ? (
                     <span />
                 ) : (
-                    <Button type="button" variant="outline" size="sm" onClick={addRow} disabled={disabled}>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={addRow}
+                        disabled={disabled}
+                        className="w-full sm:w-auto"
+                    >
                         <Plus className="mr-1 h-4 w-4" />
                         Agregar renglón
                     </Button>
