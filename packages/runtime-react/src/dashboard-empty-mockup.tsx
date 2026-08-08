@@ -137,8 +137,14 @@ function useMockupStyles() {
     }, [])
 }
 
-const tileBase =
+// Desktop absolute tiles only. Mobile stack MUST NOT include `mc-demock-tile` —
+// that class forces position:absolute (for the animated grid). On the flex
+// stack it collapses every card into a content-sized strip at the top-left
+// (the "skeleton pequeñito" regression on phones / narrow viewports).
+const desktopTileBase =
     'rounded-lg border border-border/60 bg-card mc-demock-tile mc-demock-shimmer text-foreground'
+const mobileTileBase =
+    'relative w-full rounded-xl border border-border/60 bg-card mc-demock-shimmer text-foreground'
 
 type Glyph = 'chart' | 'stat' | 'list' | 'bar'
 
@@ -232,28 +238,32 @@ export function DashboardEmptyMockup({ className }: { className?: string }) {
             data-testid="dashboard-empty-mockup"
             className={cn('pointer-events-none select-none', className)}
         >
-            {/* Móvil (<sm): las 3 columnas absolutas quedan angostas y apretadas
-                en un teléfono. Un STACK vertical de cards a ancho completo se lee
-                claro. Toggle por CSS (sin JS, SSR-safe): el reflow animado sólo
-                aparece de sm hacia arriba, donde hay ancho para las 3 columnas. */}
-            <div className="flex min-h-full flex-col gap-3 sm:hidden">
-                {MOBILE_TILE_KINDS.map((kind, i) => (
+            {/* Viewport angosto / contenido con sidebar (<lg ≈ 1024px): 3 cards
+                apiladas a ANCHO COMPLETO y altura generosa. El breakpoint es lg
+                (no sm) porque el main de ops suele quedar <640px con el sidebar
+                abierto y el stack de sm: nunca se activaba — sólo el grid
+                absoluto colapsado. Sin `mc-demock-tile` — ver mobileTileBase. */}
+            <div
+                className="flex min-h-full w-full flex-col gap-4 lg:hidden"
+                data-testid="dashboard-empty-mockup-stack"
+            >
+                {STACK_TILE_KINDS.map((kind, i) => (
                     <div
                         key={i}
-                        className={cn(tileBase, 'mc-demock-shimmer relative min-h-[132px] flex-1')}
+                        className={cn(mobileTileBase, 'min-h-[200px] flex-1')}
                     >
                         <TileGlyph kind={kind} />
                     </div>
                 ))}
             </div>
 
-            {/* Tablet/escritorio: el mockup de 3 columnas que reorganiza en bucle. */}
-            <div className="mc-demock hidden h-full sm:block">
+            {/* Desktop amplio: el mockup de 3 columnas que reorganiza en bucle. */}
+            <div className="mc-demock hidden h-full lg:block">
                 {layoutA.map((r, i) => (
                     <div
                         key={i}
                         data-mockup-tile="tile"
-                        className={cn(tileBase, `mc-demock-t${i}`)}
+                        className={cn(desktopTileBase, `mc-demock-t${i}`)}
                         // Base position = layout A, so reduced-motion (animation off)
                         // shows the full static composition.
                         style={{ left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%` }}
@@ -266,6 +276,5 @@ export function DashboardEmptyMockup({ className }: { className?: string }) {
     )
 }
 
-// En móvil mostramos 3 cards apiladas (stat + chart + list) a ancho completo —
-// suficiente para comunicar "tablero cargando/ vacío" sin apretar 6 tiles.
-const MOBILE_TILE_KINDS: Glyph[] = ['stat', 'chart', 'list']
+// Stack vertical (móvil): 3 cards a ancho completo — stat + chart + list.
+const STACK_TILE_KINDS: Glyph[] = ['stat', 'chart', 'list']
