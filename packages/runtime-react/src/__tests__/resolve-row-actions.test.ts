@@ -77,4 +77,19 @@ describe('isRowActionVisible', () => {
         expect(isActionConditionMet({ condition: { field: 's', operator: 'not_in', value: ['a', 'b'] } }, { s: 'c' })).toBe(true)
         expect(isActionConditionMet({ condition: { field: 's', operator: 'neq', value: 'a' } }, { s: 'a' })).toBe(false)
     })
+
+    it('isActionConditionMet resolves nested paths and equals/notEquals aliases', () => {
+        const approve = {
+            condition: { field: 'user.verified', operator: 'equals', value: false },
+        }
+        const revoke = {
+            condition: { field: 'user.verified', operator: 'equals', value: true },
+        }
+        expect(isActionConditionMet(approve, { user: { verified: false } })).toBe(true)
+        expect(isActionConditionMet(approve, { user: { verified: true } })).toBe(false)
+        expect(isActionConditionMet(revoke, { user: { verified: true } })).toBe(true)
+        expect(isActionConditionMet(revoke, { user: { verified: false } })).toBe(false)
+        // Flat lookup must NOT match nested conditions (regression of row[field]).
+        expect(isActionConditionMet(approve, { 'user.verified': false } as any)).toBe(false)
+    })
 })
