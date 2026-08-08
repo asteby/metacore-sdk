@@ -137,13 +137,9 @@ function useMockupStyles() {
     }, [])
 }
 
-// Desktop absolute tiles only. Mobile stack MUST NOT include `mc-demock-tile` —
-// that class forces position:absolute (for the animated grid). On the flex
-// stack it collapses every card into a content-sized strip at the top-left
-// (the "skeleton pequeñito" regression on phones / narrow viewports).
-const desktopTileBase =
-    'rounded-lg border border-border/60 bg-card mc-demock-tile mc-demock-shimmer text-foreground'
-const mobileTileBase =
+// Static stack cards — never `mc-demock-tile` (that class is position:absolute
+// for the old animated grid and collapsed cards into a tiny top-left strip).
+const stackTileBase =
     'relative w-full rounded-xl border border-border/60 bg-card mc-demock-shimmer text-foreground'
 
 type Glyph = 'chart' | 'stat' | 'list' | 'bar'
@@ -219,56 +215,31 @@ function TileGlyph({ kind }: { kind: Glyph }) {
 const TILE_KINDS: Glyph[] = ['stat', 'chart', 'chart', 'list', 'stat', 'bar']
 
 /**
- * Full-bleed skeleton dashboard that reflows through four layouts on a loop.
- * Overlap-free by construction (see the invariant note above). Purely
- * decorative — always `aria-hidden`, no text.
+ * Full-bleed skeleton dashboard: 3 static cards stacked full-width.
+ * No reflow animation — size and layout stability matter more than motion.
+ * Purely decorative — always `aria-hidden`, no text.
  *
- * Contract: tiles are positioned with percentage heights, so the CONTAINER
- * must have a DEFINITE height (e.g. `h-[…]`, or a flex child with `flex-1`).
- * A parent with only `min-height` leaves the box auto-height and the tiles
- * collapse into a strip. The dashboard empty state mounts it inside a
- * definite-height box for exactly this reason.
+ * The layout-math helpers above (`computeLayoutRects`, etc.) stay exported for
+ * the overlap unit test / future reuse; the visible UI is the stack only.
  */
 export function DashboardEmptyMockup({ className }: { className?: string }) {
     useMockupStyles()
-    const layoutA = React.useMemo(() => computeLayoutRects(MOCKUP_LAYOUTS[0]), [])
     return (
         <div
             aria-hidden="true"
             data-testid="dashboard-empty-mockup"
-            className={cn('pointer-events-none select-none', className)}
+            className={cn('pointer-events-none w-full select-none', className)}
         >
-            {/* Viewport angosto / contenido con sidebar (<lg ≈ 1024px): 3 cards
-                apiladas a ANCHO COMPLETO y altura generosa. El breakpoint es lg
-                (no sm) porque el main de ops suele quedar <640px con el sidebar
-                abierto y el stack de sm: nunca se activaba — sólo el grid
-                absoluto colapsado. Sin `mc-demock-tile` — ver mobileTileBase. */}
             <div
-                className="flex min-h-full w-full flex-col gap-4 lg:hidden"
+                className="flex w-full flex-col gap-4"
                 data-testid="dashboard-empty-mockup-stack"
             >
                 {STACK_TILE_KINDS.map((kind, i) => (
                     <div
                         key={i}
-                        className={cn(mobileTileBase, 'min-h-[200px] flex-1')}
+                        className={cn(stackTileBase, 'min-h-[200px]')}
                     >
                         <TileGlyph kind={kind} />
-                    </div>
-                ))}
-            </div>
-
-            {/* Desktop amplio: el mockup de 3 columnas que reorganiza en bucle. */}
-            <div className="mc-demock hidden h-full lg:block">
-                {layoutA.map((r, i) => (
-                    <div
-                        key={i}
-                        data-mockup-tile="tile"
-                        className={cn(desktopTileBase, `mc-demock-t${i}`)}
-                        // Base position = layout A, so reduced-motion (animation off)
-                        // shows the full static composition.
-                        style={{ left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%` }}
-                    >
-                        <TileGlyph kind={TILE_KINDS[i]} />
                     </div>
                 ))}
             </div>
@@ -276,5 +247,5 @@ export function DashboardEmptyMockup({ className }: { className?: string }) {
     )
 }
 
-// Stack vertical (móvil): 3 cards a ancho completo — stat + chart + list.
+// 3 cards a ancho completo — stat + chart + list. Sin animación de reflow.
 const STACK_TILE_KINDS: Glyph[] = ['stat', 'chart', 'list']

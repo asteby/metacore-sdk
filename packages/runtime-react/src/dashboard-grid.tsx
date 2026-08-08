@@ -154,25 +154,14 @@ export function DashboardGrid({
             <div
                 data-testid="dashboard-empty"
                 className={cn(
-                    // Full-bleed: the mockup fills the whole dashboard area, not a
-                    // centered illustration. No caption — the animation speaks for
-                    // itself (and dodges shipping un-localized copy).
-                    //
-                    // DEFINITE height (clamp), not min-height: the mockup positions
-                    // its tiles with percentage heights, which only resolve against a
-                    // parent whose height is definite. A min-height alone leaves the
-                    // box auto-height and the tiles collapse into a strip — so we own
-                    // the height here instead of hoping the dashboard layout supplies
-                    // one.
-                    // No dashed border / padding wrapper: the skeleton tiles ARE
-                    // cards (same anatomy as the real widgets), so the mockup
-                    // should float exactly like the loaded dashboard, not sit
-                    // inside a boxed placeholder. Keep only the definite height.
-                    'h-[clamp(420px,60vh,720px)] w-full',
+                    // Full-bleed stack of static skeleton cards (no dashed box,
+                    // no caption). Height follows the 3 tall cards — no absolute
+                    // %-height grid that needed a clamp wrapper.
+                    'w-full',
                     className,
                 )}
             >
-                <DashboardEmptyMockup className="h-full" />
+                <DashboardEmptyMockup />
             </div>
         )
     }
