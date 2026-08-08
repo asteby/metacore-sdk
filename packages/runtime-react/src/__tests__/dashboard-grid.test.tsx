@@ -156,16 +156,16 @@ describe('DashboardGrid render', () => {
         expect(screen.getByTestId('dashboard-empty')).toBeTruthy()
     })
 
-    it('renders the animated mockup (decorative) in the empty state', () => {
+    it('renders the static full-width skeleton stack (decorative) in the empty state', () => {
         render(<DashboardGrid widgets={[]} loadData={loaderOf({})} />)
         const mock = screen.getByTestId('dashboard-empty-mockup')
         expect(mock).toBeTruthy()
+        expect(screen.getByTestId('dashboard-empty-mockup-stack')).toBeTruthy()
         // Purely decorative → hidden from the a11y tree.
         expect(mock.getAttribute('aria-hidden')).toBe('true')
-        // Keyframes are injected once into the document head.
+        // Shimmer styles still inject once (no reflow keyframes required).
         expect(document.getElementById('mc-dashboard-empty-mockup-style')).toBeTruthy()
-        // No caption text — the animation carries the meaning (and avoids
-        // shipping un-localized copy from the package).
+        // No caption text — avoids shipping un-localized copy from the package.
         expect(screen.queryByText(/dashboard/i)).toBeNull()
     })
 
