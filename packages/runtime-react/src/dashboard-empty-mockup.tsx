@@ -210,10 +210,6 @@ function TileGlyph({ kind }: { kind: Glyph }) {
     )
 }
 
-// Kind per tile, in the [c0-top, c0-bottom, c1-top, c1-bottom, c2-top, c2-bottom]
-// order used by computeLayoutRects.
-const TILE_KINDS: Glyph[] = ['stat', 'chart', 'chart', 'list', 'stat', 'bar']
-
 /**
  * Full-bleed skeleton dashboard: 3 static cards stacked full-width.
  * No reflow animation — size and layout stability matter more than motion.
