@@ -1,7 +1,16 @@
 // ExportDialog — lets users pick format (csv/json) + columns and kicks off
 // either a sync download or an async export job (polled via /exports/:id/status).
-// Axios-like client is provided by <ApiProvider>.
-import { useState, useEffect, useCallback } from 'react'
+//
+// Labels work for BOTH host styles:
+//   - Core DefineTable with human text ("Especialidades") → shown as-is via
+//     t(label, { defaultValue: label })
+//   - Manifest i18n keys ("purchases.field.state") → resolved by the host i18n
+//     bundle the same way DynamicTable already translates column headers
+// The localized labels are also sent to the API as `column_labels` so the CSV
+// headers match what the user sees in the dialog (backend may not have the
+// addon locale bundles that only live on the frontend).
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
     Dialog,
     DialogContent,
@@ -40,6 +49,7 @@ export function ExportDialog({
     hasActiveFilters,
 }: ExportDialogProps) {
     const api = useApi()
+    const { t, i18n } = useTranslation()
     const [format, setFormat] = useState<'csv' | 'json'>('csv')
     const [exportAll, setExportAll] = useState(false)
     const [selectedColumns, setSelectedColumns] = useState<string[]>([])
@@ -48,12 +58,34 @@ export function ExportDialog({
     const [progress, setProgress] = useState(0)
     const [asyncJobId, setAsyncJobId] = useState<string | null>(null)
 
+    const tr = useCallback(
+        (label?: string, fallback?: string) => {
+            const raw = (label && label.trim()) || fallback || ''
+            if (!raw) return fallback || ''
+            return t(raw, { defaultValue: raw })
+        },
+        [t],
+    )
+
+    const title = useMemo(
+        () => tr((metadata as { titleKey?: string }).titleKey || metadata.title, metadata.title || model),
+        [metadata, model, tr],
+    )
+
+    const visibleColumns = useMemo(
+        () =>
+            (metadata?.columns?.filter((col) => !col.hidden) ?? []).map((col) => ({
+                ...col,
+                displayLabel: tr(col.label, col.key),
+            })),
+        [metadata, tr],
+    )
     useEffect(() => {
         if (open && metadata?.columns) {
             setSelectedColumns(
                 metadata.columns
-                    .filter(col => !col.hidden)
-                    .map(col => col.key)
+                    .filter((col) => !col.hidden)
+                    .map((col) => col.key),
             )
             setFormat('csv')
             setExportAll(false)
@@ -68,21 +100,19 @@ export function ExportDialog({
         setSelectedColumns((prev: string[]) =>
             prev.includes(key)
                 ? prev.filter((k: string) => k !== key)
-                : [...prev, key]
+                : [...prev, key],
         )
     }, [])
 
     const toggleAllColumns = useCallback(() => {
-        const visibleKeys = metadata.columns
-            .filter(col => !col.hidden)
-            .map(col => col.key)
+        const visibleKeys = visibleColumns.map((col) => col.key)
 
         if (selectedColumns.length === visibleKeys.length) {
             setSelectedColumns([])
         } else {
             setSelectedColumns(visibleKeys)
         }
-    }, [metadata, selectedColumns])
+    }, [visibleColumns, selectedColumns])
 
     useEffect(() => {
         if (!asyncJobId) return
@@ -145,9 +175,20 @@ export function ExportDialog({
         setProgress(0)
 
         try {
+            const columnLabels: Record<string, string> = {}
+            for (const col of visibleColumns) {
+                if (selectedColumns.includes(col.key)) {
+                    columnLabels[col.key] = col.displayLabel
+                }
+            }
+
             const params: Record<string, any> = {
                 format,
                 columns: selectedColumns.join(','),
+                // Localized headers so CSV matches the dialog (core text OR
+                // manifest i18n keys resolved by the host frontend).
+                column_labels: JSON.stringify(columnLabels),
+                lang: i18n.language || 'es',
             }
 
             if (!exportAll && currentFilters) {
@@ -190,13 +231,11 @@ export function ExportDialog({
         }
     }
 
-    const visibleColumns = metadata?.columns?.filter(col => !col.hidden) ?? []
-
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-md max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
                 <DialogHeader className="p-6 pb-4 border-b shrink-0">
-                    <DialogTitle>Exportar {metadata.title}</DialogTitle>
+                    <DialogTitle>Exportar {title}</DialogTitle>
                     <DialogDescription>
                         Selecciona el formato y las columnas a exportar.
                     </DialogDescription>
@@ -301,7 +340,7 @@ export function ExportDialog({
                                                     htmlFor={`col-${col.key}`}
                                                     className="font-normal cursor-pointer text-sm truncate"
                                                 >
-                                                    {col.label}
+                                                    {col.displayLabel}
                                                 </Label>
                                             </div>
                                         ))}
