@@ -1,6 +1,10 @@
 // @vitest-environment happy-dom
 import { describe, it, expect, afterEach } from 'vitest'
-import { isCameraScanSupported, RETAIL_BARCODE_FORMATS } from '../barcode-scanner'
+import {
+    isCameraScanSupported,
+    RETAIL_BARCODE_FORMATS,
+    trackSupportsTorch,
+} from '../barcode-scanner'
 
 describe('barcode-scanner primitive', () => {
     afterEach(() => {
@@ -24,5 +28,19 @@ describe('barcode-scanner primitive', () => {
         // el detector presente.
         const hasGUM = !!navigator.mediaDevices?.getUserMedia
         expect(isCameraScanSupported()).toBe(hasGUM)
+    })
+
+    it('trackSupportsTorch lee capabilities.torch del track', () => {
+        expect(trackSupportsTorch(null)).toBe(false)
+        expect(
+            trackSupportsTorch({
+                getCapabilities: () => ({}),
+            } as MediaStreamTrack),
+        ).toBe(false)
+        expect(
+            trackSupportsTorch({
+                getCapabilities: () => ({ torch: true }),
+            } as unknown as MediaStreamTrack),
+        ).toBe(true)
     })
 })

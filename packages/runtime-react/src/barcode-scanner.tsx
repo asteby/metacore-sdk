@@ -1,6 +1,37 @@
 import * as React from 'react'
-import { Camera, ScanLine, X } from 'lucide-react'
+import { Camera, Flashlight, FlashlightOff, ScanLine, X } from 'lucide-react'
 import { Button } from '@asteby/metacore-ui'
+
+/** `torch` aún no está en todas las libs de TS — extendemos el contrato mínimo. */
+type TorchCapabilities = MediaTrackCapabilities & { torch?: boolean }
+type TorchConstraintSet = MediaTrackConstraintSet & { torch?: boolean }
+
+/** `true` si el track de video expone linterna (ImageCapture / torch constraint). */
+export function trackSupportsTorch(track: MediaStreamTrack | null | undefined): boolean {
+    if (!track || typeof track.getCapabilities !== 'function') return false
+    try {
+        return !!(track.getCapabilities() as TorchCapabilities).torch
+    } catch {
+        return false
+    }
+}
+
+async function setTrackTorch(track: MediaStreamTrack, on: boolean): Promise<boolean> {
+    try {
+        await track.applyConstraints({
+            advanced: [{ torch: on } as TorchConstraintSet],
+        })
+        return true
+    } catch {
+        // Algunos WebViews fallan con advanced[] — reintento plano.
+        try {
+            await track.applyConstraints({ torch: on } as MediaTrackConstraints)
+            return true
+        } catch {
+            return false
+        }
+    }
+}
 
 /**
  * BarcodeScanner — primitivo REUSABLE de escaneo por cámara para todo el
@@ -141,19 +172,37 @@ export function BarcodeScanner({
     const lastHitRef = React.useRef<{ code: string; at: number }>({ code: '', at: 0 })
     const [error, setError] = React.useState<string | null>(null)
     const [ready, setReady] = React.useState(false)
+    const [torchAvailable, setTorchAvailable] = React.useState(false)
+    const [torchOn, setTorchOn] = React.useState(false)
     const beep = useScanBeep()
 
     const stop = React.useCallback(() => {
         if (rafRef.current != null) cancelAnimationFrame(rafRef.current)
         rafRef.current = null
+        const track = streamRef.current?.getVideoTracks()[0]
+        if (track && trackSupportsTorch(track)) {
+            void setTrackTorch(track, false)
+        }
         streamRef.current?.getTracks().forEach((t) => t.stop())
         streamRef.current = null
         setReady(false)
+        setTorchAvailable(false)
+        setTorchOn(false)
     }, [])
+
+    const toggleTorch = React.useCallback(async () => {
+        const track = streamRef.current?.getVideoTracks()[0]
+        if (!track || !trackSupportsTorch(track)) return
+        const next = !torchOn
+        const ok = await setTrackTorch(track, next)
+        if (ok) setTorchOn(next)
+    }, [torchOn])
 
     React.useEffect(() => {
         if (!open) return
         setError(null)
+        setTorchAvailable(false)
+        setTorchOn(false)
 
         const Ctor = getDetectorCtor()
         if (!navigator.mediaDevices?.getUserMedia || !Ctor) {
@@ -205,6 +254,8 @@ export function BarcodeScanner({
                     return
                 }
                 streamRef.current = stream
+                const videoTrack = stream.getVideoTracks()[0]
+                setTorchAvailable(trackSupportsTorch(videoTrack))
                 const video = videoRef.current
                 if (video) {
                     video.srcObject = stream
@@ -239,15 +290,40 @@ export function BarcodeScanner({
                     <ScanLine className="size-5" />
                     {title}
                 </div>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-white hover:bg-white/10 hover:text-white"
-                    onClick={onClose}
-                    aria-label="Cerrar escáner"
-                >
-                    <X className="size-5" />
-                </Button>
+                <div className="flex items-center gap-1">
+                    {torchAvailable && (
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className={
+                                torchOn
+                                    ? 'bg-amber-400/20 text-amber-300 hover:bg-amber-400/30 hover:text-amber-200'
+                                    : 'text-white hover:bg-white/10 hover:text-white'
+                            }
+                            onClick={() => void toggleTorch()}
+                            aria-label={torchOn ? 'Apagar linterna' : 'Encender linterna'}
+                            aria-pressed={torchOn}
+                            title={torchOn ? 'Apagar linterna' : 'Encender linterna'}
+                        >
+                            {torchOn ? (
+                                <Flashlight className="size-5" />
+                            ) : (
+                                <FlashlightOff className="size-5" />
+                            )}
+                        </Button>
+                    )}
+                    <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="text-white hover:bg-white/10 hover:text-white"
+                        onClick={onClose}
+                        aria-label="Cerrar escáner"
+                    >
+                        <X className="size-5" />
+                    </Button>
+                </div>
             </div>
 
             {/* Área de cámara */}
