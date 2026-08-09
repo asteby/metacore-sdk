@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 29.2.12
+
+### Patch Changes
+
+- 0150e2f: ExportDialog localizes labels (core text + manifest i18n keys) and sends column_labels so CSV headers match the UI.
+
 ## 29.2.11
 
 ### Patch Changes
