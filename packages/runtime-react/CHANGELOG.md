@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 29.2.10
+
+### Patch Changes
+
+- fd81213: BarcodeScanner: prop `feedback` para mostrar un chip de confirmación (producto agregado / sin coincidencia) **sobre** la cámara — los toasts de Sonner no se ven encima del overlay opaco.
+
 ## 29.2.9
 
 ### Patch Changes
