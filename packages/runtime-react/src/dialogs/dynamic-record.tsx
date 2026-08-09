@@ -612,8 +612,12 @@ export function DynamicRecordDialog({
             })
 
         const load = async () => {
-            // Only show the skeleton when we have nothing to render yet.
-            if (!seed) setLoading(true)
+            // Always skeleton until modal metadata is ready to paint fields.
+            // A list-row `initialRecord` seed is NOT enough on its own: without
+            // meta we don't know which fields to render, which left the dialog
+            // body blank (only the "Información detallada…" description) until
+            // `/metadata/modal` resolved — especially visible on slow/cold loads.
+            setLoading(true)
             try {
                 let meta: ModalMetadata | null = schema ? (schema as ModalMetadata) : null
                 if (!meta) {
@@ -877,7 +881,13 @@ export function DynamicRecordDialog({
         }
     }
 
-    const title = modalMeta ? config.getTitle(modalMeta, t) : ''
+    const title = modalMeta
+        ? config.getTitle(modalMeta, t)
+        : mode === 'create'
+          ? 'Nuevo registro'
+          : mode === 'edit'
+            ? 'Editar registro'
+            : 'Ver registro'
 
     const visibleFields = filterVisibleFields(modalMeta?.fields, mode, formValues)
 
