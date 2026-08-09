@@ -1,5 +1,15 @@
 # @asteby/metacore-runtime-react
 
+## 29.2.6
+
+### Patch Changes
+
+- b1a9703: feat(barcode-scanner): botón de linterna (torch) cuando el dispositivo lo soporta
+
+  En ambientes oscuros se puede encender/apagar el flash de la cámara trasera
+  desde la barra del overlay. Si el hardware no expone `torch`, el botón no
+  aparece. Aplica a POS y formularios (mismo primitivo).
+
 ## 29.2.5
 
 ### Patch Changes
