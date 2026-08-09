@@ -1,5 +1,21 @@
 # @asteby/metacore-runtime-react
 
+## 29.2.5
+
+### Patch Changes
+
+- 428f5b0: fix(dashboard): skeleton vacío = 3 cards estáticas a ancho completo
+
+  Sin animación de reflow. El stack ya no usa `mc-demock-tile` (absolute), así
+  que no se colapsa en una franja chica en móvil / con sidebar.
+
+- 48cf4e4: El botón de escaneo también aparece siempre (sin `isCameraScanSupported()`) en
+  los campos `dynamic_select` (`dynamic-select-field`) y en el modal de
+  crear/editar registro (`dialogs/dynamic-record`), no sólo en el input de texto.
+  El renglón de una orden de compra usa `dynamic_select`, así que ahí el icono de
+  cámara no aparecía en escritorio pese a declarar `scan`. Ahora los tres
+  renderers son consistentes con el POS.
+
 ## 29.2.4
 
 ### Patch Changes
