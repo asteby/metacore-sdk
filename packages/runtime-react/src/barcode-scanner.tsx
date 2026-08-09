@@ -126,6 +126,12 @@ export function useScanBeep() {
     }, [])
 }
 
+/** Chip superpuesto sobre la cámara (éxito / error del padre tras resolver el código). */
+export type BarcodeScannerFeedback = {
+    message: string
+    tone?: 'success' | 'error' | 'neutral'
+}
+
 export interface BarcodeScannerProps {
     open: boolean
     onClose: () => void
@@ -149,6 +155,12 @@ export interface BarcodeScannerProps {
      * modal, sin taparse con el chrome del host. `fixed` cubre todo el viewport.
      */
     position?: 'absolute' | 'fixed'
+    /**
+     * Feedback del padre (ej. "Harina × 2" / "Sin coincidencia") pintado ENCIMA
+     * del video. Los toasts de Sonner del host quedan detrás de este overlay
+     * opaco en la práctica — este chip es la confirmación visible al escanear.
+     */
+    feedback?: BarcodeScannerFeedback | null
 }
 
 /**
@@ -165,6 +177,7 @@ export function BarcodeScanner({
     title = 'Escanear código',
     hint = 'Apuntá al código de barras',
     position = 'absolute',
+    feedback = null,
 }: BarcodeScannerProps) {
     const videoRef = React.useRef<HTMLVideoElement | null>(null)
     const streamRef = React.useRef<MediaStream | null>(null)
@@ -345,6 +358,28 @@ export function BarcodeScanner({
                                 <span className="bg-primary absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 animate-pulse" />
                             </div>
                         </div>
+                        {/* Confirmación del padre ENCIMA del video (Sonner queda
+                            detrás de este overlay opaco al escanear). */}
+                        {feedback?.message ? (
+                            <div
+                                className="pointer-events-none absolute inset-x-0 top-4 z-10 flex justify-center px-4"
+                                data-testid="barcode-scanner-feedback"
+                                role="status"
+                                aria-live="polite"
+                            >
+                                <div
+                                    className={
+                                        feedback.tone === 'error'
+                                            ? 'max-w-[90%] rounded-full bg-red-500 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-lg'
+                                            : feedback.tone === 'neutral'
+                                              ? 'max-w-[90%] rounded-full bg-white/90 px-4 py-2.5 text-center text-sm font-semibold text-black shadow-lg'
+                                              : 'max-w-[90%] rounded-full bg-emerald-500 px-4 py-2.5 text-center text-sm font-semibold text-white shadow-lg'
+                                    }
+                                >
+                                    {feedback.message}
+                                </div>
+                            </div>
+                        ) : null}
                         <p className="absolute bottom-8 left-0 right-0 px-4 text-center text-sm text-white/90">
                             {!ready
                                 ? 'Abriendo cámara…'
