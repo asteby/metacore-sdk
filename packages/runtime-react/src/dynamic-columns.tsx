@@ -205,22 +205,36 @@ const CodeCell: React.FC<{ text: string; maxLength?: number }> = ({ text, maxLen
 }
 
 /**
+ * Lifecycle column used by `requiresState`: prefer `status` (workshop, vehicles,
+ * …) and fall back to `state` (purchases, inventory transfers, …). Empty string
+ * is treated as missing so a blank `status` does not hide a populated `state`.
+ */
+const rowLifecycleState = (row: any): unknown => {
+    const status = row?.status
+    if (status !== undefined && status !== null && status !== '') return status
+    const state = row?.state
+    if (state !== undefined && state !== null && state !== '') return state
+    return undefined
+}
+
+/**
  * State-machine gate for per-row actions.
  *
  * An action that declares a non-empty `requiresState` (camelCase) / `requires_state`
- * (snake_case, as served by some backends) is only surfaced for rows whose `status`
- * field value is contained in that array. This hides e.g. an "Iniciar trabajo"
- * action (requiresState: ['reception']) on an order already in `in_progress`.
+ * (snake_case, as served by some backends) is only surfaced for rows whose
+ * lifecycle field (`status` or `state`) is contained in that array. This hides
+ * e.g. "Recibir" (requiresState: ['confirmed','partial']) on a purchase order
+ * still in `draft`.
  *
  * Null-safe & non-regressive:
  *   - action without requiresState (or empty array)  → always shown.
- *   - row with no `status` field                      → all actions shown.
+ *   - row with neither `status` nor `state`          → all actions shown.
  */
 export const isActionAllowedForRowState = (action: any, row: any): boolean => {
     const requires: unknown = action?.requiresState ?? action?.requires_state
     if (!Array.isArray(requires) || requires.length === 0) return true
-    const status = row?.status
-    if (status === undefined || status === null || status === '') return true
+    const status = rowLifecycleState(row)
+    if (status === undefined) return true
     return requires.map(String).includes(String(status))
 }
 
