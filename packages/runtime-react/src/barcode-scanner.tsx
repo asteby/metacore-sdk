@@ -345,8 +345,12 @@ export function BarcodeScanner({
                                 <span className="bg-primary absolute inset-x-0 top-1/2 h-0.5 -translate-y-1/2 animate-pulse" />
                             </div>
                         </div>
-                        <p className="absolute bottom-8 left-0 right-0 text-center text-sm text-white/90">
-                            {ready ? hint : 'Abriendo cámara…'}
+                        <p className="absolute bottom-8 left-0 right-0 px-4 text-center text-sm text-white/90">
+                            {!ready
+                                ? 'Abriendo cámara…'
+                                : torchAvailable
+                                  ? `${hint} · tocá la linterna si está oscuro`
+                                  : hint}
                         </p>
                     </>
                 )}
