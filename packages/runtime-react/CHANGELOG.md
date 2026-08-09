@@ -1,5 +1,14 @@
 # @asteby/metacore-runtime-react
 
+## 29.2.7
+
+### Patch Changes
+
+- 89e79b0: fix(barcode-scanner): cerrar al escanear en formularios (modal crear/editar)
+
+  `continuous={false}` en dynamic-form y dynamic-record: al llenar SKU/código el
+  overlay se cierra. El POS sigue con continuous (default) para varios productos.
+
 ## 29.2.6
 
 ### Patch Changes
