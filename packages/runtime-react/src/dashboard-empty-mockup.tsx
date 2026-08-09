@@ -137,8 +137,10 @@ function useMockupStyles() {
     }, [])
 }
 
-const tileBase =
-    'rounded-lg border border-border/60 bg-card mc-demock-tile mc-demock-shimmer text-foreground'
+// Static stack cards — never `mc-demock-tile` (that class is position:absolute
+// for the old animated grid and collapsed cards into a tiny top-left strip).
+const stackTileBase =
+    'relative w-full rounded-xl border border-border/60 bg-card mc-demock-shimmer text-foreground'
 
 type Glyph = 'chart' | 'stat' | 'list' | 'bar'
 
@@ -208,57 +210,32 @@ function TileGlyph({ kind }: { kind: Glyph }) {
     )
 }
 
-// Kind per tile, in the [c0-top, c0-bottom, c1-top, c1-bottom, c2-top, c2-bottom]
-// order used by computeLayoutRects.
-const TILE_KINDS: Glyph[] = ['stat', 'chart', 'chart', 'list', 'stat', 'bar']
-
 /**
- * Full-bleed skeleton dashboard that reflows through four layouts on a loop.
- * Overlap-free by construction (see the invariant note above). Purely
- * decorative — always `aria-hidden`, no text.
+ * Full-bleed skeleton dashboard: 3 static cards stacked full-width.
+ * No reflow animation — size and layout stability matter more than motion.
+ * Purely decorative — always `aria-hidden`, no text.
  *
- * Contract: tiles are positioned with percentage heights, so the CONTAINER
- * must have a DEFINITE height (e.g. `h-[…]`, or a flex child with `flex-1`).
- * A parent with only `min-height` leaves the box auto-height and the tiles
- * collapse into a strip. The dashboard empty state mounts it inside a
- * definite-height box for exactly this reason.
+ * The layout-math helpers above (`computeLayoutRects`, etc.) stay exported for
+ * the overlap unit test / future reuse; the visible UI is the stack only.
  */
 export function DashboardEmptyMockup({ className }: { className?: string }) {
     useMockupStyles()
-    const layoutA = React.useMemo(() => computeLayoutRects(MOCKUP_LAYOUTS[0]), [])
     return (
         <div
             aria-hidden="true"
             data-testid="dashboard-empty-mockup"
-            className={cn('pointer-events-none select-none', className)}
+            className={cn('pointer-events-none w-full select-none', className)}
         >
-            {/* Móvil (<sm): las 3 columnas absolutas quedan angostas y apretadas
-                en un teléfono. Un STACK vertical de cards a ancho completo se lee
-                claro. Toggle por CSS (sin JS, SSR-safe): el reflow animado sólo
-                aparece de sm hacia arriba, donde hay ancho para las 3 columnas. */}
-            <div className="flex min-h-full flex-col gap-3 sm:hidden">
-                {MOBILE_TILE_KINDS.map((kind, i) => (
+            <div
+                className="flex w-full flex-col gap-4"
+                data-testid="dashboard-empty-mockup-stack"
+            >
+                {STACK_TILE_KINDS.map((kind, i) => (
                     <div
                         key={i}
-                        className={cn(tileBase, 'mc-demock-shimmer relative min-h-[132px] flex-1')}
+                        className={cn(stackTileBase, 'min-h-[200px]')}
                     >
                         <TileGlyph kind={kind} />
-                    </div>
-                ))}
-            </div>
-
-            {/* Tablet/escritorio: el mockup de 3 columnas que reorganiza en bucle. */}
-            <div className="mc-demock hidden h-full sm:block">
-                {layoutA.map((r, i) => (
-                    <div
-                        key={i}
-                        data-mockup-tile="tile"
-                        className={cn(tileBase, `mc-demock-t${i}`)}
-                        // Base position = layout A, so reduced-motion (animation off)
-                        // shows the full static composition.
-                        style={{ left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%` }}
-                    >
-                        <TileGlyph kind={TILE_KINDS[i]} />
                     </div>
                 ))}
             </div>
@@ -266,6 +243,5 @@ export function DashboardEmptyMockup({ className }: { className?: string }) {
     )
 }
 
-// En móvil mostramos 3 cards apiladas (stat + chart + list) a ancho completo —
-// suficiente para comunicar "tablero cargando/ vacío" sin apretar 6 tiles.
-const MOBILE_TILE_KINDS: Glyph[] = ['stat', 'chart', 'list']
+// 3 cards a ancho completo — stat + chart + list. Sin animación de reflow.
+const STACK_TILE_KINDS: Glyph[] = ['stat', 'chart', 'list']
