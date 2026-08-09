@@ -226,22 +226,42 @@ export const isActionAllowedForRowState = (action: any, row: any): boolean => {
 
 /**
  * Declarative `condition` gate for a per-row action: shows the action only when
- * the row's `field` satisfies the `eq | neq | in | not_in` operator. No
- * condition declared → always shown. Unknown operator → permissive.
+ * the row's `field` satisfies the operator. Supports both the SDK dialect
+ * (`eq` | `neq` | `in` | `not_in`) and the common host dialect
+ * (`equals` | `notEquals` | `not_in`). Nested paths (`user.verified`) are
+ * resolved via `getNestedValue`. No condition → always shown. Unknown
+ * operator → permissive.
  */
 export const isActionConditionMet = (action: any, row: any): boolean => {
     if (!action?.condition) return true
     const { field, operator, value } = action.condition
-    const rowValue = String(row?.[field] ?? '')
-    const values = Array.isArray(value) ? value : [value]
-    switch (operator) {
+    if (!field) return true
+
+    const coerce = (v: unknown): string => {
+        if (v === null || v === undefined) return ''
+        if (typeof v === 'boolean') return v ? 'true' : 'false'
+        return String(v)
+    }
+
+    const raw = getNestedValue(row, field)
+    const rowValue = coerce(raw)
+    const values = (Array.isArray(value) ? value : [value]).map(coerce)
+    const op = String(operator ?? '').toLowerCase()
+
+    switch (op) {
         case 'eq':
+        case 'equals':
+        case '==':
             return rowValue === values[0]
         case 'neq':
+        case 'notequals':
+        case 'not_equals':
+        case '!=':
             return rowValue !== values[0]
         case 'in':
             return values.includes(rowValue)
         case 'not_in':
+        case 'notin':
             return !values.includes(rowValue)
         default:
             return true
