@@ -1886,7 +1886,9 @@ function ScannableRecordInput({
                 open={scanOpen}
                 onClose={() => setScanOpen(false)}
                 onDetected={(code) => onChange(code)}
-                continuous
+                // Un campo = un código: cerrar al detectar. El POS usa continuous
+                // (default) porque suma varios productos seguidos.
+                continuous={false}
                 position="fixed"
                 title={`Escanear ${field.label ?? ''}`.trim()}
             />
