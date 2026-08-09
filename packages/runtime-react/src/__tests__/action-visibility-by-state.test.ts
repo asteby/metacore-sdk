@@ -48,4 +48,24 @@ describe('isActionAllowedForRowState', () => {
         expect(isActionAllowedForRowState(action, { status: 2 })).toBe(true)
         expect(isActionAllowedForRowState(action, { status: '3' })).toBe(false)
     })
+
+    it('falls back to row.state when status is absent (purchases, transfers)', () => {
+        const receive = { key: 'receive_goods', requiresState: ['confirmed', 'partial'] }
+        expect(isActionAllowedForRowState(receive, { state: 'draft' })).toBe(false)
+        expect(isActionAllowedForRowState(receive, { state: 'confirmed' })).toBe(true)
+        expect(isActionAllowedForRowState(receive, { state: 'partial' })).toBe(true)
+        expect(isActionAllowedForRowState(receive, { state: 'received' })).toBe(false)
+    })
+
+    it('prefers status over state when both are set', () => {
+        const action = { key: 'start', requiresState: ['reception'] }
+        expect(isActionAllowedForRowState(action, { status: 'reception', state: 'draft' })).toBe(true)
+        expect(isActionAllowedForRowState(action, { status: 'in_progress', state: 'reception' })).toBe(false)
+    })
+
+    it('ignores empty status and uses state instead', () => {
+        const action = { key: 'confirm', requiresState: ['draft'] }
+        expect(isActionAllowedForRowState(action, { status: '', state: 'draft' })).toBe(true)
+        expect(isActionAllowedForRowState(action, { status: '', state: 'confirmed' })).toBe(false)
+    })
 })
