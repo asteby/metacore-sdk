@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 29.2.11
+
+### Patch Changes
+
+- 9e07da0: Gate `requiresState` on row `status` or `state` so actions like purchases receive_goods hide on draft orders.
+
 ## 29.2.10
 
 ### Patch Changes
