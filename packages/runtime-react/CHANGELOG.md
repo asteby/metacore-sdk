@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 29.2.8
+
+### Patch Changes
+
+- b705996: Fix row-action `condition` evaluation for nested fields and `equals`/`notEquals` operators. Hosts declaring `{ field: "user.verified", operator: "equals", value: false }` no longer show every action at once.
+
 ## 29.2.7
 
 ### Patch Changes
