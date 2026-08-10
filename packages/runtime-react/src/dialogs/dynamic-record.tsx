@@ -1280,6 +1280,16 @@ export function ViewValue({
                 </div>
             )
         }
+        // Null created_by on a creator/created_by field = system actor, same
+        // contract as the table cell (resolveMissingActorLabel).
+        const isCreatedBy =
+            field.key === 'created_by' ||
+            field.key === 'created_by_id' ||
+            (typeof field.key === 'string' && field.key.startsWith('created_by.')) ||
+            renderAs === 'creator'
+        if (isCreatedBy) {
+            return <p className="text-sm py-1">Sistema</p>
+        }
         return <p className="text-sm py-1 text-muted-foreground">—</p>
     }
 

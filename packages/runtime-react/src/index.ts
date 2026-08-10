@@ -211,6 +211,7 @@ export {
     makeDefaultGetDynamicColumns,
     relationKeyFor,
     resolveAvatarSrc,
+    resolveMissingActorLabel,
     resolveRelationLabel,
     type DynamicColumnsHelpers,
 } from './dynamic-columns'
