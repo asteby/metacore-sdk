@@ -1,5 +1,14 @@
 # @asteby/metacore-runtime-react
 
+## 29.2.13
+
+### Patch Changes
+
+- 5ecfa51: fix(runtime-react): "Creado por" vacío muestra Sistema también con type avatar
+
+  La columna autoinyectada del host usa `key: created_by.avatar` + `type: avatar`;
+  el fallback Sistema solo corría para `cellStyle: creator` y la celda quedaba en N/A.
+
 ## 29.2.12
 
 ### Patch Changes
