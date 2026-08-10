@@ -990,45 +990,6 @@ export function makeDefaultGetDynamicColumns(
                             const resolvedName = resolveActorDisplayName(
                                 getNestedValue(row.original, namePath),
                             )
-                            // #region agent log
-                            if (
-                                String(col.key || '').includes('created_by') ||
-                                String(namePath || '').includes('created_by')
-                            ) {
-                                fetch(
-                                    'http://127.0.0.1:7418/ingest/6ffa7e83-ad69-4d7c-8a4a-9327529b129c',
-                                    {
-                                        method: 'POST',
-                                        headers: {
-                                            'Content-Type': 'application/json',
-                                            'X-Debug-Session-Id': '2cac11',
-                                        },
-                                        body: JSON.stringify({
-                                            sessionId: '2cac11',
-                                            runId: 'post-fix',
-                                            hypothesisId: 'OBJ',
-                                            location: 'dynamic-columns.tsx:creator',
-                                            message: 'actor cell resolve',
-                                            data: {
-                                                key: col.key,
-                                                renderAs,
-                                                namePath,
-                                                resolvedName: resolvedName ?? null,
-                                                finalName:
-                                                    resolvedName ||
-                                                    resolveMissingActorLabel(
-                                                        renderAs,
-                                                        col.key,
-                                                        namePath,
-                                                        t,
-                                                    ),
-                                            },
-                                            timestamp: Date.now(),
-                                        }),
-                                    },
-                                ).catch(() => {})
-                            }
-                            // #endregion
                             const name =
                                 resolvedName ||
                                 resolveMissingActorLabel(renderAs, col.key, namePath, t)
