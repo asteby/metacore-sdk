@@ -500,6 +500,33 @@ export const resolveRelationImage = (col: ColumnDefinition, row: any): string =>
 }
 
 /**
+ * Label when an actor cell has no resolved name. `creator` cells and the
+ * auto-injected `created_by.*` avatar column (hosts ship it as `type: avatar`
+ * with `tooltip: created_by.name`) mean "system-created" → "Sistema". Other
+ * avatar/user/search empties stay "N/A" (unassigned person).
+ */
+export function resolveMissingActorLabel(
+    renderAs: string | undefined,
+    colKey: string | undefined,
+    namePath: string | undefined,
+    t?: (key: string, options?: { defaultValue?: string }) => string,
+): string {
+    const path = namePath || ''
+    const key = colKey || ''
+    const isCreatedByColumn =
+        key === 'created_by' ||
+        key === 'created_by_id' ||
+        key.startsWith('created_by.') ||
+        path === 'created_by' ||
+        path === 'created_by.name' ||
+        path.startsWith('created_by.')
+    if (renderAs === 'creator' || isCreatedByColumn) {
+        return t ? t('common.system', { defaultValue: 'Sistema' }) : 'Sistema'
+    }
+    return 'N/A'
+}
+
+/**
  * Resolves the image source for `avatar`/`search`/`creator`/`user` cells.
  * Priority: sibling `.avatar`/`.photo` next to a nested key (`user.name` →
  * `user.avatar`), then the cell's own value. Bare filenames (backends often
@@ -933,20 +960,20 @@ export function makeDefaultGetDynamicColumns(
                                 col.tooltip ||
                                 col.displayField ||
                                 col.key
-                            // A `creator` cell with no resolved actor means the
-                            // record was created by the SYSTEM (e.g. an owner /
-                            // seed row whose `created_by` is null), not a missing
-                            // value — show "Sistema" rather than "N/A". Matches
-                            // the record-history actor fallback. `user`/`avatar`/
-                            // `search` keep "N/A" (empty there means unassigned).
+                            // A creator / created_by cell with no resolved actor
+                            // means the record was created by the SYSTEM (seed /
+                            // event / host auto-inject with null created_by_id),
+                            // not a missing value — show "Sistema" rather than
+                            // "N/A". Hosts often inject the column as
+                            // `type: avatar` + `key: created_by.avatar` +
+                            // `tooltip: created_by.name`, so renderAs is `avatar`
+                            // even though the semantic is creator. Plain
+                            // user/avatar/search columns (unassigned person)
+                            // still keep "N/A".
                             const resolvedName = getNestedValue(row.original, namePath)
                             const name =
                                 resolvedName ||
-                                (renderAs === 'creator'
-                                    ? t
-                                        ? t('common.system', { defaultValue: 'Sistema' })
-                                        : 'Sistema'
-                                    : 'N/A')
+                                resolveMissingActorLabel(renderAs, col.key, namePath, t)
                             const desc = getNestedValue(row.original, col.description || '')
 
                             const avatarSrc = resolveAvatarSrc(col, row.original, value, apiBaseUrl)
