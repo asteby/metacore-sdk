@@ -1,5 +1,14 @@
 # @asteby/metacore-runtime-react
 
+## 29.2.14
+
+### Patch Changes
+
+- bbc53fb: fix(runtime-react): no más [object Object] en celdas Creado por / Registrado por
+
+  Cuando el namePath apunta al sibling `created_by` (objeto), se usa objectLabel
+  (name) en lugar de String(object).
+
 ## 29.2.13
 
 ### Patch Changes
