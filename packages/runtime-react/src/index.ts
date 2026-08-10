@@ -212,6 +212,7 @@ export {
     relationKeyFor,
     resolveAvatarSrc,
     resolveMissingActorLabel,
+    resolveActorDisplayName,
     resolveRelationLabel,
     type DynamicColumnsHelpers,
 } from './dynamic-columns'
