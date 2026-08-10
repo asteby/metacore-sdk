@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 29.2.15
+
+### Patch Changes
+
+- 1fe4440: chore(runtime-react): quitar ingest de debug del renderer creator
+
 ## 29.2.14
 
 ### Patch Changes
