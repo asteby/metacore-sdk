@@ -146,9 +146,22 @@ export function ImportDialog({
             })
             setStep('validation')
         } catch (err: any) {
-            const message =
-                err?.response?.data?.message || 'Error al validar el archivo'
-            toast.error(message)
+            // Backends may answer a validation failure with a non-2xx status
+            // (e.g. 422) while still carrying the real per-row report in the
+            // body. Render it instead of a body-less "something went wrong"
+            // toast whenever that shape is present.
+            const body = err?.response?.data
+            const payload = body?.data ?? body
+            if (payload && (Array.isArray(payload.errors) || typeof payload.rowCount === 'number' || typeof payload.valid === 'number')) {
+                setValidationResult({
+                    valid: payload.rowCount ?? payload.valid ?? 0,
+                    skipped: payload.skipped ?? 0,
+                    errors: payload.errors ?? [],
+                })
+                setStep('validation')
+            } else {
+                toast.error(body?.message || 'Error al validar el archivo')
+            }
         } finally {
             setValidating(false)
         }
@@ -187,9 +200,26 @@ export function ImportDialog({
                 onImported?.()
             }
         } catch (err: any) {
-            const message =
-                err?.response?.data?.message || 'Error al importar los datos'
-            toast.error(message)
+            // A partial or total import failure is still a real, displayable
+            // result — the backend computes per-row reasons in `data.failures`
+            // even when it answers with a non-2xx status (e.g. 422 when zero
+            // rows were created). Show that report instead of discarding it
+            // behind a generic toast.
+            const body = err?.response?.data
+            const payload = body?.data ?? body
+            if (payload && (Array.isArray(payload.failures) || Array.isArray(payload.errors) || typeof payload.created === 'number')) {
+                setImportResult({
+                    created: payload.created ?? 0,
+                    skipped: payload.skipped ?? 0,
+                    errors: payload.failures ?? payload.errors ?? [],
+                })
+                setStep('results')
+                if ((payload.created ?? 0) > 0) {
+                    onImported?.()
+                }
+            } else {
+                toast.error(body?.message || 'Error al importar los datos')
+            }
         } finally {
             setImporting(false)
             setProgress(0)
