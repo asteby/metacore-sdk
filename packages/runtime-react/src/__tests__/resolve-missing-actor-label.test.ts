@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveMissingActorLabel } from '../dynamic-columns'
+import { resolveActorDisplayName, resolveMissingActorLabel } from '../dynamic-columns'
 
 describe('resolveMissingActorLabel', () => {
     it('creator cell → Sistema', () => {
@@ -28,5 +28,21 @@ describe('resolveMissingActorLabel', () => {
         expect(
             resolveMissingActorLabel('avatar', 'created_by.avatar', 'created_by.name', t),
         ).toBe('System')
+    })
+})
+
+describe('resolveActorDisplayName', () => {
+    it('reads name from created_by sibling object (no [object Object])', () => {
+        expect(
+            resolveActorDisplayName({ name: 'Marely Newman', avatar: '', email: 'm@x' }),
+        ).toBe('Marely Newman')
+    })
+
+    it('rejects bare objects without a label', () => {
+        expect(resolveActorDisplayName({ avatar: '/a.png' })).toBeUndefined()
+    })
+
+    it('passes scalars through', () => {
+        expect(resolveActorDisplayName('Ana')).toBe('Ana')
     })
 })
