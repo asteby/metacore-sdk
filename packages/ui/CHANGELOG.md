@@ -1,5 +1,11 @@
 # @asteby/metacore-ui
 
+## 2.14.0
+
+### Minor Changes
+
+- 30fe202: Allow nested NavCollapsibleItem children (preset → module → leaf) in the sidebar
+
 ## 2.13.0
 
 ### Minor Changes
