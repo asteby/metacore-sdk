@@ -207,7 +207,7 @@ export function checkIsActive(
 
   if (
     hasItems &&
-    (item as NavCollapsibleItem).items.some((i: NavLinkItem) =>
+    (item as NavCollapsibleItem).items.some((i) =>
       checkIsActive(href, i, false, defaultView)
     )
   ) {
@@ -224,11 +224,9 @@ export function checkIsActive(
       return true
     }
     if (hasItems) {
+      // Recurse so a preset parent stays open when a nested module leaf matches.
       for (const sub of (item as NavCollapsibleItem).items) {
-        const subParts = splitHref(sub.url ?? '').path.split('/')
-        if (subParts.slice(0, depth).join('/') === hrefPrefix) {
-          return true
-        }
+        if (checkIsActive(href, sub, true, defaultView)) return true
       }
     }
   }

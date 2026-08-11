@@ -210,3 +210,26 @@ describe('resolveActiveItemUrls — sibling "most specific wins"', () => {
     expect(active.has('/m/transfers?view=list')).toBe(true)
   })
 })
+
+describe('checkIsActive — nested collapsibles (preset → module → leaf)', () => {
+  const chat = link('Chat', '/addons/link_inbox/chat')
+  const inbox: NavCollapsibleItem = {
+    title: 'Inbox',
+    url: '/addons/link_inbox/chat',
+    items: [chat, link('Bandeja', '/m/conversations')],
+  }
+  const linkPreset: NavCollapsibleItem = {
+    title: 'Link',
+    url: '/addons/link_inbox/chat',
+    items: [inbox],
+  }
+
+  it('marks the preset parent active when a nested leaf matches', () => {
+    expect(checkIsActive('/addons/link_inbox/chat', linkPreset, true)).toBe(true)
+    expect(checkIsActive('/addons/link_inbox/chat', inbox, true)).toBe(true)
+  })
+
+  it('does not mark the preset active for an unrelated path', () => {
+    expect(checkIsActive('/m/products', linkPreset, true)).toBe(false)
+  })
+})

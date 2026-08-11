@@ -23,11 +23,16 @@ export interface NavLinkItem {
   defaultView?: string
 }
 
-export interface NavCollapsibleItem extends NavLinkItem {
-  items: NavLinkItem[]
-}
-
 export type NavItem = NavLinkItem | NavCollapsibleItem
+
+export interface NavCollapsibleItem extends NavLinkItem {
+  /**
+   * Children may be leaves OR further collapsibles (e.g. vertical preset →
+   * addon module → screen). Hosts that only ever pass leaves keep working —
+   * `NavLinkItem` is still a valid `NavItem`.
+   */
+  items: NavItem[]
+}
 
 export interface NavGroupData {
   title: string
