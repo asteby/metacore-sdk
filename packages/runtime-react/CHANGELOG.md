@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 30.0.2
+
+### Patch Changes
+
+- a5ca1a8: Permisos: agrupar acciones en secciones desplegables (action.group)
+
 ## 30.0.1
 
 ### Patch Changes
