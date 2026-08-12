@@ -14,6 +14,7 @@ import {
     flattenGroups,
     filterModuleGroups,
     defaultActionIcon,
+    groupModuleActions,
     type PermissionsCatalog,
     type GroupedPermissionsCatalog,
     type FlatPermissionsCatalog,
@@ -140,6 +141,19 @@ describe('helpers puros', () => {
             'screen.addons.pos.terminal.access',
             'product.index',
         ])
+    })
+
+    it('groupModuleActions keeps Acceder ungrouped and sections by group', () => {
+        const sections = groupModuleActions([
+            { key: 'access', label: 'Acceder', kind: 'screen' },
+            { key: 'product.index', label: 'Productos', group: 'Catálogo', capability: 'product.index' },
+            { key: 'stock.index', label: 'Stock', group: 'Catálogo', capability: 'stock.index' },
+            { key: 'salesorder.create', label: 'Venta', group: 'Ventas', capability: 'salesorder.create' },
+        ])
+        expect(sections.map((s) => s.title)).toEqual(['', 'Catálogo', 'Ventas'])
+        expect(sections[0].actions).toHaveLength(1)
+        expect(sections[1].actions).toHaveLength(2)
+        expect(sections[2].actions).toHaveLength(1)
     })
 
     it('moduleCapabilities y grantedCountForModule', () => {

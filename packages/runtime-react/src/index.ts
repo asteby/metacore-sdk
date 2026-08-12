@@ -159,6 +159,7 @@ export {
     normalizeCatalogGroups,
     flattenGroups,
     filterModuleGroups,
+    groupModuleActions,
     type PermissionsManagerProps,
     type PermissionsCatalog,
     type GroupedPermissionsCatalog,
