@@ -118,6 +118,30 @@ describe('helpers puros', () => {
         )
     })
 
+    it('capability override grants the exact cross-module key', () => {
+        expect(
+            moduleActionCapability('screen.addons.pos.terminal', 'product.index', 'product.index'),
+        ).toBe('product.index')
+        const mod = {
+            key: 'screen.addons.pos.terminal',
+            label: 'Terminal',
+            kind: 'screen' as const,
+            actions: [
+                { key: 'access', label: 'Acceder', kind: 'screen' as const },
+                {
+                    key: 'product.index',
+                    label: 'Productos · Listar',
+                    kind: 'dependency' as const,
+                    capability: 'product.index',
+                },
+            ],
+        }
+        expect(moduleCapabilities(mod)).toEqual([
+            'screen.addons.pos.terminal.access',
+            'product.index',
+        ])
+    })
+
     it('moduleCapabilities y grantedCountForModule', () => {
         const mod = grouped.groups[1].modules[0] // pos_orders
         expect(moduleCapabilities(mod)).toEqual([
