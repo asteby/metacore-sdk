@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 30.0.1
+
+### Patch Changes
+
+- 0016511: PermissionActionDef.capability: atajos cross-módulo en el grid de permisos
+
 ## 30.0.0
 
 ### Patch Changes
