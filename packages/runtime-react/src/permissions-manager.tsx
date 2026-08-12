@@ -90,8 +90,17 @@ export interface PermissionActionDef {
     /**
      * `crud` for the derived CRUD set, `custom` for manifest actions,
      * `screen` for the single `access` action of a non-model screen.
+     * `dependency` for a shortcut to another module's capability (see
+     * {@link capability}).
      */
-    kind?: 'crud' | 'custom' | 'screen' | string
+    kind?: 'crud' | 'custom' | 'screen' | 'dependency' | string
+    /**
+     * Full capability string override. When set, the grant uses this exact key
+     * instead of `${moduleKey}.${key}` — hosts use it so a screen (Terminal)
+     * can show checkboxes for other modules' caps (`product.index`, …) as
+     * shortcuts without inventing `screen….product.index`.
+     */
+    capability?: string
 }
 
 export interface PermissionModuleDef {
@@ -189,14 +198,23 @@ export interface PermissionsManagerProps {
 // Pure helpers (exported for hosts/tests)
 // ---------------------------------------------------------------------------
 
-/** Capability for a catalog module action: `lowercase(moduleKey).actionKey`. */
-export function moduleActionCapability(moduleKey: string, actionKey: string): string {
+/** Capability for a catalog module action: `lowercase(moduleKey).actionKey`,
+ * or {@link PermissionActionDef.capability} when the action is a cross-module
+ * shortcut. */
+export function moduleActionCapability(
+    moduleKey: string,
+    actionKey: string,
+    capability?: string,
+): string {
+    if (capability) return capability
     return `${moduleKey.toLowerCase()}.${actionKey}`
 }
 
 /** All capabilities of one module. */
 export function moduleCapabilities(module: PermissionModuleDef): string[] {
-    return module.actions.map((a) => moduleActionCapability(module.key, a.key))
+    return module.actions.map((a) =>
+        moduleActionCapability(module.key, a.key, a.capability),
+    )
 }
 
 /** How many of the module's capabilities are in the granted set. */
@@ -233,6 +251,7 @@ export function defaultActionIcon(actionKey: string, kind?: string): string {
         default:
             if (kind === 'crud') return 'List'
             if (kind === 'screen') return 'Eye'
+            if (kind === 'dependency') return 'Link2'
             return 'Zap'
     }
 }
@@ -1051,10 +1070,14 @@ export function PermissionsManager({
                         ) : (
                             <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                                 {activeModule.actions.map((action) => {
-                                    const cap = moduleActionCapability(activeModule.key, action.key)
+                                    const cap = moduleActionCapability(
+                                        activeModule.key,
+                                        action.key,
+                                        action.capability,
+                                    )
                                     return (
                                         <CapabilityCheck
-                                            key={action.key}
+                                            key={action.capability ?? action.key}
                                             checked={draft?.has(cap) ?? false}
                                             disabled={checksDisabled}
                                             onToggle={() => toggleCapability(cap)}
