@@ -28,6 +28,7 @@ import {
     Check,
     ChevronsUpDown,
     CheckCheck,
+    ChevronDown,
     Eraser,
     Pencil,
     Plus,
@@ -73,6 +74,9 @@ import {
     PopoverTrigger,
     Separator,
     Skeleton,
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
 } from '@asteby/metacore-ui/primitives'
 import { DynamicIcon } from './dynamic-icon'
 
@@ -101,6 +105,12 @@ export interface PermissionActionDef {
      * shortcuts without inventing `screen….product.index`.
      */
     capability?: string
+    /**
+     * Optional section title for the action grid (e.g. "Catálogo", "Ventas").
+     * When any action on a module sets `group`, the right-hand panel renders
+     * collapsible sections instead of one flat checkbox grid.
+     */
+    group?: string
 }
 
 export interface PermissionModuleDef {
@@ -215,6 +225,43 @@ export function moduleCapabilities(module: PermissionModuleDef): string[] {
     return module.actions.map((a) =>
         moduleActionCapability(module.key, a.key, a.capability),
     )
+}
+
+export interface ActionGroupSection {
+    /** Empty string = ungrouped actions rendered above the collapsibles. */
+    title: string
+    actions: PermissionActionDef[]
+}
+
+/**
+ * Split a module's actions into an optional ungrouped prefix + named sections
+ * (first-seen order of `action.group`). Modules without any `group` yield a
+ * single untitled section (flat grid, backward compatible).
+ */
+export function groupModuleActions(actions: PermissionActionDef[]): ActionGroupSection[] {
+    const ungrouped: PermissionActionDef[] = []
+    const byTitle = new Map<string, PermissionActionDef[]>()
+    const order: string[] = []
+    for (const action of actions) {
+        const title = (action.group ?? '').trim()
+        if (!title) {
+            ungrouped.push(action)
+            continue
+        }
+        let list = byTitle.get(title)
+        if (!list) {
+            list = []
+            byTitle.set(title, list)
+            order.push(title)
+        }
+        list.push(action)
+    }
+    const out: ActionGroupSection[] = []
+    if (ungrouped.length > 0) out.push({ title: '', actions: ungrouped })
+    for (const title of order) {
+        out.push({ title, actions: byTitle.get(title)! })
+    }
+    return out
 }
 
 /** How many of the module's capabilities are in the granted set. */
@@ -1068,25 +1115,12 @@ export function PermissionsManager({
                         ) : !activeModule ? (
                             <EmptyHint text="Selecciona un módulo de la lista para ver sus acciones." />
                         ) : (
-                            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                                {activeModule.actions.map((action) => {
-                                    const cap = moduleActionCapability(
-                                        activeModule.key,
-                                        action.key,
-                                        action.capability,
-                                    )
-                                    return (
-                                        <CapabilityCheck
-                                            key={action.capability ?? action.key}
-                                            checked={draft?.has(cap) ?? false}
-                                            disabled={checksDisabled}
-                                            onToggle={() => toggleCapability(cap)}
-                                            icon={action.icon || defaultActionIcon(action.key, action.kind)}
-                                            label={action.label}
-                                        />
-                                    )
-                                })}
-                            </div>
+                            <ModuleActionsPanel
+                                module={activeModule}
+                                draft={draft}
+                                checksDisabled={checksDisabled}
+                                onToggle={toggleCapability}
+                            />
                         )}
                     </CardContent>
                 </Card>
@@ -1213,6 +1247,110 @@ export function PermissionsManager({
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+        </div>
+    )
+}
+
+function ActionCheckGrid({
+    moduleKey,
+    actions,
+    draft,
+    checksDisabled,
+    onToggle,
+}: {
+    moduleKey: string
+    actions: PermissionActionDef[]
+    draft: ReadonlySet<string> | null | undefined
+    checksDisabled: boolean
+    onToggle: (cap: string) => void
+}) {
+    return (
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {actions.map((action) => {
+                const cap = moduleActionCapability(moduleKey, action.key, action.capability)
+                return (
+                    <CapabilityCheck
+                        key={action.capability ?? action.key}
+                        checked={draft?.has(cap) ?? false}
+                        disabled={checksDisabled}
+                        onToggle={() => onToggle(cap)}
+                        icon={action.icon || defaultActionIcon(action.key, action.kind)}
+                        label={action.label}
+                    />
+                )
+            })}
+        </div>
+    )
+}
+
+/** Flat grid, or collapsible sections when actions declare `group`. */
+function ModuleActionsPanel({
+    module,
+    draft,
+    checksDisabled,
+    onToggle,
+}: {
+    module: PermissionModuleDef
+    draft: ReadonlySet<string> | null | undefined
+    checksDisabled: boolean
+    onToggle: (cap: string) => void
+}) {
+    const sections = React.useMemo(
+        () => groupModuleActions(module.actions),
+        [module.actions],
+    )
+    const hasNamedGroups = sections.some((s) => s.title.length > 0)
+    if (!hasNamedGroups) {
+        return (
+            <ActionCheckGrid
+                moduleKey={module.key}
+                actions={module.actions}
+                draft={draft}
+                checksDisabled={checksDisabled}
+                onToggle={onToggle}
+            />
+        )
+    }
+
+    return (
+        <div className="flex flex-col gap-3">
+            {sections.map((section) => {
+                if (!section.title) {
+                    return (
+                        <ActionCheckGrid
+                            key="__ungrouped"
+                            moduleKey={module.key}
+                            actions={section.actions}
+                            draft={draft}
+                            checksDisabled={checksDisabled}
+                            onToggle={onToggle}
+                        />
+                    )
+                }
+                const granted = section.actions.filter((a) =>
+                    draft?.has(moduleActionCapability(module.key, a.key, a.capability)),
+                ).length
+                return (
+                    <Collapsible key={section.title} defaultOpen className="rounded-md border border-border/60">
+                        <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium hover:bg-muted/40 [&[data-state=open]>svg]:rotate-180">
+                            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform" />
+                            <span className="min-w-0 flex-1 truncate">{section.title}</span>
+                            <Badge variant="secondary" className="tabular-nums">
+                                {granted}/{section.actions.length}
+                            </Badge>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="border-t border-border/60 px-3 py-3">
+                            <ActionCheckGrid
+                                moduleKey={module.key}
+                                actions={section.actions}
+                                draft={draft}
+                                checksDisabled={checksDisabled}
+                                onToggle={onToggle}
+                            />
+                        </CollapsibleContent>
+                    </Collapsible>
+                )
+            })}
         </div>
     )
 }
