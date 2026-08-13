@@ -89,6 +89,11 @@ export interface PermissionActionDef {
     key: string
     /** Localized label ("Listar", "Pagar", "Acceder"). */
     label: string
+    /**
+     * Optional secondary line under the label (e.g. action name when the label
+     * is the module — used by screen → API shortcut checkboxes).
+     */
+    description?: string
     /** Lucide icon name from the manifest action (optional). */
     icon?: string
     /**
@@ -446,10 +451,14 @@ function CapabilityCheck({
             {icon && (
                 <DynamicIcon name={icon} className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
             )}
-            <span className="min-w-0">
-                <span className="block truncate font-medium text-foreground">{label}</span>
+            <span className="min-w-0 flex-1">
+                <span className="block break-words font-medium leading-snug text-foreground">
+                    {label}
+                </span>
                 {description && (
-                    <span className="mt-0.5 block text-xs text-muted-foreground">{description}</span>
+                    <span className="mt-0.5 block break-words text-xs leading-snug text-muted-foreground">
+                        {description}
+                    </span>
                 )}
             </span>
         </div>
@@ -1107,9 +1116,9 @@ export function PermissionsManager({
                         {!activeRole ? (
                             <EmptyHint text="Selecciona un rol para configurar sus permisos." />
                         ) : loadingPerms ? (
-                            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                            <div className="grid gap-2 sm:grid-cols-2">
                                 {Array.from({ length: 6 }).map((_, i) => (
-                                    <Skeleton key={i} className="h-11 w-full" />
+                                    <Skeleton key={i} className="h-14 w-full" />
                                 ))}
                             </div>
                         ) : !activeModule ? (
@@ -1265,7 +1274,7 @@ function ActionCheckGrid({
     onToggle: (cap: string) => void
 }) {
     return (
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-2 sm:grid-cols-2">
             {actions.map((action) => {
                 const cap = moduleActionCapability(moduleKey, action.key, action.capability)
                 return (
@@ -1276,6 +1285,7 @@ function ActionCheckGrid({
                         onToggle={() => onToggle(cap)}
                         icon={action.icon || defaultActionIcon(action.key, action.kind)}
                         label={action.label}
+                        description={action.description}
                     />
                 )
             })}
