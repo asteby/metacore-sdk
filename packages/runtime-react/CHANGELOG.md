@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 30.0.3
+
+### Patch Changes
+
+- 05d1cef: Permisos: labels de acciones sin truncate (wrap) y grid a 2 columnas; soporta description en PermissionActionDef.
+
 ## 30.0.2
 
 ### Patch Changes
