@@ -1,5 +1,11 @@
 # @asteby/metacore-ui
 
+## 2.14.1
+
+### Patch Changes
+
+- 6fe87ac: fix(layout): HeaderActions móvil — fila clickeable + popover no-modal
+
 ## 2.14.0
 
 ### Minor Changes
