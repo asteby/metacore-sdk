@@ -101,6 +101,7 @@ export function NotificationsDropdown({
   perPage = 20,
   locale = es,
   labels: labelsOverride,
+  resolveImageUrl,
   subscribeToNotifications,
 }: NotificationsDropdownProps) {
   const labels = useMemo<NotificationsDropdownLabels>(
@@ -203,6 +204,7 @@ export function NotificationsDropdown({
       locale={locale}
       notifications={notifications}
       unreadCount={unreadCount}
+      resolveImageUrl={resolveImageUrl}
       onMarkAsRead={async (id) => {
         setNotifications((prev) =>
           prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
@@ -242,6 +244,7 @@ export function NotificationsDropdown({
       locale={locale}
       notifications={notifications}
       unreadCount={unreadCount}
+      resolveImageUrl={resolveImageUrl}
       ingestWsPayload={ingestWsPayload}
       onMarkAsRead={async (id) => {
         setNotifications((prev) =>
@@ -285,6 +288,7 @@ interface InnerDropdownProps {
   locale: Locale
   notifications: NotificationItem[]
   unreadCount: number
+  resolveImageUrl?: (src: string) => string
   onMarkAsRead: (id: string) => void | Promise<void>
   onMarkAllAsRead: () => void | Promise<void>
   onNotificationClick?: (notification: NotificationItem) => void
@@ -317,6 +321,7 @@ function DropdownShell({
   locale,
   notifications,
   unreadCount,
+  resolveImageUrl,
   onMarkAsRead,
   onMarkAllAsRead,
   onNotificationClick,
@@ -346,7 +351,7 @@ function DropdownShell({
           )}
 
           {unreadCount > 0 && (
-            <span className='absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground shadow-sm ring-2 ring-background'>
+            <span className='absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground shadow-sm ring-2 ring-background'>
               {unreadCount}
               <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75'></span>
             </span>
@@ -390,32 +395,11 @@ function DropdownShell({
                   }}
                 >
                   <div className='flex items-start gap-4 w-full'>
-                    <div className='relative shrink-0'>
-                      {notification.image ? (
-                        <>
-                          <img
-                            src={notification.image}
-                            alt='Avatar'
-                            className='h-10 w-10 rounded-full object-cover border border-muted/40 shadow-sm'
-                          />
-                          <div className='absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-background ring-1 ring-border text-primary shadow-sm'>
-                            <Icon
-                              className='h-[10px] w-[10px] text-current'
-                              strokeWidth={3}
-                            />
-                          </div>
-                        </>
-                      ) : (
-                        <div
-                          className={`flex h-10 w-10 items-center justify-center rounded-full shadow-sm ring-1 ring-inset ring-black/5 ${getStyle(notification.type)}`}
-                        >
-                          <Icon
-                            className='h-5 w-5 text-white'
-                            strokeWidth={2.5}
-                          />
-                        </div>
-                      )}
-                    </div>
+                    <NotificationAvatar
+                      notification={notification}
+                      Icon={Icon}
+                      resolveImageUrl={resolveImageUrl}
+                    />
 
                     <div className='flex flex-col gap-1 w-full min-w-0'>
                       <div className='flex items-center justify-between gap-2'>
@@ -487,5 +471,45 @@ function DropdownShell({
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+/** Avatar + type badge. Resolves storage paths and falls back if the image 404s. */
+function NotificationAvatar({
+  notification,
+  Icon,
+  resolveImageUrl,
+}: {
+  notification: NotificationItem
+  Icon: React.ComponentType<{ className?: string; strokeWidth?: number }>
+  resolveImageUrl?: (src: string) => string
+}) {
+  const [failed, setFailed] = useState(false)
+  const raw = (notification.image || '').trim()
+  const resolved = raw && !failed ? (resolveImageUrl ? resolveImageUrl(raw) : raw) : ''
+  const showPhoto = Boolean(resolved)
+
+  if (showPhoto) {
+    return (
+      <div className='relative shrink-0'>
+        <img
+          src={resolved}
+          alt=''
+          className='h-10 w-10 rounded-full object-cover border border-muted/40 shadow-sm'
+          onError={() => setFailed(true)}
+        />
+        <div className='absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-background p-1 text-primary shadow-sm ring-1 ring-border'>
+          <Icon className='size-3.5 text-current' strokeWidth={2.25} />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-sm ring-1 ring-inset ring-black/5 ${getStyle(notification.type)}`}
+    >
+      <Icon className='h-5 w-5 text-white' strokeWidth={2.5} />
+    </div>
   )
 }
