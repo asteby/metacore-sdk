@@ -99,6 +99,12 @@ export interface NotificationsDropdownProps {
   /** Override built-in labels (Spanish by default). */
   labels?: Partial<NotificationsDropdownLabels>
   /**
+   * Optional URL normaliser for `notification.image` (e.g. bare storage
+   * filenames → absolute `/storage/…` URLs). When omitted, the raw value is
+   * used as `img.src`.
+   */
+  resolveImageUrl?: (src: string) => string
+  /**
    * Optional override for WebSocket subscription. When supplied, the
    * component does NOT call `useWebSocketMessage` and instead exposes the
    * handler via this prop — useful when the app owns its own socket or when
