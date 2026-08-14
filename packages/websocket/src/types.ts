@@ -95,3 +95,49 @@ export interface WebSocketContextValue<TMessage extends WebSocketMessage = WebSo
     handler: (message: T) => void,
   ) => () => void
 }
+
+/** Audio / video / screen-share call kind. */
+export type CallKind = 'audio' | 'video' | 'screen'
+
+export type CallSignalType = 'offer' | 'answer' | 'ice'
+
+/** Host → clients: someone started a call in a channel. */
+export interface CallInvitePayload {
+  call_id: string
+  channel_id: string
+  kind: CallKind
+  from_user_id: string
+  from_name?: string
+}
+
+/** Peer joined an existing call (mesh renegotiation trigger). */
+export interface CallJoinPayload {
+  call_id: string
+  channel_id: string
+  user_id: string
+  name?: string
+}
+
+/**
+ * SDP / ICE relay. `to_user_id` is set for directed mesh edges; omit to
+ * broadcast to every other participant (rare — prefer directed).
+ */
+export interface CallSignalPayload {
+  call_id: string
+  channel_id: string
+  from_user_id: string
+  to_user_id?: string
+  signal_type: CallSignalType
+  sdp?: RTCSessionDescriptionInit | { type: string; sdp?: string }
+  candidate?: RTCIceCandidateInit | null
+}
+
+export interface CallEndPayload {
+  call_id: string
+  channel_id: string
+  /** Who hung up / ended the room (mesh v1 ends for everyone). */
+  ended_by?: string
+  /** @deprecated Prefer ended_by */
+  user_id?: string
+  reason?: string
+}
