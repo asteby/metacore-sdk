@@ -1,5 +1,12 @@
 # @asteby/metacore-runtime-react
 
+## 30.0.4
+
+### Patch Changes
+
+- 1cd72ee: fix(types): ActionDefinition.steps para que el build de release compile
+- 11d12ae: DynamicSelectField: `staticOptions`, `descriptionAsBadge` y `hideCreate` para reutilizar el mismo picker en modales federados (despacho / taller) con listas filtradas en cliente.
+
 ## 30.0.3
 
 ### Patch Changes
