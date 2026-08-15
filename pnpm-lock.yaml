@@ -102,7 +102,7 @@ importers:
         version: link:../../../packages/websocket
       '@hookform/resolvers':
         specifier: ^3.9.0
-        version: 5.8.0(@standard-schema/spec@1.1.0)(ajv@8.20.0)(react-hook-form@7.82.0(react@19.2.7))(zod@4.4.3)
+        version: 3.10.0(react-hook-form@7.82.0(react@19.2.7))
       '@tanstack/react-query':
         specifier: ^5.95.0
         version: 5.101.2(react@19.2.7)
@@ -123,7 +123,7 @@ importers:
         version: 23.16.8
       lucide-react:
         specifier: ^0.460.0
-        version: 1.31.0(react@19.2.7)
+        version: 0.460.0(react@19.2.7)
       react:
         specifier: ^19.2.4
         version: 19.2.7
@@ -579,7 +579,7 @@ importers:
         version: 3.2.2(react@19.2.7)
       '@module-federation/runtime':
         specifier: ^2.5.0
-        version: 2.8.0
+        version: 2.8.2
       recharts:
         specifier: ^2.15.0
         version: 2.15.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -2631,6 +2631,11 @@ packages:
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
+  '@hookform/resolvers@3.10.0':
+    resolution: {integrity: sha512-79Dv+3mDF7i+2ajj7SkypSKHhl1cbln1OGavqrsF7p6mbUv11xpqpacPsGDCTRvCSjEEIez2ef1NveSVL3b0Ag==}
+    peerDependencies:
+      react-hook-form: ^7.0.0
+
   '@hookform/resolvers@5.8.0':
     resolution: {integrity: sha512-2m6GvRLmYYK1Fwt093lGMf7db9l/+8pNuAtwoNkpBntJT4xcA5lNthYGWKViOc3z2SuaPD0HjE81pyXmqc1JyA==}
     peerDependencies:
@@ -2779,17 +2784,29 @@ packages:
   '@module-federation/error-codes@2.8.0':
     resolution: {integrity: sha512-Gaog9904EmxYOQV0hli3XQ7jXeFaADfh5bnBtTCtbZ37Qd/Sz9kQfd+gYQRyIj7RGmkv9DPiN/SsmrTMrTymKw==}
 
+  '@module-federation/error-codes@2.8.2':
+    resolution: {integrity: sha512-8inlDv48QOjA//CLQ3epjoHEiMQGsz1Pmtu2N+s7gQVggn6AYHpjnMe8AsyGxtpaPg3wbX0HmBZtRFggpXUB9A==}
+
   '@module-federation/managers@2.8.0':
     resolution: {integrity: sha512-SnVBCwmi962WGg6hLFElxZUCnrRJdR6glE2ZKPBY/iK07AHUN2ZxuaBCBsVzyws+xLZGHZxBHmVstijTh8dSUA==}
 
   '@module-federation/runtime-core@2.8.0':
     resolution: {integrity: sha512-Tf98+epGGiPSHqmQHuXa2uXZMMvjGf1IqJDR1/FpXfmobv5ECN0mGZCjUHGNSyxvoDyXKIkKwJu7IwEoh0ouQA==}
 
+  '@module-federation/runtime-core@2.8.2':
+    resolution: {integrity: sha512-PEkkK9MUp+nUCeQMS4ox3QGZfwwxgfjGA7P4umEnr5c3y8DLNDR+26tyHf/Gkjen2VsjlcyL+mEAQo1Zi4IE3g==}
+
   '@module-federation/runtime@2.8.0':
     resolution: {integrity: sha512-cGtUBQ1/TVy7KrXy6xPgy3FEmOGyIYkBA2T4iGH3ZH5PNPPTmqN9jF2AfneTSOj0RtBr7Pxq3CUt81E/UCvK1A==}
 
+  '@module-federation/runtime@2.8.2':
+    resolution: {integrity: sha512-SUoP+PD5EjSPSi6FxEPGIZoRkFifxdeYcVQbJE9mO0VEjF51gAk3/TgX8k0vzUryOBPmXekLr9SfQXU6DqUtvA==}
+
   '@module-federation/sdk@2.8.0':
     resolution: {integrity: sha512-yBP+9+0Z8nlvKEXAZS3AsQVy7bFbZf8eMivGk4q4ZdwG3TsLMlsPjb1dQb2i7gcAG6ux9y2LWLkj/0LVk74cnQ==}
+
+  '@module-federation/sdk@2.8.2':
+    resolution: {integrity: sha512-OPS/lbQjraLXoWniQpCwQ/vqgURHTrhsackSNcOPmcJHM3LyR+DabxUc0pl8jAqExsW2l+uepQq7+/Gkei871w==}
 
   '@module-federation/third-party-dts-extractor@2.8.0':
     resolution: {integrity: sha512-nAMlr74OKIylkfRwlunOhytQbmsgb3gCqdXWnPQhG+ZtqWXGELLfMT4a1Q1ht3cS+sRpWj2SZRqK2M7GadI6tA==}
@@ -6164,6 +6181,11 @@ packages:
   lru-cache@5.1.1:
     resolution: {integrity: sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w==}
 
+  lucide-react@0.460.0:
+    resolution: {integrity: sha512-BVtq/DykVeIvRTJvRAgCsOwaGL8Un3Bxh8MbDxMhEWlZay3T4IpEKDEpwt5KZ0KJMHzgm6jrltxlT5eXOWXDHg==}
+    peerDependencies:
+      react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0-rc
+
   lucide-react@1.31.0:
     resolution: {integrity: sha512-G8u2eEtoHUnUa9f8lbvqDhCiORMnYLdUEo06EEG9MQvHQrInKcX3Pa2TH39MM5qyzRcWETxB0+aOwAPI1g1kEg==}
     peerDependencies:
@@ -9158,6 +9180,10 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
+  '@hookform/resolvers@3.10.0(react-hook-form@7.82.0(react@19.2.7))':
+    dependencies:
+      react-hook-form: 7.82.0(react@19.2.7)
+
   '@hookform/resolvers@5.8.0(@standard-schema/spec@1.1.0)(ajv@8.20.0)(react-hook-form@7.82.0(react@19.2.7))(zod@4.4.3)':
     dependencies:
       '@standard-schema/utils': 0.3.0
@@ -9249,6 +9275,8 @@ snapshots:
 
   '@module-federation/error-codes@2.8.0': {}
 
+  '@module-federation/error-codes@2.8.2': {}
+
   '@module-federation/managers@2.8.0':
     dependencies:
       '@module-federation/sdk': 2.8.0
@@ -9258,13 +9286,26 @@ snapshots:
       '@module-federation/error-codes': 2.8.0
       '@module-federation/sdk': 2.8.0
 
+  '@module-federation/runtime-core@2.8.2':
+    dependencies:
+      '@module-federation/error-codes': 2.8.2
+      '@module-federation/sdk': 2.8.2
+
   '@module-federation/runtime@2.8.0':
     dependencies:
       '@module-federation/error-codes': 2.8.0
       '@module-federation/runtime-core': 2.8.0
       '@module-federation/sdk': 2.8.0
 
+  '@module-federation/runtime@2.8.2':
+    dependencies:
+      '@module-federation/error-codes': 2.8.2
+      '@module-federation/runtime-core': 2.8.2
+      '@module-federation/sdk': 2.8.2
+
   '@module-federation/sdk@2.8.0': {}
+
+  '@module-federation/sdk@2.8.2': {}
 
   '@module-federation/third-party-dts-extractor@2.8.0': {}
 
@@ -12484,6 +12525,10 @@ snapshots:
   lru-cache@5.1.1:
     dependencies:
       yallist: 3.1.1
+
+  lucide-react@0.460.0(react@19.2.7):
+    dependencies:
+      react: 19.2.7
 
   lucide-react@1.31.0(react@19.2.7):
     dependencies:
