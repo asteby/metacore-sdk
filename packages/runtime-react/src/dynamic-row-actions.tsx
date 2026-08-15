@@ -120,7 +120,11 @@ export function useDynamicRowActions({
             return
         }
         const actionDef = metadata?.actions?.find((a) => a.key === action)
-        if (actionDef && (actionDef.fields?.length || actionDef.confirm || actionDef.executable)) {
+        // Open the dispatcher when there is ANY UI surface (fields, wizard
+        // steps, confirm bool, confirmMessage, or host `executable`). A
+        // confirm_message without confirm:true used to fall through / open and
+        // then render null — derive confirm so the ConfirmActionDialog path wins.
+        if (actionDef && (actionDef.fields?.length || actionDef.steps?.length || actionDef.confirm || actionDef.confirmMessage || actionDef.executable)) {
             setActionModal({
                 open: true,
                 action: {
@@ -128,9 +132,10 @@ export function useDynamicRowActions({
                     label: actionDef.label,
                     icon: actionDef.icon || 'Zap',
                     color: actionDef.color,
-                    confirm: actionDef.confirm,
+                    confirm: !!(actionDef.confirm || actionDef.confirmMessage),
                     confirmMessage: actionDef.confirmMessage,
                     fields: actionDef.fields,
+                    steps: actionDef.steps,
                     requiresState: actionDef.requiresState,
                     executable: actionDef.executable,
                 },
