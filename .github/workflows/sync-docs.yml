@@ -1,0 +1,51 @@
+name: Sync docs to metacore site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**.md'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout metacore-sdk
+        uses: actions/checkout@v6
+
+      - name: Checkout metacore
+        uses: actions/checkout@v6
+        with:
+          repository: asteby/metacore
+          token: ${{ secrets.METACORE_DOCS_SYNC_TOKEN }}
+          path: metacore-site
+
+      - name: Sync docs/*.md into metacore-site/docs/sdk/
+        run: node scripts/sync-docs-to-metacore.mjs metacore-site
+
+      - name: Open or update PR on metacore
+        env:
+          GH_TOKEN: ${{ secrets.METACORE_DOCS_SYNC_TOKEN }}
+        working-directory: metacore-site
+        run: |
+          if git diff --quiet; then
+            echo "no doc drift, nothing to sync"
+            exit 0
+          fi
+
+          BRANCH="docs/sync-sdk-$(date +%Y%m%d%H%M%S)"
+          git config user.name "metacore-sdk-docs-bot"
+          git config user.email "docs-bot@asteby.com"
+          git checkout -b "$BRANCH"
+          git add docs/sdk
+          git commit -m "docs(sdk): sync mirrored SDK docs from metacore-sdk@${GITHUB_SHA::7}"
+          git push -u origin "$BRANCH"
+
+          gh pr create \
+            --repo asteby/metacore \
+            --base main \
+            --head "$BRANCH" \
+            --title "docs(sdk): sync mirrored SDK docs from metacore-sdk" \
+            --body "Automated sync of \`docs/sdk/*.md\` from asteby/metacore-sdk@${GITHUB_SHA} (triggered by a docs/ change on main). The \`docs/es/sdk/\` translation is a real translation, not a mirror, and is intentionally left untouched — review it separately if the EN content changed meaningfully.
+
+This PR was opened by the \`sync-docs.yml\` workflow in metacore-sdk, not hand-authored. Review the diff before merging."
