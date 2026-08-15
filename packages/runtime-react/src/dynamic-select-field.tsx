@@ -23,6 +23,7 @@
 // case — start empty and never hit this.
 import { useEffect, useRef, useState } from 'react'
 import {
+    Badge,
     Button,
     Command,
     CommandEmpty,
@@ -177,6 +178,24 @@ export interface DynamicSelectFieldProps {
      * on open) so the label resolves to the NAME instead of showing the raw id.
      */
     readonly?: boolean
+    /**
+     * Caller-owned options (e.g. warehouses filtered by available stock for a
+     * dispatch line). When set, skips `/options` and filters these client-side
+     * by the search box. Federated process modals use this so they share the
+     * same DynamicSelect chrome without reinventing a lighter picker.
+     */
+    staticOptions?: readonly ResolvedOption[] | null
+    /**
+     * Render `option.description` as a trailing Badge (stock, codes, …) instead
+     * of the default muted subtitle under the label.
+     */
+    descriptionAsBadge?: boolean
+    /**
+     * Hide the inline "+" create affordance even when `field.ref` is set.
+     * Useful for static / filtered lists where creating a new record is not
+     * meaningful in context.
+     */
+    hideCreate?: boolean
 }
 
 export function DynamicSelectField({
@@ -187,6 +206,9 @@ export function DynamicSelectField({
     dependsValue,
     dependsHint,
     readonly = false,
+    staticOptions = null,
+    descriptionAsBadge = false,
+    hideCreate = false,
 }: DynamicSelectFieldProps) {
     const [open, setOpen] = useState(false)
     const [search, setSearch] = useState('')
@@ -224,7 +246,9 @@ export function DynamicSelectField({
     const scope = dependsValue ? String(dependsValue) : ''
     const blockedByDependency = !!dependsOn && scope === ''
 
-    const { options, loading } = useOptionsResolver({
+    const useStatic = Array.isArray(staticOptions)
+
+    const { options: fetchedOptions, loading: fetchLoading } = useOptionsResolver({
         modelKey: '',
         fieldKey: source.fieldKey,
         ref: source.ref,
@@ -241,8 +265,21 @@ export function DynamicSelectField({
         // changes while open). A picker blocked by an unset dependency never
         // fetches. A readonly cell fetches eagerly so its value's label resolves
         // to the name without the user ever opening it.
-        enabled: (open || readonly) && !blockedByDependency,
+        // Static lists never hit the network.
+        enabled: !useStatic && (open || readonly) && !blockedByDependency,
     })
+
+    const options = useStatic
+        ? (staticOptions as ResolvedOption[]).filter((o) => {
+              if (!debounced) return true
+              const q = debounced.toLowerCase()
+              return (
+                  String(o.label ?? '').toLowerCase().includes(q) ||
+                  String(o.description ?? '').toLowerCase().includes(q)
+              )
+          })
+        : fetchedOptions
+    const loading = useStatic ? false : fetchLoading
 
     // When the depended-on value changes, the previously-picked option no longer
     // belongs to the new scope, so clear the selection (skip the initial mount).
@@ -356,6 +393,11 @@ export function DynamicSelectField({
                                 ? (dependsHint || DEFAULT_DEPENDS_HINT)
                                 : selectedLabel || field.placeholder || 'Buscar…'}
                         </span>
+                        {descriptionAsBadge && selectedOption?.description ? (
+                            <Badge variant="secondary" className="shrink-0 font-normal tabular-nums">
+                                {selectedOption.description}
+                            </Badge>
+                        ) : null}
                     </span>
                     <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
                 </Button>
@@ -382,7 +424,13 @@ export function DynamicSelectField({
                         )}
                         {!loading && options.length === 0 && (
                             <CommandEmpty>
-                                {debounced ? 'Sin resultados' : 'Escribí para buscar…'}
+                                {useStatic
+                                    ? debounced
+                                        ? 'Sin resultados'
+                                        : 'Sin opciones'
+                                    : debounced
+                                      ? 'Sin resultados'
+                                      : 'Escribí para buscar…'}
                             </CommandEmpty>
                         )}
                         {!loading && options.length > 0 && (
@@ -397,14 +445,25 @@ export function DynamicSelectField({
                                         >
                                             <Check className={'mr-2 size-4 shrink-0 ' + (isSel ? 'opacity-100' : 'opacity-0')} />
                                             <OptionLead option={opt} size={24} />
-                                            <div className="ml-2 flex min-w-0 flex-col">
-                                                <span className="truncate">{opt.label}</span>
-                                                {opt.description && (
-                                                    <span className="text-muted-foreground truncate text-xs">
-                                                        {opt.description}
-                                                    </span>
-                                                )}
-                                            </div>
+                                            {descriptionAsBadge ? (
+                                                <div className="ml-2 flex min-w-0 flex-1 items-center gap-2">
+                                                    <span className="min-w-0 flex-1 truncate">{opt.label}</span>
+                                                    {opt.description ? (
+                                                        <Badge variant="secondary" className="shrink-0 font-normal tabular-nums">
+                                                            {opt.description}
+                                                        </Badge>
+                                                    ) : null}
+                                                </div>
+                                            ) : (
+                                                <div className="ml-2 flex min-w-0 flex-col">
+                                                    <span className="truncate">{opt.label}</span>
+                                                    {opt.description && (
+                                                        <span className="text-muted-foreground truncate text-xs">
+                                                            {opt.description}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
                                         </CommandItem>
                                     )
                                 })}
@@ -427,7 +486,7 @@ export function DynamicSelectField({
                     <ScanLine className="size-4" />
                 </Button>
             )}
-            {fieldRef && (
+            {fieldRef && !hideCreate && !useStatic && (
                 <Button
                     type="button"
                     variant="outline"
