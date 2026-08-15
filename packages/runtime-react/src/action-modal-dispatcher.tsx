@@ -1,8 +1,10 @@
 // ActionModalDispatcher — renders the right modal for a custom action:
 // 1) Custom component from the SDK registry → use it
-// 2) action.fields[] → GenericActionModal (form)
-// 3) action.confirm → ConfirmActionDialog
-// 4) otherwise → nothing (caller executes immediately)
+// 2) action.fields[] / action.steps[] → GenericActionModal / WizardActionModal
+// 3) action.confirm OR action.confirmMessage → ConfirmActionDialog
+// 4) action.executable (host opened the modal; federated UI missing) →
+//    ConfirmActionDialog so a click never silently no-ops
+// 5) otherwise → null (caller should execute immediately without opening us)
 //
 // The host injects its axios-like client via <ApiProvider>; we no longer
 // depend on a bundler alias to `@/lib/api`.
@@ -208,7 +210,12 @@ export function ActionModalDispatcher({
         )
     }
 
-    if (action.confirm) {
+    // confirm_message alone is confirmation intent (v3 manifests often omit the
+    // boolean). Hosts also mark every wasm action `executable` and open THIS
+    // dispatcher; without a confirm/fields/custom UI we used to return null and
+    // the row click did nothing. Treat message-only + executable-open as confirm.
+    const wantsConfirm = !!(action.confirm || action.confirmMessage)
+    if (wantsConfirm || (open && action.executable)) {
         return (
             <ConfirmActionDialog
                 open={open}
