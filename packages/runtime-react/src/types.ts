@@ -651,6 +651,8 @@ export interface ActionDefinition {
     confirm?: boolean
     confirmMessage?: string
     fields?: ActionFieldDef[]
+    /** Multi-step wizard form; when present the dispatcher renders a wizard. */
+    steps?: ActionStep[]
     requiresState?: string[]
     executable?: boolean
     /**
