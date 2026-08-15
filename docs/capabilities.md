@@ -33,13 +33,14 @@ Declared in the manifest:
   { "kind": "http:fetch",      "target": "api.stripe.com", "reason": "Process payments" },
   { "kind": "http:fetch",      "target": "*.slack.com" },
   { "kind": "event:emit",      "target": "sale.created" },
-  { "kind": "event:subscribe", "target": "invoice.stamped" }
+  { "kind": "event:subscribe", "target": "invoice.stamped" },
+  { "kind": "connector:read",  "target": "mercadopago", "reason": "Read the org's credentials" }
 ]
 ```
 
 | Field | Required | Notes |
 |---|---|---|
-| `kind` | yes | One of `db:read`, `db:write`, `http:fetch`, `event:emit`, `event:subscribe`. Must contain a `:` separator. |
+| `kind` | yes | One of `db:read`, `db:write`, `http:fetch`, `event:emit`, `event:subscribe`, `connector:read`. Must contain a `:` separator. |
 | `target` | yes | Kind-specific pattern (see below). |
 | `reason` | recommended | Shown on the install prompt. Addons with empty reasons fail `--strict` gates. |
 
@@ -106,6 +107,21 @@ that accidentally lists `*.internal` still cannot reach IMDS.
 | `"ticket.*"` | Any topic under `ticket.`. |
 | `"*"` | All topics (allowed for events; not for DB/HTTP). |
 
+### `connector:read`
+
+Grants a WASM handler access to `connector_get(key)` for one of the
+addon's declared `connectors[]` — resolving the **org's stored, encrypted
+credentials** for that connector (an access token, an API key) so the
+handler can authenticate an outbound call. Target is the connector `key`
+(e.g. `"mercadopago"`), matching `Manifest.connectors[].key`
+([manifest-spec.md §8](./manifest-spec.md#8-connectors)). Almost always
+declared alongside an `http:fetch` capability for the same third-party API
+— reading the credential is useless without permission to call the host it
+authenticates against. The hub's publish-time scanner treats `connector_get`
+as a real, statically-detected WASM import (not a text match): a compiled
+module that imports it without the matching `connector:read` capability is
+rejected outright, the same treatment `http_request` gets.
+
 ## 4. Declaring capabilities
 
 Keep the list minimal. On install, the host displays each capability's
@@ -119,6 +135,8 @@ Checklist:
 3. Does the addon make outbound HTTP calls? → declare `http:fetch` per host.
 4. Does the addon publish to the event bus? → declare `event:emit` per topic.
 5. Does the addon subscribe? → declare `event:subscribe`.
+6. Does a WASM handler read a connector credential via `connector_get`? →
+   declare `connector:read` for that connector's key.
 
 ## 5. Runtime enforcement
 

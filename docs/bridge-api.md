@@ -286,7 +286,7 @@ The canonical list lives in `metacoreFederationShared()` from
 
 ```ts
 // addon vite.config.ts
-import federation from '@originjs/vite-plugin-federation'
+import { federation } from '@module-federation/vite'
 import { metacoreFederationShared } from '@asteby/metacore-starter-config/vite'
 
 export default defineConfig({
@@ -468,7 +468,7 @@ A complete addon that renders **"Hello tenant {name}"** under
 ```ts
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react-swc'
-import federation from '@originjs/vite-plugin-federation'
+import { federation } from '@module-federation/vite'
 import { metacoreFederationShared, metacoreOptimizeDeps }
   from '@asteby/metacore-starter-config/vite'
 
