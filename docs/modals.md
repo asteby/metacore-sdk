@@ -167,8 +167,9 @@ regardless of how the component declared its prop shape.
 
 ## Wiring an action's `modal` to a registered component
 
-Inside the manifest, declare a custom modal by setting `modal: "<slug>"` on
-the action; the slug must match exactly what the addon registered:
+Inside the manifest (v3, under `contributions.actions[]`), declare a custom
+modal by setting `modal: "<slug>"` on the action; the slug must match
+exactly what the addon registered:
 
 ```json
 "contributions": {
@@ -180,11 +181,16 @@ the action; the slug must match exactly what the addon registered:
     "modal": "tickets.reassign",
     "handler": { "type": "webhook", "url": "/webhooks/reassign" },
     "fields": [
-      { "key": "assignee_id", "label": "Assignee", "type": "user", "required": true }
+      { "key": "assignee_id", "label": "Assignee", "type": "dynamic_select", "ref": "User", "required": true }
     ]
   }]
 }
 ```
+
+Setting `placement: "create"` on an action with a `modal` is the pattern
+for **replacing the generic create button** entirely with an addon's own
+rich creation flow (a document with line items, a wizard) — see
+[manifest-spec.md §7.2](./manifest-spec.md#72-actions--placement-federated-modals-wizards).
 
 When the user clicks the action, the host's `<ActionModalDispatcher>` looks
 the slug up in the `Registry`, falls back to the generic field-driven dialog
@@ -223,5 +229,5 @@ required.
 
 - [`bridge-api.md`](./bridge-api.md) — the full bridge contract; modals are one of four registry contribution kinds.
 - [`addon-cookbook.md`](./addon-cookbook.md#how-do-i-create-a-custom-action-with-a-modal) — recipe for declaring a custom action in the manifest.
-- [`manifest-spec.md`](./manifest-spec.md#5-actions-ui-triggered) — `actions[model][].modal` field reference.
+- [`manifest-spec.md`](./manifest-spec.md#72-actions--placement-federated-modals-wizards) — `contributions.actions[].modal` field reference.
 - [`packages/sdk/src/registry.ts`](../packages/sdk/src/registry.ts) — `ModalProps`, `ModalContribution`, `Registry` source.
