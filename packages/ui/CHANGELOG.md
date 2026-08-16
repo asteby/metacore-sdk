@@ -1,5 +1,11 @@
 # @asteby/metacore-ui
 
+## 2.15.0
+
+### Minor Changes
+
+- d122ae0: Till primitives: panel 380 + resize, master–detail shell, ProductTile, queue cards y chip de escaneo — para POS/compras/cajero sin duplicar.
+
 ## 2.14.3
 
 ### Patch Changes
