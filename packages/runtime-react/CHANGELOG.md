@@ -1,5 +1,13 @@
 # @asteby/metacore-runtime-react
 
+## 30.0.5
+
+### Patch Changes
+
+- 9604dc4: fix(runtime): OptionThumb cae a iniciales si el avatar 404 (no caja invisible)
+- Updated dependencies [a0c3e39]
+  - @asteby/metacore-ui@2.14.3
+
 ## 30.0.4
 
 ### Patch Changes

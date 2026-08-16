@@ -1,5 +1,11 @@
 # @asteby/metacore-ui
 
+## 2.14.3
+
+### Patch Changes
+
+- a0c3e39: Sidebar anidado (preset → módulo → vista): menos indentación y labels que hacen wrap en vez de truncarse a "Todos l…".
+
 ## 2.14.2
 
 ### Patch Changes
