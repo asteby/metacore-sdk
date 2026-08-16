@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 30.0.6
+
+### Patch Changes
+
+- c8b6269: DynamicSelect: no anidar "Crear X" en self-FK (p. ej. empresa matriz) y vacío del picker más claro al abrir.
+
 ## 30.0.5
 
 ### Patch Changes
