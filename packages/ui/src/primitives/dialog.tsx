@@ -1,12 +1,23 @@
 import * as React from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { XIcon } from 'lucide-react'
+import { useRadixModalBodyGuard } from '@/hooks/use-radix-modal-body-guard'
 import { cn } from '@/lib/utils'
 
 function Dialog({
+  open,
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot='dialog' {...props} />
+  const handleOpenChange = useRadixModalBodyGuard(open, onOpenChange)
+  return (
+    <DialogPrimitive.Root
+      data-slot='dialog'
+      open={open}
+      onOpenChange={handleOpenChange}
+      {...props}
+    />
+  )
 }
 
 function DialogTrigger({

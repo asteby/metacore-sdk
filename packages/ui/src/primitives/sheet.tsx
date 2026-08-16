@@ -1,10 +1,23 @@
 import * as React from 'react'
 import * as SheetPrimitive from '@radix-ui/react-dialog'
 import { XIcon } from 'lucide-react'
+import { useRadixModalBodyGuard } from '@/hooks/use-radix-modal-body-guard'
 import { cn } from '@/lib/utils'
 
-function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
-  return <SheetPrimitive.Root data-slot='sheet' {...props} />
+function Sheet({
+  open,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof SheetPrimitive.Root>) {
+  const handleOpenChange = useRadixModalBodyGuard(open, onOpenChange)
+  return (
+    <SheetPrimitive.Root
+      data-slot='sheet'
+      open={open}
+      onOpenChange={handleOpenChange}
+      {...props}
+    />
+  )
 }
 
 function SheetTrigger({

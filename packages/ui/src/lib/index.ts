@@ -1,4 +1,8 @@
 export { cn, getPageNumbers, sleep } from './utils'
+export {
+  restoreBodyInteraction,
+  scheduleRestoreBodyInteraction,
+} from './restore-body-interaction'
 export { getCookie, setCookie, removeCookie } from './cookies'
 export {
   resolveColorHex,
