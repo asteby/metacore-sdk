@@ -1,12 +1,23 @@
 import * as React from 'react'
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog'
+import { useRadixModalBodyGuard } from '@/hooks/use-radix-modal-body-guard'
 import { cn } from '@/lib/utils'
 import { buttonVariants } from '@/primitives/button'
 
 function AlertDialog({
+  open,
+  onOpenChange,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
-  return <AlertDialogPrimitive.Root data-slot='alert-dialog' {...props} />
+  const handleOpenChange = useRadixModalBodyGuard(open, onOpenChange)
+  return (
+    <AlertDialogPrimitive.Root
+      data-slot='alert-dialog'
+      open={open}
+      onOpenChange={handleOpenChange}
+      {...props}
+    />
+  )
 }
 
 function AlertDialogTrigger({
