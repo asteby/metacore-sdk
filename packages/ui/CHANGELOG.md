@@ -1,5 +1,11 @@
 # @asteby/metacore-ui
 
+## 2.14.2
+
+### Patch Changes
+
+- c215979: fix(ui): desbloquear body si un Dialog/Sheet se desmonta abierto (clicks congelados)
+
 ## 2.14.1
 
 ### Patch Changes
