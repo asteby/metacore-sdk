@@ -209,11 +209,14 @@ function SidebarMenuCollapsible({
                     className='group/collapsible w-full'
                   >
                     <CollapsibleTrigger asChild>
-                      <SidebarMenuSubButton className='cursor-pointer'>
+                      <SidebarMenuSubButton
+                        className='cursor-pointer'
+                        title={subItem.title}
+                      >
                         {subItem.icon && <subItem.icon />}
                         <span>{subItem.title}</span>
                         {hasBadge(subItem.badge) && <NavBadge>{subItem.badge}</NavBadge>}
-                        <ChevronRight className='ms-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 rtl:rotate-180' />
+                        <ChevronRight className='ms-auto shrink-0 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 rtl:rotate-180' />
                       </SidebarMenuSubButton>
                     </CollapsibleTrigger>
                     <CollapsibleContent className='CollapsibleContent'>
@@ -247,6 +250,7 @@ function SidebarMenuCollapsible({
                                 >
                                   <LinkComponent
                                     to={leaf.url}
+                                    title={leaf.title}
                                     onClick={() => setOpenMobile(false)}
                                     onMouseEnter={() => onItemHover?.(leaf.url)}
                                   >
@@ -272,6 +276,7 @@ function SidebarMenuCollapsible({
                 <SidebarMenuSubButton asChild isActive={activeUrls.has(subItem.url)}>
                   <LinkComponent
                     to={subItem.url}
+                    title={subItem.title}
                     onClick={() => setOpenMobile(false)}
                     onMouseEnter={() => onItemHover?.(subItem.url)}
                   >
