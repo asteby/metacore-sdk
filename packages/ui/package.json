@@ -78,6 +78,10 @@
     "./shared": {
       "types": "./dist/shared/index.d.ts",
       "import": "./dist/shared/index.js"
+    },
+    "./till": {
+      "types": "./dist/till/index.d.ts",
+      "import": "./dist/till/index.js"
     }
   },
   "scripts": {
