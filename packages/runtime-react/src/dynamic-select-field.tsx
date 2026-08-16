@@ -69,8 +69,11 @@ export function OptionThumb({
     name?: string | null
     size?: number
 }) {
+    const [broken, setBroken] = useState(false)
     const box = { width: size, height: size }
-    if (!image) {
+    // Missing or 404 image (bare avatar filenames often 404) → initials, never
+    // an invisible box that looks like "no avatar".
+    if (!image || broken) {
         return <InitialsAvatar name={name} size={size} rounded="sm" tone="neutral" />
     }
     // A lucide icon name stored where an image url/path is expected (the `icon`
@@ -90,11 +93,7 @@ export function OptionThumb({
             loading="lazy"
             className="shrink-0 rounded-sm object-cover"
             style={box}
-            // A broken image url shouldn't leave a torn-icon glyph; collapse to
-            // the neutral placeholder background instead.
-            onError={(e) => {
-                e.currentTarget.style.visibility = 'hidden'
-            }}
+            onError={() => setBroken(true)}
         />
     )
 }
