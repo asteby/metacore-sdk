@@ -429,7 +429,7 @@ export function DynamicSelectField({
                                         : 'Sin opciones'
                                     : debounced
                                       ? 'Sin resultados'
-                                      : 'Escribí para buscar…'}
+                                      : 'Sin resultados — escribe para filtrar'}
                             </CommandEmpty>
                         )}
                         {!loading && options.length > 0 && (
