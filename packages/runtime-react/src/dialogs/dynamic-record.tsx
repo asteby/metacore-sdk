@@ -12,6 +12,10 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ModelSchema } from './types'
+
+/** Model key of the open create/edit dialog — used to hide "+" on self-FK pickers
+ *  (e.g. Customer.parent_id) so they don't nest another "Crear Cliente" modal. */
+const RecordDialogModelContext = createContext<string | undefined>(undefined)
 import {
     Dialog,
     DialogContent,
@@ -951,6 +955,7 @@ export function DynamicRecordDialog({
     const goBackStep = () => setStepIndex(Math.max(clampedStep - 1, 0))
 
     return (
+        <RecordDialogModelContext.Provider value={model}>
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-2xl max-h-[90dvh] flex flex-col p-0 gap-0 overflow-hidden" style={{ maxHeight: '90dvh' }}>
                 <DialogHeader className="p-6 pb-4 border-b shrink-0">
@@ -1095,6 +1100,7 @@ export function DynamicRecordDialog({
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+        </RecordDialogModelContext.Provider>
     )
 }
 
@@ -1653,6 +1659,7 @@ export function EditField({ field, value, onChange, record }: {
 }) {
     const { t, i18n } = useTranslation()
     const editFieldImageUrl = useContext(ImageUrlContext)
+    const dialogModel = useContext(RecordDialogModelContext)
 
     // Jsonb line-items columns (e.g. Transfer.items) are action-built documents:
     // editing the array field-by-field is out of scope. Render them READ-ONLY
@@ -1741,6 +1748,13 @@ export function EditField({ field, value, onChange, record }: {
             field.widget === 'dynamic_select') &&
         !field.options?.length
     ) {
+        const ref = getFieldRef(field as ActionFieldDef)
+        // Self-FK (Customer.parent_id → Customer): nesting another "Crear Cliente"
+        // on top of the open create dialog confuses operators — select only.
+        const hideSelfCreate =
+            !!dialogModel &&
+            !!ref &&
+            dialogModel.replace(/_/g, '').toLowerCase() === ref.replace(/_/g, '').toLowerCase()
         return (
             <DynamicSelectField
                 field={field as ActionFieldDef}
@@ -1751,6 +1765,7 @@ export function EditField({ field, value, onChange, record }: {
                 // selection shows the label, not the raw uuid — without waiting
                 // for the popover to open and fetch a page.
                 seedOption={fkSeedOption(field, value, record)}
+                hideCreate={hideSelfCreate}
             />
         )
     }
