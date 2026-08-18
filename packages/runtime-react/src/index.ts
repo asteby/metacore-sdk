@@ -179,6 +179,8 @@ export * from './api-context'
 export * from './use-addon-settings'
 export * from './use-print-document'
 export * from './print-document-button'
+export * from './use-org-document-templates'
+export * from './document-template-editor'
 export * from './metadata-cache'
 export {
     ADDON_MANIFEST_CHANGED_TYPE,
