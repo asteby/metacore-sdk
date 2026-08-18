@@ -30,3 +30,12 @@ export {
   MetacoreAppShell,
   type MetacoreAppShellProps,
 } from './metacore-app-shell'
+export {
+  Mascot,
+  MASCOT_SKINS,
+  MASCOT_CSS,
+  resolveMascotName,
+  type MascotState,
+  type MascotSkin,
+  type MascotProps,
+} from './mascot'
