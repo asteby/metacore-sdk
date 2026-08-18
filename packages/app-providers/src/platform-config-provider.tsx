@@ -23,6 +23,11 @@ export interface PlatformBranding {
   favicon_url: string
   support_email: string
   support_url: string
+  // Name + skin key for the AI copilot mascot (see ./mascot). Empty/unknown
+  // skin keys fall back to the SDK default skin, so orgs without this set
+  // keep working — never hard-code a brand name/skin outside this field.
+  mascot_name: string
+  mascot_skin: string
 }
 
 export const FALLBACK_BRANDING: PlatformBranding = {
@@ -33,6 +38,8 @@ export const FALLBACK_BRANDING: PlatformBranding = {
   favicon_url: '',
   support_email: '',
   support_url: '',
+  mascot_name: '',
+  mascot_skin: '',
 }
 
 interface PlatformConfigContextType extends PlatformBranding {
