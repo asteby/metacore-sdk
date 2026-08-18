@@ -1,5 +1,11 @@
 # @asteby/metacore-app-providers
 
+## 95.1.0
+
+### Minor Changes
+
+- 3828294: Add `<Mascot>`: a declarative, skin-based animated SVG avatar for AI copilots (idle/thinking/processing/listening/speaking/happy/error states). Ships two built-in skins (`gear-lime` for Aby/Ops, `tire-red` for Llantonio/Pitsline); new verticals register a skin without new component code. `PlatformBranding` gains `mascot_name`/`mascot_skin` fields.
+
 ## 95.0.0
 
 ### Patch Changes
