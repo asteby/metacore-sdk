@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 31.1.0
+
+### Minor Changes
+
+- 50c832f: Plantillas: hooks y editor para el overlay HTML por organización de documents[] del addon.
+
 ## 31.0.0
 
 ### Patch Changes
