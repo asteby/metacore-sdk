@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 31.1.1
+
+### Patch Changes
+
+- 00caf65: PermissionsManager: add "Otorgar todo"/"Quitar todo" buttons (all modules, not just the open one) and a "Otorgar todos los permisos" checkbox when creating a role — grants full catalog access immediately instead of requiring every module to be checked one by one.
+
 ## 31.1.0
 
 ### Minor Changes
