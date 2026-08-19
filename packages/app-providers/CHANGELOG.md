@@ -1,5 +1,11 @@
 # @asteby/metacore-app-providers
 
+## 95.1.2
+
+### Patch Changes
+
+- a3f055d: Fix `<Mascot>` sitting low/off-center for skins without an antenna (e.g. Aby/`gear-lime`): the viewBox was sized to fit the antenna's extra height on every skin, leaving ~30px of dead space above a no-antenna mascot. The crop is now computed per-skin from `antenna`.
+
 ## 95.1.1
 
 ### Patch Changes
