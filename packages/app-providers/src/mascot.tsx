@@ -6,7 +6,7 @@
 // States mirror the copilot's own conversation-phase state machine (see the
 // consuming app's live-think-stage store) so the mascot's face always reflects
 // what the agent is actually doing, not a decorative loop.
-import type { CSSProperties } from 'react'
+import { useEffect, type CSSProperties } from 'react'
 
 export type MascotState =
   | 'idle'
@@ -68,6 +68,20 @@ export const MASCOT_SKINS: Record<string, MascotSkin> = {
       screenCenter: '#e7e7ea',
     },
   },
+}
+
+const STYLE_TAG_ID = 'metacore-mascot-styles'
+
+/** Injects MASCOT_CSS into <head> exactly once per document, so consuming
+ * apps get working animations for free — no manual wiring required. */
+function useMascotStyles() {
+  useEffect(() => {
+    if (typeof document === 'undefined' || document.getElementById(STYLE_TAG_ID)) return
+    const tag = document.createElement('style')
+    tag.id = STYLE_TAG_ID
+    tag.textContent = MASCOT_CSS
+    document.head.appendChild(tag)
+  }, [])
 }
 
 const DEFAULT_SKIN_KEY = 'gear-lime'
@@ -171,6 +185,7 @@ export function Mascot({
   className,
   style,
 }: MascotProps) {
+  useMascotStyles()
   const cfg = resolveSkin(skin)
   const uid = `mascot-${skin}`
   const glowId = `${uid}-glow`
@@ -179,9 +194,9 @@ export function Mascot({
 
   return (
     <svg
-      viewBox="0 0 200 230"
+      viewBox="20 24 160 186"
       width={size}
-      height={size * (230 / 200)}
+      height={size * (186 / 160)}
       fill="none"
       className={className}
       style={{ overflow: 'visible', ...style }}
@@ -202,9 +217,7 @@ export function Mascot({
         </filter>
       </defs>
 
-      <ellipse cx="100" cy="212" rx="52" ry="8" fill="#000" opacity={0.14} />
-
-      <g className="mascot-bot" style={{ transformOrigin: '100px 212px' }}>
+      <g className="mascot-bot" style={{ transformOrigin: '100px 130px' }}>
         {cfg.antenna && (
           <g className="mascot-antenna">
             <rect x="97" y="42" width="6" height="16" rx="3" fill={colors.tire} stroke={colors.treadOrTooth} strokeWidth="1" />
@@ -340,7 +353,7 @@ export function resolveMascotName(skin: string | undefined, override: string | u
 
 export const MASCOT_CSS = `
 @keyframes mascot-bob { 0%,100%{ transform: translateY(0) rotate(0deg); } 50%{ transform: translateY(-4px) rotate(.4deg); } }
-.mascot-bot{ animation: mascot-bob 3.6s ease-in-out infinite; filter: drop-shadow(0 2px 10px rgba(0,0,0,.35)); }
+.mascot-bot{ animation: mascot-bob 3.6s ease-in-out infinite; }
 
 @keyframes mascot-sway { 0%,100%{ transform: rotate(-2deg); } 50%{ transform: rotate(2.5deg); } }
 .mascot-antenna{ transform-origin: 100px 40px; animation: mascot-sway 3.6s ease-in-out infinite; }
