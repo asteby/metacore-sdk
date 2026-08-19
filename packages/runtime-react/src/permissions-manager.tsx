@@ -548,7 +548,8 @@ export function PermissionsManager({
         mode: 'create' | 'edit'
         label: string
         color: string
-    }>({ open: false, mode: 'create', label: '', color: ROLE_COLORS[5] })
+        grantAll: boolean
+    }>({ open: false, mode: 'create', label: '', color: ROLE_COLORS[5], grantAll: false })
     const [roleSaving, setRoleSaving] = React.useState(false)
     const [deleteOpen, setDeleteOpen] = React.useState(false)
     const [deleting, setDeleting] = React.useState(false)
@@ -650,6 +651,25 @@ export function PermissionsManager({
         [activeModule],
     )
 
+    // Every capability across every module in the catalog — the "Otorgar
+    // todo" button's target set (as opposed to setModuleAll, which is
+    // scoped to the currently open module).
+    const allCatalogCapabilities = React.useMemo(
+        () => allModules.flatMap((m) => moduleCapabilities(m)),
+        [allModules],
+    )
+
+    const setAllPermissions = React.useCallback(
+        (on: boolean) => {
+            if (on) {
+                setDraft(new Set(allCatalogCapabilities))
+            } else {
+                setDraft(new Set())
+            }
+        },
+        [allCatalogCapabilities],
+    )
+
     const handleSave = async () => {
         if (!activeRoleId || !draft) return
         setSaving(true)
@@ -699,7 +719,14 @@ export function PermissionsManager({
                     rs.find((r) => r.name === slugify(label))?.id ||
                     null
                 if (createdId) setActiveRoleId(createdId)
-                toast.success('Rol creado')
+                if (roleDialog.grantAll && createdId && allCatalogCapabilities.length) {
+                    await syncRolePermissions(createdId, [...allCatalogCapabilities].sort())
+                    setBaseline(new Set(allCatalogCapabilities))
+                    setDraft(new Set(allCatalogCapabilities))
+                    toast.success('Rol creado con todos los permisos')
+                } else {
+                    toast.success('Rol creado')
+                }
             } else if (roleDialog.mode === 'edit' && updateRole && activeRole) {
                 await updateRole(activeRole.id, {
                     name: activeRole.name,
@@ -743,6 +770,7 @@ export function PermissionsManager({
             mode: 'edit',
             label: activeRole.label || activeRole.name,
             color: activeRole.color || ROLE_COLORS[5],
+            grantAll: false,
         })
     }
 
@@ -816,12 +844,29 @@ export function PermissionsManager({
                                     mode: 'create',
                                     label: '',
                                     color: ROLE_COLORS[5],
+                                    grantAll: false,
                                 })
                             }
                         >
                             <Plus className="mr-1.5 h-4 w-4" /> Nuevo rol
                         </Button>
                     )}
+                    <Button
+                        variant="outline"
+                        onClick={() => setAllPermissions(true)}
+                        disabled={checksDisabled || !allCatalogCapabilities.length}
+                        title="Marca todos los permisos de todos los módulos"
+                    >
+                        <CheckCheck className="mr-1.5 h-4 w-4" /> Otorgar todo
+                    </Button>
+                    <Button
+                        variant="outline"
+                        onClick={() => setAllPermissions(false)}
+                        disabled={checksDisabled || !draft?.size}
+                        title="Quita todos los permisos del rol"
+                    >
+                        <Eraser className="mr-1.5 h-4 w-4" /> Quitar todo
+                    </Button>
                     <Button
                         onClick={handleSave}
                         disabled={!dirty || saving || !activeRole}
@@ -1204,6 +1249,28 @@ export function PermissionsManager({
                                 ))}
                             </div>
                         </div>
+                        {roleDialog.mode === 'create' && (
+                            <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm hover:bg-muted/40">
+                                <input
+                                    type="checkbox"
+                                    className="mt-0.5 size-4 accent-emerald-600"
+                                    checked={roleDialog.grantAll}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                                        setRoleDialog((d) => ({
+                                            ...d,
+                                            grantAll: e.target.checked,
+                                        }))
+                                    }
+                                />
+                                <span>
+                                    <span className="font-medium">Otorgar todos los permisos</span>
+                                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                                        Acceso completo a todos los módulos del catálogo (como un
+                                        admin). Puedes quitar permisos después.
+                                    </span>
+                                </span>
+                            </label>
+                        )}
                     </div>
                     <DialogFooter>
                         <Button
