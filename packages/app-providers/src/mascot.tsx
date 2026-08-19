@@ -121,9 +121,14 @@ function GearTeeth({ fill }: { fill: string }) {
 }
 
 function TireTread({ stroke }: { stroke: string }) {
+  // r=69, strokeWidth=10 → inner edge at r≈64, flush against the tire body
+  // circle (r=63) with a hair of overlap. Was r=76: its inner edge (r≈71)
+  // sat 8 units outside the body, showing a gap of bare background between
+  // the dashed tread and the tire — "floating lugs" disconnected from the
+  // wheel, most visible in a small icon-sized render.
   return (
     <g className="mascot-tread" opacity={0.9}>
-      <circle cx="100" cy="130" r="76" fill="none" stroke={stroke} strokeWidth="10" strokeDasharray="6 7" />
+      <circle cx="100" cy="130" r="69" fill="none" stroke={stroke} strokeWidth="10" strokeDasharray="6 7" />
     </g>
   )
 }
