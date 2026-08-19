@@ -1,5 +1,14 @@
 # @asteby/metacore-app-providers
 
+## 95.1.3
+
+### Patch Changes
+
+- afc8459: Fix the `tire-red` mascot skin (Llantonio): `screen`/`screenCenter` were pale
+  gray instead of dark, so the face rendered washed-out next to the red accent
+  ring instead of a dark screen with glowing expressions (matching `gear-lime`'s
+  pattern). `screenTone` corrected to `'dark'` to match.
+
 ## 95.1.2
 
 ### Patch Changes
