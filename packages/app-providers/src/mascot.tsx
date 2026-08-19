@@ -192,11 +192,19 @@ export function Mascot({
   const gradId = `${uid}-grad`
   const { colors } = cfg
 
+  // The drawn tire/gear body always spans x:24-176 / y:54-206 (152x152).
+  // The antenna, when present, extends the top edge up to ~y:33. Cropping
+  // per-skin (rather than one fixed box sized for the antenna) keeps a
+  // no-antenna skin (e.g. Aby/gear-lime) from sitting in a box with ~30px
+  // of dead space above it — which reads as "stuck to the bottom".
+  const viewBox = cfg.antenna ? '20 28 160 182' : '20 50 160 160'
+  const aspect = cfg.antenna ? 182 / 160 : 1
+
   return (
     <svg
-      viewBox="20 24 160 186"
+      viewBox={viewBox}
       width={size}
-      height={size * (186 / 160)}
+      height={size * aspect}
       fill="none"
       className={className}
       style={{ overflow: 'visible', ...style }}
