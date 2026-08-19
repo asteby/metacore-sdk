@@ -58,14 +58,14 @@ export const MASCOT_SKINS: Record<string, MascotSkin> = {
     name: 'Llantonio',
     toothShape: 'tire-tread',
     antenna: true,
-    screenTone: 'light',
+    screenTone: 'dark',
     colors: {
       tire: '#17171b',
       treadOrTooth: '#232328',
       accent: '#e2172a',
       glow: '#ff5b63',
-      screen: '#c7c7cc',
-      screenCenter: '#e7e7ea',
+      screen: '#0d0a0b',
+      screenCenter: '#1f1518',
     },
   },
 }
