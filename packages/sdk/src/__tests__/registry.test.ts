@@ -62,3 +62,39 @@ describe("Registry.registerSlot priority ordering", () => {
     expect(seen).toEqual(["x", "y"]);
   });
 });
+
+describe("Registry.scope + unbind", () => {
+  it("drops only the scoped addon's contributions", () => {
+    const r = new Registry();
+    r.scope("pos").registerRoute({ path: "/pos", component: A });
+    r.scope("pos").registerAction({ model: "Sale", action: "void", component: A as never });
+    r.scope("pos").registerSlot({ name: "dashboard.widgets", component: A, priority: 1 });
+    r.scope("kds").registerRoute({ path: "/kds", component: B });
+    r.scope("kds").registerSlot({ name: "dashboard.widgets", component: B, priority: 2 });
+
+    expect(r.getRoutes().map((x) => x.path)).toEqual(["/pos", "/kds"]);
+    const removed = r.unbind("pos");
+    expect(removed).toBe(3);
+    expect(r.getRoutes().map((x) => x.path)).toEqual(["/kds"]);
+    expect(r.getSlot("dashboard.widgets").map((s) => s.component)).toEqual([B]);
+    expect(r.getAction("Sale", "void")).toBeUndefined();
+  });
+
+  it("is idempotent and emits a single unbind event per actual removal", () => {
+    const r = new Registry();
+    const events: string[] = [];
+    r.subscribe((e) => events.push(e.type));
+    r.scope("pos").registerModal({ slug: "pos.pay", component: A as never });
+    expect(r.unbind("pos")).toBe(1);
+    expect(r.unbind("pos")).toBe(0);
+    expect(events.filter((t) => t === "unbind")).toEqual(["unbind"]);
+  });
+
+  it("leaves unscoped (legacy) contributions in place", () => {
+    const r = new Registry();
+    r.registerRoute({ path: "/legacy", component: A });
+    r.scope("pos").registerRoute({ path: "/pos", component: B });
+    r.unbind("pos");
+    expect(r.getRoutes().map((x) => x.path)).toEqual(["/legacy"]);
+  });
+});

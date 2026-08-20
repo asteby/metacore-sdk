@@ -123,6 +123,17 @@ export {
 } from './model-action-toolbar'
 export * from './addon-loader'
 export {
+    PURGE_ADDON_MESSAGE,
+    isAddonFrontendCacheUrl,
+    purgeAddonFrontendCache,
+    resolvePluginExports,
+    composeDisposables,
+    runDispose,
+    type PurgeAddonMessage,
+    type AddonRegisterModule,
+    type ResolvedPlugin,
+} from './addon-fiber'
+export {
     AddonLayoutProvider,
     useAddonLayout,
     useAddonLayoutControl,
