@@ -71,7 +71,12 @@ export interface ActionModalProps {
 
 type ActionComponentEntry = ComponentType<ActionModalProps>
 
-const registry = new Map<string, ActionComponentEntry>()
+interface OwnedActionComponent {
+    component: ActionComponentEntry
+    owner?: string
+}
+
+const registry = new Map<string, OwnedActionComponent>()
 
 const keyOf = (model: string, actionKey: string) => `${model}::${actionKey}`
 
@@ -79,15 +84,16 @@ export function registerActionComponent(
     model: string,
     actionKey: string,
     component: ActionComponentEntry,
+    owner?: string,
 ) {
-    registry.set(keyOf(model, actionKey), component)
+    registry.set(keyOf(model, actionKey), { component, owner })
 }
 
 export function getActionComponent(
     model: string,
     actionKey: string,
 ): ActionComponentEntry | undefined {
-    return registry.get(keyOf(model, actionKey))
+    return registry.get(keyOf(model, actionKey))?.component
 }
 
 export function hasActionComponent(model: string, actionKey: string): boolean {
@@ -96,4 +102,17 @@ export function hasActionComponent(model: string, actionKey: string): boolean {
 
 export function unregisterActionComponent(model: string, actionKey: string) {
     registry.delete(keyOf(model, actionKey))
+}
+
+/** Drop every action modal owned by `addonKey`. Used on fiber unbind. */
+export function unregisterActionComponentsByOwner(addonKey: string): number {
+    if (!addonKey) return 0
+    let removed = 0
+    for (const [key, row] of [...registry.entries()]) {
+        if (row.owner === addonKey) {
+            registry.delete(key)
+            removed += 1
+        }
+    }
+    return removed
 }

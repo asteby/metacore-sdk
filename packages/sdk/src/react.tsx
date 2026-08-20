@@ -21,6 +21,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -93,13 +94,18 @@ interface Ctx {
   navigation: NavGroup[];
   loading: boolean;
   /**
-   * Addons updated since this window loaded them. The provider revalidates the
-   * catalog on tab focus and every 5 minutes; when a manifest's version differs
-   * from the one first seen, it lands here so the host can prompt a reload
-   * (federation containers are loaded once per page lifetime — a running window
-   * never applies a new bundle without reloading).
+   * Addons whose served version moved after this window first loaded them.
+   * Hosts fiber-swap the federation container in place (AddonLoader remount)
+   * and then call {@link acknowledgeRunningVersion} so the entry drops without
+   * a full page reload. A non-empty list is a signal, not a hard-refresh order.
    */
   updatedAddons: AddonUpdate[];
+  /**
+   * Mark `key@version` as the version this window is now running — called by
+   * the host after a successful L1 fiber swap (or first load). Clears that
+   * addon from {@link updatedAddons}.
+   */
+  acknowledgeRunningVersion: (key: string, version: string) => void;
 }
 
 const MetacoreCtx = createContext<Ctx | null>(null);
@@ -133,12 +139,19 @@ export function MetacoreProvider({ client, registry, children }: MetacoreProvide
 
   // Versions this window is actually RUNNING: seeded from the first manifest
   // list that renders (cache or first fetch). Revalidations compare against
-  // this baseline — not the previous fetch — so an update stays flagged until
-  // the window reloads.
+  // this baseline. After an L1 fiber swap the host calls
+  // `acknowledgeRunningVersion` so the flag clears without a page reload.
   const runningVersions = useRef<Map<string, string> | null>(
     boot ? seedVersions(boot.manifests) : null,
   );
   const [updatedAddons, setUpdatedAddons] = useState<AddonUpdate[]>([]);
+
+  const acknowledgeRunningVersion = useCallback((key: string, version: string) => {
+    if (!key || !version) return;
+    if (!runningVersions.current) runningVersions.current = new Map();
+    runningVersions.current.set(key, version);
+    setUpdatedAddons((prev) => (prev.some((u) => u.key === key) ? prev.filter((u) => u.key !== key) : prev));
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -157,7 +170,13 @@ export function MetacoreProvider({ client, registry, children }: MetacoreProvide
         const changed: AddonUpdate[] = [];
         for (const mf of m) {
           const from = runningVersions.current.get(mf.key);
-          if (from && mf.version && mf.version !== from) {
+          if (!from) {
+            // First time this window sees the addon (install mid-session):
+            // seed as running. The fiber loader mounts it; this is not an update.
+            if (mf.version) runningVersions.current.set(mf.key, mf.version);
+            continue;
+          }
+          if (mf.version && mf.version !== from) {
             changed.push({ key: mf.key, from, to: mf.version });
           }
         }
@@ -191,8 +210,16 @@ export function MetacoreProvider({ client, registry, children }: MetacoreProvide
   }, [client]);
 
   const value = useMemo<Ctx>(
-    () => ({ client, registry, manifests, navigation, loading, updatedAddons }),
-    [client, registry, manifests, navigation, loading, updatedAddons],
+    () => ({
+      client,
+      registry,
+      manifests,
+      navigation,
+      loading,
+      updatedAddons,
+      acknowledgeRunningVersion,
+    }),
+    [client, registry, manifests, navigation, loading, updatedAddons, acknowledgeRunningVersion],
   );
 
   return <MetacoreCtx.Provider value={value}>{children}</MetacoreCtx.Provider>;
@@ -208,7 +235,7 @@ export function useAddonRoutes() {
   const { registry } = useMetacore();
   const [routes, setRoutes] = useState(registry.getRoutes());
   useEffect(() => registry.subscribe((e) => {
-    if (e.type === "route") setRoutes(registry.getRoutes());
+    if (e.type === "route" || e.type === "unbind") setRoutes(registry.getRoutes());
   }), [registry]);
   return routes;
 }
@@ -230,7 +257,10 @@ export function Slot({ name, payload, fallback = null }: SlotProps) {
   useEffect(
     () =>
       registry.subscribe((e) => {
-        if (e.type === "slot" && e.contribution.name === name) {
+        if (
+          e.type === "unbind" ||
+          (e.type === "slot" && e.contribution.name === name)
+        ) {
           setItems(registry.getSlot(name));
         }
       }),

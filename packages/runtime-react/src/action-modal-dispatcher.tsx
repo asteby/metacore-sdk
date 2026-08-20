@@ -81,7 +81,7 @@ export type { ActionMetadata, ActionModalProps }
 //     "map": { "product_id": "product_id" },
 //     "remaining": { "target": "qty_received", "of": "quantity", "minus": "received" }
 //   }
-interface PrefillSpec {
+export interface PrefillSpec {
     $prefillFromRecord: string
     map?: Record<string, string>
     remaining?: { target: string; of: string; minus?: string }
@@ -94,7 +94,7 @@ interface PrefillSpec {
     lock?: string[]
 }
 
-function isPrefillSpec(v: unknown): v is PrefillSpec {
+export function isPrefillSpec(v: unknown): v is PrefillSpec {
     return (
         typeof v === 'object' &&
         v !== null &&
@@ -122,7 +122,7 @@ function toNum(v: unknown): number {
 // untouched when there is no prefill spec or no lock list (the create flow,
 // which carries no prefill, stays fully editable). The readonly flag is set on
 // BOTH itemFields aliases the renderers tolerate.
-function applyPrefillLock(field: ActionFieldDef): ActionFieldDef {
+export function applyPrefillLock(field: ActionFieldDef): ActionFieldDef {
     const spec = lineItemsDefault(field)
     if (!isPrefillSpec(spec) || !spec.lock || spec.lock.length === 0) return field
     const lock = new Set(spec.lock)
@@ -134,7 +134,7 @@ function applyPrefillLock(field: ActionFieldDef): ActionFieldDef {
 }
 
 // buildPrefillRows projects record[spec.$prefillFromRecord] into modal rows.
-function buildPrefillRows(spec: PrefillSpec, record: any): Array<Record<string, any>> {
+export function buildPrefillRows(spec: PrefillSpec, record: any): Array<Record<string, any>> {
     const src = record?.[spec.$prefillFromRecord]
     if (!Array.isArray(src)) return []
     const rows: Array<Record<string, any>> = []
