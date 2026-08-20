@@ -1,5 +1,23 @@
 # @asteby/metacore-runtime-react
 
+## 32.0.0
+
+### Minor Changes
+
+- 5a932ed: Addon fiber hot-swap without a page reload: Registry.scope/unbind, Plugin.register
+  may return a Disposable, AddonLoader re-registers federation remotes when `?v=`
+  changes, and purgeAddonFrontendCache drops only that addon's SW cache (L1).
+  Hosts call acknowledgeRunningVersion after a successful swap instead of
+  location.reload / unregistering the service worker.
+
+### Patch Changes
+
+- 5a932ed: Export PrefillSpec helpers (`isPrefillSpec`, `buildPrefillRows`, `applyPrefillLock`)
+  so addons can unit-test `$prefillFromRecord` without reaching into private
+  dispatcher internals. Kernel now types the same shape in the v3 schema.
+- Updated dependencies [5a932ed]
+  - @asteby/metacore-sdk@3.5.0
+
 ## 31.1.1
 
 ### Patch Changes
