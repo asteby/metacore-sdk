@@ -263,9 +263,15 @@ export interface CatalogAddon {
   featured: boolean;
   created_at: string;
   latest_version?: string;
-  icon_type?: "brand" | "lucide" | "url" | "";
+  icon_type?: "brand" | "lucide" | "url" | "svg" | "";
   icon_slug?: string;
   icon_color?: string;
+  /**
+   * Absolute URL of the addon's public SVG (`GET /v1/addons/{key}/icon.svg`),
+   * present when the addon shipped a bundled icon or a preset `assets/logo.svg`.
+   * Render via `<img src>` — never inline. Absent for brand/lucide icons.
+   */
+  icon_url?: string;
 
   /**
    * Server-side gate: whether the addon can be installed at all in the
