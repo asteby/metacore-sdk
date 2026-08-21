@@ -53,7 +53,9 @@ import { es } from 'date-fns/locale'
 import { ExternalLink, Loader2, CalendarIcon, ChevronDown, Check, Upload, X as XIcon, ScanLine } from 'lucide-react'
 import { BarcodeScanner } from '../barcode-scanner'
 import { useApi } from '../api-context'
-import { toastServerError, extractFieldErrors, localizeFieldIssue } from '../server-error'
+import { toastServerError, extractFieldErrors, localizeFieldErrorMap } from '../server-error'
+import { validateValues, bagHasErrors } from '../validator'
+import { validationCatalog } from '../validation-catalog'
 import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-field'
 import { DynamicRelations } from '../dynamic-relations'
 import { useOptionsResolver, type ResolvedOption } from '../use-options-resolver'
@@ -557,7 +559,7 @@ export function DynamicRecordDialog({
     onChange,
 }: DynamicRecordDialogProps) {
     const api = useApi()
-    const { t } = useTranslation()
+    const { t, i18n } = useTranslation()
     const [modalMeta, setModalMeta] = useState<ModalMetadata | null>(
         schema ? (schema as ModalMetadata) : null,
     )
@@ -758,9 +760,11 @@ export function DynamicRecordDialog({
     // with no matching form field).
     const labelForKey = (key: string): string => {
         const f = (modalMeta?.fields ?? []).find(x => x.key === key)
-        if (f?.label) return f.label
+        if (f?.label) return t(f.label, { defaultValue: f.label })
         return key.replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
     }
+
+    const lang = i18n.language
 
     // Turn a failed submit (422 `errors` map, or a bare `{errors}` body) into
     // inline field errors + a summary toast. When there is no field map, fall
@@ -768,15 +772,13 @@ export function DynamicRecordDialog({
     const handleSubmitError = (err: unknown) => {
         const map = extractFieldErrors(err)
         if (map) {
-            const next: Record<string, string> = {}
-            for (const [key, issues] of Object.entries(map)) {
-                next[key] = localizeFieldIssue(issues[0], labelForKey(key), t)
-            }
-            setFieldErrors(next)
-            toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }))
+            const labels: Record<string, string> = {}
+            for (const f of modalMeta?.fields ?? []) labels[f.key] = labelForKey(f.key)
+            setFieldErrors(localizeFieldErrorMap(map, t, { labels, language: lang }))
+            toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }))
             return
         }
-        toastServerError(err, { t, fallback: t('dynamic.save_error', { defaultValue: 'No se pudo guardar' }) })
+        toastServerError(err, { t, language: lang, fallback: t('dynamic.save_error', { defaultValue: 'No se pudo guardar' }) })
     }
 
     const handleSubmit = async (e?: React.FormEvent) => {
@@ -789,15 +791,13 @@ export function DynamicRecordDialog({
             // fields are gated: a field hidden by its `visible_when` predicate
             // must not block submit even when it is declared required (matching
             // the render, which drops it via the same filter).
-            const missing: Record<string, string> = {}
-            for (const field of filterVisibleFields(modalMeta.fields, mode, formValues)) {
-                if (field.required && !formValues[field.key] && formValues[field.key] !== 0 && formValues[field.key] !== false) {
-                    missing[field.key] = localizeFieldIssue({ code: 'required' }, field.label, t)
-                }
-            }
-            if (Object.keys(missing).length) {
-                setFieldErrors(missing)
-                toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }))
+            const visible = filterVisibleFields(modalMeta.fields, mode, formValues)
+            const bag = validateValues(visible as ActionFieldDef[], formValues)
+            if (bagHasErrors(bag)) {
+                const labels: Record<string, string> = {}
+                for (const f of visible) labels[f.key] = t(f.label, { defaultValue: f.label })
+                setFieldErrors(localizeFieldErrorMap(bag, t, { labels, language: lang }))
+                toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }))
                 return
             }
         }
@@ -938,15 +938,12 @@ export function DynamicRecordDialog({
     // then advance. Mirrors handleSubmit's required check but scoped to the step.
     const goNextStep = () => {
         const step = groups[clampedStep]
-        const missing: Record<string, string> = {}
-        for (const field of step?.fields ?? []) {
-            if (field.required && !formValues[field.key] && formValues[field.key] !== 0 && formValues[field.key] !== false) {
-                missing[field.key] = localizeFieldIssue({ code: 'required' }, field.label, t)
-            }
-        }
-        if (Object.keys(missing).length) {
-            setFieldErrors(missing)
-            toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }))
+        const bag = validateValues((step?.fields ?? []) as ActionFieldDef[], formValues)
+        if (bagHasErrors(bag)) {
+            const labels: Record<string, string> = {}
+            for (const f of step?.fields ?? []) labels[f.key] = t(f.label, { defaultValue: f.label })
+            setFieldErrors(localizeFieldErrorMap(bag, t, { labels, language: lang }))
+            toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }))
             return
         }
         setFieldErrors({})

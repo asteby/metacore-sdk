@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { extractFieldErrors, localizeFieldIssue, type FieldIssue } from '../server-error'
+import { extractFieldErrors, localizeFieldIssue, extractServerError, type FieldIssue } from '../server-error'
 
 // A minimal i18next-like translator: honors defaultValue and does {{var}}
 // interpolation, so the tests assert BOTH the resolved Spanish default and that
@@ -70,6 +70,22 @@ describe('extractFieldErrors', () => {
     })
 })
 
+describe('extractServerError', () => {
+    it('does not stringify field-error objects as [object Object]', () => {
+        const { title, description } = extractServerError(
+            {
+                success: false,
+                message: 'validation failed',
+                errors: { sku: [{ code: 'required', params: {} }] },
+            },
+            'fallback',
+        )
+        expect(title).toBe('validation failed')
+        expect(description).toBe('sku: required')
+        expect(description).not.toContain('[object Object]')
+    })
+})
+
 describe('localizeFieldIssue', () => {
     it('required → interpolates label', () => {
         expect(localizeFieldIssue({ code: 'required' }, 'Nombre', t)).toBe('El campo Nombre es obligatorio')
@@ -94,6 +110,14 @@ describe('localizeFieldIssue', () => {
     })
     it('unknown code → generic fallback with label', () => {
         expect(localizeFieldIssue({ code: 'weird_code' }, 'Campo', t)).toBe('Campo: valor inválido')
+    })
+    it('min + kind=length uses min_length catalog', () => {
+        expect(localizeFieldIssue({ code: 'min', params: { min: 3, kind: 'length' } }, 'SKU', t)).toBe(
+            'SKU debe tener al menos 3 caracteres',
+        )
+    })
+    it('en catalog when language is en', () => {
+        expect(localizeFieldIssue({ code: 'required' }, 'Name', t, 'en')).toBe('The Name field is required')
     })
     it('message passthrough (pre-localized) ignores code/label', () => {
         const issue: FieldIssue = { message: 'Texto ya localizado' }

@@ -317,11 +317,10 @@ export interface ColumnDefinition {
      */
     ref?: string
     /**
-     * Server-side validation rules the SDK can also pre-flight in the
-     * form layer. `custom` may be a literal slug or a $org.<key>
-     * reference resolved through the OrgConfigProvider.
+     * Write-time rules the SDK also pre-flights. Object form `{regex,min,max,custom}`
+     * or a Laravel / go-playground string (`required|min:2|email`).
      */
-    validation?: FieldValidation
+    validation?: FieldValidation | string
     /**
      * Declared schema for a jsonb line-items column (kernel v3 `item_fields`).
      * Each entry describes one sub-field of the array's row objects: a `key`
@@ -389,13 +388,11 @@ export interface VisibleWhen {
     in?: string[]
 }
 
-// Mirrors `ValidationRule` from packages/sdk/src/generated/manifest.ts. Kept
-// inline here so runtime-react does not import generated kernel types directly
-// — apps and addons author ActionFieldDef literals.
-//
-// `custom` accepts either a literal validator slug (e.g. `mx.rfc`) registered
-// via `registerValidator`, or a `$org.<key>` reference resolved through the
-// OrgConfigProvider — same contract as kernel ColumnDef.Validation.Custom.
+// Write-time + client-side constraints. The kernel enforces these on
+// create/update and action payloads (locale-agnostic codes); the SDK
+// pre-flights the same rules and localizes `validation.<code>` to the
+// operator's language. `custom` is a slug (`email`, `rfc.tax_id`) or a
+// `$org.<key>` reference resolved through OrgConfigProvider.
 export interface FieldValidation {
     regex?: string
     min?: number
@@ -469,7 +466,7 @@ export interface ActionFieldDef {
     defaultValue?: any
     placeholder?: string
     searchEndpoint?: string
-    validation?: FieldValidation
+    validation?: FieldValidation | string
     widget?: FieldWidget | string
     /**
      * FK target model — same semantics as ColumnDefinition.ref. When
