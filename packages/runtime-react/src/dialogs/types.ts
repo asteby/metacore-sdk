@@ -99,6 +99,15 @@ export interface CreateRecordDialogProps extends RecordDialogProps {
     onUpdate?: (recordId: string, data: Record<string, unknown>) => Promise<CreateResult>
     /** Default values seeded into the form on create. */
     defaults?: Record<string, unknown>
+    /**
+     * Field keys that must render locked (visible, disabled, seeded from
+     * `defaults`) on create instead of editable — e.g. a parent id the caller
+     * already knows and does not want the user to change. Unlike a `readonly`
+     * field (which is excluded entirely on create, see `filterVisibleFields`),
+     * a locked field stays visible so the user sees what value is being sent.
+     * Ignored outside create mode.
+     */
+    lockedFields?: string[]
     /** Notification when a create or update succeeds. */
     onSaved?: () => void
 }
