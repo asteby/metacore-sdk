@@ -1,5 +1,12 @@
 # @asteby/metacore-sdk
 
+## 3.6.0
+
+### Minor Changes
+
+- e74975a: Product identity contract: `BrandManifest` + `brandAssetURL()` at
+  `{origin}/api/brand/{icon,logo,og}`. `CatalogAddon.icon_url` for hub-served SVG.
+
 ## Unreleased
 
 ### Minor Changes
