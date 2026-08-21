@@ -2,7 +2,8 @@
 // callers (and unit tests) can use the zod schema without pulling in React or
 // metacore-ui primitives.
 import { z, type ZodTypeAny } from 'zod'
-import type { ActionFieldDef, FieldValidation, FieldOptionsConfig, OptionDef, VisibleWhen } from './types'
+import type { ActionFieldDef, FieldOptionsConfig, OptionDef, VisibleWhen } from './types'
+import { fieldValidationOf } from './validator'
 import { resolveValidatorToken } from './use-org-config-bridge'
 
 /**
@@ -164,7 +165,7 @@ function fieldToZod(field: ActionFieldDef): ZodTypeAny {
         return field.required ? arr.min(1, `${field.label} requiere al menos un renglón`) : arr
     }
 
-    const v = field.validation ?? ({} as FieldValidation)
+    const v = fieldValidationOf(field)
     const isNumeric = field.type === 'number'
     const isBool = field.type === 'boolean'
 
