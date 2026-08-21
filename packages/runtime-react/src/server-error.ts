@@ -10,6 +10,7 @@
 // or report it. This module keeps the headline but ALSO surfaces the cause as
 // the toast description, in ONE place so every call site behaves identically.
 import { toast } from 'sonner'
+import { validationCatalog, validationMessageKey } from './validation-catalog'
 
 /** Structured, display-ready view of an error: a headline + an optional cause. */
 export interface ExtractedError {
@@ -21,16 +22,29 @@ export interface ExtractedError {
     description?: string
 }
 
+function formatIssueEntry(v: unknown): string {
+    if (v == null) return ''
+    if (typeof v === 'string') return v
+    if (typeof v === 'object' && 'code' in (v as object)) {
+        const e = v as { code?: unknown; message?: unknown }
+        if (typeof e.message === 'string' && e.message.trim()) return e.message.trim()
+        if (typeof e.code === 'string' && e.code) return e.code
+    }
+    return String(v)
+}
+
 /** Flattens a validation `errors` payload (string | string[] | field→msgs map)
- *  into a single newline-joined string, or undefined when empty. */
+ *  into a single newline-joined string, or undefined when empty. Object entries
+ *  `{code, params}` render as the code (never `[object Object]`). */
 function joinErrors(errors: unknown): string | undefined {
     if (!errors) return undefined
     if (typeof errors === 'string') return errors || undefined
-    if (Array.isArray(errors)) return errors.filter(Boolean).map(String).join('\n') || undefined
+    if (Array.isArray(errors)) return errors.map(formatIssueEntry).filter(Boolean).join('\n') || undefined
     if (typeof errors === 'object') {
-        const parts = Object.entries(errors as Record<string, unknown>).map(
-            ([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : String(v)}`,
-        )
+        const parts = Object.entries(errors as Record<string, unknown>).map(([k, v]) => {
+            const body = Array.isArray(v) ? v.map(formatIssueEntry).filter(Boolean).join(', ') : formatIssueEntry(v)
+            return body ? `${k}: ${body}` : ''
+        }).filter(Boolean)
         return parts.join('\n') || undefined
     }
     return undefined
@@ -92,17 +106,12 @@ export interface FieldIssue {
     message?: string
 }
 
-/** Spanish defaults per known validation code. `{{label}}` (and code params like
- *  `allowed`/`ref`/`expected`) are interpolated by i18next, so a host can override
- *  any of these via its addon i18n bundle under `validation.<code>`. */
-const VALIDATION_DEFAULTS: Record<string, string> = {
-    required: 'El campo {{label}} es obligatorio',
-    invalid_option: 'El valor de {{label}} no es válido',
-    not_found: 'El {{label}} seleccionado no existe',
-    duplicate: 'Ya existe un registro con ese {{label}}',
-    invalid_type: 'El campo {{label}} tiene un formato inválido',
+/** Spanish/English catalogs live in `validation-catalog.ts`. Hosts override any
+ *  key via i18next `validation.<code>`. `{{label}}` and code params (min/max/
+ *  allowed/ref/expected) interpolate through i18next. */
+function humanizeKey(k: string): string {
+    return k.replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
-const VALIDATION_FALLBACK = '{{label}}: valor inválido'
 
 /** Normalize one raw `errors` value entry into a `FieldIssue`.
  *  A string → `{message}` (pre-localized, shown verbatim); an object → `{code,params}`. */
@@ -147,16 +156,37 @@ export function extractFieldErrors(err: unknown): Record<string, FieldIssue[]> |
 }
 
 /**
- * Localize a single `FieldIssue` to a human, Spanish-by-default string using the
- * field `label`. A pre-localized `message` passes through verbatim. Otherwise the
- * `code` is translated via `t('validation.'+code, { defaultValue, label, ...params })`
- * so hosts can override the copy and `{{label}}`/param interpolation still works.
+ * Localize a single `FieldIssue` to a human string using the field `label` and
+ * the operator's language. A pre-localized `message` passes through verbatim.
+ * Otherwise `code` is translated via `t('validation.'+key)` with a catalog
+ * default (es unless `language` is `en` / `en-*`).
  */
-export function localizeFieldIssue(issue: FieldIssue, label: string, t: Translate): string {
+export function localizeFieldIssue(
+    issue: FieldIssue,
+    label: string,
+    t: Translate,
+    language?: string,
+): string {
     if (issue.message) return issue.message
-    const code = issue.code ?? ''
-    const defaultValue = VALIDATION_DEFAULTS[code] ?? VALIDATION_FALLBACK
-    return t(`validation.${code}`, { defaultValue, label, ...(issue.params ?? {}) })
+    const key = validationMessageKey(issue.code ?? '', issue.params)
+    const cat = validationCatalog(language)
+    const defaultValue = cat[key] ?? cat.fallback ?? '{{label}}: valor inválido'
+    return t(`validation.${key}`, { defaultValue, label, ...(issue.params ?? {}) })
+}
+
+/** Localize a whole 422 `errors` map into `{ [field]: firstMessage }` using
+ *  optional per-key labels (already translated) and the current language. */
+export function localizeFieldErrorMap(
+    map: Record<string, FieldIssue[]>,
+    t: Translate,
+    opts?: { labels?: Record<string, string>; language?: string },
+): Record<string, string> {
+    const out: Record<string, string> = {}
+    for (const [k, issues] of Object.entries(map)) {
+        const label = opts?.labels?.[k] ?? humanizeKey(k)
+        out[k] = localizeFieldIssue(issues[0]!, label, t, opts?.language)
+    }
+    return out
 }
 
 /** A dotted, space-free token (e.g. "pos.rate.created") — the shape of an i18n
@@ -192,15 +222,40 @@ export function toastServerSuccess(
 
 /**
  * Toast a server/network error, surfacing the REAL cause as the description
- * instead of a bare generic line. Pass the app's `t` so an i18n-key `message`
- * (e.g. "pos.error.no_rate") is localized; a plain-text message passes through
- * unchanged. Use everywhere a mutation/action can fail.
+ * instead of a bare generic line. A 422 `{errors:{field:[{code}]}}` bag is
+ * localized per-field (never `[object Object]` / English "validation failed").
+ * Pass `language` (i18n.language) so catalogs match the operator's lang;
+ * pass `labels` so field keys map to translated headers.
  */
-export function toastServerError(err: unknown, opts?: { t?: Translate; fallback?: string }): void {
+export function toastServerError(
+    err: unknown,
+    opts?: { t?: Translate; fallback?: string; language?: string; labels?: Record<string, string> },
+): void {
     const t = opts?.t
+    const lang = opts?.language
+    const cat = validationCatalog(lang)
+    const map = extractFieldErrors(err)
+    if (map) {
+        const localized = t
+            ? localizeFieldErrorMap(map, t, { labels: opts?.labels, language: lang })
+            : undefined
+        const title = t
+            ? t('validation.failed', { defaultValue: cat.failed })
+            : cat.failed
+        const description = localized
+            ? Object.values(localized).join('\n')
+            : Object.entries(map)
+                  .map(([k, issues]) => `${k}: ${issues[0]?.code ?? issues[0]?.message ?? ''}`)
+                  .join('\n')
+        toast.error(title, description ? { description } : undefined)
+        return
+    }
     const fallback =
         opts?.fallback ?? (t ? t('common.error', { defaultValue: 'Something went wrong' }) : 'Something went wrong')
-    const { title, description } = extractServerError(err, fallback)
-    const shownTitle = t ? t(title, { defaultValue: title }) : title
-    toast.error(shownTitle, description ? { description } : undefined)
+    const extracted = extractServerError(err, fallback)
+    let shownTitle = t ? t(extracted.title, { defaultValue: extracted.title }) : extracted.title
+    if (extracted.title === 'validation failed' || extracted.title === 'validation.failed') {
+        shownTitle = t ? t('validation.failed', { defaultValue: cat.failed }) : cat.failed
+    }
+    toast.error(shownTitle, extracted.description ? { description: extracted.description } : undefined)
 }
