@@ -1,5 +1,14 @@
 # @asteby/metacore-runtime-react
 
+## 32.1.0
+
+### Minor Changes
+
+- fa25f99: Laravel-style field validator: localize 422 `{errors:{field:[{code,params}]}}`
+  into the operator's language (es/en catalogs, overridable via `validation.*`),
+  map keys to translated labels, and pre-flight the same regex/min/max/custom
+  rules the kernel enforces — no more generic "validation failed" / `[object Object]`.
+
 ## 32.0.0
 
 ### Minor Changes
