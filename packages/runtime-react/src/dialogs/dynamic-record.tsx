@@ -9,7 +9,7 @@
 // flows through <ApiProvider> from runtime-react. Host-specific runtime values —
 // the image-url resolver and the org IANA timezone — are passed as props so the
 // SDK stays transport- and host-agnostic.
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ModelSchema } from './types'
 
@@ -53,7 +53,7 @@ import { es } from 'date-fns/locale'
 import { ExternalLink, Loader2, CalendarIcon, ChevronDown, Check, Upload, X as XIcon, ScanLine } from 'lucide-react'
 import { BarcodeScanner } from '../barcode-scanner'
 import { useApi } from '../api-context'
-import { toastServerError, extractFieldErrors, localizeFieldErrorMap } from '../server-error'
+import { toastServerError, extractFieldErrors, localizeFieldErrorMap, type Translate } from '../server-error'
 import { validateValues, bagHasErrors } from '../validator'
 import { validationCatalog } from '../validation-catalog'
 import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-field'
@@ -543,6 +543,12 @@ export function stripHiddenFieldValues(
     return out
 }
 
+function toastValidationFailed(t: Translate, lang: string, localized: Record<string, string>) {
+    toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }), {
+        description: Object.values(localized).filter(Boolean).join('\n'),
+    })
+}
+
 export function DynamicRecordDialog({
     open,
     onOpenChange,
@@ -567,6 +573,11 @@ export function DynamicRecordDialog({
 }: DynamicRecordDialogProps) {
     const api = useApi()
     const { t, i18n } = useTranslation()
+    // Unique per dialog instance. The footer submit lives OUTSIDE <form>, so
+    // it binds via `form={id}`. A hardcoded id made nested create (product +
+    // "Crear categoría") submit the PARENT form — toast "Revisa los campos
+    // marcados" with no marks on the inner modal.
+    const formId = useId()
     const [modalMeta, setModalMeta] = useState<ModalMetadata | null>(
         schema ? (schema as ModalMetadata) : null,
     )
@@ -781,8 +792,9 @@ export function DynamicRecordDialog({
         if (map) {
             const labels: Record<string, string> = {}
             for (const f of modalMeta?.fields ?? []) labels[f.key] = labelForKey(f.key)
-            setFieldErrors(localizeFieldErrorMap(map, t, { labels, language: lang }))
-            toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }))
+            const localized = localizeFieldErrorMap(map, t, { labels, language: lang })
+            setFieldErrors(localized)
+            toastValidationFailed(t, lang, localized)
             return
         }
         toastServerError(err, { t, language: lang, fallback: t('dynamic.save_error', { defaultValue: 'No se pudo guardar' }) })
@@ -803,8 +815,9 @@ export function DynamicRecordDialog({
             if (bagHasErrors(bag)) {
                 const labels: Record<string, string> = {}
                 for (const f of visible) labels[f.key] = t(f.label, { defaultValue: f.label })
-                setFieldErrors(localizeFieldErrorMap(bag, t, { labels, language: lang }))
-                toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }))
+                const localized = localizeFieldErrorMap(bag, t, { labels, language: lang })
+                setFieldErrors(localized)
+                toastValidationFailed(t, lang, localized)
                 return
             }
         }
@@ -950,8 +963,9 @@ export function DynamicRecordDialog({
         if (bagHasErrors(bag)) {
             const labels: Record<string, string> = {}
             for (const f of step?.fields ?? []) labels[f.key] = t(f.label, { defaultValue: f.label })
-            setFieldErrors(localizeFieldErrorMap(bag, t, { labels, language: lang }))
-            toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }))
+            const localized = localizeFieldErrorMap(bag, t, { labels, language: lang })
+            setFieldErrors(localized)
+            toastValidationFailed(t, lang, localized)
             return
         }
         setFieldErrors({})
@@ -984,7 +998,7 @@ export function DynamicRecordDialog({
                                 cell `min-w-0` so a long select/input value can't
                                 blow the two columns past the dialog width. */}
                             <form
-                                id="dynamic-record-form"
+                                id={formId}
                                 onSubmit={handleSubmit}
                                 className="grid gap-y-4"
                             >
@@ -1094,7 +1108,7 @@ export function DynamicRecordDialog({
                         {isEditable && (!isSteps || isLastStep) && (
                             <Button
                                 type="submit"
-                                form="dynamic-record-form"
+                                form={formId}
                                 disabled={saving || loading}
                             >
                                 {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
