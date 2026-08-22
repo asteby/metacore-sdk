@@ -1,5 +1,13 @@
 # @asteby/metacore-runtime-react
 
+## 33.1.1
+
+### Patch Changes
+
+- 921a74c: Crear una categoría (u otro registro) desde el "+" de un modal ya no
+  valida el formulario de atrás. Cada diálogo tiene su propio `form` id, y
+  el toast de validación lista los mensajes del validator.
+
 ## 33.1.0
 
 ### Minor Changes
