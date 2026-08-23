@@ -9,6 +9,15 @@ export type ProductTileProps = {
   /** Already-formatted price / cost line (caller owns currency). */
   price: React.ReactNode
   imageUrl?: string | null
+  /**
+   * How the image fills its box. 'cover' (default, unchanged) crops to fill —
+   * fine for photos shot to the tile's aspect ratio (food, apparel on a
+   * model). 'contain' shows the WHOLE image uncropped, letterboxed on
+   * `bg-muted` — use it for catalog/product shots that aren't pre-cropped to
+   * 4:3 (e.g. a round tire photo, a logo, packaging on white), where 'cover'
+   * would slice off the edges.
+   */
+  imageFit?: 'cover' | 'contain'
   disabled?: boolean
   /** Corner overlay (stock badge, etc.). */
   badge?: React.ReactNode
@@ -30,6 +39,7 @@ export function ProductTile({
   subtitle,
   price,
   imageUrl,
+  imageFit = 'cover',
   disabled = false,
   badge,
   hoverAction,
@@ -56,7 +66,10 @@ export function ProductTile({
           <img
             src={imageUrl}
             alt={title}
-            className='size-full object-cover'
+            className={cn(
+              'size-full',
+              imageFit === 'contain' ? 'object-contain p-2' : 'object-cover'
+            )}
           />
         ) : (
           <div className='flex size-full items-center justify-center'>
