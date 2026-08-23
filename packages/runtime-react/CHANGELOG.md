@@ -1,5 +1,14 @@
 # @asteby/metacore-runtime-react
 
+## 34.0.1
+
+### Patch Changes
+
+- 45b5f91: Fix relation/brand thumbnails (RelationCell) being cropped: switch from
+  `object-cover` to `object-contain` on a padded neutral background so
+  wide/rectangular logos (brand, supplier, category images) render in full
+  instead of clipped to a square.
+
 ## 34.0.0
 
 ### Patch Changes
