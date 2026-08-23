@@ -120,6 +120,10 @@ export {
     type UseDynamicFiltersResult,
 } from './use-dynamic-filters'
 export * from './dynamic-form'
+export {
+    FilePickButton,
+    type FilePickButtonProps,
+} from './file-pick-button'
 export * from './barcode-scanner'
 export * from './form-layout'
 export * from './form-layout-ui'
