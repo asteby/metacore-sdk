@@ -76,15 +76,19 @@ export const RelationThumbnail: React.FC<{
     alt: string
     getImageUrl?: (path: string) => string
     size?: number
-}> = ({ src, alt, getImageUrl, size = 18 }) => (
+}> = ({ src, alt, getImageUrl, size = 20 }) => (
     <Avatar
-        className="shrink-0 rounded-md ring-1 ring-border/40"
+        className="shrink-0 rounded-md bg-muted/50 p-[3px] ring-1 ring-border/40"
         style={{ width: size, height: size }}
     >
+        {/* object-contain: brand logos are typically wide/rectangular, so
+            object-cover (fills the square, cropping the sides) was cutting
+            them off. contain lets the whole mark show, letterboxed by the
+            padded neutral background above instead of clipped. */}
         <AvatarImage
             src={getImageUrl ? getImageUrl(src) : src}
             alt={alt}
-            className="object-cover"
+            className="object-contain"
         />
         <AvatarFallback className="rounded-md bg-primary/10 text-[8px] font-bold text-primary">
             {getInitials(alt)}
