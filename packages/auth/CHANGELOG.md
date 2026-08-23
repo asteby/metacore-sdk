@@ -1,5 +1,12 @@
 # @asteby/metacore-auth
 
+## 23.0.0
+
+### Patch Changes
+
+- Updated dependencies [5c51b7f]
+  - @asteby/metacore-ui@2.16.0
+
 ## 22.0.0
 
 ### Patch Changes

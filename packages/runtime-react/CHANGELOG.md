@@ -1,5 +1,12 @@
 # @asteby/metacore-runtime-react
 
+## 34.0.0
+
+### Patch Changes
+
+- Updated dependencies [5c51b7f]
+  - @asteby/metacore-ui@2.16.0
+
 ## 33.1.1
 
 ### Patch Changes
