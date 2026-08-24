@@ -80,7 +80,16 @@
     "change": "Cambiar",
     "retry": "Reintentar",
     "continue": "Continuar",
-    "done": "Listo"
+    "done": "Listo",
+    "upload": {
+      "choose": "Elegir archivo",
+      "replace": "Reemplazar",
+      "remove": "Quitar archivo",
+      "none": "Ningún archivo elegido",
+      "too_large": "Archivo muy grande (máx. {{mb}} MB).",
+      "failed": "No se pudo subir el archivo.",
+      "invalid": "Respuesta de subida inválida."
+    }
   },
   "errors": {
     "generic": "Algo salió mal",
