@@ -1,5 +1,11 @@
 # @asteby/metacore-i18n
 
+## 22.0.1
+
+### Patch Changes
+
+- 7bff072: Locale-aware FilePickButton: hide native file chrome so labels follow app language (es/en). UploadField and ImportDialog use it.
+
 ## 22.0.0
 
 ### Patch Changes

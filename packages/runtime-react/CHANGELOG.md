@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 34.0.2
+
+### Patch Changes
+
+- 7bff072: Locale-aware FilePickButton: hide native file chrome so labels follow app language (es/en). UploadField and ImportDialog use it.
+
 ## 34.0.1
 
 ### Patch Changes
