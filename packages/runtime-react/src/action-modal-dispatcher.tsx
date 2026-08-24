@@ -37,6 +37,7 @@ import {
 } from '@asteby/metacore-ui/primitives'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { translateMaybeKey } from './translate-maybe-key'
 import { toastServerError, toastServerSuccess, extractFieldErrors, localizeFieldErrorMap } from './server-error'
 import type { Translate } from './server-error'
 import { validateValues, bagHasErrors } from './validator'
@@ -389,7 +390,7 @@ function RecordPreview({ model, record }: { model: string; record: any }) {
     return (
         <div className="mt-1 overflow-hidden rounded-md border bg-muted/30 text-sm">
             {rows.map(({ col, value, lineItems }) => {
-                const label = t(col.label, { defaultValue: col.label })
+                const label = translateMaybeKey(t, col.label)
                 if (lineItems) {
                     return (
                         <div key={col.key} className="border-t px-3 py-2 first:border-t-0">
@@ -431,7 +432,7 @@ function localizeActionFieldErrors(
     if (!map) return undefined
     const labels: Record<string, string> = {}
     for (const f of fields ?? []) {
-        labels[f.key] = f.label ? t(f.label, { defaultValue: f.label }) : humanizeKey(f.key)
+        labels[f.key] = f.label ? translateMaybeKey(t, f.label) : humanizeKey(f.key)
     }
     return localizeFieldErrorMap(map, t, { labels, language })
 }
@@ -462,7 +463,7 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
     // `action.label` is an addon-contributed i18n key; its locale bundle loads
     // asynchronously, so translate at render (defaultValue keeps an already
     // localized label unchanged).
-    const label = t(action.label, { defaultValue: action.label })
+    const label = translateMaybeKey(t, action.label)
 
     const execute = async () => {
         setExecuting(true)
@@ -517,7 +518,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
     // Addon-contributed labels (action + fields) are i18n keys whose locale
     // bundle loads asynchronously; translate at render so they don't render raw.
     // defaultValue keeps an already-localized string unchanged.
-    const tl = (s: string) => t(s, { defaultValue: s })
+    const tl = (s: string) => translateMaybeKey(t, s)
     const api = useApi()
     const [formData, setFormData] = useState<Record<string, any>>({})
     const [executing, setExecuting] = useState(false)
@@ -739,7 +740,7 @@ function wizardStepErrors(
     const bag = validateValues(fields, formData)
     if (!bagHasErrors(bag)) return undefined
     const labels: Record<string, string> = {}
-    for (const f of fields) labels[f.key] = t(f.label, { defaultValue: f.label })
+    for (const f of fields) labels[f.key] = translateMaybeKey(t, f.label)
     return localizeFieldErrorMap(bag, t, { labels, language })
 }
 
@@ -752,7 +753,7 @@ function wizardStepErrors(
 // single-page action form — no widget is duplicated.
 function WizardActionModal({ open, onOpenChange, action, model, record, endpoint, onSuccess }: ActionModalProps) {
     const { t, i18n } = useTranslation()
-    const tl = (s: string) => t(s, { defaultValue: s })
+    const tl = (s: string) => translateMaybeKey(t, s)
     const api = useApi()
     const steps = action.steps ?? []
     const [stepIndex, setStepIndex] = useState(0)

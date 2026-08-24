@@ -24,6 +24,7 @@ import { useApi } from './api-context'
 import { useMetadataCache } from './metadata-cache'
 import { DynamicIcon } from './dynamic-icon'
 import { ActionModalDispatcher } from './action-modal-dispatcher'
+import { translateMaybeKey } from './translate-maybe-key'
 import { useCan, modelCapability } from './permissions-context'
 import type { ActionDefinition, ActionMetadata, TableMetadata } from './types'
 
@@ -143,7 +144,7 @@ export function ModelActionToolbar({
                                 bare `{a.label}` prints the raw key until (and after) the bundle
                                 lands because nothing re-derives it. defaultValue keeps an
                                 already-localized label untouched. */}
-                            {t(a.label, { defaultValue: a.label })}
+                            {translateMaybeKey(t, a.label)}
                         </Button>
                     )
                 })}
