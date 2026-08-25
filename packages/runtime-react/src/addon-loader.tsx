@@ -3,17 +3,26 @@
 // `remoteEntry.js` as an ESM container, loads the exposed `./register` module,
 // and calls `register(api)` with the AddonAPI injected by the host.
 //
-// Why @module-federation/runtime (not the old manual init/get machinery):
-// the host's Vite build uses `@module-federation/vite`'s `federation()` plugin,
-// which auto-initialises the shared scope at host boot. `registerRemotes` +
-// `loadRemote` then transparently wire the remote into that already-initialised
-// share scope — so the remote consumes the HOST's React/SDK singletons instead
-// of bundling its own. That's the whole point: it fixes the `useState`-null
-// crash WITHOUT this loader ever touching a share scope manually.
+// Fiber lifecycle (Cordis-style): when `url` (the `?v=` cache-bust) changes,
+// the previous plugin.dispose / returned Disposable run, the host registry
+// unbinds that addonKey, the SW addon-federation cache for that key is
+// purged, and register() runs again against the new remote. The host shell
+// (auth, QueryClient, WebSocket, service worker controller) is not touched.
 import { useEffect, useRef, useState } from 'react'
 import { registerRemotes, loadRemote } from '@module-federation/runtime'
-import type { AddonAPI, AddonLayout } from '@asteby/metacore-sdk'
+import type { AddonAPI, AddonLayout, Registry } from '@asteby/metacore-sdk'
 import { useDeclareAddonLayout } from './addon-layout-context'
+import {
+    composeDisposables,
+    disposableFromRegisterResult,
+    markRemoteRegistered,
+    purgeAddonFrontendCache,
+    resolvePluginExports,
+    runDispose,
+    shouldReregisterRemote,
+    type AddonRegisterModule,
+    type Disposable,
+} from './addon-fiber'
 
 export interface AddonLoaderProps {
     /** Unique key of the addon — maps to the federation container name. */
@@ -24,9 +33,25 @@ export interface AddonLoaderProps {
     module?: string
     /** Host-provided API passed to the addon's register() call. */
     api: AddonAPI
+    /**
+     * Host registry used to {@link Registry.unbind} this addon's contributions
+     * on dispose. Optional so legacy hosts keep compiling; without it, fiber
+     * remounts leak routes/actions.
+     */
+    hostRegistry?: Registry
+    /**
+     * Addon key for SW cache purge. Defaults to `api.manifest.key`.
+     */
+    addonKey?: string
+    /**
+     * Registry owner passed to {@link Registry.unbind}. Defaults to `addonKey`.
+     * Immersive `./plugin` fibers use `${key}::view` so they don't wipe the
+     * shell `./register` contributions of the same addon.
+     */
+    unbindKey?: string
     /** Optional rendering while loading. */
     fallback?: React.ReactNode
-    /** Called once the addon has successfully registered. */
+    /** Called once the addon has successfully registered (including re-register). */
     onReady?: () => void
     /** Called if loading fails. */
     onError?: (err: Error) => void
@@ -44,17 +69,6 @@ export interface AddonLoaderProps {
     layout?: AddonLayout
     children?: React.ReactNode
 }
-
-/** Shape of the exposed `./register` module. */
-interface AddonRegisterModule {
-    register?: (api: AddonAPI) => void | Promise<void>
-    default?: (api: AddonAPI) => void | Promise<void>
-}
-
-// `registerRemotes` is additive + idempotent across re-mounts; we still track
-// which scopes we've registered to avoid redundant `force` churn (each `force`
-// re-register wipes that remote's module cache and logs a runtime warning).
-const registered = new Set<string>()
 
 // Derive the `loadRemote` id from the scope + exposed module name. MF resolves
 // `"<remoteName>/<expose>"` — e.g. `metacore_tickets/register` for the
@@ -100,28 +114,15 @@ async function loadAddon(
     url: string,
     module: string,
 ): Promise<AddonRegisterModule | null> {
-    // Register the remote container as an ES module. `type: 'module'` matches
-    // the `@module-federation/vite` remote (remoteEntry.js is an ESM bundle).
-    // The `url` already carries the `?v=` cache-bust the host computed, so the
-    // browser refetches a fresh remoteEntry when the addon version changes.
-    //
-    // Both calls are wrapped in `withRuntimeReady` because EITHER can throw
-    // RUNTIME-009 when an addon mounts ahead of the host's federation init —
-    // registration is what actually touches the (maybe-uninitialised) runtime.
-    if (!registered.has(scope)) {
+    // Re-register whenever the `?v=` URL changes so a fiber swap actually
+    // fetches the new remoteEntry. `force: true` wipes that remote's module
+    // cache — without it, loadRemote would keep serving the previous bundle.
+    if (shouldReregisterRemote(scope, url)) {
         await withRuntimeReady(() =>
-            registerRemotes(
-                [{ name: scope, entry: url, type: 'module' }],
-                // `force: true` so a re-registration with a new `?v=` URL (addon
-                // hot-swap / version bump) overwrites the stale entry + cache.
-                { force: true },
-            ),
+            registerRemotes([{ name: scope, entry: url, type: 'module' }], { force: true }),
         )
-        registered.add(scope)
+        markRemoteRegistered(scope, url)
     }
-    // loadRemote("<scope>/<expose>") returns the exposed module namespace (or
-    // null if it can't be resolved). No manual share-scope init — the host's
-    // federation runtime already initialised it.
     return withRuntimeReady(() =>
         loadRemote<AddonRegisterModule>(remoteId(scope, module)),
     )
@@ -132,6 +133,9 @@ export function AddonLoader({
     url,
     module = './register',
     api,
+    hostRegistry,
+    addonKey,
+    unbindKey,
     fallback = null,
     onReady,
     onError,
@@ -140,7 +144,7 @@ export function AddonLoader({
 }: AddonLoaderProps) {
     const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
     const [error, setError] = useState<Error | null>(null)
-    const didRegister = useRef(false)
+    const disposeRef = useRef<Disposable | undefined>(undefined)
 
     // Propagate the addon's preferred layout to the host shell via context.
     // No-op when `layout` is undefined or `"shell"` (legacy default). Cleanup
@@ -150,20 +154,28 @@ export function AddonLoader({
 
     useEffect(() => {
         let cancelled = false
+        const key = addonKey || api.manifest?.key
+        const owner = unbindKey || key
         ;(async () => {
             try {
+                setStatus('loading')
+                if (key) await purgeAddonFrontendCache(key)
                 const mod = await loadAddon(scope, url, module)
                 if (cancelled) return
-                const register = mod?.register ?? mod?.default
-                if (typeof register !== 'function') {
+                const plugin = resolvePluginExports(mod)
+                if (typeof plugin.register !== 'function') {
                     throw new Error(
                         `Addon "${scope}" module "${module}" has no register() export`,
                     )
                 }
-                if (!didRegister.current) {
-                    didRegister.current = true
-                    await Promise.resolve(register(api))
-                }
+                // Drop leftover contributions from a previous fiber of this key
+                // before the new register() runs (idempotent if none).
+                if (owner && hostRegistry) hostRegistry.unbind(owner)
+                const ret = await Promise.resolve(plugin.register(api))
+                disposeRef.current = composeDisposables(
+                    disposableFromRegisterResult(ret),
+                    plugin.dispose,
+                )
                 setStatus('ready')
                 onReady?.()
             } catch (e: unknown) {
@@ -176,11 +188,24 @@ export function AddonLoader({
         })()
         return () => {
             cancelled = true
+            const d = disposeRef.current
+            disposeRef.current = undefined
+            void runDispose(d)
+            if (owner && hostRegistry) hostRegistry.unbind(owner)
         }
-    }, [scope, url, module])
+        // api identity is expected to be stable per addon; including it would
+        // re-register on every parent render. Fiber identity is (scope, url, module).
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [scope, url, module, addonKey, unbindKey, hostRegistry])
 
     if (status === 'loading') return <>{fallback}</>
-    if (status === 'error')
+    if (status === 'error') {
+        // Hosts that pass `onError` (toast + telemetry) should not also paint
+        // a second, persistent inline banner — DynamicAddonLoaders mounts one
+        // fiber per installed addon and a visible error stack reads as a broken
+        // shell even when only one remote failed transiently.
+        if (onError) return null
         return <div className="text-sm text-red-500">Addon load error: {error?.message}</div>
+    }
     return <>{children}</>
 }

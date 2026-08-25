@@ -106,6 +106,7 @@ export {
     type UseDynamicFiltersOptions,
     type UseDynamicFiltersResult,
 } from './use-dynamic-filters'
+export { useDebouncedValue, SEARCH_DEBOUNCE_MS } from './use-debounced-value'
 export * from './dynamic-form'
 export * from './barcode-scanner'
 export * from './form-layout'
@@ -122,6 +123,17 @@ export {
     type ActionPlacement,
 } from './model-action-toolbar'
 export * from './addon-loader'
+export {
+    PURGE_ADDON_MESSAGE,
+    isAddonFrontendCacheUrl,
+    purgeAddonFrontendCache,
+    resolvePluginExports,
+    composeDisposables,
+    runDispose,
+    type PurgeAddonMessage,
+    type AddonRegisterModule,
+    type ResolvedPlugin,
+} from './addon-fiber'
 export {
     AddonLayoutProvider,
     useAddonLayout,
@@ -237,6 +249,12 @@ export {
     type UrlKind,
     type LinkifyOptions,
 } from './rich-url'
+export {
+    ImageStack,
+    OptionBadge,
+    statusColorFor,
+    useIsDarkTheme,
+} from './display-value'
 export {
     CollectionCell,
     formatScalar,

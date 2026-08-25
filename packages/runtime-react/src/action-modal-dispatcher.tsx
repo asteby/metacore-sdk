@@ -81,7 +81,7 @@ export type { ActionMetadata, ActionModalProps }
 //     "map": { "product_id": "product_id" },
 //     "remaining": { "target": "qty_received", "of": "quantity", "minus": "received" }
 //   }
-interface PrefillSpec {
+export interface PrefillSpec {
     $prefillFromRecord: string
     map?: Record<string, string>
     remaining?: { target: string; of: string; minus?: string }
@@ -94,7 +94,7 @@ interface PrefillSpec {
     lock?: string[]
 }
 
-function isPrefillSpec(v: unknown): v is PrefillSpec {
+export function isPrefillSpec(v: unknown): v is PrefillSpec {
     return (
         typeof v === 'object' &&
         v !== null &&
@@ -122,7 +122,7 @@ function toNum(v: unknown): number {
 // untouched when there is no prefill spec or no lock list (the create flow,
 // which carries no prefill, stays fully editable). The readonly flag is set on
 // BOTH itemFields aliases the renderers tolerate.
-function applyPrefillLock(field: ActionFieldDef): ActionFieldDef {
+export function applyPrefillLock(field: ActionFieldDef): ActionFieldDef {
     const spec = lineItemsDefault(field)
     if (!isPrefillSpec(spec) || !spec.lock || spec.lock.length === 0) return field
     const lock = new Set(spec.lock)
@@ -134,7 +134,7 @@ function applyPrefillLock(field: ActionFieldDef): ActionFieldDef {
 }
 
 // buildPrefillRows projects record[spec.$prefillFromRecord] into modal rows.
-function buildPrefillRows(spec: PrefillSpec, record: any): Array<Record<string, any>> {
+export function buildPrefillRows(spec: PrefillSpec, record: any): Array<Record<string, any>> {
     const src = record?.[spec.$prefillFromRecord]
     if (!Array.isArray(src)) return []
     const rows: Array<Record<string, any>> = []
@@ -152,6 +152,65 @@ function buildPrefillRows(spec: PrefillSpec, record: any): Array<Record<string, 
         rows.push(row)
     }
     return rows
+}
+
+// ---- scalar prefill from the acted-on record --------------------------------
+//
+// Row actions (stamp / refactura / cancel-with-reason) should open with the
+// current record's values, not empty selects. Manifest declares explicit paths
+// via `defaultFromRecord` (string or string[] fallback chain). When omitted,
+// the field seeds from record[field.key] if present.
+
+export function unwrapRecordScalar(value: unknown): unknown {
+    if (value === null || value === undefined) return value
+    if (typeof value !== 'object' || value instanceof Date) return value
+    if (Array.isArray(value)) return value
+    const o = value as Record<string, unknown>
+    if ('value' in o && (typeof o.value === 'string' || typeof o.value === 'number')) {
+        return o.value
+    }
+    if ('id' in o && (typeof o.id === 'string' || typeof o.id === 'number')) {
+        return o.id
+    }
+    return value
+}
+
+export function readRecordPath(record: any, path: string): unknown {
+    if (!record || !path) return undefined
+    const parts = path.split('.')
+    let cur: any = record
+    for (const p of parts) {
+        if (cur == null || typeof cur !== 'object') return undefined
+        cur = cur[p]
+    }
+    return unwrapRecordScalar(cur)
+}
+
+function defaultFromRecordSpec(field: ActionFieldDef): string | string[] | undefined {
+    const f = field as ActionFieldDef & {
+        defaultFromRecord?: string | string[]
+        default_from_record?: string | string[]
+    }
+    return f.defaultFromRecord ?? f.default_from_record
+}
+
+/** Scalar seed for one action field from the row being acted on. */
+export function scalarDefaultFromRecord(field: ActionFieldDef, record: any): unknown {
+    if (!record) return undefined
+    const spec = defaultFromRecordSpec(field)
+    if (typeof spec === 'string') {
+        const v = readRecordPath(record, spec)
+        if (v !== undefined && v !== null && v !== '') return v
+    } else if (Array.isArray(spec)) {
+        for (const path of spec) {
+            const v = readRecordPath(record, path)
+            if (v !== undefined && v !== null && v !== '') return v
+        }
+    } else if (field.key) {
+        const v = readRecordPath(record, field.key)
+        if (v !== undefined && v !== null && v !== '') return v
+    }
+    return undefined
 }
 
 export function ActionModalDispatcher({
@@ -320,14 +379,17 @@ function selectPreviewColumns(columns: ColumnDefinition[] | undefined, record: a
             continue
         }
 
-        // Relación (ref / search / dynamic_select / *_id): solo si el sibling
-        // resolvió a un label legible; si es un *_id crudo sin resolver, se omite.
+        // Relación (ref / search / dynamic_select / uuid *_id): solo si el sibling
+        // resolvió a un label legible; text `*_id` (external_id) no es FK.
+        const t = String(col.type || '').toLowerCase()
         const isRelation =
             !!getFieldRef(col as ActionFieldDef) ||
             col.type === 'search' ||
             col.type === 'relation' ||
             (col as { widget?: string }).widget === 'dynamic_select' ||
-            (typeof col.key === 'string' && col.key.endsWith('_id'))
+            (typeof col.key === 'string' &&
+                col.key.endsWith('_id') &&
+                (t === 'uuid' || t === 'search' || t === 'relation' || t === 'dynamic_select' || t === 'belongs_to'))
         if (isRelation) {
             const sib = relationSiblingValue(col as any, record)
             const label = typeof sib === 'string' ? sib : objectLabel(sib)
@@ -546,20 +608,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
 
     useEffect(() => {
         if (open && action.fields) {
-            const defaults: Record<string, any> = {}
-            for (const field of action.fields) {
-                if (isLineItemsField(field)) {
-                    const dv = lineItemsDefault(field)
-                    defaults[field.key] = isPrefillSpec(dv)
-                        ? buildPrefillRows(dv, record)
-                        : Array.isArray(dv)
-                          ? dv
-                          : []
-                    continue
-                }
-                defaults[field.key] = field.defaultValue ?? (field.type === 'boolean' ? false : '')
-            }
-            setFormData(defaults)
+            setFormData(buildFieldDefaults(action.fields, record))
             setFieldErrors({})
         }
     }, [open, action.fields, record])
@@ -640,6 +689,8 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
         () => (action.fields ?? []).some(isLineItemsField),
         [action.fields],
     )
+    const embedRelations =
+        hasLineItems || !!(action as ActionMetadata & { embedRelations?: boolean }).embedRelations
     const explicitWidth = (action as unknown as { modalWidth?: number | string }).modalWidth
     const widthPx =
         explicitWidth != null
@@ -665,7 +716,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                         <DynamicIcon name={action.icon} className="h-5 w-5" />
                         {tl(action.label)}
                     </DialogTitle>
-                    {action.confirmMessage && <DialogDescription>{action.confirmMessage}</DialogDescription>}
+                    {action.confirmMessage && <DialogDescription>{tl(action.confirmMessage)}</DialogDescription>}
                 </DialogHeader>
                 {/* Scrollable body. The shared FieldGrid lays scalar fields out
                     in two responsive columns (single column on phones); line-items
@@ -684,14 +735,14 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                                     <FieldLabel htmlFor={field.key} required={field.required}>
                                         {tl(field.label)}
                                     </FieldLabel>
-                                    {renderField(field, formData[field.key], (v: any) => updateField(field.key, v), formData)}
+                                    {renderField(field, formData[field.key], (v: any) => updateField(field.key, v), formData, record)}
                                     {fieldErrors[field.key] && (
                                         <p className="text-destructive text-xs mt-1">{fieldErrors[field.key]}</p>
                                     )}
                                 </FieldCell>
                             )
                         })}
-                        {relations.length > 0 && (
+                        {embedRelations && relations.length > 0 && (
                             <FieldCell fullWidth>
                                 {/* Igual que el modal de registro: solo las
                                     relaciones de composición se embeben. */}
@@ -731,6 +782,11 @@ function buildFieldDefaults(fields: ActionFieldDef[], record: any): Record<strin
                 : Array.isArray(dv)
                   ? dv
                   : []
+            continue
+        }
+        const fromRecord = scalarDefaultFromRecord(field, record)
+        if (fromRecord !== undefined && fromRecord !== null && fromRecord !== '') {
+            defaults[field.key] = fromRecord
             continue
         }
         defaults[field.key] = field.defaultValue ?? (field.type === 'boolean' ? false : '')
@@ -896,7 +952,7 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
                                     <FieldLabel htmlFor={field.key} required={field.required}>
                                         {tl(field.label)}
                                     </FieldLabel>
-                                    {renderField(field, formData[field.key], (v: any) => updateField(field.key, v), formData)}
+                                    {renderField(field, formData[field.key], (v: any) => updateField(field.key, v), formData, record)}
                                 </FieldCell>
                             )
                         })}
@@ -937,6 +993,29 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
     )
 }
 
+function seedOptionFromRecord(
+    field: ActionFieldDef,
+    value: any,
+    record?: Record<string, any>,
+): import('./use-options-resolver').ResolvedOption | undefined {
+    if (!record || !field.key.endsWith('_id')) return undefined
+    const siblingKey = field.key.replace(/_id$/, '')
+    const sib = record[siblingKey]
+    if (!sib || typeof sib !== 'object') return undefined
+    const label = (sib as any).label ?? (sib as any).name ?? ''
+    if (!label && !(sib as any).image) return undefined
+    const id = String((sib as any).value ?? (sib as any).id ?? value ?? '')
+    return {
+        id,
+        value: id,
+        label: String(label),
+        name: String(label),
+        image: (sib as any).image,
+        color: (sib as any).color,
+        icon: (sib as any).icon,
+    }
+}
+
 function renderField(
     field: ActionFieldDef,
     value: any,
@@ -946,6 +1025,7 @@ function renderField(
     // fields. Omitted by callers that have no surrounding form (the field is
     // then treated as having no resolvable dependency).
     formValues?: Record<string, any>,
+    record?: Record<string, any>,
 ) {
     // Repeatable line-items group → row grid (value is an array of row objects).
     // The header form values flow in so a cell can depend on a header field.
@@ -963,7 +1043,15 @@ function renderField(
         const dependsValue = getDependsOn(field)
             ? resolveDependsValue(field, formValues)
             : undefined
-        return <DynamicSelectField field={field} value={value} onChange={onChange} dependsValue={dependsValue} />
+        return (
+            <DynamicSelectField
+                field={field}
+                value={value}
+                onChange={onChange}
+                dependsValue={dependsValue}
+                seedOption={seedOptionFromRecord(field, value, record)}
+            />
+        )
     }
     // File upload → themed picker that POSTs the file to the host upload
     // endpoint and stores the returned url/path. Kept in sync with DynamicForm.

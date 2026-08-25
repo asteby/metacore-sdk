@@ -1,5 +1,25 @@
 # @asteby/metacore-sdk
 
+## 3.5.0
+
+### Minor Changes
+
+- Addon fiber hot-swap without a page reload: Registry.scope/unbind, Plugin.register
+  may return a Disposable, AddonLoader re-registers federation remotes when `?v=`
+  changes, and purgeAddonFrontendCache drops only that addon's SW cache (L1).
+  Hosts call acknowledgeRunningVersion after a successful swap instead of
+  location.reload / unregistering the service worker.
+- 7Leguas wave: registry action bridge, dynamic record/columns display, addon-loader error UX, notifications dropdown polish.
+
+## Unreleased
+
+### Minor Changes
+
+- Product identity contract: `BrandManifest` + `brandAssetURL()` at
+  `{origin}/api/brand/{icon,logo,og}`. Distinct from tenant
+  `/api/platform/branding`. `CatalogAddon.icon_url` is the hub-served SVG
+  for addons/presets that ship artwork.
+
 ## 3.4.0
 
 ### Minor Changes

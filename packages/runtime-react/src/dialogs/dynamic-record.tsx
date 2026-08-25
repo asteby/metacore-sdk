@@ -69,6 +69,7 @@ import { IconPickerField } from '../icon-picker-field'
 import { humanizeToken } from '../dynamic-columns-helpers'
 import { formatDateCell } from '../dynamic-columns'
 import {
+    ImageStack,
     OptionBadge,
     statusColorFor,
     useIsDarkTheme,
@@ -409,6 +410,24 @@ function isRelationField(field: FieldDef): boolean {
         field.widget === 'dynamic_select' ||
         !!getFieldRef(field as ActionFieldDef) ||
         !!field.searchEndpoint
+    )
+}
+
+// looksLikeForeignKey — true only for real FKs. A bare `*_id` suffix is NOT
+// enough: columns like `external_id`, `trace_id`, or `invoice_uid` are plain
+// text identifiers from a PAC/provider, not belongs_to relations. Treating them
+// as relations rendered an InitialsAvatar ("6" chip next to "6a8c…") and made
+// fiscal detail modals look broken.
+function looksLikeForeignKey(field: FieldDef): boolean {
+    if (isRelationField(field)) return true
+    if (typeof field.key !== 'string' || !field.key.endsWith('_id')) return false
+    const t = String(field.type || '').toLowerCase()
+    return (
+        t === 'uuid' ||
+        t === 'search' ||
+        t === 'relation' ||
+        t === 'dynamic_select' ||
+        t === 'belongs_to'
     )
 }
 
@@ -1181,7 +1200,19 @@ export function ReadonlyEditField({ field, value }: { field: FieldDef; value: an
 // RelationViewValue — read-only FK lead. Resolves the relation's label + image
 // from (1) the sibling object the table served, then (2) the canonical options
 // endpoint, and renders an OptionLead (thumbnail / icon / color dot) + label.
-function RelationViewValue({ field, value, record }: { field: FieldDef; value: any; record: any }) {
+// When `stack` is true (`display: "image_stack"`), the landscape mark sits ON
+// TOP of the label — wide logos (brand marks) fit without cropping.
+function RelationViewValue({
+    field,
+    value,
+    record,
+    stack = false,
+}: {
+    field: FieldDef
+    value: any
+    record: any
+    stack?: boolean
+}) {
     const getImageUrl = useContext(ImageUrlContext)
     const sib = relationSiblingValue(field, record)
     const sibLabel = typeof sib === 'string' ? sib : objectLabel(sib)
@@ -1214,6 +1245,19 @@ function RelationViewValue({ field, value, record }: { field: FieldDef; value: a
 
     if (!label && !image) {
         return <p className="text-sm py-1 text-muted-foreground">—</p>
+    }
+
+    if (stack) {
+        return (
+            <div className="py-1">
+                <ImageStack
+                    src={image || undefined}
+                    label={label}
+                    getImageUrl={getImageUrl}
+                    size="lg"
+                />
+            </div>
+        )
     }
 
     const lead: Pick<ResolvedOption, 'image' | 'color' | 'icon' | 'label'> = {
@@ -1306,10 +1350,16 @@ export function ViewValue({
 
     const value = normalizeNilUuid(rawValue)
 
-    // Relation (search / dynamic_select / ref / any *_id) → resolved thumbnail +
-    // label. The *_id catch-all covers plain-typed FK columns not tagged as a
-    // relation field.
-    if (isRelationField(field) || (typeof field.key === 'string' && field.key.endsWith('_id'))) {
+    // Landscape stack on a relation FK (brand marks, product cards): image ON
+    // TOP, label UNDERNEATH. Checked before the default relation lead so a
+    // `display: "image_stack"` FK does not fall through to the side-by-side chip.
+    if (renderAs === 'image_stack' && looksLikeForeignKey(field)) {
+        return <RelationViewValue field={field} value={value} record={record} stack />
+    }
+
+    // Relation (search / dynamic_select / ref / uuid *_id FK) → resolved
+    // thumbnail + label. Plain text `*_id` columns (external_id, …) stay text.
+    if (looksLikeForeignKey(field)) {
         return <RelationViewValue field={field} value={value} record={record} />
     }
 
@@ -1342,7 +1392,36 @@ export function ViewValue({
         )
     }
 
-    if (field.type === 'image') {
+    // Landscape stack for image/logo URL columns (and `type: image` with
+    // `cellStyle: image_stack`). Wide marks sit above an optional caption.
+    if (renderAs === 'image_stack') {
+        if (value && isLucideIconName(value)) {
+            return <IconNameViewValue name={value} />
+        }
+        const labelField =
+            (field.styleConfig &&
+                (field.styleConfig.label_field as string | undefined)) ||
+            (field.styleConfig && (field.styleConfig.labelField as string | undefined))
+        let caption: string | undefined
+        if (labelField && record && typeof record === 'object') {
+            const raw = (record as Record<string, unknown>)[labelField]
+            if (raw != null && String(raw) !== '') caption = String(raw)
+        }
+        return value || caption ? (
+            <div className="py-1">
+                <ImageStack
+                    src={value ? String(value) : undefined}
+                    label={caption}
+                    getImageUrl={getImageUrl}
+                    size="lg"
+                />
+            </div>
+        ) : (
+            <p className="text-sm py-1 text-muted-foreground">Sin imagen</p>
+        )
+    }
+
+    if (field.type === 'image' || renderAs === 'image') {
         if (isLucideIconName(value)) {
             return <IconNameViewValue name={value} />
         }
@@ -1636,6 +1715,19 @@ function StructuredViewValue({
     if (isEmpty) {
         return <p className="text-sm py-1 text-muted-foreground">—</p>
     }
+    // Line-items arrays with a declared itemFields schema → mini-table.
+    // Plain objects (PAC provider_data, fiscal_data bags) → readable key/value
+    // list; nested objects/arrays render as pretty JSON instead of `key: {…}`
+    // stubs that looked broken in fiscal detail modals.
+    const hasItemFields = !!(field?.itemFields ?? field?.item_fields)
+    if (
+        !hasItemFields &&
+        value !== null &&
+        typeof value === 'object' &&
+        !Array.isArray(value)
+    ) {
+        return <JsonObjectViewValue value={value as Record<string, unknown>} />
+    }
     return (
         <div className="text-sm py-1">
             <CollectionCell
@@ -1647,6 +1739,43 @@ function StructuredViewValue({
                 getImageUrl={getImageUrl}
             />
         </div>
+    )
+}
+
+/** Flatten a jsonb/object bag into labeled rows; nest as pretty JSON. */
+function JsonObjectViewValue({ value }: { value: Record<string, unknown> }) {
+    const entries = Object.entries(value).filter(([, v]) => v !== undefined)
+    if (entries.length === 0) {
+        return <p className="text-sm py-1 text-muted-foreground">—</p>
+    }
+    return (
+        <dl className="grid gap-2 py-1 text-sm">
+            {entries.map(([key, raw]) => {
+                const label = humanizeToken(key)
+                const isNest =
+                    raw !== null &&
+                    typeof raw === 'object' &&
+                    !(raw instanceof Date)
+                return (
+                    <div key={key} className="min-w-0">
+                        <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            {label}
+                        </dt>
+                        <dd className="mt-0.5 break-words text-foreground">
+                            {isNest ? (
+                                <pre className="max-h-48 overflow-auto rounded-md bg-muted/40 p-2 text-[11px] leading-relaxed whitespace-pre-wrap">
+                                    {JSON.stringify(raw, null, 2)}
+                                </pre>
+                            ) : raw === null || raw === '' ? (
+                                <span className="text-muted-foreground">—</span>
+                            ) : (
+                                String(raw)
+                            )}
+                        </dd>
+                    </div>
+                )
+            })}
+        </dl>
     )
 }
 

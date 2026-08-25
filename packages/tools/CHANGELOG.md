@@ -1,5 +1,13 @@
 # @asteby/metacore-tools
 
+## 10.0.0
+
+### Patch Changes
+
+- Updated dependencies
+- Updated dependencies
+  - @asteby/metacore-sdk@3.5.0
+
 ## 9.0.0
 
 ### Patch Changes

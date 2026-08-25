@@ -110,4 +110,34 @@ describe('ViewValue — detail dialog display mapping', () => {
         )
         expect(container.textContent).toContain('—')
     })
+
+    it('renders plain text external_id without a relation initials avatar', () => {
+        const { container } = render(
+            <ViewValue
+                field={{ key: 'external_id', label: 'ID externo', type: 'text' }}
+                value="6a8c931523ea7"
+                record={{}}
+            />
+        )
+        expect(screen.getByText('6a8c931523ea7')).toBeTruthy()
+        // Must NOT render the InitialsAvatar lead ("6" chip) used for FKs.
+        expect(container.querySelector('[data-slot="avatar"]')).toBeNull()
+        expect(container.textContent).not.toMatch(/^6\s*6a8c/)
+    })
+
+    it('renders nested provider_data objects as pretty JSON, not key: {…}', () => {
+        render(
+            <ViewValue
+                field={{ key: 'provider_data', label: 'Datos del proveedor', type: 'json' }}
+                value={{
+                    forma_pago: '03',
+                    INV: { Folio: 950, Serie: 'F' },
+                }}
+                record={{}}
+            />
+        )
+        expect(screen.getByText('03')).toBeTruthy()
+        expect(screen.getByText(/"Folio": 950/)).toBeTruthy()
+        expect(screen.queryByText(/Inv:\s*\{\.\.\.\}/i)).toBeNull()
+    })
 })

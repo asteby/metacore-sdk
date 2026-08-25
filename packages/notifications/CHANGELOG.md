@@ -1,5 +1,11 @@
 # @asteby/metacore-notifications
 
+## 23.0.1
+
+### Patch Changes
+
+- 7Leguas wave: registry action bridge, dynamic record/columns display, addon-loader error UX, notifications dropdown polish.
+
 ## 23.0.0
 
 ### Patch Changes

@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from './api-context'
 import { DATE_CELL_TYPES } from './dynamic-columns'
 import { getSearchableColumnKeys } from './column-visibility'
+import { useDebouncedValue } from './use-debounced-value'
 import { useFacetLoaders, isLongTextColumn } from './use-facet-loaders'
 import type { ColumnFilterConfig, FilterOption } from './dynamic-columns-shim'
 import type { TableMetadata } from './types'
@@ -82,6 +83,7 @@ export function useDynamicFilters(
 
   const [dynamicFilters, setDynamicFilters] = useState<Record<string, string[]>>({})
   const [globalFilter, setGlobalFilter] = useState('')
+  const debouncedGlobalFilter = useDebouncedValue(globalFilter)
   const [filterOptionsMap, setFilterOptionsMap] = useState<
     Map<string, FilterOption[]>
   >(new Map())
@@ -343,11 +345,11 @@ export function useDynamicFilters(
   // DynamicTable.buildFilterParams (IN:/RANGE:/GTE:/LTE:/ILIKE:/plain).
   const filterParams = useMemo(() => {
     const params: Record<string, any> = {}
-    if (globalFilter) {
+    if (debouncedGlobalFilter) {
       if (searchableKeys === null) {
-        params.search = globalFilter
+        params.search = debouncedGlobalFilter
       } else if (searchableKeys.length > 0) {
-        params.search = globalFilter
+        params.search = debouncedGlobalFilter
         params.search_columns = searchableKeys.join(',')
       }
       // searchableKeys === [] → no searchable column, skip the search param.
@@ -371,7 +373,7 @@ export function useDynamicFilters(
       else params[`f_${key}`] = `IN:${values.join(',')}`
     })
     return params
-  }, [globalFilter, searchableKeys, defaultFilters, dynamicFilters])
+  }, [debouncedGlobalFilter, searchableKeys, defaultFilters, dynamicFilters])
 
   const activeFilterCount = useMemo(() => {
     let n = Object.values(dynamicFilters).filter((v) => v.length > 0).length

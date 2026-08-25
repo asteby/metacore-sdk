@@ -1,5 +1,22 @@
 # @asteby/metacore-runtime-react
 
+## 35.0.0
+
+### Minor Changes
+
+- Addon fiber hot-swap without a page reload: Registry.scope/unbind, Plugin.register
+  may return a Disposable, AddonLoader re-registers federation remotes when `?v=`
+  changes, and purgeAddonFrontendCache drops only that addon's SW cache (L1).
+  Hosts call acknowledgeRunningVersion after a successful swap instead of
+  location.reload / unregistering the service worker.
+
+### Patch Changes
+
+- 7Leguas wave: registry action bridge, dynamic record/columns display, addon-loader error UX, notifications dropdown polish.
+- Updated dependencies
+- Updated dependencies
+  - @asteby/metacore-sdk@3.5.0
+
 ## 31.1.0
 
 ### Minor Changes

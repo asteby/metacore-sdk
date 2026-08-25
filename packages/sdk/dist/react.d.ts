@@ -22,12 +22,33 @@ import { type ReactNode } from "react";
 import type { MarketplaceClient } from "./client.js";
 import type { Registry } from "./registry.js";
 import type { LegacyManifest as Manifest, NavGroup } from "./types.js";
+/** An installed addon whose served version changed after this window loaded it. */
+export interface AddonUpdate {
+    key: string;
+    /** Version this window is running (first seen after mount). */
+    from: string;
+    /** Version the host is now serving. */
+    to: string;
+}
 interface Ctx {
     client: MarketplaceClient;
     registry: Registry;
     manifests: Manifest[];
     navigation: NavGroup[];
     loading: boolean;
+    /**
+     * Addons whose served version moved after this window first loaded them.
+     * Hosts fiber-swap the federation container in place (AddonLoader remount)
+     * and then call {@link acknowledgeRunningVersion} so the entry drops without
+     * a full page reload. A non-empty list is a signal, not a hard-refresh order.
+     */
+    updatedAddons: AddonUpdate[];
+    /**
+     * Mark `key@version` as the version this window is now running — called by
+     * the host after a successful L1 fiber swap (or first load). Clears that
+     * addon from {@link updatedAddons}.
+     */
+    acknowledgeRunningVersion: (key: string, version: string) => void;
 }
 export interface MetacoreProviderProps {
     client: MarketplaceClient;
