@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 34.1.0
+
+### Minor Changes
+
+- b08ffb0: Add `image_stack` cell/modal display (logo above label, no muted plate) and debounce DynamicTable / kanban free-text search (~350ms) so typing on large catalogs is less abrupt.
+
 ## 34.0.2
 
 ### Patch Changes
