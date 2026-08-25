@@ -1,5 +1,41 @@
 # @asteby/metacore-marketplace
 
+## 98.0.0
+
+### Patch Changes
+
+- @asteby/metacore-app-providers@101.0.0
+
+## 97.0.0
+
+### Patch Changes
+
+- @asteby/metacore-app-providers@100.0.0
+
+## 96.0.0
+
+### Patch Changes
+
+- @asteby/metacore-app-providers@99.0.0
+
+## 95.0.0
+
+### Patch Changes
+
+- @asteby/metacore-app-providers@98.0.0
+
+## 94.0.0
+
+### Patch Changes
+
+- @asteby/metacore-app-providers@97.0.0
+
+## 93.0.0
+
+### Patch Changes
+
+- @asteby/metacore-app-providers@96.0.0
+
 ## 92.0.0
 
 ### Patch Changes

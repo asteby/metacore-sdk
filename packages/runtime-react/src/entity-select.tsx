@@ -75,6 +75,20 @@ export interface EntitySelectProps {
     labelField?: string
     /** Disable the whole control. */
     disabled?: boolean
+
+    /**
+     * Values seeded into the create dialog's form (e.g. a parent id the caller
+     * already knows — a POS sale's selected customer, when creating a vehicle
+     * from the vehicle picker). Passed through to `CreateRecordDialog.defaults`.
+     */
+    createDefaults?: Record<string, unknown>
+    /**
+     * Field keys from `createDefaults` that must also render locked (visible,
+     * disabled) on create instead of editable — e.g. don't let the user swap
+     * the customer while creating their vehicle from this picker. Passed
+     * through to `CreateRecordDialog.lockedFields`.
+     */
+    lockedCreateFields?: string[]
 }
 
 /** Lowercase model → permission capability namespace (Supplier → supplier). */
@@ -98,6 +112,8 @@ export function EntitySelect({
     endpoint,
     labelField = 'name',
     disabled = false,
+    createDefaults,
+    lockedCreateFields,
 }: EntitySelectProps) {
     const can = useCan()
     const api = useApi()
@@ -297,6 +313,8 @@ export function EntitySelect({
                     onOpenChange={setDialogOpen}
                     recordId={dialogRecordId}
                     endpoint={base}
+                    defaults={dialogRecordId ? undefined : createDefaults}
+                    lockedFields={dialogRecordId ? undefined : lockedCreateFields}
                     onCreate={async (data) => {
                         const res = await api.post(base, data)
                         const rec = (res.data?.data ?? res.data) as Record<string, unknown>

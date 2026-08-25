@@ -37,8 +37,10 @@ import {
 } from '@asteby/metacore-ui/primitives'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { toastServerError, toastServerSuccess, extractFieldErrors, localizeFieldIssue } from './server-error'
+import { toastServerError, toastServerSuccess, extractFieldErrors, localizeFieldErrorMap } from './server-error'
 import type { Translate } from './server-error'
+import { validateValues, bagHasErrors } from './validator'
+import { validationCatalog } from './validation-catalog'
 import { useApi } from './api-context'
 import { DynamicIcon } from './dynamic-icon'
 import { DynamicLineItems } from './dynamic-line-items'
@@ -485,34 +487,38 @@ function localizeActionFieldErrors(
     err: unknown,
     fields: readonly ActionFieldDef[] | undefined,
     t: Translate,
+    language?: string,
 ): Record<string, string> | undefined {
     const map = extractFieldErrors(err)
     if (!map) return undefined
-    const labelFor = (k: string) => {
-        const f = (fields ?? []).find(x => x.key === k)
-        return f?.label ? t(f.label, { defaultValue: f.label }) : humanizeKey(k)
+    const labels: Record<string, string> = {}
+    for (const f of fields ?? []) {
+        labels[f.key] = f.label ? t(f.label, { defaultValue: f.label }) : humanizeKey(f.key)
     }
-    const out: Record<string, string> = {}
-    for (const [k, issues] of Object.entries(map)) out[k] = localizeFieldIssue(issues[0], labelFor(k), t)
-    return out
+    return localizeFieldErrorMap(map, t, { labels, language })
 }
 
 /** Toast a failed action: a summary + localized per-field lines when the server
  *  returned a per-field `errors` map, else the standard cause-carrying toast.
  *  Used where inline rendering isn't wired (confirm / multi-step wizard). */
-function toastActionError(err: unknown, fields: readonly ActionFieldDef[] | undefined, t: Translate): void {
-    const localized = localizeActionFieldErrors(err, fields, t)
+function toastActionError(
+    err: unknown,
+    fields: readonly ActionFieldDef[] | undefined,
+    t: Translate,
+    language?: string,
+): void {
+    const localized = localizeActionFieldErrors(err, fields, t, language)
     if (localized) {
-        toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }), {
+        toast.error(t('validation.failed', { defaultValue: validationCatalog(language).failed }), {
             description: Object.values(localized).join('\n'),
         })
         return
     }
-    toastServerError(err, { t })
+    toastServerError(err, { t, language })
 }
 
 function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoint, onSuccess }: ActionModalProps) {
-    const { t } = useTranslation()
+    const { t, i18n } = useTranslation()
     const api = useApi()
     const [executing, setExecuting] = useState(false)
     // `action.label` is an addon-contributed i18n key; its locale bundle loads
@@ -530,10 +536,10 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
                 onOpenChange(false)
                 onSuccess()
             } else {
-                toastActionError({ response: { data: res.data } }, action.fields, t)
+                toastActionError({ response: { data: res.data } }, action.fields, t, i18n.language)
             }
         } catch (err: any) {
-            toastActionError(err, action.fields, t)
+            toastActionError(err, action.fields, t, i18n.language)
         } finally {
             setExecuting(false)
         }
@@ -569,7 +575,7 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
 }
 
 function GenericActionModal({ open, onOpenChange, action, model, record, endpoint, onSuccess }: ActionModalProps) {
-    const { t } = useTranslation()
+    const { t, i18n } = useTranslation()
     // Addon-contributed labels (action + fields) are i18n keys whose locale
     // bundle loads asynchronously; translate at render so they don't render raw.
     // defaultValue keeps an already-localized string unchanged.
@@ -623,39 +629,25 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
         })
     }
 
+    const lang = i18n.language
     const handleActionError = (err: unknown) => {
-        const localized = localizeActionFieldErrors(err, action.fields, t)
+        const localized = localizeActionFieldErrors(err, action.fields, t, lang)
         if (localized) {
             setFieldErrors(localized)
-            toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }))
+            toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }))
             return
         }
-        toastServerError(err, { t })
+        toastServerError(err, { t, language: lang })
     }
 
     const execute = async () => {
         if (action.fields) {
-            // Client-side required check → mark ALL missing fields inline.
-            const missing: Record<string, string> = {}
-            for (const field of action.fields) {
-                if (!field.required) continue
-                if (isLineItemsField(field)) {
-                    const rows = formData[field.key]
-                    if (!Array.isArray(rows) || rows.length === 0) {
-                        missing[field.key] = t('validation.line_items_required', {
-                            defaultValue: '{{label}} requiere al menos un renglón',
-                            label: tl(field.label),
-                        })
-                    }
-                    continue
-                }
-                if (!formData[field.key] && formData[field.key] !== false) {
-                    missing[field.key] = localizeFieldIssue({ code: 'required' }, tl(field.label), t)
-                }
-            }
-            if (Object.keys(missing).length) {
-                setFieldErrors(missing)
-                toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }))
+            const bag = validateValues(action.fields, formData)
+            if (bagHasErrors(bag)) {
+                const labels: Record<string, string> = {}
+                for (const f of action.fields) labels[f.key] = tl(f.label)
+                setFieldErrors(localizeFieldErrorMap(bag, t, { labels, language: lang }))
+                toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }))
                 return
             }
         }
@@ -794,28 +786,17 @@ function buildFieldDefaults(fields: ActionFieldDef[], record: any): Record<strin
     return defaults
 }
 
-// validateFields returns the first validation error for a set of required
-// fields, or null when they all pass. Shared by the wizard (per-step gate) and
-// mirrors GenericActionModal's inline checks. `tl` localizes the field label.
-function validateFields(
+function wizardStepErrors(
     fields: ActionFieldDef[],
     formData: Record<string, any>,
-    tl: (s: string) => string,
-): string | null {
-    for (const field of fields) {
-        if (!field.required) continue
-        if (isLineItemsField(field)) {
-            const rows = formData[field.key]
-            if (!Array.isArray(rows) || rows.length === 0) {
-                return `${tl(field.label)} requiere al menos un renglón`
-            }
-            continue
-        }
-        if (!formData[field.key] && formData[field.key] !== false) {
-            return `${tl(field.label)} es requerido`
-        }
-    }
-    return null
+    t: Translate,
+    language?: string,
+): Record<string, string> | undefined {
+    const bag = validateValues(fields, formData)
+    if (!bagHasErrors(bag)) return undefined
+    const labels: Record<string, string> = {}
+    for (const f of fields) labels[f.key] = t(f.label, { defaultValue: f.label })
+    return localizeFieldErrorMap(bag, t, { labels, language })
 }
 
 // WizardActionModal — the third render-path: a multi-step form. It accumulates
@@ -826,7 +807,7 @@ function validateFields(
 // so line-items, dynamic_select, uploads and dates behave identically to a
 // single-page action form — no widget is duplicated.
 function WizardActionModal({ open, onOpenChange, action, model, record, endpoint, onSuccess }: ActionModalProps) {
-    const { t } = useTranslation()
+    const { t, i18n } = useTranslation()
     const tl = (s: string) => t(s, { defaultValue: s })
     const api = useApi()
     const steps = action.steps ?? []
@@ -857,9 +838,11 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
     const widthPx = hasLineItems ? '820px' : undefined
 
     const goNext = () => {
-        const err = validateFields(stepFields, formData, tl)
-        if (err) {
-            toast.error(err)
+        const localized = wizardStepErrors(stepFields, formData, t, i18n.language)
+        if (localized) {
+            toast.error(t('validation.failed', { defaultValue: validationCatalog(i18n.language).failed }), {
+                description: Object.values(localized).join('\n'),
+            })
             return
         }
         setStepIndex((i) => Math.min(i + 1, steps.length - 1))
@@ -871,9 +854,11 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
         // Guard every step's required fields on final submit (a user could reach
         // the last step with an untouched earlier line-items grid otherwise).
         for (const s of steps) {
-            const err = validateFields(s.fields ?? [], formData, tl)
-            if (err) {
-                toast.error(err)
+            const localized = wizardStepErrors(s.fields ?? [], formData, t, i18n.language)
+            if (localized) {
+                toast.error(t('validation.failed', { defaultValue: validationCatalog(i18n.language).failed }), {
+                    description: Object.values(localized).join('\n'),
+                })
                 return
             }
         }
@@ -886,10 +871,10 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
                 onOpenChange(false)
                 onSuccess()
             } else {
-                toastActionError({ response: { data: res.data } }, steps.flatMap(s => s.fields ?? []), t)
+                toastActionError({ response: { data: res.data } }, steps.flatMap(s => s.fields ?? []), t, i18n.language)
             }
         } catch (err: any) {
-            toastActionError(err, steps.flatMap(s => s.fields ?? []), t)
+            toastActionError(err, steps.flatMap(s => s.fields ?? []), t, i18n.language)
         } finally {
             setExecuting(false)
         }

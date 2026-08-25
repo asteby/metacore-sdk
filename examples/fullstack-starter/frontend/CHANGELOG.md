@@ -1,17 +1,108 @@
 # @asteby/metacore-fullstack-example
 
+## 0.1.243
+
+### Patch Changes
+
+- Updated dependencies [b08ffb0]
+  - @asteby/metacore-runtime-react@34.1.0
+  - @asteby/metacore-app-providers@101.0.0
+
+## 0.1.242
+
+### Patch Changes
+
+- Updated dependencies [7bff072]
+  - @asteby/metacore-runtime-react@34.0.2
+  - @asteby/metacore-i18n@22.0.1
+  - @asteby/metacore-app-providers@100.0.0
+
+## 0.1.241
+
+### Patch Changes
+
+- Updated dependencies [45b5f91]
+  - @asteby/metacore-runtime-react@34.0.1
+  - @asteby/metacore-app-providers@100.0.0
+
+## 0.1.240
+
+### Patch Changes
+
+- Updated dependencies [5c51b7f]
+  - @asteby/metacore-ui@2.16.0
+  - @asteby/metacore-app-providers@100.0.0
+  - @asteby/metacore-auth@23.0.0
+  - @asteby/metacore-i18n@22.0.0
+  - @asteby/metacore-notifications@24.0.0
+  - @asteby/metacore-runtime-react@34.0.0
+  - @asteby/metacore-webhooks@22.0.0
+
+## 0.1.239
+
+### Patch Changes
+
+- Updated dependencies [921a74c]
+  - @asteby/metacore-runtime-react@33.1.1
+  - @asteby/metacore-app-providers@99.0.0
+
+## 0.1.238
+
+### Patch Changes
+
+- Updated dependencies [9eab4e0]
+  - @asteby/metacore-runtime-react@33.1.0
+  - @asteby/metacore-app-providers@99.0.0
+
+## 0.1.237
+
+### Patch Changes
+
+- Updated dependencies [e74975a]
+  - @asteby/metacore-sdk@3.6.0
+  - @asteby/metacore-runtime-react@33.0.0
+  - @asteby/metacore-app-providers@98.0.0
+
+## 0.1.236
+
+### Patch Changes
+
+- Updated dependencies [fa25f99]
+  - @asteby/metacore-runtime-react@32.1.0
+  - @asteby/metacore-app-providers@97.0.0
+
+## 0.1.235
+
+### Patch Changes
+
+- Updated dependencies [5a932ed]
+- Updated dependencies [5a932ed]
+  - @asteby/metacore-sdk@3.5.0
+  - @asteby/metacore-runtime-react@32.0.0
+  - @asteby/metacore-app-providers@96.0.0
+
+## 0.1.234
+
+### Patch Changes
+
+- Updated dependencies [00caf65]
+  - @asteby/metacore-runtime-react@31.1.1
+  - @asteby/metacore-app-providers@95.1.4
+
+## 0.1.233
+
+### Patch Changes
+
+- Updated dependencies [e9c61cf]
+- Updated dependencies [e9c61cf]
+  - @asteby/metacore-app-providers@95.1.4
+
 ## 0.1.232
 
 ### Patch Changes
 
-- Updated dependencies
-- Updated dependencies [73a97cb]
-- Updated dependencies [4786e27]
-- Updated dependencies
-  - @asteby/metacore-sdk@3.5.0
-  - @asteby/metacore-runtime-react@35.0.0
+- Updated dependencies [afc8459]
   - @asteby/metacore-app-providers@95.1.3
-  - @asteby/metacore-notifications@23.0.1
 
 ## 0.1.231
 

@@ -1,13 +1,51 @@
 # @asteby/metacore-starter-core
 
+## 105.0.0
+
+### Patch Changes
+
+- Updated dependencies [b08ffb0]
+  - @asteby/metacore-runtime-react@34.1.0
+
+## 104.0.0
+
+### Patch Changes
+
+- Updated dependencies [5c51b7f]
+  - @asteby/metacore-ui@2.16.0
+  - @asteby/metacore-auth@23.0.0
+  - @asteby/metacore-runtime-react@34.0.0
+
+## 103.0.0
+
+### Patch Changes
+
+- Updated dependencies [9eab4e0]
+  - @asteby/metacore-runtime-react@33.1.0
+
+## 102.0.0
+
+### Patch Changes
+
+- Updated dependencies [e74975a]
+  - @asteby/metacore-sdk@3.6.0
+  - @asteby/metacore-runtime-react@33.0.0
+
+## 101.0.0
+
+### Patch Changes
+
+- Updated dependencies [fa25f99]
+  - @asteby/metacore-runtime-react@32.1.0
+
 ## 100.0.0
 
 ### Patch Changes
 
-- Updated dependencies
-- Updated dependencies
+- Updated dependencies [5a932ed]
+- Updated dependencies [5a932ed]
   - @asteby/metacore-sdk@3.5.0
-  - @asteby/metacore-runtime-react@35.0.0
+  - @asteby/metacore-runtime-react@32.0.0
 
 ## 99.0.0
 

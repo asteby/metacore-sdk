@@ -78,6 +78,15 @@
     "close": "Close",
     "appearance": "Appearance",
     "change": "Change",
+    "upload": {
+      "choose": "Choose file",
+      "replace": "Replace",
+      "remove": "Remove file",
+      "none": "No file chosen",
+      "too_large": "File too large (max {{mb}} MB).",
+      "failed": "Could not upload the file.",
+      "invalid": "Invalid upload response."
+    },
     "retry": "Retry",
     "continue": "Continue",
     "done": "Done"

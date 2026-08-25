@@ -1,13 +1,79 @@
 # @asteby/metacore-starter-vite
 
+## 0.1.224
+
+### Patch Changes
+
+- Updated dependencies [b08ffb0]
+  - @asteby/metacore-runtime-react@34.1.0
+
+## 0.1.223
+
+### Patch Changes
+
+- Updated dependencies [7bff072]
+  - @asteby/metacore-runtime-react@34.0.2
+
+## 0.1.222
+
+### Patch Changes
+
+- Updated dependencies [45b5f91]
+  - @asteby/metacore-runtime-react@34.0.1
+
+## 0.1.221
+
+### Patch Changes
+
+- Updated dependencies [5c51b7f]
+  - @asteby/metacore-ui@2.16.0
+  - @asteby/metacore-auth@23.0.0
+  - @asteby/metacore-runtime-react@34.0.0
+
+## 0.1.220
+
+### Patch Changes
+
+- Updated dependencies [921a74c]
+  - @asteby/metacore-runtime-react@33.1.1
+
+## 0.1.219
+
+### Patch Changes
+
+- Updated dependencies [9eab4e0]
+  - @asteby/metacore-runtime-react@33.1.0
+
+## 0.1.218
+
+### Patch Changes
+
+- Updated dependencies [e74975a]
+  - @asteby/metacore-sdk@3.6.0
+  - @asteby/metacore-runtime-react@33.0.0
+
+## 0.1.217
+
+### Patch Changes
+
+- Updated dependencies [fa25f99]
+  - @asteby/metacore-runtime-react@32.1.0
+
+## 0.1.216
+
+### Patch Changes
+
+- Updated dependencies [5a932ed]
+- Updated dependencies [5a932ed]
+  - @asteby/metacore-sdk@3.5.0
+  - @asteby/metacore-runtime-react@32.0.0
+
 ## 0.1.215
 
 ### Patch Changes
 
-- Updated dependencies
-- Updated dependencies
-  - @asteby/metacore-sdk@3.5.0
-  - @asteby/metacore-runtime-react@35.0.0
+- Updated dependencies [00caf65]
+  - @asteby/metacore-runtime-react@31.1.1
 
 ## 0.1.214
 

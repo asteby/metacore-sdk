@@ -3,7 +3,8 @@
 // the validation rules all come from the model's ImportSpec served by the
 // kernel, so this dialog carries no per-model knowledge. Axios-like client is
 // provided by <ApiProvider>.
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
     Dialog,
     DialogContent,
@@ -12,7 +13,6 @@ import {
     DialogDescription,
     DialogFooter,
     Button,
-    Input,
     Label,
     Table,
     TableBody,
@@ -26,6 +26,7 @@ import { toast } from 'sonner'
 import { FileDown, Loader2, Check, AlertCircle } from 'lucide-react'
 import type { TableMetadata } from '../types'
 import { useApi } from '../api-context'
+import { FilePickButton } from '../file-pick-button'
 
 interface ImportDialogProps {
     open: boolean
@@ -78,6 +79,7 @@ export function ImportDialog({
     onImported,
 }: ImportDialogProps) {
     const api = useApi()
+    const { t } = useTranslation()
     const [step, setStep] = useState<Step>('upload')
     const [file, setFile] = useState<File | null>(null)
     const [validating, setValidating] = useState(false)
@@ -85,7 +87,6 @@ export function ImportDialog({
     const [validationResult, setValidationResult] = useState<ValidationResult | null>(null)
     const [importResult, setImportResult] = useState<ImportResult | null>(null)
     const [progress, setProgress] = useState(0)
-    const fileInputRef = useRef<HTMLInputElement>(null)
 
     useEffect(() => {
         if (open) {
@@ -96,14 +97,8 @@ export function ImportDialog({
             setValidationResult(null)
             setImportResult(null)
             setProgress(0)
-            if (fileInputRef.current) fileInputRef.current.value = ''
         }
     }, [open])
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const selectedFile = e.target.files?.[0] ?? null
-        setFile(selectedFile)
-    }
 
     const handleDownloadTemplate = async () => {
         try {
@@ -268,15 +263,14 @@ export function ImportDialog({
 
                             <div className="space-y-2">
                                 <Label htmlFor="import-file" className="text-sm font-medium">
-                                    Archivo
+                                    {t('common.upload.choose', { defaultValue: 'Choose file' })}
                                 </Label>
-                                <Input
-                                    ref={fileInputRef}
+                                <FilePickButton
                                     id="import-file"
-                                    type="file"
                                     accept=".xlsx,.xls,.csv,.json"
-                                    onChange={handleFileChange}
-                                    className="cursor-pointer"
+                                    hasFile={Boolean(file)}
+                                    fileName={file?.name}
+                                    onFile={setFile}
                                 />
                                 <p className="text-xs text-muted-foreground">
                                     Formatos aceptados: Excel, CSV, JSON
