@@ -72,6 +72,7 @@ import { dedupeById, useInfiniteScrollSentinel } from './use-infinite-scroll'
 import { OptionsContext } from './options-context'
 import type { TableMetadata, ApiResponse } from './types'
 import { getSearchableColumnKeys } from './column-visibility'
+import { useDebouncedValue } from './use-debounced-value'
 import { useCan, usePermissionsActive, gateTableMetadata } from './permissions-context'
 import { useDynamicRowActions } from './dynamic-row-actions'
 import { ExportDialog } from './dialogs/export'
@@ -320,6 +321,8 @@ export function DynamicTable({
         pageSize: storedPageSizeRef.current ?? 10,
     })
     const [globalFilter, setGlobalFilter] = useState('')
+    // Debounce search → URL + fetch so each keystroke does not thrash the server.
+    const debouncedGlobalFilter = useDebouncedValue(globalFilter)
     const [rowCount, setRowCount] = useState(bootData?.rowCount ?? 0)
 
     const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined)
@@ -474,7 +477,7 @@ export function DynamicTable({
             params.set('sortBy', sorting[0].id)
             params.set('order', sorting[0].desc ? 'desc' : 'asc')
         }
-        if (globalFilter) params.set('search', globalFilter)
+        if (debouncedGlobalFilter) params.set('search', debouncedGlobalFilter)
         Object.entries(dynamicFilters).forEach(([key, values]) => {
             if (values.length === 0) return
             if (defaultFilters && key in defaultFilters) return
@@ -495,7 +498,7 @@ export function DynamicTable({
         const newUrl = search ? `${window.location.pathname}?${search}` : window.location.pathname
         lastSelfSearch.current = search ? `?${search}` : ''
         window.history.replaceState(null, '', newUrl)
-    }, [enableUrlSync, urlSynced, pagination, sorting, globalFilter, dynamicFilters, defaultFilters])
+    }, [enableUrlSync, urlSynced, pagination, sorting, debouncedGlobalFilter, dynamicFilters, defaultFilters])
 
     // The host router can rewrite the query string WITHOUT remounting the
     // table — e.g. sidebar sibling entries deep-link different `f_` filters
@@ -670,11 +673,11 @@ export function DynamicTable({
             params.sortBy = sorting[0].id
             params.order = sorting[0].desc ? 'desc' : 'asc'
         }
-        if (globalFilter) {
+        if (debouncedGlobalFilter) {
             if (searchableKeys === null) {
-                params.search = globalFilter
+                params.search = debouncedGlobalFilter
             } else if (searchableKeys.length > 0) {
-                params.search = globalFilter
+                params.search = debouncedGlobalFilter
                 params.search_columns = searchableKeys.join(',')
             }
             // searchableKeys === [] → drop the search request entirely
@@ -700,7 +703,7 @@ export function DynamicTable({
             params['f_created_at'] = `${startDate}_${endDate}`
         }
         return params
-    }, [sorting, globalFilter, columnFilters, defaultFilters, dynamicFilters, dateRange, searchableKeys])
+    }, [sorting, debouncedGlobalFilter, columnFilters, defaultFilters, dynamicFilters, dateRange, searchableKeys])
 
     const hasActiveFilters = useMemo(() => {
         if (globalFilter) return true

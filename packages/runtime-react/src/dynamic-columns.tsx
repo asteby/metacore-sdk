@@ -44,7 +44,7 @@ import {
 import { Progress } from './dialogs/_primitives'
 import { humanizeToken } from './dynamic-columns-helpers'
 import { objectLabel } from './dynamic-relation-helpers'
-import {
+import { ImageStack,
     OptionBadge,
     RelationThumbnail,
     statusColorFor,
@@ -494,7 +494,7 @@ export const resolveRelationLabel = (col: ColumnDefinition, row: any): string =>
 export const resolveRelationImage = (col: ColumnDefinition, row: any): string => {
     const sibling = getNestedValue(row, relationKeyFor(col))
     if (sibling && typeof sibling === 'object') {
-        const img = sibling.image ?? sibling.avatar ?? sibling.photo
+        const img = sibling.image ?? sibling.avatar ?? sibling.photo ?? sibling.logo ?? sibling.thumbnail
         if (img !== undefined && img !== null && img !== '') return String(img)
     }
     return ''
@@ -608,11 +608,24 @@ const RelationCell: React.FC<{
     col: ColumnDefinition
     row: any
     getImageUrl?: (path: string) => string
-}> = ({ col, row, getImageUrl }) => {
+    /** Landscape stack: image above, text below (display: image_stack). */
+    stack?: boolean
+}> = ({ col, row, getImageUrl, stack = false }) => {
     const display = resolveRelationLabel(col, row)
     if (!display) return <EmptyCell />
     const image = resolveRelationImage(col, row)
     const subtitle = resolveRelationSubtitle(col, row)
+    if (stack) {
+        return (
+            <ImageStack
+                src={image || undefined}
+                label={display}
+                subtitle={subtitle || undefined}
+                getImageUrl={getImageUrl}
+                size="md"
+            />
+        )
+    }
     // FLAT reference cell: no tinted capsule around the pair. A reference is
     // data, not a status — the pill treatment (and its per-label tint) made a
     // products/warehouses listing read as a wall of badges. What identifies the
@@ -751,15 +764,29 @@ const AvatarCell: React.FC<{
 export const ImageCell: React.FC<{
     value: unknown
     getImageUrl: (path: string) => string
-}> = ({ value, getImageUrl }) => {
-    if (!value) return <span className="text-muted-foreground">-</span>
-    if (isLucideIconName(value)) {
+    /** Optional caption under the image (display: image_stack). */
+    label?: string
+    stack?: boolean
+}> = ({ value, getImageUrl, label, stack = false }) => {
+    if (!value && !label) return <span className="text-muted-foreground">-</span>
+    if (value && isLucideIconName(value)) {
         return (
             <div className="h-10 w-10 flex items-center justify-center rounded bg-muted">
                 <DynamicIcon name={value} className="h-5 w-5" />
             </div>
         )
     }
+    if (stack) {
+        return (
+            <ImageStack
+                src={value ? String(value) : undefined}
+                label={label}
+                getImageUrl={getImageUrl}
+                size="md"
+            />
+        )
+    }
+    if (!value) return <span className="text-muted-foreground">-</span>
     return (
         <div className="h-10 w-10 relative rounded overflow-hidden bg-muted flex items-center justify-center">
             <img
@@ -914,6 +941,37 @@ export function makeDefaultGetDynamicColumns(
                     // carrying a `ref` still routes here.
                     if (renderAs === 'reference') {
                         return <ReferenceCell col={col} row={row.original} />
+                    }
+
+                    // Landscape stack: wide image ON TOP, label UNDERNEATH.
+                    if (renderAs === 'image_stack') {
+                        const looksRelation =
+                            !!col.ref ||
+                            (typeof col.key === 'string' &&
+                                col.key.endsWith('_id') &&
+                                resolveRelationLabel(col, row.original) != null)
+                        if (looksRelation) {
+                            return (
+                                <RelationCell
+                                    col={col}
+                                    row={row.original}
+                                    getImageUrl={getImageUrl}
+                                    stack
+                                />
+                            )
+                        }
+                        const labelField = styleCfg(col, 'label_field', 'labelField')
+                        const caption = labelField
+                            ? String(getNestedValue(row.original, labelField) ?? '')
+                            : undefined
+                        return (
+                            <ImageCell
+                                value={value}
+                                getImageUrl={getImageUrl}
+                                label={caption || undefined}
+                                stack
+                            />
+                        )
                     }
 
                     // Resolved FK relation chip. Triggers on an explicit
@@ -1271,6 +1329,21 @@ export function makeDefaultGetDynamicColumns(
                                         </div>
                                     )}
                                 </div>
+                            )
+                        }
+
+                        case 'image_stack': {
+                            const imageValue =
+                                value ||
+                                (Array.isArray(row.original.media)
+                                    ? row.original.media.find((m: any) => m.type === 'image')?.url
+                                    : null)
+                            return (
+                                <ImageCell
+                                    value={imageValue}
+                                    getImageUrl={getImageUrl}
+                                    stack
+                                />
                             )
                         }
 

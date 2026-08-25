@@ -119,6 +119,7 @@ export {
     type UseDynamicFiltersOptions,
     type UseDynamicFiltersResult,
 } from './use-dynamic-filters'
+export { useDebouncedValue, SEARCH_DEBOUNCE_MS } from './use-debounced-value'
 export * from './dynamic-form'
 export {
     FilePickButton,
@@ -265,6 +266,12 @@ export {
     type UrlKind,
     type LinkifyOptions,
 } from './rich-url'
+export {
+    ImageStack,
+    OptionBadge,
+    statusColorFor,
+    useIsDarkTheme,
+} from './display-value'
 export {
     CollectionCell,
     formatScalar,

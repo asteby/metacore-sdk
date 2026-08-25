@@ -252,6 +252,8 @@ export interface ColumnDefinition {
         | 'phone'
         | 'media-gallery'
         | 'image'
+        // Landscape stack: wide image on top, label underneath (logos/photos).
+        | 'image_stack'
         // Declarative pro cell renderers (resolved via `cellStyle ?? type`).
         | 'url'
         | 'link'
