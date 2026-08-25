@@ -178,7 +178,14 @@ export const useMetadataCache = create<MetadataCacheState>()(
         }),
         {
             name: 'metacore-metadata-cache',
-            version: 3,
+            // Bump when display hints (e.g. image_stack) must wipe stale cache.
+            version: 4,
+            migrate: () => ({
+                cache: {},
+                modalCache: {},
+                metadataVersion: '',
+                prefetched: false,
+            }),
             partialize: (state) => ({
                 cache: state.cache,
                 modalCache: state.modalCache,

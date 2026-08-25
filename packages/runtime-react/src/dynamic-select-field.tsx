@@ -40,6 +40,7 @@ import { Check, ChevronsUpDown, Loader2, Plus, ScanLine } from 'lucide-react'
 import { resolveColorCss } from '@asteby/metacore-ui/lib'
 import { BarcodeScanner } from './barcode-scanner'
 import { DynamicIcon, isLucideIconName } from './dynamic-icon'
+import { useDebouncedValue } from './use-debounced-value'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { getDependsOn, getFieldRef, resolveOptionsSource } from './dynamic-form-schema'
 import type { ActionFieldDef } from './types'
@@ -140,12 +141,7 @@ export function OptionLead({
 }
 
 function useDebounced<T>(value: T, ms: number): T {
-    const [debounced, setDebounced] = useState(value)
-    useEffect(() => {
-        const t = setTimeout(() => setDebounced(value), ms)
-        return () => clearTimeout(t)
-    }, [value, ms])
-    return debounced
+    return useDebouncedValue(value, ms)
 }
 
 export interface DynamicSelectFieldProps {

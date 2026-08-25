@@ -71,6 +71,7 @@ import { IconPickerField } from '../icon-picker-field'
 import { humanizeToken } from '../dynamic-columns-helpers'
 import { formatDateCell } from '../dynamic-columns'
 import {
+    ImageStack,
     OptionBadge,
     statusColorFor,
     useIsDarkTheme,
@@ -1243,7 +1244,7 @@ function ReadonlyRelationField({
 // RelationViewValue — read-only FK lead. Resolves the relation's label + image
 // from (1) the sibling object the table served, then (2) the canonical options
 // endpoint, and renders an OptionLead (thumbnail / icon / color dot) + label.
-function RelationViewValue({ field, value, record }: { field: FieldDef; value: any; record: any }) {
+function RelationViewValue({ field, value, record, stack = false }: { field: FieldDef; value: any; record: any; stack?: boolean }) {
     const getImageUrl = useContext(ImageUrlContext)
     const sib = relationSiblingValue(field, record)
     const sibLabel = typeof sib === 'string' ? sib : objectLabel(sib)
@@ -1276,6 +1277,19 @@ function RelationViewValue({ field, value, record }: { field: FieldDef; value: a
 
     if (!label && !image) {
         return <p className="text-sm py-1 text-muted-foreground">—</p>
+    }
+
+    if (stack) {
+        return (
+            <div className="py-1">
+                <ImageStack
+                    src={image || undefined}
+                    label={label}
+                    getImageUrl={getImageUrl}
+                    size="lg"
+                />
+            </div>
+        )
     }
 
     const lead: Pick<ResolvedOption, 'image' | 'color' | 'icon' | 'label'> = {
@@ -1368,6 +1382,14 @@ export function ViewValue({
 
     const value = normalizeNilUuid(rawValue)
 
+    // Landscape stack on a relation FK (brand marks, product cards).
+    if (
+        renderAs === 'image_stack' &&
+        (isRelationField(field) || (typeof field.key === 'string' && field.key.endsWith('_id')))
+    ) {
+        return <RelationViewValue field={field} value={value} record={record} stack />
+    }
+
     // Relation (search / dynamic_select / ref / any *_id) → resolved thumbnail +
     // label. The *_id catch-all covers plain-typed FK columns not tagged as a
     // relation field.
@@ -1401,6 +1423,26 @@ export function ViewValue({
             </div>
         ) : (
             <p className="text-sm py-1 text-muted-foreground">-</p>
+        )
+    }
+
+    // Landscape stack for image/logo URL columns.
+    if (renderAs === 'image_stack') {
+        const caption =
+            (typeof field.styleConfig?.label_field === 'string' &&
+                record?.[field.styleConfig.label_field]) ||
+            (typeof field.styleConfig?.labelField === 'string' &&
+                record?.[field.styleConfig.labelField]) ||
+            undefined
+        return (
+            <div className="py-1">
+                <ImageStack
+                    src={value ? String(value) : undefined}
+                    label={caption ? String(caption) : field.label}
+                    getImageUrl={getImageUrl}
+                    size="lg"
+                />
+            </div>
         )
     }
 
