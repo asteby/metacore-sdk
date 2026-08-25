@@ -1,71 +1,22 @@
 # @asteby/metacore-app-providers
 
-## 101.0.0
+## 95.1.3
 
 ### Patch Changes
 
-- Updated dependencies [b08ffb0]
-  - @asteby/metacore-runtime-react@34.1.0
-
-## 100.0.0
-
-### Patch Changes
-
-- Updated dependencies [5c51b7f]
-  - @asteby/metacore-ui@2.16.0
-  - @asteby/metacore-runtime-react@34.0.0
-
-## 99.0.0
-
-### Patch Changes
-
-- Updated dependencies [9eab4e0]
-  - @asteby/metacore-runtime-react@33.1.0
-
-## 98.0.0
-
-### Patch Changes
-
-- @asteby/metacore-runtime-react@33.0.0
-
-## 97.0.0
-
-### Patch Changes
-
-- Updated dependencies [fa25f99]
-  - @asteby/metacore-runtime-react@32.1.0
-
-## 96.0.0
-
-### Patch Changes
-
-- Updated dependencies [5a932ed]
-- Updated dependencies [5a932ed]
-  - @asteby/metacore-runtime-react@32.0.0
-
-## 95.1.4
-
-### Patch Changes
-
-- e9c61cf: Fix the `tire-red` mascot skin (Llantonio): `screen`/`screenCenter` were pale
+- 73a97cb: Fix the `tire-red` mascot skin (Llantonio): `screen`/`screenCenter` were pale
   gray instead of dark, so the face rendered washed-out next to the red accent
   ring instead of a dark screen with glowing expressions (matching `gear-lime`'s
   pattern). `screenTone` corrected to `'dark'` to match.
-- e9c61cf: Fix a visible gap between the tire-tread ring and the tire body in the
+- 4786e27: Fix a visible gap between the tire-tread ring and the tire body in the
   `tire-red` mascot skin: the dashed tread circle sat at r=76 while the solid
   body circle is r=63 — an 8-unit gap of bare background between them, making
   the tread dashes look disconnected ("floating") from the wheel, especially
   at small icon sizes. Tread radius reduced to r=69 so it sits flush against
   the body, matching gear-lime's gear teeth (which already sit flush).
-
-## 95.1.3
-
-### Patch Changes
-
-- afc8459: Fix the `tire-red` mascot skin (Llantonio): `screen`/`screenCenter` were pale
-  gray instead of dark, so the face rendered washed-out next to the red accent
-  ring instead of a dark screen with glowing expressions (matching `gear-lime`'s
-  pattern). `screenTone` corrected to `'dark'` to match.
+- Updated dependencies
+- Updated dependencies
+  - @asteby/metacore-runtime-react@35.0.0
 
 ## 95.1.2
 

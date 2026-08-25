@@ -199,7 +199,13 @@ export function AddonLoader({
     }, [scope, url, module, addonKey, unbindKey, hostRegistry])
 
     if (status === 'loading') return <>{fallback}</>
-    if (status === 'error')
+    if (status === 'error') {
+        // Hosts that pass `onError` (toast + telemetry) should not also paint
+        // a second, persistent inline banner — DynamicAddonLoaders mounts one
+        // fiber per installed addon and a visible error stack reads as a broken
+        // shell even when only one remote failed transiently.
+        if (onError) return null
         return <div className="text-sm text-red-500">Addon load error: {error?.message}</div>
+    }
     return <>{children}</>
 }

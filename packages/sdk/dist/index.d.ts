@@ -6,4 +6,5 @@ export * from "./federation.js";
 export * from "./bootstrap.js";
 export * from "./action-registry.js";
 export * from "./wasm-client.js";
+export * from "./brand.js";
 //# sourceMappingURL=index.d.ts.map

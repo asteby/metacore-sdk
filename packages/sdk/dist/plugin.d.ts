@@ -1,10 +1,12 @@
 /**
  * Plugin contract — every addon's federated module default-exports one of these.
- * The host calls `register(api)` once after loading the remote entry.
+ * The host calls `register(api)` on every fiber mount (first load and each hot-swap).
  */
 import type { MarketplaceClient } from "./client.js";
 import type { Registry } from "./registry.js";
 import type { LegacyManifest as Manifest } from "./types.js";
+/** Cleanup run when a fiber unloads (hot-swap, uninstall, unmount). */
+export type Disposable = () => void | Promise<void>;
 /** What the host hands each addon at registration time. */
 export interface AddonAPI {
     /** The installation's manifest (including merged settings). */
@@ -31,8 +33,12 @@ export interface AddonAPI {
 export interface Plugin {
     /** Must equal the manifest.key — the host double-checks to catch mis-wirings. */
     key: string;
-    /** Called once, synchronously, after the remote module loads. */
-    register(api: AddonAPI): void | Promise<void>;
+    /**
+     * Called on every fiber mount — first load AND each hot-swap. May return a
+     * {@link Disposable} (Cordis-style effect) that the host runs before the
+     * next register / unbind. Returning void is still supported.
+     */
+    register(api: AddonAPI): void | Disposable | Promise<void | Disposable>;
     /** Optional cleanup — called before the addon is disabled/unloaded. */
     dispose?(): void | Promise<void>;
 }

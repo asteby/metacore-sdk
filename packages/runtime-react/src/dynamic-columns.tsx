@@ -44,9 +44,10 @@ import {
 import { Progress } from './dialogs/_primitives'
 import { humanizeToken } from './dynamic-columns-helpers'
 import { objectLabel } from './dynamic-relation-helpers'
-import { ImageStack,
+import {
     OptionBadge,
     RelationThumbnail,
+    ImageStack,
     statusColorFor,
     useIsDarkTheme,
 } from './display-value'
@@ -603,6 +604,10 @@ export const resolveRelationSubtitle = (col: ColumnDefinition, row: any): string
  * carries an `image`. Falls back to the raw id when no sibling was resolved, and
  * to an empty marker when there is no value at all. Domain-agnostic: works for
  * every `belongs_to` column (category, supplier, brand, …) without per-addon code.
+ *
+ * When `stack` is true (column `display: "image_stack"`), the landscape mark
+ * sits ON TOP of the label — wide logos fit without cropping and the cell
+ * stays readable in dense tables.
  */
 const RelationCell: React.FC<{
     col: ColumnDefinition
@@ -944,7 +949,15 @@ export function makeDefaultGetDynamicColumns(
                     }
 
                     // Landscape stack: wide image ON TOP, label UNDERNEATH.
+                    // Declared via `display: "image_stack"` on an image column
+                    // or on a belongs_to FK whose sibling carries a logo/photo
+                    // (brand marks, product cards). Fits logos that are wider
+                    // than tall without cropping into a square thumb.
                     if (renderAs === 'image_stack') {
+                        // FK relation (brand_id → brands) OR any column that
+                        // already resolved a sibling with an image — stack it.
+                        // Don't require `col.ref` alone: enrichment sometimes
+                        // leaves type=text while cellStyle carries image_stack.
                         const looksRelation =
                             !!col.ref ||
                             (typeof col.key === 'string' &&
@@ -1332,21 +1345,6 @@ export function makeDefaultGetDynamicColumns(
                             )
                         }
 
-                        case 'image_stack': {
-                            const imageValue =
-                                value ||
-                                (Array.isArray(row.original.media)
-                                    ? row.original.media.find((m: any) => m.type === 'image')?.url
-                                    : null)
-                            return (
-                                <ImageCell
-                                    value={imageValue}
-                                    getImageUrl={getImageUrl}
-                                    stack
-                                />
-                            )
-                        }
-
                         case 'image': {
                             const imageValue =
                                 value ||
@@ -1354,6 +1352,24 @@ export function makeDefaultGetDynamicColumns(
                                     ? row.original.media.find((m: any) => m.type === 'image')?.url
                                     : null)
                             return <ImageCell value={imageValue} getImageUrl={getImageUrl} />
+                        }
+
+                        case 'image_stack': {
+                            // Defensive: normally handled above before the
+                            // switch; kept so a late `type: image_stack` without
+                            // cellStyle still stacks.
+                            const labelField = styleCfg(col, 'label_field', 'labelField')
+                            const caption = labelField
+                                ? String(getNestedValue(row.original, labelField) ?? '')
+                                : undefined
+                            return (
+                                <ImageCell
+                                    value={value}
+                                    getImageUrl={getImageUrl}
+                                    label={caption || undefined}
+                                    stack
+                                />
+                            )
                         }
 
                         default: {

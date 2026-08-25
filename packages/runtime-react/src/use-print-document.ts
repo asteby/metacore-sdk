@@ -33,8 +33,34 @@ export interface PrintDocumentArgs {
      * open   → open the PDF in a new tab (user prints from the viewer).
      */
     mode?: 'print' | 'download' | 'open'
-    /** Filename for the download mode (defaults to "<key>.pdf"). */
+    /**
+     * Hint filename for download mode. Prefer leaving this unset: the server
+     * expands `{{record.*}}` into Content-Disposition. A raw template string
+     * (e.g. "cfdi-{{record.number}}.pdf") must NOT be used as a.download —
+     * that is how downloads end up literally named with mustache braces.
+     */
     filename?: string
+}
+
+/** Parse filename from Content-Disposition (RFC 5987 / quoted). */
+export function filenameFromContentDisposition(header: string | undefined | null): string | undefined {
+    if (!header) return undefined
+    const star = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(header)
+    if (star?.[1]) {
+        try {
+            return decodeURIComponent(star[1].trim().replace(/^"|"$/g, ''))
+        } catch {
+            return star[1].trim().replace(/^"|"$/g, '')
+        }
+    }
+    const plain = /filename\s*=\s*"([^"]+)"|filename\s*=\s*([^;]+)/i.exec(header)
+    const raw = (plain?.[1] ?? plain?.[2] ?? '').trim()
+    return raw || undefined
+}
+
+/** True when a caller passed an unexpanded mustache template as filename. */
+export function looksLikeFilenameTemplate(name: string | undefined): boolean {
+    return !!name && /\{\{/.test(name)
 }
 
 /**
@@ -65,9 +91,19 @@ export function usePrintDocument() {
             const cleanup = () => setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000)
 
             if (mode === 'download') {
+                const headers = (res as { headers?: Record<string, string> }).headers || {}
+                const fromHeader =
+                    filenameFromContentDisposition(
+                        headers['content-disposition'] || headers['Content-Disposition'],
+                    ) || undefined
+                // Prefer server-expanded name; never use a raw {{record.*}} template.
+                const downloadName =
+                    fromHeader ||
+                    (!looksLikeFilenameTemplate(filename) ? filename : undefined) ||
+                    `${key}.pdf`
                 const a = document.createElement('a')
                 a.href = blobUrl
-                a.download = filename || `${key}.pdf`
+                a.download = downloadName
                 document.body.appendChild(a)
                 a.click()
                 a.remove()

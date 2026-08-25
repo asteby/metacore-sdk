@@ -19,7 +19,7 @@ import { jsx as _jsx, Fragment as _Fragment } from "react/jsx-runtime";
  *
  *   <Slot name="invoice.header.right" payload={{ invoiceId }} />
  */
-import { createContext, useContext, useEffect, useMemo, useRef, useState, } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, } from "react";
 // The installed-addon catalog (manifests + navigation) drives the host's addon
 // modules (sidebar module items, dynamic routes). It's fetched into state, so a
 // full page reload starts empty and the addon modules pop in only once the two
@@ -58,6 +58,14 @@ function writeCatalogCache(manifests, navigation) {
     }
 }
 const MetacoreCtx = createContext(null);
+function seedVersions(manifests) {
+    const map = new Map();
+    for (const m of manifests) {
+        if (m.key && m.version)
+            map.set(m.key, m.version);
+    }
+    return map;
+}
 export function MetacoreProvider({ client, registry, children }) {
     // Read the persisted catalog ONCE so the first render already has the addon
     // modules instead of an empty sidebar until the fetch resolves.
@@ -70,22 +78,85 @@ export function MetacoreProvider({ client, registry, children }) {
     // Seeded from cache → don't block on the initial load; the fetch below still
     // runs and revalidates.
     const [loading, setLoading] = useState(!boot);
+    // Versions this window is actually RUNNING: seeded from the first manifest
+    // list that renders (cache or first fetch). Revalidations compare against
+    // this baseline. After an L1 fiber swap the host calls
+    // `acknowledgeRunningVersion` so the flag clears without a page reload.
+    const runningVersions = useRef(boot ? seedVersions(boot.manifests) : null);
+    const [updatedAddons, setUpdatedAddons] = useState([]);
+    const acknowledgeRunningVersion = useCallback((key, version) => {
+        if (!key || !version)
+            return;
+        if (!runningVersions.current)
+            runningVersions.current = new Map();
+        runningVersions.current.set(key, version);
+        setUpdatedAddons((prev) => (prev.some((u) => u.key === key) ? prev.filter((u) => u.key !== key) : prev));
+    }, []);
     useEffect(() => {
         let cancelled = false;
-        (async () => {
-            const [m, n] = await Promise.all([client.manifests(), client.navigation()]);
-            if (cancelled)
-                return;
-            setManifests(m);
-            setNavigation(n);
-            setLoading(false);
-            writeCatalogCache(m, n);
-        })();
+        const revalidate = async () => {
+            try {
+                const [m, n] = await Promise.all([client.manifests(), client.navigation()]);
+                if (cancelled)
+                    return;
+                setManifests(m);
+                setNavigation(n);
+                setLoading(false);
+                writeCatalogCache(m, n);
+                if (!runningVersions.current) {
+                    runningVersions.current = seedVersions(m);
+                    return;
+                }
+                const changed = [];
+                for (const mf of m) {
+                    const from = runningVersions.current.get(mf.key);
+                    if (!from) {
+                        // First time this window sees the addon (install mid-session):
+                        // seed as running. The fiber loader mounts it; this is not an update.
+                        if (mf.version)
+                            runningVersions.current.set(mf.key, mf.version);
+                        continue;
+                    }
+                    if (mf.version && mf.version !== from) {
+                        changed.push({ key: mf.key, from, to: mf.version });
+                    }
+                }
+                setUpdatedAddons((prev) => changed.length === prev.length &&
+                    changed.every((c, i) => prev[i]?.key === c.key && prev[i]?.to === c.to)
+                    ? prev
+                    : changed);
+            }
+            catch {
+                // network blip — keep serving the current state; next tick retries
+            }
+        };
+        void revalidate();
+        const onFocus = () => {
+            if (typeof document === "undefined" || document.visibilityState === "visible") {
+                void revalidate();
+            }
+        };
+        if (typeof document !== "undefined") {
+            document.addEventListener("visibilitychange", onFocus);
+        }
+        const interval = setInterval(revalidate, 5 * 60 * 1000);
         return () => {
             cancelled = true;
+            clearInterval(interval);
+            if (typeof document !== "undefined") {
+                document.removeEventListener("visibilitychange", onFocus);
+            }
         };
     }, [client]);
-    const value = useMemo(() => ({ client, registry, manifests, navigation, loading }), [client, registry, manifests, navigation, loading]);
+    const value = useMemo(() => ({
+        client,
+        registry,
+        manifests,
+        navigation,
+        loading,
+        updatedAddons,
+        acknowledgeRunningVersion,
+    }), [client, registry, manifests, navigation, loading, updatedAddons, acknowledgeRunningVersion]);
     return _jsx(MetacoreCtx.Provider, { value: value, children: children });
 }
 export function useMetacore() {
@@ -98,7 +169,7 @@ export function useAddonRoutes() {
     const { registry } = useMetacore();
     const [routes, setRoutes] = useState(registry.getRoutes());
     useEffect(() => registry.subscribe((e) => {
-        if (e.type === "route")
+        if (e.type === "route" || e.type === "unbind")
             setRoutes(registry.getRoutes());
     }), [registry]);
     return routes;
@@ -110,7 +181,8 @@ export function Slot({ name, payload, fallback = null }) {
     const { registry } = useMetacore();
     const [items, setItems] = useState(registry.getSlot(name));
     useEffect(() => registry.subscribe((e) => {
-        if (e.type === "slot" && e.contribution.name === name) {
+        if (e.type === "unbind" ||
+            (e.type === "slot" && e.contribution.name === name)) {
             setItems(registry.getSlot(name));
         }
     }), [registry, name]);

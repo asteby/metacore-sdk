@@ -1,88 +1,10 @@
 # @asteby/metacore-runtime-react
 
-## 34.1.0
+## 35.0.0
 
 ### Minor Changes
 
-- b08ffb0: Add `image_stack` cell/modal display (logo above label, no muted plate) and debounce DynamicTable / kanban free-text search (~350ms) so typing on large catalogs is less abrupt.
-
-## 34.0.2
-
-### Patch Changes
-
-- 7bff072: Locale-aware FilePickButton: hide native file chrome so labels follow app language (es/en). UploadField and ImportDialog use it.
-
-## 34.0.1
-
-### Patch Changes
-
-- 45b5f91: Fix relation/brand thumbnails (RelationCell) being cropped: switch from
-  `object-cover` to `object-contain` on a padded neutral background so
-  wide/rectangular logos (brand, supplier, category images) render in full
-  instead of clipped to a square.
-
-## 34.0.0
-
-### Patch Changes
-
-- Updated dependencies [5c51b7f]
-  - @asteby/metacore-ui@2.16.0
-
-## 33.1.1
-
-### Patch Changes
-
-- 921a74c: Crear una categoría (u otro registro) desde el "+" de un modal ya no
-  valida el formulario de atrás. Cada diálogo tiene su propio `form` id, y
-  el toast de validación lista los mensajes del validator.
-
-## 33.1.0
-
-### Minor Changes
-
-- 9eab4e0: `EntitySelect` now accepts `createDefaults` and `lockedCreateFields` to seed
-  and lock fields in its inline "+" create dialog. Motivating case: the POS
-  vehicle picker creating a vehicle for an already-selected customer — the
-  customer field should come pre-filled and not be changeable from that
-  context, instead of the user having to search/select it again (and risking
-  attaching the vehicle to the wrong customer).
-
-  - `createDefaults?: Record<string, unknown>` — seeds the create dialog's
-    form (passed through as `CreateRecordDialog.defaults`).
-  - `lockedCreateFields?: string[]` — keys from `createDefaults` that render
-    visible-but-disabled on create instead of editable (passed through as the
-    new `CreateRecordDialog.lockedFields` / `DynamicRecordDialog.lockedFields`).
-
-  New `lockedFields` support in `DynamicRecordDialog`/`CreateRecordDialog`:
-  unlike a `readonly` field (excluded entirely on create), a locked field stays
-  visible so the user sees what value is being submitted, rendered through the
-  same `ReadonlyEditField` used for edit-mode readonly fields. Also fixes
-  `ReadonlyEditField` for relation/`Ref` fields (readonly-on-edit and now
-  locked-on-create): it previously rendered the raw foreign id, and now
-  resolves and shows the related record's label like `RelationViewValue`
-  already does in view mode.
-
-## 33.0.0
-
-### Patch Changes
-
-- Updated dependencies [e74975a]
-  - @asteby/metacore-sdk@3.6.0
-
-## 32.1.0
-
-### Minor Changes
-
-- fa25f99: Laravel-style field validator: localize 422 `{errors:{field:[{code,params}]}}`
-  into the operator's language (es/en catalogs, overridable via `validation.*`),
-  map keys to translated labels, and pre-flight the same regex/min/max/custom
-  rules the kernel enforces — no more generic "validation failed" / `[object Object]`.
-
-## 32.0.0
-
-### Minor Changes
-
-- 5a932ed: Addon fiber hot-swap without a page reload: Registry.scope/unbind, Plugin.register
+- Addon fiber hot-swap without a page reload: Registry.scope/unbind, Plugin.register
   may return a Disposable, AddonLoader re-registers federation remotes when `?v=`
   changes, and purgeAddonFrontendCache drops only that addon's SW cache (L1).
   Hosts call acknowledgeRunningVersion after a successful swap instead of
@@ -90,17 +12,10 @@
 
 ### Patch Changes
 
-- 5a932ed: Export PrefillSpec helpers (`isPrefillSpec`, `buildPrefillRows`, `applyPrefillLock`)
-  so addons can unit-test `$prefillFromRecord` without reaching into private
-  dispatcher internals. Kernel now types the same shape in the v3 schema.
-- Updated dependencies [5a932ed]
+- 7Leguas wave: registry action bridge, dynamic record/columns display, addon-loader error UX, notifications dropdown polish.
+- Updated dependencies
+- Updated dependencies
   - @asteby/metacore-sdk@3.5.0
-
-## 31.1.1
-
-### Patch Changes
-
-- 00caf65: PermissionsManager: add "Otorgar todo"/"Quitar todo" buttons (all modules, not just the open one) and a "Otorgar todos los permisos" checkbox when creating a role — grants full catalog access immediately instead of requiring every module to be checked one by one.
 
 ## 31.1.0
 

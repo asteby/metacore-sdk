@@ -22,6 +22,7 @@
 // value). A dedicated `?ids=` lookup is a follow-up; create flows — the common
 // case — start empty and never hit this.
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
     Badge,
     Button,
@@ -205,6 +206,9 @@ export function DynamicSelectField({
     descriptionAsBadge = false,
     hideCreate = false,
 }: DynamicSelectFieldProps) {
+    const { t } = useTranslation()
+    const ph = (fallback: string) =>
+        field.placeholder ? t(field.placeholder, { defaultValue: field.placeholder }) : fallback
     const [open, setOpen] = useState(false)
     const [search, setSearch] = useState('')
     const [scanOpen, setScanOpen] = useState(false)
@@ -353,7 +357,7 @@ export function DynamicSelectField({
                     <span className={'min-w-0 flex-1 truncate ' + (selectedOption ? '' : 'text-muted-foreground')}>
                         {/* Never flash the raw id: until the eager fetch resolves the
                             option, show a loading hint instead of String(value). */}
-                        {selectedOption?.label ?? (loading ? 'Cargando…' : field.placeholder || '—')}
+                        {selectedOption?.label ?? (loading ? 'Cargando…' : ph('—'))}
                     </span>
                 </span>
             </Button>
@@ -386,7 +390,7 @@ export function DynamicSelectField({
                         <span className={'min-w-0 flex-1 truncate ' + (selectedLabel ? '' : 'text-muted-foreground')}>
                             {blockedByDependency
                                 ? (dependsHint || DEFAULT_DEPENDS_HINT)
-                                : selectedLabel || field.placeholder || 'Buscar…'}
+                                : selectedLabel || ph('Buscar…')}
                         </span>
                         {descriptionAsBadge && selectedOption?.description ? (
                             <Badge variant="secondary" className="shrink-0 font-normal tabular-nums">
@@ -406,7 +410,7 @@ export function DynamicSelectField({
             >
                 <Command shouldFilter={false}>
                     <CommandInput
-                        placeholder={field.placeholder || 'Buscar…'}
+                        placeholder={ph('Buscar…')}
                         value={search}
                         onValueChange={setSearch}
                     />

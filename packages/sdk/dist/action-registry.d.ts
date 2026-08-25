@@ -65,9 +65,11 @@ export interface ActionModalProps {
     onSuccess: () => void;
 }
 type ActionComponentEntry = ComponentType<ActionModalProps>;
-export declare function registerActionComponent(model: string, actionKey: string, component: ActionComponentEntry): void;
+export declare function registerActionComponent(model: string, actionKey: string, component: ActionComponentEntry, owner?: string): void;
 export declare function getActionComponent(model: string, actionKey: string): ActionComponentEntry | undefined;
 export declare function hasActionComponent(model: string, actionKey: string): boolean;
 export declare function unregisterActionComponent(model: string, actionKey: string): void;
+/** Drop every action modal owned by `addonKey`. Used on fiber unbind. */
+export declare function unregisterActionComponentsByOwner(addonKey: string): number;
 export {};
 //# sourceMappingURL=action-registry.d.ts.map

@@ -78,8 +78,53 @@ const getStyle = (type: string): string => {
       return 'bg-red-500 text-white'
     case 'info':
     default:
-      return 'bg-blue-500 text-white'
+      return 'bg-violet-600 text-white'
   }
+}
+
+const getRowAccent = (type: string): string => {
+  switch (type) {
+    case 'warning':
+      return 'border-l-amber-500'
+    case 'success':
+      return 'border-l-emerald-500'
+    case 'error':
+      return 'border-l-red-500'
+    case 'info':
+    default:
+      return 'border-l-violet-500'
+  }
+}
+
+type NotifMeta = {
+  addon_key?: string
+  model?: string
+  rule?: string
+  source?: string
+}
+
+function parseMeta(raw?: string): NotifMeta {
+  if (!raw) return {}
+  try {
+    const v = typeof raw === 'string' ? JSON.parse(raw) : raw
+    return (v && typeof v === 'object' ? v : {}) as NotifMeta
+  } catch {
+    return {}
+  }
+}
+
+function moduleLabel(meta: NotifMeta): string {
+  const key = (meta.addon_key || '').trim()
+  const map: Record<string, string> = {
+    inventory: 'Inventario',
+    warehouse: 'Almacén',
+    customers: 'Clientes',
+    pos: 'POS',
+    fiscal_mexico: 'Fiscal',
+    workshop: 'Taller',
+    accounting_lite: 'Contabilidad',
+  }
+  return map[key] || (key ? key.replace(/_/g, ' ') : '')
 }
 
 /**
@@ -378,10 +423,12 @@ function DropdownShell({
           ) : (
             notifications.map((notification) => {
               const Icon = getIconFor(notification)
+              const meta = parseMeta(notification.metadata)
+              const mod = moduleLabel(meta)
               return (
                 <DropdownMenuItem
                   key={notification.id}
-                  className='cursor-pointer p-3 sm:p-4 focus:bg-muted/50 data-[state=open]:bg-muted/50'
+                  className={`cursor-pointer p-3 sm:p-4 focus:bg-muted/50 data-[state=open]:bg-muted/50 border-l-2 ${getRowAccent(notification.type)} ${!notification.is_read ? 'bg-primary/[0.03]' : ''}`}
                   onClick={() => {
                     if (!notification.is_read) onMarkAsRead(notification.id)
                     if (onNotificationClick) {
@@ -394,17 +441,17 @@ function DropdownShell({
                     }
                   }}
                 >
-                  <div className='flex items-start gap-4 w-full'>
+                  <div className='flex items-start gap-3 w-full'>
                     <NotificationAvatar
                       notification={notification}
                       Icon={Icon}
                       resolveImageUrl={resolveImageUrl}
                     />
 
-                    <div className='flex flex-col gap-1 w-full min-w-0'>
+                    <div className='flex flex-col gap-1.5 w-full min-w-0'>
                       <div className='flex items-center justify-between gap-2'>
                         <p
-                          className={`text-sm leading-none truncate ${!notification.is_read ? 'font-semibold text-foreground' : 'text-muted-foreground'}`}
+                          className={`text-sm leading-snug truncate ${!notification.is_read ? 'font-semibold text-foreground' : 'font-medium text-foreground/80'}`}
                         >
                           {notification.title}
                         </p>
@@ -415,13 +462,22 @@ function DropdownShell({
                           })}
                         </span>
                       </div>
-                      <p className='text-xs text-muted-foreground line-clamp-2 leading-relaxed'>
-                        {notification.message}
-                      </p>
+                      {notification.message ? (
+                        <p className='text-xs text-muted-foreground line-clamp-2 leading-relaxed'>
+                          {notification.message}
+                        </p>
+                      ) : null}
+                      {mod ? (
+                        <div className='flex items-center gap-1.5 pt-0.5'>
+                          <span className='inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground capitalize'>
+                            {mod}
+                          </span>
+                        </div>
+                      ) : null}
                     </div>
                     {!notification.is_read && (
                       <div className='self-center shrink-0'>
-                        <div className='h-2.5 w-2.5 rounded-full bg-primary shadow-sm' />
+                        <div className='h-2 w-2 rounded-full bg-primary shadow-sm' />
                       </div>
                     )}
                   </div>

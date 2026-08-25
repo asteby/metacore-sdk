@@ -9,7 +9,7 @@
 // flows through <ApiProvider> from runtime-react. Host-specific runtime values —
 // the image-url resolver and the org IANA timezone — are passed as props so the
 // SDK stays transport- and host-agnostic.
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ModelSchema } from './types'
 
@@ -53,9 +53,7 @@ import { es } from 'date-fns/locale'
 import { ExternalLink, Loader2, CalendarIcon, ChevronDown, Check, Upload, X as XIcon, ScanLine } from 'lucide-react'
 import { BarcodeScanner } from '../barcode-scanner'
 import { useApi } from '../api-context'
-import { toastServerError, extractFieldErrors, localizeFieldErrorMap, type Translate } from '../server-error'
-import { validateValues, bagHasErrors } from '../validator'
-import { validationCatalog } from '../validation-catalog'
+import { toastServerError, extractFieldErrors, localizeFieldIssue } from '../server-error'
 import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-field'
 import { DynamicRelations } from '../dynamic-relations'
 import { useOptionsResolver, type ResolvedOption } from '../use-options-resolver'
@@ -245,12 +243,6 @@ export interface DynamicRecordDialogProps {
      */
     defaults?: Record<string, any>
     /**
-     * Field keys that render locked (visible, disabled, seeded from
-     * `defaults`) on create instead of editable. Ignored outside create mode.
-     * See `CreateRecordDialogProps.lockedFields` for the rationale.
-     */
-    lockedFields?: string[]
-    /**
      * Optional pre-fetched metadata. When provided the dialog skips the
      * `/metadata/modal/:model` request and uses this shape directly.
      */
@@ -421,6 +413,24 @@ function isRelationField(field: FieldDef): boolean {
     )
 }
 
+// looksLikeForeignKey — true only for real FKs. A bare `*_id` suffix is NOT
+// enough: columns like `external_id`, `trace_id`, or `invoice_uid` are plain
+// text identifiers from a PAC/provider, not belongs_to relations. Treating them
+// as relations rendered an InitialsAvatar ("6" chip next to "6a8c…") and made
+// fiscal detail modals look broken.
+function looksLikeForeignKey(field: FieldDef): boolean {
+    if (isRelationField(field)) return true
+    if (typeof field.key !== 'string' || !field.key.endsWith('_id')) return false
+    const t = String(field.type || '').toLowerCase()
+    return (
+        t === 'uuid' ||
+        t === 'search' ||
+        t === 'relation' ||
+        t === 'dynamic_select' ||
+        t === 'belongs_to'
+    )
+}
+
 function formatDisplayValue(rawValue: any, field: FieldDef): string {
     // Unset nullable FK serialized as the nil UUID renders as empty, not zeros.
     const value = normalizeNilUuid(rawValue)
@@ -544,12 +554,6 @@ export function stripHiddenFieldValues(
     return out
 }
 
-function toastValidationFailed(t: Translate, lang: string, localized: Record<string, string>) {
-    toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }), {
-        description: Object.values(localized).filter(Boolean).join('\n'),
-    })
-}
-
 export function DynamicRecordDialog({
     open,
     onOpenChange,
@@ -561,7 +565,6 @@ export function DynamicRecordDialog({
     onCreate,
     onUpdate,
     defaults,
-    lockedFields,
     schema,
     onDelete,
     onEdit,
@@ -573,12 +576,7 @@ export function DynamicRecordDialog({
     onChange,
 }: DynamicRecordDialogProps) {
     const api = useApi()
-    const { t, i18n } = useTranslation()
-    // Unique per dialog instance. The footer submit lives OUTSIDE <form>, so
-    // it binds via `form={id}`. A hardcoded id made nested create (product +
-    // "Crear categoría") submit the PARENT form — toast "Revisa los campos
-    // marcados" with no marks on the inner modal.
-    const formId = useId()
+    const { t } = useTranslation()
     const [modalMeta, setModalMeta] = useState<ModalMetadata | null>(
         schema ? (schema as ModalMetadata) : null,
     )
@@ -779,11 +777,9 @@ export function DynamicRecordDialog({
     // with no matching form field).
     const labelForKey = (key: string): string => {
         const f = (modalMeta?.fields ?? []).find(x => x.key === key)
-        if (f?.label) return t(f.label, { defaultValue: f.label })
+        if (f?.label) return f.label
         return key.replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
     }
-
-    const lang = i18n.language
 
     // Turn a failed submit (422 `errors` map, or a bare `{errors}` body) into
     // inline field errors + a summary toast. When there is no field map, fall
@@ -791,14 +787,15 @@ export function DynamicRecordDialog({
     const handleSubmitError = (err: unknown) => {
         const map = extractFieldErrors(err)
         if (map) {
-            const labels: Record<string, string> = {}
-            for (const f of modalMeta?.fields ?? []) labels[f.key] = labelForKey(f.key)
-            const localized = localizeFieldErrorMap(map, t, { labels, language: lang })
-            setFieldErrors(localized)
-            toastValidationFailed(t, lang, localized)
+            const next: Record<string, string> = {}
+            for (const [key, issues] of Object.entries(map)) {
+                next[key] = localizeFieldIssue(issues[0], labelForKey(key), t)
+            }
+            setFieldErrors(next)
+            toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }))
             return
         }
-        toastServerError(err, { t, language: lang, fallback: t('dynamic.save_error', { defaultValue: 'No se pudo guardar' }) })
+        toastServerError(err, { t, fallback: t('dynamic.save_error', { defaultValue: 'No se pudo guardar' }) })
     }
 
     const handleSubmit = async (e?: React.FormEvent) => {
@@ -811,14 +808,15 @@ export function DynamicRecordDialog({
             // fields are gated: a field hidden by its `visible_when` predicate
             // must not block submit even when it is declared required (matching
             // the render, which drops it via the same filter).
-            const visible = filterVisibleFields(modalMeta.fields, mode, formValues)
-            const bag = validateValues(visible as ActionFieldDef[], formValues)
-            if (bagHasErrors(bag)) {
-                const labels: Record<string, string> = {}
-                for (const f of visible) labels[f.key] = t(f.label, { defaultValue: f.label })
-                const localized = localizeFieldErrorMap(bag, t, { labels, language: lang })
-                setFieldErrors(localized)
-                toastValidationFailed(t, lang, localized)
+            const missing: Record<string, string> = {}
+            for (const field of filterVisibleFields(modalMeta.fields, mode, formValues)) {
+                if (field.required && !formValues[field.key] && formValues[field.key] !== 0 && formValues[field.key] !== false) {
+                    missing[field.key] = localizeFieldIssue({ code: 'required' }, field.label, t)
+                }
+            }
+            if (Object.keys(missing).length) {
+                setFieldErrors(missing)
+                toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }))
                 return
             }
         }
@@ -940,7 +938,6 @@ export function DynamicRecordDialog({
                         record={record}
                         value={formValues[field.key] ?? ''}
                         mode={mode}
-                        locked={isCreate && !!lockedFields?.includes(field.key)}
                         error={fieldErrors[field.key]}
                         onChange={val => {
                             setFormValues((prev: Record<string, any>) => ({ ...prev, [field.key]: val }))
@@ -960,13 +957,15 @@ export function DynamicRecordDialog({
     // then advance. Mirrors handleSubmit's required check but scoped to the step.
     const goNextStep = () => {
         const step = groups[clampedStep]
-        const bag = validateValues((step?.fields ?? []) as ActionFieldDef[], formValues)
-        if (bagHasErrors(bag)) {
-            const labels: Record<string, string> = {}
-            for (const f of step?.fields ?? []) labels[f.key] = t(f.label, { defaultValue: f.label })
-            const localized = localizeFieldErrorMap(bag, t, { labels, language: lang })
-            setFieldErrors(localized)
-            toastValidationFailed(t, lang, localized)
+        const missing: Record<string, string> = {}
+        for (const field of step?.fields ?? []) {
+            if (field.required && !formValues[field.key] && formValues[field.key] !== 0 && formValues[field.key] !== false) {
+                missing[field.key] = localizeFieldIssue({ code: 'required' }, field.label, t)
+            }
+        }
+        if (Object.keys(missing).length) {
+            setFieldErrors(missing)
+            toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }))
             return
         }
         setFieldErrors({})
@@ -999,7 +998,7 @@ export function DynamicRecordDialog({
                                 cell `min-w-0` so a long select/input value can't
                                 blow the two columns past the dialog width. */}
                             <form
-                                id={formId}
+                                id="dynamic-record-form"
                                 onSubmit={handleSubmit}
                                 className="grid gap-y-4"
                             >
@@ -1109,7 +1108,7 @@ export function DynamicRecordDialog({
                         {isEditable && (!isSteps || isLastStep) && (
                             <Button
                                 type="submit"
-                                form={formId}
+                                form="dynamic-record-form"
                                 disabled={saving || loading}
                             >
                                 {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -1145,24 +1144,16 @@ interface FieldRowProps {
     onChange: (val: any) => void
     /** Localized validation error for this field, shown in red under the input. */
     error?: string
-    /**
-     * Caller-forced lock (via `lockedFields`), independent of `field.readonly`.
-     * Renders the same disabled/muted input as an edit-mode readonly field, but
-     * applies on CREATE — where a plain `readonly` field would be excluded
-     * instead. The seeded `value` (from `defaults`) still submits.
-     */
-    locked?: boolean
 }
 
-function FieldRow({ field, record, value, mode, onChange, error, locked }: FieldRowProps) {
+function FieldRow({ field, record, value, mode, onChange, error }: FieldRowProps) {
     // A `readonly` field is server/system-generated (e.g. the GitHub addon's
     // `number`/`github_url`, filled by the API after the outbound create). On
     // CREATE it is excluded from the form entirely (see `visibleFields`); on EDIT
     // it stays visible but is NOT editable — rendered as a disabled, muted input
     // so the user sees its value without being able to change it. View mode keeps
-    // the rich read-only renderer. `locked` forces the same disabled rendering on
-    // CREATE for a caller-specified field (see `lockedFields`).
-    const isEditReadonly = (mode === 'edit' && !!field.readonly) || !!locked
+    // the rich read-only renderer.
+    const isEditReadonly = mode === 'edit' && !!field.readonly
 
     return (
         <div className="flex flex-col gap-1.5">
@@ -1202,49 +1193,26 @@ export function ReadonlyEditField({ field, value }: { field: FieldDef; value: an
             </div>
         )
     }
-    const fieldRef = getFieldRef(field as ActionFieldDef)
-    if (fieldRef || field.searchEndpoint) {
-        return <ReadonlyRelationField field={field} value={value} fieldRef={fieldRef} />
-    }
     const display = formatDisplayValue(value, field)
     return <Input value={display === '—' ? '' : display} disabled readOnly className="text-muted-foreground" />
-}
-
-// ReadonlyRelationField — a locked/readonly FK field (customer_id, category_id…)
-// resolves the record's label instead of showing the raw id, mirroring
-// RelationViewValue's lookup but rendered as a disabled input to match the rest
-// of ReadonlyEditField. Without this, a locked relation field (e.g. `lockedFields`
-// seeding a POS-selected customer into a vehicle create modal) would show a bare
-// UUID — the exact readability bug this dialog otherwise avoids elsewhere.
-function ReadonlyRelationField({
-    field,
-    value,
-    fieldRef,
-}: {
-    field: FieldDef
-    value: any
-    fieldRef?: string
-}) {
-    const rawVal = value && typeof value === 'object' ? (value.value ?? value.id) : value
-    const needResolve = fieldRef != null || !!field.searchEndpoint
-    const { options } = useOptionsResolver({
-        modelKey: '',
-        fieldKey: 'id',
-        ref: fieldRef,
-        endpoint: fieldRef ? undefined : field.searchEndpoint,
-        query: '',
-        limit: 50,
-        enabled: needResolve && rawVal != null && rawVal !== '',
-    })
-    const resolved = options.find(o => String(o.id) === String(rawVal))
-    const display = resolved?.label ?? (rawVal != null && rawVal !== '' ? String(rawVal) : '')
-    return <Input value={display} disabled readOnly className="text-muted-foreground" />
 }
 
 // RelationViewValue — read-only FK lead. Resolves the relation's label + image
 // from (1) the sibling object the table served, then (2) the canonical options
 // endpoint, and renders an OptionLead (thumbnail / icon / color dot) + label.
-function RelationViewValue({ field, value, record, stack = false }: { field: FieldDef; value: any; record: any; stack?: boolean }) {
+// When `stack` is true (`display: "image_stack"`), the landscape mark sits ON
+// TOP of the label — wide logos (brand marks) fit without cropping.
+function RelationViewValue({
+    field,
+    value,
+    record,
+    stack = false,
+}: {
+    field: FieldDef
+    value: any
+    record: any
+    stack?: boolean
+}) {
     const getImageUrl = useContext(ImageUrlContext)
     const sib = relationSiblingValue(field, record)
     const sibLabel = typeof sib === 'string' ? sib : objectLabel(sib)
@@ -1382,18 +1350,16 @@ export function ViewValue({
 
     const value = normalizeNilUuid(rawValue)
 
-    // Landscape stack on a relation FK (brand marks, product cards).
-    if (
-        renderAs === 'image_stack' &&
-        (isRelationField(field) || (typeof field.key === 'string' && field.key.endsWith('_id')))
-    ) {
+    // Landscape stack on a relation FK (brand marks, product cards): image ON
+    // TOP, label UNDERNEATH. Checked before the default relation lead so a
+    // `display: "image_stack"` FK does not fall through to the side-by-side chip.
+    if (renderAs === 'image_stack' && looksLikeForeignKey(field)) {
         return <RelationViewValue field={field} value={value} record={record} stack />
     }
 
-    // Relation (search / dynamic_select / ref / any *_id) → resolved thumbnail +
-    // label. The *_id catch-all covers plain-typed FK columns not tagged as a
-    // relation field.
-    if (isRelationField(field) || (typeof field.key === 'string' && field.key.endsWith('_id'))) {
+    // Relation (search / dynamic_select / ref / uuid *_id FK) → resolved
+    // thumbnail + label. Plain text `*_id` columns (external_id, …) stay text.
+    if (looksLikeForeignKey(field)) {
         return <RelationViewValue field={field} value={value} record={record} />
     }
 
@@ -1426,27 +1392,36 @@ export function ViewValue({
         )
     }
 
-    // Landscape stack for image/logo URL columns.
+    // Landscape stack for image/logo URL columns (and `type: image` with
+    // `cellStyle: image_stack`). Wide marks sit above an optional caption.
     if (renderAs === 'image_stack') {
-        const caption =
-            (typeof field.styleConfig?.label_field === 'string' &&
-                record?.[field.styleConfig.label_field]) ||
-            (typeof field.styleConfig?.labelField === 'string' &&
-                record?.[field.styleConfig.labelField]) ||
-            undefined
-        return (
+        if (value && isLucideIconName(value)) {
+            return <IconNameViewValue name={value} />
+        }
+        const labelField =
+            (field.styleConfig &&
+                (field.styleConfig.label_field as string | undefined)) ||
+            (field.styleConfig && (field.styleConfig.labelField as string | undefined))
+        let caption: string | undefined
+        if (labelField && record && typeof record === 'object') {
+            const raw = (record as Record<string, unknown>)[labelField]
+            if (raw != null && String(raw) !== '') caption = String(raw)
+        }
+        return value || caption ? (
             <div className="py-1">
                 <ImageStack
                     src={value ? String(value) : undefined}
-                    label={caption ? String(caption) : field.label}
+                    label={caption}
                     getImageUrl={getImageUrl}
                     size="lg"
                 />
             </div>
+        ) : (
+            <p className="text-sm py-1 text-muted-foreground">Sin imagen</p>
         )
     }
 
-    if (field.type === 'image') {
+    if (field.type === 'image' || renderAs === 'image') {
         if (isLucideIconName(value)) {
             return <IconNameViewValue name={value} />
         }
@@ -1740,6 +1715,19 @@ function StructuredViewValue({
     if (isEmpty) {
         return <p className="text-sm py-1 text-muted-foreground">—</p>
     }
+    // Line-items arrays with a declared itemFields schema → mini-table.
+    // Plain objects (PAC provider_data, fiscal_data bags) → readable key/value
+    // list; nested objects/arrays render as pretty JSON instead of `key: {…}`
+    // stubs that looked broken in fiscal detail modals.
+    const hasItemFields = !!(field?.itemFields ?? field?.item_fields)
+    if (
+        !hasItemFields &&
+        value !== null &&
+        typeof value === 'object' &&
+        !Array.isArray(value)
+    ) {
+        return <JsonObjectViewValue value={value as Record<string, unknown>} />
+    }
     return (
         <div className="text-sm py-1">
             <CollectionCell
@@ -1751,6 +1739,43 @@ function StructuredViewValue({
                 getImageUrl={getImageUrl}
             />
         </div>
+    )
+}
+
+/** Flatten a jsonb/object bag into labeled rows; nest as pretty JSON. */
+function JsonObjectViewValue({ value }: { value: Record<string, unknown> }) {
+    const entries = Object.entries(value).filter(([, v]) => v !== undefined)
+    if (entries.length === 0) {
+        return <p className="text-sm py-1 text-muted-foreground">—</p>
+    }
+    return (
+        <dl className="grid gap-2 py-1 text-sm">
+            {entries.map(([key, raw]) => {
+                const label = humanizeToken(key)
+                const isNest =
+                    raw !== null &&
+                    typeof raw === 'object' &&
+                    !(raw instanceof Date)
+                return (
+                    <div key={key} className="min-w-0">
+                        <dt className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                            {label}
+                        </dt>
+                        <dd className="mt-0.5 break-words text-foreground">
+                            {isNest ? (
+                                <pre className="max-h-48 overflow-auto rounded-md bg-muted/40 p-2 text-[11px] leading-relaxed whitespace-pre-wrap">
+                                    {JSON.stringify(raw, null, 2)}
+                                </pre>
+                            ) : raw === null || raw === '' ? (
+                                <span className="text-muted-foreground">—</span>
+                            ) : (
+                                String(raw)
+                            )}
+                        </dd>
+                    </div>
+                )
+            })}
+        </dl>
     )
 }
 
