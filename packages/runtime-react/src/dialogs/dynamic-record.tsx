@@ -243,6 +243,12 @@ export interface DynamicRecordDialogProps {
      */
     defaults?: Record<string, any>
     /**
+     * Field keys that render locked (visible, disabled, seeded from
+     * `defaults`) on create instead of editable. Ignored outside create mode.
+     * See `CreateRecordDialogProps.lockedFields` for the rationale.
+     */
+    lockedFields?: string[]
+    /**
      * Optional pre-fetched metadata. When provided the dialog skips the
      * `/metadata/modal/:model` request and uses this shape directly.
      */
@@ -565,6 +571,7 @@ export function DynamicRecordDialog({
     onCreate,
     onUpdate,
     defaults,
+    lockedFields,
     schema,
     onDelete,
     onEdit,
@@ -938,6 +945,7 @@ export function DynamicRecordDialog({
                         record={record}
                         value={formValues[field.key] ?? ''}
                         mode={mode}
+                        locked={isCreate && !!lockedFields?.includes(field.key)}
                         error={fieldErrors[field.key]}
                         onChange={val => {
                             setFormValues((prev: Record<string, any>) => ({ ...prev, [field.key]: val }))
@@ -1144,16 +1152,24 @@ interface FieldRowProps {
     onChange: (val: any) => void
     /** Localized validation error for this field, shown in red under the input. */
     error?: string
+    /**
+     * Caller-forced lock (via `lockedFields`), independent of `field.readonly`.
+     * Renders the same disabled/muted input as an edit-mode readonly field, but
+     * applies on CREATE — where a plain `readonly` field would be excluded
+     * instead. The seeded `value` (from `defaults`) still submits.
+     */
+    locked?: boolean
 }
 
-function FieldRow({ field, record, value, mode, onChange, error }: FieldRowProps) {
+function FieldRow({ field, record, value, mode, onChange, error, locked }: FieldRowProps) {
     // A `readonly` field is server/system-generated (e.g. the GitHub addon's
     // `number`/`github_url`, filled by the API after the outbound create). On
     // CREATE it is excluded from the form entirely (see `visibleFields`); on EDIT
     // it stays visible but is NOT editable — rendered as a disabled, muted input
     // so the user sees its value without being able to change it. View mode keeps
-    // the rich read-only renderer.
-    const isEditReadonly = mode === 'edit' && !!field.readonly
+    // the rich read-only renderer. `locked` forces the same disabled rendering on
+    // CREATE for a caller-specified field (see `lockedFields`).
+    const isEditReadonly = (mode === 'edit' && !!field.readonly) || !!locked
 
     return (
         <div className="flex flex-col gap-1.5">
@@ -1193,8 +1209,41 @@ export function ReadonlyEditField({ field, value }: { field: FieldDef; value: an
             </div>
         )
     }
+    const fieldRef = getFieldRef(field as ActionFieldDef)
+    if (fieldRef || field.searchEndpoint) {
+        return <ReadonlyRelationField field={field} value={value} fieldRef={fieldRef} />
+    }
     const display = formatDisplayValue(value, field)
     return <Input value={display === '—' ? '' : display} disabled readOnly className="text-muted-foreground" />
+}
+
+// ReadonlyRelationField — a locked/readonly FK field (customer_id, category_id…)
+// resolves the record's label instead of showing the raw id, mirroring
+// RelationViewValue's lookup but rendered as a disabled input to match the rest
+// of ReadonlyEditField.
+function ReadonlyRelationField({
+    field,
+    value,
+    fieldRef,
+}: {
+    field: FieldDef
+    value: any
+    fieldRef?: string
+}) {
+    const rawVal = value && typeof value === 'object' ? (value.value ?? value.id) : value
+    const needResolve = fieldRef != null || !!field.searchEndpoint
+    const { options } = useOptionsResolver({
+        modelKey: '',
+        fieldKey: 'id',
+        ref: fieldRef,
+        endpoint: fieldRef ? undefined : field.searchEndpoint,
+        query: '',
+        limit: 50,
+        enabled: needResolve && rawVal != null && rawVal !== '',
+    })
+    const resolved = options.find(o => String(o.id) === String(rawVal))
+    const display = resolved?.label ?? (rawVal != null && rawVal !== '' ? String(rawVal) : '')
+    return <Input value={display} disabled readOnly className="text-muted-foreground" />
 }
 
 // RelationViewValue — read-only FK lead. Resolves the relation's label + image
