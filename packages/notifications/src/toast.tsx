@@ -77,38 +77,55 @@ function ActionButtons(props: {
   if (!action && !cancel) return null
 
   return (
-    <span className='mt-2 flex flex-wrap items-center gap-2'>
+    <span className='relative z-10 mt-2 flex flex-wrap items-center gap-2 pointer-events-auto'>
       {isActionButton(action) ? (
         <button
           type='button'
-          className='inline-flex h-7 shrink-0 items-center rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:bg-primary/90'
+          className='inline-flex h-7 shrink-0 cursor-pointer items-center rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 pointer-events-auto'
           onClick={(e) => {
+            e.preventDefault()
             e.stopPropagation()
-            action.onClick(e)
+            const fn = action.onClick
             toast.dismiss(toastId)
+            // Defer so dismiss unmount doesn't race the navigation/handler.
+            window.setTimeout(() => {
+              try {
+                fn(e)
+              } catch {
+                /* never block */
+              }
+            }, 0)
           }}
         >
           {action.label}
         </button>
       ) : action ? (
-        <span className='inline-flex' onClick={(e) => e.stopPropagation()}>
+        <span className='inline-flex pointer-events-auto' onClick={(e) => e.stopPropagation()}>
           {action}
         </span>
       ) : null}
       {isActionButton(cancel) ? (
         <button
           type='button'
-          className='inline-flex h-7 shrink-0 items-center rounded-md bg-muted px-2.5 text-xs font-medium text-foreground hover:bg-muted/80'
+          className='inline-flex h-7 shrink-0 cursor-pointer items-center rounded-md bg-muted px-2.5 text-xs font-medium text-foreground hover:bg-muted/80 pointer-events-auto'
           onClick={(e) => {
+            e.preventDefault()
             e.stopPropagation()
-            cancel.onClick(e)
+            const fn = cancel.onClick
             toast.dismiss(toastId)
+            window.setTimeout(() => {
+              try {
+                fn(e)
+              } catch {
+                /* never block */
+              }
+            }, 0)
           }}
         >
           {cancel.label}
         </button>
       ) : cancel ? (
-        <span className='inline-flex' onClick={(e) => e.stopPropagation()}>
+        <span className='inline-flex pointer-events-auto' onClick={(e) => e.stopPropagation()}>
           {cancel}
         </span>
       ) : null}
@@ -148,7 +165,7 @@ export function showNotificationToast(opts: ShowNotificationToastOptions): strin
       : `ntf-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`)
 
   const cardClass = [
-    `flex ${TOAST_WIDTH} max-w-[360px] gap-3 rounded-xl border border-border/60 bg-card p-3 text-left shadow-lg ring-1 ring-black/5`,
+    `pointer-events-auto flex ${TOAST_WIDTH} max-w-[360px] gap-3 rounded-xl border border-border/60 bg-card p-3 text-left shadow-lg ring-1 ring-black/5`,
     titleOnly ? 'items-center' : 'items-start',
     opts.onClick && !hasActions ? 'cursor-pointer hover:bg-accent/40' : '',
   ]
