@@ -1,6 +1,12 @@
 import { toast } from 'sonner'
 import { resolveNotificationVisual } from './visual'
 import type { NotificationType } from './types'
+import type { ReactNode, MouseEvent as ReactMouseEvent } from 'react'
+
+export type ToastActionButton = {
+  label: ReactNode
+  onClick: (event: ReactMouseEvent<HTMLButtonElement>) => void
+}
 
 export type ShowNotificationToastOptions = {
   title: string
@@ -14,6 +20,10 @@ export type ShowNotificationToastOptions = {
   addonKey?: string
   duration?: number
   onClick?: () => void
+  /** Sonner-compatible primary action (e.g. Recargar / Actualizar). */
+  action?: ToastActionButton | ReactNode
+  /** Sonner-compatible secondary/cancel action. */
+  cancel?: ToastActionButton | ReactNode
   /**
    * Stable id so concurrent toasts stack instead of replacing each other.
    * Auto-generated when omitted.
@@ -45,6 +55,66 @@ export type InstallUnifiedToastsOptions = {
   persistTypes?: NotificationType[]
 }
 
+const TOAST_WIDTH = 'w-[360px]'
+
+function isActionButton(value: unknown): value is ToastActionButton {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'label' in value &&
+    'onClick' in value &&
+    typeof (value as ToastActionButton).onClick === 'function'
+  )
+}
+
+function ActionButtons(props: {
+  toastId: string | number
+  action?: ToastActionButton | ReactNode
+  cancel?: ToastActionButton | ReactNode
+}) {
+  const { toastId, action, cancel } = props
+  if (!action && !cancel) return null
+
+  return (
+    <span className='mt-2 flex flex-wrap items-center gap-2'>
+      {isActionButton(action) ? (
+        <button
+          type='button'
+          className='inline-flex h-7 shrink-0 items-center rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:bg-primary/90'
+          onClick={(e) => {
+            e.stopPropagation()
+            action.onClick(e)
+            toast.dismiss(toastId)
+          }}
+        >
+          {action.label}
+        </button>
+      ) : action ? (
+        <span className='inline-flex' onClick={(e) => e.stopPropagation()}>
+          {action}
+        </span>
+      ) : null}
+      {isActionButton(cancel) ? (
+        <button
+          type='button'
+          className='inline-flex h-7 shrink-0 items-center rounded-md bg-muted px-2.5 text-xs font-medium text-foreground hover:bg-muted/80'
+          onClick={(e) => {
+            e.stopPropagation()
+            cancel.onClick(e)
+            toast.dismiss(toastId)
+          }}
+        >
+          {cancel.label}
+        </button>
+      ) : cancel ? (
+        <span className='inline-flex' onClick={(e) => e.stopPropagation()}>
+          {cancel}
+        </span>
+      ) : null}
+    </span>
+  )
+}
+
 /**
  * Canonical in-app notification toast — same card as the bell dropdown
  * (dynamic Lucide icon, severity color, module chip).
@@ -65,8 +135,9 @@ export function showNotificationToast(opts: ShowNotificationToastOptions): strin
   })
   const apartado = (opts.apartado || moduleLabel || '').trim()
   const body = (opts.body || '').trim()
-  // Title-only: vertically center with the icon. Chip/body keep items-start.
-  const titleOnly = !apartado && !body
+  const hasActions = Boolean(opts.action || opts.cancel)
+  // Title-only: vertically center with the icon. Chip/body/actions keep items-start.
+  const titleOnly = !apartado && !body && !hasActions
   const duration = opts.duration ?? 5000
   const id =
     opts.id ??
@@ -74,56 +145,77 @@ export function showNotificationToast(opts: ShowNotificationToastOptions): strin
       ? crypto.randomUUID()
       : `ntf-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`)
 
+  const cardClass = [
+    `flex ${TOAST_WIDTH} max-w-[360px] gap-3 rounded-xl border border-border/60 bg-card p-3 text-left shadow-lg ring-1 ring-black/5`,
+    titleOnly ? 'items-center' : 'items-start',
+    opts.onClick && !hasActions ? 'cursor-pointer hover:bg-accent/40' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+
   toast.custom(
-    (tId) => (
-      <button
-        type='button'
-        className={[
-          'flex w-full min-w-[280px] max-w-[360px] gap-3 rounded-xl border border-border/60 bg-card p-3 text-left shadow-lg ring-1 ring-black/5',
-          titleOnly ? 'items-center' : 'items-start',
-          opts.onClick ? 'cursor-pointer hover:bg-accent/40' : '',
-        ]
-          .filter(Boolean)
-          .join(' ')}
-        onClick={() => {
-          opts.onClick?.()
-          toast.dismiss(tId)
-        }}
-      >
-        {opts.image ? (
-          <img
-            src={opts.image}
-            alt=''
-            className={`${titleOnly ? '' : 'mt-0.5 '}h-9 w-9 shrink-0 rounded-full object-cover`}
-          />
-        ) : (
-          <span
-            className={`${titleOnly ? '' : 'mt-0.5 '}flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${tone.iconClass}`}
-            style={tone.customColor ? { backgroundColor: tone.customColor, color: '#fff' } : undefined}
-          >
-            <Icon className='h-4 w-4' aria-hidden />
+    (tId) => {
+      const inner = (
+        <>
+          {opts.image ? (
+            <img
+              src={opts.image}
+              alt=''
+              className={`${titleOnly ? '' : 'mt-0.5 '}h-9 w-9 shrink-0 rounded-full object-cover`}
+            />
+          ) : (
+            <span
+              className={`${titleOnly ? '' : 'mt-0.5 '}flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${tone.iconClass}`}
+              style={tone.customColor ? { backgroundColor: tone.customColor, color: '#fff' } : undefined}
+            >
+              <Icon className='h-4 w-4' aria-hidden />
+            </span>
+          )}
+          <span className='min-w-0 flex-1'>
+            {apartado ? (
+              <span className='mb-0.5 inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium capitalize text-muted-foreground'>
+                {apartado}
+              </span>
+            ) : null}
+            <span className='block text-sm font-semibold text-foreground'>{opts.title}</span>
+            {body ? (
+              <span className='mt-0.5 block text-xs text-muted-foreground line-clamp-2'>
+                {body}
+              </span>
+            ) : null}
+            <ActionButtons toastId={tId} action={opts.action} cancel={opts.cancel} />
           </span>
-        )}
-        <span className='min-w-0 flex-1'>
-          {apartado ? (
-            <span className='mb-0.5 inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium capitalize text-muted-foreground'>
-              {apartado}
-            </span>
-          ) : null}
-          <span className='block text-sm font-semibold text-foreground'>{opts.title}</span>
-          {body ? (
-            <span className='mt-0.5 block text-xs text-muted-foreground line-clamp-2'>
-              {body}
-            </span>
-          ) : null}
-        </span>
-      </button>
-    ),
+        </>
+      )
+
+      // Nested action buttons can't live inside a <button> — use a div when
+      // actions are present; keep the whole card clickable otherwise.
+      if (hasActions) {
+        return (
+          <div className={cardClass} role='status'>
+            {inner}
+          </div>
+        )
+      }
+
+      return (
+        <button
+          type='button'
+          className={cardClass}
+          onClick={() => {
+            opts.onClick?.()
+            toast.dismiss(tId)
+          }}
+        >
+          {inner}
+        </button>
+      )
+    },
     {
       id,
       duration,
       unstyled: true,
-      className: '!bg-transparent !border-0 !shadow-none !p-0 w-auto',
+      className: `!bg-transparent !border-0 !shadow-none !p-0 ${TOAST_WIDTH}`,
     },
   )
 
@@ -140,6 +232,8 @@ type ToastData = {
   metadata?: string | Record<string, unknown>
   addonKey?: string
   addon_key?: string
+  action?: ToastActionButton | ReactNode
+  cancel?: ToastActionButton | ReactNode
   /** Opt out of bell persistence for ephemeral noise. */
   persist?: boolean
   id?: string | number
@@ -168,6 +262,8 @@ function extract(message: unknown, data?: ToastData) {
       (typeof data?.addonKey === 'string' && data.addonKey) ||
       (typeof data?.addon_key === 'string' && data.addon_key) ||
       undefined,
+    action: data?.action,
+    cancel: data?.cancel,
     persist: data?.persist,
     id: data?.id,
   }
@@ -205,6 +301,8 @@ export function installUnifiedToasts(options?: InstallUnifiedToastsOptions): voi
         apartado: x.apartado,
         metadata: x.metadata,
         addonKey: x.addonKey,
+        action: x.action,
+        cancel: x.cancel,
         id: x.id,
       })
 
@@ -238,8 +336,10 @@ export function installUnifiedToasts(options?: InstallUnifiedToastsOptions): voi
       return toastId as ReturnType<typeof toast.success>
     }
 
+  const infoWrap = wrap('info', 'info')
+
   toast.success = wrap('success', 'check-circle-2') as typeof toast.success
-  toast.info = wrap('info', 'info') as typeof toast.info
+  toast.info = infoWrap as typeof toast.info
   toast.warning = wrap('warning', 'alert-triangle') as typeof toast.warning
   toast.error = wrap('error', 'x-circle') as typeof toast.error
   // Ephemeral by default (calls, dictation) — pass { persist: true } to archive.
