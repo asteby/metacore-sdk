@@ -24,6 +24,11 @@ export {
   type NotificationMeta,
   type NotificationTone,
 } from './visual'
+export {
+  formatNotificationBodyHtml,
+  enhancePlainNotificationText,
+  sanitizeNotificationHtml,
+} from './rich-text'
 export type {
   NotificationItem,
   NotificationType,

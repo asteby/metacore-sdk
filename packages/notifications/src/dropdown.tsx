@@ -18,6 +18,7 @@ import { toast } from 'sonner'
 import { useAppBadge } from './hooks'
 import { subscribeNotificationSSE } from './sse'
 import { showNotificationToast } from './toast'
+import { formatNotificationBodyHtml } from './rich-text'
 import {
   moduleLabelFromMeta,
   parseNotificationMeta,
@@ -370,11 +371,11 @@ function DropdownShell({
               return (
                 <DropdownMenuItem
                   key={notification.id}
-                  // Flat list rows — no left accent border (it scallops against
-                  // DropdownMenuItem's rounded corners and looks broken).
+                  // Flat rows + absolute straight accent line (avoids scalloped
+                  // border-l against DropdownMenuItem rounded corners).
                   className={[
-                    'cursor-pointer rounded-none border-0 px-3 py-2.5 focus:bg-muted/60 data-[highlighted]:bg-muted/60 sm:px-4',
-                    unread ? 'bg-primary/[0.04]' : '',
+                    'cursor-pointer rounded-none border-0 px-3 py-1.5 focus:bg-muted/50 data-[highlighted]:bg-muted/50 sm:px-3.5',
+                    unread ? 'bg-primary/[0.035]' : '',
                   ]
                     .filter(Boolean)
                     .join(' ')}
@@ -390,7 +391,22 @@ function DropdownShell({
                     }
                   }}
                 >
-                  <div className='flex w-full items-start gap-3'>
+                  <div className='relative flex w-full items-start gap-2.5 pl-2'>
+                    <span
+                      className={[
+                        'absolute left-0 top-1 bottom-1 w-0.5 rounded-full',
+                        tone.customColor ? '' : tone.lineClass,
+                        unread ? 'opacity-100' : 'opacity-40',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      style={
+                        tone.customColor
+                          ? { backgroundColor: tone.customColor }
+                          : undefined
+                      }
+                      aria-hidden
+                    />
                     <NotificationAvatar
                       notification={notification}
                       Icon={Icon}
@@ -399,11 +415,11 @@ function DropdownShell({
                       resolveImageUrl={resolveImageUrl}
                     />
 
-                    <div className='min-w-0 flex-1 space-y-1'>
+                    <div className='min-w-0 flex-1 space-y-0.5'>
                       <div className='flex items-start justify-between gap-2'>
                         <p
                           className={[
-                            'truncate text-sm leading-snug',
+                            'truncate text-[13px] leading-snug',
                             unread
                               ? 'font-semibold text-foreground'
                               : 'font-medium text-foreground/90',
@@ -427,12 +443,15 @@ function DropdownShell({
                         </div>
                       </div>
                       {notification.message ? (
-                        <p className='line-clamp-2 text-xs leading-relaxed text-muted-foreground'>
-                          {notification.message}
-                        </p>
+                        <p
+                          className='line-clamp-2 text-[11px] leading-relaxed text-muted-foreground [&_strong]:font-semibold [&_strong]:text-foreground/85 [&_b]:font-semibold [&_b]:text-foreground/85 [&_em]:italic [&_i]:italic [&_u]:underline [&_mark]:rounded-sm [&_mark]:bg-amber-500/20 [&_mark]:px-0.5 [&_mark]:text-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:font-mono [&_code]:text-[10px] [&_code]:text-foreground'
+                          dangerouslySetInnerHTML={{
+                            __html: formatNotificationBodyHtml(notification.message),
+                          }}
+                        />
                       ) : null}
                       {mod ? (
-                        <span className='inline-flex max-w-full truncate rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground'>
+                        <span className='inline-flex max-w-full truncate rounded px-1 py-px text-[10px] font-medium text-muted-foreground ring-1 ring-border/70'>
                           {mod}
                         </span>
                       ) : null}
@@ -511,11 +530,11 @@ function NotificationAvatar({
         <img
           src={resolved}
           alt=''
-          className='h-9 w-9 rounded-full object-cover'
+          className='h-7 w-7 rounded-full object-cover'
           onError={() => setFailed(true)}
         />
-        <div className='absolute -bottom-0.5 -right-0.5 flex size-5 items-center justify-center rounded-full bg-background text-primary ring-1 ring-border'>
-          <Icon className='size-3 text-current' strokeWidth={2.25} />
+        <div className='absolute -bottom-0.5 -right-0.5 flex size-4 items-center justify-center rounded-full bg-background text-primary ring-1 ring-border'>
+          <Icon className='size-2.5 text-current' strokeWidth={2.5} />
         </div>
       </div>
     )
@@ -523,10 +542,10 @@ function NotificationAvatar({
 
   return (
     <div
-      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${toneClass}`}
+      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white ${toneClass}`}
       style={customColor ? { backgroundColor: customColor, color: '#fff' } : undefined}
     >
-      <Icon className='h-4 w-4' strokeWidth={2.25} />
+      <Icon className='h-3.5 w-3.5 text-white' strokeWidth={2.5} />
     </div>
   )
 }
