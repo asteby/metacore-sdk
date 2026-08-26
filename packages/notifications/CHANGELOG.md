@@ -1,5 +1,11 @@
 # @asteby/metacore-notifications
 
+## 24.0.0
+
+### Major Changes
+
+- 3ae1afb: Unified next-level notifications: SSE stream, canonical card toast (installUnifiedToasts), dynamic Lucide icons / severity colors / module chips (addon_key).
+
 ## 23.0.1
 
 ### Patch Changes
