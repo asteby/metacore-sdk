@@ -333,28 +333,31 @@ function DropdownShell({
           )}
 
           {unreadCount > 0 && (
-            <span className='absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground shadow-sm ring-2 ring-background'>
-              {unreadCount}
-              <span className='animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75'></span>
+            <span className='absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground ring-2 ring-background'>
+              {unreadCount > 99 ? '99+' : unreadCount}
             </span>
           )}
           <span className='sr-only'>{labels.srLabel}</span>
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className='w-85 sm:w-96 p-0' align='end' forceMount>
-        <DropdownMenuLabel className='p-4 font-normal border-b'>
-          <div className='flex items-center justify-between'>
-            <p className='text-sm font-semibold'>{labels.title}</p>
-            {unreadCount > 0 && (
-              <span className='rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary'>
+      <DropdownMenuContent
+        className='w-[min(100vw-1.5rem,22rem)] overflow-hidden p-0 sm:w-96'
+        align='end'
+        forceMount
+      >
+        <DropdownMenuLabel className='border-b px-4 py-3 font-normal'>
+          <div className='flex items-center justify-between gap-3'>
+            <p className='text-sm font-semibold text-foreground'>{labels.title}</p>
+            {unreadCount > 0 ? (
+              <span className='rounded-full bg-primary/15 px-2 py-0.5 text-[11px] font-medium text-primary'>
                 {labels.newBadge(unreadCount)}
               </span>
-            )}
+            ) : null}
           </div>
         </DropdownMenuLabel>
-        <DropdownMenuGroup className='max-h-[350px] overflow-y-auto'>
+        <DropdownMenuGroup className='max-h-[min(24rem,60vh)] overflow-y-auto py-1'>
           {notifications.length === 0 ? (
-            <div className='p-8 text-center text-muted-foreground text-sm'>
+            <div className='px-4 py-10 text-center text-sm text-muted-foreground'>
               {labels.empty}
             </div>
           ) : (
@@ -363,12 +366,20 @@ function DropdownShell({
               const Icon = resolveNotificationIcon(notification.icon, notification.type)
               const tone = resolveNotificationTone(notification.type, meta)
               const mod = moduleLabelFromMeta(meta)
+              const unread = !notification.is_read
               return (
                 <DropdownMenuItem
                   key={notification.id}
-                  className={`cursor-pointer border-l-2 p-3 focus:bg-muted/50 data-[state=open]:bg-muted/50 sm:p-4 ${tone.rowAccentClass} ${!notification.is_read ? 'bg-primary/[0.03]' : ''}`}
+                  // Flat list rows — no left accent border (it scallops against
+                  // DropdownMenuItem's rounded corners and looks broken).
+                  className={[
+                    'cursor-pointer rounded-none border-0 px-3 py-2.5 focus:bg-muted/60 data-[highlighted]:bg-muted/60 sm:px-4',
+                    unread ? 'bg-primary/[0.04]' : '',
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
                   onClick={() => {
-                    if (!notification.is_read) void onMarkAsRead(notification.id)
+                    if (unread) void onMarkAsRead(notification.id)
                     if (onNotificationClick) {
                       onNotificationClick(notification)
                     } else if (
@@ -388,19 +399,32 @@ function DropdownShell({
                       resolveImageUrl={resolveImageUrl}
                     />
 
-                    <div className='flex min-w-0 w-full flex-col gap-1.5'>
-                      <div className='flex items-center justify-between gap-2'>
+                    <div className='min-w-0 flex-1 space-y-1'>
+                      <div className='flex items-start justify-between gap-2'>
                         <p
-                          className={`truncate text-sm leading-snug ${!notification.is_read ? 'font-semibold text-foreground' : 'font-medium text-foreground/80'}`}
+                          className={[
+                            'truncate text-sm leading-snug',
+                            unread
+                              ? 'font-semibold text-foreground'
+                              : 'font-medium text-foreground/90',
+                          ].join(' ')}
                         >
                           {notification.title}
                         </p>
-                        <span className='shrink-0 whitespace-nowrap text-[10px] text-muted-foreground'>
-                          {formatDistanceToNow(new Date(notification.created_at), {
-                            addSuffix: true,
-                            locale,
-                          })}
-                        </span>
+                        <div className='mt-0.5 flex shrink-0 items-center gap-1.5'>
+                          <span className='whitespace-nowrap text-[10px] tabular-nums text-muted-foreground'>
+                            {formatDistanceToNow(new Date(notification.created_at), {
+                              addSuffix: true,
+                              locale,
+                            })}
+                          </span>
+                          {unread ? (
+                            <span
+                              className='h-1.5 w-1.5 rounded-full bg-primary'
+                              aria-hidden
+                            />
+                          ) : null}
+                        </div>
                       </div>
                       {notification.message ? (
                         <p className='line-clamp-2 text-xs leading-relaxed text-muted-foreground'>
@@ -408,42 +432,35 @@ function DropdownShell({
                         </p>
                       ) : null}
                       {mod ? (
-                        <div className='flex items-center gap-1.5 pt-0.5'>
-                          <span className='inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium capitalize text-muted-foreground'>
-                            {mod}
-                          </span>
-                        </div>
+                        <span className='inline-flex max-w-full truncate rounded bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-secondary-foreground'>
+                          {mod}
+                        </span>
                       ) : null}
                     </div>
-                    {!notification.is_read && (
-                      <div className='shrink-0 self-center'>
-                        <div className='h-2 w-2 rounded-full bg-primary shadow-sm' />
-                      </div>
-                    )}
                   </div>
                 </DropdownMenuItem>
               )
             })
           )}
         </DropdownMenuGroup>
-        {notifications.length > 0 && (
-          <div className='border-t bg-muted/20 p-2'>
+        {notifications.length > 0 ? (
+          <div className='border-t bg-popover p-1.5'>
             <Button
               variant='ghost'
               size='sm'
-              className='h-8 w-full text-xs'
+              className='h-8 w-full text-xs text-muted-foreground hover:text-foreground'
               onClick={() => void onMarkAllAsRead()}
             >
               {labels.markAllAsRead}
             </Button>
           </div>
-        )}
-        {notificationApiAvailable && permission !== 'granted' && (
-          <div className='border-t bg-muted/20 p-2'>
+        ) : null}
+        {notificationApiAvailable && permission !== 'granted' ? (
+          <div className='border-t bg-popover p-1.5'>
             <Button
               variant='outline'
               size='sm'
-              className='h-8 w-full gap-2 border-primary/20 bg-primary/10 text-xs text-primary hover:bg-primary/20'
+              className='h-8 w-full gap-2 border-primary/25 bg-primary/5 text-xs text-primary hover:bg-primary/10'
               onClick={async () => {
                 try {
                   const next = await Notification.requestPermission()
@@ -464,7 +481,7 @@ function DropdownShell({
               {labels.enableNotifications}
             </Button>
           </div>
-        )}
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -494,11 +511,11 @@ function NotificationAvatar({
         <img
           src={resolved}
           alt=''
-          className='h-10 w-10 rounded-full border border-muted/40 object-cover shadow-sm'
+          className='h-9 w-9 rounded-full object-cover'
           onError={() => setFailed(true)}
         />
-        <div className='absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-background p-1 text-primary shadow-sm ring-1 ring-border'>
-          <Icon className='size-3.5 text-current' strokeWidth={2.25} />
+        <div className='absolute -bottom-0.5 -right-0.5 flex size-5 items-center justify-center rounded-full bg-background text-primary ring-1 ring-border'>
+          <Icon className='size-3 text-current' strokeWidth={2.25} />
         </div>
       </div>
     )
@@ -506,10 +523,10 @@ function NotificationAvatar({
 
   return (
     <div
-      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-sm ring-1 ring-inset ring-black/5 ${toneClass}`}
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${toneClass}`}
       style={customColor ? { backgroundColor: customColor, color: '#fff' } : undefined}
     >
-      <Icon className='h-5 w-5' strokeWidth={2.5} />
+      <Icon className='h-4 w-4' strokeWidth={2.25} />
     </div>
   )
 }
