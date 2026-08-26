@@ -1,5 +1,11 @@
 # @asteby/metacore-notifications
 
+## 24.0.2
+
+### Patch Changes
+
+- ff08865: Toast stack without ghost card (unstyled), unique ids for concurrent toasts, and optional persist hook so control toasts land in the bell inbox.
+
 ## 24.0.1
 
 ### Patch Changes
