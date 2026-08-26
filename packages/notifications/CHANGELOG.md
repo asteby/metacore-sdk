@@ -1,5 +1,11 @@
 # @asteby/metacore-notifications
 
+## 24.0.3
+
+### Patch Changes
+
+- 205cb4b: Center toast title vertically when there is no description (or module chip).
+
 ## 24.0.2
 
 ### Patch Changes
