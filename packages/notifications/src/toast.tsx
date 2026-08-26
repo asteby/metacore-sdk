@@ -64,6 +64,9 @@ export function showNotificationToast(opts: ShowNotificationToastOptions): strin
     addonKey: opts.addonKey,
   })
   const apartado = (opts.apartado || moduleLabel || '').trim()
+  const body = (opts.body || '').trim()
+  // Title-only: vertically center with the icon. Chip/body keep items-start.
+  const titleOnly = !apartado && !body
   const duration = opts.duration ?? 5000
   const id =
     opts.id ??
@@ -76,7 +79,8 @@ export function showNotificationToast(opts: ShowNotificationToastOptions): strin
       <button
         type='button'
         className={[
-          'flex w-full min-w-[280px] max-w-[360px] items-start gap-3 rounded-xl border border-border/60 bg-card p-3 text-left shadow-lg ring-1 ring-black/5',
+          'flex w-full min-w-[280px] max-w-[360px] gap-3 rounded-xl border border-border/60 bg-card p-3 text-left shadow-lg ring-1 ring-black/5',
+          titleOnly ? 'items-center' : 'items-start',
           opts.onClick ? 'cursor-pointer hover:bg-accent/40' : '',
         ]
           .filter(Boolean)
@@ -90,11 +94,11 @@ export function showNotificationToast(opts: ShowNotificationToastOptions): strin
           <img
             src={opts.image}
             alt=''
-            className='mt-0.5 h-9 w-9 shrink-0 rounded-full object-cover'
+            className={`${titleOnly ? '' : 'mt-0.5 '}h-9 w-9 shrink-0 rounded-full object-cover`}
           />
         ) : (
           <span
-            className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${tone.iconClass}`}
+            className={`${titleOnly ? '' : 'mt-0.5 '}flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${tone.iconClass}`}
             style={tone.customColor ? { backgroundColor: tone.customColor, color: '#fff' } : undefined}
           >
             <Icon className='h-4 w-4' aria-hidden />
@@ -107,9 +111,9 @@ export function showNotificationToast(opts: ShowNotificationToastOptions): strin
             </span>
           ) : null}
           <span className='block text-sm font-semibold text-foreground'>{opts.title}</span>
-          {opts.body ? (
+          {body ? (
             <span className='mt-0.5 block text-xs text-muted-foreground line-clamp-2'>
-              {opts.body}
+              {body}
             </span>
           ) : null}
         </span>
