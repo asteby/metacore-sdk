@@ -1,5 +1,11 @@
 # @asteby/metacore-notifications
 
+## 24.0.8
+
+### Patch Changes
+
+- d26f5ad: Make toast action buttons (Recargar / Actualizar) reliably clickable: pointer-events, defer handler after dismiss.
+
 ## 24.0.7
 
 ### Patch Changes
