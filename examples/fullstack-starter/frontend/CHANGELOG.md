@@ -1,5 +1,12 @@
 # @asteby/metacore-fullstack-example
 
+## 0.1.238
+
+### Patch Changes
+
+- Updated dependencies [0048532]
+  - @asteby/metacore-notifications@24.0.5
+
 ## 0.1.237
 
 ### Patch Changes
