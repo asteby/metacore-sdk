@@ -1,5 +1,11 @@
 # @asteby/metacore-notifications
 
+## 24.0.7
+
+### Patch Changes
+
+- d3c3cd6: Bell dropdown: drop the left accent bar and vertically center the icon against the text block.
+
 ## 24.0.6
 
 ### Patch Changes
