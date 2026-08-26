@@ -6,6 +6,7 @@ export {
   type ShowNotificationToastOptions,
   type PersistNotificationInput,
   type InstallUnifiedToastsOptions,
+  type ToastActionButton,
 } from './toast'
 export {
   subscribeNotificationSSE,
