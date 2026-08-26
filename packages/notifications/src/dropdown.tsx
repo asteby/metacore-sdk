@@ -16,19 +16,20 @@ import { es } from 'date-fns/locale'
 import { toast } from 'sonner'
 
 import { useAppBadge } from './hooks'
+import { subscribeNotificationSSE } from './sse'
+import { showNotificationToast } from './toast'
+import {
+  moduleLabelFromMeta,
+  parseNotificationMeta,
+  resolveNotificationIcon,
+  resolveNotificationTone,
+} from './visual'
 import type {
   NotificationItem,
   NotificationWsPayload,
   NotificationsDropdownLabels,
   NotificationsDropdownProps,
 } from './types'
-
-/** Convert kebab-case to PascalCase ("message-circle" -> "MessageCircle"). */
-const toPascalCase = (str: string): string =>
-  str
-    .split('-')
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join('')
 
 const DEFAULT_LABELS: NotificationsDropdownLabels = {
   title: 'Notificaciones',
@@ -45,98 +46,15 @@ const DEFAULT_LABELS: NotificationsDropdownLabels = {
   srLabel: 'Notificaciones',
 }
 
-const getIconFor = (
-  notification: NotificationItem,
-): React.ComponentType<{ className?: string; strokeWidth?: number }> => {
-  if (notification.icon) {
-    const pascalName = toPascalCase(notification.icon)
-    const DynamicIcon = (
-      LucideIcons as unknown as Record<string, React.ComponentType<{ className?: string; strokeWidth?: number }>>
-    )[pascalName]
-    if (DynamicIcon) return DynamicIcon
-  }
-  switch (notification.type) {
-    case 'warning':
-      return LucideIcons.AlertTriangle
-    case 'success':
-      return LucideIcons.CheckCircle2
-    case 'error':
-      return LucideIcons.XCircle
-    case 'info':
-    default:
-      return LucideIcons.Info
-  }
-}
-
-const getStyle = (type: string): string => {
-  switch (type) {
-    case 'warning':
-      return 'bg-amber-500 text-white'
-    case 'success':
-      return 'bg-emerald-500 text-white'
-    case 'error':
-      return 'bg-red-500 text-white'
-    case 'info':
-    default:
-      return 'bg-violet-600 text-white'
-  }
-}
-
-const getRowAccent = (type: string): string => {
-  switch (type) {
-    case 'warning':
-      return 'border-l-amber-500'
-    case 'success':
-      return 'border-l-emerald-500'
-    case 'error':
-      return 'border-l-red-500'
-    case 'info':
-    default:
-      return 'border-l-violet-500'
-  }
-}
-
-type NotifMeta = {
-  addon_key?: string
-  model?: string
-  rule?: string
-  source?: string
-}
-
-function parseMeta(raw?: string): NotifMeta {
-  if (!raw) return {}
-  try {
-    const v = typeof raw === 'string' ? JSON.parse(raw) : raw
-    return (v && typeof v === 'object' ? v : {}) as NotifMeta
-  } catch {
-    return {}
-  }
-}
-
-function moduleLabel(meta: NotifMeta): string {
-  const key = (meta.addon_key || '').trim()
-  const map: Record<string, string> = {
-    inventory: 'Inventario',
-    warehouse: 'Almacén',
-    customers: 'Clientes',
-    pos: 'POS',
-    fiscal_mexico: 'Fiscal',
-    workshop: 'Taller',
-    accounting_lite: 'Contabilidad',
-  }
-  return map[key] || (key ? key.replace(/_/g, ' ') : '')
-}
+type Locale = Parameters<typeof formatDistanceToNow>[1] extends
+  | { locale?: infer L }
+  | undefined
+  ? NonNullable<L>
+  : never
 
 /**
- * Bell-icon dropdown that lists the authenticated user's notifications,
- * marks them read, shows an unread counter (and optional PWA app badge),
- * and streams new items pushed over WebSocket under the `NOTIFICATION`
- * message type.
- *
- * This component is transport-agnostic: the HTTP client is injected via
- * `apiClient`. The collection base path is injected via `apiBasePath` —
- * the component fetches `GET {apiBasePath}?orderBy=created_at&...` and
- * mutates items via `PATCH {apiBasePath}/{id}`.
+ * Bell-icon dropdown: REST list + live ingest (SSE preferred, WebSocket
+ * fallback) + optional canonical card toast on every new item.
  */
 export function NotificationsDropdown({
   apiClient,
@@ -148,6 +66,10 @@ export function NotificationsDropdown({
   labels: labelsOverride,
   resolveImageUrl,
   subscribeToNotifications,
+  sseUrl,
+  sseAccessToken,
+  preferSse,
+  showToastOnIngest = true,
 }: NotificationsDropdownProps) {
   const labels = useMemo<NotificationsDropdownLabels>(
     () => ({ ...DEFAULT_LABELS, ...labelsOverride }),
@@ -158,8 +80,8 @@ export function NotificationsDropdown({
   const [unreadCount, setUnreadCount] = useState(0)
   const [, setLoading] = useState(false)
   const { setBadge } = useAppBadge()
+  const seenIdsRef = useRef<Set<string>>(new Set())
 
-  // Keep fetch callbacks stable across apiClient / basePath changes.
   const apiClientRef = useRef(apiClient)
   apiClientRef.current = apiClient
   const basePathRef = useRef(apiBasePath)
@@ -186,6 +108,7 @@ export function NotificationsDropdown({
       const items = response.data?.data ?? []
       setNotifications(items)
       setUnreadCount(items.filter((n) => !n.is_read).length)
+      seenIdsRef.current = new Set(items.map((n) => n.id))
     } catch (error) {
       // eslint-disable-next-line no-console
       console.error('Failed to fetch notifications:', error)
@@ -198,38 +121,79 @@ export function NotificationsDropdown({
     fetchNotifications()
   }, [fetchNotifications, apiBasePath])
 
-  // Normalise an incoming WS payload + prepend it to the list.
-  const ingestWsPayload = useCallback((payload: NotificationWsPayload) => {
-    const newNotification: NotificationItem = {
-      id: payload.id || (typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random()}`),
-      title: payload.title,
-      message: payload.body || payload.message || payload.description || '',
-      type: payload.type || 'info',
-      is_read: false,
-      created_at: new Date().toISOString(),
-      link: payload.link,
-      icon: payload.icon,
-      image: payload.image,
-      metadata: payload.metadata,
-      conversation_id: payload.conversation_id,
-    }
-    setNotifications((prev) => [newNotification, ...prev])
-    setUnreadCount((prev) => prev + 1)
+  const ingestWsPayload = useCallback(
+    (payload: NotificationWsPayload) => {
+      const id =
+        payload.id ||
+        (typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random()}`)
 
-    if (
-      typeof window !== 'undefined' &&
-      'Notification' in window &&
-      Notification.permission !== 'granted'
-    ) {
-      window.dispatchEvent(new CustomEvent('show-notification-prompt'))
-    }
-  }, [])
+      if (seenIdsRef.current.has(id)) return
+      seenIdsRef.current.add(id)
 
-  // WebSocket wiring: use provided hook unless caller supplies a custom
-  // subscription. We always run one of the two branches exactly once.
+      const metaObj =
+        typeof payload.metadata === 'object' && payload.metadata
+          ? { ...payload.metadata }
+          : parseNotificationMeta(
+              typeof payload.metadata === 'string' ? payload.metadata : undefined,
+            )
+      if (payload.addon_key) metaObj.addon_key = payload.addon_key
+      if (payload.apartado) metaObj.apartado = payload.apartado
+      if (payload.color) metaObj.color = payload.color
+
+      const metadataStr =
+        typeof payload.metadata === 'string'
+          ? payload.metadata
+          : JSON.stringify(metaObj)
+
+      const newNotification: NotificationItem = {
+        id,
+        title: payload.title,
+        message: payload.body || payload.message || payload.description || '',
+        type: payload.type || 'info',
+        is_read: false,
+        created_at: new Date().toISOString(),
+        link: payload.link,
+        icon: payload.icon,
+        image: payload.image,
+        metadata: metadataStr,
+        conversation_id: payload.conversation_id,
+      }
+      setNotifications((prev) => [newNotification, ...prev])
+      setUnreadCount((prev) => prev + 1)
+
+      if (showToastOnIngest) {
+        showNotificationToast({
+          title: payload.title,
+          body: payload.body || payload.message || payload.description,
+          type: payload.type || 'info',
+          icon: payload.icon,
+          image: payload.image,
+          apartado: payload.apartado,
+          addonKey: payload.addon_key || (metaObj.addon_key as string | undefined),
+          metadata: metaObj,
+          onClick: () => {
+            if (onNotificationClick) onNotificationClick(newNotification)
+            else if (payload.link?.startsWith('http')) window.open(payload.link, '_blank')
+          },
+        })
+      }
+
+      if (
+        typeof window !== 'undefined' &&
+        'Notification' in window &&
+        Notification.permission !== 'granted'
+      ) {
+        window.dispatchEvent(new CustomEvent('show-notification-prompt'))
+      }
+    },
+    [showToastOnIngest, onNotificationClick],
+  )
+
   const useCustomSubscription = Boolean(subscribeToNotifications)
+  const useSse = Boolean(sseUrl)
+  const skipBuiltInWs = useCustomSubscription || (useSse && preferSse !== false)
 
   useEffect(() => {
     if (!useCustomSubscription || !subscribeToNotifications) return
@@ -239,95 +203,66 @@ export function NotificationsDropdown({
     }
   }, [useCustomSubscription, subscribeToNotifications, ingestWsPayload])
 
-  // Hooks must be called unconditionally. When the caller overrides the
-  // subscription we still call `useWebSocketMessage` but with a no-op —
-  // this requires a provider in context even when unused, so we skip it
-  // entirely via a separate component when override is present.
-  return useCustomSubscription ? (
-    <DropdownShell
-      labels={labels}
-      locale={locale}
-      notifications={notifications}
-      unreadCount={unreadCount}
-      resolveImageUrl={resolveImageUrl}
-      onMarkAsRead={async (id) => {
-        setNotifications((prev) =>
-          prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
+  useEffect(() => {
+    if (!useSse || !sseUrl) return
+    return subscribeNotificationSSE({
+      url: sseUrl,
+      accessToken: sseAccessToken,
+      onMessage: ingestWsPayload,
+    })
+  }, [useSse, sseUrl, sseAccessToken, ingestWsPayload])
+
+  const markHandlers = {
+    onMarkAsRead: async (id: string) => {
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
+      )
+      setUnreadCount((prev) => Math.max(0, prev - 1))
+      try {
+        await apiClientRef.current.patch(`${basePathRef.current}/${id}`, {
+          is_read: true,
+        })
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to mark notification as read:', error)
+      }
+    },
+    onMarkAllAsRead: async () => {
+      const unreadIds = notifications.filter((n) => !n.is_read).map((n) => n.id)
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
+      setUnreadCount(0)
+      try {
+        await Promise.all(
+          unreadIds.map((id) =>
+            apiClientRef.current.patch(`${basePathRef.current}/${id}`, {
+              is_read: true,
+            }),
+          ),
         )
-        setUnreadCount((prev) => Math.max(0, prev - 1))
-        try {
-          await apiClientRef.current.patch(`${basePathRef.current}/${id}`, {
-            is_read: true,
-          })
-        } catch (error) {
-          // eslint-disable-next-line no-console
-          console.error('Failed to mark notification as read:', error)
-        }
-      }}
-      onMarkAllAsRead={async () => {
-        const unreadIds = notifications.filter((n) => !n.is_read).map((n) => n.id)
-        setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
-        setUnreadCount(0)
-        try {
-          await Promise.all(
-            unreadIds.map((id) =>
-              apiClientRef.current.patch(`${basePathRef.current}/${id}`, {
-                is_read: true,
-              }),
-            ),
-          )
-        } catch (error) {
-          // eslint-disable-next-line no-console
-          console.error('Failed to mark all as read:', error)
-        }
-      }}
-      onNotificationClick={onNotificationClick}
-    />
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error('Failed to mark all as read:', error)
+      }
+    },
+  }
+
+  const shellProps = {
+    labels,
+    locale,
+    notifications,
+    unreadCount,
+    resolveImageUrl,
+    onNotificationClick,
+    ...markHandlers,
+  }
+
+  return skipBuiltInWs ? (
+    <DropdownShell {...shellProps} />
   ) : (
-    <DropdownWithWebSocket
-      labels={labels}
-      locale={locale}
-      notifications={notifications}
-      unreadCount={unreadCount}
-      resolveImageUrl={resolveImageUrl}
-      ingestWsPayload={ingestWsPayload}
-      onMarkAsRead={async (id) => {
-        setNotifications((prev) =>
-          prev.map((n) => (n.id === id ? { ...n, is_read: true } : n)),
-        )
-        setUnreadCount((prev) => Math.max(0, prev - 1))
-        try {
-          await apiClientRef.current.patch(`${basePathRef.current}/${id}`, {
-            is_read: true,
-          })
-        } catch (error) {
-          // eslint-disable-next-line no-console
-          console.error('Failed to mark notification as read:', error)
-        }
-      }}
-      onMarkAllAsRead={async () => {
-        const unreadIds = notifications.filter((n) => !n.is_read).map((n) => n.id)
-        setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })))
-        setUnreadCount(0)
-        try {
-          await Promise.all(
-            unreadIds.map((id) =>
-              apiClientRef.current.patch(`${basePathRef.current}/${id}`, {
-                is_read: true,
-              }),
-            ),
-          )
-        } catch (error) {
-          // eslint-disable-next-line no-console
-          console.error('Failed to mark all as read:', error)
-        }
-      }}
-      onNotificationClick={onNotificationClick}
-    />
+    <DropdownWithWebSocket ingestWsPayload={ingestWsPayload} {...shellProps} />
   )
 }
 
-/** Inner variant that subscribes to `useWebSocketMessage`. */
 interface InnerDropdownProps {
   labels: NotificationsDropdownLabels
   locale: Locale
@@ -338,15 +273,10 @@ interface InnerDropdownProps {
   onMarkAllAsRead: () => void | Promise<void>
   onNotificationClick?: (notification: NotificationItem) => void
 }
+
 interface DropdownWithWebSocketProps extends InnerDropdownProps {
   ingestWsPayload: (payload: NotificationWsPayload) => void
 }
-
-type Locale = Parameters<typeof formatDistanceToNow>[1] extends
-  | { locale?: infer L }
-  | undefined
-  ? NonNullable<L>
-  : never
 
 interface WsNotificationMessage
   extends WebSocketMessage<'NOTIFICATION', NotificationWsPayload> {}
@@ -422,15 +352,16 @@ function DropdownShell({
             </div>
           ) : (
             notifications.map((notification) => {
-              const Icon = getIconFor(notification)
-              const meta = parseMeta(notification.metadata)
-              const mod = moduleLabel(meta)
+              const meta = parseNotificationMeta(notification.metadata)
+              const Icon = resolveNotificationIcon(notification.icon, notification.type)
+              const tone = resolveNotificationTone(notification.type, meta)
+              const mod = moduleLabelFromMeta(meta)
               return (
                 <DropdownMenuItem
                   key={notification.id}
-                  className={`cursor-pointer p-3 sm:p-4 focus:bg-muted/50 data-[state=open]:bg-muted/50 border-l-2 ${getRowAccent(notification.type)} ${!notification.is_read ? 'bg-primary/[0.03]' : ''}`}
+                  className={`cursor-pointer border-l-2 p-3 focus:bg-muted/50 data-[state=open]:bg-muted/50 sm:p-4 ${tone.rowAccentClass} ${!notification.is_read ? 'bg-primary/[0.03]' : ''}`}
                   onClick={() => {
-                    if (!notification.is_read) onMarkAsRead(notification.id)
+                    if (!notification.is_read) void onMarkAsRead(notification.id)
                     if (onNotificationClick) {
                       onNotificationClick(notification)
                     } else if (
@@ -441,21 +372,23 @@ function DropdownShell({
                     }
                   }}
                 >
-                  <div className='flex items-start gap-3 w-full'>
+                  <div className='flex w-full items-start gap-3'>
                     <NotificationAvatar
                       notification={notification}
                       Icon={Icon}
+                      toneClass={tone.iconClass}
+                      customColor={tone.customColor}
                       resolveImageUrl={resolveImageUrl}
                     />
 
-                    <div className='flex flex-col gap-1.5 w-full min-w-0'>
+                    <div className='flex min-w-0 w-full flex-col gap-1.5'>
                       <div className='flex items-center justify-between gap-2'>
                         <p
-                          className={`text-sm leading-snug truncate ${!notification.is_read ? 'font-semibold text-foreground' : 'font-medium text-foreground/80'}`}
+                          className={`truncate text-sm leading-snug ${!notification.is_read ? 'font-semibold text-foreground' : 'font-medium text-foreground/80'}`}
                         >
                           {notification.title}
                         </p>
-                        <span className='text-[10px] text-muted-foreground whitespace-nowrap shrink-0'>
+                        <span className='shrink-0 whitespace-nowrap text-[10px] text-muted-foreground'>
                           {formatDistanceToNow(new Date(notification.created_at), {
                             addSuffix: true,
                             locale,
@@ -463,20 +396,20 @@ function DropdownShell({
                         </span>
                       </div>
                       {notification.message ? (
-                        <p className='text-xs text-muted-foreground line-clamp-2 leading-relaxed'>
+                        <p className='line-clamp-2 text-xs leading-relaxed text-muted-foreground'>
                           {notification.message}
                         </p>
                       ) : null}
                       {mod ? (
                         <div className='flex items-center gap-1.5 pt-0.5'>
-                          <span className='inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground capitalize'>
+                          <span className='inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium capitalize text-muted-foreground'>
                             {mod}
                           </span>
                         </div>
                       ) : null}
                     </div>
                     {!notification.is_read && (
-                      <div className='self-center shrink-0'>
+                      <div className='shrink-0 self-center'>
                         <div className='h-2 w-2 rounded-full bg-primary shadow-sm' />
                       </div>
                     )}
@@ -487,11 +420,11 @@ function DropdownShell({
           )}
         </DropdownMenuGroup>
         {notifications.length > 0 && (
-          <div className='p-2 border-t bg-muted/20'>
+          <div className='border-t bg-muted/20 p-2'>
             <Button
               variant='ghost'
               size='sm'
-              className='w-full text-xs h-8'
+              className='h-8 w-full text-xs'
               onClick={() => void onMarkAllAsRead()}
             >
               {labels.markAllAsRead}
@@ -499,11 +432,11 @@ function DropdownShell({
           </div>
         )}
         {notificationApiAvailable && permission !== 'granted' && (
-          <div className='p-2 border-t bg-muted/20'>
+          <div className='border-t bg-muted/20 p-2'>
             <Button
               variant='outline'
               size='sm'
-              className='w-full text-xs h-8 gap-2 bg-primary/10 hover:bg-primary/20 text-primary border-primary/20'
+              className='h-8 w-full gap-2 border-primary/20 bg-primary/10 text-xs text-primary hover:bg-primary/20'
               onClick={async () => {
                 try {
                   const next = await Notification.requestPermission()
@@ -530,14 +463,17 @@ function DropdownShell({
   )
 }
 
-/** Avatar + type badge. Resolves storage paths and falls back if the image 404s. */
 function NotificationAvatar({
   notification,
   Icon,
+  toneClass,
+  customColor,
   resolveImageUrl,
 }: {
   notification: NotificationItem
   Icon: React.ComponentType<{ className?: string; strokeWidth?: number }>
+  toneClass: string
+  customColor?: string
   resolveImageUrl?: (src: string) => string
 }) {
   const [failed, setFailed] = useState(false)
@@ -551,7 +487,7 @@ function NotificationAvatar({
         <img
           src={resolved}
           alt=''
-          className='h-10 w-10 rounded-full object-cover border border-muted/40 shadow-sm'
+          className='h-10 w-10 rounded-full border border-muted/40 object-cover shadow-sm'
           onError={() => setFailed(true)}
         />
         <div className='absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-background p-1 text-primary shadow-sm ring-1 ring-border'>
@@ -563,9 +499,10 @@ function NotificationAvatar({
 
   return (
     <div
-      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-sm ring-1 ring-inset ring-black/5 ${getStyle(notification.type)}`}
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full shadow-sm ring-1 ring-inset ring-black/5 ${toneClass}`}
+      style={customColor ? { backgroundColor: customColor, color: '#fff' } : undefined}
     >
-      <Icon className='h-5 w-5 text-white' strokeWidth={2.5} />
+      <Icon className='h-5 w-5' strokeWidth={2.5} />
     </div>
   )
 }

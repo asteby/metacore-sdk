@@ -1,7 +1,7 @@
 # @asteby/metacore-notifications
 
-Metacore notifications kit — a drop-in bell-icon dropdown, app-badge hook
-(Badging API) and WebSocket integration for real-time push updates.
+Bell dropdown, **unified toast**, dynamic Lucide icons / severity colors /
+module chips, and live ingest over **SSE** (preferred) or WebSocket.
 
 ## Install
 
@@ -11,76 +11,51 @@ pnpm add @asteby/metacore-notifications \
   date-fns lucide-react sonner @tanstack/react-query react react-dom
 ```
 
-This package declares its UI, WebSocket, date, icon and toast libraries as
-`peerDependencies` — the consumer installs them once at the app level.
-
-## Usage
+## Boot (host app)
 
 ```tsx
-import { NotificationsDropdown } from '@asteby/metacore-notifications/dropdown'
-import { WebSocketProvider } from '@asteby/metacore-websocket/provider'
-import { api } from '@/lib/api' // your injected axios-compatible client
-import { useNavigate } from '@tanstack/react-router'
+import { installUnifiedToasts, registerModuleLabel } from '@asteby/metacore-notifications'
 
-export function Header() {
-  const navigate = useNavigate()
-  return (
-    <WebSocketProvider url="wss://api.example.com/ws" getToken={getToken}>
-      <NotificationsDropdown
-        apiClient={api}
-        apiBasePath="/data/notifications/me"
-        enableBadge
-        onNotificationClick={(n) => {
-          if (n.link) navigate({ to: n.link })
-          else if (n.conversation_id)
-            navigate({ to: '/chats', search: { id: n.conversation_id } })
-        }}
-      />
-    </WebSocketProvider>
-  )
-}
+installUnifiedToasts() // every toast.success/info/… → same card as the bell
+registerModuleLabel('team_chat', 'Equipo') // optional extra chips
 ```
 
-`apiBasePath` lets each host application point at its own notifications endpoint, for example:
+## Dropdown + SSE
 
-- `"/data/notifications/me"`
-- `"/dynamic/notifications/me"`
+```tsx
+import { NotificationsDropdown } from '@asteby/metacore-notifications'
 
-## Props
-
-| Prop                       | Type                                      | Default  | Notes |
-|----------------------------|-------------------------------------------|----------|-------|
-| `apiClient`                | `NotificationsApiClient` (axios-compatible) | —      | Never imported as a singleton — inject it. |
-| `apiBasePath`              | `string`                                  | —        | e.g. `/data/notifications/me`. |
-| `enableBadge`              | `boolean`                                 | `true`   | Drives `navigator.setAppBadge()`. |
-| `onNotificationClick`      | `(n: NotificationItem) => void`           | —        | Navigate however you like. |
-| `perPage`                  | `number`                                  | `20`     | Initial fetch size. |
-| `locale`                   | `date-fns` `Locale`                       | `es`     | Used by `formatDistanceToNow`. |
-| `labels`                   | `Partial<NotificationsDropdownLabels>`    | —        | i18n overrides. |
-| `subscribeToNotifications` | `(onMessage) => void \| () => void`       | —        | Bring-your-own subscription (skips `useWebSocketMessage`). |
-
-## Hooks
-
-```ts
-import { useAppBadge, useNotifications } from '@asteby/metacore-notifications/hooks'
+<NotificationsDropdown
+  apiClient={api}
+  apiBasePath="/data/notifications/me"
+  sseUrl="/api/notifications/stream"
+  sseAccessToken={accessToken}
+  preferSse
+  showToastOnIngest
+  onNotificationClick={(n) => n.link && navigate({ to: n.link })}
+/>
 ```
 
-- `useAppBadge()` → `{ badgeCount, setBadge, clearBadge }` — wraps the
-  PWA Badging API with a no-op fallback.
-- `useNotifications()` → `{ permission, isSupported, requestPermission,
-  isGranted, isDenied, isDefault }` — tracks the browser's
-  `Notification.permission` state.
+### Live transports
 
-## API contract
+| Prop | Role |
+|------|------|
+| `sseUrl` | `EventSource` to host SSE (`event: notification`) |
+| `subscribeToNotifications` | Bring-your-own bus (team-chat bridge, etc.) |
+| built-in WS | Used when neither SSE-prefer nor custom subscribe is set |
 
-The component expects the injected HTTP client to behave like axios:
+### Visual contract (payload / metadata)
 
-- `GET {apiBasePath}` with query `{ orderBy, orderDir, per_page }`
-  returning `{ data: { data: NotificationItem[] } }`.
-- `PATCH {apiBasePath}/{id}` with body `{ is_read: true }`.
+- `icon` — Lucide kebab name (`shopping-cart`, `clipboard-list`, …)
+- `type` — `info` \| `success` \| `warning` \| `error` → default colors
+- `metadata.addon_key` / `apartado` — module chip (Inventario, Almacén, POS, …)
+- `metadata.color` — optional CSS/hex override for the icon disc
 
-WebSocket messages are expected under the discriminator `type: 'NOTIFICATION'`
-with a payload shaped like `NotificationWsPayload`.
+## API
+
+- `GET {apiBasePath}` → `{ data: NotificationItem[] }`
+- `PATCH {apiBasePath}/{id}` `{ is_read: true }`
+- `GET /api/notifications/stream` — SSE (`?access_token=` for EventSource)
 
 ## License
 
