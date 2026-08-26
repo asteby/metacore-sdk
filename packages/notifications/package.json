@@ -1,7 +1,7 @@
 {
   "name": "@asteby/metacore-notifications",
   "version": "23.0.1",
-  "description": "Metacore notifications — dropdown, app badge, WebSocket-driven real-time updates",
+  "description": "Metacore notifications \u2014 dropdown, SSE/WS live stream, unified toast, dynamic icons & module chips",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -27,6 +27,18 @@
     "./hooks": {
       "types": "./dist/hooks.d.ts",
       "import": "./dist/hooks.js"
+    },
+    "./toast": {
+      "types": "./dist/toast.d.ts",
+      "import": "./dist/toast.js"
+    },
+    "./sse": {
+      "types": "./dist/sse.d.ts",
+      "import": "./dist/sse.js"
+    },
+    "./visual": {
+      "types": "./dist/visual.d.ts",
+      "import": "./dist/visual.js"
     }
   },
   "scripts": {

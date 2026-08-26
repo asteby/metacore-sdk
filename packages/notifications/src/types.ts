@@ -21,7 +21,8 @@ export interface NotificationItem {
   link?: string
   icon?: string
   image?: string
-  metadata?: string
+  /** JSON string or already-parsed object (addon_key, color, …). */
+  metadata?: string | Record<string, unknown>
   conversation_id?: string
 }
 
@@ -42,8 +43,7 @@ export interface NotificationsApiClient {
 }
 
 /**
- * Shape of a WebSocket `NOTIFICATION` payload. Consumers may provide any
- * of these fields; the component normalises them into a `NotificationItem`.
+ * Shape of a live `NOTIFICATION` payload (WebSocket or SSE).
  */
 export interface NotificationWsPayload {
   id?: string
@@ -55,8 +55,13 @@ export interface NotificationWsPayload {
   link?: string
   icon?: string
   image?: string
-  metadata?: string
+  metadata?: string | Record<string, unknown>
   conversation_id?: string
+  /** Optional explicit module chip (overrides metadata.addon_key map). */
+  apartado?: string
+  addon_key?: string
+  /** Optional CSS/hex colour for the icon disc. */
+  color?: string
 }
 
 /**
@@ -114,4 +119,23 @@ export interface NotificationsDropdownProps {
   subscribeToNotifications?: (
     onMessage: (payload: NotificationWsPayload) => void,
   ) => void | (() => void)
+  /**
+   * Preferred live transport: Server-Sent Events URL
+   * (e.g. `/api/notifications/stream`). When set, opens EventSource in
+   * addition to (or instead of, when `subscribeToNotifications` is also
+   * omitted and `preferSse` is true) the WebSocket path.
+   */
+  sseUrl?: string
+  /** Bearer token for SSE (`?access_token=` — EventSource cannot set headers). */
+  sseAccessToken?: string | null
+  /**
+   * When true (default if `sseUrl` is set), skip the built-in WebSocket hook
+   * and rely on SSE (+ optional `subscribeToNotifications`).
+   */
+  preferSse?: boolean
+  /**
+   * Show the canonical card toast when a live notification arrives.
+   * Default true — one visual pipeline for bell + toast.
+   */
+  showToastOnIngest?: boolean
 }
