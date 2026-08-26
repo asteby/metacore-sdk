@@ -1,5 +1,11 @@
 # @asteby/metacore-notifications
 
+## 24.0.5
+
+### Patch Changes
+
+- 0048532: Clean up the notifications bell dropdown: remove scalloped left borders, flatter rows, readable module chips, quieter badge.
+
 ## 24.0.4
 
 ### Patch Changes
