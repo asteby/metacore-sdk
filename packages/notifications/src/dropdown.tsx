@@ -371,8 +371,6 @@ function DropdownShell({
               return (
                 <DropdownMenuItem
                   key={notification.id}
-                  // Flat rows + absolute straight accent line (avoids scalloped
-                  // border-l against DropdownMenuItem rounded corners).
                   className={[
                     'cursor-pointer rounded-none border-0 px-3 py-1.5 focus:bg-muted/50 data-[highlighted]:bg-muted/50 sm:px-3.5',
                     unread ? 'bg-primary/[0.035]' : '',
@@ -391,22 +389,7 @@ function DropdownShell({
                     }
                   }}
                 >
-                  <div className='relative flex w-full items-start gap-2.5 pl-2'>
-                    <span
-                      className={[
-                        'absolute left-0 top-1 bottom-1 w-0.5 rounded-full',
-                        tone.customColor ? '' : tone.lineClass,
-                        unread ? 'opacity-100' : 'opacity-40',
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                      style={
-                        tone.customColor
-                          ? { backgroundColor: tone.customColor }
-                          : undefined
-                      }
-                      aria-hidden
-                    />
+                  <div className='flex w-full items-center gap-2.5'>
                     <NotificationAvatar
                       notification={notification}
                       Icon={Icon}
