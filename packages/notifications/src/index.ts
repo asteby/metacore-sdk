@@ -4,6 +4,8 @@ export {
   showNotificationToast,
   installUnifiedToasts,
   type ShowNotificationToastOptions,
+  type PersistNotificationInput,
+  type InstallUnifiedToastsOptions,
 } from './toast'
 export {
   subscribeNotificationSSE,

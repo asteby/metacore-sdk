@@ -163,8 +163,15 @@ export function NotificationsDropdown({
       setNotifications((prev) => [newNotification, ...prev])
       setUnreadCount((prev) => prev + 1)
 
-      if (showToastOnIngest) {
+      // Quiet frames from POST /notifications/me already toasted on the client.
+      const skipToast =
+        Boolean((payload as { skip_toast?: boolean }).skip_toast) ||
+        metaObj.skip_toast === true ||
+        metaObj.source === 'toast'
+
+      if (showToastOnIngest && !skipToast) {
         showNotificationToast({
+          id,
           title: payload.title,
           body: payload.body || payload.message || payload.description,
           type: payload.type || 'info',
