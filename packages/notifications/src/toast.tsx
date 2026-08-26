@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { formatNotificationBodyHtml } from './rich-text'
 import { resolveNotificationVisual } from './visual'
 import type { NotificationType } from './types'
 import type { ReactNode, MouseEvent as ReactMouseEvent } from 'react'
@@ -135,6 +136,7 @@ export function showNotificationToast(opts: ShowNotificationToastOptions): strin
   })
   const apartado = (opts.apartado || moduleLabel || '').trim()
   const body = (opts.body || '').trim()
+  const bodyHtml = formatNotificationBodyHtml(body)
   const hasActions = Boolean(opts.action || opts.cancel)
   // Title-only: vertically center with the icon. Chip/body/actions keep items-start.
   const titleOnly = !apartado && !body && !hasActions
@@ -165,10 +167,10 @@ export function showNotificationToast(opts: ShowNotificationToastOptions): strin
             />
           ) : (
             <span
-              className={`${titleOnly ? '' : 'mt-0.5 '}flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${tone.iconClass}`}
+              className={`${titleOnly ? '' : 'mt-0.5 '}flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white ${tone.iconClass}`}
               style={tone.customColor ? { backgroundColor: tone.customColor, color: '#fff' } : undefined}
             >
-              <Icon className='h-4 w-4' aria-hidden />
+              <Icon className='h-4 w-4 text-white' aria-hidden />
             </span>
           )}
           <span className='min-w-0 flex-1'>
@@ -178,10 +180,11 @@ export function showNotificationToast(opts: ShowNotificationToastOptions): strin
               </span>
             ) : null}
             <span className='block text-sm font-semibold text-foreground'>{opts.title}</span>
-            {body ? (
-              <span className='mt-0.5 block text-xs text-muted-foreground line-clamp-2'>
-                {body}
-              </span>
+            {bodyHtml ? (
+              <span
+                className='mt-0.5 block text-xs text-muted-foreground line-clamp-2 [&_strong]:font-semibold [&_strong]:text-foreground/85 [&_b]:font-semibold [&_b]:text-foreground/85 [&_em]:italic [&_i]:italic [&_u]:underline [&_mark]:rounded-sm [&_mark]:bg-amber-500/20 [&_mark]:px-0.5 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:font-mono [&_code]:text-[10px]'
+                dangerouslySetInnerHTML={{ __html: bodyHtml }}
+              />
             ) : null}
             <ActionButtons toastId={tId} action={opts.action} cancel={opts.cancel} />
           </span>

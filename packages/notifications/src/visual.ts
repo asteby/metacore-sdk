@@ -69,9 +69,11 @@ export function moduleLabelFromMeta(meta: NotificationMeta): string {
 }
 
 export type NotificationTone = {
-  /** Circle behind the Lucide icon */
+  /** Circle behind the Lucide icon — always pair with text-white for contrast. */
   iconClass: string
-  /** Left border on list rows */
+  /** Thin straight accent bar (left of the row). */
+  lineClass: string
+  /** @deprecated kept for callers that still read it */
   rowAccentClass: string
   /** Optional explicit hex/css color from payload metadata.color */
   customColor?: string
@@ -80,22 +82,28 @@ export type NotificationTone = {
 const TONES: Record<NotificationType | 'default', NotificationTone> = {
   success: {
     iconClass: 'bg-emerald-500 text-white',
+    lineClass: 'bg-emerald-500',
     rowAccentClass: 'border-l-emerald-500',
   },
   warning: {
     iconClass: 'bg-amber-500 text-white',
+    lineClass: 'bg-amber-500',
     rowAccentClass: 'border-l-amber-500',
   },
   error: {
     iconClass: 'bg-red-500 text-white',
+    lineClass: 'bg-red-500',
     rowAccentClass: 'border-l-red-500',
   },
   info: {
-    iconClass: 'bg-primary text-primary-foreground',
+    // Force white glyph — primary-foreground is often a washed gray on brand themes.
+    iconClass: 'bg-primary text-white',
+    lineClass: 'bg-primary',
     rowAccentClass: 'border-l-primary',
   },
   default: {
-    iconClass: 'bg-primary text-primary-foreground',
+    iconClass: 'bg-primary text-white',
+    lineClass: 'bg-primary',
     rowAccentClass: 'border-l-primary',
   },
 }
