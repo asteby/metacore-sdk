@@ -1,5 +1,11 @@
 # @asteby/metacore-notifications
 
+## 24.0.6
+
+### Patch Changes
+
+- ae83011: Polish bell dropdown + toast: compact rows, high-contrast white icons, straight accent bar, and rich body text (safe HTML + auto-emphasis for folios/quantities).
+
 ## 24.0.5
 
 ### Patch Changes
