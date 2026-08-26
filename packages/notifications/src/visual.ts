@@ -26,6 +26,8 @@ const MODULE_LABELS: Record<string, string> = {
   hr: 'RRHH',
   vehicles: 'Vehículos',
   tires_inventory: 'Llantas',
+  link_inbox: 'Link Inbox',
+  team_chat: 'Equipo',
 }
 
 /** Hosts can register extra addon keys without forking the package. */
