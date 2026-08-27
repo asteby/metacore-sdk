@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 35.1.0
+
+### Minor Changes
+
+- 431f813: Role chips: Lucide icon + modern HSL color picker (popover SV plane / hue / hex) in PermissionsManager; ColorPickerField also used for DynamicForm color fields.
+
 ## 35.0.0
 
 ### Minor Changes
