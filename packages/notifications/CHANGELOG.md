@@ -1,5 +1,11 @@
 # @asteby/metacore-notifications
 
+## 24.0.9
+
+### Patch Changes
+
+- 431f813: Strip trailing zeros on quantity tokens in notification bodies (e.g. `-1.0000 ud` → `-1 ud`).
+
 ## 24.0.8
 
 ### Patch Changes
