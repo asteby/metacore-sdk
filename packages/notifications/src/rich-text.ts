@@ -43,10 +43,11 @@ export function enhancePlainNotificationText(text: string): string {
   s = s.replace(/(^|[\s(])_(.+?)_([\s).,;!]|$)/g, '$1<em>$2</em>$3')
   // Folios / codes: SO-00044, WO-12, INV-0001, …
   s = s.replace(/\b([A-Z]{1,8}-\d{2,})\b/g, '<strong>$1</strong>')
-  // Decimal quantities (e.g. -1.0000) and integers with units (3 ud, 2 kg)
+  // Decimal quantities (e.g. -1.0000 → -1) and integers with units (3 ud)
   s = s.replace(
-    /(^|[^\w.-])(-?\d+[.,]\d+)\b/g,
-    (_m, pre: string, num: string) => `${pre}<strong>${num}</strong>`,
+    /(^|[^\w.-])(-?\d+[.,]\d+)(\s*(?:ud|uds|pz|pzs|kg|g|lt|l|ml|cm|un))?\b/gi,
+    (_m, pre: string, num: string, unit: string | undefined) =>
+      `${pre}<strong>${formatQtyDisplay(num)}${unit ?? ''}</strong>`,
   )
   s = s.replace(
     /(^|[^\w.-])(-?\d+)(\s*(?:ud|uds|pz|pzs|kg|g|lt|l|ml|cm|un))\b/gi,
@@ -54,6 +55,18 @@ export function enhancePlainNotificationText(text: string): string {
       `${pre}<strong>${num}${unit}</strong>`,
   )
   return s
+}
+
+/** -1.0000 → -1 · 1,50 → 1,5 · keep meaningful decimals, drop trailing zeros. */
+export function formatQtyDisplay(raw: string): string {
+  const trimmed = String(raw ?? '').trim()
+  if (!trimmed) return trimmed
+  const comma = trimmed.includes(',')
+  const n = Number(trimmed.replace(',', '.'))
+  if (!Number.isFinite(n)) return trimmed
+  let out = n.toFixed(4).replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '')
+  if (comma) out = out.replace('.', ',')
+  return out
 }
 
 /** Final HTML string for a notification / toast body. */

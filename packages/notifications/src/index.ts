@@ -28,6 +28,7 @@ export {
   formatNotificationBodyHtml,
   enhancePlainNotificationText,
   sanitizeNotificationHtml,
+  formatQtyDisplay,
 } from './rich-text'
 export type {
   NotificationItem,
