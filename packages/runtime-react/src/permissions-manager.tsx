@@ -79,6 +79,9 @@ import {
     CollapsibleTrigger,
 } from '@asteby/metacore-ui/primitives'
 import { DynamicIcon } from './dynamic-icon'
+import { IconPickerField } from './icon-picker-field'
+import { ColorPickerField, DEFAULT_ROLE_COLOR } from './color-picker-field'
+import type { ActionFieldDef } from './types'
 
 // ---------------------------------------------------------------------------
 // Types (mirror of `GET /api/permissions/modules` + the host sidebar nav)
@@ -183,12 +186,15 @@ export interface RoleDef {
     label?: string
     /** Accent color (hex) for the role chip. */
     color?: string
+    /** Lucide PascalCase name (or image path) for the role chip. */
+    icon?: string
 }
 
 export interface RoleInput {
     name: string
     label?: string
     color?: string
+    icon?: string
 }
 
 export interface PermissionsManagerProps {
@@ -330,17 +336,28 @@ function slugify(label: string): string {
         .replace(/^_+|_+$/g, '')
 }
 
-const ROLE_COLORS = [
-    '#ef4444',
-    '#f97316',
-    '#eab308',
-    '#22c55e',
-    '#06b6d4',
-    '#3b82f6',
-    '#8b5cf6',
-    '#ec4899',
-    '#6b7280',
-]
+/** Suggest a Lucide icon from the role label (create-dialog default). */
+export function suggestRoleIcon(label: string): string {
+    const s = fold(label)
+    const rules: Array<[RegExp, string]> = [
+        [/cajer|cash|teller|bank/, 'Banknote'],
+        [/vend|seller|sales|shop|mostrador/, 'ShoppingBag'],
+        [/mecanic|technic|wrench|taller/, 'Wrench'],
+        [/jefe|lead|manager|gerente|supervisor/, 'HardHat'],
+        [/almacen|ware|stock|invent/, 'Warehouse'],
+        [/compr|purch|buyer/, 'Truck'],
+        [/contad|account|ledger/, 'Calculator'],
+        [/nomina|payroll|sueldo/, 'Wallet'],
+        [/rh|hr|human|emplead|people/, 'Users'],
+        [/fleet|flota|vehic/, 'Car'],
+        [/admin|dueño|owner/, 'ShieldCheck'],
+        [/view|observa|lectura|read/, 'Eye'],
+    ]
+    for (const [re, icon] of rules) {
+        if (re.test(s)) return icon
+    }
+    return 'Shield'
+}
 
 /**
  * Normalize whatever `loadModules` returned into the canonical grouped shape.
@@ -548,8 +565,16 @@ export function PermissionsManager({
         mode: 'create' | 'edit'
         label: string
         color: string
+        icon: string
         grantAll: boolean
-    }>({ open: false, mode: 'create', label: '', color: ROLE_COLORS[5], grantAll: false })
+    }>({
+        open: false,
+        mode: 'create',
+        label: '',
+        color: DEFAULT_ROLE_COLOR,
+        icon: 'Shield',
+        grantAll: false,
+    })
     const [roleSaving, setRoleSaving] = React.useState(false)
     const [deleteOpen, setDeleteOpen] = React.useState(false)
     const [deleting, setDeleting] = React.useState(false)
@@ -711,6 +736,7 @@ export function PermissionsManager({
                     name: slugify(label),
                     label,
                     color: roleDialog.color,
+                    icon: roleDialog.icon || suggestRoleIcon(label),
                 })
                 const rs = await loadRoles()
                 setRoles(rs)
@@ -732,6 +758,7 @@ export function PermissionsManager({
                     name: activeRole.name,
                     label,
                     color: roleDialog.color,
+                    icon: roleDialog.icon || suggestRoleIcon(label),
                 })
                 await refreshRoles(activeRole.id)
                 toast.success('Rol actualizado')
@@ -769,7 +796,8 @@ export function PermissionsManager({
             open: true,
             mode: 'edit',
             label: activeRole.label || activeRole.name,
-            color: activeRole.color || ROLE_COLORS[5],
+            color: activeRole.color || DEFAULT_ROLE_COLOR,
+            icon: activeRole.icon || suggestRoleIcon(activeRole.label || activeRole.name),
             grantAll: false,
         })
     }
@@ -843,7 +871,8 @@ export function PermissionsManager({
                                     open: true,
                                     mode: 'create',
                                     label: '',
-                                    color: ROLE_COLORS[5],
+                                    color: DEFAULT_ROLE_COLOR,
+                                    icon: 'Shield',
                                     grantAll: false,
                                 })
                             }
@@ -901,12 +930,18 @@ export function PermissionsManager({
                                             <span className="flex min-w-0 items-center gap-2">
                                                 {activeRole && (
                                                     <span
-                                                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                                                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
                                                         style={{
-                                                            background: activeRole.color || '#6b7280',
+                                                            background: `${activeRole.color || '#64748b'}22`,
+                                                            color: activeRole.color || '#64748b',
                                                         }}
                                                         aria-hidden="true"
-                                                    />
+                                                    >
+                                                        <DynamicIcon
+                                                            name={activeRole.icon || 'Shield'}
+                                                            className="h-3.5 w-3.5"
+                                                        />
+                                                    </span>
                                                 )}
                                                 <span className="truncate">
                                                     {activeRole
@@ -933,12 +968,18 @@ export function PermissionsManager({
                                                             }}
                                                         >
                                                             <span
-                                                                className="mr-2 h-2 w-2 shrink-0 rounded-full"
+                                                                className="mr-2 flex h-6 w-6 shrink-0 items-center justify-center rounded-md"
                                                                 style={{
-                                                                    background: role.color || '#6b7280',
+                                                                    background: `${role.color || '#64748b'}22`,
+                                                                    color: role.color || '#64748b',
                                                                 }}
                                                                 aria-hidden="true"
-                                                            />
+                                                            >
+                                                                <DynamicIcon
+                                                                    name={role.icon || 'Shield'}
+                                                                    className="h-3.5 w-3.5"
+                                                                />
+                                                            </span>
                                                             <span className="truncate">
                                                                 {role.label || role.name}
                                                             </span>
@@ -1224,30 +1265,48 @@ export function PermissionsManager({
                                 id="pm-role-name"
                                 value={roleDialog.label}
                                 placeholder="Ej. Cajero"
-                                onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                                    setRoleDialog((d) => ({ ...d, label: e.target.value }))
+                                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                                    const label = e.target.value
+                                    setRoleDialog((d) => ({
+                                        ...d,
+                                        label,
+                                        icon:
+                                            d.icon === suggestRoleIcon(d.label) ||
+                                            d.icon === 'Shield' ||
+                                            !d.icon
+                                                ? suggestRoleIcon(label)
+                                                : d.icon,
+                                    }))
+                                }}
+                            />
+                        </div>
+                        <div className="flex flex-col gap-2">
+                            <Label>Ícono</Label>
+                            <IconPickerField
+                                field={
+                                    {
+                                        key: 'icon',
+                                        label: 'Ícono',
+                                        type: 'text',
+                                        widget: 'icon',
+                                    } as ActionFieldDef
+                                }
+                                value={roleDialog.icon}
+                                onChange={(v) =>
+                                    setRoleDialog((d) => ({
+                                        ...d,
+                                        icon: typeof v === 'string' && v ? v : 'Shield',
+                                    }))
                                 }
                             />
                         </div>
                         <div className="flex flex-col gap-2">
                             <Label>Color</Label>
-                            <div className="flex flex-wrap gap-2">
-                                {ROLE_COLORS.map((c) => (
-                                    <button
-                                        key={c}
-                                        type="button"
-                                        aria-label={`Color ${c}`}
-                                        onClick={() => setRoleDialog((d) => ({ ...d, color: c }))}
-                                        className={cn(
-                                            'h-7 w-7 rounded-full border-2 transition-transform',
-                                            roleDialog.color === c
-                                                ? 'scale-110 border-foreground'
-                                                : 'border-transparent hover:scale-105',
-                                        )}
-                                        style={{ background: c }}
-                                    />
-                                ))}
-                            </div>
+                            <ColorPickerField
+                                aria-label="Color del rol"
+                                value={roleDialog.color}
+                                onChange={(color) => setRoleDialog((d) => ({ ...d, color }))}
+                            />
                         </div>
                         {roleDialog.mode === 'create' && (
                             <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3 text-sm hover:bg-muted/40">

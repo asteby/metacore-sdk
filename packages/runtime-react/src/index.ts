@@ -178,6 +178,7 @@ export {
     type UseDynamicRowActionsParams,
     type DynamicRowActions,
 } from './dynamic-row-actions'
+export { ColorPickerField, DEFAULT_ROLE_COLOR, normalizeHex } from './color-picker-field'
 export {
     PermissionsManager,
     moduleActionCapability,
@@ -185,6 +186,7 @@ export {
     grantedCountForModule,
     capabilitySetsEqual,
     defaultActionIcon,
+    suggestRoleIcon,
     normalizeCatalogGroups,
     flattenGroups,
     filterModuleGroups,

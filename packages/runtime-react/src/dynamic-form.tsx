@@ -35,6 +35,7 @@ import { DynamicSelectField } from './dynamic-select-field'
 import { DynamicDateField } from './dynamic-date-field'
 import { UploadField } from './upload-field'
 import { IconPickerField } from './icon-picker-field'
+import { ColorPickerField } from './color-picker-field'
 
 export { buildZodSchema, resolveWidget }
 export { DynamicLineItems } from './dynamic-line-items'
@@ -42,6 +43,7 @@ export { DynamicSelectField } from './dynamic-select-field'
 export { DynamicDateField } from './dynamic-date-field'
 export { UploadField } from './upload-field'
 export { IconPickerField } from './icon-picker-field'
+export { ColorPickerField, DEFAULT_ROLE_COLOR, normalizeHex } from './color-picker-field'
 
 export interface DynamicFormProps {
     fields: ActionFieldDef[]
@@ -399,7 +401,13 @@ function FieldRenderer({
             // / future MDX editor pick it up without breaking the contract.
             return <Textarea id={field.key} data-widget="richtext" value={value || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)} placeholder={field.placeholder} />
         case 'color':
-            return <Input id={field.key} type="color" value={value || '#000000'} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} />
+            return (
+                <ColorPickerField
+                    aria-label={field.label || field.key}
+                    value={typeof value === 'string' ? value : ''}
+                    onChange={onChange}
+                />
+            )
         case 'select':
             return (
                 <Select value={value || ''} onValueChange={onChange}>
