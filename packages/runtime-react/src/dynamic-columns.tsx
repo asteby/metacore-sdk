@@ -58,6 +58,7 @@ import { CollectionCell } from './collection-cell'
 import { isNilUuid, normalizeNilUuid } from './nil-uuid'
 import type { TableMetadata, ColumnDefinition } from './types'
 import { isColumnVisibleInTable } from './column-visibility'
+import { translateMaybeKey } from './translate-maybe-key'
 import type {
     ColumnFilterConfig,
     GetDynamicColumns,
@@ -1478,7 +1479,9 @@ export function makeDefaultGetDynamicColumns(
                                             onClick={() => onAction && onAction(action.key, row.original)}
                                         >
                                             <DynamicIcon name={action.icon} className="mr-2 h-4 w-4" />
-                                            {action.label}
+                                            {t
+                                                ? translateMaybeKey(t, action.label)
+                                                : action.label}
                                         </DropdownMenuItem>
                                     ))}
                             </DropdownMenuContent>
