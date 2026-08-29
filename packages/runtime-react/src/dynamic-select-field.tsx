@@ -192,6 +192,18 @@ export interface DynamicSelectFieldProps {
      * meaningful in context.
      */
     hideCreate?: boolean
+    /**
+     * Pre-filled values for the record the inline "+" creates, forwarded to
+     * the host's create modal via the `metacore:create-record` event.
+     * Generic: any model, any fields (e.g. a mechanic picker seeding
+     * `{ role: 'mecanico' }` on a new team user).
+     */
+    createDefaults?: Record<string, unknown>
+    /**
+     * Fields of the inline-created record the user must NOT change — the
+     * host's create modal renders them locked. Pairs with `createDefaults`.
+     */
+    createLockedFields?: string[]
 }
 
 export function DynamicSelectField({
@@ -205,6 +217,8 @@ export function DynamicSelectField({
     staticOptions = null,
     descriptionAsBadge = false,
     hideCreate = false,
+    createDefaults,
+    createLockedFields,
 }: DynamicSelectFieldProps) {
     const { t } = useTranslation()
     const ph = (fallback: string) =>
@@ -325,6 +339,11 @@ export function DynamicSelectField({
             new CustomEvent('metacore:create-record', {
                 detail: {
                     model: fieldRef,
+                    // Generic passthrough: the host's create modal seeds these
+                    // values and locks these fields (DynamicRecordDialog's own
+                    // defaults/lockedFields props). Undefined when unused.
+                    defaults: createDefaults,
+                    lockedFields: createLockedFields,
                     onCreated: (rec: any) => {
                         if (rec && rec.id != null) {
                             const id = String(rec.id)
