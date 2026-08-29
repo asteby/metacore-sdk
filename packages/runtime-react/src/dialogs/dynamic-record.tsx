@@ -217,6 +217,13 @@ function localizedModelName(meta: ModalMetadata, t: TFn): string {
 export interface DynamicRecordDialogProps {
     open: boolean
     onOpenChange: (open: boolean) => void
+    /**
+     * Set by the host's inline-create bridge on the sibling "Crear" dialog:
+     * marks this dialog as the nested-create SELF so the ui Dialog stamps
+     * data-nested-inline-create (surgical focus release) and the body guard
+     * lets it close while the depth lock is held.
+     */
+    nestedInlineCreateSelf?: boolean
     mode: 'view' | 'edit' | 'create'
     model: string
     recordId?: string | null
@@ -563,6 +570,7 @@ export function stripHiddenFieldValues(
 export function DynamicRecordDialog({
     open,
     onOpenChange,
+    nestedInlineCreateSelf,
     mode,
     model,
     recordId,
@@ -983,7 +991,7 @@ export function DynamicRecordDialog({
 
     return (
         <RecordDialogModelContext.Provider value={model}>
-        <Dialog open={open} onOpenChange={onOpenChange}>
+        <Dialog open={open} onOpenChange={onOpenChange} nestedInlineCreateSelf={nestedInlineCreateSelf}>
             <DialogContent className="sm:max-w-2xl max-h-[90dvh] flex flex-col p-0 gap-0 overflow-hidden" style={{ maxHeight: '90dvh' }}>
                 <DialogHeader className="p-6 pb-4 border-b shrink-0">
                     <DialogTitle>{title}</DialogTitle>
