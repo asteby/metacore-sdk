@@ -2,11 +2,7 @@ import * as React from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { XIcon } from 'lucide-react'
 import { useRadixModalBodyGuard } from '@/hooks/use-radix-modal-body-guard'
-import {
-  guardNestedInlineCreateDismiss,
-  isNestedInlineCreateOpen,
-  subscribeNestedInlineCreate,
-} from '@/lib/nested-inline-create'
+import { guardNestedInlineCreateDismiss } from '@/lib/nested-inline-create'
 import { cn } from '@/lib/utils'
 
 type DialogProps = React.ComponentProps<typeof DialogPrimitive.Root> & {
@@ -14,42 +10,37 @@ type DialogProps = React.ComponentProps<typeof DialogPrimitive.Root> & {
   nestedInlineCreateSelf?: boolean
 }
 
-/** Cross-bundle depth as reactive state (window-event backed). */
-function useNestedInlineCreateOpen(): boolean {
-  return React.useSyncExternalStore(
-    subscribeNestedInlineCreate,
-    isNestedInlineCreateOpen,
-    () => false,
-  )
-}
+// Marks the subtree of the inline-create "self" dialog so DialogContent can
+// stamp data-nested-inline-create on its Radix Content — the surgical focus
+// release in nested-inline-create.ts keys off that attribute.
+const NestedInlineCreateSelfContext = React.createContext(false)
 
 function Dialog({
   open,
   onOpenChange,
   nestedInlineCreateSelf,
-  modal,
   ...props
 }: DialogProps) {
   const handleOpenChange = useRadixModalBodyGuard(open, onOpenChange, {
     nestedInlineCreateSelf,
   })
-  // While an inline-create sibling dialog is open (host RecordCreateBridge,
-  // possibly in ANOTHER MF bundle), drop this dialog's modality: the dismiss
-  // guards already keep it open, but Radix's FocusScope (trapped when modal)
-  // would keep YANKING focus back from the sibling — its content lives in a
-  // different React tree, so the trap treats it as outside — making the
-  // create form impossible to type into. Non-modal releases the trap; the
-  // depth event restores modality the moment the create closes.
-  const inlineOpen = useNestedInlineCreateOpen()
-  const effectiveModal = nestedInlineCreateSelf ? modal : inlineOpen ? false : modal
+  // NOTE (2.17.2): dialogs no longer flip modal={false} while an inline
+  // create is open. Radix renders NO Overlay in non-modal mode and swaps
+  // DialogContentModal↔NonModal (a REMOUNT of the whole form: selects lost
+  // their labels and showed raw UUIDs, the backdrop vanished, pointer/scroll
+  // locks dropped). The parent's focus trap is now released surgically in
+  // nested-inline-create.ts instead: capture-phase focusin/focusout listeners
+  // stop Radix FocusScope from ever seeing focus moves into the sibling
+  // create dialog (marked via data-nested-inline-create below).
   return (
-    <DialogPrimitive.Root
-      data-slot='dialog'
-      open={open}
-      onOpenChange={handleOpenChange}
-      modal={effectiveModal}
-      {...props}
-    />
+    <NestedInlineCreateSelfContext.Provider value={Boolean(nestedInlineCreateSelf)}>
+      <DialogPrimitive.Root
+        data-slot='dialog'
+        open={open}
+        onOpenChange={handleOpenChange}
+        {...props}
+      />
+    </NestedInlineCreateSelfContext.Provider>
   )
 }
 
@@ -104,11 +95,13 @@ function DialogContent({
     },
     [],
   )
+  const nestedSelf = React.useContext(NestedInlineCreateSelfContext)
   return (
     <DialogPortal data-slot='dialog-portal'>
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot='dialog-content'
+        {...(nestedSelf ? { 'data-nested-inline-create': '' } : {})}
         className={cn(
           'bg-background data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border p-6 shadow-lg duration-200 sm:max-w-lg',
           className
