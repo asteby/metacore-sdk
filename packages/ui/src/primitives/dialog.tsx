@@ -2,7 +2,11 @@ import * as React from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { XIcon } from 'lucide-react'
 import { useRadixModalBodyGuard } from '@/hooks/use-radix-modal-body-guard'
-import { guardNestedInlineCreateDismiss } from '@/lib/nested-inline-create'
+import {
+  guardNestedInlineCreateDismiss,
+  isNestedInlineCreateOpen,
+  subscribeNestedInlineCreate,
+} from '@/lib/nested-inline-create'
 import { cn } from '@/lib/utils'
 
 type DialogProps = React.ComponentProps<typeof DialogPrimitive.Root> & {
@@ -10,20 +14,40 @@ type DialogProps = React.ComponentProps<typeof DialogPrimitive.Root> & {
   nestedInlineCreateSelf?: boolean
 }
 
+/** Cross-bundle depth as reactive state (window-event backed). */
+function useNestedInlineCreateOpen(): boolean {
+  return React.useSyncExternalStore(
+    subscribeNestedInlineCreate,
+    isNestedInlineCreateOpen,
+    () => false,
+  )
+}
+
 function Dialog({
   open,
   onOpenChange,
   nestedInlineCreateSelf,
+  modal,
   ...props
 }: DialogProps) {
   const handleOpenChange = useRadixModalBodyGuard(open, onOpenChange, {
     nestedInlineCreateSelf,
   })
+  // While an inline-create sibling dialog is open (host RecordCreateBridge,
+  // possibly in ANOTHER MF bundle), drop this dialog's modality: the dismiss
+  // guards already keep it open, but Radix's FocusScope (trapped when modal)
+  // would keep YANKING focus back from the sibling — its content lives in a
+  // different React tree, so the trap treats it as outside — making the
+  // create form impossible to type into. Non-modal releases the trap; the
+  // depth event restores modality the moment the create closes.
+  const inlineOpen = useNestedInlineCreateOpen()
+  const effectiveModal = nestedInlineCreateSelf ? modal : inlineOpen ? false : modal
   return (
     <DialogPrimitive.Root
       data-slot='dialog'
       open={open}
       onOpenChange={handleOpenChange}
+      modal={effectiveModal}
       {...props}
     />
   )
