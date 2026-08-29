@@ -49,11 +49,22 @@ export function isNestedInlineCreateOpen(): boolean {
 // MF bundles) and removed when depth returns to 0.
 const GUARD_KEY = '__metacore_nested_inline_create_focus_guard__'
 
+// The create dialog's own floating layers — Select dropdowns, date-picker
+// popovers, comboboxes — PORTAL to <body> inside Radix's popper wrapper, so
+// they are NOT descendants of [data-nested-inline-create]. Without covering
+// them, opening a select/calendar inside "Crear" moved focus "outside" the
+// marked container, the parent modal's trap yanked it back, and the popover
+// closed on the spot (dates unpickable, selects flashing shut). While the
+// depth lock is held, any popper-portaled layer belongs to the create flow —
+// the parent is inert behind its overlay and opens no popovers of its own.
+const NESTED_SAFE_SELECTOR =
+  '[data-nested-inline-create], [data-radix-popper-content-wrapper], [data-radix-select-viewport], [role="listbox"]'
+
 function insideNestedCreate(node: unknown): boolean {
   return Boolean(
     node &&
       typeof (node as Element).closest === 'function' &&
-      (node as Element).closest('[data-nested-inline-create]'),
+      (node as Element).closest(NESTED_SAFE_SELECTOR),
   )
 }
 
