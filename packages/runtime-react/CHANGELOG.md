@@ -1,5 +1,15 @@
 # @asteby/metacore-runtime-react
 
+## 36.1.0
+
+### Minor Changes
+
+- 4698928: DynamicSelectField gains generic `createDefaults` / `createLockedFields`
+  props: the inline "+" forwards them on the `metacore:create-record`
+  event so the host's create modal seeds those values and locks those
+  fields. Any model, any fields — e.g. a mechanic picker creating a team
+  user with `{ role: 'mecanico' }` pre-set and locked, no HR dependency.
+
 ## 36.0.1
 
 ### Patch Changes
