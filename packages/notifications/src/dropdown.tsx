@@ -124,8 +124,25 @@ export function NotificationsDropdown({
 
   const ingestWsPayload = useCallback(
     (payload: NotificationWsPayload) => {
+      // Deterministic id BEFORE the random fallback: the same notification
+      // arrives over BOTH transports (WS frame + SSE, by design — SSE can
+      // drop frames), and only one of the two paths used to synthesize a
+      // stable id. The other fell straight to randomUUID, so seenIdsRef
+      // could never collapse the pair → duplicate toast + bell entry for
+      // every declarative notification. Derive the same `ntf:` identity from
+      // the payload's metadata on every path; random stays as last resort
+      // for payloads with no distinguishing fields at all.
+      const earlyMeta =
+        typeof payload.metadata === 'object' && payload.metadata
+          ? (payload.metadata as Record<string, unknown>)
+          : parseNotificationMeta(
+              typeof payload.metadata === 'string' ? payload.metadata : undefined,
+            )
+      const recordId = earlyMeta.record_id as string | undefined
+      const eventKey = (earlyMeta.event ?? earlyMeta.rule) as string | undefined
       const id =
         payload.id ||
+        (recordId && eventKey ? `ntf:${eventKey}:${recordId}` : '') ||
         (typeof crypto !== 'undefined' && 'randomUUID' in crypto
           ? crypto.randomUUID()
           : `${Date.now()}-${Math.random()}`)
