@@ -30,12 +30,66 @@ export function isNestedInlineCreateOpen(): boolean {
   return nestedInlineCreateDepth() > 0
 }
 
+// ── Surgical focus-trap release ──────────────────────────────────────────────
+//
+// Radix FocusScope (the parent modal's trap) registers bubble-phase focusin/
+// focusout handlers on `document` and yanks focus back whenever it moves to
+// an element outside its container — which is exactly what the sibling
+// inline-create dialog is when it lives in ANOTHER MF bundle's React tree.
+// Instead of demodalizing the parent (2.17.1 — lost the overlay, dropped the
+// pointer/scroll locks, and REMOUNTED the content swapping Radix's modal/
+// non-modal content components), we install CAPTURE-phase listeners on
+// `document` while an inline create is open: any focus event whose target
+// (focusin) / relatedTarget (focusout) sits inside the create dialog
+// ([data-nested-inline-create], stamped by DialogContent) is stopped with
+// stopImmediatePropagation() BEFORE the parent's bubble-phase trap sees it.
+// The parent keeps overlay, locks and modality; the child keeps focus.
+//
+// Installed once per page (flag on globalThis — module state doesn't cross
+// MF bundles) and removed when depth returns to 0.
+const GUARD_KEY = '__metacore_nested_inline_create_focus_guard__'
+
+function insideNestedCreate(node: unknown): boolean {
+  return Boolean(
+    node &&
+      typeof (node as Element).closest === 'function' &&
+      (node as Element).closest('[data-nested-inline-create]'),
+  )
+}
+
+function onFocusInCapture(e: FocusEvent): void {
+  if (insideNestedCreate(e.target)) e.stopImmediatePropagation()
+}
+
+function onFocusOutCapture(e: FocusEvent): void {
+  if (insideNestedCreate(e.relatedTarget)) e.stopImmediatePropagation()
+}
+
+function installFocusGuard(): void {
+  const g = globalThis as Record<string, unknown>
+  if (typeof g.document === 'undefined' || g[GUARD_KEY]) return
+  g[GUARD_KEY] = true
+  document.addEventListener('focusin', onFocusInCapture, true)
+  document.addEventListener('focusout', onFocusOutCapture, true)
+}
+
+function removeFocusGuard(): void {
+  const g = globalThis as Record<string, unknown>
+  if (typeof g.document === 'undefined' || !g[GUARD_KEY]) return
+  delete g[GUARD_KEY]
+  document.removeEventListener('focusin', onFocusInCapture, true)
+  document.removeEventListener('focusout', onFocusOutCapture, true)
+}
+
 /** Increment depth; returned function decrements (use in useEffect cleanup). */
 export function pushNestedInlineCreate(): () => void {
-  setNestedInlineCreateDepth(nestedInlineCreateDepth() + 1)
+  const next = nestedInlineCreateDepth() + 1
+  setNestedInlineCreateDepth(next)
+  if (next === 1) installFocusGuard()
   emitDepthChange()
   return () => {
     setNestedInlineCreateDepth(nestedInlineCreateDepth() - 1)
+    if (nestedInlineCreateDepth() === 0) removeFocusGuard()
     emitDepthChange()
   }
 }
