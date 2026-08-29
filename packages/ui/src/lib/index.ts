@@ -14,3 +14,9 @@ export {
   OPTION_PALETTE,
 } from './option-colors'
 export { getInitials, type GetInitialsOptions } from './get-initials'
+export {
+  nestedInlineCreateDepth,
+  isNestedInlineCreateOpen,
+  pushNestedInlineCreate,
+  guardNestedInlineCreateDismiss,
+} from './nested-inline-create'
