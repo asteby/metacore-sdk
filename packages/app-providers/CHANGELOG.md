@@ -1,5 +1,12 @@
 # @asteby/metacore-app-providers
 
+## 99.0.0
+
+### Patch Changes
+
+- Updated dependencies [9023aa9]
+  - @asteby/metacore-pwa@0.6.0
+
 ## 98.0.0
 
 ### Patch Changes
