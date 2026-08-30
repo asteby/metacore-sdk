@@ -54,7 +54,8 @@
     "vite-plugin-pwa": ">=1"
   },
   "dependencies": {
-    "lucide-react": "^1.0.0"
+    "lucide-react": "^1.0.0",
+    "@asteby/metacore-notifications": "workspace:*"
   },
   "devDependencies": {
     "@types/react": "^19.0.0",
