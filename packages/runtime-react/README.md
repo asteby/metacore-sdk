@@ -33,6 +33,39 @@ Peers: `react`, `react-dom`, `react-i18next`, `i18next`, `@tanstack/react-router
 | `<LicenseGate state={…} onActivate={…}>` | El blindaje del negocio: envuelve la app; bloquea con un modal full-screen no descartable cuando la licencia de instancia falta/venció, degrada con banner en `grace`/`stale`. Branding-aware. |
 | `<LicenseExpiryBanner state={…} />` / `<LicenseStatusBadge status={…} />` | Piezas sueltas del gate para Ajustes u otros lugares. |
 | `isLicenseOperable` / `isLicenseBlocking` / `isPresetEntitled` / `isTrialExpired` | Helpers puros sobre `LicenseState`, espejo de `State.Operable()/Blocking()` del backend. |
+| `<RealtimeProvider client={…} />` / `useRealtime()` / `useRealtimeInvalidate()` / `useRealtimeStatus()` / `useRealtimeTick()` | Reacción en vivo a `DATA_EVENT` del host (ver [Realtime](#realtime)). |
+
+## Realtime
+
+El host expone un `RealtimeAPI` (`@asteby/metacore-sdk`) — en ops viaja como
+`host.realtime` a las rutas inmersivas y como `api.realtime` a `register(api)`.
+Los frames son org-scoped y **sin valores de fila** (identidad + qué llaves
+cambiaron); la reacción típica es "refetch lo que muestro".
+
+```tsx
+// Host: montar una vez, dentro del QueryClientProvider y del provider de WS.
+<RealtimeProvider client={realtimeClient}>…</RealtimeProvider>
+
+// Addon federado: pasar el cliente explícito — el contexto React NO cruza la
+// frontera de module federation, el objeto plano sí.
+useRealtime({ models: ['SalesOrder'], client: host.realtime }, (e) => {
+  if (e.action === 'resync' || e.id === currentId) refetch()
+})
+
+// Invalidar react-query (usa SIEMPRE el QueryClient del host — nunca crees otro):
+useRealtimeInvalidate({ models: ['SalesOrder', 'sales_order_items'], client: host.realtime })
+
+// Tablas y kanbans: opt-in por prop (apagado por default).
+<DynamicTable model="SalesOrder" realtime />
+<DynamicKanban model="WorkOrder" realtime />
+// …o global para todo lo que cuelgue del provider:
+<RealtimeProvider client={realtimeClient} defaultRealtime>
+```
+
+`useRealtimeInvalidate` invalida toda query cuya key (string, array anidado u
+objeto) mencione el modelo, la tabla o `addon.Model` — también como segmento de
+una ruta (`/data/sales_orders?…`). Se puede reemplazar el matcher con `match`.
+Todos los hooks son no-op cuando no hay cliente (host sin realtime).
 
 ## Blindaje de licencia (`LicenseGate`)
 

@@ -7,3 +7,4 @@ export * from "./bootstrap.js";
 export * from "./action-registry.js";
 export * from "./wasm-client.js";
 export * from "./brand.js";
+export * from "./realtime.js";

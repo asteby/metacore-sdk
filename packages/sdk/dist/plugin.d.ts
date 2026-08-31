@@ -5,6 +5,7 @@
 import type { MarketplaceClient } from "./client.js";
 import type { Registry } from "./registry.js";
 import type { LegacyManifest as Manifest } from "./types.js";
+import type { RealtimeAPI } from "./realtime.js";
 /** Cleanup run when a fiber unloads (hot-swap, uninstall, unmount). */
 export type Disposable = () => void | Promise<void>;
 /** What the host hands each addon at registration time. */
@@ -28,6 +29,12 @@ export interface AddonAPI {
         warn: (msg: string, data?: unknown) => void;
         error: (msg: string, data?: unknown) => void;
     };
+    /**
+     * Live data changes of the operator's org (org-scoped, value-free
+     * `DATA_EVENT` frames over the host's single authenticated socket). Absent
+     * on hosts without realtime — addons must tolerate `undefined`.
+     */
+    realtime?: RealtimeAPI;
 }
 /** Every addon module's default export. */
 export interface Plugin {

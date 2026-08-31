@@ -90,6 +90,7 @@ import {
 import { ColumnFilterControl, FilterValueCombobox, type ColumnFilterType } from '@asteby/metacore-ui/data-table'
 import { generateBadgeStyles, optionColor } from '@asteby/metacore-ui/lib'
 import { useApi } from './api-context'
+import { useRealtimeDefault, useRealtimeTick } from './realtime-context'
 import {
     useStageAutomations,
     StageAutomationsButton,
@@ -462,6 +463,12 @@ export interface DynamicKanbanProps {
     endpoint?: string
     /** Bump to force a metadata + records refetch (same contract as DynamicTable). */
     refreshTrigger?: any
+    /**
+     * Refetch the board when the host's realtime client reports a data event
+     * for this model (same contract as DynamicTable's `realtime`). Off by
+     * default; `<RealtimeProvider defaultRealtime>` flips the default.
+     */
+    realtime?: boolean
     /** Called when a card is clicked (outside its action menu). */
     onCardClick?: (row: any) => void
     /**
@@ -497,6 +504,7 @@ export function DynamicKanban({
     model,
     endpoint,
     refreshTrigger,
+    realtime: realtimeProp,
     onCardClick,
     onAction,
     pageSize = 50,
@@ -508,6 +516,13 @@ export function DynamicKanban({
     const { t, i18n } = useTranslation()
     const api = useApi()
     const isDark = useIsDarkTheme()
+    // Realtime refetch (opt-in) — debounced counter bumped by DATA_EVENTs for
+    // this model; folded into the board refetch effect next to refreshTrigger.
+    const realtimeDefault = useRealtimeDefault()
+    const realtimeTick = useRealtimeTick({
+        models: [model],
+        enabled: realtimeProp ?? realtimeDefault,
+    })
 
     // Stage automations (Bitrix-style per-lane rules). Degrades to no-op when
     // the host has no `/stage-automations` endpoint — the ⚡ affordance hides.
@@ -782,7 +797,9 @@ export function DynamicKanban({
             void fetchData()
         }, 200)
         return () => clearTimeout(handle)
-    }, [fetchData, metadata, refreshTrigger])
+        // realtimeTick: data events for this model (see the `realtime` prop).
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [fetchData, metadata, refreshTrigger, realtimeTick])
 
     // Filterable fields for the toolbar, in metadata order (explicit filters
     // first, then filterable columns), each labeled from its metadata source.

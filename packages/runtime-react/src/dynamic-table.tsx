@@ -64,6 +64,7 @@ import { toast } from 'sonner'
 import { Progress } from './dialogs/_primitives'
 import { useMetadataCache } from './metadata-cache'
 import { useApi, useCurrentBranch } from './api-context'
+import { useRealtimeDefault, useRealtimeTick } from './realtime-context'
 import type { ColumnFilterConfig, GetDynamicColumns } from './dynamic-columns-shim'
 import { defaultGetDynamicColumns, DATE_CELL_TYPES, aggregateOf, formatAggregateTotal } from './dynamic-columns'
 import { useFacetLoaders, isLongTextColumn } from './use-facet-loaders'
@@ -185,6 +186,13 @@ export interface DynamicTableProps {
      */
     onRowClick?: (row: any) => void
     refreshTrigger?: any
+    /**
+     * Refetch when the host's realtime client reports a data event for this
+     * model (created/updated/deleted by anyone in the org, or a `resync`).
+     * Off by default; `<RealtimeProvider defaultRealtime>` turns it on for
+     * every table, and an explicit prop always wins. No-op without a client.
+     */
+    realtime?: boolean
     defaultFilters?: Record<string, any>
     extraColumns?: ColumnDef<any>[]
     /**
@@ -241,6 +249,7 @@ export function DynamicTable({
     onAction,
     onRowClick,
     refreshTrigger,
+    realtime: realtimeProp,
     defaultFilters,
     extraColumns = [],
     getDynamicColumns = defaultGetDynamicColumns,
@@ -255,6 +264,13 @@ export function DynamicTable({
     const { t, i18n } = useTranslation()
     const api = useApi()
     const currentBranch = useCurrentBranch()
+    // Realtime refetch (opt-in): a debounced counter that bumps on every
+    // DATA_EVENT for this model and rides the same deps as `refreshTrigger`.
+    const realtimeDefault = useRealtimeDefault()
+    const realtimeTick = useRealtimeTick({
+        models: [model],
+        enabled: realtimeProp ?? realtimeDefault,
+    })
 
     const prevBranchId = useRef(currentBranch?.id)
 
@@ -742,7 +758,8 @@ export function DynamicTable({
         } finally {
             setLoadingData(false)
         }
-    }, [model, metadata, pagination, buildFilterParams, refreshTrigger, endpoint, currentBranch?.id, api, enableUrlSync])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [model, metadata, pagination, buildFilterParams, refreshTrigger, realtimeTick, endpoint, currentBranch?.id, api, enableUrlSync])
 
     // Columns whose metadata opts into a footer total (display_config.aggregate
     // → styleConfig.aggregate). When empty, no footer row is rendered and no
@@ -911,8 +928,9 @@ export function DynamicTable({
         // matching the classic path (fetchData carries refreshTrigger in its
         // deps). Without it the comment above lied: infinite lists silently
         // failed to reload after a create ("a veces no recarga la tabla").
+        // realtimeTick plays the same role for data events (see the `realtime` prop).
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [infiniteScroll, metadata, filterSignature, refreshTrigger])
+    }, [infiniteScroll, metadata, filterSignature, refreshTrigger, realtimeTick])
 
     const handleRefresh = useCallback(() => {
         // Infinite mode owns its own list: refresh reloads page 1 and drops the
