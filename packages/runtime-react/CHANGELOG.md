@@ -1,5 +1,16 @@
 # @asteby/metacore-runtime-react
 
+## 37.0.0
+
+### Minor Changes
+
+- d1ffa4f: Realtime en React: `RealtimeProvider`, `useRealtime`, `useRealtimeInvalidate` (invalida las queries del QueryClient del host cuya key menciona el modelo/tabla), `useRealtimeStatus`, `useRealtimeTick` y `queryKeyMatchesEvent`. `DynamicTable` y `DynamicKanban` aceptan la prop opt-in `realtime` (apagada por default; `<RealtimeProvider defaultRealtime>` cambia el default) para refetch en vivo ante `DATA_EVENT` del modelo.
+
+### Patch Changes
+
+- Updated dependencies [d1ffa4f]
+  - @asteby/metacore-sdk@3.7.0
+
 ## 36.1.0
 
 ### Minor Changes
