@@ -4,6 +4,13 @@
 
 ### Patch Changes
 
+- Updated dependencies [d1ffa4f]
+  - @asteby/metacore-sdk@3.7.0
+
+## 14.0.0
+
+### Patch Changes
+
 - Updated dependencies [e74975a]
   - @asteby/metacore-sdk@3.6.0
 
