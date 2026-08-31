@@ -214,6 +214,21 @@ export * from './use-org-document-templates'
 export * from './document-template-editor'
 export * from './metadata-cache'
 export {
+    RealtimeProvider,
+    useRealtimeClient,
+    useRealtimeDefault,
+    useRealtime,
+    useRealtimeStatus,
+    useRealtimeInvalidate,
+    useRealtimeTick,
+    queryKeyMatchesEvent,
+    type RealtimeContextValue,
+    type RealtimeProviderProps,
+    type UseRealtimeOptions,
+    type UseRealtimeInvalidateOptions,
+    type UseRealtimeTickOptions,
+} from './realtime-context'
+export {
     ADDON_MANIFEST_CHANGED_TYPE,
     wireHotSwapInvalidation,
     useManifestHotSwapSubscriber,
