@@ -1,5 +1,17 @@
 # @asteby/metacore-runtime-react
 
+## 37.0.0
+
+### Minor Changes
+
+- a0616e1: `DynamicTable` acepta la prop opcional `allowedActionKeys?: string[]`: un allowlist de acciones de fila (por `key` del manifest v3) a renderizar para ESA instancia de la tabla, en vez de todas las acciones que el modelo declara. Permite que dos vistas del mismo modelo (una tabla genérica y una pantalla de propósito específico, ej. una cola de aprobación de crédito) muestren distintas acciones sin tocar el manifest ni duplicar el modelo. `undefined` conserva el comportamiento actual (todas las acciones).
+- d1ffa4f: Realtime en React: `RealtimeProvider`, `useRealtime`, `useRealtimeInvalidate` (invalida las queries del QueryClient del host cuya key menciona el modelo/tabla), `useRealtimeStatus`, `useRealtimeTick` y `queryKeyMatchesEvent`. `DynamicTable` y `DynamicKanban` aceptan la prop opt-in `realtime` (apagada por default; `<RealtimeProvider defaultRealtime>` cambia el default) para refetch en vivo ante `DATA_EVENT` del modelo.
+
+### Patch Changes
+
+- Updated dependencies [d1ffa4f]
+  - @asteby/metacore-sdk@3.7.0
+
 ## 36.1.0
 
 ### Minor Changes
