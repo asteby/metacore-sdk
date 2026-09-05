@@ -177,6 +177,17 @@ export interface DynamicTableProps {
     /** Hide the export action on this view. See `hideImport`. */
     hideExport?: boolean
     hiddenColumns?: string[]
+    /**
+     * Row-action ALLOWLIST for this table instance, by action key (manifest
+     * v3 NavItem.actions, carried through the host's nav item for this route).
+     * When set, only these row actions render — even though the model may
+     * declare more. Lets two views of the SAME model differ: a generic list
+     * keeps every action, while a purpose-built screen (e.g. a credit-approval
+     * queue) shows only authorize_credit/reject_credit instead of every action
+     * SalesOrder declares (Generar factura, Cancelar, etc. included).
+     * Undefined → every row action the model declares (unchanged default).
+     */
+    allowedActionKeys?: string[]
     onAction?: (action: string, row: any) => void
     /**
      * Called when the user clicks anywhere on a data row (not on a checkbox,
@@ -246,6 +257,7 @@ export function DynamicTable({
     hideImport,
     hideExport,
     hiddenColumns = [],
+    allowedActionKeys,
     onAction,
     onRowClick,
     refreshTrigger,
@@ -1142,15 +1154,27 @@ export function DynamicTable({
         // Row-action column only renders per-row actions. Table-level placements
         // ("table"/"create") are surfaced by <ModelActionToolbar> at the page
         // level, so strip them here to avoid a meaningless per-row button.
-        const rowMetadata = viewMetadata.actions?.some((a) => a.placement === 'table' || a.placement === 'create')
-            ? { ...viewMetadata, actions: viewMetadata.actions.filter((a) => !a.placement || a.placement === 'row') }
-            : viewMetadata
+        // `allowedActionKeys`, when given, further narrows the row set to a
+        // per-VIEW allowlist — two nav entries on the same model (a generic
+        // list vs. a purpose-built approval queue) can then show different
+        // actions instead of every action the model declares.
+        const rowMetadata = (() => {
+            let actions = viewMetadata.actions
+            if (actions?.some((a) => a.placement === 'table' || a.placement === 'create')) {
+                actions = actions.filter((a) => !a.placement || a.placement === 'row')
+            }
+            if (allowedActionKeys && actions) {
+                const allowed = new Set(allowedActionKeys)
+                actions = actions.filter((a) => allowed.has(a.key))
+            }
+            return actions === viewMetadata.actions ? viewMetadata : { ...viewMetadata, actions }
+        })()
         const baseColumns = getDynamicColumns(rowMetadata, handleInternalAction, t, i18n.language, columnFilterConfigs, timeZone, currency)
         const filteredBase = baseColumns.filter((col: ColumnDef<any>) => !hiddenColumns.includes(col.id as string))
         const actionsCol = filteredBase.find((c: ColumnDef<any>) => c.id === 'actions')
         const otherCols = filteredBase.filter((c: ColumnDef<any>) => c.id !== 'actions')
         return [...otherCols, ...extraColumns, ...(actionsCol ? [actionsCol] : [])]
-    }, [viewMetadata, handleInternalAction, hiddenColumns, extraColumns, t, i18n.language, columnFilterConfigs, getDynamicColumns, timeZone, currency])
+    }, [viewMetadata, handleInternalAction, hiddenColumns, allowedActionKeys, extraColumns, t, i18n.language, columnFilterConfigs, getDynamicColumns, timeZone, currency])
 
     const filters = useMemo(() => [], [])
 
