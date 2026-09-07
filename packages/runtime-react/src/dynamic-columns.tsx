@@ -244,9 +244,21 @@ export const isActionAllowedForRowState = (action: any, row: any): boolean => {
  * Declarative `condition` gate for a per-row action: shows the action only when
  * the row's `field` satisfies the operator. Supports both the SDK dialect
  * (`eq` | `neq` | `in` | `not_in`) and the common host dialect
- * (`equals` | `notEquals` | `not_in`). Nested paths (`user.verified`) are
- * resolved via `getNestedValue`. No condition → always shown. Unknown
- * operator → permissive.
+ * (`equals` | `notEquals` | `not_in`), plus the truthy/falsy family (same
+ * operator set as the host's document print gate — services/document_gate.go
+ * — kept in sync so a manifest author doesn't have to know which gate a given
+ * contribution goes through). Nested paths (`user.verified`) are resolved via
+ * `getNestedValue`. No condition → always shown.
+ *
+ * `default: return true` for a genuinely unknown operator is deliberate — an
+ * addon shipped against a newer SDK than the host runs should degrade to
+ * "always show" (worst case: an extra menu item), never to "always hide"
+ * (worst case: a feature silently vanishes). That same permissiveness is why
+ * `truthy`/`falsy` going unrecognized here was a real, silent bug rather
+ * than a build error: confirmed live — a `condition: {field: "amount_due",
+ * operator: "truthy"}` row action rendered on every row regardless of
+ * amount_due, because the switch fell through to the default and nothing
+ * ever signaled it wasn't actually gating anything.
  */
 export const isActionConditionMet = (action: any, row: any): boolean => {
     if (!action?.condition) return true
@@ -279,6 +291,14 @@ export const isActionConditionMet = (action: any, row: any): boolean => {
         case 'not_in':
         case 'notin':
             return !values.includes(rowValue)
+        case 'truthy':
+        case 'present':
+        case 'set':
+            return rowValue !== '' && rowValue !== 'false' && rowValue !== '0'
+        case 'falsy':
+        case 'blank':
+        case 'empty':
+            return rowValue === '' || rowValue === 'false' || rowValue === '0'
         default:
             return true
     }

@@ -78,6 +78,20 @@ describe('isRowActionVisible', () => {
         expect(isActionConditionMet({ condition: { field: 's', operator: 'neq', value: 'a' } }, { s: 'a' })).toBe(false)
     })
 
+    it('isActionConditionMet supports truthy/falsy (and the present/set/blank/empty aliases)', () => {
+        const hasBalance = { condition: { field: 'amount_due', operator: 'truthy' } }
+        const noBalance = { condition: { field: 'amount_due', operator: 'falsy' } }
+        expect(isActionConditionMet(hasBalance, { amount_due: 6180 })).toBe(true)
+        expect(isActionConditionMet(hasBalance, { amount_due: 0 })).toBe(false)
+        expect(isActionConditionMet(hasBalance, { amount_due: undefined })).toBe(false)
+        expect(isActionConditionMet(noBalance, { amount_due: 0 })).toBe(true)
+        expect(isActionConditionMet(noBalance, { amount_due: 6180 })).toBe(false)
+        expect(isActionConditionMet({ condition: { field: 'flag', operator: 'present' } }, { flag: 'x' })).toBe(true)
+        expect(isActionConditionMet({ condition: { field: 'flag', operator: 'set' } }, { flag: false })).toBe(false)
+        expect(isActionConditionMet({ condition: { field: 'flag', operator: 'blank' } }, { flag: '' })).toBe(true)
+        expect(isActionConditionMet({ condition: { field: 'flag', operator: 'empty' } }, { flag: 'x' })).toBe(false)
+    })
+
     it('isActionConditionMet resolves nested paths and equals/notEquals aliases', () => {
         const approve = {
             condition: { field: 'user.verified', operator: 'equals', value: false },
