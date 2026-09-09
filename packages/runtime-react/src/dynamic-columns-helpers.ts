@@ -56,3 +56,25 @@ export function humanizeToken(value: unknown): string {
         })
         .join(' ')
 }
+
+export type MetadataTranslator = (
+    key: string,
+    options?: { defaultValue?: string },
+) => string
+
+/**
+ * Resolve addon-contributed metadata at render time. Known i18n keys use the
+ * host locale; missing keys degrade to a readable label instead of leaking a
+ * machine path such as `models.orders.table.columns.payment_status`.
+ */
+export function translateMetadataLabel(
+    value: string | undefined,
+    translate?: MetadataTranslator,
+): string {
+    if (!value) return ''
+    const token = value.includes('.') ? value.split('.').at(-1) ?? value : value
+    const fallback = humanizeToken(token)
+    if (!translate) return fallback
+    const translated = translate(value, { defaultValue: fallback })
+    return translated && translated !== value ? translated : fallback
+}

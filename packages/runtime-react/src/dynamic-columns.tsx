@@ -42,7 +42,7 @@ import {
     relationChipStyles,
 } from '@asteby/metacore-ui/lib'
 import { Progress } from './dialogs/_primitives'
-import { humanizeToken } from './dynamic-columns-helpers'
+import { humanizeToken, translateMetadataLabel } from './dynamic-columns-helpers'
 import { objectLabel } from './dynamic-relation-helpers'
 import {
     OptionBadge,
@@ -874,7 +874,7 @@ export function makeDefaultGetDynamicColumns(
             // `visibility` scope (skips `'modal'` and `'list'`).
             if (!isColumnVisibleInTable(col)) return
 
-            const translatedLabel = col.label
+            const translatedLabel = translateMetadataLabel(col.label, t)
             const filterConfig = filterConfigs?.get(col.key)
 
             const columnMeta: Record<string, unknown> = {
@@ -1498,7 +1498,7 @@ export function makeDefaultGetDynamicColumns(
                                             onClick={() => onAction && onAction(action.key, row.original)}
                                         >
                                             <DynamicIcon name={action.icon} className="mr-2 h-4 w-4" />
-                                            {action.label}
+                                            {translateMetadataLabel(action.label, t)}
                                         </DropdownMenuItem>
                                     ))}
                             </DropdownMenuContent>
