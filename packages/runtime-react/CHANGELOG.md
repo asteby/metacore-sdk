@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 37.0.2
+
+### Patch Changes
+
+- 653afe4: Never flash raw dotted i18n keys in ModelActionToolbar: humanizeActionLabel fallback + onActionIntent for Module Federation prefetch.
+
 ## 37.0.1
 
 ### Patch Changes
