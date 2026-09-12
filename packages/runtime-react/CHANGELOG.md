@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 37.1.2
+
+### Patch Changes
+
+- 2d4e1d8: Fail closed when an action declares `modal` but no federated component is registered — never fall back to the generic confirm dialog.
+
 ## 37.1.1
 
 ### Patch Changes
