@@ -66,7 +66,14 @@ function isNumericCol(col: ActionFieldDef): boolean {
 function emptyRow(itemFields: ActionFieldDef[]): Record<string, any> {
     const row: Record<string, any> = {}
     for (const f of itemFields) {
-        row[f.key] = f.defaultValue ?? (f.type === 'boolean' ? false : '')
+        // Kernel serves `default` on action fields; the SDK type uses
+        // `defaultValue` (host carryActionFieldDefaults). Accept both so a
+        // manifest `"default": 0` on optional money cells (discount) seeds 0
+        // instead of "" — blank strings trip server parsers that treat a
+        // present key as required.
+        const seeded =
+            f.defaultValue ?? (f as { default?: unknown }).default
+        row[f.key] = seeded ?? (f.type === 'boolean' ? false : '')
     }
     return row
 }
