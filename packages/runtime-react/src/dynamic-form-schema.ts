@@ -383,6 +383,87 @@ export function evaluateVisibleWhen(
 }
 
 /**
+ * Strip a DynamicTable / URL filter token down to the comparable scalar the
+ * kernel `visible_when.equals` / `.in` predicates expect.
+ *
+ * `eq:customer` → `customer`, bare `customer` stays, `in:a,b` keeps the raw
+ * multi-value (list-scope only gates on known single-eq scopes today).
+ */
+export function scopeValueFromFilterToken(raw: unknown): string {
+    if (raw == null) return ''
+    const s = String(raw)
+    const i = s.indexOf(':')
+    if (i <= 0) return s
+    const op = s.slice(0, i).toLowerCase()
+    const rest = s.slice(i + 1)
+    if (
+        op === 'eq' ||
+        op === 'neq' ||
+        op === 'gt' ||
+        op === 'gte' ||
+        op === 'lt' ||
+        op === 'lte' ||
+        op === 'like' ||
+        op === 'ilike' ||
+        op === 'contains'
+    ) {
+        return rest
+    }
+    return s
+}
+
+/**
+ * Flat "known field → value" map for list/board surfaces. Built from locked
+ * `defaultFilters` (nav / branch scope) plus active `dynamicFilters`. Only
+ * fields present here are considered known — see
+ * `evaluateVisibleWhenForListScope`.
+ */
+export function buildListScopeValues(
+    defaultFilters?: Record<string, unknown> | null,
+    dynamicFilters?: Record<string, string[] | undefined> | null,
+): Record<string, string> {
+    const out: Record<string, string> = {}
+    if (defaultFilters) {
+        for (const [key, value] of Object.entries(defaultFilters)) {
+            const v = scopeValueFromFilterToken(value)
+            if (v !== '') out[key] = v
+        }
+    }
+    if (dynamicFilters) {
+        for (const [key, values] of Object.entries(dynamicFilters)) {
+            if (defaultFilters && key in defaultFilters) continue
+            if (!values || values.length !== 1) continue
+            const v = scopeValueFromFilterToken(values[0])
+            if (v !== '') out[key] = v
+        }
+    }
+    return out
+}
+
+/**
+ * List/board variant of `evaluateVisibleWhen`.
+ *
+ * Forms always have a live sibling value (or ''). Lists often do not — a
+ * mixed AccountStatement table has no single `party_type`. Hiding every
+ * `visible_when` column when the governing field is unknown would wipe both
+ * Cliente and Proveedor on the unscoped view. Rule: if the governing field is
+ * not in `scope` (or is empty), keep the column; once the scope pins it
+ * (sidebar locked_scope / defaultFilters / a single-eq chip), apply the same
+ * predicate as the form.
+ */
+export function evaluateVisibleWhenForListScope(
+    cond: VisibleWhen | null | undefined,
+    scope: Record<string, any> | null | undefined,
+): boolean {
+    if (!cond || typeof cond.field !== 'string' || cond.field.trim() === '') return true
+    const key = cond.field.trim()
+    if (!scope || !(key in scope)) return true
+    const raw = scope[key]
+    if (raw == null || String(raw) === '') return true
+    return evaluateVisibleWhen(cond, scope)
+}
+
+/**
  * Reads a field's enriched options-resolution config, tolerating the camelCase
  * `optionsConfig` (authored SDK shape) and the snake_case `options_config` the
  * kernel manifest serves. Returns `undefined` when the field declares none.

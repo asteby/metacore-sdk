@@ -64,20 +64,25 @@ import { toast } from 'sonner'
 import { Progress } from './dialogs/_primitives'
 import { useMetadataCache } from './metadata-cache'
 import { useApi, useCurrentBranch } from './api-context'
-import { useRealtimeDefault, useRealtimeTick } from './realtime-context'
 import type { ColumnFilterConfig, GetDynamicColumns } from './dynamic-columns-shim'
 import { defaultGetDynamicColumns, DATE_CELL_TYPES, aggregateOf, formatAggregateTotal } from './dynamic-columns'
 import { useFacetLoaders, isLongTextColumn } from './use-facet-loaders'
 import { translateOptionLabels } from './filter-chips'
 import { dedupeById, useInfiniteScrollSentinel } from './use-infinite-scroll'
 import { OptionsContext } from './options-context'
-import type { TableMetadata, ApiResponse } from './types'
+import type { TableMetadata, ApiResponse, ColumnDefinition } from './types'
 import { getSearchableColumnKeys } from './column-visibility'
 import { useDebouncedValue } from './use-debounced-value'
 import { useCan, usePermissionsActive, gateTableMetadata } from './permissions-context'
 import { useDynamicRowActions } from './dynamic-row-actions'
 import { ExportDialog } from './dialogs/export'
 import { ImportDialog } from './dialogs/import'
+import {
+    buildListScopeValues,
+    evaluateVisibleWhenForListScope,
+    getVisibleWhen,
+    scopeValueFromFilterToken,
+} from './dynamic-form-schema'
 
 // ---------------------------------------------------------------------------
 // Row-data cache (perceived performance).
@@ -197,13 +202,6 @@ export interface DynamicTableProps {
      */
     onRowClick?: (row: any) => void
     refreshTrigger?: any
-    /**
-     * Refetch when the host's realtime client reports a data event for this
-     * model (created/updated/deleted by anyone in the org, or a `resync`).
-     * Off by default; `<RealtimeProvider defaultRealtime>` turns it on for
-     * every table, and an explicit prop always wins. No-op without a client.
-     */
-    realtime?: boolean
     defaultFilters?: Record<string, any>
     extraColumns?: ColumnDef<any>[]
     /**
@@ -261,7 +259,6 @@ export function DynamicTable({
     onAction,
     onRowClick,
     refreshTrigger,
-    realtime: realtimeProp,
     defaultFilters,
     extraColumns = [],
     getDynamicColumns = defaultGetDynamicColumns,
@@ -276,13 +273,6 @@ export function DynamicTable({
     const { t, i18n } = useTranslation()
     const api = useApi()
     const currentBranch = useCurrentBranch()
-    // Realtime refetch (opt-in): a debounced counter that bumps on every
-    // DATA_EVENT for this model and rides the same deps as `refreshTrigger`.
-    const realtimeDefault = useRealtimeDefault()
-    const realtimeTick = useRealtimeTick({
-        models: [model],
-        enabled: realtimeProp ?? realtimeDefault,
-    })
 
     const prevBranchId = useRef(currentBranch?.id)
 
@@ -512,6 +502,22 @@ export function DynamicTable({
             if (values.length === 1) params.set(`f_${key}`, internalValueToUrl(values[0]))
             else params.set(`f_${key}`, `in:${values.join(',')}`)
         })
+        // Re-pin locked scope into the URL so sidebar matching + deep-links keep
+        // working after "Limpiar filtros" (those keys are not in dynamicFilters).
+        if (defaultFilters) {
+            Object.entries(defaultFilters).forEach(([key, value]) => {
+                params.set(`f_${key}`, internalValueToUrl(String(value ?? '')))
+            })
+        }
+        // Preserve f_* already in the location that we did not rebuild above.
+        // Sidebar deep-links (CxC→CxP) push f_party_type=eq:supplier before React
+        // re-renders with matching defaultFilters; without this carry-through the
+        // write effect races and strips the filter down to bare ?view=list.
+        current.forEach((value, key) => {
+            if (!key.startsWith('f_')) return
+            if (params.has(key)) return
+            params.set(key, value)
+        })
         const search = params.toString()
         // If what we'd write is semantically identical to what's already in the
         // bar (only key order / colon-encoding differ from the router's form),
@@ -695,6 +701,52 @@ export function DynamicTable({
         !hideImport && (viewMetadata?.canImport ?? Boolean(viewMetadata?.import?.columns?.length))
     const exportEnabled = !hideExport && Boolean(viewMetadata?.canExport)
 
+    const listScopeValues = useMemo(() => {
+        const base = buildListScopeValues(defaultFilters, dynamicFilters)
+        // Deep-links pin f_* in the URL before defaultFilters / nav matching
+        // catch up; adopt single-eq scope values so visible_when columns hide
+        // on first paint (CxC hides Proveedor without waiting for navFilter).
+        if (!enableUrlSync || typeof window === 'undefined') return base
+        const params = new URLSearchParams(window.location.search)
+        const fromUrl: Record<string, string> = {}
+        params.forEach((raw, key) => {
+            if (!key.startsWith('f_')) return
+            const col = key.slice(2)
+            if (!col || col in base) return
+            const v = scopeValueFromFilterToken(raw)
+            if (!v) return
+            // Multi-value / range tokens are not a single list-scope pin.
+            if (v.includes(',') || /^(in|not_in|range|gte|lte):/i.test(String(raw))) return
+            fromUrl[col] = v
+        })
+        return Object.keys(fromUrl).length === 0 ? base : { ...fromUrl, ...base }
+    }, [defaultFilters, dynamicFilters, enableUrlSync, urlSynced])
+
+    // Columns whose kernel `visible_when` fails against the known list scope
+    // (locked nav defaultFilters, single-eq chips). Host `hiddenColumns` still
+    // wins; this is the scalable path so CxC hides Proveedor without each nav
+    // item re-listing every allowed column.
+    const scopeHiddenColumns = useMemo(() => {
+        const cols = (viewMetadata?.columns ?? metadata?.columns ?? []) as ColumnDefinition[]
+        if (cols.length === 0 || Object.keys(listScopeValues).length === 0) return [] as string[]
+        const hidden: string[] = []
+        for (const col of cols) {
+            const key = col.key
+            if (!key) continue
+            if (!evaluateVisibleWhenForListScope(getVisibleWhen(col), listScopeValues)) {
+                hidden.push(key)
+            }
+        }
+        return hidden
+    }, [metadata, viewMetadata, listScopeValues])
+
+    const effectiveHiddenColumns = useMemo(() => {
+        if (scopeHiddenColumns.length === 0) return hiddenColumns
+        const set = new Set(hiddenColumns)
+        for (const k of scopeHiddenColumns) set.add(k)
+        return Array.from(set)
+    }, [hiddenColumns, scopeHiddenColumns])
+
     const buildFilterParams = useCallback(() => {
         const params: Record<string, any> = {}
         if (sorting.length > 0) {
@@ -710,9 +762,12 @@ export function DynamicTable({
             }
             // searchableKeys === [] → drop the search request entirely
         }
-        columnFilters.forEach((filter: { id: string; value: unknown }) => { params[`f_${filter.id}`] = filter.value })
-        if (defaultFilters) Object.entries(defaultFilters).forEach(([key, value]) => { params[`f_${key}`] = value })
+        columnFilters.forEach((filter: { id: string; value: unknown }) => {
+            if (defaultFilters && filter.id in defaultFilters) return
+            params[`f_${filter.id}`] = filter.value
+        })
         Object.entries(dynamicFilters).forEach(([key, values]) => {
+            if (defaultFilters && key in defaultFilters) return
             if (values.length === 0) return
             const gteVal = values.find(v => v.startsWith('GTE:'))
             const lteVal = values.find(v => v.startsWith('LTE:'))
@@ -725,6 +780,8 @@ export function DynamicTable({
             if (values.length === 1) params[`f_${key}`] = values[0]
             else params[`f_${key}`] = `IN:${values.join(',')}`
         })
+        // Locked scope last so it always wins over stale dynamic/column filters.
+        if (defaultFilters) Object.entries(defaultFilters).forEach(([key, value]) => { params[`f_${key}`] = value })
         if (dateRange?.from) {
             const startDate = format(dateRange.from, 'yyyy-MM-dd')
             const endDate = dateRange.to ? format(dateRange.to, 'yyyy-MM-dd') : startDate
@@ -770,8 +827,7 @@ export function DynamicTable({
         } finally {
             setLoadingData(false)
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [model, metadata, pagination, buildFilterParams, refreshTrigger, realtimeTick, endpoint, currentBranch?.id, api, enableUrlSync])
+    }, [model, metadata, pagination, buildFilterParams, refreshTrigger, endpoint, currentBranch?.id, api, enableUrlSync])
 
     // Columns whose metadata opts into a footer total (display_config.aggregate
     // → styleConfig.aggregate). When empty, no footer row is rendered and no
@@ -940,9 +996,8 @@ export function DynamicTable({
         // matching the classic path (fetchData carries refreshTrigger in its
         // deps). Without it the comment above lied: infinite lists silently
         // failed to reload after a create ("a veces no recarga la tabla").
-        // realtimeTick plays the same role for data events (see the `realtime` prop).
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [infiniteScroll, metadata, filterSignature, refreshTrigger, realtimeTick])
+    }, [infiniteScroll, metadata, filterSignature, refreshTrigger])
 
     const handleRefresh = useCallback(() => {
         // Infinite mode owns its own list: refresh reloads page 1 and drops the
@@ -997,9 +1052,11 @@ export function DynamicTable({
     }
 
     const handleDynamicFilterChange = useCallback((filterKey: string, values: string[]) => {
+        // Locked scope (nav / branch defaultFilters) cannot be changed from the UI.
+        if (defaultFilters && filterKey in defaultFilters) return
         setDynamicFilters((prev: Record<string, string[]>) => ({ ...prev, [filterKey]: values }))
         setPagination((prev: PaginationState) => ({ ...prev, pageIndex: 0 }))
-    }, [])
+    }, [defaultFilters])
 
     // Same facet loader machinery the board uses, so a text column filters
     // identically in the table header and the kanban Sheet (the host's
@@ -1026,6 +1083,9 @@ export function DynamicTable({
         // `filterable: true` — keeps the kernel API minimal (one flag on the
         // column) while still rendering the FilterableColumnHeader.
         for (const f of metadata.filters ?? []) {
+            const filterCol = f.column || f.key
+            if (defaultFilters && filterCol in defaultFilters) continue
+            if (effectiveHiddenColumns.includes(filterCol)) continue
             let fType = f.type as ColumnFilterConfig['filterType']
             let options: { label: string; value: string; icon?: string; color?: string }[] = []
             if (f.options && f.options.length > 0) {
@@ -1069,6 +1129,8 @@ export function DynamicTable({
         }
         for (const c of metadata.columns ?? []) {
             if (!c.filterable || map.has(c.key)) continue
+            if (defaultFilters && c.key in defaultFilters) continue
+            if (effectiveHiddenColumns.includes(c.key)) continue
             const hasStaticOptions = (c.options?.length ?? 0) > 0
             const hasEndpoint = !!c.searchEndpoint
             const isRelation = !!c.ref || c.filterType === 'dynamic_select'
@@ -1133,7 +1195,7 @@ export function DynamicTable({
             })
         }
         return map
-    }, [metadata, filterOptionsMap, dynamicFilters, handleDynamicFilterChange, facetsBase, getFacetLoader, facetOptions, t])
+    }, [metadata, filterOptionsMap, dynamicFilters, handleDynamicFilterChange, facetsBase, getFacetLoader, facetOptions, t, defaultFilters, effectiveHiddenColumns])
 
     // Prewarm every facet field once the configs settle, so a text column's
     // header filter opens instantly with values + counts (same as the kanban).
@@ -1170,11 +1232,11 @@ export function DynamicTable({
             return actions === viewMetadata.actions ? viewMetadata : { ...viewMetadata, actions }
         })()
         const baseColumns = getDynamicColumns(rowMetadata, handleInternalAction, t, i18n.language, columnFilterConfigs, timeZone, currency)
-        const filteredBase = baseColumns.filter((col: ColumnDef<any>) => !hiddenColumns.includes(col.id as string))
+        const filteredBase = baseColumns.filter((col: ColumnDef<any>) => !effectiveHiddenColumns.includes(col.id as string))
         const actionsCol = filteredBase.find((c: ColumnDef<any>) => c.id === 'actions')
         const otherCols = filteredBase.filter((c: ColumnDef<any>) => c.id !== 'actions')
         return [...otherCols, ...extraColumns, ...(actionsCol ? [actionsCol] : [])]
-    }, [viewMetadata, handleInternalAction, hiddenColumns, allowedActionKeys, extraColumns, t, i18n.language, columnFilterConfigs, getDynamicColumns, timeZone, currency])
+    }, [viewMetadata, handleInternalAction, effectiveHiddenColumns, allowedActionKeys, extraColumns, t, i18n.language, columnFilterConfigs, getDynamicColumns, timeZone, currency])
 
     const filters = useMemo(() => [], [])
 
