@@ -149,13 +149,34 @@ export function declaredFiltersMatch(
  * filter-declaring sibling that matches are unaffected (manual filtering still
  * lights the base). Returns the set of URLs that should render active.
  */
+/**
+ * Depth-first leaf links across a nav tree (collapsibles unwrap). Used by the
+ * sidebar so "most specific wins" can run ACROSS groups — e.g. Customers'
+ * "Pedidos de venta" and Credit's "Solicitudes pendientes" share `/m/sales_orders`
+ * but live in different NavGroups; a per-group resolver would light both.
+ */
+export function flattenNavLeaves(items: NavItem[]): NavLinkItem[] {
+  const out: NavLinkItem[] = []
+  for (const item of items) {
+    if ('items' in item && Array.isArray((item as NavCollapsibleItem).items)) {
+      out.push(...flattenNavLeaves((item as NavCollapsibleItem).items))
+    } else {
+      out.push(item as NavLinkItem)
+    }
+  }
+  return out
+}
+
 export function resolveActiveItemUrls(
   href: string,
   items: NavItem[],
   defaultView?: string
 ): Set<string> {
-  const active = items.filter((i) =>
-    checkIsActive(href, i, false, (i as NavLinkItem).defaultView ?? defaultView)
+  // Always resolve against leaves — a collapsible parent matching via a child
+  // would otherwise win the URL set with the parent's (often bare) url.
+  const leaves = flattenNavLeaves(items)
+  const active = leaves.filter((i) =>
+    checkIsActive(href, i, false, i.defaultView ?? defaultView)
   )
   if (active.length <= 1) return new Set(active.map((i) => i.url ?? ''))
   // Group matches by path + raw view bucket; keep only the max filter count.

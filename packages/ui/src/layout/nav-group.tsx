@@ -53,6 +53,13 @@ export type NavGroupProps = NavGroupData & {
   LinkComponent: NavLinkComponent
   /** Optional hover handler for prefetching data (no-op by default). */
   onItemHover?: (url: string) => void
+  /**
+   * Pre-resolved active leaf URLs (typically from AppSidebar across ALL groups).
+   * When set, leaf `isActive` uses this set so a filtered credit queue wins over
+   * a bare "Pedidos" entry in another group. When omitted, the group resolves
+   * locally (legacy / standalone NavGroup mounts).
+   */
+  activeUrls?: Set<string>
 }
 
 function isCollapsibleItem(item: NavItem): item is NavCollapsibleItem {
@@ -75,8 +82,14 @@ export function NavGroup({
   currentHref,
   LinkComponent,
   onItemHover,
+  activeUrls: activeUrlsProp,
 }: NavGroupProps) {
   const { state, isMobile } = useSidebar()
+  // Per-group fallback when the host didn't pre-resolve across groups.
+  const localActiveUrls = React.useMemo(
+    () => activeUrlsProp ?? resolveActiveItemUrls(currentHref, items),
+    [activeUrlsProp, currentHref, items],
+  )
 
   if (items.length === 0) return null
 
@@ -95,6 +108,7 @@ export function NavGroup({
                 href={currentHref}
                 LinkComponent={LinkComponent}
                 onItemHover={onItemHover}
+                isActive={localActiveUrls.has(item.url)}
               />
             )
 
@@ -106,6 +120,7 @@ export function NavGroup({
                 href={currentHref}
                 LinkComponent={LinkComponent}
                 onItemHover={onItemHover}
+                activeUrls={localActiveUrls}
               />
             )
 
@@ -117,6 +132,7 @@ export function NavGroup({
               LinkComponent={LinkComponent}
               onItemHover={onItemHover}
               depth={0}
+              activeUrls={localActiveUrls}
             />
           )
         })}
@@ -144,18 +160,25 @@ function SidebarMenuLink({
   href,
   LinkComponent,
   onItemHover,
+  isActive,
 }: {
   item: NavLinkItem
   href: string
   LinkComponent: NavLinkComponent
   onItemHover?: (url: string) => void
+  /** Pre-resolved; falls back to checkIsActive when omitted. */
+  isActive?: boolean
 }) {
   const { setOpenMobile } = useSidebar()
+  const active =
+    typeof isActive === 'boolean'
+      ? isActive
+      : checkIsActive(href, item, false, item.defaultView)
   return (
     <SidebarMenuItem>
       <SidebarMenuButton
         asChild
-        isActive={checkIsActive(href, item, false, item.defaultView)}
+        isActive={active}
         tooltip={item.title}
       >
         <LinkComponent
@@ -178,6 +201,7 @@ function SidebarMenuCollapsible({
   LinkComponent,
   onItemHover,
   depth,
+  activeUrls,
 }: {
   item: NavCollapsibleItem
   href: string
@@ -185,9 +209,9 @@ function SidebarMenuCollapsible({
   onItemHover?: (url: string) => void
   /** 0 = top-level in the group; ≥1 = nested under another collapsible. */
   depth: number
+  activeUrls: Set<string>
 }) {
   const { setOpenMobile } = useSidebar()
-  const activeUrls = resolveActiveItemUrls(href, item.items, item.defaultView)
   const body = (
     <>
       <CollapsibleTrigger asChild>
@@ -221,50 +245,42 @@ function SidebarMenuCollapsible({
                     </CollapsibleTrigger>
                     <CollapsibleContent className='CollapsibleContent'>
                       <SidebarMenuSub>
-                        {(() => {
-                          const nestedActive = resolveActiveItemUrls(
-                            href,
-                            subItem.items,
-                            subItem.defaultView,
-                          )
-                          return subItem.items.map((leaf) => {
-                            if (isCollapsibleItem(leaf)) {
-                              // Depth 3+ is rare; still render recursively as a
-                              // nested collapsible under the sub-menu.
-                              return (
-                                <SidebarMenuCollapsible
-                                  key={`${leaf.title}-${leaf.url}`}
-                                  item={leaf}
-                                  href={href}
-                                  LinkComponent={LinkComponent}
-                                  onItemHover={onItemHover}
-                                  depth={depth + 2}
-                                />
-                              )
-                            }
+                        {subItem.items.map((leaf) => {
+                          if (isCollapsibleItem(leaf)) {
                             return (
-                              <SidebarMenuSubItem key={leaf.title}>
-                                <SidebarMenuSubButton
-                                  asChild
-                                  isActive={nestedActive.has(leaf.url)}
-                                >
-                                  <LinkComponent
-                                    to={leaf.url}
-                                    title={leaf.title}
-                                    onClick={() => setOpenMobile(false)}
-                                    onMouseEnter={() => onItemHover?.(leaf.url)}
-                                  >
-                                    {leaf.icon && <leaf.icon />}
-                                    <span>{leaf.title}</span>
-                                    {hasBadge(leaf.badge) && (
-                                      <NavBadge>{leaf.badge}</NavBadge>
-                                    )}
-                                  </LinkComponent>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
+                              <SidebarMenuCollapsible
+                                key={`${leaf.title}-${leaf.url}`}
+                                item={leaf}
+                                href={href}
+                                LinkComponent={LinkComponent}
+                                onItemHover={onItemHover}
+                                depth={depth + 2}
+                                activeUrls={activeUrls}
+                              />
                             )
-                          })
-                        })()}
+                          }
+                          return (
+                            <SidebarMenuSubItem key={leaf.title}>
+                              <SidebarMenuSubButton
+                                asChild
+                                isActive={activeUrls.has(leaf.url)}
+                              >
+                                <LinkComponent
+                                  to={leaf.url}
+                                  title={leaf.title}
+                                  onClick={() => setOpenMobile(false)}
+                                  onMouseEnter={() => onItemHover?.(leaf.url)}
+                                >
+                                  {leaf.icon && <leaf.icon />}
+                                  <span>{leaf.title}</span>
+                                  {hasBadge(leaf.badge) && (
+                                    <NavBadge>{leaf.badge}</NavBadge>
+                                  )}
+                                </LinkComponent>
+                              </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                          )
+                        })}
                       </SidebarMenuSub>
                     </CollapsibleContent>
                   </Collapsible>
@@ -309,14 +325,15 @@ function SidebarMenuCollapsedDropdown({
   href,
   LinkComponent,
   onItemHover,
+  activeUrls,
 }: {
   item: NavCollapsibleItem
   href: string
   LinkComponent: NavLinkComponent
   onItemHover?: (url: string) => void
+  activeUrls: Set<string>
 }) {
   const leaves = flattenLeaves(item.items)
-  const activeUrls = resolveActiveItemUrls(href, leaves, item.defaultView)
   return (
     <SidebarMenuItem>
       <DropdownMenu>
