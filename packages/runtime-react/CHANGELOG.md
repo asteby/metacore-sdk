@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 37.0.5
+
+### Patch Changes
+
+- 5f2a732: Action modal + line-items: preserve numeric zero (valueAsNumber), paint cell errors (`lines.0.*`), and toast a Label: message description for every field failure.
+
 ## 37.0.4
 
 ### Patch Changes
