@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 37.0.4
+
+### Patch Changes
+
+- 0396b95: DynamicRecordDialog: unique form ids (nested create), Laravel-style validateValues on submit, destructive borders on invalid fields, toast descriptions for errors on non-rendered fields, and `ensureFields` to inject host scope keys into the modal schema.
+
 ## 37.0.3
 
 ### Patch Changes
