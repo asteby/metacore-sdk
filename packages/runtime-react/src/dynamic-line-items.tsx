@@ -25,6 +25,7 @@ import {
     resolveWidget,
     getItemFields,
     computeLineItemTotals,
+    applyLineItemRowFormulas,
     evaluateBalance,
     toNumber,
     getDependsOn,
@@ -87,10 +88,16 @@ export function DynamicLineItems({ field, value, onChange, disabled = false, for
     const hasTotals = totalKeys.length > 0
     const balance = evaluateBalance(field, rows)
 
-    const addRow = () => onChange([...rows, emptyRow(itemFields)])
+    const addRow = () => onChange([...rows, applyLineItemRowFormulas(itemFields, emptyRow(itemFields))])
     const removeRow = (idx: number) => onChange(rows.filter((_, i) => i !== idx))
     const updateCell = (idx: number, key: string, cellValue: any) =>
-        onChange(rows.map((r, i) => (i === idx ? { ...r, [key]: cellValue } : r)))
+        onChange(
+            rows.map((r, i) =>
+                i === idx
+                    ? applyLineItemRowFormulas(itemFields, { ...r, [key]: cellValue })
+                    : r,
+            ),
+        )
 
     // When a balance rule reconciles two columns (e.g. debit ↔ credit), typing
     // into one clears the sibling on the same row — mirrors the federated modal
@@ -111,7 +118,13 @@ export function DynamicLineItems({ field, value, onChange, disabled = false, for
             const hasValue = toNumber(cellValue) > 0
             onChange(
                 rows.map((r, i) =>
-                    i === idx ? { ...r, [key]: cellValue, ...(hasValue ? { [sibling]: '' } : {}) } : r,
+                    i === idx
+                        ? applyLineItemRowFormulas(itemFields, {
+                              ...r,
+                              [key]: cellValue,
+                              ...(hasValue ? { [sibling]: '' } : {}),
+                          })
+                        : r,
                 ),
             )
             return

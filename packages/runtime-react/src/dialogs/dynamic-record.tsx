@@ -53,6 +53,7 @@ import { es } from 'date-fns/locale'
 import { ExternalLink, Loader2, CalendarIcon, ChevronDown, Check, Upload, X as XIcon, ScanLine } from 'lucide-react'
 import { BarcodeScanner } from '../barcode-scanner'
 import { useApi } from '../api-context'
+import { useBranchCreateGate } from '../branch-create-gate'
 import { toastServerError, extractFieldErrors, localizeFieldIssue, localizeFieldErrorMap } from '../server-error'
 import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-field'
 import { DynamicRelations } from '../dynamic-relations'
@@ -614,6 +615,7 @@ export function DynamicRecordDialog({
     onChange,
 }: DynamicRecordDialogProps) {
     const api = useApi()
+    const branchGate = useBranchCreateGate()
     const { t } = useTranslation()
     const [modalMeta, setModalMeta] = useState<ModalMetadata | null>(
         schema ? (schema as ModalMetadata) : null,
@@ -892,7 +894,17 @@ export function DynamicRecordDialog({
 
         // Empty reference pickers → null (not "" / nil-UUID) so nullable FK
         // columns accept them instead of raising a 23503 FK violation.
-        const payload = normalizeRefFieldsForSubmit(submittedValues, modalMeta.fields)
+        let payload = normalizeRefFieldsForSubmit(submittedValues, modalMeta.fields)
+
+        if (
+            isCreate &&
+            branchGate &&
+            (payload.branch_id == null || payload.branch_id === '')
+        ) {
+            const branchId = await branchGate.ensureBranchForCreate(model)
+            if (branchId === null) return
+            if (branchId) payload = { ...payload, branch_id: branchId }
+        }
 
         setSaving(true)
         try {
