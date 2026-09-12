@@ -1,10 +1,12 @@
 // ActionModalDispatcher — renders the right modal for a custom action:
 // 1) Custom component from the SDK registry → use it
-// 2) action.fields[] / action.steps[] → GenericActionModal / WizardActionModal
-// 3) action.confirm OR action.confirmMessage → ConfirmActionDialog
-// 4) action.executable (host opened the modal; federated UI missing) →
+// 2) action.modal set but no registered component → MissingCustomActionModal
+//    (NEVER fall back to confirm/fields — that hides a broken federated UI)
+// 3) action.fields[] / action.steps[] → GenericActionModal / WizardActionModal
+// 4) action.confirm OR action.confirmMessage → ConfirmActionDialog
+// 5) action.executable (host opened the modal; no modal/fields/confirm) →
 //    ConfirmActionDialog so a click never silently no-ops
-// 5) otherwise → null (caller should execute immediately without opening us)
+// 6) otherwise → null (caller should execute immediately without opening us)
 //
 // The host injects its axios-like client via <ApiProvider>; we no longer
 // depend on a bundler alias to `@/lib/api`.
@@ -251,6 +253,19 @@ export function ActionModalDispatcher({
         )
     }
 
+    // Declarative custom slot (`modal: "addon.action"`). Prefer a hard error
+    // over confirm/fields generics — those look "fine" and hide a missing remote.
+    if (action.modal) {
+        return (
+            <MissingCustomActionModal
+                open={open}
+                onOpenChange={onOpenChange}
+                action={action}
+                model={model}
+            />
+        )
+    }
+
     if (action.steps && action.steps.length > 0) {
         return (
             <WizardActionModal
@@ -283,6 +298,7 @@ export function ActionModalDispatcher({
     // boolean). Hosts also mark every wasm action `executable` and open THIS
     // dispatcher; without a confirm/fields/custom UI we used to return null and
     // the row click did nothing. Treat message-only + executable-open as confirm.
+    // Never reached when action.modal is set (handled above).
     const wantsConfirm = !!(action.confirm || action.confirmMessage)
     if (wantsConfirm || (open && action.executable)) {
         return (
@@ -299,6 +315,47 @@ export function ActionModalDispatcher({
     }
 
     return null
+}
+
+/** Shown when the action declares `modal` but no federated component registered. */
+function MissingCustomActionModal({
+    open,
+    onOpenChange,
+    action,
+    model,
+}: {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    action: ActionMetadata
+    model: string
+}) {
+    const { t } = useTranslation()
+    const slug = action.modal || ''
+    const title = t('dynamic.action_modal_missing_title', {
+        defaultValue: 'No se pudo cargar el formulario',
+    })
+    const description = t('dynamic.action_modal_missing_description', {
+        defaultValue:
+            'Esta acción requiere una interfaz personalizada ({{slug}}) que no está registrada. Recarga la página o reinstala el módulo; no se abre un confirmatorio genérico para no confundir el flujo.',
+        slug: slug || `${model}.${action.key}`,
+        action: action.key,
+        model,
+    })
+    return (
+        <AlertDialog open={open} onOpenChange={onOpenChange}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>{title}</AlertDialogTitle>
+                    <AlertDialogDescription>{description}</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogAction onClick={() => onOpenChange(false)}>
+                        {t('common.close', { defaultValue: 'Cerrar' })}
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    )
 }
 
 function buildActionUrl(endpoint: string | undefined, model: string, recordId: string | undefined, actionKey: string) {
