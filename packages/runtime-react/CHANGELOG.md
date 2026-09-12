@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 37.0.3
+
+### Patch Changes
+
+- 46a9505: List/board honor Column.visible_when against locked defaultFilters / URL scope (CxC hides Proveedor); AddonLoader retries transient remoteEntry 502s.
+
 ## 37.0.2
 
 ### Patch Changes
