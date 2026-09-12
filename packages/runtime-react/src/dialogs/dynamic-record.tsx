@@ -9,7 +9,7 @@
 // flows through <ApiProvider> from runtime-react. Host-specific runtime values —
 // the image-url resolver and the org IANA timezone — are passed as props so the
 // SDK stays transport- and host-agnostic.
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ModelSchema } from './types'
 
@@ -53,7 +53,7 @@ import { es } from 'date-fns/locale'
 import { ExternalLink, Loader2, CalendarIcon, ChevronDown, Check, Upload, X as XIcon, ScanLine } from 'lucide-react'
 import { BarcodeScanner } from '../barcode-scanner'
 import { useApi } from '../api-context'
-import { toastServerError, extractFieldErrors, localizeFieldIssue } from '../server-error'
+import { toastServerError, extractFieldErrors, localizeFieldIssue, localizeFieldErrorMap } from '../server-error'
 import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-field'
 import { DynamicRelations } from '../dynamic-relations'
 import { useOptionsResolver, type ResolvedOption } from '../use-options-resolver'
@@ -64,6 +64,7 @@ import { FieldSection, WizardProgress } from '../form-layout-ui'
 import { FieldCell } from '../field-grid'
 import { isNilUuid, normalizeNilUuid } from '../nil-uuid'
 import { normalizeRefFieldsForSubmit } from './normalize-submit'
+import { validateValues, bagHasErrors } from '../validator'
 import { DynamicIcon, isLucideIconName } from '../dynamic-icon'
 import { IconPickerField } from '../icon-picker-field'
 import { humanizeToken } from '../dynamic-columns-helpers'
@@ -224,6 +225,12 @@ export interface DynamicRecordDialogProps {
      * lets it close while the depth lock is held.
      */
     nestedInlineCreateSelf?: boolean
+    /**
+     * Fields merged into the modal schema after load (by key). Existing keys are
+     * shallow-merged; missing keys are prepended. Hosts use this to inject
+     * required scope fields (e.g. branch_id) omitted from compiled DefineModal.
+     */
+    ensureFields?: FieldDef[]
     mode: 'view' | 'edit' | 'create'
     model: string
     recordId?: string | null
@@ -567,10 +574,26 @@ export function stripHiddenFieldValues(
     return out
 }
 
+function applyEnsureFields(meta: ModalMetadata | null | undefined, ensureFields?: FieldDef[]): ModalMetadata | null {
+    if (!meta) return meta ?? null
+    if (!ensureFields?.length) return meta
+    const fields = Array.isArray(meta.fields) ? [...meta.fields] : []
+    for (const ensure of ensureFields) {
+        const idx = fields.findIndex((f) => f?.key === ensure.key)
+        if (idx >= 0) {
+            fields[idx] = { ...fields[idx], ...ensure }
+        } else {
+            fields.unshift(ensure)
+        }
+    }
+    return { ...meta, fields }
+}
+
 export function DynamicRecordDialog({
     open,
     onOpenChange,
     nestedInlineCreateSelf,
+    ensureFields,
     mode,
     model,
     recordId,
@@ -602,6 +625,9 @@ export function DynamicRecordDialog({
     // inline under each input; populated from a 422 `errors` map or the client
     // required-field check, cleared per-field on change and wholesale on reopen.
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+    // Unique form id per dialog instance — nested create must not share
+    // id={formId} or the child footer submits the parent.
+    const formId = useId()
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
     const [deleting, setDeleting] = useState(false)
@@ -663,6 +689,7 @@ export function DynamicRecordDialog({
                     if (cancelled) return
                     meta = metaRes.data?.data ?? metaRes.data
                 }
+                meta = applyEnsureFields(meta, ensureFields)
                 setModalMeta(meta)
 
                 if (isCreate) {
@@ -710,7 +737,7 @@ export function DynamicRecordDialog({
     // initialRecord intentionally omitted: the row identity is captured per open
     // via recordId; re-seeding mid-open would clobber edits.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, recordId, model, endpoint, isCreate, schema])
+    }, [open, recordId, model, endpoint, isCreate, schema, ensureFields])
 
     // Reset when closed
     useEffect(() => {
@@ -807,7 +834,17 @@ export function DynamicRecordDialog({
                 next[key] = localizeFieldIssue(issues[0], labelForKey(key), t)
             }
             setFieldErrors(next)
-            toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }))
+            const visibleKeys = new Set(
+                filterVisibleFields(modalMeta?.fields ?? [], mode, formValues).map(f => f.key),
+            )
+            const orphans = Object.entries(next).filter(([k]) => !visibleKeys.has(k))
+            const description = orphans.length
+                ? orphans.map(([k, msg]) => `${labelForKey(k)}: ${msg}`).join(' · ')
+                : undefined
+            toast.error(
+                t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }),
+                description ? { description } : undefined,
+            )
             return
         }
         toastServerError(err, { t, fallback: t('dynamic.save_error', { defaultValue: 'No se pudo guardar' }) })
@@ -818,20 +855,24 @@ export function DynamicRecordDialog({
         if (!modalMeta) return
 
         if (isEditable) {
-            // Collect ALL missing required fields (not just the first) and mark
-            // each inline instead of a single toast. Only CURRENTLY-VISIBLE
-            // fields are gated: a field hidden by its `visible_when` predicate
-            // must not block submit even when it is declared required (matching
-            // the render, which drops it via the same filter).
-            const missing: Record<string, string> = {}
-            for (const field of filterVisibleFields(modalMeta.fields, mode, formValues)) {
-                if (field.required && !formValues[field.key] && formValues[field.key] !== 0 && formValues[field.key] !== false) {
-                    missing[field.key] = localizeFieldIssue({ code: 'required' }, field.label, t)
-                }
-            }
-            if (Object.keys(missing).length) {
-                setFieldErrors(missing)
-                toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }))
+            // Laravel-style: collect every issue from the shared validator
+            // (required + rule strings / min/max / email…) on visible fields only.
+            const visible = filterVisibleFields(modalMeta.fields, mode, formValues)
+            const bag = validateValues(visible as ActionFieldDef[], formValues)
+            if (bagHasErrors(bag)) {
+                const labels: Record<string, string> = {}
+                for (const f of visible) labels[f.key] = f.label
+                const next = localizeFieldErrorMap(bag, t, { labels })
+                setFieldErrors(next)
+                const visibleKeys = new Set(visible.map(f => f.key))
+                const orphans = Object.entries(next).filter(([k]) => !visibleKeys.has(k))
+                const description = orphans.length
+                    ? orphans.map(([k, msg]) => `${labelForKey(k)}: ${msg}`).join(' · ')
+                    : undefined
+                toast.error(
+                    t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }),
+                    description ? { description } : undefined,
+                )
                 return
             }
         }
@@ -973,14 +1014,12 @@ export function DynamicRecordDialog({
     // then advance. Mirrors handleSubmit's required check but scoped to the step.
     const goNextStep = () => {
         const step = groups[clampedStep]
-        const missing: Record<string, string> = {}
-        for (const field of step?.fields ?? []) {
-            if (field.required && !formValues[field.key] && formValues[field.key] !== 0 && formValues[field.key] !== false) {
-                missing[field.key] = localizeFieldIssue({ code: 'required' }, field.label, t)
-            }
-        }
-        if (Object.keys(missing).length) {
-            setFieldErrors(missing)
+        const stepFields = step?.fields ?? []
+        const bag = validateValues(stepFields as ActionFieldDef[], formValues)
+        if (bagHasErrors(bag)) {
+            const labels: Record<string, string> = {}
+            for (const f of stepFields) labels[f.key] = f.label
+            setFieldErrors(localizeFieldErrorMap(bag, t, { labels }))
             toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }))
             return
         }
@@ -1014,7 +1053,7 @@ export function DynamicRecordDialog({
                                 cell `min-w-0` so a long select/input value can't
                                 blow the two columns past the dialog width. */}
                             <form
-                                id="dynamic-record-form"
+                                id={formId}
                                 onSubmit={handleSubmit}
                                 className="grid gap-y-4"
                             >
@@ -1124,7 +1163,7 @@ export function DynamicRecordDialog({
                         {isEditable && (!isSteps || isLastStep) && (
                             <Button
                                 type="submit"
-                                form="dynamic-record-form"
+                                form={formId}
                                 disabled={saving || loading}
                             >
                                 {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -1193,7 +1232,7 @@ function FieldRow({ field, record, value, mode, onChange, error, locked }: Field
             ) : isEditReadonly ? (
                 <ReadonlyEditField field={field} value={value} />
             ) : (
-                <EditField field={field} value={value} onChange={onChange} record={record} />
+                <EditField field={field} value={value} onChange={onChange} record={record} invalid={!!error} />
             )}
 
             {error && mode !== 'view' && (
@@ -1836,13 +1875,19 @@ function JsonObjectViewValue({ value }: { value: Record<string, unknown> }) {
     )
 }
 
-export function EditField({ field, value, onChange, record }: {
+export function EditField({ field, value, onChange, record, invalid }: {
     field: FieldDef
     value: any
     onChange: (val: any) => void
     /** The full record being edited — supplies FK relation siblings + line-items. */
     record?: any
+    /** When true, paint the control with a destructive border (Laravel-style). */
+    invalid?: boolean
 }) {
+    const invalidCls = invalid
+        ? 'border-destructive ring-1 ring-destructive/30 focus-visible:ring-destructive aria-invalid:border-destructive'
+        : undefined
+
     const { t, i18n } = useTranslation()
     const editFieldImageUrl = useContext(ImageUrlContext)
     const dialogModel = useContext(RecordDialogModelContext)
@@ -1892,6 +1937,8 @@ export function EditField({ field, value, onChange, record }: {
                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)}
                 placeholder={field.placeholder}
                 rows={4}
+                aria-invalid={invalid || undefined}
+                className={invalidCls}
             />
         )
     }
@@ -1952,6 +1999,7 @@ export function EditField({ field, value, onChange, record }: {
                 // for the popover to open and fetch a page.
                 seedOption={fkSeedOption(field, value, record)}
                 hideCreate={hideSelfCreate}
+                invalid={invalid}
             />
         )
     }
@@ -1967,7 +2015,7 @@ export function EditField({ field, value, onChange, record }: {
     if (field.type === 'select' && field.options?.length) {
         return (
             <Select value={String(value ?? '')} onValueChange={onChange}>
-                <SelectTrigger className="w-full">
+                <SelectTrigger className={cn("w-full", invalidCls)} aria-invalid={invalid || undefined}>
                     <SelectValue placeholder="Seleccionar..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -2043,7 +2091,7 @@ export function EditField({ field, value, onChange, record }: {
             ? 'email'
             : 'text'
 
-    return <ScannableRecordInput field={field} value={value} onChange={onChange} inputType={inputType} />
+    return <ScannableRecordInput field={field} value={value} onChange={onChange} inputType={inputType} invalid={invalid} className={invalidCls} />
 }
 
 /**
@@ -2062,11 +2110,15 @@ function ScannableRecordInput({
     value,
     onChange,
     inputType,
+    invalid,
+    className,
 }: {
     field: FieldDef
     value: any
     onChange: (val: any) => void
     inputType: string
+    invalid?: boolean
+    className?: string
 }) {
     const [scanOpen, setScanOpen] = useState(false)
     // El botón de escaneo aparece siempre que el campo declara `scan` (como el
@@ -2086,6 +2138,8 @@ function ScannableRecordInput({
                 )
             }
             placeholder={field.placeholder}
+            aria-invalid={invalid || undefined}
+            className={className}
         />
     )
     if (!scanEnabled) return input
