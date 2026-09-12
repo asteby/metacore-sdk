@@ -30,6 +30,18 @@ describe('applyLineItemRowFormulas', () => {
             subtotal: '',
         })
         expect(row.subtotal).toBe(25)
+        expect(row.discount).toBe(0)
+    })
+
+    it('coerces blank discount to 0 even when subtotal already matches', () => {
+        const row = applyLineItemRowFormulas(fields, {
+            qty: 1,
+            unit_price: 10,
+            discount: '',
+            subtotal: 10,
+        })
+        expect(row.subtotal).toBe(10)
+        expect(row.discount).toBe(0)
     })
 
     it('is a no-op without an amount column', () => {
