@@ -375,6 +375,9 @@ export {
     resolveOptionsSource,
     getVisibleWhen,
     evaluateVisibleWhen,
+    scopeValueFromFilterToken,
+    buildListScopeValues,
+    evaluateVisibleWhenForListScope,
 } from './dynamic-form-schema'
 export {
     ActivityValueRenderer,

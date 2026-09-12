@@ -337,12 +337,13 @@ export interface ColumnDefinition {
     /** snake_case alias served by the kernel for `itemFields`. */
     item_fields?: ColumnItemField[]
     /**
-     * Conditional visibility in the create/edit modal: render this field only
-     * when a sibling field's current value matches the predicate. Mirrors the
-     * kernel v3 `Column.visible_when` (projected onto the served ColumnDef).
-     * Tolerates the camelCase alias. Absent = always visible; a hidden field is
-     * skipped by the required-gate so it never blocks submit. See
-     * `evaluateVisibleWhen`.
+     * Conditional visibility (kernel v3 `Column.visible_when`):
+     *   - create/edit modal → `evaluateVisibleWhen` against live form values
+     *   - list/board → `evaluateVisibleWhenForListScope` against known filter
+     *     scope (`defaultFilters` / single-eq chips), so a locked nav scope
+     *     like `party_type=customer` hides `supplier_id` without each nav
+     *     item re-declaring a full column allowlist.
+     * Tolerates the camelCase alias. Absent = always visible.
      */
     visible_when?: VisibleWhen
     /** camelCase alias for `visible_when`. */
