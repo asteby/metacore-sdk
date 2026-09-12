@@ -864,11 +864,14 @@ export function DynamicRecordDialog({
                 for (const f of visible) labels[f.key] = f.label
                 const next = localizeFieldErrorMap(bag, t, { labels })
                 setFieldErrors(next)
-                const visibleKeys = new Set(visible.map(f => f.key))
-                const orphans = Object.entries(next).filter(([k]) => !visibleKeys.has(k))
-                const description = orphans.length
-                    ? orphans.map(([k, msg]) => `${labelForKey(k)}: ${msg}`).join(' · ')
-                    : undefined
+                const description = Object.entries(next)
+                    .map(([k, msg]) => {
+                        const label = labels[k] || labelForKey(k)
+                        return msg.toLowerCase().startsWith(String(label).toLowerCase())
+                            ? msg
+                            : `${label}: ${msg}`
+                    })
+                    .join(' · ')
                 toast.error(
                     t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }),
                     description ? { description } : undefined,

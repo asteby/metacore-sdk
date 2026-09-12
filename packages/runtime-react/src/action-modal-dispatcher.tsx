@@ -40,6 +40,13 @@ import { toast } from 'sonner'
 import { toastServerError, toastServerSuccess, extractFieldErrors, localizeFieldErrorMap } from './server-error'
 import type { Translate } from './server-error'
 import { validateValues, bagHasErrors } from './validator'
+import {
+    clearFieldErrorTree,
+    formatFieldErrorsDescription,
+    labelsForValidationFields,
+    labelForValidationPath,
+    lineItemErrorsFor,
+} from './field-validation-ui'
 import { validationCatalog } from './validation-catalog'
 import { useApi } from './api-context'
 import { DynamicIcon } from './dynamic-icon'
@@ -621,33 +628,43 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
 
     const updateField = (key: string, value: any) => {
         setFormData((prev: Record<string, any>) => ({ ...prev, [key]: value }))
-        setFieldErrors(prev => {
-            if (!prev[key]) return prev
-            const next = { ...prev }
-            delete next[key]
-            return next
-        })
+        setFieldErrors((prev) => clearFieldErrorTree(prev, key))
     }
 
     const lang = i18n.language
     const handleActionError = (err: unknown) => {
+        const labels = labelsForValidationFields(action.fields, t)
         const localized = localizeActionFieldErrors(err, action.fields, t, lang)
         if (localized) {
-            setFieldErrors(localized)
-            toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }))
+            // Enrich labels for dotted line-item paths before toasting.
+            const withPathLabels: Record<string, string> = {}
+            for (const [path, msg] of Object.entries(localized)) {
+                withPathLabels[path] = msg
+                if (!labels[path]) labels[path] = labelForValidationPath(path, action.fields, t)
+            }
+            setFieldErrors(withPathLabels)
+            toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }), {
+                description: formatFieldErrorsDescription(withPathLabels, action.fields, t),
+            })
             return
         }
-        toastServerError(err, { t, language: lang })
+        toastServerError(err, { t, language: lang, labels })
     }
 
     const execute = async () => {
         if (action.fields) {
             const bag = validateValues(action.fields, formData)
             if (bagHasErrors(bag)) {
-                const labels: Record<string, string> = {}
-                for (const f of action.fields) labels[f.key] = tl(f.label)
-                setFieldErrors(localizeFieldErrorMap(bag, t, { labels, language: lang }))
-                toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }))
+                const labels = labelsForValidationFields(action.fields, (k, o) => t(k, o))
+                // Exact dotted keys (`lines.0.qty`) need path-aware labels.
+                for (const path of Object.keys(bag)) {
+                    if (!labels[path]) labels[path] = labelForValidationPath(path, action.fields, t)
+                }
+                const next = localizeFieldErrorMap(bag, t, { labels, language: lang })
+                setFieldErrors(next)
+                toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }), {
+                    description: formatFieldErrorsDescription(next, action.fields, t),
+                })
                 return
             }
         }
@@ -727,7 +744,14 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                                     <FieldLabel htmlFor={field.key} required={field.required}>
                                         {tl(field.label)}
                                     </FieldLabel>
-                                    {renderField(field, formData[field.key], (v: any) => updateField(field.key, v), formData, record)}
+                                    {renderField(
+                                        field,
+                                        formData[field.key],
+                                        (v: any) => updateField(field.key, v),
+                                        formData,
+                                        record,
+                                        fieldErrors,
+                                    )}
                                     {fieldErrors[field.key] && (
                                         <p className="text-destructive text-xs mt-1">{fieldErrors[field.key]}</p>
                                     )}
@@ -1011,17 +1035,30 @@ function renderField(
     // then treated as having no resolvable dependency).
     formValues?: Record<string, any>,
     record?: Record<string, any>,
+    fieldErrors?: Record<string, string>,
 ) {
     // Repeatable line-items group → row grid (value is an array of row objects).
     // The header form values flow in so a cell can depend on a header field.
     if (isLineItemsField(field)) {
-        return <DynamicLineItems field={applyPrefillLock(field)} value={value} onChange={onChange} formValues={formValues} />
+        return (
+            <DynamicLineItems
+                field={applyPrefillLock(field)}
+                value={value}
+                onChange={onChange}
+                formValues={formValues}
+                errors={lineItemErrorsFor(field.key, fieldErrors)}
+            />
+        )
     }
     // Resolve the widget the same way DynamicForm does (explicit widget wins,
     // else inferred from type) so action modals and the standalone form stay in
     // lockstep — previously this switch keyed off `field.type` and silently
     // dropped `dynamic_select` to a plain text input.
     const widget = resolveWidget(field)
+    const invalid = !!(fieldErrors && fieldErrors[field.key])
+    const invalidCls = invalid
+        ? 'border-destructive ring-1 ring-destructive/30 focus-visible:ring-destructive'
+        : ''
     if (widget === 'dynamic_select') {
         // A header-level dynamic_select may itself depend on another header
         // field; resolve its filter_value from the form context.
@@ -1035,6 +1072,7 @@ function renderField(
                 onChange={onChange}
                 dependsValue={dependsValue}
                 seedOption={seedOptionFromRecord(field, value, record)}
+                invalid={invalid}
             />
         )
     }
@@ -1045,11 +1083,11 @@ function renderField(
     }
     switch (widget) {
         case 'textarea':
-            return <Textarea id={field.key} value={value || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)} placeholder={field.placeholder} />
+            return <Textarea id={field.key} value={value || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)} placeholder={field.placeholder} aria-invalid={invalid || undefined} className={invalidCls || undefined} />
         case 'select':
             return (
                 <Select value={value || ''} onValueChange={onChange}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder={field.placeholder || 'Seleccionar...'} /></SelectTrigger>
+                    <SelectTrigger className={'w-full' + (invalidCls ? ` ${invalidCls}` : '')} aria-invalid={invalid || undefined}><SelectValue placeholder={field.placeholder || 'Seleccionar...'} /></SelectTrigger>
                     <SelectContent>
                         {field.options?.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
                     </SelectContent>
@@ -1058,12 +1096,15 @@ function renderField(
         case 'switch':
             return <Switch id={field.key} checked={!!value} onCheckedChange={onChange} />
         case 'number':
-            return <Input id={field.key} type="number" value={value ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.valueAsNumber || '')} placeholder={field.placeholder} />
+            return <Input id={field.key} type="number" value={value ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                const n = e.target.valueAsNumber
+                onChange(e.target.value === '' || !Number.isFinite(n) ? '' : n)
+            }} placeholder={field.placeholder} aria-invalid={invalid || undefined} className={invalidCls || undefined} />
         case 'date':
             // Modern shadcn Calendar in a Popover (portaled, never clipped by the
             // modal) instead of the native, dated, easily-cut <input type=date>.
             return <DynamicDateField field={field} value={value} onChange={onChange} />
         default:
-            return <Input id={field.key} type={field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : 'text'} value={value || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} placeholder={field.placeholder} />
+            return <Input id={field.key} type={field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : 'text'} value={value || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} placeholder={field.placeholder} aria-invalid={invalid || undefined} className={invalidCls || undefined} />
     }
 }

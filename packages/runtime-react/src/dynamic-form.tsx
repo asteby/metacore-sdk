@@ -420,7 +420,10 @@ function FieldRenderer({
         case 'switch':
             return <Switch id={field.key} checked={!!value} onCheckedChange={onChange} />
         case 'number':
-            return <Input id={field.key} type="number" value={value ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.valueAsNumber || '')} placeholder={field.placeholder} />
+            return <Input id={field.key} type="number" value={value ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                const n = e.target.valueAsNumber
+                onChange(e.target.value === '' || !Number.isFinite(n) ? '' : n)
+            }} placeholder={field.placeholder} />
         case 'date':
             return <DynamicDateField field={field} value={value} onChange={onChange} />
         default:
@@ -463,9 +466,14 @@ function ScannableInput({
             id={field.key}
             type={type}
             value={value ?? ''}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                onChange(type === 'number' ? e.target.valueAsNumber || '' : e.target.value)
-            }
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                if (type !== 'number') {
+                    onChange(e.target.value)
+                    return
+                }
+                const n = e.target.valueAsNumber
+                onChange(e.target.value === '' || !Number.isFinite(n) ? '' : n)
+            }}
             placeholder={field.placeholder}
         />
     )
