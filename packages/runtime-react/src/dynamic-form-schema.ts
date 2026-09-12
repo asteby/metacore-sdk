@@ -119,6 +119,57 @@ export function computeLineItemTotals(
     return totals
 }
 
+/** Keys that mean "line net amount" across manifests / locales. */
+const LINE_AMOUNT_KEYS = new Set(['subtotal', 'line_total', 'importe', 'amount', 'total'])
+/** Keys that mean quantity on a line row. */
+const LINE_QTY_KEYS = new Set(['qty', 'quantity', 'cantidad'])
+/** Keys that mean unit price. */
+const LINE_PRICE_KEYS = new Set(['unit_price', 'price', 'precio', 'precio_unitario'])
+/** Keys that mean line discount (absolute). */
+const LINE_DISCOUNT_KEYS = new Set(['discount', 'descuento', 'discount_amount'])
+
+function firstKey(rowOrFields: { key?: string }[] | Record<string, unknown>, candidates: Set<string>): string | undefined {
+    if (Array.isArray(rowOrFields)) {
+        for (const f of rowOrFields) {
+            if (f.key && candidates.has(f.key)) return f.key
+        }
+        return undefined
+    }
+    for (const k of Object.keys(rowOrFields)) {
+        if (candidates.has(k)) return k
+    }
+    return undefined
+}
+
+/**
+ * Live line-amount formula for action / form line-items grids:
+ * `(qty|quantity) * (unit_price|…) - (discount|…)` → `subtotal|line_total|importe`.
+ *
+ * Pure + convention-based so create_sales_order (and similar modals) show
+ * Importe as the user types without each manifest declaring a client formula.
+ * No-op when the row has no amount column or no qty/price pair.
+ */
+export function applyLineItemRowFormulas(
+    itemFields: ActionFieldDef[],
+    row: Record<string, any>,
+): Record<string, any> {
+    const amountKey =
+        firstKey(itemFields, LINE_AMOUNT_KEYS) ?? firstKey(row, LINE_AMOUNT_KEYS)
+    const qtyKey = firstKey(itemFields, LINE_QTY_KEYS) ?? firstKey(row, LINE_QTY_KEYS)
+    const priceKey =
+        firstKey(itemFields, LINE_PRICE_KEYS) ?? firstKey(row, LINE_PRICE_KEYS)
+    if (!amountKey || !qtyKey || !priceKey) return row
+
+    const discountKey =
+        firstKey(itemFields, LINE_DISCOUNT_KEYS) ?? firstKey(row, LINE_DISCOUNT_KEYS)
+    const qty = toNumber(row[qtyKey])
+    const price = toNumber(row[priceKey])
+    const discount = discountKey ? toNumber(row[discountKey]) : 0
+    const next = Math.round((qty * price - discount) * 100) / 100
+    if (toNumber(row[amountKey]) === next) return row
+    return { ...row, [amountKey]: next }
+}
+
 export interface BalanceState {
     debit: number
     credit: number

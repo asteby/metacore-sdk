@@ -385,7 +385,15 @@ export {
     scopeValueFromFilterToken,
     buildListScopeValues,
     evaluateVisibleWhenForListScope,
+    applyLineItemRowFormulas,
+    computeLineItemTotals,
+    toNumber,
 } from './dynamic-form-schema'
+export {
+    BranchCreateGateProvider,
+    useBranchCreateGate,
+    type BranchCreateGateApi,
+} from './branch-create-gate'
 export {
     ActivityValueRenderer,
     type ActivityValueRendererProps,

@@ -38,6 +38,7 @@ import {
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { toastServerError, toastServerSuccess, extractFieldErrors, localizeFieldErrorMap } from './server-error'
+import { useBranchCreateGate } from './branch-create-gate'
 import type { Translate } from './server-error'
 import { validateValues, bagHasErrors } from './validator'
 import {
@@ -588,6 +589,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
     // defaultValue keeps an already-localized string unchanged.
     const tl = (s: string) => t(s, { defaultValue: s })
     const api = useApi()
+    const branchGate = useBranchCreateGate()
     const [formData, setFormData] = useState<Record<string, any>>({})
     const [executing, setExecuting] = useState(false)
     // Per-field validation errors (localized), shown inline under each input.
@@ -671,8 +673,26 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
         setFieldErrors({})
         setExecuting(true)
         try {
-            const url = buildActionUrl(endpoint, model, record.id, action.key)
-            const res = await api.post(url, formData)
+            let payload: Record<string, any> = { ...formData }
+            // Create-placement actions (and any create with no record) may need a
+            // host branch stamp when the sidebar is on "Todas". Skip when the
+            // form already collected branch_id, or the host has no gate.
+            const isCreatePlacement =
+                action.placement === 'create' ||
+                record?.id == null ||
+                record?.id === '' ||
+                record?.id === 'undefined'
+            if (
+                branchGate &&
+                isCreatePlacement &&
+                (payload.branch_id == null || payload.branch_id === '')
+            ) {
+                const branchId = await branchGate.ensureBranchForCreate(model)
+                if (branchId === null) return
+                if (branchId) payload = { ...payload, branch_id: branchId }
+            }
+            const url = buildActionUrl(endpoint, model, record?.id, action.key)
+            const res = await api.post(url, payload)
             if (res.data.success) {
                 toastServerSuccess(res.data, { t })
                 onOpenChange(false)

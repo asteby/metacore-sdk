@@ -367,6 +367,36 @@ export function DynamicTable({
     // been adopted, where `dynamicFilters`/`pagination` already mirror the URL,
     // so the write is a no-op and the filter never gets stripped.
     const [urlSynced, setUrlSynced] = useState(false)
+    // Keys that left `defaultFilters` (e.g. branch_id when switching to
+    // "Todas las sucursales"). The URL write effect used to carry-through every
+    // leftover `f_*` from location — that resurrected the locked branch filter
+    // forever after the host dropped it from defaultFilters.
+    const prevDefaultFilterKeys = useRef<Set<string>>(new Set())
+    const releasedDefaultFilterKeys = useRef<Set<string>>(new Set())
+
+    useEffect(() => {
+        const next = new Set(Object.keys(defaultFilters ?? {}))
+        const prev = prevDefaultFilterKeys.current
+        const released = new Set<string>()
+        prev.forEach((k) => {
+            if (!next.has(k)) released.add(k)
+        })
+        releasedDefaultFilterKeys.current = released
+        if (released.size > 0) {
+            setDynamicFilters((df) => {
+                let changed = false
+                const copy = { ...df }
+                released.forEach((k) => {
+                    if (k in copy) {
+                        delete copy[k]
+                        changed = true
+                    }
+                })
+                return changed ? copy : df
+            })
+        }
+        prevDefaultFilterKeys.current = next
+    }, [defaultFilters])
 
     useEffect(() => {
         if (prevBranchId.current !== currentBranch?.id) {
@@ -513,9 +543,13 @@ export function DynamicTable({
         // Sidebar deep-links (CxC→CxP) push f_party_type=eq:supplier before React
         // re-renders with matching defaultFilters; without this carry-through the
         // write effect races and strips the filter down to bare ?view=list.
+        // Do NOT resurrect keys the host just released from defaultFilters
+        // (branch_id when switching to "all" — otherwise San Felipe sticks).
         current.forEach((value, key) => {
             if (!key.startsWith('f_')) return
             if (params.has(key)) return
+            const filterKey = key.substring(2)
+            if (releasedDefaultFilterKeys.current.has(filterKey)) return
             params.set(key, value)
         })
         const search = params.toString()
