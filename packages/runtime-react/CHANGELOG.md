@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 37.1.1
+
+### Patch Changes
+
+- ae2004d: Coerce blank line-item discount to 0 so create payloads never POST discount:"" (avoids server "discount is required").
+
 ## 37.1.0
 
 ### Minor Changes
