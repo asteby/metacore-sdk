@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 37.1.0
+
+### Minor Changes
+
+- 3edee3a: Branch create gate (confirm+pick when no active branch), live line-item importe formula (qty×price−discount), and drop sticky f_branch_id when leaving a locked branch defaultFilter.
+
 ## 37.0.5
 
 ### Patch Changes
