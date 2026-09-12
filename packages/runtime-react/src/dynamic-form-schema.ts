@@ -166,8 +166,15 @@ export function applyLineItemRowFormulas(
     const price = toNumber(row[priceKey])
     const discount = discountKey ? toNumber(row[discountKey]) : 0
     const next = Math.round((qty * price - discount) * 100) / 100
-    if (toNumber(row[amountKey]) === next) return row
-    return { ...row, [amountKey]: next }
+
+    // Coerce blank optional discount to 0 so submit never POSTs `discount: ""`
+    // (servers that see a present key then reject it as "discount is required").
+    const discountBlank =
+        !!discountKey && (row[discountKey] === '' || row[discountKey] == null)
+    if (toNumber(row[amountKey]) === next && !discountBlank) return row
+    const out: Record<string, any> = { ...row, [amountKey]: next }
+    if (discountBlank) out[discountKey!] = 0
+    return out
 }
 
 export interface BalanceState {
