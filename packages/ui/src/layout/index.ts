@@ -13,6 +13,8 @@ export {
   checkIsActive,
   splitHref,
   declaredFiltersMatch,
+  flattenNavLeaves,
+  resolveActiveItemUrls,
   VIEW_PARAMS,
   type SplitHref,
 } from './nav-active'
