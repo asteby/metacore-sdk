@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 37.3.0
+
+### Minor Changes
+
+- 677580a: Add `useEdgeDevice`/`resolveEdgeDevice`/`sendEdgeDeviceCommand` generic primitives for resolving a paired edge device (printer, scale, payment terminal…) by capability, replacing per-addon lookups like `pos-edge-print`'s local `findEdgePrinter`.
+
 ## 37.2.0
 
 ### Minor Changes
