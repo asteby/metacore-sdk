@@ -511,7 +511,10 @@ export function DynamicTable({
         // the URL goes bare, and the sidebar falls back to the model default
         // (the "click twice to move the active to the right entry" bug).
         const current = new URLSearchParams(window.location.search)
-        for (const key of ['view', 'group_by']) {
+        // `action` is host-owned (?action=stamp_fiscal deep-links from
+        // notifications). Without carrying it, the first URL rewrite drops it
+        // before the list route can open ActionModalDispatcher.
+        for (const key of ['view', 'group_by', 'action']) {
             const v = current.get(key)
             if (v) params.set(key, v)
         }
