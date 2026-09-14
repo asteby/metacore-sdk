@@ -208,8 +208,13 @@ export function NotificationsDropdown({
       if (
         typeof window !== 'undefined' &&
         'Notification' in window &&
-        Notification.permission !== 'granted'
+        Notification.permission === 'default' &&
+        !(window as unknown as { __mcPushPromptDispatched?: boolean }).__mcPushPromptDispatched
       ) {
+        // Once per page load — the prompt component coalesces by toast id;
+        // don't spam the event on every SSE/WS ingest.
+        ;(window as unknown as { __mcPushPromptDispatched?: boolean }).__mcPushPromptDispatched =
+          true
         window.dispatchEvent(new CustomEvent('show-notification-prompt'))
       }
     },

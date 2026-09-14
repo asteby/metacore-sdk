@@ -38,6 +38,7 @@ export function PWAInstallPrompt({ messages, duration = 10000 }: InstallPromptPr
     shown.current = true
 
     showNotificationToast({
+      id: 'sys:pwa-install',
       title: msgs.title,
       body: msgs.description,
       type: 'info',

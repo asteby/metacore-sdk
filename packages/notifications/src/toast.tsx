@@ -86,15 +86,14 @@ function ActionButtons(props: {
             e.preventDefault()
             e.stopPropagation()
             const fn = action.onClick
+            // Run handler first so dismiss/snooze flags stick before any
+            // concurrent re-show (SSE) can race the deferred path.
+            try {
+              fn(e)
+            } catch {
+              /* never block */
+            }
             toast.dismiss(toastId)
-            // Defer so dismiss unmount doesn't race the navigation/handler.
-            window.setTimeout(() => {
-              try {
-                fn(e)
-              } catch {
-                /* never block */
-              }
-            }, 0)
           }}
         >
           {action.label}
@@ -112,14 +111,12 @@ function ActionButtons(props: {
             e.preventDefault()
             e.stopPropagation()
             const fn = cancel.onClick
+            try {
+              fn(e)
+            } catch {
+              /* never block */
+            }
             toast.dismiss(toastId)
-            window.setTimeout(() => {
-              try {
-                fn(e)
-              } catch {
-                /* never block */
-              }
-            }, 0)
           }}
         >
           {cancel.label}
