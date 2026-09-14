@@ -271,7 +271,7 @@ export function resolveWidget(field: ActionFieldDef): string {
     // single-select — NOT a raw text input. This wins over the `type` switch so
     // a declared FK column is a picker regardless of its SQL column type
     // (uuid/text/etc), matching the kernel's option-resolution semantics.
-    if (fieldHasRef(field)) return 'dynamic_select'
+    if (fieldHasRef(field)) return field.multiple ? 'dynamic_multi_select' : 'dynamic_select'
     switch (field.type) {
         case 'textarea': return 'textarea'
         case 'select': return 'select'
