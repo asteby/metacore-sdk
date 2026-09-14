@@ -1,5 +1,15 @@
 # @asteby/metacore-runtime-react
 
+## 37.2.0
+
+### Minor Changes
+
+- 362ffda: Add `useResource`/`useMutation` — a tanstack-free polling GET/mutation hook for federated addons, with a `stuck` field on `useResource` that flips true once `isLoading` stays on past a configurable threshold (default 8s) without landing. Lets addon UIs offer a retry instead of an indefinite skeleton when a fetch run gets lost to a remount/abort race. Extracted from the pattern independently reimplemented in the `pos` addon (PRs #1455, #1460).
+
+### Patch Changes
+
+- 1e35269: Preserve `?action=` in DynamicTable URL sync so notification deep-links can open ActionModalDispatcher on list routes.
+
 ## 37.1.2
 
 ### Patch Changes
