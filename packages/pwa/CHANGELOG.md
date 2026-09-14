@@ -1,5 +1,13 @@
 # @asteby/metacore-pwa
 
+## 0.6.2
+
+### Patch Changes
+
+- 17d2328: Coalesce system prompts (stable toast ids), honor "Ahora no" with a long snooze, run toast actions before dismiss to avoid SSE races, and dispatch the push-permission event at most once per page load.
+- Updated dependencies [17d2328]
+  - @asteby/metacore-notifications@26.0.1
+
 ## 0.6.1
 
 ### Patch Changes
