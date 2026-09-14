@@ -32,6 +32,7 @@ import { BarcodeScanner } from './barcode-scanner'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { DynamicLineItems } from './dynamic-line-items'
 import { DynamicSelectField } from './dynamic-select-field'
+import { DynamicMultiSelectField } from './dynamic-multi-select-field'
 import { DynamicDateField } from './dynamic-date-field'
 import { UploadField } from './upload-field'
 import { IconPickerField } from './icon-picker-field'
@@ -40,6 +41,7 @@ import { ColorPickerField } from './color-picker-field'
 export { buildZodSchema, resolveWidget }
 export { DynamicLineItems } from './dynamic-line-items'
 export { DynamicSelectField } from './dynamic-select-field'
+export { DynamicMultiSelectField } from './dynamic-multi-select-field'
 export { DynamicDateField } from './dynamic-date-field'
 export { UploadField } from './upload-field'
 export { IconPickerField } from './icon-picker-field'
@@ -373,6 +375,12 @@ function FieldRenderer({
     if (widget === 'dynamic_select') {
         const seedOption = seedOptionFromSibling(field, value, initialValues)
         return <DynamicSelectField field={field} value={value} onChange={onChange} seedOption={seedOption} />
+    }
+    // Multi-value FK/jsonb-array field (field.multiple:true) — a record that
+    // legitimately relates to several rows at once (e.g. a price list that
+    // applies to more than one customer segment).
+    if (widget === 'dynamic_multi_select') {
+        return <DynamicMultiSelectField field={field} value={value} onChange={onChange} />
     }
     // File upload → themed picker that POSTs to the host upload endpoint and
     // stores the returned file url/path as the field value.

@@ -486,6 +486,15 @@ export interface ActionFieldDef {
     source?: string
     relation?: string
     /**
+     * A field with a declared `ref` (or `source`/`relation`) normally renders
+     * as a single-value searchable picker (`dynamic_select`). Set `multiple:
+     * true` to render `DynamicMultiSelectField` instead, storing the value as
+     * a plain array of target ids — the backing column must be array-shaped
+     * (a jsonb column, the kernel's canonical choice). E.g. a price list that
+     * applies to several customer segments at once rather than exactly one.
+     */
+    multiple?: boolean
+    /**
      * Cascade dependency: the key of ANOTHER field in the same action form
      * (a header field or a sibling item-field) whose current value supplies
      * this picker's `filter_value`. While the depended-on field is empty the
