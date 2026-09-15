@@ -56,6 +56,7 @@ import { OptionsContext } from './options-context'
 import { DynamicIcon, isLucideIconName } from './dynamic-icon'
 import { CollectionCell } from './collection-cell'
 import { isNilUuid, normalizeNilUuid } from './nil-uuid'
+import { useOptionsResolver } from './use-options-resolver'
 import type { TableMetadata, ColumnDefinition } from './types'
 import { isColumnVisibleInTable } from './column-visibility'
 import type {
@@ -374,6 +375,32 @@ const renderRelationBadges = (items: any, col: ColumnDefinition) => {
                             <DynamicIcon name={iconValue} className="h-3 w-3" />
                         )}
                         <span>{label}</span>
+                    </Badge>
+                )
+            })}
+        </div>
+    )
+}
+
+/**
+ * Read-side counterpart of `DynamicMultiSelectField` (dynamic-multi-select-
+ * field.tsx): a `ref` column whose value is a plain jsonb array of target ids
+ * (field.multiple:true at write time) rather than the single-FK sibling
+ * `{value,label}` object `RelationCell` expects. There is no per-row backend
+ * resolution for this shape, so this cell resolves labels itself — one
+ * `useOptionsResolver` page (id → label) shared across every row of the
+ * column via `OptionsContext` — and renders each id as a badge.
+ */
+const RelationIdListCell: React.FC<{ ids: string[]; ref: string }> = ({ ids, ref: relTarget }) => {
+    const { options } = useOptionsResolver({ modelKey: '', fieldKey: 'id', ref: relTarget, limit: 200 })
+    if (ids.length === 0) return <EmptyCell />
+    return (
+        <div className="flex flex-wrap gap-1">
+            {ids.map((id) => {
+                const opt = options.find((o) => String(o.id) === String(id))
+                return (
+                    <Badge key={id} variant="outline">
+                        {opt ? opt.label : id.slice(0, 8)}
                     </Badge>
                 )
             })}
@@ -1016,6 +1043,13 @@ export function makeDefaultGetDynamicColumns(
                         renderAs === 'relation' ||
                         (col.ref && !col.options?.length && renderAs !== 'badge' && renderAs !== 'status')
                     ) {
+                        // A `ref` column backed by a jsonb array (field.multiple:
+                        // true at write time — see DynamicMultiSelectField) has no
+                        // resolved sibling object; RelationCell expects one. Route
+                        // it to the id-list cell instead.
+                        if (Array.isArray(value)) {
+                            return <RelationIdListCell ids={value.map(String)} ref={col.ref!} />
+                        }
                         return <RelationCell col={col} row={row.original} getImageUrl={getImageUrl} />
                     }
 
