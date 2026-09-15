@@ -56,6 +56,7 @@ import { useApi } from '../api-context'
 import { useBranchCreateGate } from '../branch-create-gate'
 import { toastServerError, extractFieldErrors, localizeFieldIssue, localizeFieldErrorMap } from '../server-error'
 import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-field'
+import { DynamicMultiSelectField } from '../dynamic-multi-select-field'
 import { DynamicRelations } from '../dynamic-relations'
 import { useOptionsResolver, type ResolvedOption } from '../use-options-resolver'
 import { getFieldRef, getVisibleWhen, evaluateVisibleWhen } from '../dynamic-form-schema'
@@ -376,6 +377,12 @@ export function fieldItemFields(field: FieldDef): ItemField[] | undefined {
 // editable widgets (media/upload, color, dates) are NOT line-items.
 export function isLineItemsField(field: FieldDef, value: any): boolean {
     if (field.type === 'image' || field.widget === 'upload') return false
+    // A `ref` field declared `multiple: true` (DynamicMultiSelectField) is a
+    // plain array of target ids, not a structured line-items document — it
+    // has its own editable picker and must not fall into the read-only
+    // inline-table branch just because its current value is an array
+    // (including the [] default on a freshly-created record).
+    if ((field as ActionFieldDef).multiple) return false
     if (fieldItemFields(field)?.length) return true
     if (Array.isArray(value)) return true
     return (
@@ -1990,6 +1997,20 @@ export function EditField({ field, value, onChange, record, invalid }: {
     // else optionsConfig.source → /api/options/<source>). Without the `type`
     // check a source-backed picker with no `ref` silently degraded to a raw text
     // input. Static inline `options` are handled by the enum <Select> branch below.
+    // Multi-value ref field (field.multiple:true — see DynamicMultiSelectField):
+    // checked BEFORE the single-value dynamic_select branch below, which would
+    // otherwise claim it too (both trigger on the same `ref`/`getFieldRef`
+    // check) and render a picker that stores a single id instead of an array.
+    if (getFieldRef(field as ActionFieldDef) && (field as ActionFieldDef).multiple) {
+        return (
+            <DynamicMultiSelectField
+                field={field as ActionFieldDef}
+                value={value}
+                onChange={onChange}
+            />
+        )
+    }
+
     if (
         (getFieldRef(field as ActionFieldDef) ||
             field.type === 'dynamic_select' ||
