@@ -86,6 +86,17 @@ describe('smartUrlLabel / fileNameFromUrl / ensureHref', () => {
         expect(ensureHref('https://a.com')).toBe('https://a.com')
         expect(ensureHref('mailto:a@b.com')).toBe('mailto:a@b.com')
     })
+
+    it('leaves a root-relative storage path unchanged (never "https:///…")', () => {
+        // The platform's own convention for every locally-served asset —
+        // uploads, hub-generated images (hub_image_provider_bridge.go),
+        // printable documents. Regression for the bug where this produced
+        // "https:///storage/…" (scheme + empty host, a dead link).
+        expect(ensureHref('/storage/hub-generations/x.png')).toBe(
+            '/storage/hub-generations/x.png'
+        )
+        expect(ensureHref('//cdn.example.com/x.png')).toBe('//cdn.example.com/x.png')
+    })
 })
 
 describe('splitTrailingPunct', () => {
@@ -171,6 +182,30 @@ describe('primitives render', () => {
         fireEvent.error(img)
         // after error, a link chip is rendered instead
         expect(screen.queryByRole('link')).toBeTruthy()
+    })
+
+    it('ImageThumbnail resolves a relative storage path through getImageUrl', () => {
+        const getImageUrl = (path: string) => `http://api.local${path}`
+        const { container } = render(
+            <ImageThumbnail
+                url="/storage/hub-generations/x.png"
+                getImageUrl={getImageUrl}
+            />
+        )
+        const img = container.querySelector('img') as HTMLImageElement
+        // Regression: this used to leak into an <a href> built by ensureHref
+        // as "https:///storage/hub-generations/x.png" (bare-host misread of a
+        // relative path). There's no <a> anymore — a click opens the lightbox.
+        expect(img.getAttribute('src')).toBe('http://api.local/storage/hub-generations/x.png')
+    })
+
+    it('ImageThumbnail opens a lightbox preview on click instead of navigating', () => {
+        render(<ImageThumbnail url="https://cdn.x/photo.png" />)
+        expect(screen.queryByRole('dialog')).toBeFalsy()
+        fireEvent.click(screen.getByRole('button'))
+        const dialog = screen.getByRole('dialog')
+        expect(dialog).toBeTruthy()
+        expect(dialog.querySelector('img')?.getAttribute('src')).toBe('https://cdn.x/photo.png')
     })
 
     it('MediaValue dispatches by kind', () => {
