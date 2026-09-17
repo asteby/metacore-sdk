@@ -13,3 +13,8 @@ export {
   type WizardStepDef,
   type WizardGuard,
 } from './wizard-context'
+export {
+  ProcessStepper,
+  type ProcessStepDef,
+  type ProcessStepperProps,
+} from './process-stepper'

@@ -10,6 +10,7 @@ import {
     Button,
 } from '@asteby/metacore-ui/primitives'
 import { ChevronDown } from 'lucide-react'
+import { ProcessStepper } from '@asteby/metacore-ui/wizard'
 import type { FieldGroup } from './form-layout'
 
 /**
@@ -75,37 +76,30 @@ export function FieldSection({
 }
 
 /**
- * Progress bar for `mode: "steps"`: one filled segment per completed/current
- * step plus a "Paso i/n · <title>" caption. Mirrors the WizardActionModal look
- * so a model wizard and an action wizard read the same.
+ * Step indicator for `mode: "steps"`: the platform's ProcessStepper (numbered
+ * circles with a check when done, label underneath, connectors) plus a
+ * "Paso i/n · <title>" caption and the step's description. Same component the
+ * process modals (workshop, warehouse) use, so a model wizard, an action wizard
+ * and a process modal read the same.
  */
 export function WizardProgress({
     groups,
     stepIndex,
     stepLabel = 'Paso',
+    onStepClick,
 }: {
     groups: FieldGroup<unknown>[]
     stepIndex: number
     stepLabel?: string
+    /** Jump back to an already completed step (forward jumps are never offered). */
+    onStepClick?: (index: number) => void
 }) {
     const current = groups[stepIndex]
+    const steps = groups.map((g, i) => ({ key: g.key, label: g.title ?? `${stepLabel} ${i + 1}` }))
     return (
-        <div className="pt-2">
-            <div className="flex items-center gap-1.5" role="list" aria-label="progress">
-                {groups.map((g, i) => (
-                    <div
-                        key={g.key}
-                        role="listitem"
-                        aria-current={i === stepIndex ? 'step' : undefined}
-                        className="h-1.5 flex-1 rounded-full"
-                        style={{
-                            backgroundColor:
-                                i <= stepIndex ? 'hsl(var(--primary))' : 'hsl(var(--muted))',
-                        }}
-                    />
-                ))}
-            </div>
-            <p className="pt-2 text-sm text-muted-foreground">
+        <div className="pt-1">
+            <ProcessStepper steps={steps} activeIndex={stepIndex} onStepClick={onStepClick} />
+            <p className="pt-3 text-sm text-muted-foreground">
                 {stepLabel} {stepIndex + 1}/{groups.length}
                 {current?.title ? ` · ${current.title}` : ''}
             </p>
