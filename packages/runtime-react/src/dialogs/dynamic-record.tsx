@@ -1080,7 +1080,7 @@ export function DynamicRecordDialog({
                                 className="grid gap-y-4"
                             >
                                 {isSteps && (
-                                    <WizardProgress groups={groups} stepIndex={clampedStep} />
+                                    <WizardProgress groups={groups} stepIndex={clampedStep} onStepClick={i => setStepIndex(i)} />
                                 )}
                                 {(isSteps ? [groups[clampedStep]] : groups).map(group => (
                                     <FieldSection key={group.key} group={group}>

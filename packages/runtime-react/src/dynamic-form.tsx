@@ -211,7 +211,7 @@ export function DynamicForm({
 
         return (
             <form onSubmit={handleSubmit} className="grid gap-4">
-                <WizardProgress groups={groups} stepIndex={stepIndex} />
+                <WizardProgress groups={groups} stepIndex={stepIndex} onStepClick={i => setStepIndex(i)} />
                 {renderGrid(step.fields)}
                 <div className="flex justify-between gap-2 pt-2">
                     {stepIndex > 0 ? (

@@ -38,6 +38,7 @@ import {
     Switch,
 } from '@asteby/metacore-ui/primitives'
 import { Loader2 } from 'lucide-react'
+import { ProcessStepper } from '@asteby/metacore-ui/wizard'
 import { toast } from 'sonner'
 import { toastServerError, toastServerSuccess, extractFieldErrors, localizeFieldErrorMap } from './server-error'
 import { useBranchCreateGate } from './branch-create-gate'
@@ -994,26 +995,16 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
                         <DynamicIcon name={action.icon} className="h-5 w-5" />
                         {tl(action.label)}
                     </DialogTitle>
-                    {/* Progress/step bar: one segment per step. The current and
-                        completed segments are filled; a numbered marker + the
-                        current step's title tell the user where they are. Inline
-                        styles for the fill color guarantee it shows even if the
-                        host's Tailwind scan drops an arbitrary class. */}
-                    <div className="pt-2">
-                        <div className="flex items-center gap-1.5" role="list" aria-label="progress">
-                            {steps.map((s, i) => (
-                                <div
-                                    key={i}
-                                    role="listitem"
-                                    aria-current={i === stepIndex ? 'step' : undefined}
-                                    className="h-1.5 flex-1 rounded-full"
-                                    style={{
-                                        backgroundColor: i <= stepIndex ? (action.color || 'hsl(var(--primary))') : 'hsl(var(--muted))',
-                                    }}
-                                />
-                            ))}
-                        </div>
-                        <DialogDescription className="pt-2">
+                    {/* Step indicator: the platform ProcessStepper (same as the
+                        declarative form_layout wizards and the process modals) +
+                        "Paso i/n · título" and the step's description. */}
+                    <div className="pt-1">
+                        <ProcessStepper
+                            steps={steps.map((s, i) => ({ key: String(i), label: s.title ? tl(s.title) : `${t('common.step', { defaultValue: 'Paso' })} ${i + 1}` }))}
+                            activeIndex={stepIndex}
+                            onStepClick={i => setStepIndex(i)}
+                        />
+                        <DialogDescription className="pt-3">
                             {t('common.step', { defaultValue: 'Paso' })} {stepIndex + 1}/{steps.length}
                             {step?.title ? ` · ${tl(step.title)}` : ''}
                         </DialogDescription>
