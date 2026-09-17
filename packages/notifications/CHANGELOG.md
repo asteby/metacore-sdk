@@ -1,5 +1,12 @@
 # @asteby/metacore-notifications
 
+## 27.0.0
+
+### Patch Changes
+
+- Updated dependencies [5f872f0]
+  - @asteby/metacore-ui@2.18.0
+
 ## 26.0.1
 
 ### Patch Changes
