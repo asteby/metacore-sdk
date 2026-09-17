@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { groupFieldsBySection, type FormLayout } from './form-layout'
 import { FieldSection, WizardProgress } from './form-layout-ui'
+import { AssistInterview } from './assist-interview'
 import {
     Input,
     Textarea,
@@ -213,6 +214,14 @@ export function DynamicForm({
             <form onSubmit={handleSubmit} className="grid gap-4">
                 <WizardProgress groups={groups} stepIndex={stepIndex} onStepClick={i => setStepIndex(i)} />
                 {renderGrid(step.fields)}
+                {step.assist && (
+                    <AssistInterview
+                        assist={step.assist}
+                        values={values}
+                        autoStart={step.assist.trigger === 'auto'}
+                        onApply={fields => setValues(prev => ({ ...prev, ...fields }))}
+                    />
+                )}
                 <div className="flex justify-between gap-2 pt-2">
                     {stepIndex > 0 ? (
                         <Button type="button" variant="outline" onClick={goBack} disabled={submitting || disabled}>
