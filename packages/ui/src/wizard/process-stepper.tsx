@@ -95,7 +95,7 @@ export function ProcessStepper({
                 )}
                 <span
                   className={cn(
-                    'max-w-full truncate text-center text-[11px] leading-tight sm:text-xs',
+                    'line-clamp-2 max-w-full break-words text-center text-[11px] leading-tight sm:text-xs',
                     active
                       ? 'font-semibold text-foreground'
                       : done
