@@ -1083,21 +1083,35 @@ export function DynamicRecordDialog({
                                 {isSteps && (
                                     <WizardProgress groups={groups} stepIndex={clampedStep} onStepClick={i => setStepIndex(i)} />
                                 )}
-                                {(isSteps ? [groups[clampedStep]] : groups).map(group => (
-                                    <FieldSection key={group.key} group={group}>
-                                        <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
-                                            {renderFields(group.fields)}
-                                        </div>
-                                        {isEditable && group.assist && (
-                                            <AssistInterview
-                                                assist={group.assist}
-                                                values={formValues}
-                                                autoStart={group.assist.trigger === 'auto'}
-                                                onApply={fields => setFormValues(prev => ({ ...prev, ...fields }))}
-                                            />
-                                        )}
-                                    </FieldSection>
-                                ))}
+                                {(isSteps ? [groups[clampedStep]] : groups).map(group =>
+                                    // An assisted step IS the interview: no form inputs, the
+                                    // provider asks what it needs and fills the fields.
+                                    isSteps && isEditable && group.assist ? (
+                                        <AssistInterview
+                                            key={group.key}
+                                            assist={group.assist}
+                                            values={formValues}
+                                            eyebrow={group.title}
+                                            autoStart={group.assist.trigger !== 'button'}
+                                            onApply={fields => setFormValues(prev => ({ ...prev, ...fields }))}
+                                        />
+                                    ) : (
+                                        <FieldSection key={group.key} group={group}>
+                                            <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+                                                {renderFields(group.fields)}
+                                            </div>
+                                            {isEditable && group.assist && (
+                                                <AssistInterview
+                                                    assist={group.assist}
+                                                    values={formValues}
+                                                    eyebrow={group.title}
+                                                    autoStart={group.assist.trigger === 'auto'}
+                                                    onApply={fields => setFormValues(prev => ({ ...prev, ...fields }))}
+                                                />
+                                            )}
+                                        </FieldSection>
+                                    ),
+                                )}
 
                                 {record?.external_url && (
                                     <div className="grid grid-cols-1 sm:grid-cols-2">
