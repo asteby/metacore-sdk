@@ -103,9 +103,6 @@ export function WizardProgress({
                 {stepLabel} {stepIndex + 1}/{groups.length}
                 {current?.title ? ` · ${current.title}` : ''}
             </p>
-            {current?.description && (
-                <p className="pt-1 text-sm text-muted-foreground">{current.description}</p>
-            )}
         </div>
     )
 }
