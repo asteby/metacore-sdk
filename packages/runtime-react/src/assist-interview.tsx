@@ -109,6 +109,9 @@ export function AssistInterview({ assist, values, onApply, autoStart = true, eye
     const [error, setError] = useState<string | null>(null)
     const [hintIdx, setHintIdx] = useState(0)
     const inputRef = useRef<HTMLInputElement | null>(null)
+    // Answers given so far: if the host loses the session (restart, TTL) we
+    // start a new one and replay them, so the user never types twice.
+    const answersRef = useRef<{ key: string; value: any }[]>([])
     const base = `/assist/${encodeURIComponent(assist.provider)}/sessions`
 
     const inputPayload = useMemo(() => {
@@ -122,6 +125,7 @@ export function AssistInterview({ assist, values, onApply, autoStart = true, eye
         setStarting(true)
         setError(null)
         setApplied(false)
+        answersRef.current = []
         try {
             const res = await api.post(base, { input: inputPayload })
             setSession(unwrap(res))
@@ -146,8 +150,14 @@ export function AssistInterview({ assist, values, onApply, autoStart = true, eye
             try {
                 const res = await api.get(`${base}/${session.id}`)
                 setSession(unwrap(res))
-            } catch {
-                /* keep polling */
+            } catch (e: any) {
+                if (isGone(e)) {
+                    try {
+                        setSession(await recover())
+                    } catch {
+                        /* next tick retries */
+                    }
+                }
             }
         }, POLL_MS)
         return () => clearInterval(t)
@@ -175,20 +185,50 @@ export function AssistInterview({ assist, values, onApply, autoStart = true, eye
         setApplied(true)
     }, [session, applied, assist.output, onApply])
 
+    const isGone = (e: any) => e?.response?.status === 404 || /sesi[oó]n no encontrada/i.test(String(e?.response?.data?.message || e?.message || ''))
+
+    // Recreate the session and replay every answer (host lost it).
+    const recover = useCallback(async () => {
+        const res = await api.post(base, { input: inputPayload })
+        let s = unwrap(res)
+        for (const a of answersRef.current) {
+            // wait until the provider is ready for the next answer
+            for (let i = 0; i < 120 && s.working && !s.done; i++) {
+                await new Promise(r => setTimeout(r, POLL_MS))
+                s = unwrap(await api.get(`${base}/${s.id}`))
+            }
+            if (s.done) break
+            s = unwrap(await api.post(`${base}/${s.id}/reply`, { key: a.key, value: a.value }))
+        }
+        return s
+    }, [api, base, inputPayload])
+
     const reply = useCallback(
         async (key: string, value: any) => {
             if (!session) return
             setAnswer('')
+            setError(null)
             setSession(s => (s ? { ...s, working: true } : s))
             try {
                 const res = await api.post(`${base}/${session.id}/reply`, { key, value })
+                answersRef.current = [...answersRef.current, { key, value }]
                 setSession(unwrap(res))
             } catch (e: any) {
-                setError(e?.response?.data?.message || e?.message || 'No se pudo enviar la respuesta')
+                if (isGone(e)) {
+                    try {
+                        answersRef.current = [...answersRef.current, { key, value }]
+                        setSession(await recover())
+                        return
+                    } catch (e2: any) {
+                        setError(e2?.response?.data?.message || e2?.message || 'No se pudo retomar la conversación')
+                    }
+                } else {
+                    setError(e?.response?.data?.message || e?.message || 'No se pudo enviar la respuesta')
+                }
                 setSession(s => (s ? { ...s, working: false } : s))
             }
         },
-        [api, base, session],
+        [api, base, session, recover],
     )
 
     const turns = session?.turns ?? []
