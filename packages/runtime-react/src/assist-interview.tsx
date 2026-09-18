@@ -197,7 +197,10 @@ export function AssistInterview({ assist, values, onApply, autoStart = true, eye
     const lastSpoken = [...turns].reverse().find(t => t.type === 'message' || t.type === 'question')
     const headline = lastSpoken?.type === 'question' ? lastSpoken.question?.prompt ?? '' : lastSpoken?.text ?? ''
     const { shown, typing } = useTypewriter(headline || (starting ? 'Un segundo…' : ''))
-    const activeProgress = [...turns].reverse().find(t => t.type === 'progress' && (t.steps ?? []).some(s => s.state !== 'done'))
+    // The latest progress block stays visible as compact chips (done / error
+    // included) until the next block replaces it; the card that followed it
+    // shows whenever the assistant is waiting on the user or finished.
+    const activeProgress = [...turns].reverse().find(t => t.type === 'progress')
     const lastCard = [...turns].reverse().find(t => t.type === 'card')?.card
     const answered = turns.filter(t => t.type === 'answer').length
     const beats = Math.max(session?.beats ?? 5, 2)
@@ -239,10 +242,10 @@ export function AssistInterview({ assist, values, onApply, autoStart = true, eye
 
             {/* status line */}
             <div className="mt-3 min-h-6 pl-12 sm:pl-14">
-                {(session?.working || starting) && (
+                {(session?.working || starting) && !running && (
                     <span className="inline-flex items-center gap-2 text-sm text-muted-foreground">
                         <Loader2 className="size-3.5 animate-spin" />
-                        {running ? running.label + (running.detail ? ` · ${running.detail}` : '') : THINKING_HINTS[hintIdx]}
+                        {THINKING_HINTS[hintIdx]}
                     </span>
                 )}
                 {activeProgress && (
@@ -251,11 +254,12 @@ export function AssistInterview({ assist, values, onApply, autoStart = true, eye
                             <li key={i} className={'inline-flex items-center gap-1.5 text-xs ' + (s.state === 'pending' ? 'text-muted-foreground/70' : s.state === 'error' ? 'text-destructive' : 'text-foreground/80')}>
                                 {s.state === 'done' ? <CheckCircle2 className="size-3.5 text-emerald-500" /> : s.state === 'running' ? <Loader2 className="size-3.5 animate-spin text-primary" /> : s.state === 'error' ? <XCircle className="size-3.5" /> : <span className="size-1.5 rounded-full bg-muted-foreground/40" />}
                                 {s.label}
+                                {s.state === 'running' && s.detail && <span className="text-muted-foreground">· {s.detail}</span>}
                             </li>
                         ))}
                     </ul>
                 )}
-                {!session?.working && activeProgress === undefined && lastCard && !session?.done && <AssistCardView card={lastCard} />}
+                {lastCard && !session?.working && <AssistCardView card={lastCard} />}
                 {session?.done && (
                     <span className="inline-flex items-center gap-2 text-sm font-medium text-emerald-600 dark:text-emerald-400">
                         <Check className="size-4" />
