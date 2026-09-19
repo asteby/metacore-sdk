@@ -74,6 +74,9 @@
       "optional": true
     }
   },
+  "scripts": {
+    "test": "node --test test/federation-budget.test.js"
+  },
   "publishConfig": {
     "access": "public"
   }

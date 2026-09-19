@@ -151,13 +151,21 @@ federation(metacoreFederationShared({ host: 'metacore_ops' }))
 
 ```ts
 import { federation } from '@module-federation/vite'
+import {
+  metacoreFederationShared,
+  metacoreFederationBudgetPlugin,
+} from '@asteby/metacore-starter-config/vite'
 
-federation(
-  metacoreFederationShared({
-    host: 'metacore_tickets', // == containerName(manifest) del SDK
-    exposes: { './register': './src/register.tsx' },
-  }),
-)
+plugins: [
+  federation(
+    metacoreFederationShared({
+      host: 'metacore_tickets', // == containerName(manifest) del SDK
+      exposes: { './register': './src/register.tsx' },
+    }),
+  ),
+  // Same ceilings as hub publish (512 KiB remoteEntry / 4 MiB dist).
+  metacoreFederationBudgetPlugin(),
+]
 ```
 
 #### Opciones
@@ -168,7 +176,7 @@ federation(
 | `apps`      | `Record<string, string>`                          | `undefined`        | Mapa name → URL de remotes. Hosts lo usan para enchufar addons; addons normalmente lo omiten. |
 | `filename`  | `string`                                          | `'remoteEntry.js'` | Override sólo si lo cambia el contrato del runtime. |
 | `exposes`   | `Record<string, string>`                          | `undefined`        | Módulos expuestos al host (lado addon). |
-| `extras`    | `string[]`                                        | `[]`               | Paquetes extra a marcar singleton sobre los obligatorios (ej. `'@tanstack/react-query'`). |
+| `extras`    | `string[]`                                        | `[]`               | Paquetes extra a marcar singleton sobre los obligatorios (ej. `'zustand'`). |
 | `overrides` | `Record<string, MetacoreFederationShareConfig>`   | `{}`               | Forzar `requiredVersion: '^X'` u otro flag por package. Se mergea encima de la entry base. |
 
 La constante exportada `METACORE_FEDERATION_SINGLETONS` está disponible para tests
