@@ -93,18 +93,30 @@ function isRuntimeNotReady(e: unknown): boolean {
     return msg.includes('#RUNTIME-009') || msg.includes('call createInstance')
 }
 
-// Retry an operation that may hit the boot race above. ~10 attempts × 60ms ≈
-// 600ms worst case — generous for the host init, imperceptible in the common
-// case (first attempt succeeds). Non-RUNTIME-009 errors (bad URL, 404, no
-// export) rethrow immediately so genuine failures still surface fast.
-async function withRuntimeReady<T>(op: () => T | Promise<T>): Promise<T> {
-    const maxAttempts = 10
+/** Transient network / gateway failures while the host API is restarting. */
+function isTransientRemoteLoadError(e: unknown): boolean {
+    if (isRuntimeNotReady(e)) return true
+    const msg = e instanceof Error ? e.message : String(e)
+    return (
+        /failed to fetch|networkerror|load failed|502|503|504|ERR_CONNECTION_REFUSED|ECONNREFUSED|Outdated Optimize Dep/i.test(
+            msg,
+        ) ||
+        // MF wraps fetch failures variously
+        /ScriptExternalLoadError|Loading script failed|remoteEntry/i.test(msg)
+    )
+}
+
+// Retry host-boot races (RUNTIME-009) and brief API blips (502 while backend
+// SyncAll is still running). Permanent errors (404, missing register) fail fast.
+async function withRemoteLoadRetry<T>(op: () => T | Promise<T>): Promise<T> {
+    const maxAttempts = 8
     for (let attempt = 1; ; attempt++) {
         try {
             return await op()
         } catch (e) {
-            if (!isRuntimeNotReady(e) || attempt >= maxAttempts) throw e
-            await sleep(60)
+            if (!isTransientRemoteLoadError(e) || attempt >= maxAttempts) throw e
+            // 80, 160, 320… capped — ~3s worst case for API restart
+            await sleep(Math.min(80 * 2 ** (attempt - 1), 800))
         }
     }
 }
@@ -118,12 +130,12 @@ async function loadAddon(
     // fetches the new remoteEntry. `force: true` wipes that remote's module
     // cache — without it, loadRemote would keep serving the previous bundle.
     if (shouldReregisterRemote(scope, url)) {
-        await withRuntimeReady(() =>
+        await withRemoteLoadRetry(() =>
             registerRemotes([{ name: scope, entry: url, type: 'module' }], { force: true }),
         )
         markRemoteRegistered(scope, url)
     }
-    return withRuntimeReady(() =>
+    return withRemoteLoadRetry(() =>
         loadRemote<AddonRegisterModule>(remoteId(scope, module)),
     )
 }

@@ -25,6 +25,7 @@ import {
     resolveWidget,
     getItemFields,
     computeLineItemTotals,
+    applyLineItemRowFormulas,
     evaluateBalance,
     toNumber,
     getDependsOn,
@@ -47,6 +48,11 @@ export interface DynamicLineItemsProps {
      * (e.g. `source_warehouse_id`), not just a sibling cell on the same row.
      */
     formValues?: Record<string, any>
+    /**
+     * Localized validation messages keyed as `rowIndex.columnKey` (e.g.
+     * `0.unit_price`). Painted as destructive borders + under-cell text.
+     */
+    errors?: Record<string, string>
 }
 
 const fmtNumber = (n: number): string =>
@@ -60,14 +66,22 @@ function isNumericCol(col: ActionFieldDef): boolean {
 function emptyRow(itemFields: ActionFieldDef[]): Record<string, any> {
     const row: Record<string, any> = {}
     for (const f of itemFields) {
-        row[f.key] = f.defaultValue ?? (f.type === 'boolean' ? false : '')
+        // Kernel serves `default` on action fields; the SDK type uses
+        // `defaultValue` (host carryActionFieldDefaults). Accept both so a
+        // manifest `"default": 0` on optional money cells (discount) seeds 0
+        // instead of "" — blank strings trip server parsers that treat a
+        // present key as required.
+        const seeded =
+            f.defaultValue ?? (f as { default?: unknown }).default
+        row[f.key] = seeded ?? (f.type === 'boolean' ? false : '')
     }
     return row
 }
 
-export function DynamicLineItems({ field, value, onChange, disabled = false, formValues }: DynamicLineItemsProps) {
+export function DynamicLineItems({ field, value, onChange, disabled = false, formValues, errors }: DynamicLineItemsProps) {
     const itemFields = getItemFields(field)
     const rows: any[] = Array.isArray(value) ? value : []
+    const errMap = errors ?? {}
 
     // `lock_rows` fixes the row set: no add-row button, no per-row delete. Rows
     // stay editable cell-by-cell. Snake_case is what the kernel serves; tolerate
@@ -81,10 +95,16 @@ export function DynamicLineItems({ field, value, onChange, disabled = false, for
     const hasTotals = totalKeys.length > 0
     const balance = evaluateBalance(field, rows)
 
-    const addRow = () => onChange([...rows, emptyRow(itemFields)])
+    const addRow = () => onChange([...rows, applyLineItemRowFormulas(itemFields, emptyRow(itemFields))])
     const removeRow = (idx: number) => onChange(rows.filter((_, i) => i !== idx))
     const updateCell = (idx: number, key: string, cellValue: any) =>
-        onChange(rows.map((r, i) => (i === idx ? { ...r, [key]: cellValue } : r)))
+        onChange(
+            rows.map((r, i) =>
+                i === idx
+                    ? applyLineItemRowFormulas(itemFields, { ...r, [key]: cellValue })
+                    : r,
+            ),
+        )
 
     // When a balance rule reconciles two columns (e.g. debit ↔ credit), typing
     // into one clears the sibling on the same row — mirrors the federated modal
@@ -105,7 +125,13 @@ export function DynamicLineItems({ field, value, onChange, disabled = false, for
             const hasValue = toNumber(cellValue) > 0
             onChange(
                 rows.map((r, i) =>
-                    i === idx ? { ...r, [key]: cellValue, ...(hasValue ? { [sibling]: '' } : {}) } : r,
+                    i === idx
+                        ? applyLineItemRowFormulas(itemFields, {
+                              ...r,
+                              [key]: cellValue,
+                              ...(hasValue ? { [sibling]: '' } : {}),
+                          })
+                        : r,
                 ),
             )
             return
@@ -149,7 +175,9 @@ export function DynamicLineItems({ field, value, onChange, disabled = false, for
                             )}
                         </div>
                         <div className="grid gap-2.5">
-                            {itemFields.map((col) => (
+                            {itemFields.map((col) => {
+                                const cellErr = errMap[`${idx}.${col.key}`]
+                                return (
                                 <div key={col.key} className="grid gap-1">
                                     <span className="text-xs font-medium">
                                         {col.label}
@@ -164,9 +192,14 @@ export function DynamicLineItems({ field, value, onChange, disabled = false, for
                                         disabled={disabled}
                                         formValues={formValues}
                                         rowValues={row}
+                                        invalid={!!cellErr}
                                     />
+                                    {cellErr && (
+                                        <p className="text-destructive text-xs">{cellErr}</p>
+                                    )}
                                 </div>
-                            ))}
+                                )
+                            })}
                         </div>
                     </div>
                 ))}
@@ -219,7 +252,9 @@ export function DynamicLineItems({ field, value, onChange, disabled = false, for
                         )}
                         {rows.map((row, idx) => (
                             <tr key={idx} className="border-t align-top">
-                                {itemFields.map((col) => (
+                                {itemFields.map((col) => {
+                                    const cellErr = errMap[`${idx}.${col.key}`]
+                                    return (
                                     <td key={col.key} className="px-2 py-1.5">
                                         <CellRenderer
                                             field={col}
@@ -228,9 +263,14 @@ export function DynamicLineItems({ field, value, onChange, disabled = false, for
                                             disabled={disabled}
                                             formValues={formValues}
                                             rowValues={row}
+                                            invalid={!!cellErr}
                                         />
+                                        {cellErr && (
+                                            <p className="text-destructive mt-1 text-xs">{cellErr}</p>
+                                        )}
                                     </td>
-                                ))}
+                                    )
+                                })}
                                 {!lockRows && (
                                     <td className="px-2 py-1.5 text-center">
                                         <Button
@@ -342,14 +382,19 @@ interface CellRendererProps {
     formValues?: Record<string, any>
     /** This row's values — for resolving a cell's `dependsOn` to a sibling cell. */
     rowValues?: Record<string, any>
+    /** Paint the control as invalid (destructive border). */
+    invalid?: boolean
 }
 
 // Per-cell widget. Mirrors the flat FieldRenderer in dynamic-form.tsx but
 // without the per-field Label (the column header is the label) and sized for a
 // table cell. Nested line-items inside a row are not supported (a row column is
 // a scalar widget).
-function CellRenderer({ field, value, onChange, disabled, formValues, rowValues }: CellRendererProps) {
+function CellRenderer({ field, value, onChange, disabled, formValues, rowValues, invalid }: CellRendererProps) {
     const widget = resolveWidget(field)
+    const invalidCls = invalid
+        ? 'border-destructive ring-1 ring-destructive/30 focus-visible:ring-destructive'
+        : ''
     // Per-field read-only: a column locked by a PrefillSpec.lock (e.g. the
     // "ordered" / "already received" progress columns of a receive-goods modal)
     // renders disabled so it shows context without being editable. Tolerates the
@@ -384,7 +429,16 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues 
     // Async searchable picker per row cell — e.g. the account_id column of a
     // journal entry's debit/credit lines. Same widget as the flat form.
     if (widget === 'dynamic_select') {
-        return <DynamicSelectField field={field} value={value} onChange={onChange} dependsValue={dependsValue} readonly={ro} />
+        return (
+            <DynamicSelectField
+                field={field}
+                value={value}
+                onChange={onChange}
+                dependsValue={dependsValue}
+                readonly={ro}
+                invalid={invalid}
+            />
+        )
     }
     if (widget === 'select' && (field.ref || getOptionsConfig(field)?.source)) {
         return (
@@ -408,6 +462,8 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues 
                     placeholder={field.placeholder}
                     disabled={off}
                     rows={2}
+                    aria-invalid={invalid || undefined}
+                    className={invalidCls || undefined}
                 />
             )
         case 'color':
@@ -417,6 +473,8 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues 
                     value={value || '#000000'}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
                     disabled={off}
+                    aria-invalid={invalid || undefined}
+                    className={invalidCls || undefined}
                 />
             )
         case 'select': {
@@ -425,7 +483,7 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues 
             if (effectiveOptions && effectiveOptions.length === 0) return null
             return (
                 <Select value={value || ''} onValueChange={onChange} disabled={off}>
-                    <SelectTrigger className="w-full">
+                    <SelectTrigger className={'w-full' + (invalidCls ? ` ${invalidCls}` : '')} aria-invalid={invalid || undefined}>
                         <SelectValue placeholder={field.placeholder || 'Seleccionar...'} />
                     </SelectTrigger>
                     <SelectContent>
@@ -445,9 +503,16 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues 
                 <Input
                     type="number"
                     value={value ?? ''}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.valueAsNumber || '')}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                        const n = e.target.valueAsNumber
+                        // `0 || ''` would wipe a legitimate zero (unit_price=0)
+                        // and then required-validation fires with nothing marked.
+                        onChange(e.target.value === '' || !Number.isFinite(n) ? '' : n)
+                    }}
                     placeholder={field.placeholder}
                     disabled={off}
+                    aria-invalid={invalid || undefined}
+                    className={invalidCls || undefined}
                 />
             )
         case 'date':
@@ -457,6 +522,8 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues 
                     value={value || ''}
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
                     disabled={off}
+                    aria-invalid={invalid || undefined}
+                    className={invalidCls || undefined}
                 />
             )
         default:
@@ -467,6 +534,8 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues 
                     onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)}
                     placeholder={field.placeholder}
                     disabled={off}
+                    aria-invalid={invalid || undefined}
+                    className={invalidCls || undefined}
                 />
             )
     }

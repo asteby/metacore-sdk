@@ -1,5 +1,53 @@
 # @asteby/metacore-marketplace
 
+## 105.0.0
+
+### Patch Changes
+
+- @asteby/metacore-app-providers@108.0.0
+
+## 104.0.0
+
+### Patch Changes
+
+- @asteby/metacore-app-providers@107.0.0
+
+## 103.0.0
+
+### Patch Changes
+
+- @asteby/metacore-app-providers@106.0.0
+
+## 102.0.0
+
+### Patch Changes
+
+- @asteby/metacore-app-providers@105.0.0
+
+## 101.0.0
+
+### Patch Changes
+
+- @asteby/metacore-app-providers@104.0.0
+
+## 100.0.0
+
+### Patch Changes
+
+- @asteby/metacore-app-providers@103.0.0
+
+## 99.0.0
+
+### Patch Changes
+
+- @asteby/metacore-app-providers@102.0.0
+
+## 98.0.0
+
+### Patch Changes
+
+- @asteby/metacore-app-providers@101.0.0
+
 ## 97.0.0
 
 ### Patch Changes

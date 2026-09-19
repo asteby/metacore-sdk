@@ -1,5 +1,117 @@
 # @asteby/metacore-runtime-react
 
+## 38.1.0
+
+### Minor Changes
+
+- 086e2b3: Paso asistido por IA en los wizards declarativos (`form_layout.sections[].assist`, kernel ≥ 0.141.0): `AssistInterview` renderiza dentro del paso una entrevista conversacional guiada por el proveedor del host (`/assist/:provider/sessions`): una pregunta a la vez con efecto de escritura, progreso en vivo (leyendo el sitio, buscando logo, detectando colores, IA…), tarjetas de vista previa (logo en claro/oscuro, paleta) y respuestas rápidas; al terminar rellena los campos `output` del formulario. Disponible en `DynamicRecordDialog` y `DynamicForm`.
+
+## 38.0.0
+
+### Minor Changes
+
+- 5f872f0: `ProcessStepper` llega a `@asteby/metacore-ui/wizard`: el indicador de pasos de los modales de proceso (círculos con icono o número, check al completar, etiqueta debajo y conectores flexibles), una sola implementación para toda la plataforma.
+
+  `runtime-react`: los wizards declarativos (`form_layout.mode = "steps"`) en `DynamicForm` y `DynamicRecordDialog` ahora usan ese stepper en lugar de la barra de progreso plana, con navegación hacia atrás al pulsar un paso completado.
+
+### Patch Changes
+
+- Updated dependencies [5f872f0]
+  - @asteby/metacore-ui@2.18.0
+
+## 37.6.0
+
+### Minor Changes
+
+- 8231b21: Fix `ensureHref` mangling every root-relative asset URL (the platform's own
+  convention for locally-served files — uploads, hub-generated images,
+  printable documents) into a broken `https:///storage/…` link (scheme + empty
+  host). Root-relative paths (`/storage/…`), protocol-relative (`//…`) and
+  fully-qualified URLs now pass through unchanged; only a bare host like
+  `github.com/x` still gets `https://` prefixed.
+
+  Also: clicking an image thumbnail (table cell, detail dialog, linkified free
+  text — anywhere `ImageThumbnail`/`MediaValue` renders) now opens a full-size
+  **preview dialog** instead of navigating to the raw file in a new tab. This
+  is the platform-wide click-to-zoom behavior; no caller builds its own
+  lightbox.
+
+## 37.5.1
+
+### Patch Changes
+
+- 2582a3a: El multi-select declarativo (`field.multiple: true`, ver #881/#883) no se veía en el modal REAL de editar/crear registro (`dialogs/dynamic-record.tsx`, usado por la tabla genérica del host) — nunca se había cableado ahí, solo en `DynamicForm` (dynamic-form.tsx, usado por acciones). Además, `isLineItemsField` trataba CUALQUIER valor array (incluido el `[]` default de un campo `multiple` recién creado) como un documento de line-items y lo renderizaba "Solo lectura". Se agrega el branch de `DynamicMultiSelectField` antes del picker single-value y se excluye `field.multiple` de la heurística de line-items.
+
+## 37.5.0
+
+### Minor Changes
+
+- 453b82b: Contraparte de lectura de `DynamicMultiSelectField`: una columna `ref` cuyo valor es un array jsonb de ids (campo declarado con `multiple: true` al escribir) ahora se renderiza como una lista de badges resueltos por id (`RelationIdListCell`) en vez de intentar leer el sibling `{value,label}` de una FK simple — antes ese caso caía sin manejar en `RelationCell` y mostraba vacío/roto.
+
+## 37.4.0
+
+### Minor Changes
+
+- 55dc342: Agrega `DynamicMultiSelectField` (widget `dynamic_multi_select`): un campo declarativo `ref`/`source`/`relation` con `field.multiple: true` ahora renderiza un picker multi-select (chips + búsqueda) en vez del `dynamic_select` de valor único, y guarda el valor como array plano de ids. Pensado para relaciones legítimamente many-to-many desde un solo formulario (p. ej. una lista de precios que aplica a varios segmentos de cliente a la vez) — la columna que lo respalda debe ser un tipo jsonb del kernel (dynamic/coltypes.go), sin requerir ningún cambio en el kernel.
+
+## 37.3.0
+
+### Minor Changes
+
+- 677580a: Add `useEdgeDevice`/`resolveEdgeDevice`/`sendEdgeDeviceCommand` generic primitives for resolving a paired edge device (printer, scale, payment terminal…) by capability, replacing per-addon lookups like `pos-edge-print`'s local `findEdgePrinter`.
+
+## 37.2.0
+
+### Minor Changes
+
+- 362ffda: Add `useResource`/`useMutation` — a tanstack-free polling GET/mutation hook for federated addons, with a `stuck` field on `useResource` that flips true once `isLoading` stays on past a configurable threshold (default 8s) without landing. Lets addon UIs offer a retry instead of an indefinite skeleton when a fetch run gets lost to a remount/abort race. Extracted from the pattern independently reimplemented in the `pos` addon (PRs #1455, #1460).
+
+### Patch Changes
+
+- 1e35269: Preserve `?action=` in DynamicTable URL sync so notification deep-links can open ActionModalDispatcher on list routes.
+
+## 37.1.2
+
+### Patch Changes
+
+- 2d4e1d8: Fail closed when an action declares `modal` but no federated component is registered — never fall back to the generic confirm dialog.
+
+## 37.1.1
+
+### Patch Changes
+
+- ae2004d: Coerce blank line-item discount to 0 so create payloads never POST discount:"" (avoids server "discount is required").
+
+## 37.1.0
+
+### Minor Changes
+
+- 3edee3a: Branch create gate (confirm+pick when no active branch), live line-item importe formula (qty×price−discount), and drop sticky f_branch_id when leaving a locked branch defaultFilter.
+
+## 37.0.5
+
+### Patch Changes
+
+- 5f2a732: Action modal + line-items: preserve numeric zero (valueAsNumber), paint cell errors (`lines.0.*`), and toast a Label: message description for every field failure.
+
+## 37.0.4
+
+### Patch Changes
+
+- 0396b95: DynamicRecordDialog: unique form ids (nested create), Laravel-style validateValues on submit, destructive borders on invalid fields, toast descriptions for errors on non-rendered fields, and `ensureFields` to inject host scope keys into the modal schema.
+
+## 37.0.3
+
+### Patch Changes
+
+- 46a9505: List/board honor Column.visible_when against locked defaultFilters / URL scope (CxC hides Proveedor); AddonLoader retries transient remoteEntry 502s.
+
+## 37.0.2
+
+### Patch Changes
+
+- 653afe4: Never flash raw dotted i18n keys in ModelActionToolbar: humanizeActionLabel fallback + onActionIntent for Module Federation prefetch.
+
 ## 37.0.1
 
 ### Patch Changes

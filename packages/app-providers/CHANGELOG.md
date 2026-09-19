@@ -1,5 +1,66 @@
 # @asteby/metacore-app-providers
 
+## 108.0.0
+
+### Patch Changes
+
+- Updated dependencies [086e2b3]
+  - @asteby/metacore-runtime-react@38.1.0
+
+## 107.0.0
+
+### Patch Changes
+
+- Updated dependencies [5f872f0]
+  - @asteby/metacore-ui@2.18.0
+  - @asteby/metacore-runtime-react@38.0.0
+  - @asteby/metacore-pwa@0.6.3
+
+## 106.0.0
+
+### Patch Changes
+
+- Updated dependencies [8231b21]
+  - @asteby/metacore-runtime-react@37.6.0
+
+## 105.0.0
+
+### Patch Changes
+
+- Updated dependencies [453b82b]
+  - @asteby/metacore-runtime-react@37.5.0
+
+## 104.0.0
+
+### Patch Changes
+
+- Updated dependencies [55dc342]
+  - @asteby/metacore-runtime-react@37.4.0
+
+## 103.0.0
+
+### Patch Changes
+
+- Updated dependencies [677580a]
+- Updated dependencies [17d2328]
+  - @asteby/metacore-runtime-react@37.3.0
+  - @asteby/metacore-pwa@0.6.2
+
+## 102.0.0
+
+### Patch Changes
+
+- Updated dependencies [1e35269]
+- Updated dependencies [362ffda]
+  - @asteby/metacore-runtime-react@37.2.0
+
+## 101.0.0
+
+### Patch Changes
+
+- Updated dependencies [3edee3a]
+  - @asteby/metacore-runtime-react@37.1.0
+
 ## 100.0.0
 
 ### Patch Changes

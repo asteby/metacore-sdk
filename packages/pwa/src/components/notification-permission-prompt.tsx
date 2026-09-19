@@ -18,6 +18,11 @@ export interface NotificationPermissionPromptProps {
   autoShowDelayMs?: number
   /** Reload the page after granting to sync state. Default: true. */
   reloadOnGrant?: boolean
+  /**
+   * Stable Sonner id — re-triggers replace the same card (no flood).
+   * Default: `sys:push-permission`.
+   */
+  toastId?: string | number
 }
 
 const DEFAULTS: Required<NotificationPermissionPromptMessages> = {
@@ -32,20 +37,50 @@ const DEFAULTS: Required<NotificationPermissionPromptMessages> = {
     'Debes habilitarlas manualmente: Click en el ícono de la barra de direcciones → Permisos → Notificaciones → Permitir',
 }
 
+export const PUSH_PERMISSION_TOAST_ID = 'sys:push-permission'
+const DISMISS_KEY = 'notification-prompt-dismissed'
+const DISMISS_UNTIL_KEY = 'notification-prompt-dismissed-until'
+const SNOOZE_MS = 30 * 24 * 60 * 60 * 1000
+
+let closedThisTab = false
+
+function isSnoozed(): boolean {
+  if (closedThisTab) return true
+  if (typeof window === 'undefined') return true
+  try {
+    if (sessionStorage.getItem(DISMISS_KEY) === 'true') return true
+    const until = Number(localStorage.getItem(DISMISS_UNTIL_KEY) || '')
+    if (Number.isFinite(until) && Date.now() < until) return true
+  } catch {
+    /* private mode */
+  }
+  return false
+}
+
+function snooze(): void {
+  closedThisTab = true
+  try {
+    localStorage.setItem(DISMISS_UNTIL_KEY, String(Date.now() + SNOOZE_MS))
+    sessionStorage.setItem(DISMISS_KEY, 'true')
+  } catch {
+    /* private mode — tab flag still blocks */
+  }
+}
+
 /**
- * Renders through the shared notification toast instead of its own
- * fixed-position banner, so it stacks with every other app notification
- * rather than competing for a corner of the screen.
+ * Ask once per snooze window. "Ahora no" silences SSE/WS re-prompts.
  */
 export function NotificationPermissionPrompt({
   messages,
   autoShowDelayMs = 2000,
   reloadOnGrant = true,
+  toastId = PUSH_PERMISSION_TOAST_ID,
 }: NotificationPermissionPromptProps = {}) {
   const msgs = { ...DEFAULTS, ...messages }
-  const shownRef = useRef(false)
+  const offeredRef = useRef(false)
 
   const handleAllow = async () => {
+    snooze()
     try {
       const permission = await Notification.requestPermission()
 
@@ -66,35 +101,34 @@ export function NotificationPermissionPrompt({
     }
   }
 
-  const handleDismiss = () => {
-    if (typeof sessionStorage !== 'undefined') {
-      sessionStorage.setItem('notification-prompt-dismissed', 'true')
-    }
-  }
-
   const show = () => {
-    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('notification-prompt-dismissed')) {
-      return
-    }
+    if (typeof window === 'undefined') return
+    if (!('Notification' in window) || Notification.permission !== 'default') return
+    if (isSnoozed() || offeredRef.current) return
+    offeredRef.current = true
     showNotificationToast({
+      id: toastId,
       title: msgs.title,
       body: msgs.description,
       type: 'info',
       icon: 'bell',
-      duration: 15000,
-      action: { label: msgs.allowLabel, onClick: () => void handleAllow() },
-      cancel: { label: msgs.dismissLabel, onClick: handleDismiss },
+      duration: Infinity,
+      action: {
+        label: msgs.allowLabel,
+        onClick: () => {
+          snooze()
+          void handleAllow()
+        },
+      },
+      cancel: { label: msgs.dismissLabel, onClick: () => snooze() },
     })
   }
 
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (!('Notification' in window) || Notification.permission !== 'default') return
-    if (shownRef.current) return
-    const timer = setTimeout(() => {
-      shownRef.current = true
-      show()
-    }, autoShowDelayMs)
+    if (isSnoozed()) return
+    const timer = setTimeout(show, autoShowDelayMs)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoShowDelayMs])
@@ -103,11 +137,8 @@ export function NotificationPermissionPrompt({
     if (typeof window === 'undefined') return
 
     const handleTrigger = () => {
-      if (!('Notification' in window)) return
-      if (Notification.permission !== 'granted') {
-        sessionStorage.removeItem('notification-prompt-dismissed')
-        show()
-      }
+      if (isSnoozed() || offeredRef.current) return
+      show()
     }
 
     window.addEventListener('show-notification-prompt', handleTrigger)

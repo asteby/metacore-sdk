@@ -46,9 +46,41 @@ export interface ModelActionToolbarProps {
     onChange?: () => void
     /** Extra classes on the button row container. */
     className?: string
+    /**
+     * Fired on hover/focus of an action button so the host can prefetch a
+     * federated remote (e.g. collections) before the click — Module Federation
+     * lazy load without blocking first paint of the list page.
+     */
+    onActionIntent?: (action: ActionDefinition) => void
 }
 
 const DEFAULT_PLACEMENTS: ActionPlacement[] = ['table', 'create']
+
+/**
+ * Last-resort label when `t(key)` has no translation yet: never flash the full
+ * dotted key in a primary CTA. Prefers the action/field segment over a trailing
+ * `.label` / `.confirm` leaf.
+ *   "receivables.action.collect_payment_create" → "Collect payment create"
+ *   "integration_github.action.create_issue.label" → "Create issue"
+ * Already-human labels pass through unchanged.
+ */
+export function humanizeActionLabel(label: string): string {
+    if (!label) return label
+    if (!label.includes('.') || /\s/.test(label)) return label
+    const parts = label.split('.').filter(Boolean)
+    let leaf = parts[parts.length - 1] || label
+    if (
+        (leaf === 'label' || leaf === 'confirm' || leaf === 'title') &&
+        parts.length >= 2
+    ) {
+        leaf = parts[parts.length - 2]
+    }
+    return leaf
+        .split('_')
+        .filter(Boolean)
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(' ')
+}
 
 function toActionMetadata(a: ActionDefinition): ActionMetadata {
     return {
@@ -109,6 +141,7 @@ export function ModelActionToolbar({
     placements = DEFAULT_PLACEMENTS,
     onChange,
     className,
+    onActionIntent,
 }: ModelActionToolbarProps) {
     const { t } = useTranslation()
     const all = useModelActions(model, placements, actions)
@@ -133,7 +166,12 @@ export function ModelActionToolbar({
                         <Button
                             key={a.key}
                             variant={isCreate ? 'default' : 'outline'}
-                            onClick={() => setActive(toActionMetadata(a))}
+                            onClick={() => {
+                                onActionIntent?.(a)
+                                setActive(toActionMetadata(a))
+                            }}
+                            onMouseEnter={() => onActionIntent?.(a)}
+                            onFocus={() => onActionIntent?.(a)}
                             style={a.color && !isCreate ? { borderColor: a.color, color: a.color } : undefined}
                         >
                             <DynamicIcon name={a.icon || (isCreate ? 'Plus' : 'Zap')} className="mr-2 h-4 w-4" />
@@ -142,8 +180,9 @@ export function ModelActionToolbar({
                                 locale bundle loads asynchronously, so translate at render — a
                                 bare `{a.label}` prints the raw key until (and after) the bundle
                                 lands because nothing re-derives it. defaultValue keeps an
-                                already-localized label untouched. */}
-                            {t(a.label, { defaultValue: a.label })}
+                                already-localized label untouched; humanizeLastSegment avoids
+                                flashing the full dotted key when the bundle is still in flight. */}
+                            {t(a.label, { defaultValue: humanizeActionLabel(a.label) })}
                         </Button>
                     )
                 })}

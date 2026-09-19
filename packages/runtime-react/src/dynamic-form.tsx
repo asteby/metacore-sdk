@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { groupFieldsBySection, type FormLayout } from './form-layout'
 import { FieldSection, WizardProgress } from './form-layout-ui'
+import { AssistInterview } from './assist-interview'
 import {
     Input,
     Textarea,
@@ -32,6 +33,7 @@ import { BarcodeScanner } from './barcode-scanner'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { DynamicLineItems } from './dynamic-line-items'
 import { DynamicSelectField } from './dynamic-select-field'
+import { DynamicMultiSelectField } from './dynamic-multi-select-field'
 import { DynamicDateField } from './dynamic-date-field'
 import { UploadField } from './upload-field'
 import { IconPickerField } from './icon-picker-field'
@@ -40,6 +42,7 @@ import { ColorPickerField } from './color-picker-field'
 export { buildZodSchema, resolveWidget }
 export { DynamicLineItems } from './dynamic-line-items'
 export { DynamicSelectField } from './dynamic-select-field'
+export { DynamicMultiSelectField } from './dynamic-multi-select-field'
 export { DynamicDateField } from './dynamic-date-field'
 export { UploadField } from './upload-field'
 export { IconPickerField } from './icon-picker-field'
@@ -209,8 +212,18 @@ export function DynamicForm({
 
         return (
             <form onSubmit={handleSubmit} className="grid gap-4">
-                <WizardProgress groups={groups} stepIndex={stepIndex} />
-                {renderGrid(step.fields)}
+                <WizardProgress groups={groups} stepIndex={stepIndex} onStepClick={i => setStepIndex(i)} />
+                {step.assist ? (
+                    <AssistInterview
+                        assist={step.assist}
+                        values={values}
+                        eyebrow={step.title}
+                        autoStart={step.assist.trigger !== 'button'}
+                        onApply={fields => setValues(prev => ({ ...prev, ...fields }))}
+                    />
+                ) : (
+                    renderGrid(step.fields)
+                )}
                 <div className="flex justify-between gap-2 pt-2">
                     {stepIndex > 0 ? (
                         <Button type="button" variant="outline" onClick={goBack} disabled={submitting || disabled}>
@@ -374,6 +387,12 @@ function FieldRenderer({
         const seedOption = seedOptionFromSibling(field, value, initialValues)
         return <DynamicSelectField field={field} value={value} onChange={onChange} seedOption={seedOption} />
     }
+    // Multi-value FK/jsonb-array field (field.multiple:true) — a record that
+    // legitimately relates to several rows at once (e.g. a price list that
+    // applies to more than one customer segment).
+    if (widget === 'dynamic_multi_select') {
+        return <DynamicMultiSelectField field={field} value={value} onChange={onChange} />
+    }
     // File upload → themed picker that POSTs to the host upload endpoint and
     // stores the returned file url/path as the field value.
     if (widget === 'upload') {
@@ -420,7 +439,10 @@ function FieldRenderer({
         case 'switch':
             return <Switch id={field.key} checked={!!value} onCheckedChange={onChange} />
         case 'number':
-            return <Input id={field.key} type="number" value={value ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.valueAsNumber || '')} placeholder={field.placeholder} />
+            return <Input id={field.key} type="number" value={value ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                const n = e.target.valueAsNumber
+                onChange(e.target.value === '' || !Number.isFinite(n) ? '' : n)
+            }} placeholder={field.placeholder} />
         case 'date':
             return <DynamicDateField field={field} value={value} onChange={onChange} />
         default:
@@ -463,9 +485,14 @@ function ScannableInput({
             id={field.key}
             type={type}
             value={value ?? ''}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                onChange(type === 'number' ? e.target.valueAsNumber || '' : e.target.value)
-            }
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                if (type !== 'number') {
+                    onChange(e.target.value)
+                    return
+                }
+                const n = e.target.valueAsNumber
+                onChange(e.target.value === '' || !Number.isFinite(n) ? '' : n)
+            }}
             placeholder={field.placeholder}
         />
     )

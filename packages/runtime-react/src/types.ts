@@ -337,12 +337,13 @@ export interface ColumnDefinition {
     /** snake_case alias served by the kernel for `itemFields`. */
     item_fields?: ColumnItemField[]
     /**
-     * Conditional visibility in the create/edit modal: render this field only
-     * when a sibling field's current value matches the predicate. Mirrors the
-     * kernel v3 `Column.visible_when` (projected onto the served ColumnDef).
-     * Tolerates the camelCase alias. Absent = always visible; a hidden field is
-     * skipped by the required-gate so it never blocks submit. See
-     * `evaluateVisibleWhen`.
+     * Conditional visibility (kernel v3 `Column.visible_when`):
+     *   - create/edit modal → `evaluateVisibleWhen` against live form values
+     *   - list/board → `evaluateVisibleWhenForListScope` against known filter
+     *     scope (`defaultFilters` / single-eq chips), so a locked nav scope
+     *     like `party_type=customer` hides `supplier_id` without each nav
+     *     item re-declaring a full column allowlist.
+     * Tolerates the camelCase alias. Absent = always visible.
      */
     visible_when?: VisibleWhen
     /** camelCase alias for `visible_when`. */
@@ -484,6 +485,15 @@ export interface ActionFieldDef {
      */
     source?: string
     relation?: string
+    /**
+     * A field with a declared `ref` (or `source`/`relation`) normally renders
+     * as a single-value searchable picker (`dynamic_select`). Set `multiple:
+     * true` to render `DynamicMultiSelectField` instead, storing the value as
+     * a plain array of target ids — the backing column must be array-shaped
+     * (a jsonb column, the kernel's canonical choice). E.g. a price list that
+     * applies to several customer segments at once rather than exactly one.
+     */
+    multiple?: boolean
     /**
      * Cascade dependency: the key of ANOTHER field in the same action form
      * (a header field or a sibling item-field) whose current value supplies

@@ -1,10 +1,12 @@
 // ActionModalDispatcher — renders the right modal for a custom action:
 // 1) Custom component from the SDK registry → use it
-// 2) action.fields[] / action.steps[] → GenericActionModal / WizardActionModal
-// 3) action.confirm OR action.confirmMessage → ConfirmActionDialog
-// 4) action.executable (host opened the modal; federated UI missing) →
+// 2) action.modal set but no registered component → MissingCustomActionModal
+//    (NEVER fall back to confirm/fields — that hides a broken federated UI)
+// 3) action.fields[] / action.steps[] → GenericActionModal / WizardActionModal
+// 4) action.confirm OR action.confirmMessage → ConfirmActionDialog
+// 5) action.executable (host opened the modal; no modal/fields/confirm) →
 //    ConfirmActionDialog so a click never silently no-ops
-// 5) otherwise → null (caller should execute immediately without opening us)
+// 6) otherwise → null (caller should execute immediately without opening us)
 //
 // The host injects its axios-like client via <ApiProvider>; we no longer
 // depend on a bundler alias to `@/lib/api`.
@@ -36,10 +38,19 @@ import {
     Switch,
 } from '@asteby/metacore-ui/primitives'
 import { Loader2 } from 'lucide-react'
+import { ProcessStepper } from '@asteby/metacore-ui/wizard'
 import { toast } from 'sonner'
 import { toastServerError, toastServerSuccess, extractFieldErrors, localizeFieldErrorMap } from './server-error'
+import { useBranchCreateGate } from './branch-create-gate'
 import type { Translate } from './server-error'
 import { validateValues, bagHasErrors } from './validator'
+import {
+    clearFieldErrorTree,
+    formatFieldErrorsDescription,
+    labelsForValidationFields,
+    labelForValidationPath,
+    lineItemErrorsFor,
+} from './field-validation-ui'
 import { validationCatalog } from './validation-catalog'
 import { useApi } from './api-context'
 import { DynamicIcon } from './dynamic-icon'
@@ -243,6 +254,19 @@ export function ActionModalDispatcher({
         )
     }
 
+    // Declarative custom slot (`modal: "addon.action"`). Prefer a hard error
+    // over confirm/fields generics — those look "fine" and hide a missing remote.
+    if (action.modal) {
+        return (
+            <MissingCustomActionModal
+                open={open}
+                onOpenChange={onOpenChange}
+                action={action}
+                model={model}
+            />
+        )
+    }
+
     if (action.steps && action.steps.length > 0) {
         return (
             <WizardActionModal
@@ -275,6 +299,7 @@ export function ActionModalDispatcher({
     // boolean). Hosts also mark every wasm action `executable` and open THIS
     // dispatcher; without a confirm/fields/custom UI we used to return null and
     // the row click did nothing. Treat message-only + executable-open as confirm.
+    // Never reached when action.modal is set (handled above).
     const wantsConfirm = !!(action.confirm || action.confirmMessage)
     if (wantsConfirm || (open && action.executable)) {
         return (
@@ -291,6 +316,47 @@ export function ActionModalDispatcher({
     }
 
     return null
+}
+
+/** Shown when the action declares `modal` but no federated component registered. */
+function MissingCustomActionModal({
+    open,
+    onOpenChange,
+    action,
+    model,
+}: {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    action: ActionMetadata
+    model: string
+}) {
+    const { t } = useTranslation()
+    const slug = action.modal || ''
+    const title = t('dynamic.action_modal_missing_title', {
+        defaultValue: 'No se pudo cargar el formulario',
+    })
+    const description = t('dynamic.action_modal_missing_description', {
+        defaultValue:
+            'Esta acción requiere una interfaz personalizada ({{slug}}) que no está registrada. Recarga la página o reinstala el módulo; no se abre un confirmatorio genérico para no confundir el flujo.',
+        slug: slug || `${model}.${action.key}`,
+        action: action.key,
+        model,
+    })
+    return (
+        <AlertDialog open={open} onOpenChange={onOpenChange}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>{title}</AlertDialogTitle>
+                    <AlertDialogDescription>{description}</AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogAction onClick={() => onOpenChange(false)}>
+                        {t('common.close', { defaultValue: 'Cerrar' })}
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    )
 }
 
 function buildActionUrl(endpoint: string | undefined, model: string, recordId: string | undefined, actionKey: string) {
@@ -581,6 +647,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
     // defaultValue keeps an already-localized string unchanged.
     const tl = (s: string) => t(s, { defaultValue: s })
     const api = useApi()
+    const branchGate = useBranchCreateGate()
     const [formData, setFormData] = useState<Record<string, any>>({})
     const [executing, setExecuting] = useState(false)
     // Per-field validation errors (localized), shown inline under each input.
@@ -621,41 +688,69 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
 
     const updateField = (key: string, value: any) => {
         setFormData((prev: Record<string, any>) => ({ ...prev, [key]: value }))
-        setFieldErrors(prev => {
-            if (!prev[key]) return prev
-            const next = { ...prev }
-            delete next[key]
-            return next
-        })
+        setFieldErrors((prev) => clearFieldErrorTree(prev, key))
     }
 
     const lang = i18n.language
     const handleActionError = (err: unknown) => {
+        const labels = labelsForValidationFields(action.fields, t)
         const localized = localizeActionFieldErrors(err, action.fields, t, lang)
         if (localized) {
-            setFieldErrors(localized)
-            toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }))
+            // Enrich labels for dotted line-item paths before toasting.
+            const withPathLabels: Record<string, string> = {}
+            for (const [path, msg] of Object.entries(localized)) {
+                withPathLabels[path] = msg
+                if (!labels[path]) labels[path] = labelForValidationPath(path, action.fields, t)
+            }
+            setFieldErrors(withPathLabels)
+            toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }), {
+                description: formatFieldErrorsDescription(withPathLabels, action.fields, t),
+            })
             return
         }
-        toastServerError(err, { t, language: lang })
+        toastServerError(err, { t, language: lang, labels })
     }
 
     const execute = async () => {
         if (action.fields) {
             const bag = validateValues(action.fields, formData)
             if (bagHasErrors(bag)) {
-                const labels: Record<string, string> = {}
-                for (const f of action.fields) labels[f.key] = tl(f.label)
-                setFieldErrors(localizeFieldErrorMap(bag, t, { labels, language: lang }))
-                toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }))
+                const labels = labelsForValidationFields(action.fields, (k, o) => t(k, o))
+                // Exact dotted keys (`lines.0.qty`) need path-aware labels.
+                for (const path of Object.keys(bag)) {
+                    if (!labels[path]) labels[path] = labelForValidationPath(path, action.fields, t)
+                }
+                const next = localizeFieldErrorMap(bag, t, { labels, language: lang })
+                setFieldErrors(next)
+                toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }), {
+                    description: formatFieldErrorsDescription(next, action.fields, t),
+                })
                 return
             }
         }
         setFieldErrors({})
         setExecuting(true)
         try {
-            const url = buildActionUrl(endpoint, model, record.id, action.key)
-            const res = await api.post(url, formData)
+            let payload: Record<string, any> = { ...formData }
+            // Create-placement actions (and any create with no record) may need a
+            // host branch stamp when the sidebar is on "Todas". Skip when the
+            // form already collected branch_id, or the host has no gate.
+            const isCreatePlacement =
+                action.placement === 'create' ||
+                record?.id == null ||
+                record?.id === '' ||
+                record?.id === 'undefined'
+            if (
+                branchGate &&
+                isCreatePlacement &&
+                (payload.branch_id == null || payload.branch_id === '')
+            ) {
+                const branchId = await branchGate.ensureBranchForCreate(model)
+                if (branchId === null) return
+                if (branchId) payload = { ...payload, branch_id: branchId }
+            }
+            const url = buildActionUrl(endpoint, model, record?.id, action.key)
+            const res = await api.post(url, payload)
             if (res.data.success) {
                 toastServerSuccess(res.data, { t })
                 onOpenChange(false)
@@ -727,7 +822,14 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                                     <FieldLabel htmlFor={field.key} required={field.required}>
                                         {tl(field.label)}
                                     </FieldLabel>
-                                    {renderField(field, formData[field.key], (v: any) => updateField(field.key, v), formData, record)}
+                                    {renderField(
+                                        field,
+                                        formData[field.key],
+                                        (v: any) => updateField(field.key, v),
+                                        formData,
+                                        record,
+                                        fieldErrors,
+                                    )}
                                     {fieldErrors[field.key] && (
                                         <p className="text-destructive text-xs mt-1">{fieldErrors[field.key]}</p>
                                     )}
@@ -893,26 +995,16 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
                         <DynamicIcon name={action.icon} className="h-5 w-5" />
                         {tl(action.label)}
                     </DialogTitle>
-                    {/* Progress/step bar: one segment per step. The current and
-                        completed segments are filled; a numbered marker + the
-                        current step's title tell the user where they are. Inline
-                        styles for the fill color guarantee it shows even if the
-                        host's Tailwind scan drops an arbitrary class. */}
-                    <div className="pt-2">
-                        <div className="flex items-center gap-1.5" role="list" aria-label="progress">
-                            {steps.map((s, i) => (
-                                <div
-                                    key={i}
-                                    role="listitem"
-                                    aria-current={i === stepIndex ? 'step' : undefined}
-                                    className="h-1.5 flex-1 rounded-full"
-                                    style={{
-                                        backgroundColor: i <= stepIndex ? (action.color || 'hsl(var(--primary))') : 'hsl(var(--muted))',
-                                    }}
-                                />
-                            ))}
-                        </div>
-                        <DialogDescription className="pt-2">
+                    {/* Step indicator: the platform ProcessStepper (same as the
+                        declarative form_layout wizards and the process modals) +
+                        "Paso i/n · título" and the step's description. */}
+                    <div className="pt-1">
+                        <ProcessStepper
+                            steps={steps.map((s, i) => ({ key: String(i), label: s.title ? tl(s.title) : `${t('common.step', { defaultValue: 'Paso' })} ${i + 1}` }))}
+                            activeIndex={stepIndex}
+                            onStepClick={i => setStepIndex(i)}
+                        />
+                        <DialogDescription className="pt-3">
                             {t('common.step', { defaultValue: 'Paso' })} {stepIndex + 1}/{steps.length}
                             {step?.title ? ` · ${tl(step.title)}` : ''}
                         </DialogDescription>
@@ -1011,17 +1103,30 @@ function renderField(
     // then treated as having no resolvable dependency).
     formValues?: Record<string, any>,
     record?: Record<string, any>,
+    fieldErrors?: Record<string, string>,
 ) {
     // Repeatable line-items group → row grid (value is an array of row objects).
     // The header form values flow in so a cell can depend on a header field.
     if (isLineItemsField(field)) {
-        return <DynamicLineItems field={applyPrefillLock(field)} value={value} onChange={onChange} formValues={formValues} />
+        return (
+            <DynamicLineItems
+                field={applyPrefillLock(field)}
+                value={value}
+                onChange={onChange}
+                formValues={formValues}
+                errors={lineItemErrorsFor(field.key, fieldErrors)}
+            />
+        )
     }
     // Resolve the widget the same way DynamicForm does (explicit widget wins,
     // else inferred from type) so action modals and the standalone form stay in
     // lockstep — previously this switch keyed off `field.type` and silently
     // dropped `dynamic_select` to a plain text input.
     const widget = resolveWidget(field)
+    const invalid = !!(fieldErrors && fieldErrors[field.key])
+    const invalidCls = invalid
+        ? 'border-destructive ring-1 ring-destructive/30 focus-visible:ring-destructive'
+        : ''
     if (widget === 'dynamic_select') {
         // A header-level dynamic_select may itself depend on another header
         // field; resolve its filter_value from the form context.
@@ -1035,6 +1140,7 @@ function renderField(
                 onChange={onChange}
                 dependsValue={dependsValue}
                 seedOption={seedOptionFromRecord(field, value, record)}
+                invalid={invalid}
             />
         )
     }
@@ -1045,11 +1151,11 @@ function renderField(
     }
     switch (widget) {
         case 'textarea':
-            return <Textarea id={field.key} value={value || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)} placeholder={field.placeholder} />
+            return <Textarea id={field.key} value={value || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)} placeholder={field.placeholder} aria-invalid={invalid || undefined} className={invalidCls || undefined} />
         case 'select':
             return (
                 <Select value={value || ''} onValueChange={onChange}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder={field.placeholder || 'Seleccionar...'} /></SelectTrigger>
+                    <SelectTrigger className={'w-full' + (invalidCls ? ` ${invalidCls}` : '')} aria-invalid={invalid || undefined}><SelectValue placeholder={field.placeholder || 'Seleccionar...'} /></SelectTrigger>
                     <SelectContent>
                         {field.options?.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
                     </SelectContent>
@@ -1058,12 +1164,15 @@ function renderField(
         case 'switch':
             return <Switch id={field.key} checked={!!value} onCheckedChange={onChange} />
         case 'number':
-            return <Input id={field.key} type="number" value={value ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.valueAsNumber || '')} placeholder={field.placeholder} />
+            return <Input id={field.key} type="number" value={value ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                const n = e.target.valueAsNumber
+                onChange(e.target.value === '' || !Number.isFinite(n) ? '' : n)
+            }} placeholder={field.placeholder} aria-invalid={invalid || undefined} className={invalidCls || undefined} />
         case 'date':
             // Modern shadcn Calendar in a Popover (portaled, never clipped by the
             // modal) instead of the native, dated, easily-cut <input type=date>.
             return <DynamicDateField field={field} value={value} onChange={onChange} />
         default:
-            return <Input id={field.key} type={field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : 'text'} value={value || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} placeholder={field.placeholder} />
+            return <Input id={field.key} type={field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : 'text'} value={value || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} placeholder={field.placeholder} aria-invalid={invalid || undefined} className={invalidCls || undefined} />
     }
 }

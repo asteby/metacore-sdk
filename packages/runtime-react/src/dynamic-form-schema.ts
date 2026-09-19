@@ -119,6 +119,64 @@ export function computeLineItemTotals(
     return totals
 }
 
+/** Keys that mean "line net amount" across manifests / locales. */
+const LINE_AMOUNT_KEYS = new Set(['subtotal', 'line_total', 'importe', 'amount', 'total'])
+/** Keys that mean quantity on a line row. */
+const LINE_QTY_KEYS = new Set(['qty', 'quantity', 'cantidad'])
+/** Keys that mean unit price. */
+const LINE_PRICE_KEYS = new Set(['unit_price', 'price', 'precio', 'precio_unitario'])
+/** Keys that mean line discount (absolute). */
+const LINE_DISCOUNT_KEYS = new Set(['discount', 'descuento', 'discount_amount'])
+
+function firstKey(rowOrFields: { key?: string }[] | Record<string, unknown>, candidates: Set<string>): string | undefined {
+    if (Array.isArray(rowOrFields)) {
+        for (const f of rowOrFields) {
+            if (f.key && candidates.has(f.key)) return f.key
+        }
+        return undefined
+    }
+    for (const k of Object.keys(rowOrFields)) {
+        if (candidates.has(k)) return k
+    }
+    return undefined
+}
+
+/**
+ * Live line-amount formula for action / form line-items grids:
+ * `(qty|quantity) * (unit_price|…) - (discount|…)` → `subtotal|line_total|importe`.
+ *
+ * Pure + convention-based so create_sales_order (and similar modals) show
+ * Importe as the user types without each manifest declaring a client formula.
+ * No-op when the row has no amount column or no qty/price pair.
+ */
+export function applyLineItemRowFormulas(
+    itemFields: ActionFieldDef[],
+    row: Record<string, any>,
+): Record<string, any> {
+    const amountKey =
+        firstKey(itemFields, LINE_AMOUNT_KEYS) ?? firstKey(row, LINE_AMOUNT_KEYS)
+    const qtyKey = firstKey(itemFields, LINE_QTY_KEYS) ?? firstKey(row, LINE_QTY_KEYS)
+    const priceKey =
+        firstKey(itemFields, LINE_PRICE_KEYS) ?? firstKey(row, LINE_PRICE_KEYS)
+    if (!amountKey || !qtyKey || !priceKey) return row
+
+    const discountKey =
+        firstKey(itemFields, LINE_DISCOUNT_KEYS) ?? firstKey(row, LINE_DISCOUNT_KEYS)
+    const qty = toNumber(row[qtyKey])
+    const price = toNumber(row[priceKey])
+    const discount = discountKey ? toNumber(row[discountKey]) : 0
+    const next = Math.round((qty * price - discount) * 100) / 100
+
+    // Coerce blank optional discount to 0 so submit never POSTs `discount: ""`
+    // (servers that see a present key then reject it as "discount is required").
+    const discountBlank =
+        !!discountKey && (row[discountKey] === '' || row[discountKey] == null)
+    if (toNumber(row[amountKey]) === next && !discountBlank) return row
+    const out: Record<string, any> = { ...row, [amountKey]: next }
+    if (discountBlank) out[discountKey!] = 0
+    return out
+}
+
 export interface BalanceState {
     debit: number
     credit: number
@@ -213,7 +271,7 @@ export function resolveWidget(field: ActionFieldDef): string {
     // single-select — NOT a raw text input. This wins over the `type` switch so
     // a declared FK column is a picker regardless of its SQL column type
     // (uuid/text/etc), matching the kernel's option-resolution semantics.
-    if (fieldHasRef(field)) return 'dynamic_select'
+    if (fieldHasRef(field)) return field.multiple ? 'dynamic_multi_select' : 'dynamic_select'
     switch (field.type) {
         case 'textarea': return 'textarea'
         case 'select': return 'select'
@@ -380,6 +438,87 @@ export function evaluateVisibleWhen(
     }
     // Named a field but declared no comparison → nothing to gate on.
     return true
+}
+
+/**
+ * Strip a DynamicTable / URL filter token down to the comparable scalar the
+ * kernel `visible_when.equals` / `.in` predicates expect.
+ *
+ * `eq:customer` → `customer`, bare `customer` stays, `in:a,b` keeps the raw
+ * multi-value (list-scope only gates on known single-eq scopes today).
+ */
+export function scopeValueFromFilterToken(raw: unknown): string {
+    if (raw == null) return ''
+    const s = String(raw)
+    const i = s.indexOf(':')
+    if (i <= 0) return s
+    const op = s.slice(0, i).toLowerCase()
+    const rest = s.slice(i + 1)
+    if (
+        op === 'eq' ||
+        op === 'neq' ||
+        op === 'gt' ||
+        op === 'gte' ||
+        op === 'lt' ||
+        op === 'lte' ||
+        op === 'like' ||
+        op === 'ilike' ||
+        op === 'contains'
+    ) {
+        return rest
+    }
+    return s
+}
+
+/**
+ * Flat "known field → value" map for list/board surfaces. Built from locked
+ * `defaultFilters` (nav / branch scope) plus active `dynamicFilters`. Only
+ * fields present here are considered known — see
+ * `evaluateVisibleWhenForListScope`.
+ */
+export function buildListScopeValues(
+    defaultFilters?: Record<string, unknown> | null,
+    dynamicFilters?: Record<string, string[] | undefined> | null,
+): Record<string, string> {
+    const out: Record<string, string> = {}
+    if (defaultFilters) {
+        for (const [key, value] of Object.entries(defaultFilters)) {
+            const v = scopeValueFromFilterToken(value)
+            if (v !== '') out[key] = v
+        }
+    }
+    if (dynamicFilters) {
+        for (const [key, values] of Object.entries(dynamicFilters)) {
+            if (defaultFilters && key in defaultFilters) continue
+            if (!values || values.length !== 1) continue
+            const v = scopeValueFromFilterToken(values[0])
+            if (v !== '') out[key] = v
+        }
+    }
+    return out
+}
+
+/**
+ * List/board variant of `evaluateVisibleWhen`.
+ *
+ * Forms always have a live sibling value (or ''). Lists often do not — a
+ * mixed AccountStatement table has no single `party_type`. Hiding every
+ * `visible_when` column when the governing field is unknown would wipe both
+ * Cliente and Proveedor on the unscoped view. Rule: if the governing field is
+ * not in `scope` (or is empty), keep the column; once the scope pins it
+ * (sidebar locked_scope / defaultFilters / a single-eq chip), apply the same
+ * predicate as the form.
+ */
+export function evaluateVisibleWhenForListScope(
+    cond: VisibleWhen | null | undefined,
+    scope: Record<string, any> | null | undefined,
+): boolean {
+    if (!cond || typeof cond.field !== 'string' || cond.field.trim() === '') return true
+    const key = cond.field.trim()
+    if (!scope || !(key in scope)) return true
+    const raw = scope[key]
+    if (raw == null || String(raw) === '') return true
+    return evaluateVisibleWhen(cond, scope)
 }
 
 /**

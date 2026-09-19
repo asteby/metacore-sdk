@@ -1,5 +1,135 @@
 # @asteby/metacore-fullstack-example
 
+## 0.1.267
+
+### Patch Changes
+
+- Updated dependencies [086e2b3]
+  - @asteby/metacore-runtime-react@38.1.0
+  - @asteby/metacore-app-providers@108.0.0
+
+## 0.1.266
+
+### Patch Changes
+
+- Updated dependencies [5f872f0]
+  - @asteby/metacore-ui@2.18.0
+  - @asteby/metacore-runtime-react@38.0.0
+  - @asteby/metacore-app-providers@107.0.0
+  - @asteby/metacore-auth@25.0.0
+  - @asteby/metacore-i18n@24.0.0
+  - @asteby/metacore-notifications@27.0.0
+  - @asteby/metacore-webhooks@24.0.0
+  - @asteby/metacore-pwa@0.6.3
+
+## 0.1.265
+
+### Patch Changes
+
+- Updated dependencies [8231b21]
+  - @asteby/metacore-runtime-react@37.6.0
+  - @asteby/metacore-app-providers@106.0.0
+
+## 0.1.264
+
+### Patch Changes
+
+- Updated dependencies [2582a3a]
+  - @asteby/metacore-runtime-react@37.5.1
+  - @asteby/metacore-app-providers@105.0.0
+
+## 0.1.263
+
+### Patch Changes
+
+- Updated dependencies [453b82b]
+  - @asteby/metacore-runtime-react@37.5.0
+  - @asteby/metacore-app-providers@105.0.0
+
+## 0.1.262
+
+### Patch Changes
+
+- Updated dependencies [55dc342]
+  - @asteby/metacore-runtime-react@37.4.0
+  - @asteby/metacore-app-providers@104.0.0
+
+## 0.1.261
+
+### Patch Changes
+
+- Updated dependencies [677580a]
+- Updated dependencies [17d2328]
+  - @asteby/metacore-runtime-react@37.3.0
+  - @asteby/metacore-notifications@26.0.1
+  - @asteby/metacore-pwa@0.6.2
+  - @asteby/metacore-app-providers@103.0.0
+
+## 0.1.260
+
+### Patch Changes
+
+- Updated dependencies [1e35269]
+- Updated dependencies [362ffda]
+  - @asteby/metacore-runtime-react@37.2.0
+  - @asteby/metacore-app-providers@102.0.0
+
+## 0.1.259
+
+### Patch Changes
+
+- Updated dependencies [2d4e1d8]
+  - @asteby/metacore-runtime-react@37.1.2
+  - @asteby/metacore-app-providers@101.0.0
+
+## 0.1.258
+
+### Patch Changes
+
+- Updated dependencies [ae2004d]
+  - @asteby/metacore-runtime-react@37.1.1
+  - @asteby/metacore-app-providers@101.0.0
+
+## 0.1.257
+
+### Patch Changes
+
+- Updated dependencies [3edee3a]
+  - @asteby/metacore-runtime-react@37.1.0
+  - @asteby/metacore-app-providers@101.0.0
+
+## 0.1.256
+
+### Patch Changes
+
+- Updated dependencies [5f2a732]
+  - @asteby/metacore-runtime-react@37.0.5
+  - @asteby/metacore-app-providers@100.0.0
+
+## 0.1.255
+
+### Patch Changes
+
+- Updated dependencies [0396b95]
+  - @asteby/metacore-runtime-react@37.0.4
+  - @asteby/metacore-app-providers@100.0.0
+
+## 0.1.254
+
+### Patch Changes
+
+- Updated dependencies [46a9505]
+  - @asteby/metacore-runtime-react@37.0.3
+  - @asteby/metacore-app-providers@100.0.0
+
+## 0.1.253
+
+### Patch Changes
+
+- Updated dependencies [653afe4]
+  - @asteby/metacore-runtime-react@37.0.2
+  - @asteby/metacore-app-providers@100.0.0
+
 ## 0.1.252
 
 ### Patch Changes

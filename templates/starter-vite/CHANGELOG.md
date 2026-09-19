@@ -1,5 +1,116 @@
 # @asteby/metacore-starter-vite
 
+## 0.1.249
+
+### Patch Changes
+
+- Updated dependencies [086e2b3]
+  - @asteby/metacore-runtime-react@38.1.0
+
+## 0.1.248
+
+### Patch Changes
+
+- Updated dependencies [5f872f0]
+  - @asteby/metacore-ui@2.18.0
+  - @asteby/metacore-runtime-react@38.0.0
+  - @asteby/metacore-auth@25.0.0
+  - @asteby/metacore-pwa@0.6.3
+
+## 0.1.247
+
+### Patch Changes
+
+- Updated dependencies [8231b21]
+  - @asteby/metacore-runtime-react@37.6.0
+
+## 0.1.246
+
+### Patch Changes
+
+- Updated dependencies [2582a3a]
+  - @asteby/metacore-runtime-react@37.5.1
+
+## 0.1.245
+
+### Patch Changes
+
+- Updated dependencies [453b82b]
+  - @asteby/metacore-runtime-react@37.5.0
+
+## 0.1.244
+
+### Patch Changes
+
+- Updated dependencies [55dc342]
+  - @asteby/metacore-runtime-react@37.4.0
+
+## 0.1.243
+
+### Patch Changes
+
+- Updated dependencies [677580a]
+- Updated dependencies [17d2328]
+  - @asteby/metacore-runtime-react@37.3.0
+  - @asteby/metacore-pwa@0.6.2
+
+## 0.1.242
+
+### Patch Changes
+
+- Updated dependencies [1e35269]
+- Updated dependencies [362ffda]
+  - @asteby/metacore-runtime-react@37.2.0
+
+## 0.1.241
+
+### Patch Changes
+
+- Updated dependencies [2d4e1d8]
+  - @asteby/metacore-runtime-react@37.1.2
+
+## 0.1.240
+
+### Patch Changes
+
+- Updated dependencies [ae2004d]
+  - @asteby/metacore-runtime-react@37.1.1
+
+## 0.1.239
+
+### Patch Changes
+
+- Updated dependencies [3edee3a]
+  - @asteby/metacore-runtime-react@37.1.0
+
+## 0.1.238
+
+### Patch Changes
+
+- Updated dependencies [5f2a732]
+  - @asteby/metacore-runtime-react@37.0.5
+
+## 0.1.237
+
+### Patch Changes
+
+- Updated dependencies [0396b95]
+  - @asteby/metacore-runtime-react@37.0.4
+
+## 0.1.236
+
+### Patch Changes
+
+- Updated dependencies [46a9505]
+  - @asteby/metacore-runtime-react@37.0.3
+
+## 0.1.235
+
+### Patch Changes
+
+- Updated dependencies [653afe4]
+  - @asteby/metacore-runtime-react@37.0.2
+
 ## 0.1.234
 
 ### Patch Changes

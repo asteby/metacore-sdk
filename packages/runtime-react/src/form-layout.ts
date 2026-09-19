@@ -31,6 +31,23 @@ export interface FormSection {
      * Tolerates the camelCase alias, same as fields. */
     visible_when?: VisibleWhen
     visibleWhen?: VisibleWhen
+    /** AI-assisted step (kernel v0.141.0): the SDK renders an interview panel
+     * driven by the host's assist provider inside this section. */
+    assist?: FormAssist
+}
+
+/** Declaration of an AI-assisted step (`form_layout.sections[].assist`). */
+export interface FormAssist {
+    /** Host-registered provider key, e.g. `brand.website_dna`. */
+    provider: string
+    label?: string
+    description?: string
+    /** Form fields sent to the provider when the session starts. */
+    input?: string[]
+    /** Form fields the provider may fill when it finishes. */
+    output?: string[]
+    /** `button` (default) or `auto` (start as soon as every input has a value). */
+    trigger?: 'button' | 'auto'
 }
 
 /** Model-level layout directive. `mode` defaults to `"sections"`. */
@@ -50,6 +67,8 @@ export interface FieldGroup<F> {
     /** True for the synthetic group holding section-less / unknown-section fields. */
     isDefault: boolean
     fields: F[]
+    /** AI-assisted step declaration, when the section has one. */
+    assist?: FormAssist
 }
 
 /** The synthetic key of the orphan group (fields with no / unknown `section`). */
@@ -141,6 +160,7 @@ export function groupFieldsBySection<F extends { section?: string }>(
             collapsed: s.collapsed,
             isDefault: false,
             fields: secFields,
+            assist: s.assist,
         })
     }
     return groups

@@ -1,11 +1,19 @@
 import { describe, it, expect } from 'vitest'
-import { evaluateVisibleWhen, getVisibleWhen } from '../dynamic-form-schema'
+import {
+    evaluateVisibleWhen,
+    evaluateVisibleWhenForListScope,
+    buildListScopeValues,
+    scopeValueFromFilterToken,
+    getVisibleWhen,
+} from '../dynamic-form-schema'
 import type { VisibleWhen } from '../types'
 
 // The discount_rules use case: a `rule_scope` field decides which picker shows.
 const equalsProduct: VisibleWhen = { field: 'rule_scope', equals: 'product' }
 const inCategory: VisibleWhen = { field: 'rule_scope', in: ['category'] }
 const inMulti: VisibleWhen = { field: 'scope', in: ['a', 'b'] }
+const customerOnly: VisibleWhen = { field: 'party_type', equals: 'customer' }
+const supplierOnly: VisibleWhen = { field: 'party_type', equals: 'supplier' }
 
 describe('evaluateVisibleWhen', () => {
     it('no predicate → always visible', () => {
@@ -59,5 +67,37 @@ describe('getVisibleWhen', () => {
         expect(getVisibleWhen(undefined)).toBeUndefined()
         expect(getVisibleWhen({})).toBeUndefined()
         expect(getVisibleWhen({ visible_when: { equals: 'x' } as unknown as VisibleWhen })).toBeUndefined()
+    })
+})
+
+describe('scopeValueFromFilterToken / buildListScopeValues', () => {
+    it('strips eq: and leaves bare values', () => {
+        expect(scopeValueFromFilterToken('eq:customer')).toBe('customer')
+        expect(scopeValueFromFilterToken('customer')).toBe('customer')
+        expect(scopeValueFromFilterToken('IN:a,b')).toBe('IN:a,b')
+    })
+
+    it('merges defaultFilters over dynamic and skips multi-value chips', () => {
+        expect(
+            buildListScopeValues(
+                { party_type: 'eq:customer', branch_id: 'eq:b1' },
+                { party_type: ['supplier'], status: ['open', 'draft'], warehouse: ['w1'] },
+            ),
+        ).toEqual({ party_type: 'customer', branch_id: 'b1', warehouse: 'w1' })
+    })
+})
+
+describe('evaluateVisibleWhenForListScope', () => {
+    it('keeps columns when the governing field is unknown (mixed list)', () => {
+        expect(evaluateVisibleWhenForListScope(customerOnly, {})).toBe(true)
+        expect(evaluateVisibleWhenForListScope(supplierOnly, {})).toBe(true)
+        expect(evaluateVisibleWhenForListScope(customerOnly, { other: 'x' })).toBe(true)
+    })
+
+    it('hides the opposite party column when nav locks party_type', () => {
+        expect(evaluateVisibleWhenForListScope(customerOnly, { party_type: 'customer' })).toBe(true)
+        expect(evaluateVisibleWhenForListScope(supplierOnly, { party_type: 'customer' })).toBe(false)
+        expect(evaluateVisibleWhenForListScope(customerOnly, { party_type: 'supplier' })).toBe(false)
+        expect(evaluateVisibleWhenForListScope(supplierOnly, { party_type: 'supplier' })).toBe(true)
     })
 })

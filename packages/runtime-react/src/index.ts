@@ -40,6 +40,13 @@ export {
     type ValidationSpec,
 } from './validator'
 export { VALIDATION_CATALOGS, validationCatalog, validationMessageKey } from './validation-catalog'
+export {
+    labelForValidationPath,
+    labelsForValidationFields,
+    formatFieldErrorsDescription,
+    clearFieldErrorTree,
+    lineItemErrorsFor,
+} from './field-validation-ui'
 export * from './dynamic-table'
 export {
     DynamicKanban,
@@ -120,6 +127,12 @@ export {
     type UseDynamicFiltersResult,
 } from './use-dynamic-filters'
 export { useDebouncedValue, SEARCH_DEBOUNCE_MS } from './use-debounced-value'
+export {
+    useResource,
+    useMutation,
+    type ResourceState,
+    type MutationState,
+} from './use-resource'
 export * from './dynamic-form'
 export {
     FilePickButton,
@@ -208,6 +221,7 @@ export * from './navigation-builder'
 export * from './i18n-provider'
 export * from './api-context'
 export * from './use-addon-settings'
+export * from './use-edge-device'
 export * from './use-print-document'
 export * from './print-document-button'
 export * from './use-org-document-templates'
@@ -375,7 +389,18 @@ export {
     resolveOptionsSource,
     getVisibleWhen,
     evaluateVisibleWhen,
+    scopeValueFromFilterToken,
+    buildListScopeValues,
+    evaluateVisibleWhenForListScope,
+    applyLineItemRowFormulas,
+    computeLineItemTotals,
+    toNumber,
 } from './dynamic-form-schema'
+export {
+    BranchCreateGateProvider,
+    useBranchCreateGate,
+    type BranchCreateGateApi,
+} from './branch-create-gate'
 export {
     ActivityValueRenderer,
     type ActivityValueRendererProps,
@@ -450,3 +475,5 @@ export {
     type AccentClasses,
     type WidgetFormatCtx,
 } from './widgets/widget-format'
+export { AssistInterview, AssistCardView } from './assist-interview'
+export type { AssistSession, AssistTurn, AssistQuestion, AssistCard, AssistProgressStep } from './assist-interview'

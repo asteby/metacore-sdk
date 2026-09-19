@@ -204,6 +204,8 @@ export interface DynamicSelectFieldProps {
      * host's create modal renders them locked. Pairs with `createDefaults`.
      */
     createLockedFields?: string[]
+    /** Paint trigger with destructive border when validation failed. */
+    invalid?: boolean
 }
 
 export function DynamicSelectField({
@@ -219,6 +221,7 @@ export function DynamicSelectField({
     hideCreate = false,
     createDefaults,
     createLockedFields,
+    invalid = false,
 }: DynamicSelectFieldProps) {
     const { t } = useTranslation()
     const ph = (fallback: string) =>
@@ -398,7 +401,11 @@ export function DynamicSelectField({
                     aria-expanded={open}
                     id={field.key}
                     disabled={blockedByDependency}
-                    className="min-w-0 flex-1 justify-between font-normal"
+                    aria-invalid={invalid || undefined}
+                    className={
+                        'min-w-0 flex-1 justify-between font-normal' +
+                        (invalid ? ' border-destructive ring-1 ring-destructive/30' : '')
+                    }
                     data-empty={!value}
                     data-depends-blocked={blockedByDependency ? '' : undefined}
                 >

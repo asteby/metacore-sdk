@@ -56,12 +56,13 @@ describe('ModelActionToolbar — translates addon action labels at render', () =
         const inst = makeI18n()
         renderToolbar(inst)
 
-        // Before the addon bundle loads the toolbar has only the key; with the
-        // fix it renders the key text (t() falls back to defaultValue = the key).
-        // The point of the test is the TRANSITION below.
+        // Before the addon bundle loads the toolbar must NOT flash the full
+        // dotted key — humanizeActionLabel turns the last segment into a
+        // readable fallback until addResourceBundle fires.
+        expect(screen.getByText('Create Issue')).toBeTruthy()
         expect(
-            screen.getByText('integration_github.action.create_issue.label'),
-        ).toBeTruthy()
+            screen.queryByText('integration_github.action.create_issue.label'),
+        ).toBeNull()
 
         // The addon locale bundle arrives asynchronously (OpsAddonLocaleLoader
         // fetch → addResourceBundle). It is NESTED, as the host loader now merges
@@ -79,8 +80,30 @@ describe('ModelActionToolbar — translates addon action labels at render', () =
         // The toolbar must re-render and show the translated label — the exact
         // behaviour that was missing (a bare {a.label} never re-derived).
         await waitFor(() => expect(screen.getByText('Crear issue')).toBeTruthy())
+        expect(screen.queryByText('Create Issue')).toBeNull()
+    })
+
+    it('humanizes collect_payment_create without flashing the receivables key', () => {
+        const inst = makeI18n()
+        render(
+            <I18nextProvider i18n={inst}>
+                <ApiProvider client={api}>
+                    <ModelActionToolbar
+                        model="account_statements"
+                        actions={[
+                            {
+                                key: 'collect_payment_create',
+                                label: 'receivables.action.collect_payment_create',
+                                placement: 'create',
+                            } as ActionDefinition,
+                        ]}
+                    />
+                </ApiProvider>
+            </I18nextProvider>,
+        )
+        expect(screen.getByText('Collect Payment Create')).toBeTruthy()
         expect(
-            screen.queryByText('integration_github.action.create_issue.label'),
+            screen.queryByText('receivables.action.collect_payment_create'),
         ).toBeNull()
     })
 
