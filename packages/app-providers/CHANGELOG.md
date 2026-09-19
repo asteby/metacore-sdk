@@ -1,5 +1,15 @@
 # @asteby/metacore-app-providers
 
+## 108.0.1
+
+### Patch Changes
+
+- 098a222: Expose the optional `default_preset_key` branding field so hosts can derive a
+  dedicated experience profile without local type casts.
+- Updated dependencies [ba96488]
+  - @asteby/metacore-ui@2.18.1
+  - @asteby/metacore-runtime-react@38.1.0
+
 ## 108.0.0
 
 ### Patch Changes
