@@ -1,5 +1,11 @@
 # @asteby/metacore-ui
 
+## 2.18.1
+
+### Patch Changes
+
+- ba96488: Resolve sidebar active state across all nav groups so a filtered credit queue wins over a bare model entry in another group.
+
 ## 2.18.0
 
 ### Minor Changes
