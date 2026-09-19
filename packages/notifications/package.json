@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-notifications",
-  "version": "26.0.1",
+  "version": "27.0.0",
   "description": "Metacore notifications — dropdown, SSE/WS live stream, unified toast, dynamic icons & module chips",
   "license": "Apache-2.0",
   "repository": {

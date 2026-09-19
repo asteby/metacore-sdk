@@ -28,6 +28,10 @@ export interface PlatformBranding {
   // keep working — never hard-code a brand name/skin outside this field.
   mascot_name: string
   mascot_skin: string
+  // Optional key identifying a named preset to apply on top of the base
+  // branding. Absent/unknown keys are a no-op — never required for
+  // existing consumers.
+  default_preset_key?: string
 }
 
 export const FALLBACK_BRANDING: PlatformBranding = {

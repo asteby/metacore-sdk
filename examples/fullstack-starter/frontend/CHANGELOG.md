@@ -1,5 +1,49 @@
 # @asteby/metacore-fullstack-example
 
+## 0.1.268
+
+### Patch Changes
+
+- Updated dependencies [ba96488]
+- Updated dependencies [098a222]
+  - @asteby/metacore-ui@2.18.1
+  - @asteby/metacore-app-providers@108.0.1
+  - @asteby/metacore-auth@25.0.0
+  - @asteby/metacore-i18n@24.0.0
+  - @asteby/metacore-notifications@27.0.0
+  - @asteby/metacore-runtime-react@38.1.0
+  - @asteby/metacore-webhooks@24.0.0
+
+## 0.1.267
+
+### Patch Changes
+
+- Updated dependencies [086e2b3]
+  - @asteby/metacore-runtime-react@38.1.0
+  - @asteby/metacore-app-providers@108.0.0
+
+## 0.1.266
+
+### Patch Changes
+
+- Updated dependencies [5f872f0]
+  - @asteby/metacore-ui@2.18.0
+  - @asteby/metacore-runtime-react@38.0.0
+  - @asteby/metacore-app-providers@107.0.0
+  - @asteby/metacore-auth@25.0.0
+  - @asteby/metacore-i18n@24.0.0
+  - @asteby/metacore-notifications@27.0.0
+  - @asteby/metacore-webhooks@24.0.0
+  - @asteby/metacore-pwa@0.6.3
+
+## 0.1.265
+
+### Patch Changes
+
+- Updated dependencies [8231b21]
+  - @asteby/metacore-runtime-react@37.6.0
+  - @asteby/metacore-app-providers@106.0.0
+
 ## 0.1.264
 
 ### Patch Changes

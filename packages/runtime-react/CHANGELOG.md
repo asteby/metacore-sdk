@@ -1,5 +1,41 @@
 # @asteby/metacore-runtime-react
 
+## 38.1.0
+
+### Minor Changes
+
+- 086e2b3: Paso asistido por IA en los wizards declarativos (`form_layout.sections[].assist`, kernel ≥ 0.141.0): `AssistInterview` renderiza dentro del paso una entrevista conversacional guiada por el proveedor del host (`/assist/:provider/sessions`): una pregunta a la vez con efecto de escritura, progreso en vivo (leyendo el sitio, buscando logo, detectando colores, IA…), tarjetas de vista previa (logo en claro/oscuro, paleta) y respuestas rápidas; al terminar rellena los campos `output` del formulario. Disponible en `DynamicRecordDialog` y `DynamicForm`.
+
+## 38.0.0
+
+### Minor Changes
+
+- 5f872f0: `ProcessStepper` llega a `@asteby/metacore-ui/wizard`: el indicador de pasos de los modales de proceso (círculos con icono o número, check al completar, etiqueta debajo y conectores flexibles), una sola implementación para toda la plataforma.
+
+  `runtime-react`: los wizards declarativos (`form_layout.mode = "steps"`) en `DynamicForm` y `DynamicRecordDialog` ahora usan ese stepper en lugar de la barra de progreso plana, con navegación hacia atrás al pulsar un paso completado.
+
+### Patch Changes
+
+- Updated dependencies [5f872f0]
+  - @asteby/metacore-ui@2.18.0
+
+## 37.6.0
+
+### Minor Changes
+
+- 8231b21: Fix `ensureHref` mangling every root-relative asset URL (the platform's own
+  convention for locally-served files — uploads, hub-generated images,
+  printable documents) into a broken `https:///storage/…` link (scheme + empty
+  host). Root-relative paths (`/storage/…`), protocol-relative (`//…`) and
+  fully-qualified URLs now pass through unchanged; only a bare host like
+  `github.com/x` still gets `https://` prefixed.
+
+  Also: clicking an image thumbnail (table cell, detail dialog, linkified free
+  text — anywhere `ImageThumbnail`/`MediaValue` renders) now opens a full-size
+  **preview dialog** instead of navigating to the raw file in a new tab. This
+  is the platform-wide click-to-zoom behavior; no caller builds its own
+  lightbox.
+
 ## 37.5.1
 
 ### Patch Changes

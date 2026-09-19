@@ -475,3 +475,5 @@ export {
     type AccentClasses,
     type WidgetFormatCtx,
 } from './widgets/widget-format'
+export { AssistInterview, AssistCardView } from './assist-interview'
+export type { AssistSession, AssistTurn, AssistQuestion, AssistCard, AssistProgressStep } from './assist-interview'

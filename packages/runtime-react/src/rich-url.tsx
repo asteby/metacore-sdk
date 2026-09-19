@@ -18,6 +18,7 @@
  */
 import React from 'react'
 import { cn } from '@asteby/metacore-ui/lib'
+import { Dialog, DialogContent, DialogTitle } from '@asteby/metacore-ui/primitives'
 import { DynamicIcon } from './dynamic-icon'
 
 /** Image file extensions we render as an inline thumbnail. */
@@ -53,9 +54,22 @@ export function classifyUrl(url: string): UrlKind {
     return 'link'
 }
 
-/** Ensure a URL is absolute so `<a href>` and `new URL()` behave. */
+/**
+ * Ensure a URL is safe to drop into `<a href>` / `new URL(..., base)`.
+ *
+ * Three shapes pass through unchanged: fully qualified (`http(s)://…`),
+ * protocol-relative (`//…`), and — the platform's own convention for every
+ * locally-served asset (uploads, hub-generated images, printable documents:
+ * see handlers.UploadFile, hub_image_provider_bridge.go, …) — ROOT-RELATIVE
+ * (`/storage/…`). A root-relative path already resolves correctly against
+ * the current origin; treating it as a bare host (the old behavior) produced
+ * "https:///storage/…" (scheme + empty host), a broken link. Anything else
+ * (`github.com/foo`) is assumed to be a bare host missing its scheme.
+ */
 export function ensureHref(url: string): string {
-    return /^(https?:)?\/\//i.test(url) || /^(mailto|tel):/i.test(url)
+    return /^(https?:)?\/\//i.test(url) ||
+        /^(mailto|tel):/i.test(url) ||
+        url.startsWith('/')
         ? url
         : `https://${url}`
 }
@@ -162,10 +176,39 @@ export const FileChip: React.FC<{
 }
 
 /**
- * Inline image thumbnail — rounded, bordered, `object-cover` — that opens the
- * full image in a new tab. On load error it degrades to a normal link chip so a
- * dead image URL is still reachable (and never a broken-image icon). `maxHeight`
- * keeps a cell thumbnail small (~h-8) while the dialog shows a larger preview.
+ * Full-size image preview — a Dialog overlay, not a new tab. Click-to-zoom is
+ * the platform-wide behavior for every inline thumbnail (table cell, detail
+ * dialog, linkified free text): the caller never builds its own lightbox.
+ * Download / "open original" stays one click away in the footer for the rare
+ * case someone wants the raw file.
+ */
+const ImageLightbox: React.FC<{
+    src: string
+    alt: string
+    open: boolean
+    onOpenChange: (open: boolean) => void
+}> = ({ src, alt, open, onOpenChange }) => (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent
+            className="max-w-[min(92vw,1100px)] max-h-[92dvh] p-2 overflow-hidden border-0 bg-transparent shadow-none flex items-center justify-center"
+            onClick={stop}
+        >
+            <DialogTitle className="sr-only">{alt}</DialogTitle>
+            <img
+                src={src}
+                alt={alt}
+                className="max-h-[86dvh] max-w-full rounded-lg object-contain shadow-2xl"
+            />
+        </DialogContent>
+    </Dialog>
+)
+
+/**
+ * Inline image thumbnail — rounded, bordered, `object-cover` — that opens a
+ * full-size PREVIEW (a lightbox dialog, not a new tab). On load error it
+ * degrades to a normal link chip so a dead image URL is still reachable (and
+ * never a broken-image icon). `maxHeight` keeps a cell thumbnail small
+ * (~h-8) while the dialog shows a larger preview.
  */
 export const ImageThumbnail: React.FC<{
     url: string
@@ -175,32 +218,42 @@ export const ImageThumbnail: React.FC<{
     className?: string
 }> = ({ url, getImageUrl, maxHeight = 160, className }) => {
     const [failed, setFailed] = React.useState(false)
-    const href = ensureHref(url)
+    const [open, setOpen] = React.useState(false)
     // Absolute URLs are used verbatim; only relative storage paths go through
-    // the host's image resolver (which prefixes the media base).
-    const src =
-        /^(https?:)?\/\//i.test(url) ? url : getImageUrl ? getImageUrl(url) : url
+    // the host's image resolver (which prefixes the media base). Anything
+    // that opens the raw file (download, the lightbox <img>) MUST resolve the
+    // same way — otherwise a relative "/storage/…" path (the platform's own
+    // convention: uploads, hub-generated assets, etc.) never matches
+    // ensureHref's "//"-prefixed check and gets misread as a bare host,
+    // producing "https:///storage/…".
+    const isAbsolute = /^(https?:)?\/\//i.test(url)
+    const src = isAbsolute ? url : getImageUrl ? getImageUrl(url) : url
+    const label = smartUrlLabel(url)
     if (failed) return <UrlChip url={url} icon="Image" />
     return (
-        <a
-            href={href}
-            target="_blank"
-            rel="noopener noreferrer"
-            title={url}
-            onClick={stop}
-            className="inline-block max-w-full align-middle"
-        >
-            <img
-                src={src}
-                alt={smartUrlLabel(url)}
-                onError={() => setFailed(true)}
-                style={{ maxHeight }}
-                className={cn(
-                    'max-w-full rounded-md border object-cover',
-                    className
-                )}
-            />
-        </a>
+        <>
+            <button
+                type="button"
+                title={label}
+                onClick={(e) => {
+                    stop(e)
+                    setOpen(true)
+                }}
+                className="inline-block max-w-full cursor-zoom-in appearance-none border-0 bg-transparent p-0 align-middle"
+            >
+                <img
+                    src={src}
+                    alt={label}
+                    onError={() => setFailed(true)}
+                    style={{ maxHeight }}
+                    className={cn(
+                        'max-w-full rounded-md border object-cover',
+                        className
+                    )}
+                />
+            </button>
+            <ImageLightbox src={src} alt={label} open={open} onOpenChange={setOpen} />
+        </>
     )
 }
 
