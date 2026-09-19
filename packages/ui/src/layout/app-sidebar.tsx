@@ -15,6 +15,7 @@ import {
 import { Skeleton } from '@/primitives/skeleton'
 import { NavGroup, type NavLinkComponent } from './nav-group'
 import type { NavGroupData } from './types'
+import { flattenNavLeaves, resolveActiveItemUrls } from './nav-active'
 
 export interface AppSidebarProps {
   /** Navigation groups (already translated). */
@@ -54,6 +55,13 @@ export function AppSidebar({
   collapsible = 'offcanvas',
   variant = 'sidebar',
 }: AppSidebarProps) {
+  // Cross-group "most specific wins": Pedidos vs Solicitudes de crédito share a
+  // model path but live in different groups — resolve once over every leaf.
+  const activeUrls = React.useMemo(() => {
+    const leaves = navGroups.flatMap((g) => flattenNavLeaves(g.items))
+    return resolveActiveItemUrls(currentHref, leaves)
+  }, [navGroups, currentHref])
+
   return (
     <Sidebar collapsible={collapsible} variant={variant}>
       {header && <SidebarHeader>{header}</SidebarHeader>}
@@ -69,6 +77,7 @@ export function AppSidebar({
               currentHref={currentHref}
               LinkComponent={LinkComponent}
               onItemHover={onItemHover}
+              activeUrls={activeUrls}
             />
           ))
         )}

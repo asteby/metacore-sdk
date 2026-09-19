@@ -4,7 +4,7 @@
 // identity equals the current href. Filter (`f_`) and transient (page/sort)
 // behaviour must be preserved.
 import { describe, expect, it } from 'vitest'
-import { checkIsActive, splitHref, declaredFiltersMatch, resolveActiveItemUrls } from '../nav-active'
+import { checkIsActive, splitHref, declaredFiltersMatch, resolveActiveItemUrls, flattenNavLeaves } from '../nav-active'
 import type { NavLinkItem, NavCollapsibleItem } from '../types'
 
 const link = (title: string, url: string): NavLinkItem => ({ title, url })
@@ -208,6 +208,22 @@ describe('resolveActiveItemUrls — sibling "most specific wins"', () => {
     )
     // No sibling declares f_status=draft → only the base matches, stays lit.
     expect(active.has('/m/transfers?view=list')).toBe(true)
+  })
+
+  it('wins across groups (credit queue vs bare pedidos)', () => {
+    const pedidos = link('Pedidos de venta', '/m/sales_orders')
+    const solicitudes = link(
+      'Solicitudes pendientes',
+      '/m/sales_orders?f_credit_pending=eq:true',
+    )
+    // Same as AppSidebar: flatten leaves from every group, then resolve once.
+    const leaves = flattenNavLeaves([pedidos, solicitudes])
+    const active = resolveActiveItemUrls(
+      '/m/sales_orders?f_credit_pending=eq:true',
+      leaves,
+    )
+    expect(active.has('/m/sales_orders?f_credit_pending=eq:true')).toBe(true)
+    expect(active.has('/m/sales_orders')).toBe(false)
   })
 })
 
