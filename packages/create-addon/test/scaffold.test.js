@@ -124,6 +124,7 @@ for (const template of ['minimal', 'crud-model', 'full-page']) {
         'utf8'
       )
       assert.match(vite, /metacoreFederationShared/)
+      assert.match(vite, /metacoreFederationBudgetPlugin/)
       assert.match(vite, /metacoreOptimizeDeps/)
       assert.match(vite, /metacore_my_addon/)
 

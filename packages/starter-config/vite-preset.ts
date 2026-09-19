@@ -11,10 +11,17 @@
  *     router: true,
  *   })
  */
+import { readdirSync, statSync } from 'node:fs'
+import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { UserConfig, PluginOption, DepOptimizationOptions } from 'vite'
+import type { UserConfig, Plugin, PluginOption, DepOptimizationOptions } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
+
+/** Align with hub `validateFrontendBudgets` (512 KiB remoteEntry). */
+export const METACORE_REMOTE_ENTRY_MAX_BYTES = 512 * 1024
+/** Align with hub `validateFrontendBudgets` (4 MiB frontend/). */
+export const METACORE_FRONTEND_MAX_BYTES = 4 * 1024 * 1024
 
 /**
  * Lista de packages `@asteby/metacore-*` (y sus subpaths) que Vite debe
@@ -259,6 +266,8 @@ export function metacoreFederationShared(
     shared[name] = { ...(shared[name] ?? {}), ...override }
   }
 
+  assertMetacoreFederationShared(shared)
+
   return {
     name: host,
     filename,
@@ -267,6 +276,121 @@ export function metacoreFederationShared(
     ...(apps ? { remotes: { ...apps } } : {}),
     ...(exposes ? { exposes: { ...exposes } } : {}),
     shared,
+  }
+}
+
+/**
+ * Fails when a required singleton is missing or has `singleton: false`.
+ * Called by {@link metacoreFederationShared}; also usable in CI against a
+ * hand-rolled `shared` map.
+ */
+export function assertMetacoreFederationShared(
+  shared: Record<string, MetacoreFederationShareConfig | undefined>
+): void {
+  for (const name of METACORE_FEDERATION_SINGLETONS) {
+    if (!shared[name]?.singleton) {
+      throw new Error(
+        `metacore federation shared: "${name}" must be { singleton: true }. ` +
+          `Use metacoreFederationShared() from @asteby/metacore-starter-config/vite ` +
+          `and do not override singleton to false.`
+      )
+    }
+  }
+}
+
+export interface FederationDistBudgetOptions {
+  /** Vite outDir to scan. Defaults to the resolved build.outDir. */
+  outDir?: string
+  /** remoteEntry filename. Default `remoteEntry.js`. */
+  filename?: string
+  maxRemoteEntryBytes?: number
+  maxFrontendBytes?: number
+}
+
+/**
+ * Walks `outDir` and rejects oversized federation artifacts — same ceilings
+ * as hub publish (`512 KiB` remoteEntry / `4 MiB` total frontend).
+ */
+export function assertFederationDistBudgets(
+  outDir: string,
+  opts: Omit<FederationDistBudgetOptions, 'outDir'> = {}
+): { total: number; remoteEntry: number } {
+  const filename = opts.filename ?? 'remoteEntry.js'
+  const maxRemote = opts.maxRemoteEntryBytes ?? METACORE_REMOTE_ENTRY_MAX_BYTES
+  const maxTotal = opts.maxFrontendBytes ?? METACORE_FRONTEND_MAX_BYTES
+
+  let total = 0
+  let remoteEntry = 0
+
+  const walk = (dir: string) => {
+    let entries: string[]
+    try {
+      entries = readdirSync(dir)
+    } catch {
+      return
+    }
+    for (const name of entries) {
+      const full = path.join(dir, name)
+      let st
+      try {
+        st = statSync(full)
+      } catch {
+        continue
+      }
+      if (st.isDirectory()) {
+        walk(full)
+        continue
+      }
+      if (!st.isFile()) continue
+      total += st.size
+      if (name === filename || full.endsWith(`/${filename}`) || full.endsWith(`\\${filename}`)) {
+        remoteEntry += st.size
+      }
+    }
+  }
+  walk(outDir)
+
+  if (total > maxTotal) {
+    throw new Error(
+      `frontend budget exceeded: ${outDir} is ${total} bytes (max ${maxTotal}). ` +
+        `Split exposes or trim the remote — oversized federation taxes every host shell open.`
+    )
+  }
+  if (remoteEntry > maxRemote) {
+    throw new Error(
+      `frontend budget exceeded: ${filename} is ${remoteEntry} bytes (max ${maxRemote}). ` +
+        `Keep the container thin and lazy-load feature chunks.`
+    )
+  }
+  return { total, remoteEntry }
+}
+
+/**
+ * Vite plugin: after `vite build`, enforce hub-aligned remoteEntry / dist size
+ * budgets so CI fails before publish. Add next to `federation(...)`:
+ *
+ * ```ts
+ * plugins: [
+ *   federation(metacoreFederationShared({ host, exposes })),
+ *   metacoreFederationBudgetPlugin(),
+ * ]
+ * ```
+ */
+export function metacoreFederationBudgetPlugin(
+  opts: FederationDistBudgetOptions = {}
+): Plugin {
+  let outDir = path.resolve(process.cwd(), opts.outDir ?? 'dist')
+  return {
+    name: 'metacore-federation-budget',
+    apply: 'build',
+    configResolved(config) {
+      outDir = opts.outDir
+        ? path.resolve(config.root, opts.outDir)
+        : path.resolve(config.root, config.build.outDir)
+    },
+    closeBundle() {
+      assertFederationDistBudgets(outDir, opts)
+    },
   }
 }
 

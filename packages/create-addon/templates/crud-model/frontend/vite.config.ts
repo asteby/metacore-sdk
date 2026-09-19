@@ -11,6 +11,7 @@ import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
 import federation from '@originjs/vite-plugin-federation'
 import {
+  metacoreFederationBudgetPlugin,
   metacoreFederationShared,
   metacoreOptimizeDeps,
 } from '@asteby/metacore-starter-config/vite'
@@ -32,6 +33,8 @@ export default defineConfig({
         },
       })
     ),
+    // Fail CI when remoteEntry / dist exceed hub publish budgets (512 KiB / 4 MiB).
+    metacoreFederationBudgetPlugin(),
   ],
   // Required when the addon consumes linked `@asteby/metacore-*` packages —
   // without this Vite serves bare specifiers to the browser and the dev
