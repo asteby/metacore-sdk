@@ -94,6 +94,11 @@ export interface Frontend {
    * Layout selects how the host frames the addon UI ("shell" | "immersive").
    */
   layout?: string;
+  /**
+   * Load tells the host when to mount the federated remote
+   * ("eager" | "route" | "action" | "idle"). Empty = host default (action).
+   */
+  load?: string;
 }
 /**
  * Metadata is identity + presentation + authorship.
