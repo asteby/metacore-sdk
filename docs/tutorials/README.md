@@ -9,6 +9,9 @@ versions called out in its preamble.
 - [Your first addon — `notes`](./first-addon.md) — manifest, WASM backend,
   federated frontend, hot-swap. The "hello world" that exercises all three
   extension axes (data + UI + logic) without overshooting.
+- [WASM guest cold-start](../wasm-guest-cold-start.md) — reactor vs command,
+  empty `_initialize`, size/compile checklist so hosts stay fast with many
+  addons installed.
 
 ## Coming soon
 
