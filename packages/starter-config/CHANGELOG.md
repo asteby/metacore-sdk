@@ -1,5 +1,11 @@
 # @asteby/metacore-starter-config
 
+## 2.6.0
+
+### Minor Changes
+
+- 5b64c23: Federation CI budgets: `metacoreFederationBudgetPlugin` + `assertFederationDistBudgets` mirror hub publish ceilings (512 KiB remoteEntry / 4 MiB frontend). `metacoreFederationShared` now asserts mandatory singletons (and the published `.js` again includes `@tanstack/react-query`). New addons scaffold with the budget plugin wired.
+
 ## 2.5.0
 
 ### Minor Changes

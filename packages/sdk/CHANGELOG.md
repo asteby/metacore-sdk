@@ -1,5 +1,11 @@
 # @asteby/metacore-sdk
 
+## 3.8.0
+
+### Minor Changes
+
+- 5b64c23: Shell cold path: `manifestsLite()` prefers `?lite=1` when revalidating the catalog, and `FrontendSpec.load?` is typed for `eager|route|action|idle` so hosts can honor the kernel contract without host-only hacks.
+
 ## 3.7.0
 
 ### Minor Changes
