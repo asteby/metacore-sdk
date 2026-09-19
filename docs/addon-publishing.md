@@ -160,4 +160,5 @@ version and only move forward when the org admin clicks Update in ops.
 - [`manifest-spec.md`](./manifest-spec.md) — the full v3 manifest field reference.
 - [`addon-cookbook.md`](./addon-cookbook.md) — end-to-end recipes.
 - [`wasm-abi.md`](./wasm-abi.md) — the WASM guest/host contract the scanner enforces against.
+- [`wasm-guest-cold-start.md`](./wasm-guest-cold-start.md) — keep guests cheap at boot/heal/first invoke.
 - [`capabilities.md`](./capabilities.md) — the `kind` catalog for `capabilities[]`.
