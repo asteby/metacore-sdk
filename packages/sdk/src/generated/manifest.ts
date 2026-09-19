@@ -238,6 +238,15 @@ export interface FrontendSpec {
    * catch typos at install time rather than at first paint.
    */
   layout?: string;
+  /**
+   * Load tells the host WHEN to mount the federated remoteEntry.
+   * 	"" / omitted — host default (typically "action").
+   * 	"eager"      — mount as soon as manifests arrive (shell tax; rare).
+   * 	"route"      — mount when navigating to a surface that needs it.
+   * 	"action"     — mount only on hover/click of a federated action.
+   * 	"idle"       — reserved; hosts MAY treat as "action".
+   */
+  load?: string;
 }
 /**
  * BackendSpec declares how the addon's backend code is executed.
