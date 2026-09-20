@@ -10,10 +10,11 @@
 //   * `@/components/dynamic/dynamic-columns` → host-injected via the
 //     `getDynamicColumns` prop (hosts retain ownership because the rendered
 //     column cells are tightly coupled to their design system).
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef, type MouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { format } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import {
     type SortingState,
     type VisibilityState,
@@ -69,6 +70,11 @@ import { defaultGetDynamicColumns, DATE_CELL_TYPES, aggregateOf, formatAggregate
 import { useFacetLoaders, isLongTextColumn } from './use-facet-loaders'
 import { translateOptionLabels } from './filter-chips'
 import { dedupeById, useInfiniteScrollSentinel } from './use-infinite-scroll'
+import {
+    DYNAMIC_TABLE_CARD_ESTIMATE_PX,
+    DYNAMIC_TABLE_ROW_ESTIMATE_PX,
+    resolveVirtualizeThreshold,
+} from './table-virtualization'
 import { OptionsContext } from './options-context'
 import type { TableMetadata, ApiResponse, ColumnDefinition } from './types'
 import { getSearchableColumnKeys } from './column-visibility'
@@ -245,6 +251,13 @@ export interface DynamicTableProps {
      * mode exactly as before.
      */
     infiniteScroll?: boolean
+    /**
+     * Row virtualization. When the visible row model has at least N rows,
+     * only viewport rows are mounted (helps infinite scroll and large page
+     * sizes). `true` / omitted → default threshold (40). `false` → always
+     * render every row. A positive number overrides the threshold.
+     */
+    virtualizeRows?: boolean | number
 }
 
 export function DynamicTable({
@@ -266,6 +279,7 @@ export function DynamicTable({
     currency,
     pagination: paginationMode,
     infiniteScroll: infiniteScrollProp = false,
+    virtualizeRows,
 }: DynamicTableProps) {
     // The explicit `pagination` prop wins; the legacy `infiniteScroll` boolean
     // still selects the mode when `pagination` is absent (back-compat).
@@ -1300,6 +1314,27 @@ export function DynamicTable({
         getFacetedUniqueValues: getFacetedUniqueValues(),
     })
 
+    const tableRows = table.getRowModel().rows
+    const virtualizeThreshold = resolveVirtualizeThreshold(virtualizeRows)
+    const shouldVirtualize =
+        virtualizeThreshold !== false && tableRows.length >= virtualizeThreshold
+    const colSpan = Math.max(columns.length, 1)
+
+    const desktopVirtualizer = useVirtualizer({
+        count: shouldVirtualize ? tableRows.length : 0,
+        getScrollElement: () => infDesktopRoot.current,
+        estimateSize: () => DYNAMIC_TABLE_ROW_ESTIMATE_PX,
+        overscan: 8,
+        enabled: shouldVirtualize,
+    })
+    const mobileVirtualizer = useVirtualizer({
+        count: shouldVirtualize ? tableRows.length : 0,
+        getScrollElement: () => infMobileRoot.current,
+        estimateSize: () => DYNAMIC_TABLE_CARD_ESTIMATE_PX,
+        overscan: 6,
+        enabled: shouldVirtualize,
+    })
+
     const TableSkeleton = () => (
         <>
             {Array.from({ length: 5 }).map((_, i) => (
@@ -1407,9 +1442,70 @@ export function DynamicTable({
                         <TableBody>
                             {loadingData && data.length === 0 ? (
                                 <TableSkeleton />
-                            ) : table.getRowModel().rows?.length ? (
+                            ) : tableRows.length ? (
                                 <>
-                                    {table.getRowModel().rows.map((row: Row<any>) => (
+                                    {shouldVirtualize ? (
+                                        <>
+                                            {desktopVirtualizer.getVirtualItems().length > 0 && (
+                                                <TableRow
+                                                    className='border-0 hover:bg-transparent'
+                                                    aria-hidden
+                                                >
+                                                    <TableCell
+                                                        colSpan={colSpan}
+                                                        className='p-0'
+                                                        style={{
+                                                            height: desktopVirtualizer.getVirtualItems()[0]?.start ?? 0,
+                                                        }}
+                                                    />
+                                                </TableRow>
+                                            )}
+                                            {desktopVirtualizer.getVirtualItems().map((virtualRow) => {
+                                                const row = tableRows[virtualRow.index]
+                                                if (!row) return null
+                                                return (
+                                                    <TableRow
+                                                        key={row.id}
+                                                        data-index={virtualRow.index}
+                                                        ref={desktopVirtualizer.measureElement}
+                                                        data-state={row.getIsSelected() && 'selected'}
+                                                        className={cn(onRowClick && 'cursor-pointer')}
+                                                        onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                                                    >
+                                                        {row.getVisibleCells().map((cell: Cell<any, unknown>) => {
+                                                            const isActionsColumn = cell.column.id === 'actions'
+                                                            const isSelectColumn = cell.column.id === 'select'
+                                                            return (
+                                                                <TableCell
+                                                                    key={cell.id}
+                                                                    style={cell.column.columnDef.size ? { width: cell.column.columnDef.size } : undefined}
+                                                                    className={cn('py-2', isActionsColumn && 'sticky right-0 bg-card shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)]')}
+                                                                    onClick={(isActionsColumn || isSelectColumn) ? (e: MouseEvent) => e.stopPropagation() : undefined}
+                                                                >
+                                                                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                                                </TableCell>
+                                                            )
+                                                        })}
+                                                    </TableRow>
+                                                )
+                                            })}
+                                            {(() => {
+                                                const items = desktopVirtualizer.getVirtualItems()
+                                                const last = items[items.length - 1]
+                                                const pad =
+                                                    last != null
+                                                        ? desktopVirtualizer.getTotalSize() - last.end
+                                                        : 0
+                                                if (pad <= 0) return null
+                                                return (
+                                                    <TableRow className='border-0 hover:bg-transparent' aria-hidden>
+                                                        <TableCell colSpan={colSpan} className='p-0' style={{ height: pad }} />
+                                                    </TableRow>
+                                                )
+                                            })()}
+                                        </>
+                                    ) : (
+                                        tableRows.map((row: Row<any>) => (
                                     <TableRow
                                         key={row.id}
                                         data-state={row.getIsSelected() && 'selected'}
@@ -1424,14 +1520,15 @@ export function DynamicTable({
                                                     key={cell.id}
                                                     style={cell.column.columnDef.size ? { width: cell.column.columnDef.size } : undefined}
                                                     className={cn('py-2', isActionsColumn && 'sticky right-0 bg-card shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)]')}
-                                                    onClick={(isActionsColumn || isSelectColumn) ? (e: React.MouseEvent) => e.stopPropagation() : undefined}
+                                                    onClick={(isActionsColumn || isSelectColumn) ? (e: MouseEvent) => e.stopPropagation() : undefined}
                                                 >
                                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                                 </TableCell>
                                             )
                                         })}
                                     </TableRow>
-                                    ))}
+                                        ))
+                                    )}
                                     {/* Spacer row: absorbs the table's leftover height (table is
                                         h-full when a footer shows) so the totals footer is pinned to
                                         the bottom of the box even with only a few rows. */}
@@ -1526,8 +1623,64 @@ export function DynamicTable({
                                 <Skeleton className='mt-2 h-4 w-32' />
                             </div>
                         ))
-                    ) : table.getRowModel().rows?.length ? (
-                        table.getRowModel().rows.map((row: Row<any>) => {
+                    ) : tableRows.length ? (
+                        shouldVirtualize ? (
+                            <div
+                                className='relative w-full'
+                                style={{ height: mobileVirtualizer.getTotalSize() }}
+                            >
+                                {mobileVirtualizer.getVirtualItems().map((virtualRow) => {
+                                    const row = tableRows[virtualRow.index]
+                                    if (!row) return null
+                                    const cells = row.getVisibleCells()
+                                    const actionsCell = cells.find((c: Cell<any, unknown>) => c.column.id === 'actions')
+                                    const dataCells = cells.filter(
+                                        (c: Cell<any, unknown>) => c.column.id !== 'actions' && c.column.id !== 'select',
+                                    )
+                                    return (
+                                        <div
+                                            key={row.id}
+                                            data-index={virtualRow.index}
+                                            ref={mobileVirtualizer.measureElement}
+                                            data-state={row.getIsSelected() && 'selected'}
+                                            className={cn(
+                                                'absolute left-0 right-0 flex flex-col gap-1.5 rounded-lg border bg-card p-3 data-[state=selected]:border-primary/40',
+                                                onRowClick && 'cursor-pointer',
+                                            )}
+                                            style={{ transform: `translateY(${virtualRow.start}px)` }}
+                                            onClick={onRowClick ? () => onRowClick(row.original) : undefined}
+                                        >
+                                            {dataCells.map((cell: Cell<any, unknown>) => {
+                                                const cellMeta = cell.column.columnDef.meta as
+                                                    | { label?: string }
+                                                    | undefined
+                                                const header = cell.column.columnDef.header
+                                                const label =
+                                                    cellMeta?.label ??
+                                                    (typeof header === 'string' ? header : cell.column.id)
+                                                return (
+                                                    <div key={cell.id} className='flex items-start justify-between gap-3 text-sm'>
+                                                        <span className='shrink-0 text-muted-foreground'>{label}</span>
+                                                        <span className='min-w-0 overflow-hidden break-words text-right font-medium [&_[data-slot=badge]]:max-w-full [&_[data-slot=badge]]:whitespace-normal [&_[data-slot=badge]]:text-start'>
+                                                            {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                                                        </span>
+                                                    </div>
+                                                )
+                                            })}
+                                            {actionsCell && (
+                                                <div
+                                                    className='flex justify-end border-t pt-2'
+                                                    onClick={onRowClick ? (e: MouseEvent) => e.stopPropagation() : undefined}
+                                                >
+                                                    {flexRender(actionsCell.column.columnDef.cell, actionsCell.getContext())}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        ) : (
+                        tableRows.map((row: Row<any>) => {
                             const cells = row.getVisibleCells()
                             const actionsCell = cells.find((c: Cell<any, unknown>) => c.column.id === 'actions')
                             const dataCells = cells.filter(
@@ -1569,7 +1722,7 @@ export function DynamicTable({
                                     {actionsCell && (
                                         <div
                                             className='flex justify-end border-t pt-2'
-                                            onClick={onRowClick ? (e: React.MouseEvent) => e.stopPropagation() : undefined}
+                                            onClick={onRowClick ? (e: MouseEvent) => e.stopPropagation() : undefined}
                                         >
                                             {flexRender(actionsCell.column.columnDef.cell, actionsCell.getContext())}
                                         </div>
@@ -1577,6 +1730,7 @@ export function DynamicTable({
                                 </div>
                             )
                         })
+                        )
                     ) : (
                         <div className='flex flex-col items-center justify-center gap-2 rounded-lg border bg-card py-12 text-muted-foreground'>
                             <div className='flex h-16 w-16 items-center justify-center rounded-full bg-muted/50'>
@@ -1636,7 +1790,7 @@ export function DynamicTable({
                     {!isBulkDeleting && (
                         <AlertDialogFooter>
                             <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-                            <AlertDialogAction onClick={(e: React.MouseEvent) => { e.preventDefault(); confirmBulkDelete() }} className="bg-red-600 hover:bg-red-700">Eliminar todos</AlertDialogAction>
+                            <AlertDialogAction onClick={(e: MouseEvent) => { e.preventDefault(); confirmBulkDelete() }} className="bg-red-600 hover:bg-red-700">Eliminar todos</AlertDialogAction>
                         </AlertDialogFooter>
                     )}
                 </AlertDialogContent>

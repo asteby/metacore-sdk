@@ -28,6 +28,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@module-federation/runtime": "^2.5.0",
+    "@tanstack/react-virtual": "^3.14.13",
     "recharts": "^2.15.0",
     "zod": "^4.3.0"
   },
