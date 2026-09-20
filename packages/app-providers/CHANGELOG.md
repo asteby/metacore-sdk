@@ -1,5 +1,12 @@
 # @asteby/metacore-app-providers
 
+## 109.0.0
+
+### Patch Changes
+
+- @asteby/metacore-runtime-react@39.0.0
+- @asteby/metacore-pwa@0.6.4
+
 ## 108.0.1
 
 ### Patch Changes

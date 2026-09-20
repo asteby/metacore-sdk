@@ -1,5 +1,11 @@
 # @asteby/metacore-notifications
 
+## 28.0.0
+
+### Patch Changes
+
+- @asteby/metacore-websocket@2.0.0
+
 ## 27.0.0
 
 ### Patch Changes
