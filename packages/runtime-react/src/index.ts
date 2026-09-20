@@ -4,6 +4,7 @@
 // duplicate-symbol conflict; consumers who want the canonical SDK type
 // should import from `@asteby/metacore-sdk` directly.
 export * from './types'
+export * from './table-virtualization'
 export {
     LicenseGate,
     LicenseExpiryBanner,
