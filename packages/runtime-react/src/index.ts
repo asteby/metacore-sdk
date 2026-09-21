@@ -216,6 +216,29 @@ export {
     type RoleDef,
     type RoleInput,
 } from './permissions-manager'
+export {
+    applySidebarLayout,
+    collectFolderKeys,
+    folderAccessCapability,
+    coreRefKey,
+    addonModelRefKey,
+    addonUrlRefKey,
+    urlRefKey,
+    leafRefFor,
+    normalizeNavPath,
+    slugifyFolderKey,
+    isValidFolderKey,
+    layoutTreeFromNavGroups,
+    type CatalogLeaf,
+    type SidebarLayoutDoc,
+    type SidebarLayoutNode,
+    type AppliedNavGroup,
+    type AppliedNavItem,
+} from './apply-sidebar-layout'
+export {
+    SidebarLayoutManager,
+    type SidebarLayoutManagerProps,
+} from './sidebar-layout-manager'
 export * from './org-runtime-context'
 export * from './org-runtime-provider'
 export * from './navigation-builder'
