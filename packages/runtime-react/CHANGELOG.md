@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 39.2.1
+
+### Patch Changes
+
+- dcc37b2: Discord-style SidebarLayoutManager (drag, rename, resolveLabel).
+
 ## 39.2.0
 
 ### Minor Changes
