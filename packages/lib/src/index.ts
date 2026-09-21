@@ -3,6 +3,7 @@ export {
   formatDistance,
   formatRelative,
   getAllTimezones,
+  detectTimezone,
 } from './date'
 export type { TimezoneInfo } from './date'
 

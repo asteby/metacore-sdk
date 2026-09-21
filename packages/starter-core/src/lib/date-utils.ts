@@ -4,16 +4,26 @@ export interface TimezoneInfo {
     offset: string;
 }
 
+/** Browser IANA timezone (Intl) or '' — never a hardcoded country. */
+export function detectTimezone(): string {
+    try {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    } catch {
+        return '';
+    }
+}
+
+function fallbackTimezones(): string[] {
+    const detected = detectTimezone();
+    return detected && detected !== 'UTC' ? [detected, 'UTC'] : ['UTC'];
+}
+
 /**
  * Returns all supported IANA timezones with their current GMT offset
  */
 export function getAllTimezones(): TimezoneInfo[] {
     // @ts-ignore - Intl.supportedValuesOf is relatively new but supported in modern browsers
-    const timezones = typeof Intl !== 'undefined' && (Intl as any).supportedValuesOf ? (Intl as any).supportedValuesOf('timeZone') : [
-        'UTC', 'America/Mexico_City', 'America/Bogota', 'America/Santiago', 'America/Argentina/Buenos_Aires',
-        'America/New_York', 'America/Los_Angeles', 'Europe/Madrid', 'Europe/London', 'Europe/Paris',
-        'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Dubai', 'Australia/Sydney'
-    ];
+    const timezones = typeof Intl !== 'undefined' && (Intl as any).supportedValuesOf ? (Intl as any).supportedValuesOf('timeZone') : fallbackTimezones();
 
     const now = new Date();
 
