@@ -79,28 +79,33 @@ export function formatRelative(
 }
 
 /**
+ * The browser's IANA timezone (Intl), or '' when it cannot be detected. Never a
+ * hardcoded country: send this on signup/onboarding and let the backend
+ * validate it; empty means "let the resolution chain decide".
+ */
+export function detectTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+  } catch {
+    return ''
+  }
+}
+
+// Engines without Intl.supportedValuesOf: offer only what we can know for sure
+// (the detected zone and UTC) instead of a country-biased shortlist.
+function fallbackTimezones(): string[] {
+  const detected = detectTimezone()
+  return detected && detected !== 'UTC' ? [detected, 'UTC'] : ['UTC']
+}
+
+/**
  * Returns all supported IANA timezones with their current GMT offset.
  */
 export function getAllTimezones(): TimezoneInfo[] {
   const timezones: string[] =
     typeof Intl !== 'undefined' && (Intl as unknown as { supportedValuesOf?: (key: string) => string[] }).supportedValuesOf
       ? (Intl as unknown as { supportedValuesOf: (key: string) => string[] }).supportedValuesOf('timeZone')
-      : [
-          'UTC',
-          'America/Mexico_City',
-          'America/Bogota',
-          'America/Santiago',
-          'America/Argentina/Buenos_Aires',
-          'America/New_York',
-          'America/Los_Angeles',
-          'Europe/Madrid',
-          'Europe/London',
-          'Europe/Paris',
-          'Asia/Tokyo',
-          'Asia/Shanghai',
-          'Asia/Dubai',
-          'Australia/Sydney',
-        ]
+      : fallbackTimezones()
 
   const now = new Date()
 
