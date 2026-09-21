@@ -1,40 +1,52 @@
 /**
- * SidebarLayoutManager — admin editor for the org-wide sidebar overlay.
- * Transport-agnostic (loaders/mutators via props), same pattern as
- * PermissionsManager. Hosts wire fetchers to /api/org/sidebar-layout.
+ * SidebarLayoutManager — Discord-style org sidebar editor.
+ * The canvas IS the sidebar: sections, folders, leaves — drag, rename, nest.
  */
 import * as React from 'react'
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core'
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 import {
   ChevronDown,
   ChevronRight,
   FolderPlus,
   GripVertical,
+  Pencil,
+  Plus,
   RotateCcw,
   Save,
   Trash2,
   Eye,
   EyeOff,
+  Hash,
   Folder,
-  FileText,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   Button,
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
   Input,
-  Label,
   ScrollArea,
-  Badge,
 } from '@asteby/metacore-ui/primitives'
+import { cn } from '@asteby/metacore-ui/lib'
 import {
-  applySidebarLayout,
   collectFolderKeys,
   folderAccessCapability,
   layoutTreeFromNavGroups,
+  leafRefFor,
   slugifyFolderKey,
   type CatalogLeaf,
   type SidebarLayoutDoc,
@@ -45,12 +57,7 @@ export interface SidebarLayoutManagerProps {
   loadLayout: () => Promise<SidebarLayoutDoc>
   saveLayout: (doc: SidebarLayoutDoc) => Promise<void>
   resetLayout: () => Promise<void>
-  /** Live catalog of every leaf the shell can show (core + addons). */
   catalog: CatalogLeaf[]
-  /**
-   * Optional: current live nav groups — used by "Partir del menú actual" to
-   * seed a tree when the org has no layout yet.
-   */
   currentGroups?: Array<{
     title: string
     items: Array<{
@@ -60,8 +67,96 @@ export interface SidebarLayoutManagerProps {
       items?: Array<{ title: string; url: string; icon?: string }>
     }>
   }>
+  /** Resolve i18n keys / raw titles to human labels. */
+  resolveLabel?: (title: string) => string
   title?: string
   description?: string
+}
+
+type Path = number[]
+
+function pathKey(path: Path): string {
+  return path.length ? path.join('.') : 'root'
+}
+
+function getAt(tree: SidebarLayoutNode[], path: Path): SidebarLayoutNode | null {
+  let cur: SidebarLayoutNode[] = tree
+  let node: SidebarLayoutNode | null = null
+  for (const i of path) {
+    node = cur[i] ?? null
+    if (!node) return null
+    cur = node.children ?? []
+  }
+  return node
+}
+
+function setChildren(
+  tree: SidebarLayoutNode[],
+  parentPath: Path,
+  children: SidebarLayoutNode[],
+): SidebarLayoutNode[] {
+  if (parentPath.length === 0) return children
+  const clone = structuredClone(tree) as SidebarLayoutNode[]
+  let cur: SidebarLayoutNode[] = clone
+  for (let d = 0; d < parentPath.length - 1; d++) {
+    const n = cur[parentPath[d]!]
+    if (!n) return tree
+    n.children = n.children ?? []
+    cur = n.children
+  }
+  const parent = cur[parentPath[parentPath.length - 1]!]
+  if (!parent) return tree
+  parent.children = children
+  return clone
+}
+
+function removeAt(tree: SidebarLayoutNode[], path: Path): {
+  tree: SidebarLayoutNode[]
+  node: SidebarLayoutNode | null
+} {
+  if (path.length === 0) return { tree, node: null }
+  const parentPath = path.slice(0, -1)
+  const idx = path[path.length - 1]!
+  const parentKids =
+    parentPath.length === 0
+      ? [...tree]
+      : [...(getAt(tree, parentPath)?.children ?? [])]
+  const [node] = parentKids.splice(idx, 1)
+  return { tree: setChildren(tree, parentPath, parentKids), node: node ?? null }
+}
+
+function insertAt(
+  tree: SidebarLayoutNode[],
+  parentPath: Path,
+  index: number,
+  node: SidebarLayoutNode,
+): SidebarLayoutNode[] {
+  const kids =
+    parentPath.length === 0
+      ? [...tree]
+      : [...(getAt(tree, parentPath)?.children ?? [])]
+  const i = Math.max(0, Math.min(index, kids.length))
+  kids.splice(i, 0, node)
+  return setChildren(tree, parentPath, kids)
+}
+
+function updateAt(
+  tree: SidebarLayoutNode[],
+  path: Path,
+  patch: Partial<SidebarLayoutNode>,
+): SidebarLayoutNode[] {
+  const clone = structuredClone(tree) as SidebarLayoutNode[]
+  let cur: SidebarLayoutNode[] = clone
+  for (let d = 0; d < path.length - 1; d++) {
+    const n = cur[path[d]!]
+    if (!n) return tree
+    n.children = n.children ?? []
+    cur = n.children
+  }
+  const i = path[path.length - 1]!
+  if (!cur[i]) return tree
+  cur[i] = { ...cur[i]!, ...patch }
+  return clone
 }
 
 function collectUsedRefs(tree: SidebarLayoutNode[]): Set<string> {
@@ -76,58 +171,221 @@ function collectUsedRefs(tree: SidebarLayoutNode[]): Set<string> {
   return used
 }
 
-function updateAt(
-  tree: SidebarLayoutNode[],
-  path: number[],
-  fn: (node: SidebarLayoutNode) => SidebarLayoutNode | null,
-): SidebarLayoutNode[] {
-  if (path.length === 0) return tree
-  const [head, ...rest] = path
-  return tree
-    .map((n, i) => {
-      if (i !== head) return n
-      if (rest.length === 0) return fn(n)
-      const kids = updateAt(n.children ?? [], rest, fn)
-      return { ...n, children: kids }
-    })
-    .filter((n): n is SidebarLayoutNode => n != null)
-}
-
-function removeAt(tree: SidebarLayoutNode[], path: number[]): SidebarLayoutNode[] {
-  return updateAt(tree, path, () => null).filter(Boolean) as SidebarLayoutNode[]
-}
-
-function moveSibling(tree: SidebarLayoutNode[], path: number[], dir: -1 | 1): SidebarLayoutNode[] {
-  if (path.length === 0) return tree
-  const parentPath = path.slice(0, -1)
-  const idx = path[path.length - 1]!
-  const getList = (nodes: SidebarLayoutNode[], p: number[]): SidebarLayoutNode[] => {
-    if (p.length === 0) return nodes
-    let cur: SidebarLayoutNode[] = nodes
-    for (const i of p) {
-      cur = cur[i]?.children ?? []
-    }
-    return cur
+function labelOf(
+  node: SidebarLayoutNode,
+  catalogByRef: Map<string, CatalogLeaf>,
+  resolveLabel: (s: string) => string,
+): string {
+  if (node.type === 'leaf') {
+    const leaf = node.ref ? catalogByRef.get(node.ref) : undefined
+    const raw = node.title || leaf?.title || node.ref || '…'
+    return resolveLabel(raw)
   }
-  const list = [...getList(tree, parentPath)]
-  const j = idx + dir
-  if (j < 0 || j >= list.length) return tree
-  ;[list[idx], list[j]] = [list[j]!, list[idx]!]
-  if (parentPath.length === 0) return list
-  return updateAt(tree, parentPath, (n) => ({ ...n, children: list }))
+  return resolveLabel(node.title || node.key || '…')
 }
 
-function appendChild(
-  tree: SidebarLayoutNode[],
-  parentPath: number[],
-  child: SidebarLayoutNode,
-): SidebarLayoutNode[] {
-  if (parentPath.length === 0) return [...tree, child]
-  return updateAt(tree, parentPath, (n) => ({
-    ...n,
-    children: [...(n.children ?? []), child],
-  }))
+// ── Sortable row ──────────────────────────────────────────────────────────
+
+function SortableRow({
+  id,
+  depth,
+  kind,
+  label,
+  hidden,
+  collapsed,
+  onToggleCollapse,
+  onRename,
+  onToggleHidden,
+  onDelete,
+  onAddFolder,
+  onAddLeaf,
+  unusedLeaves,
+  children,
+}: {
+  id: string
+  depth: number
+  kind: 'group' | 'folder' | 'leaf'
+  label: string
+  hidden?: boolean
+  collapsed?: boolean
+  onToggleCollapse?: () => void
+  onRename: (next: string) => void
+  onToggleHidden: () => void
+  onDelete: () => void
+  onAddFolder?: () => void
+  onAddLeaf?: (ref: string) => void
+  unusedLeaves?: CatalogLeaf[]
+  children?: React.ReactNode
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id })
+  const [editing, setEditing] = React.useState(false)
+  const [draft, setDraft] = React.useState(label)
+  const inputRef = React.useRef<HTMLInputElement>(null)
+
+  React.useEffect(() => {
+    if (editing) {
+      setDraft(label)
+      requestAnimationFrame(() => inputRef.current?.select())
+    }
+  }, [editing, label])
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.45 : hidden ? 0.45 : 1,
+    paddingLeft: 8 + depth * 14,
+  }
+
+  const isCategory = kind === 'group' || kind === 'folder'
+
+  const commitRename = () => {
+    const next = draft.trim()
+    setEditing(false)
+    if (next && next !== label) onRename(next)
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className="group/row">
+      <div
+        className={cn(
+          'flex items-center gap-1 rounded-md py-1 pr-1',
+          isCategory ? 'mt-2 first:mt-0' : 'hover:bg-muted/50',
+          isDragging && 'bg-muted/80',
+        )}
+      >
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-foreground cursor-grab px-0.5 active:cursor-grabbing"
+          aria-label="Arrastrar"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="size-3.5 opacity-40 group-hover/row:opacity-100" />
+        </button>
+
+        {isCategory ? (
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground p-0.5"
+            onClick={onToggleCollapse}
+          >
+            {collapsed ? (
+              <ChevronRight className="size-3.5" />
+            ) : (
+              <ChevronDown className="size-3.5" />
+            )}
+          </button>
+        ) : (
+          <Hash className="text-muted-foreground size-3.5 shrink-0 opacity-60" />
+        )}
+
+        {kind === 'folder' ? (
+          <Folder className="size-3.5 shrink-0 text-amber-500/90" />
+        ) : null}
+
+        {editing ? (
+          <Input
+            ref={inputRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commitRename}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitRename()
+              if (e.key === 'Escape') setEditing(false)
+            }}
+            className="h-7 flex-1 text-sm"
+          />
+        ) : (
+          <button
+            type="button"
+            className={cn(
+              'min-w-0 flex-1 truncate text-left text-sm',
+              isCategory
+                ? 'text-muted-foreground text-[11px] font-semibold uppercase tracking-wider'
+                : 'font-medium',
+            )}
+            onDoubleClick={() => setEditing(true)}
+            title="Doble clic para renombrar"
+          >
+            {label}
+          </button>
+        )}
+
+        <div className="flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity group-hover/row:opacity-100 focus-within:opacity-100">
+          {kind === 'group' || kind === 'folder' ? (
+            <>
+              {onAddFolder ? (
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="size-6"
+                  title="Nueva carpeta"
+                  onClick={onAddFolder}
+                >
+                  <FolderPlus className="size-3" />
+                </Button>
+              ) : null}
+              {onAddLeaf && unusedLeaves && unusedLeaves.length > 0 ? (
+                <select
+                  className="border-input bg-background h-6 max-w-[110px] rounded border px-1 text-[10px]"
+                  defaultValue=""
+                  title="Agregar ítem"
+                  onChange={(e) => {
+                    const ref = e.target.value
+                    e.target.value = ''
+                    if (ref) onAddLeaf(ref)
+                  }}
+                >
+                  <option value="">+ ítem</option>
+                  {unusedLeaves.map((l) => (
+                    <option key={l.ref} value={l.ref}>
+                      {l.title}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
+            </>
+          ) : null}
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="size-6"
+            title="Renombrar"
+            onClick={() => setEditing(true)}
+          >
+            <Pencil className="size-3" />
+          </Button>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="size-6"
+            title={hidden ? 'Mostrar' : 'Ocultar'}
+            onClick={onToggleHidden}
+          >
+            {hidden ? <EyeOff className="size-3" /> : <Eye className="size-3" />}
+          </Button>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="text-destructive size-6"
+            title="Quitar"
+            onClick={onDelete}
+          >
+            <Trash2 className="size-3" />
+          </Button>
+        </div>
+      </div>
+      {!collapsed ? children : null}
+    </div>
+  )
 }
+
+// ── Manager ───────────────────────────────────────────────────────────────
 
 export function SidebarLayoutManager({
   loadLayout,
@@ -135,44 +393,141 @@ export function SidebarLayoutManager({
   resetLayout,
   catalog,
   currentGroups,
+  resolveLabel = (s) => s,
   title = 'Menú lateral',
-  description = 'Organizá carpetas y el orden del sidebar para toda la organización. Los permisos de cada carpeta aparecen en Permisos.',
+  description = 'Arrastrá, renombrá y agrupá como en Discord. Así lo verá toda la organización.',
 }: SidebarLayoutManagerProps) {
   const [tree, setTree] = React.useState<SidebarLayoutNode[]>([])
-  const [baseline, setBaseline] = React.useState<string>('[]')
+  const [baseline, setBaseline] = React.useState('[]')
   const [loading, setLoading] = React.useState(true)
   const [saving, setSaving] = React.useState(false)
-  const [newFolderTitle, setNewFolderTitle] = React.useState('')
-  const [expanded, setExpanded] = React.useState<Record<string, boolean>>({})
+  const [collapsed, setCollapsed] = React.useState<Record<string, boolean>>({})
+  const [activeId, setActiveId] = React.useState<string | null>(null)
+  const [newCategory, setNewCategory] = React.useState('')
+
+  const catalogByRef = React.useMemo(() => {
+    const m = new Map<string, CatalogLeaf>()
+    for (const l of catalog) {
+      m.set(l.ref, { ...l, title: resolveLabel(l.title) })
+      for (const a of l.aliases ?? []) m.set(a, m.get(l.ref)!)
+    }
+    return m
+  }, [catalog, resolveLabel])
+
+  const unused = React.useMemo(() => {
+    const used = collectUsedRefs(tree)
+    return catalog
+      .filter((l) => !used.has(l.ref) && !(l.aliases ?? []).some((a) => used.has(a)))
+      .map((l) => ({ ...l, title: resolveLabel(l.title) }))
+  }, [catalog, tree, resolveLabel])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  )
+
+  const seedFromCurrent = React.useCallback(() => {
+    if (!currentGroups?.length) {
+      toast.message('No hay menú actual para copiar')
+      return []
+    }
+    return layoutTreeFromNavGroups(currentGroups, (u) => leafRefFor(u))
+  }, [currentGroups])
 
   const reload = React.useCallback(async () => {
     setLoading(true)
     try {
       const doc = await loadLayout()
-      const t = doc.tree ?? []
+      let t = doc.tree ?? []
+      // Empty overlay → show live menu as editable draft (Discord empty-server feel).
+      if (t.length === 0 && currentGroups?.length) {
+        t = seedFromCurrent()
+        setBaseline('[]') // still "unsaved overlay"
+      } else {
+        setBaseline(JSON.stringify(t))
+      }
       setTree(t)
-      setBaseline(JSON.stringify(t))
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'No se pudo cargar el layout')
+      toast.error(e instanceof Error ? e.message : 'No se pudo cargar el menú')
     } finally {
       setLoading(false)
     }
-  }, [loadLayout])
+  }, [loadLayout, currentGroups, seedFromCurrent])
 
   React.useEffect(() => {
     void reload()
   }, [reload])
 
   const dirty = JSON.stringify(tree) !== baseline
-  const used = React.useMemo(() => collectUsedRefs(tree), [tree])
-  const unused = React.useMemo(
-    () => catalog.filter((l) => !used.has(l.ref) && !(l.aliases ?? []).some((a) => used.has(a))),
-    [catalog, used],
-  )
   const folderKeys = React.useMemo(() => collectFolderKeys(tree), [tree])
-  const preview = React.useMemo(() => applySidebarLayout(catalog, tree), [catalog, tree])
 
-  const pathKey = (path: number[]) => path.join('.')
+  // Flat id → path index for DnD (ids are path keys)
+  const idToPath = React.useMemo(() => {
+    const map = new Map<string, Path>()
+    const walk = (nodes: SidebarLayoutNode[], parent: Path) => {
+      nodes.forEach((_, i) => {
+        const path = [...parent, i]
+        map.set(pathKey(path), path)
+        const n = nodes[i]!
+        if (n.children?.length) walk(n.children, path)
+      })
+    }
+    walk(tree, [])
+    return map
+  }, [tree])
+
+  const handleDragStart = (e: DragStartEvent) => {
+    setActiveId(String(e.active.id))
+  }
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    setActiveId(null)
+    const { active, over } = e
+    if (!over || active.id === over.id) return
+    const fromPath = idToPath.get(String(active.id))
+    const toPath = idToPath.get(String(over.id))
+    if (!fromPath || !toPath) return
+
+    // Same parent → reorder siblings
+    const fromParent = fromPath.slice(0, -1)
+    const toParent = toPath.slice(0, -1)
+    if (pathKey(fromParent) === pathKey(toParent)) {
+      const kids =
+        fromParent.length === 0
+          ? [...tree]
+          : [...(getAt(tree, fromParent)?.children ?? [])]
+      const oldIndex = fromPath[fromPath.length - 1]!
+      const newIndex = toPath[toPath.length - 1]!
+      setTree(setChildren(tree, fromParent, arrayMove(kids, oldIndex, newIndex)))
+      return
+    }
+
+    // Different parent → move node under target's parent at target index
+    // (or into target if it's a folder/group)
+    const overNode = getAt(tree, toPath)
+    let destParent = toParent
+    let destIndex = toPath[toPath.length - 1]!
+    if (overNode && (overNode.type === 'group' || overNode.type === 'folder')) {
+      destParent = toPath
+      destIndex = overNode.children?.length ?? 0
+    }
+
+    // Prevent dropping into own descendant
+    const fromKey = pathKey(fromPath)
+    if (pathKey(destParent).startsWith(fromKey + '.') || pathKey(destParent) === fromKey) {
+      return
+    }
+
+    setTree((prev) => {
+      const { tree: without, node } = removeAt(prev, fromPath)
+      if (!node) return prev
+      // Recompute dest index if we removed from earlier sibling in same parent
+      let idx = destIndex
+      if (pathKey(fromParent) === pathKey(destParent) && fromPath[fromPath.length - 1]! < destIndex) {
+        idx = Math.max(0, destIndex - 1)
+      }
+      return insertAt(without, destParent, idx, node)
+    })
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -191,9 +546,10 @@ export function SidebarLayoutManager({
     setSaving(true)
     try {
       await resetLayout()
-      setTree([])
+      const seeded = seedFromCurrent()
+      setTree(seeded)
       setBaseline('[]')
-      toast.success('Menú restaurado al default (addons + core)')
+      toast.success('Overlay restaurado — mostrando el menú default')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Error al resetear')
     } finally {
@@ -201,318 +557,273 @@ export function SidebarLayoutManager({
     }
   }
 
-  const seedFromCurrent = () => {
-    if (!currentGroups?.length) {
-      toast.message('No hay menú actual para copiar')
-      return
-    }
-    const seeded = layoutTreeFromNavGroups(currentGroups)
-    setTree(seeded)
-    toast.message('Árbol partido del menú actual — guardá para aplicar')
-  }
-
-  const addRootFolder = () => {
-    const titleText = newFolderTitle.trim() || 'Nueva carpeta'
-    const key = slugifyFolderKey(titleText)
+  const addRootCategory = () => {
+    const name = newCategory.trim() || 'Nueva sección'
+    const key = slugifyFolderKey(name)
     setTree((t) => [
       ...t,
       {
         type: 'group',
-        key: `group_${key}`,
-        title: titleText,
-        children: [{ type: 'folder', key, title: titleText, icon: 'Folder', children: [] }],
+        key: `group_${key}_${Date.now() % 10000}`,
+        title: name,
+        children: [],
       },
     ])
-    setNewFolderTitle('')
+    setNewCategory('')
   }
 
-  const addLeafTo = (parentPath: number[], leaf: CatalogLeaf) => {
-    setTree((t) =>
-      appendChild(t, parentPath, {
-        type: 'leaf',
-        ref: leaf.ref,
-        title: leaf.title,
-        icon: leaf.icon,
-      }),
-    )
-  }
-
-  const renderNode = (node: SidebarLayoutNode, path: number[]): React.ReactNode => {
-    const k = pathKey(path)
-    const isOpen = expanded[k] ?? true
-    const isFolderish = node.type === 'group' || node.type === 'folder'
-
+  const renderList = (nodes: SidebarLayoutNode[], parentPath: Path): React.ReactNode => {
+    const ids = nodes.map((_, i) => pathKey([...parentPath, i]))
     return (
-      <div key={k} className="border-border/60 rounded-md border bg-background/50">
-        <div className="flex items-center gap-1 px-2 py-1.5">
-          {isFolderish ? (
-            <button
-              type="button"
-              className="text-muted-foreground hover:text-foreground p-0.5"
-              onClick={() => setExpanded((e) => ({ ...e, [k]: !isOpen }))}
+      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        {nodes.map((node, i) => {
+          const path = [...parentPath, i]
+          const id = pathKey(path)
+          const depth = parentPath.length
+          const isOpen = !(collapsed[id] ?? false)
+          const lbl = labelOf(node, catalogByRef, resolveLabel)
+
+          return (
+            <SortableRow
+              key={id}
+              id={id}
+              depth={depth}
+              kind={node.type}
+              label={lbl}
+              hidden={node.hidden}
+              collapsed={!isOpen}
+              onToggleCollapse={() =>
+                setCollapsed((c) => ({ ...c, [id]: !(c[id] ?? false) }))
+              }
+              onRename={(next) => setTree((t) => updateAt(t, path, { title: next }))}
+              onToggleHidden={() =>
+                setTree((t) => updateAt(t, path, { hidden: !node.hidden }))
+              }
+              onDelete={() => setTree((t) => removeAt(t, path).tree)}
+              onAddFolder={
+                node.type === 'group' || node.type === 'folder'
+                  ? () => {
+                      const key = slugifyFolderKey(`carpeta_${Date.now() % 1000}`)
+                      setTree((t) =>
+                        insertAt(t, path, node.children?.length ?? 0, {
+                          type: 'folder',
+                          key,
+                          title: 'Nueva carpeta',
+                          icon: 'Folder',
+                          children: [],
+                        }),
+                      )
+                      setCollapsed((c) => ({ ...c, [id]: false }))
+                    }
+                  : undefined
+              }
+              onAddLeaf={
+                node.type === 'group' || node.type === 'folder'
+                  ? (ref) => {
+                      const leaf = catalog.find((l) => l.ref === ref)
+                      setTree((t) =>
+                        insertAt(t, path, node.children?.length ?? 0, {
+                          type: 'leaf',
+                          ref,
+                          title: leaf?.title,
+                          icon: leaf?.icon,
+                        }),
+                      )
+                    }
+                  : undefined
+              }
+              unusedLeaves={unused}
             >
-              {isOpen ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
-            </button>
-          ) : (
-            <GripVertical className="text-muted-foreground size-4 shrink-0 opacity-40" />
-          )}
-          {node.type === 'folder' ? (
-            <Folder className="text-amber-600 size-4 shrink-0" />
-          ) : node.type === 'leaf' ? (
-            <FileText className="text-muted-foreground size-4 shrink-0" />
-          ) : null}
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">
-            {node.title || node.key || node.ref}
-          </span>
-          {node.type === 'folder' && node.key ? (
-            <Badge variant="outline" className="font-mono text-[10px]">
-              {folderAccessCapability(node.key)}
-            </Badge>
-          ) : null}
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="size-7"
-            title={node.hidden ? 'Mostrar' : 'Ocultar'}
-            onClick={() =>
-              setTree((t) => updateAt(t, path, (n) => ({ ...n, hidden: !n.hidden })))
-            }
-          >
-            {node.hidden ? <EyeOff className="size-3.5" /> : <Eye className="size-3.5" />}
-          </Button>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="size-7"
-            onClick={() => setTree((t) => moveSibling(t, path, -1))}
-          >
-            ↑
-          </Button>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="size-7"
-            onClick={() => setTree((t) => moveSibling(t, path, 1))}
-          >
-            ↓
-          </Button>
-          <Button
-            type="button"
-            size="icon"
-            variant="ghost"
-            className="text-destructive size-7"
-            onClick={() => setTree((t) => removeAt(t, path))}
-          >
-            <Trash2 className="size-3.5" />
-          </Button>
-        </div>
-        {isFolderish && isOpen ? (
-          <div className="border-border/40 space-y-1 border-t px-2 py-2 pl-6">
-            {(node.children ?? []).map((child, i) => renderNode(child, [...path, i]))}
-            {unused.length > 0 ? (
-              <select
-                className="border-input bg-background w-full rounded-md border px-2 py-1 text-xs"
-                defaultValue=""
-                onChange={(e) => {
-                  const ref = e.target.value
-                  e.target.value = ''
-                  const leaf = catalog.find((l) => l.ref === ref)
-                  if (leaf) addLeafTo(path, leaf)
-                }}
-              >
-                <option value="">+ Agregar ítem…</option>
-                {unused.map((l) => (
-                  <option key={l.ref} value={l.ref}>
-                    {l.title} ({l.ref})
-                  </option>
-                ))}
-              </select>
-            ) : null}
-            {node.type === 'group' ? (
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-7 text-xs"
-                onClick={() => {
-                  const titleText = 'Nueva carpeta'
-                  const key = slugifyFolderKey(`${titleText}_${path.join('')}_${Date.now() % 1000}`)
-                  setTree((t) =>
-                    appendChild(t, path, {
-                      type: 'folder',
-                      key,
-                      title: titleText,
-                      icon: 'Folder',
-                      children: [],
-                    }),
-                  )
-                }}
-              >
-                <FolderPlus className="mr-1 size-3.5" />
-                Subcarpeta
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
+              {node.type !== 'leaf' && isOpen
+                ? renderList(node.children ?? [], path)
+                : null}
+            </SortableRow>
+          )
+        })}
+      </SortableContext>
     )
   }
+
+  const activeLabel = activeId
+    ? (() => {
+        const p = idToPath.get(activeId)
+        if (!p) return null
+        const n = getAt(tree, p)
+        return n ? labelOf(n, catalogByRef, resolveLabel) : null
+      })()
+    : null
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="space-y-1">
           <h2 className="text-xl font-semibold tracking-tight">{title}</h2>
-          <p className="text-muted-foreground max-w-2xl text-sm">{description}</p>
+          <p className="text-muted-foreground max-w-xl text-sm">{description}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" size="sm" onClick={seedFromCurrent}>
-            Partir del menú actual
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={saving}
+            onClick={() => {
+              setTree(seedFromCurrent())
+              toast.message('Árbol recargado desde el menú actual')
+            }}
+          >
+            Recargar menú actual
           </Button>
-          <Button type="button" variant="outline" size="sm" disabled={saving} onClick={() => void handleReset()}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={saving}
+            onClick={() => void handleReset()}
+          >
             <RotateCcw className="mr-1 size-3.5" />
             Restaurar default
           </Button>
-          <Button type="button" size="sm" disabled={!dirty || saving} onClick={() => void handleSave()}>
+          <Button
+            type="button"
+            size="sm"
+            disabled={!dirty || saving}
+            onClick={() => void handleSave()}
+          >
             <Save className="mr-1 size-3.5" />
-            {saving ? 'Guardando…' : dirty ? 'Guardar' : 'Guardado'}
+            {saving ? 'Guardando…' : dirty ? 'Guardar cambios' : 'Guardado'}
           </Button>
         </div>
       </div>
 
       {loading ? (
-        <p className="text-muted-foreground text-sm">Cargando…</p>
+        <p className="text-muted-foreground text-sm">Cargando menú…</p>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Árbol del menú</CardTitle>
-              <CardDescription>
-                Carpetas nuevas otorgan el permiso{' '}
-                <code className="text-xs">folder.&lt;key&gt;.access</code>.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex gap-2">
-                <div className="flex-1 space-y-1">
-                  <Label className="text-xs">Nueva sección + carpeta</Label>
-                  <Input
-                    value={newFolderTitle}
-                    onChange={(e) => setNewFolderTitle(e.target.value)}
-                    placeholder="Configuración"
-                  />
-                </div>
-                <Button type="button" className="mt-5" size="sm" onClick={addRootFolder}>
-                  <FolderPlus className="mr-1 size-3.5" />
-                  Crear
-                </Button>
-              </div>
-              <ScrollArea className="h-[420px] pr-2">
-                <div className="space-y-2">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_240px]">
+          {/* Discord-like sidebar canvas */}
+          <div className="bg-muted/20 border-border overflow-hidden rounded-xl border">
+            <div className="border-border/60 flex items-center justify-between border-b px-3 py-2">
+              <span className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                Vista del menú
+              </span>
+              {baseline === '[]' && dirty ? (
+                <span className="text-amber-600 text-[11px]">Sin guardar · borrador del menú actual</span>
+              ) : dirty ? (
+                <span className="text-amber-600 text-[11px]">Cambios sin guardar</span>
+              ) : (
+                <span className="text-muted-foreground text-[11px]">
+                  {folderKeys.length
+                    ? `${folderKeys.length} carpeta(s) con permiso`
+                    : 'Layout activo'}
+                </span>
+              )}
+            </div>
+
+            <ScrollArea className="h-[min(70vh,640px)]">
+              <div className="p-2 pb-4">
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                >
                   {tree.length === 0 ? (
-                    <p className="text-muted-foreground text-sm">
-                      Sin overlay — el sidebar usa el merge default. Partí del menú actual o
-                      creá una carpeta.
+                    <p className="text-muted-foreground px-3 py-8 text-center text-sm">
+                      Menú vacío. Creá una sección o recargá el menú actual.
                     </p>
                   ) : (
-                    tree.map((n, i) => renderNode(n, [i]))
+                    renderList(tree, [])
                   )}
-                </div>
-              </ScrollArea>
-              {folderKeys.length > 0 ? (
-                <p className="text-muted-foreground text-xs">
-                  Carpetas con permiso: {folderKeys.map((k) => folderAccessCapability(k)).join(', ')}
-                </p>
-              ) : null}
-            </CardContent>
-          </Card>
+                  <DragOverlay>
+                    {activeLabel ? (
+                      <div className="bg-background border-border rounded-md border px-3 py-1.5 text-sm shadow-lg">
+                        {activeLabel}
+                      </div>
+                    ) : null}
+                  </DragOverlay>
+                </DndContext>
 
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Catálogo sin usar / vista previa</CardTitle>
-              <CardDescription>
-                Ítems disponibles para colocar. La vista previa aplica el overlay sobre el
-                catálogo vivo.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <ScrollArea className="h-[200px] rounded-md border p-2">
-                {unused.length === 0 ? (
-                  <p className="text-muted-foreground text-xs">Todos los ítems están en el árbol.</p>
-                ) : (
-                  <ul className="space-y-1">
-                    {unused.map((l) => (
-                      <li key={l.ref} className="flex items-center justify-between gap-2 text-xs">
-                        <span className="truncate">
-                          {l.title}{' '}
-                          <span className="text-muted-foreground font-mono">{l.ref}</span>
-                        </span>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          className="h-6 shrink-0 text-xs"
-                          onClick={() => {
-                            if (tree.length === 0) {
-                              setTree([
-                                {
-                                  type: 'group',
-                                  key: 'sidebar.general',
-                                  title: 'sidebar.general',
-                                  children: [
-                                    { type: 'leaf', ref: l.ref, title: l.title, icon: l.icon },
-                                  ],
-                                },
-                              ])
-                            } else {
-                              addLeafTo([0], l)
-                            }
-                          }}
-                        >
-                          +
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </ScrollArea>
-              <div>
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Preview
-                </p>
-                {!preview ? (
-                  <p className="text-muted-foreground text-sm">Default merge (sin overlay).</p>
-                ) : (
-                  <ul className="space-y-2 text-sm">
-                    {preview.map((g) => (
-                      <li key={g.title}>
-                        <div className="text-muted-foreground text-xs font-semibold uppercase tracking-wide">
-                          {g.title}
-                        </div>
-                        <ul className="mt-1 space-y-0.5 pl-2">
-                          {g.items.map((it) => (
-                            <li key={`${it.title}-${it.url}`}>
-                              {it.folderKey ? `📁 ${it.title}` : it.title}
-                              {it.items?.length ? (
-                                <ul className="text-muted-foreground pl-4 text-xs">
-                                  {it.items.map((c) => (
-                                    <li key={c.ref || c.url}>{c.title}</li>
-                                  ))}
-                                </ul>
-                              ) : null}
-                            </li>
-                          ))}
-                        </ul>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <div className="mt-3 flex gap-2 px-2">
+                  <Input
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    placeholder="Nombre de sección…"
+                    className="h-8 text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') addRootCategory()
+                    }}
+                  />
+                  <Button type="button" size="sm" className="h-8 shrink-0" onClick={addRootCategory}>
+                    <Plus className="mr-1 size-3.5" />
+                    Sección
+                  </Button>
+                </div>
               </div>
-            </CardContent>
-          </Card>
+            </ScrollArea>
+          </div>
+
+          {/* Unused pool */}
+          <div className="bg-muted/10 border-border flex flex-col overflow-hidden rounded-xl border">
+            <div className="border-border/60 border-b px-3 py-2">
+              <p className="text-muted-foreground text-[11px] font-semibold uppercase tracking-wider">
+                Sin colocar
+              </p>
+              <p className="text-muted-foreground mt-0.5 text-[11px]">
+                Agregalos desde el menú + de cada sección
+              </p>
+            </div>
+            <ScrollArea className="flex-1">
+              <ul className="space-y-1 p-2">
+                {unused.length === 0 ? (
+                  <li className="text-muted-foreground px-1 py-4 text-center text-xs">
+                    Todo está en el menú
+                  </li>
+                ) : (
+                  unused.map((l) => (
+                    <li key={l.ref}>
+                      <button
+                        type="button"
+                        className="hover:bg-muted/60 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs"
+                        title={l.ref}
+                        onClick={() => {
+                          if (tree.length === 0) {
+                            setTree([
+                              {
+                                type: 'group',
+                                key: 'sidebar.general',
+                                title: 'General',
+                                children: [
+                                  { type: 'leaf', ref: l.ref, title: l.title, icon: l.icon },
+                                ],
+                              },
+                            ])
+                          } else {
+                            setTree((t) =>
+                              insertAt(t, [0], t[0]?.children?.length ?? 0, {
+                                type: 'leaf',
+                                ref: l.ref,
+                                title: l.title,
+                                icon: l.icon,
+                              }),
+                            )
+                          }
+                        }}
+                      >
+                        <Hash className="text-muted-foreground size-3 shrink-0" />
+                        <span className="truncate font-medium">{l.title}</span>
+                        <Plus className="text-muted-foreground ml-auto size-3 shrink-0 opacity-50" />
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </ScrollArea>
+            {folderKeys.length > 0 ? (
+              <div className="border-border/60 text-muted-foreground border-t px-3 py-2 text-[10px] leading-relaxed">
+                Permisos:{' '}
+                {folderKeys.map((k) => folderAccessCapability(k)).join(', ')}
+              </div>
+            ) : null}
+          </div>
         </div>
       )}
     </div>
