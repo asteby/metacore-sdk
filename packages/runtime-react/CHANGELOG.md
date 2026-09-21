@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 39.1.1
+
+### Patch Changes
+
+- a05f1bb: DynamicTable: un 403 en el endpoint de lista ya no se enmascara como "No se encontraron resultados"; muestra "Sin permiso para ver este módulo" (i18n `dynamic.forbidden_title` / `dynamic.forbidden_hint`) sin disparar refetch.
+
 ## 39.1.0
 
 ### Minor Changes
