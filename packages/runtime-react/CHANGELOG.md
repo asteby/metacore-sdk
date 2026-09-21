@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 39.2.0
+
+### Minor Changes
+
+- c935a91: Sidebar layout primitives: `applySidebarLayout` + `<SidebarLayoutManager>` for org-wide folder/reorder overlays (`folder.<key>.access`).
+
 ## 39.1.1
 
 ### Patch Changes
