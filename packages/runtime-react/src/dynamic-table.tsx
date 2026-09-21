@@ -260,6 +260,12 @@ export interface DynamicTableProps {
     virtualizeRows?: boolean | number
 }
 
+/** True when an api-client error is an HTTP 403 (axios-style or fetch-style). */
+function isForbiddenError(error: unknown): boolean {
+    const e = error as { response?: { status?: number }; status?: number } | null
+    return e?.response?.status === 403 || e?.status === 403
+}
+
 export function DynamicTable({
     model,
     endpoint,
@@ -322,6 +328,10 @@ export function DynamicTable({
     // even if meta.total says otherwise (count/list drift would otherwise
     // keep the sentinel re-firing forever). Reset by any page-1 fetch.
     const [infExhausted, setInfExhausted] = useState(false)
+    // The list endpoint answered 403: the user lacks read permission on this
+    // model. Rendered as "no permission" instead of masquerading as an empty
+    // list. Purely display state — never a fetch dependency (no refetch loop).
+    const [forbidden, setForbidden] = useState(false)
     const infPageRef = useRef(1)
     const [optionsMap, setOptionsMap] = useState<Map<string, any[]>>(new Map())
 
@@ -859,6 +869,7 @@ export function DynamicTable({
                 ...buildFilterParams(),
             }
             const res = await api.get(endpoint || `/data/${model}`, { params }) as { data: ApiResponse<any[]> }
+            setForbidden(false)
             if (res.data.success) {
                 const rows = res.data.data || []
                 setData(rows)
@@ -874,7 +885,13 @@ export function DynamicTable({
                 }
             }
         } catch (error) {
-            console.error('Error al cargar los datos', error)
+            if (isForbiddenError(error)) {
+                setForbidden(true)
+                setData([])
+                setRowCount(0)
+            } else {
+                console.error('Error al cargar los datos', error)
+            }
         } finally {
             setLoadingData(false)
         }
@@ -922,6 +939,7 @@ export function DynamicTable({
                 const res = (await api.get(endpoint || `/data/${model}`, {
                     params,
                 })) as { data: ApiResponse<any[]> }
+                setForbidden(false)
                 if (res.data.success) {
                     const rows = res.data.data || []
                     setData((prev) => (append ? dedupeById(prev, rows) : rows))
@@ -941,7 +959,16 @@ export function DynamicTable({
                     setInfExhausted(rows.length < infPageSize)
                 }
             } catch (error) {
-                console.error('Error al cargar los datos', error)
+                if (isForbiddenError(error)) {
+                    setForbidden(true)
+                    if (!append) {
+                        setData([])
+                        setRowCount(0)
+                    }
+                    setInfExhausted(true)
+                } else {
+                    console.error('Error al cargar los datos', error)
+                }
             } finally {
                 if (append) setLoadingMore(false)
                 else setLoadingData(false)
@@ -1546,8 +1573,17 @@ export function DynamicTable({
                                                 <Inbox className="h-10 w-10" />
                                             </div>
                                             <div className="flex flex-col items-center gap-1">
-                                                <h3 className="text-lg font-semibold text-foreground">No se encontraron resultados</h3>
-                                                <p className="text-sm text-muted-foreground">No hay datos para mostrar en este momento.</p>
+                                                {forbidden ? (
+                                                    <>
+                                                        <h3 className="text-lg font-semibold text-foreground" role="alert">{t('dynamic.forbidden_title', { defaultValue: 'Sin permiso para ver este módulo' })}</h3>
+                                                        <p className="text-sm text-muted-foreground">{t('dynamic.forbidden_hint', { defaultValue: 'Tu rol no tiene acceso de lectura a estos datos. Pide acceso a un administrador.' })}</p>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <h3 className="text-lg font-semibold text-foreground">No se encontraron resultados</h3>
+                                                        <p className="text-sm text-muted-foreground">No hay datos para mostrar en este momento.</p>
+                                                    </>
+                                                )}
                                             </div>
                                         </div>
                                     </TableCell>
@@ -1736,8 +1772,17 @@ export function DynamicTable({
                             <div className='flex h-16 w-16 items-center justify-center rounded-full bg-muted/50'>
                                 <Inbox className='h-8 w-8' />
                             </div>
-                            <h3 className='text-base font-semibold text-foreground'>No se encontraron resultados</h3>
-                            <p className='text-sm text-muted-foreground'>No hay datos para mostrar en este momento.</p>
+                            {forbidden ? (
+                                <>
+                                    <h3 className='text-base font-semibold text-foreground' role='alert'>{t('dynamic.forbidden_title', { defaultValue: 'Sin permiso para ver este módulo' })}</h3>
+                                    <p className='text-sm text-muted-foreground'>{t('dynamic.forbidden_hint', { defaultValue: 'Tu rol no tiene acceso de lectura a estos datos. Pide acceso a un administrador.' })}</p>
+                                </>
+                            ) : (
+                                <>
+                                    <h3 className='text-base font-semibold text-foreground'>No se encontraron resultados</h3>
+                                    <p className='text-sm text-muted-foreground'>No hay datos para mostrar en este momento.</p>
+                                </>
+                            )}
                         </div>
                     )}
                     {infiniteScroll && (
