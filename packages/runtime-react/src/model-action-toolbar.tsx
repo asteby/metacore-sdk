@@ -166,6 +166,11 @@ export function ModelActionToolbar({
                         <Button
                             key={a.key}
                             variant={isCreate ? 'default' : 'outline'}
+                            data-aby-target={
+                                isCreate
+                                    ? `model.${model}.create`
+                                    : `model.${model}.action.${a.key}`
+                            }
                             onClick={() => {
                                 onActionIntent?.(a)
                                 setActive(toActionMetadata(a))
