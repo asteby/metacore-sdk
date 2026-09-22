@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 39.2.2
+
+### Patch Changes
+
+- 4556375: Add data-aby-target model.{Model}.create on ModelActionToolbar create button for Aby UI tours.
+
 ## 39.2.1
 
 ### Patch Changes
