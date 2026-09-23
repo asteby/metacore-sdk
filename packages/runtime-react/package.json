@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-runtime-react",
-  "version": "39.2.3",
+  "version": "39.2.4",
   "description": "React runtime for metacore hosts — renders addon contributions dynamically",
   "repository": {
     "type": "git",
