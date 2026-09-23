@@ -1077,6 +1077,13 @@ export function DynamicRecordDialog({
                                 blow the two columns past the dialog width. */}
                             <form
                                 id={formId}
+                                // Stable Aby / guidance contract: unique id={formId}
+                                // keeps nested create footers from submitting the
+                                // parent, while data-aby-* lets tours find the
+                                // open form without a hardcoded id.
+                                data-aby-record-form=""
+                                data-aby-model={model}
+                                data-aby-mode={mode}
                                 onSubmit={handleSubmit}
                                 className="grid gap-y-4"
                             >
@@ -1264,7 +1271,7 @@ function FieldRow({ field, record, value, mode, onChange, error, locked }: Field
     const isEditReadonly = (mode === 'edit' && !!field.readonly) || !!locked
 
     return (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5" data-aby-field={field.key}>
             <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
                 {field.label}
                 {field.required && mode !== 'view' && !isEditReadonly && (
