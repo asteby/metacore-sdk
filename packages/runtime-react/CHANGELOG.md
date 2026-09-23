@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 39.2.3
+
+### Patch Changes
+
+- caf2015: Always revalidate `/metadata/table` on DynamicCRUDPage cache hit and replace the catalog on `prefetchAll`, so addon toolbar actions cannot stick after HotRegister while zustand localStorage still holds the pre-upgrade snapshot.
+
 ## 39.2.2
 
 ### Patch Changes
