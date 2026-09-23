@@ -127,9 +127,13 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
     const [openImport, setOpenImport] = useState(false)
 
     useEffect(() => {
+        // Stale-while-revalidate: paint from the persisted cache immediately,
+        // then ALWAYS fetch /metadata/table/:model. Returning early on a cache
+        // hit left hosts stranded on pre-upgrade actions (missing toolbar
+        // buttons after an addon HotRegister) because hard refresh does not
+        // clear zustand localStorage.
         if (cachedMeta) {
             setMetadata(cachedMeta)
-            return
         }
         let cancelled = false
         api
@@ -140,7 +144,7 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
                 setMetadata(meta ?? null)
             })
             .catch(() => {
-                if (!cancelled) setMetadata(null)
+                if (!cancelled && !cachedMeta) setMetadata(null)
             })
         return () => {
             cancelled = true

@@ -3,6 +3,16 @@
 // metadata-cache store so the runtime-react package no longer depends on
 // a host-specific alias.
 //
+// Contract (stale-while-revalidate):
+//   - Cache entries are a FIRST PAINT hint only.
+//   - Every consumer (DynamicTable, DynamicCRUDPage, ModelActionToolbar hosts)
+//     MUST still GET /metadata/table/:model and apply the live payload —
+//     including `actions[]`. Skipping the live fetch on a cache hit is how
+//     cross-addon toolbar actions disappear after an addon upgrade while
+//     localStorage still holds the pre-upgrade catalog.
+//   - `prefetchAll` replaces the catalog from `/metadata/all` and advances
+//     `metadataVersion`; a version change wipes the prior cache.
+//
 // The prefetchAll() method needs an `api` client (axios-like); we keep that
 // as an injectable parameter so the store stays host-agnostic. If a caller
 // never invokes prefetchAll, the `api` dep is not required.
@@ -148,10 +158,13 @@ export const useMetadataCache = create<MetadataCacheState>()(
 
                     const serverVersion = version || ''
                     const localVersion = get().metadataVersion
-                    const versionChanged = serverVersion !== localVersion && localVersion !== ''
 
-                    const newCache: Record<string, TableMetadata> = versionChanged ? {} : { ...get().cache }
-                    const newModalCache: Record<string, TableMetadata> = versionChanged ? {} : { ...get().modalCache }
+                    // Always rebuild from the server catalog. Merging into a
+                    // persisted cache left hosts with pre-upgrade actions /
+                    // columns after an addon HotRegister while the tab (or
+                    // localStorage) stayed open.
+                    const newCache: Record<string, TableMetadata> = {}
+                    const newModalCache: Record<string, TableMetadata> = {}
 
                     if (tables) {
                         for (const [key, meta] of Object.entries(tables)) {
@@ -167,7 +180,7 @@ export const useMetadataCache = create<MetadataCacheState>()(
                     set({
                         cache: newCache,
                         modalCache: newModalCache,
-                        metadataVersion: serverVersion,
+                        metadataVersion: serverVersion || localVersion || String(Date.now()),
                         prefetched: true,
                     })
                 } catch {
@@ -179,7 +192,8 @@ export const useMetadataCache = create<MetadataCacheState>()(
         {
             name: 'metacore-metadata-cache',
             // Bump when display hints (e.g. image_stack) must wipe stale cache.
-            version: 4,
+            // v5: always replace catalog on prefetchAll (no merge-with-stale).
+            version: 5,
             migrate: () => ({
                 cache: {},
                 modalCache: {},
