@@ -53,6 +53,7 @@ import {
 } from './field-validation-ui'
 import { validationCatalog } from './validation-catalog'
 import { useApi } from './api-context'
+import { buildRelationFilterParams } from './dynamic-relation-helpers'
 import { DynamicIcon } from './dynamic-icon'
 import { DynamicLineItems } from './dynamic-line-items'
 import { DynamicRelations } from './dynamic-relations'
@@ -165,6 +166,54 @@ export function buildPrefillRows(spec: PrefillSpec, record: any): Array<Record<s
         rows.push(row)
     }
     return rows
+}
+
+// ---- prefill lines from the record's declared relation ----------------------
+//
+// A row action opened from a LIST gets the list row, which does not carry the
+// document's lines: `record.items` is undefined and a receive modal opened
+// with "Sin renglones" (QA 7Leguas: OC receive modal empty, the user could not
+// see what was being received). When the prefill source key is missing from
+// the record but the model declares a one_to_many relation with that name, the
+// modal fetches the child rows the same way the relation panel does
+// (`/data/<through>?f_<fk>=eq:<id>`) and builds the rows from them.
+
+export interface PrefillRelationRequest {
+    fieldKey: string
+    spec: PrefillSpec
+    endpoint: string
+    params: Record<string, string | number>
+}
+
+export function prefillRelationRequests(
+    fields: ActionFieldDef[] | undefined,
+    record: any,
+    relations: Array<{ name?: string; kind?: string; through?: string; foreign_key?: string; scope?: Record<string, unknown> }>,
+): PrefillRelationRequest[] {
+    const out: PrefillRelationRequest[] = []
+    const recordId = record?.id
+    if (!fields || recordId === undefined || recordId === null || recordId === '') return out
+    for (const field of fields) {
+        if (!isLineItemsField(field)) continue
+        const spec = lineItemsDefault(field)
+        if (!isPrefillSpec(spec)) continue
+        if (Array.isArray(record?.[spec.$prefillFromRecord])) continue // already embedded
+        const rel = (relations || []).find(
+            (r) => r?.name === spec.$prefillFromRecord && (r.kind ?? 'one_to_many') === 'one_to_many',
+        )
+        if (!rel?.through || !rel.foreign_key) continue
+        const scope: Record<string, string> = {}
+        for (const [k, v] of Object.entries(rel.scope ?? {})) {
+            if (v !== undefined && v !== null) scope[k] = String(v)
+        }
+        out.push({
+            fieldKey: field.key,
+            spec,
+            endpoint: `/data/${rel.through}`,
+            params: { ...buildRelationFilterParams(rel.foreign_key, recordId, scope), per_page: 200 },
+        })
+    }
+    return out
 }
 
 // ---- scalar prefill from the acted-on record --------------------------------
@@ -685,6 +734,29 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
             setFieldErrors({})
         }
     }, [open, action.fields, record])
+
+    // Lines the list row does not carry: load them from the declared relation
+    // (see prefillRelationRequests) and seed the line-items grid.
+    useEffect(() => {
+        if (!open || relations.length === 0) return
+        const reqs = prefillRelationRequests(action.fields, record, relations)
+        if (reqs.length === 0) return
+        let cancelled = false
+        for (const req of reqs) {
+            api.get(req.endpoint, { params: req.params })
+                .then((res: any) => {
+                    if (cancelled) return
+                    const rows = res?.data?.data ?? res?.data ?? []
+                    if (!Array.isArray(rows)) return
+                    const built = buildPrefillRows(req.spec, { [req.spec.$prefillFromRecord]: rows })
+                    setFormData((prev: Record<string, any>) => ({ ...prev, [req.fieldKey]: built }))
+                })
+                .catch(() => {})
+        }
+        return () => {
+            cancelled = true
+        }
+    }, [open, action.fields, record, relations, api])
 
     const updateField = (key: string, value: any) => {
         setFormData((prev: Record<string, any>) => ({ ...prev, [key]: value }))
