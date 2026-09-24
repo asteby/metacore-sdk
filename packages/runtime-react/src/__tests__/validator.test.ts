@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseRuleString, checkValue, validateValues, bagHasErrors } from '../validator'
+import { parseRuleString, checkValue, validateValues, bagHasErrors, exemptUnchangedRuleIssues } from '../validator'
 import type { ActionFieldDef } from '../types'
 
 describe('parseRuleString', () => {
@@ -66,5 +66,32 @@ describe('validateValues', () => {
             { email: 'nope' },
         )
         expect(bag.email?.[0]?.code).toBe('email')
+    })
+})
+
+describe('exemptUnchangedRuleIssues (QA LIVE-19)', () => {
+    const fields: ActionFieldDef[] = [
+        { key: 'name', label: 'Nombre', type: 'text', required: true } as ActionFieldDef,
+        { key: 'tax_id', label: 'RFC', type: 'text', validation: { regex: '^[A-Z]{3,4}[0-9]{6}[A-Z0-9]{3}$' } } as ActionFieldDef,
+        { key: 'price', label: 'Precio', type: 'number', validation: { min: 0 } } as ActionFieldDef,
+    ]
+    it('keeps an untouched legacy value from blocking the edit', () => {
+        const values = { name: 'Renombrado', tax_id: 'abc-010101', price: '-5' }
+        const bag = validateValues(fields, values)
+        expect(bagHasErrors(bag)).toBe(true)
+        const out = exemptUnchangedRuleIssues(bag, values, { name: 'Viejo', tax_id: 'abc-010101', price: -5 })
+        expect(bagHasErrors(out)).toBe(false)
+    })
+    it('still reports a changed invalid value and required', () => {
+        const values = { name: '', tax_id: 'xyz', price: -6 }
+        const out = exemptUnchangedRuleIssues(validateValues(fields, values), values, { name: 'Viejo', tax_id: 'abc-010101', price: -5 })
+        expect(out.tax_id?.[0]?.code).toBe('regex')
+        expect(out.price?.[0]?.code).toBe('min')
+        expect(out.name?.[0]?.code).toBe('required')
+    })
+    it('is a no-op without a persisted record (create)', () => {
+        const values = { name: 'x', tax_id: 'abc' }
+        const bag = validateValues(fields, values)
+        expect(exemptUnchangedRuleIssues(bag, values, null)).toEqual(bag)
     })
 })

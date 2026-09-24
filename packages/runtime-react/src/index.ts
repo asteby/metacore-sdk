@@ -38,6 +38,7 @@ export {
     checkValue,
     validateValues,
     bagHasErrors,
+    exemptUnchangedRuleIssues,
     type ValidationSpec,
 } from './validator'
 export { VALIDATION_CATALOGS, validationCatalog, validationMessageKey } from './validation-catalog'

@@ -67,7 +67,7 @@ import { AssistInterview } from '../assist-interview'
 import { FieldCell } from '../field-grid'
 import { isNilUuid, normalizeNilUuid } from '../nil-uuid'
 import { normalizeRefFieldsForSubmit } from './normalize-submit'
-import { validateValues, bagHasErrors } from '../validator'
+import { validateValues, bagHasErrors, exemptUnchangedRuleIssues } from '../validator'
 import { DynamicIcon, isLucideIconName } from '../dynamic-icon'
 import { IconPickerField } from '../icon-picker-field'
 import { humanizeToken } from '../dynamic-columns-helpers'
@@ -868,7 +868,17 @@ export function DynamicRecordDialog({
             // Laravel-style: collect every issue from the shared validator
             // (required + rule strings / min/max / email…) on visible fields only.
             const visible = filterVisibleFields(modalMeta.fields, mode, formValues)
-            const bag = validateValues(visible as ActionFieldDef[], formValues)
+            let bag = validateValues(visible as ActionFieldDef[], formValues)
+            // Edit: a legacy value re-sent unchanged is not re-judged by a rule
+            // added after it was written (same grandfathering as the kernel).
+            if (mode === 'edit' && record) {
+                const persisted: Record<string, unknown> = {}
+                for (const f of visible) {
+                    const v = resolvePath(record, f.key)
+                    if (v !== undefined) persisted[f.key] = v
+                }
+                bag = exemptUnchangedRuleIssues(bag, formValues, persisted)
+            }
             if (bagHasErrors(bag)) {
                 const labels: Record<string, string> = {}
                 for (const f of visible) labels[f.key] = f.label

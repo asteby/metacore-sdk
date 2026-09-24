@@ -273,3 +273,39 @@ function walk(
 export function bagHasErrors(bag: Record<string, FieldIssue[]>): boolean {
     return Object.keys(bag).length > 0
 }
+
+/** Issue codes produced by a field's declarative rule (regex / min / max /
+ *  custom builtins) — the ones the kernel grandfathers on update. */
+const RULE_CODES = new Set(['regex', 'min', 'max', 'email', 'uuid', 'url', 'numeric', 'integer', 'custom'])
+
+function sameValue(a: unknown, b: unknown): boolean {
+    if (isEmpty(a) && isEmpty(b)) return true
+    if (isNumeric(a) && isNumeric(b)) return numericValue(a) === numericValue(b)
+    return asString(a) === asString(b)
+}
+
+/**
+ * Edit mode: drop the rule issues (regex/min/max/custom) of a top-level field
+ * whose value is the one already persisted. The edit form posts every field
+ * back, so a rule added after the row was written (an RFC pattern over legacy
+ * data) would otherwise block saving a record over a field nobody touched.
+ * Mirrors the kernel (dynamic.validateWrite grandfathers unchanged values on
+ * update). required / invalid_option / invalid_type are kept.
+ */
+export function exemptUnchangedRuleIssues(
+    bag: Record<string, FieldIssue[]>,
+    values: Record<string, unknown>,
+    persisted: Record<string, unknown> | null | undefined,
+): Record<string, FieldIssue[]> {
+    if (!persisted) return bag
+    const out: Record<string, FieldIssue[]> = {}
+    for (const [path, issues] of Object.entries(bag)) {
+        const unchanged =
+            !path.includes('.') &&
+            Object.prototype.hasOwnProperty.call(persisted, path) &&
+            sameValue(values?.[path], persisted[path])
+        const kept = unchanged ? issues.filter(i => !RULE_CODES.has(String(i.code))) : issues
+        if (kept.length) out[path] = kept
+    }
+    return out
+}
