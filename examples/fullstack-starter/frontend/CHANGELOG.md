@@ -1,5 +1,12 @@
 # @asteby/metacore-fullstack-example
 
+## 0.1.278
+
+### Patch Changes
+
+- Updated dependencies [c106db7]
+  - @asteby/metacore-auth@25.0.1
+
 ## 0.1.277
 
 ### Patch Changes
