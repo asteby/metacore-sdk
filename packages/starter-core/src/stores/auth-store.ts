@@ -21,6 +21,12 @@ interface AuthUser {
   currency_code?: string
   timezone?: string
   checkout_mode?: 'integrated' | 'cashier'
+  /**
+   * @deprecated Has no effect. The fulfillment policy is not an organization
+   * setting any more: it follows from the warehouse addon being installed
+   * (installed → reserve and deduct on pick; not installed → inventory deducts
+   * on delivery). Kept so hosts that still send it type-check.
+   */
   fulfillment_mode?: 'auto' | 'warehouse'
   tax_rate?: number
   tax_included?: boolean
