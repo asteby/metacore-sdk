@@ -1,5 +1,11 @@
 # @asteby/metacore-auth
 
+## 25.0.1
+
+### Patch Changes
+
+- c106db7: `AuthUser.fulfillment_mode` queda deprecado. No tiene efecto: la política de surtido la decide tener instalado el addon Almacén, no un ajuste de la organización.
+
 ## 25.0.0
 
 ### Patch Changes
