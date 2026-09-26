@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 39.2.7
+
+### Patch Changes
+
+- 6006eff: Los pickers de una misma pantalla salen en un solo POST /api/q.
+
 ## 39.2.6
 
 ### Patch Changes
