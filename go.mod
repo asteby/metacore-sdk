@@ -6,7 +6,7 @@ require (
 	github.com/asteby/metacore-kernel v0.49.6
 	github.com/gofiber/fiber/v3 v3.5.0
 	github.com/google/uuid v1.6.0
-	github.com/stripe/stripe-go/v86 v86.1.1
+	github.com/stripe/stripe-go/v86 v86.4.2
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.2
 )
