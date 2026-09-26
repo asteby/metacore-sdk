@@ -393,6 +393,13 @@ export {
     getSearchableColumnKeys,
 } from './column-visibility'
 export {
+    loadQueryPart,
+    nameBatchTokens,
+    optionsBatchToken,
+    optionsModelFromUrl,
+    type QueryPart,
+} from './query-batch'
+export {
     useOptionsResolver,
     projectOption,
     type ResolvedOption,

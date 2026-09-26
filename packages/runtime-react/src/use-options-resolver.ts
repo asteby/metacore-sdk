@@ -12,6 +12,7 @@
 // free; legacy callers that still ship `searchEndpoint` keep working.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from './api-context'
+import { loadQueryPart, optionsBatchToken, optionsModelFromUrl } from './query-batch'
 
 export interface ResolvedOption {
     /** Canonical id (server-side primary key). */
@@ -237,7 +238,33 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
             if (query) params.q = query
             if (typeof limit === 'number' && limit > 0) params.limit = limit
             if (filterValue) params.filter_value = filterValue
-            pending = api.get(url, { params }).then((res) => {
+            const model = optionsModelFromUrl(url)
+            pending = (async () => {
+                if (model) {
+                    try {
+                        const part = await loadQueryPart(
+                            api,
+                            optionsBatchToken(model, effectiveField, query ?? '', limit, filterValue),
+                        )
+                        if (!part.success) {
+                            throw new Error(part.message || 'options resolver: unsuccessful response')
+                        }
+                        const payload = readOptionsEnvelope({
+                            success: true,
+                            data: part.data,
+                            meta: part.meta,
+                        })
+                        if ((optionsEpoch.get(key) ?? 0) === epoch) {
+                            optionsCache.set(key, { payload, at: Date.now() })
+                        }
+                        return payload
+                    } catch (err) {
+                        const msg = err instanceof Error ? err.message : ''
+                        const batchMiss = msg === 'batch unavailable' || msg === 'batch part missing'
+                        if (!batchMiss) throw err
+                    }
+                }
+                const res = await api.get(url, { params })
                 const body = (res as { data: any }).data
                 if (!body || body.success !== true) {
                     throw new Error(body?.message || 'options resolver: unsuccessful response')
@@ -247,7 +274,7 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
                     optionsCache.set(key, { payload, at: Date.now() })
                 }
                 return payload
-            }).finally(() => {
+            })().finally(() => {
                 if (optionsInflight.get(key) === pending) optionsInflight.delete(key)
             })
             optionsInflight.set(key, pending)
