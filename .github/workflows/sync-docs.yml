@@ -11,10 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout metacore-sdk
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Checkout metacore
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           repository: asteby/metacore
           token: ${{ secrets.METACORE_DOCS_SYNC_TOKEN }}
