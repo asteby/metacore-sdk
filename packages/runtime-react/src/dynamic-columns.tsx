@@ -16,8 +16,7 @@ import * as React from 'react'
 import { ColumnDef } from '@tanstack/react-table'
 import { format, type Locale } from 'date-fns'
 import { es, enUS } from 'date-fns/locale'
-import * as icons from 'lucide-react'
-import { MoreHorizontal } from 'lucide-react'
+import { Calendar, Check, Copy, Mail, Minus, MoreHorizontal } from 'lucide-react'
 import {
     Avatar,
     AvatarFallback,
@@ -198,9 +197,9 @@ const CodeCell: React.FC<{ text: string; maxLength?: number }> = ({ text, maxLen
                 title="Copiar"
             >
                 {copied ? (
-                    <icons.Check className="h-3.5 w-3.5 text-green-500" />
+                    <Check className="h-3.5 w-3.5 text-green-500" />
                 ) : (
-                    <icons.Copy className="h-3.5 w-3.5" />
+                    <Copy className="h-3.5 w-3.5" />
                 )}
             </button>
         </div>
@@ -1082,7 +1081,7 @@ export function makeDefaultGetDynamicColumns(
                                     className="flex items-center gap-1.5 text-muted-foreground"
                                     title={formatted.title}
                                 >
-                                    <icons.Calendar className="h-3.5 w-3.5 opacity-70" />
+                                    <Calendar className="h-3.5 w-3.5 opacity-70" />
                                     <span className="text-sm font-medium">
                                         {formatted.display}
                                     </span>
@@ -1174,7 +1173,7 @@ export function makeDefaultGetDynamicColumns(
                                     className="inline-flex items-center gap-1.5 text-sm font-medium text-primary hover:underline"
                                     onClick={(e) => e.stopPropagation()}
                                 >
-                                    <icons.Mail className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                                    <Mail className="h-3.5 w-3.5 shrink-0 opacity-70" />
                                     <span className="truncate max-w-[260px]">{email}</span>
                                 </a>
                             )
@@ -1337,9 +1336,9 @@ export function makeDefaultGetDynamicColumns(
                             return (
                                 <span className="inline-flex items-center gap-1.5">
                                     {value ? (
-                                        <icons.Check className="h-4 w-4 text-green-500" />
+                                        <Check className="h-4 w-4 text-green-500" />
                                     ) : (
-                                        <icons.Minus className="h-4 w-4 text-muted-foreground" />
+                                        <Minus className="h-4 w-4 text-muted-foreground" />
                                     )}
                                     {showText && (
                                         <span className="text-sm text-muted-foreground">

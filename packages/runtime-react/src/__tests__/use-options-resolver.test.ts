@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import { projectOption } from '../use-options-resolver'
+import { optionsRequestKey, projectOption } from '../use-options-resolver'
 import {
     resolveValidatorToken,
     setOrgConfigBridge,
@@ -10,6 +10,14 @@ import {
 // pin down the projection layer (the only impure shape conversion the
 // hook performs) so consumers can rely on the v0.9.0 envelope reading
 // without spinning up a renderer.
+
+describe('optionsRequestKey', () => {
+    it('keeps two orgs from sharing a column cache', () => {
+        const a = optionsRequestKey('org-a|branch', '/options/Product', 'id', '', 200, undefined)
+        const b = optionsRequestKey('org-b|branch', '/options/Product', 'id', '', 200, undefined)
+        expect(a).not.toBe(b)
+    })
+})
 
 describe('projectOption', () => {
     it('mirrors id into value and label into name when missing', () => {

@@ -47,6 +47,7 @@ export function ProductTile({
   className,
 }: ProductTileProps) {
   return (
+    <div style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 220px' }}>
     <Card
       className={cn(
         'group flex flex-col gap-0 overflow-hidden p-0 py-0 transition-all duration-200',
@@ -66,6 +67,8 @@ export function ProductTile({
           <img
             src={imageUrl}
             alt={title}
+            loading="lazy"
+            decoding="async"
             className={cn(
               'size-full',
               imageFit === 'contain' ? 'object-contain p-2' : 'object-cover'
@@ -101,6 +104,7 @@ export function ProductTile({
         <div className='text-sm'>{price}</div>
       </div>
     </Card>
+    </div>
   )
 }
 

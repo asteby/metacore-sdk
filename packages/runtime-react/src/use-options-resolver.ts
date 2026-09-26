@@ -100,11 +100,58 @@ export interface UseOptionsResolverResult {
  * `/api/options/:model?field=…` endpoint. Returns the v0.9.0 envelope
  * `{ data, meta: { type, count } }` projected into a stable shape.
  *
- * The hook is intentionally minimal: it does NOT debounce `query`
- * (callers should hold the controlled value and pass it post-debounce)
- * and does NOT cache across hook instances (apps that need shared state
- * compose this with TanStack Query in their own layer).
+ * The hook does NOT debounce `query` (callers should pass it post-debounce).
+ * Identical lookups share one in-flight request and a 30s cache, so a column
+ * of reference cells does not fan out one request per row. The key includes
+ * the org and branch from the host session.
  */
+const OPTIONS_TTL_MS = 30_000
+
+type OptionsPayload = { options: ResolvedOption[]; meta: OptionsMeta }
+
+const optionsCache = new Map<string, { payload: OptionsPayload; at: number }>()
+const optionsInflight = new Map<string, Promise<OptionsPayload>>()
+const optionsEpoch = new Map<string, number>()
+
+export function optionsRequestKey(
+    scope: string,
+    url: string,
+    field: string,
+    query: string,
+    limit: number | undefined,
+    filter: string | undefined,
+): string {
+    return [scope, url, field, query, String(limit ?? ''), filter ?? ''].join('\n')
+}
+
+function optionsScope(): string {
+    if (typeof localStorage === 'undefined') return ''
+    let org = ''
+    try {
+        const raw = localStorage.getItem('auth_user')
+        if (raw) org = String((JSON.parse(raw) as { organization_id?: string }).organization_id ?? '')
+    } catch {
+        org = ''
+    }
+    const branch = localStorage.getItem('active_branch_id') ?? ''
+    return `${org}|${branch}`
+}
+
+function readOptionsEnvelope(body: any): OptionsPayload {
+    const rawOptions: any[] = Array.isArray(body?.data) ? body.data : []
+    const metaPayload =
+        body?.meta && typeof body.meta === 'object'
+            ? body.meta
+            : { type: body?.type, count: rawOptions.length }
+    return {
+        options: rawOptions.map(projectOption),
+        meta: {
+            type: metaPayload?.type ?? 'dynamic',
+            count: typeof metaPayload?.count === 'number' ? metaPayload.count : rawOptions.length,
+        },
+    }
+}
+
 export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsResolverResult {
     const {
         modelKey,
@@ -146,9 +193,7 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
         return ''
     }, [fieldKey, ref])
 
-    // Track the in-flight controller so a new fetch can abort the
-    // previous one — matters for typeahead callers passing changing `query`.
-    const abortRef = useRef<AbortController | null>(null)
+    const seenRefresh = useRef(0)
 
     useEffect(() => {
         if (!enabled || !url || !effectiveField) {
@@ -158,61 +203,75 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
             setError(null)
             return
         }
-        // Cancel any pending request before issuing a new one.
-        abortRef.current?.abort()
-        const controller = new AbortController()
-        abortRef.current = controller
+
+        const key = optionsRequestKey(
+            optionsScope(),
+            url,
+            effectiveField,
+            query ?? '',
+            limit,
+            filterValue,
+        )
+        if (refreshKey !== seenRefresh.current) {
+            seenRefresh.current = refreshKey
+            optionsEpoch.set(key, (optionsEpoch.get(key) ?? 0) + 1)
+            optionsCache.delete(key)
+            optionsInflight.delete(key)
+        }
+        const epoch = optionsEpoch.get(key) ?? 0
+        const cached = optionsCache.get(key)
+        if (cached && Date.now() - cached.at < OPTIONS_TTL_MS) {
+            setOptions(cached.payload.options)
+            setMeta(cached.payload.meta)
+            setLoading(false)
+            setError(null)
+            return
+        }
 
         setLoading(true)
         setError(null)
 
-        const params: Record<string, string | number> = { field: effectiveField }
-        if (query) params.q = query
-        if (typeof limit === 'number' && limit > 0) params.limit = limit
-        // Cascade scope: a dependent picker passes the value of the field it
-        // `dependsOn`. Skip empty strings so a cleared parent omits the param
-        // (no scope) rather than querying for the empty-string filter_value.
-        if (filterValue) params.filter_value = filterValue
-
-        api.get(url, { params, signal: controller.signal })
-            .then((res) => {
-                if (controller.signal.aborted) return
+        let pending = optionsInflight.get(key)
+        if (!pending) {
+            const params: Record<string, string | number> = { field: effectiveField }
+            if (query) params.q = query
+            if (typeof limit === 'number' && limit > 0) params.limit = limit
+            if (filterValue) params.filter_value = filterValue
+            pending = api.get(url, { params }).then((res) => {
                 const body = (res as { data: any }).data
                 if (!body || body.success !== true) {
                     throw new Error(body?.message || 'options resolver: unsuccessful response')
                 }
-                const rawOptions: any[] = Array.isArray(body.data) ? body.data : []
-                const projected = rawOptions.map(projectOption)
-                setOptions(projected)
-                // v0.9.0 envelope: meta.type / meta.count. We tolerate
-                // older deployments that still emit a root-level `type`
-                // by reading either spot — the projection prefers the
-                // canonical location so the SDK guides apps to the new
-                // shape without breaking grace-period upgrades.
-                const metaPayload =
-                    body.meta && typeof body.meta === 'object'
-                        ? body.meta
-                        : { type: body.type, count: rawOptions.length }
-                setMeta({
-                    type: metaPayload?.type ?? 'dynamic',
-                    count:
-                        typeof metaPayload?.count === 'number'
-                            ? metaPayload.count
-                            : rawOptions.length,
-                })
+                const payload = readOptionsEnvelope(body)
+                if ((optionsEpoch.get(key) ?? 0) === epoch) {
+                    optionsCache.set(key, { payload, at: Date.now() })
+                }
+                return payload
+            }).finally(() => {
+                if (optionsInflight.get(key) === pending) optionsInflight.delete(key)
+            })
+            optionsInflight.set(key, pending)
+        }
+
+        let cancelled = false
+        pending
+            .then((payload) => {
+                if (cancelled) return
+                setOptions(payload.options)
+                setMeta(payload.meta)
             })
             .catch((err: any) => {
-                if (controller.signal.aborted) return
+                if (cancelled) return
                 setError(err instanceof Error ? err : new Error(String(err)))
                 setOptions([])
                 setMeta(null)
             })
             .finally(() => {
-                if (!controller.signal.aborted) setLoading(false)
+                if (!cancelled) setLoading(false)
             })
 
         return () => {
-            controller.abort()
+            cancelled = true
         }
     }, [api, url, effectiveField, query, limit, enabled, filterValue, refreshKey])
 

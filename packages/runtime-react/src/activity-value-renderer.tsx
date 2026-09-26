@@ -11,7 +11,7 @@
  */
 
 import * as React from 'react'
-import * as icons from 'lucide-react'
+import { Calendar, Check, ExternalLink, Mail, Minus } from 'lucide-react'
 import { es, enUS } from 'date-fns/locale'
 import {
     Badge,
@@ -231,7 +231,7 @@ export const ActivityValueRenderer: React.FC<ActivityValueRendererProps> = ({
                 className="inline-flex items-center gap-1 text-sm text-muted-foreground"
                 title={formatted.title}
             >
-                <icons.Calendar className="h-3 w-3 opacity-60" />
+                <Calendar className="h-3 w-3 opacity-60" />
                 {formatted.display}
             </span>
         )
@@ -245,9 +245,9 @@ export const ActivityValueRenderer: React.FC<ActivityValueRendererProps> = ({
         return (
             <span className="inline-flex items-center gap-1">
                 {value ? (
-                    <icons.Check className="h-3.5 w-3.5 text-green-500" />
+                    <Check className="h-3.5 w-3.5 text-green-500" />
                 ) : (
-                    <icons.Minus className="h-3.5 w-3.5 text-muted-foreground" />
+                    <Minus className="h-3.5 w-3.5 text-muted-foreground" />
                 )}
                 <span className="text-sm text-muted-foreground">{value ? 'Sí' : 'No'}</span>
             </span>
@@ -350,7 +350,7 @@ export const ActivityValueRenderer: React.FC<ActivityValueRendererProps> = ({
                 className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
                 onClick={(e) => e.stopPropagation()}
             >
-                <icons.ExternalLink className="h-3 w-3 shrink-0" />
+                <ExternalLink className="h-3 w-3 shrink-0" />
                 <span className="truncate" style={{ maxWidth: 200 }}>{label}</span>
             </a>
         )
@@ -368,7 +368,7 @@ export const ActivityValueRenderer: React.FC<ActivityValueRendererProps> = ({
                 className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
                 onClick={(e) => e.stopPropagation()}
             >
-                <icons.Mail className="h-3 w-3 shrink-0" />
+                <Mail className="h-3 w-3 shrink-0" />
                 <span className="truncate" style={{ maxWidth: 200 }}>{email}</span>
             </a>
         )

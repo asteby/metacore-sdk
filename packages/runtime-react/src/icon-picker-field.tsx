@@ -12,8 +12,8 @@
 // initial mode is inferred from the current value — path-like ("/" or ".")
 // means image, anything else means icon.
 import { useMemo, useState } from 'react'
-import { icons } from 'lucide-react'
 import { ChevronsUpDown } from 'lucide-react'
+import { lucideIconNames } from './dynamic-icon'
 import {
     Button,
     Input,
@@ -35,7 +35,7 @@ export interface IconPickerFieldProps {
  * the DOM light: the lucide catalog is ~1500 glyphs, so we never mount them all. */
 const PAGE = 60
 
-const ALL_ICON_NAMES = Object.keys(icons)
+const ALL_ICON_NAMES = lucideIconNames()
 
 /** True when a stored value looks like an image url/path rather than an icon name. */
 export function looksLikeImageValue(value: unknown): boolean {

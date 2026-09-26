@@ -1,18 +1,48 @@
-// Minimal DynamicIcon — resolves a lucide-react icon by name. Used across
-// action modals and the default row-action menus. Hosts that need custom
-// icon sets can override by shadowing this component via their own prop.
-import * as icons from 'lucide-react'
+// DynamicIcon resolves a lucide glyph by name without pulling the full icon
+// set into the shared chunk. Each glyph is its own dynamic import.
+import { lazy, Suspense, useMemo, type ComponentType } from 'react'
+import dynamicIconImports from 'lucide-react/dynamicIconImports'
 
 export interface DynamicIconProps {
     name: string
     className?: string
 }
 
+type IconName = keyof typeof dynamicIconImports
+
+function pascalToKebab(pascal: string): string {
+    return pascal
+        .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+        .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
+        .toLowerCase()
+}
+
+function kebabToPascal(kebab: string): string {
+    return kebab
+        .split('-')
+        .map((part) => (part ? part.charAt(0).toUpperCase() + part.slice(1) : ''))
+        .join('')
+}
+
+function loaderFor(pascal: string) {
+    const kebab = pascalToKebab(pascal) as IconName
+    return dynamicIconImports[kebab]
+}
+
 export function DynamicIcon({ name, className }: DynamicIconProps) {
-    const resolved = resolveLucideIconName(name) ?? name
-    const Icon = (icons as unknown as Record<string, React.ComponentType<{ className?: string }>>)[resolved]
+    const resolved = resolveLucideIconName(name)
+    const Icon = useMemo(() => {
+        if (!resolved) return null
+        const loader = loaderFor(resolved)
+        if (!loader) return null
+        return lazy(loader as () => Promise<{ default: ComponentType<{ className?: string }> }>)
+    }, [resolved])
     if (!Icon) return null
-    return <Icon className={className} />
+    return (
+        <Suspense fallback={null}>
+            <Icon className={className} />
+        </Suspense>
+    )
 }
 
 // resolveLucideIconName — canonical PascalCase lucide name for a value that is
@@ -24,13 +54,10 @@ export function resolveLucideIconName(value: unknown): string | null {
     if (/[/\\.:\s]/.test(value)) return null
     let name = value
     if (/^[a-z0-9]+(-[a-z0-9]+)*$/.test(value)) {
-        name = value
-            .split('-')
-            .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-            .join('')
+        name = kebabToPascal(value)
     }
     if (!/^[A-Z][A-Za-z0-9]*$/.test(name)) return null
-    return (icons as unknown as Record<string, unknown>)[name] ? name : null
+    return loaderFor(name) ? name : null
 }
 
 // isLucideIconName — true when a string is a lucide-react icon name
@@ -42,4 +69,9 @@ export function resolveLucideIconName(value: unknown): string | null {
 // component, not a real glyph.
 export function isLucideIconName(value: unknown): value is string {
     return resolveLucideIconName(value) !== null
+}
+
+/** PascalCase names of every lucide glyph, for the icon picker grid. */
+export function lucideIconNames(): string[] {
+    return Object.keys(dynamicIconImports).map(kebabToPascal)
 }
