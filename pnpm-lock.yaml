@@ -585,7 +585,7 @@ importers:
         version: 3.2.2(react@19.2.8)
       '@module-federation/runtime':
         specifier: ^2.5.0
-        version: 2.9.0
+        version: 2.9.1
       '@tanstack/react-virtual':
         specifier: ^3.14.13
         version: 3.14.13(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -2634,17 +2634,29 @@ packages:
   '@module-federation/error-codes@2.9.0':
     resolution: {integrity: sha512-IGpd+VRlji3NyGOGGTsk7YEmPRKcDoBK4YHqIuP+OQwyb2YhHCUHO2vW9RXeQxCuKwi+c6xkTweRYG+Umy+0Zw==}
 
+  '@module-federation/error-codes@2.9.1':
+    resolution: {integrity: sha512-5lqrIZTeMiKdn4uuX/+X8uN/4C0yqI8P3WO42DNRR7B9gCA4HMDCHrrxU8odQup9bzRsN5TJSz3av6d2iNmPgA==}
+
   '@module-federation/managers@2.9.0':
     resolution: {integrity: sha512-8KhB2PF4g+M0hGaethU1H4GVWabLn5sF5TvnM6VxgAcDL4TfLY8aC/YobAXHG/SV0jpU5lsGe6s6xy6ccV0MQw==}
 
   '@module-federation/runtime-core@2.9.0':
     resolution: {integrity: sha512-dLykRYfpbEJBTdk2NlbNoVVTB196O3qujawTBguLABJkPCWETJNk60NR1yZO34eI+DTH+eGwHU3m7FddAWnbnw==}
 
+  '@module-federation/runtime-core@2.9.1':
+    resolution: {integrity: sha512-HMdsiTQoWqOXFr9Boki+U99piC00C7GLBZN05t+sXcutHq99oXZ8ONjvPL/h2pu7VAuPXgCjuCE3iqUQXv54EQ==}
+
   '@module-federation/runtime@2.9.0':
     resolution: {integrity: sha512-3cyAav0hWP+dNvB7qrcK9CKxQn+JvkbRvLtZz3zS2g0EyxtDFDjgbHY0Afcf7oHf8IHhKeEdzb/3Kjr1Pjmr7A==}
 
+  '@module-federation/runtime@2.9.1':
+    resolution: {integrity: sha512-dRCy2HpUinPnk2b6GB/R6t2iJTHkSFGv83sbrEKylXkR2ATH0V47WpUdoNsZCEUOTQlAIHwZzDCVocA5FbcsBA==}
+
   '@module-federation/sdk@2.9.0':
     resolution: {integrity: sha512-IMjObgBGQTXd33jTTCYcxvz8iOQGLsZ2QIPOj90rDxuBtJsN4WJwYyXqligrhY/e5p/BipUPdbIgKmWL7zFhTw==}
+
+  '@module-federation/sdk@2.9.1':
+    resolution: {integrity: sha512-JneBWSHr9ZCZHa5geNUleVK2vBTugWXLIXlV72UAhgHm1cTMYKZljnhRSX59n7Xssz4Yk+m+W3rYg6Eb4ouL8w==}
 
   '@module-federation/third-party-dts-extractor@2.9.0':
     resolution: {integrity: sha512-R1Xuqnqzw6wQxWV3yU9fX1FydXAeZF2TNVFAVo1N1oLBA2j5y7aUO/Fc3VSNgd9/gxMzJgTVBdA+nMiD2SFCgg==}
@@ -9053,6 +9065,8 @@ snapshots:
 
   '@module-federation/error-codes@2.9.0': {}
 
+  '@module-federation/error-codes@2.9.1': {}
+
   '@module-federation/managers@2.9.0':
     dependencies:
       '@module-federation/sdk': 2.9.0
@@ -9062,13 +9076,26 @@ snapshots:
       '@module-federation/error-codes': 2.9.0
       '@module-federation/sdk': 2.9.0
 
+  '@module-federation/runtime-core@2.9.1':
+    dependencies:
+      '@module-federation/error-codes': 2.9.1
+      '@module-federation/sdk': 2.9.1
+
   '@module-federation/runtime@2.9.0':
     dependencies:
       '@module-federation/error-codes': 2.9.0
       '@module-federation/runtime-core': 2.9.0
       '@module-federation/sdk': 2.9.0
 
+  '@module-federation/runtime@2.9.1':
+    dependencies:
+      '@module-federation/error-codes': 2.9.1
+      '@module-federation/runtime-core': 2.9.1
+      '@module-federation/sdk': 2.9.1
+
   '@module-federation/sdk@2.9.0': {}
+
+  '@module-federation/sdk@2.9.1': {}
 
   '@module-federation/third-party-dts-extractor@2.9.0': {}
 
