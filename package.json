@@ -8,7 +8,7 @@
     "url": "https://github.com/asteby/metacore-sdk"
   },
   "license": "Apache-2.0",
-  "packageManager": "pnpm@11.27.1",
+  "packageManager": "pnpm@11.28.0",
   "engines": {
     "node": ">=20",
     "pnpm": ">=10"
