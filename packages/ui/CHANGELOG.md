@@ -1,5 +1,11 @@
 # @asteby/metacore-ui
 
+## 2.18.2
+
+### Patch Changes
+
+- 8629139: Los iconos de Lucide se cargan por glifo, las celdas de una columna de referencia comparten una sola petición de options, y la tile del POS pinta solo lo que entra en pantalla.
+
 ## 2.18.1
 
 ### Patch Changes
