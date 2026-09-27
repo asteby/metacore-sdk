@@ -55,13 +55,17 @@ interface AxiosLike {
     }
 }
 
-// The read batch is a POST to /q; it reads, so it must not count as a write.
-const BATCH_READ_URL = /(^|\/)q\/?(\?|$)/
+// POSTs that do not change any record a list or picker shows: the read batch
+// (/q) and the bell inbox the host writes on every control toast
+// (/notifications/me). Counting them as writes dropped the caches on each read
+// or toast.
+const NOT_A_RECORD_WRITE = [/(^|\/)q\/?(\?|$)/, /(^|\/)notifications\/me\/?(\?|$)/]
 
 function isWrite(method: string | undefined, url: string | undefined): boolean {
     const m = (method ?? '').toLowerCase()
     if (m === '' || m === 'get' || m === 'head' || m === 'options') return false
-    return !BATCH_READ_URL.test(url ?? '')
+    const u = url ?? ''
+    return !NOT_A_RECORD_WRITE.some((re) => re.test(u))
 }
 
 /** Drops the batch rows and the picker options the runtime remembered. */

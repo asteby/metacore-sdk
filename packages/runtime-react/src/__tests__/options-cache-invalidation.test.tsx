@@ -70,7 +70,7 @@ describe('options cache invalidation', () => {
         await waitFor(() => expect(screen.getByTestId('opts').textContent).toBe('A,B'))
     })
 
-    it('neither a GET nor the /q read batch drops the cache', async () => {
+    it('neither a GET, the /q read batch nor a toast in the bell drops the cache', async () => {
         const brands = ['A']
         const { client, hostWrite } = hostClient(brands)
         const view = render(
@@ -84,6 +84,7 @@ describe('options cache invalidation', () => {
         await act(async () => {
             await hostWrite('get')
             await hostWrite('post', '/q')
+            await hostWrite('post', '/notifications/me')
         })
         view.unmount()
         render(
