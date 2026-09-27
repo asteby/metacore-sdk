@@ -255,16 +255,75 @@ function generateThemeVars(primaryHex: string, accentHex: string) {
   return vars
 }
 
+/**
+ * Attribute a host sets on `<html>` to activate a theme pack (a full token
+ * skin: glass, soft, ocean…). Any value other than `default` means the pack
+ * owns the surface tokens (background, card, sidebar, border…) and branding
+ * only reinforces the brand accent on top.
+ */
+export const THEME_PACK_ATTRIBUTE = 'data-ui-theme'
+
+// Brand accent tokens — painted inline so they win over every theme pack.
+const BRAND_ACCENT_KEYS = ['--primary', '--primary-foreground', '--chart-2'] as const
+
+// Tokens that follow the brand accent under a theme pack (active nav item,
+// focus ring) so a custom brand color doesn't leave the pack's own hue there.
+const PACK_ACCENT_FOLLOW: Record<string, '--primary' | '--primary-foreground'> = {
+  '--ring': '--primary',
+  '--sidebar-primary': '--primary',
+  '--sidebar-primary-foreground': '--primary-foreground',
+  '--sidebar-ring': '--primary',
+}
+
+const BRANDING_STYLE_ID = 'metacore-branding-surfaces'
+const ATTR = THEME_PACK_ATTRIBUTE
+// Specificity (0,2,0) beats the host's `:root` / `.dark` token defaults.
+const NO_PACK_SELECTOR = `:root:is(:not([${ATTR}]), [${ATTR}='default'])`
+// Specificity (0,3,0) beats a pack's `.dark[data-ui-theme='x']` override.
+const PACK_SELECTOR = `:root[${ATTR}]:not([${ATTR}='default'])`
+
+/**
+ * Builds the stylesheet for the non-accent tokens. Surfaces used to be
+ * written inline on `<html>`, which beats any selector — so a theme pack's
+ * translucent glass surfaces (or any pack's own palette) were flattened back
+ * to the brand's opaque surfaces the moment branding painted. Scoping them
+ * to "no pack active" lets CSS resolve the winner live when the pack
+ * attribute changes, with no re-apply needed.
+ */
+export function buildBrandingSurfaceCss(vars: Record<string, string>): string {
+  const decl = (entries: [string, string][]) =>
+    entries.map(([k, v]) => `  ${k}: ${v};`).join('\n')
+  const surfaces = Object.entries(vars).filter(
+    ([k]) => !(BRAND_ACCENT_KEYS as readonly string[]).includes(k),
+  )
+  const follow = Object.entries(PACK_ACCENT_FOLLOW)
+    .filter(([, src]) => vars[src])
+    .map(([k, src]) => [k, vars[src]] as [string, string])
+  return `${NO_PACK_SELECTOR} {\n${decl(surfaces)}\n}\n${PACK_SELECTOR} {\n${decl(follow)}\n}\n`
+}
+
 function applyThemeVars(vars: Record<string, string>) {
   const root = document.documentElement
-  // Clear any branded keys we won't be rewriting in this pass so a
-  // stale value from a previous mode/branding can't bleed through.
+  // Clear every branded key inline before repainting so a stale value from
+  // a previous mode/branding (or an older SDK that painted surfaces inline)
+  // can't bleed through and shadow the stylesheet below.
   for (const key of BRANDED_KEYS) {
-    if (!(key in vars)) root.style.removeProperty(key)
+    if (!(BRAND_ACCENT_KEYS as readonly string[]).includes(key) || !(key in vars)) {
+      root.style.removeProperty(key)
+    }
   }
-  for (const [key, value] of Object.entries(vars)) {
-    root.style.setProperty(key, value)
+  for (const key of BRAND_ACCENT_KEYS) {
+    const value = vars[key]
+    if (value) root.style.setProperty(key, value)
   }
+
+  let style = document.getElementById(BRANDING_STYLE_ID) as HTMLStyleElement | null
+  if (!style) {
+    style = document.createElement('style')
+    style.id = BRANDING_STYLE_ID
+    document.head.appendChild(style)
+  }
+  style.textContent = buildBrandingSurfaceCss(vars)
 }
 
 // Treat empty/whitespace strings as "not provided" so a tenant row with a

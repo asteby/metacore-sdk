@@ -16,6 +16,8 @@ export {
   usePlatformConfig,
   applyBranding,
   applyCachedBranding,
+  buildBrandingSurfaceCss,
+  THEME_PACK_ATTRIBUTE,
   FALLBACK_BRANDING,
   type PlatformBranding,
   type BrandingFetcher,
