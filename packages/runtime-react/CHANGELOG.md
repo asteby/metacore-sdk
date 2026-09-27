@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 39.2.10
+
+### Patch Changes
+
+- aaad307: Un toast guardado en la campana (`POST /notifications/me`) ya no borra las cachés del lote ni de options: no cambia ningún registro que se liste.
+
 ## 39.2.9
 
 ### Patch Changes
