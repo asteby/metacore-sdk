@@ -1,5 +1,14 @@
 # @asteby/metacore-runtime-react
 
+## 39.2.9
+
+### Patch Changes
+
+- 834829a: Un campo `date` servido como UTC medianoche (`2026-09-27T00:00:00Z`) ya no se muestra como el día anterior al oeste de UTC. Pasaba en el selector de fecha del modal de registro y en la celda de fecha sin zona de la org. Se lee el día `YYYY-MM-DD` como día local, igual que `DynamicDateField` (QA Pitsline PIT-025).
+- f658538: PermissionsManager: el selector de módulo elige la entrada, no la key. Dos entradas del menú sobre el mismo modelo (p. ej. "Ventas POS" y "Por cobrar" sobre sales_orders) ya no caen siempre en la primera. Si el servidor rechaza crear o editar un rol (422 nombre duplicado), el motivo aparece dentro del diálogo y el diálogo sigue abierto. El catálogo de validación traduce `protected_field`, que antes caía en "valor inválido".
+- a98aa8e: El lote /api/q ya no sirve filas viejas: las listas, registros y options siempre consultan al servidor (reutilizan solo con etag de contenido `qh-`), toda mutación de useApi olvida lo recordado, y el recorte por `in:` guarda todas las filas de cada id, lee `f_<campo>` por su columna y no toca listas paginadas.
+- 6f046fe: Los selectores ya no muestran opciones viejas después de guardar. La caché de 30 s de options por columna se borra con cada escritura: las de `useApi()` y también las que el host hace con su propio axios (diálogos nativos, configuración). Además, el POST de lectura `/q` ya no cuenta como escritura, así que ya no borra lo que el lote recordó en cada lectura de options.
+
 ## 39.2.8
 
 ### Patch Changes
