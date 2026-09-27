@@ -45,7 +45,8 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -w -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "test": "vitest run"
   },
   "peerDependencies": {
     "react": ">=18",
@@ -68,7 +69,8 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "sonner": "^2.0.0",
-    "typescript": "^6.0.0"
+    "typescript": "^6.0.0",
+    "vitest": "^4.0.0"
   },
   "publishConfig": {
     "access": "public"

@@ -43,18 +43,34 @@ export function enhancePlainNotificationText(text: string): string {
   s = s.replace(/(^|[\s(])_(.+?)_([\s).,;!]|$)/g, '$1<em>$2</em>$3')
   // Folios / codes: SO-00044, WO-12, INV-0001, …
   s = s.replace(/\b([A-Z]{1,8}-\d{2,})\b/g, '<strong>$1</strong>')
-  // Decimal quantities (e.g. -1.0000 → -1) and integers with units (3 ud)
+  // Decimal quantities (e.g. -1.0000 → -1) and integers with units (3 ud).
+  // The whole numeric run is matched, so a formatted amount (MX$1,060.00) is
+  // emphasized as written instead of its "1,060" being read as a decimal comma
+  // and shortened to "1,06" (PIT-023).
   s = s.replace(
-    /(^|[^\w.-])(-?\d+[.,]\d+)(\s*(?:ud|uds|pz|pzs|kg|g|lt|l|ml|cm|un))?\b/gi,
+    /(^|[^\w.,-])(-?\d+(?:[.,]\d+)+)(\s*(?:ud|uds|pz|pzs|kg|g|lt|l|ml|cm|un))?\b/gi,
     (_m, pre: string, num: string, unit: string | undefined) =>
-      `${pre}<strong>${formatQtyDisplay(num)}${unit ?? ''}</strong>`,
+      `${pre}<strong>${isPlainDecimal(pre, num) ? formatQtyDisplay(num) : num}${unit ?? ''}</strong>`,
   )
   s = s.replace(
-    /(^|[^\w.-])(-?\d+)(\s*(?:ud|uds|pz|pzs|kg|g|lt|l|ml|cm|un))\b/gi,
+    /(^|[^\w.,>-])(-?\d+)(\s*(?:ud|uds|pz|pzs|kg|g|lt|l|ml|cm|un))\b/gi,
     (_m, pre: string, num: string, unit: string) =>
       `${pre}<strong>${num}${unit}</strong>`,
   )
   return s
+}
+
+/**
+ * Only an unambiguous decimal is shortened: one separator, not a money amount
+ * (currency symbol before it) and not three digits after the separator, which
+ * reads as thousands in one locale and as decimals in another (1,060 · 1.500).
+ */
+function isPlainDecimal(pre: string, num: string): boolean {
+  if (/[$€£¥]$/.test(pre)) return false
+  const seps = num.match(/[.,]/g) ?? []
+  if (seps.length !== 1) return false
+  const fraction = num.slice(num.search(/[.,]/) + 1)
+  return fraction.length !== 3
 }
 
 /** -1.0000 → -1 · 1,50 → 1,5 · keep meaningful decimals, drop trailing zeros. */
