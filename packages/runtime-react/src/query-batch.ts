@@ -31,7 +31,26 @@ type Waiter = {
 }
 
 type CachedPart = { part: QueryPart; at: number }
-type CachedEntity = { row: Record<string, unknown> | null; at: number }
+type CachedEntity = { rows: Record<string, unknown>[]; at: number }
+
+/**
+ * Only metadata and i18n are served from memory without asking the server.
+ * Rows (`t:` lists, `r:` records) and options change with every save: they
+ * always travel, and an unchanged payload comes back as `not_modified` when
+ * the server's etag hashes the content.
+ */
+function servedFromMemory(token: string): boolean {
+    return token.startsWith('m:') || token.startsWith('mm:') || token.startsWith('i:')
+}
+
+/**
+ * Etags the server derives from the payload itself (`"qh-…"`). The older
+ * `"q-<seed>-<len>"` ones only counted rows or bytes, so a value edited to one
+ * of the same length came back `not_modified` with the old data.
+ */
+function contentEtag(etag: string | undefined): boolean {
+    return !!etag && etag.startsWith('"qh-')
+}
 
 const partCache = new Map<string, CachedPart>()
 const entityCache = new Map<string, CachedEntity>()
@@ -42,13 +61,18 @@ export interface InListToken {
     shape: string
 }
 
-/** A concrete `t:` `in:` list. `@` references stay whole: the ids are not known yet. */
+/**
+ * A concrete `t:` `in:` list. `@` references stay whole: the ids are not known
+ * yet. A paginated list (`page=`) is not split: serving part of it from memory
+ * would change which rows land on the page and the total.
+ */
 export function splitInToken(token: string): InListToken | null {
     const q = token.indexOf('?')
     if (q < 0 || !token.startsWith('t:')) return null
     const model = token.slice(2, q)
     if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(model)) return null
     const params = new URLSearchParams(token.slice(q + 1))
+    if (params.has('page')) return null
     let field = ''
     let ids: string[] = []
     for (const [key, value] of params.entries()) {
@@ -69,6 +93,11 @@ export function splitInToken(token: string): InListToken | null {
 
 function entityKey(scope: string, shape: string, id: string): string {
     return `${scope}\n${shape}\n${id}`
+}
+
+/** The row column an `in:` filter matches: `f_product_id` filters `product_id`. */
+function rowField(param: string): string {
+    return param.startsWith('f_') ? param.slice(2) : param
 }
 
 function replaceInIds(token: string, field: string, ids: string[]): string {
@@ -99,7 +128,7 @@ export function narrowInToken(token: string, now = Date.now()): NarrowedIn | nul
             missingIds.push(id)
             continue
         }
-        if (hit.row) rows.push(hit.row)
+        rows.push(...hit.rows)
     }
     if (missingIds.length === parsed.ids.length) return null
     return {
@@ -111,7 +140,11 @@ export function narrowInToken(token: string, now = Date.now()): NarrowedIn | nul
     }
 }
 
-/** Stores one row per requested id. An id with no row is remembered as empty. */
+/**
+ * Stores every row of each requested id (one id can match many rows: the
+ * stock of a product in several warehouses). An id with no row is remembered
+ * as empty.
+ */
 export function rememberInRows(
     token: string,
     ids: string[],
@@ -121,22 +154,19 @@ export function rememberInRows(
     const parsed = splitInToken(token)
     if (!parsed) return
     const scope = cacheScope()
-    const seen = new Set<string>()
+    const field = rowField(parsed.field)
+    const byId = new Map<string, Record<string, unknown>[]>()
+    for (const id of ids) byId.set(id, [])
     if (Array.isArray(rows)) {
         for (const row of rows) {
             if (!row || typeof row !== 'object') continue
-            const id = String((row as Record<string, unknown>)[parsed.field] ?? '').trim()
-            if (!id) continue
-            seen.add(id)
-            entityCache.set(entityKey(scope, parsed.shape, id), {
-                row: row as Record<string, unknown>,
-                at: now,
-            })
+            const id = String((row as Record<string, unknown>)[field] ?? '').trim()
+            const bucket = byId.get(id)
+            if (bucket) bucket.push(row as Record<string, unknown>)
         }
     }
-    for (const id of ids) {
-        if (seen.has(id)) continue
-        entityCache.set(entityKey(scope, parsed.shape, id), { row: null, at: now })
+    for (const [id, bucket] of byId) {
+        entityCache.set(entityKey(scope, parsed.shape, id), { rows: bucket, at: now })
     }
 }
 
@@ -146,6 +176,19 @@ export function resetQueryBatchCache(): void {
     waiters = []
     if (timer != null) clearTimeout(timer)
     timer = null
+}
+
+/**
+ * Forgets every row, record and option read. useApi calls it after each
+ * mutation so the list that just gained, changed or lost a row reads it
+ * again instead of the copy from before the save. Metadata and i18n stay.
+ */
+export function invalidateQueryBatchData(): void {
+    for (const key of [...partCache.keys()]) {
+        const token = key.slice(key.indexOf('\n') + 1)
+        if (!servedFromMemory(token)) partCache.delete(key)
+    }
+    entityCache.clear()
 }
 let waiters: Waiter[] = []
 let timer: ReturnType<typeof setTimeout> | null = null
@@ -205,7 +248,7 @@ export function nameBatchTokens(tokens: string[]): { name: string; token: string
 
 export function loadQueryPart(api: ApiClient, token: string): Promise<QueryPart> {
     const cached = partCache.get(`${cacheScope()}\n${token}`)
-    if (cached && Date.now() - cached.at < PART_TTL_MS && cached.part.success) {
+    if (cached && servedFromMemory(token) && Date.now() - cached.at < PART_TTL_MS && cached.part.success) {
         return Promise.resolve(cached.part)
     }
     const narrowed = narrowInToken(token)
@@ -239,7 +282,8 @@ async function flushQueryBatch() {
     const scope = cacheScope()
     for (const part of named) {
         const cached = partCache.get(`${scope}\n${part.token}`)
-        if (cached?.part.etag) inm[part.name] = cached.part.etag
+        const etag = cached?.part.etag
+        if (etag && (servedFromMemory(part.token) || contentEtag(etag))) inm[part.name] = etag
     }
     try {
         const res = await api.post('/q', { parts: named.map((part) => part.plan), inm })
@@ -257,9 +301,14 @@ async function flushQueryBatch() {
             if (part.not_modified) {
                 const cached = partCache.get(`${scope}\n${waiter.token}`)
                 if (cached) {
+                    cached.at = Date.now()
                     waiter.resolve(cached.part)
                     continue
                 }
+                // Invalidated while the request was in flight: nothing to
+                // reuse, so batchGet falls back to the plain GET.
+                waiter.reject(new Error('batch part not modified but not cached'))
+                continue
             }
             const merged = mergeCachedRows(waiter.cachedRows, part)
             if (waiter.missingIds && waiter.field) {

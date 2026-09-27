@@ -400,6 +400,7 @@ export {
     optionsBatchToken,
     optionsModelFromUrl,
     rememberInRows,
+    invalidateQueryBatchData,
     resetQueryBatchCache,
     splitInToken,
     tokenForGet,
