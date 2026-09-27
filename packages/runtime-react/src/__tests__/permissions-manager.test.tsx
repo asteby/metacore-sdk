@@ -400,6 +400,79 @@ describe('PermissionsManager (módulo como combobox agrupado)', () => {
     })
 })
 
+describe('PermissionsManager (entradas que comparten modelo)', () => {
+    // Two sidebar entries over the same model (QA PIT-001: "Ventas POS" and
+    // "Por cobrar" both over sales_orders): picking the second must show the
+    // second, not the first entry with that key.
+    const shared: GroupedPermissionsCatalog = {
+        groups: [
+            {
+                title: 'Caja',
+                modules: [
+                    {
+                        key: 'sales_orders',
+                        label: 'Por cobrar',
+                        kind: 'model',
+                        actions: [{ key: 'index', label: 'Listar', kind: 'crud' }],
+                    },
+                ],
+            },
+            {
+                title: 'Ventas',
+                modules: [
+                    {
+                        key: 'sales_orders',
+                        label: 'Ventas POS',
+                        kind: 'model',
+                        actions: [{ key: 'index', label: 'Listar', kind: 'crud' }],
+                    },
+                ],
+            },
+        ],
+    }
+    const moduleTrigger = () => {
+        const triggers = screen.getAllByRole('combobox')
+        return triggers[triggers.length - 1]
+    }
+
+    it('seleccionar la segunda entrada muestra la segunda', async () => {
+        render(<PermissionsManager {...makeProps(shared)} />)
+        await waitFor(() => expect(moduleTrigger().textContent).toMatch(/Por cobrar/))
+        fireEvent.click(moduleTrigger())
+        fireEvent.click(await screen.findByRole('option', { name: /Ventas POS/ }))
+        await waitFor(() => expect(moduleTrigger().textContent).toMatch(/Ventas POS/))
+    })
+})
+
+describe('PermissionsManager (error al crear rol)', () => {
+    it('muestra dentro del diálogo el motivo del servidor y lo deja abierto', async () => {
+        const dup = Object.assign(new Error('Request failed with status code 422'), {
+            response: {
+                data: {
+                    success: false,
+                    code: 'duplicate',
+                    message: 'Ya existe un registro con esos datos',
+                    error: { code: 'duplicate', message: 'Ya existe un registro con esos datos' },
+                },
+            },
+        })
+        const props = makeProps(grouped, {
+            createRole: vi.fn(async () => {
+                throw dup
+            }),
+        })
+        render(<PermissionsManager {...props} />)
+        fireEvent.click(await screen.findByRole('button', { name: /Nuevo rol/ }))
+        fireEvent.change(await screen.findByLabelText('Nombre del rol'), {
+            target: { value: 'Admin' },
+        })
+        fireEvent.click(screen.getByRole('button', { name: 'Crear rol' }))
+        const alert = await screen.findByRole('alert')
+        expect(alert.textContent).toBe('Ya existe un registro con esos datos')
+        expect(screen.getByRole('dialog')).toBeTruthy()
+    })
+})
+
 describe('PermissionsManager (retrocompat shape viejo {modules})', () => {
     it('renderiza el shape flat legacy sin romper, agrupado por addon', async () => {
         const props = makeProps(legacy)

@@ -22,6 +22,7 @@ export const VALIDATION_CATALOGS: Record<string, Record<string, string>> = {
         integer: '{{label}} debe ser un entero',
         custom: '{{label}} no es válido',
         line_items_required: '{{label}} requiere al menos un renglón',
+        protected_field: 'El campo {{label}} lo administra el sistema y no se puede modificar',
         fallback: '{{label}}: valor inválido',
     },
     en: {
@@ -43,6 +44,7 @@ export const VALIDATION_CATALOGS: Record<string, Record<string, string>> = {
         integer: 'The {{label}} must be an integer',
         custom: 'The {{label}} is invalid',
         line_items_required: '{{label}} requires at least one row',
+        protected_field: 'The {{label}} field is managed by the system and cannot be changed',
         fallback: '{{label}}: invalid value',
     },
 }

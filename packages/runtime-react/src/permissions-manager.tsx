@@ -38,6 +38,7 @@ import {
     Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { extractServerError } from './server-error'
 import { cn } from '@asteby/metacore-ui/lib'
 import {
     AlertDialog,
@@ -397,6 +398,29 @@ export function normalizeCatalogGroups(catalog: PermissionsCatalog): ModuleGroup
 }
 
 /** Flat list of every module across groups, in render order. */
+/** Identity of one picker entry: its group index and its index in the group. */
+export function moduleEntryId(groupIndex: number, moduleIndex: number): string {
+    return `${groupIndex}:${moduleIndex}`
+}
+
+/** The first entry of the catalog, or null when it has no modules. */
+export function firstModuleEntryId(groups: ModuleGroup[]): string | null {
+    const gi = groups.findIndex((g) => g.modules.length > 0)
+    return gi < 0 ? null : moduleEntryId(gi, 0)
+}
+
+/** Resolve an entry id back to its module and group. */
+export function moduleAtEntry(
+    groups: ModuleGroup[] | null | undefined,
+    id: string | null,
+): { module: PermissionModuleDef; group: ModuleGroup } | null {
+    if (!groups || !id) return null
+    const [gi, mi] = id.split(':').map(Number)
+    const group = groups[gi!]
+    const module = group?.modules[mi!]
+    return group && module ? { module, group } : null
+}
+
 export function flattenGroups(groups: ModuleGroup[]): PermissionModuleDef[] {
     return groups.flatMap((g) => g.modules)
 }
@@ -546,6 +570,10 @@ export function PermissionsManager({
     const [loadError, setLoadError] = React.useState(false)
 
     const [activeRoleId, setActiveRoleId] = React.useState<string | null>(null)
+    // The picker selection is the ENTRY (group index : module index), not the
+    // module key: two sidebar entries may govern the same model (e.g. "Ventas
+    // POS" and "Por cobrar" both over sales_orders) and a key-based lookup
+    // always landed on the first of them.
     const [activeModuleKey, setActiveModuleKey] = React.useState<string | null>(null)
 
     // baseline = capabilities as persisted; draft = baseline + local edits.
@@ -567,6 +595,8 @@ export function PermissionsManager({
         color: string
         icon: string
         grantAll: boolean
+        /** Server rejection shown inside the dialog (e.g. duplicate name). */
+        error?: string
     }>({
         open: false,
         mode: 'create',
@@ -594,9 +624,7 @@ export function PermissionsManager({
                 setGeneral(cat.general ?? [])
                 setRoles(rs)
                 setActiveRoleId((prev) => prev ?? rs[0]?.id ?? null)
-                setActiveModuleKey(
-                    (prev) => prev ?? flattenGroups(grouped)[0]?.key ?? null,
-                )
+                setActiveModuleKey((prev) => prev ?? firstModuleEntryId(grouped))
             })
             .catch(() => {
                 if (!cancelled) setLoadError(true)
@@ -642,8 +670,8 @@ export function PermissionsManager({
         [roles, activeRoleId],
     )
     const activeModule = React.useMemo(
-        () => allModules.find((m) => m.key === activeModuleKey) ?? null,
-        [allModules, activeModuleKey],
+        () => moduleAtEntry(groups, activeModuleKey)?.module ?? null,
+        [groups, activeModuleKey],
     )
 
     const dirty = baseline !== null && draft !== null && !capabilitySetsEqual(baseline, draft)
@@ -730,6 +758,7 @@ export function PermissionsManager({
         const label = roleDialog.label.trim()
         if (!label) return
         setRoleSaving(true)
+        setRoleDialog((d) => ({ ...d, error: undefined }))
         try {
             if (roleDialog.mode === 'create' && createRole) {
                 const created = await createRole({
@@ -764,10 +793,15 @@ export function PermissionsManager({
                 toast.success('Rol actualizado')
             }
             setRoleDialog((d) => ({ ...d, open: false }))
-        } catch {
-            toast.error(
-                roleDialog.mode === 'create' ? 'No se pudo crear el rol' : 'No se pudo actualizar el rol',
-            )
+        } catch (err) {
+            // Keep the dialog open WITH the server's reason (422 duplicate name,
+            // 403 …): a toast alone can sit behind the modal overlay.
+            const fallback =
+                roleDialog.mode === 'create' ? 'No se pudo crear el rol' : 'No se pudo actualizar el rol'
+            const { title, description } = extractServerError(err, fallback)
+            const error = description ? `${title}: ${description}` : title
+            setRoleDialog((d) => ({ ...d, error }))
+            toast.error(fallback, { description: error })
         } finally {
             setRoleSaving(false)
         }
@@ -806,11 +840,10 @@ export function PermissionsManager({
     const moduleGranted = activeModule && draft ? grantedCountForModule(draft, activeModule) : 0
     const moduleTotal = activeModule?.actions.length ?? 0
     const checksDisabled = !activeRole || !draft || loadingPerms || saving
-    const activeModuleGroupTitle = React.useMemo(() => {
-        if (!activeModule || !groups) return ''
-        const g = groups.find((grp) => grp.modules.some((m) => m.key === activeModule.key))
-        return g?.title ?? ''
-    }, [activeModule, groups])
+    const activeModuleGroupTitle = React.useMemo(
+        () => moduleAtEntry(groups, activeModuleKey)?.group.title ?? '',
+        [groups, activeModuleKey],
+    )
 
     // ---- render --------------------------------------------------------------
     if (loadError) {
@@ -1094,12 +1127,12 @@ export function PermissionsManager({
                                                     key={group.title || `__untitled_${gi}`}
                                                     heading={group.title || undefined}
                                                 >
-                                                    {group.modules.map((mod) => (
+                                                    {group.modules.map((mod, mi) => (
                                                         <CommandItem
-                                                            key={mod.key}
-                                                            value={`${group.title} ${mod.label} ${mod.key}`}
+                                                            key={moduleEntryId(gi, mi)}
+                                                            value={`${group.title} ${mod.label} ${mod.key} ${moduleEntryId(gi, mi)}`}
                                                             onSelect={() => {
-                                                                setActiveModuleKey(mod.key)
+                                                                setActiveModuleKey(moduleEntryId(gi, mi))
                                                                 setModuleOpen(false)
                                                             }}
                                                         >
@@ -1129,7 +1162,7 @@ export function PermissionsManager({
                                                                         /{mod.actions.length}
                                                                     </Badge>
                                                                 )}
-                                                            {mod.key === activeModuleKey && (
+                                                            {moduleEntryId(gi, mi) === activeModuleKey && (
                                                                 <Check className="ml-2 h-4 w-4 shrink-0" />
                                                             )}
                                                         </CommandItem>
@@ -1270,6 +1303,7 @@ export function PermissionsManager({
                                     setRoleDialog((d) => ({
                                         ...d,
                                         label,
+                                        error: undefined,
                                         icon:
                                             d.icon === suggestRoleIcon(d.label) ||
                                             d.icon === 'Shield' ||
@@ -1329,6 +1363,11 @@ export function PermissionsManager({
                                     </span>
                                 </span>
                             </label>
+                        )}
+                        {roleDialog.error && (
+                            <p role="alert" className="text-sm text-destructive">
+                                {roleDialog.error}
+                            </p>
                         )}
                     </div>
                     <DialogFooter>
