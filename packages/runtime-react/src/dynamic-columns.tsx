@@ -15,6 +15,7 @@
 import * as React from 'react'
 import { ColumnDef } from '@tanstack/react-table'
 import { format, type Locale } from 'date-fns'
+import { parseCalendarDate } from './calendar-date'
 import { es, enUS } from 'date-fns/locale'
 import { Calendar, Check, Copy, Mail, Minus, MoreHorizontal } from 'lucide-react'
 import {
@@ -507,7 +508,8 @@ export function formatDateCell(
             title: format(date, 'PPpp', { locale }),
         }
     }
-    return { display: format(date, 'PPP', { locale }) }
+    // Calendar day without an org zone: read YYYY-MM-DD as a local day.
+    return { display: format(parseCalendarDate(value) ?? date, 'PPP', { locale }) }
 }
 
 /**

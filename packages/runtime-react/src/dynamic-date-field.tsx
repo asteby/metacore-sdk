@@ -21,6 +21,7 @@ import {
 } from '@asteby/metacore-ui/primitives'
 import { CalendarIcon } from 'lucide-react'
 import type { ActionFieldDef } from './types'
+import { parseCalendarDate } from './calendar-date'
 
 export interface DynamicDateFieldProps {
     field: ActionFieldDef
@@ -28,16 +29,7 @@ export interface DynamicDateFieldProps {
     onChange: (v: any) => void
 }
 
-// Parse "YYYY-MM-DD" (or any Date-parseable string) into a local Date, or
-// undefined when empty/invalid. Uses noon to dodge timezone day-shift.
-function toDate(v: any): Date | undefined {
-    if (!v) return undefined
-    const s = String(v)
-    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s)
-    if (m) return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12)
-    const d = new Date(s)
-    return isNaN(d.getTime()) ? undefined : d
-}
+const toDate = parseCalendarDate
 
 // Format a Date back to "YYYY-MM-DD" (local, no timezone shift).
 function toISO(d: Date): string {

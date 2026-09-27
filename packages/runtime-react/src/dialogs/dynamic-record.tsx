@@ -49,6 +49,7 @@ import {
 import { cn } from '@asteby/metacore-ui/lib'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
+import { parseCalendarDate } from '../calendar-date'
 import { es } from 'date-fns/locale'
 import { ExternalLink, Loader2, CalendarIcon, ChevronDown, Check, Upload, X as XIcon, ScanLine } from 'lucide-react'
 import { BarcodeScanner } from '../barcode-scanner'
@@ -2125,7 +2126,11 @@ export function EditField({ field, value, onChange, record, invalid }: {
     }
 
     if (field.type === 'date' || field.type === 'datetime' || field.type === 'timestamp' || field.type === 'timestamptz') {
-        const dateValue = value ? (typeof value === 'string' ? parseISO(value) : new Date(value)) : undefined
+        // A pure `date` is a calendar day: read its YYYY-MM-DD as a local day so
+        // UTC midnight does not render as the day before (PIT-025).
+        const dateValue = field.type === 'date'
+            ? parseCalendarDate(value)
+            : value ? (typeof value === 'string' ? parseISO(value) : new Date(value)) : undefined
         // Treat the Go zero-time (0001-01-01) as empty so an unset date shows the
         // placeholder instead of "31 de diciembre de 1".
         const validDate =
