@@ -2,8 +2,9 @@
 // runtime-react components (DynamicTable, dialogs, action dispatcher) can
 // talk to the backend without a bundler alias to `@/lib/api`. Hosts wrap
 // their app in <ApiProvider value={axiosInstance}> once at the root.
-import React, { createContext, useContext, useMemo } from 'react'
+import React, { createContext, useContext, useEffect, useMemo } from 'react'
 import { batchGet, invalidateQueryBatchData } from './query-batch'
+import { invalidateOptionsCache } from './use-options-resolver'
 
 /** Minimal axios-compatible client shape consumed by runtime-react. */
 export interface ApiClient {
@@ -21,12 +22,57 @@ export interface ApiProviderProps {
 }
 
 export function ApiProvider({ client, children }: ApiProviderProps) {
+    // Hosts also write through their own client (native dialogs, settings
+    // screens) without going through useApi(). When the client is axios,
+    // every non-GET response drops what the runtime remembered as well.
+    useEffect(() => {
+        const interceptors = (client as AxiosLike).interceptors?.response
+        if (!interceptors?.use) return
+        const onSettled = (config: { method?: string; url?: string } | undefined) => {
+            if (isWrite(config?.method, config?.url)) forgetRemembered()
+        }
+        const id = interceptors.use(
+            (res: any) => {
+                onSettled(res?.config)
+                return res
+            },
+            (err: any) => {
+                onSettled(err?.config)
+                return Promise.reject(err)
+            },
+        )
+        return () => interceptors.eject?.(id)
+    }, [client])
     return <ApiContext.Provider value={client}>{children}</ApiContext.Provider>
 }
 
-function mutating<T>(request: Promise<T>): Promise<T> {
+interface AxiosLike {
+    interceptors?: {
+        response?: {
+            use?: (onFulfilled: (res: any) => any, onRejected: (err: any) => any) => number
+            eject?: (id: number) => void
+        }
+    }
+}
+
+// The read batch is a POST to /q; it reads, so it must not count as a write.
+const BATCH_READ_URL = /(^|\/)q\/?(\?|$)/
+
+function isWrite(method: string | undefined, url: string | undefined): boolean {
+    const m = (method ?? '').toLowerCase()
+    if (m === '' || m === 'get' || m === 'head' || m === 'options') return false
+    return !BATCH_READ_URL.test(url ?? '')
+}
+
+/** Drops the batch rows and the picker options the runtime remembered. */
+function forgetRemembered(): void {
     invalidateQueryBatchData()
-    return request.finally(invalidateQueryBatchData)
+    invalidateOptionsCache()
+}
+
+function mutating<T>(request: Promise<T>): Promise<T> {
+    forgetRemembered()
+    return request.finally(forgetRemembered)
 }
 
 /** Returns the host-injected api client. Throws if no <ApiProvider> is mounted. */
@@ -41,7 +87,8 @@ export function useApi(): ApiClient {
     // wrapper is stable while the host client is.
     return useMemo<ApiClient>(() => ({
         get: (url, config) => batchGet(ctx, url, config),
-        post: (url, body, config) => mutating(ctx.post(url, body, config)),
+        post: (url, body, config) =>
+            isWrite('post', url) ? mutating(ctx.post(url, body, config)) : ctx.post(url, body, config),
         put: (url, body, config) => mutating(ctx.put(url, body, config)),
         delete: (url, config) => mutating(ctx.delete(url, config)),
     }), [ctx])

@@ -113,6 +113,20 @@ type OptionsPayload = { options: ResolvedOption[]; meta: OptionsMeta }
 const optionsCache = new Map<string, { payload: OptionsPayload; at: number }>()
 const optionsInflight = new Map<string, Promise<OptionsPayload>>()
 const optionsEpoch = new Map<string, number>()
+// Bumped by invalidateOptionsCache: a lookup that started before a write must
+// not store what it read.
+let optionsGeneration = 0
+
+/**
+ * Forgets every cached and in-flight options lookup. Called after any write
+ * (create, edit, delete), so a picker opened right after creating a record
+ * lists it instead of serving the previous 30 s snapshot.
+ */
+export function invalidateOptionsCache(): void {
+    optionsGeneration++
+    optionsCache.clear()
+    optionsInflight.clear()
+}
 
 export function optionsRequestKey(
     scope: string,
@@ -220,6 +234,7 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
             optionsInflight.delete(key)
         }
         const epoch = optionsEpoch.get(key) ?? 0
+        const generation = optionsGeneration
         const cached = optionsCache.get(key)
         if (cached && Date.now() - cached.at < OPTIONS_TTL_MS) {
             setOptions(cached.payload.options)
@@ -254,7 +269,7 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
                             data: part.data,
                             meta: part.meta,
                         })
-                        if ((optionsEpoch.get(key) ?? 0) === epoch) {
+                        if ((optionsEpoch.get(key) ?? 0) === epoch && optionsGeneration === generation) {
                             optionsCache.set(key, { payload, at: Date.now() })
                         }
                         return payload
@@ -270,7 +285,7 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
                     throw new Error(body?.message || 'options resolver: unsuccessful response')
                 }
                 const payload = readOptionsEnvelope(body)
-                if ((optionsEpoch.get(key) ?? 0) === epoch) {
+                if ((optionsEpoch.get(key) ?? 0) === epoch && optionsGeneration === generation) {
                     optionsCache.set(key, { payload, at: Date.now() })
                 }
                 return payload

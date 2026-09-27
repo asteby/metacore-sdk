@@ -410,6 +410,7 @@ export {
 } from './query-batch'
 export {
     useOptionsResolver,
+    invalidateOptionsCache,
     projectOption,
     type ResolvedOption,
     type OptionsMeta,
