@@ -16,6 +16,16 @@ const badgeVariants = cva(
           'border-transparent bg-destructive text-white [a&]:hover:bg-destructive/90 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/60',
         outline:
           'text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground',
+        // Soft tonal states (tinted fill, readable text in claro/oscuro) for
+        // status chips: translucent enough to sit on glass surfaces too.
+        success:
+          'border-emerald-500/25 bg-emerald-500/12 text-emerald-700 dark:text-emerald-300',
+        warning:
+          'border-amber-500/25 bg-amber-500/12 text-amber-700 dark:text-amber-300',
+        danger:
+          'border-destructive/25 bg-destructive/10 text-destructive dark:text-red-300',
+        info: 'border-sky-500/25 bg-sky-500/12 text-sky-700 dark:text-sky-300',
+        muted: 'border-border/60 bg-muted/60 text-muted-foreground',
       },
     },
     defaultVariants: {
