@@ -1,0 +1,360 @@
+/**
+ * Glass theme pack — translucent surfaces over a soft gradient, in the
+ * iOS / visionOS idiom: floating panels with a hairline rim, an inner top
+ * highlight, layered soft shadows and blur + saturation behind them.
+ *
+ * Activated with <html data-ui-theme="glass">. The pack only brings
+ * surfaces, borders, blur and shadows: it never sets --primary (nor ring /
+ * sidebar-primary). The accent is always the brand, painted by
+ * @asteby/metacore-app-providers' applyBranding.
+ *
+ * Targets the `data-slot` attributes of @asteby/metacore-ui primitives, so
+ * every app built on them (sidebar, dialogs, sheets, popovers, selects,
+ * inputs, tables) picks it up without per-component classes. Import it after
+ * the app's base tokens:
+ *
+ *   @import '@asteby/metacore-theme/glass.css';
+ *
+ * Plain (unlayered) CSS on purpose: it must win over Tailwind utilities
+ * such as `bg-card` or `hover:bg-muted/50` in `@layer utilities`.
+ */
+
+/* ─── Tokens ─── */
+[data-ui-theme='glass'] {
+  --radius: 1.1rem;
+  --font-sans: Manrope, Inter, sans-serif;
+
+  --background: oklch(0.985 0.01 250 / 0.5);
+  --foreground: oklch(0.22 0.03 250);
+  --card: oklch(1 0 0 / 0.5);
+  --card-foreground: oklch(0.22 0.03 250);
+  --popover: oklch(0.995 0.004 250 / 0.74);
+  --popover-foreground: oklch(0.22 0.03 250);
+  --secondary: oklch(1 0 0 / 0.55);
+  --secondary-foreground: oklch(0.28 0.04 250);
+  --muted: oklch(0.95 0.015 250 / 0.6);
+  --muted-foreground: oklch(0.44 0.03 250);
+  --accent: oklch(1 0 0 / 0.6);
+  --accent-foreground: oklch(0.24 0.04 250);
+  /* Inner separators: a dark hairline reads on white glass, a white one doesn't. */
+  --border: oklch(0.35 0.03 250 / 0.12);
+  --input: oklch(0.35 0.03 250 / 0.14);
+  --sidebar: oklch(1 0 0 / 0.45);
+  --sidebar-foreground: oklch(0.26 0.03 250);
+  --sidebar-accent: oklch(1 0 0 / 0.6);
+  --sidebar-accent-foreground: oklch(0.22 0.04 250);
+  --sidebar-border: oklch(0.35 0.03 250 / 0.1);
+
+  --glass-blur: 24px;
+  --glass-saturate: 1.8;
+  --glass-radius: calc(var(--radius) + 4px);
+  /* Outer rim of a floating panel. */
+  --glass-rim: oklch(1 0 0 / 0.55);
+  --glass-highlight: inset 0 1px 0 0 oklch(1 0 0 / 0.75);
+  --glass-shadow:
+    0 1px 2px oklch(0.25 0.04 260 / 0.06),
+    0 8px 24px -8px oklch(0.25 0.04 260 / 0.14),
+    0 24px 56px -16px oklch(0.25 0.04 260 / 0.16);
+  --glass-shadow-float:
+    0 2px 6px oklch(0.25 0.04 260 / 0.08),
+    0 18px 48px -12px oklch(0.25 0.04 260 / 0.24),
+    0 48px 96px -24px oklch(0.25 0.04 260 / 0.22);
+  --glass-field: oklch(1 0 0 / 0.55);
+  --glass-field-hover: oklch(1 0 0 / 0.7);
+  --glass-overlay: oklch(0.3 0.03 260 / 0.16);
+  --glass-row-hover: oklch(1 0 0 / 0.4);
+  --glass-thead: oklch(1 0 0 / 0.62);
+
+  --shadow-md: var(--glass-shadow);
+  --ui-surface-blur: var(--glass-blur);
+  --ui-card-alpha: 0.5;
+
+  background-color: oklch(0.93 0.035 270);
+  background-image:
+    radial-gradient(48rem 34rem at 10% -8%, oklch(0.8 0.11 250 / 0.9), transparent 70%),
+    radial-gradient(40rem 30rem at 105% 20%, oklch(0.78 0.12 295 / 0.75), transparent 68%),
+    radial-gradient(38rem 28rem at 60% 115%, oklch(0.9 0.12 90 / 0.7), transparent 70%);
+  background-attachment: fixed;
+}
+
+.dark[data-ui-theme='glass'] {
+  --background: oklch(0.22 0.03 255 / 0.5);
+  --foreground: oklch(0.96 0.01 250);
+  --card: oklch(0.27 0.03 255 / 0.45);
+  --card-foreground: oklch(0.96 0.01 250);
+  --popover: oklch(0.23 0.03 255 / 0.78);
+  --popover-foreground: oklch(0.96 0.01 250);
+  --secondary: oklch(1 0 0 / 0.08);
+  --secondary-foreground: oklch(0.96 0.01 250);
+  --muted: oklch(1 0 0 / 0.06);
+  --muted-foreground: oklch(0.76 0.03 250);
+  --accent: oklch(1 0 0 / 0.1);
+  --accent-foreground: oklch(0.97 0.01 250);
+  --border: oklch(1 0 0 / 0.1);
+  --input: oklch(1 0 0 / 0.12);
+  --sidebar: oklch(0.2 0.03 255 / 0.5);
+  --sidebar-foreground: oklch(0.94 0.01 250);
+  --sidebar-accent: oklch(1 0 0 / 0.1);
+  --sidebar-accent-foreground: oklch(0.97 0.01 250);
+  --sidebar-border: oklch(1 0 0 / 0.08);
+
+  --glass-rim: oklch(1 0 0 / 0.1);
+  --glass-highlight: inset 0 1px 0 0 oklch(1 0 0 / 0.09);
+  --glass-shadow:
+    0 1px 2px oklch(0 0 0 / 0.3),
+    0 8px 24px -8px oklch(0 0 0 / 0.4),
+    0 24px 56px -16px oklch(0 0 0 / 0.45);
+  --glass-shadow-float:
+    0 2px 6px oklch(0 0 0 / 0.35),
+    0 18px 48px -12px oklch(0 0 0 / 0.55),
+    0 48px 96px -24px oklch(0 0 0 / 0.5);
+  --glass-field: oklch(1 0 0 / 0.06);
+  --glass-field-hover: oklch(1 0 0 / 0.1);
+  --glass-overlay: oklch(0.08 0.02 260 / 0.45);
+  --glass-row-hover: oklch(1 0 0 / 0.05);
+  --glass-thead: oklch(0.25 0.03 255 / 0.7);
+
+  background-color: oklch(0.16 0.03 260);
+  background-image:
+    radial-gradient(42rem 28rem at 8% -8%, oklch(0.45 0.16 250 / 0.7), transparent 70%),
+    radial-gradient(32rem 24rem at 100% 0%, oklch(0.4 0.12 200 / 0.55), transparent 68%),
+    radial-gradient(28rem 22rem at 70% 100%, oklch(0.42 0.14 300 / 0.45), transparent 70%);
+  background-attachment: fixed;
+}
+
+/* ─── Blur behind every translucent surface ─── */
+[data-ui-theme='glass'] .bg-background,
+[data-ui-theme='glass'] .bg-card,
+[data-ui-theme='glass'] .bg-popover,
+[data-ui-theme='glass'] .bg-sidebar,
+[data-ui-theme='glass'] [data-slot='sidebar-inner'],
+[data-ui-theme='glass'] [data-slot='popover-content'],
+[data-ui-theme='glass'] [data-slot='select-content'],
+[data-ui-theme='glass'] [data-slot='dropdown-menu-content'],
+[data-ui-theme='glass'] [data-slot='dropdown-menu-sub-content'],
+[data-ui-theme='glass'] [data-slot='context-menu-content'] {
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+}
+
+/*
+ * Only the leaf surfaces are glass. body and the sidebar wrapper are pure
+ * layout, yet they also paint --background / --sidebar (inset variant):
+ * stacked under the panels those alphas compound to a flat fill.
+ */
+[data-ui-theme='glass'] body,
+[data-ui-theme='glass'] [data-slot='sidebar-wrapper'] {
+  background-color: transparent;
+}
+
+/* ─── Floating panels: sidebar + main inset ─── */
+[data-ui-theme='glass'] [data-slot='sidebar-inner'],
+[data-ui-theme='glass'] [data-slot='sidebar-inset'] {
+  border: 1px solid var(--glass-rim);
+  border-radius: var(--glass-radius);
+  box-shadow: var(--glass-highlight), var(--glass-shadow);
+  background-clip: padding-box;
+}
+
+[data-ui-theme='glass'] [data-slot='sidebar-inner'] {
+  overflow: hidden;
+}
+
+/*
+ * The plain `sidebar` variant is flush to the viewport edge with a border:
+ * give it the same 0.5rem gutter the floating/inset variants have, and the
+ * icon-collapsed width room for that gutter.
+ */
+[data-ui-theme='glass'] [data-slot='sidebar'][data-variant='sidebar'] [data-slot='sidebar-container'] {
+  padding: 0.5rem;
+  border-inline: 0;
+}
+
+[data-ui-theme='glass'] [data-slot='sidebar'][data-variant='sidebar'][data-collapsible='icon'] [data-slot='sidebar-container'] {
+  width: calc(var(--sidebar-width-icon) + 1rem + 2px);
+}
+
+[data-ui-theme='glass'] [data-slot='sidebar'][data-variant='sidebar'][data-collapsible='icon'] [data-slot='sidebar-gap'] {
+  width: calc(var(--sidebar-width-icon) + 1rem);
+}
+
+@media (min-width: 768px) {
+  [data-ui-theme='glass'] [data-slot='sidebar'][data-variant='sidebar'] ~ [data-slot='sidebar-inset'] {
+    margin: 0.5rem;
+    margin-inline-start: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  /* No sidebar panel beside it on phones: the inset is the whole screen. */
+  [data-ui-theme='glass'] [data-slot='sidebar-inset'] {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+/*
+ * Mobile sidebar: a Sheet whose content carries data-slot="sidebar" +
+ * data-mobile="true" (not sheet-content). Float it as a card with the same
+ * gutter, over the dimmed overlay, so it takes the denser popover glass.
+ */
+[data-ui-theme='glass'] [data-mobile='true'][data-slot='sidebar'] {
+  inset-block: 0.5rem;
+  inset-inline-start: 0.5rem;
+  height: auto;
+  background-color: var(--popover);
+  border: 1px solid var(--glass-rim);
+  border-radius: var(--glass-radius);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-float);
+  background-clip: padding-box;
+  overflow: hidden;
+  -webkit-backdrop-filter: blur(40px) saturate(var(--glass-saturate));
+  backdrop-filter: blur(40px) saturate(var(--glass-saturate));
+}
+
+/* ─── Floating layers: dialogs, sheets, menus ─── */
+[data-ui-theme='glass'] [data-slot='dialog-overlay'],
+[data-ui-theme='glass'] [data-slot='alert-dialog-overlay'],
+[data-ui-theme='glass'] [data-slot='sheet-overlay'] {
+  background-color: var(--glass-overlay);
+  -webkit-backdrop-filter: blur(6px) saturate(1.2);
+  backdrop-filter: blur(6px) saturate(1.2);
+}
+
+[data-ui-theme='glass'] [data-slot='dialog-content'],
+[data-ui-theme='glass'] [data-slot='alert-dialog-content'],
+[data-ui-theme='glass'] [data-slot='sheet-content'] {
+  background-color: var(--popover);
+  color: var(--popover-foreground);
+  border: 1px solid var(--glass-rim);
+  box-shadow: var(--glass-highlight), var(--glass-shadow-float);
+  background-clip: padding-box;
+  -webkit-backdrop-filter: blur(40px) saturate(var(--glass-saturate));
+  backdrop-filter: blur(40px) saturate(var(--glass-saturate));
+}
+
+[data-ui-theme='glass'] [data-slot='dialog-content'],
+[data-ui-theme='glass'] [data-slot='alert-dialog-content'] {
+  border-radius: calc(var(--radius) + 6px);
+}
+
+[data-ui-theme='glass'] [data-slot='dialog-footer'],
+[data-ui-theme='glass'] [data-slot='sheet-footer'] {
+  border-color: var(--border);
+}
+
+/* A footer bar that sits on a separator gets a faint frosted band. */
+[data-ui-theme='glass'] [data-slot='dialog-footer'].border-t {
+  background-color: color-mix(in oklch, var(--popover) 55%, transparent);
+}
+
+[data-ui-theme='glass'] [data-slot='popover-content'],
+[data-ui-theme='glass'] [data-slot='select-content'],
+[data-ui-theme='glass'] [data-slot='dropdown-menu-content'],
+[data-ui-theme='glass'] [data-slot='dropdown-menu-sub-content'],
+[data-ui-theme='glass'] [data-slot='context-menu-content'] {
+  background-color: var(--popover);
+  border-color: var(--glass-rim);
+  box-shadow: var(--glass-highlight), var(--glass-shadow);
+  background-clip: padding-box;
+}
+
+/* ─── Fields ─── */
+[data-ui-theme='glass'] [data-slot='input'],
+[data-ui-theme='glass'] [data-slot='textarea'],
+[data-ui-theme='glass'] [data-slot='select-trigger'],
+[data-ui-theme='glass'] [data-slot='command-input-wrapper'] {
+  background-color: var(--glass-field);
+  border-color: var(--input);
+  box-shadow: var(--glass-highlight);
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+[data-ui-theme='glass'] [data-slot='input']:hover:not(:disabled),
+[data-ui-theme='glass'] [data-slot='textarea']:hover:not(:disabled),
+[data-ui-theme='glass'] [data-slot='select-trigger']:hover:not(:disabled) {
+  background-color: var(--glass-field-hover);
+}
+
+[data-ui-theme='glass'] [data-slot='input']:focus-visible,
+[data-ui-theme='glass'] [data-slot='textarea']:focus-visible,
+[data-ui-theme='glass'] [data-slot='select-trigger']:focus-visible,
+[data-ui-theme='glass'] [data-slot='select-trigger'][data-state='open'] {
+  background-color: var(--glass-field-hover);
+  border-color: var(--primary);
+  box-shadow:
+    var(--glass-highlight),
+    0 0 0 3px color-mix(in oklch, var(--primary) 28%, transparent);
+  outline: none;
+}
+
+/* ─── Tables (DynamicTable and any metacore-ui <Table>) ─── */
+[data-ui-theme='glass'] [data-slot='table-head'] {
+  background-color: var(--glass-thead);
+  border-bottom: 1px solid var(--border);
+  -webkit-backdrop-filter: blur(16px) saturate(var(--glass-saturate));
+  backdrop-filter: blur(16px) saturate(var(--glass-saturate));
+}
+
+[data-ui-theme='glass'] [data-slot='table-row'] {
+  border-color: var(--border);
+  transition: background-color 120ms ease;
+}
+
+[data-ui-theme='glass'] [data-slot='table-body'] [data-slot='table-row']:hover {
+  background-color: var(--glass-row-hover);
+}
+
+[data-ui-theme='glass'] [data-slot='table-row'][data-state='selected'] {
+  background-color: color-mix(in oklch, var(--primary) 10%, transparent);
+}
+
+/* Sticky cells (actions column, totals footer) must not show rows through. */
+[data-ui-theme='glass'] [data-slot='table-cell'].sticky {
+  background-color: var(--glass-thead);
+  -webkit-backdrop-filter: blur(16px) saturate(var(--glass-saturate));
+  backdrop-filter: blur(16px) saturate(var(--glass-saturate));
+}
+
+/* ─── Without backdrop-filter translucency just muddies text ─── */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  [data-ui-theme='glass'] {
+    --background: oklch(0.97 0.02 250 / 0.92);
+    --card: oklch(1 0 0 / 0.94);
+    --popover: oklch(1 0 0 / 0.98);
+    --sidebar: oklch(0.99 0.008 250 / 0.92);
+    --glass-thead: oklch(0.98 0.01 250);
+    --glass-field: oklch(1 0 0 / 0.9);
+    --glass-overlay: oklch(0.3 0.03 260 / 0.4);
+  }
+
+  .dark[data-ui-theme='glass'] {
+    --background: oklch(0.2 0.03 250 / 0.94);
+    --card: oklch(0.24 0.03 250 / 0.94);
+    --popover: oklch(0.22 0.03 250 / 0.98);
+    --sidebar: oklch(0.17 0.03 250 / 0.94);
+    --glass-thead: oklch(0.24 0.03 250);
+    --glass-field: oklch(0.26 0.03 250);
+    --glass-overlay: oklch(0.05 0.02 260 / 0.7);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  [data-ui-theme='glass'] {
+    --background: oklch(0.97 0.02 250 / 0.94);
+    --card: oklch(1 0 0 / 0.95);
+    --popover: oklch(1 0 0 / 0.98);
+    --sidebar: oklch(0.99 0.008 250 / 0.94);
+  }
+
+  .dark[data-ui-theme='glass'] {
+    --background: oklch(0.2 0.03 250 / 0.95);
+    --card: oklch(0.24 0.03 250 / 0.95);
+    --popover: oklch(0.22 0.03 250 / 0.98);
+    --sidebar: oklch(0.17 0.03 250 / 0.95);
+  }
+}

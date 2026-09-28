@@ -50,6 +50,22 @@ If you already have your own Tailwind entry and only want the tokens:
 @import '@asteby/metacore-theme/tokens.css';
 ```
 
+### Glass theme pack
+
+A translucent skin (floating panels, blur + saturation, hairline rim, soft
+layered shadows) activated with `<html data-ui-theme="glass">`. It styles the
+`data-slot` primitives of `@asteby/metacore-ui` (sidebar, dialogs, sheets,
+popovers, selects, inputs, tables) and only sets surfaces — the accent stays
+the brand painted by `applyBranding`. Import it after your tokens:
+
+```css
+@import '@asteby/metacore-theme/tokens.css';
+@import '@asteby/metacore-theme/glass.css';
+```
+
+It includes a near-opaque fallback for browsers without `backdrop-filter`
+and for `prefers-reduced-transparency`.
+
 ## Usage from JS/TS
 
 For programmatic access (Storybook, charts, PDF):

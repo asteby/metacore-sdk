@@ -23,6 +23,7 @@
     },
     "./tokens.css": "./styles/tokens.css",
     "./index.css": "./styles/index.css",
+    "./glass.css": "./styles/glass.css",
     "./fonts": {
       "types": "./dist/fonts.d.ts",
       "import": "./dist/fonts.js"
