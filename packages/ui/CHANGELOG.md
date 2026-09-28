@@ -1,5 +1,11 @@
 # @asteby/metacore-ui
 
+## 2.21.0
+
+### Minor Changes
+
+- bd81d54: `Badge` gana variantes tonales `success`, `warning`, `danger`, `info` y `muted`: tinte del token de estado del tema (`--success`, `--warning`, `--info`, `--destructive`) con fallback oklch, así un theme pack los recolorea, pensadas para chips de estado (también sobre superficies de vidrio).
+
 ## 2.20.0
 
 ### Patch Changes
