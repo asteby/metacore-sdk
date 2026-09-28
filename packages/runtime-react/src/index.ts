@@ -386,6 +386,19 @@ export {
     type ModelExtensionProps,
 } from './model-extension-registry'
 export {
+    registerAgentResultRenderer,
+    resolveAgentResultRenderer,
+    listAgentResultRenderers,
+    clearAgentResultRenderers,
+    useAgentResultRegistryVersion,
+    AgentResultView,
+    type AgentResult,
+    type AgentResultRenderer,
+    type AgentResultRendererOptions,
+    type AgentResultRendererProps,
+    type AgentResultViewProps,
+} from './agent-result-registry'
+export {
     isColumnVisibleInTable,
     isColumnVisibleInModal,
     isColumnVisibleInLineSubtable,

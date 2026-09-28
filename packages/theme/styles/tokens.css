@@ -51,6 +51,23 @@
   --shadow-2xl: 0px 2px 3px 0px hsl(0 0% 0% / 0.40);
   --tracking-normal: -0.025em;
   --spacing: 0.27rem;
+
+  /*
+   * Semantic surfaces for floating UI outside the metacore-ui primitives
+   * (chat panels, composers, result cards). Defaults are the plain tokens;
+   * a theme pack (glass.css) redefines them, so screens that paint with
+   * these never need to know which theme is active.
+   */
+  --surface-panel: var(--card);
+  --surface-raised: var(--card);
+  --surface-field: var(--background);
+  --border-rim: var(--border);
+  --elevation-raised: 0 1px 2px oklch(0 0 0 / 0.05);
+  --elevation-panel: 0 1px 2px oklch(0 0 0 / 0.05), 0 12px 32px -16px oklch(0 0 0 / 0.18);
+  --elevation-float: 0 2px 6px oklch(0 0 0 / 0.08), 0 24px 56px -20px oklch(0 0 0 / 0.3);
+  --backdrop-panel: none;
+  --radius-panel: calc(var(--radius) + 4px);
+  --radius-field: calc(var(--radius) + 10px);
 }
 
 .dark {

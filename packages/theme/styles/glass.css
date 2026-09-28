@@ -65,6 +65,18 @@
   --glass-row-hover: oklch(1 0 0 / 0.4);
   --glass-thead: oklch(1 0 0 / 0.62);
 
+  /* Semantic surfaces (see tokens.css) mapped onto the glass recipe. */
+  --surface-panel: var(--card);
+  --surface-raised: var(--card);
+  --surface-field: var(--glass-field);
+  --border-rim: var(--glass-rim);
+  --elevation-raised: var(--glass-highlight), 0 1px 2px oklch(0.25 0.04 260 / 0.06);
+  --elevation-panel: var(--glass-highlight), var(--glass-shadow);
+  --elevation-float: var(--glass-highlight), var(--glass-shadow-float);
+  --backdrop-panel: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  --radius-panel: var(--glass-radius);
+  --radius-field: calc(var(--radius) + 10px);
+
   --shadow-md: var(--glass-shadow);
   --ui-surface-blur: var(--glass-blur);
   --ui-card-alpha: 0.5;
