@@ -386,9 +386,16 @@ export interface ActionCondition {
  * values; a hidden field never gates submit (its required-check is skipped).
  */
 export interface VisibleWhen {
-    field: string
+    field?: string
     equals?: string
     in?: string[]
+    /**
+     * Attribute class (kernel v3 `visible_when.class`, CONTRACT-item-master):
+     * the field shows when the record's category carries this class. Used
+     * alone, without `field`. Evaluated against the classes the dialog
+     * resolves for the record (see `useAttributeClasses`).
+     */
+    class?: string
 }
 
 // Write-time + client-side constraints. The kernel enforces these on

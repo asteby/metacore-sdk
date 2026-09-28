@@ -60,7 +60,8 @@ import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-f
 import { DynamicMultiSelectField } from '../dynamic-multi-select-field'
 import { DynamicRelations } from '../dynamic-relations'
 import { useOptionsResolver, type ResolvedOption } from '../use-options-resolver'
-import { getFieldRef, getVisibleWhen, evaluateVisibleWhen } from '../dynamic-form-schema'
+import { getFieldRef, getVisibleWhen, evaluateVisibleWhen, ATTRIBUTE_CLASSES_KEY } from '../dynamic-form-schema'
+import { useAttributeClasses, type AttributeClass } from '../attribute-classes'
 import type { VisibleWhen } from '../types'
 import { groupFieldsBySection, type FormLayout } from '../form-layout'
 import { FieldSection, WizardProgress } from '../form-layout-ui'
@@ -203,6 +204,14 @@ interface ModalMetadata {
     form_layout?: FormLayout
     /** camelCase alias for `form_layout`. */
     formLayout?: FormLayout
+    /**
+     * Attribute classes of the model's extensions enabled for the org
+     * (CONTRACT-item-master §3.2); fields with `visible_when.class` show when
+     * the record's category carries the class.
+     */
+    attribute_classes?: AttributeClass[]
+    /** Field whose referenced record carries the classes (default category_id). */
+    attribute_class_field?: string
     /**
      * Backend-localized CRUD success messages (modal metadata). Preferred over
      * the raw response message which is not localized.
@@ -552,11 +561,13 @@ export function filterVisibleFields(
     fields: FieldDef[] | undefined,
     mode: 'view' | 'edit' | 'create',
     formValues?: Record<string, any>,
+    attributeClasses?: string[],
 ): FieldDef[] {
+    const values = formValues && attributeClasses ? { ...formValues, [ATTRIBUTE_CLASSES_KEY]: attributeClasses } : formValues
     return (fields ?? []).filter(f => {
         if (f.hidden) return false
         if (mode === 'create' && f.readonly) return false
-        if (formValues && !evaluateVisibleWhen(getVisibleWhen(f), formValues)) return false
+        if (values && !evaluateVisibleWhen(getVisibleWhen(f), values)) return false
         return true
     })
 }
@@ -573,8 +584,9 @@ export function stripHiddenFieldValues(
     values: Record<string, any>,
     fields: FieldDef[] | undefined,
     mode: 'view' | 'edit' | 'create',
+    attributeClasses?: string[],
 ): Record<string, any> {
-    const visibleKeys = new Set(filterVisibleFields(fields, mode, values).map(f => f.key))
+    const visibleKeys = new Set(filterVisibleFields(fields, mode, values, attributeClasses).map(f => f.key))
     const out: Record<string, any> = {}
     for (const [key, value] of Object.entries(values)) {
         const field = (fields ?? []).find(f => f.key === key)
@@ -632,6 +644,8 @@ export function DynamicRecordDialog({
     const [relations, setRelations] = useState<RelationMeta[]>([])
     const [record, setRecord] = useState<any | null>(null)
     const [formValues, setFormValues] = useState<Record<string, any>>({})
+    // Classes of the record's category, for `visible_when.class` fields.
+    const attributeClasses = useAttributeClasses(api, modalMeta, formValues)
     // Per-field validation errors (localized strings), keyed by field.key. Shown
     // inline under each input; populated from a 422 `errors` map or the client
     // required-field check, cleared per-field on change and wholesale on reopen.
@@ -846,7 +860,7 @@ export function DynamicRecordDialog({
             }
             setFieldErrors(next)
             const visibleKeys = new Set(
-                filterVisibleFields(modalMeta?.fields ?? [], mode, formValues).map(f => f.key),
+                filterVisibleFields(modalMeta?.fields ?? [], mode, formValues, attributeClasses).map(f => f.key),
             )
             const orphans = Object.entries(next).filter(([k]) => !visibleKeys.has(k))
             const description = orphans.length
@@ -868,7 +882,7 @@ export function DynamicRecordDialog({
         if (isEditable) {
             // Laravel-style: collect every issue from the shared validator
             // (required + rule strings / min/max / email…) on visible fields only.
-            const visible = filterVisibleFields(modalMeta.fields, mode, formValues)
+            const visible = filterVisibleFields(modalMeta.fields, mode, formValues, attributeClasses)
             let bag = validateValues(visible as ActionFieldDef[], formValues)
             // Edit: a legacy value re-sent unchanged is not re-judged by a rule
             // added after it was written (same grandfathering as the kernel).
@@ -909,7 +923,7 @@ export function DynamicRecordDialog({
         // filter, so a DiscountRule with scope=category never submits the
         // product_id / customer_id it isn't showing. Mirrors dynamic-form.tsx,
         // which builds its Zod only over visibleFields.
-        const submittedValues = stripHiddenFieldValues(formValues, modalMeta.fields, mode)
+        const submittedValues = stripHiddenFieldValues(formValues, modalMeta.fields, mode, attributeClasses)
 
         // Empty reference pickers → null (not "" / nil-UUID) so nullable FK
         // columns accept them instead of raising a 23503 FK violation.
@@ -1002,7 +1016,7 @@ export function DynamicRecordDialog({
             ? 'Editar registro'
             : 'Ver registro'
 
-    const visibleFields = filterVisibleFields(modalMeta?.fields, mode, formValues)
+    const visibleFields = filterVisibleFields(modalMeta?.fields, mode, formValues, attributeClasses)
 
     // Declarative form layout: group the (already visibility-filtered) fields by
     // their section. Empty sections drop out for free. Steps mode only drives a

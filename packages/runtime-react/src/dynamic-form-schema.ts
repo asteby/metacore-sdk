@@ -404,8 +404,15 @@ export function getVisibleWhen(
 ): VisibleWhen | undefined {
     if (!field) return undefined
     const vw = field.visible_when ?? field.visibleWhen
-    return vw && typeof vw === 'object' && typeof vw.field === 'string' ? vw : undefined
+    return vw && typeof vw === 'object' && (typeof vw.field === 'string' || typeof vw.class === 'string') ? vw : undefined
 }
+
+/**
+ * Form-values key that carries the record's attribute classes (resolved from
+ * its category) so `visible_when.class` evaluates with the same pure function
+ * as the sibling-field predicates. Never submitted.
+ */
+export const ATTRIBUTE_CLASSES_KEY = '__attribute_classes'
 
 /**
  * Evaluates a `visible_when` predicate against the current flat form values.
@@ -426,6 +433,10 @@ export function evaluateVisibleWhen(
     cond: VisibleWhen | null | undefined,
     formValues: Record<string, any> | null | undefined,
 ): boolean {
+    if (cond && typeof cond.class === 'string' && cond.class !== '') {
+        const classes = formValues ? formValues[ATTRIBUTE_CLASSES_KEY] : undefined
+        return Array.isArray(classes) && classes.includes(cond.class)
+    }
     if (!cond || typeof cond.field !== 'string' || cond.field.trim() === '') return true
     const raw = formValues ? formValues[cond.field.trim()] : undefined
     const current = raw == null ? '' : String(raw)
@@ -513,6 +524,7 @@ export function evaluateVisibleWhenForListScope(
     cond: VisibleWhen | null | undefined,
     scope: Record<string, any> | null | undefined,
 ): boolean {
+    // A class predicate depends on each row's category: a list keeps the column.
     if (!cond || typeof cond.field !== 'string' || cond.field.trim() === '') return true
     const key = cond.field.trim()
     if (!scope || !(key in scope)) return true

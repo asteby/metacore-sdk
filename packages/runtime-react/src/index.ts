@@ -431,6 +431,7 @@ export {
     resolveOptionsSource,
     getVisibleWhen,
     evaluateVisibleWhen,
+    ATTRIBUTE_CLASSES_KEY,
     scopeValueFromFilterToken,
     buildListScopeValues,
     evaluateVisibleWhenForListScope,
@@ -519,3 +520,10 @@ export {
 } from './widgets/widget-format'
 export { AssistInterview, AssistCardView } from './assist-interview'
 export type { AssistSession, AssistTurn, AssistQuestion, AssistCard, AssistProgressStep } from './assist-interview'
+export {
+    useAttributeClasses,
+    resolveAttributeClasses,
+    resetAttributeClassCache,
+    type AttributeClass,
+    type AttributeClassSection,
+} from './attribute-classes'
