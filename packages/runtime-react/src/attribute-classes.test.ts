@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { resolveAttributeClasses, resetAttributeClassCache } from './attribute-classes'
+import { classesCarriedByRecord, resolveAttributeClasses, resetAttributeClassCache } from './attribute-classes'
 import { ATTRIBUTE_CLASSES_KEY, evaluateVisibleWhen, getVisibleWhen } from './dynamic-form-schema'
 import { filterVisibleFields } from './dialogs/dynamic-record'
 
@@ -39,5 +39,41 @@ describe('resolveAttributeClasses', () => {
         await resolveAttributeClasses(api as never, 'Category', 'c1')
         expect(get).toHaveBeenCalledTimes(2)
         expect(get).toHaveBeenCalledWith('/data/Category/c1')
+    })
+})
+
+describe('classesCarriedByRecord', () => {
+    const meta = {
+        attribute_classes: [
+            { key: 'tire', sections: [{ key: 'size', fields: ['section_width_mm', 'rim_diameter_in'] }] },
+            { key: 'battery', sections: [{ key: 'b', fields: ['capacity_ah'] }] },
+        ],
+        fields: [
+            { key: 'name' },
+            { key: 'TireSpec.section_width_mm' },
+            { key: 'TireSpec.rim_diameter_in' },
+            { key: 'BatterySpec.capacity_ah' },
+        ],
+    }
+
+    it('a saved tire with a spec sheet keeps its fields without a category class', () => {
+        expect(classesCarriedByRecord(meta, { name: 'x', 'TireSpec.rim_diameter_in': 16 })).toEqual(['tire'])
+        // nested shape
+        expect(classesCarriedByRecord(meta, { TireSpec: { section_width_mm: 205 } })).toEqual(['tire'])
+        const fields = [
+            { key: 'name', label: 'Nombre', type: 'text' },
+            { key: 'TireSpec.rim_diameter_in', label: 'Rin', type: 'number', visible_when: { class: 'tire' } },
+        ] as never
+        const carried = classesCarriedByRecord(meta, { 'TireSpec.rim_diameter_in': 16 })
+        expect(filterVisibleFields(fields, 'edit', { name: 'x' }, carried).map((f) => f.key)).toEqual([
+            'name',
+            'TireSpec.rim_diameter_in',
+        ])
+    })
+
+    it('a record without data in the class fields carries nothing', () => {
+        expect(classesCarriedByRecord(meta, { name: 'x', 'TireSpec.rim_diameter_in': null, 'TireSpec.section_width_mm': '' })).toEqual([])
+        expect(classesCarriedByRecord(meta, null)).toEqual([])
+        expect(classesCarriedByRecord({ fields: meta.fields }, { 'TireSpec.rim_diameter_in': 16 })).toEqual([])
     })
 })

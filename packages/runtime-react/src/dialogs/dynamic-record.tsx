@@ -644,8 +644,9 @@ export function DynamicRecordDialog({
     const [relations, setRelations] = useState<RelationMeta[]>([])
     const [record, setRecord] = useState<any | null>(null)
     const [formValues, setFormValues] = useState<Record<string, any>>({})
-    // Classes of the record's category, for `visible_when.class` fields.
-    const attributeClasses = useAttributeClasses(api, modalMeta, formValues)
+    // Classes of the record's category (plus those its saved data carries), for
+    // `visible_when.class` fields.
+    const attributeClasses = useAttributeClasses(api, modalMeta, formValues, record)
     // Per-field validation errors (localized strings), keyed by field.key. Shown
     // inline under each input; populated from a 422 `errors` map or the client
     // required-field check, cleared per-field on change and wholesale on reopen.
