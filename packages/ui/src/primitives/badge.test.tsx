@@ -4,10 +4,10 @@ import { Badge } from './badge'
 
 describe('Badge tonal variants', () => {
   it.each([
-    ['success', 'text-emerald-700'],
-    ['warning', 'text-amber-700'],
+    ['success', 'var(--success'],
+    ['warning', 'var(--warning'],
     ['danger', 'text-destructive'],
-    ['info', 'text-sky-700'],
+    ['info', 'var(--info'],
     ['muted', 'text-muted-foreground'],
   ] as const)('%s paints a soft tinted chip', (variant, text) => {
     const html = renderToStaticMarkup(<Badge variant={variant}>Estado</Badge>)

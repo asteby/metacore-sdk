@@ -52,6 +52,11 @@
   --tracking-normal: -0.025em;
   --spacing: 0.27rem;
 
+  /* Status hues for chips and badges (text-safe on --background). */
+  --success: oklch(0.56 0.14 155);
+  --warning: oklch(0.6 0.15 65);
+  --info: oklch(0.55 0.13 235);
+
   /*
    * Semantic surfaces for floating UI outside the metacore-ui primitives
    * (chat panels, composers, result cards). Defaults are the plain tokens;
@@ -119,6 +124,9 @@
   --shadow-lg: 0px 2px 3px 0px hsl(0 0% 0% / 0.16), 0px 4px 6px -1px hsl(0 0% 0% / 0.16);
   --shadow-xl: 0px 2px 3px 0px hsl(0 0% 0% / 0.16), 0px 8px 10px -1px hsl(0 0% 0% / 0.16);
   --shadow-2xl: 0px 2px 3px 0px hsl(0 0% 0% / 0.40);
+  --success: oklch(0.78 0.14 155);
+  --warning: oklch(0.82 0.14 80);
+  --info: oklch(0.78 0.11 235);
 }
 
 @theme inline {
