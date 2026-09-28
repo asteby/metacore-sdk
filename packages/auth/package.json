@@ -78,6 +78,7 @@
     }
   },
   "dependencies": {
+    "@asteby/metacore-lib": "workspace:^",
     "@hookform/resolvers": "^5.0.0",
     "axios": "^1.7.7",
     "lucide-react": "^1.0.0",

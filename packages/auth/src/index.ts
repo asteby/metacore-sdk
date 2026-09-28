@@ -8,7 +8,7 @@ export { AuthProvider, useAuth } from './provider'
 export type { AuthProviderProps, LegacyAuthUser } from './provider'
 
 // API client factory
-export { createApiClient } from './api-client'
+export { createApiClient, HtmlResponseError, isHtmlResponseError } from './api-client'
 export type { CreateApiClientOptions, ApiClient } from './api-client'
 
 // Route guards

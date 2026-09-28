@@ -14,6 +14,8 @@ export interface ErrorLabels {
   timeout: string
 }
 
+import { looksLikeHtml } from './http-errors'
+
 const DEFAULT_LABELS: ErrorLabels = {
   generic: 'Something went wrong!',
   notFound: 'Content not found.',
@@ -50,7 +52,8 @@ interface ErrorWithStatus {
 function extractMessage(error: unknown, labels: ErrorLabels): string {
   if (!error) return labels.generic
 
-  if (typeof error === 'string') return error
+  // An HTML page is never a message (misrouted proxy / SPA catch-all).
+  if (typeof error === 'string') return looksLikeHtml(error) ? labels.generic : error
 
   if (typeof error !== 'object') return labels.generic
 
@@ -68,9 +71,8 @@ function extractMessage(error: unknown, labels: ErrorLabels): string {
     if (status === 404) return labels.notFound
     if (status === 204) return labels.notFound
 
-    return (
-      data?.message || data?.title || data?.error || data?.detail || err.message || labels.generic
-    )
+    const candidates = [data?.message, data?.title, data?.error, data?.detail, err.message]
+    return candidates.find((c) => typeof c === 'string' && c && !looksLikeHtml(c)) || labels.generic
   }
 
   // Network-level errors
@@ -79,7 +81,7 @@ function extractMessage(error: unknown, labels: ErrorLabels): string {
 
   if ('status' in err && Number(err.status) === 204) return labels.notFound
 
-  return err.message || labels.generic
+  return err.message && !looksLikeHtml(err.message) ? err.message : labels.generic
 }
 
 /**

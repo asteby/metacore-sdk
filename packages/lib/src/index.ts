@@ -21,4 +21,17 @@ export type { CurrencyInfo } from './currency'
 export { handleServerError } from './errors'
 export type { ErrorLabels, ToastLike, LoggerLike } from './errors'
 
+export {
+  HtmlResponseError,
+  HTML_RESPONSE_ERROR_CODE,
+  detectHtmlResponse,
+  isHtmlResponseError,
+  looksLikeHtml,
+  isHtmlContentType,
+  htmlTitle,
+  htmlSnippet,
+  newCorrelationId,
+} from './http-errors'
+export type { HtmlResponseErrorInit, DetectHtmlInput } from './http-errors'
+
 export { showSubmittedData } from './show-submitted-data'

@@ -36,6 +36,10 @@
       "types": "./dist/errors.d.ts",
       "import": "./dist/errors.js"
     },
+    "./http-errors": {
+      "types": "./dist/http-errors.d.ts",
+      "import": "./dist/http-errors.js"
+    },
     "./show-submitted-data": {
       "types": "./dist/show-submitted-data.d.ts",
       "import": "./dist/show-submitted-data.js"
@@ -45,6 +49,7 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -w -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
     "clean": "rm -rf dist"
   },
   "peerDependencies": {
@@ -66,7 +71,8 @@
     "date-fns": "^4.1.0",
     "react": "^19.2.4",
     "sonner": "^2.0.0",
-    "typescript": "^6.0.0"
+    "typescript": "^6.0.0",
+    "vitest": "^4.0.0"
   },
   "publishConfig": {
     "access": "public"
