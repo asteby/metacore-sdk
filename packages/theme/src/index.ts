@@ -8,6 +8,7 @@ export {
   shadowTokens,
   fontTokens,
   trackingTokens,
+  motionTokens,
   themeConfig,
 } from './preset.js'
 export type { ThemeConfig } from './preset.js'

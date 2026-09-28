@@ -47,6 +47,8 @@ export interface UseOptimisticMutationResult<TVariables> {
   /** Variables of the latest unconfirmed call (e.g. which card is applying). */
   pendingVariables: TVariables | undefined
   error: unknown
+  /** Re-send the variables of the last call that failed (toast "Reintentar"). */
+  retry: () => void
 }
 
 type Envelope<TVariables> = { variables: TVariables; seq: number }
@@ -55,6 +57,19 @@ const jsonEqual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringi
 
 /**
  * Optimistic write over a TanStack Query cache entry, with rollback.
+ *
+ * ```tsx
+ * const apply = useOptimisticMutation({
+ *   queryKey: ['org-sidebar-layout'],
+ *   mutationFn: (key: string) => api.post('/apply', { key }).then((r) => r.data),
+ *   optimistic: (current, key) => ({ ...current, template_key: key }),
+ *   reconcile: (server) => server,
+ *   onError: (_e, key) => toast.error('No se aplicó', {
+ *     action: { label: 'Reintentar', onClick: () => apply.mutate(key) },
+ *   }),
+ * })
+ * <Card aria-busy={apply.pendingVariables === tpl.key} onClick={() => apply.mutate(tpl.key)} />
+ * ```
  *
  * - The cache is patched before the request, so the screen answers at once.
  * - Writes to the same `queryKey` run one at a time, in call order (mutation
@@ -81,6 +96,7 @@ export function useOptimisticMutation<TData, TVariables, TCache = TData>(
   const queuedRef = useRef<Envelope<TVariables> | null>(null)
   const [pendingVariables, setPendingVariables] = useState<TVariables | undefined>(undefined)
   const [error, setError] = useState<unknown>(null)
+  const failedRef = useRef<{ variables: TVariables } | null>(null)
 
   const scopeId = `optimistic:${JSON.stringify(options.queryKey)}`
 
@@ -125,6 +141,7 @@ export function useOptimisticMutation<TData, TVariables, TCache = TData>(
         // The server may have partially applied; resync in the background.
         void qc.invalidateQueries({ queryKey: opts.queryKey })
       }
+      if (latest) failedRef.current = { variables }
       setError(err)
       opts.onError?.(err, variables)
     },
@@ -165,6 +182,7 @@ export function useOptimisticMutation<TData, TVariables, TCache = TData>(
       if (next !== undefined) qc.setQueryData<TCache>(opts.queryKey, next)
       setPendingVariables(variables)
       setError(null)
+      failedRef.current = null
 
       const envelope = { variables, seq }
       if (opts.debounceMs && opts.debounceMs > 0) {
@@ -181,10 +199,16 @@ export function useOptimisticMutation<TData, TVariables, TCache = TData>(
   // Never drop a debounced write because the editor closed.
   useEffect(() => flush, [flush])
 
+  const retry = useCallback(() => {
+    const failed = failedRef.current
+    if (failed) mutate(failed.variables)
+  }, [mutate])
+
   return {
     mutate,
     isPending: pendingVariables !== undefined,
     pendingVariables,
     error,
+    retry,
   }
 }

@@ -134,11 +134,15 @@ export {
     type UseOptimisticMutationOptions,
     type UseOptimisticMutationResult,
 } from './use-optimistic-mutation'
+export { useFlipAnimation, type UseFlipAnimationOptions } from './use-flip-animation'
 export {
-    useFlipAnimation,
+    motionDuration,
+    motionEasing,
     prefersReducedMotion,
-    type UseFlipAnimationOptions,
-} from './use-flip-animation'
+    MOTION_DEFAULTS,
+    type MotionDuration,
+    type MotionEasing,
+} from './motion'
 export {
     useResource,
     useMutation,

@@ -161,3 +161,22 @@ describe('useOptimisticMutation', () => {
     await waitFor(() => expect(fn).toHaveBeenCalledWith('saved-on-close'))
   })
 })
+
+describe('useOptimisticMutation retry', () => {
+  it('re-sends the failed variables and re-applies them optimistically', async () => {
+    let fail = true
+    const fn = vi.fn((t: string) => (fail ? Promise.reject(new Error('offline')) : Promise.resolve({ template: t })))
+    const { qc, hook } = setup(fn)
+
+    act(() => hook.result.current.mutate('classic'))
+    await waitFor(() => expect(hook.result.current.isPending).toBe(false))
+    expect(qc.getQueryData(KEY)).toEqual({ template: 'default' })
+
+    fail = false
+    act(() => hook.result.current.retry())
+    expect(qc.getQueryData(KEY)).toEqual({ template: 'classic' })
+    await waitFor(() => expect(hook.result.current.isPending).toBe(false))
+    expect(fn).toHaveBeenCalledTimes(2)
+    expect(qc.getQueryData(KEY)).toEqual({ template: 'classic' })
+  })
+})

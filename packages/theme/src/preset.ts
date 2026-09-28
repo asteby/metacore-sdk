@@ -103,6 +103,27 @@ export const trackingTokens = {
   normal: '-0.025em',
 } as const
 
+/**
+ * Motion tokens. Durations follow a small scale (feedback → layout moves);
+ * easings are "standard" (enter/move), "emphasized" (larger travel) and
+ * "exit". CSS: `--motion-duration-*` / `--motion-ease-*` in tokens.css.
+ * Consumers must honour prefers-reduced-motion (tokens.css zeroes the
+ * durations under `reduce`).
+ */
+export const motionTokens = {
+  duration: {
+    instant: '100ms',
+    fast: '150ms',
+    moderate: '220ms',
+    slow: '320ms',
+  },
+  easing: {
+    standard: 'cubic-bezier(0.2, 0, 0, 1)',
+    emphasized: 'cubic-bezier(0.3, 0, 0, 1)',
+    exit: 'cubic-bezier(0.4, 0, 1, 1)',
+  },
+} as const
+
 export const themeConfig = {
   colors: colorTokens,
   charts: chartTokens,
@@ -110,6 +131,7 @@ export const themeConfig = {
   shadows: shadowTokens,
   fonts: fontTokens,
   tracking: trackingTokens,
+  motion: motionTokens,
 } as const
 
 export type ThemeConfig = typeof themeConfig

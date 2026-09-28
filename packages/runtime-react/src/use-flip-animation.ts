@@ -1,4 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, type RefObject } from 'react'
+import {
+  motionDuration,
+  motionEasing,
+  prefersReducedMotion,
+  type MotionDuration,
+  type MotionEasing,
+} from './motion'
 
 export interface UseFlipAnimationOptions {
   /** Elements to animate, queried inside the root. */
@@ -10,22 +17,19 @@ export interface UseFlipAnimationOptions {
    * snapshots does not read as movement. Default: the root.
    */
   scrollContainer?: (root: HTMLElement) => HTMLElement | null
-  durationMs?: number
-  easing?: string
+  /** Motion token (default `moderate`) or explicit ms. */
+  duration?: MotionDuration | number
+  /** Motion token (default `standard`) or a CSS timing function. */
+  easing?: MotionEasing | string
   /** Off switch; the hook also stays still under prefers-reduced-motion. */
   disabled?: boolean
 }
 
 const DEFAULT_SELECTOR = '[data-flip-key]'
+const MOTION_EASING_KEYS = { standard: 1, emphasized: 1, exit: 1 }
 
 const defaultKeyOf = (el: HTMLElement): string | null =>
   el.dataset.flipKey ?? el.getAttribute('href') ?? (el.textContent?.trim() || null)
-
-export function prefersReducedMotion(): boolean {
-  return typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-}
 
 type Positions = Map<string, { top: number; left: number }>
 
@@ -47,8 +51,8 @@ export function useFlipAnimation(
     selector = DEFAULT_SELECTOR,
     keyOf = defaultKeyOf,
     scrollContainer,
-    durationMs = 220,
-    easing = 'cubic-bezier(0.2, 0, 0, 1)',
+    duration = 'moderate',
+    easing = 'standard',
     disabled = false,
   } = options
   const positionsRef = useRef<Positions | null>(null)
@@ -115,6 +119,9 @@ export function useFlipAnimation(
     const after = measureRef.current()
     positionsRef.current = after
     if (!before || !after || disabled || prefersReducedMotion()) return
+    const durationMs = typeof duration === 'number' ? duration : motionDuration(duration)
+    if (durationMs <= 0) return
+    const timing = easing in MOTION_EASING_KEYS ? motionEasing(easing as MotionEasing) : easing
 
     const { selector: sel, keyOf: key } = configRef.current
     // A stale snapshot can report huge jumps; those would read as a glitch.
@@ -127,7 +134,7 @@ export function useFlipAnimation(
       if (!to || typeof el.animate !== 'function') return
       if (!from) {
         // Entered with this change: fade in instead of popping.
-        el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: durationMs, easing })
+        el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: durationMs, easing: timing })
         return
       }
       const dy = from.top - to.top
@@ -139,8 +146,8 @@ export function useFlipAnimation(
           { transform: `translate(${dx}px, ${dy}px)` },
           { transform: 'translate(0, 0)' },
         ],
-        { duration: durationMs, easing },
+        { duration: durationMs, easing: timing },
       )
     })
-  }, [trigger, rootRef, disabled, durationMs, easing])
+  }, [trigger, rootRef, disabled, duration, easing])
 }
