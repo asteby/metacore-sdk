@@ -1,5 +1,4 @@
 import { createElement, lazy, Suspense, type ComponentType } from 'react'
-import dynamicIconImports from 'lucide-react/dynamicIconImports'
 import { Box, Circle, type LucideIcon } from 'lucide-react'
 import type { NavCollapsibleItem, NavLinkItem } from './types'
 
@@ -22,7 +21,23 @@ export const FALLBACK_GROUP_ICON: LucideIcon = Box
 /** Neutral fallback icon for a child nav item that declares none. */
 export const FALLBACK_ITEM_ICON: LucideIcon = Circle
 
-type IconName = keyof typeof dynamicIconImports
+type GlyphModule = { default: ComponentType<{ className?: string }> }
+type IconLoaders = Record<string, () => Promise<GlyphModule>>
+
+// The name → import() map of every Lucide glyph (~160 KB raw) loads with the
+// first addon icon. A static import put it in every bundle that touches the
+// package root, including each federated remote's copy of this package.
+let iconLoaders: Promise<IconLoaders> | null = null
+function loadIconLoaders(): Promise<IconLoaders> {
+  iconLoaders ??= import('lucide-react/dynamicIconImports').then(
+    (mod) => mod.default as unknown as IconLoaders,
+    (err) => {
+      iconLoaders = null
+      throw err
+    },
+  )
+  return iconLoaders
+}
 
 const glyphCache = new Map<string, LucideIcon>()
 
@@ -40,7 +55,8 @@ function toKebab(name: string): string {
  * `shopping-cart`, `shopping_cart`, or `ShoppingCart` interchangeably.
  * Each glyph is its own import. A namespace import of lucide put every SVG
  * in the shell's first load.
- * Returns `fallback` for missing/unknown names so something always renders.
+ * Missing names return `fallback`; unknown ones render it, so something
+ * always shows.
  */
 export function resolveIconName(
   name?: string,
@@ -50,12 +66,11 @@ export function resolveIconName(
   const key = toKebab(name)
   const cached = glyphCache.get(key)
   if (cached) return cached
-  const loader = dynamicIconImports[key as IconName]
-  if (!loader) {
-    glyphCache.set(key, fallback)
-    return fallback
-  }
-  const Glyph = lazy(loader as () => Promise<{ default: ComponentType<{ className?: string }> }>)
+  // Unknown names render the fallback once the map has loaded.
+  const Glyph = lazy(async (): Promise<GlyphModule> => {
+    const loader = (await loadIconLoaders())[key]
+    return loader ? loader() : { default: fallback }
+  })
   function NavIcon(props: { className?: string }) {
     return createElement(
       Suspense,
