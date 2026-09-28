@@ -35,7 +35,10 @@ export interface UseOptimisticMutationOptions<TData, TVariables, TCache> {
   /** Other queries to refresh in the background after a confirmed write. */
   invalidate?: QueryKey[]
   onSuccess?: (data: TData, variables: TVariables) => void
-  /** Runs after the cache was rolled back to the last confirmed value. */
+  /**
+   * Runs after the cache was rolled back to the last confirmed value. Only
+   * the latest call reports: a superseded write that fails stays silent.
+   */
   onError?: (error: unknown, variables: TVariables) => void
 }
 
@@ -132,16 +135,17 @@ export function useOptimisticMutation<TData, TVariables, TCache = TData>(
     onError: (err, { variables, seq }) => {
       const opts = optionsRef.current
       const latest = seq === seqRef.current && queuedRef.current === null
-      if (latest) {
-        const confirmed = confirmedRef.current
-        if (confirmed && confirmed.value !== undefined) {
-          qc.setQueryData<TCache>(opts.queryKey, confirmed.value)
-        }
-        settleLatest()
-        // The server may have partially applied; resync in the background.
-        void qc.invalidateQueries({ queryKey: opts.queryKey })
+      // A superseded write that fails is moot: the newer call decides what
+      // the screen shows and whether the user sees an error.
+      if (!latest) return
+      const confirmed = confirmedRef.current
+      if (confirmed && confirmed.value !== undefined) {
+        qc.setQueryData<TCache>(opts.queryKey, confirmed.value)
       }
-      if (latest) failedRef.current = { variables }
+      settleLatest()
+      // The server may have partially applied; resync in the background.
+      void qc.invalidateQueries({ queryKey: opts.queryKey, exact: true })
+      failedRef.current = { variables }
       setError(err)
       opts.onError?.(err, variables)
     },
@@ -177,7 +181,7 @@ export function useOptimisticMutation<TData, TVariables, TCache = TData>(
         confirmedRef.current = { value: qc.getQueryData<TCache>(opts.queryKey) }
       }
       // A refetch landing mid-write would paint the old value back.
-      void qc.cancelQueries({ queryKey: opts.queryKey })
+      void qc.cancelQueries({ queryKey: opts.queryKey, exact: true })
       const next = opts.optimistic(qc.getQueryData<TCache>(opts.queryKey), variables)
       if (next !== undefined) qc.setQueryData<TCache>(opts.queryKey, next)
       setPendingVariables(variables)

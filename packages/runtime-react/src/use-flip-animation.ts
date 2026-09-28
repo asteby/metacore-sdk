@@ -88,9 +88,9 @@ export function useFlipAnimation(
 
   // Snapshot at rest: after mount and after interactions that move things
   // without a trigger change (expanding a collapsible, for instance).
+  // Listens on the document and resolves the root per event, so a ref whose
+  // element is swapped (remount, mobile sheet) keeps working.
   useEffect(() => {
-    const root = rootRef.current
-    if (!root) return
     let timer: ReturnType<typeof setTimeout> | null = null
     const schedule = () => {
       if (timer) clearTimeout(timer)
@@ -98,14 +98,18 @@ export function useFlipAnimation(
         positionsRef.current = measureRef.current()
       }, 350)
     }
+    const onInteraction = (e: Event) => {
+      const root = rootRef.current
+      if (root && e.target instanceof Node && root.contains(e.target)) schedule()
+    }
     schedule()
-    root.addEventListener('pointerup', schedule)
-    root.addEventListener('keyup', schedule)
+    document.addEventListener('pointerup', onInteraction, true)
+    document.addEventListener('keyup', onInteraction, true)
     window.addEventListener('resize', schedule)
     return () => {
       if (timer) clearTimeout(timer)
-      root.removeEventListener('pointerup', schedule)
-      root.removeEventListener('keyup', schedule)
+      document.removeEventListener('pointerup', onInteraction, true)
+      document.removeEventListener('keyup', onInteraction, true)
       window.removeEventListener('resize', schedule)
     }
   }, [rootRef])

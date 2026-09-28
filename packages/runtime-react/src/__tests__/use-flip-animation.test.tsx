@@ -62,4 +62,48 @@ describe('useFlipAnimation', () => {
     view.rerender(<List order={['b', 'a']} reduced />)
     expect(animate).not.toHaveBeenCalled()
   })
+
+  it('stays still under prefers-reduced-motion', () => {
+    vi.useFakeTimers()
+    fakeLayout()
+    const animate = vi.fn()
+    HTMLElement.prototype.animate = animate as never
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query: string) => ({ matches: query.includes('reduce'), media: query }) as MediaQueryList,
+    )
+
+    const view = render(<List order={['a', 'b']} />)
+    vi.advanceTimersByTime(400)
+    view.rerender(<List order={['b', 'a']} />)
+    expect(animate).not.toHaveBeenCalled()
+  })
+
+  it('works with a root resolved from the DOM instead of a wrapper element', () => {
+    vi.useFakeTimers()
+    fakeLayout()
+    const animate = vi.fn()
+    HTMLElement.prototype.animate = animate as never
+    const domRef = {
+      get current() {
+        return document.querySelector<HTMLElement>('[data-slot="list"]')
+      },
+    }
+    function Resolved({ order }: { order: string[] }) {
+      useFlipAnimation(domRef, order.join(','))
+      return (
+        <ul data-slot="list">
+          {order.map((k) => (
+            <li key={k} data-flip-key={k}>
+              {k}
+            </li>
+          ))}
+        </ul>
+      )
+    }
+
+    const view = render(<Resolved order={['a', 'b']} />)
+    vi.advanceTimersByTime(400)
+    view.rerender(<Resolved order={['b', 'a']} />)
+    expect(animate).toHaveBeenCalledTimes(2)
+  })
 })

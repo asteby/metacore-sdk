@@ -130,6 +130,25 @@ describe('useOptimisticMutation', () => {
     expect(qc.getQueryData(KEY)).toEqual({ template: 'classic' })
   })
 
+  it('keeps a superseded failure silent when the newest write succeeds', async () => {
+    const first = deferred<Doc>()
+    const second = deferred<Doc>()
+    const onError = vi.fn()
+    const { qc, hook } = setup((t) => (t === 'classic' ? first.promise : second.promise), { onError })
+
+    act(() => {
+      hook.result.current.mutate('classic')
+      hook.result.current.mutate('custom')
+    })
+    await act(async () => first.reject(new Error('stale')))
+    expect(qc.getQueryData(KEY)).toEqual({ template: 'custom' })
+    await act(async () => second.resolve({ template: 'custom' }))
+    await waitFor(() => expect(hook.result.current.isPending).toBe(false))
+    expect(onError).not.toHaveBeenCalled()
+    expect(hook.result.current.error).toBeNull()
+    expect(qc.getQueryData(KEY)).toEqual({ template: 'custom' })
+  })
+
   it('debounces bursts: every call paints, only the last one is sent', async () => {
     vi.useFakeTimers()
     const fn = vi.fn((t: string) => Promise.resolve({ template: t }))
