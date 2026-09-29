@@ -1,5 +1,12 @@
 # @asteby/metacore-starter-vite
 
+## 0.1.270
+
+### Patch Changes
+
+- Updated dependencies [4525ddc]
+  - @asteby/metacore-auth@27.1.0
+
 ## 0.1.269
 
 ### Patch Changes
