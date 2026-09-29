@@ -90,11 +90,13 @@ export function useApi(): ApiClient {
     // remembered, so the refresh after a save reads the saved row. The
     // wrapper is stable while the host client is.
     return useMemo<ApiClient>(() => ({
-        get: (url, config) => batchGet(ctx, url, config),
-        post: (url, body, config) =>
-            isWrite('post', url) ? mutating(ctx.post(url, body, config)) : ctx.post(url, body, config),
-        put: (url, body, config) => mutating(ctx.put(url, body, config)),
-        delete: (url, config) => mutating(ctx.delete(url, config)),
+        // Each call reaches the host client with the arguments it was given —
+        // never a trailing `undefined` it didn't ask for.
+        get: (...args: Parameters<ApiClient['get']>) => batchGet(ctx, ...args),
+        post: (...args: Parameters<ApiClient['post']>) =>
+            isWrite('post', args[0]) ? mutating(ctx.post(...args)) : ctx.post(...args),
+        put: (...args: Parameters<ApiClient['put']>) => mutating(ctx.put(...args)),
+        delete: (...args: Parameters<ApiClient['delete']>) => mutating(ctx.delete(...args)),
     }), [ctx])
 }
 

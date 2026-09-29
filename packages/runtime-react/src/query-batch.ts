@@ -377,8 +377,11 @@ function batchForbidden(message?: string): boolean {
  * or options read. Anything the batch refuses falls back to the original GET.
  */
 export async function batchGet(api: ApiClient, url: string, config?: { params?: Record<string, unknown> }) {
+    // The fallback GET gets exactly the arguments the caller passed: no
+    // trailing `undefined` config reaching the host client.
+    const plainGet = () => (config === undefined ? api.get(url) : api.get(url, config))
     const token = tokenForGet(url, config?.params)
-    if (!token) return api.get(url, config)
+    if (!token) return plainGet()
     try {
         const part = await loadQueryPart(api, token)
         if (!part.success) {
@@ -391,13 +394,13 @@ export async function batchGet(api: ApiClient, url: string, config?: { params?: 
                 err.response = { status: 403 }
                 throw err
             }
-            return api.get(url, config)
+            return plainGet()
         }
         return { data: { success: true, data: part.data, meta: part.meta } }
     } catch (err) {
         const status = (err as { status?: number; response?: { status?: number } })?.status
             ?? (err as { response?: { status?: number } })?.response?.status
         if (status === 403) throw err
-        return api.get(url, config)
+        return plainGet()
     }
 }
