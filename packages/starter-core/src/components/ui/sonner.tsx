@@ -1,30 +1,11 @@
-import { Toaster as Sonner, type ToasterProps } from 'sonner'
+import { Toaster as MetacoreToaster } from '@asteby/metacore-ui/primitives'
+import type { ComponentProps } from 'react'
 import { useTheme } from '../../context/theme-provider'
+
+type ToasterProps = ComponentProps<typeof MetacoreToaster>
 
 export function Toaster({ ...props }: ToasterProps) {
   const { theme = 'system' } = useTheme()
 
-  return (
-    <Sonner
-      theme={theme as ToasterProps['theme']}
-      className='toaster group [&_div[data-content]]:w-full'
-      toastOptions={{
-        classNames: {
-          toast: 'rounded-lg border bg-background shadow-lg',
-          title: 'font-semibold',
-          description: 'text-sm text-muted-foreground',
-          actionButton: 'bg-primary text-primary-foreground',
-          cancelButton: 'bg-muted text-muted-foreground',
-        },
-      }}
-      style={
-        {
-          '--normal-bg': 'var(--popover)',
-          '--normal-text': 'var(--popover-foreground)',
-          '--normal-border': 'var(--border)',
-        } as React.CSSProperties
-      }
-      {...props}
-    />
-  )
+  return <MetacoreToaster theme={theme as ToasterProps['theme']} {...props} />
 }

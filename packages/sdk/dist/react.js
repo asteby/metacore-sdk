@@ -96,7 +96,14 @@ export function MetacoreProvider({ client, registry, children }) {
         let cancelled = false;
         const revalidate = async () => {
             try {
-                const [m, n] = await Promise.all([client.manifests(), client.navigation()]);
+                const [m, n] = await Promise.all([
+                    // Prefer lite when the host/kernel supports it; fall back to full.
+                    typeof client.manifestsLite ===
+                        "function"
+                        ? client.manifestsLite()
+                        : client.manifests(),
+                    client.navigation(),
+                ]);
                 if (cancelled)
                     return;
                 setManifests(m);

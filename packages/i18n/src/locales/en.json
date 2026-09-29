@@ -181,5 +181,8 @@
     "toggle": "Toggle language",
     "english": "English",
     "spanish": "Spanish"
+  },
+  "toast": {
+    "dismiss": "Dismiss notification"
   }
 }
