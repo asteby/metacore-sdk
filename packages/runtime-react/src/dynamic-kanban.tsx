@@ -25,23 +25,50 @@
 // dropped into a lane reachable from its current stage. Disallowed lanes dim
 // while dragging and reject the drop.
 import * as React from 'react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+    useCallback,
+    useContext,
+    useEffect,
+    useId,
+    useLayoutEffect,
+    useMemo,
+    useRef,
+    useState,
+    useSyncExternalStore,
+} from 'react'
 import { useTranslation } from 'react-i18next'
+import { useTimeZone, useCurrency } from './org-runtime-context'
+import {
+    QueryClient,
+    QueryClientContext,
+    QueryClientProvider,
+    useQueryClient,
+} from '@tanstack/react-query'
 import { useI18nResourceVersion } from './use-i18n-resource-version'
 import {
     DndContext,
-    DragOverlay,
+    KeyboardSensor,
     PointerSensor,
+    closestCenter,
+    defaultDropAnimationSideEffects,
+    pointerWithin,
+    rectIntersection,
     useSensor,
     useSensors,
     useDraggable,
     useDroppable,
+    type Announcements,
+    type CollisionDetection,
     type DragStartEvent,
     type DragEndEvent,
+    type DragOverEvent,
+    type DropAnimation,
+    type KeyboardCoordinateGetter,
 } from '@dnd-kit/core'
 import {
     SortableContext,
     horizontalListSortingStrategy,
+    sortableKeyboardCoordinates,
     useSortable,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -121,11 +148,20 @@ import {
     translateOptionLabels,
 } from './filter-chips'
 import { dedupeById, useInfiniteScrollSentinel } from './use-infinite-scroll'
+import { useOptimisticMutation } from './use-optimistic-mutation'
+import { useFlipAnimation } from './use-flip-animation'
+import { PortalDragOverlay } from './portal-drag-overlay'
+import { objectLabel } from './dynamic-relation-helpers'
 import { useMetadataCache } from './metadata-cache'
 import { ActivityValueRenderer } from './activity-value-renderer'
 import { DynamicIcon } from './dynamic-icon'
 import { isColumnVisibleInTable } from './column-visibility'
-import { isRowActionVisible, relationKeyFor } from './dynamic-columns'
+import {
+    aggregateOf,
+    formatAggregateTotal,
+    isRowActionVisible,
+    relationKeyFor,
+} from './dynamic-columns'
 import { useCan, usePermissionsActive, resolveRowActions } from './permissions-context'
 import { useDynamicRowActions } from './dynamic-row-actions'
 import { useStageLayout } from './stage-layout'
@@ -206,18 +242,29 @@ export function groupByStage(
 }
 
 /**
- * Whether a card may move `from → to` given the declared transitions. No
- * transitions declared → unrestricted (the kernel still validates server-side).
- * A move to the same stage is always a no-op "allowed". `'*'` is a wildcard on
- * either side.
+ * Whether a card may move `from → to` — the same rule as the kernel's
+ * `StageMachine.Allows`, so a lane the board offers never ends in a 422:
+ *
+ * - no `transitions` in the metadata → no stage machine, any move;
+ * - a move to the same stage is a no-op, always allowed;
+ * - a card with no stage yet — or one outside `stageKeys` (a value written
+ *   before the machine existed) — is being placed, not moved: any stage takes it;
+ * - otherwise the move must be declared. An EMPTY list means the machine allows
+ *   no moves between its stages.
+ *
+ * `'*'` is a wildcard on either side.
  */
 export function isTransitionAllowed(
     transitions: StageTransition[] | undefined,
     from: string,
     to: string,
+    stageKeys?: ReadonlySet<string>,
 ): boolean {
     if (from === to) return true
-    if (!transitions || transitions.length === 0) return true
+    if (!transitions) return true
+    if (from === '' || (stageKeys && !stageKeys.has(from))) {
+        return !stageKeys || stageKeys.has(to)
+    }
     return transitions.some(
         (t) =>
             (t.from === from || t.from === '*') && (t.to === to || t.to === '*'),
@@ -347,6 +394,188 @@ export function cardCellValue(card: any, col: ColumnDefinition): unknown {
 }
 
 /**
+ * Plain text of a card cell — what a person reads on the card. A resolved
+ * relation reads as its label/name (never the raw FK uuid), so the lane search
+ * and the drag announcements match what is on screen. Pure — exported for tests.
+ */
+export function cardCellText(card: any, col: ColumnDefinition): string {
+    const v = cardCellValue(card, col)
+    if (v === null || v === undefined) return ''
+    if (typeof v === 'object') {
+        if (Array.isArray(v)) {
+            return v
+                .map((x) => (typeof x === 'object' ? objectLabel(x) ?? '' : String(x)))
+                .filter(Boolean)
+                .join(', ')
+        }
+        return objectLabel(v) ?? ''
+    }
+    return String(v)
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * Whether a card field has nothing worth a row: unset, blank, an empty list,
+ * `false`, or an opaque id that no relation resolved to a name (a soft-ref
+ * uuid column). The card hides those rows instead of painting "Campo: —".
+ * Pure — exported for unit tests.
+ */
+export function isEmptyCardValue(card: any, col: ColumnDefinition): boolean {
+    const v = cardCellValue(card, col)
+    if (v === null || v === undefined || v === false) return true
+    if (typeof v === 'string') {
+        const s = v.trim()
+        return s === '' || UUID_RE.test(s)
+    }
+    if (Array.isArray(v)) return v.length === 0
+    if (typeof v === 'object') return Object.keys(v).length === 0
+    return false
+}
+
+/**
+ * The fields a card shows: the first `max` candidates that carry a value for
+ * THIS card. Candidates come in metadata order, so a card with an empty
+ * "Asignado a" shows the next useful field instead of a dash. Pure.
+ */
+export function visibleCardFields(
+    card: any,
+    candidates: ColumnDefinition[],
+    max = 3,
+): ColumnDefinition[] {
+    const out: ColumnDefinition[] = []
+    for (const col of candidates) {
+        if (out.length >= max) break
+        if (!isEmptyCardValue(card, col)) out.push(col)
+    }
+    return out
+}
+
+/**
+ * Records as the board paints them: each card with an unconfirmed move shows in
+ * its destination lane. The fetched records stay as the server sent them, so a
+ * rejected move just drops its override and the card is back where it was.
+ * Pure — exported for unit tests.
+ */
+export function applyStageOverrides(
+    records: any[],
+    overrides: Record<string, string> | undefined,
+    groupByKey: string,
+): any[] {
+    if (!overrides || Object.keys(overrides).length === 0) return records
+    return records.map((r) => {
+        const to = overrides[String(r.id)]
+        if (to === undefined || String(r?.[groupByKey] ?? '') === to) return r
+        return { ...r, [groupByKey]: to }
+    })
+}
+
+/** Per-lane change an in-flight move makes to the server totals. */
+export interface LaneDelta {
+    count: number
+    sums: Record<string, number>
+}
+
+function numericValue(v: unknown): number | null {
+    if (v === null || v === undefined || v === '') return null
+    const n = typeof v === 'number' ? v : Number(v)
+    return Number.isFinite(n) ? n : null
+}
+
+/**
+ * How the unconfirmed moves shift each lane's server count and aggregate sums:
+ * the source lane loses the card (and its values), the destination gains them.
+ * Lets the header totals follow the drag live and snap back on a rollback
+ * without touching the server figures. Pure — exported for unit tests.
+ */
+export function laneDeltasFromOverrides(
+    records: any[],
+    overrides: Record<string, string> | undefined,
+    groupByKey: string,
+    aggregateKeys: string[] = [],
+): Record<string, LaneDelta> {
+    const out: Record<string, LaneDelta> = {}
+    if (!overrides) return out
+    const bump = (stage: string, card: any, sign: 1 | -1) => {
+        const d = (out[stage] ??= { count: 0, sums: {} })
+        d.count += sign
+        for (const key of aggregateKeys) {
+            const n = numericValue(card?.[key])
+            if (n !== null) d.sums[key] = (d.sums[key] ?? 0) + sign * n
+        }
+    }
+    for (const r of records) {
+        const to = overrides[String(r.id)]
+        if (to === undefined) continue
+        const from = String(r?.[groupByKey] ?? '')
+        if (from === to) continue
+        bump(from, r, -1)
+        bump(to, r, 1)
+    }
+    return out
+}
+
+/**
+ * Returns a NEW per-lane aggregate map with a card's numeric values moved from
+ * `fromStage` to `toStage`. Lanes with no known sums yet are left alone. Pure.
+ */
+export function applyLaneAggregatesOnMove(
+    aggregates: Record<string, Record<string, number>>,
+    card: any,
+    fromStage: string,
+    toStage: string,
+    aggregateKeys: string[],
+): Record<string, Record<string, number>> {
+    const next = { ...aggregates }
+    const shift = (stage: string, sign: 1 | -1) => {
+        const cur = next[stage]
+        if (!cur) return
+        const updated = { ...cur }
+        for (const key of aggregateKeys) {
+            const n = numericValue(card?.[key])
+            if (n !== null) updated[key] = (numericValue(updated[key]) ?? 0) + sign * n
+        }
+        next[stage] = updated
+    }
+    shift(fromStage, -1)
+    shift(toStage, 1)
+    return next
+}
+
+/** A lane's on-screen box, as the keyboard navigation reads it. */
+export interface LaneRect {
+    id: string
+    left: number
+    top: number
+    width: number
+}
+
+/**
+ * Keyboard drag: where the dragged card goes when the user presses ← or →.
+ * Picks the nearest lane to the left/right of the card's current center and
+ * returns the top-left coordinates that center the card in that lane, just
+ * under its header. Undefined when there is no lane further in that direction.
+ * Pure — exported for unit tests.
+ */
+export function nextLaneCoordinates(
+    direction: 'left' | 'right',
+    current: { left: number; top: number; width: number },
+    lanes: LaneRect[],
+): { x: number; y: number } | undefined {
+    const center = current.left + current.width / 2
+    const sorted = [...lanes].sort((a, b) => a.left - b.left)
+    const target =
+        direction === 'right'
+            ? sorted.find((l) => l.left > center)
+            : [...sorted].reverse().find((l) => l.left + l.width < center)
+    if (!target) return undefined
+    return {
+        x: target.left + (target.width - current.width) / 2,
+        y: Math.max(current.top, target.top + 56),
+    }
+}
+
+/**
  * Whether a card passes a lane funnel. Picked select/facet `values` match by
  * equality (IN — the card's field value must be one of them); a free-text
  * `text` matches by case-insensitive substring. No field / no criteria → passes.
@@ -392,11 +621,13 @@ export function cardMatchesLaneQuery(
 ): boolean {
     const q = query.trim().toLowerCase()
     if (!q) return true
-    return cols.some((c) =>
-        String(card?.[c.key] ?? '')
-            .toLowerCase()
-            .includes(q),
-    )
+    return cols.some((c) => {
+        // Match what the card shows (a relation's name) and the raw value.
+        const shown = cardCellText(card, c).toLowerCase()
+        if (shown.includes(q)) return true
+        const raw = card?.[c.key]
+        return typeof raw !== 'object' && String(raw ?? '').toLowerCase().includes(q)
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -500,7 +731,55 @@ export interface DynamicKanbanProps {
     defaultFilters?: Record<string, any>
 }
 
-export function DynamicKanban({
+/**
+ * The optimistic card move runs on TanStack Query (useOptimisticMutation). A
+ * host that mounts no QueryClientProvider still gets a working board: the
+ * kanban brings its own client in that case.
+ */
+export function DynamicKanban(props: DynamicKanbanProps) {
+    const hostClient = useContext(QueryClientContext)
+    const [ownClient] = useState(() =>
+        hostClient
+            ? null
+            : new QueryClient({ defaultOptions: { mutations: { retry: false } } }),
+    )
+    if (!hostClient && ownClient) {
+        return (
+            <QueryClientProvider client={ownClient}>
+                <DynamicKanbanBoard {...props} />
+            </QueryClientProvider>
+        )
+    }
+    return <DynamicKanbanBoard {...props} />
+}
+
+/** How long the drop animation takes to land the card in its lane. */
+const DROP_ANIMATION: DropAnimation = {
+    duration: 220,
+    easing: 'cubic-bezier(0.2, 0, 0, 1)',
+    sideEffects: defaultDropAnimationSideEffects({
+        styles: { active: { opacity: '0' } },
+    }),
+}
+
+/** Card fields a card may pick from; it shows the first few with a value. */
+const CARD_FIELD_CANDIDATES = 8
+const CARD_FIELDS_SHOWN = 3
+
+/** No card move in flight (a stable empty snapshot). */
+const NO_MOVES: Record<string, string> = Object.freeze({}) as Record<string, string>
+
+/** Server figures for one lane: its aggregate sums, keyed by column. */
+type LaneAggregates = Record<string, Record<string, number>>
+
+/** A card move in flight: which card, and the lanes it leaves and enters. */
+interface CardMove {
+    cardId: string
+    from: string
+    to: string
+}
+
+function DynamicKanbanBoard({
     model,
     endpoint,
     refreshTrigger,
@@ -509,11 +788,17 @@ export function DynamicKanban({
     onAction,
     pageSize = 50,
     lanePageSize = 25,
-    timeZone,
-    currency,
+    timeZone: timeZoneProp,
+    currency: currencyProp,
     defaultFilters,
 }: DynamicKanbanProps) {
     const { t, i18n } = useTranslation()
+    // The org's timezone/currency: an explicit prop wins, else the app-wide
+    // OrgRuntimeProvider (without it, money fell back to USD).
+    const orgTimeZone = useTimeZone()
+    const orgCurrency = useCurrency()
+    const timeZone = timeZoneProp ?? orgTimeZone
+    const currency = currencyProp ?? orgCurrency
     const api = useApi()
     const isDark = useIsDarkTheme()
     // Realtime refetch (opt-in) — debounced counter bumped by DATA_EVENTs for
@@ -575,6 +860,9 @@ export function DynamicKanban({
     // Active drag LANE id — a header drag reorders columns (Trello/Bitrix-style)
     // rather than moving a card. Kept apart so onDragEnd routes by draggable type.
     const [activeLaneId, setActiveLaneId] = useState<string | null>(null)
+    // Lane under the dragged card — drives the "allowed / not allowed" feedback
+    // (ring on the lane, not-allowed cursor on the lifted card).
+    const [overLaneId, setOverLaneId] = useState<string | null>(null)
 
     // Per-org lane order. `useStageLayout` reports whether the host wired the
     // `/stage-layout` endpoint (→ lane drag turns on) and persists the chosen
@@ -591,9 +879,40 @@ export function DynamicKanban({
     // stage totals into the fresh board.
     const fetchGenRef = useRef(0)
 
+    // Keyboard drag (a11y): Space/Enter lifts a focused card, ←/→ jump to the
+    // neighbouring lane, Space/Enter drops, Escape cancels. A lane header drag
+    // keeps the sortable's own keyboard coordinates.
+    const keyboardCoordinates = useCallback<KeyboardCoordinateGetter>((event, args) => {
+        const { context } = args
+        if (context.active?.data.current?.type === 'lane') {
+            return sortableKeyboardCoordinates(event, args)
+        }
+        const direction =
+            event.code === 'ArrowRight' ? 'right' : event.code === 'ArrowLeft' ? 'left' : null
+        if (!direction) return undefined
+        event.preventDefault()
+        const rect = context.collisionRect
+        if (!rect) return undefined
+        const lanes: LaneRect[] = []
+        for (const c of context.droppableContainers.getEnabled()) {
+            const r = context.droppableRects.get(c.id)
+            if (r) lanes.push({ id: String(c.id), left: r.left, top: r.top, width: r.width })
+        }
+        return nextLaneCoordinates(direction, rect, lanes)
+    }, [])
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+        useSensor(KeyboardSensor, { coordinateGetter: keyboardCoordinates }),
     )
+    // A card lands in the lane under the pointer (a column is a tall target, so
+    // "where the pointer is" beats "what the card overlaps"); keyboard drags have
+    // no pointer and fall back to overlap. A lane header drag snaps to the
+    // nearest column.
+    const collisionDetection = useCallback<CollisionDetection>((args) => {
+        if (args.active.data.current?.type === 'lane') return closestCenter(args)
+        const hits = pointerWithin(args)
+        return hits.length > 0 ? hits : rectIntersection(args)
+    }, [])
 
     // ---- metadata fetch (same path as DynamicTable) ----
     useEffect(() => {
@@ -642,6 +961,102 @@ export function DynamicKanban({
         clearAll,
     } = useDynamicFilters(metadata, { defaultFilters, model, endpoint })
 
+    const groupByKey = metadata?.group_by || ''
+    // Extra per-lane conditions (stage overrides) keyed by stage. A real lane
+    // that carries these queries its data — and counts its header — with the
+    // stage scope PLUS these filters (serialized like a smart lane's), so the
+    // top-up + lane-summary requests below layer them on. Sourced from
+    // `metadata.stages` (the kernel applies declared + custom-real overrides).
+    const stageExtraFilters = useMemo(() => {
+        const m = new Map<string, CustomStageFilter[]>()
+        for (const s of metadata?.stages ?? []) {
+            if (s.filters && s.filters.length > 0) {
+                m.set(
+                    s.key,
+                    s.filters.map((f) => ({
+                        field: f.field,
+                        op: f.op as CustomStageFilter['op'],
+                        value: f.value,
+                    })),
+                )
+            }
+        }
+        return m
+    }, [metadata?.stages])
+
+    // Columns the model declares a total for (`display_config.aggregate` — the
+    // same flag the table footer reads). Each lane header shows their sum over
+    // the lane, from the same `/aggregate` endpoint the footer uses.
+    const aggregateCols = useMemo(
+        () => (metadata?.columns ?? []).filter((c) => aggregateOf(c)),
+        [metadata],
+    )
+    const aggregateKeys = useMemo(() => aggregateCols.map((c) => c.key), [aggregateCols])
+    const [laneAggregates, setLaneAggregates] = useState<LaneAggregates>({})
+
+    // Asks the server for one lane's figures, scoped by the active filters and
+    // the lane's own conditions: the real card count (a `per_page=1` list read,
+    // only `meta.total` is used) and, when the model declares totals, the lane's
+    // sums. `overwrite` replaces a total already known — used after a move, when
+    // the server is the one to settle what an automation may have changed.
+    const probeLane = useCallback(
+        async (stageKey: string, gen: number, overwrite: boolean) => {
+            const gb = metadata?.group_by
+            if (!gb) return
+            const base = endpoint || `/data/${model}`
+            const scope = {
+                ...filterParams,
+                ...smartLaneParams(stageExtraFilters.get(stageKey)),
+            }
+            const count = (async () => {
+                try {
+                    const r = (await api.get(base, {
+                        params: { ...scope, page: 1, per_page: 1, [`f_${gb}`]: stageKey },
+                    })) as { data: ApiResponse<any[]> & { meta?: any } }
+                    const total = r.data.meta?.total ?? r.data.meta?.count ?? null
+                    if (total == null || gen !== fetchGenRef.current) return
+                    setLanePagination((p) => {
+                        const existing = p[stageKey]
+                        // A real page fetch already learned this lane's total.
+                        if (!overwrite && existing?.total != null) return p
+                        return {
+                            ...p,
+                            [stageKey]: {
+                                nextPage: existing?.nextPage ?? 1,
+                                total,
+                                loading: existing?.loading ?? false,
+                                done: existing?.done ?? total === 0,
+                            },
+                        }
+                    })
+                } catch {
+                    // A failed total just leaves the header on the loaded count.
+                }
+            })()
+            const sums = (async () => {
+                if (aggregateKeys.length === 0) return
+                try {
+                    const r = (await api.get(`${base}/aggregate`, {
+                        params: { ...scope, [`f_${gb}`]: stageKey },
+                    })) as { data: ApiResponse<Record<string, any>> }
+                    const data = r.data?.success ? r.data.data : null
+                    if (!data || typeof data !== 'object' || Array.isArray(data)) return
+                    if (gen !== fetchGenRef.current) return
+                    const row: Record<string, number> = {}
+                    for (const key of aggregateKeys) {
+                        const n = Number(data[key])
+                        row[key] = Number.isFinite(n) ? n : 0
+                    }
+                    setLaneAggregates((prev) => ({ ...prev, [stageKey]: row }))
+                } catch {
+                    // No sums for this lane: the header just shows the count.
+                }
+            })()
+            await Promise.all([count, sums])
+        },
+        [api, endpoint, model, metadata?.group_by, filterParams, stageExtraFilters, aggregateKeys],
+    )
+
     // ---- initial board page (one request, grouped into lanes) ----
     // Resets the per-lane pagination so every lane restarts its incremental
     // top-up from scratch — called on mount, refresh, and any filter/search
@@ -661,83 +1076,49 @@ export function DynamicKanban({
             setLoadingData(false)
         }
         setLanePagination({})
-        // Eager per-lane totals: so every lane header shows the REAL stage count
-        // on first render (not just what the global page happened to load), fire
-        // one lightweight `per_page=1` request per declared stage — in parallel,
-        // scoped by the SAME active filters/search (`f_<group_by>=<stage>` on top
-        // of filterParams). We read only `meta.total`; the row itself is ignored
-        // (the lane loads its real cards via loadMoreLane on scroll). The
-        // "unassigned" lane can't be stage-scoped, so it keeps its loaded count.
-        const gb = metadata.group_by
-        const declaredStages = deriveStages(metadata)
-        if (gb && declaredStages.length > 0) {
-            void Promise.all(
-                declaredStages.map(async (stage) => {
-                    try {
-                        const r = (await api.get(endpoint || `/data/${model}`, {
-                            params: {
-                                ...filterParams,
-                                ...smartLaneParams(stage.filters),
-                                page: 1,
-                                per_page: 1,
-                                [`f_${gb}`]: stage.key,
-                            },
-                        })) as { data: ApiResponse<any[]> & { meta?: any } }
-                        const total = r.data.meta?.total ?? r.data.meta?.count ?? null
-                        if (total == null || gen !== fetchGenRef.current) return
-                        setLanePagination((p) => {
-                            const existing = p[stage.key]
-                            // A real page fetch already learned this lane's total.
-                            if (existing?.total != null) return p
-                            return {
-                                ...p,
-                                [stage.key]: {
-                                    nextPage: existing?.nextPage ?? 1,
-                                    total,
-                                    loading: existing?.loading ?? false,
-                                    done: existing?.done ?? total === 0,
-                                },
-                            }
-                        })
-                    } catch (err) {
-                        // A failed total just leaves the header on the loaded count.
-                    }
-                }),
-            )
+        setLaneAggregates({})
+        // Eager per-lane figures: so every lane header shows the REAL stage count
+        // (and its declared sums) on first render — not just what the global page
+        // happened to load — probe each declared stage in parallel, scoped by the
+        // SAME active filters/search. The "unassigned" lane can't be
+        // stage-scoped, so it keeps its loaded count.
+        const declared = deriveStages(metadata)
+        if (metadata.group_by && declared.length > 0) {
+            void Promise.all(declared.map((stage) => probeLane(stage.key, gen, false)))
         }
-    }, [api, endpoint, model, metadata, pageSize, filterParams])
+    }, [api, endpoint, model, metadata, pageSize, filterParams, probeLane])
+
+    // Re-reads the server figures of the lanes a move touched.
+    const refreshLanes = useCallback(
+        (stageKeys: string[]) => {
+            const gen = fetchGenRef.current
+            for (const key of new Set(stageKeys)) {
+                if (key && key !== UNASSIGNED_LANE) void probeLane(key, gen, true)
+            }
+        },
+        [probeLane],
+    )
 
     // Load the next page for ONE lane/stage and append it (deduped by id) into
     // the shared records. Scoped by `f_<group_by>=<stage>` on top of the active
     // filterParams (the stage scope wins over any global group_by filter).
-    const groupByKey = metadata?.group_by || ''
-    // Extra per-lane conditions (stage overrides) keyed by stage. A real lane
-    // that carries these queries its data — and counts its header — with the
-    // stage scope PLUS these filters (serialized like a smart lane's), so the
-    // top-up + eager-total requests below layer them on. Sourced from
-    // `metadata.stages` (the kernel applies declared + custom-real overrides).
-    const stageExtraFilters = useMemo(() => {
-        const m = new Map<string, CustomStageFilter[]>()
-        for (const s of metadata?.stages ?? []) {
-            if (s.filters && s.filters.length > 0) {
-                m.set(
-                    s.key,
-                    s.filters.map((f) => ({
-                        field: f.field,
-                        op: f.op as CustomStageFilter['op'],
-                        value: f.value,
-                    })),
-                )
-            }
-        }
-        return m
-    }, [metadata?.stages])
+    //
+    // The page is derived from how many of the stage's cards are loaded, not
+    // from a counter: once a card leaves the lane the server's pages shift by
+    // one, and a counter would skip the card that slid into the gap. Reading
+    // from the loaded count re-requests that page instead (dedupe drops the
+    // repeats).
+    const recordsRef = useRef<any[]>(records)
+    recordsRef.current = records
     const loadMoreLane = useCallback(
         async (stageKey: string) => {
             if (!metadata || !groupByKey) return
             const current = lanePagination[stageKey]
             if (current?.loading || current?.done) return
-            const nextPage = current?.nextPage ?? 1
+            const loaded = recordsRef.current.filter(
+                (r) => String(r?.[groupByKey] ?? '') === stageKey,
+            ).length
+            const nextPage = Math.floor(loaded / lanePageSize) + 1
             setLanePagination((p) => ({
                 ...p,
                 [stageKey]: {
@@ -978,13 +1359,48 @@ export function DynamicKanban({
         [stages],
     )
 
-    const grouped = useMemo(
-        () => groupByStage(records, groupByKey, stages),
-        [records, groupByKey, stages],
+    // ---- optimistic card moves ----
+    // Unconfirmed moves live in their own small cache entry (`cardId → lane`),
+    // layered over the fetched records at paint time. The records themselves
+    // only change once the server confirms, so a rollback is just dropping the
+    // override — it can never clobber cards a lane loaded meanwhile.
+    const qc = useQueryClient()
+    const boardInstance = useId()
+    const movesKey = useMemo(
+        () => ['metacore', 'kanban-moves', model, boardInstance] as const,
+        [model, boardInstance],
+    )
+    // Read synchronously (not through useQuery, whose notifications land a tick
+    // later): the override must paint in the SAME commit as the drop, so the
+    // drag overlay's drop animation flies to the card's new lane, not its old one.
+    const moveOverrides = useSyncExternalStore(
+        useCallback((onChange: () => void) => qc.getQueryCache().subscribe(onChange), [qc]),
+        () => qc.getQueryData<Record<string, string>>(movesKey) ?? NO_MOVES,
+        () => NO_MOVES,
+    )
+    useEffect(() => () => qc.removeQueries({ queryKey: movesKey, exact: true }), [qc, movesKey])
+    const displayRecords = useMemo(
+        () => applyStageOverrides(records, moveOverrides, groupByKey),
+        [records, moveOverrides, groupByKey],
+    )
+    // How the moves in flight shift each lane's server count and sums.
+    const laneDeltas = useMemo(
+        () => laneDeltasFromOverrides(records, moveOverrides, groupByKey, aggregateKeys),
+        [records, moveOverrides, groupByKey, aggregateKeys],
     )
 
+    const grouped = useMemo(
+        () => groupByStage(displayRecords, groupByKey, stages),
+        [displayRecords, groupByKey, stages],
+    )
+
+    // Card fields: a few more candidates than a card shows, so a card whose
+    // first fields are empty shows the next ones that have a value.
     const { title: titleCol, fields: fieldCols } = useMemo(
-        () => (metadata ? selectCardColumns(metadata) : { title: null, fields: [] }),
+        () =>
+            metadata
+                ? selectCardColumns(metadata, CARD_FIELD_CANDIDATES)
+                : { title: null, fields: [] },
         [metadata],
     )
 
@@ -1023,9 +1439,9 @@ export function DynamicKanban({
 
     const cardById = useMemo(() => {
         const m = new Map<string, any>()
-        for (const r of records) m.set(String(r.id), r)
+        for (const r of displayRecords) m.set(String(r.id), r)
         return m
-    }, [records])
+    }, [displayRecords])
 
     const stageOfCard = useCallback(
         (id: string): string => {
@@ -1036,12 +1452,125 @@ export function DynamicKanban({
         [cardById, groupByKey],
     )
 
-    const onDragStart = useCallback((e: DragStartEvent) => {
-        if (e.active.data.current?.type === 'lane') {
-            setActiveLaneId(String(e.active.id))
-        } else {
-            setActiveId(String(e.active.id))
-        }
+    // FLIP: cards glide to their new place when a move lands or rolls back.
+    // The card just dropped is skipped — the drag overlay already carries it.
+    const boardRef = useRef<HTMLDivElement | null>(null)
+    const droppedCardRef = useRef<string | null>(null)
+    const flipShouldAnimate = useCallback(
+        (_el: HTMLElement, key: string) => key !== droppedCardRef.current,
+        [],
+    )
+    useFlipAnimation(boardRef, displayRecords, { shouldAnimate: flipShouldAnimate })
+    // The skip covers only the drop's own paint: a rollback later must glide the
+    // card back. (Runs after the FLIP effect above — same component, in order.)
+    useLayoutEffect(() => {
+        droppedCardRef.current = null
+    }, [displayRecords])
+
+    const cardText = useCallback(
+        (card: any): string =>
+            (titleCol ? cardCellText(card, titleCol) : '') || String(card?.id ?? ''),
+        [titleCol],
+    )
+    const laneLabel = useCallback(
+        (key: string): string => {
+            if (key === UNASSIGNED_LANE) return t('kanban.unassigned', { defaultValue: 'Sin etapa' })
+            const st = stages.find((x) => x.key === key)
+            return st ? t(st.label, { defaultValue: st.label }) : key
+        },
+        [stages, t],
+    )
+
+    const base = endpoint || `/data/${model}`
+    const moveCard = useOptimisticMutation<any, CardMove, Record<string, string>>({
+        queryKey: movesKey,
+        mutationFn: async (move) => {
+            try {
+                // `base` is the org-scoped list endpoint (e.g. `/data/<model>/me`),
+                // so the per-record update is just `<base>/<id>` — same convention
+                // as DynamicTable/DynamicRelation.
+                const res = (await api.put(`${base}/${move.cardId}`, {
+                    [groupByKey]: move.to,
+                })) as { data?: ApiResponse<any> }
+                if (res?.data && res.data.success === false) {
+                    throw Object.assign(new Error(res.data.message || 'update_failed'), {
+                        serverMessage: res.data.message,
+                    })
+                }
+                // Confirmed: the record takes the new lane (plus whatever the server
+                // wrote with it — a transition's `set`, an automation), and the
+                // lane figures follow in the same paint as the override going away.
+                const saved = res?.data?.data
+                const card = recordsRef.current.find((r) => String(r.id) === move.cardId)
+                setRecords((rs) =>
+                    rs.map((r) =>
+                        String(r.id) === move.cardId
+                            ? {
+                                  ...r,
+                                  ...(saved && typeof saved === 'object' && !Array.isArray(saved)
+                                      ? saved
+                                      : {}),
+                                  [groupByKey]: move.to,
+                              }
+                            : r,
+                    ),
+                )
+                setLanePagination((p) => applyLaneTotalsOnMove(p, move.from, move.to))
+                if (card) {
+                    setLaneAggregates((a) =>
+                        applyLaneAggregatesOnMove(a, card, move.from, move.to, aggregateKeys),
+                    )
+                }
+                return saved
+            } catch (err: any) {
+                // Rejected: drop this card's override so it glides back to its lane.
+                // Done here (not in onError) so a rejected move that a newer drag
+                // superseded still returns home and still tells the user why.
+                qc.setQueryData<Record<string, string>>(movesKey, (cur) => {
+                    if (!cur || cur[move.cardId] !== move.to) return cur
+                    const { [move.cardId]: _dropped, ...rest } = cur
+                    return rest
+                })
+                const reason = err?.response?.data?.message ?? err?.serverMessage
+                toast.error(
+                    t('kanban.moveFailed', {
+                        defaultValue: 'No se pudo mover la tarjeta',
+                    }) + (reason ? `: ${reason}` : ''),
+                )
+                throw err
+            }
+        },
+        optimistic: (current, move) => ({ ...(current ?? {}), [move.cardId]: move.to }),
+        // The record already carries the confirmed lane: the override goes away.
+        reconcile: (_data, move, current) => {
+            if (!current || !(move.cardId in current)) return current ?? {}
+            const { [move.cardId]: _confirmed, ...rest } = current
+            return rest
+        },
+        isEqual: (a, b) => a.cardId === b.cardId && a.to === b.to,
+        onSuccess: (_data, move) => refreshLanes([move.from, move.to]),
+    })
+
+    const onDragStart = useCallback(
+        (e: DragStartEvent) => {
+            if (e.active.data.current?.type === 'lane') {
+                setActiveLaneId(String(e.active.id))
+            } else {
+                droppedCardRef.current = null
+                setActiveId(String(e.active.id))
+            }
+        },
+        [],
+    )
+
+    const onDragOver = useCallback((e: DragOverEvent) => {
+        setOverLaneId(e.over ? String(e.over.id) : null)
+    }, [])
+
+    const onDragCancel = useCallback(() => {
+        setActiveId(null)
+        setActiveLaneId(null)
+        setOverLaneId(null)
     }, [])
 
     // Optimistic lane reorder: reorder the columns in local state immediately,
@@ -1073,6 +1602,7 @@ export function DynamicKanban({
         async (e: DragEndEvent) => {
             setActiveId(null)
             setActiveLaneId(null)
+            setOverLaneId(null)
             const { active, over } = e
             // A header drag reorders columns rather than moving a card.
             if (active.data.current?.type === 'lane') {
@@ -1082,59 +1612,106 @@ export function DynamicKanban({
             if (!over) return
             const cardId = String(active.id)
             const destStage = String(over.id)
-            // Never drop a card onto a smart lane (a saved view, not a stage).
-            if (!realStageKeys.has(destStage) && destStage !== UNASSIGNED_LANE) return
+            // Only a real stage takes a card: never a smart lane (a saved view)
+            // nor the synthetic "Sin etapa" lane (not a value the record can hold).
+            if (!realStageKeys.has(destStage)) return
             const srcStage = stageOfCard(cardId)
             if (srcStage === destStage) return
-            if (!isTransitionAllowed(transitions, srcStage, destStage)) {
-                toast.error(
-                    t('kanban.invalidTransition', {
-                        defaultValue: 'Movimiento no permitido entre estas etapas',
-                    }),
-                )
-                return
-            }
+            // A lane the stage machine doesn't reach was shown as "no permitido"
+            // the whole drag; dropping there just sends the card home.
+            if (!isTransitionAllowed(transitions, srcStage, destStage, realStageKeys)) return
 
-            // OPTIMISTIC: move the card in local state immediately.
-            const prevRecords = records
-            const prevPagination = lanePagination
-            setRecords((rs) =>
-                rs.map((r) =>
-                    String(r.id) === cardId ? { ...r, [groupByKey]: destStage } : r,
-                ),
-            )
-            // Keep the server totals consistent with the moved card so a lane's
-            // `count/total` header stays truthful with partial lanes: one leaves
-            // the source stage, one joins the destination.
-            setLanePagination((p) => applyLaneTotalsOnMove(p, srcStage, destStage))
-
-            try {
-                const base = endpoint || `/data/${model}`
-                // `base` is the org-scoped list endpoint (e.g. `/data/<model>/me`),
-                // so the per-record update is just `<base>/<id>` — same convention
-                // as DynamicTable/DynamicRelation. Appending an extra `/me` here
-                // produced `/data/<model>/me/me/<id>` → 404 on drag-to-move.
-                const res = (await api.put(`${base}/${cardId}`, {
-                    [groupByKey]: destStage,
-                })) as { data?: ApiResponse<any> }
-                if (res?.data && res.data.success === false) {
-                    throw new Error(res.data.message || 'update_failed')
-                }
-            } catch (err: any) {
-                // REVERT + toast on failure.
-                setRecords(prevRecords)
-                setLanePagination(prevPagination)
-                toast.error(
-                    t('kanban.moveFailed', {
-                        defaultValue: 'No se pudo mover la tarjeta',
-                    }) +
-                        (err?.response?.data?.message
-                            ? `: ${err.response.data.message}`
-                            : ''),
-                )
-            }
+            droppedCardRef.current = cardId
+            moveCard.mutate({ cardId, from: srcStage, to: destStage })
         },
-        [api, endpoint, groupByKey, lanePagination, model, records, stageOfCard, t, transitions, realStageKeys, reorderLanes],
+        [moveCard, realStageKeys, stageOfCard, transitions, reorderLanes],
+    )
+
+    // Screen-reader narration of a card drag (dnd-kit reads these aloud).
+    const announcements = useMemo<Announcements>(() => {
+        const cardName = (id: string | number) => {
+            const card = cardById.get(String(id))
+            return card ? cardText(card) : String(id)
+        }
+        const isCard = (a: { data: { current?: Record<string, any> } }) =>
+            a.data.current?.type !== 'lane'
+        return {
+            onDragStart: ({ active }) =>
+                isCard(active)
+                    ? t('kanban.a11y.picked', {
+                          defaultValue: 'Tarjeta {{card}} levantada, en {{lane}}.',
+                          card: cardName(active.id),
+                          lane: laneLabel(stageOfCard(String(active.id))),
+                      })
+                    : t('kanban.a11y.lanePicked', {
+                          defaultValue: 'Columna {{lane}} levantada.',
+                          lane: laneLabel(String(active.id)),
+                      }),
+            onDragOver: ({ active, over }) => {
+                if (!over) return undefined
+                if (!isCard(active)) {
+                    return t('kanban.a11y.laneOver', {
+                        defaultValue: 'Sobre la columna {{lane}}.',
+                        lane: laneLabel(String(over.id)),
+                    })
+                }
+                const from = stageOfCard(String(active.id))
+                const to = String(over.id)
+                return realStageKeys.has(to) && isTransitionAllowed(transitions, from, to, realStageKeys)
+                    ? t('kanban.a11y.over', {
+                          defaultValue: 'Sobre {{lane}}.',
+                          lane: laneLabel(to),
+                      })
+                    : t('kanban.a11y.overBlocked', {
+                          defaultValue: '{{lane}}: no se puede mover aquí.',
+                          lane: laneLabel(to),
+                      })
+            },
+            onDragEnd: ({ active, over }) => {
+                if (!isCard(active)) {
+                    return t('kanban.a11y.laneDropped', {
+                        defaultValue: 'Columna {{lane}} soltada.',
+                        lane: laneLabel(String(active.id)),
+                    })
+                }
+                const from = stageOfCard(String(active.id))
+                const to = over ? String(over.id) : ''
+                if (!over || to === from) {
+                    return t('kanban.a11y.droppedHome', {
+                        defaultValue: 'Tarjeta {{card}} se queda en {{lane}}.',
+                        card: cardName(active.id),
+                        lane: laneLabel(from),
+                    })
+                }
+                return realStageKeys.has(to) && isTransitionAllowed(transitions, from, to, realStageKeys)
+                    ? t('kanban.a11y.dropped', {
+                          defaultValue: 'Tarjeta {{card}} movida a {{lane}}.',
+                          card: cardName(active.id),
+                          lane: laneLabel(to),
+                      })
+                    : t('kanban.a11y.droppedBlocked', {
+                          defaultValue:
+                              'No se puede mover de {{from}} a {{lane}}. La tarjeta vuelve a {{from}}.',
+                          from: laneLabel(from),
+                          lane: laneLabel(to),
+                      })
+            },
+            onDragCancel: ({ active }) =>
+                t('kanban.a11y.cancelled', {
+                    defaultValue: 'Movimiento cancelado. {{card}} vuelve a su lugar.',
+                    card: isCard(active) ? cardName(active.id) : laneLabel(String(active.id)),
+                }),
+        }
+    }, [cardById, cardText, laneLabel, realStageKeys, stageOfCard, t, transitions])
+
+    const screenReaderInstructions = useMemo(
+        () => ({
+            draggable: t('kanban.a11y.instructions', {
+                defaultValue:
+                    'Para mover una tarjeta, presiona Espacio o Enter. Usa las flechas izquierda y derecha para cambiar de columna, Espacio o Enter para soltarla y Escape para cancelar.',
+            }),
+        }),
+        [t],
     )
 
     // Board-level "Restablecer orden": drop the stored order and refetch the
@@ -1205,7 +1782,11 @@ export function DynamicKanban({
     const droppableAllowedFor = (stageKey: string) =>
         !activeId ||
         stageKey === activeStage ||
-        isTransitionAllowed(transitions, activeStage, stageKey)
+        (realStageKeys.has(stageKey) &&
+            isTransitionAllowed(transitions, activeStage, stageKey, realStageKeys))
+    // The lifted card is over a lane that won't take it → not-allowed cursor.
+    const overBlocked =
+        !!activeId && !!overLaneId && !droppableAllowedFor(overLaneId)
 
     // Opens the gear (⚙) "Configurar etapa" dialog for a lane, routing to the
     // right backend by kind: a custom real stage edits through /custom-stages, a
@@ -1293,12 +1874,37 @@ export function DynamicKanban({
         }
         const laneState = lanePagination[stage.key]
         const isUnassigned = stage.key === UNASSIGNED_LANE
-        const laneHasMore = !isUnassigned && !laneState?.done
+        // Server figures, shifted by the moves still in flight.
+        const delta = laneDeltas[stage.key]
+        const serverTotal =
+            laneState?.total != null ? Math.max(0, laneState.total + (delta?.count ?? 0)) : null
+        const laneSums = laneAggregates[stage.key]
+        const aggregates =
+            laneSums && aggregateCols.length > 0
+                ? aggregateCols.map((col) => ({
+                      key: col.key,
+                      label: t(col.label, { defaultValue: col.label }),
+                      value: formatAggregateTotal(
+                          col,
+                          (laneSums[col.key] ?? 0) + (delta?.sums[col.key] ?? 0),
+                          currency,
+                          i18n.language,
+                      ),
+                  }))
+                : []
+        // Nothing left to fetch once every card the server counts is loaded
+        // (a lane the first page already filled needs no top-up request).
+        const laneHasMore =
+            !isUnassigned &&
+            !laneState?.done &&
+            !(serverTotal != null && allCards.length >= serverTotal)
+        const blocked = !!activeId && !droppableAllowedFor(stage.key)
         return {
             stage,
             count: cards.length,
             totalCount: allCards.length,
-            serverTotal: laneState?.total ?? null,
+            serverTotal,
+            aggregates,
             hasMore: laneHasMore,
             loadingMore: !!laneState?.loading,
             onLoadMore: () => loadMoreLane(stage.key),
@@ -1312,7 +1918,8 @@ export function DynamicKanban({
                 }),
             onQueryChange: (q) => updateLaneFilter(stage.key, { query: q }),
             isDark,
-            dimmed: !!activeId && !droppableAllowedFor(stage.key),
+            dimmed: blocked,
+            blockedOver: blocked && overLaneId === stage.key,
             model,
             columns: metadata?.columns ?? [],
             automationsAvailable:
@@ -1347,6 +1954,7 @@ export function DynamicKanban({
                             currency={currency}
                             onClick={onCardClick}
                             onAction={handleInternalAction}
+                            pending={card.id != null && String(card.id) in moveOverrides}
                         />
                     ))
                 ),
@@ -1508,21 +2116,38 @@ export function DynamicKanban({
                 data-testid="kanban-filter-chips"
             />
 
-            <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd}>
+            <DndContext
+                sensors={sensors}
+                collisionDetection={collisionDetection}
+                onDragStart={onDragStart}
+                onDragOver={onDragOver}
+                onDragEnd={onDragEnd}
+                onDragCancel={onDragCancel}
+                // Near the board's left/right edge the columns scroll by
+                // themselves while a card is held there.
+                autoScroll={{ threshold: { x: 0.15, y: 0.15 }, acceleration: 14 }}
+                accessibility={{ announcements, screenReaderInstructions }}
+            >
                 {/* Horizontal SortableContext over the draggable lanes (real
                     stages + smart lanes). Card drags don't touch it — their
                     active id isn't a sortable item, so the lanes never shift when
                     moving a card; a `data.type` tag routes drop handling. */}
                 <SortableContext items={boardLaneKeys} strategy={horizontalListSortingStrategy}>
-                <div className="flex w-full min-w-0 gap-4 overflow-x-auto p-1" data-testid="kanban-board">
+                <div
+                    ref={boardRef}
+                    className="flex w-full min-w-0 gap-4 overflow-x-auto p-1"
+                    data-testid="kanban-board"
+                    data-dragging={activeId ? 'card' : undefined}
+                >
                 {renderLanes.map((lane) =>
                     lane.kind === 'stage' ? (
                         <SortableStageLane
                             key={lane.stage.key}
                             reorderEnabled={laneReorderEnabled}
-                            droppableDisabled={
-                                !!activeId && !droppableAllowedFor(lane.stage.key)
-                            }
+                            // A lane the card can't enter stays a drop target so
+                            // it can say so (red ring, not-allowed cursor); the
+                            // drop itself is refused in onDragEnd.
+                            droppableDisabled={false}
                             laneProps={buildLaneProps(lane.stage)}
                         />
                     ) : laneReorderEnabled ? (
@@ -1543,9 +2168,8 @@ export function DynamicKanban({
                 {unassignedStage && (
                     <DroppableStageLane
                         key={UNASSIGNED_LANE}
-                        droppableDisabled={
-                            !!activeId && !droppableAllowedFor(UNASSIGNED_LANE)
-                        }
+                        // "Sin etapa" is not a value a card can be given.
+                        droppableDisabled={!!activeId}
                         laneProps={buildLaneProps(unassignedStage)}
                     />
                 )}
@@ -1557,7 +2181,9 @@ export function DynamicKanban({
                 </div>
                 </SortableContext>
 
-            <DragOverlay>
+            {/* In <body>: a glass panel around the board would otherwise shift
+                the fixed overlay away from the pointer (see PortalDragOverlay). */}
+            <PortalDragOverlay dropAnimation={DROP_ANIMATION} zIndex={60}>
                 {activeCard ? (
                     <CardPreview
                         card={activeCard}
@@ -1566,9 +2192,10 @@ export function DynamicKanban({
                         locale={i18n.language}
                         timeZone={timeZone}
                         currency={currency}
+                        blocked={overBlocked}
                     />
                 ) : null}
-            </DragOverlay>
+            </PortalDragOverlay>
 
             {rowActionDialogs}
             </DndContext>
@@ -1874,6 +2501,8 @@ interface KanbanLaneProps {
     totalCount: number
     /** Server-reported total for the stage (from response meta), or null. */
     serverTotal: number | null
+    /** The lane's declared totals (sum of a money/number column), formatted. */
+    aggregates: { key: string; label: string; value: string }[]
     /** More server pages available for this stage. */
     hasMore: boolean
     /** A top-up request for this stage is in flight. */
@@ -1885,7 +2514,10 @@ interface KanbanLaneProps {
     onFunnelChange: (filter: LaneFunnelValue | null) => void
     onQueryChange: (query: string) => void
     isDark: boolean
+    /** A card is being dragged and this lane can't take it. */
     dimmed: boolean
+    /** …and the card is right over this lane. */
+    blockedOver: boolean
     /** Drag-and-drop wiring from the lane's sortable/droppable wrapper. */
     dnd: LaneDnd
     /** Model key + columns for the stage-automations editor. */
@@ -1914,6 +2546,7 @@ function KanbanLane({
     count,
     totalCount,
     serverTotal,
+    aggregates,
     hasMore,
     loadingMore,
     onLoadMore,
@@ -1923,6 +2556,7 @@ function KanbanLane({
     onQueryChange,
     isDark,
     dimmed,
+    blockedOver,
     dnd,
     model,
     columns,
@@ -2009,14 +2643,21 @@ function KanbanLane({
             // fit, capped at max-w so a couple of lanes don't stretch absurdly
             // wide. Below min-w the board's overflow-x-auto takes over and the
             // lanes scroll horizontally at their minimum width.
-            className="group/lane flex min-w-[280px] max-w-[420px] flex-1 shrink-0 flex-col rounded-xl border bg-muted/30 transition-opacity"
+            className="group/lane flex min-w-[280px] max-w-[420px] flex-1 shrink-0 flex-col rounded-xl border bg-muted/30 transition-[opacity,outline-color] duration-150"
             style={{
-                opacity: dnd.isDragging ? 0.6 : dimmed ? 0.45 : 1,
-                outline: dnd.isOver ? '2px solid var(--ring, #3b82f6)' : 'none',
+                opacity: dnd.isDragging ? 0.6 : dimmed ? (blockedOver ? 0.7 : 0.45) : 1,
+                outline: blockedOver
+                    ? '2px dashed var(--destructive, #ef4444)'
+                    : dnd.isOver
+                      ? '2px solid var(--ring, #3b82f6)'
+                      : '2px solid transparent',
                 outlineOffset: 2,
+                cursor: dimmed ? 'not-allowed' : undefined,
                 ...dnd.style,
             }}
             data-stage={stage.key}
+            data-drop={dimmed ? 'blocked' : undefined}
+            aria-disabled={dimmed || undefined}
         >
             <div className="flex items-center justify-between gap-2 px-3 py-2.5">
                 {/* Title cluster doubles as the reorder handle (Trello/Bitrix):
@@ -2116,6 +2757,34 @@ function KanbanLane({
                     )}
                 </div>
             </div>
+            {(aggregates.length > 0 || blockedOver) && (
+                <div className="-mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 px-3 pb-1.5 text-xs">
+                    {blockedOver ? (
+                        <span
+                            className="font-medium text-destructive"
+                            data-testid={`lane-blocked-${stage.key}`}
+                        >
+                            {t('kanban.dropNotAllowed', {
+                                defaultValue: 'No se puede mover aquí',
+                            })}
+                        </span>
+                    ) : (
+                        aggregates.map((a) => (
+                            <span
+                                key={a.key}
+                                className="tabular-nums text-muted-foreground"
+                                title={a.label}
+                                data-testid={`lane-total-${stage.key}-${a.key}`}
+                            >
+                                {aggregates.length > 1 && (
+                                    <span className="opacity-70">{a.label}: </span>
+                                )}
+                                <span className="font-semibold text-foreground">{a.value}</span>
+                            </span>
+                        ))
+                    )}
+                </div>
+            )}
             {searchOpen && (
                 <div className="px-3 pb-1.5">
                     <div className="relative">
@@ -2337,6 +3006,7 @@ function LaneFilterButton({
 interface KanbanCardProps {
     card: any
     titleCol: ColumnDefinition | null
+    /** Candidate fields; the card shows the first few that have a value. */
     fieldCols: ColumnDefinition[]
     actions: ActionDefinition[]
     locale: string
@@ -2347,6 +3017,61 @@ interface KanbanCardProps {
     onAction: (actionKey: string, record: any) => void
     /** When false the card is static (no drag) — used by read-only smart lanes. */
     draggable?: boolean
+    /** Its move is waiting for the server. */
+    pending?: boolean
+}
+
+// The title + the card's non-empty fields. Shared by the card and the drag
+// preview so the lifted card looks exactly like the one on the board.
+function CardBody({
+    card,
+    titleCol,
+    fieldCols,
+    locale,
+    timeZone,
+    currency,
+    menu,
+}: Pick<KanbanCardProps, 'card' | 'titleCol' | 'fieldCols' | 'locale' | 'timeZone' | 'currency'> & {
+    menu?: React.ReactNode
+}) {
+    const fields = visibleCardFields(card, fieldCols, CARD_FIELDS_SHOWN)
+    return (
+        <CardContent className="space-y-1.5 p-3">
+            <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1 break-words text-sm font-medium leading-snug">
+                    {titleCol && !isEmptyCardValue(card, titleCol) ? (
+                        <ActivityValueRenderer
+                            value={cardCellValue(card, titleCol)}
+                            col={titleCol}
+                            locale={locale}
+                            timeZone={timeZone}
+                            currency={currency}
+                        />
+                    ) : (
+                        <span className="truncate text-muted-foreground">#{String(card.id)}</span>
+                    )}
+                </div>
+                {menu}
+            </div>
+            {fields.map((col) => (
+                <div
+                    key={col.key}
+                    className="flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground"
+                >
+                    <span className="shrink-0 opacity-70">{col.label}:</span>
+                    <span className="min-w-0 break-words">
+                        <ActivityValueRenderer
+                            value={cardCellValue(card, col)}
+                            col={col}
+                            locale={locale}
+                            timeZone={timeZone}
+                            currency={currency}
+                        />
+                    </span>
+                </div>
+            ))}
+        </CardContent>
+    )
 }
 
 function KanbanCard({
@@ -2360,6 +3085,7 @@ function KanbanCard({
     onClick,
     onAction,
     draggable = true,
+    pending = false,
 }: KanbanCardProps) {
     const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
         id: String(card.id),
@@ -2369,90 +3095,68 @@ function KanbanCard({
 
     const visibleActions = actions.filter((a) => isRowActionVisible(a, card))
 
+    const menu =
+        visibleActions.length > 0 ? (
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 shrink-0 -mr-1 -mt-1"
+                        // Don't start a drag / card click from the menu button.
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onKeyDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                    {visibleActions.map((a) => (
+                        <DropdownMenuItem
+                            key={a.key}
+                            onClick={(e) => {
+                                e.stopPropagation()
+                                onAction(a.key, card)
+                            }}
+                        >
+                            <DynamicIcon name={a.icon || 'Zap'} className="mr-2 h-4 w-4" />
+                            {a.label}
+                        </DropdownMenuItem>
+                    ))}
+                </DropdownMenuContent>
+            </DropdownMenu>
+        ) : null
+
     return (
         <Card
             ref={draggable ? setNodeRef : undefined}
             {...(draggable ? attributes : {})}
             {...(draggable ? listeners : {})}
-            className={`w-full min-w-0 border-border/70 shadow-sm ${
+            className={`w-full min-w-0 shrink-0 border-border/70 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 draggable ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'
             }`}
             style={{ opacity: isDragging ? 0.4 : 1 }}
             onClick={() => onClick?.(card)}
             data-card-id={String(card.id)}
+            data-flip-key={draggable ? String(card.id) : undefined}
+            aria-busy={pending || undefined}
         >
-            <CardContent className="space-y-1.5 p-3">
-                <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1 break-words text-sm font-medium leading-snug">
-                        {titleCol ? (
-                            <ActivityValueRenderer
-                                value={cardCellValue(card, titleCol)}
-                                col={titleCol}
-                                locale={locale}
-                                timeZone={timeZone}
-                                currency={currency}
-                            />
-                        ) : (
-                            <span className="truncate">{String(card.id)}</span>
-                        )}
-                    </div>
-                    {visibleActions.length > 0 && (
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 shrink-0 -mr-1 -mt-1"
-                                    // Don't start a drag / card click from the menu button.
-                                    onPointerDown={(e) => e.stopPropagation()}
-                                    onClick={(e) => e.stopPropagation()}
-                                >
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                                {visibleActions.map((a) => (
-                                    <DropdownMenuItem
-                                        key={a.key}
-                                        onClick={(e) => {
-                                            e.stopPropagation()
-                                            onAction(a.key, card)
-                                        }}
-                                    >
-                                        <DynamicIcon
-                                            name={a.icon || 'Zap'}
-                                            className="mr-2 h-4 w-4"
-                                        />
-                                        {a.label}
-                                    </DropdownMenuItem>
-                                ))}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    )}
-                </div>
-                {fieldCols.map((col) => (
-                    <div
-                        key={col.key}
-                        className="flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground"
-                    >
-                        <span className="shrink-0 opacity-70">{col.label}:</span>
-                        <span className="min-w-0 break-words">
-                            <ActivityValueRenderer
-                                value={cardCellValue(card, col)}
-                                col={col}
-                                locale={locale}
-                                timeZone={timeZone}
-                                currency={currency}
-                            />
-                        </span>
-                    </div>
-                ))}
-            </CardContent>
+            <CardBody
+                card={card}
+                titleCol={titleCol}
+                fieldCols={fieldCols}
+                locale={locale}
+                timeZone={timeZone}
+                currency={currency}
+                menu={menu}
+            />
         </Card>
     )
 }
 
-// Static preview rendered inside the DragOverlay (no dnd hooks, no menu).
+// Static preview rendered inside the DragOverlay (no dnd hooks, no menu). It
+// fills the overlay box, which dnd-kit sizes to the card being dragged.
 function CardPreview({
     card,
     titleCol,
@@ -2460,41 +3164,25 @@ function CardPreview({
     locale,
     timeZone,
     currency,
-}: Omit<KanbanCardProps, 'actions' | 'onClick' | 'onAction'>) {
+    blocked = false,
+}: Omit<KanbanCardProps, 'actions' | 'onClick' | 'onAction'> & { blocked?: boolean }) {
     return (
-        <Card className="w-[284px] cursor-grabbing border-primary/40 shadow-lg">
-            <CardContent className="space-y-1.5 p-3">
-                <div className="break-words text-sm font-medium leading-snug">
-                    {titleCol ? (
-                        <ActivityValueRenderer
-                            value={cardCellValue(card, titleCol)}
-                            col={titleCol}
-                            locale={locale}
-                            timeZone={timeZone}
-                            currency={currency}
-                        />
-                    ) : (
-                        String(card.id)
-                    )}
-                </div>
-                {fieldCols.map((col) => (
-                    <div
-                        key={col.key}
-                        className="flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground"
-                    >
-                        <span className="shrink-0 opacity-70">{col.label}:</span>
-                        <span className="min-w-0 break-words">
-                            <ActivityValueRenderer
-                                value={cardCellValue(card, col)}
-                                col={col}
-                                locale={locale}
-                                timeZone={timeZone}
-                                currency={currency}
-                            />
-                        </span>
-                    </div>
-                ))}
-            </CardContent>
+        <Card
+            className={`h-full w-full shadow-xl transition-[border-color] ${
+                blocked ? 'border-destructive/60' : 'border-primary/40'
+            }`}
+            style={{ cursor: blocked ? 'not-allowed' : 'grabbing' }}
+            data-testid="kanban-drag-preview"
+            data-blocked={blocked || undefined}
+        >
+            <CardBody
+                card={card}
+                titleCol={titleCol}
+                fieldCols={fieldCols}
+                locale={locale}
+                timeZone={timeZone}
+                currency={currency}
+            />
         </Card>
     )
 }

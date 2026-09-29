@@ -26,7 +26,8 @@ let captured: {
     onDragEnd?: (e: any) => void | Promise<void>
     onDragStart?: (e: any) => void
 } = {}
-vi.mock('@dnd-kit/core', () => ({
+vi.mock('@dnd-kit/core', async (orig) => ({
+    ...((await orig()) as Record<string, unknown>),
     DndContext: ({ children, onDragEnd, onDragStart }: any) => {
         captured.onDragEnd = onDragEnd
         captured.onDragStart = onDragStart

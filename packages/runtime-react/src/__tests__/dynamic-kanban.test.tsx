@@ -171,9 +171,22 @@ describe('isTransitionAllowed', () => {
         expect(isTransitionAllowed(TRANSITIONS, 'done', 'done')).toBe(true)
     })
 
-    it('is unrestricted when no transitions are declared', () => {
+    it('is unrestricted when the metadata carries no transitions', () => {
         expect(isTransitionAllowed(undefined, 'done', 'backlog')).toBe(true)
-        expect(isTransitionAllowed([], 'done', 'backlog')).toBe(true)
+    })
+
+    it('an empty list allows no moves between stages (kernel rule)', () => {
+        expect(isTransitionAllowed([], 'done', 'backlog')).toBe(false)
+        expect(isTransitionAllowed([], 'done', 'done')).toBe(true)
+    })
+
+    it('places a card that has no stage, or one outside the machine, in any stage', () => {
+        const keys = new Set(['backlog', 'in_progress', 'review', 'done'])
+        expect(isTransitionAllowed(TRANSITIONS, '', 'done', keys)).toBe(true)
+        expect(isTransitionAllowed(TRANSITIONS, 'legacy_open', 'done', keys)).toBe(true)
+        expect(isTransitionAllowed([], '', 'backlog', keys)).toBe(true)
+        // …but only into a stage of the machine.
+        expect(isTransitionAllowed(TRANSITIONS, '', 'nowhere', keys)).toBe(false)
     })
 
     it('honors wildcards on either side', () => {

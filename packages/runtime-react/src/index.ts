@@ -57,9 +57,15 @@ export {
     groupByStage,
     isTransitionAllowed,
     applyOptimisticMove,
+    applyStageOverrides,
+    laneDeltasFromOverrides,
     selectCardColumns,
+    visibleCardFields,
+    isEmptyCardValue,
+    nextLaneCoordinates,
     UNASSIGNED_LANE,
 } from './dynamic-kanban'
+export { PortalDragOverlay, type PortalDragOverlayProps } from './portal-drag-overlay'
 export {
     useStageAutomations,
     StageAutomationsButton,

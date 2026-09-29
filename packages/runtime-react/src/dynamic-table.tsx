@@ -12,6 +12,7 @@
 //     column cells are tightly coupled to their design system).
 import { useEffect, useState, useMemo, useCallback, useRef, type MouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useTimeZone, useCurrency } from './org-runtime-context'
 import { format } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -282,12 +283,18 @@ export function DynamicTable({
     defaultFilters,
     extraColumns = [],
     getDynamicColumns = defaultGetDynamicColumns,
-    timeZone,
-    currency,
+    timeZone: timeZoneProp,
+    currency: currencyProp,
     pagination: paginationMode,
     infiniteScroll: infiniteScrollProp = false,
     virtualizeRows,
 }: DynamicTableProps) {
+    // The org's timezone/currency: an explicit prop wins, else the app-wide
+    // OrgRuntimeProvider (without it, money fell back to USD).
+    const orgTimeZone = useTimeZone()
+    const orgCurrency = useCurrency()
+    const timeZone = timeZoneProp ?? orgTimeZone
+    const currency = currencyProp ?? orgCurrency
     // The explicit `pagination` prop wins; the legacy `infiniteScroll` boolean
     // still selects the mode when `pagination` is absent (back-compat).
     const infiniteScroll = paginationMode ? paginationMode === 'infinite' : infiniteScrollProp

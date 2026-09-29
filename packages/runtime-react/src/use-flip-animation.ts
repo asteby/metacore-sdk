@@ -23,6 +23,12 @@ export interface UseFlipAnimationOptions {
   easing?: MotionEasing | string
   /** Off switch; the hook also stays still under prefers-reduced-motion. */
   disabled?: boolean
+  /**
+   * Leave one element still on this change while still tracking where it is
+   * (e.g. the card a drag overlay is already carrying into place). Default:
+   * animate everything.
+   */
+  shouldAnimate?: (el: HTMLElement, key: string) => boolean
 }
 
 const DEFAULT_SELECTOR = '[data-flip-key]'
@@ -54,12 +60,13 @@ export function useFlipAnimation(
     duration = 'moderate',
     easing = 'standard',
     disabled = false,
+    shouldAnimate,
   } = options
   const positionsRef = useRef<Positions | null>(null)
   const triggerRef = useRef(trigger)
-  const configRef = useRef({ selector, keyOf, scrollContainer })
+  const configRef = useRef({ selector, keyOf, scrollContainer, shouldAnimate })
   useEffect(() => {
-    configRef.current = { selector, keyOf, scrollContainer }
+    configRef.current = { selector, keyOf, scrollContainer, shouldAnimate }
   })
 
   const measure = (): Positions | null => {
@@ -105,11 +112,16 @@ export function useFlipAnimation(
     schedule()
     document.addEventListener('pointerup', onInteraction, true)
     document.addEventListener('keyup', onInteraction, true)
+    // Scrolling a list inside the root moves its items without a trigger
+    // change; without a fresh snapshot the next change would replay the scroll
+    // distance as movement. (Scroll does not bubble: listen in capture.)
+    document.addEventListener('scroll', onInteraction, true)
     window.addEventListener('resize', schedule)
     return () => {
       if (timer) clearTimeout(timer)
       document.removeEventListener('pointerup', onInteraction, true)
       document.removeEventListener('keyup', onInteraction, true)
+      document.removeEventListener('scroll', onInteraction, true)
       window.removeEventListener('resize', schedule)
     }
   }, [rootRef])
@@ -127,7 +139,7 @@ export function useFlipAnimation(
     if (durationMs <= 0) return
     const timing = easing in MOTION_EASING_KEYS ? motionEasing(easing as MotionEasing) : easing
 
-    const { selector: sel, keyOf: key } = configRef.current
+    const { selector: sel, keyOf: key, shouldAnimate: animates } = configRef.current
     // A stale snapshot can report huge jumps; those would read as a glitch.
     const maxJump = root.clientHeight > 0 ? root.clientHeight * 1.5 : Infinity
     root.querySelectorAll<HTMLElement>(sel).forEach((el) => {
@@ -136,6 +148,7 @@ export function useFlipAnimation(
       const from = before.get(k)
       const to = after.get(k)
       if (!to || typeof el.animate !== 'function') return
+      if (animates && !animates(el, k)) return
       if (!from) {
         // Entered with this change: fade in instead of popping.
         el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: durationMs, easing: timing })
