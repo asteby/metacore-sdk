@@ -28,6 +28,7 @@ import {
 } from '@/primitives/dropdown-menu'
 import type { NavGroupData, NavItem, NavLinkItem, NavCollapsibleItem } from './types'
 import { checkIsActive, resolveActiveItemUrls } from './nav-active'
+import { useNavFolderOpen } from './nav-open-state'
 
 export { checkIsActive, splitHref, declaredFiltersMatch, VIEW_PARAMS } from './nav-active'
 export type { SplitHref } from './nav-active'
@@ -133,6 +134,7 @@ export function NavGroup({
               onItemHover={onItemHover}
               depth={0}
               activeUrls={localActiveUrls}
+              folderId={`${title}/${item.title}`}
             />
           )
         })}
@@ -202,6 +204,7 @@ function SidebarMenuCollapsible({
   onItemHover,
   depth,
   activeUrls,
+  folderId,
 }: {
   item: NavCollapsibleItem
   href: string
@@ -210,8 +213,14 @@ function SidebarMenuCollapsible({
   /** 0 = top-level in the group; ≥1 = nested under another collapsible. */
   depth: number
   activeUrls: Set<string>
+  /** Path of titles that names this folder in the remembered open state. */
+  folderId: string
 }) {
   const { setOpenMobile } = useSidebar()
+  const [open, setOpen] = useNavFolderOpen(
+    folderId,
+    checkIsActive(href, item, true, item.defaultView),
+  )
   const body = (
     <>
       <CollapsibleTrigger asChild>
@@ -228,8 +237,9 @@ function SidebarMenuCollapsible({
             if (isCollapsibleItem(subItem)) {
               return (
                 <SidebarMenuSubItem key={`${subItem.title}-${subItem.url}`}>
-                  <Collapsible
-                    defaultOpen={checkIsActive(href, subItem, true, subItem.defaultView)}
+                  <RememberedCollapsible
+                    folderId={`${folderId}/${subItem.title}`}
+                    containsActive={checkIsActive(href, subItem, true, subItem.defaultView)}
                     className='group/collapsible w-full'
                   >
                     <CollapsibleTrigger asChild>
@@ -256,6 +266,7 @@ function SidebarMenuCollapsible({
                                 onItemHover={onItemHover}
                                 depth={depth + 2}
                                 activeUrls={activeUrls}
+                                folderId={`${folderId}/${subItem.title}/${leaf.title}`}
                               />
                             )
                           }
@@ -283,7 +294,7 @@ function SidebarMenuCollapsible({
                         })}
                       </SidebarMenuSub>
                     </CollapsibleContent>
-                  </Collapsible>
+                  </RememberedCollapsible>
                 </SidebarMenuSubItem>
               )
             }
@@ -312,12 +323,25 @@ function SidebarMenuCollapsible({
   return (
     <Collapsible
       asChild={depth === 0}
-      defaultOpen={checkIsActive(href, item, true, item.defaultView)}
+      open={open}
+      onOpenChange={setOpen}
       className='group/collapsible'
     >
       {depth === 0 ? <SidebarMenuItem>{body}</SidebarMenuItem> : body}
     </Collapsible>
   )
+}
+
+function RememberedCollapsible({
+  folderId,
+  containsActive,
+  ...props
+}: React.ComponentProps<typeof Collapsible> & {
+  folderId: string
+  containsActive: boolean
+}) {
+  const [open, setOpen] = useNavFolderOpen(folderId, containsActive)
+  return <Collapsible {...props} open={open} onOpenChange={setOpen} />
 }
 
 function SidebarMenuCollapsedDropdown({

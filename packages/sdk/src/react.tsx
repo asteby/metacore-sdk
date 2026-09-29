@@ -45,15 +45,26 @@ import type { LegacyManifest as Manifest, NavGroup } from "./types.js";
 // (stale-while-revalidate). The payload is plain serialisable data (manifests +
 // nav groups whose icons are string slugs, not components).
 const CATALOG_CACHE_KEY = "mc:sdk:catalog:v1";
+
+/**
+ * localStorage key of the persisted catalog. Hosts that serve several orgs or
+ * users from one origin pass a scope (e.g. `<org>:<user>`) so a reload never
+ * paints another tenant's addon modules; hosts that seed the cache themselves
+ * (a bootstrap endpoint) write to the same key.
+ */
+export function catalogCacheKey(scope?: string): string {
+  return scope ? `${CATALOG_CACHE_KEY}:${scope}` : CATALOG_CACHE_KEY;
+}
+
 interface CatalogCache {
   manifests: Manifest[];
   navigation: NavGroup[];
 }
 
-function readCatalogCache(): CatalogCache | null {
+function readCatalogCache(scope?: string): CatalogCache | null {
   try {
     if (typeof localStorage === "undefined") return null;
-    const raw = localStorage.getItem(CATALOG_CACHE_KEY);
+    const raw = localStorage.getItem(catalogCacheKey(scope));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     return parsed &&
@@ -66,11 +77,15 @@ function readCatalogCache(): CatalogCache | null {
   }
 }
 
-function writeCatalogCache(manifests: Manifest[], navigation: NavGroup[]): void {
+function writeCatalogCache(
+  manifests: Manifest[],
+  navigation: NavGroup[],
+  scope?: string,
+): void {
   try {
     if (typeof localStorage === "undefined") return;
     localStorage.setItem(
-      CATALOG_CACHE_KEY,
+      catalogCacheKey(scope),
       JSON.stringify({ manifests, navigation }),
     );
   } catch {
@@ -122,13 +137,15 @@ export interface MetacoreProviderProps {
   client: MarketplaceClient;
   registry: Registry;
   children: ReactNode;
+  /** Scope of the persisted catalog (see {@link catalogCacheKey}). */
+  cacheScope?: string;
 }
 
-export function MetacoreProvider({ client, registry, children }: MetacoreProviderProps) {
+export function MetacoreProvider({ client, registry, children, cacheScope }: MetacoreProviderProps) {
   // Read the persisted catalog ONCE so the first render already has the addon
   // modules instead of an empty sidebar until the fetch resolves.
   const bootRef = useRef<CatalogCache | null | undefined>(undefined);
-  if (bootRef.current === undefined) bootRef.current = readCatalogCache();
+  if (bootRef.current === undefined) bootRef.current = readCatalogCache(cacheScope);
   const boot = bootRef.current;
 
   const [manifests, setManifests] = useState<Manifest[]>(boot?.manifests ?? []);
@@ -169,7 +186,7 @@ export function MetacoreProvider({ client, registry, children }: MetacoreProvide
         setManifests(m);
         setNavigation(n);
         setLoading(false);
-        writeCatalogCache(m, n);
+        writeCatalogCache(m, n, cacheScope);
         if (!runningVersions.current) {
           runningVersions.current = seedVersions(m);
           return;
@@ -214,7 +231,7 @@ export function MetacoreProvider({ client, registry, children }: MetacoreProvide
         document.removeEventListener("visibilitychange", onFocus);
       }
     };
-  }, [client]);
+  }, [client, cacheScope]);
 
   const value = useMemo<Ctx>(
     () => ({

@@ -136,6 +136,14 @@ export {
 } from './use-optimistic-mutation'
 export { useFlipAnimation, type UseFlipAnimationOptions } from './use-flip-animation'
 export {
+    usePersistedQuery,
+    createPersistedSnapshot,
+    type UsePersistedQueryOptions,
+    type PersistedSnapshot,
+    type PersistedSnapshotOptions,
+    type PersistedEntry,
+} from './use-persisted-query'
+export {
     motionDuration,
     motionEasing,
     prefersReducedMotion,

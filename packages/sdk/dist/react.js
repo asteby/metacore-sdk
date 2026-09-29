@@ -29,11 +29,20 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 // (stale-while-revalidate). The payload is plain serialisable data (manifests +
 // nav groups whose icons are string slugs, not components).
 const CATALOG_CACHE_KEY = "mc:sdk:catalog:v1";
-function readCatalogCache() {
+/**
+ * localStorage key of the persisted catalog. Hosts that serve several orgs or
+ * users from one origin pass a scope (e.g. `<org>:<user>`) so a reload never
+ * paints another tenant's addon modules; hosts that seed the cache themselves
+ * (a bootstrap endpoint) write to the same key.
+ */
+export function catalogCacheKey(scope) {
+    return scope ? `${CATALOG_CACHE_KEY}:${scope}` : CATALOG_CACHE_KEY;
+}
+function readCatalogCache(scope) {
     try {
         if (typeof localStorage === "undefined")
             return null;
-        const raw = localStorage.getItem(CATALOG_CACHE_KEY);
+        const raw = localStorage.getItem(catalogCacheKey(scope));
         if (!raw)
             return null;
         const parsed = JSON.parse(raw);
@@ -47,11 +56,11 @@ function readCatalogCache() {
         return null;
     }
 }
-function writeCatalogCache(manifests, navigation) {
+function writeCatalogCache(manifests, navigation, scope) {
     try {
         if (typeof localStorage === "undefined")
             return;
-        localStorage.setItem(CATALOG_CACHE_KEY, JSON.stringify({ manifests, navigation }));
+        localStorage.setItem(catalogCacheKey(scope), JSON.stringify({ manifests, navigation }));
     }
     catch {
         // quota / private mode — the cache is a nicety, never fatal
@@ -66,12 +75,12 @@ function seedVersions(manifests) {
     }
     return map;
 }
-export function MetacoreProvider({ client, registry, children }) {
+export function MetacoreProvider({ client, registry, children, cacheScope }) {
     // Read the persisted catalog ONCE so the first render already has the addon
     // modules instead of an empty sidebar until the fetch resolves.
     const bootRef = useRef(undefined);
     if (bootRef.current === undefined)
-        bootRef.current = readCatalogCache();
+        bootRef.current = readCatalogCache(cacheScope);
     const boot = bootRef.current;
     const [manifests, setManifests] = useState(boot?.manifests ?? []);
     const [navigation, setNavigation] = useState(boot?.navigation ?? []);
@@ -96,13 +105,20 @@ export function MetacoreProvider({ client, registry, children }) {
         let cancelled = false;
         const revalidate = async () => {
             try {
-                const [m, n] = await Promise.all([client.manifests(), client.navigation()]);
+                const [m, n] = await Promise.all([
+                    // Prefer lite when the host/kernel supports it; fall back to full.
+                    typeof client.manifestsLite ===
+                        "function"
+                        ? client.manifestsLite()
+                        : client.manifests(),
+                    client.navigation(),
+                ]);
                 if (cancelled)
                     return;
                 setManifests(m);
                 setNavigation(n);
                 setLoading(false);
-                writeCatalogCache(m, n);
+                writeCatalogCache(m, n, cacheScope);
                 if (!runningVersions.current) {
                     runningVersions.current = seedVersions(m);
                     return;
@@ -147,7 +163,7 @@ export function MetacoreProvider({ client, registry, children }) {
                 document.removeEventListener("visibilitychange", onFocus);
             }
         };
-    }, [client]);
+    }, [client, cacheScope]);
     const value = useMemo(() => ({
         client,
         registry,
