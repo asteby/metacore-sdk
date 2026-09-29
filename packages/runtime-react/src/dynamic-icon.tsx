@@ -1,7 +1,9 @@
 // DynamicIcon resolves a lucide glyph by name without pulling the full icon
-// set into the shared chunk. Each glyph is its own dynamic import.
-import { lazy, Suspense, useMemo, type ComponentType } from 'react'
+// set into the shared chunk. It draws through the shared glyph registry of
+// @asteby/metacore-ui: a glyph seen before renders in the first frame, and an
+// unseen one holds its box until it loads, so the label next to it stays put.
 import dynamicIconImports from 'lucide-react/dynamicIconImports'
+import { Glyph } from '@asteby/metacore-ui/icons'
 
 export interface DynamicIconProps {
     name: string
@@ -25,24 +27,18 @@ function kebabToPascal(kebab: string): string {
 }
 
 function loaderFor(pascal: string) {
-    const kebab = pascalToKebab(pascal) as IconName
-    return dynamicIconImports[kebab]
+    const kebab = pascalToKebab(pascal)
+    // Lucide keys split digits ("building-2"); "building2" is not one.
+    return (
+        dynamicIconImports[kebab as IconName] ??
+        dynamicIconImports[kebab.replace(/([a-z])(\d)/g, '$1-$2') as IconName]
+    )
 }
 
 export function DynamicIcon({ name, className }: DynamicIconProps) {
     const resolved = resolveLucideIconName(name)
-    const Icon = useMemo(() => {
-        if (!resolved) return null
-        const loader = loaderFor(resolved)
-        if (!loader) return null
-        return lazy(loader as () => Promise<{ default: ComponentType<{ className?: string }> }>)
-    }, [resolved])
-    if (!Icon) return null
-    return (
-        <Suspense fallback={null}>
-            <Icon className={className} />
-        </Suspense>
-    )
+    if (!resolved) return null
+    return <Glyph name={resolved} className={className} />
 }
 
 // resolveLucideIconName — canonical PascalCase lucide name for a value that is

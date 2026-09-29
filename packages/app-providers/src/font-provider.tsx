@@ -27,10 +27,11 @@ export function FontProvider({ children, fonts }: FontProviderProps) {
 
   useEffect(() => {
     const root = document.documentElement
-    root.classList.forEach((cls) => {
-      if (cls.startsWith('font-')) root.classList.remove(cls)
-    })
-    if (font) root.classList.add(`font-${font}`)
+    const target = font ? `font-${font}` : ''
+    // Leave <html> untouched when the pre-paint boot script already set it.
+    const stale = Array.from(root.classList).filter((cls) => cls.startsWith('font-') && cls !== target)
+    stale.forEach((cls) => root.classList.remove(cls))
+    if (target && !root.classList.contains(target)) root.classList.add(target)
   }, [font])
 
   const setFont = (next: string) => {

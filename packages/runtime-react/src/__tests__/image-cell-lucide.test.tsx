@@ -4,7 +4,7 @@
 // kebab, as stored by the `icon` form widget) renders the glyph instead of a
 // broken <img>; real paths/urls keep rendering an <img>.
 import { afterEach, describe, expect, it } from 'vitest'
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, render, waitFor } from '@testing-library/react'
 import { ImageCell } from '../dynamic-columns'
 import { isLucideIconName, resolveLucideIconName } from '../dynamic-icon'
 
@@ -13,15 +13,17 @@ afterEach(cleanup)
 const getImageUrl = (p: string) => `/img${p}`
 
 describe('ImageCell con nombre lucide', () => {
-    it('renderiza el ícono (svg) para un nombre PascalCase, sin <img>', () => {
+    it('renderiza el ícono (svg) para un nombre PascalCase, sin <img>', async () => {
         const { container } = render(<ImageCell value="CreditCard" getImageUrl={getImageUrl} />)
-        expect(container.querySelector('svg')).toBeTruthy()
+        // The glyph loads once; its box is held meanwhile.
+        await waitFor(() => expect(container.querySelector('svg')).toBeTruthy())
         expect(container.querySelector('img')).toBeNull()
     })
 
-    it('renderiza el ícono también para el slug kebab "credit-card"', () => {
+    it('renderiza el ícono también para el slug kebab "credit-card"', async () => {
         const { container } = render(<ImageCell value="credit-card" getImageUrl={getImageUrl} />)
-        expect(container.querySelector('svg')).toBeTruthy()
+        // The glyph loads once; its box is held meanwhile.
+        await waitFor(() => expect(container.querySelector('svg')).toBeTruthy())
         expect(container.querySelector('img')).toBeNull()
     })
 

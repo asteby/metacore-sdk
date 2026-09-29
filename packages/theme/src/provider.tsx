@@ -1,16 +1,29 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import {
+  THEME_MODE_COOKIE,
+  releaseThemeBoot,
+  watchThemeBoot,
+  type ThemeBootWatchOptions,
+} from './boot.js'
 
 type Theme = 'dark' | 'light' | 'system'
 type ResolvedTheme = Exclude<Theme, 'system'>
 
 const DEFAULT_THEME: Theme = 'system'
-const DEFAULT_STORAGE_KEY = 'metacore-ui-theme'
+const DEFAULT_STORAGE_KEY = THEME_MODE_COOKIE
 const THEME_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 
 export type ThemeProviderProps = {
   children: React.ReactNode
   defaultTheme?: Theme
   storageKey?: string
+  /**
+   * Stores the resolved theme of <html> for `themeBootScript()`, so the next
+   * load paints it before the first frame. On by default; pass options to
+   * change what is kept. A custom `storageKey` must also be given to the
+   * script as `modeCookie`.
+   */
+  persistBoot?: boolean | ThemeBootWatchOptions
 }
 
 export type ThemeProviderState = {
@@ -55,6 +68,7 @@ export function ThemeProvider({
   children,
   defaultTheme = DEFAULT_THEME,
   storageKey = DEFAULT_STORAGE_KEY,
+  persistBoot = true,
 }: ThemeProviderProps) {
   const [theme, _setTheme] = useState<Theme>(
     () => (readCookie(storageKey) as Theme | undefined) || defaultTheme
@@ -75,8 +89,12 @@ export function ThemeProvider({
     const root = window.document.documentElement
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
 
+    // Unchanged classes are left alone: every class mutation makes the
+    // branding provider repaint its tokens.
     const applyTheme = (current: ResolvedTheme) => {
-      root.classList.remove('light', 'dark')
+      const other = current === 'dark' ? 'light' : 'dark'
+      if (root.classList.contains(current) && !root.classList.contains(other)) return
+      root.classList.remove(other)
       root.classList.add(current)
     }
 
@@ -90,6 +108,15 @@ export function ThemeProvider({
     mediaQuery.addEventListener('change', handleChange)
     return () => mediaQuery.removeEventListener('change', handleChange)
   }, [theme, resolvedTheme])
+
+  const bootOptions = typeof persistBoot === 'object' ? persistBoot : undefined
+  useEffect(() => {
+    const stop = persistBoot === false ? () => {} : watchThemeBoot(bootOptions)
+    releaseThemeBoot()
+    return stop
+    // Options are read once: the watcher lives as long as the app.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [persistBoot === false])
 
   const setTheme = (next: Theme) => {
     writeCookie(storageKey, next, THEME_COOKIE_MAX_AGE)

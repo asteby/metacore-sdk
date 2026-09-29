@@ -93,6 +93,33 @@ The bundled `<ThemeProvider>` (light/dark/system, cookie-persisted) is the
 recommended entry; consumer apps can drop their local copies and use
 `useTheme()` for the toggle UI.
 
+## No flash on reload
+
+`<ThemeProvider>` stores what `<html>` ends up painting — light/dark, the
+`data-ui-*` attributes (theme pack, font, density), `font-*` classes, inline
+custom properties (brand color) and the branding surfaces stylesheet. An inline
+script restores it before the first frame, so a returning visitor never sees
+the defaults first. First visits follow `prefers-color-scheme`. Transitions stay
+off until the providers have mounted (`data-boot-transition` opts an element
+out, e.g. a splash that fades).
+
+```ts
+// vite.config.ts
+import { themeBootScript } from '@asteby/metacore-theme/boot'
+
+plugins: [
+  {
+    name: 'metacore-theme-boot',
+    transformIndexHtml: () => [
+      { tag: 'script', children: themeBootScript(), injectTo: 'head-prepend' },
+    ],
+  },
+]
+```
+
+`@asteby/metacore-theme/boot` has no React import, so it loads in a Node
+config. Pass `persistBoot={false}` to the provider to opt out.
+
 ## License
 
 Apache-2.0

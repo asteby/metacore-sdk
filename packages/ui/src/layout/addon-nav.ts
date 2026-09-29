@@ -1,5 +1,6 @@
 import { createElement, lazy, Suspense, type ComponentType } from 'react'
-import { Box, Circle, createLucideIcon, type LucideIcon } from 'lucide-react'
+import { Box, Circle, type LucideIcon } from 'lucide-react'
+import { getGlyph, glyphKey, loadGlyph } from '../icons/glyphs'
 import type { NavCollapsibleItem, NavLinkItem } from './types'
 
 /**
@@ -21,115 +22,17 @@ export const FALLBACK_GROUP_ICON: LucideIcon = Box
 /** Neutral fallback icon for a child nav item that declares none. */
 export const FALLBACK_ITEM_ICON: LucideIcon = Circle
 
-type GlyphNode = [string, Record<string, string>][]
-type GlyphModule = {
-  default: ComponentType<{ className?: string }>
-  // Lucide ≥1.3x exports the glyph's data next to the component; which name
-  // depends on the release.
-  __iconNode?: GlyphNode
-  __iconData?: { node?: GlyphNode }
-}
-type IconLoaders = Record<string, () => Promise<GlyphModule>>
-
-// The name → import() map of every Lucide glyph (~160 KB raw) loads with the
-// first addon icon. A static import put it in every bundle that touches the
-// package root, including each federated remote's copy of this package.
-let iconLoaders: Promise<IconLoaders> | null = null
-function loadIconLoaders(): Promise<IconLoaders> {
-  iconLoaders ??= import('lucide-react/dynamicIconImports').then(
-    (mod) => mod.default as unknown as IconLoaders,
-    (err) => {
-      iconLoaders = null
-      throw err
-    },
-  )
-  return iconLoaders
-}
-
-const glyphCache = new Map<string, LucideIcon>()
-
-// Glyphs already seen are kept as data (a few hundred bytes each) so the next
-// page load draws them on the first render. Without it every nav icon painted
-// its fallback first and swapped once the icon map and the glyph chunk loaded.
-const GLYPH_STORE_KEY = 'mc:ui:glyphs:v1'
-const GLYPH_STORE_MAX = 400
-const GLYPH_TAGS = new Set([
-  'path', 'circle', 'rect', 'line', 'polyline', 'polygon', 'ellipse', 'g',
-])
-
-let storedGlyphs: Record<string, GlyphNode> | null = null
-let glyphWriteScheduled = false
-
-function isGlyphNode(node: unknown): node is GlyphNode {
-  return (
-    Array.isArray(node) &&
-    node.every(
-      (el) =>
-        Array.isArray(el) &&
-        GLYPH_TAGS.has(el[0]) &&
-        el[1] !== null &&
-        typeof el[1] === 'object' &&
-        Object.entries(el[1]).every(
-          ([k, v]) => typeof v === 'string' && !/^on|^dangerously/i.test(k),
-        ),
-    )
-  )
-}
-
-function readStoredGlyphs(): Record<string, GlyphNode> {
-  if (storedGlyphs) return storedGlyphs
-  storedGlyphs = {}
-  try {
-    const raw = globalThis.localStorage?.getItem(GLYPH_STORE_KEY)
-    const parsed: unknown = raw ? JSON.parse(raw) : null
-    if (parsed && typeof parsed === 'object') {
-      for (const [key, node] of Object.entries(parsed)) {
-        if (isGlyphNode(node)) storedGlyphs[key] = node
-      }
-    }
-  } catch {
-    /* private mode / corrupt entry: start empty */
-  }
-  return storedGlyphs
-}
-
-function rememberGlyph(key: string, mod: GlyphModule): void {
-  const node = mod.__iconData?.node ?? mod.__iconNode
-  const stored = readStoredGlyphs()
-  if (stored[key] || !isGlyphNode(node)) return
-  const keys = Object.keys(stored)
-  if (keys.length >= GLYPH_STORE_MAX) delete stored[keys[0]]
-  stored[key] = node
-  // A sidebar resolves dozens of glyphs in the same tick: write once.
-  if (glyphWriteScheduled) return
-  glyphWriteScheduled = true
-  setTimeout(() => {
-    glyphWriteScheduled = false
-    try {
-      globalThis.localStorage?.setItem(GLYPH_STORE_KEY, JSON.stringify(readStoredGlyphs()))
-    } catch {
-      /* quota: the glyphs still load lazily */
-    }
-  }, 0)
-}
-
-function toKebab(name: string): string {
-  return name
-    .replace(/[\s_]+/g, '-')
-    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-    .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
-    .replace(/([a-zA-Z])(\d)/g, '$1-$2')
-    .toLowerCase()
-}
+// Icons handed out per name, so a nav tree keeps one component per glyph even
+// after its chunk arrives.
+const navIcons = new Map<string, LucideIcon>()
 
 /**
  * Resolve any icon name against the full Lucide icon set. Names match
  * case-insensitively after normalising separators, so manifests may use
  * `shopping-cart`, `shopping_cart`, or `ShoppingCart` interchangeably.
- * Each glyph is its own import. A namespace import of lucide put every SVG
- * in the shell's first load.
- * A glyph this browser loaded before renders synchronously from its stored
- * data, so a reload does not flash the fallback.
+ * Glyphs come from the shared registry (`@asteby/metacore-ui/icons`): one
+ * this browser loaded before renders synchronously from its stored data, so
+ * a reload does not flash the fallback.
  * Missing names return `fallback`; unknown ones render it, so something
  * always shows.
  */
@@ -138,23 +41,18 @@ export function resolveIconName(
   fallback: LucideIcon = FALLBACK_ITEM_ICON,
 ): LucideIcon {
   if (!name) return fallback
-  const key = toKebab(name)
-  const cached = glyphCache.get(key)
-  if (cached) return cached
-  const stored = readStoredGlyphs()[key]
-  if (stored) {
-    const icon = createLucideIcon(key, stored as Parameters<typeof createLucideIcon>[1])
-    glyphCache.set(key, icon)
-    return icon
+  const key = glyphKey(name)
+  const handed = navIcons.get(key)
+  if (handed) return handed
+  const ready = getGlyph(name)
+  if (ready) {
+    navIcons.set(key, ready)
+    return ready
   }
   // Unknown names render the fallback once the map has loaded.
-  const Glyph = lazy(async (): Promise<GlyphModule> => {
-    const loader = (await loadIconLoaders())[key]
-    if (!loader) return { default: fallback }
-    const mod = await loader()
-    rememberGlyph(key, mod)
-    return mod
-  })
+  const Glyph = lazy(async (): Promise<{ default: ComponentType<{ className?: string }> }> => ({
+    default: (await loadGlyph(name)) ?? fallback,
+  }))
   function NavIcon(props: { className?: string }) {
     return createElement(
       Suspense,
@@ -163,7 +61,7 @@ export function resolveIconName(
     )
   }
   const icon = NavIcon as unknown as LucideIcon
-  glyphCache.set(key, icon)
+  navIcons.set(key, icon)
   return icon
 }
 

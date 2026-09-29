@@ -36,6 +36,7 @@ import {
     useReactTable,
 } from '@tanstack/react-table'
 import { cn } from '@asteby/metacore-ui/lib'
+import { preloadGlyphs } from '@asteby/metacore-ui/icons'
 import {
     Table,
     TableBody,
@@ -760,6 +761,12 @@ export function DynamicTable({
         if (!metadata || !permissionsActive) return metadata
         return gateTableMetadata(metadata, model, can, (key, fallback) => t(key, { defaultValue: fallback }))
     }, [metadata, permissionsActive, can, model, t])
+
+    // Row-action menus mount their icons on open: load them with the
+    // metadata so the first open draws every glyph at once.
+    useEffect(() => {
+        void preloadGlyphs((metadata?.actions ?? []).map((a) => a.icon))
+    }, [metadata])
 
     // Importing is offered when the host opts in explicitly (`canImport`) or,
     // when it says nothing, whenever the kernel served an import spec for the

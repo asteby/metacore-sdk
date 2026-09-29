@@ -302,6 +302,13 @@ export function buildBrandingSurfaceCss(vars: Record<string, string>): string {
   return `${NO_PACK_SELECTOR} {\n${decl(surfaces)}\n}\n${PACK_SELECTOR} {\n${decl(follow)}\n}\n`
 }
 
+// Writes only what differs: the pre-paint boot script (see
+// @asteby/metacore-theme `themeBootScript`) already painted the cached
+// result, and rewriting identical values still restyles the whole page.
+function setVar(root: HTMLElement, key: string, value: string) {
+  if (root.style.getPropertyValue(key).trim() !== value) root.style.setProperty(key, value)
+}
+
 function applyThemeVars(vars: Record<string, string>) {
   const root = document.documentElement
   // Clear every branded key inline before repainting so a stale value from
@@ -309,12 +316,12 @@ function applyThemeVars(vars: Record<string, string>) {
   // can't bleed through and shadow the stylesheet below.
   for (const key of BRANDED_KEYS) {
     if (!(BRAND_ACCENT_KEYS as readonly string[]).includes(key) || !(key in vars)) {
-      root.style.removeProperty(key)
+      if (root.style.getPropertyValue(key)) root.style.removeProperty(key)
     }
   }
   for (const key of BRAND_ACCENT_KEYS) {
     const value = vars[key]
-    if (value) root.style.setProperty(key, value)
+    if (value) setVar(root, key, value)
   }
 
   let style = document.getElementById(BRANDING_STYLE_ID) as HTMLStyleElement | null
@@ -323,7 +330,8 @@ function applyThemeVars(vars: Record<string, string>) {
     style.id = BRANDING_STYLE_ID
     document.head.appendChild(style)
   }
-  style.textContent = buildBrandingSurfaceCss(vars)
+  const css = buildBrandingSurfaceCss(vars)
+  if (style.textContent !== css) style.textContent = css
 }
 
 // Treat empty/whitespace strings as "not provided" so a tenant row with a
@@ -355,27 +363,45 @@ export function applyBranding(
   }
 
   const root = document.documentElement
-  if (primaryHex) {
-    root.style.setProperty('--brand-primary', primaryHex)
-  }
-  if (accentHex) {
-    root.style.setProperty('--brand-accent', accentHex)
-  }
+  if (primaryHex) setVar(root, '--brand-primary', primaryHex)
+  if (accentHex) setVar(root, '--brand-accent', accentHex)
 }
 
 const STORAGE_KEY = 'platform-branding'
+
+function readCachedBranding(storageKey: string): PlatformBranding | undefined {
+  if (typeof window === 'undefined') return undefined
+  try {
+    const cached = window.localStorage.getItem(storageKey)
+    return cached ? (JSON.parse(cached) as PlatformBranding) : undefined
+  } catch {
+    // ignore — corrupted JSON or quota errors aren't fatal
+    return undefined
+  }
+}
 
 // Paint cached branding before React mounts so the initial frame matches the
 // tenant theme. Safe to call on module import — guarded by try/catch and
 // browser-only checks.
 export function applyCachedBranding(storageKey: string = STORAGE_KEY) {
-  if (typeof window === 'undefined') return
-  try {
-    const cached = window.localStorage.getItem(storageKey)
-    if (cached) applyBranding(JSON.parse(cached) as PlatformBranding)
-  } catch {
-    // ignore — corrupted JSON or quota errors aren't fatal
+  const cached = readCachedBranding(storageKey)
+  if (cached) applyBranding(cached)
+}
+
+// Merge only non-empty fields over defaults — an empty string from the API
+// (unset DB column) must not overwrite a good default and blank the brand.
+// Mirrors `clean()` used in applyBranding.
+function mergeBranding(
+  defaults: PlatformBranding,
+  data: Partial<PlatformBranding>,
+): PlatformBranding {
+  const merged = { ...defaults } as unknown as Record<string, unknown>
+  for (const [k, v] of Object.entries(data)) {
+    if (typeof v === 'string' ? v.trim() !== '' : v != null) {
+      merged[k] = v
+    }
   }
+  return merged as unknown as PlatformBranding
 }
 
 export type BrandingFetcher = () => Promise<Partial<PlatformBranding>>
@@ -410,20 +436,14 @@ export function PlatformConfigProvider({
   const queryClient = useQueryClient()
 
   const { data: branding } = useQuery({
-    queryKey: ['platform-branding', storageKey],
-    queryFn: async () => {
-      const res = await fetcher()
-      // Merge only non-empty fields over defaults — an empty string from the
-      // API (unset DB column) must not overwrite a good default and blank the
-      // brand. Mirrors `clean()` used in applyBranding.
-      const merged = { ...defaults } as unknown as Record<string, unknown>
-      for (const [k, v] of Object.entries(res)) {
-        if (typeof v === 'string' ? v.trim() !== '' : v != null) {
-          merged[k] = v
-        }
-      }
-      return merged as unknown as PlatformBranding
+    // Until the fetch resolves, the branding this browser cached last time:
+    // the defaults are another brand's colors on a returning visit.
+    placeholderData: () => {
+      const cached = readCachedBranding(storageKey)
+      return cached ? mergeBranding(defaults, cached) : undefined
     },
+    queryKey: ['platform-branding', storageKey],
+    queryFn: async () => mergeBranding(defaults, await fetcher()),
     staleTime,
     retry: 1,
   })
@@ -441,11 +461,18 @@ export function PlatformConfigProvider({
     }
   }, [branding, defaults, storageKey])
 
+  // The tokens depend on light/dark only; other class changes on <html>
+  // (fonts, boot markers) must not repaint them.
   useEffect(() => {
+    const root = document.documentElement
+    let dark = root.classList.contains('dark')
     const observer = new MutationObserver(() => {
+      const next = root.classList.contains('dark')
+      if (next === dark) return
+      dark = next
       if (current.primary_color) applyBranding(current, defaults)
     })
-    observer.observe(document.documentElement, {
+    observer.observe(root, {
       attributes: true,
       attributeFilter: ['class'],
     })
