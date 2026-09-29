@@ -77,8 +77,26 @@ interface OwnedActionComponent {
 }
 
 const registry = new Map<string, OwnedActionComponent>()
+const listeners = new Set<() => void>()
 
 const keyOf = (model: string, actionKey: string) => `${model}::${actionKey}`
+
+function notify() {
+    for (const listener of [...listeners]) listener()
+}
+
+/**
+ * Subscribe to registry changes (register / unregister). Federated remotes
+ * register after the host has already rendered, so readers use this with
+ * `useSyncExternalStore` to pick the component up the moment it lands.
+ * Returns the unsubscribe function.
+ */
+export function subscribeActionComponents(listener: () => void): () => void {
+    listeners.add(listener)
+    return () => {
+        listeners.delete(listener)
+    }
+}
 
 export function registerActionComponent(
     model: string,
@@ -87,6 +105,7 @@ export function registerActionComponent(
     owner?: string,
 ) {
     registry.set(keyOf(model, actionKey), { component, owner })
+    notify()
 }
 
 export function getActionComponent(
@@ -101,7 +120,7 @@ export function hasActionComponent(model: string, actionKey: string): boolean {
 }
 
 export function unregisterActionComponent(model: string, actionKey: string) {
-    registry.delete(keyOf(model, actionKey))
+    if (registry.delete(keyOf(model, actionKey))) notify()
 }
 
 /** Drop every action modal owned by `addonKey`. Used on fiber unbind. */
@@ -114,5 +133,6 @@ export function unregisterActionComponentsByOwner(addonKey: string): number {
             removed += 1
         }
     }
+    if (removed > 0) notify()
     return removed
 }

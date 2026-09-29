@@ -671,6 +671,8 @@ export interface ActionDefinition {
     steps?: ActionStep[]
     requiresState?: string[]
     executable?: boolean
+    /** Federated modal slug "<addon_key>.<action_key>" (manifest `modal`). */
+    modal?: string
     /**
      * Where the host surfaces the trigger. Mirrors manifest/v3 Action.placement.
      *   "row" (default) — per-row table action.
@@ -719,5 +721,7 @@ export interface ActionMetadata {
     steps?: ActionStep[]
     requiresState?: string[]
     executable?: boolean
+    /** Federated modal slug "<addon_key>.<action_key>"; see ActionModalDispatcher. */
+    modal?: string
     placement?: 'row' | 'table' | 'create'
 }

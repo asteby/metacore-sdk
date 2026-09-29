@@ -1,10 +1,11 @@
 // @vitest-environment happy-dom
 //
 // When an action declares `modal: "<slug>"` and no federated component is
-// registered, ActionModalDispatcher must surface an error — never the generic
-// ConfirmActionDialog (even if confirm/confirmMessage are also set).
+// registered, ActionModalDispatcher must surface an error once the wait times
+// out — never the generic ConfirmActionDialog (even if confirm/confirmMessage
+// are also set).
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({
@@ -12,7 +13,7 @@ vi.mock('react-i18next', () => ({
     }),
 }))
 
-import { ActionModalDispatcher } from '../action-modal-dispatcher'
+import { ActionModalDispatcher, FEDERATED_ACTION_MODAL_TIMEOUT_MS } from '../action-modal-dispatcher'
 import { ApiProvider, type ApiClient } from '../api-context'
 import {
     registerActionComponent,
@@ -22,6 +23,7 @@ import {
 
 afterEach(() => {
     cleanup()
+    vi.useRealTimers()
     unregisterActionComponent('SalesOrder', 'authorize_credit')
 })
 
@@ -58,7 +60,13 @@ function renderDispatcher(action: ActionMetadata = creditAction) {
 
 describe('ActionModalDispatcher custom modal contract', () => {
     it('errors when modal is declared but no component is registered (no generic confirm)', () => {
+        vi.useFakeTimers()
+        const err = vi.spyOn(console, 'error').mockImplementation(() => {})
         renderDispatcher()
+        act(() => {
+            vi.advanceTimersByTime(FEDERATED_ACTION_MODAL_TIMEOUT_MS)
+        })
+        err.mockRestore()
         expect(screen.getByText('No se pudo cargar el formulario')).toBeTruthy()
         expect(screen.queryByText('customers.action.authorize_credit_confirm_message')).toBeNull()
         expect(screen.queryByRole('button', { name: /autorizar a crédito/i })).toBeNull()

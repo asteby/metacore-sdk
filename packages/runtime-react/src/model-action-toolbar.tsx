@@ -83,18 +83,9 @@ export function humanizeActionLabel(label: string): string {
 }
 
 function toActionMetadata(a: ActionDefinition): ActionMetadata {
-    return {
-        key: a.key,
-        label: a.label,
-        icon: a.icon || 'Zap',
-        color: a.color,
-        confirm: a.confirm,
-        confirmMessage: a.confirmMessage,
-        fields: a.fields,
-        requiresState: a.requiresState,
-        executable: a.executable,
-        placement: a.placement,
-    }
+    // Spread, don't cherry-pick: a hand-picked copy dropped `modal`/`steps`
+    // and the dispatcher fell back to generics for federated/wizard actions.
+    return { ...a, icon: a.icon || 'Zap' }
 }
 
 /**

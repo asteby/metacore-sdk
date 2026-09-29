@@ -174,8 +174,10 @@ export * from './form-layout-ui'
 export { FieldGrid, FieldCell, FieldLabel } from './field-grid'
 export {
     ActionModalDispatcher,
+    FEDERATED_ACTION_MODAL_TIMEOUT_MS,
     type ActionModalProps,
 } from './action-modal-dispatcher'
+export { setFederatedActionLoader, type FederatedActionLoader } from './federated-action-loader'
 export {
     ModelActionToolbar,
     useModelActions,

@@ -11,8 +11,8 @@
 //   view / edit            → host `onAction(action, row)` when provided (string
 //                            contract), else the built-in record dialog.
 //   link action            → navigate to the action's templated `linkUrl`.
-//   custom (fields/confirm/
-//   executable) action     → opens the ActionModal via the dispatcher.
+//   custom (modal/fields/
+//   confirm/executable)    → opens the ActionModal via the dispatcher.
 //   anything else          → host `onAction` + refresh (or just refresh).
 //
 // The host `onAction` contract is a STRING action key on purpose — the existing
@@ -120,24 +120,20 @@ export function useDynamicRowActions({
             return
         }
         const actionDef = metadata?.actions?.find((a) => a.key === action)
-        // Open the dispatcher when there is ANY UI surface (fields, wizard
-        // steps, confirm bool, confirmMessage, or host `executable`). A
-        // confirm_message without confirm:true used to fall through / open and
-        // then render null — derive confirm so the ConfirmActionDialog path wins.
-        if (actionDef && (actionDef.fields?.length || actionDef.steps?.length || actionDef.confirm || actionDef.confirmMessage || actionDef.executable)) {
+        // Open the dispatcher when there is ANY UI surface (federated `modal`,
+        // fields, wizard steps, confirm bool, confirmMessage, or host
+        // `executable`). A confirm_message without confirm:true used to fall
+        // through / open and then render null — derive confirm so the
+        // ConfirmActionDialog path wins. Pass the WHOLE definition: a
+        // cherry-picked copy dropped `modal` and the dispatcher fell back to
+        // the generic confirm while the remote was still loading.
+        if (actionDef && (actionDef.modal || actionDef.fields?.length || actionDef.steps?.length || actionDef.confirm || actionDef.confirmMessage || actionDef.executable)) {
             setActionModal({
                 open: true,
                 action: {
-                    key: actionDef.key,
-                    label: actionDef.label,
+                    ...actionDef,
                     icon: actionDef.icon || 'Zap',
-                    color: actionDef.color,
                     confirm: !!(actionDef.confirm || actionDef.confirmMessage),
-                    confirmMessage: actionDef.confirmMessage,
-                    fields: actionDef.fields,
-                    steps: actionDef.steps,
-                    requiresState: actionDef.requiresState,
-                    executable: actionDef.executable,
                 },
                 record: row,
             })

@@ -1,7 +1,10 @@
 // ActionModalDispatcher — renders the right modal for a custom action:
 // 1) Custom component from the SDK registry → use it
-// 2) action.modal set but no registered component → MissingCustomActionModal
-//    (NEVER fall back to confirm/fields — that hides a broken federated UI)
+// 2) action.modal set but no registered component → loading state while the
+//    host loads the remote (setFederatedActionLoader); the registry is reactive,
+//    so the component renders the moment it registers. Timeout or invalid slug
+//    → MissingCustomActionModal. NEVER falls back to confirm/fields — that
+//    hides a broken federated UI.
 // 3) action.fields[] / action.steps[] → GenericActionModal / WizardActionModal
 // 4) action.confirm OR action.confirmMessage → ConfirmActionDialog
 // 5) action.executable (host opened the modal; no modal/fields/confirm) →
@@ -10,7 +13,7 @@
 //
 // The host injects its axios-like client via <ApiProvider>; we no longer
 // depend on a bundler alias to `@/lib/api`.
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
     Dialog,
@@ -76,7 +79,9 @@ import {
     type ActionMetadata,
     type ActionModalProps,
     getActionComponent,
+    subscribeActionComponents,
 } from '@asteby/metacore-sdk'
+import { requestFederatedAction } from './federated-action-loader'
 
 export type { ActionMetadata, ActionModalProps }
 
@@ -284,10 +289,10 @@ export function ActionModalDispatcher({
     endpoint,
     onSuccess,
 }: ActionModalProps) {
-    const CustomComponent = useMemo(
-        () => getActionComponent(model, action.key),
-        [model, action.key],
-    )
+    // Reactive read: a federated remote usually registers AFTER the first
+    // render, and a memoized lookup would pin the fallback forever.
+    const readComponent = () => getActionComponent(model, action.key)
+    const CustomComponent = useSyncExternalStore(subscribeActionComponents, readComponent, readComponent)
 
     if (CustomComponent) {
         return (
@@ -303,11 +308,12 @@ export function ActionModalDispatcher({
         )
     }
 
-    // Declarative custom slot (`modal: "addon.action"`). Prefer a hard error
-    // over confirm/fields generics — those look "fine" and hide a missing remote.
+    // Declarative custom slot (`modal: "addon.action"`). Wait for the remote,
+    // then a hard error — confirm/fields generics look "fine" and hide a
+    // missing remote.
     if (action.modal) {
         return (
-            <MissingCustomActionModal
+            <PendingCustomActionModal
                 open={open}
                 onOpenChange={onOpenChange}
                 action={action}
@@ -365,6 +371,81 @@ export function ActionModalDispatcher({
     }
 
     return null
+}
+
+/** How long an action with `modal` waits for its federated component. */
+export const FEDERATED_ACTION_MODAL_TIMEOUT_MS = 20_000
+/** How often the host loader is re-invoked while waiting. */
+const FEDERATED_ACTION_RETRY_MS = 2_000
+const MODAL_SLUG_RE = /^[\w-]+(\.[\w-]+)+$/
+
+/**
+ * `modal` declared, component not registered yet: show a loading dialog, ask
+ * the host to load the remote (re-asking periodically), and give up with
+ * MissingCustomActionModal after the timeout. The dispatcher swaps this out
+ * for the real component as soon as the registry reports it.
+ */
+function PendingCustomActionModal({
+    open,
+    onOpenChange,
+    action,
+    model,
+}: {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    action: ActionMetadata
+    model: string
+}) {
+    const { t } = useTranslation()
+    const slug = action.modal || ''
+    const validSlug = MODAL_SLUG_RE.test(slug)
+    const [timedOut, setTimedOut] = useState(false)
+
+    useEffect(() => {
+        if (!open) return
+        if (!validSlug) {
+            console.error('[metacore] action modal slug is invalid', { model, action: action.key, modal: slug })
+            return
+        }
+        setTimedOut(false)
+        const req = { model, actionKey: action.key, modal: slug }
+        requestFederatedAction(req)
+        const retry = setInterval(() => requestFederatedAction(req), FEDERATED_ACTION_RETRY_MS)
+        const giveUp = setTimeout(() => {
+            clearInterval(retry)
+            console.error('[metacore] federated action modal did not register in time', {
+                model,
+                action: action.key,
+                modal: slug,
+                timeoutMs: FEDERATED_ACTION_MODAL_TIMEOUT_MS,
+            })
+            setTimedOut(true)
+        }, FEDERATED_ACTION_MODAL_TIMEOUT_MS)
+        return () => {
+            clearInterval(retry)
+            clearTimeout(giveUp)
+        }
+    }, [open, validSlug, model, action.key, slug])
+
+    if (!validSlug || timedOut) {
+        return <MissingCustomActionModal open={open} onOpenChange={onOpenChange} action={action} model={model} />
+    }
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>{t(action.label, { defaultValue: action.label })}</DialogTitle>
+                    <DialogDescription>
+                        {t('dynamic.action_modal_loading', { defaultValue: 'Cargando…' })}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="flex justify-center py-6" data-testid="federated-action-loading">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+            </DialogContent>
+        </Dialog>
+    )
 }
 
 /** Shown when the action declares `modal` but no federated component registered. */
