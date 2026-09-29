@@ -250,7 +250,17 @@ describe('useDynamicRowActions', () => {
 })
 
 describe('ModelActionToolbar', () => {
+    // Prod case: link-inbox's Device.create_and_connect ("Conectar WhatsApp")
+    // is a `placement: "create"` toolbar action with `modal`. The toolbar used
+    // to drop `modal`, open the generic confirm and POST the action with no
+    // record → "action payload missing the device record id".
     it('placement create + modal: loading, then the late-registered component — never the confirm', () => {
+        vi.useFakeTimers()
+        const api = {
+            get: vi.fn().mockResolvedValue({ data: {} }),
+            post: vi.fn().mockResolvedValue({ data: { success: true } }),
+        } as unknown as ApiClient
+        const onChange = vi.fn()
         const loader = vi.fn()
         setFederatedActionLoader(loader)
         const connect = {
@@ -267,20 +277,27 @@ describe('ModelActionToolbar', () => {
             executable: true,
         } as ActionDefinition
         render(
-            <ApiProvider client={noopApi}>
-                <ModelActionToolbar model="Device" actions={[connect]} />
+            <ApiProvider client={api}>
+                <ModelActionToolbar model="Device" actions={[connect]} onChange={onChange} />
             </ApiProvider>,
         )
         act(() => {
             screen.getByText('Conectar WhatsApp').click()
         })
         expect(screen.getByTestId('federated-action-loading')).toBeTruthy()
-        expect(screen.queryByText('Conectar?')).toBeNull()
         expect(loader).toHaveBeenCalledWith({
             model: 'Device',
             actionKey: 'create_and_connect',
             modal: 'link_inbox.create_and_connect',
         })
+
+        // The remote is slow: still loading, no confirm, nothing executed.
+        act(() => {
+            vi.advanceTimersByTime(5_000)
+        })
+        expect(screen.getByTestId('federated-action-loading')).toBeTruthy()
+        expect(screen.queryByText('Conectar?')).toBeNull()
+        expect(screen.queryByRole('alertdialog')).toBeNull()
 
         function ConnectModal({ action }: ActionModalProps) {
             return <div data-testid="connect-modal">{action.modal}</div>
@@ -289,7 +306,10 @@ describe('ModelActionToolbar', () => {
             registerActionComponent('Device', 'create_and_connect', ConnectModal as never, 'link_inbox')
         })
         expect(screen.getByTestId('connect-modal').textContent).toBe('link_inbox.create_and_connect')
+        expect(screen.queryByTestId('federated-action-loading')).toBeNull()
         expect(screen.queryByText('Conectar?')).toBeNull()
-        expect(noopApi.post).not.toHaveBeenCalled()
+        expect(screen.queryByRole('alertdialog')).toBeNull()
+        expect(api.post).not.toHaveBeenCalled()
+        expect(onChange).not.toHaveBeenCalled()
     })
 })
