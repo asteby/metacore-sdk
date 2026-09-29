@@ -41,10 +41,6 @@ export class MarketplaceClient {
     manifests() {
         return this.get("/manifests");
     }
-    /** Shell-oriented manifests (no columns/actions/i18n). Hosts SHOULD use this. */
-    manifestsLite() {
-        return this.get("/manifests?lite=1");
-    }
     // ----- oauth (for integrations that need it) -----
     oauthStatus(provider) {
         return this.get(`/oauth/${encodeURIComponent(provider)}/status`);

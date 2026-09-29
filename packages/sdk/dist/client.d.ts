@@ -27,8 +27,6 @@ export declare class MarketplaceClient {
     updateSettings(key: string, settings: Record<string, unknown>): Promise<Installation>;
     navigation(): Promise<NavGroup[]>;
     manifests(): Promise<Manifest[]>;
-    /** Shell-oriented manifests (no columns/actions/i18n). Hosts SHOULD use this. */
-    manifestsLite(): Promise<Manifest[]>;
     oauthStatus(provider: string): Promise<{
         connected: boolean;
         account?: string;
