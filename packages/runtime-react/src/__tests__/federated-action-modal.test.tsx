@@ -24,8 +24,9 @@ vi.mock('@tanstack/react-router', () => ({
 import { ActionModalDispatcher, FEDERATED_ACTION_MODAL_TIMEOUT_MS } from '../action-modal-dispatcher'
 import { setFederatedActionLoader } from '../federated-action-loader'
 import { useDynamicRowActions } from '../dynamic-row-actions'
+import { ModelActionToolbar } from '../model-action-toolbar'
 import { ApiProvider, type ApiClient } from '../api-context'
-import type { TableMetadata } from '../types'
+import type { ActionDefinition, TableMetadata } from '../types'
 import {
     registerActionComponent,
     unregisterActionComponent,
@@ -39,6 +40,8 @@ afterEach(() => {
     vi.restoreAllMocks()
     setFederatedActionLoader(null)
     unregisterActionComponent('Order', 'return')
+    unregisterActionComponent('Device', 'create_and_connect')
+    unregisterActionComponent('Invoice', 'register_payment')
 })
 
 const noopApi: ApiClient = {
@@ -112,13 +115,25 @@ describe('ActionModalDispatcher with a declared federated modal', () => {
         )
     })
 
-    it('errors immediately (and logs) on an invalid modal slug', () => {
+    it('still asks the host and times out on a slug without a valid prefix', () => {
+        vi.useFakeTimers()
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
         const err = vi.spyOn(console, 'error').mockImplementation(() => {})
-        renderDispatcher({ ...returnAction, modal: 'not a slug' })
+        const loader = vi.fn()
+        setFederatedActionLoader(loader)
+        renderDispatcher({ ...returnAction, modal: 'noprefix' })
+        expect(loader).toHaveBeenCalledWith({ model: 'Order', actionKey: 'return', modal: 'noprefix' })
+        expect(warn).toHaveBeenCalled()
+        expect(screen.getByTestId('federated-action-loading')).toBeTruthy()
+
+        act(() => {
+            vi.advanceTimersByTime(FEDERATED_ACTION_MODAL_TIMEOUT_MS)
+        })
         expect(screen.getByText('No se pudo cargar el formulario')).toBeTruthy()
+        expect(screen.queryByText('Devolver?')).toBeNull()
         expect(err).toHaveBeenCalledWith(
-            expect.stringContaining('slug is invalid'),
-            expect.objectContaining({ model: 'Order', action: 'return', modal: 'not a slug' }),
+            expect.stringContaining('did not register in time'),
+            expect.objectContaining({ model: 'Order', action: 'return', modal: 'noprefix' }),
         )
     })
 
@@ -183,8 +198,98 @@ describe('useDynamicRowActions', () => {
         expect(screen.queryByText('Devolver?')).toBeNull()
     })
 
+    it('honors a host-injected `modal` override on another addon\'s confirm action', () => {
+        // customers declares Invoice.register_payment as a plain confirm; the
+        // optional collections addon overrides it and the host injects `modal`.
+        function PaymentModal({ action }: ActionModalProps) {
+            return <div data-testid="payment-modal">{action.modal}</div>
+        }
+        const override = {
+            key: 'register_payment',
+            label: 'Registrar pago',
+            icon: 'Wallet',
+            type: 'custom',
+            confirmMessage: 'Registrar pago?',
+            executable: true,
+            modal: 'collections.register_payment',
+        }
+        const metadata = { actions: [override] } as unknown as TableMetadata
+        function InvoiceHarness() {
+            const { handleInternalAction, dialogs } = useDynamicRowActions({
+                model: 'Invoice',
+                metadata,
+                onRefresh: () => {},
+            })
+            return (
+                <>
+                    <button onClick={() => handleInternalAction('register_payment', { id: '1' })}>pay</button>
+                    {dialogs}
+                </>
+            )
+        }
+        render(
+            <ApiProvider client={noopApi}>
+                <InvoiceHarness />
+            </ApiProvider>,
+        )
+        act(() => {
+            screen.getByText('pay').click()
+        })
+        expect(screen.getByTestId('federated-action-loading')).toBeTruthy()
+        expect(screen.queryByText('Registrar pago?')).toBeNull()
+        act(() => {
+            registerActionComponent('Invoice', 'register_payment', PaymentModal as never, 'collections')
+        })
+        expect(screen.getByTestId('payment-modal').textContent).toBe('collections.register_payment')
+    })
+
     it('opens the dispatcher for a modal-only action (no fields/confirm/executable)', () => {
         renderHarness({ key: 'return', label: 'Devolver', icon: 'Undo2', modal: 'returns.return', type: 'custom' })
         expect(screen.getByTestId('federated-action-loading')).toBeTruthy()
+    })
+})
+
+describe('ModelActionToolbar', () => {
+    it('placement create + modal: loading, then the late-registered component — never the confirm', () => {
+        const loader = vi.fn()
+        setFederatedActionLoader(loader)
+        const connect = {
+            key: 'create_and_connect',
+            name: 'create_and_connect',
+            label: 'Conectar WhatsApp',
+            icon: 'Plus',
+            class: '',
+            type: 'custom',
+            placement: 'create',
+            modal: 'link_inbox.create_and_connect',
+            confirm: true,
+            confirmMessage: 'Conectar?',
+            executable: true,
+        } as ActionDefinition
+        render(
+            <ApiProvider client={noopApi}>
+                <ModelActionToolbar model="Device" actions={[connect]} />
+            </ApiProvider>,
+        )
+        act(() => {
+            screen.getByText('Conectar WhatsApp').click()
+        })
+        expect(screen.getByTestId('federated-action-loading')).toBeTruthy()
+        expect(screen.queryByText('Conectar?')).toBeNull()
+        expect(loader).toHaveBeenCalledWith({
+            model: 'Device',
+            actionKey: 'create_and_connect',
+            modal: 'link_inbox.create_and_connect',
+        })
+
+        function ConnectModal({ action }: ActionModalProps) {
+            return <div data-testid="connect-modal">{action.modal}</div>
+        }
+        act(() => {
+            registerActionComponent('Device', 'create_and_connect', ConnectModal as never, 'link_inbox')
+        })
+        expect(screen.getByTestId('connect-modal').textContent).toBe('link_inbox.create_and_connect')
+        expect(screen.queryByText('Conectar?')).toBeNull()
+        expect(noopApi.post).not.toHaveBeenCalled()
     })
 })

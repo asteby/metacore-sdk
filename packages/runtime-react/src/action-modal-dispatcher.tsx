@@ -2,8 +2,9 @@
 // 1) Custom component from the SDK registry → use it
 // 2) action.modal set but no registered component → loading state while the
 //    host loads the remote (setFederatedActionLoader); the registry is reactive,
-//    so the component renders the moment it registers. Timeout or invalid slug
-//    → MissingCustomActionModal. NEVER falls back to confirm/fields — that
+//    so the component renders the moment it registers. Timeout →
+//    MissingCustomActionModal (a malformed slug still asks the host, then
+//    times out). NEVER falls back to confirm/fields — that
 //    hides a broken federated UI.
 // 3) action.fields[] / action.steps[] → GenericActionModal / WizardActionModal
 // 4) action.confirm OR action.confirmMessage → ConfirmActionDialog
@@ -383,7 +384,9 @@ const MODAL_SLUG_RE = /^[\w-]+(\.[\w-]+)+$/
  * `modal` declared, component not registered yet: show a loading dialog, ask
  * the host to load the remote (re-asking periodically), and give up with
  * MissingCustomActionModal after the timeout. The dispatcher swaps this out
- * for the real component as soon as the registry reports it.
+ * for the real component as soon as the registry reports it. `modal` is
+ * honored wherever it came from — the addon's own manifest or a host-injected
+ * override from another addon that registerAction()s over it.
  */
 function PendingCustomActionModal({
     open,
@@ -398,14 +401,21 @@ function PendingCustomActionModal({
 }) {
     const { t } = useTranslation()
     const slug = action.modal || ''
-    const validSlug = MODAL_SLUG_RE.test(slug)
     const [timedOut, setTimedOut] = useState(false)
 
     useEffect(() => {
         if (!open) return
+        // A slug without a valid `<addon>.<name>` prefix still goes to the
+        // host loader (it decides which remote to load) and still times out —
+        // the component is looked up by (model, action.key), never by slug.
+        // Warn so a malformed manifest is diagnosable before the timeout.
+        const validSlug = MODAL_SLUG_RE.test(slug)
         if (!validSlug) {
-            console.error('[metacore] action modal slug is invalid', { model, action: action.key, modal: slug })
-            return
+            console.warn('[metacore] action modal slug has no valid "<addon>.<name>" prefix', {
+                model,
+                action: action.key,
+                modal: slug,
+            })
         }
         setTimedOut(false)
         const req = { model, actionKey: action.key, modal: slug }
@@ -417,6 +427,7 @@ function PendingCustomActionModal({
                 model,
                 action: action.key,
                 modal: slug,
+                validSlug,
                 timeoutMs: FEDERATED_ACTION_MODAL_TIMEOUT_MS,
             })
             setTimedOut(true)
@@ -425,9 +436,9 @@ function PendingCustomActionModal({
             clearInterval(retry)
             clearTimeout(giveUp)
         }
-    }, [open, validSlug, model, action.key, slug])
+    }, [open, model, action.key, slug])
 
-    if (!validSlug || timedOut) {
+    if (timedOut) {
         return <MissingCustomActionModal open={open} onOpenChange={onOpenChange} action={action} model={model} />
     }
 
