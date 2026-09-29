@@ -22,6 +22,13 @@ import { type ReactNode } from "react";
 import type { MarketplaceClient } from "./client.js";
 import type { Registry } from "./registry.js";
 import type { LegacyManifest as Manifest, NavGroup } from "./types.js";
+/**
+ * localStorage key of the persisted catalog. Hosts that serve several orgs or
+ * users from one origin pass a scope (e.g. `<org>:<user>`) so a reload never
+ * paints another tenant's addon modules; hosts that seed the cache themselves
+ * (a bootstrap endpoint) write to the same key.
+ */
+export declare function catalogCacheKey(scope?: string): string;
 /** An installed addon whose served version changed after this window loaded it. */
 export interface AddonUpdate {
     key: string;
@@ -54,8 +61,10 @@ export interface MetacoreProviderProps {
     client: MarketplaceClient;
     registry: Registry;
     children: ReactNode;
+    /** Scope of the persisted catalog (see {@link catalogCacheKey}). */
+    cacheScope?: string;
 }
-export declare function MetacoreProvider({ client, registry, children }: MetacoreProviderProps): import("react").JSX.Element;
+export declare function MetacoreProvider({ client, registry, children, cacheScope }: MetacoreProviderProps): import("react").JSX.Element;
 export declare function useMetacore(): Ctx;
 export declare function useAddonRoutes(): import("./registry.js").RouteContribution[];
 export declare function useNavigation(): NavGroup[];
