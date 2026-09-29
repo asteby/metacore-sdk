@@ -1,5 +1,11 @@
 # @asteby/metacore-pwa
 
+## 0.6.9
+
+### Patch Changes
+
+- @asteby/metacore-notifications@32.0.0
+
 ## 0.6.8
 
 ### Patch Changes
