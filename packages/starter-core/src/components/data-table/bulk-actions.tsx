@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { useState, useEffect, useRef } from 'react'
 import { type Table } from '@tanstack/react-table'
 import { X } from 'lucide-react'
@@ -123,7 +124,9 @@ export function DataTableBulkActions<TData>({
     return null
   }
 
-  return (
+  // In <body>: a fixed toolbar inside a glass panel (backdrop-filter) would be
+  // placed and clipped by that panel instead of the viewport.
+  return createPortal(
     <>
       {/* Live region for screen reader announcements */}
       <div
@@ -208,6 +211,7 @@ export function DataTableBulkActions<TData>({
           {children}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   )
 }

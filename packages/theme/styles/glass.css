@@ -134,7 +134,14 @@
   background-attachment: fixed;
 }
 
-/* ─── Blur behind every translucent surface ─── */
+/* ─── Blur behind every translucent surface ───
+ * A backdrop-filter makes its element the containing block of every
+ * position:fixed descendant, the main inset included. A fixed layer rendered
+ * inline inside the page (a drag overlay, a full-screen editor, a loading
+ * veil) is then placed and clipped by the panel, not the viewport. Render such
+ * layers through a portal to <body>: Radix primitives already do, and
+ * @asteby/metacore-runtime-react ships PortalDragOverlay for dnd-kit.
+ */
 [data-ui-theme='glass'] .bg-background,
 [data-ui-theme='glass'] .bg-card,
 [data-ui-theme='glass'] .bg-popover,

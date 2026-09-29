@@ -11,6 +11,7 @@
  * Dialog, headless-ui, etc.) or render it inline.
  */
 import { useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { Capability, Manifest } from '../client/types'
 import { diffRequiresConsent, diffPermissions } from '../client/manifest'
 import { useMarketplaceLabels } from '../providers/MarketplaceProvider'
@@ -72,7 +73,9 @@ export function InstallConfirmModal({
     })
   }
 
-  return (
+  // In <body>: inside a glass panel (backdrop-filter) a fixed overlay would
+  // cover and center on that panel, not the viewport.
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
@@ -175,6 +178,7 @@ export function InstallConfirmModal({
           </button>
         </footer>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

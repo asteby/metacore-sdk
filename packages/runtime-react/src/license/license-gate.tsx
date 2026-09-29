@@ -19,6 +19,7 @@
  * INDEPENDIENTE del kernel: no importa su cliente ni fija su versión. Solo
  * consume `LicenseState` y una promesa `onActivate`.
  */
+import { createPortal } from 'react-dom'
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ShieldAlert, Clock, Loader2 } from 'lucide-react'
@@ -165,7 +166,9 @@ function LicenseGateModal({
         }
     }
 
-    return (
+    // In <body>: mounted inside a glass panel (backdrop-filter), a fixed veil
+    // would cover only that panel.
+    return createPortal(
         <div
             role="dialog"
             aria-modal="true"
@@ -300,6 +303,7 @@ function LicenseGateModal({
                     )}
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body,
     )
 }

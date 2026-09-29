@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom'
 import { useState, useEffect, useRef } from 'react'
 import * as React from 'react'
 import { type Table } from '@tanstack/react-table'
@@ -106,7 +107,9 @@ export function DataTableBulkActions<TData>({
     return null
   }
 
-  return (
+  // In <body>: a fixed toolbar inside a glass panel (backdrop-filter) would be
+  // placed and clipped by that panel instead of the viewport.
+  return createPortal(
     <>
       <div
         aria-live='polite'
@@ -190,6 +193,7 @@ export function DataTableBulkActions<TData>({
           {children}
         </div>
       </div>
-    </>
+    </>,
+    document.body
   )
 }

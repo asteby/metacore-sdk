@@ -5,7 +5,6 @@
 import * as React from 'react'
 import {
   DndContext,
-  DragOverlay,
   PointerSensor,
   closestCenter,
   useSensor,
@@ -20,6 +19,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
+import { PortalDragOverlay } from './portal-drag-overlay'
 import {
   ChevronDown,
   ChevronRight,
@@ -733,13 +733,13 @@ export function SidebarLayoutManager({
                   ) : (
                     renderList(tree, [])
                   )}
-                  <DragOverlay>
+                  <PortalDragOverlay>
                     {activeLabel ? (
                       <div className="bg-background border-border rounded-md border px-3 py-1.5 text-sm shadow-lg">
                         {activeLabel}
                       </div>
                     ) : null}
-                  </DragOverlay>
+                  </PortalDragOverlay>
                 </DndContext>
 
                 <div className="mt-3 flex gap-2 px-2">
