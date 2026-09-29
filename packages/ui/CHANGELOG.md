@@ -1,5 +1,17 @@
 # @asteby/metacore-ui
 
+## 2.22.0
+
+### Minor Changes
+
+- 7128a39: Primer pintado estable del shell al recargar.
+
+  - runtime-react: `usePersistedQuery` y `createPersistedSnapshot`. Una query sembrada desde localStorage (versionada y con scope por org/usuario): el primer render ya tiene el último valor, se revalida una vez por carga en segundo plano y cada valor nuevo (refetch o `setQueryData`) se vuelve a guardar.
+  - ui: `resolveIconName` guarda los datos de cada glifo Lucide cargado y en la siguiente carga lo dibuja sin Suspense, sin pasar por el ícono de reserva. Los nombres con dígito (`Undo2`) resuelven a su glifo (`undo-2`). Las carpetas del sidebar que el usuario dejó abiertas siguen abiertas al recargar.
+  - sdk: `MetacoreProvider` acepta `cacheScope` y exporta `catalogCacheKey(scope)`, para que el catálogo persistido no se comparta entre orgs o usuarios del mismo origen.
+
+- 9292ef9: Los toasts se cierran con una "x" al estilo de macOS. El `Toaster` de `@asteby/metacore-ui/primitives` agrega a cada toast (success, error, info, warning, loading, con acción y `toast.custom`) un botón circular de 18 px en la esquina superior izquierda, de vidrio con los tokens del tema, que aparece con fade y escala al pasar el mouse o enfocar con teclado y queda siempre visible en pantallas táctiles. El auto-cierre sigue pausado mientras el mouse está encima. Se desactiva con `closeButton={false}` (o por toast con `closeButton: false` / `dismissible: false`); `closeButtonLabel` fija el `aria-label`, que por defecto sale de la clave `toast.dismiss` ("Cerrar notificación" / "Dismiss notification"), nueva en `@asteby/metacore-i18n`. El `Toaster` de `@asteby/metacore-starter-core` ahora envuelve el de `@asteby/metacore-ui`.
+
 ## 2.21.0
 
 ### Minor Changes
