@@ -570,3 +570,6 @@ export {
     type AttributeClass,
     type AttributeClassSection,
 } from './attribute-classes'
+
+// Página de documento (benchmark §5/§6): cabecera, badges, acciones por estado, botones inteligentes.
+export * from './document'

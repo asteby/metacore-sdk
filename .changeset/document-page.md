@@ -1,0 +1,5 @@
+---
+"@asteby/metacore-runtime-react": minor
+---
+
+Patrón «página de documento» (benchmark Pitsline §5/§6/§7, FAC-1/FAC-5/FAC-6). Un `DocumentSpec` de datos puros declara, por modelo, badges de varias máquinas de estado independientes (`StatusMachine`, catálogo semántico neutral/info/success/caution/warning/critical con ícono y texto: el color nunca es la única señal), la distribución de acciones por estado (1 primaria + hasta 3 secundarias + «Más…» + zona destructiva separada, con bloqueo explicado `blockedWhen`), botones inteligentes con contador, pestañas (`fields` / `records` / `slot`) y fuentes relacionadas (con relación de dos saltos `via`). Componentes: `DocumentPage`, `DocumentHeader`, `ActionBar`, `SmartButtons`, `StatusBadge`, `DocumentTimeline`, `CancelWithReason` (cancelación guiada de 2 pasos con catálogo de motivos, documento sustituto y consecuencias). Registro por modelo con `registerDocumentPage` / `getDocumentPage`; `pruneUnavailableActions` quita las acciones que el backend no declara.
