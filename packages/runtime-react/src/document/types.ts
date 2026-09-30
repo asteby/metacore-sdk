@@ -183,6 +183,8 @@ export interface DocumentContext {
     record: Record<string, unknown>
     /** Filas por fuente (`sources[key]`). */
     sources: Record<string, Record<string, unknown>[]>
+    /** Total del servidor por fuente (`meta.total`); si falta, el contador usa el largo de `sources[key]`. */
+    totals?: Record<string, number>
     /** Derivados (`$`). */
     derived: Record<string, unknown>
 }

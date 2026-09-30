@@ -60,12 +60,12 @@ export function DocumentPage(props: DocumentPageProps) {
     const fmt: FieldFormatOptions = { locale: props.locale, currency: props.currency, timeZone: props.timeZone }
 
     const recordId = record.id as string | number | undefined
-    const { sources, reload } = useDocumentSources(spec.sources, recordId)
+    const { sources, totals, reload } = useDocumentSources(spec.sources, recordId)
 
     const ctx: DocumentContext = useMemo(() => {
-        const base = { record, sources }
+        const base = { record, sources, totals }
         return { ...base, derived: registration.derive?.(base) ?? {} }
-    }, [record, sources, registration])
+    }, [record, sources, totals, registration])
 
     // Recarga las fuentes cuando el host avisa de un cambio (acción ejecutada).
     const [lastReload, setLastReload] = useState(props.reloadKey ?? 0)
@@ -120,7 +120,7 @@ export function DocumentPage(props: DocumentPageProps) {
 
     const smart: SmartButtonItem[] = (spec.smartButtons ?? [])
         .map((b): SmartButtonItem | null => {
-            const count = b.source ? sources[b.source]?.length ?? 0 : undefined
+            const count = b.source ? sourceCount(ctx, b.source) : undefined
             const active = b.source ? (count ?? 0) > 0 : b.field ? !!readPath(ctx, b.field) : true
             if (b.hideWhenEmpty && !active) return null
             const href = b.href ? interpolate(b.href, ctx) : undefined
@@ -179,8 +179,13 @@ export function DocumentPage(props: DocumentPageProps) {
     )
 }
 
+/** Total de una fuente: el del servidor si lo dio (`meta.total`), si no las filas traídas. */
+function sourceCount(ctx: DocumentContext, key: string): number {
+    return ctx.totals?.[key] ?? ctx.sources[key]?.length ?? 0
+}
+
 function tabCount(tb: DocumentTabDef, ctx: DocumentContext): number | undefined {
-    if (tb.kind === 'records') return ctx.sources[tb.source]?.length
+    if (tb.kind === 'records') return ctx.sources[tb.source] ? sourceCount(ctx, tb.source) : undefined
     if (tb.kind === 'slot' && tb.count) {
         const v = readPath(ctx, tb.count)
         return typeof v === 'number' ? v : undefined

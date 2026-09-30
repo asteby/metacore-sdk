@@ -104,4 +104,20 @@ describe('DocumentPage', () => {
         await waitFor(() => expect(open).toHaveBeenCalledWith('https://x/y.pdf', '_blank', 'noopener,noreferrer'))
         expect(onAction).not.toHaveBeenCalled()
     })
+
+    it('el contador usa meta.total del servidor, no el tamaño de la página traída', async () => {
+        const api = {
+            get: vi.fn().mockResolvedValue({
+                data: { success: true, data: [{ id: 'r1', fiscal_uuid: 'REP-UUID-1' }], meta: { total: 312 } },
+            }),
+        } as unknown as ApiClient
+        render(
+            <ApiProvider client={api}>
+                <DocumentPage registration={registration} record={{ id: 'i1', number: 'A-42', total: 1500 }} onAction={vi.fn()} currency='MXN' />
+            </ApiProvider>,
+        )
+        // 312 en el botón inteligente y en la pestaña; nunca «1» (una fila traída).
+        await waitFor(() => expect(screen.getAllByText('312').length).toBeGreaterThan(0))
+        expect(screen.queryAllByText('1')).toHaveLength(0)
+    })
 })

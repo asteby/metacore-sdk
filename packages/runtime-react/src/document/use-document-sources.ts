@@ -11,6 +11,12 @@ type Rows = Record<string, unknown>[]
 
 export interface DocumentSourcesState {
     sources: Record<string, Record<string, unknown>[]>
+    /**
+     * Total del servidor por fuente directa (`meta.total`), para que un contador
+     * diga 312 y no «50» (el tamaño de la página que se trajo). Una fuente sin
+     * `meta.total` —o de dos saltos— no aparece: el contador cae al largo de sus filas.
+     */
+    totals: Record<string, number>
     loading: boolean
     /** Vuelve a pedir todas las fuentes (tras ejecutar una acción). */
     reload: () => void
@@ -27,6 +33,7 @@ export function useDocumentSources(
 ): DocumentSourcesState {
     const api = useApi()
     const [sources, setSources] = useState<Record<string, Record<string, unknown>[]>>({})
+    const [totals, setTotals] = useState<Record<string, number>>({})
     const [loading, setLoading] = useState(false)
     const [nonce, setNonce] = useState(0)
     const reload = useCallback(() => setNonce((n) => n + 1), [])
@@ -34,10 +41,12 @@ export function useDocumentSources(
     useEffect(() => {
         if (!defs || defs.length === 0 || recordId === undefined || recordId === null) {
             setSources({})
+            setTotals({})
             return
         }
         let cancelled = false
         setLoading(true)
+        const seenTotals: Record<string, number> = {}
         const fetchRows = async (d: DocumentSourceDef, params: Record<string, string>): Promise<Rows> => {
             try {
                 const res = await api.get(`/data/${d.model}`, {
@@ -45,6 +54,9 @@ export function useDocumentSources(
                 })
                 const body = res.data
                 const rows = (body?.data ?? body) as unknown
+                const total = body?.meta?.total
+                // Sólo las consultas directas (sin `via`): las de dos saltos se parten en trozos y no suman.
+                if (!d.via && typeof total === 'number' && Number.isFinite(total)) seenTotals[d.key] = total
                 return Array.isArray(rows) ? (rows as Rows) : []
             } catch {
                 return []
@@ -80,6 +92,7 @@ export function useDocumentSources(
             .then((out) => {
                 if (cancelled) return
                 setSources(out)
+                setTotals(seenTotals)
                 setLoading(false)
             })
         return () => {
@@ -87,5 +100,5 @@ export function useDocumentSources(
         }
     }, [api, defs, recordId, nonce])
 
-    return { sources, loading, reload }
+    return { sources, totals, loading, reload }
 }
