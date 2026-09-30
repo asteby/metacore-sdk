@@ -940,6 +940,7 @@ function DynamicKanbanBoard({
     // to no-op when the host has no `/stage-overrides` endpoint — the ⚙ gear then
     // hides on declared lanes (custom lanes keep it via /custom-stages).
     const stageOverridesHook = useStageOverrides(model)
+    const stageLayoutHook = useStageLayout(model)
     // Dialog state: create/edit a stage, and the delete confirmation.
     const [stageDialogOpen, setStageDialogOpen] = useState(false)
     const [editingStage, setEditingStage] = useState<CustomStage | null>(null)
@@ -1029,7 +1030,6 @@ function DynamicKanbanBoard({
     // the metadata (the backend also stamps `stages[]/smart_lanes[].order`, so the
     // board already paints ordered on load — this only backs the live drag + the
     // revert-on-failure). Null → follow the metadata order.
-    const stageLayoutHook = useStageLayout(model)
     const [laneOrderOverride, setLaneOrderOverride] = useState<string[] | null>(null)
     const laneReorderEnabled = stageLayout.available
 
