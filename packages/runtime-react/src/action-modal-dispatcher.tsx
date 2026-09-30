@@ -58,6 +58,7 @@ import {
 import { validationCatalog } from './validation-catalog'
 import { useApi } from './api-context'
 import { useReasonPrompt } from './reason-prompt'
+import { useSupervisor, withApproval } from './supervised-action'
 import { buildRelationFilterParams } from './dynamic-relation-helpers'
 import { DynamicIcon } from './dynamic-icon'
 import { DynamicLineItems } from './dynamic-line-items'
@@ -732,6 +733,7 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
     // Actions listed in the model's `reason_required.actions` (cancel, void…)
     // answer 422 errors.reason without a motive; the prompt asks and retries.
     const reasonPrompt = useReasonPrompt()
+    const supervisor = useSupervisor()
     // `action.label` is an addon-contributed i18n key; its locale bundle loads
     // asynchronously, so translate at render (defaultValue keeps an already
     // localized label unchanged).
@@ -741,10 +743,13 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
         setExecuting(true)
         try {
             const url = buildActionUrl(endpoint, model, record.id, action.key)
+            // Supervisor PIN first (action.supervisorPolicy); null = cancelled.
+            const auth = await supervisor.authorize({ label, supervisorPolicy: action.supervisorPolicy }, { model, recordId: String(record.id) })
+            if (!auth) return
             const res = await reasonPrompt.run({
                 title: label,
                 description: t('actions.reason_desc', { defaultValue: 'Esta acción pide el motivo. Queda en la bitácora del documento.' }),
-                request: (reason) => api.post(url, reason ? { reason } : {}),
+                request: (reason) => api.post(url, withApproval(reason ? { reason } : {}, auth)),
             })
             // Operator cancelled the reason prompt: nothing ran.
             if (!res) return
@@ -802,6 +807,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
     const tl = (s: string) => t(s, { defaultValue: s })
     const api = useApi()
     const reasonPrompt = useReasonPrompt()
+    const supervisor = useSupervisor()
     const branchGate = useBranchCreateGate()
     const [formData, setFormData] = useState<Record<string, any>>({})
     const [executing, setExecuting] = useState(false)
@@ -928,10 +934,15 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                 if (branchId) payload = { ...payload, branch_id: branchId }
             }
             const url = buildActionUrl(endpoint, model, record?.id, action.key)
+            const auth = await supervisor.authorize(
+                { label: tl(action.label), supervisorPolicy: action.supervisorPolicy },
+                { model, recordId: record?.id != null ? String(record.id) : undefined },
+            )
+            if (!auth) return
             const res = await reasonPrompt.run({
                 title: tl(action.label),
                 description: t('actions.reason_desc', { defaultValue: 'Esta acción pide el motivo. Queda en la bitácora del documento.' }),
-                request: (reason) => api.post(url, reason ? { ...payload, reason } : payload),
+                request: (reason) => api.post(url, withApproval(reason ? { ...payload, reason } : payload, auth)),
             })
             if (!res) return
             if (res.data.success) {
@@ -1096,6 +1107,8 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
     const { t, i18n } = useTranslation()
     const tl = (s: string) => t(s, { defaultValue: s })
     const api = useApi()
+    const reasonPrompt = useReasonPrompt()
+    const supervisor = useSupervisor()
     const steps = action.steps ?? []
     const [stepIndex, setStepIndex] = useState(0)
     const [formData, setFormData] = useState<Record<string, any>>({})
@@ -1151,7 +1164,17 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
         setExecuting(true)
         try {
             const url = buildActionUrl(endpoint, model, record?.id, action.key)
-            const res = await api.post(url, formData)
+            const auth = await supervisor.authorize(
+                { label: tl(action.label), supervisorPolicy: action.supervisorPolicy },
+                { model, recordId: record?.id != null ? String(record.id) : undefined },
+            )
+            if (!auth) return
+            const res = await reasonPrompt.run({
+                title: tl(action.label),
+                description: t('actions.reason_desc', { defaultValue: 'Esta acción pide el motivo. Queda en la bitácora del documento.' }),
+                request: (reason) => api.post(url, withApproval(reason ? { ...formData, reason } : formData, auth)),
+            })
+            if (!res) return
             if (res.data.success) {
                 toastServerSuccess(res.data, { t })
                 onOpenChange(false)
@@ -1249,6 +1272,7 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
                         </Button>
                     )}
                 </DialogFooter>
+            {reasonPrompt.dialog}
             </DialogContent>
         </Dialog>
     )

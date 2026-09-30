@@ -680,6 +680,12 @@ export interface ActionDefinition {
     /** Multi-step wizard form; when present the dispatcher renders a wizard. */
     steps?: ActionStep[]
     requiresState?: string[]
+    /**
+     * Manifest `supervisor_policy`: the action needs the on-the-spot
+     * authorization of a supervisor for that policy (`general.approve_<policy>`).
+     * The action modals ask for the PIN and send the grant as `approval_id`.
+     */
+    supervisorPolicy?: string
     executable?: boolean
     /** Federated modal slug "<addon_key>.<action_key>" (manifest `modal`). */
     modal?: string
