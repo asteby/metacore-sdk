@@ -1,5 +1,16 @@
 # @asteby/metacore-runtime-react
 
+## 45.1.0
+
+### Minor Changes
+
+- 610500d: Aprobación de supervisor con PIN: `ApprovalPinDialog` (motivo + PIN, error inline), `ApprovalGateProvider` / `useApprovalGate` (`requestApproval({policy, label, context})`: quien tiene `general.approve_<policy>` pasa sin prompt; los demás piden PIN a `/approvals/pin-grant`) y `approvalCapability`. `toastServerError` ya no pinta como error una escritura parada con `approval_required`: avisa "Enviado a aprobación" y, con el gate montado, ofrece "Aprobar con PIN" (`/approvals/:id/approve-pin`). Cierra el pendiente de docs/APPROVALS.md (los dispatchers del SDK apilaban el toast de error).
+- 2c4c75e: Componentes de negocio compartidos con contrato estable (benchmark Pitsline §7, §6.4-6.7) en `@asteby/metacore-runtime-react`.
+
+  - Componentes: `CustomerPicker`, `ProductPicker` (medida de llanta, código de barras, SKU/clave de proveedor, variantes, existencia por almacén), `LineItemsEditor` (secciones/notas, política de sobreventa, `serializeLineItems` como única salida hacia el backend — corrige el guardado de renglones PIT-018), `PaymentCapture` (cobro mixto, cambio solo en efectivo, referencia y cuenta) y `RefundDestination` (efectivo, tarjeta, monedero, saldo a favor, NC CFDI).
+  - Utilidades: formateador único `formatMoney` / `formatDate` / `formatDateTime` / `createFormatter` / `useFormatter` (es-MX, moneda y zona de la org, sin mezclar locale — PIT-023/025); `mapApiError` (409/422 → mensaje por campo + banner, PIT-002/003/013/021/029); `notify`, `SystemNoticeBanner`, `FormErrorBanner`, `ACTION_SAFE_TOASTER_PROPS` (avisos que no tapan acciones, PIT-005) y `EmptyState` accionable.
+  - `BUSINESS_COMPONENTS`: catálogo legible por máquina (props, eventos, permisos, dónde se usa). Guía en `docs/business-components.md`.
+
 ## 45.0.0
 
 ### Minor Changes
