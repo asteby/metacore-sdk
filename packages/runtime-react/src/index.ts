@@ -219,6 +219,25 @@ export {
     type PermissionsProviderProps,
 } from './permissions-context'
 export {
+    ApprovalPinDialog,
+    approvalErrorMessage,
+    type ApprovalPinDialogProps,
+    type ApprovalPinSubmit,
+} from './approval-pin-dialog'
+export {
+    ApprovalGateProvider,
+    useApprovalGate,
+    approvalCapability,
+    approvalRequiredInfo,
+    approvalGateAvailable,
+    APPROVAL_PARKED_EVENT,
+    APPROVAL_DECIDED_EVENT,
+    type ApprovalGateValue,
+    type ApprovalGrant,
+    type ApprovalRequiredInfo,
+    type RequestApprovalOptions,
+} from './approval-gate'
+export {
     useDynamicRowActions,
     type UseDynamicRowActionsParams,
     type DynamicRowActions,

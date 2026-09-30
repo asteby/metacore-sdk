@@ -11,6 +11,7 @@
 // the toast description, in ONE place so every call site behaves identically.
 import { toast } from 'sonner'
 import { validationCatalog, validationMessageKey } from './validation-catalog'
+import { APPROVAL_PARKED_EVENT, approvalGateAvailable, approvalRequiredInfo } from './approval-events'
 
 /** Structured, display-ready view of an error: a headline + an optional cause. */
 export interface ExtractedError {
@@ -234,6 +235,25 @@ export function toastServerError(
     const t = opts?.t
     const lang = opts?.language
     const cat = validationCatalog(lang)
+    // A write parked for approval is not a failure: say so, and when an
+    // <ApprovalGateProvider> is mounted offer to approve it right now with a PIN.
+    const parked = approvalRequiredInfo(err)
+    if (parked) {
+        const title = parked.label || (t ? t('approvals.sent', { defaultValue: 'Enviado a aprobación' }) : 'Enviado a aprobación')
+        toast.info(title, {
+            description: parked.roles.length
+                ? (t ? t('approvals.waiting_for', { defaultValue: 'Lo decide: {{roles}}', roles: parked.roles.join(', ') }) : parked.roles.join(', '))
+                : undefined,
+            action:
+                parked.requestId && approvalGateAvailable()
+                    ? {
+                          label: t ? t('approvals.approve_with_pin', { defaultValue: 'Aprobar con PIN' }) : 'Aprobar con PIN',
+                          onClick: () => window.dispatchEvent(new CustomEvent(APPROVAL_PARKED_EVENT, { detail: parked })),
+                      }
+                    : undefined,
+        })
+        return
+    }
     const map = extractFieldErrors(err)
     if (map) {
         const localized = t
