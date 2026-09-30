@@ -83,6 +83,10 @@ export {
 export interface DynamicRelationStrings {
     title: string
     emptyState: string
+    /** Sub-tabla sin permiso de lectura (HTTP 403). Default: "Sin permiso para ver estos registros." */
+    forbiddenState?: string
+    /** Falla al cargar la sub-tabla (no 403). Default: "No se pudieron cargar los registros relacionados." */
+    errorState?: string
     addLabel: string
     editLabel: string
     removeLabel: string
@@ -252,6 +256,9 @@ function OneToManyRelation({
     const [optionsMap, setOptionsMap] = useState<Map<string, any[]>>(new Map())
     const [rows, setRows] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
+    // HTTP status of the last failed fetch (null = ok). Without it a 403/500
+    // rendered the empty state and read as "no related rows" (PIT-045).
+    const [fetchErrorStatus, setFetchErrorStatus] = useState<number | null>(null)
     // Paginación server-side + scroll infinito, igual que <DynamicTable>.
     const [total, setTotal] = useState(0)
     const [page, setPage] = useState(1)
@@ -341,6 +348,7 @@ function OneToManyRelation({
                 cacheMetadata(model, fresh)
             }
             const list = (dataRes as { data: ApiResponse<any[]> }).data
+            setFetchErrorStatus(null)
             if (list.success) {
                 const fetched = list.data || []
                 setRows((prev) => (append ? dedupeById(prev, fetched) : fetched))
@@ -351,6 +359,7 @@ function OneToManyRelation({
             }
         } catch (err) {
             console.error('DynamicRelation fetch error', err)
+            setFetchErrorStatus((err as { response?: { status?: number } })?.response?.status ?? 0)
         } finally {
             if (append) setLoadingMore(false)
             else setLoading(false)
@@ -555,7 +564,11 @@ function OneToManyRelation({
                 </div>
             ) : rows.length === 0 ? (
                 <div className="text-center text-sm text-muted-foreground py-8 border rounded-md bg-muted/30">
-                    {labels.emptyState}
+                    {fetchErrorStatus === 403
+                        ? (labels.forbiddenState ?? 'Sin permiso para ver estos registros.')
+                        : fetchErrorStatus !== null
+                          ? (labels.errorState ?? 'No se pudieron cargar los registros relacionados.')
+                          : labels.emptyState}
                 </div>
             ) : (
                 // Real metadata-driven table — same metacore-ui primitives and

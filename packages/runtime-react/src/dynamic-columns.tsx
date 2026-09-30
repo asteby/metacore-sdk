@@ -1312,7 +1312,11 @@ export function makeDefaultGetDynamicColumns(
 
                         case 'tags': {
                             const list: string[] = Array.isArray(value)
-                                ? value.map(String)
+                                ? value.map((v) =>
+                                      v && typeof v === 'object'
+                                          ? String((v as { label?: unknown; name?: unknown; key?: unknown }).label ?? (v as { name?: unknown }).name ?? (v as { key?: unknown }).key ?? '')
+                                          : String(v),
+                                  ).filter(Boolean)
                                 : value
                                   ? String(value)
                                         .split(',')
