@@ -57,4 +57,12 @@ export const BUSINESS_COMPONENTS: readonly BusinessComponentSpec[] = [
         usedBy: ['ReturnWizard', 'Cancelación de apartado', 'Anticipos'],
         helpers: ['validateRefund', 'singleDestination', 'DEFAULT_REFUND_DESTINATIONS'],
     },
+    {
+        name: 'ReturnWizard',
+        value: 'lines: ReturnableLine[]',
+        events: ['onSubmit', 'onCancel'],
+        permissions: [],
+        usedBy: ['POS', 'Pedido', 'Factura', 'RMA', 'OT'],
+        helpers: ['computeReturnTotals', 'validateReturnChoices', 'creditNoteRelation', 'returnSteps', 'serializeReturn'],
+    },
 ] as const

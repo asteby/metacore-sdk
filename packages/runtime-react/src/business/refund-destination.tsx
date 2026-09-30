@@ -103,9 +103,9 @@ export function RefundDestination({
                         />
                         {errors[`${i}.amount`] && <p className="mt-0.5 text-xs text-destructive">{errors[`${i}.amount`]}</p>}
                     </div>
-                    {(a.kind === 'card' || a.kind === 'credit_note') && (
+                    {(a.kind === 'card' || a.kind === 'transfer' || a.kind === 'credit_note') && (
                         <Input
-                            placeholder={a.kind === 'card' ? t('refund.cardRef', { defaultValue: 'Referencia' }) : t('refund.ncRef', { defaultValue: 'Folio / UUID relacionado' })}
+                            placeholder={a.kind === 'card' || a.kind === 'transfer' ? t('refund.cardRef', { defaultValue: 'Referencia' }) : t('refund.ncRef', { defaultValue: 'Folio / UUID relacionado' })}
                             value={a.reference ?? ''}
                             disabled={disabled}
                             onChange={(e) => emit(value.map((x, j) => (j === i ? { ...x, reference: e.target.value } : x)))}

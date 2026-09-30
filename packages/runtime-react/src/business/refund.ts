@@ -2,7 +2,7 @@
 // Lógica pura de <RefundDestination>.
 import { roundMoney, toAmount } from './format'
 
-export type RefundDestinationKind = 'cash' | 'card' | 'wallet' | 'store_credit' | 'credit_note'
+export type RefundDestinationKind = 'cash' | 'card' | 'transfer' | 'wallet' | 'store_credit' | 'credit_note'
 
 export interface RefundDestinationOption {
     kind: RefundDestinationKind
@@ -25,6 +25,7 @@ export interface RefundAllocation {
 export const DEFAULT_REFUND_DESTINATIONS: RefundDestinationOption[] = [
     { kind: 'cash', label: 'Efectivo' },
     { kind: 'card', label: 'Tarjeta' },
+    { kind: 'transfer', label: 'Transferencia' },
     { kind: 'wallet', label: 'Monedero' },
     { kind: 'store_credit', label: 'Saldo a favor' },
     { kind: 'credit_note', label: 'Nota de crédito (CFDI)' },

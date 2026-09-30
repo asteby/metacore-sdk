@@ -58,6 +58,10 @@ await api.put(url, { lines: serializeLineItems(lines) })   // única puerta haci
 
 Destinos `cash | card | wallet | store_credit | credit_note`. `options` filtra y limita (`maxAmount` = lo pagado con tarjeta; `available:false` + `disabledReason` si no hay CFDI). `allowSplit` reparte entre destinos; `validateRefund` exige que la suma cuadre con `total`.
 
+### ReturnWizard
+
+Asistente único «Devolver mercancía» (POS, Pedido, Factura, RMA, OT): renglones y cantidades (tope = vendido − ya devuelto) → condición (vendible → stock; defectuoso → merma o garantía) → recepción → reembolso con `RefundDestination`. Sin `warehouseConnected`, «Recibir» es un paso del propio asistente (corrige PIT-021); con almacén, este confirma fuera. Con `invoiced`, ofrece la NC CFDI y `creditNoteRelation` da la relación SAT: 03 si regresan renglones con producto, 01 si es solo importe (misma regla que el backend). No conoce endpoints: `onSubmit` recibe `serializeReturn(...)` = `{reason, notes?, received, lines[], refund[], credit_note?, totals}`.
+
 ## Utilidades transversales
 
 - **Formato** — `formatMoney(1060, {currency:'MXN'})` → `$1,060.00`; `formatDate`/`formatDateTime` en la zona de la org (un `YYYY-MM-DD` es fecha de calendario y no retrocede un día); `createFormatter()` para tickets/PDF fuera de React; `useFormatter()` dentro. Locale por defecto `es-MX`.

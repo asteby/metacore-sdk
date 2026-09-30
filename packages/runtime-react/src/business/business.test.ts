@@ -162,3 +162,49 @@ describe('product search', () => {
         expect(line).toMatchObject({ product_id: 'v1', unit_price: 1200, tax_rate: 0.16, available: 3, description: 'Llanta X · 205/55R16' })
     })
 })
+
+import { canTransitionRma, computeReturnTotals, creditNoteRelation, returnSteps, serializeReturn, validateReturnChoices, type ReturnableLine } from './return'
+
+describe('return', () => {
+    const lines: ReturnableLine[] = [
+        { key: 'a', product_id: 'p1', description: 'Llanta', sold: 4, alreadyReturned: 1, unit_price: 1000, tax_rate: 0.16 },
+        { key: 'b', description: 'Servicio', sold: 1, unit_price: 200 },
+    ]
+    const ch = (q: number) => ({ a: { quantity: q, condition: 'sellable' as const, destination: 'stock' as const } })
+    it('tope por devolver = vendido − ya devuelto', () => {
+        expect(validateReturnChoices(lines, ch(4), 'x').errors['a.quantity']).toBeTruthy()
+        expect(validateReturnChoices(lines, ch(3), 'x').valid).toBe(true)
+    })
+    it('exige renglón y motivo; destino coherente con la condición', () => {
+        expect(validateReturnChoices(lines, {}, 'x').valid).toBe(false)
+        expect(validateReturnChoices(lines, ch(1), '').valid).toBe(false)
+        const bad = { a: { quantity: 1, condition: 'sellable' as const, destination: 'scrap' as const } }
+        expect(validateReturnChoices(lines, bad, 'x').errors['a.destination']).toBeTruthy()
+    })
+    it('totales con IVA y relación 03/01', () => {
+        expect(computeReturnTotals(lines, ch(2)).total).toBe(2320)
+        expect(creditNoteRelation(lines, ch(2))).toBe('03')
+        expect(creditNoteRelation(lines, { b: { quantity: 1, condition: 'sellable', destination: 'stock' } })).toBe('01')
+    })
+    it('sin almacén, Recibir es un paso; con almacén no', () => {
+        expect(returnSteps({ warehouseConnected: false })).toContain('receive')
+        expect(returnSteps({ warehouseConnected: true })).not.toContain('receive')
+    })
+    it('serializeReturn omite renglones en 0 y añade NC solo si hay reembolso a NC', () => {
+        const p = serializeReturn({ lines, choices: ch(2), reason: ' defecto ', received: true, refund: [{ kind: 'credit_note', amount: 2320 }] })
+        expect(p.lines).toHaveLength(1)
+        expect(p.reason).toBe('defecto')
+        expect(p.credit_note).toEqual({ relation: '03' })
+        expect(serializeReturn({ lines, choices: ch(2), reason: 'x', received: true, refund: [{ kind: 'cash', amount: 2320 }] }).credit_note).toBeUndefined()
+    })
+})
+
+describe('rma states', () => {
+    it('flujo feliz y motivo obligatorio al rechazar/cancelar', () => {
+        expect(canTransitionRma('draft', 'authorized').ok).toBe(true)
+        expect(canTransitionRma('received', 'settled').ok).toBe(true)
+        expect(canTransitionRma('authorized', 'rejected').ok).toBe(false)
+        expect(canTransitionRma('authorized', 'rejected', 'no aplica').ok).toBe(true)
+        expect(canTransitionRma('closed', 'draft').ok).toBe(false)
+    })
+})
