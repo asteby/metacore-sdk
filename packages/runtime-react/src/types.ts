@@ -67,6 +67,12 @@ export interface TableMetadata {
      */
     group_by?: string
     /**
+     * The model's stage column (`stage_field`), when the host serves it. Lets a
+     * board grouped by ANOTHER column (`?group_by=`) tell it apart from the stage
+     * board; absent on older hosts (the served `group_by` stands in).
+     */
+    stage_field?: string
+    /**
      * Board lanes (the stage machine of the `group_by`/`stage_field` column).
      * When present the kanban renders one lane per stage in `order`. When absent
      * the SDK derives lanes from the `group_by` column's `options` (the kernel

@@ -152,6 +152,7 @@ import { useFlipAnimation } from './use-flip-animation'
 import { PortalDragOverlay } from './portal-drag-overlay'
 import { objectLabel } from './dynamic-relation-helpers'
 import { useMetadataCache } from './metadata-cache'
+import { useOptionsResolver } from './use-options-resolver'
 import { ActivityValueRenderer } from './activity-value-renderer'
 import { DynamicIcon } from './dynamic-icon'
 import { isColumnVisibleInTable } from './column-visibility'
@@ -343,16 +344,28 @@ export function formatLaneCount(
     return String(shown)
 }
 
+/** Reads a boolean-ish opt-in from a column's `styleConfig` (`display_config`). */
+function cardFlag(col: ColumnDefinition, key: string): boolean {
+    const v = (col.styleConfig as Record<string, unknown> | undefined)?.[key]
+    return v === true || v === 'true' || v === 1
+}
+
 /**
- * Picks the columns shown on a card: a `title` column (first searchable column,
- * else first text-ish column) and up to `maxFields` secondary columns. Excludes
- * the group_by column (it's the lane itself) and any column hidden from the
- * table view (visibility modal/list, or `hidden`).
+ * Picks the columns shown on a card: a `title` column and the secondary fields.
+ * Excludes the group_by column (it's the lane itself) and any column hidden
+ * from the table view (visibility modal/list, or `hidden`).
+ *
+ * A model can lay its card out explicitly through the columns' manifest
+ * `display_config`: `card_title: true` picks the title, `card: true` marks each
+ * field the card shows, in column order (`explicit` is then true and ALL the
+ * flagged fields are shown — the card is no longer capped at `maxFields`).
+ * Without any flag the legacy heuristic applies: the first searchable / text
+ * column is the title and the next `maxFields` visible columns are the fields.
  */
 export function selectCardColumns(
     metadata: TableMetadata,
     maxFields = 3,
-): { title: ColumnDefinition | null; fields: ColumnDefinition[] } {
+): { title: ColumnDefinition | null; fields: ColumnDefinition[]; explicit: boolean } {
     const groupBy = metadata.group_by
     const visible = metadata.columns.filter(
         (c) =>
@@ -361,15 +374,110 @@ export function selectCardColumns(
             isColumnVisibleInTable(c) &&
             c.key !== 'id',
     )
+    const flagged = visible.filter((c) => cardFlag(c, 'card'))
+    const flaggedTitle = visible.find((c) => cardFlag(c, 'card_title'))
+    const explicit = flagged.length > 0 || !!flaggedTitle
     const title =
+        flaggedTitle ??
         visible.find((c) => c.searchable) ??
         visible.find((c) => c.type === 'text' || c.cellStyle === 'truncate-text') ??
         visible[0] ??
         null
-    const fields = visible
-        .filter((c) => c.key !== title?.key)
-        .slice(0, maxFields)
-    return { title, fields }
+    const fields = explicit
+        ? flagged.filter((c) => c.key !== title?.key)
+        : visible.filter((c) => c.key !== title?.key).slice(0, maxFields)
+    return { title, fields, explicit }
+}
+
+/**
+ * Whether a card's date field is past due — the SDK paints it as a warning.
+ * A column opts in with `display_config.overdue: true`; the optional
+ * `display_config.overdue_unless` (`{ <field>: [values…] }`) exempts cards whose
+ * row matches (a work order already delivered is never late). Pure — exported
+ * for unit tests.
+ */
+export function isCardOverdue(card: any, col: ColumnDefinition, now: number = Date.now()): boolean {
+    if (!cardFlag(col, 'overdue')) return false
+    const raw = card?.[col.key]
+    if (raw === null || raw === undefined || raw === '') return false
+    const at = typeof raw === 'number' ? raw : Date.parse(String(raw))
+    if (!Number.isFinite(at) || at >= now) return false
+    const unless = (col.styleConfig as Record<string, unknown> | undefined)?.overdue_unless
+    if (unless && typeof unless === 'object') {
+        for (const [field, values] of Object.entries(unless as Record<string, unknown>)) {
+            const list = Array.isArray(values) ? values : [values]
+            if (list.map(String).includes(String(card?.[field] ?? ''))) return false
+        }
+    }
+    return true
+}
+
+/**
+ * The metadata regrouped by another column (a nav entry's `group_by`). A model
+ * can serve several boards over the same records — by stage, by technician, by
+ * bay — but the host projects ONE `group_by` per model, so the entry's own wins.
+ * The stage machine (stages, transitions, smart lanes) belongs to the model's
+ * stage column (`stage_field`; older hosts that do not serve it: the served
+ * group_by): grouping by it keeps the machine, grouping by anything else drops
+ * it and the lanes come from the new column. Returns the SAME object when there
+ * is nothing to change (no override, the served group_by already, or a column the
+ * model does not have). Pure — exported for unit tests.
+ */
+export function withGroupBy(
+    metadata: TableMetadata | null,
+    groupBy: string | undefined,
+): TableMetadata | null {
+    if (!metadata || !groupBy || groupBy === metadata.group_by) return metadata
+    if (!metadata.columns.some((c) => c.key === groupBy)) return metadata
+    const stageColumn = metadata.stage_field ?? (metadata.stages?.length ? metadata.group_by : undefined)
+    if (groupBy === stageColumn) return { ...metadata, group_by: groupBy }
+    return {
+        ...metadata,
+        group_by: groupBy,
+        stages: undefined,
+        transitions: undefined,
+        smart_lanes: undefined,
+    }
+}
+
+/**
+ * Whether the board's lanes must come from the group_by column's REFERENCE
+ * (one lane per technician, per bay, per owner…): the metadata declares no
+ * stages, the column has no inline options, but it points at a record list.
+ * Pure — exported for unit tests.
+ */
+export function refLaneSource(
+    metadata: TableMetadata | null,
+): { ref?: string; endpoint?: string } | null {
+    if (!metadata?.group_by) return null
+    if ((metadata.stages?.length ?? 0) > 0) return null
+    const col = metadata.columns.find((c) => c.key === metadata.group_by)
+    if (!col || (col.options?.length ?? 0) > 0) return null
+    if (col.searchEndpoint) return { endpoint: col.searchEndpoint }
+    if (col.ref) return { ref: col.ref }
+    return null
+}
+
+/**
+ * The metadata with one lane per resolved option of a reference group_by column
+ * (labels ordered alphabetically). No transitions are declared, so a card can
+ * be dragged to any lane — i.e. re-assigned to another technician / bay.
+ * Returns the metadata untouched when there are no options. Pure.
+ */
+export function withRefLanes(
+    metadata: TableMetadata,
+    options: { value: string | number; label: string; color?: string | null }[],
+): TableMetadata {
+    if (options.length === 0) return metadata
+    const stages: StageMeta[] = [...options]
+        .sort((a, b) => String(a.label).localeCompare(String(b.label)))
+        .map((o, i) => ({
+            key: String(o.value),
+            label: String(o.label),
+            color: o.color ?? undefined,
+            order: i,
+        }))
+    return { ...metadata, stages }
 }
 
 /** The all-zeros UUID — a Go zero-value FK serialized as "set" when it isn't. */
@@ -725,6 +833,16 @@ export interface DynamicKanbanProps {
     /** ISO 4217 currency for money card fields (org config). */
     currency?: string
     /**
+     * Column to group the board by, when the host's nav entry asks for one
+     * (`?group_by=`): a model can offer several boards over the same records —
+     * by stage, by technician, by bay. Absent or equal to the served
+     * `group_by` → the model's own stage machine. Otherwise the lanes come from
+     * that column (its options, or its referenced records) with no transitions,
+     * and the per-org stage customisations (custom lanes, overrides, lane order,
+     * automations) are off: they belong to the stage column.
+     */
+    groupBy?: string
+    /**
      * Static equality filters always applied to the board (never shown as a
      * removable chip). Same contract as DynamicTable's `defaultFilters`.
      */
@@ -791,6 +909,7 @@ function DynamicKanbanBoard({
     timeZone: timeZoneProp,
     currency: currencyProp,
     defaultFilters,
+    groupBy: groupByProp,
 }: DynamicKanbanProps) {
     const { t, i18n } = useTranslation()
     // The org's timezone/currency: an explicit prop wins, else the app-wide
@@ -811,16 +930,16 @@ function DynamicKanbanBoard({
 
     // Stage automations (Bitrix-style per-lane rules). Degrades to no-op when
     // the host has no `/stage-automations` endpoint — the ⚡ affordance hides.
-    const automations = useStageAutomations(model)
+    const automationsHook = useStageAutomations(model)
 
     // Custom stages (Bitrix-style user-defined columns). Degrades to no-op when
     // the host has no `/custom-stages` endpoint — the "+ Agregar etapa" column
     // and lane menus simply don't render.
-    const customStages = useCustomStages(model)
+    const customStagesHook = useCustomStages(model)
     // Per-org overrides for DECLARED lanes (rename/recolor/conditions). Degrades
     // to no-op when the host has no `/stage-overrides` endpoint — the ⚙ gear then
     // hides on declared lanes (custom lanes keep it via /custom-stages).
-    const stageOverrides = useStageOverrides(model)
+    const stageOverridesHook = useStageOverrides(model)
     // Dialog state: create/edit a stage, and the delete confirmation.
     const [stageDialogOpen, setStageDialogOpen] = useState(false)
     const [editingStage, setEditingStage] = useState<CustomStage | null>(null)
@@ -842,7 +961,47 @@ function DynamicKanbanBoard({
     const { getMetadata, setMetadata: cacheMetadata } = useMetadataCache()
     const cachedMeta = getMetadata(model)
 
-    const [metadata, setMetadata] = useState<TableMetadata | null>(cachedMeta || null)
+    const [serverMetadata, setMetadata] = useState<TableMetadata | null>(cachedMeta || null)
+    // A reference group_by (technician, bay…) has no declared stages: its lanes
+    // are the referenced records, resolved through the same options endpoint the
+    // form selects use.
+    const routedMetadata = useMemo(
+        () => withGroupBy(serverMetadata, groupByProp),
+        [serverMetadata, groupByProp],
+    )
+    // Grouped by something other than the stage column: the stage machine is gone.
+    const regrouped =
+        (serverMetadata?.stages?.length ?? 0) > 0 && (routedMetadata?.stages?.length ?? 0) === 0
+    const laneSource = useMemo(() => refLaneSource(routedMetadata), [routedMetadata])
+    const { options: laneOptions } = useOptionsResolver({
+        modelKey: '',
+        fieldKey: 'id',
+        ref: laneSource?.ref,
+        endpoint: laneSource?.endpoint,
+        limit: 200,
+        enabled: !!laneSource,
+    })
+    const metadata = useMemo(
+        () => (routedMetadata && laneSource ? withRefLanes(routedMetadata, laneOptions) : routedMetadata),
+        [routedMetadata, laneSource, laneOptions],
+    )
+    // The stage customisations belong to the stage column: off on another grouping.
+    const automations = useMemo(
+        () => (regrouped ? { ...automationsHook, available: false } : automationsHook),
+        [regrouped, automationsHook],
+    )
+    const customStages = useMemo(
+        () => (regrouped ? { ...customStagesHook, available: false } : customStagesHook),
+        [regrouped, customStagesHook],
+    )
+    const stageOverrides = useMemo(
+        () => (regrouped ? { ...stageOverridesHook, available: false } : stageOverridesHook),
+        [regrouped, stageOverridesHook],
+    )
+    const stageLayout = useMemo(
+        () => (regrouped ? { ...stageLayoutHook, available: false } : stageLayoutHook),
+        [regrouped, stageLayoutHook],
+    )
     const [records, setRecords] = useState<any[]>([])
     const [loading, setLoading] = useState(!cachedMeta)
     const [loadingData, setLoadingData] = useState(true)
@@ -870,7 +1029,7 @@ function DynamicKanbanBoard({
     // the metadata (the backend also stamps `stages[]/smart_lanes[].order`, so the
     // board already paints ordered on load — this only backs the live drag + the
     // revert-on-failure). Null → follow the metadata order.
-    const stageLayout = useStageLayout(model)
+    const stageLayoutHook = useStageLayout(model)
     const [laneOrderOverride, setLaneOrderOverride] = useState<string[] | null>(null)
     const laneReorderEnabled = stageLayout.available
 
@@ -1396,11 +1555,15 @@ function DynamicKanbanBoard({
 
     // Card fields: a few more candidates than a card shows, so a card whose
     // first fields are empty shows the next ones that have a value.
-    const { title: titleCol, fields: fieldCols } = useMemo(
+    const {
+        title: titleCol,
+        fields: fieldCols,
+        explicit: explicitCard,
+    } = useMemo(
         () =>
             metadata
                 ? selectCardColumns(metadata, CARD_FIELD_CANDIDATES)
-                : { title: null, fields: [] },
+                : { title: null, fields: [], explicit: false },
         [metadata],
     )
 
@@ -1948,6 +2111,7 @@ function DynamicKanbanBoard({
                             card={card}
                             titleCol={titleCol}
                             fieldCols={fieldCols}
+                            showAllFields={explicitCard}
                             actions={rowActions}
                             locale={i18n.language}
                             timeZone={timeZone}
@@ -1979,6 +2143,7 @@ function DynamicKanbanBoard({
                 card={card}
                 titleCol={titleCol}
                 fieldCols={fieldCols}
+                showAllFields={explicitCard}
                 actions={rowActions}
                 locale={i18n.language}
                 timeZone={timeZone}
@@ -2189,6 +2354,7 @@ function DynamicKanbanBoard({
                         card={activeCard}
                         titleCol={titleCol}
                         fieldCols={fieldCols}
+                        showAllFields={explicitCard}
                         locale={i18n.language}
                         timeZone={timeZone}
                         currency={currency}
@@ -3008,6 +3174,8 @@ interface KanbanCardProps {
     titleCol: ColumnDefinition | null
     /** Candidate fields; the card shows the first few that have a value. */
     fieldCols: ColumnDefinition[]
+    /** The model laid its card out explicitly: show every field with a value. */
+    showAllFields?: boolean
     actions: ActionDefinition[]
     locale: string
     timeZone?: string
@@ -3027,14 +3195,15 @@ function CardBody({
     card,
     titleCol,
     fieldCols,
+    showAllFields,
     locale,
     timeZone,
     currency,
     menu,
-}: Pick<KanbanCardProps, 'card' | 'titleCol' | 'fieldCols' | 'locale' | 'timeZone' | 'currency'> & {
+}: Pick<KanbanCardProps, 'card' | 'titleCol' | 'fieldCols' | 'showAllFields' | 'locale' | 'timeZone' | 'currency'> & {
     menu?: React.ReactNode
 }) {
-    const fields = visibleCardFields(card, fieldCols, CARD_FIELDS_SHOWN)
+    const fields = visibleCardFields(card, fieldCols, showAllFields ? fieldCols.length : CARD_FIELDS_SHOWN)
     return (
         <CardContent className="space-y-1.5 p-3">
             <div className="flex items-start justify-between gap-2">
@@ -3056,7 +3225,12 @@ function CardBody({
             {fields.map((col) => (
                 <div
                     key={col.key}
-                    className="flex min-w-0 items-start gap-1.5 text-xs text-muted-foreground"
+                    className={`flex min-w-0 items-start gap-1.5 text-xs ${
+                        isCardOverdue(card, col)
+                            ? 'font-medium text-destructive'
+                            : 'text-muted-foreground'
+                    }`}
+                    data-overdue={isCardOverdue(card, col) || undefined}
                 >
                     <span className="shrink-0 opacity-70">{col.label}:</span>
                     <span className="min-w-0 break-words">
@@ -3078,6 +3252,7 @@ function KanbanCard({
     card,
     titleCol,
     fieldCols,
+    showAllFields,
     actions,
     locale,
     timeZone,
@@ -3145,6 +3320,7 @@ function KanbanCard({
                 card={card}
                 titleCol={titleCol}
                 fieldCols={fieldCols}
+                showAllFields={showAllFields}
                 locale={locale}
                 timeZone={timeZone}
                 currency={currency}
@@ -3160,6 +3336,7 @@ function CardPreview({
     card,
     titleCol,
     fieldCols,
+    showAllFields,
     locale,
     timeZone,
     currency,
@@ -3178,6 +3355,7 @@ function CardPreview({
                 card={card}
                 titleCol={titleCol}
                 fieldCols={fieldCols}
+                showAllFields={showAllFields}
                 locale={locale}
                 timeZone={timeZone}
                 currency={currency}

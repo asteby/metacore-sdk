@@ -38,6 +38,10 @@ import {
     isTransitionAllowed,
     applyOptimisticMove,
     selectCardColumns,
+    isCardOverdue,
+    refLaneSource,
+    withRefLanes,
+    withGroupBy,
     cardMatchesLaneQuery,
     cardMatchesLaneFunnel,
     laneFunnelCount,
@@ -223,6 +227,143 @@ describe('selectCardColumns', () => {
         expect(title?.key).toBe('title')
         expect(fields.map((f) => f.key)).not.toContain('stage')
         expect(fields.map((f) => f.key)).toEqual(['assignee', 'priority'])
+    })
+})
+
+describe('selectCardColumns — explicit card layout (display_config)', () => {
+    const col = (key: string, styleConfig?: Record<string, unknown>, extra: object = {}) =>
+        ({ key, label: key, type: 'text', sortable: false, filterable: false, styleConfig, ...extra }) as any
+    const boardMeta = (columns: any[]) => ({ ...meta(), columns }) as any
+
+    it('shows every flagged field in column order and the flagged title', () => {
+        const { title, fields, explicit } = selectCardColumns(
+            boardMeta([
+                col('stage'),
+                col('folio', { card_title: true }),
+                col('customer', { card: true }),
+                col('plate', { card: true }),
+                col('promised_at', { card: true }),
+                col('amount', { card: true }),
+                col('notes'),
+            ]),
+        )
+        expect(explicit).toBe(true)
+        expect(title?.key).toBe('folio')
+        expect(fields.map((f) => f.key)).toEqual(['customer', 'plate', 'promised_at', 'amount'])
+    })
+
+    it('keeps the legacy heuristic when no column is flagged', () => {
+        expect(selectCardColumns(meta()).explicit).toBe(false)
+    })
+})
+
+describe('isCardOverdue', () => {
+    const now = Date.parse('2026-09-29T12:00:00Z')
+    const due = (cfg: Record<string, unknown>) =>
+        ({ key: 'promised_at', label: 'p', type: 'datetime', styleConfig: cfg }) as any
+
+    it('flags a past date on an opted-in column', () => {
+        expect(isCardOverdue({ promised_at: '2026-09-28T10:00:00Z' }, due({ overdue: true }), now)).toBe(true)
+    })
+    it('does not flag a future, empty or non-opted-in date', () => {
+        expect(isCardOverdue({ promised_at: '2026-09-30T10:00:00Z' }, due({ overdue: true }), now)).toBe(false)
+        expect(isCardOverdue({ promised_at: null }, due({ overdue: true }), now)).toBe(false)
+        expect(isCardOverdue({ promised_at: '2026-09-28T10:00:00Z' }, due({}), now)).toBe(false)
+    })
+    it('honours overdue_unless (delivered orders are never late)', () => {
+        const cfg = { overdue: true, overdue_unless: { stage: ['delivered'] } }
+        expect(isCardOverdue({ promised_at: '2026-09-28T10:00:00Z', stage: 'delivered' }, due(cfg), now)).toBe(false)
+        expect(isCardOverdue({ promised_at: '2026-09-28T10:00:00Z', stage: 'in_process' }, due(cfg), now)).toBe(true)
+    })
+})
+
+describe('withGroupBy (one model, several boards)', () => {
+    const boardMeta = (over: object = {}) =>
+        ({
+            columns: [
+                { key: 'stage', label: 'Etapa', type: 'text' },
+                { key: 'assigned_mechanic_id', label: 'Técnico', type: 'text', ref: 'users' },
+            ],
+            // The host projects ONE group_by per model: here another nav entry's.
+            group_by: 'assigned_mechanic_id',
+            stage_field: 'stage',
+            stages: [{ key: 'a', label: 'A' }],
+            transitions: [{ from: 'a', to: 'a' }],
+            smart_lanes: [{ key: 's', label: 'S', filters: [] }],
+            ...over,
+        }) as any
+
+    it('is the same object when there is no override or it matches the served group_by', () => {
+        const m = boardMeta()
+        expect(withGroupBy(m, undefined)).toBe(m)
+        expect(withGroupBy(m, 'assigned_mechanic_id')).toBe(m)
+        expect(withGroupBy(null, 'stage')).toBeNull()
+    })
+    it('ignores a column the model does not have', () => {
+        const m = boardMeta()
+        expect(withGroupBy(m, 'nope')).toBe(m)
+    })
+    it('keeps the stage machine when grouping by the stage column', () => {
+        const out = withGroupBy(boardMeta(), 'stage')!
+        expect(out.group_by).toBe('stage')
+        expect(out.stages).toHaveLength(1)
+        expect(out.transitions).toHaveLength(1)
+        expect(out.smart_lanes).toHaveLength(1)
+    })
+    it('falls back to the served group_by as stage column on hosts without stage_field', () => {
+        const out = withGroupBy(boardMeta({ stage_field: undefined, group_by: 'stage' }), 'assigned_mechanic_id')!
+        expect(out.stages).toBeUndefined()
+        const back = withGroupBy(boardMeta({ stage_field: undefined, group_by: 'assigned_mechanic_id' }), 'stage')
+        // no stage_field and the served group_by is not the stage column: cannot tell, machine dropped
+        expect(back!.stages).toBeUndefined()
+    })
+    it('drops the stage machine when grouping by another column', () => {
+        const out = withGroupBy(boardMeta({ group_by: 'stage' }), 'assigned_mechanic_id')!
+        expect(out.group_by).toBe('assigned_mechanic_id')
+        expect(out.stages).toBeUndefined()
+        expect(out.transitions).toBeUndefined()
+        expect(out.smart_lanes).toBeUndefined()
+        expect(refLaneSource(out)).toEqual({ ref: 'users' })
+    })
+})
+
+describe('reference lanes (group_by on a reference column)', () => {
+    const refMeta = (over: object = {}) =>
+        ({
+            columns: [{ key: 'assigned_mechanic_id', label: 'Técnico', type: 'text', ref: 'users' }],
+            group_by: 'assigned_mechanic_id',
+            ...over,
+        }) as any
+
+    it('resolves the lane source from the column ref or search endpoint', () => {
+        expect(refLaneSource(refMeta())).toEqual({ ref: 'users' })
+        expect(
+            refLaneSource(
+                refMeta({ columns: [{ key: 'assigned_mechanic_id', label: 't', type: 'text', searchEndpoint: '/options/x?field=id' }] }),
+            ),
+        ).toEqual({ endpoint: '/options/x?field=id' })
+    })
+    it('yields no source when stages or inline options already declare the lanes', () => {
+        expect(refLaneSource(refMeta({ stages: [{ key: 'a', label: 'A' }] }))).toBeNull()
+        expect(
+            refLaneSource(refMeta({ columns: [{ key: 'assigned_mechanic_id', label: 't', type: 'text', ref: 'users', options: [{ value: 'a', label: 'A' }] }] })),
+        ).toBeNull()
+        expect(refLaneSource(null)).toBeNull()
+    })
+    it('builds one lane per option, alphabetical, with no transitions', () => {
+        const out = withRefLanes(refMeta(), [
+            { value: 'u2', label: 'Zoe' },
+            { value: 'u1', label: 'Ana' },
+        ])
+        expect(deriveStages(out).map((s) => [s.key, s.label])).toEqual([
+            ['u1', 'Ana'],
+            ['u2', 'Zoe'],
+        ])
+        expect(out.transitions).toBeUndefined()
+    })
+    it('leaves the metadata alone while the options are still loading', () => {
+        const m = refMeta()
+        expect(withRefLanes(m, [])).toBe(m)
     })
 })
 
