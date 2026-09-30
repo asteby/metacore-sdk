@@ -50,6 +50,8 @@ export interface ActivityEvent {
      */
     changes?: Record<string, { from: unknown; to: unknown }> | null
     summary?: string | null
+    /** Motive the operator stated for a delete / reason_required action (PER-4). */
+    reason?: string | null
     occurred_at: string
 }
 
@@ -204,7 +206,7 @@ export const ActivityDiff: React.FC<ActivityDiffProps> = ({
 
     const variantBadge = VARIANT_BADGE[variant] ?? VARIANT_BADGE.other
 
-    if (allKeys.length === 0 && !event.summary) {
+    if (allKeys.length === 0 && !event.summary && !event.reason) {
         return (
             <div className={cn('text-sm text-muted-foreground italic py-1', className)}>
                 Sin campos registrados.
@@ -234,6 +236,13 @@ export const ActivityDiff: React.FC<ActivityDiffProps> = ({
                     </button>
                 )}
             </div>
+
+            {/* Mandatory-reason motive (delete / cancel with reason_required) */}
+            {event.reason && (
+                <p className="text-sm" data-testid="activity-reason">
+                    <span className="font-medium">Motivo:</span> {event.reason}
+                </p>
+            )}
 
             {/* Summary line (if backend provided one) */}
             {event.summary && (

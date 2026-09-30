@@ -27,9 +27,19 @@ import {
 } from '@tanstack/react-query'
 import { useApi } from './api-context'
 
-/** Stable react-query key for an addon's per-org settings. */
-export function addonSettingsKey(addonKey: string) {
-    return ['addon-settings', addonKey] as const
+/** Stable react-query key for an addon's per-org settings (per branch when given). */
+export function addonSettingsKey(addonKey: string, branchId?: string | null) {
+    return branchId ? (['addon-settings', addonKey, branchId] as const) : (['addon-settings', addonKey] as const)
+}
+
+/**
+ * Settings URL. With a branch, the host answers the settings the addon runs
+ * with there: org values with each `scope: branch` key replaced by the branch's
+ * override (POS-1). Without one, the org values (legacy behaviour).
+ */
+export function addonSettingsUrl(addonKey: string, branchId?: string | null): string {
+    const base = `/api/addons/${addonKey}/settings`
+    return branchId ? `${base}?branch_id=${encodeURIComponent(branchId)}` : base
 }
 
 /**
@@ -63,6 +73,12 @@ export interface UseAddonSettingsOptions<T> {
     staleTime?: number
     /** Defer fetching (e.g. until the addon key is known). */
     enabled?: boolean
+    /**
+     * Read the settings as one branch sees them (manifest `scope: branch` keys
+     * resolve to the branch override, else the org value). Omit for org values.
+     * A terminal passes its active branch here.
+     */
+    branchId?: string | null
 }
 
 export interface UseAddonSettingsResult<T> {
@@ -92,12 +108,12 @@ export function useAddonSettings<T extends Record<string, unknown> = Record<stri
     opts: UseAddonSettingsOptions<T> = {},
 ): UseAddonSettingsResult<T> {
     const api = useApi()
-    const { defaults, staleTime, enabled } = opts
+    const { defaults, staleTime, enabled, branchId } = opts
 
     const query = useQuery<Partial<T>>({
-        queryKey: addonSettingsKey(addonKey),
+        queryKey: addonSettingsKey(addonKey, branchId),
         queryFn: async () => {
-            const res = await api.get(`/api/addons/${addonKey}/settings`)
+            const res = await api.get(addonSettingsUrl(addonKey, branchId))
             const body = (res as { data: any }).data
             // Host envelope: { success, data: { <key>: <value> } }.
             const values = body?.success ? body.data : body
@@ -134,18 +150,21 @@ export function useAddonSettings<T extends Record<string, unknown> = Record<stri
  */
 export function useUpdateAddonSettings<T extends Record<string, unknown> = Record<string, unknown>>(
     addonKey: string,
+    /** Write branch overrides (only `scope: branch` keys; `null` clears one) instead of org values. */
+    branchId?: string | null,
 ) {
     const api = useApi()
     const qc = useQueryClient()
 
     return useMutation<Partial<T>, Error, Partial<T>>({
         mutationFn: async (values) => {
-            const res = await api.put(`/api/addons/${addonKey}/settings`, values)
+            const res = await api.put(addonSettingsUrl(addonKey, branchId), values)
             const body = (res as { data: any }).data
             const saved = body?.success ? body.data : body
             return (saved ?? values) as Partial<T>
         },
         onSuccess: () => {
+            // Prefix match: refreshes the org read and every branch read.
             void qc.invalidateQueries({ queryKey: addonSettingsKey(addonKey) })
         },
     })

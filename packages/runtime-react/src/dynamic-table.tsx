@@ -67,6 +67,7 @@ import { toast } from 'sonner'
 import { Progress } from './dialogs/_primitives'
 import { useMetadataCache } from './metadata-cache'
 import { useApi, useCurrentBranch } from './api-context'
+import { useReasonPrompt } from './reason-prompt'
 import type { ColumnFilterConfig, GetDynamicColumns } from './dynamic-columns-shim'
 import { defaultGetDynamicColumns, DATE_CELL_TYPES, aggregateOf, formatAggregateTotal } from './dynamic-columns'
 import { useFacetLoaders, isLongTextColumn } from './use-facet-loaders'
@@ -1123,6 +1124,7 @@ export function DynamicTable({
         onRefresh: handleRefresh,
     })
 
+    const bulkReasonPrompt = useReasonPrompt()
     const confirmBulkDelete = async () => {
         const selectedRows = table.getFilteredSelectedRowModel().rows
         if (selectedRows.length === 0) return
@@ -1130,13 +1132,29 @@ export function DynamicTable({
         setBulkDeleteTotal(selectedRows.length)
         setBulkDeleteProgress(0)
         let successCount = 0, errorCount = 0
+        // One reason for the whole batch: asked the first time a row is refused
+        // for lacking it (model declares reason_required.delete), reused after.
+        let bulkReason: string | undefined
+        let bulkCancelled = false
         for (let i = 0; i < selectedRows.length; i++) {
             const row = selectedRows[i]
+            if (bulkCancelled) { errorCount++; setBulkDeleteProgress(i + 1); continue }
             try {
                 const writeBase = mutationEndpoint ?? endpoint
                 const deleteEndpoint = writeBase ? `${writeBase}/${row.original.id}` : `/data/${model}/${row.original.id}`
-                const res = await api.delete(deleteEndpoint)
-                if (res.data.success) successCount++; else errorCount++
+                const res = await bulkReasonPrompt.run({
+                    title: t('dynamic.bulk_delete_reason_title', { count: selectedRows.length, defaultValue: 'Eliminar {{count}} registro(s)' }),
+                    description: t('dynamic.delete_reason_desc', { defaultValue: 'Este modelo pide el motivo de la eliminación.' }),
+                    confirmLabel: t('dynamic.delete_confirm', { defaultValue: 'Eliminar' }),
+                    reason: bulkReason,
+                    request: (reason) => {
+                        if (reason) bulkReason = reason
+                        return api.delete(deleteEndpoint, reason ? { params: { reason } } : undefined)
+                    },
+                })
+                if (!res) { bulkCancelled = true; errorCount++ }
+                else if (res.data.success) successCount++
+                else errorCount++
             } catch (e) { console.error('Error al eliminar', e); errorCount++ }
             setBulkDeleteProgress(i + 1)
         }
@@ -1862,6 +1880,8 @@ export function DynamicTable({
                     )}
                 </AlertDialogContent>
             </AlertDialog>
+
+            {bulkReasonPrompt.dialog}
 
             {exportEnabled && (
                 <ExportDialog open={exportOpen} onOpenChange={setExportOpen} model={model} metadata={metadata} currentFilters={buildFilterParams()} hasActiveFilters={hasActiveFilters} />

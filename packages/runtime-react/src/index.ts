@@ -238,6 +238,16 @@ export {
     type RequestApprovalOptions,
 } from './approval-gate'
 export {
+    ReasonPromptDialog,
+    useReasonPrompt,
+    reasonRequiredInfo,
+    DEFAULT_REASON_MIN,
+    type ReasonPromptDialogProps,
+    type ReasonPromptApi,
+    type ReasonRequiredInfo,
+    type RunWithReasonOptions,
+} from './reason-prompt'
+export {
     useDynamicRowActions,
     type UseDynamicRowActionsParams,
     type DynamicRowActions,

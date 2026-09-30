@@ -57,6 +57,7 @@ import {
 } from './field-validation-ui'
 import { validationCatalog } from './validation-catalog'
 import { useApi } from './api-context'
+import { useReasonPrompt } from './reason-prompt'
 import { buildRelationFilterParams } from './dynamic-relation-helpers'
 import { DynamicIcon } from './dynamic-icon'
 import { DynamicLineItems } from './dynamic-line-items'
@@ -728,6 +729,9 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
     const { t, i18n } = useTranslation()
     const api = useApi()
     const [executing, setExecuting] = useState(false)
+    // Actions listed in the model's `reason_required.actions` (cancel, void…)
+    // answer 422 errors.reason without a motive; the prompt asks and retries.
+    const reasonPrompt = useReasonPrompt()
     // `action.label` is an addon-contributed i18n key; its locale bundle loads
     // asynchronously, so translate at render (defaultValue keeps an already
     // localized label unchanged).
@@ -737,7 +741,13 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
         setExecuting(true)
         try {
             const url = buildActionUrl(endpoint, model, record.id, action.key)
-            const res = await api.post(url, {})
+            const res = await reasonPrompt.run({
+                title: label,
+                description: t('actions.reason_desc', { defaultValue: 'Esta acción pide el motivo. Queda en la bitácora del documento.' }),
+                request: (reason) => api.post(url, reason ? { reason } : {}),
+            })
+            // Operator cancelled the reason prompt: nothing ran.
+            if (!res) return
             if (res.data.success) {
                 toastServerSuccess(res.data, { t })
                 onOpenChange(false)
@@ -753,6 +763,8 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
     }
 
     return (
+        <>
+        {reasonPrompt.dialog}
         <AlertDialog open={open} onOpenChange={onOpenChange}>
             <AlertDialogContent>
                 <AlertDialogHeader>
@@ -778,6 +790,7 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
                 </AlertDialogFooter>
             </AlertDialogContent>
         </AlertDialog>
+        </>
     )
 }
 
@@ -788,6 +801,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
     // defaultValue keeps an already-localized string unchanged.
     const tl = (s: string) => t(s, { defaultValue: s })
     const api = useApi()
+    const reasonPrompt = useReasonPrompt()
     const branchGate = useBranchCreateGate()
     const [formData, setFormData] = useState<Record<string, any>>({})
     const [executing, setExecuting] = useState(false)
@@ -914,7 +928,12 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                 if (branchId) payload = { ...payload, branch_id: branchId }
             }
             const url = buildActionUrl(endpoint, model, record?.id, action.key)
-            const res = await api.post(url, payload)
+            const res = await reasonPrompt.run({
+                title: tl(action.label),
+                description: t('actions.reason_desc', { defaultValue: 'Esta acción pide el motivo. Queda en la bitácora del documento.' }),
+                request: (reason) => api.post(url, reason ? { ...payload, reason } : payload),
+            })
+            if (!res) return
             if (res.data.success) {
                 toastServerSuccess(res.data, { t })
                 onOpenChange(false)
@@ -1022,6 +1041,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                         {tl(action.label)}
                     </Button>
                 </DialogFooter>
+                {reasonPrompt.dialog}
             </DialogContent>
         </Dialog>
     )

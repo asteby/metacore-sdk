@@ -34,6 +34,7 @@ import {
     AlertDialogTitle,
 } from '@asteby/metacore-ui/primitives'
 import { useApi } from './api-context'
+import { useReasonPrompt } from './reason-prompt'
 import { ActionModalDispatcher } from './action-modal-dispatcher'
 import { DynamicRecordDialog } from './dialogs/dynamic-record'
 import { RequiresAddonDialog, resolveRequiresAddon } from './requires-addon'
@@ -102,6 +103,9 @@ export function useDynamicRowActions({
 
     const [rowToDelete, setRowToDelete] = useState<any | null>(null)
     const [isDeleting, setIsDeleting] = useState(false)
+    // Models that declare `reason_required.delete` answer a bare DELETE with 422
+    // errors.reason; the prompt asks once and retries with `?reason=`.
+    const reasonPrompt = useReasonPrompt()
 
     const [actionModal, setActionModal] = useState<{
         open: boolean
@@ -157,7 +161,14 @@ export function useDynamicRowActions({
         setIsDeleting(true)
         try {
             const deleteEndpoint = writeBase ? `${writeBase}/${rowToDelete.id}` : `/data/${model}/${rowToDelete.id}`
-            const res = await api.delete(deleteEndpoint)
+            const res = await reasonPrompt.run({
+                title: t('dynamic.delete_reason_title', { defaultValue: 'Eliminar registro' }),
+                description: t('dynamic.delete_reason_desc', { defaultValue: 'Este modelo pide el motivo de la eliminación.' }),
+                confirmLabel: t('dynamic.delete_confirm', { defaultValue: 'Eliminar' }),
+                request: (reason) => api.delete(deleteEndpoint, reason ? { params: { reason } } : undefined),
+            })
+            // El operador canceló el motivo: no se eliminó nada.
+            if (!res) return
             // CRUD estándar: no usar res.data.message (el endpoint dinámico
             // devuelve texto en inglés que se filtraría al toast). String localizado.
             if (res.data.success) { toast.success(t('dynamic.delete_success', { defaultValue: 'Registro eliminado correctamente' })); onRefresh() }
@@ -173,6 +184,7 @@ export function useDynamicRowActions({
 
     const dialogs = (
         <>
+            {reasonPrompt.dialog}
             <AlertDialog open={!!rowToDelete} onOpenChange={(open: boolean) => !open && setRowToDelete(null)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>

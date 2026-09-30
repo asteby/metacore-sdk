@@ -54,6 +54,16 @@ export interface ActionMetadata {
      *   "create"        — toolbar button that replaces the generic create button.
      */
     placement?: 'row' | 'table' | 'create';
+    /**
+     * Optional addon this action depends on, stamped by the host only while it
+     * is NOT installed (wire: `requires_addon`). The runtime keeps the action
+     * visible but locked and offers to install the addon instead of running it.
+     */
+    requiresAddon?: {
+        key: string;
+        name?: string;
+        reason?: string;
+    };
 }
 export interface ActionModalProps {
     open: boolean;
@@ -65,6 +75,13 @@ export interface ActionModalProps {
     onSuccess: () => void;
 }
 type ActionComponentEntry = ComponentType<ActionModalProps>;
+/**
+ * Subscribe to registry changes (register / unregister). Federated remotes
+ * register after the host has already rendered, so readers use this with
+ * `useSyncExternalStore` to pick the component up the moment it lands.
+ * Returns the unsubscribe function.
+ */
+export declare function subscribeActionComponents(listener: () => void): () => void;
 export declare function registerActionComponent(model: string, actionKey: string, component: ActionComponentEntry, owner?: string): void;
 export declare function getActionComponent(model: string, actionKey: string): ActionComponentEntry | undefined;
 export declare function hasActionComponent(model: string, actionKey: string): boolean;
