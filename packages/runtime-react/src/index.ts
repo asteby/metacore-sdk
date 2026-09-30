@@ -242,6 +242,13 @@ export {
     type RequestApprovalOptions,
 } from './approval-gate'
 export {
+    useSupervisor,
+    withApproval,
+    type SupervisedAction,
+    type SupervisorAuthorization,
+    type AuthorizeOptions,
+} from './supervised-action'
+export {
     ReasonPromptDialog,
     useReasonPrompt,
     reasonRequiredInfo,
