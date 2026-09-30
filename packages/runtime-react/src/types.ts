@@ -654,6 +654,16 @@ export interface FieldOptionsConfig {
     image?: string
 }
 
+/** An optional addon an action needs before it can run. */
+export interface RequiresAddon {
+    /** Addon key, e.g. "connector_whatsapp". */
+    key: string
+    /** Localized display name, e.g. "Conector WhatsApp". Falls back to `key`. */
+    name?: string
+    /** Why the action needs it (literal or i18n key). */
+    reason?: string
+}
+
 export interface ActionDefinition {
     key: string
     name: string
@@ -680,6 +690,13 @@ export interface ActionDefinition {
      *   "create"        — toolbar button that replaces the generic create button.
      */
     placement?: 'row' | 'table' | 'create'
+    /**
+     * Optional addon this action depends on, stamped by the host only while it
+     * is NOT installed (served as `requires_addon`; read through
+     * resolveRequiresAddon). The action stays visible but locked: a click opens
+     * the "requires addon" dialog instead of executing.
+     */
+    requiresAddon?: RequiresAddon
 }
 
 export interface ApiResponse<T> {
@@ -724,4 +741,11 @@ export interface ActionMetadata {
     /** Federated modal slug "<addon_key>.<action_key>"; see ActionModalDispatcher. */
     modal?: string
     placement?: 'row' | 'table' | 'create'
+    /**
+     * Optional addon this action depends on, stamped by the host only while it
+     * is NOT installed (served as `requires_addon`; read through
+     * resolveRequiresAddon). The action stays visible but locked: a click opens
+     * the "requires addon" dialog instead of executing.
+     */
+    requiresAddon?: RequiresAddon
 }

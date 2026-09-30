@@ -57,6 +57,7 @@ import { DynamicIcon, isLucideIconName } from './dynamic-icon'
 import { CollectionCell } from './collection-cell'
 import { isNilUuid, normalizeNilUuid } from './nil-uuid'
 import { useOptionsResolver } from './use-options-resolver'
+import { RequiresAddonLock, resolveRequiresAddon, useRequiresAddonLabel } from './requires-addon'
 import type { TableMetadata, ColumnDefinition } from './types'
 import { isColumnVisibleInTable } from './column-visibility'
 import type {
@@ -204,6 +205,36 @@ const CodeCell: React.FC<{ text: string; maxLength?: number }> = ({ text, maxLen
                 )}
             </button>
         </div>
+    )
+}
+
+/**
+ * One entry of the row "…" menu. An action gated by a missing optional addon
+ * (`requiresAddon`) stays listed with a lock + tooltip; the click still goes to
+ * `onAction`, whose shared handler (useDynamicRowActions) opens the
+ * requires-addon dialog instead of executing.
+ */
+export function RowActionMenuItem({
+    action,
+    label,
+    onSelect,
+}: {
+    action: any
+    label: React.ReactNode
+    onSelect: (e: React.MouseEvent) => void
+}) {
+    const requirement = resolveRequiresAddon(action)
+    const requiresAddonLabel = useRequiresAddonLabel()
+    return (
+        <DropdownMenuItem
+            onClick={onSelect}
+            title={requirement ? requiresAddonLabel(requirement) : undefined}
+            data-requires-addon={requirement?.key}
+        >
+            <DynamicIcon name={action.icon || 'Zap'} className="mr-2 h-4 w-4" />
+            {label}
+            {requirement && <RequiresAddonLock requirement={requirement} />}
+        </DropdownMenuItem>
     )
 }
 
@@ -1528,13 +1559,12 @@ export function makeDefaultGetDynamicColumns(
                                 {resolvedActions
                                     .filter((action) => isRowActionVisible(action, row.original))
                                     .map((action) => (
-                                        <DropdownMenuItem
+                                        <RowActionMenuItem
                                             key={action.key}
-                                            onClick={() => onAction && onAction(action.key, row.original)}
-                                        >
-                                            <DynamicIcon name={action.icon} className="mr-2 h-4 w-4" />
-                                            {translateMetadataLabel(action.label, t)}
-                                        </DropdownMenuItem>
+                                            action={action}
+                                            label={translateMetadataLabel(action.label, t)}
+                                            onSelect={() => onAction && onAction(action.key, row.original)}
+                                        />
                                     ))}
                             </DropdownMenuContent>
                         </DropdownMenu>

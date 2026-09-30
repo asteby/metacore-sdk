@@ -223,6 +223,17 @@ export {
     type UseDynamicRowActionsParams,
     type DynamicRowActions,
 } from './dynamic-row-actions'
+export {
+    resolveRequiresAddon,
+    setAddonInstallHandler,
+    getAddonInstallHandler,
+    requiresAddonName,
+    useRequiresAddonLabel,
+    RequiresAddonLock,
+    RequiresAddonDialog,
+    type RequiresAddon,
+    type RequiresAddonDialogProps,
+} from './requires-addon'
 export { ColorPickerField, DEFAULT_ROLE_COLOR, normalizeHex } from './color-picker-field'
 export {
     PermissionsManager,

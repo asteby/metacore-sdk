@@ -11,6 +11,8 @@
 //   view / edit            → host `onAction(action, row)` when provided (string
 //                            contract), else the built-in record dialog.
 //   link action            → navigate to the action's templated `linkUrl`.
+//   requiresAddon          → opens the "requires addon" dialog; the action is
+//                            never dispatched (no modal, no backend call).
 //   custom (modal/fields/
 //   confirm/executable)    → opens the ActionModal via the dispatcher.
 //   anything else          → host `onAction` + refresh (or just refresh).
@@ -34,7 +36,8 @@ import {
 import { useApi } from './api-context'
 import { ActionModalDispatcher } from './action-modal-dispatcher'
 import { DynamicRecordDialog } from './dialogs/dynamic-record'
-import type { TableMetadata, ActionMetadata } from './types'
+import { RequiresAddonDialog, resolveRequiresAddon } from './requires-addon'
+import type { TableMetadata, ActionMetadata, RequiresAddon } from './types'
 
 export interface UseDynamicRowActionsParams {
     /** Model key as registered on the backend (e.g. "issue"). */
@@ -106,7 +109,13 @@ export function useDynamicRowActions({
         record: any | null
     }>({ open: false, action: null, record: null })
 
+    const [missingAddon, setMissingAddon] = useState<RequiresAddon | null>(null)
+
     const handleInternalAction = useCallback(async (action: string, row: any) => {
+        // A missing optional addon gates the action BEFORE any other routing:
+        // it must not reach the dispatcher, the host, or the backend.
+        const requirement = resolveRequiresAddon(metadata?.actions?.find((a) => a.key === action))
+        if (requirement) { setMissingAddon(requirement); return }
         if (action === 'delete') { setRowToDelete(row); return }
         if (action === 'view' || action === 'edit') {
             if (onAction) await Promise.resolve(onAction(action, row))
@@ -200,6 +209,11 @@ export function useDynamicRowActions({
                     onSuccess={onRefresh}
                 />
             )}
+
+            <RequiresAddonDialog
+                requirement={missingAddon}
+                onOpenChange={(open: boolean) => !open && setMissingAddon(null)}
+            />
         </>
     )
 

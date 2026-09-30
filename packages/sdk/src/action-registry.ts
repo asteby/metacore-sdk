@@ -57,6 +57,12 @@ export interface ActionMetadata {
      *   "create"        — toolbar button that replaces the generic create button.
      */
     placement?: 'row' | 'table' | 'create'
+    /**
+     * Optional addon this action depends on, stamped by the host only while it
+     * is NOT installed (wire: `requires_addon`). The runtime keeps the action
+     * visible but locked and offers to install the addon instead of running it.
+     */
+    requiresAddon?: { key: string; name?: string; reason?: string }
 }
 
 export interface ActionModalProps {

@@ -25,7 +25,13 @@ import { useMetadataCache } from './metadata-cache'
 import { DynamicIcon } from './dynamic-icon'
 import { ActionModalDispatcher } from './action-modal-dispatcher'
 import { useCan, modelCapability } from './permissions-context'
-import type { ActionDefinition, ActionMetadata, TableMetadata } from './types'
+import {
+    RequiresAddonDialog,
+    RequiresAddonLock,
+    resolveRequiresAddon,
+    useRequiresAddonLabel,
+} from './requires-addon'
+import type { ActionDefinition, ActionMetadata, RequiresAddon, TableMetadata } from './types'
 
 export type ActionPlacement = 'row' | 'table' | 'create'
 
@@ -144,6 +150,8 @@ export function ModelActionToolbar({
         [all, can, model],
     )
     const [active, setActive] = useState<ActionMetadata | null>(null)
+    const [missingAddon, setMissingAddon] = useState<RequiresAddon | null>(null)
+    const requiresAddonLabel = useRequiresAddonLabel()
     const dataEndpoint = endpoint ?? `/data/${model}/me`
 
     if (surfaced.length === 0) return null
@@ -153,6 +161,9 @@ export function ModelActionToolbar({
             <div className={className ?? 'flex items-center gap-2'}>
                 {surfaced.map((a) => {
                     const isCreate = (a.placement ?? 'row') === 'create'
+                    // Locked while its optional addon is missing: still shown,
+                    // but a click explains + offers install instead of running.
+                    const requirement = resolveRequiresAddon(a)
                     return (
                         <Button
                             key={a.key}
@@ -162,12 +173,18 @@ export function ModelActionToolbar({
                                     ? `model.${model}.create`
                                     : `model.${model}.action.${a.key}`
                             }
+                            data-requires-addon={requirement?.key}
+                            title={requirement ? requiresAddonLabel(requirement) : undefined}
                             onClick={() => {
+                                if (requirement) {
+                                    setMissingAddon(requirement)
+                                    return
+                                }
                                 onActionIntent?.(a)
                                 setActive(toActionMetadata(a))
                             }}
-                            onMouseEnter={() => onActionIntent?.(a)}
-                            onFocus={() => onActionIntent?.(a)}
+                            onMouseEnter={() => !requirement && onActionIntent?.(a)}
+                            onFocus={() => !requirement && onActionIntent?.(a)}
                             style={a.color && !isCreate ? { borderColor: a.color, color: a.color } : undefined}
                         >
                             <DynamicIcon name={a.icon || (isCreate ? 'Plus' : 'Zap')} className="mr-2 h-4 w-4" />
@@ -179,6 +196,7 @@ export function ModelActionToolbar({
                                 already-localized label untouched; humanizeLastSegment avoids
                                 flashing the full dotted key when the bundle is still in flight. */}
                             {t(a.label, { defaultValue: humanizeActionLabel(a.label) })}
+                            {requirement && <RequiresAddonLock requirement={requirement} />}
                         </Button>
                     )
                 })}
@@ -200,6 +218,13 @@ export function ModelActionToolbar({
                     }}
                 />
             )}
+
+            <RequiresAddonDialog
+                requirement={missingAddon}
+                onOpenChange={(open) => {
+                    if (!open) setMissingAddon(null)
+                }}
+            />
         </>
     )
 }

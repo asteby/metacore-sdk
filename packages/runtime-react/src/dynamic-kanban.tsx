@@ -96,7 +96,6 @@ import {
     CardContent,
     DropdownMenu,
     DropdownMenuContent,
-    DropdownMenuItem,
     DropdownMenuTrigger,
     Input,
     Popover,
@@ -161,6 +160,7 @@ import {
     formatAggregateTotal,
     isRowActionVisible,
     relationKeyFor,
+    RowActionMenuItem,
 } from './dynamic-columns'
 import { useCan, usePermissionsActive, resolveRowActions } from './permissions-context'
 import { useDynamicRowActions } from './dynamic-row-actions'
@@ -3113,16 +3113,15 @@ function KanbanCard({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
                     {visibleActions.map((a) => (
-                        <DropdownMenuItem
+                        <RowActionMenuItem
                             key={a.key}
-                            onClick={(e) => {
+                            action={a}
+                            label={a.label}
+                            onSelect={(e) => {
                                 e.stopPropagation()
                                 onAction(a.key, card)
                             }}
-                        >
-                            <DynamicIcon name={a.icon || 'Zap'} className="mr-2 h-4 w-4" />
-                            {a.label}
-                        </DropdownMenuItem>
+                        />
                     ))}
                 </DropdownMenuContent>
             </DropdownMenu>
