@@ -1,5 +1,17 @@
 # @asteby/metacore-runtime-react
 
+## 45.3.0
+
+### Minor Changes
+
+- ce3dd3b: Action modal: `PrefillSpec.fromField` — a line-items grid can be seeded from the document picked in a sibling ref field. A `create`-placed action (no record) such as «Recibir OC» now fills its rows as soon as the user selects the purchase order: `$prefillFromRecord` names a one_to_many relation of the referenced model, `map`/`remaining`/`lock` work as in row actions, and clearing the selection empties the grid. Exports `prefillFromFieldRequests` and `prefillFromFieldRelationRequest`.
+- 6ffdaa9: Motivo obligatorio al eliminar/cancelar (PER-4). Un modelo que declara `reason_required` en su manifest responde 422 `errors.reason` a un DELETE o acción sin motivo; `useReasonPrompt().run({ request })` prueba la petición, y si el servidor lo exige pregunta una vez (`ReasonPromptDialog`) y reintenta con `reason`. Ya cableado en la eliminación de fila, la eliminación masiva (un motivo para el lote) y los modales de acción (confirmación y formulario). `ActivityEvent.reason` se pinta en `ActivityDiff` («Motivo: …»). `useAddonSettings`/`useUpdateAddonSettings` aceptan `branchId` para leer/escribir los ajustes por sucursal (`settings[].scope: branch`, POS-1); `addonSettingsKey`/`addonSettingsUrl` lo respetan.
+- cfafe4e: `ReturnWizard` («Devolver mercancía», benchmark DEV-2): un solo asistente para POS, Pedido, Factura, RMA y OT. Renglones con tope vendido − devuelto, condición vendible/defectuoso → stock/merma/garantía, paso «Recibir» dentro del asistente cuando no hay almacén (PIT-021), reembolso con `RefundDestination` (nuevo destino `transfer`), estados de RMA con motivo obligatorio al rechazar/cancelar (`canTransitionRma`) y NC CFDI con relación 01/03 automática (`creditNoteRelation`). Helpers puros: `computeReturnTotals`, `validateReturnChoices`, `serializeReturn`, `returnSteps`.
+
+### Patch Changes
+
+- 0eb49fb: DynamicRelation: una sub-tabla cuya carga falla (403/500) ya no se muestra como «No hay registros relacionados»; muestra «Sin permiso…» o un aviso de error (strings opcionales `forbiddenState` / `errorState`). La columna `tags` con objetos usa su `label`/`name`/`key` en lugar de «[object Object]» (PIT-045, PIT-049).
+
 ## 45.2.0
 
 ### Minor Changes
