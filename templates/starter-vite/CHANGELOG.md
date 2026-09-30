@@ -1,5 +1,12 @@
 # @asteby/metacore-starter-vite
 
+## 0.1.278
+
+### Patch Changes
+
+- Updated dependencies [6c9c85f]
+  - @asteby/metacore-runtime-react@45.4.0
+
 ## 0.1.277
 
 ### Patch Changes
