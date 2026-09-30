@@ -1,5 +1,16 @@
 # @asteby/metacore-runtime-react
 
+## 45.0.0
+
+### Minor Changes
+
+- 42c0e43: Acciones que requieren un addon opcional (`requiresAddon`). Cuando el host marca una acción con `requires_addon` / `requiresAddon` (`{ key, name?, reason? }`), la acción sigue visible pero bloqueada en el menú de fila (tabla y kanban) y en `ModelActionToolbar`: candado + tooltip "Requiere «name»". Al hacer clic no abre el dispatcher, el modal federado ni llama al backend; abre un diálogo "Esta acción requiere «name»" con "Instalar" y "Cancelar". "Instalar" invoca el handler registrado con `setAddonInstallHandler(fn)` o, si no hay, navega con el router a `/marketplace/<key>`. Nuevas exportaciones: `resolveRequiresAddon`, `setAddonInstallHandler`, `getAddonInstallHandler`, `requiresAddonName`, `useRequiresAddonLabel`, `RequiresAddonLock`, `RequiresAddonDialog`, tipo `RequiresAddon`.
+
+### Patch Changes
+
+- Updated dependencies [42c0e43]
+  - @asteby/metacore-sdk@3.11.0
+
 ## 44.0.0
 
 ### Minor Changes

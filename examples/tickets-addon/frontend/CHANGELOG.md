@@ -1,5 +1,12 @@
 # @metacore-addons/tickets
 
+## 18.0.0
+
+### Patch Changes
+
+- Updated dependencies [42c0e43]
+  - @asteby/metacore-sdk@3.11.0
+
 ## 17.0.0
 
 ### Patch Changes
