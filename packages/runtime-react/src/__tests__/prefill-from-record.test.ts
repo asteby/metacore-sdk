@@ -144,3 +144,72 @@ describe('applyPrefillLock', () => {
         expect(applyPrefillLock(field)).toBe(field)
     })
 })
+
+// ---- fromField: rows seeded from a document picked in a sibling field --------
+
+import { prefillFromFieldRequests, prefillFromFieldRelationRequest } from '../action-modal-dispatcher'
+
+const receiptFields = (): ActionFieldDef[] => [
+    { key: 'purchase_order_id', label: 'OC', type: 'dynamic_select', ref: 'PurchaseOrder' } as ActionFieldDef,
+    receiveField({
+        key: 'items',
+        default: {
+            $prefillFromRecord: 'items',
+            fromField: 'purchase_order_id',
+            map: { product_id: 'product_variant_id', ordered: 'qty', received_so_far: 'qty_received' },
+            remaining: { target: 'qty_received', of: 'qty', minus: 'qty_received' },
+        },
+    } as Partial<ActionFieldDef>),
+]
+
+describe('prefillFromFieldRequests', () => {
+    it('lee el id del campo hermano y el modelo de su ref', () => {
+        const reqs = prefillFromFieldRequests(receiptFields(), { purchase_order_id: 'po-1' })
+        expect(reqs).toHaveLength(1)
+        expect(reqs[0]).toMatchObject({ fieldKey: 'items', refModel: 'PurchaseOrder', refId: 'po-1' })
+    })
+
+    it('desenvuelve {value,id} y devuelve refId vacío sin selección', () => {
+        expect(prefillFromFieldRequests(receiptFields(), { purchase_order_id: { id: 'po-2', label: 'OC-2' } })[0].refId).toBe('po-2')
+        expect(prefillFromFieldRequests(receiptFields(), { purchase_order_id: '' })[0].refId).toBe('')
+        expect(prefillFromFieldRequests(receiptFields(), {})[0].refId).toBe('')
+    })
+
+    it('ignora specs sin fromField o cuyo campo hermano no tiene ref', () => {
+        const noFrom = receiveField({ default: { $prefillFromRecord: 'items' } } as Partial<ActionFieldDef>)
+        expect(prefillFromFieldRequests([noFrom], {})).toEqual([])
+        const fields = receiptFields()
+        ;(fields[0] as any).ref = undefined
+        expect(prefillFromFieldRequests(fields, { purchase_order_id: 'x' })).toEqual([])
+    })
+})
+
+describe('prefillFromFieldRelationRequest', () => {
+    const rels = [
+        { name: 'goods_receipts', kind: 'one_to_many', through: 'GoodsReceipt', foreign_key: 'purchase_order_id' },
+        { name: 'items', kind: 'one_to_many', through: 'PurchaseOrderItem', foreign_key: 'purchase_order_id' },
+    ]
+    it('arma el request de hijos por la relación de la OC elegida', () => {
+        const [req] = prefillFromFieldRequests(receiptFields(), { purchase_order_id: 'po-1' })
+        expect(prefillFromFieldRelationRequest(req, rels)).toEqual({
+            endpoint: '/data/PurchaseOrderItem',
+            params: { f_purchase_order_id: 'eq:po-1', per_page: 200 },
+        })
+    })
+    it('null sin selección o si la relación no existe', () => {
+        const [empty] = prefillFromFieldRequests(receiptFields(), {})
+        expect(prefillFromFieldRelationRequest(empty, rels)).toBeNull()
+        const [req] = prefillFromFieldRequests(receiptFields(), { purchase_order_id: 'po-1' })
+        expect(prefillFromFieldRelationRequest(req, [])).toBeNull()
+    })
+    it('las filas resultantes descartan lo ya recibido por completo (remaining)', () => {
+        const [req] = prefillFromFieldRequests(receiptFields(), { purchase_order_id: 'po-1' })
+        const rows = buildPrefillRows(req.spec, {
+            items: [
+                { product_variant_id: 'a', qty: 10, qty_received: 4 },
+                { product_variant_id: 'b', qty: 5, qty_received: 5 },
+            ],
+        })
+        expect(rows).toEqual([{ product_id: 'a', ordered: 10, received_so_far: 4, qty_received: 6 }])
+    })
+})

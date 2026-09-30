@@ -14,7 +14,7 @@
 //
 // The host injects its axios-like client via <ApiProvider>; we no longer
 // depend on a bundler alias to `@/lib/api`.
-import { useState, useEffect, useMemo, useSyncExternalStore } from 'react'
+import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
     Dialog,
@@ -112,6 +112,16 @@ export interface PrefillSpec {
      * flow (which carries no prefill spec); only the prefilled action locks them.
      */
     lock?: string[]
+    /**
+     * Key of a SIBLING action field (a dynamic_select with a `ref`) whose selected
+     * value is the id of the document the rows are seeded from. Without it the
+     * rows come from the record the action was opened on (row actions); with it
+     * a `create`-placed action — which has no record — seeds its grid as soon as
+     * the user picks the source document (e.g. a goods receipt picking its
+     * purchase order). `$prefillFromRecord` then names a one_to_many relation of
+     * the REFERENCED model. Clearing the selection empties the grid.
+     */
+    fromField?: string
 }
 
 export function isPrefillSpec(v: unknown): v is PrefillSpec {
@@ -220,6 +230,64 @@ export function prefillRelationRequests(
         })
     }
     return out
+}
+
+// ---- prefill lines from a document picked in a sibling field ----------------
+//
+// A create-placed action has no record, so `$prefillFromRecord` alone can only
+// seed an empty grid. With `fromField` the spec follows a sibling ref field:
+// when the user selects the source document the modal loads its relation rows
+// and seeds the grid (see PrefillSpec.fromField).
+
+export interface PrefillFromFieldRequest {
+    fieldKey: string
+    spec: PrefillSpec
+    /** Model key the sibling field references (its `ref`). */
+    refModel: string
+    /** Selected document id; '' when nothing is selected (grid must clear). */
+    refId: string
+}
+
+export function prefillFromFieldRequests(
+    fields: ActionFieldDef[] | undefined,
+    formData: Record<string, any>,
+): PrefillFromFieldRequest[] {
+    const out: PrefillFromFieldRequest[] = []
+    if (!fields) return out
+    for (const field of fields) {
+        if (!isLineItemsField(field)) continue
+        const spec = lineItemsDefault(field)
+        if (!isPrefillSpec(spec) || !spec.fromField) continue
+        const source = fields.find((f) => f.key === spec.fromField)
+        const refModel = source ? getFieldRef(source) : undefined
+        if (!refModel) continue
+        const raw = unwrapRecordScalar(formData?.[spec.fromField])
+        const refId = raw === undefined || raw === null ? '' : String(raw)
+        out.push({ fieldKey: field.key, spec, refModel, refId })
+    }
+    return out
+}
+
+// prefillFromFieldRelationRequest resolves the child-rows request for a
+// selected document, from the referenced model's declared relations. Null when
+// the relation is missing or not a plain one_to_many.
+export function prefillFromFieldRelationRequest(
+    req: PrefillFromFieldRequest,
+    relations: Array<{ name?: string; kind?: string; through?: string; foreign_key?: string; scope?: Record<string, unknown> }>,
+): { endpoint: string; params: Record<string, string | number> } | null {
+    if (!req.refId) return null
+    const rel = (relations || []).find(
+        (r) => r?.name === req.spec.$prefillFromRecord && (r.kind ?? 'one_to_many') === 'one_to_many',
+    )
+    if (!rel?.through || !rel.foreign_key) return null
+    const scope: Record<string, string> = {}
+    for (const [k, v] of Object.entries(rel.scope ?? {})) {
+        if (v !== undefined && v !== null) scope[k] = String(v)
+    }
+    return {
+        endpoint: `/data/${rel.through}`,
+        params: { ...buildRelationFilterParams(rel.foreign_key, req.refId, scope), per_page: 200 },
+    }
 }
 
 // ---- scalar prefill from the acted-on record --------------------------------
@@ -849,6 +917,60 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
             cancelled = true
         }
     }, [open, action.fields, record, relations, api])
+
+    // Lines seeded from a document picked in a sibling field (PrefillSpec.fromField).
+    // Re-runs only when the picked id changes; each pick loads the referenced
+    // model's relations (cached per model for the life of the modal) and then
+    // the child rows.
+    const fromFieldReqs = useMemo(
+        () => prefillFromFieldRequests(action.fields, formData),
+        [action.fields, formData],
+    )
+    const fromFieldSig = fromFieldReqs.map((r) => `${r.fieldKey}=${r.refModel}:${r.refId}`).join('|')
+    const refRelationsCache = useRef<Map<string, Promise<any[]>>>(new Map())
+    useEffect(() => {
+        if (!open || fromFieldReqs.length === 0) return
+        let cancelled = false
+        for (const req of fromFieldReqs) {
+            if (!req.refId) {
+                setFormData((prev: Record<string, any>) =>
+                    Array.isArray(prev[req.fieldKey]) && prev[req.fieldKey].length === 0
+                        ? prev
+                        : { ...prev, [req.fieldKey]: [] },
+                )
+                continue
+            }
+            let relsPromise = refRelationsCache.current.get(req.refModel)
+            if (!relsPromise) {
+                relsPromise = api
+                    .get(`/metadata/table/${req.refModel}`)
+                    .then((res: any) => {
+                        const rels = res?.data?.relations ?? res?.data?.data?.relations ?? []
+                        return Array.isArray(rels) ? rels : []
+                    })
+                    .catch(() => [] as any[])
+                refRelationsCache.current.set(req.refModel, relsPromise)
+            }
+            relsPromise
+                .then((rels) => {
+                    const call = prefillFromFieldRelationRequest(req, rels)
+                    if (!call) return
+                    return api.get(call.endpoint, { params: call.params }).then((res: any) => {
+                        if (cancelled) return
+                        const rows = res?.data?.data ?? res?.data ?? []
+                        if (!Array.isArray(rows)) return
+                        const built = buildPrefillRows(req.spec, { [req.spec.$prefillFromRecord]: rows })
+                        setFormData((prev: Record<string, any>) => ({ ...prev, [req.fieldKey]: built }))
+                    })
+                })
+                .catch(() => {})
+        }
+        return () => {
+            cancelled = true
+        }
+        // fromFieldSig captures every dependency of fromFieldReqs that matters.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, fromFieldSig, api])
 
     const updateField = (key: string, value: any) => {
         setFormData((prev: Record<string, any>) => ({ ...prev, [key]: value }))
