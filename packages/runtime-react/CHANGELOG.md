@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 46.2.0
+
+### Minor Changes
+
+- e61ec17: `InspectionChecklist` compartido (benchmark §7, TAL-4/TAL-5): plantilla de puntos con semáforo, profundidad de dibujo por llanta, fotos y video por punto (subida por el host vía `onUpload`), recomendación → renglón del presupuesto y encabezado de recepción (kilometraje, combustible, daños). Incluye la lógica pura (`treadStatus`, `summarizeInspection`, `validateInspection`, `serializeInspectionPoints`, `parseInspectionPoints`, `recommendationsToLines`) y la entrada en `BUSINESS_COMPONENTS`.
+
 ## 46.1.0
 
 ### Minor Changes
