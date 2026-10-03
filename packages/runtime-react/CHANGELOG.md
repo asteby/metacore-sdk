@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 46.2.3
+
+### Patch Changes
+
+- ab15b46: El campo de fecha de un diálogo de acción marca aria-invalid cuando el servidor rechaza ese campo.
+
 ## 46.2.2
 
 ### Patch Changes
