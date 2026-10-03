@@ -75,5 +75,20 @@ describe('formatDateCell', () => {
             expect(out!.display).not.toMatch(/\d{1,2}:\d{2}/)
             expect(out!.title).toBeUndefined()
         })
+
+        // PIT-025: invoice_date is a timestamptz shown with the day-only renderer.
+        // 2026-09-30T00:41:06Z is the 29th (18:41) in Mexico City: an evening
+        // invoice must not roll to the 30th.
+        it('renders a `date` column that holds an INSTANT in the org zone, not UTC', () => {
+            const out = formatDateCell('2026-09-30T00:41:06Z', 'date', enUS, 'America/Mexico_City')
+            expect(out!.display).toMatch(/September 29, 2026/)
+            expect(out!.title).toBeUndefined()
+        })
+
+        it('keeps UTC-midnight and YYYY-MM-DD as calendar days', () => {
+            for (const v of ['2026-09-27T00:00:00Z', '2026-09-27T00:00:00.000Z', '2026-09-27']) {
+                expect(formatDateCell(v, 'date', enUS, 'America/Mexico_City')!.display).toMatch(/September 27, 2026/)
+            }
+        })
     })
 })

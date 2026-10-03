@@ -15,7 +15,7 @@
 import * as React from 'react'
 import { ColumnDef } from '@tanstack/react-table'
 import { format, type Locale } from 'date-fns'
-import { parseCalendarDate } from './calendar-date'
+import { isCalendarDayValue, parseCalendarDate } from './calendar-date'
 import { es, enUS } from 'date-fns/locale'
 import { Calendar, Check, Copy, Mail, Minus, MoreHorizontal } from 'lucide-react'
 import {
@@ -525,10 +525,13 @@ export function formatDateCell(
                 }).format(date),
             }
         }
-        // Pure calendar date: pin to UTC so it never shifts across zones.
+        // Pure calendar date: pin to UTC so it never shifts across zones. A value
+        // with a real time of day is an instant even under a day-only renderer
+        // (timestamptz columns like invoice_date): show ITS day in the org zone.
+        const calendarDay = typeof value !== 'string' || isCalendarDayValue(value)
         return {
             display: new Intl.DateTimeFormat(localeTag, {
-                timeZone: 'UTC',
+                timeZone: calendarDay ? 'UTC' : timeZone,
                 dateStyle: 'long',
             }).format(date),
         }

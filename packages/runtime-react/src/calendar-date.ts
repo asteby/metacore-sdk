@@ -14,3 +14,15 @@ export function parseCalendarDate(v: unknown): Date | undefined {
     const d = new Date(s)
     return isNaN(d.getTime()) ? undefined : d
 }
+
+/**
+ * True when a serialized value is a pure CALENDAR DAY: `YYYY-MM-DD`, or that day at
+ * exactly UTC midnight (how the backend serves a `date` column). Anything with a
+ * real time of day is an INSTANT: a `timestamptz` shown with a day-only renderer
+ * must be read in the organization's zone, or an evening invoice (29 Sep 19:41 in
+ * Mexico City = 30 Sep 00:41Z) shows as the 30th (PIT-025).
+ */
+export function isCalendarDayValue(v: unknown): boolean {
+    if (typeof v !== 'string') return false
+    return /^\d{4}-\d{2}-\d{2}(?:[T ]00:00:00(?:\.0+)?(?:Z|\+00:00)?)?$/.test(v.trim())
+}
