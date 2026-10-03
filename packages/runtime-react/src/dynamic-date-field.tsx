@@ -27,6 +27,8 @@ export interface DynamicDateFieldProps {
     field: ActionFieldDef
     value: any
     onChange: (v: any) => void
+    /** Server or client validation failed for this field (PIT-046). */
+    invalid?: boolean
 }
 
 const toDate = parseCalendarDate
@@ -49,7 +51,7 @@ function label(d: Date | undefined): string {
     }
 }
 
-export function DynamicDateField({ field, value, onChange }: DynamicDateFieldProps) {
+export function DynamicDateField({ field, value, onChange, invalid }: DynamicDateFieldProps) {
     const [open, setOpen] = useState(false)
     const selected = toDate(value)
 
@@ -61,7 +63,11 @@ export function DynamicDateField({ field, value, onChange }: DynamicDateFieldPro
                     variant="outline"
                     id={field.key}
                     data-empty={!selected}
-                    className="w-full justify-start text-start font-normal data-[empty=true]:text-muted-foreground"
+                    aria-invalid={invalid || undefined}
+                    className={
+                        'w-full justify-start text-start font-normal data-[empty=true]:text-muted-foreground' +
+                        (invalid ? ' border-destructive ring-1 ring-destructive/30' : '')
+                    }
                 >
                     <CalendarIcon className="mr-2 size-4 shrink-0 opacity-50" />
                     <span className="truncate">

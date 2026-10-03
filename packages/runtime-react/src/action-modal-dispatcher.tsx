@@ -1501,7 +1501,7 @@ function renderField(
         case 'date':
             // Modern shadcn Calendar in a Popover (portaled, never clipped by the
             // modal) instead of the native, dated, easily-cut <input type=date>.
-            return <DynamicDateField field={field} value={value} onChange={onChange} />
+            return <DynamicDateField field={field} value={value} onChange={onChange} invalid={invalid} />
         default:
             return <Input id={field.key} type={field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : 'text'} value={value || ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => onChange(e.target.value)} placeholder={field.placeholder} aria-invalid={invalid || undefined} className={invalidCls || undefined} />
     }
