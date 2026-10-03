@@ -718,6 +718,9 @@ function ManyToManyRelation({
     const [pivotRows, setPivotRows] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [syncing, setSyncing] = useState(false)
+    // Same distinction as the 1:N sub-table (PIT-045): a 403 is not "no rows",
+    // and an empty pivot is not "sin permiso".
+    const [fetchErrorStatus, setFetchErrorStatus] = useState<number | null>(null)
 
     // Canonical path: SDK options resolver. Only fires when no legacy
     // override is set. The hook is a no-op when `useResolver` is false.
@@ -744,6 +747,7 @@ function ManyToManyRelation({
             if (!useResolver) tasks.push(api.get(legacyTargetPath))
             const results = await Promise.all(tasks)
             const pivotRes = results[0] as { data: ApiResponse<any[]> }
+            setFetchErrorStatus(null)
             if (pivotRes.data.success) setPivotRows(pivotRes.data.data || [])
             let cursor = 1
             if (!targetMeta) {
@@ -759,6 +763,7 @@ function ManyToManyRelation({
             }
         } catch (err) {
             console.error('DynamicRelation m2m fetch error', err)
+            setFetchErrorStatus((err as { response?: { status?: number } })?.response?.status ?? 0)
         } finally {
             setLoading(false)
         }
@@ -840,6 +845,12 @@ function ManyToManyRelation({
 
             {(loading || (useResolver && resolved.loading)) ? (
                 <Skeleton className="h-10 w-full" />
+            ) : fetchErrorStatus !== null ? (
+                <div className="text-center text-sm text-muted-foreground py-8 border rounded-md bg-muted/30">
+                    {fetchErrorStatus === 403
+                        ? (labels.forbiddenState ?? 'Sin permiso para ver estos registros.')
+                        : (labels.errorState ?? 'No se pudieron cargar los registros relacionados.')}
+                </div>
             ) : options.length === 0 ? (
                 <div className="text-center text-sm text-muted-foreground py-8 border rounded-md bg-muted/30">
                     {labels.emptyState}
