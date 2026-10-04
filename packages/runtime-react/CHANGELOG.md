@@ -1,5 +1,30 @@
 # @asteby/metacore-runtime-react
 
+## 47.0.0
+
+### Minor Changes
+
+- 4371f2c: Diálogos de acción: resultado de timbrado y errores del servidor.
+
+  - #1024 (FAC-3 / PIT-051): nuevo `CfdiStampPanel` / `CfdiStampResultDialog` / `extractStampResult`. Cuando la acción responde con `fiscal_uuid`, `pdf_url` y/o `xml_url`, el diálogo muestra el UUID como texto y enlaces «Descargar PDF» / «Descargar XML» en lugar del JSON. Sin esas claves no se inventa un resultado fiscal.
+  - #1023 (PIT-046): los diálogos de acción (genérico, wizard y confirmación) pintan un `FormErrorBanner` dentro del diálogo con el 422 (`errors` por campo) o el mensaje y causa de un 500, y permanecen abiertos.
+
+- 4371f2c: FAC-12 (#1022): alta guiada por tipo de documento. Nuevo `DocumentFormDialog` y `resolveDocumentForms`: cuando el metadata de la tabla (o la prop `documentForms` de `DynamicCRUDPage`) trae `document_forms`, «Crear» muestra tarjetas de tipo (Factura / Nota de crédito / REP / Global / Traslado…) y, al elegir, los campos de ese tipo y un paso de renglones con `DocumentLinesGrid`; un solo tipo se salta el selector. Escribe el valor del tipo en `type_field`, serializa los renglones con `serializeLineItems`, muestra los 422 (banner + campos) dentro del diálogo y emite el evento de mutación para refrescar la lista. Sin manifest, el alta genérica no cambia. El SDK no embebe catálogos SAT: campos y valores los sirve el kernel o el addon. Nuevos tipos: `DocumentFormsManifest`, `DocumentFormType`, `DocumentFormLines`, `TableMetadata.document_forms`.
+- 4371f2c: PIT-044: el menú lateral se filtra por los permisos efectivos del rol. `@asteby/metacore-ui` agrega `filterNavGroups`, `NavLinkItem.requires` y la prop `isItemVisible` de `AppSidebar`; `@asteby/metacore-runtime-react` agrega `useNavItemVisible`, `isNavItemAllowed`, `capabilityForNavItem` (una entrada `/m/<modelo>` exige `<modelo>.index`; las demás rutas no se bloquean) y `useNavigation` respeta `NavItem.requires`; el `AppSidebar` de starter-core lo aplica. Sin `PermissionsProvider` (o con `isAdmin`) no se oculta nada.
+- 4371f2c: Las listas se refrescan tras crear, editar o borrar (#1020). `DynamicRecordDialog` y `ActionModalDispatcher` (componente federado, wizard, formulario genérico y confirmación) emiten el evento `metacore:record-mutated` con el modelo; `DynamicTable` y `DynamicKanban` vuelven a pedir los datos cuando el modelo coincide (sin distinguir mayúsculas). Nuevos exports: `emitRecordMutation`, `subscribeRecordMutations`, `useRecordMutationTick`.
+- 4371f2c: Tres componentes de negocio compartidos:
+
+  - `VehiclePicker` (#1025): selector controlado de vehículo con búsqueda por placa o VIN y alta rápida (`CreateRecordDialog`), mismo estilo que `CustomerPicker`; sin `PermissionsProvider` no bloquea la UI.
+  - `RelateDocuments` (#1026): relaciona uno o más documentos origen con un tipo de relación (`related_document_id`, `relation_type`), muestra UUID/folio; los tipos llegan por prop (sin catálogos fiscales embebidos).
+  - `PrintSendDialog` (#1027): imprimir (URL de PDF del host) o enviar por `onSend(canal, destino, documento)`; sin integración de mensajería.
+
+### Patch Changes
+
+- 4371f2c: Roles y permisos (#1021): «Permisos generales» deja de ser una columna de tarjetas junto al rol y pasa a ser un grupo sintético del combobox de módulos; al elegirlo se editan en la misma grilla de dos columnas que las acciones de un módulo, y el conteo de concedidos los incluye. Nuevo `generalPermissionsModule`.
+- 4371f2c: Auditoría Ronda D: «Descargar Factura CFDI» no daba ninguna señal. `usePrintDocument` ahora muestra un toast de progreso, uno de éxito y, si falla, el motivo que responde el servidor (también cuando el cuerpo llega como Blob); la promesa sigue rechazando. `feedback: false` lo silencia y `PrintDocumentButton` deja el toast de error al llamador cuando pasa `onError`.
+- Updated dependencies [4371f2c]
+  - @asteby/metacore-ui@2.24.0
+
 ## 46.4.0
 
 ### Minor Changes

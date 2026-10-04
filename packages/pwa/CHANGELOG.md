@@ -1,5 +1,12 @@
 # @asteby/metacore-pwa
 
+## 0.6.13
+
+### Patch Changes
+
+- 4371f2c: Auditoría Ronda D: los avisos persistentes (Instalar App, Actualización, permiso de notificaciones) ya no se quedan encima de los diálogos abiertos ni tapan sus campos y botones. Se retiran mientras hay un diálogo abierto y vuelven al cerrarlo (si el usuario no los descartó). Nuevos exports: `useModalOpen`, `hasOpenModal`.
+  - @asteby/metacore-notifications@36.0.0
+
 ## 0.6.12
 
 ### Patch Changes
