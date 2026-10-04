@@ -37,6 +37,7 @@ import { ExportDialog } from './dialogs/export'
 import { ImportDialog } from './dialogs/import'
 import { getModelExtension } from './model-extension-registry'
 import { ModelActionToolbar } from './model-action-toolbar'
+import { resolveListPrimaryAction } from './list-primary-action'
 import { useCan, modelCapability } from './permissions-context'
 import type { TableMetadata } from './types'
 
@@ -159,10 +160,17 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
     }, [title])
 
     const enableCRUD = metadata?.enableCRUDActions ?? false
-    // A "create"-placement action ships a custom create experience — it
-    // replaces the generic create button (the ModelActionToolbar renders it).
-    const hasCreateAction = metadata?.actions?.some((a) => a.placement === 'create') ?? false
-    const effectiveHideCreate = hideCreate || ext?.hideCreate || hasCreateAction
+    // Una sola primaria: placement create, replaces_create, create_mode o la
+    // extensión del modelo ocultan el Crear genérico. El shell de ops debe
+    // usar el mismo resolveListPrimaryAction.
+    const primary = resolveListPrimaryAction({
+        enableCRUD,
+        canCreate: metadata?.canCreate,
+        hideCreate: hideCreate || ext?.hideCreate,
+        createMode: ext?.createMode ?? metadata?.create_mode,
+        primaryActionKey: ext?.primaryActionKey,
+        actions: metadata?.actions,
+    })
     const effectiveHideExport = hideExport || ext?.hideExport
     const effectiveHideImport = hideImport || ext?.hideImport
     // Refresh defaults to hidden in the page header — <DynamicTable> ships
@@ -174,7 +182,7 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
     // (useCan defaults to always-true), in which case create/export/import
     // require `lowercase(model).create|export|import`.
     const can = useCan()
-    const showCreate = enableCRUD && !effectiveHideCreate && can(modelCapability(model, 'create'))
+    const showCreate = primary.showGenericCreate && can(modelCapability(model, 'create'))
     const showImport = enableCRUD && !effectiveHideImport && can(modelCapability(model, 'import'))
     const showExport = !effectiveHideExport && can(modelCapability(model, 'export'))
     const showRefresh = !effectiveHideRefresh
@@ -239,11 +247,13 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
                             model={model}
                             endpoint={dataEndpoint}
                             actions={metadata?.actions}
+                            primaryActionKey={ext?.primaryActionKey}
                             onChange={handleRefresh}
                         />
                         {showCreate && (
                             <button
                                 type='button'
+                                data-primary='true'
                                 onClick={() => setOpenCreate(true)}
                                 className='inline-flex items-center gap-2 h-9 px-3 rounded-md bg-primary text-primary-foreground hover:opacity-90 text-sm font-medium'
                             >

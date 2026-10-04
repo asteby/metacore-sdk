@@ -32,6 +32,7 @@ import {
     useRequiresAddonLabel,
 } from './requires-addon'
 import type { ActionDefinition, ActionMetadata, RequiresAddon, TableMetadata } from './types'
+import { resolveListPrimaryAction } from './list-primary-action'
 
 export type ActionPlacement = 'row' | 'table' | 'create'
 
@@ -58,6 +59,12 @@ export interface ModelActionToolbarProps {
      * lazy load without blocking first paint of the list page.
      */
     onActionIntent?: (action: ActionDefinition) => void
+    /**
+     * Acción que queda como único botón primario (`data-primary`). El resto de
+     * las que reclaman el alta bajan a `outline`. Lo resuelve igual
+     * `resolveListPrimaryAction`.
+     */
+    primaryActionKey?: string
 }
 
 const DEFAULT_PLACEMENTS: ActionPlacement[] = ['table', 'create']
@@ -139,6 +146,7 @@ export function ModelActionToolbar({
     onChange,
     className,
     onActionIntent,
+    primaryActionKey,
 }: ModelActionToolbarProps) {
     const { t } = useTranslation()
     const all = useModelActions(model, placements, actions)
@@ -153,6 +161,11 @@ export function ModelActionToolbar({
     const [missingAddon, setMissingAddon] = useState<RequiresAddon | null>(null)
     const requiresAddonLabel = useRequiresAddonLabel()
     const dataEndpoint = endpoint ?? `/data/${model}/me`
+    const primary = resolveListPrimaryAction({
+        enableCRUD: true,
+        primaryActionKey,
+        actions: surfaced,
+    })
 
     if (surfaced.length === 0) return null
 
@@ -160,16 +173,18 @@ export function ModelActionToolbar({
         <>
             <div className={className ?? 'flex items-center gap-2'}>
                 {surfaced.map((a) => {
-                    const isCreate = (a.placement ?? 'row') === 'create'
+                    const isPrimary = primary.primaryAction?.key === a.key
+                    const isCreate = isPrimary || (a.placement ?? 'row') === 'create'
                     // Locked while its optional addon is missing: still shown,
                     // but a click explains + offers install instead of running.
                     const requirement = resolveRequiresAddon(a)
                     return (
                         <Button
                             key={a.key}
-                            variant={isCreate ? 'default' : 'outline'}
+                            variant={isPrimary ? 'default' : 'outline'}
+                            data-primary={isPrimary ? 'true' : undefined}
                             data-aby-target={
-                                isCreate
+                                isPrimary
                                     ? `model.${model}.create`
                                     : `model.${model}.action.${a.key}`
                             }

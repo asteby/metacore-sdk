@@ -188,6 +188,14 @@ export {
     type ModelActionToolbarProps,
     type ActionPlacement,
 } from './model-action-toolbar'
+export {
+    resolveListPrimaryAction,
+    actionReplacesCreate,
+    type ListPrimaryActionInput,
+    type ListPrimaryActionResult,
+    type ListActionRef,
+    type CreateMode,
+} from './list-primary-action'
 export * from './addon-loader'
 export {
     PURGE_ADDON_MESSAGE,

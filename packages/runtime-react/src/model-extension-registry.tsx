@@ -24,6 +24,13 @@ export interface ModelExtension {
     headerExtras?: React.ComponentType<ModelExtensionProps>
     toolbarExtras?: React.ComponentType<ModelExtensionProps>
     hideCreate?: boolean
+    /**
+     * `hidden` quita el Crear genérico. `action` también, porque la acción del
+     * módulo (ver `primaryActionKey`) es la alta. `generic` lo deja.
+     */
+    createMode?: 'generic' | 'hidden' | 'action'
+    /** Acción de toolbar que queda como único botón primario y oculta el Crear genérico. */
+    primaryActionKey?: string
     hideExport?: boolean
     hideImport?: boolean
     hideRefresh?: boolean

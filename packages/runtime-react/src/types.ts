@@ -37,6 +37,13 @@ export interface TableMetadata {
     canImport?: boolean
     canCreate?: boolean
     /**
+     * Cómo se pinta el alta genérica. `generic` (o ausente) es el botón Crear.
+     * `hidden` lo quita. `action` lo quita porque el módulo trae la suya
+     * (`placement: create` o `replaces_create`). Lo sirve el kernel; un host
+     * también puede fijarlo con `ModelExtension.createMode` sin cambio de kernel.
+     */
+    create_mode?: 'generic' | 'hidden' | 'action'
+    /**
      * The model's spreadsheet-import declaration, served by the kernel: the
      * columns of the generated template and the headers accepted when parsing
      * a filled file back in. The kernel derives it from the model's form
@@ -702,6 +709,13 @@ export interface ActionDefinition {
      *   "create"        — toolbar button that replaces the generic create button.
      */
     placement?: 'row' | 'table' | 'create'
+    /**
+     * Esta acción de toolbar sustituye al Crear genérico aunque su `placement`
+     * sea `table`. El kernel tiene que reenviar el campo; si lo recorta, el
+     * host usa `ModelExtension.primaryActionKey` o `createMode`.
+     */
+    replaces_create?: boolean
+    replacesCreate?: boolean
     /**
      * Optional addon this action depends on, stamped by the host only while it
      * is NOT installed (served as `requires_addon`; read through
