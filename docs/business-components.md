@@ -20,6 +20,9 @@ Reglas comunes del contrato:
 | `PaymentCapture` | `PaymentTender[]` | `onChange`, `onSubmit(payload)` | prop `submitPermission` |
 | `RefundDestination` | `RefundAllocation[]` | `onChange`, `onValidate` | — |
 | `InspectionChecklist` | `InspectionPoint[]` (+ `InspectionHeader`) | `onChange`, `onHeaderChange`, `onUpload`, `onValidate`, `onAddToBudget` | — |
+| `VehiclePicker` | `VehicleResult \| null` | `onChange` | `<model>.create` (alta rápida) |
+| `RelateDocuments` | `RelatedDocument[]` | `onChange` | — |
+| `PrintSendDialog` | `document: PrintableDocument` | `onSend`, `onPrint`, `onOpenChange` | — |
 
 `BUSINESS_COMPONENTS` exporta esta tabla como datos.
 
@@ -106,3 +109,25 @@ await api.post(action, { points: serializeInspectionPoints(points) })   // únic
 ```
 
 Cada punto (`makeInspectionPoint`) trae `section`, `name`, `kind` (`check` | `tread` | `measure`), `status` (`pending | ok | attention | urgent`), `value`/`unit`, `notes`, `recommendation` + `quantity` × `unit_price` y `media[]` (fotos y video). La profundidad de dibujo (`tread`) fija el semáforo por `treadThresholds` (default rojo < 1.6 mm, amarillo < 3 mm); verde limpia la recomendación. `summarizeInspection` da conteos, el peor estado y el total recomendado; `recommendationsToLines(points, {approval})` vuelve las recomendaciones renglones del presupuesto (`LineItem`), filtrables por la respuesta del cliente. `readOnly` la muestra sin edición (inspección enviada o cerrada).
+
+### VehiclePicker
+
+Mismo contrato que `CustomerPicker`. Busca por placa o VIN (`search` lo implementa el host contra su índice), muestra el vehículo elegido y ofrece alta rápida con `CreateRecordDialog` del modelo (`model`, default `Vehicle`); lo creado se selecciona solo. Sin `PermissionsProvider` no se bloquea el alta (el backend autoriza). Pasa `createDefaults={{ customer_id }}` para ligar el alta al cliente ya elegido.
+
+```tsx
+<VehiclePicker value={vehicle} onChange={setVehicle} search={searchVehicles} createDefaults={{ customer_id: customer?.id }} />
+```
+
+### RelateDocuments
+
+Relaciona documentos origen con un tipo de relación. El valor es dato puro: `{ related_document_id, relation_type }` (más `uuid`/`folio`/`label` solo para mostrar). Los tipos llegan por `relationTypes` (el catálogo SAT lo aporta el addon, el SDK no lo embebe). `serializeRelatedDocuments(value)` deja solo los campos que viajan al servidor.
+
+```tsx
+<RelateDocuments value={rels} onChange={setRels} search={searchInvoices}
+  relationTypes={[{ value: '01', label: 'Nota de crédito de los documentos relacionados' }]} />
+```
+
+### PrintSendDialog
+
+Diálogo para imprimir o enviar un documento emitido. «Imprimir» abre `document.pdfUrl` (o llama `onPrint`); «Enviar» llama `onSend(channel, destination, document)` — el SDK no integra ningún proveedor de correo ni WhatsApp. Si `onSend` rechaza, el mensaje se muestra en el diálogo. Sin `onSend` solo se ofrece imprimir.
+

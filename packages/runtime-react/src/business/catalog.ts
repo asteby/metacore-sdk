@@ -94,4 +94,28 @@ export const BUSINESS_COMPONENTS: readonly BusinessComponentSpec[] = [
             'recommendationsToLines',
         ],
     },
+    {
+        name: 'VehiclePicker',
+        value: 'value: VehicleResult | null',
+        events: ['onChange'],
+        permissions: ['<model>.create (alta rápida; default Vehicle → vehicle.create)'],
+        usedBy: ['POS', 'Recepción de vehículo', 'OT', 'Cotización', 'Pedido'],
+        helpers: ['describeVehicle'],
+    },
+    {
+        name: 'RelateDocuments',
+        value: 'value: RelatedDocument[] (related_document_id + relation_type)',
+        events: ['onChange'],
+        permissions: [],
+        usedBy: ['Nota de crédito', 'Devolución', 'Sustitución de CFDI', 'REP'],
+        helpers: ['serializeRelatedDocuments'],
+    },
+    {
+        name: 'PrintSendDialog',
+        value: 'document: PrintableDocument (+ open)',
+        events: ['onSend', 'onPrint', 'onOpenChange'],
+        permissions: [],
+        usedBy: ['Cotización', 'Factura', 'Nota de crédito', 'Pedido', 'OC'],
+        helpers: [],
+    },
 ] as const
