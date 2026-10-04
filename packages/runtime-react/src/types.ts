@@ -64,6 +64,21 @@ export interface DocumentFormsManifest {
     types: DocumentFormType[]
 }
 
+/**
+ * Audit columns of a model, served by the kernel (>= v0.188) on the table
+ * metadata. Each value is the COLUMN NAME (the key in the row), not a value;
+ * a key is omitted when the model lacks that column (append-only ledgers have
+ * only `created_*`). Purely additive — older kernels omit `audit` entirely.
+ */
+export interface AuditMeta {
+    created_at?: string
+    created_by?: string
+    updated_at?: string
+    updated_by?: string
+    deleted_at?: string
+    deleted_by?: string
+}
+
 export interface TableMetadata {
     title: string
     endpoint: string
@@ -78,6 +93,11 @@ export interface TableMetadata {
     canExport?: boolean
     canImport?: boolean
     canCreate?: boolean
+    /**
+     * Audit columns (when/who) of the model. Feeds `<AuditInfo>`; absent on
+     * older kernels or models without audit columns.
+     */
+    audit?: AuditMeta
     /**
      * Formularios de alta guiados por tipo de documento (FAC-12). Cuando trae
      * al menos un tipo, `DynamicCRUDPage` abre `DocumentFormDialog` en lugar del

@@ -60,6 +60,8 @@ import { toastServerError, extractFieldErrors, localizeFieldIssue, localizeField
 import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-field'
 import { DynamicMultiSelectField } from '../dynamic-multi-select-field'
 import { DynamicRelations } from '../dynamic-relations'
+import { AuditInfo, readAuditMeta } from '../audit-info'
+import type { AuditMeta } from '../types'
 import { useOptionsResolver, type ResolvedOption } from '../use-options-resolver'
 import { getFieldRef, getVisibleWhen, evaluateVisibleWhen, ATTRIBUTE_CLASSES_KEY } from '../dynamic-form-schema'
 import { useAttributeClasses, type AttributeClass } from '../attribute-classes'
@@ -643,6 +645,7 @@ export function DynamicRecordDialog({
         schema ? (schema as ModalMetadata) : null,
     )
     const [relations, setRelations] = useState<RelationMeta[]>([])
+    const [audit, setAudit] = useState<AuditMeta | undefined>(undefined)
     const [record, setRecord] = useState<any | null>(null)
     const [formValues, setFormValues] = useState<Record<string, any>>({})
     // Classes of the record's category (plus those its saved data carries), for
@@ -784,6 +787,7 @@ export function DynamicRecordDialog({
     useEffect(() => {
         if (!open || mode === 'create' || !recordId) {
             setRelations([])
+            setAudit(undefined)
             return
         }
         let cancelled = false
@@ -792,6 +796,7 @@ export function DynamicRecordDialog({
                 if (cancelled) return
                 const meta = res.data?.data ?? res.data
                 const rels: RelationMeta[] = Array.isArray(meta?.relations) ? meta.relations : []
+                setAudit(readAuditMeta(meta?.audit))
                 // Localize each panel header: the backend serves `label` as an
                 // i18n key (addon bundle, loaded live) and the SDK renders it verbatim.
                 setRelations(
@@ -1188,6 +1193,14 @@ export function DynamicRecordDialog({
                                         onChange={handleChildChange}
                                     />
                                 </div>
+                            )}
+                            {!isCreate && record && audit && (
+                                <AuditInfo
+                                    record={record}
+                                    audit={audit}
+                                    timeZone={timeZone}
+                                    className="mt-6 border-t pt-3"
+                                />
                             )}
                         </CurrencyContext.Provider>
                         </TimeZoneContext.Provider>

@@ -585,6 +585,14 @@ export {
     type ActivityDiffProps,
 } from './activity-diff'
 export {
+    AuditInfo,
+    readAuditMeta,
+    resolveAuditActor,
+    SYSTEM_ACTOR_ID,
+    type AuditInfoProps,
+    type AuditActor,
+} from './audit-info'
+export {
     RecordHistory,
     type RecordHistoryProps,
 } from './record-history'
