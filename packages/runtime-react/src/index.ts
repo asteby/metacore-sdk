@@ -203,6 +203,14 @@ export {
     type RecordMutationKind,
     type RecordMutationDetail,
 } from './record-mutation-events'
+export {
+    CfdiStampPanel,
+    CfdiStampResultDialog,
+    extractStampResult,
+    type CfdiStampResult,
+    type CfdiStampPanelProps,
+    type CfdiStampResultDialogProps,
+} from './cfdi-stamp-panel'
 export { useRecordMutationTick } from './use-record-mutation-tick'
 export * from './addon-loader'
 export {

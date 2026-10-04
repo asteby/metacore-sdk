@@ -45,7 +45,9 @@ import {
 import { Loader2 } from 'lucide-react'
 import { ProcessStepper } from '@asteby/metacore-ui/wizard'
 import { toast } from 'sonner'
-import { toastServerError, toastServerSuccess, extractFieldErrors, localizeFieldErrorMap } from './server-error'
+import { toastServerError, toastServerSuccess, extractFieldErrors, extractServerError, localizeFieldErrorMap } from './server-error'
+import { FormErrorBanner } from './business/feedback'
+import { CfdiStampResultDialog, extractStampResult, type CfdiStampResult } from './cfdi-stamp-panel'
 import { useBranchCreateGate } from './branch-create-gate'
 import type { Translate } from './server-error'
 import { validateValues, bagHasErrors } from './validator'
@@ -802,10 +804,34 @@ function toastActionError(
     toastServerError(err, { t, language })
 }
 
+/** Text for the in-dialog error banner of a failed action (PIT-046, #1023): a
+ *  422 with per-field `errors` -> "Revisa los campos" + each localized line; any
+ *  other failure (500, network) -> the server's own message and cause. Unlike
+ *  the toast it stays on screen until the next attempt. */
+export function actionErrorBannerMessage(
+    err: unknown,
+    fields: readonly ActionFieldDef[] | undefined,
+    t: Translate,
+    language?: string,
+): string {
+    const localized = localizeActionFieldErrors(err, fields, t, language)
+    if (localized) {
+        const head = t('validation.failed', { defaultValue: validationCatalog(language).failed })
+        const lines = Object.values(localized).filter(Boolean)
+        return lines.length ? `${head}: ${lines.join(' · ')}` : head
+    }
+    const fallback = t('common.error', { defaultValue: 'Algo salió mal. Intenta de nuevo.' })
+    const ex = extractServerError(err, fallback)
+    const title = t(ex.title, { defaultValue: ex.title })
+    return ex.description && ex.description !== title ? `${title} — ${ex.description}` : title
+}
+
 function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoint, onSuccess }: ActionModalProps) {
     const { t, i18n } = useTranslation()
     const api = useApi()
     const [executing, setExecuting] = useState(false)
+    const [formError, setFormError] = useState<string | undefined>()
+    const [stamp, setStamp] = useState<CfdiStampResult | undefined>()
     // Actions listed in the model's `reason_required.actions` (cancel, void…)
     // answer 422 errors.reason without a motive; the prompt asks and retries.
     const reasonPrompt = useReasonPrompt()
@@ -817,6 +843,7 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
 
     const execute = async () => {
         setExecuting(true)
+        setFormError(undefined)
         try {
             const url = buildActionUrl(endpoint, model, record.id, action.key)
             // Supervisor PIN first (action.supervisorPolicy); null = cancelled.
@@ -831,16 +858,39 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
             if (!res) return
             if (res.data.success) {
                 toastServerSuccess(res.data, { t })
+                const result = extractStampResult(res.data)
+                if (result) {
+                    setStamp(result)
+                    return
+                }
                 onOpenChange(false)
                 onSuccess()
             } else {
+                setFormError(actionErrorBannerMessage({ response: { data: res.data } }, action.fields, t, i18n.language))
                 toastActionError({ response: { data: res.data } }, action.fields, t, i18n.language)
             }
         } catch (err: any) {
+            setFormError(actionErrorBannerMessage(err, action.fields, t, i18n.language))
             toastActionError(err, action.fields, t, i18n.language)
         } finally {
             setExecuting(false)
         }
+    }
+
+    if (stamp) {
+        return (
+            <CfdiStampResultDialog
+                open={open}
+                result={stamp}
+                title={label}
+                onOpenChange={(o) => {
+                    if (o) return
+                    setStamp(undefined)
+                    onOpenChange(false)
+                    onSuccess()
+                }}
+            />
+        )
     }
 
     return (
@@ -858,6 +908,7 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 {record ? <RecordPreview model={model} record={record} /> : null}
+                <FormErrorBanner message={formError} />
                 <AlertDialogFooter>
                     <AlertDialogCancel disabled={executing}>{t('common.cancel')}</AlertDialogCancel>
                     <AlertDialogAction
@@ -889,6 +940,10 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
     const [executing, setExecuting] = useState(false)
     // Per-field validation errors (localized), shown inline under each input.
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+    // Persistent in-dialog banner for a failed submit (422 / 500) — the toast
+    // alone vanished and, for some failures, only the console had the cause.
+    const [formError, setFormError] = useState<string | undefined>()
+    const [stamp, setStamp] = useState<CfdiStampResult | undefined>()
     // Related records to surface BELOW the form, as read-only context for the
     // record being acted on — e.g. the reception history of a transfer while
     // receiving against it. Sourced from the model's metadata.relations (the
@@ -920,6 +975,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
         if (open && action.fields) {
             setFormData(buildFieldDefaults(action.fields, record))
             setFieldErrors({})
+            setFormError(undefined)
         }
     }, [open, action.fields, record])
 
@@ -1007,6 +1063,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
 
     const lang = i18n.language
     const handleActionError = (err: unknown) => {
+        setFormError(actionErrorBannerMessage(err, action.fields, t, lang))
         const labels = labelsForValidationFields(action.fields, t)
         const localized = localizeActionFieldErrors(err, action.fields, t, lang)
         if (localized) {
@@ -1043,6 +1100,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
             }
         }
         setFieldErrors({})
+        setFormError(undefined)
         setExecuting(true)
         try {
             let payload: Record<string, any> = { ...formData }
@@ -1077,6 +1135,11 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
             if (!res) return
             if (res.data.success) {
                 toastServerSuccess(res.data, { t })
+                const result = extractStampResult(res.data)
+                if (result) {
+                    setStamp(result)
+                    return
+                }
                 onOpenChange(false)
                 onSuccess()
             } else {
@@ -1110,6 +1173,22 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
               ? '820px'
               : undefined
 
+    if (stamp) {
+        return (
+            <CfdiStampResultDialog
+                open={open}
+                result={stamp}
+                title={tl(action.label)}
+                onOpenChange={(o) => {
+                    if (o) return
+                    setStamp(undefined)
+                    onOpenChange(false)
+                    onSuccess()
+                }}
+            />
+        )
+    }
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             {/* Sticky header + footer, scrollable body: the form can grow tall
@@ -1135,6 +1214,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                     (in FieldCell) keeps a long select/input value from blowing the
                     grid past the dialog and spawning a horizontal scrollbar. */}
                 <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 py-4">
+                    <FormErrorBanner message={formError} className="mb-3" />
                     <FieldGrid>
                         {action.fields?.map((field) => {
                             const fullWidth =
@@ -1243,6 +1323,8 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
     const [stepIndex, setStepIndex] = useState(0)
     const [formData, setFormData] = useState<Record<string, any>>({})
     const [executing, setExecuting] = useState(false)
+    const [formError, setFormError] = useState<string | undefined>()
+    const [stamp, setStamp] = useState<CfdiStampResult | undefined>()
 
     // Reset to the first step and seed defaults for EVERY step's fields whenever
     // the modal (re)opens, so accumulated values from a prior run don't leak.
@@ -1251,6 +1333,7 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
         const allFields = steps.flatMap((s) => s.fields ?? [])
         setFormData(buildFieldDefaults(allFields, record))
         setStepIndex(0)
+        setFormError(undefined)
     }, [open, action.steps, record])
 
     const updateField = (key: string, value: any) =>
@@ -1292,6 +1375,7 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
             }
         }
         setExecuting(true)
+        setFormError(undefined)
         try {
             const url = buildActionUrl(endpoint, model, record?.id, action.key)
             const auth = await supervisor.authorize(
@@ -1305,14 +1389,22 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
                 request: (reason) => api.post(url, withApproval(reason ? { ...formData, reason } : formData, auth)),
             })
             if (!res) return
+            const allFields = steps.flatMap(s => s.fields ?? [])
             if (res.data.success) {
                 toastServerSuccess(res.data, { t })
+                const result = extractStampResult(res.data)
+                if (result) {
+                    setStamp(result)
+                    return
+                }
                 onOpenChange(false)
                 onSuccess()
             } else {
-                toastActionError({ response: { data: res.data } }, steps.flatMap(s => s.fields ?? []), t, i18n.language)
+                setFormError(actionErrorBannerMessage({ response: { data: res.data } }, allFields, t, i18n.language))
+                toastActionError({ response: { data: res.data } }, allFields, t, i18n.language)
             }
         } catch (err: any) {
+            setFormError(actionErrorBannerMessage(err, steps.flatMap(s => s.fields ?? []), t, i18n.language))
             toastActionError(err, steps.flatMap(s => s.fields ?? []), t, i18n.language)
         } finally {
             setExecuting(false)
@@ -1320,6 +1412,22 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
     }
 
     if (steps.length === 0) return null
+
+    if (stamp) {
+        return (
+            <CfdiStampResultDialog
+                open={open}
+                result={stamp}
+                title={tl(action.label)}
+                onOpenChange={(o) => {
+                    if (o) return
+                    setStamp(undefined)
+                    onOpenChange(false)
+                    onSuccess()
+                }}
+            />
+        )
+    }
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1355,6 +1463,7 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
                     persist in the one formData object, so navigating back and
                     forth keeps entries intact. */}
                 <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 py-4">
+                    <FormErrorBanner message={formError} className="mb-3" />
                     <FieldGrid>
                         {stepFields.map((field) => {
                             const fullWidth =
