@@ -73,7 +73,6 @@ import {
     Popover,
     PopoverContent,
     PopoverTrigger,
-    Separator,
     Skeleton,
     Collapsible,
     CollapsibleContent,
@@ -360,6 +359,31 @@ export function suggestRoleIcon(label: string): string {
     return 'Shield'
 }
 
+/** Label of the synthetic module that hosts the general (non-model) flags. */
+export const GENERAL_MODULE_LABEL = 'Permisos generales'
+
+/**
+ * The general flags (`general.work_after_hours`, …) as a synthetic module, so
+ * they are picked from the module combobox and edited in the same two-column
+ * action grid as any module's actions (#1021). Each flag keeps its full
+ * capability key through `PermissionActionDef.capability`.
+ */
+export function generalPermissionsModule(general: GeneralPermissionDef[]): PermissionModuleDef {
+    return {
+        key: 'general',
+        label: GENERAL_MODULE_LABEL,
+        icon: 'SlidersHorizontal',
+        kind: 'model',
+        actions: general.map((g) => ({
+            key: g.key.replace(/^general\./, ''),
+            label: g.label,
+            description: g.description,
+            capability: g.key,
+            kind: 'custom',
+        })),
+    }
+}
+
 /**
  * Normalize whatever `loadModules` returned into the canonical grouped shape.
  *
@@ -613,6 +637,15 @@ export function PermissionsManager({
 
     const allModules = React.useMemo(() => (groups ? flattenGroups(groups) : []), [groups])
 
+    // What the module picker lists: the catalog groups plus a trailing synthetic
+    // group for the general flags. `allModules` / "Otorgar todo" keep using the
+    // plain catalog, so that button's scope does not change.
+    const pickerGroups = React.useMemo<ModuleGroup[] | null>(() => {
+        if (!groups) return groups
+        if (!general || general.length === 0) return groups
+        return [...groups, { title: '', modules: [generalPermissionsModule(general)] }]
+    }, [groups, general])
+
     // ---- initial load: catalog + roles in parallel -------------------------
     React.useEffect(() => {
         let cancelled = false
@@ -670,8 +703,8 @@ export function PermissionsManager({
         [roles, activeRoleId],
     )
     const activeModule = React.useMemo(
-        () => moduleAtEntry(groups, activeModuleKey)?.module ?? null,
-        [groups, activeModuleKey],
+        () => moduleAtEntry(pickerGroups, activeModuleKey)?.module ?? null,
+        [pickerGroups, activeModuleKey],
     )
 
     const dirty = baseline !== null && draft !== null && !capabilitySetsEqual(baseline, draft)
@@ -841,8 +874,8 @@ export function PermissionsManager({
     const moduleTotal = activeModule?.actions.length ?? 0
     const checksDisabled = !activeRole || !draft || loadingPerms || saving
     const activeModuleGroupTitle = React.useMemo(
-        () => moduleAtEntry(groups, activeModuleKey)?.group.title ?? '',
-        [groups, activeModuleKey],
+        () => moduleAtEntry(pickerGroups, activeModuleKey)?.group.title ?? '',
+        [pickerGroups, activeModuleKey],
     )
 
     // ---- render --------------------------------------------------------------
@@ -1052,26 +1085,6 @@ export function PermissionsManager({
                                 )}
                             </div>
 
-                            {(general?.length ?? 0) > 0 && (
-                                <>
-                                    <Separator />
-                                    <div>
-                                        <h3 className="mb-2 text-sm font-semibold">Permisos Generales</h3>
-                                        <div className="flex flex-col gap-2">
-                                            {general!.map((g) => (
-                                                <CapabilityCheck
-                                                    key={g.key}
-                                                    checked={draft?.has(g.key) ?? false}
-                                                    disabled={checksDisabled}
-                                                    onToggle={() => toggleCapability(g.key)}
-                                                    label={g.label}
-                                                    description={g.description}
-                                                />
-                                            ))}
-                                        </div>
-                                    </div>
-                                </>
-                            )}
                         </CardContent>
                     </Card>
 
@@ -1122,7 +1135,7 @@ export function PermissionsManager({
                                         <CommandInput placeholder="Buscar módulo…" />
                                         <CommandList className="max-h-[360px]">
                                             <CommandEmpty>Sin módulos.</CommandEmpty>
-                                            {(groups ?? []).map((group, gi) => (
+                                            {(pickerGroups ?? []).map((group, gi) => (
                                                 <CommandGroup
                                                     key={group.title || `__untitled_${gi}`}
                                                     heading={group.title || undefined}

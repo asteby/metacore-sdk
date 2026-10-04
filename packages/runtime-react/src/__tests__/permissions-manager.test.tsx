@@ -249,9 +249,25 @@ describe('PermissionsManager (módulo como combobox agrupado)', () => {
         expect(screen.getByRole('option', { name: /Pedidos POS/ })).toBeTruthy()
         expect(screen.getByRole('option', { name: /Terminal/ })).toBeTruthy()
 
-        // Generales presentes con descripción.
-        expect(screen.getByText('Permisos Generales')).toBeTruthy()
-        expect(screen.getByText('Trabajar fuera de horario')).toBeTruthy()
+        // Los generales son un grupo sintético del combobox (#1021), no cards
+        // sueltas junto a la tarjeta del rol.
+        expect(screen.getByRole('option', { name: /Permisos generales/ })).toBeTruthy()
+        expect(screen.queryByText('Trabajar fuera de horario')).toBeNull()
+    })
+
+    it('«Permisos generales» se edita en la misma grilla de dos columnas y cuenta en el total', async () => {
+        const props = makeProps()
+        render(<PermissionsManager {...props} />)
+        await waitFor(() => expect(moduleTrigger().textContent).toMatch(/Usuarios/))
+
+        await selectModule(/Permisos generales/)
+        expect(await screen.findByText('Trabajar fuera de horario')).toBeTruthy()
+        expect(screen.getByText('0/1')).toBeTruthy()
+        const box = screen.getByRole('checkbox', { name: /Trabajar fuera de horario/ })
+        // Misma grilla que las acciones de un módulo.
+        expect(box.closest('div.grid')?.className).toContain('sm:grid-cols-2')
+        fireEvent.click(box)
+        expect(screen.getByText('1/1')).toBeTruthy()
     })
 
     it('CERO acordeones: el módulo es un combobox, no un folder colapsable', async () => {
@@ -304,7 +320,8 @@ describe('PermissionsManager (módulo como combobox agrupado)', () => {
         await selectModule(/Pedidos POS/)
         await screen.findByText('Pagar')
         fireEvent.click(screen.getByRole('checkbox', { name: /Pagar/ }))
-        fireEvent.click(screen.getByRole('checkbox', { name: /Trabajar fuera de horario/ }))
+        await selectModule(/Permisos generales/)
+        fireEvent.click(await screen.findByRole('checkbox', { name: /Trabajar fuera de horario/ }))
 
         expect(screen.getByText('Cambios sin guardar')).toBeTruthy()
         fireEvent.click(screen.getByRole('button', { name: /Guardar permisos/ }))
