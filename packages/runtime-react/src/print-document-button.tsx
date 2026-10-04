@@ -51,7 +51,15 @@ export function PrintDocumentButton({
             if (e.defaultPrevented) return
             setBusy(true)
             try {
-                await printDocument({ model, id, key: documentKey, mode, filename })
+                // A caller that handles errors itself keeps ownership of the error toast.
+                await printDocument({
+                    model,
+                    id,
+                    key: documentKey,
+                    mode,
+                    filename,
+                    feedback: onError ? { progress: true, success: true, error: false } : true,
+                })
             } catch (err) {
                 onError?.(err)
             } finally {

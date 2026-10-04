@@ -17,6 +17,7 @@
 // The ApiClient is a PEER via <ApiProvider> (same one useAddonSettings uses), so
 // this hook constructs no client of its own.
 import { useCallback } from 'react'
+import { toast } from 'sonner'
 import { useApi } from './api-context'
 
 export interface PrintDocumentArgs {
@@ -40,6 +41,42 @@ export interface PrintDocumentArgs {
      * that is how downloads end up literally named with mustache braces.
      */
     filename?: string
+    /**
+     * User feedback. Default: a toast while the file is prepared, a success toast
+     * when it is ready and an error toast with the server's reason when it fails
+     * (a download used to give NO sign of life — PIT «Descargar Factura CFDI»).
+     * `false` silences all of it; `{ error: false }` leaves errors to the caller
+     * (the promise still rejects either way).
+     */
+    feedback?: boolean | { progress?: boolean; success?: boolean; error?: boolean }
+}
+
+const noun = (mode: 'print' | 'download' | 'open') =>
+    mode === 'download' ? 'Descargando documento…' : mode === 'open' ? 'Abriendo documento…' : 'Preparando impresión…'
+
+const readyMessage = (mode: 'print' | 'download' | 'open') =>
+    mode === 'download' ? 'Documento descargado' : mode === 'open' ? 'Documento abierto' : 'Documento listo para imprimir'
+
+/** Best-effort message from an error whose body is a Blob (responseType: 'blob'). */
+export async function documentErrorMessage(err: unknown): Promise<string> {
+    const fallback = 'No se pudo generar el documento. Inténtalo de nuevo.'
+    const e = err as { response?: { data?: unknown; status?: number }; message?: unknown } | undefined
+    let data = e?.response?.data
+    try {
+        if (typeof Blob !== 'undefined' && data instanceof Blob) {
+            data = JSON.parse(await data.text())
+        }
+    } catch {
+        data = undefined
+    }
+    const d = data as { message?: unknown; details?: unknown; error?: unknown } | string | undefined
+    if (typeof d === 'string' && d.trim()) return d.trim().slice(0, 200)
+    if (d && typeof d === 'object') {
+        const msg = [d.message, d.details, d.error].find((x) => typeof x === 'string' && x.trim()) as string | undefined
+        if (msg) return msg.trim()
+    }
+    if (e?.response?.status === 404) return 'El documento no está disponible todavía.'
+    return fallback
 }
 
 /** Parse filename from Content-Disposition (RFC 5987 / quoted). */
@@ -71,14 +108,14 @@ export function looksLikeFilenameTemplate(name: string | undefined): boolean {
  */
 export function usePrintDocument() {
     const api = useApi()
-    return useCallback(
+    const run = useCallback(
         async ({
             model,
             id,
             key,
-            mode = 'print',
+            mode,
             filename,
-        }: PrintDocumentArgs): Promise<string> => {
+        }: Required<Pick<PrintDocumentArgs, 'model' | 'id' | 'key' | 'mode'>> & Pick<PrintDocumentArgs, 'filename'>): Promise<string> => {
             const url = `/data/${encodeURIComponent(model)}/${encodeURIComponent(
                 id,
             )}/documents/${encodeURIComponent(key)}.pdf`
@@ -144,5 +181,31 @@ export function usePrintDocument() {
             return blobUrl
         },
         [api],
+    )
+    return useCallback(
+        async ({
+            model,
+            id,
+            key,
+            mode = 'print',
+            filename,
+            feedback = true,
+        }: PrintDocumentArgs): Promise<string> => {
+            const fb = feedback === false ? {} : feedback === true ? { progress: true, success: true, error: true } : feedback
+            const toastId = fb.progress ? toast.loading(noun(mode)) : undefined
+            try {
+                const blobUrl = await run({ model, id, key, mode, filename })
+                if (toastId !== undefined) toast.dismiss(toastId)
+                if (fb.success) toast.success(readyMessage(mode))
+                return blobUrl
+            } catch (err) {
+                if (toastId !== undefined) toast.dismiss(toastId)
+                if (fb.error) toast.error(await documentErrorMessage(err))
+                throw err
+            } finally {
+                if (toastId !== undefined) toast.dismiss(toastId)
+            }
+        },
+        [run],
     )
 }
