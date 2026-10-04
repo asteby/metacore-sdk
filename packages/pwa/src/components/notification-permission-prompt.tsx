@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { showNotificationToast } from '@asteby/metacore-notifications'
 import { toast } from 'sonner'
+import { useModalOpen } from '../use-modal-open'
 
 export interface NotificationPermissionPromptMessages {
   title?: string
@@ -78,6 +79,17 @@ export function NotificationPermissionPrompt({
 }: NotificationPermissionPromptProps = {}) {
   const msgs = { ...DEFAULTS, ...messages }
   const offeredRef = useRef(false)
+  const modalOpen = useModalOpen()
+  const modalOpenRef = useRef(modalOpen)
+  modalOpenRef.current = modalOpen
+  // The permission card is sticky: when a dialog opens, retract it and let it
+  // be offered again once the dialog closes (it was not dismissed by the user).
+  useEffect(() => {
+    if (modalOpen && offeredRef.current) {
+      toast.dismiss(toastId)
+      offeredRef.current = false
+    }
+  }, [modalOpen, toastId])
 
   const handleAllow = async () => {
     snooze()
@@ -105,6 +117,8 @@ export function NotificationPermissionPrompt({
     if (typeof window === 'undefined') return
     if (!('Notification' in window) || Notification.permission !== 'default') return
     if (isSnoozed() || offeredRef.current) return
+    // Never over an open dialog: retry once it closes (see effect below).
+    if (modalOpenRef.current) return
     offeredRef.current = true
     showNotificationToast({
       id: toastId,
@@ -127,11 +141,11 @@ export function NotificationPermissionPrompt({
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (!('Notification' in window) || Notification.permission !== 'default') return
-    if (isSnoozed()) return
+    if (isSnoozed() || modalOpen) return
     const timer = setTimeout(show, autoShowDelayMs)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoShowDelayMs])
+  }, [autoShowDelayMs, modalOpen])
 
   useEffect(() => {
     if (typeof window === 'undefined') return

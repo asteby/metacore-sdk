@@ -19,6 +19,8 @@ export {
 } from './notification-manager'
 export type { NotificationOptions, NotificationManagerOptions } from './notification-manager'
 
+export { useModalOpen, hasOpenModal } from './use-modal-open'
+
 export {
   PWAInstallPrompt,
   PWAUpdatePrompt,

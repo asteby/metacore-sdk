@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { showNotificationToast } from '@asteby/metacore-notifications'
+import { toast } from 'sonner'
 import { usePWAContext } from '../provider'
+import { useModalOpen } from '../use-modal-open'
 
 export interface UpdatePromptMessages {
   title?: string
@@ -43,8 +45,18 @@ export function PWAUpdatePrompt({
   const { needRefresh, updateApp, closeUpdatePrompt } = usePWAContext()
   const msgs = { ...DEFAULTS, ...messages }
   const shown = useRef(false)
+  // The sticky update card used to sit over open dialogs and hide their fields
+  // and buttons: retract it while a modal is open, bring it back afterwards.
+  const modalOpen = useModalOpen()
 
   useEffect(() => {
+    if (modalOpen) {
+      if (shown.current) {
+        toast.dismiss(toastId)
+        shown.current = false
+      }
+      return
+    }
     if (!needRefresh || shown.current) return
     shown.current = true
 
@@ -65,7 +77,7 @@ export function PWAUpdatePrompt({
       },
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [needRefresh])
+  }, [needRefresh, modalOpen])
 
   return null
 }

@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { showNotificationToast } from '@asteby/metacore-notifications'
+import { toast } from 'sonner'
 import { usePWAContext } from '../provider'
+import { useModalOpen } from '../use-modal-open'
 
 export interface InstallPromptMessages {
   title?: string
@@ -31,11 +33,23 @@ export function PWAInstallPrompt({ messages, duration = 10000 }: InstallPromptPr
   const { isInstallable, installApp } = usePWAContext()
   const msgs = { ...DEFAULTS, ...messages }
   const shown = useRef(false)
+  const shownAt = useRef(0)
+  // Never float over an open dialog: hold back (or retract) while one is open.
+  const modalOpen = useModalOpen()
 
   useEffect(() => {
+    if (modalOpen) {
+      if (shown.current) {
+        toast.dismiss('sys:pwa-install')
+        // Only offer it again if it was still on screen (not already timed out).
+        if (Date.now() - shownAt.current < duration) shown.current = false
+      }
+      return
+    }
     if (!isInstallable || shown.current) return
     if (typeof localStorage !== 'undefined' && localStorage.getItem('pwa-install-dismissed')) return
     shown.current = true
+    shownAt.current = Date.now()
 
     showNotificationToast({
       id: 'sys:pwa-install',
@@ -60,7 +74,7 @@ export function PWAInstallPrompt({ messages, duration = 10000 }: InstallPromptPr
       },
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isInstallable])
+  }, [isInstallable, modalOpen])
 
   return null
 }
