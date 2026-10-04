@@ -196,6 +196,14 @@ export {
     type ListActionRef,
     type CreateMode,
 } from './list-primary-action'
+export {
+    emitRecordMutation,
+    subscribeRecordMutations,
+    RECORD_MUTATION_EVENT,
+    type RecordMutationKind,
+    type RecordMutationDetail,
+} from './record-mutation-events'
+export { useRecordMutationTick } from './use-record-mutation-tick'
 export * from './addon-loader'
 export {
     PURGE_ADDON_MESSAGE,

@@ -152,6 +152,7 @@ import { useFlipAnimation } from './use-flip-animation'
 import { PortalDragOverlay } from './portal-drag-overlay'
 import { objectLabel } from './dynamic-relation-helpers'
 import { useMetadataCache } from './metadata-cache'
+import { useRecordMutationTick } from './use-record-mutation-tick'
 import { useOptionsResolver } from './use-options-resolver'
 import { ActivityValueRenderer } from './activity-value-renderer'
 import { DynamicIcon } from './dynamic-icon'
@@ -923,6 +924,7 @@ function DynamicKanbanBoard({
     // Realtime refetch (opt-in) — debounced counter bumped by DATA_EVENTs for
     // this model; folded into the board refetch effect next to refreshTrigger.
     const realtimeDefault = useRealtimeDefault()
+    const mutationTick = useRecordMutationTick(model)
     const realtimeTick = useRealtimeTick({
         models: [model],
         enabled: realtimeProp ?? realtimeDefault,
@@ -1339,7 +1341,7 @@ function DynamicKanbanBoard({
         return () => clearTimeout(handle)
         // realtimeTick: data events for this model (see the `realtime` prop).
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [fetchData, metadata, refreshTrigger, realtimeTick])
+    }, [fetchData, metadata, refreshTrigger, realtimeTick, mutationTick])
 
     // Filterable fields for the toolbar, in metadata order (explicit filters
     // first, then filterable columns), each labeled from its metadata source.

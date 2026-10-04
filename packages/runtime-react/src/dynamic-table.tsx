@@ -66,6 +66,7 @@ import { Inbox, Download, Upload, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Progress } from './dialogs/_primitives'
 import { useMetadataCache } from './metadata-cache'
+import { useRecordMutationTick } from './use-record-mutation-tick'
 import { useApi, useCurrentBranch } from './api-context'
 import { useReasonPrompt } from './reason-prompt'
 import type { ColumnFilterConfig, GetDynamicColumns } from './dynamic-columns-shim'
@@ -295,6 +296,9 @@ export function DynamicTable({
     // OrgRuntimeProvider (without it, money fell back to USD).
     const orgTimeZone = useTimeZone()
     const orgCurrency = useCurrency()
+    // Bumps when a dialog/modal anywhere creates, edits or deletes a record of
+    // this model, so the list reloads without the caller wiring refreshTrigger.
+    const mutationTick = useRecordMutationTick(model)
     const timeZone = timeZoneProp ?? orgTimeZone
     const currency = currencyProp ?? orgCurrency
     // The explicit `pagination` prop wins; the legacy `infiniteScroll` boolean
@@ -917,7 +921,7 @@ export function DynamicTable({
         } finally {
             setLoadingData(false)
         }
-    }, [model, metadata, pagination, buildFilterParams, refreshTrigger, endpoint, currentBranch?.id, api, enableUrlSync, relationInclude])
+    }, [model, metadata, pagination, buildFilterParams, refreshTrigger, mutationTick, endpoint, currentBranch?.id, api, enableUrlSync, relationInclude])
 
     // Columns whose metadata opts into a footer total (display_config.aggregate
     // → styleConfig.aggregate). When empty, no footer row is rendered and no
@@ -1098,7 +1102,7 @@ export function DynamicTable({
         // deps). Without it the comment above lied: infinite lists silently
         // failed to reload after a create ("a veces no recarga la tabla").
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [infiniteScroll, metadata, filterSignature, refreshTrigger])
+    }, [infiniteScroll, metadata, filterSignature, refreshTrigger, mutationTick])
 
     const handleRefresh = useCallback(() => {
         // Infinite mode owns its own list: refresh reloads page 1 and drops the

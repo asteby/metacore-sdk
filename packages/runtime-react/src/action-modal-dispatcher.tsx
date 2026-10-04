@@ -14,7 +14,8 @@
 //
 // The host injects its axios-like client via <ApiProvider>; we no longer
 // depend on a bundler alias to `@/lib/api`.
-import { useState, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { emitRecordMutation } from './record-mutation-events'
+import { useState, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
     Dialog,
@@ -358,8 +359,15 @@ export function ActionModalDispatcher({
     model,
     record,
     endpoint,
-    onSuccess,
+    onSuccess: onSuccessProp,
 }: ActionModalProps) {
+    // Every successful action may have created/updated/deleted a record of
+    // `model` (federated component, wizard, generic form or confirmation), so
+    // announce it: mounted lists of the model reload on their own (#1020).
+    const onSuccess = useCallback(() => {
+        emitRecordMutation(model, 'update')
+        onSuccessProp?.()
+    }, [model, onSuccessProp])
     // Reactive read: a federated remote usually registers AFTER the first
     // render, and a memoized lookup would pin the fallback forever.
     const readComponent = () => getActionComponent(model, action.key)

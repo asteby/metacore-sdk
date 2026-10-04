@@ -9,6 +9,7 @@
 // flows through <ApiProvider> from runtime-react. Host-specific runtime values —
 // the image-url resolver and the org IANA timezone — are passed as props so the
 // SDK stays transport- and host-agnostic.
+import { emitRecordMutation } from '../record-mutation-events'
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ModelSchema } from './types'
@@ -945,6 +946,7 @@ export function DynamicRecordDialog({
             if (isCreate && onCreate) {
                 const created = await onCreate(payload)
                 toast.success(modalMeta?.messages?.created || t('dynamic.create_success', { defaultValue: 'Registro creado correctamente' }))
+                emitRecordMutation(model, 'create')
                 onSaved?.(created ?? undefined)
                 onOpenChange(false)
                 return
@@ -953,6 +955,7 @@ export function DynamicRecordDialog({
             if (!isCreate && recordId && onUpdate) {
                 const updated = await onUpdate(String(recordId), payload)
                 toast.success(modalMeta?.messages?.updated || t('dynamic.update_success', { defaultValue: 'Guardado correctamente' }))
+                emitRecordMutation(model, 'update')
                 onSaved?.(updated ?? undefined)
                 onOpenChange(false)
                 return
@@ -980,6 +983,7 @@ export function DynamicRecordDialog({
                             : t('dynamic.update_success', { defaultValue: 'Guardado correctamente' })),
                 )
                 // Hand the persisted record back so callers can auto-select it.
+                emitRecordMutation(model, isCreate ? 'create' : 'update')
                 onSaved?.(res.data?.data ?? res.data ?? undefined)
                 onOpenChange(false)
             } else {
@@ -1000,6 +1004,7 @@ export function DynamicRecordDialog({
         setDeleting(true)
         try {
             await onDelete()
+            emitRecordMutation(model, 'delete')
             onOpenChange(false)
         } catch (err: any) {
             console.error('[DynamicRecordDialog] delete error:', err)
