@@ -60,6 +60,11 @@ describe('projectOption', () => {
         expect(out.icon).toBeNull()
     })
 
+    it('keeps extra price and sku on meta', () => {
+        const out = projectOption({ id: 'p1', label: 'Llanta', price: 800, sku: 'LX', nested: { a: 1 } })
+        expect(out.meta).toEqual({ price: 800, sku: 'LX' })
+    })
+
     it('survives empty payload (defensive)', () => {
         const out = projectOption({})
         expect(out.id).toBe('')

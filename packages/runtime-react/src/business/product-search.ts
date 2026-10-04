@@ -58,6 +58,8 @@ export interface ProductVariant {
     sku?: string
     barcode?: string
     price?: number
+    /** Costo de catálogo (compras). Opcional; el precio de lista sigue en `price`. */
+    cost?: number
     stock?: StockByWarehouse[]
 }
 
@@ -70,6 +72,8 @@ export interface ProductResult {
     supplier_sku?: string
     kind?: 'product' | 'tire' | 'service' | 'bundle'
     price?: number
+    /** Costo de catálogo (compras). */
+    cost?: number
     tax_rate?: number
     tire?: TireSize
     variants?: ProductVariant[]
@@ -96,12 +100,16 @@ export function productToLine(
     opts: { warehouseId?: string; quantity?: number } = {},
 ): LineItem {
     const src = variant ?? p
+    const list = variant?.price ?? p.price
+    const cost = variant?.cost ?? p.cost
     return makeLine({
         product_id: variant?.id ?? p.id,
         sku: variant?.sku ?? p.sku,
         description: variant ? `${p.name} · ${variant.label}` : p.name,
         quantity: opts.quantity ?? 1,
-        unit_price: variant?.price ?? p.price ?? 0,
+        unit_price: list ?? 0,
+        catalog_price: list,
+        cost,
         tax_rate: p.tax_rate ?? 0,
         available: availableStock(src, opts.warehouseId) ?? availableStock(p, opts.warehouseId),
     })

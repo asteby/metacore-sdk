@@ -177,6 +177,66 @@ export function applyLineItemRowFormulas(
     return out
 }
 
+const AUTOFILL_PRICE_KEYS = new Set(['unit_price', 'price', 'sale_price'])
+const AUTOFILL_COST_KEYS = new Set(['cost', 'unit_cost', 'catalog_cost', 'catalog_price'])
+
+function metaNumber(meta: Record<string, unknown>, keys: string[]): number | undefined {
+    for (const k of keys) {
+        const v = meta[k]
+        if (typeof v === 'number' && Number.isFinite(v)) return v
+        if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) return Number(v)
+    }
+    return undefined
+}
+
+/**
+ * Al elegir un producto en una grilla declarativa, copia precio/costo/SKU/tasa
+ * que vengan en `option.meta` a las columnas hermanas y recalcula el importe.
+ * No-op si el meta no trae datos útiles (el journal entry no se toca).
+ */
+export function autofillLineFromOption(
+    itemFields: ActionFieldDef[],
+    row: Record<string, any>,
+    option: { label?: string; meta?: Record<string, unknown> },
+): Record<string, any> {
+    const meta = option.meta
+    if (!meta || Object.keys(meta).length === 0) return row
+    const next: Record<string, any> = { ...row }
+    let changed = false
+    for (const f of itemFields) {
+        if (AUTOFILL_PRICE_KEYS.has(f.key)) {
+            const v = metaNumber(meta, ['unit_price', 'price', 'sale_price'])
+            if (v != null) {
+                next[f.key] = v
+                changed = true
+            }
+        } else if (AUTOFILL_COST_KEYS.has(f.key)) {
+            const v = metaNumber(meta, ['cost', 'unit_cost', 'catalog_price', 'catalog_cost'])
+            if (v != null) {
+                next[f.key] = v
+                changed = true
+            }
+        } else if (f.key === 'tax_rate' || f.key === 'tax') {
+            const v = metaNumber(meta, ['tax_rate', 'tax'])
+            if (v != null) {
+                next[f.key] = v
+                changed = true
+            }
+        } else if (f.key === 'sku' || f.key === 'code') {
+            const v = meta.sku ?? meta.code
+            if (typeof v === 'string' && v.trim()) {
+                next[f.key] = v.trim()
+                changed = true
+            }
+        } else if ((f.key === 'description' || f.key === 'name') && !next[f.key] && option.label) {
+            next[f.key] = option.label
+            changed = true
+        }
+    }
+    if (!changed) return row
+    return applyLineItemRowFormulas(itemFields, next)
+}
+
 export interface BalanceState {
     debit: number
     credit: number

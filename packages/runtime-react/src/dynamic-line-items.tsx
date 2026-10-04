@@ -26,6 +26,7 @@ import {
     getItemFields,
     computeLineItemTotals,
     applyLineItemRowFormulas,
+    autofillLineFromOption,
     evaluateBalance,
     toNumber,
     getDependsOn,
@@ -139,6 +140,16 @@ export function DynamicLineItems({ field, value, onChange, disabled = false, for
         updateCell(idx, key, cellValue)
     }
 
+    const handlePick = (idx: number, key: string, opt: ResolvedOption) => {
+        onChange(
+            rows.map((r, i) =>
+                i === idx
+                    ? autofillLineFromOption(itemFields, { ...r, [key]: String(opt.id) }, opt)
+                    : r,
+            ),
+        )
+    }
+
     const totalCols = itemFields.filter((c) => c.total)
 
     return (
@@ -189,6 +200,7 @@ export function DynamicLineItems({ field, value, onChange, disabled = false, for
                                         field={col}
                                         value={row?.[col.key]}
                                         onChange={(v: any) => handleCell(idx, col.key, v)}
+                                        onPick={(opt) => handlePick(idx, col.key, opt)}
                                         disabled={disabled}
                                         formValues={formValues}
                                         rowValues={row}
@@ -260,6 +272,7 @@ export function DynamicLineItems({ field, value, onChange, disabled = false, for
                                             field={col}
                                             value={row?.[col.key]}
                                             onChange={(v: any) => handleCell(idx, col.key, v)}
+                                            onPick={(opt) => handlePick(idx, col.key, opt)}
                                             disabled={disabled}
                                             formValues={formValues}
                                             rowValues={row}
@@ -377,6 +390,7 @@ interface CellRendererProps {
     field: ActionFieldDef
     value: any
     onChange: (v: any) => void
+    onPick?: (opt: ResolvedOption) => void
     disabled?: boolean
     /** Header form values — for resolving a cell's `dependsOn` to a header field. */
     formValues?: Record<string, any>
@@ -390,7 +404,7 @@ interface CellRendererProps {
 // without the per-field Label (the column header is the label) and sized for a
 // table cell. Nested line-items inside a row are not supported (a row column is
 // a scalar widget).
-function CellRenderer({ field, value, onChange, disabled, formValues, rowValues, invalid }: CellRendererProps) {
+function CellRenderer({ field, value, onChange, onPick, disabled, formValues, rowValues, invalid }: CellRendererProps) {
     const widget = resolveWidget(field)
     const invalidCls = invalid
         ? 'border-destructive ring-1 ring-destructive/30 focus-visible:ring-destructive'
@@ -434,6 +448,7 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues,
                 field={field}
                 value={value}
                 onChange={onChange}
+                onPick={onPick}
                 dependsValue={dependsValue}
                 readonly={ro}
                 invalid={invalid}
@@ -446,6 +461,7 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues,
                 field={field}
                 value={value}
                 onChange={onChange}
+                onPick={onPick}
                 disabled={disabled}
                 formValues={formValues}
                 rowValues={rowValues}
@@ -541,7 +557,7 @@ function CellRenderer({ field, value, onChange, disabled, formValues, rowValues,
     }
 }
 
-function RefCell({ field, value, onChange, disabled, formValues, rowValues }: CellRendererProps) {
+function RefCell({ field, value, onChange, onPick, disabled, formValues, rowValues }: CellRendererProps) {
     // Cascade: resolve the value of the field this cell `dependsOn` from the
     // row (sibling) first, then the header form. While empty, the picker is
     // disabled with a hint instead of listing the whole (unscoped) table.
@@ -581,7 +597,11 @@ function RefCell({ field, value, onChange, disabled, formValues, rowValues }: Ce
     return (
         <Select
             value={value || ''}
-            onValueChange={onChange}
+            onValueChange={(v) => {
+                onChange(v)
+                const opt = options.find((o) => String(o.id) === String(v))
+                if (opt) onPick?.(opt)
+            }}
             disabled={disabled || loading || blockedByDependency}
         >
             <SelectTrigger className="w-full" data-depends-blocked={blockedByDependency ? '' : undefined}>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyLineItemRowFormulas } from '../dynamic-form-schema'
+import { applyLineItemRowFormulas, autofillLineFromOption } from '../dynamic-form-schema'
 import type { ActionFieldDef } from '../types'
 
 const fields: ActionFieldDef[] = [
@@ -51,5 +51,22 @@ describe('applyLineItemRowFormulas', () => {
         ]
         const input = { qty: 2, unit_price: 5 }
         expect(applyLineItemRowFormulas(lean, input)).toBe(input)
+    })
+})
+
+describe('autofillLineFromOption', () => {
+    it('copia precio, sku y recalcula el importe', () => {
+        const row = autofillLineFromOption(
+            fields,
+            { product_id: '', qty: 2, unit_price: '', discount: 0, subtotal: 0 },
+            { label: 'Llanta', meta: { price: 800, sku: 'LX' } },
+        )
+        expect(row.unit_price).toBe(800)
+        expect(row.subtotal).toBe(1600)
+    })
+
+    it('no toca la fila si el option no trae meta', () => {
+        const input = { product_id: 'p1', qty: 1, unit_price: 10, discount: 0, subtotal: 10 }
+        expect(autofillLineFromOption(fields, input, { label: 'X' })).toBe(input)
     })
 })

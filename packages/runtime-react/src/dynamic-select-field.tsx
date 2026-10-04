@@ -149,6 +149,8 @@ export interface DynamicSelectFieldProps {
     field: ActionFieldDef
     value: any
     onChange: (v: any) => void
+    /** Opción completa recién elegida (incluye `meta` para autollenar columnas hermanas). */
+    onPick?: (opt: ResolvedOption) => void
     /**
      * Pre-resolved option for the CURRENT value (label + image/color/icon) the
      * caller already has — e.g. the relation sibling the table served. Lets the
@@ -212,6 +214,7 @@ export function DynamicSelectField({
     field,
     value,
     onChange,
+    onPick,
     seedOption,
     dependsValue,
     dependsHint,
@@ -327,6 +330,7 @@ export function DynamicSelectField({
     const handlePick = (opt: ResolvedOption) => {
         setPicked(opt)
         onChange(String(opt.id))
+        onPick?.(opt)
         setOpen(false)
         setSearch('')
     }

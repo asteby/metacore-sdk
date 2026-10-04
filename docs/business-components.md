@@ -16,7 +16,7 @@ Reglas comunes del contrato:
 |---|---|---|---|
 | `CustomerPicker` | `CustomerResult \| null` | `onChange` | `<model>.create` (alta rápida) |
 | `ProductPicker` | — | `onSelect(product, variant?)` | — |
-| `LineItemsEditor` | `LineItem[]` | `onChange`, `onValidate`, `onRequestProduct` | prop `editPermission` |
+| `DocumentLinesGrid` (`LineItemsEditor`) | `LineItem[]` | `onChange`, `onValidate`, `onRequestProduct` | prop `editPermission` |
 | `PaymentCapture` | `PaymentTender[]` | `onChange`, `onSubmit(payload)` | prop `submitPermission` |
 | `RefundDestination` | `RefundAllocation[]` | `onChange`, `onValidate` | — |
 | `InspectionChecklist` | `InspectionPoint[]` (+ `InspectionHeader`) | `onChange`, `onHeaderChange`, `onUpload`, `onValidate`, `onAddToBudget` | — |
@@ -40,16 +40,30 @@ Muestra adeudo, crédito y `alerts`. El alta rápida abre `CreateRecordDialog` d
 
 `search` recibe la consulta ya clasificada por `parseProductQuery`: `{kind:'barcode', barcode}`, `{kind:'tire_size', tire:{width,ratio,rim,normalized}}` o `{kind:'text', text}`, para que el backend elija el índice (código, medida, SKU/clave de proveedor). Devuelve `ProductResult[]` (con `variants`, `stock` por almacén y `bundle_items`). Enter con un código de barras de resultado único lo selecciona. `productToLine(product, variant, {warehouseId})` produce el renglón para el editor.
 
-### LineItemsEditor
+### DocumentLinesGrid
+
+`LineItemsEditor` es este mismo componente (el nombre anterior sigue exportado). Las props nuevas son opcionales: un editor que ya usa `value` / `onChange` / `columns` no cambia de comportamiento.
 
 ```tsx
 const [lines, setLines] = useState<LineItem[]>(() => parseLineItems(doc.lines))
-<LineItemsEditor value={lines} onChange={setLines} columns={['discount','tax','lot','dot']}
-  policy={{ stockPolicy: 'block' }} serverErrors={mapped.fields} onRequestProduct={openPicker} />
+<DocumentLinesGrid
+  value={lines}
+  onChange={setLines}
+  search={searchProducts}          // buscador en la fila; mismo contrato que ProductPicker
+  priceSource="sale"               // 'cost' en compras (costo de catálogo)
+  columns={['discount', 'tax', 'unit']}
+  policy={{ stockPolicy: 'block' }}
+/>
 await api.put(url, { lines: serializeLineItems(lines) })   // única puerta hacia el backend
 ```
 
-`serializeLineItems` manda números reales (nunca `""`), sin claves de UI, opcionales vacíos omitidos y `position` 1-based; `parseLineItems` es la inversa. `validateLineItems`: sin negativos (salvo `allowNegative`, p. ej. NC), descuento 0-100, política de sobreventa `allow | warn | block`. Tipos de renglón: `item`, `section`, `note`.
+`serializeLineItems` manda números reales (nunca `""`), sin claves de UI, opcionales vacíos omitidos y `position` 1-based. Solo agrega `unit`, `catalog_price` y `discount_kind: "amount"` cuando el renglón los trae; un renglón anterior serializa igual que antes. `cost` y `max_quantity` se quedan en el cliente. `parseLineItems` es la inversa.
+
+El importe de la fila es neto (cantidad × precio − descuento). El impuesto, redondeado por renglón, va en el pie (`taxBreakdown` no recalcula la tasa sobre la base sumada). `priceSource="cost"` escribe el costo y muestra el costo de catálogo debajo. Un segundo clic del mismo producto suma cantidad (`addProductLine`). `mode="from_source"` oculta alta y borrado, permite cantidad 0 y topa con `max_quantity` (NC: facturado − acreditado; devolución: vendido − devuelto). Enter agrega renglón, Tab avanza y Supr en una celda vacía borra con deshacer.
+
+`validateLineItems`: sin negativos (salvo `allowNegative`), descuento 0-100 o importe que no supere el renglón, política de sobreventa `allow | warn | block`, aviso si el precio queda bajo el costo. El PIN de ese aviso (POS-2) lo resuelve el host. Tipos de renglón: `item`, `section`, `note`.
+
+En grillas declarativas (`DynamicLineItems`), elegir un producto cuyo option traiga `price`, `cost`, `sku` o `tax_rate` copia esos valores a las columnas hermanas. Si el option no trae ese meta, la fila no cambia.
 
 ### PaymentCapture
 

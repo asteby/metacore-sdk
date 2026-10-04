@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { createFormatter, formatDate, formatDateTime, formatMoney, roundMoney, toAmount } from './format'
 import { mapApiError } from './field-errors'
 import {
+    computeLine,
     computeTotals,
     makeLine,
     parseLineItems,
     serializeLineItems,
+    taxBreakdown,
     validateLineItems,
 } from './line-items'
+import { addProductLine, lineGridKeyCommand, priceFromProduct } from './document-lines'
 import { newTender, serializePayment, summarizePayment, validatePayment, type PaymentMethodOption } from './payment'
 import { singleDestination, validateRefund } from './refund'
 import { parseProductQuery, parseTireSize, productToLine } from './product-search'
@@ -94,7 +97,47 @@ describe('line items', () => {
         expect(out[0]).toEqual({ position: 1, kind: 'item', description: 'Llanta', quantity: 2, unit_price: 0, discount: 0, tax_rate: 0, lot: 'L1' })
         expect(out[1]).toEqual({ position: 2, kind: 'note', description: 'Nota' })
         expect(out[0]).not.toHaveProperty('key')
+        expect(out[0]).not.toHaveProperty('catalog_price')
+        expect(out[0]).not.toHaveProperty('discount_kind')
+        expect(out[0]).not.toHaveProperty('unit')
         expect(parseLineItems(out)).toHaveLength(2)
+    })
+    it('2 × 800 es 1600 neto; el IVA 16% suma 256 y el total 1856', () => {
+        const line = makeLine({ quantity: 2, unit_price: 800, tax_rate: 0.16 })
+        expect(computeLine(line)).toMatchObject({ gross: 1600, net: 1600, tax: 256, total: 1856 })
+        expect(computeTotals([line])).toMatchObject({ subtotal: 1600, tax: 256, total: 1856 })
+        expect(taxBreakdown([line])).toEqual([{ rate: 0.16, base: 1600, tax: 256 }])
+    })
+    it('descuento en importe y tope de cantidad', () => {
+        const line = makeLine({ description: 'x', quantity: 1, unit_price: 100, discount: 15, discount_kind: 'amount' })
+        expect(computeLine(line)).toMatchObject({ discount: 15, net: 85, total: 85 })
+        expect(validateLineItems([makeLine({ description: 'x', quantity: 3, max_quantity: 2 })]).errors['0.quantity']).toMatch(/máximo/)
+        expect(validateLineItems([makeLine({ description: 'x', quantity: 0 })], { allowZeroQuantity: true }).valid).toBe(true)
+        const out = serializeLineItems([makeLine({ description: 'A', unit: 'pza', catalog_price: 800, discount_kind: 'amount', discount: 10 })])
+        expect(out[0]).toMatchObject({ unit: 'pza', catalog_price: 800, discount_kind: 'amount', discount: 10 })
+        expect(out[0]).not.toHaveProperty('cost')
+        expect(out[0]).not.toHaveProperty('max_quantity')
+    })
+})
+
+describe('document lines', () => {
+    const tire = { id: 'p1', name: 'Llanta X', sku: 'LX', price: 1200, cost: 800, tax_rate: 0.16 }
+    it('compras usa el costo y un segundo clic suma cantidad', () => {
+        expect(priceFromProduct(tire, undefined, 'cost')).toBe(800)
+        expect(priceFromProduct(tire, undefined, 'sale')).toBe(1200)
+        const once = addProductLine([], tire, undefined, { priceSource: 'cost' })
+        expect(once[0]).toMatchObject({ quantity: 1, unit_price: 800, catalog_price: 800, sku: 'LX', description: 'Llanta X' })
+        const twice = addProductLine(once, tire, undefined, { priceSource: 'cost' })
+        expect(twice).toHaveLength(1)
+        expect(twice[0]!.quantity).toBe(2)
+        expect(computeLine(twice[0]!)).toMatchObject({ net: 1600, tax: 256, total: 1856 })
+    })
+    it('teclado: Enter agrega, Supr en celda vacía borra, no con sugerencias abiertas', () => {
+        expect(lineGridKeyCommand('Enter', { mode: 'free' })).toBe('add')
+        expect(lineGridKeyCommand('Enter', { suggestionsOpen: true })).toBe('none')
+        expect(lineGridKeyCommand('Enter', { mode: 'from_source' })).toBe('none')
+        expect(lineGridKeyCommand('Backspace', { cellEmpty: true })).toBe('delete')
+        expect(lineGridKeyCommand('Tab')).toBe('next')
     })
 })
 

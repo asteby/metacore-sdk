@@ -27,6 +27,11 @@ export interface ResolvedOption {
     image?: string | null
     color?: string | null
     icon?: string | null
+    /**
+     * Campos extra del payload (precio, costo, sku, tasa) que no son decoración.
+     * Solo se llena cuando el option trae números o strings además de id/label.
+     */
+    meta?: Record<string, unknown>
 }
 
 export interface OptionsMeta {
@@ -331,9 +336,18 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
  * id/value and label/name fields for legacy parity — we accept either
  * and surface a stable shape downstream.
  */
+const OPTION_KNOWN_KEYS = new Set(['id', 'value', 'label', 'name', 'description', 'image', 'color', 'icon'])
+
 export function projectOption(raw: any): ResolvedOption {
     const id = raw?.id ?? raw?.value ?? ''
     const label = String(raw?.label ?? raw?.name ?? id ?? '')
+    const meta: Record<string, unknown> = {}
+    if (raw && typeof raw === 'object') {
+        for (const [k, v] of Object.entries(raw)) {
+            if (OPTION_KNOWN_KEYS.has(k)) continue
+            if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') meta[k] = v
+        }
+    }
     return {
         id,
         value: raw?.value ?? id,
@@ -343,5 +357,6 @@ export function projectOption(raw: any): ResolvedOption {
         image: raw?.image ?? null,
         color: raw?.color ?? null,
         icon: raw?.icon ?? null,
+        ...(Object.keys(meta).length > 0 ? { meta } : {}),
     }
 }
