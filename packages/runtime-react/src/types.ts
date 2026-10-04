@@ -22,6 +22,48 @@ export interface ImportSpecMeta {
     instructions?: string[]
 }
 
+/** Paso de renglones de un tipo de documento (usa el editor de renglones del SDK). */
+export interface DocumentFormLines {
+    /** Campo del payload que recibe los renglones. Default: `lines` (o `lines_field` del manifest). */
+    field?: string
+    /** Columnas opcionales del editor (`discount`, `tax`, `unit`…). */
+    columns?: string[]
+    /** `sale` (precio de lista) o `cost` (compras). Default `sale`. */
+    price_source?: 'sale' | 'cost'
+    /** Al menos un renglón para guardar. Default true. */
+    required?: boolean
+    /** Título del paso. Default «Renglones». */
+    title?: string
+}
+
+/** Un tipo de documento (Factura, Nota de crédito, REP, Global, Traslado…). */
+export interface DocumentFormType {
+    key: string
+    label: string
+    description?: string
+    icon?: string
+    /** Valor que se escribe en `type_field` (p. ej. `"E"`). Default: `key`. */
+    value?: string
+    /** Campos del tipo, en el mismo vocabulario que los campos de una acción. */
+    fields: ActionFieldDef[]
+    /** Valores fijos que viajan en el alta de este tipo. */
+    defaults?: Record<string, unknown>
+    /** Con esto el tipo tiene paso de renglones. */
+    lines?: DocumentFormLines | boolean
+    /** Endpoint de alta propio de este tipo. Default: el del modelo. */
+    endpoint?: string
+    /** Texto del botón final. Default «Crear». */
+    submit_label?: string
+}
+
+export interface DocumentFormsManifest {
+    /** Columna discriminadora del modelo (p. ej. `"type"`). Sin ella no se escribe el tipo. */
+    type_field?: string
+    /** Campo por defecto de los renglones. Default `lines`. */
+    lines_field?: string
+    types: DocumentFormType[]
+}
+
 export interface TableMetadata {
     title: string
     endpoint: string
@@ -36,6 +78,13 @@ export interface TableMetadata {
     canExport?: boolean
     canImport?: boolean
     canCreate?: boolean
+    /**
+     * Formularios de alta guiados por tipo de documento (FAC-12). Cuando trae
+     * al menos un tipo, `DynamicCRUDPage` abre `DocumentFormDialog` en lugar del
+     * formulario genérico del modelo. Lo sirve el kernel o el addon; el SDK no
+     * conoce campos fiscales.
+     */
+    document_forms?: DocumentFormsManifest
     /**
      * Cómo se pinta el alta genérica. `generic` (o ausente) es el botón Crear.
      * `hidden` lo quita. `action` lo quita porque el módulo trae la suya

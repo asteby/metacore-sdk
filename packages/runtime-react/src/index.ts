@@ -204,6 +204,11 @@ export {
     type RecordMutationDetail,
 } from './record-mutation-events'
 export {
+    DocumentFormDialog,
+    resolveDocumentForms,
+    type DocumentFormDialogProps,
+} from './document-form-dialog'
+export {
     modelFromNavUrl,
     capabilityForNavItem,
     isNavItemAllowed,

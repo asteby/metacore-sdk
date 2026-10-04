@@ -33,13 +33,14 @@ import { useApi } from './api-context'
 import { useMetadataCache } from './metadata-cache'
 import { DynamicTable } from './dynamic-table'
 import { DynamicRecordDialog } from './dialogs/dynamic-record'
+import { DocumentFormDialog, resolveDocumentForms } from './document-form-dialog'
 import { ExportDialog } from './dialogs/export'
 import { ImportDialog } from './dialogs/import'
 import { getModelExtension } from './model-extension-registry'
 import { ModelActionToolbar } from './model-action-toolbar'
 import { resolveListPrimaryAction } from './list-primary-action'
 import { useCan, modelCapability } from './permissions-context'
-import type { TableMetadata } from './types'
+import type { DocumentFormsManifest, TableMetadata } from './types'
 
 export interface DynamicCRUDPageStrings {
     refresh?: string
@@ -90,6 +91,11 @@ export interface DynamicCRUDPageProps {
     classes?: DynamicCRUDPageClasses
     /** Fired after a create/import/refresh successfully reloads the table. */
     onChange?: () => void
+    /**
+     * Guided create by document type (FAC-12). Wins over `metadata.document_forms`;
+     * with neither, the generic record dialog is used as before.
+     */
+    documentForms?: DocumentFormsManifest
 }
 
 /**
@@ -112,6 +118,7 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
         toolbarExtras,
         classes,
         onChange,
+        documentForms,
     } = props
 
     const strings = { ...defaultStrings, ...(i18n ?? {}) }
@@ -186,6 +193,7 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
     const showImport = enableCRUD && !effectiveHideImport && can(modelCapability(model, 'import'))
     const showExport = !effectiveHideExport && can(modelCapability(model, 'export'))
     const showRefresh = !effectiveHideRefresh
+    const guidedForms = resolveDocumentForms(metadata, documentForms)
 
     const handleRefresh = useCallback(() => {
         setRefreshKey((k) => k + 1)
@@ -274,7 +282,18 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
                 </div>
             </div>
 
-            {showCreate && (
+            {showCreate && guidedForms && (
+                <DocumentFormDialog
+                    open={openCreate}
+                    onOpenChange={setOpenCreate}
+                    model={model}
+                    endpoint={dataEndpoint}
+                    forms={guidedForms}
+                    onSaved={handleRefresh}
+                />
+            )}
+
+            {showCreate && !guidedForms && (
                 <DynamicRecordDialog
                     open={openCreate}
                     onOpenChange={setOpenCreate}

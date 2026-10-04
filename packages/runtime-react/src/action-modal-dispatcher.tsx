@@ -1271,7 +1271,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
 // buildFieldDefaults seeds formData for a set of action fields, honoring the
 // same line-items prefill spec + boolean/empty rules GenericActionModal uses, so
 // wizard steps and single-page forms initialize identically.
-function buildFieldDefaults(fields: ActionFieldDef[], record: any): Record<string, any> {
+export function buildFieldDefaults(fields: ActionFieldDef[], record: any): Record<string, any> {
     const defaults: Record<string, any> = {}
     for (const field of fields) {
         if (isLineItemsField(field)) {
@@ -1540,7 +1540,8 @@ function seedOptionFromRecord(
     }
 }
 
-function renderField(
+/** Renders one action field (same widgets as the action modals). Shared with DocumentFormDialog. */
+export function renderField(
     field: ActionFieldDef,
     value: any,
     onChange: (value: any) => void,
