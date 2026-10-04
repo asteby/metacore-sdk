@@ -3,6 +3,7 @@ import { Building2 } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth-store'
 import { useTranslation } from 'react-i18next'
 import { useNavigation } from '@/hooks/use-navigation'
+import { useNavItemVisible } from '@asteby/metacore-runtime-react'
 
 import {
   Sidebar,
@@ -65,6 +66,24 @@ export function AppSidebar({
         translatedServer[translatedServer.length - 1],
       ]
 
+  // PIT-044: hide entries the role's effective permissions don't allow. Inert
+  // (undefined) when the host mounts no <PermissionsProvider>.
+  const isItemVisible = useNavItemVisible()
+  const visibleGroups = isItemVisible
+    ? navGroups
+        .map((group) => ({
+          ...group,
+          items: group.items
+            .map((item) =>
+              item.items
+                ? { ...item, items: item.items.filter((c) => isItemVisible(c)) }
+                : item,
+            )
+            .filter((item) => (item.items ? item.items.length > 0 : isItemVisible(item))),
+        }))
+        .filter((group) => group.items.length > 0)
+    : navGroups
+
   /* Default values from user or fallback */
   const orgName = user?.organization_name || t('common.main_company')
   const orgLogo = user?.organization_logo || Building2
@@ -80,7 +99,7 @@ export function AppSidebar({
         {isLoading ? (
           <SidebarSkeletonContent />
         ) : (
-          navGroups.map((group) => (
+          visibleGroups.map((group) => (
             <NavGroupCmp key={group.title} {...group} />
           ))
         )}

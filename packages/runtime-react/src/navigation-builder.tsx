@@ -1,6 +1,7 @@
 // NavigationBuilder — merges a host's base sidebar with `manifest.navigation`
 // contributions from every loaded addon. Pure function + a React hook.
 import { useMemo } from 'react'
+import { useCan, type CanFn } from './permissions-context'
 
 export interface NavItem {
     key: string
@@ -59,8 +60,33 @@ export function mergeNavigation(base: NavItem[], contributions: AddonNavigationC
         .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0))
 }
 
+/**
+ * Drops items whose `requires` capability the user lacks (PIT-044). A parent
+ * left without children is dropped too, unless it links somewhere itself.
+ */
+export function filterNavigationByCapability(items: NavItem[], can: CanFn): NavItem[] {
+    const out: NavItem[] = []
+    for (const item of items) {
+        if (item.requires && !can(item.requires)) continue
+        if (item.children) {
+            const children = filterNavigationByCapability(item.children, can)
+            if (children.length === 0 && item.children.length > 0 && !item.to) continue
+            out.push({ ...item, children })
+        } else {
+            out.push(item)
+        }
+    }
+    return out
+}
+
 export function useNavigation(base: NavItem[], contributions: AddonNavigationContribution[]): NavItem[] {
-    return useMemo(() => mergeNavigation(base, contributions), [base, contributions])
+    // useCan() allows everything without a <PermissionsProvider>, so hosts that
+    // never opt in keep the full tree.
+    const can = useCan()
+    return useMemo(
+        () => filterNavigationByCapability(mergeNavigation(base, contributions), can),
+        [base, contributions, can],
+    )
 }
 
 export interface NavigationBuilderProps {

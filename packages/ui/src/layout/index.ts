@@ -18,6 +18,7 @@ export {
   VIEW_PARAMS,
   type SplitHref,
 } from './nav-active'
+export { filterNavGroups, filterNavItems } from './filter-nav'
 export { TeamSwitcher } from './team-switcher'
 export { ProfileDropdown } from './profile-dropdown'
 export {

@@ -14,7 +14,8 @@ import {
 } from '@/primitives/sidebar'
 import { Skeleton } from '@/primitives/skeleton'
 import { NavGroup, type NavLinkComponent } from './nav-group'
-import type { NavGroupData } from './types'
+import type { NavGroupData, NavLinkItem } from './types'
+import { filterNavGroups } from './filter-nav'
 import { flattenNavLeaves, resolveActiveItemUrls } from './nav-active'
 
 export interface AppSidebarProps {
@@ -32,6 +33,11 @@ export interface AppSidebarProps {
   footer?: React.ReactNode
   /** Optional hover handler for prefetching data. */
   onItemHover?: (url: string) => void
+  /**
+   * Per-entry visibility (e.g. effective role permissions). Hidden leaves are
+   * dropped; collapsibles/groups left empty disappear with them.
+   */
+  isItemVisible?: (item: NavLinkItem) => boolean
   /** `<Sidebar>` `collapsible` prop. Defaults to 'offcanvas'. */
   collapsible?: 'offcanvas' | 'icon' | 'none'
   /** `<Sidebar>` `variant` prop. Defaults to 'sidebar'. */
@@ -45,7 +51,7 @@ export interface AppSidebarProps {
  * slots directly.
  */
 export function AppSidebar({
-  navGroups,
+  navGroups: navGroupsProp,
   currentHref,
   LinkComponent,
   isLoading = false,
@@ -54,7 +60,12 @@ export function AppSidebar({
   onItemHover,
   collapsible = 'offcanvas',
   variant = 'sidebar',
+  isItemVisible,
 }: AppSidebarProps) {
+  const navGroups = React.useMemo(
+    () => (isItemVisible ? filterNavGroups(navGroupsProp, isItemVisible) : navGroupsProp),
+    [navGroupsProp, isItemVisible],
+  )
   // Cross-group "most specific wins": Pedidos vs Solicitudes de crédito share a
   // model path but live in different groups — resolve once over every leaf.
   const activeUrls = React.useMemo(() => {

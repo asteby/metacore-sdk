@@ -204,6 +204,13 @@ export {
     type RecordMutationDetail,
 } from './record-mutation-events'
 export {
+    modelFromNavUrl,
+    capabilityForNavItem,
+    isNavItemAllowed,
+    useNavItemVisible,
+    type NavLeafLike,
+} from './nav-permissions'
+export {
     CfdiStampPanel,
     CfdiStampResultDialog,
     extractStampResult,
