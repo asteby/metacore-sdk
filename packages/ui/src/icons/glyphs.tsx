@@ -152,6 +152,9 @@ export function loadGlyph(name: string): Promise<LucideIcon | null> {
         return null
       }
       const mod = await loader()
+      // A chunk that 404s (stale deploy) can resolve undefined instead of
+      // rejecting: not cached as missing, so the next visit retries it.
+      if (!mod?.default) return null
       remember(key, mod)
       // Something may have registered it meanwhile: keep that component.
       const icon = glyphs.get(key) ?? mod.default
