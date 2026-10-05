@@ -565,6 +565,12 @@ export interface ActionFieldDef {
     type: string
     required?: boolean
     /**
+     * Campo de solo lectura (escrito por el servidor/sistema): `DynamicForm` lo
+     * oculta y lo excluye de defaults y submit. Acepta el alias `readOnly`.
+     */
+    readonly?: boolean
+    readOnly?: boolean
+    /**
      * Explicit nullability flag served by the kernel (v0.77.1+) from
      * `modelbase.FieldDef.Nullable` (populated as `!Required`). An optional `ref`
      * arrives as `nullable: true`. When present it authoritatively decides whether
