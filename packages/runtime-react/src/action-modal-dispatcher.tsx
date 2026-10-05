@@ -15,7 +15,7 @@
 // The host injects its axios-like client via <ApiProvider>; we no longer
 // depend on a bundler alias to `@/lib/api`.
 import { emitRecordMutation } from './record-mutation-events'
-import { useState, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { Suspense, useState, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
     Dialog,
@@ -88,6 +88,9 @@ import {
     subscribeActionComponents,
 } from '@asteby/metacore-sdk'
 import { requestFederatedAction } from './federated-action-loader'
+import { useInstalledAddons } from './installed-addons-context'
+import { federatedModalComponent, resolveFederatedModal } from './primitives/contributions'
+import { installedPredicate, useContributionsVersion } from './primitives/use-contributions'
 
 export type { ActionMetadata, ActionModalProps }
 
@@ -375,6 +378,15 @@ export function ActionModalDispatcher({
     const readComponent = () => getActionComponent(model, action.key)
     const CustomComponent = useSyncExternalStore(subscribeActionComponents, readComponent, readComponent)
 
+    // Modal federado declarativo (registerFederatedModal). Si el addon dueño
+    // del slug consta como NO instalado, el `modal` se ignora y se usa el
+    // formulario genérico de la acción de inmediato (sin esperar el timeout).
+    useContributionsVersion()
+    const installed = useInstalledAddons()
+    const slug = action.modal || ''
+    const federatedModal = slug ? resolveFederatedModal(slug, installedPredicate(installed)) : null
+    const modalAddonMissing = !!slug && !federatedModal && !!installed && !installed.addons.has(slug.split('.')[0])
+
     if (CustomComponent) {
         return (
             <CustomComponent
@@ -389,10 +401,28 @@ export function ActionModalDispatcher({
         )
     }
 
+    if (federatedModal) {
+        const FederatedComponent = federatedModalComponent<ActionModalProps>(federatedModal)
+        return (
+            <Suspense fallback={<LoadingActionDialog open={open} onOpenChange={onOpenChange} action={action} />}>
+                <FederatedComponent
+                    open={open}
+                    onOpenChange={onOpenChange}
+                    action={action}
+                    model={model}
+                    record={record}
+                    endpoint={endpoint}
+                    onSuccess={onSuccess}
+                />
+            </Suspense>
+        )
+    }
+
     // Declarative custom slot (`modal: "addon.action"`). Wait for the remote,
     // then a hard error — confirm/fields generics look "fine" and hide a
-    // missing remote.
-    if (action.modal) {
+    // missing remote. Exception: the slug's addon is known NOT installed — the
+    // remote will never come, so fall through to the generic form now.
+    if (action.modal && !modalAddonMissing) {
         return (
             <PendingCustomActionModal
                 open={open}
@@ -479,7 +509,6 @@ function PendingCustomActionModal({
     action: ActionMetadata
     model: string
 }) {
-    const { t } = useTranslation()
     const slug = action.modal || ''
     const [timedOut, setTimedOut] = useState(false)
 
@@ -522,6 +551,20 @@ function PendingCustomActionModal({
         return <MissingCustomActionModal open={open} onOpenChange={onOpenChange} action={action} model={model} />
     }
 
+    return <LoadingActionDialog open={open} onOpenChange={onOpenChange} action={action} />
+}
+
+/** Diálogo «Cargando…» mientras llega el componente federado de la acción. */
+function LoadingActionDialog({
+    open,
+    onOpenChange,
+    action,
+}: {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    action: ActionMetadata
+}) {
+    const { t } = useTranslation()
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent>
