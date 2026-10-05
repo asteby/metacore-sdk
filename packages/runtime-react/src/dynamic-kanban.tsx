@@ -94,9 +94,6 @@ import {
     Button,
     Card,
     CardContent,
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuTrigger,
     Input,
     Popover,
     PopoverContent,
@@ -113,6 +110,13 @@ import {
     SheetTrigger,
     Skeleton,
 } from '@asteby/metacore-ui/primitives'
+// The card "…" menu renders RowActionMenuItem (dynamic-columns), whose
+// DropdownMenuItem comes from the ROOT '@asteby/metacore-ui' entry. The menu
+// shell MUST come from that same entry: hosts share the root entry as a Module
+// Federation singleton while '/primitives' is bundled locally, so mixing them
+// yields two Radix Menu contexts and the click crashes the app with
+// "`MenuItem` must be used within `Menu`" (Pitsline taller kanban, 2026-10-05).
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from '@asteby/metacore-ui'
 import { ColumnFilterControl, FilterValueCombobox, type ColumnFilterType } from '@asteby/metacore-ui/data-table'
 import { generateBadgeStyles, optionColor } from '@asteby/metacore-ui/lib'
 import { useApi } from './api-context'
