@@ -1,5 +1,6 @@
 ---
 '@asteby/metacore-runtime-react': minor
+'@asteby/metacore-sdk': minor
 ---
 
 Primitivos de negocio para hosts y addons federados:
@@ -11,3 +12,4 @@ Primitivos de negocio para hosts y addons federados:
 - Modales federados: `registerFederatedModal` / `resolveFederatedModal`. `ActionModalDispatcher` pinta el modal registrado sin esperar al host y, si el addon del `modal` no está instalado, abre el formulario genérico de la acción de inmediato en lugar de esperar 20 s.
 - Tipos de documento (`registerDocumentKind`, `CORE_DOCUMENT_KINDS`) y contratos de PartyCard / TotalsPanel / PreviewPanel / ValidationChecklist.
 - Manifest `document_forms`: `lines.kind`, `lines.open_documents`, `sources`, `preview` y `submit_action` en los tipos.
+- Ayudantes de captura por modelo: `registerRecordPrefill` (también en `registry.scope(addon)`, se retira en el `unbind`) y `RecordPrefillBar`, que `DynamicRecordDialog` monta arriba del formulario; solo aplica claves que el formulario declara.

@@ -689,3 +689,7 @@ export {
     useInstalledAddons,
     type InstalledAddonsValue,
 } from './installed-addons-context'
+
+// Ayudantes de captura (registerRecordPrefill de @asteby/metacore-sdk) arriba
+// del formulario genérico de un modelo; DynamicRecordDialog ya lo monta.
+export { RecordPrefillBar, type RecordPrefillBarProps } from './record-prefill-bar'

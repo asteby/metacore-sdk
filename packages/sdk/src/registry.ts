@@ -12,6 +12,11 @@
  */
 
 import type { ComponentType } from "react";
+import {
+  registerRecordPrefill,
+  unregisterRecordPrefillsByOwner,
+  type RecordPrefillContribution,
+} from "./record-prefill-registry.js";
 
 export interface RouteContribution {
   path: string;
@@ -68,6 +73,8 @@ export interface ScopedRegistry {
   registerModal(c: ModalContribution): void;
   registerAction(c: ActionContribution): void;
   registerSlot(c: SlotContribution): void;
+  /** Ayudante de captura en el formulario genérico de un modelo (p. ej. CSF en Customer). */
+  registerRecordPrefill(c: RecordPrefillContribution): void;
 }
 
 interface OwnedRoute {
@@ -112,6 +119,9 @@ export class Registry {
       registerModal: (c) => this.registerModal(c, addonKey),
       registerAction: (c) => this.registerAction(c, addonKey),
       registerSlot: (c) => this.registerSlot(c, addonKey),
+      registerRecordPrefill: (c) => {
+        registerRecordPrefill(c, addonKey);
+      },
     };
   }
 
@@ -156,6 +166,8 @@ export class Registry {
       if (kept.length === 0) this.slots.delete(name);
       else this.slots.set(name, kept);
     }
+
+    removed += unregisterRecordPrefillsByOwner(addonKey);
 
     if (removed > 0) this.emit({ type: "unbind", addonKey });
     return removed;

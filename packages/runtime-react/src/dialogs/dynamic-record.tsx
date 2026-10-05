@@ -10,7 +10,7 @@
 // the image-url resolver and the org IANA timezone — are passed as props so the
 // SDK stays transport- and host-agnostic.
 import { emitRecordMutation } from '../record-mutation-events'
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ModelSchema } from './types'
 
@@ -69,6 +69,7 @@ import type { VisibleWhen } from '../types'
 import { groupFieldsBySection, type FormLayout } from '../form-layout'
 import { FieldSection, WizardProgress } from '../form-layout-ui'
 import { AssistInterview } from '../assist-interview'
+import { RecordPrefillBar } from '../record-prefill-bar'
 import { FieldCell } from '../field-grid'
 import { isNilUuid, normalizeNilUuid } from '../nil-uuid'
 import { normalizeRefFieldsForSubmit } from './normalize-submit'
@@ -667,6 +668,17 @@ export function DynamicRecordDialog({
     const isCreate = mode === 'create'
     const isView = mode === 'view'
     const isEditable = mode === 'create' || mode === 'edit'
+    // Claves que un ayudante de captura (RecordPrefillBar) puede escribir: sólo
+    // los campos que este formulario declara (incluye fiscal_data.* de las
+    // ModelExtension). Readonly fuera: un prefill no salta un candado.
+    const prefillAllowedKeys = useMemo(
+        () => new Set<string>((modalMeta?.fields ?? []).filter((f: any) => !f.readonly).map((f: any) => f.key)),
+        [modalMeta],
+    )
+    const applyPrefill = useCallback(
+        (patch: Record<string, any>) => setFormValues(prev => ({ ...prev, ...patch })),
+        [],
+    )
     const config = MODE_CONFIG[mode]
 
     // ── Fetch metadata + record when dialog opens ──────────────────────────
@@ -1111,6 +1123,16 @@ export function DynamicRecordDialog({
                                 two-column grid, unchanged. FieldCell gives each
                                 cell `min-w-0` so a long select/input value can't
                                 blow the two columns past the dialog width. */}
+                            {isEditable && (
+                                <RecordPrefillBar
+                                    model={model}
+                                    mode={isCreate ? 'create' : 'edit'}
+                                    recordId={recordId}
+                                    values={formValues}
+                                    allowedKeys={prefillAllowedKeys}
+                                    onApply={applyPrefill}
+                                />
+                            )}
                             <form
                                 id={formId}
                                 // Stable Aby / guidance contract: unique id={formId}
