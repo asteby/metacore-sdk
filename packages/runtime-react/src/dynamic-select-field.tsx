@@ -22,6 +22,7 @@
 // value). A dedicated `?ids=` lookup is a follow-up; create flows — the common
 // case — start empty and never hit this.
 import { useEffect, useRef, useState } from 'react'
+import { getOptionFilter } from './option-filter'
 import { useTranslation } from 'react-i18next'
 import {
     Badge,
@@ -266,6 +267,7 @@ export function DynamicSelectField({
     const blockedByDependency = !!dependsOn && scope === ''
 
     const useStatic = Array.isArray(staticOptions)
+    const optionFilter = getOptionFilter(field)
 
     const { options: fetchedOptions, loading: fetchLoading } = useOptionsResolver({
         modelKey: '',
@@ -280,6 +282,8 @@ export function DynamicSelectField({
         // Cascade scope forwarded as filter_value (only when this field
         // declares a dependency). Re-fetches when the parent value changes.
         filterValue: dependsOn ? scope : undefined,
+        optionFilter,
+        keepValue: value,
         // Don't fetch until the popover opens (and keep fetching as the query
         // changes while open). A picker blocked by an unset dependency never
         // fetches. A readonly cell fetches eagerly so its value's label resolves

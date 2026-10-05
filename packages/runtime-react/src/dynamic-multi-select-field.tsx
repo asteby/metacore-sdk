@@ -19,6 +19,7 @@
 // value instead.
 import { useMemo } from 'react'
 import { MultiSelect } from '@asteby/metacore-ui/primitives'
+import { getOptionFilter } from './option-filter'
 import { useOptionsResolver } from './use-options-resolver'
 import { getFieldRef } from './dynamic-form-schema'
 import type { ActionFieldDef } from './types'
@@ -38,6 +39,7 @@ export function DynamicMultiSelectField({ field, value, onChange }: DynamicMulti
         ref,
         endpoint: !ref && field.searchEndpoint ? field.searchEndpoint : undefined,
         limit: 200,
+        optionFilter: getOptionFilter(field),
     })
 
     const selected = useMemo(() => (Array.isArray(value) ? value.map(String) : []), [value])

@@ -30,6 +30,7 @@ import {
 } from './dynamic-form-schema'
 import { ScanLine } from 'lucide-react'
 import { BarcodeScanner } from './barcode-scanner'
+import { getOptionFilter } from './option-filter'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { DynamicLineItems } from './dynamic-line-items'
 import { DynamicSelectField } from './dynamic-select-field'
@@ -530,6 +531,8 @@ function RefSelect({ field, value, onChange }: FieldRendererProps) {
         modelKey: '',          // unused — `ref` drives the URL
         fieldKey: 'id',
         ref: field.ref,
+        optionFilter: getOptionFilter(field),
+        keepValue: value,
     })
     return (
         <Select value={value || ''} onValueChange={onChange} disabled={loading}>

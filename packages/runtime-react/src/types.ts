@@ -1,3 +1,4 @@
+import type { OptionFilter } from './option-filter'
 // Shared metadata shape consumed by every host. Some hosts add a `link`
 // action type with a `linkUrl` template — represented here as part of the
 // `type` union so the SDK can render it uniformly.
@@ -401,6 +402,16 @@ export interface ColumnDefinition {
      */
     ref?: string
     /**
+     * Hides options of this relation/dynamic picker (e.g. cancelled invoices in
+     * the payments selector). One rule or a list (AND), tested client-side
+     * against the option's extra columns (`meta`): `{ field: 'status', not_in:
+     * ['cancelada'] }`. The options endpoint must return that column. Absent →
+     * the picker lists everything (retrocompat). See `option-filter.ts`.
+     */
+    optionFilter?: OptionFilter
+    /** snake_case alias served by the kernel manifest for `optionFilter`. */
+    option_filter?: OptionFilter
+    /**
      * Write-time rules the SDK also pre-flights. Object form `{regex,min,max,custom}`
      * or a Laravel / go-playground string (`required|min:2|email`).
      */
@@ -566,6 +577,16 @@ export interface ActionFieldDef {
      * `useOptionsResolver` against `/api/options/<ref>?field=id`.
      */
     ref?: string
+    /**
+     * Hides options of this relation/dynamic picker (e.g. cancelled invoices in
+     * the payments selector). One rule or a list (AND), tested client-side
+     * against the option's extra columns (`meta`): `{ field: 'status', not_in:
+     * ['cancelada'] }`. The options endpoint must return that column. Absent →
+     * the picker lists everything (retrocompat). See `option-filter.ts`.
+     */
+    optionFilter?: OptionFilter
+    /** snake_case alias served by the kernel manifest for `optionFilter`. */
+    option_filter?: OptionFilter
     /**
      * snake_case aliases the kernel manifest may serve for a belongs_to FK
      * target instead of `ref`. Treated as equivalent to `ref` by the SDK so a

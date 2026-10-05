@@ -36,6 +36,7 @@ import {
     applyOptionWhen,
 } from './dynamic-form-schema'
 import { DynamicSelectField, DEFAULT_DEPENDS_HINT } from './dynamic-select-field'
+import { getOptionFilter } from './option-filter'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 
 export interface DynamicLineItemsProps {
@@ -575,6 +576,8 @@ function RefCell({ field, value, onChange, onPick, disabled, formValues, rowValu
         ref: optSource.ref,
         endpoint: optSource.endpoint,
         filterValue: dependsOn ? scope : undefined,
+        optionFilter: getOptionFilter(field),
+        keepValue: value,
         enabled: !blockedByDependency,
     })
 

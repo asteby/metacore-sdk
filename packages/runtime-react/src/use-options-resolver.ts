@@ -12,6 +12,7 @@
 // free; legacy callers that still ship `searchEndpoint` keep working.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from './api-context'
+import { applyOptionFilter, type OptionFilterRule } from './option-filter'
 import { loadQueryPart, optionsBatchToken, optionsModelFromUrl } from './query-batch'
 
 export interface ResolvedOption {
@@ -90,6 +91,13 @@ export interface UseOptionsResolverArgs {
      * `fieldKey` / `query` / `limit` exactly the same way.
      */
     endpoint?: string
+    /**
+     * Client-side rules that hide fetched options (see `option-filter.ts`).
+     * Empty/undefined → no filtering (retrocompat).
+     */
+    optionFilter?: OptionFilterRule[]
+    /** Current selection: never hidden by `optionFilter`, so its label survives. */
+    keepValue?: unknown
 }
 
 export interface UseOptionsResolverResult {
@@ -182,6 +190,8 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
         enabled = true,
         endpoint,
         filterValue,
+        optionFilter,
+        keepValue,
     } = args
 
     const api = useApi()
@@ -322,8 +332,16 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
         }
     }, [api, url, effectiveField, query, limit, enabled, filterValue, refreshKey])
 
+    // Rules arrive as a fresh array each render; key on their content.
+    const filterKey = optionFilter && optionFilter.length > 0 ? JSON.stringify(optionFilter) : ''
+    const visibleOptions = useMemo(
+        () => (filterKey ? applyOptionFilter(options, optionFilter ?? [], keepValue) : options),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [options, filterKey, keepValue],
+    )
+
     return {
-        options,
+        options: visibleOptions,
         meta,
         loading,
         error,

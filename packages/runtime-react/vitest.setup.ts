@@ -27,3 +27,10 @@ function installMemoryStorage(name: 'localStorage' | 'sessionStorage') {
 
 installMemoryStorage('localStorage')
 installMemoryStorage('sessionStorage')
+
+// `waitFor` defaults to 1s; the DynamicTable/DynamicKanban suites render large
+// trees and miss it when the whole monorepo's tests run in parallel (turbo).
+// A longer ceiling only affects failing waits, passing tests return immediately.
+import { configure } from '@testing-library/react'
+
+configure({ asyncUtilTimeout: 5000 })

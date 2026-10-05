@@ -669,3 +669,8 @@ export {
 
 // Página de documento (benchmark §5/§6): cabecera, badges, acciones por estado, botones inteligentes.
 export * from './document'
+
+// Option filter — hide options of a relation / dynamic picker from the manifest
+// (`option_filter` / `optionFilter` on the field).
+export { getOptionFilter, applyOptionFilter, optionPassesRule } from './option-filter'
+export type { OptionFilter, OptionFilterRule } from './option-filter'
