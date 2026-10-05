@@ -7,7 +7,7 @@ import {
   slugifyFolderKey,
   type CatalogLeaf,
   type SidebarLayoutNode,
-} from './apply-sidebar-layout'
+} from '../apply-sidebar-layout'
 
 describe('applySidebarLayout', () => {
   const catalog: CatalogLeaf[] = [

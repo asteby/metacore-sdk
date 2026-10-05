@@ -75,7 +75,7 @@ export function InstallConfirmModal({
 
   // In <body>: inside a glass panel (backdrop-filter) a fixed overlay would
   // cover and center on that panel, not the viewport.
-  return createPortal(
+  const dialog = (
     <div
       role="dialog"
       aria-modal="true"
@@ -178,7 +178,9 @@ export function InstallConfirmModal({
           </button>
         </footer>
       </div>
-    </div>,
-    document.body,
+    </div>
   )
+  // No DOM (SSR / renderToStaticMarkup): render inline instead of crashing on
+  // `document.body`; the portal only matters once there is a viewport.
+  return typeof document === 'undefined' ? dialog : createPortal(dialog, document.body)
 }

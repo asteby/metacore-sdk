@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react'
 
 vi.mock('react-i18next', () => ({
-    useTranslation: () => ({ t: (k: string, o?: any) => o?.defaultValue ?? k }),
+    useTranslation: () => ({ t: (k: string, o?: any) => o?.defaultValue ?? k, i18n: { language: 'es' } }),
 }))
 
 import { ActionModalDispatcher } from '../action-modal-dispatcher'

@@ -149,6 +149,10 @@ describe('DynamicTable infinite scroll', () => {
         await waitFor(() => expect(screen.getByText('30 de 45')).toBeTruthy())
         observers.forEach((o) => o.fire(true))
         await waitFor(() => expect(screen.getByText('45 de 45')).toBeTruthy())
+        // The sentinel leaves the viewport once everything is loaded. While it
+        // stays intersecting the hook deliberately chains the next page after a
+        // reset (viewport-fill), which would mask the collapse asserted below.
+        observers.forEach((o) => o.fire(false))
 
         // Change the active filters via defaultFilters (part of buildFilterParams).
         rerender(

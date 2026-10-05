@@ -9,7 +9,7 @@
 //     header field is empty, and once the header field has a value the options
 //     request carries that value as `filter_value` and re-fetches on change.
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react'
 
 // Identity translator so any raw i18n keys surface verbatim.
 vi.mock('react-i18next', () => ({
@@ -194,6 +194,10 @@ function LineItemsHost({ headerValue }: { headerValue: string }) {
     )
 }
 
+// The editor renders a mobile card list AND a desktop table (CSS picks one), so
+// scope queries to the table to hit a single picker.
+const tableCombobox = () => within(document.querySelector('table') as HTMLElement).getByRole('combobox')
+
 describe('DynamicLineItems cascading cell', () => {
     it('disables the picker while the header field is empty', () => {
         const get = vi.fn(async () => ({
@@ -206,7 +210,7 @@ describe('DynamicLineItems cascading cell', () => {
             </ApiProvider>,
         )
         // The combobox trigger is disabled and shows the dependency hint.
-        const trigger = screen.getByRole('combobox')
+        const trigger = tableCombobox()
         expect((trigger as HTMLButtonElement).disabled).toBe(true)
         expect(trigger.getAttribute('data-depends-blocked')).toBe('')
         // No options request fires while blocked.
@@ -230,7 +234,7 @@ describe('DynamicLineItems cascading cell', () => {
         )
 
         // Open the popover so the typeahead fetches.
-        const trigger = screen.getByRole('combobox')
+        const trigger = tableCombobox()
         expect((trigger as HTMLButtonElement).disabled).toBe(false)
         await act(async () => {
             trigger.click()
@@ -300,7 +304,10 @@ describe('DynamicLineItems cell with optionsConfig.source', () => {
                 meta: { type: 'dynamic', count: 1 },
             },
         }))
-        const client = { get } as unknown as ApiClient
+        // `/options/<model>` lookups try the batched `/q` endpoint first; a client
+        // whose batch endpoint is unavailable falls back to the plain GET asserted here.
+        const post = vi.fn(async () => ({ data: { success: false } }))
+        const client = { get, post } as unknown as ApiClient
 
         const { rerender } = render(
             <ApiProvider client={client}>
@@ -308,7 +315,7 @@ describe('DynamicLineItems cell with optionsConfig.source', () => {
             </ApiProvider>,
         )
 
-        const trigger = screen.getByRole('combobox')
+        const trigger = tableCombobox()
         expect((trigger as HTMLButtonElement).disabled).toBe(false)
         await act(async () => {
             trigger.click()

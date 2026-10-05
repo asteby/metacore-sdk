@@ -82,7 +82,11 @@ describe('detail-view jsonb line-items (ViewValue → inline CollectionCell)', (
                 record={{}}
             />
         )
-        expect(screen.getByText('Precio:')).toBeTruthy()
+        // Keys are humanized (the addon-declared label is the localized source);
+        // each pair renders as a <dt>/<dd>, never "[object Object]".
+        expect(screen.getByText('Price').tagName).toBe('DT')
+        expect(screen.getByText('10').tagName).toBe('DD')
+        expect(screen.getByText('Quantity')).toBeTruthy()
         expect(container.textContent).not.toContain('[object Object]')
     })
 

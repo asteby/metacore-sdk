@@ -65,6 +65,7 @@ describe('DynamicLineItems — lock_rows', () => {
     it('control: sin lock_rows muestra "Agregar renglón" y un botón de borrar por fila', () => {
         render(<DynamicLineItems field={lineField()} value={rows} onChange={vi.fn()} />)
         expect(screen.getByText('Agregar renglón')).toBeTruthy()
-        expect(screen.getAllByLabelText('Eliminar renglón')).toHaveLength(2)
+        // Mobile cards + desktop table both render a delete control per row.
+        expect(screen.getAllByLabelText('Eliminar renglón')).toHaveLength(rows.length * 2)
     })
 })
