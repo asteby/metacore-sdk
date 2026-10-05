@@ -1,5 +1,18 @@
 # @asteby/metacore-runtime-react
 
+## 47.1.0
+
+### Minor Changes
+
+- 1614e02: `TableMetadata.audit` (columnas de auditoría que sirve el kernel >= v0.188) y nuevo `<AuditInfo>`: «Creado por X · fecha», «Modificado por Y · fecha» y «Eliminado por Z · fecha», colapsado al pie del detalle/edición de `DynamicRecordDialog`. El nombre sale del host (`resolveActor`), del hermano expandido del registro (`created_by`) o, si no, un id corto; el actor de sistema se muestra como «Sistema».
+- 0ee83dd: Filtro de opciones en selectores de relación: el campo (columna o campo de acción) acepta `option_filter` / `optionFilter` (una regla o lista con `field` y `equals` / `not_equals` / `in` / `not_in`) para ocultar opciones, p. ej. facturas con status `cancelada` en el selector de abonos (PIT-059). Se aplica en cliente sobre las columnas extra que devuelve `/options`, nunca oculta la selección actual y es retrocompatible (sin la propiedad no cambia nada). Nuevos exports: `getOptionFilter`, `applyOptionFilter`, `optionPassesRule`, tipos `OptionFilter` y `OptionFilterRule`; `useOptionsResolver` acepta `optionFilter` y `keepValue`.
+
+### Patch Changes
+
+- ad1e1b0: Kanban: el menú «…» de la tarjeta ya no tira la app con «`MenuItem` must be used within `Menu`». El `DropdownMenu` de la tarjeta se importa ahora desde la entrada raíz de `@asteby/metacore-ui`, la misma de `RowActionMenuItem`. Así no se mezclan dos contextos de Radix cuando el host comparte la raíz por Module Federation y empaqueta `/primitives` aparte. Se agrega un test que lo vigila.
+- Updated dependencies [66d82f5]
+  - @asteby/metacore-ui@2.24.1
+
 ## 47.0.0
 
 ### Minor Changes

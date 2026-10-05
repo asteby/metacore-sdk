@@ -1,5 +1,12 @@
 # @asteby/metacore-marketplace
 
+## 128.0.0
+
+### Patch Changes
+
+- e0eb354: InstallConfirmModal ya no falla al renderizarse sin DOM (SSR, renderToStaticMarkup): el portal a body solo se usa cuando existe `document`.
+  - @asteby/metacore-app-providers@130.0.0
+
 ## 127.0.0
 
 ### Patch Changes
