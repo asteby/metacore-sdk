@@ -674,3 +674,14 @@ export * from './document'
 // (`option_filter` / `optionFilter` on the field).
 export { getOptionFilter, applyOptionFilter, optionPassesRule } from './option-filter'
 export type { OptionFilter, OptionFilterRule } from './option-filter'
+
+// Addons instalados / capacidades provistas — primitivo único de «¿qué hay
+// instalado?» para hosts y remotes federados. Sin provider los hooks devuelven
+// `undefined` (desconocido): el consumidor NUNCA debe asumir ausente.
+export {
+    InstalledAddonsProvider,
+    useAddonInstalled,
+    useCapabilityProvided,
+    useInstalledAddons,
+    type InstalledAddonsValue,
+} from './installed-addons-context'
