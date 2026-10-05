@@ -51,6 +51,8 @@ export const BUSINESS_COMPONENTS: readonly BusinessComponentSpec[] = [
             'applyProductToLine',
             'addProductLine',
             'lineGridKeyCommand',
+            'createCatalogProductSearch',
+            'catalogRecordToProduct',
         ],
     },
     {

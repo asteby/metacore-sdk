@@ -35,6 +35,13 @@ export interface DocumentFormLines {
     required?: boolean
     /** Título del paso. Default «Renglones». */
     title?: string
+    /**
+     * Cómo se captura el descuento: `percent` (default del grid), `amount`
+     * (importe) o `both`. Debe coincidir con la fórmula del modelo de renglones:
+     * si el backend calcula `quantity * unit_price - discount`, declara `amount`
+     * (con `percent` un 10 % se restaría como $10).
+     */
+    discount_mode?: 'percent' | 'amount' | 'both'
 }
 
 /** Un tipo de documento (Factura, Nota de crédito, REP, Global, Traslado…). */

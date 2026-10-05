@@ -31,17 +31,21 @@ export function applyProductToLine(
     const list = variant?.price ?? product.price
     const cost = variant?.cost ?? product.cost
     const catalog = source === 'cost' ? (cost ?? list) : list
+    // Nunca cantidad 0: un renglón vacío (o con la celda borrada) entra con 1.
+    const qty = opts.quantity ?? toAmount(line.quantity)
     return {
         ...line,
         kind: 'item',
         product_id: variant?.id ?? product.id,
         sku: variant?.sku ?? product.sku,
         description: variant ? `${product.name} · ${variant.label}` : product.name,
-        quantity: opts.quantity ?? (toAmount(line.quantity) || 1),
+        quantity: qty !== 0 ? qty : 1,
         unit_price: priceFromProduct(product, variant, source),
         catalog_price: catalog,
         cost,
         tax_rate: product.tax_rate ?? line.tax_rate ?? 0,
+        unit: product.unit ?? line.unit,
+        extensions: product.extensions ? { ...(line.extensions ?? {}), ...product.extensions } : line.extensions,
         available: availableStock(src, opts.warehouseId) ?? availableStock(product, opts.warehouseId),
     }
 }

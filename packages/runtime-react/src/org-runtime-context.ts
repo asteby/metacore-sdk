@@ -26,3 +26,13 @@ export const CurrencyContext = createContext<string | undefined>(undefined)
 
 /** Reads the nearest org currency (undefined outside a provider). */
 export const useCurrency = () => useContext(CurrencyContext)
+
+/**
+ * Org default tax rate as a fraction (e.g. `0.16`), from the org's fiscal
+ * config. Document line editors use it when the picked product carries no rate
+ * of its own. `undefined` outside a provider → lines start at 0.
+ */
+export const TaxRateContext = createContext<number | undefined>(undefined)
+
+/** Reads the nearest org default tax rate (undefined outside a provider). */
+export const useOrgTaxRate = () => useContext(TaxRateContext)

@@ -23,6 +23,7 @@ import {
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useApi } from './api-context'
+import { useOrgTaxRate } from './org-runtime-context'
 import { DynamicIcon } from './dynamic-icon'
 import { FieldCell, FieldGrid, FieldLabel } from './field-grid'
 import { FormErrorBanner } from './business/feedback'
@@ -42,6 +43,7 @@ import { validateValues, bagHasErrors } from './validator'
 import { clearFieldErrorTree } from './field-validation-ui'
 import { emitRecordMutation } from './record-mutation-events'
 import { isLineItemsField, resolveWidget } from './dynamic-form-schema'
+import { createCatalogProductSearch } from './business/catalog-product-search'
 import type {
     ActionFieldDef,
     DocumentFormLines,
@@ -62,8 +64,15 @@ export interface DocumentFormDialogProps {
     initialType?: string
     /** Se llama con el registro creado. */
     onSaved?: (record?: unknown) => void
-    /** Buscador de productos para el editor de renglones (mismo contrato que ProductPicker). */
+    /**
+     * Buscador de productos para el editor de renglones (mismo contrato que
+     * ProductPicker). Sin él se busca en el catálogo (`productModel`) vía /data.
+     */
     searchProducts?: DocumentLinesGridProps['search']
+    /** Modelo de catálogo del buscador por defecto. Default `products.Product`. */
+    productModel?: string
+    /** Tasa de impuesto (0.16) si el producto no trae la suya. Default: la de la org (OrgRuntimeProvider). */
+    defaultTaxRate?: number
     /** Moneda ISO para el editor de renglones (default: la de la org). */
     currency?: string
 }
@@ -94,10 +103,13 @@ export function DocumentFormDialog({
     initialType,
     onSaved,
     searchProducts,
+    productModel,
+    defaultTaxRate,
     currency,
 }: DocumentFormDialogProps) {
     const { t, i18n } = useTranslation()
     const api = useApi()
+    const orgTaxRate = useOrgTaxRate()
     const types = forms.types
     const single = types.length === 1 ? types[0] : undefined
 
@@ -111,6 +123,14 @@ export function DocumentFormDialog({
     const [saving, setSaving] = useState(false)
 
     const type = useMemo(() => types.find((x) => x.key === typeKey) ?? null, [types, typeKey])
+    // Sin buscador inyectado, el paso de renglones solo ofrecía «Renglón libre»
+    // y la línea entraba sin precio (DynamicCRUDPage no pasa searchProducts).
+    // Default: el catálogo de productos de la org.
+    const taxRate = defaultTaxRate ?? orgTaxRate
+    const lineSearch = useMemo(
+        () => searchProducts ?? createCatalogProductSearch(api, { model: productModel, defaultTaxRate: taxRate }),
+        [searchProducts, api, productModel, taxRate],
+    )
     const lineCfg = type ? linesConfig(type, forms) : undefined
 
     // Reset every time the dialog (re)opens.
@@ -311,8 +331,9 @@ export function DocumentFormDialog({
                             }}
                             columns={(lineCfg.columns as LineItemsColumn[] | undefined) ?? ['discount', 'tax']}
                             priceSource={lineCfg.price_source ?? 'sale'}
+                            discountMode={lineCfg.discount_mode}
                             serverErrors={serverLineErrors}
-                            search={searchProducts}
+                            search={lineSearch}
                             currency={currency}
                         />
                     )}

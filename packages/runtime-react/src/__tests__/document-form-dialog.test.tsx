@@ -16,6 +16,7 @@ import { DocumentFormDialog, resolveDocumentForms } from '../document-form-dialo
 import { DynamicCRUDPage } from '../dynamic-crud-page'
 import { useMetadataCache } from '../metadata-cache'
 import { ApiProvider, type ApiClient } from '../api-context'
+import { OrgRuntimeProvider } from '../org-runtime-provider'
 import type { DocumentFormsManifest } from '../types'
 
 afterEach(cleanup)
@@ -125,6 +126,84 @@ describe('DocumentFormDialog', () => {
         expect(banner.textContent).toContain('La factura origen no existe')
         expect(onOpenChange).not.toHaveBeenCalledWith(false)
         expect(onSaved).not.toHaveBeenCalled()
+    })
+})
+
+// Retest Pitsline 05/10: Facturas → Crear guardaba la factura en $0 porque el
+// host (DynamicCRUDPage / ops) no pasa `searchProducts` y el paso de renglones
+// solo ofrecía «Renglón libre» sin precio.
+describe('DocumentFormDialog: buscador de catálogo por defecto', () => {
+    const invoiceOnly: DocumentFormsManifest = { ...forms, types: [forms.types[0]] }
+    const catalogRow = {
+        id: 'prod-1',
+        name: 'Llanta 205/55R16',
+        sku: 'LL-205',
+        unit_price: '1500.00',
+        cost_price: '900',
+        unit_of_measure: 'pza',
+        product_type: 'product',
+        fiscal_data: { mx_clave_prod_serv: '25172504', mx_clave_unidad: 'H87' },
+    }
+
+    function mount(opts: { searchProducts?: any; taxRate?: number } = {}) {
+        const get = vi.fn().mockResolvedValue({ data: { success: true, data: [catalogRow] } })
+        const post = vi.fn().mockResolvedValue({ data: { success: true, data: { id: 'inv-1' } } })
+        const client = { get, post, put: vi.fn(), delete: vi.fn() } as unknown as ApiClient
+        render(
+            <ApiProvider client={client}>
+                <OrgRuntimeProvider taxRate={opts.taxRate}>
+                    <DocumentFormDialog
+                        open
+                        onOpenChange={vi.fn()}
+                        model="customers.Invoice"
+                        forms={invoiceOnly}
+                        searchProducts={opts.searchProducts}
+                    />
+                </OrgRuntimeProvider>
+            </ApiProvider>,
+        )
+        return { get, post }
+    }
+
+    async function pickFirstProduct(query: string, name: RegExp) {
+        fireEvent.change(document.querySelectorAll('input')[0], { target: { value: 'ACME' } })
+        fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+        fireEvent.change(await screen.findByLabelText('Buscar producto'), { target: { value: query } })
+        fireEvent.click(await waitFor(() => screen.getByRole('button', { name }), { timeout: 2000 }))
+    }
+
+    it('sin searchProducts del host busca en el catálogo y el renglón entra con precio, cantidad 1, unidad, SKU e IVA de la org', async () => {
+        const { get, post } = mount({ taxRate: 0.16 })
+        await pickFirstProduct('llanta', /Llanta 205\/55R16/)
+        expect(get).toHaveBeenCalledWith(
+            '/data/products.Product',
+            expect.objectContaining({ params: expect.objectContaining({ search: 'llanta' }) }),
+        )
+        fireEvent.click(screen.getByRole('button', { name: 'Crear' }))
+        await waitFor(() => expect(post).toHaveBeenCalled())
+        const [line] = (post.mock.calls[0][1] as any).lines
+        expect(line).toMatchObject({
+            product_id: 'prod-1',
+            sku: 'LL-205',
+            description: 'Llanta 205/55R16',
+            quantity: 1,
+            unit_price: 1500,
+            tax_rate: 0.16,
+            unit: 'pza',
+            fiscal_data: { mx_clave_prod_serv: '25172504', mx_clave_unidad: 'H87' },
+        })
+        expect(line.unit_price).toBeGreaterThan(0)
+    })
+
+    it('si el host pasa searchProducts, se usa ese y no el catálogo', async () => {
+        const searchProducts = vi.fn(async () => [{ id: 'h1', name: 'Servicio host', price: 250, tax_rate: 0.08 }])
+        const { get, post } = mount({ searchProducts })
+        await pickFirstProduct('serv', /Servicio host/)
+        expect(searchProducts).toHaveBeenCalled()
+        expect(get).not.toHaveBeenCalledWith('/data/products.Product', expect.anything())
+        fireEvent.click(screen.getByRole('button', { name: 'Crear' }))
+        await waitFor(() => expect(post).toHaveBeenCalled())
+        expect((post.mock.calls[0][1] as any).lines[0]).toMatchObject({ product_id: 'h1', quantity: 1, unit_price: 250, tax_rate: 0.08 })
     })
 })
 
