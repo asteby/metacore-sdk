@@ -243,7 +243,16 @@ export function RowActionMenuItem({
  * …) and fall back to `state` (purchases, inventory transfers, …). Empty string
  * is treated as missing so a blank `status` does not hide a populated `state`.
  */
-const rowLifecycleState = (row: any): unknown => {
+const rowLifecycleState = (row: any, stageField?: string): unknown => {
+    // A model with a stage machine gates its actions on the stage column, the
+    // same field the kernel's checkRequiresState reads (dynamic/action.go).
+    // Without this, WorkOrder actions declared with stage keys
+    // (requiresState: ['reception', …]) were compared to `status` ('open') and
+    // hidden in every row, so an OT could never be advanced from the UI.
+    if (stageField) {
+        const stage = row?.[stageField]
+        if (stage !== undefined && stage !== null && stage !== '') return stage
+    }
     const status = row?.status
     if (status !== undefined && status !== null && status !== '') return status
     const state = row?.state
@@ -264,10 +273,10 @@ const rowLifecycleState = (row: any): unknown => {
  *   - action without requiresState (or empty array)  → always shown.
  *   - row with neither `status` nor `state`          → all actions shown.
  */
-export const isActionAllowedForRowState = (action: any, row: any): boolean => {
+export const isActionAllowedForRowState = (action: any, row: any, stageField?: string): boolean => {
     const requires: unknown = action?.requiresState ?? action?.requires_state
     if (!Array.isArray(requires) || requires.length === 0) return true
-    const status = rowLifecycleState(row)
+    const status = rowLifecycleState(row, stageField)
     if (status === undefined) return true
     return requires.map(String).includes(String(status))
 }
@@ -341,8 +350,16 @@ export const isActionConditionMet = (action: any, row: any): boolean => {
  * (`requiresState`) AND the declarative `condition` must pass. Shared by the
  * table's action column and the kanban card menu so they hide/show identically.
  */
-export const isRowActionVisible = (action: any, row: any): boolean =>
-    isActionAllowedForRowState(action, row) && isActionConditionMet(action, row)
+export const isRowActionVisible = (action: any, row: any, stageField?: string): boolean =>
+    isActionAllowedForRowState(action, row, stageField) && isActionConditionMet(action, row)
+
+/**
+ * The column a model's `requiresState` gates read: the served `stage_field`
+ * (or, for hosts that predate it, the `group_by` of a model with stages).
+ * Undefined → the historical `status` / `state` lookup.
+ */
+export const lifecycleStageField = (metadata: any): string | undefined =>
+    metadata?.stage_field ?? metadata?.stageField ?? (metadata?.stages?.length ? metadata?.group_by : undefined)
 
 const lowerFirst = (value?: string) => {
     if (!value) return value
@@ -1564,7 +1581,7 @@ export function makeDefaultGetDynamicColumns(
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                                 {resolvedActions
-                                    .filter((action) => isRowActionVisible(action, row.original))
+                                    .filter((action) => isRowActionVisible(action, row.original, lifecycleStageField(metadata)))
                                     .map((action) => (
                                         <RowActionMenuItem
                                             key={action.key}

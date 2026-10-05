@@ -165,6 +165,7 @@ import {
     aggregateOf,
     formatAggregateTotal,
     isRowActionVisible,
+    lifecycleStageField,
     relationKeyFor,
     RowActionMenuItem,
 } from './dynamic-columns'
@@ -2119,6 +2120,7 @@ function DynamicKanbanBoard({
                             fieldCols={fieldCols}
                             showAllFields={explicitCard}
                             actions={rowActions}
+                            stageField={lifecycleStageField(metadata)}
                             locale={i18n.language}
                             timeZone={timeZone}
                             currency={currency}
@@ -2151,6 +2153,7 @@ function DynamicKanbanBoard({
                 fieldCols={fieldCols}
                 showAllFields={explicitCard}
                 actions={rowActions}
+                stageField={lifecycleStageField(metadata)}
                 locale={i18n.language}
                 timeZone={timeZone}
                 currency={currency}
@@ -3183,6 +3186,8 @@ interface KanbanCardProps {
     /** The model laid its card out explicitly: show every field with a value. */
     showAllFields?: boolean
     actions: ActionDefinition[]
+    /** Column the actions' requiresState reads (the model's stage_field). */
+    stageField?: string
     locale: string
     timeZone?: string
     currency?: string
@@ -3260,6 +3265,7 @@ function KanbanCard({
     fieldCols,
     showAllFields,
     actions,
+    stageField,
     locale,
     timeZone,
     currency,
@@ -3274,7 +3280,7 @@ function KanbanCard({
         disabled: !draggable,
     })
 
-    const visibleActions = actions.filter((a) => isRowActionVisible(a, card))
+    const visibleActions = actions.filter((a) => isRowActionVisible(a, card, stageField))
 
     const menu =
         visibleActions.length > 0 ? (
