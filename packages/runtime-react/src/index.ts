@@ -359,6 +359,10 @@ export {
 } from './sidebar-layout-manager'
 export * from './org-runtime-context'
 export * from './business'
+// Primitivos de negocio (PaymentAllocator, AgingTable, ApprovalInbox,
+// contribuciones/modales federados, tipos de documento y contratos de paneles).
+// Ver primitives/index.ts para el mapa completo.
+export * from './primitives'
 export * from './org-runtime-provider'
 export * from './navigation-builder'
 export * from './i18n-provider'

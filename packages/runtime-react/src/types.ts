@@ -35,6 +35,33 @@ export interface DocumentFormLines {
     required?: boolean
     /** Título del paso. Default «Renglones». */
     title?: string
+    /**
+     * Qué captura el grid (ver primitives/document-kinds LinesMode). Default `sale`.
+     * `allocation` cambia el grid por PaymentAllocator (documentos abiertos de la
+     * contraparte); `credit` limita cantidades a facturado − acreditado.
+     */
+    kind?: 'sale' | 'purchase' | 'credit' | 'allocation' | 'workorder'
+    /** Solo `kind: allocation`: de dónde salen los documentos abiertos. */
+    open_documents?: DocumentFormOpenDocuments
+}
+
+/** Documentos con saldo de la contraparte para PaymentAllocator. */
+export interface DocumentFormOpenDocuments {
+    /** Modelo (p. ej. `customers.Invoice`, `purchases.SupplierInvoice`). */
+    model: string
+    /** Campo del documento que apunta a la contraparte (`customer_id`). */
+    party_field: string
+    balance_field: string
+    number_field: string
+    total_field?: string
+    due_field?: string
+    issued_field?: string
+    /** Columna con el método (PUE/PPD…); el núcleo solo la muestra. */
+    method_field?: string
+    /** Campo del renglón de la acción donde va el id y el monto (`invoice_id`, `amount`). */
+    line_document_field: string
+    line_amount_field: string
+    option_filter?: unknown
 }
 
 /** Un tipo de documento (Factura, Nota de crédito, REP, Global, Traslado…). */
@@ -55,6 +82,45 @@ export interface DocumentFormType {
     endpoint?: string
     /** Texto del botón final. Default «Crear». */
     submit_label?: string
+    /** «Cargar desde…»: documentos origen cuyos renglones se copian. */
+    sources?: DocumentFormSource[]
+    /** Vista previa / validación previa (acción del modelo con `analyze: true`). */
+    preview?: DocumentFormPreview
+    /**
+     * Guardar llamando a una acción del modelo (placement `create`) en vez del
+     * create genérico. P. ej. Payment → `collect_multi_payment_create`, que ya
+     * reparte el pago en PaymentAllocation dentro de una transacción.
+     */
+    submit_action?: string
+}
+
+/** Un documento origen para «Cargar desde…». */
+export interface DocumentFormSource {
+    key: string
+    label: string
+    /** Modelo origen (p. ej. `quotes.Quote`). Si el addon no está, se oculta. */
+    model: string
+    /** Relación one_to_many con los renglones (p. ej. `items`). */
+    lines: string
+    /** Mapeo renglón origen → LineItem (`description: product_name`, `discount: discount_pct`…). */
+    map?: Record<string, string>
+    /** Campos del encabezado que se copian del origen (`customer_id: customer_id`). */
+    header?: Record<string, string>
+    /** Campo del documento que guarda el vínculo (p. ej. `sales_order_id`). */
+    link_field?: string
+    /** Filtro de opciones del selector del origen (mismo contrato que option_filter). */
+    option_filter?: unknown
+    /** Addon requerido (gating de UI; el servidor revalida). */
+    requires_addon?: string
+}
+
+/** Vista previa: acción de fila sobre el borrador, llamada con `analyze: true`. */
+export interface DocumentFormPreview {
+    /** Clave de la acción (p. ej. `preview_cfdi`, de fiscal_mexico). */
+    action: string
+    /** Addon que la aporta (si no está instalado, el panel muestra solo totales). */
+    requires_addon?: string
+    label?: string
 }
 
 export interface DocumentFormsManifest {
