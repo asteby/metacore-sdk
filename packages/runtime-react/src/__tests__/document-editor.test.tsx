@@ -224,6 +224,28 @@ describe('DocumentEditor — cobro / REP (lines.kind: allocation)', () => {
         expect(body.type).toBeUndefined()
     })
 
+    it('«crear desde» una factura: toma su cliente y lista sus facturas abiertas con saldo', async () => {
+        const fromInvoice: DocumentFormType = {
+            ...payment,
+            fields: payment.fields.map((f) => ({ ...f, default_from_record: undefined }) as any),
+            sources: [{ key: 'invoice', label: 'Factura', model: 'customers.Invoice', lines: 'items', header: { customer_id: 'customer_id' } }],
+        }
+        const api = makeApi({
+            ...routes,
+            '/data/customers.Invoice': (_url: string, cfg?: { params?: Record<string, unknown> }) =>
+                cfg?.params?.f_id
+                    ? { data: [{ id: 'inv-new', number: 'A-2', customer_id: 'c1', amount_due: 1000 }] }
+                    : (routes['/data/customers.Invoice'] as unknown),
+        })
+        renderEditor(fromInvoice, api, { initialSource: { key: 'invoice', id: 'inv-new' } })
+        await screen.findByText('A-1')
+        expect(screen.getByText('A-2')).toBeTruthy()
+        expect(api.get).toHaveBeenCalledWith('/data/customers.Invoice', expect.objectContaining({ params: expect.objectContaining({ f_id: 'eq:inv-new' }) }))
+        expect(api.get).toHaveBeenCalledWith('/data/customers.Invoice', expect.objectContaining({ params: expect.objectContaining({ f_customer_id: 'eq:c1' }) }))
+        // Sin renglones que copiar: no pide source-lines ni la relación.
+        expect(api.get.mock.calls.some(([u]) => String(u).includes('source-lines'))).toBe(false)
+    })
+
     it('editar un monto pasa a reparto manual; «Autoaplicar» regresa al automático', async () => {
         const api = makeApi(routes)
         renderEditor(payment, api, { record: { customer_id: 'c1' } })
@@ -298,7 +320,7 @@ describe('DocumentEditor — «crear desde» con lo pendiente del servidor', () 
         await screen.findByDisplayValue('Llanta 205/55R16')
         expect(screen.queryByDisplayValue('Balanceo')).toBeNull()
         expect(api.get).toHaveBeenCalledWith('/dynamic/customers.Invoice/source-lines', { params: { source: 'sales_order', id: 'so-1' } })
-        expect(await screen.findByText('1 renglones con lo pendiente · 1 ya cubiertos se omitieron')).toBeTruthy()
+        expect(await screen.findByText('1 renglones con lo que falta · 1 ya completos (omitidos)')).toBeTruthy()
     })
 
     it('si el host aún no sirve source-lines (404) cae a la relación del origen', async () => {

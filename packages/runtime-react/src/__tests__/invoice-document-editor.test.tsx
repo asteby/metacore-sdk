@@ -164,7 +164,7 @@ describe('Factura con layout editor — pantalla única', () => {
 
     it('«Cargar desde» ofrece venta, OT y cotización como opciones', () => {
         renderInvoice(makeApi())
-        const group = screen.getByRole('radiogroup', { name: 'Tipo de documento origen' })
+        const group = screen.getByRole('radiogroup', { name: 'Documento de origen' })
         expect(within(group).getAllByRole('radio').map((r) => r.textContent)).toEqual(['Venta', 'Orden de trabajo', 'Cotización'])
         fireEvent.click(within(group).getByRole('radio', { name: 'Orden de trabajo' }))
         expect(within(group).getByRole('radio', { name: 'Orden de trabajo' }).getAttribute('aria-checked')).toBe('true')
@@ -180,7 +180,7 @@ describe('Factura — «Cargar desde» OT y cotización con lo restante', () => 
         expect(screen.getByDisplayValue('Alineación eje direccional')).toBeTruthy()
         expect(screen.queryByDisplayValue('Montaje y balanceo')).toBeNull()
         expect(api.get).toHaveBeenCalledWith('/dynamic/customers.Invoice/source-lines', { params: { source: 'work_order', id: 'wo-1' } })
-        expect(await screen.findByText('2 renglones con lo pendiente · 1 ya cubiertos se omitieron')).toBeTruthy()
+        expect(await screen.findByText('2 renglones con lo que falta · 1 ya completos (omitidos)')).toBeTruthy()
 
         // La tarjeta del cliente: datos fiscales con etiquetas del modelo.
         await waitFor(() => expect(slot('party-card')).toBeTruthy())
@@ -214,8 +214,9 @@ describe('Factura — «Cargar desde» OT y cotización con lo restante', () => 
         const [, body] = api.post.mock.calls[0] as [string, any]
         expect(body.quote_id).toBe('q-1')
         expect(body.currency_code).toBe('MXN')
+        // El descuento ($1,200 de las 6 piezas) se prorratea a las 4 pendientes.
         expect(body.items).toEqual([
-            expect.objectContaining({ product_id: 'p-llanta', quantity: 4, unit_price: 5890, discount: 1200, tax_rate: 0.16, quote_item_id: 'qi-1' }),
+            expect.objectContaining({ product_id: 'p-llanta', quantity: 4, unit_price: 5890, discount: 800, tax_rate: 0.16, quote_item_id: 'qi-1' }),
         ])
         expect(body.items[0]).not.toHaveProperty('work_order_item_id')
     })

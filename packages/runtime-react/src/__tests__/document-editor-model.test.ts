@@ -17,7 +17,7 @@ import {
     splitEditorFields,
     toOpenDocuments,
 } from '../business/document-editor-model'
-import { makeLine, serializeLineItems } from '../business/line-items'
+import { makeLine, serializeLineItems, validateLineItems } from '../business/line-items'
 import { allocatePayment, validateAllocation } from '../primitives/allocation'
 import type { ActionFieldDef, DocumentFormOpenDocuments } from '../types'
 
@@ -99,6 +99,19 @@ describe('linesFromSource', () => {
         const [l] = linesFromSource([{ description: 'Balanceo', quantity: 1, unit_price: 100, discount_pct: 10, tax_rate: 16 }], { discount: 'discount_pct' })
         expect(l.discount).toBe(10)
         expect(l.tax_rate).toBe(0.16)
+    })
+    it('carga parcial: el descuento en importe se prorratea a lo pendiente (no supera el importe)', () => {
+        // Cotización 4 llantas × $1,000 con $400 de descuento; 3 ya facturadas.
+        const rows = [{ id: 'q1', description: 'Llanta', quantity: 4, unit_price: 1000, discount_amount: 400, tax_rate: 16, source_quantity: 4, remaining_quantity: 1 }]
+        const [l] = linesFromSource(rows, { discount: 'discount_amount' }, { discountMode: 'amount' })
+        expect(l).toMatchObject({ quantity: 1, max_quantity: 1, discount: 100, discount_kind: 'amount' })
+        expect(validateLineItems([l]).errors).toEqual({})
+        // Sin lo pendiente servido (o completo) el importe queda intacto.
+        const [full] = linesFromSource([{ ...rows[0], remaining_quantity: 4 }], { discount: 'discount_amount' }, { discountMode: 'amount' })
+        expect(full.discount).toBe(400)
+        // Un porcentaje no depende de la cantidad.
+        const [pct] = linesFromSource([{ ...rows[0], discount_pct: 10 }], { discount: 'discount_pct' })
+        expect(pct.discount).toBe(10)
     })
     it('NC (credit): la cantidad queda topada en lo facturado', () => {
         const [l] = linesFromSource([{ description: 'Llanta', quantity: 4, unit_price: 1500, tax_rate: 0.16 }], {}, { kind: 'credit' })

@@ -197,8 +197,8 @@
     "source_failed": "The document could not be loaded",
     "source_loaded_one": "{{count}} line loaded",
     "source_loaded_other": "{{count}} lines loaded",
-    "source_loaded_partial_one": "{{count}} line with the pending quantity · {{covered}} already covered were skipped",
-    "source_loaded_partial_other": "{{count}} lines with the pending quantity · {{covered}} already covered were skipped",
-    "source_all_covered": "The whole document is already recorded in other documents; nothing is pending."
+    "source_loaded_partial_one": "{{count}} line with what is left · {{covered}} already complete (skipped)",
+    "source_loaded_partial_other": "{{count}} lines with what is left · {{covered}} already complete (skipped)",
+    "source_all_covered": "That document is already fully recorded; nothing is pending."
   }
 }

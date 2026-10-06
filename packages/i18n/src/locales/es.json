@@ -190,15 +190,15 @@
   },
   "documentEditor": {
     "load_from": "Cargar desde…",
-    "source_kind": "Tipo de documento origen",
+    "source_kind": "Documento de origen",
     "preview": "Vista previa",
     "advanced": "Opciones fiscales",
     "loading_source": "Cargando…",
     "source_failed": "No se pudo cargar el documento",
     "source_loaded_one": "{{count}} renglón cargado",
     "source_loaded_other": "{{count}} renglones cargados",
-    "source_loaded_partial_one": "{{count}} renglón con lo pendiente · {{covered}} ya cubiertos se omitieron",
-    "source_loaded_partial_other": "{{count}} renglones con lo pendiente · {{covered}} ya cubiertos se omitieron",
-    "source_all_covered": "Todo el documento ya está registrado en otros documentos; no queda nada pendiente."
+    "source_loaded_partial_one": "{{count}} renglón con lo que falta · {{covered}} ya completos (omitidos)",
+    "source_loaded_partial_other": "{{count}} renglones con lo que falta · {{covered}} ya completos (omitidos)",
+    "source_all_covered": "Ese documento ya se registró completo; no queda nada pendiente."
   }
 }

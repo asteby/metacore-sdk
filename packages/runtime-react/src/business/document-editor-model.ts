@@ -200,7 +200,8 @@ export function creditStatus(
  *
  * Con `remaining_quantity` (lo sirve el host: cantidad − lo ya facturado o
  * devuelto) la cantidad sugerida y el tope son lo pendiente y los renglones ya
- * cubiertos se omiten. Cada línea guarda `source_line_id` para el vínculo.
+ * cubiertos se omiten; un descuento en importe se prorratea a lo pendiente (un
+ * porcentaje no cambia). Cada línea guarda `source_line_id` para el vínculo.
  */
 export function linesFromSource(
     rows: unknown,
@@ -237,7 +238,16 @@ export function linesFromSource(
         })
         // El descuento del origen se lee en la unidad del documento (importe en
         // modelos cuyo subtotal resta un monto).
-        if (opts.discountMode === 'amount') line.discount_kind = 'amount'
+        if (opts.discountMode === 'amount') {
+            line.discount_kind = 'amount'
+            // Un importe es de TODO el renglón de origen: al cargar solo lo
+            // pendiente se prorratea a esa cantidad (4 llantas con $400 de
+            // descuento, 1 pendiente → $100), si no superaría el importe.
+            const sourceQty = toAmount(r.source_quantity ?? get('quantity'))
+            if (pending != null && sourceQty > 0 && pending < sourceQty) {
+                line.discount = roundMoney((toAmount(line.discount) * pending) / sourceQty)
+            }
+        }
         if (pending != null) line.max_quantity = pending
         else if (opts.kind === 'credit') line.max_quantity = hasValue(get('max_quantity')) ? toAmount(get('max_quantity')) : qty
         const sourceLine = r.source_line_id ?? r.id
@@ -316,7 +326,7 @@ export function localIssues(lines: LineItem[], opts: { requireLines?: boolean; r
             issues.push({
                 field: `lines.${i}`,
                 severity: 'error',
-                message: `Renglón ${i + 1}: la cantidad excede lo pendiente del documento origen (${l.max_quantity}).`,
+                message: `Renglón ${i + 1}: la cantidad excede lo pendiente del documento origen (quedan ${l.max_quantity}).`,
             })
         }
         if (opts.requireTax && toAmount(l.tax_rate) === 0) {

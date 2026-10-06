@@ -402,11 +402,11 @@ export function DocumentEditor({
                     setSourceNote(
                         loaded.length === 0 && covered > 0
                             ? t('documentEditor.source_all_covered', {
-                                  defaultValue: 'Todo el documento ya está registrado en otros documentos; no queda nada pendiente.',
+                                  defaultValue: 'Ese documento ya se registró completo; no queda nada pendiente.',
                               })
                             : covered > 0
                               ? t('documentEditor.source_loaded_partial', {
-                                    defaultValue: '{{count}} renglones con lo pendiente · {{covered}} ya cubiertos se omitieron',
+                                    defaultValue: '{{count}} renglones con lo que falta · {{covered}} ya completos (omitidos)',
                                     count: loaded.length,
                                     covered,
                                 })
@@ -630,7 +630,7 @@ export function DocumentEditor({
                 {sources.length > 1 && (
                     <div
                         role="radiogroup"
-                        aria-label={t('documentEditor.source_kind', { defaultValue: 'Tipo de documento origen' })}
+                        aria-label={t('documentEditor.source_kind', { defaultValue: 'Documento de origen' })}
                         className="inline-flex flex-wrap gap-1 rounded-md border p-1"
                     >
                         {sources.map((s) => (
