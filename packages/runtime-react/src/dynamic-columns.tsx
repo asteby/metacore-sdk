@@ -17,7 +17,7 @@ import { ColumnDef } from '@tanstack/react-table'
 import { format, type Locale } from 'date-fns'
 import { isCalendarDayValue, parseCalendarDate } from './calendar-date'
 import { es, enUS } from 'date-fns/locale'
-import { Calendar, Check, Copy, Mail, Minus, MoreHorizontal } from 'lucide-react'
+import { Calendar, Check, Copy, Mail, Minus } from 'lucide-react'
 import {
     Avatar,
     AvatarFallback,
@@ -25,10 +25,6 @@ import {
     Badge,
     Button,
     Checkbox,
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
     InitialsAvatar,
 } from '@asteby/metacore-ui'
 import {
@@ -57,7 +53,7 @@ import { DynamicIcon, isLucideIconName } from './dynamic-icon'
 import { CollectionCell } from './collection-cell'
 import { isNilUuid, normalizeNilUuid } from './nil-uuid'
 import { useOptionsResolver } from './use-options-resolver'
-import { RequiresAddonLock, resolveRequiresAddon, useRequiresAddonLabel } from './requires-addon'
+import { RowActionsMenu } from './row-actions-menu'
 import type { TableMetadata, ColumnDefinition } from './types'
 import { isColumnVisibleInTable } from './column-visibility'
 import type {
@@ -208,35 +204,9 @@ const CodeCell: React.FC<{ text: string; maxLength?: number }> = ({ text, maxLen
     )
 }
 
-/**
- * One entry of the row "…" menu. An action gated by a missing optional addon
- * (`requiresAddon`) stays listed with a lock + tooltip; the click still goes to
- * `onAction`, whose shared handler (useDynamicRowActions) opens the
- * requires-addon dialog instead of executing.
- */
-export function RowActionMenuItem({
-    action,
-    label,
-    onSelect,
-}: {
-    action: any
-    label: React.ReactNode
-    onSelect: (e: React.MouseEvent) => void
-}) {
-    const requirement = resolveRequiresAddon(action)
-    const requiresAddonLabel = useRequiresAddonLabel()
-    return (
-        <DropdownMenuItem
-            onClick={onSelect}
-            title={requirement ? requiresAddonLabel(requirement) : undefined}
-            data-requires-addon={requirement?.key}
-        >
-            <DynamicIcon name={action.icon || 'Zap'} className="mr-2 h-4 w-4" />
-            {label}
-            {requirement && <RequiresAddonLock requirement={requirement} />}
-        </DropdownMenuItem>
-    )
-}
+// RowActionMenuItem vive en row-actions-menu.tsx (junto al menú que lo usa);
+// se re-exporta aquí por compatibilidad (dynamic-kanban, hosts).
+export { RowActionMenuItem } from './row-actions-menu'
 
 /**
  * Lifecycle column used by `requiresState`: prefer `status` (workshop, vehicles,
@@ -1571,28 +1541,14 @@ export function makeDefaultGetDynamicColumns(
                 maxSize: 80,
                 meta: {},
                 cell: ({ row }) => (
-                    <div className="flex items-center justify-end">
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" className="h-8 w-8 p-0">
-                                    <span className="sr-only">Abrir menú</span>
-                                    <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                {resolvedActions
-                                    .filter((action) => isRowActionVisible(action, row.original, lifecycleStageField(metadata)))
-                                    .map((action) => (
-                                        <RowActionMenuItem
-                                            key={action.key}
-                                            action={action}
-                                            label={translateMetadataLabel(action.label, t)}
-                                            onSelect={() => onAction && onAction(action.key, row.original)}
-                                        />
-                                    ))}
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    </div>
+                    // Primaria destacada, principales y un «Más…» con las
+                    // secundarias (compartir/imprimir/correo/chat + las que
+                    // aporten addons instalados). Ver row-actions-menu.tsx.
+                    <RowActionsMenu
+                        actions={resolvedActions.filter((action) => isRowActionVisible(action, row.original, lifecycleStageField(metadata)))}
+                        row={row.original}
+                        onAction={onAction}
+                    />
                 ),
             })
         }

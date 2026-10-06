@@ -1,5 +1,20 @@
 # @asteby/metacore-i18n
 
+## 29.1.0
+
+### Minor Changes
+
+- 4d97e6b: «Crear desde» con renglones y cantidad pendiente en el DocumentEditor. Una fuente (`document_forms.types[].sources[]`) que declara `line_link_field`, `remaining_qty_field` o `remaining_endpoint` precarga sus renglones desde lo que sirve el host (`<endpoint>/source-lines`, kernel ≥ v0.191): la cantidad sugerida y el tope son lo pendiente (cantidad − lo ya facturado/devuelto, calculado en el servidor), los renglones ya cubiertos se omiten con un aviso breve y cada renglón guarda `source_line_id`, que se envía en la columna `line_link_field` para que el servidor valide al guardar (su rechazo en español se muestra tal cual). Sin `source-lines` (404) cae a la relación como antes. Un tipo con `sources` usa el editor salvo `layout: "wizard"`; `DocumentFormDialog` abre el editor cuando recibe `initialSource`, y `DynamicCRUDPage` acepta `initialCreate` para abrir el alta con tipo y origen (p. ej. desde la URL). Las acciones de fila `type: "link"` con query (`?create=…&from_id={id}`) navegan con `search` (antes la query quedaba en el path y la ruta no casaba); los valores interpolados van codificados. `serializeLineItems(lines, { sourceLineField })`, `sourceLoadSummary` y `sourceTracksRemaining` exportados del modelo del editor; cada renglón serializado lleva además `subtotal` y `tax_amount` calculados (modelos de renglón sin tasa no pierden el IVA) y `linesFromSource` respeta `discount_mode: "amount"`. i18n es/en de los avisos de carga.
+
+### Patch Changes
+
+- f9616d1: Un solo registro para modales, slots y acciones, y acciones secundarias fuera de la vista principal:
+
+  - `@asteby/metacore-sdk` es la única fuente de verdad: `registerModalComponent` (modales por slug, con addon dueño y `load` perezoso), `registerRecordAction` (acciones secundarias sobre registros con su proveedor `requires: { addon | capability }`) y `slotStore`. `Registry.scope(addon).registerModal/registerAction/registerSlot` escriben ahí (antes `registerModal` no tenía lector) y `unbind` lo retira todo. `adaptActionProps` entrega a un remote ambos contratos de props (ActionModalProps y recordId/payload/close).
+  - `registerFederatedModal` queda como alias deprecado y compatible de `registerModalComponent`; `slotRegistry` y `<Slot>` de runtime-react leen el `slotStore` del SDK y no pintan contribuciones de addons no instalados.
+  - Acciones primarias/secundarias: `priority` del manifest v3 (o convención por clave: print, share, email, mail, whatsapp, chat, download, pdf, xml, acuse). `RowActionsMenu` (menú «…» por defecto de DynamicTable) muestra una primaria destacada y agrupa las secundarias y las aportadas por addons en «Más…»; las acciones por capacidad sin proveedor activo no se ofrecen. `DocumentPage` manda las secundarias de su layout a `DocumentSecondaryBar` (pie) y `resolveActions` devuelve el nuevo grupo `footer`.
+  - i18n: `datatable.more_actions`, `datatable.open_menu`, `datatable.secondary_actions` (es/en).
+
 ## 29.0.0
 
 ### Patch Changes

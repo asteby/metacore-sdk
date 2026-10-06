@@ -1,3 +1,4 @@
+import { classifyActionPriority } from '../action-priority'
 import type {
     ActionLayout,
     DocumentActionDef,
@@ -130,12 +131,15 @@ export function resolveActions(spec: DocumentSpec, ctx: DocumentContext): Resolv
     const destructive = many(layout.destructive)
     const secondary: ResolvedAction[] = []
     const more: ResolvedAction[] = []
+    const footer: ResolvedAction[] = []
     for (const a of [...many(layout.secondary)]) {
         if (a.def.destructive) destructive.push(a)
+        else if (isFooterAction(a.def)) footer.push(a)
         else secondary.push(a)
     }
     for (const a of many(layout.more)) {
         if (a.def.destructive) destructive.push(a)
+        else if (isFooterAction(a.def)) footer.push(a)
         else more.push(a)
     }
     const overflow = secondary.splice(MAX_VISIBLE_SECONDARY)
@@ -146,7 +150,19 @@ export function resolveActions(spec: DocumentSpec, ctx: DocumentContext): Resolv
         destructive.unshift(primary)
         primary = undefined
     }
-    return { primary, secondary, more, destructive }
+    return { primary, secondary, more, destructive, footer }
+}
+
+/**
+ * ¿Va al pie? `priority: secondary`, o la convención por clave sobre la acción
+ * del modelo (`modelAction ?? key`): compartir, imprimir, correo, chat, PDF/XML.
+ */
+function isFooterAction(def: DocumentActionDef): boolean {
+    if (def.priority) return def.priority === 'secondary'
+    return (
+        classifyActionPriority({ key: def.key }) === 'secondary' ||
+        (!!def.modelAction && classifyActionPriority({ key: def.modelAction }) === 'secondary')
+    )
 }
 
 /** Interpola `{{campo}}` con valores del registro (sin evaluar código). */

@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@asteby/metacore-ui/primitives'
 import { cn } from '@asteby/metacore-ui/lib'
 import { ActionBar } from './action-bar'
+import { DocumentSecondaryBar } from './secondary-bar'
 import { DocumentHeader, type HeaderBadge, type HeaderMetric } from './document-header'
 import { SmartButtons, type SmartButtonItem } from './smart-buttons'
 import { StatusBadge } from './status-badge'
@@ -175,6 +176,20 @@ export function DocumentPage(props: DocumentPageProps) {
                     </TabsContent>
                 ))}
             </Tabs>
+
+            {/* Compartir / imprimir / correo / PDF-XML y lo que aporten los
+                addons instalados: al pie, no compitiendo con la primaria. */}
+            <DocumentSecondaryBar
+                items={layout.footer.map((a) => ({
+                    key: a.def.key,
+                    label: a.def.label,
+                    icon: a.def.icon,
+                    blockedReason: a.blockedReason,
+                    run: () => handleAction(a),
+                }))}
+                model={spec.model}
+                record={record}
+            />
         </div>
     )
 }
