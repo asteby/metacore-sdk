@@ -42,11 +42,15 @@ import {
     sourceTracksRemaining,
     partyDefaults,
     partySummaryRows,
+    recordLabel,
+    seedRecord,
+    sourceHeaderSeeds,
     splitEditorFields,
     toOpenDocuments,
     friendlyOptionLabel,
     withFriendlyOptions,
     type EditorIssue,
+    type SeedLabel,
 } from './document-editor-model'
 import {
     CollapsibleSection,
@@ -140,6 +144,9 @@ export function DocumentEditor({
     const [extFields, setExtFields] = useState<ActionFieldDef[]>([])
     const [party, setParty] = useState<Record<string, any> | null>(null)
     const [partyLabels, setPartyLabels] = useState<Record<string, string>>({})
+    // Etiquetas de los selectores que el editor llena por código (contraparte y
+    // documento origen de «Cargar desde…»): sin ellas el selector cerrado pinta el UUID.
+    const [seeds, setSeeds] = useState<Record<string, SeedLabel>>({})
     const [openDocs, setOpenDocs] = useState<OpenDocument[]>([])
     const [docsLoading, setDocsLoading] = useState(false)
     const [alloc, setAlloc] = useState<PaymentAllocatorValue>({ strategy: 'oldest_due_first', manual: {} })
@@ -159,6 +166,7 @@ export function DocumentEditor({
     // renglón para que el servidor descuente lo ya facturado/devuelto y valide.
     const [loadedSource, setLoadedSource] = useState<DocumentFormSource | null>(null)
     const [sourceNote, setSourceNote] = useState<string | undefined>()
+    const [sourceSeed, setSourceSeed] = useState<SeedLabel | null>(null)
     const relCache = useRef(new Map<string, Promise<any[]>>())
 
     const taxRate = defaultTaxRate ?? orgTaxRate
@@ -223,6 +231,11 @@ export function DocumentEditor({
                 if (cancelled) return
                 setParty(rec)
                 setHeader((h) => ({ ...h, ...partyDefaults(rec, fieldKeys.current, h) }))
+                const label = recordLabel(rec, 'name') ?? recordLabel(rec, 'legal_name')
+                if (label && type.party) {
+                    const key = type.party.field
+                    setSeeds((s) => ({ ...s, [key]: { value: String(partyId), label } }))
+                }
             })
             .catch(() => !cancelled && setParty(null))
         return () => {
@@ -392,6 +405,26 @@ export function DocumentEditor({
             if (!lineCfg || !id) return
             setBusy('source')
             try {
+                // Cabecera primero (cliente, moneda, vínculo): llega aunque los
+                // renglones del origen fallen, y la tarjeta del cliente se carga.
+                if (src.header || src.link_field) {
+                    const h = await api.get(`/data/${src.model}`, { params: { f_id: `eq:${id}`, per_page: 1 } })
+                    const rec = ((h?.data?.data ?? [])[0] ?? {}) as Record<string, any>
+                    setHeader((prev) => {
+                        const next = { ...prev }
+                        for (const [to, from] of Object.entries(src.header ?? {})) {
+                            const v = rec[from]
+                            if (v == null || v === '') continue
+                            next[to] = typeof v === 'object' && !Array.isArray(v) ? v.value ?? v.id ?? v : v
+                        }
+                        if (src.link_field) next[src.link_field] = id
+                        return next
+                    })
+                    const seeded = sourceHeaderSeeds(src, rec, id, type.fields)
+                    setSeeds((s) => ({ ...s, ...seeded }))
+                    const label = src.link_field ? seeded[src.link_field]?.label : recordLabel(rec)
+                    setSourceSeed(label ? { value: id, label } : null)
+                }
                 if (!isAllocation) {
                     const rows = await fetchSourceRows(src, id)
                     const loaded = linesFromSource(rows, src.map, { kind, discountMode: lineCfg.discount_mode, defaultTaxRate: taxRate })
@@ -413,16 +446,6 @@ export function DocumentEditor({
                               : t('documentEditor.source_loaded', { defaultValue: '{{count}} renglones cargados', count: loaded.length }),
                     )
                 }
-                if (src.header || src.link_field) {
-                    const h = await api.get(`/data/${src.model}`, { params: { f_id: `eq:${id}`, per_page: 1 } })
-                    const rec = ((h?.data?.data ?? [])[0] ?? {}) as Record<string, any>
-                    setHeader((prev) => {
-                        const next = { ...prev }
-                        for (const [to, from] of Object.entries(src.header ?? {})) if (rec[from] != null) next[to] = rec[from]
-                        if (src.link_field) next[src.link_field] = id
-                        return next
-                    })
-                }
                 setServerIssues([])
             } catch (err) {
                 toast.error(t('documentEditor.source_failed', { defaultValue: 'No se pudo cargar el documento' }), {
@@ -432,7 +455,7 @@ export function DocumentEditor({
                 setBusy(null)
             }
         },
-        [api, lineCfg, isAllocation, kind, t, fetchSourceRows, taxRate],
+        [api, lineCfg, isAllocation, kind, t, fetchSourceRows, taxRate, type.fields],
     )
 
     // Prefill al abrir desde un documento origen (acción de fila «Crear NC», «Facturar venta»…).
@@ -549,13 +572,14 @@ export function DocumentEditor({
         setFieldErrors((prev) => clearFieldErrorTree(prev, key))
     }
 
+    const fieldRecord = useMemo(() => seedRecord(seeds, record), [seeds, record])
     const fieldCell = (field: ActionFieldDef, fullWidth = false) =>
         visible(field) ? (
             <FieldCell key={field.key} fullWidth={fullWidth}>
                 <FieldLabel htmlFor={field.key} required={field.required}>
                     {tl(field.label)}
                 </FieldLabel>
-                {renderField(withFriendlyOptions(field), header[field.key], (v: any) => updateField(field.key, v), header, undefined, fieldErrors)}
+                {renderField(withFriendlyOptions(field), header[field.key], (v: any) => updateField(field.key, v), header, fieldRecord, fieldErrors)}
                 {fieldErrors[field.key] && <p className="mt-1 text-xs text-destructive">{fieldErrors[field.key]}</p>}
             </FieldCell>
         ) : null
@@ -569,7 +593,7 @@ export function DocumentEditor({
         .map((f) => {
             const v = header[f.key]
             if (v == null || v === '') return null
-            const opt = f.options?.find((o) => String(o.value) === String(v))
+            const opt = Array.isArray(f.options) ? f.options.find((o) => String(o.value) === String(v)) : undefined
             return opt ? String(opt.value) : String(v)
         })
         .filter(Boolean)
@@ -658,6 +682,7 @@ export function DocumentEditor({
                         key={activeSource.key}
                         source={activeSource}
                         value={sourceId}
+                        seed={sourceSeed}
                         header={header}
                         label={tl(activeSource.label)}
                         onPick={(id) => {
@@ -769,8 +794,9 @@ export function DocumentEditor({
                     .filter(visible)
                     .map((f) => {
                         const v = header[f.key]
-                        const opt = f.options?.find((o) => String(o.value) === String(v))
-                        return { label: tl(f.label), value: v == null || v === '' ? '' : opt ? friendlyOptionLabel(tl(String(opt.label ?? v))) : String(v) }
+                        const opt = Array.isArray(f.options) ? f.options.find((o) => String(o.value) === String(v)) : undefined
+                        const seeded = seeds[f.key] && String(seeds[f.key].value) === String(v) ? seeds[f.key].label : undefined
+                        return { label: tl(f.label), value: v == null || v === '' ? '' : opt ? friendlyOptionLabel(tl(String(opt.label ?? v))) : seeded ?? String(v) }
                     })
                     .filter((r) => r.value)}
                 lines={lines}
@@ -835,12 +861,15 @@ export function DocumentEditor({
 function SourcePicker({
     source,
     value,
+    seed,
     header,
     label,
     onPick,
 }: {
     source: DocumentFormSource
     value: string
+    /** Folio del origen ya cargado: el selector cerrado lo muestra en vez del UUID. */
+    seed?: SeedLabel | null
     header: Record<string, any>
     label: string
     onPick: (id: string) => void
@@ -858,7 +887,7 @@ function SourcePicker({
     )
     return (
         <div className="min-w-[240px] flex-1" data-source={source.key}>
-            {renderField(field, value, (v: any) => onPick(v == null || v === '' ? '' : String(v)), header)}
+            {renderField(field, value, (v: any) => onPick(v == null || v === '' ? '' : String(v)), header, seed ? { id: seed.value, label: seed.label } : undefined)}
         </div>
     )
 }

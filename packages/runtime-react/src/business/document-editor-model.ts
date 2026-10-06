@@ -292,6 +292,74 @@ export function sourceTracksRemaining(src: Pick<DocumentFormSource, 'line_link_f
     return !!(src.line_link_field || src.remaining_qty_field || src.remaining_endpoint)
 }
 
+/** Opción ya resuelta de un selector de la cabecera que el editor llenó por código. */
+export interface SeedLabel {
+    value: string
+    label: string
+}
+
+/** Columnas con las que se nombra un documento (folio antes que nombre). */
+const DOCUMENT_LABEL_COLUMNS = ['number', 'folio', 'order_number', 'name', 'title', 'code']
+
+function declaredOptionLabel(f: ActionFieldDef | undefined): string | undefined {
+    const opts = (f as { options?: unknown } | undefined)?.options
+    const l = opts && !Array.isArray(opts) && typeof opts === 'object' ? (opts as { label?: unknown }).label : undefined
+    return typeof l === 'string' && l ? l : undefined
+}
+
+/** Nombre visible de un registro: la columna declarada por el campo, luego folio/nombre. */
+export function recordLabel(rec: Record<string, any> | null | undefined, preferred?: string): string | undefined {
+    if (!rec) return undefined
+    for (const c of preferred ? [preferred, ...DOCUMENT_LABEL_COLUMNS] : DOCUMENT_LABEL_COLUMNS) {
+        const v = rec[c]
+        if ((typeof v === 'string' && v.trim()) || typeof v === 'number') return String(v)
+    }
+    return undefined
+}
+
+/**
+ * Etiquetas de lo que «Cargar desde…» escribe en la cabecera, para que el
+ * selector muestre el nombre y no el UUID sin abrirse:
+ *  - `header` (`customer_id ← customer_id`): el objeto hermano `{value,label}`
+ *    que el host sirve junto a la FK (`customer`);
+ *  - `link_field`: el propio documento origen, con su folio.
+ */
+export function sourceHeaderSeeds(
+    src: Pick<DocumentFormSource, 'header' | 'link_field'>,
+    rec: Record<string, any>,
+    id: string,
+    fields: readonly ActionFieldDef[] = [],
+): Record<string, SeedLabel> {
+    const out: Record<string, SeedLabel> = {}
+    for (const [to, from] of Object.entries(src.header ?? {})) {
+        if (!from.endsWith('_id')) continue
+        const v = refValue(rec[from])
+        const label = refLabel(rec[from]) ?? refLabel(rec[from.slice(0, -3)])
+        if (v && label) out[to] = { value: v, label }
+    }
+    if (src.link_field) {
+        const label = recordLabel(rec, declaredOptionLabel(fields.find((f) => f.key === src.link_field)))
+        if (label) out[src.link_field] = { value: id, label }
+    }
+    return out
+}
+
+/**
+ * Registro para `renderField` con las etiquetas sembradas como objeto hermano
+ * (`customer_id` → `customer: {value,label}`), el mismo contrato que sirve el
+ * host en una fila. Conserva el registro desde el que se abrió.
+ */
+export function seedRecord(
+    seeds: Record<string, SeedLabel>,
+    record?: Record<string, any>,
+): Record<string, any> | undefined {
+    const keys = Object.keys(seeds).filter((k) => k.endsWith('_id'))
+    if (keys.length === 0) return record
+    const out: Record<string, any> = { ...(record ?? {}) }
+    for (const k of keys) out[k.slice(0, -3)] = seeds[k]
+    return out
+}
+
 export interface EditorIssue {
     field?: string
     severity: 'error' | 'warning'
