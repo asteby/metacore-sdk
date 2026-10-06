@@ -252,10 +252,89 @@ describe('DocumentFormDialog + layout: editor', () => {
         unmount()
         render(
             <ApiProvider client={api.client}>
-                <DocumentFormDialog open onOpenChange={() => {}} model="customers.Invoice" forms={{ ...forms, types: [{ ...invoice, layout: undefined }] }} />
+                <DocumentFormDialog open onOpenChange={() => {}} model="customers.Invoice" forms={{ ...forms, types: [{ ...invoice, layout: undefined, sources: undefined }] }} />
             </ApiProvider>,
         )
         expect(document.querySelector('[data-slot="document-editor"]')).toBeNull()
         expect(screen.getByRole('button', { name: 'Siguiente' })).toBeTruthy()
+    })
+
+    it('un tipo con sources usa el editor («Cargar desde…») salvo layout: wizard explícito', () => {
+        const api = makeApi()
+        const { unmount } = render(
+            <ApiProvider client={api.client}>
+                <DocumentFormDialog open onOpenChange={() => {}} model="customers.Invoice" forms={{ ...forms, types: [{ ...invoice, layout: undefined }] }} />
+            </ApiProvider>,
+        )
+        expect(document.querySelector('[data-slot="load-from-source"]')).toBeTruthy()
+        unmount()
+        render(
+            <ApiProvider client={api.client}>
+                <DocumentFormDialog open onOpenChange={() => {}} model="customers.Invoice" forms={{ ...forms, types: [{ ...invoice, layout: 'wizard' }] }} />
+            </ApiProvider>,
+        )
+        expect(document.querySelector('[data-slot="document-editor"]')).toBeNull()
+    })
+})
+
+describe('DocumentEditor — «crear desde» con lo pendiente del servidor', () => {
+    const tracked: DocumentFormType = {
+        ...invoice,
+        sources: [{ ...invoice.sources![0], line_link_field: 'sales_order_item_id', exclude_states: ['cancelled'] }],
+    }
+    const pendingRows = {
+        data: [
+            { id: 'soi-1', source_line_id: 'soi-1', product_id: 'p1', product_name: 'Llanta 205/55R16', quantity: 4, remaining_quantity: 1, unit_price: 1500, discount: 0, tax_rate: 0.16 },
+            { id: 'soi-2', source_line_id: 'soi-2', product_id: 'p2', product_name: 'Balanceo', quantity: 4, remaining_quantity: 0, unit_price: 100, tax_rate: 0.16 },
+        ],
+    }
+
+    it('precarga lo pendiente (no lo vendido), omite lo ya facturado y guarda el vínculo por renglón', async () => {
+        const api = makeApi({
+            '/dynamic/customers.Invoice/source-lines': pendingRows,
+            '/data/customers.SalesOrder': { data: [{ id: 'so-1' }] },
+        })
+        renderEditor(tracked, api, { initialSource: { key: 'sales_order', id: 'so-1' } })
+        await screen.findByDisplayValue('Llanta 205/55R16')
+        expect(screen.queryByDisplayValue('Balanceo')).toBeNull()
+        expect(api.get).toHaveBeenCalledWith('/dynamic/customers.Invoice/source-lines', { params: { source: 'sales_order', id: 'so-1' } })
+        expect(await screen.findByText('1 renglones con lo pendiente · 1 ya cubiertos se omitieron')).toBeTruthy()
+    })
+
+    it('si el host aún no sirve source-lines (404) cae a la relación del origen', async () => {
+        const api = makeApi({
+            '/dynamic/customers.Invoice/source-lines': () => {
+                throw { response: { status: 404 } }
+            },
+            '/metadata/table/customers.SalesOrder': { data: { relations: [{ name: 'items', kind: 'one_to_many', through: 'customers.SalesOrderItem', foreign_key: 'sales_order_id' }] } },
+            '/data/customers.SalesOrderItem': { data: [{ id: 'soi-1', product_id: 'p1', product_name: 'Llanta 205/55R16', quantity: 4, unit_price: 1500, tax_rate: 0.16 }] },
+        })
+        renderEditor(tracked, api, { initialSource: { key: 'sales_order', id: 'so-1' } })
+        await screen.findByDisplayValue('Llanta 205/55R16')
+    })
+
+    it('el rechazo del servidor por exceso se muestra con su mensaje en español', async () => {
+        const post = vi.fn().mockRejectedValue({
+            response: {
+                status: 422,
+                data: {
+                    success: false,
+                    message: 'validation failed',
+                    errors: { 'lines.0.quantity': [{ code: 'exceeds_remaining', message: 'Renglón 1: la cantidad 1 excede lo pendiente de «Venta» (0).' }] },
+                },
+            },
+        })
+        const api = makeApi({ '/dynamic/customers.Invoice/source-lines': pendingRows, '/data/customers.SalesOrder': { data: [{ id: 'so-1', customer_name: 'ACME' }] } }, post)
+        renderEditor(
+            { ...tracked, sources: [{ ...tracked.sources![0], header: { customer_name: 'customer_name' } }] },
+            api,
+            { initialSource: { key: 'sales_order', id: 'so-1' } },
+        )
+        await screen.findByDisplayValue('ACME')
+        fireEvent.click(screen.getByRole('button', { name: 'Guardar factura' }))
+        await waitFor(() => expect(post).toHaveBeenCalled())
+        const [, body] = post.mock.calls[0] as [string, any]
+        expect(body.lines).toEqual([expect.objectContaining({ product_id: 'p1', quantity: 1, sales_order_item_id: 'soi-1' })])
+        expect(await screen.findByText(/excede lo pendiente de «Venta»/)).toBeTruthy()
     })
 })

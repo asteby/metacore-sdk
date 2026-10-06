@@ -184,5 +184,15 @@
   },
   "toast": {
     "dismiss": "Dismiss notification"
+  },
+  "documentEditor": {
+    "load_from": "Load from…",
+    "loading_source": "Loading…",
+    "source_failed": "The document could not be loaded",
+    "source_loaded_one": "{{count}} line loaded",
+    "source_loaded_other": "{{count}} lines loaded",
+    "source_loaded_partial_one": "{{count}} line with the pending quantity · {{covered}} already covered were skipped",
+    "source_loaded_partial_other": "{{count}} lines with the pending quantity · {{covered}} already covered were skipped",
+    "source_all_covered": "The whole document is already recorded in other documents; nothing is pending."
   }
 }

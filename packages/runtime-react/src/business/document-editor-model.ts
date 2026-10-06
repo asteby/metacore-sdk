@@ -11,6 +11,7 @@ import type { Allocation, AllocationIssue, OpenDocument } from '../primitives/al
 import type {
     ActionFieldDef,
     DocumentFormLines,
+    DocumentFormSource,
     DocumentFormOpenDocuments,
     DocumentFormsManifest,
     DocumentFormType,
@@ -24,8 +25,10 @@ const ADVANCED_SECTIONS = new Set(['fiscal', 'advanced'])
 export type EditorLinesConfig = DocumentFormLines & { field: string }
 
 /** true si el tipo se abre en el DocumentEditor (`layout: "editor"`). */
-export function isEditorLayout(type: Pick<DocumentFormType, 'layout'> | null | undefined): boolean {
-    return type?.layout === 'editor'
+export function isEditorLayout(type: Pick<DocumentFormType, 'layout' | 'sources'> | null | undefined): boolean {
+    // «Cargar desde…» vive en el editor: un tipo con `sources` lo usa salvo que
+    // pida explícitamente el wizard.
+    return type?.layout === 'editor' || (type?.layout !== 'wizard' && (type?.sources?.length ?? 0) > 0)
 }
 
 /** Paso de renglones efectivo del tipo (o undefined si no tiene). */
@@ -189,13 +192,22 @@ export function creditStatus(
  * (`description: product_name`, `discount: discount_pct`). Si el origen trae
  * `tax_amount` y `subtotal` pero no la tasa, la deriva. `credit` (NC) topa la
  * cantidad en lo facturado (o en `max_quantity` si el origen la trae).
+ *
+ * Con `remaining_quantity` (lo sirve el host: cantidad − lo ya facturado o
+ * devuelto) la cantidad sugerida y el tope son lo pendiente y los renglones ya
+ * cubiertos se omiten. Cada línea guarda `source_line_id` para el vínculo.
  */
-export function linesFromSource(rows: unknown, map: Record<string, string> = {}, opts: { kind?: DocumentFormLines['kind'] } = {}): LineItem[] {
+export function linesFromSource(
+    rows: unknown,
+    map: Record<string, string> = {},
+    opts: { kind?: DocumentFormLines['kind']; discountMode?: DocumentFormLines['discount_mode'] } = {},
+): LineItem[] {
     if (!Array.isArray(rows)) return []
-    return rows.map((raw) => {
+    return rows.filter((raw) => !isFullyConsumed(raw)).map((raw) => {
         const r = (raw ?? {}) as Record<string, any>
         const get = (k: string) => r[map[k] ?? k]
-        const qty = toAmount(get('quantity') ?? 1)
+        const pending = hasValue(r.remaining_quantity) ? toAmount(r.remaining_quantity) : undefined
+        const qty = pending ?? toAmount(get('quantity') ?? 1)
         let rate = get('tax_rate')
         if (!hasValue(rate)) {
             const sub = toAmount(get('subtotal'))
@@ -213,9 +225,32 @@ export function linesFromSource(rows: unknown, map: Record<string, string> = {},
             tax_rate: r2 > 1 ? r2 / 100 : r2,
             unit: get('unit') ?? undefined,
         })
-        if (opts.kind === 'credit') line.max_quantity = hasValue(get('max_quantity')) ? toAmount(get('max_quantity')) : qty
+        // El descuento del origen se lee en la unidad del documento (importe en
+        // modelos cuyo subtotal resta un monto).
+        if (opts.discountMode === 'amount') line.discount_kind = 'amount'
+        if (pending != null) line.max_quantity = pending
+        else if (opts.kind === 'credit') line.max_quantity = hasValue(get('max_quantity')) ? toAmount(get('max_quantity')) : qty
+        const sourceLine = r.source_line_id ?? r.id
+        if (hasValue(sourceLine)) line.source_line_id = String(sourceLine)
         return line
     })
+}
+
+function isFullyConsumed(raw: unknown): boolean {
+    const r = (raw ?? {}) as Record<string, any>
+    return hasValue(r.remaining_quantity) && toAmount(r.remaining_quantity) <= 0
+}
+
+/** Cuántos renglones del origen se cargaron y cuántos se omitieron por estar ya cubiertos. */
+export function sourceLoadSummary(rows: unknown): { loaded: number; covered: number } {
+    if (!Array.isArray(rows)) return { loaded: 0, covered: 0 }
+    const covered = rows.filter(isFullyConsumed).length
+    return { loaded: rows.length - covered, covered }
+}
+
+/** Fuente que precarga desde lo pendiente servido por el host (no desde la relación cruda). */
+export function sourceTracksRemaining(src: Pick<DocumentFormSource, 'line_link_field' | 'remaining_qty_field' | 'remaining_endpoint'>): boolean {
+    return !!(src.line_link_field || src.remaining_qty_field || src.remaining_endpoint)
 }
 
 export interface EditorIssue {
@@ -234,6 +269,13 @@ export function localIssues(lines: LineItem[], opts: { requireLines?: boolean; r
     items.forEach((l, i) => {
         if (!l.description.trim()) issues.push({ field: `lines.${i}`, severity: 'error', message: `Renglón ${i + 1}: falta la descripción.` })
         if (toAmount(l.unit_price) <= 0) issues.push({ field: `lines.${i}`, severity: 'warning', message: `Renglón ${i + 1}: precio en cero.` })
+        if (l.max_quantity != null && toAmount(l.quantity) > toAmount(l.max_quantity)) {
+            issues.push({
+                field: `lines.${i}`,
+                severity: 'error',
+                message: `Renglón ${i + 1}: la cantidad excede lo pendiente del documento origen (${l.max_quantity}).`,
+            })
+        }
         if (opts.requireTax && toAmount(l.tax_rate) === 0) {
             issues.push({ field: `lines.${i}`, severity: 'warning', message: `Renglón ${i + 1}: sin impuesto.` })
         }

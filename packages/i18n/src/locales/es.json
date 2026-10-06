@@ -184,5 +184,15 @@
   },
   "toast": {
     "dismiss": "Cerrar notificación"
+  },
+  "documentEditor": {
+    "load_from": "Cargar desde…",
+    "loading_source": "Cargando…",
+    "source_failed": "No se pudo cargar el documento",
+    "source_loaded_one": "{{count}} renglón cargado",
+    "source_loaded_other": "{{count}} renglones cargados",
+    "source_loaded_partial_one": "{{count}} renglón con lo pendiente · {{covered}} ya cubiertos se omitieron",
+    "source_loaded_partial_other": "{{count}} renglones con lo pendiente · {{covered}} ya cubiertos se omitieron",
+    "source_all_covered": "Todo el documento ya está registrado en otros documentos; no queda nada pendiente."
   }
 }
