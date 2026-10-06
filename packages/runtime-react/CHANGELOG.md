@@ -1,5 +1,24 @@
 # @asteby/metacore-runtime-react
 
+## 49.1.0
+
+### Minor Changes
+
+- eee67cb: Los campos fecha de un formulario declarativo (document_forms, acciones y asistentes) pueden declarar `default: "$today"` (o `"today"`) y nacen con el día de hoy en la zona horaria de la organización (`OrgRuntimeProvider`), no en la del navegador ni en UTC.
+
+  - `buildFieldDefaults` lee el `default` del manifest además del `defaultValue` del host. Antes los defaults escalares de los campos de document_forms se ignoraban.
+  - Un `$token` desconocido nunca se siembra en un campo fecha: el campo queda vacío y no se manda un literal que el backend rechaza.
+  - Nuevos exports: `todayInZone`, `isTodayToken`, `resolveFieldDefault`.
+
+  Retest r4 de Pitsline: FAC-00014 se guardó con fecha 26/27 sep. `invoice_date` era obligatoria y no tenía default, y el calendario abre en el mes actual con los últimos días del mes anterior en la primera fila.
+
+- 40cf304: `document_forms.types[].create_model`: un tipo puede delegar su alta a otro modelo (p. ej. `customers.Invoice`). «Crear» no pinta un formulario: llama a `onDelegateCreate({ model, type })` del host, que abre la página de ese modelo con su alta abierta.
+
+  - `DocumentFormDialog` y `DynamicCRUDPage` aceptan `onDelegateCreate`. Sin él, los tipos delegados no se ofrecen: una vista acotada a uno de ellos sigue sin «Crear», como hasta ahora.
+  - Nuevos exports: `delegatedCreate(forms)`, `withoutDelegatedTypes(forms)` y el tipo `DelegatedCreate`.
+
+  Retest r4 de Pitsline: Documentos fiscales → Facturas se había quedado sin «Crear» porque FiscalDocument no tiene formulario de factura. La factura nace en customers y se timbra después.
+
 ## 49.0.0
 
 ### Minor Changes

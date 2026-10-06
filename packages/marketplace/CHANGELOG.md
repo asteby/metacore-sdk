@@ -1,5 +1,11 @@
 # @asteby/metacore-marketplace
 
+## 131.0.0
+
+### Patch Changes
+
+- @asteby/metacore-app-providers@133.0.0
+
 ## 130.0.0
 
 ### Patch Changes
