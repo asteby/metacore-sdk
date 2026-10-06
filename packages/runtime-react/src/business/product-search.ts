@@ -80,6 +80,10 @@ export interface ProductResult {
     stock?: StockByWarehouse[]
     /** Paquetes automáticos: ids/nombres que se sugieren junto al producto. */
     bundle_items?: Array<{ product_id: string; name: string; quantity: number }>
+    /** Unidad de venta del catálogo (pza, juego, kg…). */
+    unit?: string
+    /** Campos de extensión del producto (fiscal_data.*) que se copian al renglón. */
+    extensions?: Record<string, string>
 }
 
 /** Existencia disponible: de la variante o del producto, en un almacén o en total. */

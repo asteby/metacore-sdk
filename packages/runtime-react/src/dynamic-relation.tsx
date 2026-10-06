@@ -636,11 +636,16 @@ function OneToManyRelation({
             )}
 
             <Dialog open={formOpen} onOpenChange={(open: boolean) => { setFormOpen(open); if (!open) setEditingRow(null) }}>
-                <DialogContent>
-                    <DialogHeader>
+                {/* Alto acotado al viewport: el cuerpo del form hace scroll y el
+                    footer (Guardar) queda fijo, para que un renglón con muchos
+                    campos no deje el botón fuera de pantalla. */}
+                <DialogContent className="flex max-h-[90dvh] flex-col overflow-hidden">
+                    <DialogHeader className="shrink-0">
                         <DialogTitle>{editingRow ? labels.editLabel : labels.addLabel}</DialogTitle>
                     </DialogHeader>
                     <DynamicForm
+                        key={editingRow ? `edit-${editingRow.id ?? ''}` : 'new'}
+                        scrollableBody
                         fields={formFields}
                         initialValues={editingRow || undefined}
                         onSubmit={handleSubmit}

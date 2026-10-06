@@ -37,6 +37,13 @@ export interface LineItem {
     dot?: string
     /** Existencia disponible conocida (para la política de sobreventa). */
     available?: number
+    /**
+     * Campos de extensión del renglón que aportan OTROS addons (p. ej.
+     * fiscal_mexico: `mx_clave_prod_serv`, `mx_clave_unidad`), copiados del
+     * producto al elegirlo. Viajan en `fiscal_data` (la bolsa de ModelExtension
+     * del host) — el SDK no conoce sus claves.
+     */
+    extensions?: Record<string, string>
 }
 
 /** Qué hacer si `quantity > available`. */
@@ -214,6 +221,7 @@ export function serializeLineItems(lines: LineItem[]): Array<Record<string, unkn
                 const v = l[k]
                 if (typeof v === 'string' && v.trim()) out[k] = v.trim()
             }
+            if (l.extensions && Object.keys(l.extensions).length > 0) out.fiscal_data = { ...l.extensions }
         }
         return out
     })
@@ -231,7 +239,7 @@ export function parseLineItems(rows: unknown): LineItem[] {
             product_id: str(o.product_id),
             sku: str(o.sku),
             description: typeof o.description === 'string' ? o.description : '',
-            quantity: o.quantity == null ? 1 : toAmount(o.quantity),
+            quantity: o.quantity == null || o.quantity === '' ? 1 : toAmount(o.quantity),
             unit_price: toAmount(o.unit_price),
             discount: toAmount(o.discount),
             discount_kind: o.discount_kind === 'amount' ? 'amount' : undefined,
@@ -243,6 +251,12 @@ export function parseLineItems(rows: unknown): LineItem[] {
             technician_id: str(o.technician_id),
             lot: str(o.lot),
             dot: str(o.dot),
+            extensions:
+                o.fiscal_data && typeof o.fiscal_data === 'object'
+                    ? (Object.fromEntries(
+                          Object.entries(o.fiscal_data as Record<string, unknown>).filter(([, v]) => typeof v === 'string'),
+                      ) as Record<string, string>)
+                    : undefined,
         })
     })
 }

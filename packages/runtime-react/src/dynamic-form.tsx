@@ -1,7 +1,7 @@
 // Minimal standalone DynamicForm. Factored from the dynamic-record-dialog
 // pattern + ActionFieldDef renderer so callers can reuse the form layout
 // outside the full record-edit modal.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { groupFieldsBySection, type FormLayout } from './form-layout'
 import { FieldSection, WizardProgress } from './form-layout-ui'
 import { AssistInterview } from './assist-interview'
@@ -65,7 +65,34 @@ export interface DynamicFormProps {
      * legacy flat list (unchanged).
      */
     formLayout?: FormLayout
+    /**
+     * Para formularios dentro de un modal con alto acotado: el cuerpo de campos
+     * hace scroll propio y la barra de botones (Guardar/Cancelar) queda fija
+     * abajo, así nunca queda fuera de pantalla con muchos campos. El contenedor
+     * debe ser flex-col con alto máximo (p.ej. `max-h-[90dvh]`).
+     */
+    scrollableBody?: boolean
 }
+
+// Valores iniciales del formulario: el registro (edición) gana sobre el default
+// del campo. Se calcula de forma síncrona en el primer render para que ningún
+// widget (p.ej. un Select de Radix) monte con '' y emita un cambio espurio que
+// pise el valor real del registro.
+function seedValues(fields: ActionFieldDef[], initialValues?: Record<string, any>): Record<string, any> {
+    const defaults: Record<string, any> = {}
+    for (const f of fields) {
+        if (isLineItemsField(f)) {
+            defaults[f.key] = initialValues?.[f.key] ?? f.defaultValue ?? []
+            continue
+        }
+        defaults[f.key] = initialValues?.[f.key] ?? f.defaultValue ?? (f.type === 'boolean' ? false : '')
+    }
+    return defaults
+}
+
+const isReadonlyField = (f: ActionFieldDef) =>
+    !!(f as { readonly?: boolean; readOnly?: boolean }).readonly ||
+    !!(f as { readonly?: boolean; readOnly?: boolean }).readOnly
 
 export function DynamicForm({
     fields,
@@ -76,8 +103,8 @@ export function DynamicForm({
     cancelLabel = 'Cancelar',
     disabled = false,
     formLayout,
+    scrollableBody = false,
 }: DynamicFormProps) {
-    const [values, setValues] = useState<Record<string, any>>({})
     const [errors, setErrors] = useState<Record<string, string>>({})
     const [submitting, setSubmitting] = useState(false)
 
@@ -87,9 +114,14 @@ export function DynamicForm({
     // (ColumnDef.Readonly). They are also excluded from defaults/submit so a
     // create never posts e.g. `status: ""` over the column default.
     const editableFields = useMemo(
-        () => fields.filter((f) => !(f as { readonly?: boolean }).readonly),
+        () => fields.filter((f) => !isReadonlyField(f)),
         [fields],
     )
+
+    const [values, setValues] = useState<Record<string, any>>(() => seedValues(editableFields, initialValues))
+    // Campos que el usuario (o un reset dependiente) cambió desde la siembra.
+    // En edición, un select que sigue vacío y nadie tocó no viaja en el PATCH.
+    const touched = useRef<Set<string>>(new Set())
 
     // Conditional visibility: a field carrying `visible_when` is rendered — and
     // validated — only while the referenced sibling field's current value
@@ -133,21 +165,22 @@ export function DynamicForm({
         setStepIndex((i) => Math.min(i, Math.max(groups.length - 1, 0)))
     }, [groups.length])
 
+    // Re-siembra cuando cambia el registro o los campos DESPUÉS del montaje (el
+    // primer render ya quedó sembrado por el inicializador de useState).
+    const seededFrom = useRef({ editableFields, initialValues })
     useEffect(() => {
-        const defaults: Record<string, any> = {}
-        for (const f of editableFields) {
-            if (isLineItemsField(f)) {
-                defaults[f.key] = initialValues?.[f.key] ?? f.defaultValue ?? []
-                continue
-            }
-            defaults[f.key] = initialValues?.[f.key] ?? f.defaultValue ?? (f.type === 'boolean' ? false : '')
-        }
-        setValues(defaults)
+        const prev = seededFrom.current
+        if (prev.editableFields === editableFields && prev.initialValues === initialValues) return
+        seededFrom.current = { editableFields, initialValues }
+        touched.current = new Set()
+        setValues(seedValues(editableFields, initialValues))
         setErrors({})
     }, [editableFields, initialValues])
 
-    const update = (k: string, v: any) =>
+    const update = (k: string, v: any) => {
+        touched.current.add(k)
         setValues((prev: Record<string, any>) => ({ ...prev, [k]: v }))
+    }
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -163,8 +196,19 @@ export function DynamicForm({
             return
         }
         setErrors({})
+        const data = { ...(result.data as Record<string, any>) }
+        // Edición: un select vacío que el usuario no tocó no se manda — el update
+        // es parcial, así que omitirlo conserva lo que tenga el registro en vez de
+        // pisarlo con ''.
+        if (initialValues) {
+            for (const f of visibleFields) {
+                if (resolveWidget(f) !== 'select') continue
+                if (touched.current.has(f.key)) continue
+                if (data[f.key] === '' || data[f.key] == null) delete data[f.key]
+            }
+        }
         setSubmitting(true)
-        try { await onSubmit(result.data as Record<string, any>) } finally { setSubmitting(false) }
+        try { await onSubmit(data) } finally { setSubmitting(false) }
     }
 
     // Renders one group's fields into the responsive 2-column grid: scalar
@@ -185,6 +229,11 @@ export function DynamicForm({
             ))}
         </div>
     )
+
+    // scrollableBody: el cuerpo hace scroll y el footer de botones queda fijo.
+    const formClass = scrollableBody ? 'flex min-h-0 flex-1 flex-col gap-4' : 'grid gap-4'
+    const bodyClass = scrollableBody ? '-mx-1 grid min-h-0 flex-1 gap-4 overflow-y-auto px-1' : 'grid gap-4'
+    const footerExtra = scrollableBody ? ' shrink-0 border-t' : ''
 
     // ── Steps (wizard) mode ────────────────────────────────────────────────
     // One step per section; Anterior/Siguiente navigate, submit only on the
@@ -212,20 +261,22 @@ export function DynamicForm({
         const goBack = () => setStepIndex((i) => Math.max(i - 1, 0))
 
         return (
-            <form onSubmit={handleSubmit} className="grid gap-4">
-                <WizardProgress groups={groups} stepIndex={stepIndex} onStepClick={i => setStepIndex(i)} />
-                {step.assist ? (
-                    <AssistInterview
-                        assist={step.assist}
-                        values={values}
-                        eyebrow={step.title}
-                        autoStart={step.assist.trigger !== 'button'}
-                        onApply={fields => setValues(prev => ({ ...prev, ...fields }))}
-                    />
-                ) : (
-                    renderGrid(step.fields)
-                )}
-                <div className="flex justify-between gap-2 pt-2">
+            <form onSubmit={handleSubmit} className={formClass}>
+                <div className={bodyClass}>
+                    <WizardProgress groups={groups} stepIndex={stepIndex} onStepClick={i => setStepIndex(i)} />
+                    {step.assist ? (
+                        <AssistInterview
+                            assist={step.assist}
+                            values={values}
+                            eyebrow={step.title}
+                            autoStart={step.assist.trigger !== 'button'}
+                            onApply={fields => setValues(prev => ({ ...prev, ...fields }))}
+                        />
+                    ) : (
+                        renderGrid(step.fields)
+                    )}
+                </div>
+                <div className={'flex justify-between gap-2 pt-2' + footerExtra}>
                     {stepIndex > 0 ? (
                         <Button type="button" variant="outline" onClick={goBack} disabled={submitting || disabled}>
                             Anterior
@@ -258,13 +309,15 @@ export function DynamicForm({
     // stays fully declarative — driven only by field shape. With no layout this
     // is a single default group rendered without section chrome (unchanged).
     return (
-        <form onSubmit={handleSubmit} className="grid gap-4">
-            {groups.map((group) => (
-                <FieldSection key={group.key} group={group}>
-                    {renderGrid(group.fields)}
-                </FieldSection>
-            ))}
-            <div className="flex justify-end gap-2 pt-2">
+        <form onSubmit={handleSubmit} className={formClass}>
+            <div className={bodyClass}>
+                {groups.map((group) => (
+                    <FieldSection key={group.key} group={group}>
+                        {renderGrid(group.fields)}
+                    </FieldSection>
+                ))}
+            </div>
+            <div className={'flex justify-end gap-2 pt-2' + footerExtra}>
                 {onCancel && (
                     <Button type="button" variant="outline" onClick={onCancel} disabled={submitting || disabled}>
                         {cancelLabel}
@@ -428,15 +481,17 @@ function FieldRenderer({
                     onChange={onChange}
                 />
             )
-        case 'select':
+        case 'select': {
+            const opts = effectiveOptions ?? field.options
             return (
-                <Select value={value || ''} onValueChange={onChange}>
+                <Select value={value || ''} onValueChange={guardEmptySelect(value, onChange, (opts ?? []).map((o) => o.value))}>
                     <SelectTrigger className="w-full"><SelectValue placeholder={field.placeholder || 'Seleccionar...'} /></SelectTrigger>
                     <SelectContent>
-                        {(effectiveOptions ?? field.options)?.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                        {opts?.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
                     </SelectContent>
                 </Select>
             )
+        }
         case 'switch':
             return <Switch id={field.key} checked={!!value} onCheckedChange={onChange} />
         case 'number':
@@ -526,6 +581,25 @@ function ScannableInput({
     )
 }
 
+/**
+ * Radix Select puede emitir `onValueChange('')` sin interacción del usuario (su
+ * <select> nativo oculto colapsa a '' si recibe el valor antes que sus
+ * <option>s, p.ej. dentro de un <form> en el primer render). Ese '' pisaría el
+ * valor real del registro y viajaría en el PATCH. Se ignora cuando ya hay un
+ * valor y '' no es una opción válida — el usuario nunca puede elegir '' así.
+ */
+export function guardEmptySelect(
+    current: unknown,
+    onChange: (v: any) => void,
+    optionValues: readonly unknown[],
+): (v: string) => void {
+    return (v: string) => {
+        const hasValue = current !== undefined && current !== null && current !== ''
+        if (v === '' && hasValue && !optionValues.some((o) => String(o) === '')) return
+        onChange(v)
+    }
+}
+
 function RefSelect({ field, value, onChange }: FieldRendererProps) {
     const { options, loading } = useOptionsResolver({
         modelKey: '',          // unused — `ref` drives the URL
@@ -535,7 +609,11 @@ function RefSelect({ field, value, onChange }: FieldRendererProps) {
         keepValue: value,
     })
     return (
-        <Select value={value || ''} onValueChange={onChange} disabled={loading}>
+        <Select
+            value={value || ''}
+            onValueChange={guardEmptySelect(value, onChange, options.map((o: ResolvedOption) => String(o.id)))}
+            disabled={loading}
+        >
             <SelectTrigger className="w-full">
                 <SelectValue placeholder={loading ? 'Cargando…' : (field.placeholder || 'Seleccionar...')} />
             </SelectTrigger>

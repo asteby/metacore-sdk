@@ -175,9 +175,18 @@ export function deriveRelationFormFields(
             // than a raw uuid text input. Without this the column lost its `ref`
             // crossing the column→field boundary and degraded to plain text.
             ref: col.ref,
+            // Columnas de solo lectura (escritas por el servidor/sistema): el
+            // DynamicForm las oculta y no las manda en el submit. Sin copiarla,
+            // el renglón las exponía editables y el PATCH las pisaba.
+            ...(isReadonlyColumn(col) ? { readonly: true } : {}),
         })
     }
     return out
+}
+
+function isReadonlyColumn(col: ColumnDefinition): boolean {
+    const c = col as ColumnDefinition & { readonly?: boolean; readOnly?: boolean; read_only?: boolean }
+    return c.readonly === true || c.readOnly === true || c.read_only === true
 }
 
 function columnTypeToFieldType(col: ColumnDefinition): string {

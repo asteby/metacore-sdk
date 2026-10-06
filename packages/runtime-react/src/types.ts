@@ -43,6 +43,13 @@ export interface DocumentFormLines {
     kind?: 'sale' | 'purchase' | 'credit' | 'allocation' | 'workorder'
     /** Solo `kind: allocation`: de dónde salen los documentos abiertos. */
     open_documents?: DocumentFormOpenDocuments
+    /**
+     * Cómo se captura el descuento: `percent` (default del grid), `amount`
+     * (importe) o `both`. Debe coincidir con la fórmula del modelo de renglones:
+     * si el backend calcula `quantity * unit_price - discount`, declara `amount`
+     * (con `percent` un 10 % se restaría como $10).
+     */
+    discount_mode?: 'percent' | 'amount' | 'both'
 }
 
 /** Documentos con saldo de la contraparte para PaymentAllocator. */
@@ -623,6 +630,12 @@ export interface ActionFieldDef {
     label: string
     type: string
     required?: boolean
+    /**
+     * Campo de solo lectura (escrito por el servidor/sistema): `DynamicForm` lo
+     * oculta y lo excluye de defaults y submit. Acepta el alias `readOnly`.
+     */
+    readonly?: boolean
+    readOnly?: boolean
     /**
      * Explicit nullability flag served by the kernel (v0.77.1+) from
      * `modelbase.FieldDef.Nullable` (populated as `!Required`). An optional `ref`

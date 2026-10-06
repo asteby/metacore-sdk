@@ -12,13 +12,15 @@ import {
   identityImageUrl,
   type GetImageUrl,
 } from './image-url-context'
-import { CurrencyContext, TimeZoneContext } from './org-runtime-context'
+import { CurrencyContext, TaxRateContext, TimeZoneContext } from './org-runtime-context'
 
 export interface OrgRuntimeProviderProps {
   /** Org IANA timezone (e.g. `America/Mexico_City`). */
   timeZone?: string
   /** Org ISO-4217 currency (e.g. `MXN`). */
   currency?: string
+  /** Org default tax rate as a fraction (e.g. `0.16`) for document lines. */
+  taxRate?: number
   /** Resolver turning a stored path into a fetchable URL. Defaults to identity. */
   getImageUrl?: GetImageUrl
   children: ReactNode
@@ -27,6 +29,7 @@ export interface OrgRuntimeProviderProps {
 export function OrgRuntimeProvider({
   timeZone,
   currency,
+  taxRate,
   getImageUrl = identityImageUrl,
   children,
 }: OrgRuntimeProviderProps) {
@@ -34,7 +37,9 @@ export function OrgRuntimeProvider({
     <ImageUrlContext.Provider value={getImageUrl}>
       <TimeZoneContext.Provider value={timeZone}>
         <CurrencyContext.Provider value={currency}>
-          {children}
+          <TaxRateContext.Provider value={taxRate}>
+            {children}
+          </TaxRateContext.Provider>
         </CurrencyContext.Provider>
       </TimeZoneContext.Provider>
     </ImageUrlContext.Provider>
