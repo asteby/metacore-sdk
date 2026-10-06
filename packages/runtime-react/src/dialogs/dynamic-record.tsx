@@ -76,7 +76,7 @@ import { normalizeRefFieldsForSubmit } from './normalize-submit'
 import { validateValues, bagHasErrors, exemptUnchangedRuleIssues } from '../validator'
 import { DynamicIcon, isLucideIconName } from '../dynamic-icon'
 import { IconPickerField } from '../icon-picker-field'
-import { humanizeToken } from '../dynamic-columns-helpers'
+import { humanizeToken, localizeFieldLabel } from '../dynamic-columns-helpers'
 import { formatDateCell } from '../dynamic-columns'
 import {
     ImageStack,
@@ -863,7 +863,7 @@ export function DynamicRecordDialog({
     // with no matching form field).
     const labelForKey = (key: string): string => {
         const f = (modalMeta?.fields ?? []).find(x => x.key === key)
-        if (f?.label) return f.label
+        if (f?.label) return localizeFieldLabel(f.label, t)
         return key.replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
     }
 
@@ -915,7 +915,7 @@ export function DynamicRecordDialog({
             }
             if (bagHasErrors(bag)) {
                 const labels: Record<string, string> = {}
-                for (const f of visible) labels[f.key] = f.label
+                for (const f of visible) labels[f.key] = localizeFieldLabel(f.label, t)
                 const next = localizeFieldErrorMap(bag, t, { labels })
                 setFieldErrors(next)
                 const description = Object.entries(next)
@@ -1089,7 +1089,7 @@ export function DynamicRecordDialog({
         const bag = validateValues(stepFields as ActionFieldDef[], formValues)
         if (bagHasErrors(bag)) {
             const labels: Record<string, string> = {}
-            for (const f of stepFields) labels[f.key] = f.label
+            for (const f of stepFields) labels[f.key] = localizeFieldLabel(f.label, t)
             setFieldErrors(localizeFieldErrorMap(bag, t, { labels }))
             toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }))
             return
@@ -1335,11 +1335,12 @@ function FieldRow({ field, record, value, mode, onChange, error, locked }: Field
     // the rich read-only renderer. `locked` forces the same disabled rendering on
     // CREATE for a caller-specified field (see `lockedFields`).
     const isEditReadonly = (mode === 'edit' && !!field.readonly) || !!locked
+    const { t } = useTranslation()
 
     return (
         <div className="flex flex-col gap-1.5" data-aby-field={field.key}>
             <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                {field.label}
+                {localizeFieldLabel(field.label, t)}
                 {field.required && mode !== 'view' && !isEditReadonly && (
                     <span className="text-destructive ml-0.5">*</span>
                 )}

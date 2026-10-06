@@ -426,7 +426,7 @@ export {
     resolveRelationLabel,
     type DynamicColumnsHelpers,
 } from './dynamic-columns'
-export { humanizeToken, translateMetadataLabel } from './dynamic-columns-helpers'
+export { humanizeToken, localizeFieldLabel, translateMetadataLabel } from './dynamic-columns-helpers'
 export type { MetadataTranslator } from './dynamic-columns-helpers'
 export {
     UrlChip,
