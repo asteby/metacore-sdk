@@ -25,6 +25,34 @@ const journalField = (overrides: Partial<ActionFieldDef> = {}): ActionFieldDef =
 })
 
 describe('computeLineItemTotals', () => {
+    // Pitsline r3 (g): the work order lines carry qty + a `total` price column
+    // and no amount column. qty=2 × 750 footed 750; the saved order was 1500.
+    it('suma qty × precio cuando la columna total es el precio unitario', () => {
+        const field = {
+            key: 'lines',
+            type: 'array',
+            itemFields: [
+                { key: 'description', type: 'string' },
+                { key: 'qty', type: 'number' },
+                { key: 'price', type: 'number', total: true },
+            ],
+        } as any
+        const rows = [{ qty: '2', price: '750' }, { qty: 1, price: 99.9 }]
+        expect(computeLineItemTotals(field, rows)).toEqual({ price: 1599.9 })
+    })
+    it('con columna de importe, el precio unitario se suma tal cual', () => {
+        const field = {
+            key: 'lines',
+            type: 'array',
+            itemFields: [
+                { key: 'qty', type: 'number' },
+                { key: 'unit_price', type: 'number', total: true },
+                { key: 'subtotal', type: 'number', total: true },
+            ],
+        } as any
+        const rows = [{ qty: 2, unit_price: 10, subtotal: 20 }]
+        expect(computeLineItemTotals(field, rows)).toEqual({ unit_price: 10, subtotal: 20 })
+    })
     it('suma solo las columnas marcadas con total', () => {
         const rows = [
             { account_id: 'a', debit: '100', credit: '' },
