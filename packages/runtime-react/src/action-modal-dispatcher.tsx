@@ -93,6 +93,8 @@ import { requestFederatedAction } from './federated-action-loader'
 import { useInstalledAddons } from './installed-addons-context'
 import { federatedModalComponent, resolveFederatedModal } from './primitives/contributions'
 import { installedPredicate, useContributionsVersion } from './primitives/use-contributions'
+import { isTodayToken, todayInZone } from './calendar-date'
+import { useTimeZone } from './org-runtime-context'
 
 export type { ActionMetadata, ActionModalProps }
 
@@ -1021,6 +1023,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
     const reasonPrompt = useReasonPrompt()
     const supervisor = useSupervisor()
     const branchGate = useBranchCreateGate()
+    const orgTimeZone = useTimeZone()
     const [formData, setFormData] = useState<Record<string, any>>({})
     const [executing, setExecuting] = useState(false)
     // Per-field validation errors (localized), shown inline under each input.
@@ -1058,11 +1061,11 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
 
     useEffect(() => {
         if (open && action.fields) {
-            setFormData(buildFieldDefaults(action.fields, record, model))
+            setFormData(buildFieldDefaults(action.fields, record, model, { timeZone: orgTimeZone }))
             setFieldErrors({})
             setFormError(undefined)
         }
-    }, [open, action.fields, record, model])
+    }, [open, action.fields, record, model, orgTimeZone])
 
     // Lines the list row does not carry: load them from the declared relation
     // (see prefillRelationRequests) and seed the line-items grid.
@@ -1353,10 +1356,44 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
     )
 }
 
+/** Context a declared field default is resolved against. */
+export interface FieldDefaultContext {
+    /** Org IANA timezone: `$today` is the org's day, not the browser's or UTC's. */
+    timeZone?: string
+    /** Clock (tests). */
+    now?: Date
+}
+
+const DATE_FIELD_TYPES = new Set(['date', 'datetime', 'timestamp', 'timestamptz'])
+
+/**
+ * The declared scalar default of a field, resolved: `defaultValue` (host
+ * camelCase) or `default` (raw manifest, the kernel serves action/document-form
+ * fields without renaming it). A date field may declare `$today` / `today` and
+ * gets the org's calendar day. An unknown `$token` never lands in a date field
+ * (undefined): a literal "$today" posted as invoice_date is a 422, an empty
+ * field is just a required field to fill.
+ */
+export function resolveFieldDefault(field: ActionFieldDef, ctx: FieldDefaultContext = {}): unknown {
+    const f = field as { defaultValue?: unknown; default?: unknown }
+    const raw = f.defaultValue ?? f.default
+    if (raw === undefined || raw === null) return undefined
+    if (DATE_FIELD_TYPES.has(String(field.type ?? '').toLowerCase()) && typeof raw === 'string') {
+        if (isTodayToken(raw)) return todayInZone(ctx.timeZone, ctx.now)
+        if (raw.trim().startsWith('$')) return undefined
+    }
+    return raw
+}
+
 // buildFieldDefaults seeds formData for a set of action fields, honoring the
 // same line-items prefill spec + boolean/empty rules GenericActionModal uses, so
 // wizard steps and single-page forms initialize identically.
-export function buildFieldDefaults(fields: ActionFieldDef[], record: any, model?: string): Record<string, any> {
+export function buildFieldDefaults(
+    fields: ActionFieldDef[],
+    record: any,
+    model?: string,
+    ctx: FieldDefaultContext = {},
+): Record<string, any> {
     const defaults: Record<string, any> = {}
     for (const field of fields) {
         if (isLineItemsField(field)) {
@@ -1373,7 +1410,7 @@ export function buildFieldDefaults(fields: ActionFieldDef[], record: any, model?
             defaults[field.key] = fromRecord
             continue
         }
-        defaults[field.key] = field.defaultValue ?? (field.type === 'boolean' ? false : '')
+        defaults[field.key] = resolveFieldDefault(field, ctx) ?? (field.type === 'boolean' ? false : '')
     }
     return defaults
 }
@@ -1404,6 +1441,7 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
     const api = useApi()
     const reasonPrompt = useReasonPrompt()
     const supervisor = useSupervisor()
+    const orgTimeZone = useTimeZone()
     const steps = action.steps ?? []
     const [stepIndex, setStepIndex] = useState(0)
     const [formData, setFormData] = useState<Record<string, any>>({})
@@ -1416,10 +1454,10 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
     useEffect(() => {
         if (!open) return
         const allFields = steps.flatMap((s) => s.fields ?? [])
-        setFormData(buildFieldDefaults(allFields, record, model))
+        setFormData(buildFieldDefaults(allFields, record, model, { timeZone: orgTimeZone }))
         setStepIndex(0)
         setFormError(undefined)
-    }, [open, action.steps, record, model])
+    }, [open, action.steps, record, model, orgTimeZone])
 
     const updateField = (key: string, value: any) =>
         setFormData((prev: Record<string, any>) => ({ ...prev, [key]: value }))

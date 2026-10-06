@@ -23,7 +23,7 @@ import { Button } from '@asteby/metacore-ui/primitives'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useApi } from '../api-context'
-import { useOrgTaxRate } from '../org-runtime-context'
+import { useOrgTaxRate, useTimeZone } from '../org-runtime-context'
 import { FieldCell, FieldGrid, FieldLabel } from '../field-grid'
 import { FormErrorBanner } from './feedback'
 import { DocumentLinesGrid, type DocumentLinesGridProps, type LineItemsColumn } from './line-items-editor'
@@ -114,6 +114,7 @@ export function DocumentEditor({
     const fmt = useFormatter({ currency })
     const installed = useInstalledAddons()
     const orgTaxRate = useOrgTaxRate()
+    const orgTimeZone = useTimeZone()
     const tl = useCallback((s: string) => t(s, { defaultValue: s }), [t])
 
     const lineCfg = useMemo(() => editorLinesConfig(type, forms), [type, forms])
@@ -122,7 +123,7 @@ export function DocumentEditor({
     const amountKey = isAllocation ? allocationAmountField(type.fields) : undefined
 
     const [header, setHeader] = useState<Record<string, any>>(() => ({
-        ...buildFieldDefaults(type.fields, record),
+        ...buildFieldDefaults(type.fields, record, undefined, { timeZone: orgTimeZone, now: today }),
         ...(type.defaults ?? {}),
     }))
     const [lines, setLines] = useState<LineItem[]>([])
