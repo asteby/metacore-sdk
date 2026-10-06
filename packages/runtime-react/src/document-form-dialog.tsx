@@ -45,7 +45,7 @@ import { emitRecordMutation } from './record-mutation-events'
 import { isLineItemsField, resolveWidget, scopeValueFromFilterToken } from './dynamic-form-schema'
 import { createCatalogProductSearch, withDefaultTaxRate } from './business/catalog-product-search'
 import { DocumentEditor } from './business/document-editor'
-import { editorLinesConfig, isEditorLayout } from './business/document-editor-model'
+import { editorLinesConfig, isEditorLayout, isFullscreenEditor } from './business/document-editor-model'
 import type {
     ActionFieldDef,
     DocumentFormType,
@@ -336,14 +336,22 @@ export function DocumentFormDialog({
     if (open && type && delegatedModel) return null
 
     // layout "editor": una sola pantalla por secciones (DocumentEditor). Sin él
-    // sigue el wizard de siempre (retrocompatible).
+    // sigue el wizard de siempre (retrocompatible). Un documento con renglones
+    // (factura, cotización, pedido, OC) ocupa toda la pantalla; NC y cobro
+    // siguen en el diálogo grande.
     if (open && type && step !== 'type' && (isEditorLayout(type) || !!initialSource)) {
+        const fullscreen = isFullscreenEditor(type, forms)
         return (
             <Dialog open={open} onOpenChange={onOpenChange}>
                 <DialogContent
-                    className="flex max-h-[92dvh] flex-col overflow-hidden"
-                    style={{ maxHeight: '92dvh', maxWidth: '960px', width: '95vw' }}
+                    className={fullscreen ? 'flex flex-col overflow-hidden sm:max-w-none' : 'flex max-h-[92dvh] flex-col overflow-hidden'}
+                    style={
+                        fullscreen
+                            ? { width: 'calc(100vw - 2rem)', maxWidth: '1440px', height: 'calc(100dvh - 2rem)', maxHeight: 'calc(100dvh - 2rem)' }
+                            : { maxHeight: '92dvh', maxWidth: '960px', width: '95vw' }
+                    }
                     data-slot="document-editor-dialog"
+                    data-fullscreen={fullscreen ? 'true' : undefined}
                 >
                     <DialogHeader className="shrink-0">
                         <DialogTitle>{tl(type.label)}</DialogTitle>
@@ -359,6 +367,7 @@ export function DocumentFormDialog({
                         initialSource={initialSource}
                         searchProducts={lineSearch}
                         currency={currency}
+                        fullscreen={fullscreen}
                         onCancel={() => (canGoBackToTypes ? setStep('type') : onOpenChange(false))}
                         onSaved={(rec) => {
                             onSaved?.(rec)

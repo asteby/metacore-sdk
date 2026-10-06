@@ -7,6 +7,7 @@ import { Badge } from '@asteby/metacore-ui/primitives'
 import { AlertTriangle, ChevronDown, XCircle } from 'lucide-react'
 import type { CreditStatus, EditorIssue } from './document-editor-model'
 import type { Formatter } from './format'
+import { computeLine, type LineItem } from './line-items'
 
 /** Bloque con título discreto y espaciado generoso (sin bordes pesados). */
 export function EditorSection({ title, hint, children, slot }: { title?: ReactNode; hint?: ReactNode; children: ReactNode; slot?: string }) {
@@ -161,4 +162,52 @@ export function PreviewPanel({ preview }: { preview: PreviewContent | null }) {
     if (preview.html) return <iframe title="Vista previa" srcDoc={preview.html} className="h-96 w-full rounded border" data-slot="preview-html" />
     if (preview.xml) return <pre className="max-h-96 overflow-auto rounded bg-muted p-3 text-[11px] leading-tight" data-slot="preview-xml">{preview.xml}</pre>
     return null
+}
+
+export interface DraftPreviewProps {
+    title: string
+    party?: string
+    /** Datos del encabezado ya con su etiqueta y valor legibles. */
+    header: Array<{ label: string; value: string }>
+    lines: LineItem[]
+    totals: TotalsRow[]
+    fmt: Formatter
+}
+
+/**
+ * Vista previa local del documento (sin servidor ni borrador): cómo queda con
+ * lo capturado. Para tipos sin acción `preview`; la del servidor (PDF/XML) gana.
+ */
+export function DraftPreview({ title, party, header, lines, totals, fmt }: DraftPreviewProps) {
+    const items = lines.filter((l) => l.kind === 'item')
+    return (
+        <article className="space-y-3 rounded border bg-background p-4 text-xs" data-slot="preview-draft">
+            <header className="flex flex-wrap items-baseline justify-between gap-2 border-b pb-2">
+                <span className="text-sm font-semibold">{title}</span>
+                {party && <span className="font-medium">{party}</span>}
+            </header>
+            {header.length > 0 && (
+                <dl className="grid grid-cols-2 gap-x-4 gap-y-1">
+                    {header.map((h) => (
+                        <div key={h.label} className="min-w-0">
+                            <dt className="text-muted-foreground">{h.label}</dt>
+                            <dd className="truncate">{h.value}</dd>
+                        </div>
+                    ))}
+                </dl>
+            )}
+            <table className="w-full tabular-nums">
+                <tbody>
+                    {items.map((l) => (
+                        <tr key={l.key} className="border-t align-top">
+                            <td className="py-1 pr-2">{l.description}</td>
+                            <td className="py-1 pr-2 text-right">{l.quantity}</td>
+                            <td className="py-1 text-right">{fmt.money(computeLine(l).net)}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+            <TotalsPanel rows={totals} />
+        </article>
+    )
 }

@@ -44,11 +44,13 @@ import {
     partySummaryRows,
     splitEditorFields,
     toOpenDocuments,
+    friendlyOptionLabel,
     withFriendlyOptions,
     type EditorIssue,
 } from './document-editor-model'
 import {
     CollapsibleSection,
+    DraftPreview,
     EditorSection,
     PartyCard,
     PreviewPanel,
@@ -89,6 +91,12 @@ export interface DocumentEditorProps {
     currency?: string
     /** Hoy (días de atraso del reparto; inyectable en tests). */
     today?: Date
+    /**
+     * Pantalla completa (DocumentFormDialog la pide para documentos con
+     * renglones): a dos columnas en pantallas anchas, con totales, revisión y
+     * vista previa a la derecha; en una sola columna en móvil.
+     */
+    fullscreen?: boolean
 }
 
 type Busy = 'save' | 'preview' | 'source' | null
@@ -107,6 +115,7 @@ export function DocumentEditor({
     defaultTaxRate,
     currency,
     today,
+    fullscreen = false,
 }: DocumentEditorProps) {
     const { t, i18n } = useTranslation()
     const lang = i18n?.language
@@ -130,6 +139,7 @@ export function DocumentEditor({
     const [linesFromSourceDoc, setLinesFromSourceDoc] = useState(false)
     const [extFields, setExtFields] = useState<ActionFieldDef[]>([])
     const [party, setParty] = useState<Record<string, any> | null>(null)
+    const [partyLabels, setPartyLabels] = useState<Record<string, string>>({})
     const [openDocs, setOpenDocs] = useState<OpenDocument[]>([])
     const [docsLoading, setDocsLoading] = useState(false)
     const [alloc, setAlloc] = useState<PaymentAllocatorValue>({ strategy: 'oldest_due_first', manual: {} })
@@ -219,6 +229,25 @@ export function DocumentEditor({
             cancelled = true
         }
     }, [api, type.party, partyId])
+
+    // Etiquetas de la tarjeta (RFC, régimen…): las del formulario del modelo de
+    // la contraparte, incluidas sus extensiones; sin ellas se ve la columna cruda.
+    const partyModel = type.party?.model
+    useEffect(() => {
+        if (!partyModel) return
+        let cancelled = false
+        api.get(`/metadata/modal/${partyModel}`)
+            .then((res: any) => {
+                const fields: any[] = res?.data?.data?.fields ?? res?.data?.fields ?? []
+                const out: Record<string, string> = {}
+                for (const f of fields) if (typeof f?.key === 'string' && typeof f?.label === 'string' && f.label) out[f.key] = f.label
+                if (!cancelled) setPartyLabels(out)
+            })
+            .catch(() => {})
+        return () => {
+            cancelled = true
+        }
+    }, [api, partyModel])
 
     // Cobro: documentos abiertos de la contraparte.
     const openCfg = lineCfg?.open_documents
@@ -365,7 +394,7 @@ export function DocumentEditor({
             try {
                 if (!isAllocation) {
                     const rows = await fetchSourceRows(src, id)
-                    const loaded = linesFromSource(rows, src.map, { kind, discountMode: lineCfg.discount_mode })
+                    const loaded = linesFromSource(rows, src.map, { kind, discountMode: lineCfg.discount_mode, defaultTaxRate: taxRate })
                     const { covered } = sourceLoadSummary(rows)
                     setLines(loaded)
                     setLoadedSource(src)
@@ -403,7 +432,7 @@ export function DocumentEditor({
                 setBusy(null)
             }
         },
-        [api, lineCfg, isAllocation, kind, t, fetchSourceRows],
+        [api, lineCfg, isAllocation, kind, t, fetchSourceRows, taxRate],
     )
 
     // Prefill al abrir desde un documento origen (acción de fila «Crear NC», «Facturar venta»…).
@@ -531,11 +560,10 @@ export function DocumentEditor({
             </FieldCell>
         ) : null
 
-    const summaryRows = partySummaryRows(
-        party,
-        type.party?.summary,
-        Object.fromEntries(allFields.map((f) => [f.key, tl(f.label)])),
-    )
+    const summaryRows = partySummaryRows(party, type.party?.summary, {
+        ...Object.fromEntries(Object.entries(partyLabels).map(([k, v]) => [k, tl(v)])),
+        ...Object.fromEntries(allFields.map((f) => [f.key, tl(f.label)])),
+    })
     const advancedSummary = groups.advanced
         .filter(visible)
         .map((f) => {
@@ -566,175 +594,226 @@ export function DocumentEditor({
               { label: t('documentEditor.total', { defaultValue: 'Total' }), value: fmt.money(totals.total), emphasis: true },
           ]
 
-    const activeSource = sources.find((s) => s.key === sourceKey)
+    const activeSource = sources.find((s) => s.key === sourceKey) ?? (sources.length === 1 ? sources[0] : undefined)
     const linesTitle = lineCfg?.title
         ? tl(lineCfg.title)
         : isAllocation
           ? t('documentEditor.allocation_title', { defaultValue: 'Documentos a pagar' })
           : t('documentEditor.lines_title', { defaultValue: 'Conceptos' })
+    // Sin acción de vista previa del servidor, un documento con renglones ofrece
+    // la suya local (encabezado, renglones y totales): sin borrador ni red.
+    const localPreview = !previewEnabled && !type.preview && !!lineCfg && !isAllocation && kind !== 'credit'
+
+    const essentials = (
+        <EditorSection slot="editor-essentials">
+            <FieldGrid>
+                {groups.party && fieldCell(groups.party)}
+                {groups.essential.map((f) => fieldCell(f))}
+            </FieldGrid>
+            {party && (
+                <PartyCard name={party.name ?? party.legal_name} rows={summaryRows} credit={credit} fmt={fmt}>
+                    {partyContribs.map(({ id, component: C }) => (
+                        <C key={id} {...contribProps} />
+                    ))}
+                </PartyCard>
+            )}
+        </EditorSection>
+    )
+
+    const loadFrom = sources.length > 0 && !isAllocation && (
+        <EditorSection
+            slot="load-from-source"
+            title={t('documentEditor.load_from', { defaultValue: 'Cargar desde…' })}
+            hint={busy === 'source' ? t('documentEditor.loading_source', { defaultValue: 'Cargando…' }) : sourceNote}
+        >
+            <div className="flex flex-wrap items-center gap-2">
+                {sources.length > 1 && (
+                    <div
+                        role="radiogroup"
+                        aria-label={t('documentEditor.source_kind', { defaultValue: 'Tipo de documento origen' })}
+                        className="inline-flex flex-wrap gap-1 rounded-md border p-1"
+                    >
+                        {sources.map((s) => (
+                            <button
+                                key={s.key}
+                                type="button"
+                                role="radio"
+                                aria-checked={s.key === sourceKey}
+                                data-source-kind={s.key}
+                                onClick={() => {
+                                    setSourceKey(s.key)
+                                    setSourceId('')
+                                }}
+                                className={`rounded px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                                    s.key === sourceKey ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-accent'
+                                }`}
+                            >
+                                {tl(s.label)}
+                            </button>
+                        ))}
+                    </div>
+                )}
+                {activeSource && (
+                    <SourcePicker
+                        key={activeSource.key}
+                        source={activeSource}
+                        value={sourceId}
+                        header={header}
+                        label={tl(activeSource.label)}
+                        onPick={(id) => {
+                            setSourceKey(activeSource.key)
+                            setSourceId(id)
+                            if (id) void loadFromSource(activeSource, id)
+                        }}
+                    />
+                )}
+            </div>
+        </EditorSection>
+    )
+
+    const totalsPanel = <TotalsPanel rows={totalsRows} />
+
+    const linesSection = lineCfg && (
+        <EditorSection
+            slot={isAllocation ? 'editor-allocation' : 'editor-lines'}
+            title={linesTitle}
+            hint={
+                isAllocation && openBalance > 0 && amountKey ? (
+                    <button type="button" className="underline-offset-2 hover:underline" onClick={() => updateField(amountKey, openBalance)}>
+                        {t('documentEditor.pay_all', { defaultValue: 'Cobrar todo ({{amount}})', amount: fmt.money(openBalance) })}
+                    </button>
+                ) : undefined
+            }
+        >
+            {isAllocation ? (
+                allocPartyId ? (
+                    <PaymentAllocator
+                        documents={openDocs}
+                        result={allocation}
+                        value={alloc}
+                        onChange={setAlloc}
+                        currency={currency}
+                        loading={docsLoading}
+                        today={today}
+                    />
+                ) : (
+                    <p className="text-sm text-muted-foreground">
+                        {t('documentEditor.pick_party_first', { defaultValue: 'Elige el cliente para ver sus documentos con saldo.' })}
+                    </p>
+                )
+            ) : (
+                <DocumentLinesGrid
+                    value={lines}
+                    onChange={(next) => {
+                        setLines(next)
+                        setServerIssues([])
+                    }}
+                    columns={(lineCfg.columns as LineItemsColumn[] | undefined) ?? ['discount', 'tax']}
+                    priceSource={lineCfg.price_source ?? (kind === 'purchase' ? 'cost' : 'sale')}
+                    discountMode={lineCfg.discount_mode}
+                    mode={linesFromSourceDoc ? 'from_source' : 'free'}
+                    policy={kind === 'credit' ? { allowZeroQuantity: linesFromSourceDoc } : undefined}
+                    search={search}
+                    currency={currency}
+                />
+            )}
+            {!fullscreen && totalsPanel}
+        </EditorSection>
+    )
+
+    const advanced = (groups.advanced.length > 0 || headerContribs.length > 0) && (
+        <CollapsibleSection
+            slot="advanced-options"
+            title={t('documentEditor.advanced', { defaultValue: 'Opciones fiscales' })}
+            summary={advancedSummary || t('documentEditor.advanced_defaults', { defaultValue: 'Valores sugeridos' })}
+            open={advancedOpen}
+            onOpenChange={setAdvancedOpen}
+        >
+            {groups.advanced.length > 0 && <FieldGrid>{groups.advanced.map((f) => fieldCell(f))}</FieldGrid>}
+            {headerContribs.map(({ id, component: C }) => (
+                <C key={id} {...contribProps} />
+            ))}
+        </CollapsibleSection>
+    )
+
+    const contributedSections = [...bodyContribs, ...sideContribs].map(({ id, component: C }) => (
+        <section key={id} data-contribution={id}>
+            <C {...contribProps} />
+        </section>
+    ))
+
+    const notes = groups.notes.length > 0 && <FieldGrid>{groups.notes.map((f) => fieldCell(f, true))}</FieldGrid>
+
+    const previewSection = previewEnabled ? (
+        <CollapsibleSection slot="preview" title={tl(type.preview!.label ?? 'Vista previa')} open={previewOpen} onOpenChange={togglePreview}>
+            {busy === 'preview' ? (
+                <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin" aria-hidden />
+                    {t('documentEditor.preview_loading', { defaultValue: 'Generando vista previa…' })}
+                </p>
+            ) : (
+                <>
+                    <PreviewPanel preview={preview} />
+                    <Button type="button" variant="ghost" size="sm" onClick={() => void runPreview()} disabled={busy !== null}>
+                        {t('documentEditor.preview_refresh', { defaultValue: 'Actualizar vista previa' })}
+                    </Button>
+                </>
+            )}
+        </CollapsibleSection>
+    ) : localPreview ? (
+        <CollapsibleSection slot="preview" title={t('documentEditor.preview', { defaultValue: 'Vista previa' })} open={previewOpen} onOpenChange={setPreviewOpen}>
+            <DraftPreview
+                title={tl(type.label)}
+                party={party ? String(party.name ?? party.legal_name ?? '') : undefined}
+                header={[...groups.essential, ...groups.advanced]
+                    .filter(visible)
+                    .map((f) => {
+                        const v = header[f.key]
+                        const opt = f.options?.find((o) => String(o.value) === String(v))
+                        return { label: tl(f.label), value: v == null || v === '' ? '' : opt ? friendlyOptionLabel(tl(String(opt.label ?? v))) : String(v) }
+                    })
+                    .filter((r) => r.value)}
+                lines={lines}
+                totals={totalsRows}
+                fmt={fmt}
+            />
+        </CollapsibleSection>
+    ) : null
+
+    const checklist = <ValidationChecklist issues={shownIssues} title={t('documentEditor.review', { defaultValue: 'Revisa antes de guardar' })} />
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col" data-slot="document-editor" data-kind={kind}>
-            <div className="-mx-1 min-h-0 flex-1 space-y-8 overflow-y-auto px-1 py-2">
-                <FormErrorBanner message={formError} />
-
-                <EditorSection slot="editor-essentials">
-                    <FieldGrid>
-                        {groups.party && fieldCell(groups.party)}
-                        {groups.essential.map((f) => fieldCell(f))}
-                    </FieldGrid>
-                    {party && (
-                        <PartyCard name={party.name ?? party.legal_name} rows={summaryRows} credit={credit} fmt={fmt}>
-                            {partyContribs.map(({ id, component: C }) => (
-                                <C key={id} {...contribProps} />
-                            ))}
-                        </PartyCard>
-                    )}
-                </EditorSection>
-
-                {sources.length > 0 && !isAllocation && (
-                    <EditorSection
-                        slot="load-from-source"
-                        title={t('documentEditor.load_from', { defaultValue: 'Cargar desde…' })}
-                        hint={busy === 'source' ? t('documentEditor.loading_source', { defaultValue: 'Cargando…' }) : sourceNote}
-                    >
-                        <div className="flex flex-wrap items-center gap-2">
-                            {sources.length > 1 && (
-                                <select
-                                    aria-label={t('documentEditor.source_kind', { defaultValue: 'Tipo de documento origen' })}
-                                    className="h-9 rounded-md border bg-background px-2 text-sm"
-                                    value={sourceKey}
-                                    onChange={(e) => {
-                                        setSourceKey(e.target.value)
-                                        setSourceId('')
-                                    }}
-                                >
-                                    <option value="">{t('documentEditor.choose_source', { defaultValue: 'Elige…' })}</option>
-                                    {sources.map((s) => (
-                                        <option key={s.key} value={s.key}>
-                                            {tl(s.label)}
-                                        </option>
-                                    ))}
-                                </select>
-                            )}
-                            {(activeSource ?? (sources.length === 1 ? sources[0] : undefined)) && (
-                                <SourcePicker
-                                    source={(activeSource ?? sources[0])!}
-                                    value={sourceId}
-                                    header={header}
-                                    label={tl((activeSource ?? sources[0])!.label)}
-                                    onPick={(id) => {
-                                        if (!activeSource) setSourceKey(sources[0].key)
-                                        setSourceId(id)
-                                        const src = activeSource ?? sources[0]
-                                        if (id) void loadFromSource(src, id)
-                                    }}
-                                />
-                            )}
-                        </div>
-                    </EditorSection>
-                )}
-
-                {lineCfg && (
-                    <EditorSection
-                        slot={isAllocation ? 'editor-allocation' : 'editor-lines'}
-                        title={linesTitle}
-                        hint={
-                            isAllocation && openBalance > 0 && amountKey ? (
-                                <button
-                                    type="button"
-                                    className="underline-offset-2 hover:underline"
-                                    onClick={() => updateField(amountKey, openBalance)}
-                                >
-                                    {t('documentEditor.pay_all', { defaultValue: 'Cobrar todo ({{amount}})', amount: fmt.money(openBalance) })}
-                                </button>
-                            ) : undefined
-                        }
-                    >
-                        {isAllocation ? (
-                            allocPartyId ? (
-                                <PaymentAllocator
-                                    documents={openDocs}
-                                    result={allocation}
-                                    value={alloc}
-                                    onChange={setAlloc}
-                                    currency={currency}
-                                    loading={docsLoading}
-                                    today={today}
-                                />
-                            ) : (
-                                <p className="text-sm text-muted-foreground">
-                                    {t('documentEditor.pick_party_first', { defaultValue: 'Elige el cliente para ver sus documentos con saldo.' })}
-                                </p>
-                            )
-                        ) : (
-                            <DocumentLinesGrid
-                                value={lines}
-                                onChange={(next) => {
-                                    setLines(next)
-                                    setServerIssues([])
-                                }}
-                                columns={(lineCfg.columns as LineItemsColumn[] | undefined) ?? ['discount', 'tax']}
-                                priceSource={lineCfg.price_source ?? (kind === 'purchase' ? 'cost' : 'sale')}
-                                discountMode={lineCfg.discount_mode}
-                                mode={linesFromSourceDoc ? 'from_source' : 'free'}
-                                policy={kind === 'credit' ? { allowZeroQuantity: linesFromSourceDoc } : undefined}
-                                search={search}
-                                currency={currency}
-                            />
-                        )}
-                        <TotalsPanel rows={totalsRows} />
-                    </EditorSection>
-                )}
-
-                {(groups.advanced.length > 0 || headerContribs.length > 0) && (
-                    <CollapsibleSection
-                        slot="advanced-options"
-                        title={t('documentEditor.advanced', { defaultValue: 'Opciones fiscales' })}
-                        summary={advancedSummary || t('documentEditor.advanced_defaults', { defaultValue: 'Valores sugeridos' })}
-                        open={advancedOpen}
-                        onOpenChange={setAdvancedOpen}
-                    >
-                        {groups.advanced.length > 0 && <FieldGrid>{groups.advanced.map((f) => fieldCell(f))}</FieldGrid>}
-                        {headerContribs.map(({ id, component: C }) => (
-                            <C key={id} {...contribProps} />
-                        ))}
-                    </CollapsibleSection>
-                )}
-
-                {[...bodyContribs, ...sideContribs].map(({ id, component: C }) => (
-                    <section key={id} data-contribution={id}>
-                        <C {...contribProps} />
-                    </section>
-                ))}
-
-                {groups.notes.length > 0 && <FieldGrid>{groups.notes.map((f) => fieldCell(f, true))}</FieldGrid>}
-
-                {previewEnabled && (
-                    <CollapsibleSection
-                        slot="preview"
-                        title={tl(type.preview!.label ?? 'Vista previa')}
-                        open={previewOpen}
-                        onOpenChange={togglePreview}
-                    >
-                        {busy === 'preview' ? (
-                            <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Loader2 className="size-4 animate-spin" aria-hidden />
-                                {t('documentEditor.preview_loading', { defaultValue: 'Generando vista previa…' })}
-                            </p>
-                        ) : (
-                            <>
-                                <PreviewPanel preview={preview} />
-                                <Button type="button" variant="ghost" size="sm" onClick={() => void runPreview()} disabled={busy !== null}>
-                                    {t('documentEditor.preview_refresh', { defaultValue: 'Actualizar vista previa' })}
-                                </Button>
-                            </>
-                        )}
-                    </CollapsibleSection>
-                )}
-
-                <ValidationChecklist issues={shownIssues} title={t('documentEditor.review', { defaultValue: 'Revisa antes de guardar' })} />
-            </div>
+        <div className="flex min-h-0 flex-1 flex-col" data-slot="document-editor" data-kind={kind} data-layout={fullscreen ? 'fullscreen' : 'dialog'}>
+            {fullscreen ? (
+                <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 py-2 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8">
+                    <div className="min-w-0 space-y-8" data-slot="editor-main">
+                        <FormErrorBanner message={formError} />
+                        {essentials}
+                        {loadFrom}
+                        {linesSection}
+                        {advanced}
+                        {contributedSections}
+                        {notes}
+                    </div>
+                    <aside className="mt-8 space-y-6 lg:sticky lg:top-0 lg:mt-0 lg:self-start" data-slot="editor-aside">
+                        <div className="rounded-lg border p-4">{totalsPanel}</div>
+                        {checklist}
+                        {previewSection}
+                    </aside>
+                </div>
+            ) : (
+                <div className="-mx-1 min-h-0 flex-1 space-y-8 overflow-y-auto px-1 py-2">
+                    <FormErrorBanner message={formError} />
+                    {essentials}
+                    {loadFrom}
+                    {linesSection}
+                    {advanced}
+                    {contributedSections}
+                    {notes}
+                    {previewSection}
+                    {checklist}
+                </div>
+            )}
 
             <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t pt-4" data-slot="editor-actions">
                 {footerContribs.map(({ id, component: C }) => (

@@ -190,6 +190,9 @@
   },
   "documentEditor": {
     "load_from": "Load from…",
+    "source_kind": "Source document type",
+    "preview": "Preview",
+    "advanced": "Tax options",
     "loading_source": "Loading…",
     "source_failed": "The document could not be loaded",
     "source_loaded_one": "{{count}} line loaded",

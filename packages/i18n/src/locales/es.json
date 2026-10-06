@@ -190,6 +190,9 @@
   },
   "documentEditor": {
     "load_from": "Cargar desde…",
+    "source_kind": "Tipo de documento origen",
+    "preview": "Vista previa",
+    "advanced": "Opciones fiscales",
     "loading_source": "Cargando…",
     "source_failed": "No se pudo cargar el documento",
     "source_loaded_one": "{{count}} renglón cargado",
