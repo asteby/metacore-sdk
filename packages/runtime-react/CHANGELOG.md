@@ -1,5 +1,23 @@
 # @asteby/metacore-runtime-react
 
+## 49.3.0
+
+### Minor Changes
+
+- 12b6d10: DocumentEditor «Cargar desde…»: al precargar solo lo pendiente de un renglón, el descuento en importe (`discount_mode: amount`) se prorratea a esa cantidad (cotización de 6 piezas con $1,200 de descuento y 4 pendientes → $800), en vez de arrastrar el importe completo y chocar con «El descuento no puede superar el importe». Un descuento en porcentaje no cambia. Avisos de carga en español más claro («con lo que falta · ya completos (omitidos)», «Documento de origen»).
+
+### Patch Changes
+
+- 0a64839: DocumentEditor: los selects con opciones condicionadas (`options[].when`) solo ofrecen las que aplican y ajustan solos un valor que dejó de aplicar.
+
+  Con método de pago PPD, la forma de pago pasa sola a «99 · Por definir» (la única que aplica) y el alta de la factura lleva los dos valores; al volver a PUE regresa al default del campo. Vale igual si el cambio viene de la contraparte o de «Cargar desde…».
+
+- 0a64839: DocumentEditor: «Cargar desde» venta, OT o cotización deja el cliente elegido y los selectores muestran nombre o folio, no el UUID.
+
+  - La cabecera del origen (`sources[].header`, p. ej. `customer_id`, y `link_field`) se carga antes que los renglones, así que el cliente y su tarjeta llegan aunque los renglones del origen fallen.
+  - Los selectores que el editor llena por código (cliente, documento origen, «Factura a abonar» de la NC) se siembran con la etiqueta que ya conoce: el objeto hermano `{value,label}` que sirve el host, el nombre de la contraparte cargada o el folio del origen. El selector «Cargar desde…» también muestra el folio.
+  - La vista previa local muestra esas etiquetas, y un campo con `options` en objeto ya no rompe el resumen.
+
 ## 49.2.2
 
 ### Patch Changes
