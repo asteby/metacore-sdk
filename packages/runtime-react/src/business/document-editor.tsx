@@ -333,8 +333,11 @@ export function DocumentEditor({
                         params: { source: src.key, id, ...(draftId ? { exclude: draftId } : {}) },
                     })
                     return res?.data?.data ?? []
-                } catch (err: any) {
-                    if (err?.response?.status !== 404) throw err
+                } catch {
+                    // Un host sin `source-lines` (404, o la ruta del registro
+                    // contestando 400/500 a «source-lines» como id) o un origen que
+                    // el host aún no sabe calcular: se precarga de la relación y el
+                    // guardado del servidor sigue validando lo pendiente.
                 }
             }
             let rels = relCache.current.get(src.model)

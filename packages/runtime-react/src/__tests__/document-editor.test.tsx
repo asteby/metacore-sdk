@@ -313,6 +313,21 @@ describe('DocumentEditor — «crear desde» con lo pendiente del servidor', () 
         await screen.findByDisplayValue('Llanta 205/55R16')
     })
 
+    it('si la ruta source-lines contesta 400/500 (host sin la ruta) también cae a la relación', async () => {
+        for (const status of [400, 500]) {
+            const api = makeApi({
+                '/dynamic/customers.Invoice/source-lines': () => {
+                    throw { response: { status } }
+                },
+                '/metadata/table/customers.SalesOrder': { data: { relations: [{ name: 'items', kind: 'one_to_many', through: 'customers.SalesOrderItem', foreign_key: 'sales_order_id' }] } },
+                '/data/customers.SalesOrderItem': { data: [{ id: 'soi-1', product_id: 'p1', product_name: 'Llanta 205/55R16', quantity: 4, unit_price: 1500, tax_rate: 0.16 }] },
+            })
+            renderEditor(tracked, api, { initialSource: { key: 'sales_order', id: 'so-1' } })
+            await screen.findByDisplayValue('Llanta 205/55R16')
+            cleanup()
+        }
+    })
+
     it('el rechazo del servidor por exceso se muestra con su mensaje en español', async () => {
         const post = vi.fn().mockRejectedValue({
             response: {
@@ -336,5 +351,50 @@ describe('DocumentEditor — «crear desde» con lo pendiente del servidor', () 
         const [, body] = post.mock.calls[0] as [string, any]
         expect(body.lines).toEqual([expect.objectContaining({ product_id: 'p1', quantity: 1, sales_order_item_id: 'soi-1' })])
         expect(await screen.findByText(/excede lo pendiente de «Venta»/)).toBeTruthy()
+    })
+})
+
+describe('DocumentEditor — nota de crédito desde la factura (retest Pitsline r5)', () => {
+    const creditNote: DocumentFormType = {
+        key: 'credit_note',
+        label: 'Nota de crédito',
+        layout: 'editor',
+        submit_action: 'create_credit_note',
+        fields: [
+            { key: 'invoice_id', label: 'Factura', type: 'text', required: true },
+            { key: 'reason', label: 'Motivo', type: 'text' },
+        ],
+        lines: { kind: 'credit', columns: ['tax'], required: false, title: 'Renglones a acreditar' },
+        sources: [
+            { key: 'invoice', label: 'Factura', model: 'customers.Invoice', lines: 'items', link_field: 'invoice_id', line_link_field: 'invoice_item_id', exclude_states: ['cancelled'] },
+        ],
+    }
+
+    it('una sola tabla editable con el producto nombrado y lo restante por acreditar', async () => {
+        const api = makeApi({
+            '/dynamic/fiscal_mexico.CreditNote/source-lines': {
+                data: [
+                    // InvoiceItem: sin descripción; el host resuelve product {value,label}.
+                    { id: 'it-1', source_line_id: 'it-1', product_id: 'p1', product: { value: 'p1', label: 'EVERLAND 205/55R16' }, quantity: 2, remaining_quantity: 1, unit_price: 710, tax_amount: 227.2, subtotal: 1420 },
+                ],
+            },
+        })
+        render(
+            <ApiProvider client={api.client}>
+                <DocumentEditor
+                    model="fiscal_mexico.CreditNote"
+                    forms={{ lines_field: 'lines', types: [creditNote] }}
+                    type={creditNote}
+                    initialSource={{ key: 'invoice', id: 'inv-15' }}
+                    onCancel={() => {}}
+                    onSaved={() => {}}
+                    currency="MXN"
+                />
+            </ApiProvider>,
+        )
+        await screen.findByDisplayValue('EVERLAND 205/55R16')
+        expect(screen.getAllByRole('table')).toHaveLength(1)
+        expect(screen.getByDisplayValue('1')).toBeTruthy()
+        expect(screen.queryByDisplayValue('0')).toBeNull()
     })
 })

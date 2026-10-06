@@ -201,8 +201,10 @@ export {
 } from './list-primary-action'
 export {
     emitRecordMutation,
+    emitRecordMutationSettled,
     subscribeRecordMutations,
     RECORD_MUTATION_EVENT,
+    RECORD_MUTATION_SETTLE_DELAYS,
     type RecordMutationKind,
     type RecordMutationDetail,
 } from './record-mutation-events'

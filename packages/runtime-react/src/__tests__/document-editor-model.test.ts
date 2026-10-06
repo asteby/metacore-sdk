@@ -106,7 +106,34 @@ describe('linesFromSource', () => {
     })
 })
 
+describe('linesFromSource — renglón de origen sin descripción (retest Pitsline r5)', () => {
+    it('InvoiceItem solo trae el producto: se nombra con su etiqueta y conserva el id', () => {
+        const [l] = linesFromSource(
+            [{ id: 'it-1', product_id: { value: 'p1', label: 'EVERLAND 205/55R16' }, quantity: 1, unit_price: 710, subtotal: 710, tax_amount: 113.6 }],
+            {},
+            { kind: 'credit' },
+        )
+        expect(l.product_id).toBe('p1')
+        expect(l.description).toBe('EVERLAND 205/55R16')
+        expect(l.quantity).toBe(1)
+        expect(l.max_quantity).toBe(1)
+        expect(l.tax_rate).toBe(0.16)
+        expect(l.source_line_id).toBe('it-1')
+    })
+    it('con la relación resuelta como objeto hermano `product`', () => {
+        const [l] = linesFromSource([{ id: 'it-1', product_id: 'p1', product: { id: 'p1', name: 'Balanceo' }, quantity: 2, unit_price: 100 }])
+        expect(l.product_id).toBe('p1')
+        expect(l.description).toBe('Balanceo')
+    })
+})
+
 describe('localIssues', () => {
+    it('un renglón con producto y sin texto no bloquea el guardado; uno libre sin texto sí', () => {
+        expect(localIssues([makeLine({ product_id: 'p1', description: '', unit_price: 10 })]).filter((i) => i.severity === 'error')).toEqual([])
+        expect(localIssues([makeLine({ description: '', unit_price: 10 })])).toEqual([
+            expect.objectContaining({ severity: 'error', message: 'Renglón 1: elige un producto o escribe la descripción.' }),
+        ])
+    })
     it('sin renglones es error; precio en cero es aviso; sin ruido por renglón libre', () => {
         expect(localIssues([]).some((i) => i.severity === 'error')).toBe(true)
         const w = localIssues([makeLine({ description: 'Servicio' })])

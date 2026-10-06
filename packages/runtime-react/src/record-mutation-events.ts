@@ -32,6 +32,29 @@ export function emitRecordMutation(model: string | undefined | null, kind: Recor
 }
 
 /**
+ * Delays (ms) at which a mutation is announced again. The backend's event
+ * subscribers write AFTER the action answered (stamping → the invoice's state,
+ * a payment → its auto-stamped REP), so a list or tab that reloaded at once kept
+ * showing the previous state until a manual reload (retest Pitsline r5).
+ */
+export const RECORD_MUTATION_SETTLE_DELAYS: readonly number[] = [1500, 5000]
+
+/**
+ * Announce a mutation now and again after `delays`, so what the server derives
+ * asynchronously from it reaches mounted lists too. Returns a cancel function.
+ */
+export function emitRecordMutationSettled(
+    model: string | undefined | null,
+    kind: RecordMutationKind,
+    delays: readonly number[] = RECORD_MUTATION_SETTLE_DELAYS,
+): () => void {
+    emitRecordMutation(model, kind)
+    if (!model || typeof window === 'undefined') return () => {}
+    const timers = delays.map((ms) => window.setTimeout(() => emitRecordMutation(model, kind), ms))
+    return () => timers.forEach((t) => window.clearTimeout(t))
+}
+
+/**
  * Listen for mutations of `model` (case-insensitive). Returns an unsubscribe.
  */
 export function subscribeRecordMutations(

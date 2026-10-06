@@ -14,7 +14,7 @@
 //
 // The host injects its axios-like client via <ApiProvider>; we no longer
 // depend on a bundler alias to `@/lib/api`.
-import { emitRecordMutation } from './record-mutation-events'
+import { emitRecordMutationSettled } from './record-mutation-events'
 import { Suspense, useState, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -415,9 +415,11 @@ export function ActionModalDispatcher({
 }: ActionModalProps) {
     // Every successful action may have created/updated/deleted a record of
     // `model` (federated component, wizard, generic form or confirmation), so
-    // announce it: mounted lists of the model reload on their own (#1020).
+    // announce it: mounted lists of the model reload on their own (#1020) —
+    // and again once the server's event subscribers had time to write what the
+    // action triggers (estado tras timbrar, REP tras un pago).
     const onSuccess = useCallback(() => {
-        emitRecordMutation(model, 'update')
+        emitRecordMutationSettled(model, 'update')
         onSuccessProp?.()
     }, [model, onSuccessProp])
     // Reactive read: a federated remote usually registers AFTER the first
@@ -1640,12 +1642,39 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
     )
 }
 
-function seedOptionFromRecord(
+/** Columnas con las que se nombra una fila cuando el selector no declara `options.label`. */
+const RECORD_LABEL_COLUMNS = ['number', 'folio', 'name', 'title', 'code', 'label']
+
+/**
+ * La etiqueta de la PROPIA fila cuando el campo se sembró con su id
+ * («Factura a abonar» al registrar un pago desde la factura): la columna que el
+ * selector usa de etiqueta (`options.label`) o la primera de nombre que tenga.
+ * Sin esto el selector mostraba el UUID crudo (retest Pitsline r5).
+ */
+function selfLabel(field: ActionFieldDef, record: Record<string, any>): string {
+    const opts = (field as { options?: unknown }).options
+    const declared =
+        opts && !Array.isArray(opts) && typeof opts === 'object' ? (opts as { label?: unknown }).label : undefined
+    const cols = typeof declared === 'string' && declared ? [declared, ...RECORD_LABEL_COLUMNS] : RECORD_LABEL_COLUMNS
+    for (const c of cols) {
+        const v = unwrapRecordScalar(record[c])
+        if ((typeof v === 'string' && v.trim()) || typeof v === 'number') return String(v)
+    }
+    return ''
+}
+
+export function seedOptionFromRecord(
     field: ActionFieldDef,
     value: any,
     record?: Record<string, any>,
 ): import('./use-options-resolver').ResolvedOption | undefined {
-    if (!record || !field.key.endsWith('_id')) return undefined
+    if (!record) return undefined
+    const selfId = unwrapRecordScalar(record.id)
+    if (value != null && value !== '' && selfId != null && String(selfId) === String(value)) {
+        const label = selfLabel(field, record)
+        if (label) return { id: String(value), value: String(value), label, name: label }
+    }
+    if (!field.key.endsWith('_id')) return undefined
     const siblingKey = field.key.replace(/_id$/, '')
     const sib = record[siblingKey]
     if (!sib || typeof sib !== 'object') return undefined

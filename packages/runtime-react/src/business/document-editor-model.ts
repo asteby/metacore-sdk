@@ -215,10 +215,11 @@ export function linesFromSource(
             rate = sub > 0 ? Math.round((tax / sub) * 10000) / 10000 : 0
         }
         const r2 = toAmount(rate)
+        const product = get('product_id')
         const line = makeLine({
-            product_id: get('product_id') ?? undefined,
+            product_id: refValue(product),
             sku: get('sku') ?? undefined,
-            description: String(get('description') ?? get('product_name') ?? ''),
+            description: String(get('description') ?? get('product_name') ?? refLabel(product) ?? refLabel(r.product) ?? ''),
             quantity: qty,
             unit_price: toAmount(get('unit_price')),
             discount: toAmount(get('discount') ?? 0),
@@ -234,6 +235,29 @@ export function linesFromSource(
         if (hasValue(sourceLine)) line.source_line_id = String(sourceLine)
         return line
     })
+}
+
+/** Id de una celda de relación (`{value,label}`, `{id,name}` o el id plano). */
+function refValue(v: unknown): string | undefined {
+    if (v == null || v === '') return undefined
+    if (typeof v === 'object') {
+        const o = v as Record<string, unknown>
+        const id = o.value ?? o.id
+        return id == null || id === '' ? undefined : String(id)
+    }
+    return String(v)
+}
+
+/**
+ * Nombre de una celda de relación ya resuelta por el host (`{label}`/`{name}`).
+ * Un renglón de origen sin descripción propia (InvoiceItem solo lleva el
+ * producto) se nombra con su producto en vez de entrar en blanco.
+ */
+function refLabel(v: unknown): string | undefined {
+    if (!v || typeof v !== 'object') return undefined
+    const o = v as Record<string, unknown>
+    const l = o.label ?? o.name
+    return typeof l === 'string' && l.trim() ? l : undefined
 }
 
 function isFullyConsumed(raw: unknown): boolean {
@@ -267,7 +291,11 @@ export function localIssues(lines: LineItem[], opts: { requireLines?: boolean; r
         issues.push({ field: 'lines', severity: 'error', message: 'Agrega al menos un renglón.' })
     }
     items.forEach((l, i) => {
-        if (!l.description.trim()) issues.push({ field: `lines.${i}`, severity: 'error', message: `Renglón ${i + 1}: falta la descripción.` })
+        // Un renglón con producto se describe con él (el servidor lo nombra
+        // desde el catálogo): solo un renglón libre exige texto, como en el
+        // editor de renglones (validateLineItems).
+        if (!l.description.trim() && !l.product_id)
+            issues.push({ field: `lines.${i}`, severity: 'error', message: `Renglón ${i + 1}: elige un producto o escribe la descripción.` })
         if (toAmount(l.unit_price) <= 0) issues.push({ field: `lines.${i}`, severity: 'warning', message: `Renglón ${i + 1}: precio en cero.` })
         if (l.max_quantity != null && toAmount(l.quantity) > toAmount(l.max_quantity)) {
             issues.push({
