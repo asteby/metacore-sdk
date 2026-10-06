@@ -107,12 +107,25 @@ export function computeLineItemTotals(
     field: ActionFieldDef,
     rows: any[] | undefined,
 ): Record<string, number> {
-    const cols = getItemFields(field).filter((c) => c.total)
+    const itemFields = getItemFields(field)
+    const cols = itemFields.filter((c) => c.total)
+    // A `total` UNIT PRICE column on a grid with a quantity and no line amount
+    // column sums the line amounts (qty × price − discount): adding unit prices
+    // is meaningless once a quantity exists (2 × 750 footed 750, not 1500).
+    const qtyKey = firstKey(itemFields, LINE_QTY_KEYS)
+    const lineValued = !!qtyKey && !firstKey(itemFields, LINE_AMOUNT_KEYS)
+    const discountKey = firstKey(itemFields, LINE_DISCOUNT_KEYS)
     const totals: Record<string, number> = {}
     for (const c of cols) totals[c.key] = 0
     if (Array.isArray(rows)) {
         for (const row of rows) {
-            for (const c of cols) totals[c.key] += toNumber(row?.[c.key])
+            for (const c of cols) {
+                const v = toNumber(row?.[c.key])
+                totals[c.key] +=
+                    lineValued && LINE_PRICE_KEYS.has(c.key)
+                        ? toNumber(row?.[qtyKey!]) * v - (discountKey ? toNumber(row?.[discountKey]) : 0)
+                        : v
+            }
         }
     }
     for (const k of Object.keys(totals)) totals[k] = Math.round(totals[k] * 100) / 100

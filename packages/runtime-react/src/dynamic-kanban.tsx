@@ -425,18 +425,39 @@ export function isCardOverdue(card: any, col: ColumnDefinition, now: number = Da
  * The stage machine (stages, transitions, smart lanes) belongs to the model's
  * stage column (`stage_field`; older hosts that do not serve it: the served
  * group_by): grouping by it keeps the machine, grouping by anything else drops
- * it and the lanes come from the new column. Returns the SAME object when there
- * is nothing to change (no override, the served group_by already, or a column the
- * model does not have). Pure — exported for unit tests.
+ * it and the lanes come from the new column.
+ *
+ * The served group_by is the LAST kanban nav entry's, which need not be the
+ * stage column: a board opened without `?group_by=` (the list's view toggle)
+ * groups by the stage column, and a board grouped by the served column keeps
+ * the machine only when that column IS the stage column. Otherwise the stage
+ * lanes were painted over another column (by bay: every card under «Sin etapa»
+ * and a drop wrote `service_bay_id = 'diagnosis'`, 422). Returns the SAME
+ * object when there is nothing to change. Pure — exported for unit tests.
  */
 export function withGroupBy(
     metadata: TableMetadata | null,
     groupBy: string | undefined,
 ): TableMetadata | null {
-    if (!metadata || !groupBy || groupBy === metadata.group_by) return metadata
+    if (!metadata) return metadata
+    const hasMachine = (metadata.stages?.length ?? 0) > 0
+    const stageColumn = metadata.stage_field ?? (hasMachine ? metadata.group_by : undefined)
+    if (!groupBy) {
+        if (!hasMachine || !stageColumn || stageColumn === metadata.group_by) return metadata
+        return { ...metadata, group_by: stageColumn }
+    }
+    if (groupBy === stageColumn) {
+        return groupBy === metadata.group_by ? metadata : { ...metadata, group_by: groupBy }
+    }
     if (!metadata.columns.some((c) => c.key === groupBy)) return metadata
-    const stageColumn = metadata.stage_field ?? (metadata.stages?.length ? metadata.group_by : undefined)
-    if (groupBy === stageColumn) return { ...metadata, group_by: groupBy }
+    if (
+        groupBy === metadata.group_by &&
+        !hasMachine &&
+        !metadata.transitions &&
+        !metadata.smart_lanes
+    ) {
+        return metadata
+    }
     return {
         ...metadata,
         group_by: groupBy,

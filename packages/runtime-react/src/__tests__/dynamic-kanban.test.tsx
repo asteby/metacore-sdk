@@ -293,11 +293,32 @@ describe('withGroupBy (one model, several boards)', () => {
             ...over,
         }) as any
 
-    it('is the same object when there is no override or it matches the served group_by', () => {
-        const m = boardMeta()
+    it('is the same object when the served group_by is already the stage column', () => {
+        const m = boardMeta({ group_by: 'stage' })
         expect(withGroupBy(m, undefined)).toBe(m)
-        expect(withGroupBy(m, 'assigned_mechanic_id')).toBe(m)
+        expect(withGroupBy(m, 'stage')).toBe(m)
         expect(withGroupBy(null, 'stage')).toBeNull()
+        const flat = boardMeta({ stages: undefined, transitions: undefined, smart_lanes: undefined })
+        expect(withGroupBy(flat, 'assigned_mechanic_id')).toBe(flat)
+        expect(withGroupBy(flat, undefined)).toBe(flat)
+    })
+    // Pitsline r3 (b): WorkOrder serves group_by=service_bay_id (the last kanban
+    // nav entry) with the stage lanes. Without ?group_by= the board grouped the
+    // stage lanes by the bay: every card in «Sin etapa», each lane count sent
+    // f_service_bay_id=diagnosis and a drop PUT service_bay_id='diagnosis' (422).
+    it('groups a board without ?group_by= by the stage column, not the served one', () => {
+        const out = withGroupBy(boardMeta(), undefined)!
+        expect(out.group_by).toBe('stage')
+        expect(out.stages).toHaveLength(1)
+        expect(out.transitions).toHaveLength(1)
+    })
+    it('drops the stage machine on the board of the served (non-stage) column', () => {
+        const out = withGroupBy(boardMeta(), 'assigned_mechanic_id')!
+        expect(out.group_by).toBe('assigned_mechanic_id')
+        expect(out.stages).toBeUndefined()
+        expect(out.transitions).toBeUndefined()
+        expect(out.smart_lanes).toBeUndefined()
+        expect(refLaneSource(out)).toEqual({ ref: 'users' })
     })
     it('ignores a column the model does not have', () => {
         const m = boardMeta()

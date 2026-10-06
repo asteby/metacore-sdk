@@ -206,6 +206,7 @@ export {
 export {
     DocumentFormDialog,
     resolveDocumentForms,
+    scopeDocumentFormsToFilter,
     type DocumentFormDialogProps,
 } from './document-form-dialog'
 export {

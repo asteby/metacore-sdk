@@ -33,7 +33,7 @@ import { useApi } from './api-context'
 import { useMetadataCache } from './metadata-cache'
 import { DynamicTable } from './dynamic-table'
 import { DynamicRecordDialog } from './dialogs/dynamic-record'
-import { DocumentFormDialog, resolveDocumentForms } from './document-form-dialog'
+import { DocumentFormDialog, resolveDocumentForms, scopeDocumentFormsToFilter } from './document-form-dialog'
 import { ExportDialog } from './dialogs/export'
 import { ImportDialog } from './dialogs/import'
 import { getModelExtension } from './model-extension-registry'
@@ -97,6 +97,12 @@ export interface DynamicCRUDPageProps {
      */
     documentForms?: DocumentFormsManifest
     /**
+     * Filtro fijo de la vista (el `filter` del nav). Si va sobre el `type_field`
+     * del alta guiada, «Crear» abre ese tipo directo o se oculta cuando no hay
+     * formulario para él.
+     */
+    filter?: Record<string, string>
+    /**
      * Abre el alta guiada al montar («crear desde»): tipo de documento y origen
      * a precargar (`sources[].key` + id), p. ej. leídos de la URL
      * `?create=<tipo>&from=<fuente>&from_id=<id>`. Solo con document_forms.
@@ -125,6 +131,7 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
         classes,
         onChange,
         documentForms,
+        filter,
         initialCreate,
     } = props
 
@@ -196,11 +203,22 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
     // (useCan defaults to always-true), in which case create/export/import
     // require `lowercase(model).create|export|import`.
     const can = useCan()
-    const showCreate = primary.showGenericCreate && can(modelCapability(model, 'create'))
+    const scoped = scopeDocumentFormsToFilter(resolveDocumentForms(metadata, documentForms), filter)
+    const guidedForms = scoped.forms
+    const showCreate = primary.showGenericCreate && !scoped.hideCreate && can(modelCapability(model, 'create'))
     const showImport = enableCRUD && !effectiveHideImport && can(modelCapability(model, 'import'))
     const showExport = !effectiveHideExport && can(modelCapability(model, 'export'))
     const showRefresh = !effectiveHideRefresh
-    const guidedForms = resolveDocumentForms(metadata, documentForms)
+
+    // El mismo filtro acota la tabla (forma `eq:<valor>` que espera DynamicTable).
+    const filterKey = filter ? JSON.stringify(filter) : ''
+    const tableFilters = useMemo(() => {
+        if (!filter || Object.keys(filter).length === 0) return undefined
+        return Object.fromEntries(
+            Object.entries(filter).map(([k, v]) => [k, String(v).includes(':') ? String(v) : `eq:${v}`]),
+        )
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filterKey])
 
     const handleRefresh = useCallback(() => {
         setRefreshKey((k) => k + 1)
@@ -285,6 +303,7 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
                         model={model}
                         endpoint={dataEndpoint}
                         refreshTrigger={refreshKey}
+                        defaultFilters={tableFilters}
                     />
                 </div>
             </div>

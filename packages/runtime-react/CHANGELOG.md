@@ -1,5 +1,34 @@
 # @asteby/metacore-runtime-react
 
+## 48.0.0
+
+### Minor Changes
+
+- 7532829: Primitivos de negocio para hosts y addons federados:
+
+  - `InstalledAddonsProvider` + `useAddonInstalled` / `useCapabilityProvided` / `useInstalledAddons`: una sola respuesta a «¿qué hay instalado?» (sin provider devuelven `undefined`, nunca «ausente»).
+  - `allocatePayment` / `validateAllocation` (PaymentAllocator) y `computeAging` / `bucketFor` (AgingTable) como funciones puras.
+  - Bandeja de aprobaciones: `approvalsClient`, `registerApprovalCategory`, `groupApprovals` y el tipo `ApprovalRequestDTO`.
+  - Contribuciones federadas por documento: `registerDocumentContribution` (con disposer y carga perezosa), `resolveContributions` (pura) y el hook `useDocumentContributions`.
+  - Modales federados: `registerFederatedModal` / `resolveFederatedModal`. `ActionModalDispatcher` pinta el modal registrado sin esperar al host y, si el addon del `modal` no está instalado, abre el formulario genérico de la acción de inmediato en lugar de esperar 20 s.
+  - Tipos de documento (`registerDocumentKind`, `CORE_DOCUMENT_KINDS`) y contratos de PartyCard / TotalsPanel / PreviewPanel / ValidationChecklist.
+  - Manifest `document_forms`: `lines.kind`, `lines.open_documents`, `sources`, `preview` y `submit_action` en los tipos.
+  - Ayudantes de captura por modelo: `registerRecordPrefill` (también en `registry.scope(addon)`, se retira en el `unbind`) y `RecordPrefillBar`, que `DynamicRecordDialog` monta arriba del formulario; solo aplica claves que el formulario declara.
+
+- 830349b: `DocumentEditor`: alta de documentos en una sola pantalla por secciones cuando el tipo de `document_forms` declara `layout: "editor"` (factura, nota de crédito, cobro/REP, cotización, OC). A la vista solo lo esencial (contraparte con su tarjeta, «Cargar desde…», renglones o reparto del pago, totales); los campos fiscales (`fiscal_data.*`, catálogos con default, contribuciones `header.fields`) van en «Opciones fiscales», plegada por defecto, y la vista previa también es opcional y plegada. Una sola acción primaria. Prefill desde el documento origen (`sources`, `initialSource`, `default_from_record` vía la nueva prop `record`) y validación inline. `lines.kind: "allocation"` reparte el cobro con `PaymentAllocator` (del más vencido o manual, con parcialidad) y guarda por `submit_action`. Nuevos exports: `DocumentEditor`, `PaymentAllocator`, `PartyCard`, `TotalsPanel`, `ValidationChecklist`, `PreviewPanel`, `CollapsibleSection`, `EditorSection` y las reglas puras de `document-editor-model`. Sin `layout: "editor"` el wizard sigue igual.
+- 7d1bdf9: Alta guiada acotada a la vista filtrada: `scopeDocumentFormsToFilter(forms, filter)` y la prop `filter` de `DynamicCRUDPage`. Si el filtro fijo de la vista (el `filter` del nav) va sobre el `type_field` de `document_forms`, «Crear» abre ese tipo directo; si no hay formulario para ese tipo, no se ofrece. Antes «Documentos fiscales → Facturas → Crear» abría el formulario del REP.
+- 9c34b09: Crear factura (DocumentFormDialog): el paso de renglones busca en el catálogo de productos aunque el host no pase `searchProducts`. Antes solo ofrecía «Renglón libre» y la factura se guardaba en $0. Al elegir un producto, el renglón entra con precio de venta, unidad, SKU, claves de extensión (`fiscal_data`), cantidad 1 y la tasa de impuesto del producto o, si no trae, la de la organización (`OrgRuntimeProvider taxRate`, nuevo). Nuevos: `createCatalogProductSearch`, props `productModel`/`defaultTaxRate` y `lines.discount_mode` en `document_forms`. Una cantidad vacía al leer renglones ya no queda en 0.
+
+### Patch Changes
+
+- 3c6e8eb: Corrige que al editar un registro (p. ej. un renglón dentro de una relación) un campo select con valor se borrara al guardar sin tocarlo. `DynamicForm` siembra los valores del registro de forma síncrona, ignora el `onValueChange('')` espurio del Select cuando ya hay valor y `''` no es opción válida, y en edición no manda selects vacíos que el usuario no tocó. `deriveRelationFormFields` ahora copia `readonly` de la columna, y el modal de alta/edición de renglón limita su alto al viewport con cuerpo con scroll y botones fijos abajo.
+- 153dff8: El formulario de alta/edición (`DynamicRecordDialog`) ya no muestra claves de catálogo crudas como etiqueta de campo (p. ej. `FISCAL_MEXICO.EXT.CUSTOMER.RFC_RECEPTOR` en los campos que un addon agrega por extensión a Clientes o Productos). Si la etiqueta llega del servidor sin resolver, se traduce con el catálogo del cliente y, si tampoco está ahí, se muestra legible (`Codigo Postal`). Las etiquetas que ya llegan en texto humano no se tocan. Nuevo helper exportado `localizeFieldLabel`.
+- db934ed: Kanban: los carriles de etapas ya no se pintan sobre otra columna. El host sirve un solo `group_by` por modelo, el del ÚLTIMO tablero de la navegación (en Taller, `service_bay_id`). Un tablero abierto sin `?group_by=` (por ejemplo, con el cambio de vista desde la lista) agrupaba las etapas por la bahía: todas las OT caían en «Sin etapa», los conteos de cada carril pedían `f_service_bay_id=diagnosis` (422) y al soltar una tarjeta se enviaba `service_bay_id = 'diagnosis'` (422 «no es un UUID válido»). `withGroupBy` ahora agrupa por el `stage_field` cuando no hay `?group_by=`. El tablero de la columna servida conserva la máquina de etapas solo si esa columna es la de etapas.
+- 4ed3225: Renglones de formularios de acción: cuando la columna `total` es el precio unitario (`price`, `unit_price`…) y el renglón tiene cantidad pero ninguna columna de importe, la fila de total suma cantidad × precio − descuento de cada renglón y ya no los precios sueltos. En la OT de taller, cantidad 2 × 750 mostraba 750 en el total, aunque al guardar quedaba bien (1500). Si hay columna de importe (`subtotal`, `line_total`…), el comportamiento no cambia.
+- f2e31cf: Las acciones por fila con `requiresState` se filtran contra el `stage_field` del modelo cuando hay máquina de etapas, igual que el kernel. Antes se comparaban con `status`, y por eso la OT de taller no mostraba «Procesar», «Esperar refacciones» ni «Cancelar» en la tabla ni en el kanban. Nuevo export `lifecycleStageField(metadata)`.
+- Updated dependencies [7532829]
+  - @asteby/metacore-sdk@3.13.0
+
 ## 47.1.0
 
 ### Minor Changes
