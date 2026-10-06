@@ -12,6 +12,12 @@
 // `register*` devuelve un disposer; el AddonLoader lo llama al desmontar o
 // recargar el remote y la contribución desaparece sin recargar la página.
 import { createElement, lazy, Suspense, type ComponentType } from 'react'
+import {
+    getModalComponent,
+    registerModalComponent,
+    subscribeActionComponents,
+    type ModalComponentEntry,
+} from '@asteby/metacore-sdk'
 import { slotRegistry } from '../slot'
 
 /** Regiones del DocumentEditor/DocumentPage donde se puede contribuir. */
@@ -76,6 +82,11 @@ function notify() {
     for (const l of [...listeners]) l()
 }
 
+// Los modales viven en el store canónico del SDK (action-registry): cualquier
+// cambio ahí (Registry.registerModal, registerModalComponent, unbind) también
+// re-pinta a quien escucha contribuciones.
+subscribeActionComponents(notify)
+
 /** Suscripción para useSyncExternalStore (contribuciones y modales). */
 export function subscribeContributions(listener: () => void): () => void {
     listeners.add(listener)
@@ -114,6 +125,7 @@ export function registerDocumentContribution<P = DocumentContributionProps>(c: D
         slotRegistry.register(slotIdFor(k, c.region), resolved.component as ComponentType, {
             priority: c.priority ?? 0,
             source: source ?? c.requiresAddon ?? c.id,
+            owner: c.requiresAddon,
         }),
     )
     let disposed = false
@@ -157,6 +169,10 @@ export function resolveContributions(
 // declarativa: el addon registra la clave al cargar. Si el addon dueño no está
 // instalado, resolveFederatedModal devuelve null de inmediato y el dispatcher
 // usa el formulario genérico de la acción en vez de colgarse esperando.
+//
+// No hay mapa propio: es un alias del store canónico de modales por slug de
+// @asteby/metacore-sdk (registerModalComponent), el mismo donde escribe
+// `api.registry.registerModal` de AddonAPI.
 
 export interface FederatedModal<P = any> {
     /** Clave `<addon>.<nombre>`, la misma que `modal` en el manifest. */
@@ -164,33 +180,63 @@ export interface FederatedModal<P = any> {
     addon: string
     /** El dispatcher le pasa ActionModalProps (open, onOpenChange, action, model, record…). */
     load: () => Promise<{ default: ComponentType<P> }>
+    /** Presente cuando el modal se registró ya cargado (`api.registry.registerModal`). */
+    component?: ComponentType<P>
 }
 
-const modals = new Map<string, FederatedModal>()
+/** Vista FederatedModal de cada entrada del store (identidad estable por entrada). */
+const views = new WeakMap<ModalComponentEntry, FederatedModal>()
 const modalComponents = new WeakMap<FederatedModal, ComponentType<any>>()
+/** Disposers de lo registrado por este alias (sólo __resetContributions los usa). */
+const aliasDisposers = new Set<() => void>()
 
+/**
+ * @deprecated Usa `registerModalComponent({ slug, load, owner })` de
+ * `@asteby/metacore-sdk` o `api.registry.registerModal` desde el plugin. Se
+ * mantiene como alias compatible: escribe en el mismo store.
+ */
 export function registerFederatedModal(m: FederatedModal): () => void {
-    modals.set(m.key, m)
-    notify()
+    const dispose = registerModalComponent({ slug: m.key, owner: m.addon, load: m.load, component: m.component })
+    const stored = getModalComponent(m.key)
+    if (stored) views.set(stored, m)
+    aliasDisposers.add(dispose)
     return () => {
-        if (modals.get(m.key) === m) {
-            modals.delete(m.key)
-            notify()
-        }
+        aliasDisposers.delete(dispose)
+        dispose()
     }
 }
 
-/** null si el modal no está registrado o su addon no está instalado. Nunca espera. */
-export function resolveFederatedModal(key: string, isInstalled: IsAddonInstalled): FederatedModal | null {
-    const m = modals.get(key)
-    return m && isInstalled(m.addon) ? m : null
+function viewOf(e: ModalComponentEntry): FederatedModal {
+    let v = views.get(e)
+    if (!v) {
+        const component = e.component
+        v = {
+            key: e.slug,
+            addon: e.owner ?? '',
+            load: e.load ?? (async () => ({ default: component! })),
+            component,
+        }
+        views.set(e, v)
+    }
+    return v
 }
 
 /**
- * Componente `React.lazy` del modal resuelto, memoizado por registro (no se
- * re-crea en cada render). Quien lo pinta lo envuelve en `<Suspense>`.
+ * Modal del slug en el store canónico, o null si no está registrado o su addon
+ * dueño no está instalado. Nunca espera.
+ */
+export function resolveFederatedModal(key: string, isInstalled: IsAddonInstalled): FederatedModal | null {
+    const m = getModalComponent(key)
+    return m && (!m.owner || isInstalled(m.owner)) ? viewOf(m) : null
+}
+
+/**
+ * Componente del modal resuelto: el ya cargado si lo hay; si no, un
+ * `React.lazy` memoizado por registro (no se re-crea en cada render; quien lo
+ * pinta lo envuelve en `<Suspense>`).
  */
 export function federatedModalComponent<P = any>(m: FederatedModal<P>): ComponentType<P> {
+    if (m.component) return m.component
     let C = modalComponents.get(m)
     if (!C) {
         C = lazy(m.load) as unknown as ComponentType<any>
@@ -203,6 +249,7 @@ export function federatedModalComponent<P = any>(m: FederatedModal<P>): Componen
 export function __resetContributions(): void {
     for (const e of [...contribs.values()]) e.dispose()
     contribs.clear()
-    modals.clear()
+    for (const d of [...aliasDisposers]) d()
+    aliasDisposers.clear()
     notify()
 }

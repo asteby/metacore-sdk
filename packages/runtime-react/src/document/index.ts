@@ -13,6 +13,7 @@ export {
 export { formatFieldValue, type FieldFormatOptions } from './format'
 export { StatusBadge, STATUS_TONE_STYLE, type StatusBadgeProps } from './status-badge'
 export { ActionBar, type ActionBarProps } from './action-bar'
+export { DocumentSecondaryBar, type DocumentSecondaryBarProps, type SecondaryBarItem } from './secondary-bar'
 export { DocumentHeader, type DocumentHeaderProps, type HeaderBadge, type HeaderMetric } from './document-header'
 export { SmartButtons, type SmartButtonItem, type SmartButtonsProps } from './smart-buttons'
 export { DocumentTimeline, type DocumentTimelineProps, type TimelineEntry } from './document-timeline'

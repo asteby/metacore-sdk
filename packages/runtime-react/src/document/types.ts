@@ -64,6 +64,12 @@ export interface DocumentActionDef {
     href?: string
     openUrl?: string
     tab?: string
+    /**
+     * "secondary" (o, sin valor, una clave de compartir/imprimir/correo/chat/
+     * PDF/XML por convención) saca la acción de la cabecera y la pone en la
+     * barra secundaria del pie — salvo que el layout la haga primaria.
+     */
+    priority?: 'primary' | 'secondary'
     /** Estilo crítico: siempre va en la zona destructiva. */
     destructive?: boolean
     /** Se muestra deshabilitada con el motivo en lugar de desaparecer. */
@@ -200,6 +206,8 @@ export interface ResolvedActionLayout {
     secondary: ResolvedAction[]
     more: ResolvedAction[]
     destructive: ResolvedAction[]
+    /** Secundarias (compartir, imprimir, correo…) → DocumentSecondaryBar, no la cabecera. */
+    footer: ResolvedAction[]
 }
 
 export type DocumentSlotRenderer = (ctx: DocumentContext) => ReactNode

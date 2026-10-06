@@ -56,6 +56,12 @@ export default definePlugin({
       priority: 30,
     })
 
+    // Modales (`registerModal({ slug: '{{ADDON_KEY}}.<accion>' })`), slots y
+    // acciones secundarias sobre registros de otros addons
+    // (`registerRecordAction({ id, label, run })` → «Más…» de la fila y pie del
+    // documento) van al mismo registro del host y se ocultan solos si este
+    // addon se desinstala o desactiva.
+
     api.log.info('{{ADDON_KEY}} addon registered', {
       version: api.manifest.version,
     })

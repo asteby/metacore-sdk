@@ -1,56 +1,19 @@
-// Slot / SlotRegistry — named extension points the host renders and addons
-// contribute to at register() time. Keyed by a slot id (e.g. "dashboard.widgets",
+// Slot — named extension points the host renders and addons contribute to at
+// register() time. Keyed by a slot id (e.g. "dashboard.widgets",
 // "invoice.footer"). Each contribution is an arbitrary React element factory.
+//
+// El store es `slotStore` de @asteby/metacore-sdk: el mismo donde escribe
+// `api.registry.registerSlot` (AddonAPI) y `registerDocumentContribution`, así
+// que hay una sola lista por slot. Una entrada con addon dueño (`owner`) que
+// consta como NO instalado (InstalledAddonsProvider) no se pinta.
 import React, { useSyncExternalStore } from 'react'
+import { slotStore, type SlotComponent, type SlotEntry } from '@asteby/metacore-sdk'
+import { useInstalledAddons } from './installed-addons-context'
 
-export type SlotComponent<P = any> = React.ComponentType<P>
+export type { SlotComponent, SlotEntry }
 
-interface SlotEntry {
-    id: string
-    component: SlotComponent
-    priority: number
-    source?: string
-}
-
-type Listener = () => void
-
-class SlotRegistryImpl {
-    private slots = new Map<string, SlotEntry[]>()
-    private listeners = new Set<Listener>()
-
-    register(slotId: string, component: SlotComponent, opts?: { priority?: number; source?: string }): () => void {
-        const entry: SlotEntry = { id: slotId, component, priority: opts?.priority ?? 0, source: opts?.source }
-        const list = this.slots.get(slotId) ?? []
-        list.push(entry)
-        // Higher priority renders first — canonical across SDK and runtime-react.
-        // See docs/slot-priority.md.
-        list.sort((a, b) => b.priority - a.priority)
-        this.slots.set(slotId, list)
-        this.emit()
-        return () => {
-            const arr = this.slots.get(slotId)
-            if (!arr) return
-            const idx = arr.indexOf(entry)
-            if (idx >= 0) {
-                arr.splice(idx, 1)
-                this.emit()
-            }
-        }
-    }
-
-    get(slotId: string): SlotEntry[] {
-        return this.slots.get(slotId) ?? []
-    }
-
-    subscribe(listener: Listener): () => void {
-        this.listeners.add(listener)
-        return () => { this.listeners.delete(listener) }
-    }
-
-    private emit() { this.listeners.forEach(l => l()) }
-}
-
-export const slotRegistry = new SlotRegistryImpl()
+/** Alias histórico del store canónico (`slotRegistry.register/get/subscribe`). */
+export const slotRegistry = slotStore
 
 export interface SlotProps {
     /** Slot id. */
@@ -62,11 +25,13 @@ export interface SlotProps {
 }
 
 export function Slot({ name, props, fallback = null }: SlotProps) {
-    const entries = useSyncExternalStore(
-        (cb) => slotRegistry.subscribe(cb),
-        () => slotRegistry.get(name),
-        () => slotRegistry.get(name),
+    const all = useSyncExternalStore(
+        (cb) => slotStore.subscribe(cb),
+        () => slotStore.get(name),
+        () => slotStore.get(name),
     )
+    const installed = useInstalledAddons()
+    const entries = installed ? all.filter((e) => !e.owner || installed.addons.has(e.owner)) : all
     if (entries.length === 0) return <>{fallback}</>
     return (
         <>
