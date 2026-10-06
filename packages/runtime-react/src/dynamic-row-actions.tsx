@@ -44,7 +44,18 @@ import type { TableMetadata, ActionMetadata, RequiresAddon } from './types'
  * Destino de una acción link. La query (`?create=…&from_id=…`) va como `search`:
  * metida en `to` el router la tomaba como parte del path y la ruta no casaba.
  */
-export function linkNavigation(url: string): { to: string; search?: Record<string, string> } {
+export function linkNavigation(
+    url: string,
+): { to: '/m/$model'; params: { model: string }; search?: Record<string, string> } | { to: string; search?: Record<string, string> } {
+    const i = url.indexOf('?')
+    const path = i < 0 ? url : url.slice(0, i)
+    const search = i < 0 ? undefined : Object.fromEntries(new URLSearchParams(url.slice(i + 1)))
+    // /m/<tabla>?create=&from=&from_id= → ruta parametrizada (retest r6b: el menú
+    // «Nota de crédito» de la factura aterrizaba en la lista sin abrir el editor).
+    const m = path.match(/^\/m\/([^/?#]+)\/?$/)
+    if (m) return { to: '/m/$model', params: { model: m[1] }, search }
+    return search ? { to: path, search } : { to: path }
+} {
     const i = url.indexOf('?')
     if (i < 0) return { to: url }
     return { to: url.slice(0, i), search: Object.fromEntries(new URLSearchParams(url.slice(i + 1))) }
@@ -138,7 +149,7 @@ export function useDynamicRowActions({
         }
         const linkDef = metadata?.actions?.find((a) => a.key === action && a.type === 'link')
         if (linkDef?.linkUrl) {
-            const url = linkDef.linkUrl.replace(/\{(\w+)\}/g, (_: string, field: string) => encodeURIComponent(String(row[field] ?? '')))
+            const url = linkDef.linkUrl.replace(/\{(\w+)\}/g, (_: string, field: string) => String(row[field] ?? ''))
             navigate(linkNavigation(url) as any)
             return
         }
