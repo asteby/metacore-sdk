@@ -135,7 +135,10 @@
     "columns": "Columnas",
     "view": "Ver",
     "edit": "Editar",
-    "delete": "Eliminar"
+    "delete": "Eliminar",
+    "more_actions": "Más…",
+    "open_menu": "Abrir menú",
+    "secondary_actions": "Compartir y documentos"
   },
   "settings": {
     "profile": {

@@ -80,6 +80,7 @@ import {
     resolveVirtualizeThreshold,
 } from './table-virtualization'
 import { OptionsContext } from './options-context'
+import { RowActionsModelContext } from './row-actions-menu'
 import type { TableMetadata, ApiResponse, ColumnDefinition } from './types'
 import { getSearchableColumnKeys } from './column-visibility'
 import { visibleRelationInclude } from './list-include'
@@ -1455,6 +1456,7 @@ export function DynamicTable({
     }
 
     return (
+        <RowActionsModelContext.Provider value={model}>
         <OptionsContext.Provider value={{ optionsMap }}>
             <div className='flex flex-col h-full min-h-0 w-full'>
                 <div className='pb-4 shrink-0'>
@@ -1899,6 +1901,7 @@ export function DynamicTable({
                 </Button>
             </DataTableBulkActions>
         </OptionsContext.Provider>
+        </RowActionsModelContext.Provider>
     )
 }
 

@@ -84,6 +84,8 @@ import type { ActionFieldDef, TableMetadata, ColumnDefinition } from './types'
 import {
     type ActionMetadata,
     type ActionModalProps,
+    type BridgedActionProps,
+    adaptActionProps,
     getActionComponent,
     subscribeActionComponents,
 } from '@asteby/metacore-sdk'
@@ -402,17 +404,14 @@ export function ActionModalDispatcher({
     }
 
     if (federatedModal) {
-        const FederatedComponent = federatedModalComponent<ActionModalProps>(federatedModal)
+        // Modal por slug del store canónico: lo registró `api.registry.registerModal`
+        // (contrato recordId/payload/close) o registerFederatedModal
+        // (ActionModalProps). Recibe ambos contratos.
+        const FederatedComponent = federatedModalComponent<BridgedActionProps>(federatedModal)
         return (
             <Suspense fallback={<LoadingActionDialog open={open} onOpenChange={onOpenChange} action={action} />}>
                 <FederatedComponent
-                    open={open}
-                    onOpenChange={onOpenChange}
-                    action={action}
-                    model={model}
-                    record={record}
-                    endpoint={endpoint}
-                    onSuccess={onSuccess}
+                    {...adaptActionProps({ open, onOpenChange, action, model, record, endpoint, onSuccess })}
                 />
             </Suspense>
         )

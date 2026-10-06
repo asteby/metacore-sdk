@@ -908,6 +908,18 @@ export interface ActionDefinition {
     replaces_create?: boolean
     replacesCreate?: boolean
     /**
+     * Manifest v3 `priority`. "primary": la única acción destacada del menú de
+     * fila / cabecera. "secondary": compartir, imprimir, correo, chat → pie del
+     * documento y «Más…» del menú de fila. Sin valor: convención por clave
+     * (ver classifyActionPriority).
+     */
+    priority?: 'primary' | 'secondary'
+    /**
+     * Cómo despacha (served `trigger`). `type: "capability"` necesita un addon
+     * que provea `capability`; sin proveedor activo la acción no se ofrece.
+     */
+    trigger?: { type: string; capability?: string; connector?: string }
+    /**
      * Optional addon this action depends on, stamped by the host only while it
      * is NOT installed (served as `requires_addon`; read through
      * resolveRequiresAddon). The action stays visible but locked: a click opens
@@ -958,6 +970,8 @@ export interface ActionMetadata {
     /** Federated modal slug "<addon_key>.<action_key>"; see ActionModalDispatcher. */
     modal?: string
     placement?: 'row' | 'table' | 'create'
+    /** Manifest v3 `priority`; ver ActionDefinition.priority. */
+    priority?: 'primary' | 'secondary'
     /**
      * Optional addon this action depends on, stamped by the host only while it
      * is NOT installed (served as `requires_addon`; read through

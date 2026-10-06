@@ -694,3 +694,28 @@ export {
 // Ayudantes de captura (registerRecordPrefill de @asteby/metacore-sdk) arriba
 // del formulario genérico de un modelo; DynamicRecordDialog ya lo monta.
 export { RecordPrefillBar, type RecordPrefillBarProps } from './record-prefill-bar'
+
+// Acciones primarias / secundarias de un registro: una sola primaria
+// destacada; compartir/imprimir/correo/chat al «Más…» de la fila y al pie del
+// documento. Las aportadas por addons (registerRecordAction del SDK) sólo con
+// su proveedor instalado y activo.
+export {
+    RowActionsMenu,
+    RowActionMenuItem,
+    RowActionsModelContext,
+    type RowActionsMenuProps,
+} from './row-actions-menu'
+export {
+    classifyActionPriority,
+    isActionProviderActive,
+    isRecordActionProviderActive,
+    resolveRecordActions,
+    splitActionsByPriority,
+    useRecordActions,
+    type ActionPriority,
+    type PrioritizableAction,
+    type RecordActionContext,
+    type RecordActionContribution,
+    type ResolvedRecordAction,
+    type SplitActions,
+} from './record-actions'

@@ -1,7 +1,18 @@
-import { type ComponentType } from 'react'
+import { createElement, type ComponentType } from 'react'
 
 // Canonical action registry. Hosts re-export this module so every addon
 // modal lives in a single registry regardless of which host loaded it.
+//
+// ÚNICA fuente de verdad del front para lo que un addon aporta a la pantalla
+// de un registro, siempre etiquetado con el addon dueño (`owner`):
+//   - componentes de acción por (modelo, acción)   registerActionComponent
+//   - modales por slug `<addon>.<nombre>`          registerModalComponent
+//   - acciones de registro (compartir, imprimir,
+//     enviar al chat…) con su proveedor            registerRecordAction
+//   - slots con nombre                             slotStore
+// `Registry.scope(addon).register*` (AddonAPI), `registerFederatedModal` y
+// `registerDocumentContribution` de runtime-react escriben AQUÍ; quien pinta
+// filtra por addon instalado y activo (InstalledAddonsProvider).
 
 export interface ActionFieldDef {
     key: string
@@ -69,7 +80,15 @@ export interface ActionMetadata {
      * visible but locked and offers to install the addon instead of running it.
      */
     requiresAddon?: { key: string; name?: string; reason?: string }
+    /**
+     * Manifest v3 `priority`: "primary" = la única acción destacada; "secondary"
+     * = compartir/imprimir/correo/chat, que el host manda al pie del documento
+     * y al «Más…» del menú de fila. Sin valor se clasifica por convención.
+     */
+    priority?: ActionPriority
 }
+
+export type ActionPriority = 'primary' | 'secondary'
 
 export interface ActionModalProps {
     open: boolean
@@ -147,4 +166,185 @@ export function unregisterActionComponentsByOwner(addonKey: string): number {
     }
     if (removed > 0) notify()
     return removed
+}
+
+// ---- Modales por slug -------------------------------------------------------
+// `action.modal` del manifest ("fiscal_mexico.import_cfdi"). Lo escriben
+// Registry.registerModal (AddonAPI) y registerFederatedModal (runtime-react);
+// lo lee ActionModalDispatcher. Antes eran dos mapas y el de Registry no tenía
+// lector.
+
+export interface ModalComponentEntry {
+    slug: string
+    /** Addon dueño: si no está instalado y activo, el host no lo resuelve. */
+    owner?: string
+    /** Componente ya cargado… */
+    component?: ComponentType<any>
+    /** …o loader perezoso del remote federado (`() => import('addon/Modal')`). */
+    load?: () => Promise<{ default: ComponentType<any> }>
+}
+
+const modals = new Map<string, ModalComponentEntry>()
+
+/**
+ * Registra el modal del slug. Re-registrar el mismo slug reemplaza. Devuelve el
+ * disposer (no borra si otro registro ya lo reemplazó).
+ */
+export function registerModalComponent(entry: ModalComponentEntry): () => void {
+    if (!entry.component && !entry.load) throw new Error(`modal ${entry.slug}: component o load es obligatorio`)
+    const owned = { ...entry, owner: entry.owner ?? ownerOfSlug(entry.slug) }
+    modals.set(entry.slug, owned)
+    notify()
+    return () => {
+        if (modals.get(entry.slug) === owned) {
+            modals.delete(entry.slug)
+            notify()
+        }
+    }
+}
+
+export function getModalComponent(slug: string): ModalComponentEntry | undefined {
+    return modals.get(slug)
+}
+
+/** `<addon>.<nombre>` → `<addon>`; sin punto no hay dueño deducible. */
+export function ownerOfSlug(slug: string): string | undefined {
+    const i = slug.indexOf('.')
+    return i > 0 ? slug.slice(0, i) : undefined
+}
+
+// ---- Acciones de registro (secundarias) --------------------------------------
+// Lo que un addon (o el host, con una capacidad) aporta a CUALQUIER registro sin
+// que el addon del modelo lo declare: «Enviar al chat», imprimir/descargar el
+// PDF, enlace público… El SDK las pinta en el «Más…» del menú de fila y en la
+// barra secundaria (pie) del documento, sólo si su proveedor está activo.
+
+export interface RecordActionContext {
+    model: string
+    record: Record<string, unknown>
+}
+
+export interface RecordActionItem {
+    key: string
+    label: string
+    icon?: string
+    run: () => unknown
+}
+
+export interface RecordActionContribution {
+    /** Id estable `<proveedor>.<nombre>`. Re-registrar el mismo id reemplaza. */
+    id: string
+    /** Clave i18n o literal. */
+    label?: string
+    /** Ícono lucide. */
+    icon?: string
+    /** Modelos donde aplica (clave o tabla, como el host la nombre). Default: todos. */
+    models?: string[] | '*'
+    /** Default "secondary": una contribución externa nunca roba la primaria. */
+    priority?: ActionPriority
+    /**
+     * Proveedor que debe estar instalado y activo. `addon` = clave del addon;
+     * `capability` = contrato `provides_capabilities` (cualquier addon que lo
+     * provea, o el host si es core). Sin `requires` vale el dueño del registro.
+     */
+    requires?: { addon?: string; capability?: string }
+    /** Menor = antes. Default 0. */
+    order?: number
+    when?: (ctx: RecordActionContext) => boolean
+    run?: (ctx: RecordActionContext) => unknown
+    /** Una entrada por elemento (p. ej. un PDF por plantilla del modelo). */
+    expand?: (ctx: RecordActionContext) => RecordActionItem[]
+    /** Pinta su propio control en la barra secundaria (no aparece en el menú de fila). */
+    render?: ComponentType<RecordActionContext>
+}
+
+export interface OwnedRecordAction {
+    contribution: RecordActionContribution
+    owner?: string
+}
+
+const recordActions = new Map<string, OwnedRecordAction>()
+let recordActionsSnapshot: OwnedRecordAction[] = []
+
+export function registerRecordAction(c: RecordActionContribution, owner?: string): () => void {
+    if (!c.run && !c.expand && !c.render) throw new Error(`record action ${c.id}: run, expand o render es obligatorio`)
+    const row: OwnedRecordAction = { contribution: c, owner }
+    recordActions.set(c.id, row)
+    recordActionsChanged()
+    return () => {
+        if (recordActions.get(c.id) === row) {
+            recordActions.delete(c.id)
+            recordActionsChanged()
+        }
+    }
+}
+
+/** Snapshot estable (cambia de identidad sólo al registrar/quitar): apto para useSyncExternalStore. */
+export function listRecordActions(): readonly OwnedRecordAction[] {
+    return recordActionsSnapshot
+}
+
+function recordActionsChanged() {
+    recordActionsSnapshot = [...recordActions.values()]
+    notify()
+}
+
+/** Quita modales y acciones de registro de `addonKey` (fiber unbind). */
+export function unregisterContributionsByOwner(addonKey: string): number {
+    if (!addonKey) return 0
+    let removed = 0
+    for (const [slug, m] of [...modals.entries()]) {
+        if (m.owner === addonKey) {
+            modals.delete(slug)
+            removed += 1
+        }
+    }
+    let actionsRemoved = 0
+    for (const [id, a] of [...recordActions.entries()]) {
+        if (a.owner === addonKey) {
+            recordActions.delete(id)
+            actionsRemoved += 1
+        }
+    }
+    if (actionsRemoved > 0) recordActionsSnapshot = [...recordActions.values()]
+    removed += actionsRemoved
+    if (removed > 0) notify()
+    return removed
+}
+
+// ---- Adaptador de props -------------------------------------------------------
+// Los remotes de addons se escriben contra dos contratos: ActionModalProps
+// (open/onOpenChange/onSuccess) y el de AddonAPI (recordId/payload/close).
+// Este envoltorio entrega ambos, así un mismo componente sirve registrado por
+// acción o por slug.
+
+export type BridgedActionProps = ActionModalProps & {
+    recordId: string
+    payload: Record<string, unknown>
+    close: (result?: unknown) => void
+}
+
+export function closeResultIsSuccess(result: unknown): boolean {
+    return (
+        result === true ||
+        (typeof result === 'object' && result !== null && (result as { ok?: unknown }).ok === true)
+    )
+}
+
+export function adaptActionProps(p: ActionModalProps): BridgedActionProps {
+    return {
+        ...p,
+        recordId: p.record?.id != null ? String(p.record.id) : '',
+        payload: (p.record ?? {}) as Record<string, unknown>,
+        close: (result?: unknown) => {
+            p.onOpenChange(false)
+            if (closeResultIsSuccess(result)) p.onSuccess?.()
+        },
+    }
+}
+
+export function withAdaptedActionProps(component: ComponentType<any>): ComponentType<ActionModalProps> {
+    const Adapted = (p: ActionModalProps) => createElement(component, adaptActionProps(p))
+    Adapted.displayName = `AdaptedAction(${component.displayName || component.name || 'Anonymous'})`
+    return Adapted
 }
