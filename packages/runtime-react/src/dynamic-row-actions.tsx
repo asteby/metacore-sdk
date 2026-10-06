@@ -55,11 +55,8 @@ export function linkNavigation(
     const m = path.match(/^\/m\/([^/?#]+)\/?$/)
     if (m) return { to: '/m/$model', params: { model: m[1] }, search }
     return search ? { to: path, search } : { to: path }
-} {
-    const i = url.indexOf('?')
-    if (i < 0) return { to: url }
-    return { to: url.slice(0, i), search: Object.fromEntries(new URLSearchParams(url.slice(i + 1))) }
 }
+
 
 export interface UseDynamicRowActionsParams {
     /** Model key as registered on the backend (e.g. "issue"). */
