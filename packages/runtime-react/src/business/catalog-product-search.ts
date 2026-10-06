@@ -85,3 +85,21 @@ export function createCatalogProductSearch(api: ApiLike, opts: CatalogProductSea
             .map((r) => catalogRecordToProduct(r as Record<string, any>, opts.defaultTaxRate))
     }
 }
+
+/**
+ * Buscador del host (`searchProducts`) con el IVA de la org como respaldo: un
+ * producto que no trae su tasa entra con la de la org en vez de 0 (retest
+ * Pitsline 2026-10-05: el buscador de ops no devolvía tasa y el renglón de la
+ * factura quedaba sin IVA). Sin tasa de org, el buscador queda tal cual.
+ */
+export function withDefaultTaxRate<Q, S>(
+    search: (query: Q, signal: S) => Promise<ProductResult[]>,
+    defaultTaxRate: number | undefined,
+): (query: Q, signal: S) => Promise<ProductResult[]> {
+    if (defaultTaxRate == null) return search
+    return async (query, signal) => {
+        const rows = await search(query, signal)
+        return rows.map((p) => (p.tax_rate == null ? { ...p, tax_rate: defaultTaxRate } : p))
+    }
+}
+

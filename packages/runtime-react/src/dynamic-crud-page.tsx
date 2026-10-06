@@ -102,6 +102,12 @@ export interface DynamicCRUDPageProps {
      * formulario para él.
      */
     filter?: Record<string, string>
+    /**
+     * Abre el alta guiada al montar («crear desde»): tipo de documento y origen
+     * a precargar (`sources[].key` + id), p. ej. leídos de la URL
+     * `?create=<tipo>&from=<fuente>&from_id=<id>`. Solo con document_forms.
+     */
+    initialCreate?: { type?: string; source?: { key: string; id: string } }
 }
 
 /**
@@ -126,6 +132,7 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
         onChange,
         documentForms,
         filter,
+        initialCreate,
     } = props
 
     const strings = { ...defaultStrings, ...(i18n ?? {}) }
@@ -137,7 +144,7 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
 
     const [metadata, setMetadata] = useState<TableMetadata | null>(cachedMeta ?? null)
     const [refreshKey, setRefreshKey] = useState(0)
-    const [openCreate, setOpenCreate] = useState(false)
+    const [openCreate, setOpenCreate] = useState(!!initialCreate)
     const [openExport, setOpenExport] = useState(false)
     const [openImport, setOpenImport] = useState(false)
 
@@ -308,13 +315,15 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
                     model={model}
                     endpoint={dataEndpoint}
                     forms={guidedForms}
+                    initialType={initialCreate?.type}
+                    initialSource={initialCreate?.source}
                     onSaved={handleRefresh}
                 />
             )}
 
             {showCreate && !guidedForms && (
                 <DynamicRecordDialog
-                    open={openCreate}
+                    open={openCreate && !initialCreate?.source}
                     onOpenChange={setOpenCreate}
                     mode='create'
                     model={model}

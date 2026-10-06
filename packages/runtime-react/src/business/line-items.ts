@@ -32,6 +32,12 @@ export interface LineItem {
     cost?: number
     /** Tope de cantidad (NC: facturado − acreditado; devolución: vendido − devuelto). */
     max_quantity?: number
+    /**
+     * Id del renglón del documento origen («crear desde»). Viaja en la columna
+     * `line_link_field` de la fuente para que el servidor descuente y valide lo
+     * pendiente; un renglón libre no lo lleva.
+     */
+    source_line_id?: string
     technician_id?: string
     lot?: string
     dot?: string
@@ -203,7 +209,10 @@ export function validateLineItems(lines: LineItem[], policy: LineItemsPolicy = {
  * Forma que se manda al backend: números reales (nunca `""`), sin claves de UI,
  * opcionales vacíos omitidos y `position` 1-based conservando el orden.
  */
-export function serializeLineItems(lines: LineItem[]): Array<Record<string, unknown>> {
+export function serializeLineItems(
+    lines: LineItem[],
+    opts: { /** Columna que recibe `source_line_id` (la `line_link_field` de la fuente). */ sourceLineField?: string } = {},
+): Array<Record<string, unknown>> {
     return lines.map((l, i) => {
         const out: Record<string, unknown> = {
             position: i + 1,
@@ -222,6 +231,12 @@ export function serializeLineItems(lines: LineItem[]): Array<Record<string, unkn
                 if (typeof v === 'string' && v.trim()) out[k] = v.trim()
             }
             if (l.extensions && Object.keys(l.extensions).length > 0) out.fiscal_data = { ...l.extensions }
+            if (opts.sourceLineField && l.source_line_id) out[opts.sourceLineField] = l.source_line_id
+            // Importes ya calculados: un modelo de renglón sin tasa (solo
+            // `tax_amount`/`subtotal`) los guarda tal cual en vez de perder el IVA.
+            const a = computeLine(l)
+            out.subtotal = a.net
+            out.tax_amount = a.tax
         }
         return out
     })

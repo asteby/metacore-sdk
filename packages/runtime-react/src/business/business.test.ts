@@ -94,7 +94,7 @@ describe('line items', () => {
             makeLine({ description: ' Llanta ', quantity: '2' as unknown as number, unit_price: '' as unknown as number, sku: '', lot: ' L1 ' }),
             makeLine({ kind: 'note', description: 'Nota' }),
         ])
-        expect(out[0]).toEqual({ position: 1, kind: 'item', description: 'Llanta', quantity: 2, unit_price: 0, discount: 0, tax_rate: 0, lot: 'L1' })
+        expect(out[0]).toEqual({ position: 1, kind: 'item', description: 'Llanta', quantity: 2, unit_price: 0, discount: 0, tax_rate: 0, lot: 'L1', subtotal: 0, tax_amount: 0 })
         expect(out[1]).toEqual({ position: 2, kind: 'note', description: 'Nota' })
         expect(out[0]).not.toHaveProperty('key')
         expect(out[0]).not.toHaveProperty('catalog_price')

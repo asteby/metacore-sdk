@@ -40,6 +40,16 @@ import { DynamicRecordDialog } from './dialogs/dynamic-record'
 import { RequiresAddonDialog, resolveRequiresAddon } from './requires-addon'
 import type { TableMetadata, ActionMetadata, RequiresAddon } from './types'
 
+/**
+ * Destino de una acción link. La query (`?create=…&from_id=…`) va como `search`:
+ * metida en `to` el router la tomaba como parte del path y la ruta no casaba.
+ */
+export function linkNavigation(url: string): { to: string; search?: Record<string, string> } {
+    const i = url.indexOf('?')
+    if (i < 0) return { to: url }
+    return { to: url.slice(0, i), search: Object.fromEntries(new URLSearchParams(url.slice(i + 1))) }
+}
+
 export interface UseDynamicRowActionsParams {
     /** Model key as registered on the backend (e.g. "issue"). */
     model: string
@@ -128,8 +138,8 @@ export function useDynamicRowActions({
         }
         const linkDef = metadata?.actions?.find((a) => a.key === action && a.type === 'link')
         if (linkDef?.linkUrl) {
-            const url = linkDef.linkUrl.replace(/\{(\w+)\}/g, (_: string, field: string) => String(row[field] ?? ''))
-            navigate({ to: url })
+            const url = linkDef.linkUrl.replace(/\{(\w+)\}/g, (_: string, field: string) => encodeURIComponent(String(row[field] ?? '')))
+            navigate(linkNavigation(url) as any)
             return
         }
         const actionDef = metadata?.actions?.find((a) => a.key === action)
