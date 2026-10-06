@@ -23,7 +23,7 @@ import {
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useApi } from './api-context'
-import { useOrgTaxRate } from './org-runtime-context'
+import { useOrgTaxRate, useTimeZone } from './org-runtime-context'
 import { DynamicIcon } from './dynamic-icon'
 import { FieldCell, FieldGrid, FieldLabel } from './field-grid'
 import { FormErrorBanner } from './business/feedback'
@@ -134,6 +134,7 @@ export function DocumentFormDialog({
     const { t, i18n } = useTranslation()
     const api = useApi()
     const orgTaxRate = useOrgTaxRate()
+    const orgTimeZone = useTimeZone()
     const types = forms.types
     const single = types.length === 1 ? types[0] : undefined
 
@@ -176,10 +177,13 @@ export function DocumentFormDialog({
     // Seed field defaults for the chosen type.
     useEffect(() => {
         if (!type) return
-        setFormData({ ...buildFieldDefaults(type.fields, record), ...(type.defaults ?? {}) })
+        setFormData({
+            ...buildFieldDefaults(type.fields, record, undefined, { timeZone: orgTimeZone }),
+            ...(type.defaults ?? {}),
+        })
         setFieldErrors({})
         setFormError(undefined)
-    }, [type, record])
+    }, [type, record, orgTimeZone])
 
     const updateField = (key: string, value: any) => {
         setFormData((prev) => ({ ...prev, [key]: value }))
