@@ -78,3 +78,25 @@ export function translateMetadataLabel(
     const translated = translate(value, { defaultValue: fallback })
     return translated && translated !== value ? translated : fallback
 }
+
+// A catalog key as addons write them: lowercase dotted segments
+// ("fiscal_mexico.ext.customer.rfc_receptor"). Human labels have spaces,
+// capitals or accents and never match.
+const CATALOG_KEY_RE = /^[a-z0-9_]+(\.[a-z0-9_]+)+$/
+
+/**
+ * Form-field label as the user should read it. The host usually serves labels
+ * already localized; when it could not (an extension field whose addon catalog
+ * the server did not resolve), the label arrives as the raw catalog key and the
+ * form printed `FISCAL_MEXICO.EXT.CUSTOMER.RFC_RECEPTOR`. Such a key is resolved
+ * with the client catalog and, failing that, humanized. Any other label is
+ * returned untouched.
+ */
+export function localizeFieldLabel(
+    label: string | undefined,
+    translate?: MetadataTranslator,
+): string {
+    if (!label) return ''
+    if (!CATALOG_KEY_RE.test(label)) return label
+    return translateMetadataLabel(label, translate)
+}
