@@ -28,7 +28,7 @@
   },
   "devDependencies": {
     "@changesets/changelog-github": "^1.0.0",
-    "@changesets/cli": "2.31.1",
+    "@changesets/cli": "3.0.3",
     "tsup": "^8.3.5",
     "turbo": "^2.3.3",
     "typescript": "^6.0.0"
