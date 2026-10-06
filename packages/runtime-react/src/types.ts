@@ -141,6 +141,20 @@ export interface DocumentFormSource {
     option_filter?: unknown
     /** Addon requerido (gating de UI; el servidor revalida). */
     requires_addon?: string
+    /** Columna de cantidad del renglón origen (default `quantity`). */
+    qty_field?: string
+    /**
+     * Columna del renglón de ESTE documento que guarda el id del renglón origen
+     * (p. ej. `sales_order_item_id`). Con ella el host sirve lo pendiente por
+     * renglón (`<endpoint>/source-lines`) y rechaza al guardar si se excede.
+     */
+    line_link_field?: string
+    /** Columna del renglón origen que ya trae lo pendiente (la mantiene su addon). */
+    remaining_qty_field?: string
+    /** Endpoint del addon que sirve los renglones con `remaining_quantity` (`?id=`). */
+    remaining_endpoint?: string
+    /** Estados de este documento que no consumen el origen (cancelada…). */
+    exclude_states?: string[]
 }
 
 /** Vista previa: acción de fila sobre el borrador, llamada con `analyze: true`. */

@@ -38,6 +38,8 @@ import {
     editorLinesConfig,
     linesFromSource,
     localIssues,
+    sourceLoadSummary,
+    sourceTracksRemaining,
     partyDefaults,
     partySummaryRows,
     splitEditorFields,
@@ -142,6 +144,10 @@ export function DocumentEditor({
     const [attempted, setAttempted] = useState(false)
     const [sourceKey, setSourceKey] = useState<string>(initialSource?.key ?? '')
     const [sourceId, setSourceId] = useState<string>(initialSource?.id ?? '')
+    // Fuente de la que salieron los renglones: su `line_link_field` viaja en cada
+    // renglón para que el servidor descuente lo ya facturado/devuelto y valide.
+    const [loadedSource, setLoadedSource] = useState<DocumentFormSource | null>(null)
+    const [sourceNote, setSourceNote] = useState<string | undefined>()
     const relCache = useRef(new Map<string, Promise<any[]>>())
 
     const taxRate = defaultTaxRate ?? orgTaxRate
@@ -273,10 +279,13 @@ export function DocumentEditor({
         const p: Record<string, unknown> = { ...(type.defaults ?? {}), ...header }
         if (forms.type_field && !type.submit_action) p[forms.type_field] = type.value ?? type.key
         if (lineCfg) {
-            p[lineCfg.field] = isAllocation && openCfg ? allocationPayload(allocation.allocations, openCfg) : serializeLineItems(lines)
+            p[lineCfg.field] =
+                isAllocation && openCfg
+                    ? allocationPayload(allocation.allocations, openCfg)
+                    : serializeLineItems(lines, { sourceLineField: loadedSource?.line_link_field })
         }
         return p
-    }, [type, header, forms.type_field, lineCfg, isAllocation, openCfg, allocation, lines])
+    }, [type, header, forms.type_field, lineCfg, isAllocation, openCfg, allocation, lines, loadedSource])
 
     const baseUrl = type.endpoint ?? endpoint ?? `/dynamic/${model}`
 
@@ -304,27 +313,72 @@ export function DocumentEditor({
     }
 
     // ---- Cargar desde… --------------------------------------------------------
+    /**
+     * Renglones del origen. Con lo pendiente declarado (`line_link_field`,
+     * `remaining_qty_field` o `remaining_endpoint`) los sirve el host ya con
+     * `remaining_quantity` (cantidad − lo ya facturado/devuelto, calculado en el
+     * servidor); si el host aún no tiene `source-lines` (404) o la fuente no lo
+     * declara, se leen de la relación como antes.
+     */
+    const fetchSourceRows = useCallback(
+        async (src: DocumentFormSource, id: string): Promise<unknown[]> => {
+            if (src.remaining_endpoint) {
+                const res = await api.get(src.remaining_endpoint, { params: { id } })
+                return res?.data?.data ?? []
+            }
+            if (sourceTracksRemaining(src)) {
+                try {
+                    const res = await api.get(`${baseUrl}/source-lines`, {
+                        params: { source: src.key, id, ...(draftId ? { exclude: draftId } : {}) },
+                    })
+                    return res?.data?.data ?? []
+                } catch (err: any) {
+                    if (err?.response?.status !== 404) throw err
+                }
+            }
+            let rels = relCache.current.get(src.model)
+            if (!rels) {
+                rels = api
+                    .get(`/metadata/table/${src.model}`)
+                    .then((r: any) => r?.data?.data?.relations ?? r?.data?.relations ?? [])
+                relCache.current.set(src.model, rels)
+            }
+            const call = prefillFromFieldRelationRequest(
+                { fieldKey: lineCfg?.field ?? 'lines', refModel: src.model, refId: id, spec: { $prefillFromRecord: src.lines } },
+                await rels,
+            )
+            if (!call) throw new Error(`${src.model}: falta la relación «${src.lines}»`)
+            const res = await api.get(call.endpoint, { params: call.params })
+            return res?.data?.data ?? []
+        },
+        [api, baseUrl, draftId, lineCfg?.field],
+    )
+
     const loadFromSource = useCallback(
         async (src: DocumentFormSource, id: string) => {
             if (!lineCfg || !id) return
             setBusy('source')
             try {
                 if (!isAllocation) {
-                    let rels = relCache.current.get(src.model)
-                    if (!rels) {
-                        rels = api
-                            .get(`/metadata/table/${src.model}`)
-                            .then((r: any) => r?.data?.data?.relations ?? r?.data?.relations ?? [])
-                        relCache.current.set(src.model, rels)
-                    }
-                    const call = prefillFromFieldRelationRequest(
-                        { fieldKey: lineCfg.field, refModel: src.model, refId: id, spec: { $prefillFromRecord: src.lines } },
-                        await rels,
-                    )
-                    if (!call) throw new Error(`${src.model}: falta la relación «${src.lines}»`)
-                    const res = await api.get(call.endpoint, { params: call.params })
-                    setLines(linesFromSource(res?.data?.data ?? [], src.map, { kind }))
+                    const rows = await fetchSourceRows(src, id)
+                    const loaded = linesFromSource(rows, src.map, { kind, discountMode: lineCfg.discount_mode })
+                    const { covered } = sourceLoadSummary(rows)
+                    setLines(loaded)
+                    setLoadedSource(src)
                     setLinesFromSourceDoc(kind === 'credit')
+                    setSourceNote(
+                        loaded.length === 0 && covered > 0
+                            ? t('documentEditor.source_all_covered', {
+                                  defaultValue: 'Todo el documento ya está registrado en otros documentos; no queda nada pendiente.',
+                              })
+                            : covered > 0
+                              ? t('documentEditor.source_loaded_partial', {
+                                    defaultValue: '{{count}} renglones con lo pendiente · {{covered}} ya cubiertos se omitieron',
+                                    count: loaded.length,
+                                    covered,
+                                })
+                              : t('documentEditor.source_loaded', { defaultValue: '{{count}} renglones cargados', count: loaded.length }),
+                    )
                 }
                 if (src.header || src.link_field) {
                     const h = await api.get(`/data/${src.model}`, { params: { f_id: `eq:${id}`, per_page: 1 } })
@@ -345,7 +399,7 @@ export function DocumentEditor({
                 setBusy(null)
             }
         },
-        [api, lineCfg, isAllocation, kind, t],
+        [api, lineCfg, isAllocation, kind, t, fetchSourceRows],
     )
 
     // Prefill al abrir desde un documento origen (acción de fila «Crear NC», «Facturar venta»…).
@@ -538,7 +592,7 @@ export function DocumentEditor({
                     <EditorSection
                         slot="load-from-source"
                         title={t('documentEditor.load_from', { defaultValue: 'Cargar desde…' })}
-                        hint={busy === 'source' ? t('documentEditor.loading_source', { defaultValue: 'Cargando…' }) : undefined}
+                        hint={busy === 'source' ? t('documentEditor.loading_source', { defaultValue: 'Cargando…' }) : sourceNote}
                     >
                         <div className="flex flex-wrap items-center gap-2">
                             {sources.length > 1 && (

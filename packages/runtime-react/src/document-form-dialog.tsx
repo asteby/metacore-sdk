@@ -258,7 +258,7 @@ export function DocumentFormDialog({
 
     // layout "editor": una sola pantalla por secciones (DocumentEditor). Sin él
     // sigue el wizard de siempre (retrocompatible).
-    if (open && type && step !== 'type' && isEditorLayout(type)) {
+    if (open && type && step !== 'type' && (isEditorLayout(type) || !!initialSource)) {
         return (
             <Dialog open={open} onOpenChange={onOpenChange}>
                 <DialogContent

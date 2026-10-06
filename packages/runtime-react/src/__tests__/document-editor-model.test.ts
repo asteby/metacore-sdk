@@ -9,13 +9,15 @@ import {
     isEditorLayout,
     linesFromSource,
     localIssues,
+    sourceLoadSummary,
+    sourceTracksRemaining,
     overdueDays,
     partyDefaults,
     partySummaryRows,
     splitEditorFields,
     toOpenDocuments,
 } from '../business/document-editor-model'
-import { makeLine } from '../business/line-items'
+import { makeLine, serializeLineItems } from '../business/line-items'
 import { allocatePayment, validateAllocation } from '../primitives/allocation'
 import type { ActionFieldDef, DocumentFormOpenDocuments } from '../types'
 
@@ -55,6 +57,10 @@ describe('layout y renglones', () => {
         expect(isEditorLayout({ layout: 'editor' })).toBe(true)
         expect(isEditorLayout({ layout: 'wizard' })).toBe(false)
         expect(isEditorLayout({})).toBe(false)
+        // Un tipo con «Cargar desde…» usa el editor salvo wizard explícito.
+        const src = [{ key: 'sale', label: 'Venta', model: 'customers.SalesOrder', lines: 'items' }]
+        expect(isEditorLayout({ sources: src })).toBe(true)
+        expect(isEditorLayout({ layout: 'wizard', sources: src })).toBe(false)
     })
     it('allocation usa `allocations` por defecto; el manifest manda', () => {
         const base = { key: 'p', label: 'P', fields: [] }
@@ -163,5 +169,53 @@ describe('cobro / REP (allocation)', () => {
         expect(overdueDays({ due_at: '2026-10-01' }, new Date(2026, 9, 6))).toBe(5)
         expect(overdueDays({ due_at: '2026-10-30' }, new Date(2026, 9, 6))).toBe(0)
         expect(overdueDays({ due_at: null })).toBe(0)
+    })
+})
+
+describe('linesFromSource con lo pendiente («crear desde»)', () => {
+    it('la cantidad sugerida y el tope son remaining_quantity; lo ya cubierto se omite; guarda el renglón origen', () => {
+        const rows = [
+            { id: 'a', source_line_id: 'a', product_id: 'p1', product_name: 'Llanta', quantity: 4, remaining_quantity: 1, unit_price: 1500, discount: 5, tax_rate: 0.16 },
+            { id: 'b', source_line_id: 'b', product_name: 'Balanceo', quantity: 2, remaining_quantity: 0, unit_price: 100 },
+        ]
+        const lines = linesFromSource(rows, { description: 'product_name' })
+        expect(lines).toHaveLength(1)
+        expect(lines[0]).toMatchObject({ product_id: 'p1', description: 'Llanta', quantity: 1, max_quantity: 1, unit_price: 1500, discount: 5, tax_rate: 0.16, source_line_id: 'a' })
+        expect(sourceLoadSummary(rows)).toEqual({ loaded: 1, covered: 1 })
+    })
+    it('sin remaining_quantity conserva la cantidad del origen y usa su id como vínculo', () => {
+        const [l] = linesFromSource([{ id: 'x', description: 'Servicio', quantity: 3, unit_price: 10 }])
+        expect(l.quantity).toBe(3)
+        expect(l.max_quantity).toBeUndefined()
+        expect(l.source_line_id).toBe('x')
+    })
+    it('localIssues marca la cantidad que excede lo pendiente', () => {
+        const l = { ...makeLine({ description: 'Llanta', quantity: 3, unit_price: 10 }), max_quantity: 2 }
+        expect(localIssues([l]).some((i) => i.severity === 'error' && i.message.includes('excede lo pendiente'))).toBe(true)
+    })
+    it('sourceTracksRemaining: solo con line_link_field, remaining_qty_field o remaining_endpoint', () => {
+        expect(sourceTracksRemaining({ line_link_field: 'sales_order_item_id' })).toBe(true)
+        expect(sourceTracksRemaining({ remaining_endpoint: '/x' })).toBe(true)
+        expect(sourceTracksRemaining({})).toBe(false)
+    })
+})
+
+
+describe('serializeLineItems con vínculo al renglón origen', () => {
+    it('escribe source_line_id en la columna line_link_field y no en renglones libres', () => {
+        const linked = { ...makeLine({ description: 'Llanta', quantity: 1, unit_price: 10 }), source_line_id: 'soi-1' }
+        const free = makeLine({ description: 'Flete', quantity: 1, unit_price: 50 })
+        const [a, b] = serializeLineItems([linked, free], { sourceLineField: 'sales_order_item_id' })
+        expect(a.sales_order_item_id).toBe('soi-1')
+        expect(b.sales_order_item_id).toBeUndefined()
+        expect(serializeLineItems([linked])[0].sales_order_item_id).toBeUndefined()
+    })
+    it('lleva subtotal e impuesto calculados (modelos de renglón sin tasa)', () => {
+        const l = { ...makeLine({ description: 'Llanta', quantity: 2, unit_price: 100, discount: 20, tax_rate: 0.16 }), discount_kind: 'amount' as const }
+        expect(serializeLineItems([l])[0]).toMatchObject({ subtotal: 180, tax_amount: 28.8, discount: 20, discount_kind: 'amount' })
+    })
+    it('linesFromSource con discount_mode amount conserva el descuento como importe', () => {
+        const [l] = linesFromSource([{ id: 'a', quantity: 2, unit_price: 100, discount: 20, remaining_quantity: 2 }], {}, { discountMode: 'amount' })
+        expect(l.discount_kind).toBe('amount')
     })
 })
