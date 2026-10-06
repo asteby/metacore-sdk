@@ -12,7 +12,7 @@ vi.mock('react-i18next', () => {
     return { useTranslation: () => value }
 })
 
-import { DocumentFormDialog, resolveDocumentForms } from '../document-form-dialog'
+import { DocumentFormDialog, resolveDocumentForms, scopeDocumentFormsToFilter } from '../document-form-dialog'
 import { DynamicCRUDPage } from '../dynamic-crud-page'
 import { useMetadataCache } from '../metadata-cache'
 import { ApiProvider, type ApiClient } from '../api-context'
@@ -236,7 +236,7 @@ describe('DynamicCRUDPage + document_forms', () => {
             ...extra,
         }) as any
 
-    const mount = (m: any) => {
+    const mount = (m: any, filter?: Record<string, string>) => {
         useMetadataCache.getState().setMetadata('fiscal_documents', m)
         const client = {
             get: vi.fn(async (url: string) =>
@@ -248,7 +248,7 @@ describe('DynamicCRUDPage + document_forms', () => {
         } as unknown as ApiClient
         render(
             <ApiProvider client={client}>
-                <DynamicCRUDPage model="fiscal_documents" />
+                <DynamicCRUDPage model="fiscal_documents" filter={filter} />
             </ApiProvider>,
         )
     }
@@ -265,5 +265,41 @@ describe('DynamicCRUDPage + document_forms', () => {
         fireEvent.click((await screen.findByText(/New Nota/)).closest('button')!)
         await new Promise((r) => setTimeout(r, 50))
         expect(screen.queryByRole('radiogroup')).toBeNull()
+    })
+
+    // Retest r3 (05/10): «Documentos fiscales → Facturas» (nav filtrado por el
+    // type_field) ofrecía Crear y abría el REP, el único tipo declarado.
+    it('vista filtrada a un tipo sin formulario: sin botón Crear', async () => {
+        mount(meta({ document_forms: forms }), { type: 'P' })
+        await screen.findByText(/Nota/)
+        await new Promise((r) => setTimeout(r, 50))
+        expect(screen.queryByText(/New Nota/)).toBeNull()
+    })
+
+    it('vista filtrada a un tipo con formulario: Crear abre ese tipo directo', async () => {
+        mount(meta({ document_forms: forms }), { type: 'eq:E' })
+        fireEvent.click((await screen.findByText(/New Nota/)).closest('button')!)
+        expect(await screen.findByText('Factura origen')).toBeTruthy()
+        expect(screen.queryByRole('radiogroup')).toBeNull()
+    })
+})
+
+describe('scopeDocumentFormsToFilter', () => {
+    it('sin filtro sobre el type_field no cambia nada', () => {
+        expect(scopeDocumentFormsToFilter(forms, undefined)).toEqual({ forms, hideCreate: false })
+        expect(scopeDocumentFormsToFilter(forms, { status: 'draft' })).toEqual({ forms, hideCreate: false })
+        expect(scopeDocumentFormsToFilter(undefined, { type: 'I' })).toEqual({ forms: undefined, hideCreate: false })
+        expect(scopeDocumentFormsToFilter({ ...forms, type_field: undefined }, { type: 'X' }).hideCreate).toBe(false)
+    })
+
+    it('acota al tipo del filtro (valor o key, sin importar mayúsculas ni eq:)', () => {
+        expect(scopeDocumentFormsToFilter(forms, { type: 'e' }).forms?.types.map((x) => x.key)).toEqual(['credit_note'])
+        expect(scopeDocumentFormsToFilter(forms, { type: 'eq:I' }).forms?.types.map((x) => x.key)).toEqual(['invoice'])
+        const noValue: DocumentFormsManifest = { type_field: 'document_type', types: [{ key: 'payment_complement', label: 'REP', fields: [] }] }
+        expect(scopeDocumentFormsToFilter(noValue, { document_type: 'payment_complement' }).forms).toBe(noValue)
+    })
+
+    it('filtro a un tipo sin formulario: oculta Crear', () => {
+        expect(scopeDocumentFormsToFilter(forms, { type: 'P' })).toEqual({ forms: undefined, hideCreate: true })
     })
 })

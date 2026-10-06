@@ -42,7 +42,7 @@ import { extractFieldErrors, localizeFieldErrorMap } from './server-error'
 import { validateValues, bagHasErrors } from './validator'
 import { clearFieldErrorTree } from './field-validation-ui'
 import { emitRecordMutation } from './record-mutation-events'
-import { isLineItemsField, resolveWidget } from './dynamic-form-schema'
+import { isLineItemsField, resolveWidget, scopeValueFromFilterToken } from './dynamic-form-schema'
 import { createCatalogProductSearch } from './business/catalog-product-search'
 import { DocumentEditor } from './business/document-editor'
 import { editorLinesConfig, isEditorLayout } from './business/document-editor-model'
@@ -93,6 +93,26 @@ export function resolveDocumentForms(
     return m && Array.isArray(m.types) && m.types.length > 0 ? m : undefined
 }
 
+/**
+ * Acota el alta guiada a la vista filtrada. Un nav que filtra por la columna
+ * discriminadora (`type_field`) lista UN tipo de documento: «Crear» debe abrir
+ * ese tipo directo y, si el manifest no trae formulario para él, no ofrecerse
+ * (retest r3: «Documentos fiscales → Facturas → Crear» abría el REP, el único
+ * tipo declarado). Sin manifest, sin `type_field` o sin filtro sobre él, todo
+ * queda igual.
+ */
+export function scopeDocumentFormsToFilter(
+    forms: DocumentFormsManifest | undefined,
+    filter?: Record<string, unknown> | null,
+): { forms: DocumentFormsManifest | undefined; hideCreate: boolean } {
+    const field = forms?.type_field
+    if (!forms || !field || !filter || !(field in filter)) return { forms, hideCreate: false }
+    const want = scopeValueFromFilterToken(filter[field]).trim().toLowerCase()
+    if (want === '') return { forms, hideCreate: false }
+    const types = forms.types.filter((x) => String(x.value ?? x.key).trim().toLowerCase() === want)
+    if (types.length === 0) return { forms: undefined, hideCreate: true }
+    return { forms: types.length === forms.types.length ? forms : { ...forms, types }, hideCreate: false }
+}
 
 type Step = 'type' | 'fields' | 'lines'
 
