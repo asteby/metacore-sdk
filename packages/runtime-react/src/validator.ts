@@ -4,6 +4,7 @@
 // the same keys.
 import type { ActionFieldDef, FieldValidation } from './types'
 import type { FieldIssue } from './server-error'
+import { applyOptionWhen, getDependsOn } from './option-when'
 
 const NIL_UUID = '00000000-0000-0000-0000-000000000000'
 const NUMERIC_TYPES = new Set(['int', 'integer', 'bigint', 'decimal', 'numeric', 'number', 'float', 'double'])
@@ -207,7 +208,13 @@ function checkBuiltin(slug: string, value: unknown): FieldIssue | undefined {
     }
 }
 
-function specFromField(field: ActionFieldDef): ValidationSpec {
+/**
+ * `context` son los valores hermanos contra los que se evalúa el `when` de
+ * cada opción: una opción que su `when` descarta con el valor actual (forma de
+ * pago «99» con método PUE) es `invalid_option`, igual que una fuera de catálogo
+ * — y como la rechaza el kernel al guardar.
+ */
+function specFromField(field: ActionFieldDef, context?: Record<string, unknown>): ValidationSpec {
     const v = fieldValidationOf(field)
     const spec: ValidationSpec = {
         required: !!field.required,
@@ -217,7 +224,10 @@ function specFromField(field: ActionFieldDef): ValidationSpec {
         max: v.max,
         custom: v.custom,
     }
-    if (field.options?.length) spec.options = field.options.map(o => String(o.value))
+    if (field.options?.length) {
+        const applicable = context ? applyOptionWhen(field.options, context, getDependsOn(field)) : field.options
+        spec.options = applicable.map(o => String(o.value))
+    }
     return spec
 }
 
@@ -238,7 +248,7 @@ export function validateValues(
     values: Record<string, unknown>,
 ): Record<string, FieldIssue[]> {
     const bag: Record<string, FieldIssue[]> = {}
-    walk(fields, values ?? {}, '', bag)
+    walk(fields, values ?? {}, '', bag, values ?? {})
     return bag
 }
 
@@ -247,6 +257,7 @@ function walk(
     values: Record<string, unknown>,
     prefix: string,
     bag: Record<string, FieldIssue[]>,
+    context: Record<string, unknown>,
 ): void {
     for (const field of fields) {
         const key = field.key
@@ -261,11 +272,12 @@ function walk(
             }
             rows.forEach((row, i) => {
                 const obj = row && typeof row === 'object' ? (row as Record<string, unknown>) : {}
-                walk(itemFieldsOf(field), obj, `${path}.${i}`, bag)
+                // Una celda puede depender de otra del renglón o del encabezado.
+                walk(itemFieldsOf(field), obj, `${path}.${i}`, bag, { ...context, ...obj })
             })
             continue
         }
-        const issues = checkValue(raw, specFromField(field))
+        const issues = checkValue(raw, specFromField(field, context))
         if (issues.length) bag[path] = issues
     }
 }
