@@ -48,6 +48,7 @@ import { DocumentEditor } from './business/document-editor'
 import { editorLinesConfig, isEditorLayout } from './business/document-editor-model'
 import type {
     ActionFieldDef,
+    DocumentFormType,
     DocumentFormsManifest,
     TableMetadata,
 } from './types'
@@ -82,6 +83,39 @@ export interface DocumentFormDialogProps {
     record?: Record<string, any>
     /** Documento origen a precargar en el DocumentEditor (`sources[].key` + id). */
     initialSource?: { key: string; id: string }
+    /**
+     * Tipo con `create_model`: el alta vive en otro modelo. El host navega a la
+     * página de ese modelo con su alta abierta; el diálogo se cierra sin pintar
+     * formulario. Sin este callback un tipo delegado no se ofrece.
+     */
+    onDelegateCreate?: (target: DelegatedCreate) => void
+}
+
+/** Alta delegada a otro modelo (`document_forms.types[].create_model`). */
+export interface DelegatedCreate {
+    /** Clave del modelo destino tal como la declara el manifest (`customers.Invoice`). */
+    model: string
+    /** Tipo que la declaró. */
+    type: DocumentFormType
+}
+
+/**
+ * Si «Crear» de estos formularios es un alta delegada: un único tipo (p. ej.
+ * ya acotado por el filtro de la vista) con `create_model`. Con varios tipos el
+ * selector la ofrece como una tarjeta más.
+ */
+export function delegatedCreate(forms: DocumentFormsManifest | undefined): DelegatedCreate | undefined {
+    const only = forms?.types.length === 1 ? forms.types[0] : undefined
+    const model = only?.create_model?.trim()
+    return only && model ? { model, type: only } : undefined
+}
+
+/** Quita los tipos delegados cuando el host no sabe navegar a otro modelo. */
+export function withoutDelegatedTypes(forms: DocumentFormsManifest | undefined): DocumentFormsManifest | undefined {
+    if (!forms) return forms
+    const types = forms.types.filter((x) => !x.create_model?.trim())
+    if (types.length === forms.types.length) return forms
+    return types.length > 0 ? { ...forms, types } : undefined
 }
 
 /** Manifest efectivo: la prop gana sobre el metadata; sin tipos devuelve undefined. */
@@ -130,11 +164,16 @@ export function DocumentFormDialog({
     currency,
     record,
     initialSource,
+    onDelegateCreate,
 }: DocumentFormDialogProps) {
     const { t, i18n } = useTranslation()
     const api = useApi()
     const orgTaxRate = useOrgTaxRate()
-    const types = forms.types
+    // Sin onDelegateCreate el host no sabe abrir otro modelo: sus tipos no se ofrecen.
+    const types = useMemo(
+        () => (onDelegateCreate ? forms.types : forms.types.filter((x) => !x.create_model?.trim())),
+        [forms.types, onDelegateCreate],
+    )
     const single = types.length === 1 ? types[0] : undefined
 
     const [typeKey, setTypeKey] = useState<string | null>(initialType ?? single?.key ?? null)
@@ -147,6 +186,16 @@ export function DocumentFormDialog({
     const [saving, setSaving] = useState(false)
 
     const type = useMemo(() => types.find((x) => x.key === typeKey) ?? null, [types, typeKey])
+    const delegatedModel = type?.create_model?.trim() || undefined
+
+    // Tipo con alta en otro modelo: no hay formulario aquí; el host navega.
+    useEffect(() => {
+        if (!open || !type || !delegatedModel) return
+        onDelegateCreate?.({ model: delegatedModel, type })
+        onOpenChange(false)
+        // onDelegateCreate/onOpenChange: callbacks del host, no disparan de nuevo.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, type, delegatedModel])
     // Sin buscador inyectado, el paso de renglones solo ofrecía «Renglón libre»
     // y la línea entraba sin precio (DynamicCRUDPage no pasa searchProducts).
     // Default: el catálogo de productos de la org. El buscador del host también
@@ -279,6 +328,8 @@ export function DocumentFormDialog({
             : s === 'fields'
               ? t('documentForm.step_data', { defaultValue: 'Datos' })
               : tl(lineCfg?.title ?? 'Renglones')
+
+    if (open && type && delegatedModel) return null
 
     // layout "editor": una sola pantalla por secciones (DocumentEditor). Sin él
     // sigue el wizard de siempre (retrocompatible).

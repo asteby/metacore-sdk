@@ -107,6 +107,13 @@ export interface DocumentFormType {
      * reparte el pago en PaymentAllocation dentro de una transacción.
      */
     submit_action?: string
+    /**
+     * El alta de este tipo vive en OTRO modelo (`customers.Invoice`): «Crear»
+     * no pinta formulario, el host abre la página de ese modelo con su alta
+     * abierta (`onDelegateCreate`). P. ej. Documentos fiscales → Facturas: la
+     * factura nace en customers y se timbra después. Sin campos ni renglones.
+     */
+    create_model?: string
 }
 
 /** Contraparte: qué campo del encabezado la elige y qué muestra su tarjeta. */

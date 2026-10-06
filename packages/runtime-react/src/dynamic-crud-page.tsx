@@ -33,7 +33,13 @@ import { useApi } from './api-context'
 import { useMetadataCache } from './metadata-cache'
 import { DynamicTable } from './dynamic-table'
 import { DynamicRecordDialog } from './dialogs/dynamic-record'
-import { DocumentFormDialog, resolveDocumentForms, scopeDocumentFormsToFilter } from './document-form-dialog'
+import {
+    DocumentFormDialog,
+    resolveDocumentForms,
+    scopeDocumentFormsToFilter,
+    withoutDelegatedTypes,
+    type DelegatedCreate,
+} from './document-form-dialog'
 import { ExportDialog } from './dialogs/export'
 import { ImportDialog } from './dialogs/import'
 import { getModelExtension } from './model-extension-registry'
@@ -108,6 +114,12 @@ export interface DynamicCRUDPageProps {
      * `?create=<tipo>&from=<fuente>&from_id=<id>`. Solo con document_forms.
      */
     initialCreate?: { type?: string; source?: { key: string; id: string } }
+    /**
+     * Alta delegada (`document_forms.types[].create_model`): el host abre la
+     * página del modelo destino con su alta abierta. Sin él, esos tipos no se
+     * ofrecen (y si la vista queda acotada a uno, no hay «Crear»).
+     */
+    onDelegateCreate?: (target: DelegatedCreate) => void
 }
 
 /**
@@ -133,6 +145,7 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
         documentForms,
         filter,
         initialCreate,
+        onDelegateCreate,
     } = props
 
     const strings = { ...defaultStrings, ...(i18n ?? {}) }
@@ -203,7 +216,11 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
     // (useCan defaults to always-true), in which case create/export/import
     // require `lowercase(model).create|export|import`.
     const can = useCan()
-    const scoped = scopeDocumentFormsToFilter(resolveDocumentForms(metadata, documentForms), filter)
+    const declaredForms = resolveDocumentForms(metadata, documentForms)
+    const scoped = scopeDocumentFormsToFilter(
+        onDelegateCreate ? declaredForms : withoutDelegatedTypes(declaredForms),
+        filter,
+    )
     const guidedForms = scoped.forms
     const showCreate = primary.showGenericCreate && !scoped.hideCreate && can(modelCapability(model, 'create'))
     const showImport = enableCRUD && !effectiveHideImport && can(modelCapability(model, 'import'))
@@ -318,6 +335,7 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
                     initialType={initialCreate?.type}
                     initialSource={initialCreate?.source}
                     onSaved={handleRefresh}
+                    onDelegateCreate={onDelegateCreate}
                 />
             )}
 
