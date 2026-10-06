@@ -1,5 +1,31 @@
 # @asteby/metacore-runtime-react
 
+## 49.2.0
+
+### Minor Changes
+
+- 4fca0af: DocumentEditor a pantalla completa para documentos con renglones (factura, cotización, pedido, OC).
+
+  - **Pantalla completa:** DocumentFormDialog abre el editor de un tipo `layout: "editor"` con renglones de venta o compra en un diálogo que ocupa la pantalla (máx. 1440 px). En pantallas anchas va a dos columnas: captura a la izquierda; totales, revisión y vista previa a la derecha. NC y cobro/REP siguen en el diálogo de 960 px.
+  - **Divulgación progresiva:** lo obligatorio que el tipo declara queda a la vista aunque sea de extensión (`fiscal_data.metodo_pago`, `fiscal_data.forma_pago` de la factura); las extensiones que llegan del metadata siguen plegadas en «Opciones fiscales».
+  - **Tarjeta de la contraparte:** sus filas usan las etiquetas del formulario del modelo de la contraparte (`/metadata/modal/<party.model>`): «RFC», «Régimen fiscal», «Uso CFDI» en vez de `tax_id` o `regimen_receptor`.
+  - **«Cargar desde…»:** con varias fuentes, botones por tipo de origen (venta, OT, cotización) en lugar de un `<select>`. Un origen sin dato de impuesto (p. ej. una OT de taller) toma la tasa de la org, como un renglón nuevo.
+  - **Vista previa local:** un tipo con renglones y sin acción `preview` del servidor ofrece una vista previa plegada del documento (encabezado, renglones y totales) sin crear borrador.
+  - i18n es/en: `documentEditor.source_kind`, `documentEditor.preview`, `documentEditor.advanced`.
+
+- 4fca0af: Retest Pitsline r5 (nota de crédito y acciones):
+
+  - «Crear desde»: un renglón de origen sin descripción propia (InvoiceItem solo
+    lleva el producto) se nombra con la etiqueta del producto que resuelve el
+    host, y un renglón con producto ya no exige texto para guardar. El fallo de
+    `source-lines` (404, 400/500 de un host sin la ruta) cae a la relación.
+  - `ActionModalDispatcher` anuncia la mutación ahora y otra vez cuando el
+    servidor asienta lo derivado (`emitRecordMutationSettled`,
+    `RECORD_MUTATION_SETTLE_DELAYS`): la lista y la pestaña REP se refrescan
+    tras timbrar o registrar un pago.
+  - Un selector sembrado con el id de la propia fila muestra su folio
+    («Factura a abonar: FAC-00015») y no el UUID.
+
 ## 49.1.0
 
 ### Minor Changes
