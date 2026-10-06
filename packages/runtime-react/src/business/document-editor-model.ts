@@ -6,6 +6,7 @@
 import { roundMoney, toAmount } from './format'
 import { computeTotals, makeLine, type LineItem } from './line-items'
 import { optionPassesRule, getOptionFilter } from '../option-filter'
+import { applyOptionWhen, getDependsOn } from '../dynamic-form-schema'
 import type { ResolvedOption } from '../use-options-resolver'
 import type { Allocation, AllocationIssue, OpenDocument } from '../primitives/allocation'
 import type {
@@ -117,6 +118,40 @@ export function friendlyOptionLabel(label: string): string {
 export function withFriendlyOptions(f: ActionFieldDef): ActionFieldDef {
     if (!Array.isArray(f.options) || f.options.length === 0) return f
     return { ...f, options: f.options.map((o) => ({ ...o, label: friendlyOptionLabel(String(o.label ?? o.value)) })) }
+}
+
+/** Select estático con alguna opción condicionada por otro campo (`options[].when`). */
+function isGatedSelect(f: ActionFieldDef): boolean {
+    return Array.isArray(f.options) && f.options.some((o) => !!o?.when)
+}
+
+/** Opciones del select que aplican con los valores actuales (`options[].when`). */
+export function gatedOptions(f: ActionFieldDef, values: Record<string, unknown>): ActionFieldDef {
+    if (!isGatedSelect(f)) return f
+    return { ...f, options: applyOptionWhen(f.options, values, getDependsOn(f)) }
+}
+
+/**
+ * Selects con opciones condicionadas (`options[].when`, p. ej. forma de pago
+ * «99» solo con método PPD): cuando el valor actual deja de aplicar —o está
+ * vacío y solo queda una opción— devuelve el que toca. Una sola opción
+ * permitida se elige sola; si hay varias, el default del campo si aplica; si
+ * no, vacío. Sin cambios devuelve `{}`, así que aplicarlo converge.
+ */
+export function gatedOptionFixes(fields: readonly ActionFieldDef[], values: Record<string, unknown>): Record<string, unknown> {
+    const out: Record<string, unknown> = {}
+    for (const f of fields) {
+        if (!isGatedSelect(f)) continue
+        const allowed = applyOptionWhen(f.options, values, getDependsOn(f))
+        const cur = values[f.key]
+        const ok = (v: unknown) => hasValue(v) && allowed.some((o) => String(o.value) === String(v))
+        if (ok(cur)) continue
+        if (!hasValue(cur) && allowed.length !== 1) continue
+        const def = declaredDefault(f)
+        const next = allowed.length === 1 ? allowed[0].value : ok(def) ? def : ''
+        if (String(next ?? '') !== String(cur ?? '')) out[f.key] = next
+    }
+    return out
 }
 
 /**

@@ -48,6 +48,8 @@ import {
     splitEditorFields,
     toOpenDocuments,
     friendlyOptionLabel,
+    gatedOptionFixes,
+    gatedOptions,
     withFriendlyOptions,
     type EditorIssue,
     type SeedLabel,
@@ -214,6 +216,15 @@ export function DocumentEditor({
 
     const fieldKeys = useRef<string[]>([])
     fieldKeys.current = allFields.map((f) => f.key)
+
+    // Opciones condicionadas (`options[].when`): al cambiar el campo del que
+    // dependen —a mano, por la contraparte o por «Cargar desde…»— el valor que
+    // dejó de aplicar se ajusta solo (método PPD → forma de pago 99) y viaja así
+    // en el alta, no solo en el diálogo de timbrado.
+    useEffect(() => {
+        const fixes = gatedOptionFixes(allFields, header)
+        if (Object.keys(fixes).length > 0) setHeader((h) => ({ ...h, ...gatedOptionFixes(allFields, h) }))
+    }, [allFields, header])
 
     // Contraparte: tarjeta + defaults de las extensiones con la misma clave.
     const partyId = type.party ? header[type.party.field] : undefined
@@ -579,7 +590,7 @@ export function DocumentEditor({
                 <FieldLabel htmlFor={field.key} required={field.required}>
                     {tl(field.label)}
                 </FieldLabel>
-                {renderField(withFriendlyOptions(field), header[field.key], (v: any) => updateField(field.key, v), header, fieldRecord, fieldErrors)}
+                {renderField(withFriendlyOptions(gatedOptions(field, header)), header[field.key], (v: any) => updateField(field.key, v), header, fieldRecord, fieldErrors)}
                 {fieldErrors[field.key] && <p className="mt-1 text-xs text-destructive">{fieldErrors[field.key]}</p>}
             </FieldCell>
         ) : null
