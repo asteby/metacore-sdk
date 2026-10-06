@@ -89,6 +89,14 @@ export interface DocumentFormType {
     endpoint?: string
     /** Texto del botón final. Default «Crear». */
     submit_label?: string
+    /**
+     * `wizard` (default: Datos → Siguiente → Renglones) o `editor`: UNA pantalla
+     * por secciones (contraparte, origen, renglones o reparto, totales, «Opciones
+     * fiscales» plegadas, vista previa opcional). Ver DocumentEditor.
+     */
+    layout?: 'wizard' | 'editor'
+    /** Contraparte del documento (cliente / proveedor). Solo `layout: editor`. */
+    party?: DocumentFormParty
     /** «Cargar desde…»: documentos origen cuyos renglones se copian. */
     sources?: DocumentFormSource[]
     /** Vista previa / validación previa (acción del modelo con `analyze: true`). */
@@ -99,6 +107,20 @@ export interface DocumentFormType {
      * reparte el pago en PaymentAllocation dentro de una transacción.
      */
     submit_action?: string
+}
+
+/** Contraparte: qué campo del encabezado la elige y qué muestra su tarjeta. */
+export interface DocumentFormParty {
+    /** Campo del encabezado (dynamic_select) con el id. P. ej. `customer_id`. */
+    field: string
+    /** Modelo de la contraparte. P. ej. `customers.Customer`. */
+    model: string
+    /** Endpoint de lectura. Default `/data/<model>`. */
+    endpoint?: string
+    /** Columnas de la tarjeta; además se muestran las extensiones `fiscal_data.*`. */
+    summary?: string[]
+    /** Columnas de crédito/saldo (si existen en el modelo). */
+    credit?: { limit?: string; balance?: string; overdue?: string; hold_reason?: string }
 }
 
 /** Un documento origen para «Cargar desde…». */

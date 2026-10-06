@@ -1,0 +1,5 @@
+---
+"@asteby/metacore-runtime-react": minor
+---
+
+`DocumentEditor`: alta de documentos en una sola pantalla por secciones cuando el tipo de `document_forms` declara `layout: "editor"` (factura, nota de crédito, cobro/REP, cotización, OC). A la vista solo lo esencial (contraparte con su tarjeta, «Cargar desde…», renglones o reparto del pago, totales); los campos fiscales (`fiscal_data.*`, catálogos con default, contribuciones `header.fields`) van en «Opciones fiscales», plegada por defecto, y la vista previa también es opcional y plegada. Una sola acción primaria. Prefill desde el documento origen (`sources`, `initialSource`, `default_from_record` vía la nueva prop `record`) y validación inline. `lines.kind: "allocation"` reparte el cobro con `PaymentAllocator` (del más vencido o manual, con parcialidad) y guarda por `submit_action`. Nuevos exports: `DocumentEditor`, `PaymentAllocator`, `PartyCard`, `TotalsPanel`, `ValidationChecklist`, `PreviewPanel`, `CollapsibleSection`, `EditorSection` y las reglas puras de `document-editor-model`. Sin `layout: "editor"` el wizard sigue igual.

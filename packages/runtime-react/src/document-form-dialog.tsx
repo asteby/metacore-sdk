@@ -44,11 +44,11 @@ import { clearFieldErrorTree } from './field-validation-ui'
 import { emitRecordMutation } from './record-mutation-events'
 import { isLineItemsField, resolveWidget } from './dynamic-form-schema'
 import { createCatalogProductSearch } from './business/catalog-product-search'
+import { DocumentEditor } from './business/document-editor'
+import { editorLinesConfig, isEditorLayout } from './business/document-editor-model'
 import type {
     ActionFieldDef,
-    DocumentFormLines,
     DocumentFormsManifest,
-    DocumentFormType,
     TableMetadata,
 } from './types'
 
@@ -75,6 +75,13 @@ export interface DocumentFormDialogProps {
     defaultTaxRate?: number
     /** Moneda ISO para el editor de renglones (default: la de la org). */
     currency?: string
+    /**
+     * Registro desde el que se abre (acción de fila «Crear NC», «Registrar
+     * cobro»…): siembra los campos con `default_from_record`.
+     */
+    record?: Record<string, any>
+    /** Documento origen a precargar en el DocumentEditor (`sources[].key` + id). */
+    initialSource?: { key: string; id: string }
 }
 
 /** Manifest efectivo: la prop gana sobre el metadata; sin tipos devuelve undefined. */
@@ -86,11 +93,6 @@ export function resolveDocumentForms(
     return m && Array.isArray(m.types) && m.types.length > 0 ? m : undefined
 }
 
-function linesConfig(type: DocumentFormType, forms: DocumentFormsManifest): (DocumentFormLines & { field: string }) | undefined {
-    if (!type.lines) return undefined
-    const cfg: DocumentFormLines = type.lines === true ? {} : type.lines
-    return { ...cfg, field: cfg.field ?? forms.lines_field ?? 'lines' }
-}
 
 type Step = 'type' | 'fields' | 'lines'
 
@@ -106,6 +108,8 @@ export function DocumentFormDialog({
     productModel,
     defaultTaxRate,
     currency,
+    record,
+    initialSource,
 }: DocumentFormDialogProps) {
     const { t, i18n } = useTranslation()
     const api = useApi()
@@ -131,7 +135,7 @@ export function DocumentFormDialog({
         () => searchProducts ?? createCatalogProductSearch(api, { model: productModel, defaultTaxRate: taxRate }),
         [searchProducts, api, productModel, taxRate],
     )
-    const lineCfg = type ? linesConfig(type, forms) : undefined
+    const lineCfg = type ? editorLinesConfig(type, forms) : undefined
 
     // Reset every time the dialog (re)opens.
     useEffect(() => {
@@ -148,10 +152,10 @@ export function DocumentFormDialog({
     // Seed field defaults for the chosen type.
     useEffect(() => {
         if (!type) return
-        setFormData({ ...buildFieldDefaults(type.fields, undefined), ...(type.defaults ?? {}) })
+        setFormData({ ...buildFieldDefaults(type.fields, record), ...(type.defaults ?? {}) })
         setFieldErrors({})
         setFormError(undefined)
-    }, [type])
+    }, [type, record])
 
     const updateField = (key: string, value: any) => {
         setFormData((prev) => ({ ...prev, [key]: value }))
@@ -251,6 +255,41 @@ export function DocumentFormDialog({
             : s === 'fields'
               ? t('documentForm.step_data', { defaultValue: 'Datos' })
               : tl(lineCfg?.title ?? 'Renglones')
+
+    // layout "editor": una sola pantalla por secciones (DocumentEditor). Sin él
+    // sigue el wizard de siempre (retrocompatible).
+    if (open && type && step !== 'type' && isEditorLayout(type)) {
+        return (
+            <Dialog open={open} onOpenChange={onOpenChange}>
+                <DialogContent
+                    className="flex max-h-[92dvh] flex-col overflow-hidden"
+                    style={{ maxHeight: '92dvh', maxWidth: '960px', width: '95vw' }}
+                    data-slot="document-editor-dialog"
+                >
+                    <DialogHeader className="shrink-0">
+                        <DialogTitle>{tl(type.label)}</DialogTitle>
+                        {type.description && <DialogDescription>{tl(type.description)}</DialogDescription>}
+                    </DialogHeader>
+                    <DocumentEditor
+                        key={type.key}
+                        model={model}
+                        endpoint={endpoint}
+                        forms={forms}
+                        type={type}
+                        record={record}
+                        initialSource={initialSource}
+                        searchProducts={lineSearch}
+                        currency={currency}
+                        onCancel={() => (canGoBackToTypes ? setStep('type') : onOpenChange(false))}
+                        onSaved={(rec) => {
+                            onSaved?.(rec)
+                            onOpenChange(false)
+                        }}
+                    />
+                </DialogContent>
+            </Dialog>
+        )
+    }
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
