@@ -69,7 +69,7 @@ import { DynamicRelations } from './dynamic-relations'
 import { DynamicSelectField } from './dynamic-select-field'
 import { DynamicDateField } from './dynamic-date-field'
 import { UploadField } from './upload-field'
-import { isLineItemsField, resolveWidget, resolveDependsValue, getDependsOn, getFieldRef } from './dynamic-form-schema'
+import { isLineItemsField, resolveWidget, resolveDependsValue, getDependsOn, getFieldRef, applyOptionWhen } from './dynamic-form-schema'
 import { FieldGrid, FieldCell, FieldLabel } from './field-grid'
 import { useMetadataCache } from './metadata-cache'
 import {
@@ -1752,15 +1752,24 @@ export function renderField(
     switch (widget) {
         case 'textarea':
             return <Textarea id={field.key} value={value || ''} onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onChange(e.target.value)} placeholder={field.placeholder} aria-invalid={invalid || undefined} className={invalidCls || undefined} />
-        case 'select':
+        case 'select': {
+            // Opciones condicionadas por un campo hermano (`options[].when`, p. ej.
+            // forma de pago «99» solo con método PPD): solo se ofrecen las que
+            // aplican, y un valor ya elegido que dejó de aplicar se marca en el
+            // acto (el validador y el kernel lo rechazan como invalid_option).
+            const options = formValues ? applyOptionWhen(field.options, formValues, getDependsOn(field)) : field.options ?? []
+            const stale = !!value && !options.some((o) => String(o.value) === String(value))
+            const selectInvalid = invalid || stale
+            const selectCls = selectInvalid ? 'border-destructive ring-1 ring-destructive/30 focus-visible:ring-destructive' : ''
             return (
-                <Select value={value || ''} onValueChange={onChange}>
-                    <SelectTrigger className={'w-full' + (invalidCls ? ` ${invalidCls}` : '')} aria-invalid={invalid || undefined}><SelectValue placeholder={field.placeholder || 'Seleccionar...'} /></SelectTrigger>
+                <Select value={stale ? '' : value || ''} onValueChange={onChange}>
+                    <SelectTrigger className={'w-full' + (selectCls ? ` ${selectCls}` : '')} aria-invalid={selectInvalid || undefined} data-stale-option={stale || undefined}><SelectValue placeholder={field.placeholder || 'Seleccionar...'} /></SelectTrigger>
                     <SelectContent>
-                        {field.options?.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
+                        {options.map((opt) => <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>)}
                     </SelectContent>
                 </Select>
             )
+        }
         case 'switch':
             return <Switch id={field.key} checked={!!value} onCheckedChange={onChange} />
         case 'number':
