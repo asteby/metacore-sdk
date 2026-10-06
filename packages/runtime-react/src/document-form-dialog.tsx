@@ -43,7 +43,7 @@ import { validateValues, bagHasErrors } from './validator'
 import { clearFieldErrorTree } from './field-validation-ui'
 import { emitRecordMutation } from './record-mutation-events'
 import { isLineItemsField, resolveWidget, scopeValueFromFilterToken } from './dynamic-form-schema'
-import { createCatalogProductSearch } from './business/catalog-product-search'
+import { createCatalogProductSearch, withDefaultTaxRate } from './business/catalog-product-search'
 import { DocumentEditor } from './business/document-editor'
 import { editorLinesConfig, isEditorLayout } from './business/document-editor-model'
 import type {
@@ -149,10 +149,14 @@ export function DocumentFormDialog({
     const type = useMemo(() => types.find((x) => x.key === typeKey) ?? null, [types, typeKey])
     // Sin buscador inyectado, el paso de renglones solo ofrecía «Renglón libre»
     // y la línea entraba sin precio (DynamicCRUDPage no pasa searchProducts).
-    // Default: el catálogo de productos de la org.
+    // Default: el catálogo de productos de la org. El buscador del host también
+    // recibe el IVA de la org para los productos que no traen su tasa.
     const taxRate = defaultTaxRate ?? orgTaxRate
     const lineSearch = useMemo(
-        () => searchProducts ?? createCatalogProductSearch(api, { model: productModel, defaultTaxRate: taxRate }),
+        () =>
+            searchProducts
+                ? withDefaultTaxRate(searchProducts, taxRate)
+                : createCatalogProductSearch(api, { model: productModel, defaultTaxRate: taxRate }),
         [searchProducts, api, productModel, taxRate],
     )
     const lineCfg = type ? editorLinesConfig(type, forms) : undefined

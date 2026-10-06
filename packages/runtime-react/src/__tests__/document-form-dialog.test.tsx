@@ -207,6 +207,46 @@ describe('DocumentFormDialog: buscador de catálogo por defecto', () => {
     })
 })
 
+// Retest Pitsline 2026-10-05 (FAC-00013): el buscador de ops no trae tasa y el
+// renglón entraba sin IVA; el producto sin tasa toma la de la org.
+describe('DocumentFormDialog: IVA de la org con el buscador del host', () => {
+    it('producto sin tasa → IVA de la org; con tasa propia → la suya', async () => {
+        const searchProducts = vi.fn(async () => [
+            { id: 'p1', name: 'Llanta host', price: 200 },
+            { id: 'p2', name: 'Frontera host', price: 100, tax_rate: 0.08 },
+        ])
+        const post = vi.fn().mockResolvedValue({ data: { success: true, data: { id: 'inv-1' } } })
+        const client = { get: vi.fn(), post, put: vi.fn(), delete: vi.fn() } as unknown as ApiClient
+        render(
+            <ApiProvider client={client}>
+                <OrgRuntimeProvider taxRate={0.16}>
+                    <DocumentFormDialog
+                        open
+                        onOpenChange={vi.fn()}
+                        model="customers.Invoice"
+                        forms={{ ...forms, lines_field: 'items', types: [forms.types[0]] }}
+                        searchProducts={searchProducts as any}
+                    />
+                </OrgRuntimeProvider>
+            </ApiProvider>,
+        )
+        fireEvent.change(document.querySelectorAll('input')[0], { target: { value: 'ACME' } })
+        fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
+        const search = await screen.findByLabelText('Buscar producto')
+        fireEvent.change(search, { target: { value: 'host' } })
+        fireEvent.click(await waitFor(() => screen.getByRole('button', { name: /Llanta host/ }), { timeout: 2000 }))
+        fireEvent.change(await screen.findByLabelText('Buscar producto'), { target: { value: 'fron' } })
+        fireEvent.click(await waitFor(() => screen.getByRole('button', { name: /Frontera host/ }), { timeout: 2000 }))
+        fireEvent.click(screen.getByRole('button', { name: 'Crear' }))
+        await waitFor(() => expect(post).toHaveBeenCalled())
+        const body = post.mock.calls[0][1] as any
+        expect(body.items).toEqual([
+            expect.objectContaining({ product_id: 'p1', quantity: 1, unit_price: 200, tax_rate: 0.16 }),
+            expect.objectContaining({ product_id: 'p2', quantity: 1, unit_price: 100, tax_rate: 0.08 }),
+        ])
+    })
+})
+
 describe('resolveDocumentForms', () => {
     it('sin manifest (o sin tipos) devuelve undefined: el alta genérica sigue igual', () => {
         expect(resolveDocumentForms(null)).toBeUndefined()

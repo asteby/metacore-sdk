@@ -338,8 +338,45 @@ function defaultFromRecordSpec(field: ActionFieldDef): string | string[] | undef
     return f.defaultFromRecord ?? f.default_from_record
 }
 
-/** Scalar seed for one action field from the row being acted on. */
-export function scalarDefaultFromRecord(field: ActionFieldDef, record: any): unknown {
+/** `customers.Invoice`, `Invoice`, `invoices`, `sales_orders` → forma comparable. */
+function modelToken(m: string): string {
+    const last = m.split('.').pop() ?? m
+    return last.replace(/[^a-z0-9]/gi, '').toLowerCase()
+}
+
+/**
+ * ¿`ref` (FK de un campo) apunta al modelo `model` de la fila? Tolera prefijo de
+ * addon, PascalCase vs tabla y el plural de la tabla (`Invoice` ↔ `invoices`,
+ * `CustomerAddress` ↔ `customer_addresses`).
+ */
+export function refTargetsModel(ref: string | undefined | null, model: string | undefined | null): boolean {
+    if (!ref || !model) return false
+    const a = modelToken(ref)
+    const b = modelToken(model)
+    if (!a || !b) return false
+    return a === b || a + 's' === b || a + 'es' === b || b + 's' === a || b + 'es' === a
+}
+
+function fieldRef(field: ActionFieldDef): string | undefined {
+    if (field.ref) return field.ref
+    const opts = (field as { options?: unknown }).options
+    if (opts && !Array.isArray(opts) && typeof opts === 'object') {
+        const src = (opts as { source?: unknown }).source
+        if (typeof src === 'string' && src) return src
+    }
+    return undefined
+}
+
+/**
+ * Scalar seed for one action field from the row being acted on.
+ *
+ * Sin `default_from_record` declarado, un campo se siembra con la columna
+ * homónima de la fila; y un selector que apunta al MISMO modelo de la fila y
+ * que la fila no tiene como columna (`invoice_id` → Invoice en «Registrar pago»
+ * de una factura) se siembra con el id de esa fila: la acción se abrió desde
+ * ella (retest Pitsline 2026-10-05).
+ */
+export function scalarDefaultFromRecord(field: ActionFieldDef, record: any, model?: string): unknown {
     if (!record) return undefined
     const spec = defaultFromRecordSpec(field)
     if (typeof spec === 'string') {
@@ -353,6 +390,12 @@ export function scalarDefaultFromRecord(field: ActionFieldDef, record: any): unk
     } else if (field.key) {
         const v = readRecordPath(record, field.key)
         if (v !== undefined && v !== null && v !== '') return v
+        // Sólo si la fila NO tiene esa columna: un `parent_id` vacío de una
+        // categoría es «sin padre», no «yo mismo».
+        const id = unwrapRecordScalar(record.id)
+        if (!(field.key in record) && id !== undefined && id !== null && id !== '' && refTargetsModel(fieldRef(field), model)) {
+            return id
+        }
     }
     return undefined
 }
@@ -1016,11 +1059,11 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
 
     useEffect(() => {
         if (open && action.fields) {
-            setFormData(buildFieldDefaults(action.fields, record))
+            setFormData(buildFieldDefaults(action.fields, record, model))
             setFieldErrors({})
             setFormError(undefined)
         }
-    }, [open, action.fields, record])
+    }, [open, action.fields, record, model])
 
     // Lines the list row does not carry: load them from the declared relation
     // (see prefillRelationRequests) and seed the line-items grid.
@@ -1314,7 +1357,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
 // buildFieldDefaults seeds formData for a set of action fields, honoring the
 // same line-items prefill spec + boolean/empty rules GenericActionModal uses, so
 // wizard steps and single-page forms initialize identically.
-export function buildFieldDefaults(fields: ActionFieldDef[], record: any): Record<string, any> {
+export function buildFieldDefaults(fields: ActionFieldDef[], record: any, model?: string): Record<string, any> {
     const defaults: Record<string, any> = {}
     for (const field of fields) {
         if (isLineItemsField(field)) {
@@ -1326,7 +1369,7 @@ export function buildFieldDefaults(fields: ActionFieldDef[], record: any): Recor
                   : []
             continue
         }
-        const fromRecord = scalarDefaultFromRecord(field, record)
+        const fromRecord = scalarDefaultFromRecord(field, record, model)
         if (fromRecord !== undefined && fromRecord !== null && fromRecord !== '') {
             defaults[field.key] = fromRecord
             continue
@@ -1374,10 +1417,10 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
     useEffect(() => {
         if (!open) return
         const allFields = steps.flatMap((s) => s.fields ?? [])
-        setFormData(buildFieldDefaults(allFields, record))
+        setFormData(buildFieldDefaults(allFields, record, model))
         setStepIndex(0)
         setFormError(undefined)
-    }, [open, action.steps, record])
+    }, [open, action.steps, record, model])
 
     const updateField = (key: string, value: any) =>
         setFormData((prev: Record<string, any>) => ({ ...prev, [key]: value }))
