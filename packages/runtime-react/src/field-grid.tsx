@@ -42,14 +42,28 @@ export function FieldCell({
 export function FieldLabel({
     htmlFor,
     required,
+    tone = 'caps',
     children,
 }: {
     htmlFor?: string
     required?: boolean
+    /**
+     * `caps` (default): small uppercase eyebrow of the CRUD modals. `sentence`:
+     * sentence-case label for dense editors (DocumentEditor) where a column of
+     * uppercase labels reads as shouting.
+     */
+    tone?: 'caps' | 'sentence'
     children: ReactNode
 }) {
     return (
-        <Label htmlFor={htmlFor} className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <Label
+            htmlFor={htmlFor}
+            className={
+                tone === 'sentence'
+                    ? 'text-sm font-medium text-foreground/80'
+                    : 'text-xs font-medium uppercase tracking-wide text-muted-foreground'
+            }
+        >
             {children}
             {required && <span className="ml-0.5 text-destructive">*</span>}
         </Label>

@@ -20,7 +20,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@asteby/metacore-ui/primitives'
-import { Loader2 } from 'lucide-react'
+import { Loader2, ReceiptText } from 'lucide-react'
 import { toast } from 'sonner'
 import { useApi } from '../api-context'
 import { useOrgTaxRate, useTimeZone } from '../org-runtime-context'
@@ -584,10 +584,10 @@ export function DocumentEditor({
     }
 
     const fieldRecord = useMemo(() => seedRecord(seeds, record), [seeds, record])
-    const fieldCell = (field: ActionFieldDef, fullWidth = false) =>
+    const fieldCell = (field: ActionFieldDef, fullWidth = false, className?: string) =>
         visible(field) ? (
-            <FieldCell key={field.key} fullWidth={fullWidth}>
-                <FieldLabel htmlFor={field.key} required={field.required}>
+            <FieldCell key={field.key} fullWidth={fullWidth} className={className}>
+                <FieldLabel htmlFor={field.key} required={field.required} tone="sentence">
                     {tl(field.label)}
                 </FieldLabel>
                 {renderField(withFriendlyOptions(gatedOptions(field, header)), header[field.key], (v: any) => updateField(field.key, v), header, fieldRecord, fieldErrors)}
@@ -641,10 +641,14 @@ export function DocumentEditor({
 
     const essentials = (
         <EditorSection slot="editor-essentials">
-            <FieldGrid>
-                {groups.party && fieldCell(groups.party)}
-                {groups.essential.map((f) => fieldCell(f))}
-            </FieldGrid>
+            {/* Contraparte + fechas + condiciones en un bloque: tres columnas cuando
+                el contenedor lo permite (la contraparte ocupa dos), una en móvil. */}
+            <div className="@container rounded-xl border bg-card/40 p-4">
+                <FieldGrid className="gap-x-4 @2xl:grid-cols-3">
+                    {groups.party && fieldCell(groups.party, false, '@2xl:col-span-2')}
+                    {groups.essential.map((f) => fieldCell(f))}
+                </FieldGrid>
+            </div>
             {party && (
                 <PartyCard name={party.name ?? party.legal_name} rows={summaryRows} credit={credit} fmt={fmt}>
                     {partyContribs.map(({ id, component: C }) => (
@@ -659,14 +663,18 @@ export function DocumentEditor({
         <EditorSection
             slot="load-from-source"
             title={t('documentEditor.load_from', { defaultValue: 'Cargar desde…' })}
-            hint={busy === 'source' ? t('documentEditor.loading_source', { defaultValue: 'Cargando…' }) : sourceNote}
+            hint={
+                busy === 'source'
+                    ? t('documentEditor.loading_source', { defaultValue: 'Cargando…' })
+                    : sourceNote ?? (sourceId ? undefined : t('documentEditor.load_from_hint', { defaultValue: 'Opcional · precarga contraparte y renglones' }))
+            }
         >
             <div className="flex flex-wrap items-center gap-2">
                 {sources.length > 1 && (
                     <div
                         role="radiogroup"
                         aria-label={t('documentEditor.source_kind', { defaultValue: 'Documento de origen' })}
-                        className="inline-flex flex-wrap gap-1 rounded-md border p-1"
+                        className="inline-flex h-9 shrink-0 items-center gap-0.5 rounded-md border bg-muted/40 p-0.5"
                     >
                         {sources.map((s) => (
                             <button
@@ -679,13 +687,23 @@ export function DocumentEditor({
                                     setSourceKey(s.key)
                                     setSourceId('')
                                 }}
-                                className={`rounded px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                                    s.key === sourceKey ? 'bg-primary/10 font-medium text-primary' : 'text-muted-foreground hover:bg-accent'
+                                className={`h-full rounded-sm px-3 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
+                                    s.key === sourceKey
+                                        ? 'bg-background font-medium text-foreground shadow-xs dark:bg-input/60'
+                                        : 'text-muted-foreground hover:text-foreground'
                                 }`}
                             >
                                 {tl(s.label)}
                             </button>
                         ))}
+                    </div>
+                )}
+                {!activeSource && (
+                    <div
+                        className="flex h-9 min-w-60 flex-1 items-center rounded-md border border-dashed px-3 text-sm text-muted-foreground"
+                        data-slot="source-picker-empty"
+                    >
+                        {t('documentEditor.pick_source_kind', { defaultValue: 'Elige el tipo de documento para buscarlo' })}
                     </div>
                 )}
                 {activeSource && (
@@ -707,7 +725,19 @@ export function DocumentEditor({
         </EditorSection>
     )
 
-    const totalsPanel = <TotalsPanel rows={totalsRows} />
+    // Sin renglones todavía: un estado vacío amable en vez de $0.00 en cada fila.
+    const noLines = !isAllocation && !!lineCfg && lines.length === 0
+    const totalsPanel = noLines ? (
+        <TotalsPanel rows={totalsRows.filter((r) => r.emphasis)} muted />
+    ) : (
+        <TotalsPanel rows={totalsRows} />
+    )
+    const totalsEmpty = noLines && (
+        <div className="flex items-start gap-3 text-sm text-muted-foreground" data-slot="totals-empty">
+            <ReceiptText className="mt-0.5 size-4 shrink-0" aria-hidden />
+            <p>{t('documentEditor.totals_empty', { defaultValue: 'Aún no hay renglones. Busca un producto en la tabla para ver el desglose.' })}</p>
+        </div>
+    )
 
     const linesSection = lineCfg && (
         <EditorSection
@@ -751,6 +781,7 @@ export function DocumentEditor({
                     policy={kind === 'credit' ? { allowZeroQuantity: linesFromSourceDoc } : undefined}
                     search={search}
                     currency={currency}
+                    showTotals={false}
                 />
             )}
             {!fullscreen && totalsPanel}
@@ -817,13 +848,26 @@ export function DocumentEditor({
         </CollapsibleSection>
     ) : null
 
+    const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || '')
     const checklist = <ValidationChecklist issues={shownIssues} title={t('documentEditor.review', { defaultValue: 'Revisa antes de guardar' })} />
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col" data-slot="document-editor" data-kind={kind} data-layout={fullscreen ? 'fullscreen' : 'dialog'}>
+        <div
+            className="flex min-h-0 flex-1 flex-col"
+            data-slot="document-editor"
+            data-kind={kind}
+            data-layout={fullscreen ? 'fullscreen' : 'dialog'}
+            onKeyDown={(e) => {
+                // ⌘/Ctrl+Enter guarda desde cualquier campo del editor.
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && busy === null) {
+                    e.preventDefault()
+                    void submit()
+                }
+            }}
+        >
             {fullscreen ? (
-                <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 py-2 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-8">
-                    <div className="min-w-0 space-y-8" data-slot="editor-main">
+                <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 py-2 lg:grid lg:grid-cols-[minmax(0,1fr)_320px] lg:gap-6">
+                    <div className="min-w-0 space-y-6" data-slot="editor-main">
                         <FormErrorBanner message={formError} />
                         {essentials}
                         {loadFrom}
@@ -832,14 +876,17 @@ export function DocumentEditor({
                         {contributedSections}
                         {notes}
                     </div>
-                    <aside className="mt-8 space-y-6 lg:sticky lg:top-0 lg:mt-0 lg:self-start" data-slot="editor-aside">
-                        <div className="rounded-lg border p-4">{totalsPanel}</div>
+                    <aside className="mt-6 space-y-4 lg:sticky lg:top-0 lg:mt-0 lg:self-start" data-slot="editor-aside">
+                        <div className="space-y-3 rounded-xl border bg-card/40 p-4">
+                            {totalsEmpty}
+                            {totalsPanel}
+                        </div>
                         {checklist}
                         {previewSection}
                     </aside>
                 </div>
             ) : (
-                <div className="-mx-1 min-h-0 flex-1 space-y-8 overflow-y-auto px-1 py-2">
+                <div className="-mx-1 min-h-0 flex-1 space-y-6 overflow-y-auto px-1 py-2">
                     <FormErrorBanner message={formError} />
                     {essentials}
                     {loadFrom}
@@ -853,6 +900,11 @@ export function DocumentEditor({
             )}
 
             <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t pt-4" data-slot="editor-actions">
+                <span className="mr-auto hidden items-center gap-1 text-xs text-muted-foreground sm:inline-flex" data-slot="editor-shortcut">
+                    <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[0.7rem]">{isMac ? '⌘' : 'Ctrl'}</kbd>
+                    <kbd className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[0.7rem]">Enter</kbd>
+                    <span>{t('documentEditor.shortcut_save', { defaultValue: 'para guardar' })}</span>
+                </span>
                 {footerContribs.map(({ id, component: C }) => (
                     <C key={id} {...contribProps} />
                 ))}
@@ -897,7 +949,7 @@ function SourcePicker({
         [source, label],
     )
     return (
-        <div className="min-w-[240px] flex-1" data-source={source.key}>
+        <div className="min-w-60 flex-1" data-source={source.key}>
             {renderField(field, value, (v: any) => onPick(v == null || v === '' ? '' : String(v)), header, seed ? { id: seed.value, label: seed.label } : undefined)}
         </div>
     )

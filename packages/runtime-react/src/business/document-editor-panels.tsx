@@ -14,8 +14,8 @@ export function EditorSection({ title, hint, children, slot }: { title?: ReactNo
     return (
         <section className="space-y-3" data-slot={slot}>
             {(title || hint) && (
-                <header className="flex items-baseline justify-between gap-3">
-                    {title && <h3 className="text-sm font-semibold">{title}</h3>}
+                <header className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    {title && <h3 className="whitespace-nowrap text-sm font-semibold">{title}</h3>}
                     {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
                 </header>
             )}
@@ -49,13 +49,13 @@ export function CollapsibleSection({ title, summary, open, defaultOpen = false, 
         onOpenChange?.(!isOpen)
     }
     return (
-        <section className="rounded-lg border border-dashed" data-slot={slot} data-state={isOpen ? 'open' : 'closed'}>
+        <section className="rounded-xl border border-dashed" data-slot={slot} data-state={isOpen ? 'open' : 'closed'}>
             <button
                 type="button"
                 aria-expanded={isOpen}
                 aria-controls={id}
                 onClick={toggle}
-                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm"
+                className="flex w-full items-center justify-between gap-3 rounded-xl px-4 py-3 text-left text-sm transition-colors hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             >
                 <span className="font-medium">{title}</span>
                 <span className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
@@ -81,7 +81,7 @@ export interface PartyCardProps {
 /** Tarjeta compacta de la contraparte: nombre, 3-6 datos clave y estado de crédito. */
 export function PartyCard({ name, rows, credit, fmt, children }: PartyCardProps) {
     return (
-        <div className="rounded-md bg-muted/40 px-4 py-3 text-sm" data-slot="party-card">
+        <div className="rounded-lg bg-muted/40 px-4 py-3 text-sm" data-slot="party-card">
             <div className="flex flex-wrap items-center justify-between gap-2">
                 {name && <span className="font-medium">{name}</span>}
                 {credit && (
@@ -116,11 +116,14 @@ export interface TotalsRow {
 }
 
 /** Totales alineados a la derecha; la última fila con `emphasis` es el total. */
-export function TotalsPanel({ rows }: { rows: TotalsRow[] }) {
+export function TotalsPanel({ rows, muted = false }: { rows: TotalsRow[]; muted?: boolean }) {
     return (
-        <dl className="ml-auto w-full max-w-xs space-y-1 text-sm tabular-nums" data-slot="totals">
-            {rows.map((r) => (
-                <div key={r.label} className={`flex justify-between gap-6 ${r.emphasis ? 'border-t pt-2 text-base font-semibold' : ''}`}>
+        <dl className={`ml-auto w-full max-w-xs space-y-1.5 text-sm tabular-nums ${muted ? 'text-muted-foreground' : ''}`} data-slot="totals">
+            {rows.map((r, i) => (
+                <div
+                    key={r.label}
+                    className={`flex items-baseline justify-between gap-6 ${r.emphasis ? `${i > 0 ? 'border-t pt-2.5' : ''} text-lg font-semibold` : ''}`}
+                >
                     <dt className={r.emphasis ? '' : 'text-muted-foreground'}>{r.label}</dt>
                     <dd>{r.value}</dd>
                 </div>
@@ -137,7 +140,7 @@ export function ValidationChecklist({ issues, title = 'Revisa antes de guardar' 
             <p className="mb-1 text-xs font-medium text-muted-foreground">{title}</p>
             <ul className="space-y-1 text-sm">
                 {issues.map((i, k) => (
-                    <li key={`${i.field ?? ''}:${k}`} className={`flex items-start gap-2 ${i.severity === 'error' ? 'text-destructive' : 'text-amber-700'}`}>
+                    <li key={`${i.field ?? ''}:${k}`} className={`flex items-start gap-2 ${i.severity === 'error' ? 'text-destructive' : 'text-amber-700 dark:text-amber-400'}`}>
                         {i.severity === 'error' ? <XCircle className="mt-0.5 size-4 shrink-0" aria-hidden /> : <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden />}
                         {i.message}
                     </li>
