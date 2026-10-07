@@ -475,8 +475,33 @@ export type { DynamicRecordDialogProps, FieldDef, FieldOption, GetImageUrl } fro
 export { CreateRecordDialog } from './dialogs/create-record-dialog'
 export { EntitySelect } from './entity-select'
 export type { EntitySelectProps, EntitySelectOption } from './entity-select'
-export { RecordPickerAction, PickerCreateItem, JOINED_TRIGGER_CLASS, hasRecordPickerAction } from './record-picker-actions'
-export type { RecordPickerActionProps } from './record-picker-actions'
+// RecordPicker — the ONE "pick a related record" control (search, single /
+// multiple, create / edit, rich options, field / cell, portaled list). Every
+// picker above (DynamicSelectField, EntitySelect, Customer/Product/Vehicle
+// pickers, LineProductCell) is a thin configuration of it.
+export { RecordPicker, useRecordSearch, useLatestSearch, RECORD_PICKER_Z_INDEX } from './record-picker'
+export type {
+    RecordPickerProps,
+    RecordPickerItemState,
+    RecordPickerVariant,
+    RecordPickerTrigger,
+    UseRecordSearchOptions,
+    UseRecordSearchResult,
+} from './record-picker'
+export {
+    RecordPickerAction,
+    PickerCreateItem,
+    JOINED_TRIGGER_CLASS,
+    hasRecordPickerAction,
+    requestRecordCreate,
+    requestRecordEdit,
+    recordLabel,
+    withSearchPrefill,
+} from './record-picker-actions'
+export type { RecordPickerActionProps, RecordCreateRequest, RecordEditRequest } from './record-picker-actions'
+export { useRecordPickerDialog } from './record-picker-dialog'
+export type { UseRecordPickerDialogOptions, UseRecordPickerDialogResult } from './record-picker-dialog'
+export { OptionLead, OptionThumb } from './record-picker-option'
 export { ViewRecordDialog } from './dialogs/view-record-dialog'
 export type {
     ModelKey,

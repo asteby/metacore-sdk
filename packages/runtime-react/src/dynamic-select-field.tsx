@@ -1,4 +1,5 @@
 // DynamicSelectField — async, searchable single-select for declarative forms.
+// A configuration of the shared <RecordPicker> (record-picker.tsx).
 //
 // This is the declarative answer to "I don't want to type a raw FK UUID".
 // Instead of a plain <select> that dumps every option (RefSelect) or a free
@@ -24,28 +25,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { getOptionFilter } from './option-filter'
 import { useTranslation } from 'react-i18next'
-import {
-    Badge,
-    Button,
-    Command,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-    InitialsAvatar,
-} from '@asteby/metacore-ui/primitives'
-import { Check, ChevronsUpDown, Loader2, ScanLine } from 'lucide-react'
-import { resolveColorCss } from '@asteby/metacore-ui/lib'
+import { Badge, Button } from '@asteby/metacore-ui/primitives'
+import { ScanLine } from 'lucide-react'
 import { BarcodeScanner } from './barcode-scanner'
-import { JOINED_TRIGGER_CLASS, PickerCreateItem, RecordPickerAction, hasRecordPickerAction } from './record-picker-actions'
-import { DynamicIcon, isLucideIconName } from './dynamic-icon'
-import { useDebouncedValue } from './use-debounced-value'
+import { RecordPicker } from './record-picker'
+import { OptionLead } from './record-picker-option'
+import { recordLabel, requestRecordCreate, requestRecordEdit, withSearchPrefill } from './record-picker-actions'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
+import { useDebouncedValue } from './use-debounced-value'
 import { getDependsOn, getFieldRef, resolveOptionsSource } from './dynamic-form-schema'
 import type { ActionFieldDef } from './types'
+
+export { OptionLead, OptionThumb } from './record-picker-option'
 
 /**
  * Default hint shown when a cascading picker's depended-on field is still
@@ -53,98 +44,6 @@ import type { ActionFieldDef } from './types'
  * `dependsHint`.
  */
 export const DEFAULT_DEPENDS_HINT = 'Selecciona primero el campo del que depende'
-
-/**
- * Small square thumbnail for an option's `image`. When the option has no image
- * it falls back to a deterministic initials avatar (shared `InitialsAvatar`)
- * derived from `name`, so an imageless reference reads as a colored badge rather
- * than an empty placeholder — and rows/triggers stay aligned. `size` is in
- * pixels (kept small — 20–24px — so the picker reads as a list, not a gallery).
- * Inline style for the box dimensions: arbitrary Tailwind classes from a
- * federated addon don't always survive the host's class scan.
- */
-export function OptionThumb({
-    image,
-    name,
-    size = 20,
-}: {
-    image?: string | null
-    name?: string | null
-    size?: number
-}) {
-    const [broken, setBroken] = useState(false)
-    const box = { width: size, height: size }
-    // Missing or 404 image (bare avatar filenames often 404) → initials, never
-    // an invisible box that looks like "no avatar".
-    if (!image || broken) {
-        return <InitialsAvatar name={name} size={size} rounded="sm" tone="neutral" />
-    }
-    // A lucide icon name stored where an image url/path is expected (the `icon`
-    // form widget's icon mode) → render the glyph instead of a broken <img>.
-    if (isLucideIconName(image)) {
-        return (
-            <span className="flex shrink-0 items-center justify-center rounded-sm bg-muted" style={box} aria-hidden>
-                <DynamicIcon name={image} className="size-4" />
-            </span>
-        )
-    }
-    return (
-        <img
-            src={image}
-            alt=""
-            aria-hidden
-            loading="lazy"
-            className="shrink-0 rounded-sm object-cover"
-            style={box}
-            onError={() => setBroken(true)}
-        />
-    )
-}
-
-/**
- * Leading visual for an option: a photo thumbnail (FK relations with an image),
- * else a declared icon, else a color dot (enum/status options with a color).
- * Returns null when the option carries none, so plain text options stay plain.
- */
-export function OptionLead({
-    option,
-    size = 20,
-}: {
-    option?: Pick<ResolvedOption, 'image' | 'color' | 'icon' | 'label'> | null
-    size?: number
-}) {
-    if (!option) return null
-    if (option.image) return <OptionThumb image={option.image} name={option.label} size={size} />
-    if (option.icon) {
-        return (
-            <span
-                className="flex shrink-0 items-center justify-center"
-                style={{ width: size, height: size, color: option.color ? resolveColorCss(option.color) : undefined }}
-                aria-hidden
-            >
-                <DynamicIcon name={option.icon} className="size-4" />
-            </span>
-        )
-    }
-    if (option.color) {
-        return (
-            <span
-                className="shrink-0 rounded-full"
-                style={{ width: Math.round(size * 0.5), height: Math.round(size * 0.5), background: resolveColorCss(option.color) }}
-                aria-hidden
-            />
-        )
-    }
-    // No image/icon/color: an imageless reference option. Show its initials
-    // (shared InitialsAvatar) so it stays visually aligned with the sibling
-    // options that DO carry a thumbnail, rather than a blank gap.
-    if (option.label) return <InitialsAvatar name={option.label} size={size} rounded="sm" tone="neutral" />
-    return null
-}
-
-function useDebounced<T>(value: T, ms: number): T {
-    return useDebouncedValue(value, ms)
-}
 
 export interface DynamicSelectFieldProps {
     field: ActionFieldDef
@@ -212,6 +111,12 @@ export interface DynamicSelectFieldProps {
     invalid?: boolean
 }
 
+/**
+ * Declarative `dynamic_select` (manifest `ref` / `optionsConfig.source`) on top
+ * of the shared {@link RecordPicker}: options from the canonical options
+ * endpoint (`useOptionsResolver`: option_filter, options[].when keep-value,
+ * cascade `filter_value`), inline create/edit through the host modal events.
+ */
 export function DynamicSelectField({
     field,
     value,
@@ -234,35 +139,28 @@ export function DynamicSelectField({
     const [open, setOpen] = useState(false)
     const [search, setSearch] = useState('')
     const [scanOpen, setScanOpen] = useState(false)
-    const debounced = useDebounced(search, 250)
+    const debounced = useDebouncedValue(search, 250)
 
     // Escaneo por cámara para "llenar rápido": opt-in por campo (`scan`). El
-    // botón aparece SIEMPRE que el campo lo declara (igual que el POS), sin
-    // esconderse por `isCameraScanSupported()` — en escritorio el botón no salía
-    // aunque el campo lo pidiera. El BarcodeScanner ya degrada con un mensaje
-    // cuando no hay cámara. Un código escaneado alimenta la búsqueda y abre el
-    // picker para elegir la referencia sin tipear el UUID.
+    // botón aparece SIEMPRE que el campo lo declara (igual que el POS). El
+    // BarcodeScanner ya degrada con un mensaje cuando no hay cámara. Un código
+    // escaneado alimenta la búsqueda y abre el picker.
     const scanEnabled = !!(field.scan ?? field.scannable)
     const handleScanDetected = (code: string) => {
         setSearch(code)
         setOpen(true)
     }
-    // Remember the label of the option the user actually picked so the trigger
-    // shows a name (not a UUID) without a round-trip.
+    // Remember the option the user actually picked so the trigger shows a name
+    // (not a UUID) without a round-trip.
     const [picked, setPicked] = useState<ResolvedOption | null>(null)
 
-    // Tolerate the snake_case `source`/`relation` aliases the kernel may serve
-    // for the FK target, not just camelCase `ref`.
+    // Tolerate the snake_case `source`/`relation` aliases for the FK target.
     const fieldRef = getFieldRef(field)
-
-    // Options routing: an `optionsConfig.source` (dependent/scoped picker) wins
-    // over the field's `ref` — query the SOURCE model with `field=<value>`;
-    // otherwise keep the canonical `ref`-based resolution.
+    // An `optionsConfig.source` (dependent/scoped picker) wins over `ref`.
     const source = resolveOptionsSource(field)
 
     // Cascade: a `dependsOn` field whose value is still empty leaves this
-    // picker disabled until the parent is set. `dependsValue` is the resolved
-    // value the caller threaded from the form context.
+    // picker disabled until the parent is set.
     const dependsOn = getDependsOn(field)
     const scope = dependsValue ? String(dependsValue) : ''
     const blockedByDependency = !!dependsOn && scope === ''
@@ -275,21 +173,15 @@ export function DynamicSelectField({
         fieldKey: source.fieldKey,
         ref: source.ref,
         // optionsConfig.source → `/options/<source>`. Else searchEndpoint only
-        // drives the URL when there's no ref — ref is the canonical,
-        // kernel-derived path and wins.
+        // drives the URL when there's no ref (ref is canonical and wins).
         endpoint: source.endpoint ?? (source.ref ? undefined : field.searchEndpoint),
         query: debounced,
         limit: 20,
-        // Cascade scope forwarded as filter_value (only when this field
-        // declares a dependency). Re-fetches when the parent value changes.
         filterValue: dependsOn ? scope : undefined,
         optionFilter,
         keepValue: value,
-        // Don't fetch until the popover opens (and keep fetching as the query
-        // changes while open). A picker blocked by an unset dependency never
-        // fetches. A readonly cell fetches eagerly so its value's label resolves
-        // to the name without the user ever opening it.
-        // Static lists never hit the network.
+        // Fetch only while open; a readonly cell fetches eagerly so its label
+        // resolves to the name. Blocked cascades and static lists never fetch.
         enabled: !useStatic && (open || readonly) && !blockedByDependency,
     })
 
@@ -305,8 +197,7 @@ export function DynamicSelectField({
         : fetchedOptions
     const loading = useStatic ? false : fetchLoading
 
-    // When the depended-on value changes, the previously-picked option no longer
-    // belongs to the new scope, so clear the selection (skip the initial mount).
+    // A new cascade scope invalidates the selection (skip the initial mount).
     const prevScopeRef = useRef<string>(scope)
     useEffect(() => {
         if (!dependsOn) return
@@ -317,20 +208,12 @@ export function DynamicSelectField({
         }
     }, [dependsOn, scope, value, onChange])
 
-    // The currently-selected option, resolved either from what the user picked
-    // (cached in `picked`) or from the loaded page. Drives both the trigger
-    // label and its thumbnail.
     const selectedOption =
         (picked && String(picked.id) === String(value) ? picked : null) ??
         options.find((o) => String(o.id) === String(value)) ??
         (seedOption && String(seedOption.id) === String(value) ? seedOption : null) ??
         null
-
     const selectedLabel = selectedOption?.label ?? (value ? String(value) : '')
-
-    // Only switch the picker into "with thumbnails" mode when the data actually
-    // carries images — a relation whose options have no `image` keeps the plain
-    // text list it had before (no empty placeholder column).
 
     const handlePick = (opt: ResolvedOption) => {
         setPicked(opt)
@@ -340,238 +223,130 @@ export function DynamicSelectField({
         setSearch('')
     }
 
-    // Inline-create: the "+" opens the REFERENCED model's own create modal (the
-    // real one the host renders for that model — full fields, not a duplicate),
-    // via a decoupled window event the host listens for. On success the host
-    // hands back the new record and we select it immediately. No host import →
-    // no circular dependency; works for ANY dynamic_select with a `ref`.
-    // Inline-edit: with a value selected the joined pencil opens THAT record's
-    // edit modal through the sibling `metacore:edit-record` event (the host's
-    // RecordCreateBridge already listens for it). On save the trigger label
-    // refreshes from the returned record.
+    const toOption = (id: string, label: string): ResolvedOption => ({ id, value: id, label, name: label })
+
+    // Inline create / edit: the REFERENCED model's real modal, rendered by the
+    // host (RecordCreateBridge) via decoupled window events — no host import.
+    const openCreate = (query: string) => {
+        if (!fieldRef) return
+        setOpen(false)
+        requestRecordCreate({
+            model: fieldRef,
+            // The searched text seeds the new record's name; explicit
+            // createDefaults win. Keys that aren't fields are ignored.
+            defaults: withSearchPrefill(query, 'name', createDefaults),
+            lockedFields: createLockedFields,
+            onCreated: (rec: any) => {
+                if (rec && rec.id != null) {
+                    const id = String(rec.id)
+                    handlePick(toOption(id, recordLabel(rec) ?? id))
+                }
+            },
+        })
+    }
     const openEdit = () => {
-        if (!fieldRef || !value || typeof window === 'undefined') return
+        if (!fieldRef || !value) return
         setOpen(false)
-        window.dispatchEvent(
-            new CustomEvent('metacore:edit-record', {
-                detail: {
-                    model: fieldRef,
-                    recordId: String(value),
-                    onSaved: (rec: any) => {
-                        const id = String(value)
-                        const label = rec ? rec.name ?? rec.label ?? rec.title : undefined
-                        if (label != null) setPicked({ ...(selectedOption ?? { id, value: id }), id, value: id, label: String(label), name: String(label) })
-                    },
-                },
-            }),
-        )
+        const id = String(value)
+        requestRecordEdit({
+            model: fieldRef,
+            recordId: id,
+            onSaved: (rec: any) => {
+                const label = recordLabel(rec)
+                if (label != null) setPicked({ ...(selectedOption ?? toOption(id, label)), id, value: id, label, name: label })
+            },
+        })
     }
 
-    const openCreate = () => {
-        if (!fieldRef || typeof window === 'undefined') return
-        setOpen(false)
-        window.dispatchEvent(
-            new CustomEvent('metacore:create-record', {
-                detail: {
-                    model: fieldRef,
-                    // Generic passthrough: the host's create modal seeds these
-                    // values and locks these fields (DynamicRecordDialog's own
-                    // defaults/lockedFields props). Undefined when unused.
-                    defaults: createDefaults,
-                    lockedFields: createLockedFields,
-                    onCreated: (rec: any) => {
-                        if (rec && rec.id != null) {
-                            const id = String(rec.id)
-                            const label = String(rec.name ?? rec.label ?? rec.title ?? rec.id)
-                            handlePick({ id, value: id, label, name: label })
-                        }
-                    },
-                },
-            }),
-        )
-    }
-
-    // Locked display: the value is fixed by context, so render the resolved
-    // label (name) as a disabled control — no popover, no inline-create. While
-    // the eager fetch is in flight the label falls back to the seed/raw value,
-    // then snaps to the name once options arrive.
-    if (readonly) {
-        return (
-            <Button
-                type="button"
-                variant="outline"
-                role="combobox"
-                id={field.key}
-                disabled
-                aria-readonly="true"
-                className="w-full min-w-0 cursor-default justify-start font-normal opacity-100"
-            >
-                <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                    {selectedOption ? <OptionLead option={selectedOption} size={20} /> : null}
-                    <span className={'min-w-0 flex-1 truncate ' + (selectedOption ? '' : 'text-muted-foreground')}>
-                        {/* Never flash the raw id: until the eager fetch resolves the
-                            option, show a loading hint instead of String(value). */}
-                        {selectedOption?.label ?? (loading ? 'Cargando…' : ph('—'))}
-                    </span>
-                </span>
-            </Button>
-        )
-    }
-
-    // w-full + min-w-0: as a grid cell child, the row must be allowed to shrink
-    // to the cell. Without min-w-0 the combobox+button row sizes to its content
-    // (the long empty-state placeholder) and overflows the column, pushing the
-    // "+" off-screen — it only "fit" once a short value was selected.
-    const canMutate = !!fieldRef && !hideCreate && !useStatic
-    const joined = canMutate && !blockedByDependency && hasRecordPickerAction(!!value, openCreate, openEdit)
+    const canMutate = !!fieldRef && !hideCreate && !useStatic && !blockedByDependency
     const fieldName = field.label ? t(field.label, { defaultValue: field.label }) : fieldRef ?? ''
+    const badge = (opt: ResolvedOption) =>
+        opt.description ? (
+            <Badge variant="secondary" className="shrink-0 font-normal tabular-nums">
+                {opt.description}
+            </Badge>
+        ) : null
+
     return (
-        <div className="flex w-full min-w-0 items-center gap-1.5" data-slot="dynamic-select">
-            <div className="flex min-w-0 flex-1 items-center">
-            <Popover open={open && !blockedByDependency} onOpenChange={(o: boolean) => { if (!blockedByDependency) setOpen(o) }}>
-            <PopoverTrigger asChild>
-                <Button
-                    type="button"
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={open}
-                    id={field.key}
-                    disabled={blockedByDependency}
-                    aria-invalid={invalid || undefined}
-                    className={
-                        'min-w-0 flex-1 justify-between font-normal' +
-                        (joined ? ` ${JOINED_TRIGGER_CLASS}` : '') +
-                        (invalid ? ' border-destructive ring-1 ring-destructive/30' : '')
-                    }
-                    data-empty={!value}
-                    data-depends-blocked={blockedByDependency ? '' : undefined}
-                >
-                    <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
-                        {value && selectedOption ? (
-                            <OptionLead option={selectedOption} size={20} />
-                        ) : null}
+        <RecordPicker<ResolvedOption>
+            slot="dynamic-select"
+            id={field.key}
+            items={options}
+            loading={loading}
+            getKey={(o) => String(o.id)}
+            getLabel={(o) => o.label}
+            value={value}
+            selected={selectedOption}
+            onSelect={handlePick}
+            query={search}
+            onQueryChange={setSearch}
+            open={open && !blockedByDependency}
+            onOpenChange={(o) => {
+                if (!blockedByDependency) setOpen(o)
+            }}
+            disabled={blockedByDependency}
+            readOnly={readonly}
+            invalid={invalid}
+            renderLead={(o, where) => <OptionLead option={o} size={where === 'option' ? 24 : 20} />}
+            getDescription={descriptionAsBadge ? undefined : (o) => o.description}
+            renderTrailing={descriptionAsBadge ? (o) => badge(o) : undefined}
+            renderValue={() => {
+                if (readonly) {
+                    return (
+                        <>
+                            {selectedOption ? <OptionLead option={selectedOption} size={20} /> : null}
+                            <span className={'min-w-0 flex-1 truncate ' + (selectedOption ? '' : 'text-muted-foreground')}>
+                                {/* Never flash the raw id while the eager fetch resolves. */}
+                                {selectedOption?.label ?? (loading ? 'Cargando…' : ph('—'))}
+                            </span>
+                        </>
+                    )
+                }
+                return (
+                    <>
+                        {value && selectedOption ? <OptionLead option={selectedOption} size={20} /> : null}
                         <span className={'min-w-0 flex-1 truncate ' + (selectedLabel ? '' : 'text-muted-foreground')}>
-                            {blockedByDependency
-                                ? (dependsHint || DEFAULT_DEPENDS_HINT)
-                                : selectedLabel || ph('Buscar…')}
+                            {blockedByDependency ? dependsHint || DEFAULT_DEPENDS_HINT : selectedLabel || ph('Buscar…')}
                         </span>
-                        {descriptionAsBadge && selectedOption?.description ? (
-                            <Badge variant="secondary" className="shrink-0 font-normal tabular-nums">
-                                {selectedOption.description}
-                            </Badge>
-                        ) : null}
-                    </span>
-                    <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent
-                className="p-0"
-                align="start"
-                // Portaled (never clipped by a table/modal overflow) and
-                // collision-aware: flips above the trigger when there is no
-                // room below. Match the trigger width without an arbitrary
-                // Tailwind class (those don't always survive a consuming app's
-                // Tailwind scan), with a floor so short cells stay readable.
-                collisionPadding={8}
-                style={{ width: 'max(var(--radix-popover-trigger-width), 14rem)', maxWidth: 'calc(100vw - 1rem)' }}
-            >
-                <Command shouldFilter={false}>
-                    <CommandInput
-                        placeholder={ph('Buscar…')}
-                        value={search}
-                        onValueChange={setSearch}
-                    />
-                    <CommandList>
-                        {loading && (
-                            <div className="text-muted-foreground flex items-center justify-center gap-2 py-6 text-sm">
-                                <Loader2 className="size-4 animate-spin" />
-                                Buscando…
-                            </div>
-                        )}
-                        {!loading && options.length === 0 && (
-                            // Plain block, not <CommandEmpty>: cmdk hides Empty while
-                            // any item is mounted, and the "Crear …" footer is one.
-                            <div className="text-muted-foreground py-6 text-center text-sm" data-slot="picker-empty">
-                                {useStatic
-                                    ? debounced
-                                        ? 'Sin resultados'
-                                        : 'Sin opciones'
-                                    : debounced
-                                      ? 'Sin resultados'
-                                      : 'Sin resultados — escribe para filtrar'}
-                            </div>
-                        )}
-                        {!loading && options.length > 0 && (
-                            <CommandGroup className="max-h-64 overflow-auto">
-                                {options.map((opt) => {
-                                    const isSel = String(opt.id) === String(value)
-                                    return (
-                                        <CommandItem
-                                            key={String(opt.id)}
-                                            value={String(opt.id)}
-                                            onSelect={() => handlePick(opt)}
-                                        >
-                                            <Check className={'mr-2 size-4 shrink-0 ' + (isSel ? 'opacity-100' : 'opacity-0')} />
-                                            <OptionLead option={opt} size={24} />
-                                            {descriptionAsBadge ? (
-                                                <div className="ml-2 flex min-w-0 flex-1 items-center gap-2">
-                                                    <span className="min-w-0 flex-1 truncate">{opt.label}</span>
-                                                    {opt.description ? (
-                                                        <Badge variant="secondary" className="shrink-0 font-normal tabular-nums">
-                                                            {opt.description}
-                                                        </Badge>
-                                                    ) : null}
-                                                </div>
-                                            ) : (
-                                                <div className="ml-2 flex min-w-0 flex-col">
-                                                    <span className="truncate">{opt.label}</span>
-                                                    {opt.description && (
-                                                        <span className="text-muted-foreground truncate text-xs">
-                                                            {opt.description}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            )}
-                                        </CommandItem>
-                                    )
-                                })}
-                            </CommandGroup>
-                        )}
-                        {canMutate && !loading && (
-                            <PickerCreateItem label={fieldName} onSelect={openCreate} />
-                        )}
-                    </CommandList>
-                </Command>
-            </PopoverContent>
-            </Popover>
-            {canMutate && !blockedByDependency && (
-                <RecordPickerAction hasValue={!!value} label={fieldName} onCreate={openCreate} onEdit={openEdit} />
-            )}
-            </div>
-            {scanEnabled && (
-                <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="size-9 shrink-0"
-                    onClick={() => setScanOpen(true)}
-                    title="Escanear con la cámara"
-                    aria-label="Escanear código de barras con la cámara"
-                >
-                    <ScanLine className="size-4" />
-                </Button>
-            )}
-            {scanEnabled && (
-                <BarcodeScanner
-                    open={scanOpen}
-                    onClose={() => setScanOpen(false)}
-                    onDetected={handleScanDetected}
-                    continuous={false}
-                    position="fixed"
-                    title={`Escanear ${field.label ?? ''}`.trim()}
-                />
-            )}
-        </div>
+                        {descriptionAsBadge && selectedOption ? badge(selectedOption) : null}
+                    </>
+                )
+            }}
+            placeholder={ph('Buscar…')}
+            searchPlaceholder={ph('Buscar…')}
+            emptyText={debounced ? 'Sin resultados' : useStatic ? 'Sin opciones' : 'Sin resultados — escribe para filtrar'}
+            entityLabel={fieldName}
+            onCreate={canMutate ? openCreate : undefined}
+            onEdit={canMutate ? openEdit : undefined}
+            triggerProps={{
+                'data-depends-blocked': blockedByDependency ? '' : undefined,
+            }}
+            after={
+                scanEnabled ? (
+                    <>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="size-9 shrink-0"
+                            onClick={() => setScanOpen(true)}
+                            title="Escanear con la cámara"
+                            aria-label="Escanear código de barras con la cámara"
+                        >
+                            <ScanLine className="size-4" />
+                        </Button>
+                        <BarcodeScanner
+                            open={scanOpen}
+                            onClose={() => setScanOpen(false)}
+                            onDetected={handleScanDetected}
+                            continuous={false}
+                            position="fixed"
+                            title={`Escanear ${field.label ?? ''}`.trim()}
+                        />
+                    </>
+                ) : null
+            }
+        />
     )
 }
 

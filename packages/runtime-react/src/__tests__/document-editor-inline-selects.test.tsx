@@ -95,7 +95,8 @@ describe('DocumentLinesGrid — select de producto en la celda', () => {
         expect(cell.closest('tr')!.getAttribute('data-line-key')).toBe(free.key)
         fireEvent.change(cell, { target: { value: '205' } })
         const option = await waitFor(() => screen.getByRole('option', { name: /Llanta 205/ }), { timeout: 2000 })
-        fireEvent.click(within(option).getByRole('button'))
+        // La opción (role=option) es el elemento interactivo del RecordPicker.
+        fireEvent.click(option)
         expect(state()).toHaveLength(1)
         expect(state()[0]).toMatchObject({ key: free.key, product_id: 'p1', unit_price: 1500, sku: 'LL-205' })
     })

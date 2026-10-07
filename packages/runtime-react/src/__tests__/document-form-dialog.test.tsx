@@ -169,7 +169,8 @@ describe('DocumentFormDialog: buscador de catálogo por defecto', () => {
         fireEvent.change(document.querySelectorAll('input')[0], { target: { value: 'ACME' } })
         fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
         fireEvent.change(await screen.findByLabelText('Buscar producto'), { target: { value: query } })
-        fireEvent.click(await waitFor(() => screen.getByRole('button', { name }), { timeout: 2000 }))
+        // RecordPicker: la opción del producto es role="option" clicable (sin <button> anidado).
+        fireEvent.click(await waitFor(() => screen.getByRole('option', { name }), { timeout: 2000 }))
     }
 
     it('sin searchProducts del host busca en el catálogo y el renglón entra con precio, cantidad 1, unidad, SKU e IVA de la org', async () => {
@@ -234,9 +235,9 @@ describe('DocumentFormDialog: IVA de la org con el buscador del host', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Siguiente' }))
         const search = await screen.findByLabelText('Buscar producto')
         fireEvent.change(search, { target: { value: 'host' } })
-        fireEvent.click(await waitFor(() => screen.getByRole('button', { name: /Llanta host/ }), { timeout: 2000 }))
+        fireEvent.click(await waitFor(() => screen.getByRole('option', { name: /Llanta host/ }), { timeout: 2000 }))
         fireEvent.change(await screen.findByLabelText('Buscar producto'), { target: { value: 'fron' } })
-        fireEvent.click(await waitFor(() => screen.getByRole('button', { name: /Frontera host/ }), { timeout: 2000 }))
+        fireEvent.click(await waitFor(() => screen.getByRole('option', { name: /Frontera host/ }), { timeout: 2000 }))
         fireEvent.click(screen.getByRole('button', { name: 'Crear' }))
         await waitFor(() => expect(post).toHaveBeenCalled())
         const body = post.mock.calls[0][1] as any

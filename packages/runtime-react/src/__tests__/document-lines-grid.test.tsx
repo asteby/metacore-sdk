@@ -49,7 +49,8 @@ describe('DocumentLinesGrid', () => {
         const search = vi.fn(async () => [tire])
         render(<Harness search={search} priceSource="cost" />)
         fireEvent.change(screen.getByLabelText('Buscar producto'), { target: { value: 'llan' } })
-        const option = await waitFor(() => screen.getByRole('button', { name: /Llanta X/ }), { timeout: 2000 })
+        // RecordPicker: la opción del producto es role="option" clicable (sin <button> anidado).
+        const option = await waitFor(() => screen.getByRole('option', { name: /Llanta X/ }), { timeout: 2000 })
         fireEvent.click(option)
         expect(state()[0]).toMatchObject({ description: 'Llanta X', sku: 'LX', quantity: 1, unit_price: 800, catalog_price: 800 })
         expect(screen.getByText(/Catálogo/)).toBeTruthy()

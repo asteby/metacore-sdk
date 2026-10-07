@@ -5,9 +5,9 @@
 // (p. ej. SAT 01/03/04) llegan por la prop `relationTypes`.
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link2, Search, X } from 'lucide-react'
-import { Badge, Button, Input } from '@asteby/metacore-ui'
-import { useAsyncSearch } from './use-async-search'
+import { Link2, X } from 'lucide-react'
+import { Badge, Button } from '@asteby/metacore-ui'
+import { RecordPicker, useLatestSearch } from '../record-picker'
 
 export interface RelatableDocument {
     id: string
@@ -40,7 +40,7 @@ export interface RelateDocumentsProps {
     onChange: (value: RelatedDocument[]) => void
     /** Catálogo de tipos de relación (lo aporta el addon). */
     relationTypes: RelationTypeOption[]
-    /** Búsqueda de documentos origen. Estable (useCallback). */
+    /** Búsqueda de documentos origen. */
     search: (q: string, signal: AbortSignal) => Promise<RelatableDocument[]>
     /** Tipo preseleccionado al agregar. Default: el primero del catálogo. */
     defaultRelationType?: string
@@ -66,8 +66,9 @@ export function RelateDocuments({
 }: RelateDocumentsProps) {
     const { t } = useTranslation()
     const [text, setText] = useState('')
+    const [open, setOpen] = useState(false)
     const [pendingType, setPendingType] = useState<string>(defaultRelationType ?? relationTypes[0]?.value ?? '')
-    const { results, loading, error } = useAsyncSearch(text, search, { minChars: 2 })
+    const searchFn = useLatestSearch(search)
     const full = max != null && value.length >= max
     const typeLabel = (v: string) => relationTypes.find((r) => r.value === v)?.label ?? v
 
@@ -121,17 +122,34 @@ export function RelateDocuments({
             )}
 
             {!full && !disabled && (
-                <div className="space-y-2">
-                    <div className="flex items-center gap-1.5">
-                        <div className="relative flex-1">
-                            <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" aria-hidden />
-                            <Input
-                                className="pl-8"
-                                value={text}
-                                placeholder={placeholder ?? t('relateDocuments.placeholder', { defaultValue: 'Buscar por folio o UUID' })}
-                                onChange={(e) => setText(e.target.value)}
-                            />
-                        </div>
+                // La búsqueda de documentos es el mismo <RecordPicker> de toda la
+                // plataforma (lista en portal, teclado, estados).
+                <RecordPicker<RelatableDocument>
+                    trigger="input"
+                    search={searchFn}
+                    minChars={2}
+                    query={text}
+                    onQueryChange={setText}
+                    open={open}
+                    onOpenChange={setOpen}
+                    getKey={(d) => d.id}
+                    getLabel={docTitle}
+                    isItemDisabled={(d) => value.some((x) => x.related_document_id === d.id)}
+                    renderItem={(d, { disabled: already }) => (
+                        <span className="flex w-full min-w-0 items-center justify-between gap-2">
+                            <span className="min-w-0">
+                                <span className="block truncate text-sm font-medium">{docTitle(d)}</span>
+                                {d.uuid && <span className="block break-all font-mono text-xs text-muted-foreground">{d.uuid}</span>}
+                            </span>
+                            {already && <Badge variant="muted">{t('relateDocuments.added', { defaultValue: 'Agregado' })}</Badge>}
+                        </span>
+                    )}
+                    onSelect={add}
+                    placeholder={placeholder ?? t('relateDocuments.placeholder', { defaultValue: 'Buscar por folio o UUID' })}
+                    loadingText={t('common.searching', { defaultValue: 'Buscando…' })}
+                    errorText={t('relateDocuments.error', { defaultValue: 'No se pudo buscar documentos. Inténtalo de nuevo.' })}
+                    emptyText={t('relateDocuments.empty', { defaultValue: 'No encontramos ese documento.' })}
+                    after={
                         <select
                             className={selectCls}
                             value={pendingType}
@@ -142,35 +160,8 @@ export function RelateDocuments({
                                 <option key={r.value} value={r.value}>{r.label}</option>
                             ))}
                         </select>
-                    </div>
-                    {loading && <p className="text-sm text-muted-foreground">{t('common.searching', { defaultValue: 'Buscando…' })}</p>}
-                    {error && !loading && (
-                        <p role="alert" className="text-sm text-destructive">
-                            {t('relateDocuments.error', { defaultValue: 'No se pudo buscar documentos. Inténtalo de nuevo.' })}
-                        </p>
-                    )}
-                    {!loading && !error && text.trim().length >= 2 && results.length === 0 && (
-                        <p className="text-sm text-muted-foreground">{t('relateDocuments.empty', { defaultValue: 'No encontramos ese documento.' })}</p>
-                    )}
-                    {results.length > 0 && (
-                        <ul role="listbox" className="max-h-64 divide-y overflow-auto rounded-md border">
-                            {results.map((d) => {
-                                const already = value.some((x) => x.related_document_id === d.id)
-                                return (
-                                    <li key={d.id} role="option" aria-selected={already}>
-                                        <button type="button" disabled={already} className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left hover:bg-accent disabled:opacity-50" onClick={() => add(d)}>
-                                            <span>
-                                                <span className="block text-sm font-medium">{docTitle(d)}</span>
-                                                {d.uuid && <span className="block break-all font-mono text-xs text-muted-foreground">{d.uuid}</span>}
-                                            </span>
-                                            {already && <Badge variant="muted">{t('relateDocuments.added', { defaultValue: 'Agregado' })}</Badge>}
-                                        </button>
-                                    </li>
-                                )
-                            })}
-                        </ul>
-                    )}
-                </div>
+                    }
+                />
             )}
         </div>
     )

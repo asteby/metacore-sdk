@@ -1,16 +1,14 @@
 // CustomerPicker + alta rápida — busca por nombre, RFC/ID fiscal, teléfono, placa
-// o VIN; muestra saldo, crédito y alertas (benchmark §7). El alta rápida reutiliza
+// o VIN; muestra saldo, crédito y alertas (benchmark §7). Configuración del
+// <RecordPicker> compartido: el alta rápida (y la edición del elegido) reutiliza
 // el <CreateRecordDialog> dinámico del modelo (formulario desde metadata).
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Search, X } from 'lucide-react'
-import { Badge, Button, Input } from '@asteby/metacore-ui'
-import { CreateRecordDialog } from '../dialogs/create-record-dialog'
-import { useApi } from '../api-context'
+import { Badge } from '@asteby/metacore-ui'
+import { RecordPicker, useLatestSearch } from '../record-picker'
+import { useRecordPickerDialog } from '../record-picker-dialog'
 import { useCan } from '../permissions-context'
 import { useFormatter } from './format'
-import { useAsyncSearch } from './use-async-search'
-import { EmptyState } from './feedback'
 
 export interface CustomerResult {
     id: string
@@ -32,7 +30,7 @@ export interface CustomerPickerProps {
     value: CustomerResult | null
     /** Evento único de cambio: cliente elegido/creado, o `null` al limpiar. */
     onChange: (customer: CustomerResult | null) => void
-    /** Búsqueda (nombre, ID fiscal, teléfono, placa, VIN). Estable (useCallback). */
+    /** Búsqueda (nombre, ID fiscal, teléfono, placa, VIN). */
     search: (q: string, signal: AbortSignal) => Promise<CustomerResult[]>
     /** Modelo del kernel para el alta rápida. Default `Customer`. */
     model?: string
@@ -44,6 +42,8 @@ export interface CustomerPickerProps {
     validateTaxId?: (taxId: string) => string | undefined
     /** Overrides de permiso (default `<model>.create` con useCan). */
     canCreate?: boolean
+    /** Override de permiso para editar al elegido (default `<model>.update`). */
+    canEdit?: boolean
     /** Valores iniciales del alta rápida (p. ej. el texto buscado como nombre). */
     createDefaults?: Record<string, unknown>
     currency?: string
@@ -55,6 +55,12 @@ function snake(model: string): string {
     return model.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
 }
 
+const customerLine = (c: CustomerResult) => [c.tax_id, c.phone, c.plate, c.vin].filter(Boolean).join(' · ')
+
+/**
+ * @deprecated Configuración fina de {@link RecordPicker}; se conserva para no
+ * romper consumidores.
+ */
 export function CustomerPicker({
     value,
     onChange,
@@ -64,26 +70,22 @@ export function CustomerPicker({
     mapRecord,
     validateTaxId,
     canCreate,
+    canEdit,
     createDefaults,
     currency,
     disabled,
     placeholder,
 }: CustomerPickerProps) {
     const { t } = useTranslation()
-    const api = useApi()
     const can = useCan()
     const fmt = useFormatter({ currency })
     const [text, setText] = useState('')
-    const [creating, setCreating] = useState(false)
-    const { results, loading, error } = useAsyncSearch(text, search, { minChars: 2 })
+    const [open, setOpen] = useState(false)
+    const searchFn = useLatestSearch(search)
     const mayCreate = canCreate ?? can(`${snake(model)}.create`)
-    const base = endpoint ?? `/data/${model}/me`
+    const mayEdit = canEdit ?? can(`${snake(model)}.update`)
     const taxIdError = value?.tax_id && validateTaxId ? validateTaxId(value.tax_id) : undefined
 
-    const pick = (c: CustomerResult) => {
-        onChange(c)
-        setText('')
-    }
     const toResult = useCallback(
         (rec: Record<string, unknown>): CustomerResult =>
             mapRecord
@@ -96,24 +98,23 @@ export function CustomerPicker({
                   },
         [mapRecord],
     )
+    const { openCreate, openEdit, dialog } = useRecordPickerDialog({
+        model,
+        endpoint,
+        prefillField: 'name',
+        createDefaults,
+        onSaved: (rec, kind) => {
+            const next = toResult(rec)
+            // Al editar se conservan saldo/crédito/alertas que el registro no trae.
+            onChange(kind === 'edit' && value ? { ...value, ...next } : next)
+            setText('')
+        },
+    })
 
-    if (value) {
-        const overLimit = value.credit_limit != null && (value.balance ?? 0) > value.credit_limit
-        return (
-            <div data-slot="customer-picker" className="space-y-1 rounded-md border p-2">
-                <div className="flex items-start justify-between gap-2">
-                    <div>
-                        <p className="text-sm font-medium">{value.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                            {[value.tax_id, value.phone, value.plate, value.vin].filter(Boolean).join(' · ')}
-                        </p>
-                    </div>
-                    {!disabled && (
-                        <Button type="button" size="icon" variant="ghost" onClick={() => onChange(null)} aria-label={t('customerPicker.clear', { defaultValue: 'Quitar cliente' })}>
-                            <X className="size-4" />
-                        </Button>
-                    )}
-                </div>
+    const overLimit = !!value && value.credit_limit != null && (value.balance ?? 0) > value.credit_limit
+    const below = value ? (
+        <>
+            {(value.balance != null && value.balance !== 0) || value.credit_limit != null || value.alerts?.length ? (
                 <div className="flex flex-wrap gap-1.5">
                     {value.balance != null && value.balance !== 0 && (
                         <Badge variant={overLimit ? 'danger' : 'warning'}>
@@ -129,73 +130,61 @@ export function CustomerPicker({
                         <Badge key={a} variant="danger">{a}</Badge>
                     ))}
                 </div>
-                {taxIdError && <p role="alert" className="text-xs text-destructive">{taxIdError}</p>}
-            </div>
-        )
-    }
+            ) : null}
+            {taxIdError && <p role="alert" className="text-xs text-destructive">{taxIdError}</p>}
+        </>
+    ) : null
 
     return (
-        <div data-slot="customer-picker" className="space-y-2">
-            <div className="flex items-center gap-1.5">
-                <div className="relative flex-1">
-                    <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" aria-hidden />
-                    <Input
-                        className="pl-8"
-                        disabled={disabled}
-                        value={text}
-                        placeholder={placeholder ?? t('customerPicker.placeholder', { defaultValue: 'Nombre, RFC, teléfono, placa o VIN' })}
-                        onChange={(e) => setText(e.target.value)}
-                    />
-                </div>
-                {mayCreate && (
-                    <Button type="button" variant="outline" size="icon" disabled={disabled} onClick={() => setCreating(true)} aria-label={t('customerPicker.create', { defaultValue: 'Nuevo cliente' })}>
-                        <Plus className="size-4" />
-                    </Button>
+        <>
+            <RecordPicker<CustomerResult>
+                trigger="input"
+                slot="customer-picker"
+                search={searchFn}
+                minChars={2}
+                query={text}
+                onQueryChange={setText}
+                open={open}
+                onOpenChange={setOpen}
+                getKey={(c) => c.id}
+                getLabel={(c) => c.name}
+                renderItem={(c) => (
+                    <span className="flex w-full min-w-0 items-center justify-between gap-2">
+                        <span className="min-w-0">
+                            <span className="block truncate font-medium">{c.name}</span>
+                            <span className="block truncate text-xs text-muted-foreground">{customerLine(c)}</span>
+                        </span>
+                        {c.balance != null && c.balance > 0 && <Badge variant="warning">{fmt.money(c.balance)}</Badge>}
+                    </span>
                 )}
-            </div>
-            {loading && <p className="text-sm text-muted-foreground">{t('common.searching', { defaultValue: 'Buscando…' })}</p>}
-            {error && !loading && (
-                <p role="alert" className="text-sm text-destructive">
-                    {t('customerPicker.error', { defaultValue: 'No se pudo buscar clientes. Inténtalo de nuevo.' })}
-                </p>
-            )}
-            {!loading && !error && text.trim().length >= 2 && results.length === 0 && (
-                <EmptyState
-                    title={t('customerPicker.empty', { defaultValue: 'No encontramos a ese cliente' })}
-                    action={mayCreate ? { label: t('customerPicker.createAction', { defaultValue: 'Crear cliente' }), onClick: () => setCreating(true) } : undefined}
-                />
-            )}
-            {results.length > 0 && (
-                <ul role="listbox" className="max-h-64 divide-y overflow-auto rounded-md border">
-                    {results.map((c) => (
-                        <li key={c.id} role="option" aria-selected={false}>
-                            <button type="button" className="flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left hover:bg-accent" onClick={() => pick(c)}>
-                                <span>
-                                    <span className="block text-sm font-medium">{c.name}</span>
-                                    <span className="block text-xs text-muted-foreground">{[c.tax_id, c.phone, c.plate, c.vin].filter(Boolean).join(' · ')}</span>
-                                </span>
-                                {c.balance != null && c.balance > 0 && <Badge variant="warning">{fmt.money(c.balance)}</Badge>}
-                            </button>
-                        </li>
-                    ))}
-                </ul>
-            )}
-
-            {creating && (
-                <CreateRecordDialog
-                    modelKey={model}
-                    open={creating}
-                    onOpenChange={setCreating}
-                    endpoint={base}
-                    defaults={createDefaults ?? (text.trim() ? { name: text.trim() } : undefined)}
-                    onCreate={async (data) => {
-                        const res = await api.post(base, data)
-                        const rec = (res.data?.data ?? res.data) as Record<string, unknown>
-                        pick(toResult(rec))
-                        return rec.id != null ? { id: String(rec.id) } : undefined
-                    }}
-                />
-            )}
-        </div>
+                value={value?.id ?? null}
+                selected={value}
+                onSelect={(c) => onChange(c)}
+                onClear={disabled ? undefined : () => onChange(null)}
+                clearLabel={t('customerPicker.clear', { defaultValue: 'Quitar cliente' })}
+                renderValue={(c) =>
+                    c ? (
+                        <span className="block min-w-0">
+                            <span className="block truncate text-sm font-medium">{c.name}</span>
+                            {customerLine(c) && <span className="block truncate text-xs text-muted-foreground">{customerLine(c)}</span>}
+                        </span>
+                    ) : null
+                }
+                below={below}
+                disabled={disabled}
+                placeholder={placeholder ?? t('customerPicker.placeholder', { defaultValue: 'Nombre, RFC, teléfono, placa o VIN' })}
+                loadingText={t('common.searching', { defaultValue: 'Buscando…' })}
+                errorText={t('customerPicker.error', { defaultValue: 'No se pudo buscar clientes. Inténtalo de nuevo.' })}
+                emptyText={t('customerPicker.empty', { defaultValue: 'No encontramos a ese cliente' })}
+                entityLabel={t('customerPicker.entity', { defaultValue: 'cliente' })}
+                createLabel={t('customerPicker.create', { defaultValue: 'Nuevo cliente' })}
+                editLabel={t('customerPicker.edit', { defaultValue: 'Editar cliente' })}
+                createFooter="empty"
+                createFooterLabel={() => t('customerPicker.createAction', { defaultValue: 'Crear cliente' })}
+                onCreate={mayCreate ? (q) => openCreate(q) : undefined}
+                onEdit={mayEdit && value ? () => openEdit(value.id) : undefined}
+            />
+            {dialog}
+        </>
     )
 }

@@ -1,17 +1,15 @@
 // VehiclePicker + alta rápida — busca por placa o VIN (y marca/modelo/cliente que
-// el host decida indexar) y reutiliza el <CreateRecordDialog> dinámico del modelo
-// vehículo para el alta rápida. Mismo contrato que <CustomerPicker>: controlado
+// el host decida indexar). Configuración del <RecordPicker> compartido: el alta
+// rápida (y la edición del elegido) reutiliza el <CreateRecordDialog> dinámico
+// del modelo vehículo. Mismo contrato que <CustomerPicker>: controlado
 // (`value` / `onChange`), `search` inyectado por el host, permisos con useCan
 // (sin <PermissionsProvider> no bloquea nada: el backend autoriza).
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Car, Plus, Search, X } from 'lucide-react'
-import { Button, Input } from '@asteby/metacore-ui'
-import { CreateRecordDialog } from '../dialogs/create-record-dialog'
-import { useApi } from '../api-context'
+import { Car } from 'lucide-react'
+import { RecordPicker, useLatestSearch } from '../record-picker'
+import { useRecordPickerDialog } from '../record-picker-dialog'
 import { useCan } from '../permissions-context'
-import { useAsyncSearch } from './use-async-search'
-import { EmptyState } from './feedback'
 
 export interface VehicleResult {
     id: string
@@ -31,7 +29,7 @@ export interface VehiclePickerProps {
     value: VehicleResult | null
     /** Evento único de cambio: vehículo elegido/creado, o `null` al limpiar. */
     onChange: (vehicle: VehicleResult | null) => void
-    /** Búsqueda por placa o VIN. Estable (useCallback). */
+    /** Búsqueda por placa o VIN. */
     search: (q: string, signal: AbortSignal) => Promise<VehicleResult[]>
     /** Modelo del kernel para el alta rápida. Default `Vehicle`. */
     model?: string
@@ -41,6 +39,8 @@ export interface VehiclePickerProps {
     mapRecord?: (rec: Record<string, unknown>) => VehicleResult
     /** Override de permiso (default `<model>.create` con useCan). */
     canCreate?: boolean
+    /** Override de permiso para editar al elegido (default `<model>.update`). */
+    canEdit?: boolean
     /** Valores iniciales del alta (p. ej. `customer_id` del cliente ya elegido). */
     createDefaults?: Record<string, unknown>
     disabled?: boolean
@@ -59,6 +59,10 @@ export function describeVehicle(v: VehicleResult): string {
     return [unit, v.plate, v.vin].filter(Boolean).join(' · ')
 }
 
+/**
+ * @deprecated Configuración fina de {@link RecordPicker}; se conserva para no
+ * romper consumidores.
+ */
 export function VehiclePicker({
     value,
     onChange,
@@ -67,23 +71,19 @@ export function VehiclePicker({
     endpoint,
     mapRecord,
     canCreate,
+    canEdit,
     createDefaults,
     disabled,
     placeholder,
 }: VehiclePickerProps) {
     const { t } = useTranslation()
-    const api = useApi()
     const can = useCan()
     const [text, setText] = useState('')
-    const [creating, setCreating] = useState(false)
-    const { results, loading, error } = useAsyncSearch(text, search, { minChars: 2 })
+    const [open, setOpen] = useState(false)
+    const searchFn = useLatestSearch(search)
     const mayCreate = canCreate ?? can(`${snake(model)}.create`)
-    const base = endpoint ?? `/data/${model}/me`
+    const mayEdit = canEdit ?? can(`${snake(model)}.update`)
 
-    const pick = (v: VehicleResult) => {
-        onChange(v)
-        setText('')
-    }
     const toResult = useCallback(
         (rec: Record<string, unknown>): VehicleResult =>
             mapRecord
@@ -100,89 +100,66 @@ export function VehiclePicker({
                   },
         [mapRecord],
     )
-
-    if (value) {
-        return (
-            <div data-slot="vehicle-picker" className="flex items-start justify-between gap-2 rounded-md border p-2">
-                <div className="flex items-start gap-2">
-                    <Car className="mt-0.5 size-4 text-muted-foreground" aria-hidden />
-                    <div>
-                        <p className="text-sm font-medium">{value.plate || value.vin || t('vehiclePicker.noPlate', { defaultValue: 'Sin placa' })}</p>
-                        <p className="text-xs text-muted-foreground">
-                            {[[value.make, value.model, value.year].filter((x) => x != null && x !== '').join(' '), value.vin && value.plate ? value.vin : '', value.customer_name]
-                                .filter(Boolean)
-                                .join(' · ')}
-                        </p>
-                    </div>
-                </div>
-                {!disabled && (
-                    <Button type="button" size="icon" variant="ghost" onClick={() => onChange(null)} aria-label={t('vehiclePicker.clear', { defaultValue: 'Quitar vehículo' })}>
-                        <X className="size-4" />
-                    </Button>
-                )}
-            </div>
-        )
-    }
+    const { openCreate, openEdit, dialog } = useRecordPickerDialog({
+        model,
+        endpoint,
+        prefillField: 'plate',
+        createDefaults,
+        onSaved: (rec, kind) => {
+            const next = toResult(rec)
+            onChange(kind === 'edit' && value ? { ...value, ...next } : next)
+            setText('')
+        },
+    })
 
     return (
-        <div data-slot="vehicle-picker" className="space-y-2">
-            <div className="flex items-center gap-1.5">
-                <div className="relative flex-1">
-                    <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" aria-hidden />
-                    <Input
-                        className="pl-8"
-                        disabled={disabled}
-                        value={text}
-                        placeholder={placeholder ?? t('vehiclePicker.placeholder', { defaultValue: 'Placa o VIN' })}
-                        onChange={(e) => setText(e.target.value)}
-                    />
-                </div>
-                {mayCreate && (
-                    <Button type="button" variant="outline" size="icon" disabled={disabled} onClick={() => setCreating(true)} aria-label={t('vehiclePicker.create', { defaultValue: 'Nuevo vehículo' })}>
-                        <Plus className="size-4" />
-                    </Button>
-                )}
-            </div>
-            {loading && <p className="text-sm text-muted-foreground">{t('common.searching', { defaultValue: 'Buscando…' })}</p>}
-            {error && !loading && (
-                <p role="alert" className="text-sm text-destructive">
-                    {t('vehiclePicker.error', { defaultValue: 'No se pudo buscar vehículos. Inténtalo de nuevo.' })}
-                </p>
-            )}
-            {!loading && !error && text.trim().length >= 2 && results.length === 0 && (
-                <EmptyState
-                    title={t('vehiclePicker.empty', { defaultValue: 'No encontramos ese vehículo' })}
-                    action={mayCreate ? { label: t('vehiclePicker.createAction', { defaultValue: 'Crear vehículo' }), onClick: () => setCreating(true) } : undefined}
-                />
-            )}
-            {results.length > 0 && (
-                <ul role="listbox" className="max-h-64 divide-y overflow-auto rounded-md border">
-                    {results.map((v) => (
-                        <li key={v.id} role="option" aria-selected={false}>
-                            <button type="button" className="flex w-full flex-col px-2 py-1.5 text-left hover:bg-accent" onClick={() => pick(v)}>
-                                <span className="text-sm font-medium">{v.plate || v.vin || v.id}</span>
-                                <span className="text-xs text-muted-foreground">{[describeVehicle({ ...v, plate: undefined }), v.customer_name].filter(Boolean).join(' · ')}</span>
-                            </button>
-                        </li>
-                    ))}
-                </ul>
-            )}
-
-            {creating && (
-                <CreateRecordDialog
-                    modelKey={model}
-                    open={creating}
-                    onOpenChange={setCreating}
-                    endpoint={base}
-                    defaults={createDefaults ?? (text.trim() ? { plate: text.trim() } : undefined)}
-                    onCreate={async (data) => {
-                        const res = await api.post(base, data)
-                        const rec = (res.data?.data ?? res.data) as Record<string, unknown>
-                        pick(toResult(rec))
-                        return rec.id != null ? { id: String(rec.id) } : undefined
-                    }}
-                />
-            )}
-        </div>
+        <>
+            <RecordPicker<VehicleResult>
+                trigger="input"
+                slot="vehicle-picker"
+                search={searchFn}
+                minChars={2}
+                query={text}
+                onQueryChange={setText}
+                open={open}
+                onOpenChange={setOpen}
+                getKey={(v) => v.id}
+                getLabel={(v) => v.plate || v.vin || v.id}
+                getDescription={(v) => [describeVehicle({ ...v, plate: undefined }), v.customer_name].filter(Boolean).join(' · ')}
+                value={value?.id ?? null}
+                selected={value}
+                onSelect={(v) => onChange(v)}
+                onClear={disabled ? undefined : () => onChange(null)}
+                clearLabel={t('vehiclePicker.clear', { defaultValue: 'Quitar vehículo' })}
+                renderValue={(v) =>
+                    v ? (
+                        <span className="flex min-w-0 items-start gap-2">
+                            <Car className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+                            <span className="block min-w-0">
+                                <span className="block truncate text-sm font-medium">{v.plate || v.vin || t('vehiclePicker.noPlate', { defaultValue: 'Sin placa' })}</span>
+                                <span className="block truncate text-xs text-muted-foreground">
+                                    {[[v.make, v.model, v.year].filter((x) => x != null && x !== '').join(' '), v.vin && v.plate ? v.vin : '', v.customer_name]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                </span>
+                            </span>
+                        </span>
+                    ) : null
+                }
+                disabled={disabled}
+                placeholder={placeholder ?? t('vehiclePicker.placeholder', { defaultValue: 'Placa o VIN' })}
+                loadingText={t('common.searching', { defaultValue: 'Buscando…' })}
+                errorText={t('vehiclePicker.error', { defaultValue: 'No se pudo buscar vehículos. Inténtalo de nuevo.' })}
+                emptyText={t('vehiclePicker.empty', { defaultValue: 'No encontramos ese vehículo' })}
+                entityLabel={t('vehiclePicker.entity', { defaultValue: 'vehículo' })}
+                createLabel={t('vehiclePicker.create', { defaultValue: 'Nuevo vehículo' })}
+                editLabel={t('vehiclePicker.edit', { defaultValue: 'Editar vehículo' })}
+                createFooter="empty"
+                createFooterLabel={() => t('vehiclePicker.createAction', { defaultValue: 'Crear vehículo' })}
+                onCreate={mayCreate ? (q) => openCreate(q) : undefined}
+                onEdit={mayEdit && value ? () => openEdit(value.id) : undefined}
+            />
+            {dialog}
+        </>
     )
 }

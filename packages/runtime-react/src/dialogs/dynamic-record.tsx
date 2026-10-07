@@ -39,12 +39,6 @@ import {
     Popover,
     PopoverContent,
     PopoverTrigger,
-    Command,
-    CommandEmpty,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
     Calendar,
 } from '@asteby/metacore-ui/primitives'
 import { cn } from '@asteby/metacore-ui/lib'
@@ -52,12 +46,13 @@ import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { parseCalendarDate } from '../calendar-date'
 import { es } from 'date-fns/locale'
-import { ExternalLink, Loader2, CalendarIcon, ChevronDown, Check, Upload, X as XIcon, ScanLine } from 'lucide-react'
+import { ExternalLink, Loader2, CalendarIcon, Upload, X as XIcon, ScanLine } from 'lucide-react'
 import { BarcodeScanner } from '../barcode-scanner'
 import { useApi } from '../api-context'
 import { useBranchCreateGate } from '../branch-create-gate'
 import { toastServerError, extractFieldErrors, localizeFieldIssue, localizeFieldErrorMap } from '../server-error'
 import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-field'
+import { RecordPicker } from '../record-picker'
 import { DynamicMultiSelectField } from '../dynamic-multi-select-field'
 import { DynamicRelations } from '../dynamic-relations'
 import { AuditInfo, readAuditMeta } from '../audit-info'
@@ -2380,108 +2375,60 @@ const searchCache = new Map<string, any[]>()
 
 function SearchField({ field, value, onChange }: { field: FieldDef; value: any; onChange: (val: any) => void }) {
     const api = useApi()
-    const [open, setOpen] = useState(false)
-    const [query, setQuery] = useState('')
-    const [results, setResults] = useState<any[]>([])
-    const [loading, setLoading] = useState(false)
     const [selectedLabel, setSelectedLabel] = useState('')
+    const ep = field.searchEndpoint!
 
     useEffect(() => {
-        if (!value || !field.searchEndpoint) return
-        const cached = searchCache.get(field.searchEndpoint)
+        if (!value || !ep) return
+        const cached = searchCache.get(ep)
         if (cached) {
             const match = cached.find((item: any) => item.value === value || item.id === value)
             if (match) { setSelectedLabel(match.label || match.name || ''); return }
         }
-        api.get(field.searchEndpoint, { params: { search: '', limit: 50 } }).then(res => {
+        api.get(ep, { params: { search: '', limit: 50 } }).then(res => {
             const items = extractArray(res)
-            searchCache.set(field.searchEndpoint!, items)
+            searchCache.set(ep, items)
             const match = items.find((item: any) => item.value === value || item.id === value)
             if (match) setSelectedLabel(match.label || match.name || '')
         }).catch(() => {})
-    }, [value, field.searchEndpoint, api])
+    }, [value, ep, api])
 
-    useEffect(() => {
-        if (!open || !field.searchEndpoint) return
-        if (!query) {
-            const cached = searchCache.get(field.searchEndpoint)
-            if (cached) { setResults(cached); return }
+    // Legacy `type: search` + searchEndpoint — same <RecordPicker> as every
+    // relation field; the empty query is served from the per-endpoint cache.
+    const search = useCallback(async (q: string) => {
+        if (!q) {
+            const cached = searchCache.get(ep)
+            if (cached) return cached
         }
-        setLoading(true)
-        const timer = setTimeout(() => {
-            api.get(field.searchEndpoint!, { params: { search: query, limit: 20 } }).then(res => {
-                const items = extractArray(res)
-                if (!query) searchCache.set(field.searchEndpoint!, items)
-                setResults(items)
-            }).catch(() => setResults([]))
-                .finally(() => setLoading(false))
-        }, query ? 250 : 0)
-        return () => clearTimeout(timer)
-    }, [query, open, field.searchEndpoint, api])
+        const items = extractArray(await api.get(ep, { params: { search: q, limit: 20 } }))
+        if (!q) searchCache.set(ep, items)
+        return items
+    }, [api, ep])
 
+    const itemValue = (item: any) => item.value ?? item.id
+    const itemLabel = (item: any): string => item.label ?? item.name ?? ''
+    const what = field.label?.toLowerCase() || ''
     return (
-        <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-                <Button
-                    variant="outline"
-                    role="combobox"
-                    className={cn(
-                        "w-full justify-between font-normal h-9",
-                        !value && "text-muted-foreground"
-                    )}
-                >
-                    <span className="truncate">{selectedLabel || `Seleccionar ${field.label?.toLowerCase() || ''}...`}</span>
-                    <ChevronDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start" side="bottom" sideOffset={4}>
-                <Command shouldFilter={false}>
-                    <CommandInput
-                        placeholder={`Buscar ${field.label?.toLowerCase() || ''}...`}
-                        value={query}
-                        onValueChange={setQuery}
-                    />
-                    <CommandList className="max-h-[200px]">
-                        {loading ? (
-                            <div className="py-6 text-center text-sm">
-                                <Loader2 className="h-4 w-4 animate-spin mx-auto mb-1 text-muted-foreground" />
-                                <span className="text-muted-foreground text-xs">Buscando...</span>
-                            </div>
-                        ) : results.length === 0 ? (
-                            <CommandEmpty>Sin resultados.</CommandEmpty>
-                        ) : (
-                            <CommandGroup>
-                                {results.map((item: any) => {
-                                    const itemValue = item.value ?? item.id
-                                    const itemLabel = item.label ?? item.name ?? ''
-                                    const isSelected = value === itemValue
-                                    return (
-                                        <CommandItem
-                                            key={itemValue}
-                                            value={String(itemValue)}
-                                            onSelect={() => {
-                                                onChange(itemValue)
-                                                setSelectedLabel(itemLabel)
-                                                setOpen(false)
-                                                setQuery('')
-                                            }}
-                                        >
-                                            {isSelected && <Check className="mr-2 h-3.5 w-3.5 shrink-0 text-primary" />}
-                                            <OptionThumb image={item.image} name={itemLabel} size={20} />
-                                            <div className="flex flex-col min-w-0 ml-2">
-                                                <span className="truncate">{itemLabel}</span>
-                                                {item.description && (
-                                                    <span className="text-[11px] text-muted-foreground truncate">{item.description}</span>
-                                                )}
-                                            </div>
-                                        </CommandItem>
-                                    )
-                                })}
-                            </CommandGroup>
-                        )}
-                    </CommandList>
-                </Command>
-            </PopoverContent>
-        </Popover>
+        <RecordPicker<any>
+            search={search}
+            minChars={0}
+            getKey={(item) => String(itemValue(item))}
+            getLabel={itemLabel}
+            getDescription={(item) => item.description}
+            renderLead={(item) => <OptionThumb image={item.image} name={itemLabel(item)} size={20} />}
+            value={value}
+            selected={value ? { value, label: selectedLabel } : null}
+            renderValue={() => (
+                <span className={cn('min-w-0 flex-1 truncate', !selectedLabel && 'text-muted-foreground')}>
+                    {selectedLabel || `Seleccionar ${what}...`}
+                </span>
+            )}
+            onSelect={(item) => {
+                onChange(itemValue(item))
+                setSelectedLabel(itemLabel(item))
+            }}
+            searchPlaceholder={`Buscar ${what}...`}
+            emptyText="Sin resultados."
+        />
     )
 }

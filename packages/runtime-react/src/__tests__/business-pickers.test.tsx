@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // #1025 VehiclePicker, #1026 RelateDocuments, #1027 PrintSendDialog.
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
 vi.mock('react-i18next', () => ({
     useTranslation: () => ({ t: (k: string, o?: any) => o?.defaultValue ?? k, i18n: { language: 'es' } }),
@@ -49,7 +49,9 @@ describe('VehiclePicker', () => {
         fireEvent.change(screen.getByPlaceholderText('Placa o VIN'), { target: { value: 'ABC' } })
         const opt = await screen.findByRole('option')
         expect(search.mock.calls[0][0]).toBe('ABC')
-        fireEvent.click(opt.querySelector('button')!)
+        // La opción misma es el elemento interactivo (RecordPicker: role=option
+        // sin <button> anidado, como pide ARIA para listbox).
+        fireEvent.click(opt)
         expect(onChange).toHaveBeenCalledWith(veh)
     })
 
@@ -102,7 +104,8 @@ describe('RelateDocuments', () => {
         const { rerender } = render(<RelateDocuments value={value} onChange={onChange} relationTypes={types} search={search} />)
         fireEvent.change(screen.getByPlaceholderText('Buscar por folio o UUID'), { target: { value: 'A-' } })
         const list = await screen.findByRole('listbox')
-        fireEvent.click(list.querySelectorAll('button')[0])
+        // RecordPicker: se elige la opción (role=option), no un <button> interno.
+        fireEvent.click((await within(list).findAllByRole('option'))[0]!)
         expect(onChange).toHaveBeenLastCalledWith([
             expect.objectContaining({ related_document_id: 'd1', relation_type: '01', uuid: 'UUID-1', folio: 'A-1' }),
         ])

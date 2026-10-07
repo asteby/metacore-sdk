@@ -1,5 +1,9 @@
 // EntitySelect — the shared, permission-aware single-select for a related model.
 //
+// Now a thin configuration of <RecordPicker> (record-picker.tsx); prefer it for
+// new screens. Kept with its exact props for consumers (POS, collections and
+// other federated addons).
+//
 // A searchable async combobox over a kernel model's records, plus the two
 // affordances every "pick a related record" control should have, exactly like
 // the dynamic create modal's relation fields (Categoría/Marca) do:
@@ -14,23 +18,11 @@
 // `/metadata/modal/:model` schema via <CreateRecordDialog>, so no per-model form
 // code is needed. This lives in the SDK so POS, purchases and any future addon
 // share ONE implementation instead of each re-porting a bespoke picker.
-import { useCallback, useEffect, useState } from 'react'
-import { Search, X, type LucideIcon } from 'lucide-react'
-import {
-    Button,
-    Command,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@asteby/metacore-ui'
-import { CreateRecordDialog } from './dialogs/create-record-dialog'
-import { JOINED_TRIGGER_CLASS, PickerCreateItem, RecordPickerAction, hasRecordPickerAction } from './record-picker-actions'
+import type { LucideIcon } from 'lucide-react'
+import { RecordPicker, useLatestSearch } from './record-picker'
+import { recordLabel } from './record-picker-actions'
+import { useRecordPickerDialog } from './record-picker-dialog'
 import { useCan } from './permissions-context'
-import { useApi } from './api-context'
 
 /** One searchable option: `value` is the id, `label` the display text. */
 export interface EntitySelectOption {
@@ -96,13 +88,16 @@ function capabilityNamespace(model: string): string {
     return model.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase()
 }
 
+/**
+ * @deprecated Thin wrapper over {@link RecordPicker}; prefer it for new code.
+ */
 export function EntitySelect({
     model,
     value,
     label,
     onSelect,
     fetcher,
-    icon: Icon,
+    icon,
     placeholder = 'Seleccionar…',
     searchPlaceholder = 'Buscar…',
     emptyText = 'Sin resultados',
@@ -116,197 +111,53 @@ export function EntitySelect({
     lockedCreateFields,
 }: EntitySelectProps) {
     const can = useCan()
-    const api = useApi()
-
     const ns = capabilityNamespace(model)
     const mayCreate = canCreate ?? can(`${ns}.create`)
     const mayEdit = canEdit ?? can(`${ns}.update`)
-    const base = endpoint ?? `/data/${model}/me`
 
-    const [open, setOpen] = useState(false)
-    const [dialogOpen, setDialogOpen] = useState(false)
-    const [dialogRecordId, setDialogRecordId] = useState<string | undefined>(undefined)
-    const [searchTerm, setSearchTerm] = useState('')
-    const [results, setResults] = useState<EntitySelectOption[]>([])
-    const [isLoading, setIsLoading] = useState(false)
-
-    const minChars = preload ? 0 : 2
-
-    const run = useCallback(
-        async (q: string, signal: AbortSignal) => {
-            if (q.length < minChars) {
-                setResults([])
-                return
-            }
-            setIsLoading(true)
-            try {
-                const rows = await fetcher(q, signal)
-                if (!signal.aborted) setResults(rows)
-            } catch {
-                if (!signal.aborted) setResults([])
-            } finally {
-                if (!signal.aborted) setIsLoading(false)
-            }
+    // Read the {id,label} off a saved record and select it (create) or
+    // refresh its label (edit).
+    const { openCreate, openEdit, dialog } = useRecordPickerDialog({
+        model,
+        endpoint,
+        prefillField: labelField,
+        createDefaults,
+        lockedCreateFields,
+        onSaved: (rec) => {
+            const id = rec.id != null ? String(rec.id) : value ?? ''
+            onSelect(id, recordLabel(rec, labelField) ?? label ?? id)
         },
-        [fetcher, minChars],
-    )
-
-    useEffect(() => {
-        if (!open) return
-        const controller = new AbortController()
-        const timeout = setTimeout(() => run(searchTerm, controller.signal), 250)
-        return () => {
-            clearTimeout(timeout)
-            controller.abort()
-        }
-    }, [searchTerm, run, open])
-
-    const pick = (row: EntitySelectOption) => {
-        onSelect(row.value, row.label)
-        setOpen(false)
-        setSearchTerm('')
-    }
-
-    const clear = (e: React.MouseEvent) => {
-        e.stopPropagation()
-        onSelect(null, null)
-    }
-
-    const openCreate = () => {
-        setOpen(false)
-        setDialogRecordId(undefined)
-        setDialogOpen(true)
-    }
-    const openEdit = () => {
-        if (!value) return
-        setOpen(false)
-        setDialogRecordId(value)
-        setDialogOpen(true)
-    }
-
-    // Read the {id,label} off a saved record and select it. The transport
-    // matches the standard org-scoped CRUD the dynamic modal uses, so create/edit
-    // stay consistent with the rest of the app.
-    const selectSaved = (rec: Record<string, unknown> | undefined | null) => {
-        if (!rec) return
-        const id = rec.id != null ? String(rec.id) : value ?? ''
-        const lbl =
-            (rec[labelField] != null && String(rec[labelField])) ||
-            (rec.name != null && String(rec.name)) ||
-            label ||
-            id
-        onSelect(id, lbl)
-    }
-
-    const onCreate = mayCreate ? openCreate : undefined
-    const onEdit = mayEdit ? openEdit : undefined
-    const joined = hasRecordPickerAction(!!value, onCreate, onEdit)
+    })
+    const search = useLatestSearch(fetcher)
 
     return (
-        <div className="flex items-center" data-slot="entity-select">
-            <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
-                <PopoverTrigger asChild>
-                    <Button
-                        variant="outline"
-                        disabled={disabled}
-                        className={'w-full min-w-0 flex-1 justify-start gap-2 font-normal' + (joined ? ` ${JOINED_TRIGGER_CLASS}` : '')}
-                    >
-                        {Icon && <Icon className="text-muted-foreground size-4 shrink-0" />}
-                        <span className="flex-1 truncate text-left">{label ?? placeholder}</span>
-                        {value && (
-                            <span
-                                role="button"
-                                tabIndex={0}
-                                onClick={clear}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter' || e.key === ' ')
-                                        clear(e as unknown as React.MouseEvent)
-                                }}
-                                className="hover:bg-accent ml-auto shrink-0 rounded-sm p-0.5"
-                            >
-                                <X className="size-3.5" />
-                            </span>
-                        )}
-                    </Button>
-                </PopoverTrigger>
-                <PopoverContent
-                    className="p-0"
-                    align="start"
-                    collisionPadding={8}
-                    style={{ width: 'max(var(--radix-popover-trigger-width), 14rem)', maxWidth: 'calc(100vw - 1rem)' }}
-                >
-                    <Command shouldFilter={false}>
-                        <CommandInput
-                            placeholder={searchPlaceholder}
-                            value={searchTerm}
-                            onValueChange={setSearchTerm}
-                        />
-                        <CommandList>
-                            {isLoading && (
-                                <div className="text-muted-foreground py-4 text-center text-sm">
-                                    Buscando…
-                                </div>
-                            )}
-                            {!isLoading &&
-                                searchTerm.length >= minChars &&
-                                results.length === 0 && <div className="text-muted-foreground py-6 text-center text-sm">{emptyText}</div>}
-                            {!isLoading && results.length > 0 && (
-                                <CommandGroup className="max-h-64 overflow-auto">
-                                    {results.map((row) => (
-                                        <CommandItem
-                                            key={row.value}
-                                            value={row.value}
-                                            onSelect={() => pick(row)}
-                                            className="flex flex-col items-start gap-0.5"
-                                        >
-                                            <span className="text-sm font-medium">{row.label}</span>
-                                            {row.description && (
-                                                <span className="text-muted-foreground text-xs">
-                                                    {row.description}
-                                                </span>
-                                            )}
-                                        </CommandItem>
-                                    ))}
-                                </CommandGroup>
-                            )}
-                            {!isLoading && !preload && searchTerm.length < minChars && (
-                                <div className="text-muted-foreground flex flex-col items-center gap-1 py-6">
-                                    <Search className="size-5" />
-                                    <span className="text-xs">Escribe al menos 2 caracteres</span>
-                                </div>
-                            )}
-                            {onCreate && !isLoading && <PickerCreateItem label={model} onSelect={openCreate} />}
-                        </CommandList>
-                    </Command>
-                </PopoverContent>
-            </Popover>
-
-            {/* Selected → edit (pencil); empty → create (+). Each gated by perms. */}
-            <RecordPickerAction hasValue={!!value} label={model} onCreate={onCreate} onEdit={onEdit} disabled={disabled} />
-
-            {dialogOpen && (
-                <CreateRecordDialog
-                    modelKey={model}
-                    open={dialogOpen}
-                    onOpenChange={setDialogOpen}
-                    recordId={dialogRecordId}
-                    endpoint={base}
-                    defaults={dialogRecordId ? undefined : createDefaults}
-                    lockedFields={dialogRecordId ? undefined : lockedCreateFields}
-                    onCreate={async (data) => {
-                        const res = await api.post(base, data)
-                        const rec = (res.data?.data ?? res.data) as Record<string, unknown>
-                        selectSaved(rec)
-                        return rec.id != null ? { id: String(rec.id) } : undefined
-                    }}
-                    onUpdate={async (id, data) => {
-                        const res = await api.put(`${base}/${id}`, data)
-                        const rec = (res.data?.data ?? res.data) as Record<string, unknown>
-                        selectSaved({ id, ...rec })
-                        return { id: String(id) }
-                    }}
-                />
-            )}
-        </div>
+        <>
+            <RecordPicker<EntitySelectOption>
+                slot="entity-select"
+                search={search}
+                minChars={preload ? 0 : 2}
+                minCharsText="Escribe al menos 2 caracteres"
+                getKey={(o) => o.value}
+                getLabel={(o) => o.label}
+                getDescription={(o) => o.description}
+                showCheck={false}
+                value={value}
+                selected={value ? { value, label: label ?? value } : null}
+                onSelect={(o) => onSelect(o.value, o.label)}
+                onClear={() => onSelect(null, null)}
+                icon={icon}
+                placeholder={placeholder}
+                renderValue={(sel) => (
+                    <span className={'min-w-0 flex-1 truncate' + (sel ? '' : ' text-muted-foreground')}>{label ?? placeholder}</span>
+                )}
+                searchPlaceholder={searchPlaceholder}
+                emptyText={emptyText}
+                entityLabel={model}
+                onCreate={mayCreate ? (q) => openCreate(q) : undefined}
+                onEdit={mayEdit && value ? () => openEdit(value) : undefined}
+                disabled={disabled}
+            />
+            {dialog}
+        </>
     )
 }
