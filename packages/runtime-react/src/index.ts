@@ -430,6 +430,7 @@ export {
     makeDefaultGetDynamicColumns,
     relationKeyFor,
     resolveAvatarSrc,
+    resolveImageSrc,
     resolveMissingActorLabel,
     resolveActorDisplayName,
     resolveRelationLabel,
