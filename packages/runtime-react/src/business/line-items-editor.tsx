@@ -675,7 +675,7 @@ function DraftRow({
     entityLabel,
     span,
 }: {
-    /** Columnas que ocupa el buscador (todas menos «Importe» y acciones). */
+    /** Columnas antes de «Importe» y acciones; el buscador ocupa solo la primera. */
     span: number
     onCreate?: (query: string) => void
     entityLabel?: string
@@ -690,10 +690,10 @@ function DraftRow({
     const [text, setText] = useState('')
     return (
         <tr className="border-t border-dashed" data-slot="line-draft-row">
-            {/* El renglón vacío no tiene cantidad ni precio todavía: el buscador
-                usa ese ancho (antes medía solo la columna «Descripción» y el
-                texto de ayuda se cortaba). */}
-            <td className={CELL} colSpan={span}>
+            {/* El buscador vive SOLO en la celda «Descripción», como cualquier
+                renglón: no invade Cant./Precio/Desc. (esas celdas quedan vacías
+                hasta elegir producto). */}
+            <td className={CELL}>
                 <LineProductCell
                     search={search}
                     text={text}
@@ -726,6 +726,9 @@ function DraftRow({
                     entityLabel={entityLabel}
                 />
             </td>
+            {Array.from({ length: Math.max(0, span - 1) }, (_, i) => (
+                <td key={i} aria-hidden />
+            ))}
             <td aria-hidden />
             <td aria-hidden />
         </tr>
