@@ -3,13 +3,15 @@
 // Controlado: `value`/`onChange` con `LineItem[]`. Guardar = `serializeLineItems`.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Heading, Minus, Plus, StickyNote, Trash2 } from 'lucide-react'
+import { Heading, Minus, Pencil, Plus, StickyNote, Trash2 } from 'lucide-react'
 import { Button, Input } from '@asteby/metacore-ui'
 import { useCan } from '../permissions-context'
 import { useFormatter } from './format'
 import {
     addProductLine,
+    applyCatalogPending,
     applyProductToLine,
+    refreshLineFromProduct,
     lineGridKeyCommand,
     type DocumentLinesMode,
     type PriceSource,
@@ -73,6 +75,26 @@ export interface DocumentLinesGridProps {
      * ya muestra sus propios totales (DocumentEditor) lo apaga.
      */
     showTotals?: boolean
+    /**
+     * Alta del producto desde la celda («+» y «Crear producto «texto»»). Resuelve
+     * con el producto guardado (o nada si se canceló): el renglón se llena con
+     * el mismo mapeo que al elegir uno existente.
+     */
+    onCreateProduct?: (query: string) => Promise<ProductResult | null | undefined>
+    /**
+     * Edición del producto del renglón (lápiz en la celda). Resuelve con el
+     * producto ya guardado: el renglón se actualiza salvo los campos que el
+     * usuario sobrescribió (ver `refreshLineFromProduct`).
+     */
+    onEditProduct?: (line: LineItem) => Promise<ProductResult | null | undefined>
+    /** Nombre del modelo de catálogo para «Crear …» / «Editar …» (default «producto»). */
+    productLabel?: string
+    /**
+     * Etiqueta visible de la unidad (`unit` → «pza»). Si devuelve vacío, la
+     * unidad no se muestra bajo el SKU (nunca la clave cruda). Sin esta prop se
+     * muestra el valor tal cual.
+     */
+    unitLabel?: (unit: string) => string | undefined
 }
 
 /** @deprecated Usa `DocumentLinesGridProps`. Es el mismo contrato. */
@@ -100,6 +122,10 @@ export function DocumentLinesGrid({
     editPermission,
     currency,
     showTotals = true,
+    onCreateProduct,
+    onEditProduct,
+    productLabel,
+    unitLabel,
 }: DocumentLinesGridProps) {
     const { t } = useTranslation()
     const can = useCan()
@@ -125,6 +151,12 @@ export function DocumentLinesGrid({
     const canAdd = !locked && !fromSource
     const [undo, setUndo] = useState<LineItem[] | null>(null)
 
+    // Crear/editar desde la celda resuelven DESPUÉS de un modal: se trabaja
+    // sobre los renglones de ese momento (no los del render que abrió el modal).
+    const latest = useRef(value)
+    latest.current = value
+    const entity = productLabel ?? t('lineItems.productEntity', { defaultValue: 'producto' })
+
     const emit = (next: LineItem[]) => {
         onChange(next)
         const priced = discountMode === 'amount' ? next.map((l) => (l.kind === 'item' ? { ...l, discount_kind: 'amount' as const } : l)) : next
@@ -132,7 +164,7 @@ export function DocumentLinesGrid({
     }
     const patch = (idx: number, p: Partial<LineItem>) => {
         if (discountMode === 'amount') p = { ...p, discount_kind: 'amount' }
-        emit(value.map((l, i) => (i === idx ? { ...l, ...p } : l)))
+        emit(value.map((l, i) => (i === idx ? withoutAnsweredPending({ ...l, ...p }, p) : l)))
     }
     const remove = (idx: number) => {
         setUndo(value)
@@ -159,22 +191,53 @@ export function DocumentLinesGrid({
     const blankLine = () => makeLine(discountMode === 'amount' ? { discount_kind: 'amount' } : {})
 
     /** Renglón vacío del final: el producto entra como renglón nuevo (o suma al mismo). */
-    const pickProduct = (product: ProductResult, variant?: ProductVariant) => {
-        const next = addProductLine(value, product, variant, { priceSource, warehouseId, mergeSameProduct })
+    const pickProduct = (product: ProductResult, variant?: ProductVariant, base: LineItem[] = value) => {
+        const next = addProductLine(base, product, variant, { priceSource, warehouseId, mergeSameProduct })
         emit(next)
         const id = variant?.id ?? product.id
-        const target = next.find((l) => l.kind === 'item' && l.product_id === id && !value.includes(l)) ?? next[next.length - 1]
+        const target = next.find((l) => l.kind === 'item' && l.product_id === id && !base.includes(l)) ?? next[next.length - 1]
         if (target) setFocusQty(target.key)
     }
 
     /** Renglón libre existente: el producto elegido en su celda llena ESE renglón. */
-    const fillLine = (idx: number, product: ProductResult, variant?: ProductVariant) => {
-        const cur = value[idx]
+    const fillLine = (idx: number, product: ProductResult, variant?: ProductVariant, base: LineItem[] = value) => {
+        const cur = base[idx]
         if (!cur) return
         const filled = applyProductToLine(cur, product, variant, { priceSource, warehouseId })
-        emit(value.map((l, i) => (i === idx ? (discountMode === 'amount' ? { ...filled, discount_kind: 'amount' as const } : filled) : l)))
+        emit(base.map((l, i) => (i === idx ? (discountMode === 'amount' ? { ...filled, discount_kind: 'amount' as const } : filled) : l)))
         setFocusQty(cur.key)
     }
+
+    /**
+     * «Crear producto «texto»» / «+»: el alta del modelo de catálogo; al
+     * guardarse, el producto nuevo entra en ESE renglón (o en uno nuevo desde
+     * el renglón del final) y lo llena igual que al elegir uno existente.
+     */
+    const createProduct = onCreateProduct
+        ? async (query: string, lineKey?: string) => {
+              const product = await onCreateProduct(query)
+              if (!product) return
+              const base = latest.current
+              const idx = lineKey ? base.findIndex((l) => l.key === lineKey) : -1
+              if (idx >= 0 && !base[idx].product_id) fillLine(idx, product, undefined, base)
+              else pickProduct(product, undefined, base)
+          }
+        : undefined
+
+    /**
+     * Lápiz: edita el producto del renglón; al guardar, el renglón toma los
+     * valores nuevos salvo lo que el usuario sobrescribió (queda el aviso).
+     */
+    const editProduct = onEditProduct
+        ? async (line: LineItem) => {
+              const product = await onEditProduct(line)
+              if (!product) return
+              const base = latest.current
+              emit(base.map((l) => (l.key === line.key ? refreshLineFromProduct(l, product, { priceSource, warehouseId }) : l)))
+          }
+        : undefined
+
+    const unitText = (u?: string) => (!u ? undefined : unitLabel ? unitLabel(u) || undefined : u)
 
     /** Texto escrito en el renglón vacío sin elegir producto → renglón libre con esa descripción. */
     const addFreeFromDraft = (description: string) => {
@@ -296,21 +359,57 @@ export function DocumentLinesGrid({
                                                 ariaLabel={t('lineItems.description', { defaultValue: 'Descripción' })}
                                                 invalid={!!cell(i, 'description')}
                                                 dataCell="description"
+                                                onCreate={createProduct ? (q) => void createProduct(q, l.key) : undefined}
+                                                entityLabel={entity}
                                             />
                                         ) : (
-                                            <Input
-                                                value={l.description}
-                                                disabled={locked}
-                                                className={INPUT}
-                                                data-cell="description"
-                                                aria-label={t('lineItems.description', { defaultValue: 'Descripción' })}
-                                                aria-invalid={!!cell(i, 'description')}
-                                                onChange={(e) => patch(i, { description: e.target.value })}
-                                                onKeyDown={(e) => descKeys(e, i, l)}
-                                            />
+                                            <div className="relative" data-slot="line-description">
+                                                <Input
+                                                    value={l.description}
+                                                    disabled={locked}
+                                                    className={INPUT + (editProduct && l.product_id && !locked ? ' pr-9' : '')}
+                                                    data-cell="description"
+                                                    aria-label={t('lineItems.description', { defaultValue: 'Descripción' })}
+                                                    aria-invalid={!!cell(i, 'description')}
+                                                    onChange={(e) => patch(i, { description: e.target.value })}
+                                                    onKeyDown={(e) => descKeys(e, i, l)}
+                                                />
+                                                {editProduct && l.product_id && !locked && (
+                                                    <Button
+                                                        type="button"
+                                                        size="icon"
+                                                        variant="ghost"
+                                                        className={EDIT}
+                                                        data-slot="line-edit-product"
+                                                        aria-label={t('lineItems.editProduct', { defaultValue: 'Editar {{entity}}', entity })}
+                                                        title={t('lineItems.editProduct', { defaultValue: 'Editar {{entity}}', entity })}
+                                                        onClick={() => void editProduct(l)}
+                                                    >
+                                                        <Pencil className="size-3.5" />
+                                                    </Button>
+                                                )}
+                                            </div>
                                         )}
-                                        {(l.sku || l.unit) && (
-                                            <p className="mt-0.5 text-xs text-muted-foreground">{[l.sku, !show('unit') ? l.unit : ''].filter(Boolean).join(' · ')}</p>
+                                        {(l.sku || unitText(l.unit)) && (
+                                            <p className="mt-0.5 text-xs text-muted-foreground">{[l.sku, !show('unit') ? unitText(l.unit) : ''].filter(Boolean).join(' · ')}</p>
+                                        )}
+                                        {l.catalog_pending && !locked && (
+                                            <p className="mt-0.5 text-xs text-muted-foreground" data-slot="catalog-pending" role="status">
+                                                {l.catalog_pending.unit_price != null
+                                                    ? t('lineItems.catalogPriceChanged', {
+                                                          defaultValue: 'Precio de catálogo cambió a {{price}}',
+                                                          price: fmt.money(l.catalog_pending.unit_price),
+                                                      })
+                                                    : t('lineItems.catalogChanged', { defaultValue: 'El producto cambió en el catálogo' })}
+                                                {' — '}
+                                                <button
+                                                    type="button"
+                                                    className="font-medium text-foreground underline-offset-2 hover:underline focus-visible:underline focus-visible:outline-none"
+                                                    onClick={() => emit(latest.current.map((x) => (x.key === l.key ? applyCatalogPending(x) : x)))}
+                                                >
+                                                    {t('lineItems.catalogApply', { defaultValue: 'aplicar' })}
+                                                </button>
+                                            </p>
                                         )}
                                         {cell(i, 'description') && <p className="mt-0.5 text-xs text-destructive">{cell(i, 'description')}</p>}
                                     </td>
@@ -474,10 +573,12 @@ export function DocumentLinesGrid({
                                 search={search}
                                 warehouseId={warehouseId}
                                 currency={currency}
-                                onPick={pickProduct}
+                                onPick={(p, v) => pickProduct(p, v)}
                                 onFree={addFreeFromDraft}
                                 onAddBlank={() => emit([...value, blankLine()])}
-                                trailingCells={colCount - 1}
+                                onCreate={createProduct ? (q) => void createProduct(q) : undefined}
+                                entityLabel={entity}
+                                span={colCount - 2}
                             />
                         )}
                     </tbody>
@@ -542,6 +643,15 @@ export function DocumentLinesGrid({
     )
 }
 
+/** Capturar a mano un campo con aviso de catálogo responde el aviso: deja de ofrecer «aplicar» para ese campo. */
+function withoutAnsweredPending(line: LineItem, p: Partial<LineItem>): LineItem {
+    if (!line.catalog_pending) return line
+    const pending = { ...line.catalog_pending }
+    for (const k of Object.keys(p)) delete (pending as Record<string, unknown>)[k]
+    const { catalog_pending: _drop, ...rest } = line
+    return Object.keys(pending).length > 0 ? { ...rest, catalog_pending: pending } : rest
+}
+
 /** Mismo componente. El nombre anterior sigue exportado. */
 export const LineItemsEditor = DocumentLinesGrid
 
@@ -561,9 +671,14 @@ function DraftRow({
     onPick,
     onFree,
     onAddBlank,
-    trailingCells,
+    onCreate,
+    entityLabel,
+    span,
 }: {
-    trailingCells: number
+    /** Columnas que ocupa el buscador (todas menos «Importe» y acciones). */
+    span: number
+    onCreate?: (query: string) => void
+    entityLabel?: string
     search: NonNullable<DocumentLinesGridProps['search']>
     warehouseId?: string
     currency?: string
@@ -575,7 +690,10 @@ function DraftRow({
     const [text, setText] = useState('')
     return (
         <tr className="border-t border-dashed" data-slot="line-draft-row">
-            <td className={CELL}>
+            {/* El renglón vacío no tiene cantidad ni precio todavía: el buscador
+                usa ese ancho (antes medía solo la columna «Descripción» y el
+                texto de ayuda se cortaba). */}
+            <td className={CELL} colSpan={span}>
                 <LineProductCell
                     search={search}
                     text={text}
@@ -595,15 +713,21 @@ function DraftRow({
                     warehouseId={warehouseId}
                     currency={currency}
                     ariaLabel={t('lineItems.searchProduct', { defaultValue: 'Buscar producto' })}
-                    placeholder={t('lineItems.searchPlaceholder', { defaultValue: 'Producto, medida (205/55R16), SKU o código de barras' })}
                     className="border-dashed bg-transparent shadow-none"
                     dataCell="search"
+                    onCreate={
+                        onCreate
+                            ? (q) => {
+                                  setText('')
+                                  onCreate(q)
+                              }
+                            : undefined
+                    }
+                    entityLabel={entityLabel}
                 />
             </td>
-            {/* Celdas vacías con la misma estructura: el buscador mide lo que su columna. */}
-            {Array.from({ length: trailingCells }, (_, i) => (
-                <td key={i} aria-hidden />
-            ))}
+            <td aria-hidden />
+            <td aria-hidden />
         </tr>
     )
 }
@@ -624,6 +748,10 @@ function TotalRow({ span, label, value, slot, strong }: { span: number; label: s
 /** Borrar renglón: aparece al pasar o enfocar la fila (siempre visible en móvil). */
 const DELETE =
     'size-8 text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 max-sm:opacity-100'
+
+/** Lápiz «Editar producto» dentro de la celda: al pasar o enfocar la fila; siempre con teclado y en móvil. */
+const EDIT =
+    'absolute right-0.5 top-1/2 size-7 -translate-y-1/2 text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 max-sm:opacity-100'
 
 /** Celda densa: misma altura en todos los renglones. */
 const CELL = 'px-2 py-1.5 align-top'

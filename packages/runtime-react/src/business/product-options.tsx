@@ -108,7 +108,7 @@ export function ProductHitRow({ hit, warehouseId, currency, compact }: { hit: Pr
     return (
         <span className="flex w-full min-w-0 items-center justify-between gap-3">
             <span className="min-w-0">
-                <span className="block truncate font-medium">{productHitLabel(hit)}</span>
+                <span className="line-clamp-2 break-words font-medium" title={productHitLabel(hit)}>{productHitLabel(hit)}</span>
                 {meta && <span className="block truncate text-xs text-muted-foreground">{meta}</span>}
             </span>
             <span className="flex shrink-0 items-center gap-2">

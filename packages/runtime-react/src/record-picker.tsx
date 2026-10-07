@@ -268,6 +268,8 @@ export interface RecordPickerProps<T> {
     inputRef?: Ref<HTMLInputElement>
     /** Floor for the list width (CSS length). Default 14rem. */
     minListWidth?: string
+    /** Ceiling for the list width (CSS length), e.g. under a very wide trigger. Default: none. */
+    maxListWidth?: string
     /** Rendered after the joined group (e.g. a scan button). */
     after?: ReactNode
     /** Rendered under the control (badges, hints). */
@@ -351,6 +353,7 @@ export function RecordPicker<T>(props: RecordPickerProps<T>) {
         triggerProps,
         inputRef,
         minListWidth = '14rem',
+        maxListWidth,
         after,
         below,
         beforeList,
@@ -555,7 +558,15 @@ export function RecordPicker<T>(props: RecordPickerProps<T>) {
         )
 
     const list = (
-        <div className="max-h-72 overflow-y-auto overflow-x-hidden overscroll-contain" data-slot="record-picker-list">
+        <div
+            className="overflow-y-auto overflow-x-hidden overscroll-contain"
+            data-slot="record-picker-list"
+            // Never taller than the room Radix measured on the side it opened
+            // (flipped above the field near the bottom of a modal it used to
+            // spill past the top of the viewport): 18rem at most, minus the
+            // search box in button mode; the list scrolls inside.
+            style={{ maxHeight: `min(18rem, calc(var(--radix-popover-content-available-height, 18rem) - ${isInput ? '2px' : '2.75rem'}))` }}
+        >
             {beforeList}
             {status}
             <ul
@@ -596,7 +607,7 @@ export function RecordPicker<T>(props: RecordPickerProps<T>) {
                                     ) : null}
                                     {renderLead?.(item, 'option')}
                                     <span className="flex min-w-0 flex-1 flex-col">
-                                        <span className="truncate">{getLabel(item)}</span>
+                                        <span className="line-clamp-2 break-words">{getLabel(item)}</span>
                                         {desc != null && desc !== '' ? (
                                             <span className="truncate text-xs text-muted-foreground">{desc}</span>
                                         ) : null}
@@ -636,7 +647,9 @@ export function RecordPicker<T>(props: RecordPickerProps<T>) {
     )
 
     const contentStyle = {
-        width: `max(var(--radix-popover-trigger-width), ${minListWidth})`,
+        width: maxListWidth
+            ? `min(max(var(--radix-popover-trigger-width), ${minListWidth}), ${maxListWidth})`
+            : `max(var(--radix-popover-trigger-width), ${minListWidth})`,
         maxWidth: 'calc(100vw - 1rem)',
         zIndex: RECORD_PICKER_Z_INDEX,
     }

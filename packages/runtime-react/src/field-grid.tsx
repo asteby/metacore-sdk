@@ -42,15 +42,16 @@ export function FieldCell({
 export function FieldLabel({
     htmlFor,
     required,
-    tone = 'caps',
+    tone = 'sentence',
     children,
 }: {
     htmlFor?: string
     required?: boolean
     /**
-     * `caps` (default): small uppercase eyebrow of the CRUD modals. `sentence`:
-     * sentence-case label for dense editors (DocumentEditor) where a column of
-     * uppercase labels reads as shouting.
+     * `sentence` (default): sentence-case label — every form of the runtime
+     * (CRUD modal, action modal, DocumentEditor) reads the same and a column of
+     * uppercase labels no longer shouts. `caps`: small uppercase eyebrow, for
+     * callers that still want it.
      */
     tone?: 'caps' | 'sentence'
     children: ReactNode

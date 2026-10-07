@@ -47,10 +47,17 @@ describe('DocumentLinesGrid — select de producto en la celda', () => {
         const input = screen.getByRole('combobox', { name: 'Buscar producto' })
         const td = input.closest('td')!
         expect(td).toBeTruthy()
-        // Ocupa solo su celda: no hay colSpan sobre toda la fila.
-        expect(td.colSpan).toBe(1)
-        expect(td.closest('tr')!.getAttribute('data-slot')).toBe('line-draft-row')
-        expect(td.closest('tr')!.children.length).toBeGreaterThan(1)
+        // No es una barra a todo lo ancho: el renglón vacío conserva las celdas
+        // de «Importe» y acciones; el buscador usa el ancho de las columnas que
+        // ese renglón aún no llena (cantidad, precio…), así no se corta.
+        const row = td.closest('tr')!
+        expect(row.getAttribute('data-slot')).toBe('line-draft-row')
+        const columns = document.querySelectorAll('[data-slot="line-items-editor"] thead th').length
+        expect(td.colSpan).toBe(columns - 2)
+        expect(row.children.length).toBe(3)
+        // Placeholder corto que cabe; el detalle va como ayuda.
+        expect(input.getAttribute('placeholder')).toBe('Buscar producto…')
+        expect(input.getAttribute('title')).toMatch(/SKU o código de barras/)
     })
 
     it('la lista sale en un portal fuera del contenedor con overflow y Enter elige y pasa a «Cant.»', async () => {

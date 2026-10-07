@@ -178,12 +178,68 @@ export function partyDefaults(
     return out
 }
 
-/** Filas de la tarjeta de contraparte: resumen declarado + extensiones (máximo `limit`). */
+/** Etiqueta y opciones de catálogo de un campo (de la metadata del modelo o del propio tipo). */
+export interface FieldDisplayMeta {
+    label?: string
+    options?: ReadonlyArray<{ value: unknown; label?: unknown }>
+}
+
+/**
+ * Metadata de pantalla por clave a partir de listas de campos/columnas
+ * (`/metadata/modal` → fields, `/metadata/table` → columns, campos del tipo).
+ * La primera lista que trae etiqueta u opciones para una clave gana.
+ */
+export function fieldDisplayMeta(
+    lists: ReadonlyArray<ReadonlyArray<unknown> | null | undefined>,
+    translate: (s: string) => string = (s) => s,
+): Record<string, FieldDisplayMeta> {
+    const out: Record<string, FieldDisplayMeta> = {}
+    for (const list of lists) {
+        for (const raw of list ?? []) {
+            const f = raw as { key?: unknown; name?: unknown; label?: unknown; options?: unknown }
+            const key = typeof f?.key === 'string' ? f.key : typeof f?.name === 'string' ? f.name : undefined
+            if (!key) continue
+            const cur = (out[key] ??= {})
+            if (!cur.label && typeof f.label === 'string' && f.label) cur.label = translate(f.label)
+            if (!cur.options && Array.isArray(f.options) && f.options.length > 0) {
+                cur.options = f.options.map((o: any) => ({ value: o?.value, label: typeof o?.label === 'string' ? translate(o.label) : o?.label }))
+            }
+        }
+    }
+    return out
+}
+
+/** `tax_id` → «Tax id»: último recurso cuando ningún metadata etiqueta la columna. */
+export function humanizeKey(key: string): string {
+    const base = key.replace(EXTENSION_PREFIX, '').replace(/[_.]+/g, ' ').trim()
+    return base ? base.charAt(0).toUpperCase() + base.slice(1) : key
+}
+
+/**
+ * Valor de catálogo legible: `G03` con la opción «Gastos en general» →
+ * «G03 · Gastos en general» (si la etiqueta ya trae el código, tal cual).
+ */
+export function formatOptionValue(value: unknown, options?: FieldDisplayMeta['options']): string {
+    const raw = String(value)
+    const opt = options?.find((o) => String(o.value) === raw)
+    const label = opt && typeof opt.label === 'string' ? opt.label.trim() : ''
+    if (!label || label === raw) return raw
+    if (label.includes(raw)) return label
+    const codeLike = /^[A-Z0-9]{1,5}$/.test(raw) && /\d/.test(raw)
+    return codeLike ? `${raw} · ${label}` : label
+}
+
+/**
+ * Filas de la tarjeta de contraparte: resumen declarado + extensiones (máximo
+ * `limit`). Etiqueta del campo (metadata / labels declarados, ya traducidos),
+ * valores de catálogo con su texto y nunca claves crudas ni vacíos.
+ */
 export function partySummaryRows(
     party: Record<string, any> | null,
     summary: readonly string[] = [],
     labels: Record<string, string> = {},
     limit = 6,
+    meta: Record<string, FieldDisplayMeta> = {},
 ): Array<{ key: string; label: string; value: string }> {
     if (!party) return []
     const keys = new Set<string>(summary)
@@ -193,7 +249,9 @@ export function partySummaryRows(
     for (const key of keys) {
         const v = readPath(party, key)
         if (!hasValue(v) || typeof v === 'object') continue
-        rows.push({ key, label: labels[key] ?? key.replace(EXTENSION_PREFIX, ''), value: String(v) })
+        if (typeof v === 'string' && !v.trim()) continue
+        const m = meta[key]
+        rows.push({ key, label: labels[key] ?? m?.label ?? humanizeKey(key), value: formatOptionValue(v, m?.options) })
     }
     return rows.slice(0, limit)
 }

@@ -29,13 +29,17 @@ import { FormErrorBanner } from './feedback'
 import { DocumentLinesGrid, type DocumentLinesGridProps, type LineItemsColumn } from './line-items-editor'
 import { computeTotals, serializeLineItems, taxBreakdown, type LineItem } from './line-items'
 import { roundMoney, toAmount, useFormatter } from './format'
-import { createCatalogProductSearch } from './catalog-product-search'
+import { catalogRecordToProduct, createCatalogProductSearch } from './catalog-product-search'
+import type { ProductResult } from './product-search'
+import { requestRecordCreate, requestRecordEdit, withSearchPrefill } from '../record-picker-actions'
 import {
     allocationAmountField,
     allocationIssueMessages,
     allocationPayload,
     creditStatus,
     editorLinesConfig,
+    fieldDisplayMeta,
+    type FieldDisplayMeta,
     linesFromSource,
     localIssues,
     sourceLoadSummary,
@@ -91,8 +95,13 @@ export interface DocumentEditorProps {
     onSaved?: (record?: unknown) => void
     onCancel: () => void
     searchProducts?: DocumentLinesGridProps['search']
-    /** Modelo de catálogo del buscador por defecto. Default `products.Product`. */
+    /**
+     * Modelo de catálogo: buscador por defecto y alta/edición del producto
+     * desde la celda del renglón. Default `products.Product`.
+     */
     productModel?: string
+    /** Columna del modelo de catálogo que recibe lo buscado al crear. Default `name`. */
+    productLabelField?: string
     defaultTaxRate?: number
     currency?: string
     /** Hoy (días de atraso del reparto; inyectable en tests). */
@@ -118,6 +127,7 @@ export function DocumentEditor({
     onCancel,
     searchProducts,
     productModel,
+    productLabelField = 'name',
     defaultTaxRate,
     currency,
     today,
@@ -145,7 +155,8 @@ export function DocumentEditor({
     const [linesFromSourceDoc, setLinesFromSourceDoc] = useState(false)
     const [extFields, setExtFields] = useState<ActionFieldDef[]>([])
     const [party, setParty] = useState<Record<string, any> | null>(null)
-    const [partyLabels, setPartyLabels] = useState<Record<string, string>>({})
+    const [partyFieldLists, setPartyFieldLists] = useState<unknown[][]>([])
+    const [catalogMeta, setCatalogMeta] = useState<Record<string, FieldDisplayMeta> | null>(null)
     // Etiquetas de los selectores que el editor llena por código (contraparte y
     // documento origen de «Cargar desde…»): sin ellas el selector cerrado pinta el UUID.
     const [seeds, setSeeds] = useState<Record<string, SeedLabel>>({})
@@ -254,24 +265,92 @@ export function DocumentEditor({
         }
     }, [api, type.party, partyId])
 
-    // Etiquetas de la tarjeta (RFC, régimen…): las del formulario del modelo de
-    // la contraparte, incluidas sus extensiones; sin ellas se ve la columna cruda.
+    // Etiquetas de la tarjeta (RFC, régimen…) y texto de sus catálogos: la
+    // metadata del modelo de la contraparte (formulario, con extensiones, y
+    // tabla); sin ellas se veía la columna cruda (`tax_id`).
     const partyModel = type.party?.model
     useEffect(() => {
         if (!partyModel) return
         let cancelled = false
-        api.get(`/metadata/modal/${partyModel}`)
-            .then((res: any) => {
-                const fields: any[] = res?.data?.data?.fields ?? res?.data?.fields ?? []
-                const out: Record<string, string> = {}
-                for (const f of fields) if (typeof f?.key === 'string' && typeof f?.label === 'string' && f.label) out[f.key] = f.label
-                if (!cancelled) setPartyLabels(out)
-            })
-            .catch(() => {})
+        void loadModelFieldLists(api, partyModel).then((lists) => {
+            if (!cancelled) setPartyFieldLists(lists)
+        })
         return () => {
             cancelled = true
         }
     }, [api, partyModel])
+
+    // Modelo de catálogo del renglón: alta/edición desde la celda y etiquetas
+    // de sus catálogos (unidad «unit» → «Pieza»).
+    const catalogModel = productModel ?? 'products.Product'
+    // Perezoso: solo cuando ya hay un renglón con producto (no compite con la
+    // carga inicial del editor).
+    const hasCatalogLine = lines.some((l) => l.kind === 'item' && !!l.product_id)
+    const wantsCatalogMeta = !!lineCfg && !isAllocation && hasCatalogLine
+    useEffect(() => {
+        if (!wantsCatalogMeta) return
+        let cancelled = false
+        void loadModelFieldLists(api, catalogModel).then((lists) => {
+            if (!cancelled) setCatalogMeta(fieldDisplayMeta(lists, tl))
+        })
+        return () => {
+            cancelled = true
+        }
+    }, [api, catalogModel, tl, wantsCatalogMeta])
+
+    /** Lee el producto guardado con la misma proyección del buscador (catalogRecordToProduct). */
+    const loadCatalogProduct = useCallback(
+        async (id: string, saved?: Record<string, any>): Promise<ProductResult | null> => {
+            try {
+                const res: any = await api.get(`/data/${catalogModel}`, { params: { f_id: `eq:${id}`, per_page: 1 } })
+                const rows = res?.data?.data
+                const row = Array.isArray(rows) ? rows[0] : null
+                if (row) return catalogRecordToProduct({ ...(saved ?? {}), ...row }, taxRate)
+            } catch {
+                // Sin lectura, lo que devolvió el guardado.
+            }
+            return saved && saved.id != null ? catalogRecordToProduct(saved, taxRate) : null
+        },
+        [api, catalogModel, taxRate],
+    )
+    const createProduct = useCallback(
+        (query: string) =>
+            new Promise<ProductResult | null>((resolve) => {
+                requestRecordCreate({
+                    model: catalogModel,
+                    defaults: withSearchPrefill(query, productLabelField),
+                    onCreated: (rec: any) => {
+                        if (rec?.id == null) return resolve(null)
+                        void loadCatalogProduct(String(rec.id), rec).then(resolve)
+                    },
+                })
+            }),
+        [catalogModel, productLabelField, loadCatalogProduct],
+    )
+    const editProduct = useCallback(
+        (line: LineItem) =>
+            new Promise<ProductResult | null>((resolve) => {
+                const id = line.catalog?.product_ref ?? line.product_id
+                if (!id) return resolve(null)
+                requestRecordEdit({
+                    model: catalogModel,
+                    recordId: id,
+                    onSaved: (rec: any) => void loadCatalogProduct(id, rec && typeof rec === 'object' ? { id, ...rec } : undefined).then(resolve),
+                })
+            }),
+        [catalogModel, loadCatalogProduct],
+    )
+    /** Unidad visible: la opción del catálogo; sin opciones declaradas, el valor tal cual. */
+    const unitLabel = useCallback(
+        (u: string) => {
+            if (!catalogMeta) return undefined
+            const opts = catalogMeta.unit_of_measure?.options ?? catalogMeta.unit?.options
+            if (!opts) return u
+            const o = opts.find((x) => String(x.value) === u)
+            return typeof o?.label === 'string' && o.label && o.label !== u ? o.label : undefined
+        },
+        [catalogMeta],
+    )
 
     // Cobro: documentos abiertos de la contraparte.
     const openCfg = lineCfg?.open_documents
@@ -595,10 +674,10 @@ export function DocumentEditor({
             </FieldCell>
         ) : null
 
-    const summaryRows = partySummaryRows(party, type.party?.summary, {
-        ...Object.fromEntries(Object.entries(partyLabels).map(([k, v]) => [k, tl(v)])),
-        ...Object.fromEntries(allFields.map((f) => [f.key, tl(f.label)])),
-    })
+    // Etiquetas y catálogos: la metadata de la contraparte y, para las
+    // extensiones compartidas (`fiscal_data.uso_cfdi`), los campos del propio documento.
+    const summaryMeta = useMemo(() => fieldDisplayMeta([...partyFieldLists, allFields], tl), [partyFieldLists, allFields, tl])
+    const summaryRows = partySummaryRows(party, type.party?.summary, {}, 6, summaryMeta)
     const advancedSummary = groups.advanced
         .filter(visible)
         .map((f) => {
@@ -782,6 +861,9 @@ export function DocumentEditor({
                     search={search}
                     currency={currency}
                     showTotals={false}
+                    onCreateProduct={kind === 'credit' ? undefined : createProduct}
+                    onEditProduct={editProduct}
+                    unitLabel={unitLabel}
                 />
             )}
             {!fullscreen && totalsPanel}
@@ -953,4 +1035,37 @@ function SourcePicker({
             {renderField(field, value, (v: any) => onPick(v == null || v === '' ? '' : String(v)), header, seed ? { id: seed.value, label: seed.label } : undefined)}
         </div>
     )
+}
+
+/**
+ * Campos y columnas de un modelo para etiquetar sus valores: formulario
+ * (`/metadata/modal`, con extensiones) y tabla (`/metadata/table`). Si la
+ * clave con módulo (`customers.Customer`) no resuelve en el host, prueba la
+ * corta (`Customer`), como el puente de alta del host. Nunca lanza.
+ */
+async function loadModelFieldLists(api: { get: (url: string, cfg?: any) => Promise<any> }, model: string): Promise<unknown[][]> {
+    const short = model.includes('.') ? model.slice(model.lastIndexOf('.') + 1) : undefined
+    // `undefined` = la petición falló (el host no conoce esa clave); `[]` = respondió sin campos.
+    const read = async (url: string, key: 'fields' | 'columns'): Promise<unknown[] | undefined> => {
+        try {
+            const res = await api.get(url)
+            const list = res?.data?.data?.[key] ?? res?.data?.[key]
+            return Array.isArray(list) ? list : []
+        } catch {
+            return undefined
+        }
+    }
+    // En serie y solo lo necesario (una lectura en el caso normal): el
+    // formulario; la clave corta solo si la larga falló; la tabla solo si
+    // ningún formulario respondió con campos.
+    const candidates = short ? [model, short] : [model]
+    for (const kind of ['modal', 'table'] as const) {
+        for (const m of candidates) {
+            const list = await read(`/metadata/${kind}/${m}`, kind === 'modal' ? 'fields' : 'columns')
+            if (list === undefined) continue
+            if (list.length > 0) return [list]
+            break
+        }
+    }
+    return []
 }

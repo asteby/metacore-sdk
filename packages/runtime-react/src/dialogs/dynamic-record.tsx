@@ -1334,7 +1334,7 @@ function FieldRow({ field, record, value, mode, onChange, error, locked }: Field
 
     return (
         <div className="flex flex-col gap-1.5" data-aby-field={field.key}>
-            <Label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            <Label className="text-sm font-medium text-foreground/80">
                 {localizeFieldLabel(field.label, t)}
                 {field.required && mode !== 'view' && !isEditReadonly && (
                     <span className="text-destructive ml-0.5">*</span>

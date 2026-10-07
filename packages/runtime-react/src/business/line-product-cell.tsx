@@ -8,6 +8,10 @@
 // Teclado: ↑/↓ recorren, Enter elige (el grid pasa el foco a «Cant.»), Esc
 // cierra, Tab cierra y avanza normal. El texto escrito sin elegir queda como
 // descripción libre (el renglón libre sigue funcionando igual).
+//
+// Con `onCreate`, la celda ofrece crear el producto como las apps top: «+» unido
+// al buscador y «Crear producto «texto»» al pie de la lista, prellenado con lo
+// buscado. El grid llena el renglón con el producto nuevo al guardarlo.
 import { forwardRef, useState, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { RecordPicker } from '../record-picker'
@@ -47,10 +51,16 @@ export interface LineProductCellProps {
     className?: string
     /** Atributos de datos para que el grid ubique la celda (foco por teclado). */
     dataCell?: string
+    /** Alta del producto desde la celda, prellenada con lo buscado. */
+    onCreate?: (query: string) => void
+    /** Nombre del modelo para «Crear …» (default «producto»). */
+    entityLabel?: string
+    /** Detalle de qué se puede buscar: tooltip del buscador y estado sin coincidencias. */
+    hint?: string
 }
 
 export const LineProductCell = forwardRef<HTMLInputElement, LineProductCellProps>(function LineProductCell(
-    { search, text, onTextChange, onPick, onKeyDownClosed, warehouseId, currency, placeholder, ariaLabel, disabled, invalid, className, dataCell },
+    { search, text, onTextChange, onPick, onKeyDownClosed, warehouseId, currency, placeholder, ariaLabel, disabled, invalid, className, dataCell, onCreate, entityLabel, hint },
     ref,
 ) {
     const { t } = useTranslation()
@@ -58,6 +68,8 @@ export const LineProductCell = forwardRef<HTMLInputElement, LineProductCellProps
     // capturado no despliega «sin resultados» encima de la tabla.
     const [typing, setTyping] = useState(false)
     const { hits, loading, minChars } = useProductSearch(typing ? text : '', search, typing)
+    const entity = entityLabel ?? t('lineItems.productEntity', { defaultValue: 'producto' })
+    const searchHint = hint ?? t('lineItems.searchHint', { defaultValue: 'Busca por nombre, SKU o código de barras' })
 
     return (
         <RecordPicker<ProductHit>
@@ -66,7 +78,8 @@ export const LineProductCell = forwardRef<HTMLInputElement, LineProductCellProps
             freeText
             anchorSlot="line-product-cell"
             contentSlot="line-product-results"
-            minListWidth="22rem"
+            minListWidth="26.25rem"
+            maxListWidth="35rem"
             items={hits}
             loading={loading}
             minChars={minChars}
@@ -85,10 +98,24 @@ export const LineProductCell = forwardRef<HTMLInputElement, LineProductCellProps
             disabled={disabled}
             invalid={invalid}
             triggerClassName={className}
-            triggerProps={{ 'data-cell': dataCell }}
-            placeholder={placeholder ?? t('lineItems.searchPlaceholder', { defaultValue: 'Producto, medida (205/55R16), SKU o código de barras' })}
+            triggerProps={{ 'data-cell': dataCell, title: searchHint }}
+            placeholder={placeholder ?? t('lineItems.searchPlaceholderShort', { defaultValue: 'Buscar producto…' })}
             loadingText={t('common.searching', { defaultValue: 'Buscando…' })}
-            emptyText={t('lineItems.noProduct', { defaultValue: 'Sin coincidencias. Se usará como descripción libre.' })}
+            emptyText={
+                <span className="block space-y-1">
+                    <span className="block">{t('lineItems.noProduct', { defaultValue: 'Sin coincidencias. Se usará como descripción libre.' })}</span>
+                    <span className="block text-xs">{searchHint}</span>
+                </span>
+            }
+            onCreate={onCreate}
+            entityLabel={entity}
+            createLabel={t('lineItems.createProduct', { defaultValue: 'Crear {{entity}}', entity })}
+            createFooterLabel={(q) => (
+                <>
+                    {t('lineItems.createProduct', { defaultValue: 'Crear {{entity}}', entity })}
+                    {q ? <span className="text-muted-foreground"> «{q}»</span> : null}
+                </>
+            )}
         />
     )
 })

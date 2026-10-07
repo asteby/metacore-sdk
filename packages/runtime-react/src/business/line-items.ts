@@ -3,6 +3,7 @@
 // guardado de renglones fallaba (PIT-018) por mandar al API cadenas vacías y
 // claves de UI; `serializeLineItems` es la única puerta de salida hacia el backend.
 import { roundMoney, toAmount } from './format'
+import type { ProductVariant } from './product-search'
 
 export type LineItemKind = 'item' | 'section' | 'note'
 
@@ -50,6 +51,36 @@ export interface LineItem {
      * del host) — el SDK no conoce sus claves.
      */
     extensions?: Record<string, string>
+    /**
+     * Valores que el catálogo escribió en el renglón la última vez que se
+     * aplicó el producto (elegirlo, crearlo o editarlo desde la celda). Un campo
+     * cuyo valor actual difiere de su foto es un override del usuario («dirty»)
+     * y una edición del producto no lo pisa. No se serializa.
+     */
+    catalog?: LineCatalogSnapshot
+    /**
+     * Valores nuevos del catálogo que NO se aplicaron porque el usuario ya
+     * había cambiado ese campo a mano: la celda ofrece «aplicar». No se serializa.
+     */
+    catalog_pending?: Partial<Pick<LineItem, CatalogLineField>>
+}
+
+/** Campos del renglón que salen del producto y el usuario puede sobrescribir. */
+export type CatalogLineField = 'description' | 'sku' | 'unit_price' | 'tax_rate' | 'unit'
+
+export const CATALOG_LINE_FIELDS: readonly CatalogLineField[] = ['description', 'sku', 'unit_price', 'tax_rate', 'unit']
+
+/** Foto de lo que el catálogo escribió en el renglón (por campo) y de qué producto/variante. */
+export interface LineCatalogSnapshot {
+    description?: string
+    sku?: string
+    unit_price?: number
+    tax_rate?: number
+    unit?: string
+    /** Id del producto del catálogo (el registro que se edita), aunque el renglón lleve una variante. */
+    product_ref?: string
+    /** Variante elegida: al refrescar se vuelve a aplicar la misma. */
+    variant?: ProductVariant
 }
 
 /** Qué hacer si `quantity > available`. */
