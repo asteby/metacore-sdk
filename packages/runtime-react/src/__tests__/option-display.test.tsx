@@ -98,7 +98,8 @@ describe('OptionDisplayRow', () => {
         expect(screen.getByText('Servicio')).toBeTruthy()
         const row = document.querySelector('[data-slot="option-display"]')!
         expect(row.getAttribute('data-dimmed')).toBe('true')
-        expect(document.querySelectorAll('[data-slot="option-metric"]')).toHaveLength(2)
+        expect(document.querySelectorAll('[data-slot="option-metric"]')).toHaveLength(1)
+        expect(document.querySelectorAll('[data-slot="option-metric-chip"]')).toHaveLength(1)
         // Title clamps to two lines instead of truncating to one.
         expect(document.querySelector('[data-slot="option-display-title"]')!.className).toContain('line-clamp-2')
     })

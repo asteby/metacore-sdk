@@ -124,38 +124,37 @@ export function formatTrailingValue(item: OptionTrailingItem, fmt: Formatter, no
     }
 }
 
-/** Fixed width per metric so columns line up across rows. */
-const METRIC_MIN_WIDTH = '4.75rem'
-
-function TrailingMetric({ item, fmt, compact }: { item: OptionTrailingItem; fmt: Formatter; compact?: boolean }) {
+/**
+ * One metric. A toned metric is a chip carrying its value and label («18
+ * disp.», or the tone's text «Agotado»); a plain one is the value in tabular
+ * numbers, with its label inline only when `showLabel` (several plain metrics
+ * side by side need it to tell «Saldo» from «Vencido»; a lone price does not).
+ */
+function TrailingMetric({ item, fmt, showLabel }: { item: OptionTrailingItem; fmt: Formatter; showLabel?: boolean }) {
     const { t } = useTranslation()
-    const text = item.text ? t(item.text, { defaultValue: item.text }) : formatTrailingValue(item, fmt)
     const label = item.label ? t(item.label, { defaultValue: item.label }) : ''
-    const toned = !!item.tone
-    const value = toned ? (
-        <Badge
-            variant={toneVariant(item.tone)}
-            className="font-medium tabular-nums"
-            data-slot="option-metric-chip"
-            data-tone={item.tone}
-        >
-            {text}
-        </Badge>
-    ) : (
-        <span className="text-sm font-medium tabular-nums text-foreground" data-slot="option-metric-value">
-            {text}
-        </span>
-    )
-    if (compact) return value
+    const value = formatTrailingValue(item, fmt)
+    if (item.tone) {
+        const text = item.text ? t(item.text, { defaultValue: item.text }) : [value, label].filter(Boolean).join(' ')
+        return (
+            <Badge
+                variant={toneVariant(item.tone)}
+                className="font-medium tabular-nums"
+                title={label && item.text ? `${label}: ${value}` : undefined}
+                data-slot="option-metric-chip"
+                data-key={item.key}
+                data-tone={item.tone}
+            >
+                {text}
+            </Badge>
+        )
+    }
     return (
-        <span
-            className="flex shrink-0 flex-col items-end justify-center gap-0.5 text-right"
-            style={{ minWidth: METRIC_MIN_WIDTH }}
-            data-slot="option-metric"
-            data-key={item.key}
-        >
-            {value}
-            {label ? <span className="text-[10px] uppercase leading-none tracking-wide text-muted-foreground">{label}</span> : null}
+        <span className="flex items-baseline gap-1 whitespace-nowrap" title={label || undefined} data-slot="option-metric" data-key={item.key}>
+            {showLabel && label ? <span className="text-[11px] text-muted-foreground">{label}</span> : null}
+            <span className="text-sm font-semibold tabular-nums text-foreground" data-slot="option-metric-value">
+                {item.text ? t(item.text, { defaultValue: item.text }) : value}
+            </span>
         </span>
     )
 }
@@ -183,6 +182,7 @@ export function OptionDisplayRow({ display, label, active, selected, currency, a
     const title = display.title || label || ''
     const trailing = display.trailing ?? []
     const badges = display.badges ?? []
+    const plainCount = trailing.filter((i) => !i.tone).length
     return (
         <span
             className="flex w-full min-w-0 items-center gap-3 py-0.5"
@@ -216,9 +216,12 @@ export function OptionDisplayRow({ display, label, active, selected, currency, a
                 ) : null}
             </span>
             {trailing.length > 0 ? (
-                <span className="ml-auto flex shrink-0 items-center gap-3" data-slot="option-display-trailing">
+                // Metrics stack right-aligned (price over the stock chip): the
+                // column stays narrow so the title keeps its room, and the
+                // values line up across rows.
+                <span className="ml-auto flex shrink-0 flex-col items-end justify-center gap-1 text-right" data-slot="option-display-trailing">
                     {trailing.map((item) => (
-                        <TrailingMetric key={item.key} item={item} fmt={fmt} />
+                        <TrailingMetric key={item.key} item={item} fmt={fmt} showLabel={plainCount > 1} />
                     ))}
                 </span>
             ) : null}
@@ -243,7 +246,7 @@ export function OptionDisplayValue({ display, label, currency }: { display: Opti
             {extra ? (
                 <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{formatTrailingValue(extra, fmt)}</span>
             ) : null}
-            {lead ? <TrailingMetric item={lead} fmt={fmt} compact /> : null}
+            {lead ? <TrailingMetric item={lead} fmt={fmt} /> : null}
         </span>
     )
 }
