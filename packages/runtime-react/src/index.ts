@@ -259,12 +259,15 @@ export {
     PermissionsProvider,
     useCan,
     usePermissionsActive,
+    useRoleGate,
+    isActionAllowedForRoles,
     makeCan,
     capabilityForActionKey,
     modelCapability,
     gateTableMetadata,
     resolveRowActions,
     type CanFn,
+    type RoleGate,
     type PermissionsProviderProps,
 } from './permissions-context'
 export {

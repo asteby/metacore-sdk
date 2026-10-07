@@ -169,7 +169,7 @@ import {
     relationKeyFor,
     RowActionMenuItem,
 } from './dynamic-columns'
-import { useCan, usePermissionsActive, resolveRowActions } from './permissions-context'
+import { useCan, usePermissionsActive, useRoleGate, resolveRowActions } from './permissions-context'
 import { useDynamicRowActions } from './dynamic-row-actions'
 import { useStageLayout } from './stage-layout'
 import type {
@@ -1607,14 +1607,20 @@ function DynamicKanbanBoard({
     // user lacks permission for never appears.
     const can = useCan()
     const permissionsActive = usePermissionsActive()
+    const roleGate = useRoleGate()
     const rowActions = useMemo(
         () =>
             metadata
-                ? resolveRowActions(metadata, model, can, permissionsActive, (k, fb) =>
-                      t(k, { defaultValue: fb }),
+                ? resolveRowActions(
+                      metadata,
+                      model,
+                      can,
+                      permissionsActive,
+                      (k, fb) => t(k, { defaultValue: fb }),
+                      roleGate,
                   )
                 : [],
-        [metadata, model, can, permissionsActive, t],
+        [metadata, model, can, permissionsActive, t, roleGate],
     )
 
     // Shared row-action dispatch + dialogs — view/edit/delete/link/custom behave
