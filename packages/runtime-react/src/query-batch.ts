@@ -375,6 +375,9 @@ export function tokenForGet(url: string, params?: Record<string, unknown>): stri
             if (value != null && value !== '') search.set(key, String(value))
         }
     }
+    // An `?ids=` resolve is not a page: the `o:` token has no slot for it, so
+    // it goes as its own GET instead of being turned into a first-page read.
+    if (search.has('ids')) return null
     const limit = Number(search.get('limit'))
     return optionsBatchToken(
         opt[1],

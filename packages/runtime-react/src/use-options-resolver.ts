@@ -139,6 +139,15 @@ export function invalidateOptionsCache(): void {
     optionsGeneration++
     optionsCache.clear()
     optionsInflight.clear()
+    for (const fn of invalidationListeners) fn()
+}
+
+const invalidationListeners = new Set<() => void>()
+
+/** Runs `fn` on every invalidateOptionsCache (id-label lookups drop with it). */
+export function onOptionsCacheInvalidated(fn: () => void): () => void {
+    invalidationListeners.add(fn)
+    return () => invalidationListeners.delete(fn)
 }
 
 export function optionsRequestKey(
@@ -152,7 +161,8 @@ export function optionsRequestKey(
     return [scope, url, field, query, String(limit ?? ''), filter ?? ''].join('\n')
 }
 
-function optionsScope(): string {
+/** Org + branch of the host session: part of every options cache key. */
+export function optionsScope(): string {
     if (typeof localStorage === 'undefined') return ''
     let org = ''
     try {

@@ -153,7 +153,7 @@ describe('EditField — PART 2: FK select shows the resolved label', () => {
         expect(screen.queryByText('550e8400-e29b-41d4-a716-446655440000')).toBeNull()
     })
 
-    it('keeps the raw value as fallback when no sibling was injected', () => {
+    it('keeps the raw value as fallback when no sibling was injected and the host cannot resolve ids', async () => {
         render(
             <ApiProvider client={noopApi}>
                 <EditField
@@ -164,7 +164,10 @@ describe('EditField — PART 2: FK select shows the resolved label', () => {
                 />
             </ApiProvider>,
         )
-        // No sibling → existing behaviour: the raw value is shown on the trigger.
-        expect(screen.getByText('wh-xyz')).toBeTruthy()
+        // No sibling → an `?ids=` lookup runs first ("Cargando…", never the id);
+        // this host answers without resolving it, so the raw value is the
+        // fallback on the trigger, as before.
+        expect(screen.getByText('Cargando…')).toBeTruthy()
+        expect(await screen.findByText('wh-xyz')).toBeTruthy()
     })
 })

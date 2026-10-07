@@ -589,6 +589,14 @@ export {
     type UseOptionsResolverResult,
 } from './use-options-resolver'
 export {
+    useResolveOptionIds,
+    OPTION_IDS_CHUNK,
+    type OptionIdResolution,
+    type UseResolveOptionIdsArgs,
+    type UseResolveOptionIdsResult,
+} from './use-option-ids'
+export { DELETED_RECORD_LABEL } from './dynamic-select-field'
+export {
     setOrgConfigBridge,
     getOrgConfigBridge,
     resolveValidatorToken,

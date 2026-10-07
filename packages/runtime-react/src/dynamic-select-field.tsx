@@ -18,10 +18,11 @@
 //   1. field.ref          → /options/<ref>?field=id        (canonical, preferred)
 //   2. field.searchEndpoint→ used verbatim as the options endpoint (escape hatch)
 //
-// Edit-mode caveat: resolving an EXISTING value's label requires the id to be
-// in a fetched page (we match by id against loaded options, else show the raw
-// value). A dedicated `?ids=` lookup is a follow-up; create flows — the common
-// case — start empty and never hit this.
+// Edit mode: an EXISTING value is labelled from (in order) the option the user
+// just picked, the loaded page, the caller's `seedOption`, and otherwise one
+// `?ids=` lookup (useResolveOptionIds — batched and shared with every picker of
+// the same ref on screen). While it resolves the trigger reads "Cargando…",
+// never the raw id; an id that no longer exists reads "(registro eliminado)".
 import { useEffect, useRef, useState } from 'react'
 import { getOptionFilter } from './option-filter'
 import { useTranslation } from 'react-i18next'
@@ -32,6 +33,7 @@ import { RecordPicker } from './record-picker'
 import { OptionLead } from './record-picker-option'
 import { recordLabel, requestRecordCreate, requestRecordEdit, withSearchPrefill } from './record-picker-actions'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
+import { useResolveOptionIds } from './use-option-ids'
 import { useDebouncedValue } from './use-debounced-value'
 import { getDependsOn, getFieldRef, resolveOptionsSource } from './dynamic-form-schema'
 import type { ActionFieldDef } from './types'
@@ -44,6 +46,9 @@ export { OptionLead, OptionThumb } from './record-picker-option'
  * `dependsHint`.
  */
 export const DEFAULT_DEPENDS_HINT = 'Selecciona primero el campo del que depende'
+
+/** Label of a held value whose record no longer exists (or is not visible). */
+export const DELETED_RECORD_LABEL = '(registro eliminado)'
 
 export interface DynamicSelectFieldProps {
     field: ActionFieldDef
@@ -168,21 +173,23 @@ export function DynamicSelectField({
     const useStatic = Array.isArray(staticOptions)
     const optionFilter = getOptionFilter(field)
 
+    // optionsConfig.source → `/options/<source>`. Else searchEndpoint only
+    // drives the URL when there's no ref (ref is canonical and wins).
+    const optionsEndpoint = source.endpoint ?? (source.ref ? undefined : field.searchEndpoint)
     const { options: fetchedOptions, loading: fetchLoading } = useOptionsResolver({
         modelKey: '',
         fieldKey: source.fieldKey,
         ref: source.ref,
-        // optionsConfig.source → `/options/<source>`. Else searchEndpoint only
-        // drives the URL when there's no ref (ref is canonical and wins).
-        endpoint: source.endpoint ?? (source.ref ? undefined : field.searchEndpoint),
+        endpoint: optionsEndpoint,
         query: debounced,
         limit: 20,
         filterValue: dependsOn ? scope : undefined,
         optionFilter,
         keepValue: value,
-        // Fetch only while open; a readonly cell fetches eagerly so its label
-        // resolves to the name. Blocked cascades and static lists never fetch.
-        enabled: !useStatic && (open || readonly) && !blockedByDependency,
+        // Fetch only while open (a held value's label comes from the `?ids=`
+        // lookup below, readonly included). Blocked cascades and static lists
+        // never fetch.
+        enabled: !useStatic && open && !blockedByDependency,
     })
 
     const options = useStatic
@@ -208,12 +215,37 @@ export function DynamicSelectField({
         }
     }, [dependsOn, scope, value, onChange])
 
-    const selectedOption =
-        (picked && String(picked.id) === String(value) ? picked : null) ??
-        options.find((o) => String(o.id) === String(value)) ??
-        (seedOption && String(seedOption.id) === String(value) ? seedOption : null) ??
+    const valueKey = value != null && value !== '' ? String(value) : ''
+    const knownOption =
+        (picked && String(picked.id) === valueKey ? picked : null) ??
+        options.find((o) => String(o.id) === valueKey) ??
+        (seedOption && String(seedOption.id) === valueKey ? seedOption : null) ??
         null
-    const selectedLabel = selectedOption?.label ?? (value ? String(value) : '')
+    // A held value nobody has labelled yet: one `?ids=` lookup (no popover).
+    const needsLookup = !!valueKey && !knownOption && !useStatic
+    const { resolved, loading: idsLoading } = useResolveOptionIds({
+        ref: source.ref,
+        endpoint: optionsEndpoint,
+        field: source.fieldKey,
+        ids: needsLookup ? [valueKey] : [],
+        enabled: needsLookup,
+    })
+    const resolution = needsLookup ? resolved.get(valueKey) : undefined
+    const selectedOption = knownOption ?? (resolution?.status === 'found' ? resolution.option : null)
+    const valueResolving = needsLookup && !selectedOption && idsLoading
+    const valueMissing = needsLookup && !selectedOption && resolution?.status === 'missing'
+    const selectedLabel =
+        selectedOption?.label ?? (valueResolving ? '' : valueMissing ? DELETED_RECORD_LABEL : valueKey)
+    const resolvingNode = (
+        <span className="min-w-0 flex-1 truncate animate-pulse text-muted-foreground" data-slot="record-picker-value-loading">
+            Cargando…
+        </span>
+    )
+    const missingNode = (
+        <span className="min-w-0 flex-1 truncate italic text-muted-foreground" data-slot="record-picker-value-missing">
+            {DELETED_RECORD_LABEL}
+        </span>
+    )
 
     const handlePick = (opt: ResolvedOption) => {
         setPicked(opt)
@@ -291,13 +323,15 @@ export function DynamicSelectField({
             getDescription={descriptionAsBadge ? undefined : (o) => o.description}
             renderTrailing={descriptionAsBadge ? (o) => badge(o) : undefined}
             renderValue={() => {
+                // Never flash the raw id while the label resolves.
+                if (valueResolving) return resolvingNode
+                if (valueMissing) return missingNode
                 if (readonly) {
                     return (
                         <>
                             {selectedOption ? <OptionLead option={selectedOption} size={20} /> : null}
                             <span className={'min-w-0 flex-1 truncate ' + (selectedOption ? '' : 'text-muted-foreground')}>
-                                {/* Never flash the raw id while the eager fetch resolves. */}
-                                {selectedOption?.label ?? (loading ? 'Cargando…' : ph('—'))}
+                                {selectedOption?.label ?? ph('—')}
                             </span>
                         </>
                     )

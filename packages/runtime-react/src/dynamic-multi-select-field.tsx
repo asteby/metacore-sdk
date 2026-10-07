@@ -17,11 +17,17 @@
 // (segments, tags, categories — tens, not thousands of rows); a field with a
 // genuinely large option set should keep using a single dynamic_select per
 // value instead.
+//
+// Selected ids outside that page (or hidden by an option_filter) are labelled
+// with ONE `?ids=` lookup (useResolveOptionIds): a chip reads "Cargando…" while
+// it resolves and "(registro eliminado)" when the record is gone — never the id.
 import { useMemo, useState } from 'react'
 import { getOptionFilter } from './option-filter'
 import { RecordPicker } from './record-picker'
 import { OptionLead } from './record-picker-option'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
+import { useResolveOptionIds } from './use-option-ids'
+import { DELETED_RECORD_LABEL } from './dynamic-select-field'
 import { getFieldRef } from './dynamic-form-schema'
 import type { ActionFieldDef } from './types'
 
@@ -35,7 +41,7 @@ export interface DynamicMultiSelectFieldProps {
 export function DynamicMultiSelectField({ field, value, onChange }: DynamicMultiSelectFieldProps) {
     const ref = getFieldRef(field)
     const [query, setQuery] = useState('')
-    const { options, loading } = useOptionsResolver({
+    const { options, loading, meta, error } = useOptionsResolver({
         modelKey: '',
         fieldKey: 'id',
         ref,
@@ -45,13 +51,19 @@ export function DynamicMultiSelectField({ field, value, onChange }: DynamicMulti
     })
 
     const selected = useMemo(() => (Array.isArray(value) ? value.map(String) : []), [value])
-    const selectedItems = useMemo(
-        () =>
-            selected
-                .map((id) => options.find((o) => String(o.id) === id))
-                .filter((o): o is ResolvedOption => !!o),
-        [selected, options],
-    )
+    const endpoint = !ref && field.searchEndpoint ? field.searchEndpoint : undefined
+    // Ask for the ids the loaded page does not cover — only once it is in.
+    const pageSettled = !loading && (meta !== null || error !== null)
+    const unresolved = pageSettled ? selected.filter((id) => !options.some((o) => String(o.id) === id)) : []
+    const { resolved } = useResolveOptionIds({ ref, endpoint, field: 'id', ids: unresolved, enabled: unresolved.length > 0 })
+    const selectedItems = selected.map((id): ResolvedOption => {
+        const loaded = options.find((o) => String(o.id) === id)
+        if (loaded) return loaded
+        const r = pageSettled ? resolved.get(id) : undefined
+        if (r?.status === 'found') return r.option
+        const label = !r ? 'Cargando…' : r.status === 'missing' ? DELETED_RECORD_LABEL : id
+        return { id, value: id, label, name: label }
+    })
     const shown = useMemo(() => {
         const q = query.trim().toLowerCase()
         return q ? options.filter((o) => String(o.label ?? '').toLowerCase().includes(q)) : options

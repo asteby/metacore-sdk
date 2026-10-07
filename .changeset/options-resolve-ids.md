@@ -1,0 +1,5 @@
+---
+"@asteby/metacore-runtime-react": minor
+---
+
+RecordPicker: al editar un registro con una relación ya guardada, `DynamicSelectField` y `DynamicMultiSelectField` resuelven la etiqueta del valor con UNA petición `GET /options/<ref>?field=id&ids=…` sin abrir el popover (antes mostraban el UUID crudo si no había semilla). Nuevo `useResolveOptionIds`: react-query por id (usa el `QueryClient` del host o uno propio), agrupa en una sola petición los ids pedidos por todos los pickers de la misma ref en pantalla (trozos de 100), no dispara con semilla ni con el valor ya cargado, y se invalida con `invalidateOptionsCache`. Mientras carga muestra «Cargando…»; un id que ya no existe se ve como «(registro eliminado)». Compatible con hosts sin `ids`: si la respuesta trae otros registros se filtra por id y, si no está, se muestra el valor como antes. Las lecturas con `ids` no pasan por el batch `/q`. El `DynamicSelectField` de solo lectura ya no carga la primera página para resolver su etiqueta. Requiere metacore-kernel con `?ids=` (y en ops, el handler de lookup que lo reenvía) para el modo completo.
