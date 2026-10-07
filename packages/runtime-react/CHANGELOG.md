@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 49.6.0
+
+### Minor Changes
+
+- 046d56f: `RecordPicker`: un solo selector de registro para todo el runtime. Búsqueda asíncrona (`search` con debounce/cancelación o `items` del resolver de opciones), estados cargando/vacío/error, selección simple y múltiple, crear (el «+» unido al trigger y «Crear …» al pie prellenado con el texto buscado) y editar el seleccionado (lápiz), opciones enriquecidas por props (avatar/iniciales, subtítulo, precio/stock), variantes `field`/`cell` y trigger `button`/`input` (texto libre), lista siempre en portal collision-aware por encima de los diálogos y teclado completo (↑/↓/Home/End/Enter/Esc/Tab) con ARIA combobox/listbox. `DynamicSelectField`, `EntitySelect`, `CustomerPicker`, `ProductPicker`, `VehiclePicker`, `LineProductCell`, `RelateDocuments`, `DynamicMultiSelectField` y el campo `search` legado del modal genérico pasan a ser configuraciones finas del primitivo (mismos props y exports; los wrappers quedan deprecados en JSDoc). Nuevos exports: `RecordPicker`, `useRecordSearch`, `useLatestSearch`, `useRecordPickerDialog`, `requestRecordCreate`/`requestRecordEdit`, `recordLabel`, `withSearchPrefill`, `OptionLead`/`OptionThumb`, `useProductSearch`/`ProductHitRow`. Las opciones son `role="option"` clicables sin `<button>` anidado (los tests que buscaban ese botón deben hacer click en la opción). Customer/Vehicle pickers suman el lápiz de edición del elegido (gateado por `<model>.update`).
+
 ## 49.5.0
 
 ### Minor Changes
