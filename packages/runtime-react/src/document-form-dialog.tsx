@@ -211,17 +211,26 @@ export function DocumentFormDialog({
     )
     const lineCfg = type ? editorLinesConfig(type, forms) : undefined
 
-    // Reset every time the dialog (re)opens.
-    useEffect(() => {
-        if (!open) return
-        const start = initialType ?? single?.key ?? null
-        setTypeKey(start)
-        setStep(start ? 'fields' : 'type')
-        setLines([])
-        setFieldErrors({})
-        setServerLineErrors({})
-        setFormError(undefined)
-    }, [open, initialType, single?.key])
+    // Reset every time the dialog (re)opens — DURING render, not in an effect.
+    // The host keeps this dialog mounted while closed (and across views whose
+    // forms change, e.g. the same /m/$model route going Facturas → Notas de
+    // crédito); an effect reset ran after the first open frame was already
+    // painted with the previous type/step, so the wizard (or the previous
+    // type's editor) flashed before the right DocumentEditor (QA Pitsline r6).
+    const openKey = open ? `${initialType ?? ''}\u0000${single?.key ?? ''}` : null
+    const [resetFor, setResetFor] = useState<string | null>(null)
+    if (openKey !== resetFor) {
+        setResetFor(openKey)
+        if (openKey !== null) {
+            const start = initialType ?? single?.key ?? null
+            setTypeKey(start)
+            setStep(start ? 'fields' : 'type')
+            setLines([])
+            setFieldErrors({})
+            setServerLineErrors({})
+            setFormError(undefined)
+        }
+    }
 
     // Seed field defaults for the chosen type.
     useEffect(() => {

@@ -9,8 +9,16 @@
  * {@link Registry.scope}. {@link Registry.unbind} drops every contribution
  * of that owner so a fiber can remount without leaking routes/actions/slots
  * — the Cordis dispose equivalent for the host UI registry.
+ *
+ * Write-through: modales, acciones de registro y slots se publican además en
+ * los stores canónicos (action-registry.ts / slot-store.ts) con su addon
+ * dueño, que es lo que leen ActionModalDispatcher, `<Slot>` de runtime-react y
+ * los menús de acciones. Los getters de esta clase siguen sirviendo a quien
+ * los use (sdk/react `<Slot>`, rutas), pero la fuente de verdad es el store.
  */
 import type { ComponentType } from "react";
+import { type RecordPrefillContribution } from "./record-prefill-registry.js";
+import { type RecordActionContribution } from "./action-registry.js";
 export interface RouteContribution {
     path: string;
     component: ComponentType<unknown>;
@@ -72,6 +80,14 @@ export interface ScopedRegistry {
     registerModal(c: ModalContribution): void;
     registerAction(c: ActionContribution): void;
     registerSlot(c: SlotContribution): void;
+    /** Ayudante de captura en el formulario genérico de un modelo (p. ej. CSF en Customer). */
+    registerRecordPrefill(c: RecordPrefillContribution): void;
+    /**
+     * Acción secundaria sobre registros (compartir, imprimir, enviar…). Se pinta
+     * en el «Más…» del menú de fila y en el pie del documento sólo mientras este
+     * addon (o el proveedor de `requires`) esté instalado y activo.
+     */
+    registerRecordAction(c: RecordActionContribution): void;
 }
 /**
  * Registry is shared across all addons within a single host shell.
