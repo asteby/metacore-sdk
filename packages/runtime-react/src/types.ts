@@ -906,6 +906,14 @@ export interface ActionDefinition {
     steps?: ActionStep[]
     requiresState?: string[]
     /**
+     * Roles allowed to see/run this action. Empty/absent = unrestricted. Only
+     * filters the UI when the host mounts <PermissionsProvider roles={...}>
+     * (see `isActionAllowedForRoles`); the backend remains the authority.
+     */
+    allowedRoles?: string[]
+    /** snake_case wire form of `allowedRoles`, read as a fallback. */
+    allowed_roles?: string[]
+    /**
      * Manifest `supervisor_policy`: the action needs the on-the-spot
      * authorization of a supervisor for that policy (`general.approve_<policy>`).
      * The action modals ask for the PIN and send the grant as `approval_id`.

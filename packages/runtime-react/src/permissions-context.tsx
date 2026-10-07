@@ -35,7 +35,42 @@ export interface PermissionsProviderProps {
     permissions: string[]
     /** Superrole bypass — admins/owners see everything, no filtering at all. */
     isAdmin: boolean
+    /**
+     * Roles of the current user (e.g. `['doctor']`), used ONLY to honour the
+     * per-action `allowedRoles` declared in table metadata. Opt-in: while this
+     * is `undefined` (and `loading` is not set) role filtering is OFF and
+     * `allowedRoles` is ignored, exactly as before this prop existed. Once the
+     * host passes an array (even `[]` = "resolved, no roles") the filter is
+     * fail-closed: an action with a non-empty `allowedRoles` that shares no
+     * role with the user is hidden.
+     *
+     * Pass a referentially stable array (`useMemo`, or a value straight from a
+     * store): the table rebuilds its columns when `roles` / `superRoles` change
+     * identity, so an inline `roles={[role]}` recreates them on every render.
+     */
+    roles?: string[]
+    /**
+     * Roles that bypass `allowedRoles` entirely (the host's superroles, e.g.
+     * `['admin', 'super_admin']`). Default `[]` = no role bypasses. `isAdmin`
+     * also bypasses. Same stable-reference advice as `roles`.
+     */
+    superRoles?: string[]
+    /**
+     * The host is still hydrating the session roles. While true no action is
+     * hidden by `allowedRoles` (avoids a flash of missing actions); set it back
+     * to false once `roles` is resolved.
+     */
+    rolesLoading?: boolean
     children: React.ReactNode
+}
+
+/** Resolved role-gating state shared with the table surfaces. */
+export interface RoleGate {
+    /** User roles; `undefined` while unresolved. */
+    roles?: string[]
+    superRoles: string[]
+    loading: boolean
+    isAdmin: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -56,10 +91,64 @@ export function makeCan(permissions: string[], isAdmin: boolean): CanFn {
 const ALWAYS_ALLOW: CanFn = () => true
 
 const PermissionsContext = createContext<CanFn | null>(null)
+const RoleGateContext = createContext<RoleGate | null>(null)
 
-export function PermissionsProvider({ permissions, isAdmin, children }: PermissionsProviderProps) {
+const NO_ROLES: string[] = []
+
+export function PermissionsProvider({
+    permissions,
+    isAdmin,
+    roles,
+    superRoles = NO_ROLES,
+    rolesLoading = false,
+    children,
+}: PermissionsProviderProps) {
     const can = useMemo(() => makeCan(permissions, isAdmin), [permissions, isAdmin])
-    return <PermissionsContext.Provider value={can}>{children}</PermissionsContext.Provider>
+    const roleGate = useMemo<RoleGate>(
+        () => ({ roles, superRoles, loading: rolesLoading, isAdmin }),
+        [roles, superRoles, rolesLoading, isAdmin],
+    )
+    return (
+        <PermissionsContext.Provider value={can}>
+            <RoleGateContext.Provider value={roleGate}>{children}</RoleGateContext.Provider>
+        </PermissionsContext.Provider>
+    )
+}
+
+/**
+ * Role-gating state of the nearest <PermissionsProvider>, or `null` when none
+ * is mounted (no provider → no role filtering, legacy behaviour).
+ */
+export function useRoleGate(): RoleGate | null {
+    return useContext(RoleGateContext)
+}
+
+/**
+ * Whether `action` is visible for the user under `gate`. Pure.
+ *
+ * UX ONLY: this hides buttons, it does not authorize anything. The backend
+ * remains the authority and must enforce the same `allowedRoles` on execution.
+ *
+ * Rules:
+ *   - no gate (no provider) → visible (unchanged behaviour).
+ *   - action without `allowedRoles` (or empty) → visible. Reads both the
+ *     camelCase `allowedRoles` and the snake_case `allowed_roles` wire forms.
+ *   - `gate.loading` → visible (don't flash-hide while the session hydrates).
+ *   - `gate.roles === undefined` and not loading → the host did not opt in to
+ *     role gating → visible.
+ *   - `gate.isAdmin` or any user role in `gate.superRoles` → visible.
+ *   - otherwise visible only if the user shares a role with `allowedRoles`
+ *     (fail-closed: `roles: []` sees none of the restricted actions).
+ */
+export function isActionAllowedForRoles(action: ActionDefinition, gate: RoleGate | null): boolean {
+    if (!gate) return true
+    const declared = action.allowedRoles ?? action.allowed_roles
+    if (!declared || declared.length === 0) return true
+    if (gate.loading || gate.roles === undefined) return true
+    if (gate.isAdmin) return true
+    const userRoles = gate.roles
+    if (userRoles.some((r) => gate.superRoles.includes(r))) return true
+    return userRoles.some((r) => declared.includes(r))
 }
 
 /**
@@ -113,6 +202,10 @@ const DEFAULT_TRIO: { key: string; i18nKey: string; fallback: string; icon: stri
  *     actions so individual entries can be dropped; `tx` resolves their labels
  *     (defaults to the Spanish fallbacks used by the column factory).
  *
+ * When `roleGate` is given, actions declaring `allowedRoles` are also dropped
+ * for users outside those roles (see `isActionAllowedForRoles`; UX only, the
+ * backend stays the authority).
+ *
  * Pure + idempotent. Callers should only invoke it when a provider is active
  * (`usePermissionsActive()`), otherwise pass the metadata through untouched.
  */
@@ -121,6 +214,7 @@ export function gateTableMetadata(
     model: string,
     can: CanFn,
     tx: (i18nKey: string, fallback: string) => string = (_k, fallback) => fallback,
+    roleGate: RoleGate | null = null,
 ): TableMetadata {
     const allowed = (key: string) => can(modelCapability(model, key))
 
@@ -139,7 +233,7 @@ export function gateTableMetadata(
                     }) as ActionDefinition,
             )
           : []
-    const actions = base.filter((a) => allowed(a.key))
+    const actions = base.filter((a) => allowed(a.key) && isActionAllowedForRoles(a, roleGate))
 
     return {
         ...metadata,
@@ -176,8 +270,9 @@ export function resolveRowActions(
     can: CanFn,
     permissionsActive: boolean,
     tx: (i18nKey: string, fallback: string) => string = (_k, fallback) => fallback,
+    roleGate: RoleGate | null = null,
 ): ActionDefinition[] {
-    const gated = permissionsActive ? gateTableMetadata(metadata, model, can, tx) : metadata
+    const gated = permissionsActive ? gateTableMetadata(metadata, model, can, tx, roleGate) : metadata
     const explicit = gated.actions ?? []
     const hasExplicit = (gated.hasActions ?? explicit.length > 0) && explicit.length > 0
     const base: ActionDefinition[] = hasExplicit

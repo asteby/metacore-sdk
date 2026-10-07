@@ -85,7 +85,7 @@ import type { TableMetadata, ApiResponse, ColumnDefinition } from './types'
 import { getSearchableColumnKeys } from './column-visibility'
 import { visibleRelationInclude } from './list-include'
 import { useDebouncedValue } from './use-debounced-value'
-import { useCan, usePermissionsActive, gateTableMetadata } from './permissions-context'
+import { useCan, usePermissionsActive, useRoleGate, gateTableMetadata } from './permissions-context'
 import { useDynamicRowActions } from './dynamic-row-actions'
 import { ExportDialog } from './dialogs/export'
 import { ImportDialog } from './dialogs/import'
@@ -809,10 +809,11 @@ export function DynamicTable({
     // filtered by `can(lowercase(model).<action>)`.
     const can = useCan()
     const permissionsActive = usePermissionsActive()
+    const roleGate = useRoleGate()
     const viewMetadata = useMemo(() => {
         if (!metadata || !permissionsActive) return metadata
-        return gateTableMetadata(metadata, model, can, (key, fallback) => t(key, { defaultValue: fallback }))
-    }, [metadata, permissionsActive, can, model, t])
+        return gateTableMetadata(metadata, model, can, (key, fallback) => t(key, { defaultValue: fallback }), roleGate)
+    }, [metadata, permissionsActive, can, model, t, roleGate])
 
     // Row-action menus mount their icons on open: load them with the
     // metadata so the first open draws every glyph at once.
