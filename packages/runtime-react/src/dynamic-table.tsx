@@ -69,7 +69,7 @@ import { useMetadataCache } from './metadata-cache'
 import { useRecordMutationTick } from './use-record-mutation-tick'
 import { useApi, useCurrentBranch } from './api-context'
 import { useReasonPrompt } from './reason-prompt'
-import type { ColumnFilterConfig, GetDynamicColumns } from './dynamic-columns-shim'
+import type { ColumnFilterConfig, GetDynamicColumns, RowActionPredicate } from './dynamic-columns-shim'
 import { defaultGetDynamicColumns, DATE_CELL_TYPES, aggregateOf, formatAggregateTotal } from './dynamic-columns'
 import { useFacetLoaders, isLongTextColumn } from './use-facet-loaders'
 import { translateOptionLabels } from './filter-chips'
@@ -213,6 +213,15 @@ export interface DynamicTableProps {
      * clickable and the behaviour is unchanged.
      */
     onRowClick?: (row: any) => void
+    /**
+     * Consumer-side per-row gate for row actions, AND-ed with the metadata
+     * gates (`requiresState` + `condition`): it can only hide more. Receives the
+     * full action definition (adapt an `(actionKey, row)` predicate with
+     * `(a, row) => legacy(a.key, row)`). A throw hides the action (fail-closed,
+     * `console.error`). Memoize it (module-level fn or `useCallback`).
+     * Omitted → behaviour unchanged. Not a substitute for backend authorization.
+     */
+    isRowActionVisible?: RowActionPredicate
     refreshTrigger?: any
     defaultFilters?: Record<string, any>
     extraColumns?: ColumnDef<any>[]
@@ -313,6 +322,7 @@ export function DynamicTable({
     allowedActionKeys,
     onAction,
     onRowClick,
+    isRowActionVisible: rowActionPredicate,
     refreshTrigger,
     defaultFilters,
     extraColumns = [],
@@ -1396,12 +1406,12 @@ export function DynamicTable({
             }
             return actions === viewMetadata.actions ? viewMetadata : { ...viewMetadata, actions }
         })()
-        const baseColumns = getDynamicColumns(rowMetadata, handleInternalAction, t, i18n.language, columnFilterConfigs, timeZone, currency)
+        const baseColumns = getDynamicColumns(rowMetadata, handleInternalAction, t, i18n.language, columnFilterConfigs, timeZone, currency, rowActionPredicate)
         const filteredBase = baseColumns.filter((col: ColumnDef<any>) => !effectiveHiddenColumns.includes(col.id as string))
         const actionsCol = filteredBase.find((c: ColumnDef<any>) => c.id === 'actions')
         const otherCols = filteredBase.filter((c: ColumnDef<any>) => c.id !== 'actions')
         return [...otherCols, ...extraColumns, ...(actionsCol ? [actionsCol] : [])]
-    }, [viewMetadata, handleInternalAction, effectiveHiddenColumns, allowedActionKeys, extraColumns, t, i18n.language, columnFilterConfigs, getDynamicColumns, timeZone, currency])
+    }, [viewMetadata, handleInternalAction, effectiveHiddenColumns, allowedActionKeys, extraColumns, t, i18n.language, columnFilterConfigs, getDynamicColumns, timeZone, currency, rowActionPredicate])
 
     const filters = useMemo(() => [], [])
 

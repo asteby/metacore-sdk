@@ -423,6 +423,7 @@ export type {
     ColumnFilterConfig,
     FilterOption as DynamicColumnFilterOption,
     GetDynamicColumns,
+    RowActionPredicate,
     DynamicIconComponent,
 } from './dynamic-columns-shim'
 export {

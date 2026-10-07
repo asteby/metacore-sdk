@@ -59,6 +59,7 @@ import { isColumnVisibleInTable } from './column-visibility'
 import type {
     ColumnFilterConfig,
     GetDynamicColumns,
+    RowActionPredicate,
 } from './dynamic-columns-shim'
 
 /** Host-supplied helpers consumed by avatar/image cell renderers. */
@@ -320,8 +321,22 @@ export const isActionConditionMet = (action: any, row: any): boolean => {
  * (`requiresState`) AND the declarative `condition` must pass. Shared by the
  * table's action column and the kanban card menu so they hide/show identically.
  */
-export const isRowActionVisible = (action: any, row: any, stageField?: string): boolean =>
-    isActionAllowedForRowState(action, row, stageField) && isActionConditionMet(action, row)
+export const isRowActionVisible = (
+    action: any,
+    row: any,
+    stageField?: string,
+    predicate?: RowActionPredicate,
+): boolean => {
+    if (!(isActionAllowedForRowState(action, row, stageField) && isActionConditionMet(action, row))) return false
+    if (!predicate) return true
+    // Consumer predicate: AND-ed with the metadata gates; fail-closed on throw.
+    try {
+        return !!predicate(action, row)
+    } catch (err) {
+        console.error('[metacore] isRowActionVisible predicate threw; hiding action', action?.key, err)
+        return false
+    }
+}
 
 /**
  * The column a model's `requiresState` gates read: the served `stage_field`
@@ -889,6 +904,7 @@ export function makeDefaultGetDynamicColumns(
         filterConfigs?: Map<string, ColumnFilterConfig>,
         timeZone?: string,
         currency?: string,
+        rowActionPredicate?: RowActionPredicate,
     ): ColumnDef<any>[] {
         const dateLocale = currentLanguage === 'en' ? enUS : es
         const columns: ColumnDef<any>[] = [
@@ -1545,7 +1561,7 @@ export function makeDefaultGetDynamicColumns(
                     // secundarias (compartir/imprimir/correo/chat + las que
                     // aporten addons instalados). Ver row-actions-menu.tsx.
                     <RowActionsMenu
-                        actions={resolvedActions.filter((action) => isRowActionVisible(action, row.original, lifecycleStageField(metadata)))}
+                        actions={resolvedActions.filter((action) => isRowActionVisible(action, row.original, lifecycleStageField(metadata), rowActionPredicate))}
                         row={row.original}
                         onAction={onAction}
                     />
