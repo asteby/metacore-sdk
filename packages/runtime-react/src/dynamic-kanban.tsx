@@ -161,6 +161,7 @@ import { useOptionsResolver } from './use-options-resolver'
 import { ActivityValueRenderer } from './activity-value-renderer'
 import { DynamicIcon } from './dynamic-icon'
 import { isColumnVisibleInTable } from './column-visibility'
+import type { RowActionPredicate } from './dynamic-columns-shim'
 import {
     aggregateOf,
     formatAggregateTotal,
@@ -845,6 +846,15 @@ export interface DynamicKanbanProps {
      */
     onAction?: (action: string, row: any) => void
     /**
+     * Consumer-side per-row gate for row actions, AND-ed with the metadata
+     * gates (`requiresState` + `condition`): it can only hide more. Receives the
+     * full action definition (adapt an `(actionKey, row)` predicate with
+     * `(a, row) => legacy(a.key, row)`). A throw hides the action (fail-closed,
+     * `console.error`). Memoize it (module-level fn or `useCallback`).
+     * Omitted → behaviour unchanged. Not a substitute for backend authorization.
+     */
+    isRowActionVisible?: RowActionPredicate
+    /**
      * Size of the INITIAL board page (one request, grouped into lanes). Each
      * lane then tops up incrementally on scroll (see `lanePageSize`). Defaults
      * to 50 — enough to fill the visible lanes without loading the whole board.
@@ -931,6 +941,7 @@ function DynamicKanbanBoard({
     realtime: realtimeProp,
     onCardClick,
     onAction,
+    isRowActionVisible: rowActionPredicate,
     pageSize = 50,
     lanePageSize = 25,
     timeZone: timeZoneProp,
@@ -2142,6 +2153,7 @@ function DynamicKanbanBoard({
                             showAllFields={explicitCard}
                             actions={rowActions}
                             stageField={lifecycleStageField(metadata)}
+                            rowActionPredicate={rowActionPredicate}
                             locale={i18n.language}
                             timeZone={timeZone}
                             currency={currency}
@@ -2175,6 +2187,7 @@ function DynamicKanbanBoard({
                 showAllFields={explicitCard}
                 actions={rowActions}
                 stageField={lifecycleStageField(metadata)}
+                rowActionPredicate={rowActionPredicate}
                 locale={i18n.language}
                 timeZone={timeZone}
                 currency={currency}
@@ -3209,6 +3222,8 @@ interface KanbanCardProps {
     actions: ActionDefinition[]
     /** Column the actions' requiresState reads (the model's stage_field). */
     stageField?: string
+    /** Consumer row-action predicate (`DynamicKanban.isRowActionVisible`). */
+    rowActionPredicate?: RowActionPredicate
     locale: string
     timeZone?: string
     currency?: string
@@ -3287,6 +3302,7 @@ function KanbanCard({
     showAllFields,
     actions,
     stageField,
+    rowActionPredicate,
     locale,
     timeZone,
     currency,
@@ -3301,7 +3317,7 @@ function KanbanCard({
         disabled: !draggable,
     })
 
-    const visibleActions = actions.filter((a) => isRowActionVisible(a, card, stageField))
+    const visibleActions = actions.filter((a) => isRowActionVisible(a, card, stageField, rowActionPredicate))
 
     const menu =
         visibleActions.length > 0 ? (
