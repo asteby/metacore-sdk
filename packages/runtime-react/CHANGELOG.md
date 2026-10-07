@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 49.8.0
+
+### Minor Changes
+
+- 13e4aaf: DocumentEditor: crear y editar el producto desde la celda del renglón. «Crear producto «texto»» y «+» abren el alta del modelo de catálogo (metacore:create-record) prellenada con lo buscado y el producto nuevo llena ESE renglón con el mismo mapeo que al elegirlo; el lápiz (hover/foco, accesible por teclado) abre la edición (metacore:edit-record) y al guardar el renglón se actualiza salvo los campos que el usuario sobrescribió (dirty por campo contra la foto del catálogo), con aviso «Precio de catálogo cambió a $X — aplicar». Los renglones de un documento origen no cambian cantidad, tope ni precios. Tarjeta de la contraparte con etiquetas de la metadata (clave corta si la larga no resuelve) y valores de catálogo «G03 · Gastos en general», sin vacíos. Placeholder corto «Buscar producto…» con la ayuda como tooltip y en el estado vacío; el buscador del renglón vacío usa el ancho de las columnas que aún no llena; la unidad bajo el SKU sale con su etiqueta (nunca la clave cruda). RecordPicker: la lista se acota al alto disponible (no se sale del viewport al abrirse hacia arriba), `maxListWidth` y nombres a 2 líneas. FieldLabel y el modal genérico usan sentence case por defecto.
+
 ## 49.7.0
 
 ### Minor Changes
