@@ -27,10 +27,11 @@ import { useEffect, useRef, useState } from 'react'
 import { getOptionFilter } from './option-filter'
 import { useTranslation } from 'react-i18next'
 import { Badge, Button } from '@asteby/metacore-ui/primitives'
-import { ScanLine } from 'lucide-react'
+import { Check, ScanLine } from 'lucide-react'
 import { BarcodeScanner } from './barcode-scanner'
 import { RecordPicker } from './record-picker'
 import { OptionLead } from './record-picker-option'
+import { OptionDisplayRow, OptionDisplayValue, getOptionDisplay, hasOptionDisplays } from './option-display'
 import { recordLabel, requestRecordCreate, requestRecordEdit, withSearchPrefill } from './record-picker-actions'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { useResolveOptionIds } from './use-option-ids'
@@ -114,6 +115,12 @@ export interface DynamicSelectFieldProps {
     createLockedFields?: string[]
     /** Paint trigger with destructive border when validation failed. */
     invalid?: boolean
+    /**
+     * Picker context for the declarative option display's contributed
+     * metrics (`?ctx.<key>=`), e.g. `{ warehouse_id }` of the document being
+     * edited so the product stock is the one of that warehouse.
+     */
+    optionsContext?: Record<string, string | null | undefined>
 }
 
 /**
@@ -137,6 +144,7 @@ export function DynamicSelectField({
     createDefaults,
     createLockedFields,
     invalid = false,
+    optionsContext,
 }: DynamicSelectFieldProps) {
     const { t } = useTranslation()
     const ph = (fallback: string) =>
@@ -186,6 +194,7 @@ export function DynamicSelectField({
         filterValue: dependsOn ? scope : undefined,
         optionFilter,
         keepValue: value,
+        context: optionsContext,
         // Fetch only while open (a held value's label comes from the `?ids=`
         // lookup below, readonly included). Blocked cascades and static lists
         // never fetch.
@@ -292,6 +301,10 @@ export function DynamicSelectField({
 
     const canMutate = !!fieldRef && !hideCreate && !useStatic && !blockedByDependency
     const fieldName = field.label ? t(field.label, { defaultValue: field.label }) : fieldRef ?? ''
+    // Declarative option display (manifest `option_display`): rich rows with
+    // avatar, two-line title, subtitle and toned metrics (price, stock…).
+    const richRows = hasOptionDisplays(options)
+    const selectedDisplay = getOptionDisplay(selectedOption)
     const badge = (opt: ResolvedOption) =>
         opt.description ? (
             <Badge variant="secondary" className="shrink-0 font-normal tabular-nums">
@@ -320,12 +333,43 @@ export function DynamicSelectField({
             readOnly={readonly}
             invalid={invalid}
             renderLead={(o, where) => <OptionLead option={o} size={where === 'option' ? 24 : 20} />}
+            renderItem={
+                richRows
+                    ? (o, st) => {
+                          const d = getOptionDisplay(o)
+                          return (
+                              <>
+                                  {d ? (
+                                      <OptionDisplayRow display={d} label={o.label} active={st.active} selected={st.selected} />
+                                  ) : (
+                                      <span className="flex w-full min-w-0 items-center gap-3">
+                                          <OptionLead option={o} size={32} />
+                                          <span className="flex min-w-0 flex-1 flex-col">
+                                              <span className="line-clamp-2 text-sm font-medium">{o.label}</span>
+                                              {o.description ? <span className="truncate text-xs text-muted-foreground">{o.description}</span> : null}
+                                          </span>
+                                      </span>
+                                  )}
+                                  <Check
+                                      className={'size-4 shrink-0 text-primary ' + (st.selected ? 'opacity-100' : 'opacity-0')}
+                                      aria-hidden
+                                  />
+                              </>
+                          )
+                      }
+                    : undefined
+            }
+            isItemDisabled={richRows ? (o) => !!getOptionDisplay(o)?.blocked : undefined}
+            minListWidth={richRows ? '26rem' : undefined}
             getDescription={descriptionAsBadge ? undefined : (o) => o.description}
             renderTrailing={descriptionAsBadge ? (o) => badge(o) : undefined}
             renderValue={() => {
                 // Never flash the raw id while the label resolves.
                 if (valueResolving) return resolvingNode
                 if (valueMissing) return missingNode
+                if (selectedDisplay && value && !blockedByDependency) {
+                    return <OptionDisplayValue display={selectedDisplay} label={selectedOption?.label} />
+                }
                 if (readonly) {
                     return (
                         <>

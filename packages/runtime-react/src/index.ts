@@ -502,6 +502,16 @@ export type { RecordPickerActionProps, RecordCreateRequest, RecordEditRequest } 
 export { useRecordPickerDialog } from './record-picker-dialog'
 export type { UseRecordPickerDialogOptions, UseRecordPickerDialogResult } from './record-picker-dialog'
 export { OptionLead, OptionThumb } from './record-picker-option'
+export {
+    OptionDisplayRow,
+    OptionDisplayValue,
+    getOptionDisplay,
+    hasOptionDisplays,
+    formatTrailingValue,
+    formatRelativeDate,
+    toneVariant,
+} from './option-display'
+export type { OptionDisplayData, OptionTrailingItem, OptionBadgeItem, OptionDisplayTone, OptionDisplayRowProps } from './option-display'
 export { ViewRecordDialog } from './dialogs/view-record-dialog'
 export type {
     ModelKey,

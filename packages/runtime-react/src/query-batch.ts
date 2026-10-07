@@ -234,12 +234,14 @@ export function optionsBatchToken(
     query: string,
     limit: number | undefined,
     filter: string | undefined,
+    context?: Record<string, string>,
 ): string {
     const params = new URLSearchParams()
     params.set('field', field)
     if (query) params.set('q', query)
     if (typeof limit === 'number' && limit > 0) params.set('limit', String(limit))
     if (filter) params.set('filter_value', filter)
+    for (const k of Object.keys(context ?? {}).sort()) params.set(`ctx.${k}`, context![k]!)
     return `o:${model}?${params.toString()}`
 }
 

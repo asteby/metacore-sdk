@@ -14,6 +14,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from './api-context'
 import { applyOptionFilter, type OptionFilterRule } from './option-filter'
 import { loadQueryPart, optionsBatchToken, optionsModelFromUrl } from './query-batch'
+import type { OptionDisplayData } from './option-display'
 
 export interface ResolvedOption {
     /** Canonical id (server-side primary key). */
@@ -28,6 +29,12 @@ export interface ResolvedOption {
     image?: string | null
     color?: string | null
     icon?: string | null
+    /**
+     * Presentación declarativa resuelta por el kernel (manifest v3
+     * `option_display`): título, subtítulo, imagen, métricas a la derecha con
+     * tono (precio, stock…) y badges. Ausente en hosts/modelos sin display.
+     */
+    display?: OptionDisplayData | null
     /**
      * Campos extra del payload (precio, costo, sku, tasa) que no son decoración.
      * Solo se llena cuando el option trae números o strings además de id/label.
@@ -98,6 +105,12 @@ export interface UseOptionsResolverArgs {
     optionFilter?: OptionFilterRule[]
     /** Current selection: never hidden by `optionFilter`, so its label survives. */
     keepValue?: unknown
+    /**
+     * Picker context for the option display's contributed metrics, sent as
+     * `?ctx.<key>=<value>` (e.g. `{ warehouse_id }` of the document being
+     * edited → stock in that warehouse). Empty values are dropped.
+     */
+    context?: Record<string, string | null | undefined>
 }
 
 export interface UseOptionsResolverResult {
@@ -157,8 +170,34 @@ export function optionsRequestKey(
     query: string,
     limit: number | undefined,
     filter: string | undefined,
+    context?: Record<string, string>,
 ): string {
-    return [scope, url, field, query, String(limit ?? ''), filter ?? ''].join('\n')
+    const parts = [scope, url, field, query, String(limit ?? ''), filter ?? '']
+    const ctx = contextKey(context)
+    if (ctx) parts.push(ctx)
+    return parts.join('\n')
+}
+
+/** Normalized picker context: string values only, empty dropped (null when none). */
+export function normalizeOptionsContext(
+    context: Record<string, string | null | undefined> | undefined,
+): Record<string, string> | undefined {
+    if (!context) return undefined
+    const out: Record<string, string> = {}
+    for (const [k, v] of Object.entries(context)) {
+        if (v == null) continue
+        const s = String(v).trim()
+        if (s) out[k] = s
+    }
+    return Object.keys(out).length > 0 ? out : undefined
+}
+
+function contextKey(context: Record<string, string> | undefined): string {
+    if (!context) return ''
+    return Object.keys(context)
+        .sort()
+        .map((k) => `${k}=${context[k]}`)
+        .join('&')
 }
 
 /** Org + branch of the host session: part of every options cache key. */
@@ -203,6 +242,8 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
         optionFilter,
         keepValue,
     } = args
+    const context = normalizeOptionsContext(args.context)
+    const ctxSig = contextKey(context)
 
     const api = useApi()
     const [options, setOptions] = useState<ResolvedOption[]>([])
@@ -251,6 +292,7 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
             query ?? '',
             limit,
             filterValue,
+            context,
         )
         if (refreshKey !== seenRefresh.current) {
             seenRefresh.current = refreshKey
@@ -278,13 +320,14 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
             if (query) params.q = query
             if (typeof limit === 'number' && limit > 0) params.limit = limit
             if (filterValue) params.filter_value = filterValue
+            for (const [k, v] of Object.entries(context ?? {})) params[`ctx.${k}`] = v
             const model = optionsModelFromUrl(url)
             pending = (async () => {
                 if (model) {
                     try {
                         const part = await loadQueryPart(
                             api,
-                            optionsBatchToken(model, effectiveField, query ?? '', limit, filterValue),
+                            optionsBatchToken(model, effectiveField, query ?? '', limit, filterValue, context),
                         )
                         if (!part.success) {
                             throw new Error(part.message || 'options resolver: unsuccessful response')
@@ -340,7 +383,8 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
         return () => {
             cancelled = true
         }
-    }, [api, url, effectiveField, query, limit, enabled, filterValue, refreshKey])
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- context is keyed by ctxSig
+    }, [api, url, effectiveField, query, limit, enabled, filterValue, refreshKey, ctxSig])
 
     // Rules arrive as a fresh array each render; key on their content.
     const filterKey = optionFilter && optionFilter.length > 0 ? JSON.stringify(optionFilter) : ''
@@ -364,7 +408,7 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
  * id/value and label/name fields for legacy parity — we accept either
  * and surface a stable shape downstream.
  */
-const OPTION_KNOWN_KEYS = new Set(['id', 'value', 'label', 'name', 'description', 'image', 'color', 'icon'])
+const OPTION_KNOWN_KEYS = new Set(['id', 'value', 'label', 'name', 'description', 'image', 'color', 'icon', 'display'])
 
 export function projectOption(raw: any): ResolvedOption {
     const id = raw?.id ?? raw?.value ?? ''
@@ -385,6 +429,7 @@ export function projectOption(raw: any): ResolvedOption {
         image: raw?.image ?? null,
         color: raw?.color ?? null,
         icon: raw?.icon ?? null,
+        ...(raw?.display && typeof raw.display === 'object' ? { display: raw.display as OptionDisplayData } : {}),
         ...(Object.keys(meta).length > 0 ? { meta } : {}),
     }
 }

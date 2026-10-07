@@ -30,6 +30,7 @@ import { DocumentLinesGrid, type DocumentLinesGridProps, type LineItemsColumn } 
 import { computeTotals, serializeLineItems, taxBreakdown, type LineItem } from './line-items'
 import { roundMoney, toAmount, useFormatter } from './format'
 import { catalogRecordToProduct, createCatalogProductSearch } from './catalog-product-search'
+import { withOptionDisplays } from './product-display'
 import type { ProductResult } from './product-search'
 import { requestRecordCreate, requestRecordEdit, withSearchPrefill } from '../record-picker-actions'
 import {
@@ -183,9 +184,17 @@ export function DocumentEditor({
     const relCache = useRef(new Map<string, Promise<any[]>>())
 
     const taxRate = defaultTaxRate ?? orgTaxRate
+    // The header's warehouse (when the document type declares one) scopes the
+    // stock the catalog's option_display shows in the product rows.
+    const headerWarehouse = typeof header.warehouse_id === 'string' ? header.warehouse_id : ''
     const search = useMemo(
-        () => searchProducts ?? createCatalogProductSearch(api, { model: productModel, defaultTaxRate: taxRate }),
-        [searchProducts, api, productModel, taxRate],
+        () =>
+            withOptionDisplays(
+                searchProducts ?? createCatalogProductSearch(api, { model: productModel, defaultTaxRate: taxRate }),
+                api,
+                { model: productModel ?? 'products.Product', context: { warehouse_id: headerWarehouse } },
+            ),
+        [searchProducts, api, productModel, taxRate, headerWarehouse],
     )
 
     const isInstalled = useCallback((k?: string) => !k || !installed || installed.addons.has(k), [installed])

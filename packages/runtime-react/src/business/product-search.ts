@@ -4,6 +4,7 @@
 // la entrada para que el backend/addon elija el índice correcto.
 import type { LineItem } from './line-items'
 import { makeLine } from './line-items'
+import type { OptionDisplayData } from '../option-display'
 
 export interface TireSize {
     width: number
@@ -84,6 +85,13 @@ export interface ProductResult {
     unit?: string
     /** Campos de extensión del producto (fiscal_data.*) que se copian al renglón. */
     extensions?: Record<string, string>
+    /**
+     * Presentación declarativa del catálogo (manifest `option_display` del
+     * modelo de producto): la fila del buscador la pinta tal cual — precio,
+     * existencia aportada por inventory con su tono, badges. Ver
+     * `withOptionDisplays`.
+     */
+    display?: OptionDisplayData | null
 }
 
 /** Existencia disponible: de la variante o del producto, en un almacén o en total. */

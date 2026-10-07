@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@asteby/metacore-ui/primitives'
 import { useLatestSearch, useRecordSearch } from '../record-picker'
 import { useFormatter } from './format'
+import { OptionDisplayRow } from '../option-display'
 import {
     availableStock,
     parseProductQuery,
@@ -102,8 +103,16 @@ export function ProductHitTrailing({
     )
 }
 
-/** Option body: bold name (· variant), muted meta line, stock/price right. */
+/**
+ * Option body: bold name (· variant), muted meta line, stock/price right. A
+ * product whose catalog declares an `option_display` (the server resolved it,
+ * see `withOptionDisplays`) paints that row instead: avatar, two-line title,
+ * subtitle and toned metrics (price + stock contributed by inventory).
+ */
 export function ProductHitRow({ hit, warehouseId, currency, compact }: { hit: ProductHit; warehouseId?: string; currency?: string; compact?: boolean }) {
+    if (hit.product.display && !hit.variant) {
+        return <OptionDisplayRow display={hit.product.display} label={productHitLabel(hit)} currency={currency} />
+    }
     const meta = productHitMeta(hit)
     return (
         <span className="flex w-full min-w-0 items-center justify-between gap-3">
