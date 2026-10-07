@@ -81,11 +81,11 @@ import {
 } from './table-virtualization'
 import { OptionsContext } from './options-context'
 import { RowActionsModelContext } from './row-actions-menu'
-import type { TableMetadata, ApiResponse, ColumnDefinition } from './types'
+import type { TableMetadata, ApiResponse, ColumnDefinition, ActionDefinition } from './types'
 import { getSearchableColumnKeys } from './column-visibility'
 import { visibleRelationInclude } from './list-include'
 import { useDebouncedValue } from './use-debounced-value'
-import { useCan, usePermissionsActive, useRoleGate, gateTableMetadata } from './permissions-context'
+import { useCan, usePermissionsActive, useRoleGate, gateTableMetadata, modelCapability } from './permissions-context'
 import { useDynamicRowActions } from './dynamic-row-actions'
 import { ExportDialog } from './dialogs/export'
 import { ImportDialog } from './dialogs/import'
@@ -184,6 +184,13 @@ export interface DynamicTableProps {
      */
     mutationEndpoint?: string
     enableUrlSync?: boolean
+    /**
+     * Initial sort applied when there is no user/URL sorting yet. It seeds the
+     * `sorting` state, so a `?sortBy=` deep-link wins over it (when
+     * `enableUrlSync`), and the user can still change or clear the sort via
+     * the column headers. Only read on mount.
+     */
+    defaultSort?: { id: string; desc?: boolean }
     /**
      * Hide the import action on THIS view even when the model supports it.
      * A role-scoped view (e.g. a rep seeing only their own records) usually
@@ -303,6 +310,10 @@ export interface DynamicTableBulkContext {
     selectedIds: Array<string | number>
     clearSelection: () => void
     refresh: () => void
+    /** Metadata actions visible to the current user (capability-gated when a PermissionsProvider is mounted). */
+    actions: ActionDefinition[]
+    /** `true` when the user may run `actionKey` on this model; always `true` without a PermissionsProvider. */
+    can: (actionKey: string) => boolean
 }
 
 /** True when an api-client error is an HTTP 403 (axios-style or fetch-style). */
@@ -316,6 +327,7 @@ export function DynamicTable({
     endpoint,
     mutationEndpoint,
     enableUrlSync = true,
+    defaultSort,
     hideImport,
     hideExport,
     hiddenColumns = [],
@@ -405,7 +417,12 @@ export function DynamicTable({
     const [bulkDeleteTotal, setBulkDeleteTotal] = useState(0)
 
     const [rowSelection, setRowSelection] = useState({})
-    const [sorting, setSorting] = useState<SortingState>([])
+    const [sorting, setSorting] = useState<SortingState>(() => {
+        if (!defaultSort) return []
+        // A deep-linked ?sortBy= wins; skip the default so no request goes out with it first.
+        if (enableUrlSync && typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('sortBy')) return []
+        return [{ id: defaultSort.id, desc: defaultSort.desc ?? false }]
+    })
     const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(() => {
         const initial: VisibilityState = {}
         hiddenColumns.forEach(col => { initial[col] = false })
@@ -1990,6 +2007,8 @@ export function DynamicTable({
                         selectedIds: bulkSelectedRows.map((r) => r.id).filter((id) => id != null),
                         clearSelection: () => table.resetRowSelection(),
                         refresh: handleRefresh,
+                        actions: viewMetadata?.actions ?? [],
+                        can: (actionKey: string) => !permissionsActive || can(modelCapability(model, actionKey)),
                     })
                     : extraBulkActions}
                 {!hideBulkDelete && (
