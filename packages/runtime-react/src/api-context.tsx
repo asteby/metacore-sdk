@@ -15,13 +15,22 @@ export interface ApiClient {
 }
 
 const ApiContext = createContext<ApiClient | null>(null)
+const BatchContext = createContext<boolean>(true)
 
 export interface ApiProviderProps {
     client: ApiClient
+    /**
+     * Groups list, metadata and options reads into one `POST /q`. Defaults to
+     * `true`. Pass `false` when the host backend does not implement `/q`: every
+     * read then goes straight to its own GET and no POST is attempted. When
+     * left on and `/q` answers 404/405, the batch turns itself off for that
+     * client after the first failed attempt and the read falls back to GET.
+     */
+    batch?: boolean
     children: React.ReactNode
 }
 
-export function ApiProvider({ client, children }: ApiProviderProps) {
+export function ApiProvider({ client, batch = true, children }: ApiProviderProps) {
     // Hosts also write through their own client (native dialogs, settings
     // screens) without going through useApi(). When the client is axios,
     // every non-GET response drops what the runtime remembered as well.
@@ -43,7 +52,11 @@ export function ApiProvider({ client, children }: ApiProviderProps) {
         )
         return () => interceptors.eject?.(id)
     }, [client])
-    return <ApiContext.Provider value={client}>{children}</ApiContext.Provider>
+    return (
+        <ApiContext.Provider value={client}>
+            <BatchContext.Provider value={batch}>{children}</BatchContext.Provider>
+        </ApiContext.Provider>
+    )
 }
 
 interface AxiosLike {
@@ -82,6 +95,7 @@ function mutating<T>(request: Promise<T>): Promise<T> {
 /** Returns the host-injected api client. Throws if no <ApiProvider> is mounted. */
 export function useApi(): ApiClient {
     const ctx = useContext(ApiContext)
+    const batch = useContext(BatchContext)
     if (!ctx) {
         throw new Error('useApi() requires an <ApiProvider> ancestor. Hosts must inject an axios-like client via runtime-react ApiProvider.')
     }
@@ -92,12 +106,13 @@ export function useApi(): ApiClient {
     return useMemo<ApiClient>(() => ({
         // Each call reaches the host client with the arguments it was given —
         // never a trailing `undefined` it didn't ask for.
-        get: (...args: Parameters<ApiClient['get']>) => batchGet(ctx, ...args),
+        get: (...args: Parameters<ApiClient['get']>) =>
+            batch ? batchGet(ctx, ...args) : ctx.get(...args),
         post: (...args: Parameters<ApiClient['post']>) =>
             isWrite('post', args[0]) ? mutating(ctx.post(...args)) : ctx.post(...args),
         put: (...args: Parameters<ApiClient['put']>) => mutating(ctx.put(...args)),
         delete: (...args: Parameters<ApiClient['delete']>) => mutating(ctx.delete(...args)),
-    }), [ctx])
+    }), [ctx, batch])
 }
 
 /** Optional branch context — hosts that support tenant branches can supply

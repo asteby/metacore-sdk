@@ -170,7 +170,19 @@ export function rememberInRows(
     }
 }
 
+/**
+ * Clients whose backend has no `/q` (it answered 404/405). They get plain GETs
+ * for the rest of the session instead of one failed POST per read.
+ */
+let unsupportedClients = new WeakSet<object>()
+
+function errorStatus(err: unknown): number | undefined {
+    const e = err as { status?: number; response?: { status?: number } } | null
+    return e?.status ?? e?.response?.status
+}
+
 export function resetQueryBatchCache(): void {
+    unsupportedClients = new WeakSet<object>()
     partCache.clear()
     entityCache.clear()
     waiters = []
@@ -320,6 +332,11 @@ async function flushQueryBatch() {
             waiter.resolve(merged)
         }
     } catch (err) {
+        // The host has no /q route: remember it so later reads skip the POST.
+        // Every waiter of this window still rejects and batchGet answers it
+        // with the plain GET, so no read is lost.
+        const status = errorStatus(err)
+        if (status === 404 || status === 405) unsupportedClients.add(api)
         const error = err instanceof Error ? err : new Error(String(err))
         for (const waiter of batch) waiter.reject(error)
     }
@@ -381,7 +398,7 @@ export async function batchGet(api: ApiClient, url: string, config?: { params?: 
     // trailing `undefined` config reaching the host client.
     const plainGet = () => (config === undefined ? api.get(url) : api.get(url, config))
     const token = tokenForGet(url, config?.params)
-    if (!token) return plainGet()
+    if (!token || unsupportedClients.has(api)) return plainGet()
     try {
         const part = await loadQueryPart(api, token)
         if (!part.success) {
