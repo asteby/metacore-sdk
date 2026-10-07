@@ -15,11 +15,10 @@
 // code is needed. This lives in the SDK so POS, purchases and any future addon
 // share ONE implementation instead of each re-porting a bespoke picker.
 import { useCallback, useEffect, useState } from 'react'
-import { Search, X, Plus, Pencil, type LucideIcon } from 'lucide-react'
+import { Search, X, type LucideIcon } from 'lucide-react'
 import {
     Button,
     Command,
-    CommandEmpty,
     CommandGroup,
     CommandInput,
     CommandItem,
@@ -29,6 +28,7 @@ import {
     PopoverTrigger,
 } from '@asteby/metacore-ui'
 import { CreateRecordDialog } from './dialogs/create-record-dialog'
+import { JOINED_TRIGGER_CLASS, PickerCreateItem, RecordPickerAction, hasRecordPickerAction } from './record-picker-actions'
 import { useCan } from './permissions-context'
 import { useApi } from './api-context'
 
@@ -172,14 +172,14 @@ export function EntitySelect({
         onSelect(null, null)
     }
 
-    const openCreate = (e: React.MouseEvent) => {
-        e.stopPropagation()
+    const openCreate = () => {
+        setOpen(false)
         setDialogRecordId(undefined)
         setDialogOpen(true)
     }
-    const openEdit = (e: React.MouseEvent) => {
-        e.stopPropagation()
+    const openEdit = () => {
         if (!value) return
+        setOpen(false)
         setDialogRecordId(value)
         setDialogOpen(true)
     }
@@ -198,14 +198,18 @@ export function EntitySelect({
         onSelect(id, lbl)
     }
 
+    const onCreate = mayCreate ? openCreate : undefined
+    const onEdit = mayEdit ? openEdit : undefined
+    const joined = hasRecordPickerAction(!!value, onCreate, onEdit)
+
     return (
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center" data-slot="entity-select">
             <Popover open={open} onOpenChange={disabled ? undefined : setOpen}>
                 <PopoverTrigger asChild>
                     <Button
                         variant="outline"
                         disabled={disabled}
-                        className="w-full flex-1 justify-start gap-2 font-normal"
+                        className={'w-full min-w-0 flex-1 justify-start gap-2 font-normal' + (joined ? ` ${JOINED_TRIGGER_CLASS}` : '')}
                     >
                         {Icon && <Icon className="text-muted-foreground size-4 shrink-0" />}
                         <span className="flex-1 truncate text-left">{label ?? placeholder}</span>
@@ -228,7 +232,8 @@ export function EntitySelect({
                 <PopoverContent
                     className="p-0"
                     align="start"
-                    style={{ width: 'var(--radix-popover-trigger-width)' }}
+                    collisionPadding={8}
+                    style={{ width: 'max(var(--radix-popover-trigger-width), 14rem)', maxWidth: 'calc(100vw - 1rem)' }}
                 >
                     <Command shouldFilter={false}>
                         <CommandInput
@@ -244,7 +249,7 @@ export function EntitySelect({
                             )}
                             {!isLoading &&
                                 searchTerm.length >= minChars &&
-                                results.length === 0 && <CommandEmpty>{emptyText}</CommandEmpty>}
+                                results.length === 0 && <div className="text-muted-foreground py-6 text-center text-sm">{emptyText}</div>}
                             {!isLoading && results.length > 0 && (
                                 <CommandGroup className="max-h-64 overflow-auto">
                                     {results.map((row) => (
@@ -270,41 +275,14 @@ export function EntitySelect({
                                     <span className="text-xs">Escribe al menos 2 caracteres</span>
                                 </div>
                             )}
+                            {onCreate && !isLoading && <PickerCreateItem label={model} onSelect={openCreate} />}
                         </CommandList>
                     </Command>
                 </PopoverContent>
             </Popover>
 
             {/* Selected → edit (pencil); empty → create (+). Each gated by perms. */}
-            {value
-                ? mayEdit && (
-                      <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          disabled={disabled}
-                          onClick={openEdit}
-                          aria-label="Editar"
-                          title="Editar"
-                          className="shrink-0"
-                      >
-                          <Pencil className="size-4" />
-                      </Button>
-                  )
-                : mayCreate && (
-                      <Button
-                          type="button"
-                          variant="outline"
-                          size="icon"
-                          disabled={disabled}
-                          onClick={openCreate}
-                          aria-label="Crear"
-                          title="Crear"
-                          className="shrink-0"
-                      >
-                          <Plus className="size-4" />
-                      </Button>
-                  )}
+            <RecordPickerAction hasValue={!!value} label={model} onCreate={onCreate} onEdit={onEdit} disabled={disabled} />
 
             {dialogOpen && (
                 <CreateRecordDialog

@@ -475,6 +475,8 @@ export type { DynamicRecordDialogProps, FieldDef, FieldOption, GetImageUrl } fro
 export { CreateRecordDialog } from './dialogs/create-record-dialog'
 export { EntitySelect } from './entity-select'
 export type { EntitySelectProps, EntitySelectOption } from './entity-select'
+export { RecordPickerAction, PickerCreateItem, JOINED_TRIGGER_CLASS, hasRecordPickerAction } from './record-picker-actions'
+export type { RecordPickerActionProps } from './record-picker-actions'
 export { ViewRecordDialog } from './dialogs/view-record-dialog'
 export type {
     ModelKey,

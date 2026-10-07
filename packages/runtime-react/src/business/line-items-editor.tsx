@@ -1,14 +1,15 @@
 // DocumentLinesGrid — editor único de renglones (UX-2).
 // `LineItemsEditor` es el mismo componente: las props nuevas son opcionales.
 // Controlado: `value`/`onChange` con `LineItem[]`. Guardar = `serializeLineItems`.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Heading, Minus, Plus, Search, StickyNote, Trash2 } from 'lucide-react'
+import { Heading, Minus, Plus, StickyNote, Trash2 } from 'lucide-react'
 import { Button, Input } from '@asteby/metacore-ui'
 import { useCan } from '../permissions-context'
 import { useFormatter } from './format'
 import {
     addProductLine,
+    applyProductToLine,
     lineGridKeyCommand,
     type DocumentLinesMode,
     type PriceSource,
@@ -22,9 +23,8 @@ import {
     type LineItemsPolicy,
     type LineItemsValidation,
 } from './line-items'
-import { useAsyncSearch } from './use-async-search'
+import { LineProductCell } from './line-product-cell'
 import {
-    parseProductQuery,
     type ProductQuery,
     type ProductResult,
     type ProductVariant,
@@ -68,6 +68,11 @@ export interface DocumentLinesGridProps {
     editPermission?: string
     /** Moneda ISO (default: la de la org). */
     currency?: string
+    /**
+     * Pinta el bloque de totales bajo la tabla. Default true; un contenedor que
+     * ya muestra sus propios totales (DocumentEditor) lo apaga.
+     */
+    showTotals?: boolean
 }
 
 /** @deprecated Usa `DocumentLinesGridProps`. Es el mismo contrato. */
@@ -94,6 +99,7 @@ export function DocumentLinesGrid({
     readOnly = false,
     editPermission,
     currency,
+    showTotals = true,
 }: DocumentLinesGridProps) {
     const { t } = useTranslation()
     const can = useCan()
@@ -136,52 +142,121 @@ export function DocumentLinesGrid({
     const cell = (i: number, field: keyof LineItem) => errors[`${i}.${field}`]
     const warn = (i: number, field: string) => validation.warnings[`${i}.${field}`]
 
+    // Foco tras elegir: Enter en el buscador pasa a «Cant.» del renglón que
+    // recibió el producto (nuevo o sumado), como un editor de facturas pro.
+    const rootRef = useRef<HTMLDivElement>(null)
+    const [focusQty, setFocusQty] = useState<string | null>(null)
+    useEffect(() => {
+        if (!focusQty) return
+        const el = rootRef.current?.querySelector<HTMLInputElement>(`[data-line-key="${focusQty}"] [data-cell="quantity"]`)
+        if (el) {
+            el.focus()
+            el.select?.()
+        }
+        setFocusQty(null)
+    }, [focusQty, value])
+
+    const blankLine = () => makeLine(discountMode === 'amount' ? { discount_kind: 'amount' } : {})
+
+    /** Renglón vacío del final: el producto entra como renglón nuevo (o suma al mismo). */
     const pickProduct = (product: ProductResult, variant?: ProductVariant) => {
-        emit(addProductLine(value, product, variant, { priceSource, warehouseId, mergeSameProduct }))
+        const next = addProductLine(value, product, variant, { priceSource, warehouseId, mergeSameProduct })
+        emit(next)
+        const id = variant?.id ?? product.id
+        const target = next.find((l) => l.kind === 'item' && l.product_id === id && !value.includes(l)) ?? next[next.length - 1]
+        if (target) setFocusQty(target.key)
+    }
+
+    /** Renglón libre existente: el producto elegido en su celda llena ESE renglón. */
+    const fillLine = (idx: number, product: ProductResult, variant?: ProductVariant) => {
+        const cur = value[idx]
+        if (!cur) return
+        const filled = applyProductToLine(cur, product, variant, { priceSource, warehouseId })
+        emit(value.map((l, i) => (i === idx ? (discountMode === 'amount' ? { ...filled, discount_kind: 'amount' as const } : filled) : l)))
+        setFocusQty(cur.key)
+    }
+
+    /** Texto escrito en el renglón vacío sin elegir producto → renglón libre con esa descripción. */
+    const addFreeFromDraft = (description: string) => {
+        const line = { ...blankLine(), description }
+        emit([...value, line])
+        setFocusQty(line.key)
+    }
+
+    // Ancho mínimo = columnas fijas + un mínimo legible para «Descripción».
+    const minWidth =
+        260 +
+        (stepper ? 144 : 96) +
+        112 +
+        112 +
+        40 +
+        (show('discount') ? (discountMode === 'both' ? 128 : 96) : 0) +
+        (show('tax') ? 64 : 0) +
+        (show('unit') ? 80 : 0) +
+        (show('technician') ? 128 : 0) +
+        (show('lot') ? 112 : 0) +
+        (show('dot') ? 96 : 0)
+    const colCount = 1 + (['unit', 'discount', 'tax', 'technician', 'lot', 'dot'] as LineItemsColumn[]).filter(show).length + 4
+
+    const descKeys = (e: KeyboardEvent<HTMLInputElement>, i: number, l: LineItem) => {
+        const cmd = lineGridKeyCommand(e.key, {
+            cellEmpty: !l.description.trim() && !l.product_id,
+            mode,
+        })
+        if (cmd === 'delete') {
+            e.preventDefault()
+            remove(i)
+        } else if (cmd === 'add') {
+            e.preventDefault()
+            emit([...value, blankLine()])
+        }
     }
 
     return (
-        <div data-slot="line-items-editor" data-component="DocumentLinesGrid" data-mode={mode} className="space-y-2">
-            <div className="overflow-x-auto rounded-md border">
-                <table className="w-full text-sm">
-                    <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
+        <div ref={rootRef} data-slot="line-items-editor" data-component="DocumentLinesGrid" data-mode={mode} className="space-y-2">
+            <div className="overflow-x-auto rounded-lg border bg-card/40">
+                {/* table-fixed: «Descripción» se queda con el ancho libre y las
+                    numéricas con el suyo; en pantallas angostas la tabla
+                    conserva un mínimo y desplaza en horizontal. */}
+                <table className="w-full table-fixed border-collapse text-sm" style={{ minWidth }}>
+                    <thead className="border-b bg-muted/40 text-left text-xs font-medium text-muted-foreground">
                         <tr>
-                            <th className="px-2 py-2">{t('lineItems.description', { defaultValue: 'Descripción' })}</th>
-                            {show('unit') && <th className="w-20 px-2 py-2">{t('lineItems.unit', { defaultValue: 'Unidad' })}</th>}
-                            <th className="w-36 px-2 py-2 text-right">{t('lineItems.quantity', { defaultValue: 'Cant.' })}</th>
-                            <th className="w-32 px-2 py-2 text-right">
+                            <th className="px-3 py-2 font-medium">{t('lineItems.description', { defaultValue: 'Descripción' })}</th>
+                            {show('unit') && <th className="w-20 px-3 py-2 font-medium">{t('lineItems.unit', { defaultValue: 'Unidad' })}</th>}
+                            <th className={(stepper ? 'w-36' : 'w-24') + ' px-3 py-2 text-right font-medium'}>{t('lineItems.quantity', { defaultValue: 'Cant.' })}</th>
+                            <th className="w-28 px-3 py-2 text-right font-medium">
                                 {priceSource === 'cost'
                                     ? t('lineItems.unitCost', { defaultValue: 'Costo unitario' })
                                     : t('lineItems.unitPrice', { defaultValue: 'Precio' })}
                             </th>
                             {show('discount') && (
-                                <th className="w-28 px-2 py-2 text-right">
+                                <th className={(discountMode === 'both' ? 'w-32' : 'w-24') + ' px-3 py-2 text-right font-medium'}>
                                     {discountMode === 'amount'
                                         ? t('lineItems.discountAmount', { defaultValue: 'Desc.' })
                                         : t('lineItems.discount', { defaultValue: 'Desc. %' })}
                                 </th>
                             )}
-                            {show('tax') && <th className="w-20 px-2 py-2 text-right">{t('lineItems.tax', { defaultValue: 'IVA %' })}</th>}
-                            {show('technician') && <th className="w-32 px-2 py-2">{t('lineItems.technician', { defaultValue: 'Técnico' })}</th>}
-                            {show('lot') && <th className="w-28 px-2 py-2">{t('lineItems.lot', { defaultValue: 'Lote' })}</th>}
-                            {show('dot') && <th className="w-24 px-2 py-2">DOT</th>}
-                            <th className="w-32 px-2 py-2 text-right">{t('lineItems.amount', { defaultValue: 'Importe' })}</th>
-                            <th className="w-10" />
+                            {show('tax') && <th className="w-16 px-3 py-2 text-right font-medium">{t('lineItems.tax', { defaultValue: 'IVA %' })}</th>}
+                            {show('technician') && <th className="w-32 px-3 py-2 font-medium">{t('lineItems.technician', { defaultValue: 'Técnico' })}</th>}
+                            {show('lot') && <th className="w-28 px-3 py-2 font-medium">{t('lineItems.lot', { defaultValue: 'Lote' })}</th>}
+                            {show('dot') && <th className="w-24 px-3 py-2 font-medium">DOT</th>}
+                            <th className="w-28 px-3 py-2 text-right font-medium">{t('lineItems.amount', { defaultValue: 'Importe' })}</th>
+                            <th className="w-10"><span className="sr-only">{t('common.actions', { defaultValue: 'Acciones' })}</span></th>
                         </tr>
                     </thead>
                     <tbody>
                         {value.map((l, i) => {
                             if (l.kind !== 'item') {
                                 return (
-                                    <tr key={l.key} className="border-t bg-muted/30">
-                                        <td colSpan={99} className="px-2 py-1.5">
+                                    <tr key={l.key} className="group border-t bg-muted/30" data-line-key={l.key}>
+                                        <td colSpan={99} className={CELL}>
                                             <div className="flex items-center gap-2">
                                                 <Input
                                                     value={l.description}
                                                     disabled={locked}
                                                     aria-invalid={!!cell(i, 'description')}
                                                     placeholder={l.kind === 'section' ? t('lineItems.sectionPlaceholder', { defaultValue: 'Sección' }) : t('lineItems.notePlaceholder', { defaultValue: 'Nota' })}
-                                                    className={l.kind === 'section' ? 'font-semibold' : 'italic'}
+                                                    className={'h-8 ' + (l.kind === 'section' ? 'font-semibold' : 'italic')}
                                                     onChange={(e) => patch(i, { description: e.target.value })}
                                                     onKeyDown={(e) => {
                                                         const cmd = lineGridKeyCommand(e.key, { cellEmpty: !l.description.trim(), mode })
@@ -192,7 +267,7 @@ export function DocumentLinesGrid({
                                                     }}
                                                 />
                                                 {canAdd && (
-                                                    <Button type="button" size="icon" variant="ghost" onClick={() => remove(i)} aria-label={t('common.delete', { defaultValue: 'Eliminar' })}>
+                                                    <Button type="button" size="icon" variant="ghost" className={DELETE} onClick={() => remove(i)} aria-label={t('common.delete', { defaultValue: 'Eliminar' })}>
                                                         <Trash2 className="size-4" />
                                                     </Button>
                                                 )}
@@ -207,39 +282,44 @@ export function DocumentLinesGrid({
                             const kind = shown.discount_kind ?? 'percent'
                             const qtyMax = l.max_quantity
                             return (
-                                <tr key={l.key} className="border-t align-top" data-line-key={l.key}>
-                                    <td className="px-2 py-1.5">
-                                        <Input
-                                            value={l.description}
-                                            disabled={locked}
-                                            aria-label={t('lineItems.description', { defaultValue: 'Descripción' })}
-                                            aria-invalid={!!cell(i, 'description')}
-                                            onChange={(e) => patch(i, { description: e.target.value })}
-                                            onKeyDown={(e) => {
-                                                const cmd = lineGridKeyCommand(e.key, {
-                                                    cellEmpty: !l.description.trim() && !l.product_id,
-                                                    mode,
-                                                })
-                                                if (cmd === 'delete') {
-                                                    e.preventDefault()
-                                                    remove(i)
-                                                } else if (cmd === 'add') {
-                                                    e.preventDefault()
-                                                    emit([...value, makeLine(discountMode === 'amount' ? { discount_kind: 'amount' } : {})])
-                                                }
-                                            }}
-                                        />
+                                <tr key={l.key} className="group border-t align-top transition-colors hover:bg-muted/30 focus-within:bg-muted/20" data-line-key={l.key}>
+                                    <td className={CELL}>
+                                        {search && canAdd && !l.product_id ? (
+                                            <LineProductCell
+                                                search={search}
+                                                text={l.description}
+                                                onTextChange={(text) => patch(i, { description: text })}
+                                                onPick={(p, v) => fillLine(i, p, v)}
+                                                onKeyDownClosed={(e) => descKeys(e, i, l)}
+                                                warehouseId={warehouseId}
+                                                currency={currency}
+                                                ariaLabel={t('lineItems.description', { defaultValue: 'Descripción' })}
+                                                invalid={!!cell(i, 'description')}
+                                                dataCell="description"
+                                            />
+                                        ) : (
+                                            <Input
+                                                value={l.description}
+                                                disabled={locked}
+                                                className={INPUT}
+                                                data-cell="description"
+                                                aria-label={t('lineItems.description', { defaultValue: 'Descripción' })}
+                                                aria-invalid={!!cell(i, 'description')}
+                                                onChange={(e) => patch(i, { description: e.target.value })}
+                                                onKeyDown={(e) => descKeys(e, i, l)}
+                                            />
+                                        )}
                                         {(l.sku || l.unit) && (
                                             <p className="mt-0.5 text-xs text-muted-foreground">{[l.sku, !show('unit') ? l.unit : ''].filter(Boolean).join(' · ')}</p>
                                         )}
                                         {cell(i, 'description') && <p className="mt-0.5 text-xs text-destructive">{cell(i, 'description')}</p>}
                                     </td>
                                     {show('unit') && (
-                                        <td className="px-2 py-1.5">
-                                            <Input value={l.unit ?? ''} disabled={locked} onChange={(e) => patch(i, { unit: e.target.value })} />
+                                        <td className={CELL}>
+                                            <Input className={INPUT} value={l.unit ?? ''} disabled={locked} onChange={(e) => patch(i, { unit: e.target.value })} />
                                         </td>
                                     )}
-                                    <td className="px-2 py-1.5">
+                                    <td className={CELL}>
                                         {stepper ? (
                                             <div className="flex items-center justify-end gap-1">
                                                 <Button
@@ -255,7 +335,8 @@ export function DocumentLinesGrid({
                                                 </Button>
                                                 <Input
                                                     inputMode="decimal"
-                                                    className="h-8 w-14 text-right"
+                                                    className="h-8 w-14 text-right tabular-nums"
+                                                    data-cell="quantity"
                                                     value={String(l.quantity)}
                                                     disabled={locked}
                                                     aria-label={t('lineItems.quantity', { defaultValue: 'Cant.' })}
@@ -285,7 +366,8 @@ export function DocumentLinesGrid({
                                         ) : (
                                             <Input
                                                 inputMode="decimal"
-                                                className="text-right"
+                                                className={NUM}
+                                                data-cell="quantity"
                                                 value={String(l.quantity)}
                                                 disabled={locked}
                                                 aria-label={t('lineItems.quantity', { defaultValue: 'Cant.' })}
@@ -296,10 +378,10 @@ export function DocumentLinesGrid({
                                         {cell(i, 'quantity') && <p className="mt-0.5 text-xs text-destructive">{cell(i, 'quantity')}</p>}
                                         {!cell(i, 'quantity') && warn(i, 'quantity') && <p className="mt-0.5 text-xs text-muted-foreground">{warn(i, 'quantity')}</p>}
                                     </td>
-                                    <td className="px-2 py-1.5">
+                                    <td className={CELL}>
                                         <Input
                                             inputMode="decimal"
-                                            className="text-right"
+                                            className={NUM}
                                             value={String(l.unit_price)}
                                             disabled={locked}
                                             aria-label={priceSource === 'cost' ? t('lineItems.unitCost', { defaultValue: 'Costo unitario' }) : t('lineItems.unitPrice', { defaultValue: 'Precio' })}
@@ -307,7 +389,7 @@ export function DocumentLinesGrid({
                                             onChange={(e) => patch(i, { unit_price: num(e.target.value) })}
                                         />
                                         {l.catalog_price != null && (
-                                            <p className="mt-0.5 text-right text-xs text-muted-foreground">
+                                            <p className="mt-0.5 truncate whitespace-nowrap text-right text-xs text-muted-foreground">
                                                 {t('lineItems.catalogPrice', { defaultValue: 'Catálogo' })} {fmt.money(l.catalog_price)}
                                             </p>
                                         )}
@@ -315,7 +397,7 @@ export function DocumentLinesGrid({
                                         {!cell(i, 'unit_price') && warn(i, 'unit_price') && <p className="mt-0.5 text-xs text-muted-foreground">{warn(i, 'unit_price')}</p>}
                                     </td>
                                     {show('discount') && (
-                                        <td className="px-2 py-1.5">
+                                        <td className={CELL}>
                                             <div className="flex items-center gap-1">
                                                 {discountMode === 'both' && (
                                                     <Button
@@ -331,7 +413,7 @@ export function DocumentLinesGrid({
                                                 )}
                                                 <Input
                                                     inputMode="decimal"
-                                                    className="text-right"
+                                                    className={NUM}
                                                     value={String(l.discount)}
                                                     disabled={locked}
                                                     aria-invalid={!!cell(i, 'discount')}
@@ -342,10 +424,10 @@ export function DocumentLinesGrid({
                                         </td>
                                     )}
                                     {show('tax') && (
-                                        <td className="px-2 py-1.5">
+                                        <td className={CELL}>
                                             <Input
                                                 inputMode="decimal"
-                                                className="text-right"
+                                                className={NUM}
                                                 value={String(Math.round(l.tax_rate * 10000) / 100)}
                                                 disabled={locked}
                                                 onChange={(e) => patch(i, { tax_rate: num(e.target.value) / 100 })}
@@ -353,24 +435,26 @@ export function DocumentLinesGrid({
                                         </td>
                                     )}
                                     {show('technician') && (
-                                        <td className="px-2 py-1.5">
-                                            <Input value={l.technician_id ?? ''} disabled={locked} onChange={(e) => patch(i, { technician_id: e.target.value })} />
+                                        <td className={CELL}>
+                                            <Input className={INPUT} value={l.technician_id ?? ''} disabled={locked} onChange={(e) => patch(i, { technician_id: e.target.value })} />
                                         </td>
                                     )}
                                     {show('lot') && (
-                                        <td className="px-2 py-1.5">
-                                            <Input value={l.lot ?? ''} disabled={locked} onChange={(e) => patch(i, { lot: e.target.value })} />
+                                        <td className={CELL}>
+                                            <Input className={INPUT} value={l.lot ?? ''} disabled={locked} onChange={(e) => patch(i, { lot: e.target.value })} />
                                         </td>
                                     )}
                                     {show('dot') && (
-                                        <td className="px-2 py-1.5">
-                                            <Input value={l.dot ?? ''} disabled={locked} onChange={(e) => patch(i, { dot: e.target.value })} />
+                                        <td className={CELL}>
+                                            <Input className={INPUT} value={l.dot ?? ''} disabled={locked} onChange={(e) => patch(i, { dot: e.target.value })} />
                                         </td>
                                     )}
-                                    <td className="px-2 py-2 text-right tabular-nums" data-slot="line-amount">{fmt.money(a.net)}</td>
-                                    <td className="px-1 py-1.5">
+                                    <td className="px-3 py-1.5 text-right align-top font-medium tabular-nums" data-slot="line-amount">
+                                        <span className="inline-flex h-8 items-center">{fmt.money(a.net)}</span>
+                                    </td>
+                                    <td className="px-1 py-1.5 align-top">
                                         {canAdd && (
-                                            <Button type="button" size="icon" variant="ghost" onClick={() => remove(i)} aria-label={t('common.delete', { defaultValue: 'Eliminar' })}>
+                                            <Button type="button" size="icon" variant="ghost" className={DELETE} onClick={() => remove(i)} aria-label={t('common.delete', { defaultValue: 'Eliminar' })}>
                                                 <Trash2 className="size-4" />
                                             </Button>
                                         )}
@@ -386,15 +470,25 @@ export function DocumentLinesGrid({
                             </tr>
                         )}
                         {canAdd && search && (
-                            <SearchRow
+                            <DraftRow
                                 search={search}
                                 warehouseId={warehouseId}
                                 currency={currency}
                                 onPick={pickProduct}
-                                onAddFree={() => emit([...value, makeLine(discountMode === 'amount' ? { discount_kind: 'amount' } : {})])}
+                                onFree={addFreeFromDraft}
+                                onAddBlank={() => emit([...value, blankLine()])}
+                                trailingCells={colCount - 1}
                             />
                         )}
                     </tbody>
+                    {showTotals && (
+                        <tfoot className="border-t bg-muted/20 text-sm tabular-nums" data-slot="line-totals">
+                            <TotalRow span={colCount - 2} label={t('lineItems.subtotal', { defaultValue: 'Subtotal' })} value={fmt.money(totals.subtotal)} />
+                            {totals.discount > 0 && <TotalRow span={colCount - 2} label={t('lineItems.discountTotal', { defaultValue: 'Descuento' })} value={`-${fmt.money(totals.discount)}`} />}
+                            {totals.tax > 0 && <TotalRow span={colCount - 2} label={t('lineItems.taxTotal', { defaultValue: 'Impuestos' })} value={fmt.money(totals.tax)} slot="tax-total" />}
+                            <TotalRow span={colCount - 2} label={t('lineItems.total', { defaultValue: 'Total' })} value={fmt.money(totals.total)} slot="grand-total" strong />
+                        </tfoot>
+                    )}
                 </table>
             </div>
 
@@ -416,16 +510,16 @@ export function DocumentLinesGrid({
                 </p>
             )}
 
-            <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-3">
                 {canAdd ? (
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-1">
                         {onRequestProduct && !search && (
                             <Button type="button" size="sm" variant="outline" onClick={onRequestProduct}>
                                 <Plus className="mr-1 size-4" />
                                 {t('lineItems.addProduct', { defaultValue: 'Agregar producto' })}
                             </Button>
                         )}
-                        <Button type="button" size="sm" variant="outline" onClick={() => emit([...value, makeLine(discountMode === 'amount' ? { discount_kind: 'amount' } : {})])}>
+                        <Button type="button" size="sm" variant="ghost" onClick={() => emit([...value, blankLine()])}>
                             <Plus className="mr-1 size-4" />
                             {t('lineItems.addLine', { defaultValue: 'Renglón libre' })}
                         </Button>
@@ -442,15 +536,7 @@ export function DocumentLinesGrid({
                             </>
                         )}
                     </div>
-                ) : (
-                    <span />
-                )}
-                <dl className="min-w-56 space-y-0.5 text-sm tabular-nums">
-                    <div className="flex justify-between gap-6"><dt className="text-muted-foreground">{t('lineItems.subtotal', { defaultValue: 'Subtotal' })}</dt><dd>{fmt.money(totals.subtotal)}</dd></div>
-                    {totals.discount > 0 && <div className="flex justify-between gap-6"><dt className="text-muted-foreground">{t('lineItems.discountTotal', { defaultValue: 'Descuento' })}</dt><dd>-{fmt.money(totals.discount)}</dd></div>}
-                    {totals.tax > 0 && <div className="flex justify-between gap-6"><dt className="text-muted-foreground">{t('lineItems.taxTotal', { defaultValue: 'Impuestos' })}</dt><dd data-slot="tax-total">{fmt.money(totals.tax)}</dd></div>}
-                    <div className="flex justify-between gap-6 font-semibold"><dt>{t('lineItems.total', { defaultValue: 'Total' })}</dt><dd data-slot="grand-total">{fmt.money(totals.total)}</dd></div>
-                </dl>
+                ) : null}
             </div>
         </div>
     )
@@ -463,116 +549,85 @@ function toNum(n: number): number {
     return Number.isFinite(n) ? n : 0
 }
 
-function SearchRow({
+/**
+ * Renglón vacío del final, siempre listo para buscar: el buscador vive en la
+ * celda «Descripción» (no en una barra a todo lo ancho). Elegir agrega el
+ * producto; Enter con texto sin coincidencias lo agrega como renglón libre.
+ */
+function DraftRow({
     search,
     warehouseId,
     currency,
     onPick,
-    onAddFree,
+    onFree,
+    onAddBlank,
+    trailingCells,
 }: {
+    trailingCells: number
     search: NonNullable<DocumentLinesGridProps['search']>
     warehouseId?: string
     currency?: string
     onPick: (product: ProductResult, variant?: ProductVariant) => void
-    onAddFree: () => void
+    onFree: (description: string) => void
+    onAddBlank: () => void
 }) {
     const { t } = useTranslation()
-    const fmt = useFormatter({ currency })
     const [text, setText] = useState('')
-    const [active, setActive] = useState(0)
-    const parsed = parseProductQuery(text)
-    const run = useMemo(() => {
-        return (q: string, signal: AbortSignal) => {
-            const p = parseProductQuery(q)
-            return p.kind === 'empty' ? Promise.resolve([]) : search(p, signal)
-        }
-    }, [search])
-    const { results, loading } = useAsyncSearch(text, run, {
-        minChars: parsed.kind === 'barcode' ? 8 : 2,
-        delay: parsed.kind === 'barcode' ? 0 : 250,
-    })
-    const flat = results.flatMap((p) =>
-        (p.variants?.length ?? 0) > 0 ? p.variants!.map((v) => ({ product: p, variant: v as ProductVariant | undefined })) : [{ product: p, variant: undefined as ProductVariant | undefined }],
-    )
-    const open = flat.length > 0
-
-    const choose = (idx: number) => {
-        const hit = flat[idx]
-        if (!hit) return
-        onPick(hit.product, hit.variant)
-        setText('')
-        setActive(0)
-    }
-
     return (
-        <tr className="border-t">
-            <td colSpan={99} className="px-2 py-1.5">
-                <div className="relative">
-                    <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" aria-hidden />
-                    <Input
-                        className="pl-8"
-                        value={text}
-                        role="combobox"
-                        aria-expanded={open}
-                        aria-label={t('lineItems.searchProduct', { defaultValue: 'Buscar producto' })}
-                        placeholder={t('lineItems.searchPlaceholder', { defaultValue: 'Producto, medida (205/55R16), SKU o código de barras' })}
-                        onChange={(e) => {
-                            setText(e.target.value)
-                            setActive(0)
-                        }}
-                        onKeyDown={(e) => {
-                            if (e.key === 'ArrowDown' && open) {
-                                e.preventDefault()
-                                setActive((n) => Math.min(flat.length - 1, n + 1))
-                                return
-                            }
-                            if (e.key === 'ArrowUp' && open) {
-                                e.preventDefault()
-                                setActive((n) => Math.max(0, n - 1))
-                                return
-                            }
-                            const cmd = lineGridKeyCommand(e.key, { suggestionsOpen: open, cellEmpty: !text.trim(), mode: 'free' })
-                            if (e.key === 'Enter' && open) {
-                                e.preventDefault()
-                                choose(active)
-                                return
-                            }
-                            if (cmd === 'add' && !text.trim()) {
-                                e.preventDefault()
-                                onAddFree()
-                            }
-                        }}
-                    />
-                    {open && (
-                        <ul role="listbox" className="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-md border bg-popover shadow-md">
-                            {flat.map((hit, idx) => {
-                                const price = priceOf(hit.product, hit.variant, warehouseId)
-                                return (
-                                    <li key={`${hit.product.id}:${hit.variant?.id ?? ''}`} role="option" aria-selected={idx === active}>
-                                        <button
-                                            type="button"
-                                            className={'flex w-full items-center justify-between gap-2 px-2 py-1.5 text-left text-sm hover:bg-accent ' + (idx === active ? 'bg-accent' : '')}
-                                            onMouseDown={(e) => e.preventDefault()}
-                                            onClick={() => choose(idx)}
-                                        >
-                                            <span>
-                                                <span className="block font-medium">{hit.variant ? `${hit.product.name} · ${hit.variant.label}` : hit.product.name}</span>
-                                                <span className="block text-xs text-muted-foreground">{hit.variant?.sku ?? hit.product.sku}</span>
-                                            </span>
-                                            {price != null && <span className="tabular-nums">{fmt.money(price)}</span>}
-                                        </button>
-                                    </li>
-                                )
-                            })}
-                        </ul>
-                    )}
-                    {loading && <p className="mt-1 text-xs text-muted-foreground">{t('common.searching', { defaultValue: 'Buscando…' })}</p>}
-                </div>
+        <tr className="border-t border-dashed" data-slot="line-draft-row">
+            <td className={CELL}>
+                <LineProductCell
+                    search={search}
+                    text={text}
+                    onTextChange={setText}
+                    onPick={(p, v) => {
+                        setText('')
+                        onPick(p, v)
+                    }}
+                    onKeyDownClosed={(e) => {
+                        if (e.key !== 'Enter') return
+                        e.preventDefault()
+                        const typed = text.trim()
+                        setText('')
+                        if (typed) onFree(typed)
+                        else onAddBlank()
+                    }}
+                    warehouseId={warehouseId}
+                    currency={currency}
+                    ariaLabel={t('lineItems.searchProduct', { defaultValue: 'Buscar producto' })}
+                    placeholder={t('lineItems.searchPlaceholder', { defaultValue: 'Producto, medida (205/55R16), SKU o código de barras' })}
+                    className="border-dashed bg-transparent shadow-none"
+                    dataCell="search"
+                />
             </td>
+            {/* Celdas vacías con la misma estructura: el buscador mide lo que su columna. */}
+            {Array.from({ length: trailingCells }, (_, i) => (
+                <td key={i} aria-hidden />
+            ))}
         </tr>
     )
 }
 
-function priceOf(p: ProductResult, v: ProductVariant | undefined, _warehouseId?: string): number | undefined {
-    return v?.price ?? p.price
+/** Fila de totales alineada a la columna «Importe». */
+function TotalRow({ span, label, value, slot, strong }: { span: number; label: string; value: string; slot?: string; strong?: boolean }) {
+    return (
+        <tr className={strong ? 'font-semibold' : 'text-muted-foreground'}>
+            <td colSpan={span} className="px-3 py-1 text-right">{label}</td>
+            <td className={'px-3 py-1 text-right ' + (strong ? 'text-base text-foreground' : 'text-foreground')} data-slot={slot}>
+                {value}
+            </td>
+            <td />
+        </tr>
+    )
 }
+
+/** Borrar renglón: aparece al pasar o enfocar la fila (siempre visible en móvil). */
+const DELETE =
+    'size-8 text-muted-foreground opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100 max-sm:opacity-100'
+
+/** Celda densa: misma altura en todos los renglones. */
+const CELL = 'px-2 py-1.5 align-top'
+/** Inputs de celda: un poco más bajos que los del formulario (densidad de editor). */
+const INPUT = 'h-8'
+/** Numéricos: alineados a la derecha y con cifras tabulares. */
+const NUM = 'h-8 text-right tabular-nums'

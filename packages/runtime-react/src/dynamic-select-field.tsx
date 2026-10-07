@@ -28,7 +28,6 @@ import {
     Badge,
     Button,
     Command,
-    CommandEmpty,
     CommandGroup,
     CommandInput,
     CommandItem,
@@ -38,9 +37,10 @@ import {
     PopoverTrigger,
     InitialsAvatar,
 } from '@asteby/metacore-ui/primitives'
-import { Check, ChevronsUpDown, Loader2, Plus, ScanLine } from 'lucide-react'
+import { Check, ChevronsUpDown, Loader2, ScanLine } from 'lucide-react'
 import { resolveColorCss } from '@asteby/metacore-ui/lib'
 import { BarcodeScanner } from './barcode-scanner'
+import { JOINED_TRIGGER_CLASS, PickerCreateItem, RecordPickerAction, hasRecordPickerAction } from './record-picker-actions'
 import { DynamicIcon, isLucideIconName } from './dynamic-icon'
 import { useDebouncedValue } from './use-debounced-value'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
@@ -190,7 +190,8 @@ export interface DynamicSelectFieldProps {
      */
     descriptionAsBadge?: boolean
     /**
-     * Hide the inline "+" create affordance even when `field.ref` is set.
+     * Hide the inline create/edit affordances (joined "+" / pencil and the
+     * "Crear …" list footer) even when `field.ref` is set.
      * Useful for static / filtered lists where creating a new record is not
      * meaningful in context.
      */
@@ -344,8 +345,31 @@ export function DynamicSelectField({
     // via a decoupled window event the host listens for. On success the host
     // hands back the new record and we select it immediately. No host import →
     // no circular dependency; works for ANY dynamic_select with a `ref`.
+    // Inline-edit: with a value selected the joined pencil opens THAT record's
+    // edit modal through the sibling `metacore:edit-record` event (the host's
+    // RecordCreateBridge already listens for it). On save the trigger label
+    // refreshes from the returned record.
+    const openEdit = () => {
+        if (!fieldRef || !value || typeof window === 'undefined') return
+        setOpen(false)
+        window.dispatchEvent(
+            new CustomEvent('metacore:edit-record', {
+                detail: {
+                    model: fieldRef,
+                    recordId: String(value),
+                    onSaved: (rec: any) => {
+                        const id = String(value)
+                        const label = rec ? rec.name ?? rec.label ?? rec.title : undefined
+                        if (label != null) setPicked({ ...(selectedOption ?? { id, value: id }), id, value: id, label: String(label), name: String(label) })
+                    },
+                },
+            }),
+        )
+    }
+
     const openCreate = () => {
         if (!fieldRef || typeof window === 'undefined') return
+        setOpen(false)
         window.dispatchEvent(
             new CustomEvent('metacore:create-record', {
                 detail: {
@@ -398,8 +422,12 @@ export function DynamicSelectField({
     // to the cell. Without min-w-0 the combobox+button row sizes to its content
     // (the long empty-state placeholder) and overflows the column, pushing the
     // "+" off-screen — it only "fit" once a short value was selected.
+    const canMutate = !!fieldRef && !hideCreate && !useStatic
+    const joined = canMutate && !blockedByDependency && hasRecordPickerAction(!!value, openCreate, openEdit)
+    const fieldName = field.label ? t(field.label, { defaultValue: field.label }) : fieldRef ?? ''
     return (
-        <div className="flex w-full min-w-0 items-center gap-1.5">
+        <div className="flex w-full min-w-0 items-center gap-1.5" data-slot="dynamic-select">
+            <div className="flex min-w-0 flex-1 items-center">
             <Popover open={open && !blockedByDependency} onOpenChange={(o: boolean) => { if (!blockedByDependency) setOpen(o) }}>
             <PopoverTrigger asChild>
                 <Button
@@ -412,6 +440,7 @@ export function DynamicSelectField({
                     aria-invalid={invalid || undefined}
                     className={
                         'min-w-0 flex-1 justify-between font-normal' +
+                        (joined ? ` ${JOINED_TRIGGER_CLASS}` : '') +
                         (invalid ? ' border-destructive ring-1 ring-destructive/30' : '')
                     }
                     data-empty={!value}
@@ -438,9 +467,13 @@ export function DynamicSelectField({
             <PopoverContent
                 className="p-0"
                 align="start"
-                // Match the trigger width without an arbitrary Tailwind class
-                // (those don't always survive a consuming app's Tailwind scan).
-                style={{ width: 'var(--radix-popover-trigger-width)' }}
+                // Portaled (never clipped by a table/modal overflow) and
+                // collision-aware: flips above the trigger when there is no
+                // room below. Match the trigger width without an arbitrary
+                // Tailwind class (those don't always survive a consuming app's
+                // Tailwind scan), with a floor so short cells stay readable.
+                collisionPadding={8}
+                style={{ width: 'max(var(--radix-popover-trigger-width), 14rem)', maxWidth: 'calc(100vw - 1rem)' }}
             >
                 <Command shouldFilter={false}>
                     <CommandInput
@@ -456,7 +489,9 @@ export function DynamicSelectField({
                             </div>
                         )}
                         {!loading && options.length === 0 && (
-                            <CommandEmpty>
+                            // Plain block, not <CommandEmpty>: cmdk hides Empty while
+                            // any item is mounted, and the "Crear …" footer is one.
+                            <div className="text-muted-foreground py-6 text-center text-sm" data-slot="picker-empty">
                                 {useStatic
                                     ? debounced
                                         ? 'Sin resultados'
@@ -464,7 +499,7 @@ export function DynamicSelectField({
                                     : debounced
                                       ? 'Sin resultados'
                                       : 'Sin resultados — escribe para filtrar'}
-                            </CommandEmpty>
+                            </div>
                         )}
                         {!loading && options.length > 0 && (
                             <CommandGroup className="max-h-64 overflow-auto">
@@ -502,10 +537,17 @@ export function DynamicSelectField({
                                 })}
                             </CommandGroup>
                         )}
+                        {canMutate && !loading && (
+                            <PickerCreateItem label={fieldName} onSelect={openCreate} />
+                        )}
                     </CommandList>
                 </Command>
             </PopoverContent>
             </Popover>
+            {canMutate && !blockedByDependency && (
+                <RecordPickerAction hasValue={!!value} label={fieldName} onCreate={openCreate} onEdit={openEdit} />
+            )}
+            </div>
             {scanEnabled && (
                 <Button
                     type="button"
@@ -517,19 +559,6 @@ export function DynamicSelectField({
                     aria-label="Escanear código de barras con la cámara"
                 >
                     <ScanLine className="size-4" />
-                </Button>
-            )}
-            {fieldRef && !hideCreate && !useStatic && (
-                <Button
-                    type="button"
-                    variant="outline"
-                    size="icon"
-                    className="size-9 shrink-0"
-                    onClick={openCreate}
-                    title={`Crear ${field.label ?? fieldRef}`}
-                    aria-label={`Crear ${field.label ?? fieldRef}`}
-                >
-                    <Plus className="size-4" />
                 </Button>
             )}
             {scanEnabled && (
