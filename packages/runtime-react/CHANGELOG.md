@@ -1,5 +1,19 @@
 # @asteby/metacore-runtime-react
 
+## 49.10.0
+
+### Minor Changes
+
+- 239ae9a: Filtro UX de acciones por rol: `allowedRoles` (también `allowed_roles`) en `ActionDefinition`, y `PermissionsProvider` acepta `roles`, `superRoles` y `rolesLoading`. `gateTableMetadata`/`resolveRowActions` (tabla y kanban) ocultan una acción con `allowedRoles` no vacío si el usuario no comparte ningún rol, salvo bypass por `superRoles` o `isAdmin`. Nuevos exports: `useRoleGate`, `isActionAllowedForRoles`, `RoleGate`.
+
+  Decisión de seguridad/compat: el filtro es opt-in. Sin provider, o con provider sin `roles` (`undefined`), o con `rolesLoading`, no se oculta nada (comportamiento actual, sin parpadeo durante la hidratación). Con `roles` resuelto (incluso `[]`) es fail-closed. `superRoles` por defecto es `[]` (sin bypass; el host pasa p. ej. `['admin','super_admin']`). Solo UX: el backend sigue siendo la autoridad.
+
+  Alcance: solo filtra las acciones de la tabla, del menú de fila y del kanban (`gateTableMetadata` / `resolveRowActions`); `ModelActionToolbar` y `DynamicCRUDPage` no usan este filtro todavía. `roles` y `superRoles` deben pasarse con referencia estable (`useMemo` o el valor del store).
+
+- 239ae9a: `DynamicTable`: nueva prop `defaultSort` (`{ id, desc? }`) que siembra el orden inicial sin pisar el `?sortBy=` de la URL ni impedir que el usuario lo cambie o limpie. `DynamicTableBulkContext` suma `actions` (acciones de metadata visibles según permisos) y `can(actionKey)` para filtrar los botones masivos del host por rol/capability. Aditivo: sin ellas el comportamiento no cambia.
+- 239ae9a: Las columnas `type: 'image'` respetan `col.basePath` (o `styleConfig.base_path`) con el mismo contrato que `resolveAvatarSrc`: URL absoluta y ruta con `/` intactas; un filename suelto se resuelve como `apiBaseUrl + basePath + filename`. Sin `basePath` el comportamiento no cambia. Nuevo helper opcional `normalizeImagePath(raw, col)` en `DynamicColumnsHelpers` (se aplica antes de resolver) y export de `resolveImageSrc`.
+- 239ae9a: `DynamicTable` y `DynamicKanban` aceptan `isRowActionVisible?: RowActionPredicate` (`(action, row) => boolean`, tipo exportado): un predicado del consumidor que oculta acciones por fila. Se evalúa con AND junto a `requiresState` y `condition` de la metadata (solo puede ocultar más), si lanza la acción se oculta (fail-closed, `console.error`) y sin predicado el comportamiento no cambia. `GetDynamicColumns` recibe un 8º parámetro opcional `rowActionPredicate`; los factories custom pueden ignorarlo. Memoiza el predicado para no reconstruir las columnas.
+
 ## 49.9.1
 
 ### Patch Changes
