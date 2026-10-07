@@ -10,7 +10,7 @@
 //   * `@/components/dynamic/dynamic-columns` → host-injected via the
 //     `getDynamicColumns` prop (hosts retain ownership because the rendered
 //     column cells are tightly coupled to their design system).
-import { useEffect, useState, useMemo, useCallback, useRef, type MouseEvent } from 'react'
+import { useEffect, useState, useMemo, useCallback, useRef, type MouseEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useTimeZone, useCurrency } from './org-runtime-context'
 import { format } from 'date-fns'
@@ -264,6 +264,30 @@ export interface DynamicTableProps {
      * render every row. A positive number overrides the threshold.
      */
     virtualizeRows?: boolean | number
+    /**
+     * Host-provided actions rendered in the floating bar that appears while
+     * rows are selected, next to the built-in "Eliminar". Pass a node, or a
+     * function that receives the current selection:
+     *   - `selectedRows`: the selected row objects (current page only);
+     *   - `selectedIds`: their `id`s;
+     *   - `clearSelection()`: unselect everything (call after a successful action);
+     *   - `refresh()`: reload the list.
+     * The selection is cleared whenever the page, page size, sort, search or
+     * column filters change (classic pagination), so a bulk action can never
+     * hit rows the user no longer sees. The host owns the write call and its
+     * authorization — the table only supplies the selection.
+     */
+    extraBulkActions?: ReactNode | ((ctx: DynamicTableBulkContext) => ReactNode)
+    /** Hide the built-in bulk "Eliminar" (e.g. a model whose rows must not be deleted in batch). */
+    hideBulkDelete?: boolean
+}
+
+/** Context handed to `DynamicTableProps.extraBulkActions` when it is a function. */
+export interface DynamicTableBulkContext {
+    selectedRows: any[]
+    selectedIds: Array<string | number>
+    clearSelection: () => void
+    refresh: () => void
 }
 
 /** True when an api-client error is an HTTP 403 (axios-style or fetch-style). */
@@ -292,6 +316,8 @@ export function DynamicTable({
     pagination: paginationMode,
     infiniteScroll: infiniteScrollProp = false,
     virtualizeRows,
+    extraBulkActions,
+    hideBulkDelete,
 }: DynamicTableProps) {
     // The org's timezone/currency: an explicit prop wins, else the app-wide
     // OrgRuntimeProvider (without it, money fell back to USD).
@@ -1372,6 +1398,10 @@ export function DynamicTable({
         manualSorting: true,
         manualFiltering: true,
         enableRowSelection: true,
+        // Key the selection by record id, not by position in the page: a bulk
+        // action must act on the rows the user ticked, never on whatever row
+        // lands at the same index after the data changes.
+        getRowId: (row: any, index: number) => (row?.id != null ? String(row.id) : String(index)),
         onRowSelectionChange: setRowSelection,
         onSortingChange: setSorting,
         onColumnVisibilityChange: setColumnVisibility,
@@ -1387,6 +1417,21 @@ export function DynamicTable({
     })
 
     const tableRows = table.getRowModel().rows
+    const bulkSelectedRows = table.getFilteredSelectedRowModel().rows.map((r) => r.original as any)
+
+    // Classic pagination swaps the visible rows on every page / sort / search /
+    // filter change; drop the selection so it never refers to rows that are no
+    // longer on screen. Infinite mode accumulates rows (selection is id-keyed,
+    // so it stays valid) and is left alone.
+    const selectionScope = infiniteScroll ? '' : JSON.stringify([pagination.pageIndex, pagination.pageSize, sorting, columnFilters, globalFilter])
+    const prevSelectionScope = useRef(selectionScope)
+    useEffect(() => {
+        if (prevSelectionScope.current !== selectionScope) {
+            prevSelectionScope.current = selectionScope
+            setRowSelection({})
+        }
+    }, [selectionScope])
+
     const virtualizeThreshold = resolveVirtualizeThreshold(virtualizeRows)
     const shouldVirtualize =
         virtualizeThreshold !== false && tableRows.length >= virtualizeThreshold
@@ -1896,9 +1941,19 @@ export function DynamicTable({
                 <ImportDialog open={importOpen} onOpenChange={setImportOpen} model={model} metadata={metadata} onImported={handleRefresh} />
             )}
             <DataTableBulkActions table={table} entityName="registro">
-                <Button variant="destructive" size="sm" className="h-8" onClick={() => setShowBulkDeleteConfirm(true)}>
-                    <Trash2 className="h-4 w-4 mr-1.5" /> Eliminar
-                </Button>
+                {typeof extraBulkActions === 'function'
+                    ? extraBulkActions({
+                        selectedRows: bulkSelectedRows,
+                        selectedIds: bulkSelectedRows.map((r) => r.id).filter((id) => id != null),
+                        clearSelection: () => table.resetRowSelection(),
+                        refresh: handleRefresh,
+                    })
+                    : extraBulkActions}
+                {!hideBulkDelete && (
+                    <Button variant="destructive" size="sm" className="h-8" onClick={() => setShowBulkDeleteConfirm(true)}>
+                        <Trash2 className="h-4 w-4 mr-1.5" /> Eliminar
+                    </Button>
+                )}
             </DataTableBulkActions>
         </OptionsContext.Provider>
         </RowActionsModelContext.Provider>

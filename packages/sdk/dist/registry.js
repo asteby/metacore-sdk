@@ -9,7 +9,16 @@
  * {@link Registry.scope}. {@link Registry.unbind} drops every contribution
  * of that owner so a fiber can remount without leaking routes/actions/slots
  * — the Cordis dispose equivalent for the host UI registry.
+ *
+ * Write-through: modales, acciones de registro y slots se publican además en
+ * los stores canónicos (action-registry.ts / slot-store.ts) con su addon
+ * dueño, que es lo que leen ActionModalDispatcher, `<Slot>` de runtime-react y
+ * los menús de acciones. Los getters de esta clase siguen sirviendo a quien
+ * los use (sdk/react `<Slot>`, rutas), pero la fuente de verdad es el store.
  */
+import { registerRecordPrefill, unregisterRecordPrefillsByOwner, } from "./record-prefill-registry.js";
+import { registerActionComponent, registerModalComponent, registerRecordAction, unregisterActionComponentsByOwner, unregisterContributionsByOwner, withAdaptedActionProps, } from "./action-registry.js";
+import { slotStore } from "./slot-store.js";
 /**
  * Registry is shared across all addons within a single host shell.
  * The host creates exactly one and hands a {@link Registry.scope scoped}
@@ -31,6 +40,12 @@ export class Registry {
             registerModal: (c) => this.registerModal(c, addonKey),
             registerAction: (c) => this.registerAction(c, addonKey),
             registerSlot: (c) => this.registerSlot(c, addonKey),
+            registerRecordPrefill: (c) => {
+                registerRecordPrefill(c, addonKey);
+            },
+            registerRecordAction: (c) => {
+                registerRecordAction(c, addonKey);
+            },
         };
     }
     /**
@@ -75,7 +90,14 @@ export class Registry {
             else
                 this.slots.set(name, kept);
         }
-        if (removed > 0)
+        removed += unregisterRecordPrefillsByOwner(addonKey);
+        // Stores canónicos: lo que este addon publicó por write-through (y lo que
+        // registró directo con registerRecordAction) se va con él. No suma a
+        // `removed` para no contar dos veces lo ya contado arriba.
+        const canonical = unregisterActionComponentsByOwner(addonKey) +
+            unregisterContributionsByOwner(addonKey) +
+            slotStore.removeByOwner(addonKey);
+        if (removed > 0 || canonical > 0)
             this.emit({ type: "unbind", addonKey });
         return removed;
     }
@@ -86,10 +108,18 @@ export class Registry {
     }
     registerModal(c, owner) {
         this.modals.set(c.slug, { owner, contribution: c });
+        // Antes nadie leía este mapa: el dispatcher sólo conocía (modelo, acción).
+        registerModalComponent({ slug: c.slug, component: c.component, owner });
         this.emit({ type: "modal", contribution: c, owner });
     }
     registerAction(c, owner) {
         this.actions.set(`${c.model}::${c.action}`, { owner, contribution: c });
+        // El host puede re-registrar encima (alias de tabla, error boundary) al
+        // escuchar el evento; sin host-bridge, esto basta para que el dispatcher
+        // lo encuentre.
+        if (c.component) {
+            registerActionComponent(c.model, c.action, withAdaptedActionProps(c.component), owner);
+        }
         this.emit({ type: "action", contribution: c, owner });
     }
     registerSlot(c, owner) {
@@ -99,6 +129,7 @@ export class Registry {
         // See docs/slot-priority.md.
         list.sort((a, b) => (b.contribution.priority ?? 0) - (a.contribution.priority ?? 0));
         this.slots.set(c.name, list);
+        slotStore.register(c.name, c.component, { priority: c.priority, owner });
         this.emit({ type: "slot", contribution: c, owner });
     }
     // ---- readers used by the shell ----
