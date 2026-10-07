@@ -76,6 +76,13 @@ export interface DynamicColumnsHelpers {
      * `import.meta.env.VITE_API_URL.replace('/api', '')`.
      */
     apiBaseUrl?: string
+    /**
+     * Optional host hook applied to the raw value of `type: 'image'` columns
+     * BEFORE it is resolved (absolute URL / rooted path / bare filename +
+     * basePath). Lets a host map its own storage convention (e.g. rewrite a
+     * legacy prefix) without the SDK hardcoding it. Omitted = no-op.
+     */
+    normalizeImagePath?: (raw: string, col: ColumnDefinition) => string
 }
 
 const defaultGetImageUrl = (path: string) => path
@@ -665,6 +672,26 @@ export const resolveAvatarSrc = (
 }
 
 /**
+ * Resolves the source of a `type: 'image'` cell with the same contract as
+ * `resolveAvatarSrc`: absolute `http(s)` URL and rooted `/path` are untouched;
+ * a bare filename gets `apiBaseUrl + basePath` only when the column declares a
+ * basePath (`styleConfig.base_path` / `col.basePath`), otherwise it is left
+ * as-is (previous behaviour). `normalizeImagePath` runs first. Exported for tests.
+ */
+export const resolveImageSrc = (
+    col: ColumnDefinition,
+    raw: string,
+    apiBaseUrl = '',
+    normalizeImagePath?: (raw: string, col: ColumnDefinition) => string,
+): string => {
+    const value = normalizeImagePath ? normalizeImagePath(raw, col) : raw
+    if (value.startsWith('http') || value.startsWith('/')) return value
+    const basePath = styleCfg(col, 'base_path', 'basePath') ?? col.basePath ?? ''
+    if (!basePath) return value
+    return `${apiBaseUrl}${basePath}${value}`
+}
+
+/**
  * Reads a secondary identifier the backend stamps on a resolved FK sibling — a
  * product's SKU, a user's email — projected as `subtitle`/`description` (the
  * relational twin of `image` via the column's `label_description`). Rendered
@@ -895,6 +922,7 @@ export function makeDefaultGetDynamicColumns(
 ): GetDynamicColumns {
     const getImageUrl = helpers.getImageUrl ?? defaultGetImageUrl
     const apiBaseUrl = helpers.apiBaseUrl ?? ''
+    const normalizeImagePath = helpers.normalizeImagePath
 
     return function defaultGetDynamicColumns(
         metadata: TableMetadata,
@@ -1447,7 +1475,11 @@ export function makeDefaultGetDynamicColumns(
                                 (Array.isArray(row.original.media)
                                     ? row.original.media.find((m: any) => m.type === 'image')?.url
                                     : null)
-                            return <ImageCell value={imageValue} getImageUrl={getImageUrl} />
+                            const imageSrc =
+                                imageValue && !isLucideIconName(imageValue)
+                                    ? resolveImageSrc(col, String(imageValue), apiBaseUrl, normalizeImagePath)
+                                    : imageValue
+                            return <ImageCell value={imageSrc} getImageUrl={getImageUrl} />
                         }
 
                         case 'image_stack': {
