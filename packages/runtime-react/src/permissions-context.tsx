@@ -43,12 +43,16 @@ export interface PermissionsProviderProps {
      * host passes an array (even `[]` = "resolved, no roles") the filter is
      * fail-closed: an action with a non-empty `allowedRoles` that shares no
      * role with the user is hidden.
+     *
+     * Pass a referentially stable array (`useMemo`, or a value straight from a
+     * store): the table rebuilds its columns when `roles` / `superRoles` change
+     * identity, so an inline `roles={[role]}` recreates them on every render.
      */
     roles?: string[]
     /**
      * Roles that bypass `allowedRoles` entirely (the host's superroles, e.g.
      * `['admin', 'super_admin']`). Default `[]` = no role bypasses. `isAdmin`
-     * also bypasses.
+     * also bypasses. Same stable-reference advice as `roles`.
      */
     superRoles?: string[]
     /**
