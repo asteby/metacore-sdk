@@ -280,6 +280,12 @@ export interface DynamicTableProps {
     extraBulkActions?: ReactNode | ((ctx: DynamicTableBulkContext) => ReactNode)
     /** Hide the built-in bulk "Eliminar" (e.g. a model whose rows must not be deleted in batch). */
     hideBulkDelete?: boolean
+    /**
+     * First-use content shown instead of "No se encontraron resultados" when the
+     * list loaded fine, is empty, and no search/filter is active. Never shown
+     * after a load error (a retry is offered) or a 403.
+     */
+    emptyState?: ReactNode
 }
 
 /** Context handed to `DynamicTableProps.extraBulkActions` when it is a function. */
@@ -318,6 +324,7 @@ export function DynamicTable({
     virtualizeRows,
     extraBulkActions,
     hideBulkDelete,
+    emptyState,
 }: DynamicTableProps) {
     // The org's timezone/currency: an explicit prop wins, else the app-wide
     // OrgRuntimeProvider (without it, money fell back to USD).
@@ -373,6 +380,9 @@ export function DynamicTable({
     // model. Rendered as "no permission" instead of masquerading as an empty
     // list. Purely display state — never a fetch dependency (no refetch loop).
     const [forbidden, setForbidden] = useState(false)
+    // A list request that failed for a reason other than 403 (500, network,
+    // `success: false`). Shown with a retry instead of a misleading "no results".
+    const [loadError, setLoadError] = useState(false)
     const infPageRef = useRef(1)
     const [optionsMap, setOptionsMap] = useState<Map<string, any[]>>(new Map())
 
@@ -923,6 +933,7 @@ export function DynamicTable({
             if (relationInclude) params.include = relationInclude
             const res = await api.get(endpoint || `/data/${model}`, { params }) as { data: ApiResponse<any[]> }
             setForbidden(false)
+            setLoadError(!res.data.success)
             if (res.data.success) {
                 const rows = res.data.data || []
                 setData(rows)
@@ -940,10 +951,12 @@ export function DynamicTable({
         } catch (error) {
             if (isForbiddenError(error)) {
                 setForbidden(true)
+                setLoadError(false)
                 setData([])
                 setRowCount(0)
             } else {
                 console.error('Error al cargar los datos', error)
+                setLoadError(true)
             }
         } finally {
             setLoadingData(false)
@@ -994,6 +1007,7 @@ export function DynamicTable({
                     params,
                 })) as { data: ApiResponse<any[]> }
                 setForbidden(false)
+                setLoadError(!res.data.success)
                 if (res.data.success) {
                     const rows = res.data.data || []
                     setData((prev) => (append ? dedupeById(prev, rows) : rows))
@@ -1015,6 +1029,7 @@ export function DynamicTable({
             } catch (error) {
                 if (isForbiddenError(error)) {
                     setForbidden(true)
+                    setLoadError(false)
                     if (!append) {
                         setData([])
                         setRowCount(0)
@@ -1022,6 +1037,7 @@ export function DynamicTable({
                     setInfExhausted(true)
                 } else {
                     console.error('Error al cargar los datos', error)
+                    setLoadError(true)
                 }
             } finally {
                 if (append) setLoadingMore(false)
@@ -1669,6 +1685,14 @@ export function DynamicTable({
                                                         <h3 className="text-lg font-semibold text-foreground" role="alert">{t('dynamic.forbidden_title', { defaultValue: 'Sin permiso para ver este módulo' })}</h3>
                                                         <p className="text-sm text-muted-foreground">{t('dynamic.forbidden_hint', { defaultValue: 'Tu rol no tiene acceso de lectura a estos datos. Pide acceso a un administrador.' })}</p>
                                                     </>
+                                                ) : loadError ? (
+                                                    <>
+                                                        <h3 className="text-lg font-semibold text-foreground" role="alert">{t('dynamic.load_error_title', { defaultValue: 'No se pudieron cargar los datos' })}</h3>
+                                                        <p className="text-sm text-muted-foreground">{t('dynamic.load_error_hint', { defaultValue: 'Ocurrió un error al consultar la lista. Inténtalo de nuevo.' })}</p>
+                                                        <Button variant="outline" size="sm" className="mt-2" onClick={handleRefresh}>{t('dynamic.retry', { defaultValue: 'Reintentar' })}</Button>
+                                                    </>
+                                                ) : emptyState && !hasActiveFilters ? (
+                                                    emptyState
                                                 ) : (
                                                     <>
                                                         <h3 className="text-lg font-semibold text-foreground">No se encontraron resultados</h3>
@@ -1868,6 +1892,14 @@ export function DynamicTable({
                                     <h3 className='text-base font-semibold text-foreground' role='alert'>{t('dynamic.forbidden_title', { defaultValue: 'Sin permiso para ver este módulo' })}</h3>
                                     <p className='text-sm text-muted-foreground'>{t('dynamic.forbidden_hint', { defaultValue: 'Tu rol no tiene acceso de lectura a estos datos. Pide acceso a un administrador.' })}</p>
                                 </>
+                            ) : loadError ? (
+                                <>
+                                    <h3 className='text-base font-semibold text-foreground' role='alert'>{t('dynamic.load_error_title', { defaultValue: 'No se pudieron cargar los datos' })}</h3>
+                                    <p className='text-sm text-muted-foreground'>{t('dynamic.load_error_hint', { defaultValue: 'Ocurrió un error al consultar la lista. Inténtalo de nuevo.' })}</p>
+                                    <Button variant='outline' size='sm' onClick={handleRefresh}>{t('dynamic.retry', { defaultValue: 'Reintentar' })}</Button>
+                                </>
+                            ) : emptyState && !hasActiveFilters ? (
+                                emptyState
                             ) : (
                                 <>
                                     <h3 className='text-base font-semibold text-foreground'>No se encontraron resultados</h3>
