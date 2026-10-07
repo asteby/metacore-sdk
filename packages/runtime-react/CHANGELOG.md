@@ -1,5 +1,13 @@
 # @asteby/metacore-runtime-react
 
+## 49.5.0
+
+### Minor Changes
+
+- 2fca21f: `ApiProvider` acepta `batch={false}` para no agrupar lecturas en `POST /q`: un host cuyo backend no implementa `/q` ya no paga un POST fallido por cada lectura. Además, con el batch activo, si `/q` responde 404/405 el cliente deja de intentarlo tras el primer fallo y la lectura se resuelve por el GET normal. El comportamiento por defecto no cambia para hosts que sí tienen `/q`.
+- 2575411: DynamicTable: nueva primitiva de acciones masivas. `extraBulkActions` (nodo o función `({ selectedRows, selectedIds, clearSelection, refresh }) => nodo`) pinta las acciones del host en la barra flotante de selección, junto al "Eliminar" integrado; `hideBulkDelete` oculta ese "Eliminar". La selección ahora se indexa por `id` del registro (antes por posición en la página) y, con paginación clásica, se vacía al cambiar de página, tamaño, orden, búsqueda o filtros de columna, de modo que una acción masiva nunca actúa sobre filas que el usuario ya no ve.
+- e030a86: DynamicTable: un fallo del endpoint de lista que no es 403 (500, red o `success: false`) ya no se ve como "No se encontraron resultados": muestra "No se pudieron cargar los datos" con un botón "Reintentar" que vuelve a pedir la lista (claves `dynamic.load_error_title`, `dynamic.load_error_hint`, `dynamic.retry`). Nueva prop opcional `emptyState` para mostrar contenido de primer uso cuando la lista carga bien, está vacía y no hay búsqueda ni filtros activos; nunca tapa un error ni un 403.
+
 ## 49.4.0
 
 ### Minor Changes
