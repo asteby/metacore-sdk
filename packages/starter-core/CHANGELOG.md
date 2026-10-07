@@ -1,5 +1,12 @@
 # @asteby/metacore-starter-core
 
+## 148.0.0
+
+### Patch Changes
+
+- Updated dependencies [468bd2b]
+  - @asteby/metacore-runtime-react@49.7.0
+
 ## 147.0.0
 
 ### Patch Changes
