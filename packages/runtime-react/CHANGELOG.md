@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 49.3.1
+
+### Patch Changes
+
+- 6e6d443: `DocumentFormDialog` reinicia tipo y paso al abrirse durante el render, no en un efecto: el primer frame ya es el DocumentEditor del tipo pedido. Antes, si el host lo dejaba montado mientras cambiaban sus formularios (misma ruta para otra vista) o el `initialType`, al abrir se pintaba un instante el wizard «Nuevo documento» o el editor del tipo anterior (QA Pitsline r6, Nota de crédito).
+
 ## 49.3.0
 
 ### Minor Changes
