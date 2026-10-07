@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-app-providers",
-  "version": "135.0.0",
+  "version": "136.0.0",
   "description": "Providers genéricos reutilizables para apps metacore (direction, font, layout, search, platform-config)",
   "license": "Apache-2.0",
   "repository": {
@@ -42,7 +42,7 @@
     "react": ">=18",
     "react-dom": ">=18",
     "@asteby/metacore-pwa": ">=0.6.15",
-    "@asteby/metacore-runtime-react": ">=49.3.1",
+    "@asteby/metacore-runtime-react": ">=49.4.0",
     "@asteby/metacore-ui": ">=2.24.1",
     "sonner": ">=1.7"
   },
