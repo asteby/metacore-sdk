@@ -1,12 +1,14 @@
 // @vitest-environment happy-dom
 //
 // DynamicTable `defaultSort` + bulk ctx `actions` / `can`:
-//   1. Host actions render in the floating bar once rows are selected and
-//      receive the selected rows / ids.
-//   2. `clearSelection()` empties the selection.
-//   3. Changing page drops the selection (classic pagination) so a bulk
-//      action can never target rows that are no longer visible.
-//   4. `hideBulkDelete` removes the built-in "Eliminar".
+//   1. `defaultSort` seeds the first request (sortBy/order); `desc` omitted
+//      means asc; without it nothing is sent; a `?sortBy=` in the URL wins when
+//      enableUrlSync is on. (Changing it from the header menu is plain
+//      TanStack sorting state and is not exercised here: the Radix menu does
+//      not open reliably under happy-dom.)
+//   2. The bulk context handed to `extraBulkActions` exposes `actions` (the
+//      metadata actions) and `can(key)`: all allowed without a provider,
+//      filtered by capability inside a PermissionsProvider.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
@@ -102,7 +104,7 @@ describe('DynamicTable defaultSort', () => {
         }
     })
 
-    it('defaults to asc and sends nothing without defaultSort', async () => {
+    it('defaultSort without desc is asc; no defaultSort sends no sortBy', async () => {
         const a = fakeApi(5)
         const { unmount } = render(
             <ApiProvider client={a}>
