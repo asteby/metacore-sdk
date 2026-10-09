@@ -1,5 +1,12 @@
 # @asteby/metacore-ui
 
+## 2.25.0
+
+### Minor Changes
+
+- b616c74: Nuevo subpath `@asteby/metacore-ui/profile` (también desde la raíz): kit de primitivos para pantallas de detalle de personas/entidades, pensado primero para móvil. `ProfileHeader` (cabecera que flota sin tarjeta propia), `SectionCard`, `StatStrip`, `DefinitionList`, `RecordList`/`RecordRow` (fila de registro con chip de estado; botón de ancho completo con `onOpen`), `ContactLink`, `EmptyState` y `PillTabsList`/`PillTabsTrigger` (pestañas con scroll horizontal, fijas arriba).
+- a8b3bce: Button: tamaños opt-in `comfortable`, `comfortable-lg` e `icon-comfortable` (los actuales no cambian) y estado `:active` (`scale .98`, desactivado con `motion-reduce`). Sidebar: el contenedor fijo y la hoja móvil respetan `--app-topbar-h`, `--app-notice-h` y `--app-bottombar-h` (default 0, idéntico a antes si no se definen).
+
 ## 2.24.1
 
 ### Patch Changes
