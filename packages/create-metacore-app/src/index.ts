@@ -137,6 +137,13 @@ async function main(): Promise<void> {
       )
     }
 
+    const vendored = await vendorMonorepoRefs(targetDir, options.example)
+    if (vendored > 0) {
+      console.log(
+        green(`✓ Vendored ${vendored} files referenced from the monorepo root.`)
+      )
+    }
+
     await applyAppName(targetDir, appName)
   } else {
     const templateDir = path.join(TEMPLATE_ROOT, options.template)
@@ -246,6 +253,101 @@ async function freezeWorkspaceDeps(root: string): Promise<number> {
     }
   }
   return replaced
+}
+
+/**
+ * Examples live inside the monorepo, so they reach for files above their own
+ * directory: `"extends": "../../../tsconfig.base.json"` in a tsconfig, or
+ * `node ../../../scripts/gen-route-tree.mjs` in a package.json script. Cloned
+ * on their own those paths point at nothing and the first build fails.
+ *
+ * Each reference is resolved against where the file sat in the monorepo; when
+ * it lands outside `examples/<name>/` the target is downloaded next to the
+ * file that uses it (keeping its monorepo-relative path) and the reference is
+ * rewritten to point at that copy. A download that fails leaves the reference
+ * untouched and warns, so the scaffold still completes.
+ */
+async function vendorMonorepoRefs(
+  root: string,
+  example: string
+): Promise<number> {
+  const exampleBase = `examples/${example}`
+  const files = await glob('**/{package.json,tsconfig*.json}', {
+    cwd: root,
+    dot: true,
+    filesOnly: true,
+    absolute: true,
+  })
+  const downloads = new Map<string, string | null>()
+  let vendored = 0
+
+  const vendor = async (
+    dir: string,
+    ref: string
+  ): Promise<string | null> => {
+    if (!ref.startsWith('../')) return null
+    const dirInRepo = path.posix.join(
+      exampleBase,
+      path.relative(root, dir).split(path.sep).join('/')
+    )
+    const repoPath = path.posix.normalize(path.posix.join(dirInRepo, ref))
+    if (repoPath.startsWith(`${exampleBase}/`) || repoPath.startsWith('..')) {
+      return null
+    }
+    let body = downloads.get(repoPath)
+    if (body === undefined) {
+      body = await fetchRepoFile(repoPath)
+      downloads.set(repoPath, body)
+    }
+    if (body === null) {
+      console.log(
+        yellow(`! Could not fetch ${repoPath}; left "${ref}" unchanged.`)
+      )
+      return null
+    }
+    const dest = path.join(dir, ...repoPath.split('/'))
+    if (!existsSync(dest)) {
+      await mkdir(path.dirname(dest), { recursive: true })
+      await writeFile(dest, body, 'utf8')
+      vendored++
+    }
+    return `./${repoPath}`
+  }
+
+  for (const file of files) {
+    if (file.includes(`${path.sep}node_modules${path.sep}`)) continue
+    const dir = path.dirname(file)
+    let text = await readFile(file, 'utf8')
+    const refs = new Set<string>()
+    if (path.basename(file) === 'package.json') {
+      for (const m of text.matchAll(/(?:\.\.\/)+[\w@./-]+/g)) refs.add(m[0])
+    } else {
+      for (const m of text.matchAll(/"extends"\s*:\s*"([^"]+)"/g)) {
+        if (m[1]) refs.add(m[1])
+      }
+    }
+    let touched = false
+    for (const ref of refs) {
+      const local = await vendor(dir, ref)
+      if (local) {
+        text = text.split(ref).join(local)
+        touched = true
+      }
+    }
+    if (touched) await writeFile(file, text, 'utf8')
+  }
+  return vendored
+}
+
+async function fetchRepoFile(repoPath: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://raw.githubusercontent.com/${MONOREPO}/main/${repoPath}`
+    )
+    return res.ok ? await res.text() : null
+  } catch {
+    return null
+  }
 }
 
 async function fetchLatestVersion(pkg: string): Promise<string | null> {
