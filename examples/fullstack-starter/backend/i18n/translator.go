@@ -119,4 +119,3 @@ func MustNew(defaultLang string) *Translator {
 	}
 	return t
 }
-

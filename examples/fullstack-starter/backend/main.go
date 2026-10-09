@@ -12,8 +12,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v3"
+	"github.com/gofiber/fiber/v3/middleware/cors"
 	"github.com/google/uuid"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -122,22 +122,22 @@ func main() {
 
 	fiberApp := fiber.New()
 	fiberApp.Use(cors.New(cors.Config{
-		AllowOrigins:     getenvDefault("CORS_ORIGINS", "http://localhost:5173"),
-		AllowMethods:     "GET,POST,PUT,DELETE,PATCH,OPTIONS",
-		AllowHeaders:     "Origin,Content-Type,Accept,Authorization",
+		AllowOrigins:     strings.Split(getenvDefault("CORS_ORIGINS", "http://localhost:5173"), ","),
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization"},
 		AllowCredentials: true,
 	}))
 
 	apiRouter := app.Mount(fiberApp.Group("/api"))
 
-	apiRouter.Get("/notifications/me", func(c *fiber.Ctx) error {
+	apiRouter.Get("/notifications/me", func(c fiber.Ctx) error {
 		userID := auth.GetUserID(c)
 		var notifs []models.Notification
 		db.Where("user_id = ?", userID).Order("created_at DESC").Limit(20).Find(&notifs)
 		return c.JSON(fiber.Map{"success": true, "data": notifs})
 	})
 
-	apiRouter.Post("/test-notification", func(c *fiber.Ctx) error {
+	apiRouter.Post("/test-notification", func(c fiber.Ctx) error {
 		userID := auth.GetUserID(c)
 		notif := models.Notification{
 			UserID:  &userID,
@@ -162,7 +162,7 @@ func main() {
 		return c.JSON(fiber.Map{"success": true, "message": "Notification sent via WebSocket"})
 	})
 
-	fiberApp.Get("/healthz", func(c *fiber.Ctx) error { return c.SendString("ok") })
+	fiberApp.Get("/healthz", func(c fiber.Ctx) error { return c.SendString("ok") })
 
 	port := getenvDefault("PORT", "7200")
 	log.Printf("🚀 Metacore Starter listening on :%s", port)
