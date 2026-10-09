@@ -1,5 +1,28 @@
 # @asteby/metacore-runtime-react
 
+## 50.0.0
+
+### Minor Changes
+
+- b1954cd: DynamicRecordDialog: tres mejoras opcionales y retrocompatibles (sin las opciones nuevas el comportamiento es idéntico).
+
+  - `ModalMetadata.editPayload?: 'all' | 'declared'` (alias `edit_payload`). En `mode='edit'`, `'declared'` envía en el PUT solo las claves de los campos declarados en la metadata del modal (un campo declarado vacío va como `''`, para poder borrar valores; los ocultos por `visible_when` siguen fuera). El id solo viaja en la URL / como primer argumento de `onUpdate`. Default `'all'` = hoy. Nota: el formulario ya se siembra solo con los campos declarados, así que `'declared'` además excluye claves añadidas por `onApply` y garantiza el `''`; para NO enviar un campo de estado (p. ej. `approved`) el host debe no declararlo en el modal.
+  - `FieldDef.maxSize` (bytes) y `FieldDef.accept` (MIME/extensiones) en campos `file` e `image`: un archivo que no cumple NO se sube a `/upload`; se muestra un error en el campo (`role="alert"`) y, en `image`, también toast. Ambos campos aceptan arrastrar y soltar sobre su zona (el botón/selector sigue operable por teclado). `UploadField` ahora también valida el tipo contra `accept` (antes solo el tamaño). Nuevas claves i18n `common.upload.invalid_type`. Exporta `fileMatchesAccept` y `validateUploadFile`.
+  - `FieldDef.deriveFrom?: { field, transform: 'slug' }` (alias `derive_from`): mientras el usuario no edite el campo destino, se pre-rellena con el slug del origen (minúsculas, sin acentos, guiones); al editarlo a mano deja de derivarse (vaciarlo reactiva la derivación). Exporta `slugify`.
+
+  Nota: `maxSize` y `accept` son validación de comodidad en el cliente (se saltan fácilmente); el backend debe seguir validando tipo y tamaño. En `mode='edit'`, `deriveFrom` no pisa un destino ya guardado (solo deriva si estaba vacío).
+
+  NO cubierto: subir el archivo multipart directo al endpoint del modelo (como hace hoy el modal de categorías de TV de doctores.lat) — el contrato HTTP sigue siendo `POST /upload` + URL en el JSON; cambiarlo es una decisión de contrato del host.
+
+- 95b55c2: DynamicRecordDialog / IconPickerField: `iconOnly` (también `icon_only`) por campo oculta la pestaña "Imagen" del selector de ícono y conserva un valor URL previo como valor actual con opción "Quitar"; y ModalMetadata acepta `createDescription`, `editDescription`, `viewDescription`, `createSubmitLabel`, `editSubmitLabel` (y snake_case) para sustituir la descripción y etiquetas de botón genéricas. Todo opcional: sin ellos el diálogo es idéntico.
+- 479a351: `DynamicTable` y `DynamicKanban` aceptan `isRowActionVisible?: RowActionPredicate` (`(action, row) => boolean`, tipo exportado): un predicado del consumidor que oculta acciones por fila. Se evalúa con AND junto a `requiresState` y `condition` de la metadata (solo puede ocultar más), si lanza la acción se oculta (fail-closed, `console.error`) y sin predicado el comportamiento no cambia. `GetDynamicColumns` recibe un 8º parámetro opcional `rowActionPredicate`; los factories custom pueden ignorarlo. Memoiza el predicado para no reconstruir las columnas.
+
+### Patch Changes
+
+- Updated dependencies [b616c74]
+- Updated dependencies [a8b3bce]
+  - @asteby/metacore-ui@2.25.0
+
 ## 49.13.0
 
 ### Minor Changes
