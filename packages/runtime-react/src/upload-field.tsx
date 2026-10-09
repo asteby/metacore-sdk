@@ -51,6 +51,39 @@ export function uploadedDisplayName(value: unknown): string {
     return parts[parts.length - 1] || cleaned
 }
 
+/**
+ * True when `file` satisfies an HTML-style accept list (`"image/*,.pdf,image/png"`).
+ * Tokens: `type/*` (prefix), `type/sub` (exact MIME) and `.ext` (filename suffix),
+ * case-insensitive. An empty/absent list accepts everything. Pure — exported for tests.
+ */
+export function fileMatchesAccept(file: { name: string; type: string }, accept?: string): boolean {
+    const tokens = (accept ?? '')
+        .split(',')
+        .map((x) => x.trim().toLowerCase())
+        .filter(Boolean)
+    if (tokens.length === 0) return true
+    const name = (file.name || '').toLowerCase()
+    const type = (file.type || '').toLowerCase()
+    return tokens.some((tok) => {
+        if (tok.startsWith('.')) return name.endsWith(tok)
+        if (tok.endsWith('/*')) return type.startsWith(tok.slice(0, -1))
+        return type === tok
+    })
+}
+
+/**
+ * Client-side gate shared by the upload widgets: `'type'` when the file does not
+ * match `accept`, `'size'` when it exceeds `maxSize` (bytes), else null. Pure.
+ */
+export function validateUploadFile(
+    file: { name: string; type: string; size: number },
+    opts: { accept?: string; maxSize?: number },
+): 'type' | 'size' | null {
+    if (!fileMatchesAccept(file, opts.accept)) return 'type'
+    if (opts.maxSize && file.size > opts.maxSize) return 'size'
+    return null
+}
+
 export function UploadField({ field, value, onChange }: UploadFieldProps) {
     const { t } = useTranslation()
     const api = useApi()
@@ -69,7 +102,16 @@ export function UploadField({ field, value, onChange }: UploadFieldProps) {
                 return
             }
             setError(null)
-            if (maxSize && file.size > maxSize) {
+            const rejected = validateUploadFile(file, { accept, maxSize })
+            if (rejected === 'type') {
+                setError(
+                    t('common.upload.invalid_type', {
+                        defaultValue: 'File type not allowed.',
+                    }),
+                )
+                return
+            }
+            if (rejected === 'size' && maxSize) {
                 const mb = (maxSize / (1024 * 1024)).toFixed(1)
                 setError(
                     t('common.upload.too_large', {
@@ -121,11 +163,23 @@ export function UploadField({ field, value, onChange }: UploadFieldProps) {
                 setUploading(false)
             }
         },
-        [api, endpoint, maxSize, storagePath, onChange, t],
+        [api, endpoint, accept, maxSize, storagePath, onChange, t],
     )
 
     return (
-        <div className="grid gap-1.5" data-widget="upload">
+        <div
+            className="grid gap-1.5"
+            data-widget="upload"
+            onDragOver={(e) => {
+                e.preventDefault()
+            }}
+            onDrop={(e) => {
+                e.preventDefault()
+                const dropped = e.dataTransfer?.files?.[0]
+                if (!dropped || uploading) return
+                void handleFile(dropped)
+            }}
+        >
             <FilePickButton
                 id={field.key}
                 accept={accept}

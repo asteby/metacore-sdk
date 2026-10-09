@@ -55,12 +55,12 @@ import { toastServerError, extractFieldErrors, localizeFieldIssue, localizeField
 import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-field'
 import { RecordPicker } from '../record-picker'
 import { DynamicMultiSelectField } from '../dynamic-multi-select-field'
-import { UploadField } from '../upload-field'
+import { UploadField, validateUploadFile } from '../upload-field'
 import { DynamicRelations } from '../dynamic-relations'
 import { AuditInfo, readAuditMeta } from '../audit-info'
 import type { AuditMeta } from '../types'
 import { useOptionsResolver, type ResolvedOption } from '../use-options-resolver'
-import { getFieldRef, getVisibleWhen, evaluateVisibleWhen, ATTRIBUTE_CLASSES_KEY } from '../dynamic-form-schema'
+import { getFieldRef, getVisibleWhen, evaluateVisibleWhen, getUploadConfig, ATTRIBUTE_CLASSES_KEY } from '../dynamic-form-schema'
 import { useAttributeClasses, type AttributeClass } from '../attribute-classes'
 import type { VisibleWhen } from '../types'
 import { groupFieldsBySection, type FormLayout } from '../form-layout'
@@ -185,6 +185,61 @@ export interface FieldDef {
     iconOnly?: boolean
     /** snake_case alias for `iconOnly`. */
     icon_only?: boolean
+    /**
+     * `file` / `image` upload: maximum size in bytes. A larger file is rejected
+     * client-side (error toast + inline message) and never POSTed to `/upload`.
+     * Absent → no limit (retrocompat).
+     */
+    maxSize?: number
+    /**
+     * `file` / `image` upload: accept list (`"image/*"`, `"image/png,.webp"`).
+     * Forwarded to the file input and also enforced on pick and drag-and-drop.
+     * Absent → `image/*` for `image`, anything for `file` (retrocompat).
+     */
+    accept?: string
+    /**
+     * Pre-fills this field from a sibling while the user has not edited it by
+     * hand: `{ field: 'name', transform: 'slug' }` keeps `slug` in sync with
+     * `name`. Once the user types in this field it is no longer derived.
+     */
+    deriveFrom?: { field: string; transform: 'slug' }
+    /** snake_case alias for `deriveFrom`. */
+    derive_from?: { field: string; transform: 'slug' }
+}
+
+/**
+ * Lowercase, accent-free, hyphenated slug ("Asociaciones Médicas" →
+ * "asociaciones-medicas"). Pure — used by `FieldDef.deriveFrom`.
+ */
+export function slugify(input: unknown): string {
+    return String(input ?? '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+}
+
+const getDeriveFrom = (f: FieldDef) => f.deriveFrom ?? f.derive_from
+
+/**
+ * `editPayload: 'declared'` — keeps only the keys of the fields declared in the
+ * modal metadata. A declared field with no value is sent as '' (so a value can
+ * be cleared); one hidden by `visible_when` (already stripped) stays out.
+ */
+export function pickDeclaredFieldValues(
+    values: Record<string, any>,
+    fields: FieldDef[] | undefined,
+): Record<string, any> {
+    const out: Record<string, any> = {}
+    for (const f of fields ?? []) {
+        if (f.key in values) {
+            out[f.key] = values[f.key] ?? ''
+        } else if (!getVisibleWhen(f) && !f.hidden && f.type !== 'hidden' && !f.readonly) {
+            out[f.key] = ''
+        }
+    }
+    return out
 }
 
 // Permissive shape: the wire payload may omit some fields (e.g. `title` is
@@ -217,6 +272,14 @@ interface ModalMetadata {
     create_submit_label?: string
     edit_submit_label?: string
     fields?: FieldDef[]
+    /**
+     * Shape of the PUT payload in `mode='edit'`. `'all'` (default) sends every
+     * form value as before; `'declared'` sends only the keys of the fields
+     * declared in this metadata (a declared empty field goes as ''). Create is
+     * unaffected. Tolerates the snake_case alias `edit_payload`.
+     */
+    editPayload?: 'all' | 'declared'
+    edit_payload?: 'all' | 'declared'
     /**
      * Declarative form layout (kernel PR #230): groups the fields into named
      * sections rendered stacked (`mode:"sections"`) or as a wizard
@@ -736,6 +799,8 @@ export function DynamicRecordDialog({
     const [audit, setAudit] = useState<AuditMeta | undefined>(undefined)
     const [record, setRecord] = useState<any | null>(null)
     const [formValues, setFormValues] = useState<Record<string, any>>({})
+    // Derived fields (`deriveFrom`) the user has typed in by hand: no longer derived.
+    const manualDerived = useRef<Set<string>>(new Set())
     // Classes of the record's category (plus those its saved data carries), for
     // `visible_when.class` fields.
     const attributeClasses = useAttributeClasses(api, modalMeta, formValues, record)
@@ -777,6 +842,7 @@ export function DynamicRecordDialog({
         // the wizard to its first step.
         setFieldErrors({})
         setStepIndex(0)
+        manualDerived.current.clear()
 
         let cancelled = false
 
@@ -792,6 +858,14 @@ export function DynamicRecordDialog({
                 initial[field.key] = isPasswordField(field)
                     ? ''
                     : resolvePath(rec, field.key) ?? field.defaultValue ?? ''
+            }
+            // En edición, un destino derivado ya guardado no se pisa: cuenta como manual.
+            if (!isCreate) {
+                for (const field of meta.fields ?? []) {
+                    if (getDeriveFrom(field) && initial[field.key] !== '' && initial[field.key] != null) {
+                        manualDerived.current.add(field.key)
+                    }
+                }
             }
             setFormValues(initial)
         }
@@ -1032,7 +1106,10 @@ export function DynamicRecordDialog({
         // filter, so a DiscountRule with scope=category never submits the
         // product_id / customer_id it isn't showing. Mirrors dynamic-form.tsx,
         // which builds its Zod only over visibleFields.
-        const submittedValues = stripHiddenFieldValues(formValues, modalMeta.fields, mode, attributeClasses)
+        let submittedValues = stripHiddenFieldValues(formValues, modalMeta.fields, mode, attributeClasses)
+        if (mode === 'edit' && (modalMeta.editPayload ?? modalMeta.edit_payload) === 'declared') {
+            submittedValues = pickDeclaredFieldValues(submittedValues, modalMeta.fields)
+        }
 
         // Empty reference pickers → null (not "" / nil-UUID) so nullable FK
         // columns accept them instead of raising a 23503 FK violation.
@@ -1163,7 +1240,23 @@ export function DynamicRecordDialog({
                         locked={isCreate && !!lockedFields?.includes(field.key)}
                         error={fieldErrors[field.key]}
                         onChange={val => {
-                            setFormValues((prev: Record<string, any>) => ({ ...prev, [field.key]: val }))
+                            if (getDeriveFrom(field)) {
+                                if (val === '' || val == null) manualDerived.current.delete(field.key)
+                                else manualDerived.current.add(field.key)
+                            }
+                            setFormValues((prev: Record<string, any>) => {
+                                const next = { ...prev, [field.key]: val }
+                                for (const target of modalMeta?.fields ?? []) {
+                                    const d = getDeriveFrom(target)
+                                    if (!d || d.field !== field.key || d.transform !== 'slug') continue
+                                    if (manualDerived.current.has(target.key)) continue
+                                    const current = prev[target.key] ?? ''
+                                    if (current === '' || current === slugify(prev[field.key])) {
+                                        next[target.key] = slugify(val)
+                                    }
+                                }
+                                return next
+                            })
                             setFieldErrors(prev => {
                                 if (!prev[field.key]) return prev
                                 const next = { ...prev }
@@ -2483,18 +2576,34 @@ function ScannableRecordInput({
     )
 }
 
-function ImageUploadField({ field: _field, value, onChange }: { field: FieldDef; value: any; onChange: (val: any) => void }) {
+function ImageUploadField({ field, value, onChange }: { field: FieldDef; value: any; onChange: (val: any) => void }) {
     const { t } = useTranslation()
     const api = useApi()
     const model = useContext(ModelContext)
     const getImageUrl = useContext(ImageUrlContext)
     const [uploading, setUploading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+    const [dragging, setDragging] = useState(false)
     const inputRef = useRef<HTMLInputElement>(null)
+    const { accept: declaredAccept, maxSize } = getUploadConfig(field as ActionFieldDef)
+    const accept = declaredAccept || 'image/*'
 
-    async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-        const file = e.target.files?.[0]
-        if (!file) return
-
+    async function upload(file: File) {
+        const rejected = validateUploadFile(file, { accept: declaredAccept, maxSize })
+        if (rejected) {
+            const msg =
+                rejected === 'type'
+                    ? t('common.upload.invalid_type', { defaultValue: 'File type not allowed.' })
+                    : t('common.upload.too_large', {
+                          mb: ((maxSize ?? 0) / (1024 * 1024)).toFixed(1),
+                          defaultValue: 'File too large (max {{mb}} MB).',
+                      })
+            setError(msg)
+            toast.error(msg)
+            if (inputRef.current) inputRef.current.value = ''
+            return
+        }
+        setError(null)
         setUploading(true)
         try {
             const formData = new FormData()
@@ -2511,35 +2620,67 @@ function ImageUploadField({ field: _field, value, onChange }: { field: FieldDef;
         }
     }
 
+    function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0]
+        if (!file) return
+        void upload(file)
+    }
+
     return (
-        <div className="flex items-center gap-3">
-            {value ? (
-                <div className="relative">
-                    <img src={getImageUrl(String(value))} alt="" className="h-16 w-16 rounded-lg object-cover border" />
+        <div className="grid gap-1.5">
+            <div
+                className="flex items-center gap-3"
+                onDragOver={(e) => {
+                    // Siempre preventDefault: si no, el navegador abre el archivo soltado.
+                    e.preventDefault()
+                    if (value || uploading) return
+                    setDragging(true)
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(e) => {
+                    e.preventDefault()
+                    setDragging(false)
+                    const dropped = e.dataTransfer?.files?.[0]
+                    if (!dropped || value || uploading) return
+                    void upload(dropped)
+                }}
+            >
+                {value ? (
+                    <div className="relative">
+                        <img src={getImageUrl(String(value))} alt="" className="h-16 w-16 rounded-lg object-cover border" />
+                        <button
+                            type="button"
+                            onClick={() => onChange('')}
+                            className="absolute -top-1.5 -right-1.5 size-5 bg-destructive text-white rounded-full flex items-center justify-center hover:bg-destructive/90"
+                        >
+                            <XIcon className="size-3" />
+                        </button>
+                    </div>
+                ) : (
                     <button
                         type="button"
-                        onClick={() => onChange('')}
-                        className="absolute -top-1.5 -right-1.5 size-5 bg-destructive text-white rounded-full flex items-center justify-center hover:bg-destructive/90"
+                        onClick={() => inputRef.current?.click()}
+                        disabled={uploading}
+                        className={cn(
+                            'h-16 w-16 rounded-lg border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center gap-1 hover:border-primary/50 hover:bg-muted/50 transition-colors disabled:opacity-50',
+                            dragging && 'border-primary/50 bg-muted/50',
+                        )}
                     >
-                        <XIcon className="size-3" />
+                        {uploading ? (
+                            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+                        ) : (
+                            <Upload className="size-4 text-muted-foreground" />
+                        )}
                     </button>
-                </div>
-            ) : (
-                <button
-                    type="button"
-                    onClick={() => inputRef.current?.click()}
-                    disabled={uploading}
-                    className="h-16 w-16 rounded-lg border-2 border-dashed border-muted-foreground/30 flex flex-col items-center justify-center gap-1 hover:border-primary/50 hover:bg-muted/50 transition-colors disabled:opacity-50"
-                >
-                    {uploading ? (
-                        <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                    ) : (
-                        <Upload className="size-4 text-muted-foreground" />
-                    )}
-                </button>
+                )}
+                <input ref={inputRef} type="file" accept={accept} onChange={handleFile} className="hidden" />
+                {!value && <span className="text-xs text-muted-foreground">PNG, JPG, WebP</span>}
+            </div>
+            {error && (
+                <span className="text-sm text-destructive" role="alert">
+                    {error}
+                </span>
             )}
-            <input ref={inputRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
-            {!value && <span className="text-xs text-muted-foreground">PNG, JPG, WebP</span>}
         </div>
     )
 }
