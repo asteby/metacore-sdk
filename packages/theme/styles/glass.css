@@ -197,19 +197,53 @@
   width: calc(var(--sidebar-width-icon) + 1rem);
 }
 
+/*
+ * Host chrome awareness. A host with fixed chrome around the app shell
+ * publishes its sizes as CSS variables on :root (all default to 0, so without
+ * them nothing changes):
+ *
+ *   --app-topbar-h     height of a fixed top bar
+ *   --app-notice-h     height of a notice strip under it (0 when hidden)
+ *   --app-bottombar-h  height of a bottom dock (mobile)
+ *
+ * The floating inset leaves them free: top margin = topbar + notice + gutter,
+ * bottom margin (mobile) = bottombar + gutter. Optionally cap the panel with
+ *   --glass-inset-max-height: calc(100svh - var(--app-topbar-h) - var(--app-notice-h) - 1rem);
+ * when the shell wrapper is not height-bound (min-h-svh) — the SDK
+ * SidebarProvider is h-svh, where the panel already stretches to fit.
+ */
 @media (min-width: 768px) {
   [data-ui-theme='glass'] [data-slot='sidebar'][data-variant='sidebar'] ~ [data-slot='sidebar-inset'] {
-    margin: 0.5rem;
+    margin: calc(var(--app-topbar-h, 0px) + var(--app-notice-h, 0px) + 0.5rem) 0.5rem 0.5rem;
     margin-inline-start: 0;
+    max-height: var(--glass-inset-max-height, none);
+  }
+
+  /*
+   * Opt-in: an inset with no sidebar sibling (chat-like screens) floats the
+   * same way with <SidebarInset data-glass-float>.
+   */
+  [data-ui-theme='glass'] [data-slot='sidebar-inset'][data-glass-float] {
+    margin: calc(var(--app-topbar-h, 0px) + var(--app-notice-h, 0px) + 0.5rem) 0.5rem 0.5rem;
+    max-height: var(--glass-inset-max-height, none);
   }
 }
 
 @media (max-width: 767px) {
-  /* No sidebar panel beside it on phones: the inset is the whole screen. */
+  /*
+   * No sidebar panel beside it on phones: by default the inset is the whole
+   * screen, flat. Opt in to a floating panel with --glass-mobile-gutter
+   * (e.g. 0.5rem), --glass-mobile-radius (e.g. var(--glass-radius)),
+   * --glass-mobile-border-width (e.g. 1px) and --glass-mobile-shadow
+   * (e.g. var(--glass-highlight), var(--glass-shadow)).
+   */
   [data-ui-theme='glass'] [data-slot='sidebar-inset'] {
-    border: 0;
-    border-radius: 0;
-    box-shadow: none;
+    margin: calc(var(--app-topbar-h, 0px) + var(--app-notice-h, 0px) + var(--glass-mobile-gutter, 0px))
+      var(--glass-mobile-gutter, 0px) calc(var(--app-bottombar-h, 0px) + var(--glass-mobile-gutter, 0px));
+    max-height: var(--glass-inset-max-height, none);
+    border-width: var(--glass-mobile-border-width, 0px);
+    border-radius: var(--glass-mobile-radius, 0px);
+    box-shadow: var(--glass-mobile-shadow, none);
   }
 }
 
@@ -219,7 +253,8 @@
  * gutter, over the dimmed overlay, so it takes the denser popover glass.
  */
 [data-ui-theme='glass'] [data-mobile='true'][data-slot='sidebar'] {
-  inset-block: 0.5rem;
+  inset-block-start: calc(var(--app-topbar-h, 0px) + var(--app-notice-h, 0px) + 0.5rem);
+  inset-block-end: calc(var(--app-bottombar-h, 0px) + 0.5rem);
   inset-inline-start: 0.5rem;
   height: auto;
   background-color: var(--popover);

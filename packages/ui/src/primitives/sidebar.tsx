@@ -177,7 +177,7 @@ function Sidebar({
           data-sidebar='sidebar'
           data-slot='sidebar'
           data-mobile='true'
-          className='bg-sidebar text-sidebar-foreground w-(--sidebar-width) p-0 [&>button]:hidden'
+          className='bg-sidebar text-sidebar-foreground top-[calc(var(--app-topbar-h,0px)+var(--app-notice-h,0px))] bottom-[var(--app-bottombar-h,0px)] h-auto w-(--sidebar-width) p-0 [&>button]:hidden'
           style={
             {
               '--sidebar-width': SIDEBAR_WIDTH_MOBILE,
@@ -218,7 +218,8 @@ function Sidebar({
       <div
         data-slot='sidebar-container'
         className={cn(
-          'fixed inset-y-0 z-10 hidden h-svh w-(--sidebar-width) transition-[inset-inline,width] duration-200 ease-linear md:flex',
+          // Host chrome offsets (fixed topbar / notice strip) default to 0 → same as inset-y-0 h-svh.
+          'fixed top-[calc(var(--app-topbar-h,0px)+var(--app-notice-h,0px))] bottom-0 z-10 hidden h-[calc(100svh-var(--app-topbar-h,0px)-var(--app-notice-h,0px))] w-(--sidebar-width) transition-[inset-inline,width] duration-200 ease-linear md:flex',
           side === 'left'
             ? 'start-0 group-data-[collapsible=offcanvas]:-start-[calc(var(--sidebar-width))]'
             : 'end-0 group-data-[collapsible=offcanvas]:-end-[calc(var(--sidebar-width))]',
