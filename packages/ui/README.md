@@ -38,6 +38,8 @@ import { cn } from '@asteby/metacore-ui/lib'
 | `@asteby/metacore-ui/profile` | Detail-page kit (mobile-first): `ProfileHeader`, `SectionCard`, `StatStrip`, `DefinitionList`, `RecordList`/`RecordRow`, `ContactLink`, `EmptyState`, `PillTabsList`/`PillTabsTrigger`. |
 | `@asteby/metacore-ui/lib` | `cn`, `getPageNumbers`, `getCookie`/`setCookie`/`removeCookie`, `resolveColorCss`/`resolveColorHex`/`generateBadgeStyles`. |
 
+`Button` sizes: `default | sm | lg | icon` plus the opt-in roomier `comfortable` (h-11), `comfortable-lg` (h-12) and `icon-comfortable` (size-11). All buttons get a pressed state (`scale .98`, disabled under `prefers-reduced-motion`). `Sidebar` honours the optional host variables `--app-topbar-h`, `--app-notice-h` (fixed top chrome) and `--app-bottombar-h` (mobile sheet bottom offset); all default to 0.
+
 ## Decoupling from app internals
 
 Several components that in the source app depended on a zustand `auth-store`, a Vite-specific `api` client, or a tanstack-router `<Link>` have been refactored to receive their data via props:

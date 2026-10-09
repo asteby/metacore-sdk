@@ -66,6 +66,37 @@ the brand painted by `applyBranding`. Import it after your tokens:
 It includes a near-opaque fallback for browsers without `backdrop-filter`
 and for `prefers-reduced-transparency`.
 
+#### Host chrome and mobile floating panel (optional variables)
+
+A host with fixed chrome around the shell publishes its sizes on `:root`. All
+variables are optional and default to `0`/flat: without them the compiled CSS
+behaves exactly as before.
+
+| Variable | Default | Effect |
+|---|---|---|
+| `--app-topbar-h` | `0px` | Fixed top bar: pushes the inset (and `@asteby/metacore-ui` `Sidebar`) down |
+| `--app-notice-h` | `0px` | Notice strip under the top bar (0 when hidden) |
+| `--app-bottombar-h` | `0px` | Bottom dock on mobile: bottom margin of the inset and the mobile sidebar sheet |
+| `--glass-inset-max-height` | `none` | Cap for the inset when the wrapper is not height-bound, e.g. `calc(100svh - var(--app-topbar-h) - var(--app-notice-h) - 1rem)` |
+| `--glass-mobile-gutter` | `0px` | Margin around the inset on phones (e.g. `0.5rem`) |
+| `--glass-mobile-radius` | `0px` | Corner radius of the inset on phones (e.g. `var(--glass-radius)`) |
+| `--glass-mobile-border-width` | `0px` | Rim width on phones (e.g. `1px`) |
+| `--glass-mobile-shadow` | `none` | Shadow on phones (e.g. `var(--glass-highlight), var(--glass-shadow)`) |
+
+```css
+:root {
+  --app-topbar-h: 3rem;
+  --app-bottombar-h: 4rem; /* 0 from sm up if the dock is mobile-only */
+  --glass-mobile-gutter: 0.5rem;
+  --glass-mobile-radius: var(--glass-radius);
+  --glass-mobile-border-width: 1px;
+  --glass-mobile-shadow: var(--glass-highlight), var(--glass-shadow);
+}
+```
+
+An inset with no sidebar sibling (chat-like screens) floats on desktop with
+`<SidebarInset data-glass-float>`.
+
 ## Usage from JS/TS
 
 For programmatic access (Storybook, charts, PDF):
