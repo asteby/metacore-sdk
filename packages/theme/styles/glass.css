@@ -180,6 +180,29 @@
 }
 
 /*
+ * ─── Nested surfaces: any plain `.bg-card` inside the shell ───
+ * `.bg-card` already gets translucency + blur from the rule above, but none
+ * of the "floating panel" treatment (rim, lift, clip) that sidebar-inset and
+ * dialogs get — so a card sitting on the page (a settings panel, an empty
+ * state) reads as a flat, barely-differentiated rectangle instead of a
+ * floating one.
+ *
+ * Deliberately NOT `--glass-rim` here: that token is white, meant to catch
+ * light on a panel's OUTER edge against the colorful gradient backdrop
+ * (sidebar-inset, dialogs sit directly on it). A `.bg-card` is nested one
+ * layer deeper, already inside that panel's own blur-diluted near-white
+ * backdrop — a white rim there is white-on-white, invisible. `--border` is
+ * the token already defined above for exactly this ("a dark hairline reads
+ * on white glass, a white one doesn't") — reuse it instead of inventing a
+ * second rim color.
+ */
+[data-ui-theme='glass'] .bg-card {
+  border-color: var(--border);
+  box-shadow: var(--glass-highlight), var(--glass-shadow);
+  background-clip: padding-box;
+}
+
+/*
  * The plain `sidebar` variant is flush to the viewport edge with a border:
  * give it the same 0.5rem gutter the floating/inset variants have, and the
  * icon-collapsed width room for that gutter.
