@@ -40,3 +40,11 @@ export {
   type MascotSkin,
   type MascotProps,
 } from './mascot'
+export {
+  mascotFaceStore,
+  createMascotFaceStore,
+  pickMascotFace,
+  useMascotFace,
+  usePublishMascotFace,
+  type MascotFaceStore,
+} from './mascot-face'
