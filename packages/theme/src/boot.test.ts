@@ -130,6 +130,30 @@ describe('theme boot', () => {
     expect(root().style.getPropertyValue('--ok')).toBe('1')
   })
 
+  it('a first visit paints the vertical default attributes', () => {
+    runBoot({ defaultAttrs: { 'data-ui-theme': 'glass', 'data-ui-density': 'comfortable' } })
+    expect(root().getAttribute('data-ui-theme')).toBe('glass')
+    expect(root().getAttribute('data-ui-density')).toBe('comfortable')
+  })
+
+  it('default attributes never override a stored theme', () => {
+    paintResolvedTheme('light')
+    persistThemeBoot()
+    resetDocument()
+    runBoot({ defaultAttrs: { 'data-ui-theme': 'ocean', 'data-ui-density': 'comfortable' } })
+    expect(root().getAttribute('data-ui-theme')).toBe('glass')
+    expect(root().getAttribute('data-ui-density')).toBe('compact')
+  })
+
+  it('default attributes are limited to data-* with string values', () => {
+    runBoot({
+      defaultAttrs: { onload: 'alert(1)', 'data-ui-theme': 'glass', 'data-x': 1 as unknown as string },
+    })
+    expect(root().hasAttribute('onload')).toBe(false)
+    expect(root().hasAttribute('data-x')).toBe(false)
+    expect(root().getAttribute('data-ui-theme')).toBe('glass')
+  })
+
   it('survives a corrupt entry', () => {
     localStorage.setItem(THEME_BOOT_STORAGE_KEY, '{nope')
     expect(() => runBoot()).not.toThrow()

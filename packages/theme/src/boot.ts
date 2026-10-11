@@ -45,6 +45,13 @@ export interface ThemeBootScriptOptions {
   defaultMode?: ThemeMode | 'system'
   /** Longest the transition lock may last if the app never releases it. */
   maxLockMs?: number
+  /**
+   * `data-*` attributes to paint on <html> for a first visit — a browser with
+   * no stored theme yet. Lets a vertical ship its own default pack (e.g.
+   * `{ 'data-ui-theme': 'glass' }`) instead of the neutral one. Ignored as
+   * soon as a theme has been stored, so a real pick is never overridden.
+   */
+  defaultAttrs?: Record<string, string>
 }
 
 export interface ThemeBootWatchOptions {
@@ -92,8 +99,16 @@ function bootTheme(o: Required<ThemeBootScriptOptions> & { lockClass: string; al
 
     var raw = localStorage.getItem(o.storageKey)
     var s = raw ? JSON.parse(raw) : null
-    if (!s || s.v !== 1) return
     var k
+    if (!s || s.v !== 1) {
+      // First visit: the vertical's default attributes, if it declared any.
+      for (k in o.defaultAttrs) {
+        if (/^data-[\w-]+$/.test(k) && typeof o.defaultAttrs[k] === 'string') {
+          root.setAttribute(k, o.defaultAttrs[k] as string)
+        }
+      }
+      return
+    }
     for (k in s.attrs) {
       // Only data-* from storage: never an event-handler attribute.
       if (/^data-[\w-]+$/.test(k) && typeof s.attrs[k] === 'string') root.setAttribute(k, s.attrs[k])
@@ -126,6 +141,7 @@ export function themeBootScript(options: ThemeBootScriptOptions = {}): string {
     modeCookie: options.modeCookie ?? THEME_MODE_COOKIE,
     defaultMode: options.defaultMode ?? 'system',
     maxLockMs: options.maxLockMs ?? 8000,
+    defaultAttrs: options.defaultAttrs ?? {},
     lockClass: THEME_BOOTING_CLASS,
     allowAttr: THEME_BOOT_TRANSITION_ATTRIBUTE,
   }
