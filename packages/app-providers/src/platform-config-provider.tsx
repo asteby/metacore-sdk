@@ -28,6 +28,11 @@ export interface PlatformBranding {
   // keep working — never hard-code a brand name/skin outside this field.
   mascot_name: string
   mascot_skin: string
+  // Starter prompts shown in the copilot chat's empty state, per vertical
+  // (usually generated once server-side from the vertical's tagline and
+  // modules and cached). Absent/empty means "none configured": consumers use
+  // `useAgentSuggestions()`, which falls back to a neutral default set.
+  agent_suggestions?: string[]
   // Optional key identifying a named preset to apply on top of the base
   // branding. Absent/unknown keys are a no-op — never required for
   // existing consumers.

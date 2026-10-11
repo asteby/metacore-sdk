@@ -40,3 +40,8 @@ export {
   type MascotSkin,
   type MascotProps,
 } from './mascot'
+export {
+  DEFAULT_AGENT_SUGGESTIONS,
+  resolveAgentSuggestions,
+  useAgentSuggestions,
+} from './agent-suggestions'
