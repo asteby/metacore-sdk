@@ -148,6 +148,14 @@ plugins: [
 ]
 ```
 
+A vertical can ship its own default pack for a first visit with `defaultAttrs`
+(only `data-*` keys with string values are applied, and only while nothing has
+been stored — a real user/org pick is never overridden):
+
+```ts
+themeBootScript({ defaultAttrs: { 'data-ui-theme': 'glass' } })
+```
+
 `@asteby/metacore-theme/boot` has no React import, so it loads in a Node
 config. Pass `persistBoot={false}` to the provider to opt out.
 
