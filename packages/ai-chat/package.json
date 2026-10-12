@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-ai-chat",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Metacore copilot chat — floating widget, chat panel, draggable FAB and an injectable chat client (HTTP, permissions, branding, suggestions)",
   "license": "Apache-2.0",
   "repository": {
