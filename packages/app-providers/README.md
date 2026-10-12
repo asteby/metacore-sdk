@@ -36,6 +36,7 @@ pnpm add @asteby/metacore-pwa @asteby/metacore-runtime-react @asteby/metacore-ui
 | `PlatformConfigProvider`, `usePlatformConfig`   | Tenant branding (name, logo, primary/accent color, support URLs) — transport-agnostic. |
 | `applyBranding`, `applyCachedBranding`          | Imperative helpers for pre-React paint and SW updates. |
 | `FALLBACK_BRANDING`                             | Empty defaults consumers can spread over. |
+| `usePublishMascotFace`, `useMascotFace`, `mascotFaceStore` | One shared mascot face across chat surfaces; the most active `MascotState` wins (`error` > `speaking` > `processing` > `thinking` > `listening` > `happy` > `idle`). |
 | `MetacoreAppShell`                              | Full kit: ApiProvider + QueryClient + PWA + Toaster + addon-install bridge. |
 | `getCookie`, `setCookie`, `removeCookie`        | Tiny cookie helpers shared by the providers. |
 
