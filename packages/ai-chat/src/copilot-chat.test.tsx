@@ -212,4 +212,48 @@ describe('CopilotChat', () => {
     fireEvent.change(screen.getByLabelText('Conversaciones'), { target: { value: 'b' } })
     expect(onSelect).toHaveBeenCalledWith('b')
   })
+
+  describe('widget regressions', () => {
+    const openWidget = (props = {}) => {
+      render(
+        <CopilotProvider client={client()} suggestions={[]}>
+          <CopilotWidget {...props} />
+        </CopilotProvider>,
+      )
+      fireEvent.click(screen.getByLabelText('Abrir copiloto'))
+    }
+
+    it('closes on Escape pressed outside the panel (e.g. a toast)', () => {
+      const toast = document.createElement('button')
+      document.body.appendChild(toast)
+      openWidget()
+      expect(screen.getByRole('log')).toBeTruthy()
+      fireEvent.keyDown(toast, { key: 'Escape' })
+      expect(screen.queryByRole('log')).toBeNull()
+      toast.remove()
+    })
+
+    it('does not close when Escape targets another modal dialog or an outside text field', () => {
+      const modal = document.createElement('div')
+      modal.setAttribute('aria-modal', 'true')
+      const inner = document.createElement('button')
+      modal.appendChild(inner)
+      const input = document.createElement('input')
+      document.body.append(modal, input)
+      openWidget()
+      fireEvent.keyDown(inner, { key: 'Escape' })
+      fireEvent.keyDown(input, { key: 'Escape' })
+      expect(screen.getByRole('log')).toBeTruthy()
+      modal.remove()
+      input.remove()
+    })
+
+    it('forwards sessions, onSelectSession and demo to CopilotChat', () => {
+      const onSelect = vi.fn()
+      openWidget({ sessions: [{ id: 's1', title: 'Primera' }], onSelectSession: onSelect, demo: true })
+      expect(screen.getByText('Datos demostrativos')).toBeTruthy()
+      fireEvent.change(screen.getByRole('combobox'), { target: { value: 's1' } })
+      expect(onSelect).toHaveBeenCalledWith('s1')
+    })
+  })
 })
