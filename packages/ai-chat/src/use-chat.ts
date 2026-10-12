@@ -63,6 +63,7 @@ export function useChat(initialSessionId?: string | null) {
             content: res.reply,
             proposals: normalizeProposals(res.proposals),
             attachments: res.attachments,
+            demo: res.demo,
           },
         })
       } catch {

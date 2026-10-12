@@ -1,10 +1,13 @@
-import { createContext, useContext, useEffect, useRef, useState, type FormEvent } from 'react'
-import { Check, Plus, RotateCw, Send, WifiOff, X } from 'lucide-react'
+import { createContext, useContext, useEffect, useRef, type ReactNode } from 'react'
+import { Check, Plus, RotateCw, WifiOff, X } from 'lucide-react'
 import { Mascot } from '@asteby/metacore-app-providers'
-import { AGENT_CAPSULE, AGENT_CARD, AGENT_ENTER, AGENT_FOCUS } from './surfaces'
+import { AGENT_CARD, AGENT_ENTER, AGENT_FOCUS } from './surfaces'
+import { ChatHeader } from './chat-header'
+import { Composer } from './composer'
 import { useCopilot, useCopilotSuggestions } from './context'
 import { useChat } from './use-chat'
 import { useOnline } from './use-online'
+import { Markdown } from './markdown'
 import { useRevealText } from './use-reveal-text'
 import type { ChatMessage, ChatSessionSummary } from './types'
 
@@ -18,20 +21,21 @@ function Avatar({ size, thinking }: { size: number; thinking?: boolean }) {
 }
 
 function Bubble({ message, onFrame }: { message: ChatMessage; onFrame: () => void }) {
-  const { permissions, labels } = useCopilot()
-  const { text } = useRevealText(message.content, !!message.fresh && message.role === 'ai', onFrame)
+  const { permissions, labels, onLinkClick } = useCopilot()
+  const { text, revealing } = useRevealText(message.content, !!message.fresh && message.role === 'ai', onFrame)
   const mine = message.role === 'user'
   return (
     <div className={cx('flex', mine ? 'justify-end' : 'justify-start', AGENT_ENTER)}>
       <div
         className={cx(
-          'max-w-[85%] whitespace-pre-wrap break-words rounded-2xl px-3 py-2 text-sm',
+          'max-w-[85%] break-words rounded-2xl px-3 py-2 text-sm',
+          (mine || message.error) && 'whitespace-pre-wrap',
           mine ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
           message.error && 'border border-destructive/50 text-destructive',
         )}
         role={message.error ? 'alert' : undefined}
       >
-        {text}
+        {mine || message.error ? text : <Markdown content={text} streaming={revealing} onLinkClick={onLinkClick} />}
         {message.proposals?.map((p) => (
           <ProposalCard key={p.id} proposal={p} canDecide={permissions.canDecideProposals} labels={labels} />
         ))}
@@ -89,16 +93,27 @@ export interface CopilotChatProps {
   sessions?: readonly ChatSessionSummary[]
   /** Called with the chosen session id. Pair with `sessionId` to load its history. */
   onSelectSession?: (id: string) => void
+  /** Header title; defaults to the branding name. */
+  title?: string
+  /** Header subtitle (e.g. the agent's role). */
+  subtitle?: string
+  /** Header avatar; defaults to the mascot. */
+  avatar?: ReactNode
+  /** Rendered before the avatar (e.g. a back button). */
+  headerStart?: ReactNode
+  /** Rendered before the close button (e.g. expand / open-fullscreen). */
+  headerEnd?: ReactNode
+  /** Escape inside the panel; defaults to `onClose`. Lets a host collapse before closing. */
+  onEscape?: () => void
 }
 
 /** The chat panel: header, thread, starter prompts, composer. No positioning. */
-export function CopilotChat({ className, sessionId, onClose, demo, sessions, onSelectSession }: CopilotChatProps) {
+export function CopilotChat({ className, sessionId, onClose, demo, sessions, onSelectSession, title, subtitle, avatar, headerStart, headerEnd, onEscape }: CopilotChatProps) {
   const { permissions, branding, labels, demo: ctxDemo } = useCopilot()
-  const isDemo = demo ?? ctxDemo
   const online = useOnline()
   const suggestions = useCopilotSuggestions()
   const chat = useChat(sessionId)
-  const [draft, setDraft] = useState('')
+  const isDemo = demo ?? (ctxDemo || chat.messages.some((m) => m.demo))
   const endRef = useRef<HTMLDivElement>(null)
   const scroll = () => endRef.current?.scrollIntoView?.({ block: 'end' })
   useEffect(() => {
@@ -114,13 +129,6 @@ export function CopilotChat({ className, sessionId, onClose, demo, sessions, onS
     )
   }
 
-  const submit = (e?: FormEvent) => {
-    e?.preventDefault()
-    if (!online) return
-    const text = draft
-    setDraft('')
-    void chat.send(text)
-  }
   const lastFailed = !chat.loading && chat.messages[chat.messages.length - 1]?.error === true
   const retryBtn = (onClick: () => void) => (
     <button type="button" onClick={onClick} className={cx(TOUCH, 'gap-1 rounded-md border px-3 text-xs', AGENT_FOCUS)}>
@@ -134,20 +142,26 @@ export function CopilotChat({ className, sessionId, onClose, demo, sessions, onS
         className={cx('flex h-full min-h-0 flex-col', className)}
         aria-label={branding.name ?? 'Copiloto'}
         onKeyDown={(e) => {
-          if (e.key === 'Escape' && onClose && !e.nativeEvent.isComposing) {
+          const esc = onEscape ?? onClose
+          if (e.key === 'Escape' && esc && !e.nativeEvent.isComposing) {
             e.stopPropagation()
-            onClose()
+            esc()
           }
         }}
       >
-        <header className="flex items-center gap-2 border-b border-border/50 px-3 py-2">
-          <Avatar size={28} thinking={chat.loading} />
-          <h2 className="flex-1 truncate text-sm font-semibold">{branding.name ?? 'Copiloto'}</h2>
-          {isDemo && (
-            <span className="shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-              {labels.demo}
-            </span>
-          )}
+        <ChatHeader
+          start={headerStart}
+          avatar={avatar ?? <Avatar size={28} thinking={chat.loading} />}
+          title={title ?? branding.name ?? 'Copiloto'}
+          subtitle={subtitle}
+          badge={
+            isDemo && (
+              <span className="shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                {labels.demo}
+              </span>
+            )
+          }
+        >
           {sessions && sessions.length > 0 && onSelectSession && (
             <select
               aria-label={labels.sessions}
@@ -166,12 +180,13 @@ export function CopilotChat({ className, sessionId, onClose, demo, sessions, onS
           <button type="button" aria-label={labels.newChat} title={labels.newChat} className={cx(TOUCH, 'rounded-md hover:bg-muted', AGENT_FOCUS)} onClick={chat.reset}>
             <Plus className="size-4" aria-hidden />
           </button>
+          {headerEnd}
           {onClose && (
             <button type="button" aria-label={labels.close} className={cx(TOUCH, 'rounded-md hover:bg-muted', AGENT_FOCUS)} onClick={onClose}>
               <X className="size-4" aria-hidden />
             </button>
           )}
-        </header>
+        </ChatHeader>
 
         {!online && (
           <div role="status" className="flex items-center gap-2 border-b bg-muted px-3 py-2 text-xs">
@@ -224,27 +239,7 @@ export function CopilotChat({ className, sessionId, onClose, demo, sessions, onS
           <div ref={endRef} />
         </div>
 
-        <form onSubmit={submit} className={cx(AGENT_CAPSULE, 'm-3 flex items-end gap-2 p-2')}>
-          <textarea
-            aria-label={labels.placeholder}
-            className="max-h-32 min-h-9 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm outline-none"
-            placeholder={labels.placeholder}
-            rows={1}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) submit(e)
-            }}
-          />
-          <button
-            type="submit"
-            aria-label={labels.send}
-            disabled={!draft.trim() || chat.loading || !online}
-            className={cx(TOUCH, 'rounded-full bg-primary text-primary-foreground disabled:opacity-50', AGENT_FOCUS)}
-          >
-            <Send className="size-4" aria-hidden />
-          </button>
-        </form>
+        <Composer onSend={(t) => void chat.send(t)} busy={chat.loading} online={online} />
       </section>
     </ChatBridge.Provider>
   )

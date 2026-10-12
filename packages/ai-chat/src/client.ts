@@ -52,6 +52,7 @@ export function createHttpChatClient(http: HttpLike, opts: HttpChatClientOptions
         reply: String(d.reply ?? d.response ?? d.message ?? ''),
         proposals: normalizeProposals(d.proposals),
         attachments: Array.isArray(d.attachments) ? d.attachments : undefined,
+        demo: d.demo === true || d.is_demo === true ? true : undefined,
       }
     },
     async listSessions(): Promise<ChatSessionSummary[]> {

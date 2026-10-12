@@ -52,6 +52,45 @@ on `ChatClient.send`, `loadHistory` and the HTTP client:
 An explicit `title`/`summary` wins over the derived ones. Rows without `id` or without anything to show are dropped.
 `action`, `model` and `payload` are kept on the normalized proposal so `decideProposal` hosts can use them.
 
+## Markdown replies
+
+AI replies render as safe Markdown + GFM (`Markdown`, also exported): headings, lists, tables (horizontal scroll),
+blockquotes, inline/blocked code with a copy button, links and images. Raw HTML is never rendered, dangerous URL
+schemes are dropped, external links open with `noopener noreferrer`, images are limited to http(s)/same-origin.
+Unterminated code fences are closed while a reply is typed in. Styled with theme tokens only (no typography plugin).
+Pass `onLinkClick` to `CopilotProvider` to route in-app links through your router (return `true` when handled).
+
+## Channels: bot + agents + team
+
+Give the widget an adapter and it becomes a unified inbox. The package knows no endpoint or socket; you map your backend:
+
+```tsx
+const channels: ChannelAdapter = {
+  listChannels: () => api.get('/internal-chat/channels').then(toChannels),   // kind: 'bot' | 'agent' | 'team'
+  loadMessages: (id) => api.get(`/internal-chat/channels/${id}/messages`).then(toMessages),
+  send: (id, body) => api.post(`/internal-chat/channels/${id}/messages`, { body }).then(toMessage),
+  markRead: (id) => api.post(`/internal-chat/channels/${id}/read`),
+  subscribe: (on) => ws.subscribe('INTERNAL_CHAT_MESSAGE', (e) => on({ type: 'message', message: toMessage(e.payload) })),
+}
+<CopilotWidget channels={channels} fullscreenHref="/agent" />
+```
+
+- The bot channel (your `ChatClient`) is injected first (`includeBot={false}` to omit). An `agent` channel with its own
+  `client: ChatClient` gets the full AI chat (proposals, history); without one it is served by the adapter like a team thread.
+- Unread counts drive a FAB badge (live even while the panel is closed); the last opened channel is remembered.
+- `subscribe` events: `message`, `unread`, `presence`, `channels` (refetch).
+
+## Full screen
+
+The header's expand button turns the widget into a viewport-filling surface (list + thread side by side from `md` up;
+phones always get it). `Escape` steps back: expanded → floating → closed. `fullscreenHref` / `onOpenFullscreen` add an
+"open full view" link for apps with their own workspace route. `hidden` removes the widget on routes that already show it.
+
+## Demo badge
+
+The badge shows when `CopilotProvider demo` / `CopilotWidget demo` is set, or when the backend flags a reply with
+`demo: true` (`createHttpChatClient` reads `demo` / `is_demo`). Never leave it permanently on for real data.
+
 ## Accessibility and states
 
 - `CopilotWidget` panel is `role="dialog"` (`aria-label` = branding name, `aria-modal="false"`: the page stays usable).

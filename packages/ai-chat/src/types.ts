@@ -39,6 +39,8 @@ export interface ChatMessage {
   fresh?: boolean
   /** The turn failed; `content` holds the user-facing reason. */
   error?: boolean
+  /** The backend answered this turn from demo data (drives the demo badge). */
+  demo?: boolean
 }
 
 export interface SendMessageInput {
@@ -53,6 +55,8 @@ export interface SendMessageResult {
   reply: string
   proposals?: ChatProposal[]
   attachments?: ChatAttachment[]
+  /** The reply was produced from demo data; shows the demo badge. */
+  demo?: boolean
 }
 
 export interface ChatSessionSummary {
@@ -115,6 +119,22 @@ export interface CopilotLabels {
   historyError: string
   sessions: string
   newSession: string
+  /** Channel inbox (see `ChannelAdapter`). */
+  channels: string
+  back: string
+  expand: string
+  collapse: string
+  openFullscreen: string
+  selectChannel: string
+  noChannels: string
+  channelsError: string
+  messagesError: string
+  loadingMessages: string
+  online: string
+  unread: string
+  sendFailed: string
+  /** BCP-47 locale for relative times in the channel list. */
+  locale: string
 }
 
 export const DEFAULT_LABELS: CopilotLabels = {
@@ -136,4 +156,18 @@ export const DEFAULT_LABELS: CopilotLabels = {
   historyError: 'No se pudo cargar la conversación.',
   sessions: 'Conversaciones',
   newSession: 'Conversación actual',
+  channels: 'Conversaciones',
+  back: 'Volver',
+  expand: 'Ampliar a pantalla completa',
+  collapse: 'Reducir',
+  openFullscreen: 'Abrir vista completa',
+  selectChannel: 'Selecciona una conversación',
+  noChannels: 'Aún no hay conversaciones.',
+  channelsError: 'No se pudieron cargar las conversaciones.',
+  messagesError: 'No se pudieron cargar los mensajes.',
+  loadingMessages: 'Cargando mensajes',
+  online: 'En línea',
+  unread: 'sin leer',
+  sendFailed: 'No se pudo enviar el mensaje.',
+  locale: 'es',
 }
