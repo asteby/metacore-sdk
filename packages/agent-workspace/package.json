@@ -1,7 +1,7 @@
 {
   "name": "@asteby/metacore-agent-workspace",
-  "version": "0.1.0",
-  "description": "Metacore agent workspace \u2014 full agent chat (history, voice, attachments, charts, proposals), floating widget, team chat and calls, with every host concern injected through ports",
+  "version": "0.2.0",
+  "description": "Metacore agent workspace — full agent chat (history, voice, attachments, charts, proposals), floating widget, team chat and calls, with every host concern injected through ports",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
