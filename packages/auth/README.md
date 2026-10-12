@@ -93,6 +93,24 @@ export function SignInRoute() {
 }
 ```
 
+## Showcases
+
+`@asteby/metacore-auth/showcases` ships brand-neutral options for the sign-in side column: `GenericShowcase`, composable `blocks`, and `GradientShowcase`, a decorative CSS-only gradient backdrop (theme `--primary` by default) with a content slot:
+
+```tsx
+import { GradientShowcase } from '@asteby/metacore-auth/showcases'
+
+<SignInPage
+  showcase={
+    <GradientShowcase title='Bienvenido' subtitle='Inicia sesión para continuar.'>
+      <MyIllustration />
+    </GradientShowcase>
+  }
+/>
+```
+
+Props: `colors` (≥2 CSS colors), `angle`, `blobs`, `scrim`, `title`/`subtitle`/`footer`, `children`, `className`. Also importable from `@asteby/metacore-auth/showcases/gradient`.
+
 ## Design notes
 
 - **Zustand store is canonical** — generic shape (user + token + reset) shared across host applications. Persists to `localStorage` keys `auth_token` / `auth_user`.

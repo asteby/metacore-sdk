@@ -52,6 +52,10 @@
       "types": "./dist/showcases/generic.d.ts",
       "import": "./dist/showcases/generic.js"
     },
+    "./showcases/gradient": {
+      "types": "./dist/showcases/gradient.d.ts",
+      "import": "./dist/showcases/gradient.js"
+    },
     "./showcases/blocks": {
       "types": "./dist/showcases/blocks/index.d.ts",
       "import": "./dist/showcases/blocks/index.js"
