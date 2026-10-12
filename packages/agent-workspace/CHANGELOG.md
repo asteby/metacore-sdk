@@ -1,5 +1,11 @@
 # @asteby/metacore-agent-workspace
 
+## 0.3.0
+
+### Minor Changes
+
+- 56448c3: Sincroniza con ops (mascot-face-store, agent-suggestions, mascotName en el PiP, speech-dictation) y exporta ImmersiveCopilot, sonidos y stores.
+
 ## 0.2.0
 
 ### Minor Changes
