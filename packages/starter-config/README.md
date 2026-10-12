@@ -97,6 +97,12 @@ export default defineConfig(
 
 ### Module Federation singletons (`metacoreFederationShared`)
 
+> **Opcional.** `@module-federation/vite` es un `peerDependency` opcional: ya no se
+> instala con `starter-config`. Apps sin microfrontends no necesitan nada. Apps con
+> federación (p. ej. ops) deben declararlo: `pnpm add -D @module-federation/vite`.
+> Igual para `@module-federation/runtime` en `@asteby/metacore-runtime-react`
+> (sólo si cargas addons federados con `AddonLoader`).
+
 > `metacoreFederationShared()` is the **canonical way** to configure Module
 > Federation for any metacore host or addon. It now targets the official
 > [`@module-federation/vite`](https://module-federation.io) plugin (the broken

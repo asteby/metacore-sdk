@@ -634,9 +634,6 @@ importers:
       '@dnd-kit/utilities':
         specifier: ^3.2.2
         version: 3.2.2(react@19.3.0)
-      '@module-federation/runtime':
-        specifier: ^2.5.0
-        version: 2.9.2
       '@tanstack/react-virtual':
         specifier: ^3.14.13
         version: 3.14.13(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -653,6 +650,9 @@ importers:
       '@asteby/metacore-ui':
         specifier: workspace:*
         version: link:../ui
+      '@module-federation/runtime':
+        specifier: ^2.5.0
+        version: 2.9.2
       '@tanstack/react-query':
         specifier: ^5.95.0
         version: 5.104.0(react@19.3.0)
@@ -733,7 +733,7 @@ importers:
   packages/starter-config:
     dependencies:
       '@module-federation/vite':
-        specifier: ^1.16.2
+        specifier: '>=1.16'
         version: 1.22.1(typescript@6.0.3)(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))
       '@tailwindcss/vite':
         specifier: '>=4'

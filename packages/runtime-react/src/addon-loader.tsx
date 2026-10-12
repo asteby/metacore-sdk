@@ -9,7 +9,20 @@
 // purged, and register() runs again against the new remote. The host shell
 // (auth, QueryClient, WebSocket, service worker controller) is not touched.
 import { useEffect, useRef, useState } from 'react'
-import { registerRemotes, loadRemote } from '@module-federation/runtime'
+// `@module-federation/runtime` is an OPTIONAL peer: apps without federated
+// addons never install it. It is loaded lazily, only when an addon is loaded.
+type MfRuntime = typeof import('@module-federation/runtime')
+let mfRuntime: Promise<MfRuntime> | null = null
+function getMfRuntime(): Promise<MfRuntime> {
+    mfRuntime ??= import('@module-federation/runtime').catch((e) => {
+        mfRuntime = null
+        throw new Error(
+            'Loading federated addons requires the optional peer dependency "@module-federation/runtime" (pnpm add @module-federation/runtime). ' +
+                (e instanceof Error ? e.message : String(e)),
+        )
+    })
+    return mfRuntime
+}
 import type { AddonAPI, AddonLayout, Registry } from '@asteby/metacore-sdk'
 import { useDeclareAddonLayout } from './addon-layout-context'
 import {
@@ -131,12 +144,16 @@ async function loadAddon(
     // cache — without it, loadRemote would keep serving the previous bundle.
     if (shouldReregisterRemote(scope, url)) {
         await withRemoteLoadRetry(() =>
-            registerRemotes([{ name: scope, entry: url, type: 'module' }], { force: true }),
+            getMfRuntime().then((mf) =>
+                mf.registerRemotes([{ name: scope, entry: url, type: 'module' }], { force: true }),
+            ),
         )
         markRemoteRegistered(scope, url)
     }
     return withRemoteLoadRetry(() =>
-        loadRemote<AddonRegisterModule>(remoteId(scope, module)),
+        getMfRuntime().then((mf) =>
+            mf.loadRemote<AddonRegisterModule>(remoteId(scope, module)),
+        ),
     )
 }
 
