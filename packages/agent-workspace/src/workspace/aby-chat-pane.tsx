@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react'
+import { useState, useRef, useEffect, useCallback, useId } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
-  X, Plus, Send, Bot, Sparkles, Cog,
+  X, Plus, Send, Cog,
   Mic, MicOff, Paperclip, FileSpreadsheet, Trash2, ArrowLeft, MessageSquarePlus,
   AudioLines, AlertTriangle, RotateCcw, Plug,
 } from 'lucide-react'
@@ -9,6 +9,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Button, Skeleton } from '@asteby/metacore-ui'
 import { Mascot, mascotStateFromAgent } from './mascot'
+import { useMascotFaceStore } from '../lib/mascot-face-store'
 import { ConfirmDialog } from '@asteby/metacore-ui'
 import { api, getApiErrorMessage } from '../host'
 import { cn } from '@asteby/metacore-ui'
@@ -16,7 +17,7 @@ import { getImageUrl } from '@asteby/metacore-starter-core'
 import { useWebSocketContext, useWorkspaceHost } from '../host'
 import { useSpeechDictation } from '../lib/speech-dictation'
 import { speakText, stopSpeaking, ttsSupported, isSpeaking } from '../lib/speech-tts'
-import { canUseMicWaveform, subscribeVoiceLevels, stopVoiceLevels, VOICE_BAR_COUNT } from '../lib/voice-levels'
+import { stopVoiceLevels } from '../lib/voice-levels'
 import { useAbyLiveStore } from '../lib/aby-live-store'
 import { useLiveThinkStage } from '../lib/aby-live-think-stage'
 import { resolveIcon } from '../host'
@@ -280,6 +281,7 @@ export function AbyChatPane({
   const { listening: aiListening, toggle: toggleAiDictation, start: startDictation, stop: stopDictation } =
     useSpeechDictation({
       continuous: liveMode && !micMuted,
+      mascotName: mascotName || 'Aby',
       onInterim: (chunk) => setInterimSpeech(chunk),
       onFinal: (chunk) => {
         if (!chunk) return
@@ -346,6 +348,23 @@ export function AbyChatPane({
     interimSpeech,
     micMuted,
   ])
+
+  // List, header and the in-thread avatar share this face. A second pane
+  // (the hidden widget) may also publish; the store keeps the busiest one.
+  const mascotFaceId = useId()
+  const mascotFace = mascotStateFromAgent({
+    loading: !!thread?.loading,
+    speaking: liveMode && speaking,
+    listening: liveMode && aiListening && !speaking && !micMuted,
+    stepIcon: liveThinkStage?.icon,
+    stepKind: thread?.steps?.[thread.steps.length - 1]?.kind,
+  })
+  useEffect(() => {
+    useMascotFaceStore.getState().setFace(mascotFaceId, mascotFace)
+  }, [mascotFaceId, mascotFace])
+  useEffect(() => {
+    return () => useMascotFaceStore.getState().clearFace(mascotFaceId)
+  }, [mascotFaceId])
 
   // Thought trail for PiP (recent agent steps).
   useEffect(() => {
@@ -1240,7 +1259,7 @@ export function AbyChatPane({
             </ul>
           ) : sessions.length === 0 ? (
             <div className='flex flex-col items-center gap-3 px-4 py-14 text-center text-muted-foreground'>
-              <Bot className='h-9 w-9 opacity-50' />
+              <Mascot skin={mascotSkin} size={56} state={mascotFace} />
               <div>
                 <p className='text-sm font-medium text-foreground'>Habla con {mascotName || 'Aby'}</p>
                 <p className='mt-1 text-xs'>Consultas, crear registros, analizar datos…</p>
@@ -1307,21 +1326,6 @@ export function AbyChatPane({
   if (isWorkspace) {
     const workspaceComposer = thread ? (
       <div className={AGENT_CAPSULE}>
-        {liveMode && (
-          <div className='px-3 pt-2'>
-            <LiveModeStatus
-              listening={aiListening && !thread.loading && !speaking}
-              thinking={thread.loading}
-              speaking={speaking}
-              interimText={interimSpeech}
-              stepHint={
-                liveThinkStage
-                  ? `${liveThinkStage.icon}|${liveThinkStage.hint}`
-                  : undefined
-              }
-            />
-          </div>
-        )}
         {pendingFiles.length > 0 && (
           <div className='flex flex-wrap gap-1.5 px-3 pt-2'>
             {pendingFiles.map((f, i) => {
@@ -1607,18 +1611,7 @@ export function AbyChatPane({
                   )}
                   {thread.loading && (
                     <div className='flex items-start gap-2.5'>
-                      <Mascot
-                        skin={mascotSkin}
-                        size={28}
-                        state={mascotStateFromAgent({
-                          loading: true,
-                          speaking: liveMode && speaking,
-                          listening:
-                            liveMode && aiListening && !speaking && !micMuted,
-                          stepIcon: liveThinkStage?.icon,
-                          stepKind: thread.steps?.[thread.steps.length - 1]?.kind,
-                        })}
-                      />
+                      <Mascot skin={mascotSkin} size={28} state={mascotFace} />
                       <AgentTrail steps={thread.steps || []} live={liveMode} />
                     </div>
                   )}
@@ -1677,7 +1670,7 @@ export function AbyChatPane({
           <div className='flex flex-col gap-3 p-4'>
             {thread.messages.length === 0 && !thread.loading && (
               <div className='flex flex-col items-center justify-center gap-2 py-12 text-muted-foreground'>
-                <Bot className='h-8 w-8' />
+                <Mascot skin={mascotSkin} size={48} state={mascotFace} />
                 <p className='text-center text-sm'>
                   Escribe tu tarea o pregunta.
                   <br />
@@ -1752,17 +1745,7 @@ export function AbyChatPane({
             )}
             {thread.loading && (
               <div className='flex items-start gap-2.5'>
-                <Mascot
-                  skin={mascotSkin}
-                  size={28}
-                  state={mascotStateFromAgent({
-                    loading: true,
-                    speaking: liveMode && speaking,
-                    listening: liveMode && aiListening && !speaking && !micMuted,
-                    stepIcon: liveThinkStage?.icon,
-                    stepKind: thread.steps?.[thread.steps.length - 1]?.kind,
-                  })}
-                />
+                <Mascot skin={mascotSkin} size={28} state={mascotFace} />
                 <AgentTrail steps={thread.steps || []} live={liveMode} />
               </div>
             )}
@@ -1772,19 +1755,6 @@ export function AbyChatPane({
 
       {thread && (
         <div className='flex shrink-0 flex-col gap-1.5 px-2.5 pb-2.5 pt-1.5'>
-          {liveMode && (
-            <LiveModeStatus
-              listening={aiListening && !thread.loading && !speaking}
-              thinking={thread.loading}
-              speaking={speaking}
-              interimText={interimSpeech}
-              stepHint={
-                liveThinkStage
-                  ? `${liveThinkStage.icon}|${liveThinkStage.hint}`
-                  : undefined
-              }
-            />
-          )}
           {pendingFiles.length > 0 && (
             <div className='flex flex-wrap gap-1.5'>
               {pendingFiles.map((f, i) => {
@@ -1958,9 +1928,9 @@ export function AbyChatPane({
                   ? 'Subiendo…'
                   : liveMode
                     ? speaking
-                      ? 'Aby está hablando…'
+                      ? `${mascotName || 'Aby'} está hablando…`
                       : thread.loading
-                        ? 'Aby pensando…'
+                        ? `${mascotName || 'Aby'} pensando…`
                         : micMuted
                           ? 'Mic apagado — escribe o enciende el mic'
                           : aiListening
@@ -2205,230 +2175,8 @@ const iconColors: Record<string, string> = {
   check: 'text-emerald-400',
 }
 
-function LiveWaveform({
-  active,
-  phase,
-  accent,
-}: {
-  active: boolean
-  phase: 'idle' | 'listening' | 'thinking' | 'speaking'
-  /** Override bar gradient when thinking follows brain/package/cog. */
-  accent?: 'emerald' | 'amber' | 'purple' | 'sky' | 'zinc'
-}) {
-  const [levels, setLevels] = useState(() =>
-    Array.from({ length: VOICE_BAR_COUNT }, () => 0.18),
-  )
-
-  useEffect(() => {
-    if (!active) {
-      setLevels(Array.from({ length: VOICE_BAR_COUNT }, () => 0.12))
-      return
-    }
-
-    // Escuchando: niveles reales del mic en desktop; en móvil animación suave
-    // (getUserMedia + SpeechRecognition pelean el mic en PWA/Android).
-    if (phase === 'listening') {
-      if (canUseMicWaveform()) {
-        return subscribeVoiceLevels(setLevels)
-      }
-      let raf = 0
-      let t = 0
-      const tick = () => {
-        t += 0.14
-        setLevels(
-          Array.from({ length: VOICE_BAR_COUNT }, (_, i) => {
-            const wave =
-              0.28 +
-              Math.sin(t + i * 0.55) * 0.32 +
-              Math.sin(t * 1.7 + i * 0.9) * 0.16
-            return Math.min(1, Math.max(0.12, wave))
-          }),
-        )
-        raf = requestAnimationFrame(tick)
-      }
-      raf = requestAnimationFrame(tick)
-      return () => cancelAnimationFrame(raf)
-    }
-
-    // Pensando / hablando: pulso suave (no es tu voz — Aby no tiene mic ahí).
-    let raf = 0
-    let t = 0
-    const amp = phase === 'speaking' ? 0.72 : phase === 'thinking' ? 0.42 : 0.2
-    const tick = () => {
-      t += phase === 'thinking' ? 0.06 : 0.13
-      setLevels(
-        Array.from({ length: VOICE_BAR_COUNT }, (_, i) => {
-          const wave =
-            0.22 +
-            Math.sin(t + i * 0.5) * 0.28 +
-            Math.sin(t * 1.6 + i * 0.85) * 0.14
-          return Math.min(1, Math.max(0.1, wave * amp))
-        }),
-      )
-      raf = requestAnimationFrame(tick)
-    }
-    raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(raf)
-  }, [active, phase])
-
-  const barClass =
-    accent === 'purple'
-      ? 'bg-gradient-to-t from-purple-700 to-violet-300'
-      : accent === 'emerald' || phase === 'listening'
-        ? 'bg-gradient-to-t from-emerald-600 to-teal-300'
-        : accent === 'zinc'
-          ? 'bg-gradient-to-t from-zinc-600 to-zinc-300'
-          : phase === 'speaking' || accent === 'sky'
-            ? 'bg-gradient-to-t from-sky-600 to-cyan-300'
-            : 'bg-gradient-to-t from-amber-600 to-yellow-300'
-
-  return (
-    <div className='flex h-7 items-end gap-0.5' aria-hidden>
-      {levels.map((h, i) => (
-        <span
-          key={i}
-          className={cn(
-            'w-0.5 rounded-full transition-[height,background-color] duration-100',
-            barClass,
-          )}
-          style={{ height: `${Math.round(h * 100)}%`, opacity: active ? 1 : 0.35 }}
-        />
-      ))}
-    </div>
-  )
-}
-
-function parseStepIcon(stepHint?: string): string {
-  if (!stepHint) return ''
-  const parts = stepHint.split('|')
-  return parts.length > 1 ? parts[0] : ''
-}
-
-function LiveModeStatus({
-  listening,
-  thinking,
-  speaking,
-  stepHint,
-  interimText,
-}: {
-  listening: boolean
-  thinking: boolean
-  speaking: boolean
-  stepHint?: string
-  interimText?: string
-}) {
-  const { mascot_name: mascotName, mascot_skin: mascotSkin } = useWorkspacePlatformConfig()
-  const stepIcon = parseStepIcon(stepHint)
-  const phase = speaking
-    ? 'speaking'
-    : thinking
-      ? 'thinking'
-      : listening
-        ? 'listening'
-        : 'idle'
-
-  // Mientras piensa, el avatar recorre etapas (sparkles→cog→brain→package) con dwell.
-  const thinkTone: 'purple' | 'emerald' | 'amber' =
-    stepIcon === 'brain'
-      ? 'purple'
-      : stepIcon === 'sparkles' ||
-          stepIcon === 'package' ||
-          stepIcon === 'package-search' ||
-          stepIcon === 'boxes' ||
-          stepIcon === 'warehouse'
-        ? 'emerald'
-        : 'amber'
-
-  const label =
-    phase === 'speaking'
-      ? `${mascotName} hablando`
-      : phase === 'thinking'
-        ? stepIcon === 'brain'
-          ? `${mascotName} razonando`
-          : stepIcon === 'package' || stepIcon === 'package-search'
-            ? `${mascotName} consultando`
-            : `${mascotName} pensando`
-        : phase === 'listening'
-          ? 'Te escucho'
-          : 'Live listo'
-
-  const hint =
-    phase === 'thinking' && stepHint
-      ? (stepHint.includes('|') ? stepHint.split('|').slice(1).join('|') : stepHint)
-      : phase === 'speaking'
-        ? ''
-        : phase === 'listening'
-          ? interimText?.trim() || ''
-          : ''
-
-  const shell =
-    phase === 'listening'
-      ? 'border-emerald-500/35 bg-emerald-500/10'
-      : phase === 'speaking'
-        ? 'border-sky-500/35 bg-sky-500/10'
-        : phase === 'thinking' && thinkTone === 'purple'
-          ? 'border-purple-500/35 bg-purple-500/10'
-          : phase === 'thinking' && thinkTone === 'emerald'
-            ? 'border-emerald-500/35 bg-emerald-500/10'
-            : phase === 'thinking'
-              ? 'border-amber-500/35 bg-amber-500/10'
-              : 'border-border/70 bg-muted/30'
-
-  return (
-    <div
-      className={cn(
-        'relative overflow-hidden rounded-2xl border px-3.5 py-3 shadow-sm transition-colors duration-700',
-        shell,
-      )}
-    >
-      <div
-        className={cn(
-          'pointer-events-none absolute inset-x-0 bottom-0 h-1 opacity-90 transition-colors duration-700',
-          phase === 'listening' && 'bg-gradient-to-r from-emerald-600 via-teal-400 to-emerald-500',
-          phase === 'speaking' && 'bg-gradient-to-r from-sky-600 via-cyan-400 to-indigo-500',
-          phase === 'thinking' && thinkTone === 'purple' && 'bg-gradient-to-r from-purple-600 via-violet-400 to-fuchsia-500',
-          phase === 'thinking' && thinkTone === 'emerald' && 'bg-gradient-to-r from-emerald-600 via-teal-400 to-green-500',
-          phase === 'thinking' && thinkTone === 'amber' && 'bg-gradient-to-r from-amber-600 via-yellow-400 to-orange-500',
-          phase === 'idle' && 'bg-gradient-to-r from-muted-foreground/20 to-muted-foreground/10',
-          phase === 'listening' && 'animate-pulse',
-        )}
-      />
-      <div className='flex items-center gap-3'>
-        <div className='relative flex h-16 w-16 shrink-0 items-center justify-center'>
-          <Mascot skin={mascotSkin} state={phase} size={72} />
-        </div>
-        <div className='min-w-0 flex-1'>
-          <p className='truncate text-sm font-semibold text-foreground transition-colors duration-300'>
-            {label}
-          </p>
-          {hint ? (
-            <p className='truncate text-xs text-muted-foreground'>{hint}</p>
-          ) : (
-            <p className='truncate text-xs text-muted-foreground'>
-              {phase === 'listening' ? 'Habla cuando quieras' : phase === 'idle' ? 'Modo voz activo' : ' '}
-            </p>
-          )}
-        </div>
-        <LiveWaveform
-          active={phase === 'listening' || phase === 'speaking' || phase === 'thinking'}
-          phase={phase}
-          accent={
-            phase === 'thinking'
-              ? thinkTone === 'purple'
-                ? 'purple'
-                : thinkTone === 'emerald'
-                  ? 'emerald'
-                  : 'amber'
-              : undefined
-          }
-        />
-      </div>
-    </div>
-  )
-}
 
 function AgentTrail({ steps, live = false }: { steps: AgentStep[]; live?: boolean }) {
-  const { mascot_name: mascotName } = useWorkspacePlatformConfig()
   const visible =
     steps.length > 0
       ? steps
@@ -2442,10 +2190,6 @@ function AgentTrail({ steps, live = false }: { steps: AgentStep[]; live?: boolea
           : 'border-border/60 bg-muted/40',
       )}
     >
-      <div className='mb-1.5 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground'>
-        <Sparkles className='h-3 w-3 animate-pulse text-emerald-400' />
-        {live ? `${mascotName || 'Aby'} en vivo` : `${mascotName || 'Aby'} trabajando`}
-      </div>
       <div className='flex flex-col gap-1'>
         {visible.map((step, i) => {
           const isLast = i === visible.length - 1

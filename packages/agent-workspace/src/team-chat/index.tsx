@@ -15,7 +15,6 @@ import {
   ScreenShare,
   Paperclip,
   FileIcon,
-  Bot,
   Hash,
 } from 'lucide-react'
 
@@ -53,6 +52,8 @@ import { useCall } from './call-provider'
 import type { CallKind } from '../lib/chrome-media'
 import { ABY_CHANNEL_ID, consumeTeamDraft, registerAbyInboxOpener, registerTeamChatInboxOpener } from '../lib/aby-widget'
 import { rememberAbyFocus, rememberTeamChannel } from '../lib/chat-context'
+import { Mascot } from '../workspace/mascot'
+import { useMascotFaceStore } from '../lib/mascot-face-store'
 const AbyChatPane = lazy(() =>
   import('../workspace/aby-chat-pane').then((m) => ({ default: m.AbyChatPane })),
 )
@@ -62,7 +63,8 @@ const WS_REACTION = 'INTERNAL_CHAT_REACTION'
 
 export function TeamChat() {
   const { t, i18n } = useTranslation()
-  const { mascot_name: mascotName } = useWorkspacePlatformConfig()
+  const { mascot_name: mascotName, mascot_skin: mascotSkin } = useWorkspacePlatformConfig()
+  const mascotState = useMascotFaceStore((s) => s.state)
   const locale = i18n.language?.startsWith('es') ? es : enUS
   const currentUser = useWorkspaceUser()
   const {
@@ -626,9 +628,7 @@ export function TeamChat() {
                         showAby && 'bg-muted',
                       )}
                     >
-                      <span className='bg-primary/15 text-primary flex size-10 shrink-0 items-center justify-center rounded-lg'>
-                        <Bot className='size-5' />
-                      </span>
+                      <Mascot skin={mascotSkin} size={40} state={mascotState} />
                       <div className='min-w-0 flex-1'>
                         <div className='flex items-center gap-2'>
                           <span className='flex-1 truncate text-sm font-semibold'>{mascotName || 'Aby'}</span>
@@ -695,9 +695,7 @@ export function TeamChat() {
                     <ArrowLeft className='rtl:rotate-180' />
                   </Button>
                   <div className='flex min-w-0 items-center gap-2 lg:gap-4'>
-                    <span className='bg-primary/15 text-primary flex size-10 shrink-0 items-center justify-center rounded-lg'>
-                      <Bot className='size-5' />
-                    </span>
+                    <Mascot skin={mascotSkin} size={40} state={mascotState} />
                     <div className='min-w-0'>
                       <span className='block truncate text-sm font-medium lg:text-base'>{mascotName || 'Aby'}</span>
                       <p className='text-muted-foreground truncate text-xs'>

@@ -61,6 +61,17 @@ function useSoftMascotCss() {
       .mascot-size-soft .mascot-eye-idle {
         animation-name: mascot-blink-soft !important;
       }
+      /* Navy face: the shared blue accent disappears into the screen, and a
+         4px stroke shrinks under a pixel at avatar size. Ice + a heavier
+         line is local so it wins even if the prebundled skin is stale. */
+      [data-mascot-skin='gobi-navy'] svg g[stroke-linecap='round'],
+      [data-mascot-skin='gobi-navy'] svg path[stroke-linecap='round'] {
+        stroke: #f4f8ff;
+        stroke-width: 6.5;
+      }
+      [data-mascot-skin='gobi-navy'] svg .mascot-tread circle {
+        fill: #f4f8ff;
+      }
       /* Never disable tread / bob / antenna — spinning is the brand motion. */
     `
   }, [])
@@ -81,12 +92,14 @@ function asSdkMascotState(state: MascotState | string | undefined): MascotState 
   }
 }
 
-export function Mascot({ soft, className, size = 32, state, ...props }: MascotProps) {
+export function Mascot({ soft, className, size = 32, state, skin, ...props }: MascotProps) {
   useSoftMascotCss()
   const sizeSoft = soft ?? size < 48
   if (SdkMascot) {
     return (
       <span
+        data-mascot-skin={skin}
+        data-mascot-state={asSdkMascotState(state) || 'idle'}
         className={cn(
           'inline-flex leading-none',
           sizeSoft && 'mascot-size-soft',
@@ -96,6 +109,7 @@ export function Mascot({ soft, className, size = 32, state, ...props }: MascotPr
       >
         <SdkMascot
           {...props}
+          skin={skin}
           state={asSdkMascotState(state) as ComponentProps<typeof SdkMascot>['state']}
           size={size}
         />
