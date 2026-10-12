@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Mascot } from '@asteby/metacore-app-providers'
-import { CopilotChat } from './copilot-chat'
+import { CopilotChat, type CopilotChatProps } from './copilot-chat'
 import { useCopilot } from './context'
 import { AGENT_FOCUS, AGENT_PANEL } from './surfaces'
 import { useDraggableFab, type FabPosition } from './use-draggable-fab'
@@ -10,10 +10,16 @@ export interface CopilotWidgetProps {
   defaultPosition?: FabPosition
   defaultOpen?: boolean
   zIndex?: number
+  /** Forwarded to `CopilotChat`: past sessions for the picker. */
+  sessions?: CopilotChatProps['sessions']
+  /** Forwarded to `CopilotChat`: called when the user picks a session. */
+  onSelectSession?: CopilotChatProps['onSelectSession']
+  /** Forwarded to `CopilotChat`: shows the demo badge (overrides the provider). */
+  demo?: CopilotChatProps['demo']
 }
 
 /** Floating action button + anchored chat panel. Renders nothing without `canChat`. */
-export function CopilotWidget({ defaultPosition, defaultOpen = false, zIndex = 50 }: CopilotWidgetProps) {
+export function CopilotWidget({ defaultPosition, defaultOpen = false, zIndex = 50, sessions, onSelectSession, demo }: CopilotWidgetProps) {
   const { permissions, branding, labels } = useCopilot()
   const [open, setOpen] = useState(defaultOpen)
   const fab = useDraggableFab(defaultPosition)
@@ -31,6 +37,24 @@ export function CopilotWidget({ defaultPosition, defaultOpen = false, zIndex = 5
     } else {
       fabRef.current?.focus()
     }
+  }, [open])
+
+  // Escape closes the panel even when focus sits outside it (e.g. a toast).
+  // Yields to anything else that claims the key: handled events, IME
+  // composition, other modal dialogs and text fields outside the panel.
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || e.isComposing) return
+      const t = e.target instanceof Element ? e.target : null
+      if (t && !panelRef.current?.contains(t)) {
+        if (t.closest('[aria-modal="true"], dialog[open]')) return
+        if (t.closest('input, textarea, select, [contenteditable]:not([contenteditable="false"])')) return
+      }
+      setOpen(false)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
   }, [open])
   if (!permissions.canChat) return null
   const { panelLayout: p } = fab
@@ -55,7 +79,7 @@ export function CopilotWidget({ defaultPosition, defaultOpen = false, zIndex = 5
             overflow: 'hidden',
           }}
         >
-          <CopilotChat onClose={() => setOpen(false)} />
+          <CopilotChat onClose={() => setOpen(false)} sessions={sessions} onSelectSession={onSelectSession} demo={demo} />
         </div>
       )}
       <button
