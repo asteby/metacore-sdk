@@ -1,5 +1,11 @@
 # @asteby/metacore-ai-chat
 
+## 1.0.1
+
+### Patch Changes
+
+- 3332536: Fix crash when opening the chat: the scroll effect returned the Promise from `scrollIntoView` as its cleanup, which made React throw (`destroy is not a function`) in Chromium.
+
 ## 1.0.0
 
 ### Patch Changes
