@@ -36,6 +36,33 @@ Default REST contract (`createHttpChatClient`):
 Different backend? Implement `ChatClient` (`send` required; `listSessions`,
 `loadHistory`, `decideProposal` optional).
 
+## Proposal format
+
+A reply may carry `proposals`. Both shapes are accepted and normalized (`normalizeProposal`)
+on `ChatClient.send`, `loadHistory` and the HTTP client:
+
+```jsonc
+// A) display shape
+{ "id": "p1", "title": "Archivar hallazgo", "summary": "Motivo…", "status": "pending" }
+// B) action shape: title = "action · model", summary = compact JSON of payload
+{ "id": "p2", "action": "archive", "model": "finding", "payload": { "id": 7 }, "status": "pending" }
+```
+
+`id` is required (string or number, coerced to string); `status` is `pending` (default) | `approved` | `rejected`.
+An explicit `title`/`summary` wins over the derived ones. Rows without `id` or without anything to show are dropped.
+`action`, `model` and `payload` are kept on the normalized proposal so `decideProposal` hosts can use them.
+
+## Accessibility and states
+
+- `CopilotWidget` panel is `role="dialog"` (`aria-label` = branding name, `aria-modal="false"`: the page stays usable).
+  Focus moves to the composer on open and returns to the FAB on close; `Escape` closes (any `CopilotChat` with `onClose`).
+- Controls are at least 44x44px with a visible focus ring; animations honour `prefers-reduced-motion`.
+- Offline (`navigator.onLine`) shows a status banner and disables sending. Failed turns show an alert with `labels.retry`;
+  `loadHistory` and `decideProposal` failures show an alert (history with retry) instead of failing silently.
+- `demo` on `CopilotProvider` (or `CopilotChat`) renders the `labels.demo` badge ("Datos demostrativos").
+- Optional session picker: `<CopilotChat sessions={list} sessionId={id} onSelectSession={setId} />`
+  (get `list` from `client.listSessions()`).
+
 ## Adopting it
 
 ### ops (ERP)

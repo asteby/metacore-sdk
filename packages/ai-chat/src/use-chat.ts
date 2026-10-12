@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useReducer, useRef } from 'react'
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import { normalizeProposals } from './proposals'
 import { chatReducer, initialChatState } from './chat-state'
 import { nextMessageId } from './client'
 import { useCopilot } from './context'
@@ -14,17 +15,29 @@ export function useChat(initialSessionId?: string | null) {
 
   useEffect(() => () => abortRef.current?.abort(), [])
 
+  const [historyNonce, setHistoryNonce] = useState(0)
+  const [decideFailed, setDecideFailed] = useState(false)
+
   useEffect(() => {
     if (!initialSessionId || !client.loadHistory) return
     let cancelled = false
     client
       .loadHistory(initialSessionId)
-      .then((messages) => !cancelled && dispatch({ type: 'history', sessionId: initialSessionId, messages }))
-      .catch(() => {})
+      .then((messages) => {
+        if (cancelled) return
+        dispatch({
+          type: 'history',
+          sessionId: initialSessionId,
+          messages: messages.map((m) => ({ ...m, proposals: normalizeProposals(m.proposals) })),
+        })
+      })
+      .catch(() => {
+        if (!cancelled) dispatch({ type: 'historyError' })
+      })
     return () => {
       cancelled = true
     }
-  }, [client, initialSessionId])
+  }, [client, initialSessionId, historyNonce])
 
   const send = useCallback(
     async (text: string, attachments?: ChatAttachment[]) => {
@@ -48,7 +61,7 @@ export function useChat(initialSessionId?: string | null) {
             id: nextMessageId(),
             role: 'ai',
             content: res.reply,
-            proposals: res.proposals,
+            proposals: normalizeProposals(res.proposals),
             attachments: res.attachments,
           },
         })
@@ -63,8 +76,13 @@ export function useChat(initialSessionId?: string | null) {
   const decide = useCallback(
     async (id: string, approve: boolean) => {
       if (!client.decideProposal) return
-      await client.decideProposal(id, approve)
-      dispatch({ type: 'proposal', id, status: approve ? 'approved' : 'rejected' })
+      setDecideFailed(false)
+      try {
+        await client.decideProposal(id, approve)
+        dispatch({ type: 'proposal', id, status: approve ? 'approved' : 'rejected' })
+      } catch {
+        setDecideFailed(true)
+      }
     },
     [client],
   )
@@ -74,5 +92,18 @@ export function useChat(initialSessionId?: string | null) {
     dispatch({ type: 'reset' })
   }, [])
 
-  return { ...state, send, decide, reset }
+  /** Re-send the turn that failed (drops the error bubble first). */
+  const retry = useCallback(async () => {
+    const s = stateRef.current
+    const last = s.messages[s.messages.length - 1]
+    if (!last?.error || s.loading) return
+    const prev = s.messages[s.messages.length - 2]
+    dispatch({ type: 'discardFailed' })
+    if (prev?.role === 'user') await send(prev.content, prev.attachments)
+  }, [send])
+
+  const reloadHistory = useCallback(() => setHistoryNonce((n) => n + 1), [])
+  const clearDecideError = useCallback(() => setDecideFailed(false), [])
+
+  return { ...state, decideFailed, clearDecideError, send, decide, reset, retry, reloadHistory }
 }

@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Mascot } from '@asteby/metacore-app-providers'
 import { CopilotChat } from './copilot-chat'
 import { useCopilot } from './context'
-import { AGENT_PANEL } from './surfaces'
+import { AGENT_FOCUS, AGENT_PANEL } from './surfaces'
 import { useDraggableFab, type FabPosition } from './use-draggable-fab'
 
 export interface CopilotWidgetProps {
@@ -17,6 +17,21 @@ export function CopilotWidget({ defaultPosition, defaultOpen = false, zIndex = 5
   const { permissions, branding, labels } = useCopilot()
   const [open, setOpen] = useState(defaultOpen)
   const fab = useDraggableFab(defaultPosition)
+  const fabRef = useRef<HTMLButtonElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const wasOpen = useRef(defaultOpen)
+
+  // Focus management: into the composer on open, back to the FAB on close.
+  useEffect(() => {
+    if (open === wasOpen.current) return
+    wasOpen.current = open
+    if (open) {
+      const target = panelRef.current?.querySelector<HTMLElement>('textarea') ?? panelRef.current
+      target?.focus()
+    } else {
+      fabRef.current?.focus()
+    }
+  }, [open])
   if (!permissions.canChat) return null
   const { panelLayout: p } = fab
 
@@ -24,6 +39,11 @@ export function CopilotWidget({ defaultPosition, defaultOpen = false, zIndex = 5
     <>
       {open && (
         <div
+          ref={panelRef}
+          role="dialog"
+          aria-modal="false" /* non-modal: the page stays usable behind the floating panel */
+          aria-label={branding.name ?? 'Copiloto'}
+          tabIndex={-1}
           className={AGENT_PANEL}
           style={{
             position: 'fixed',
@@ -42,7 +62,8 @@ export function CopilotWidget({ defaultPosition, defaultOpen = false, zIndex = 5
         type="button"
         aria-label={open ? labels.close : labels.open}
         aria-expanded={open}
-        className="fixed flex size-12 items-center justify-center rounded-full border bg-background shadow-lg"
+        ref={fabRef}
+        className={`fixed flex size-12 items-center justify-center rounded-full border bg-background shadow-lg ${AGENT_FOCUS}`}
         style={{ ...fab.fabStyle, zIndex }}
         onPointerDown={fab.onFabPointerDown}
         onPointerMove={fab.onFabPointerMove}

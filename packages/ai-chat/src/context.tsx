@@ -15,6 +15,8 @@ export interface CopilotContextValue {
   labels: CopilotLabels
   /** Explicit starter prompts; null means "use useAgentSuggestions()". */
   suggestions: readonly string[] | null
+  /** Show the "demo data" badge. */
+  demo: boolean
 }
 
 const CopilotContext = createContext<CopilotContextValue | null>(null)
@@ -27,6 +29,8 @@ export interface CopilotProviderProps {
   labels?: Partial<CopilotLabels>
   /** Starter prompts. Omit to resolve them from platform branding. */
   suggestions?: readonly string[]
+  /** Mark the copilot as running on demo data: renders the `labels.demo` badge. */
+  demo?: boolean
   children: ReactNode
 }
 
@@ -36,6 +40,7 @@ export function CopilotProvider({
   branding,
   labels,
   suggestions,
+  demo = false,
   children,
 }: CopilotProviderProps) {
   const value = useMemo<CopilotContextValue>(
@@ -45,8 +50,9 @@ export function CopilotProvider({
       branding: branding ?? {},
       labels: { ...DEFAULT_LABELS, ...labels },
       suggestions: suggestions ?? null,
+      demo,
     }),
-    [client, permissions, branding, labels, suggestions],
+    [client, permissions, branding, labels, suggestions, demo],
   )
   return <CopilotContext.Provider value={value}>{children}</CopilotContext.Provider>
 }

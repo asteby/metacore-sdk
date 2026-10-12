@@ -32,4 +32,16 @@ describe('chatReducer', () => {
       initialChatState,
     )
   })
+
+  it('discardFailed drops the error bubble and the user turn behind it', () => {
+    const s = chatReducer(
+      { ...initialChatState, messages: [msg('0', 'ai'), msg('1', 'user'), { ...msg('e', 'ai'), error: true }] },
+      { type: 'discardFailed' },
+    )
+    expect(s.messages.map((m) => m.id)).toEqual(['0'])
+  })
+
+  it('flags a history error', () => {
+    expect(chatReducer(initialChatState, { type: 'historyError' }).historyError).toBe(true)
+  })
 })

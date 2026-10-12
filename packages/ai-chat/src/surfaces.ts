@@ -35,6 +35,10 @@ export const AGENT_CAPSULE = [
   'transition-[border-color,box-shadow] duration-200 focus-within:[border-color:color-mix(in_oklab,var(--primary)_45%,transparent)]',
 ].join(' ')
 
+/** Visible keyboard focus ring for every interactive control. */
+export const AGENT_FOCUS =
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 motion-reduce:transition-none'
+
 /** Result / action card inside a reply. */
 export const AGENT_CARD = [
   'rounded-xl border bg-[var(--surface-raised,var(--card))]',

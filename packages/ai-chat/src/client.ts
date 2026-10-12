@@ -1,3 +1,4 @@
+import { normalizeProposals } from './proposals'
 import type {
   ChatClient,
   ChatMessage,
@@ -24,7 +25,7 @@ export function toChatMessage(row: any): ChatMessage {
     role: row?.role === 'user' ? 'user' : 'ai',
     content: String(row?.content ?? row?.message ?? ''),
     attachments: Array.isArray(row?.attachments) ? row.attachments : undefined,
-    proposals: Array.isArray(row?.proposals) ? row.proposals : undefined,
+    proposals: normalizeProposals(row?.proposals),
   }
 }
 
@@ -49,7 +50,7 @@ export function createHttpChatClient(http: HttpLike, opts: HttpChatClientOptions
       return {
         sessionId: String(d.session_id ?? input.sessionId ?? ''),
         reply: String(d.reply ?? d.response ?? d.message ?? ''),
-        proposals: Array.isArray(d.proposals) ? d.proposals : undefined,
+        proposals: normalizeProposals(d.proposals),
         attachments: Array.isArray(d.attachments) ? d.attachments : undefined,
       }
     },

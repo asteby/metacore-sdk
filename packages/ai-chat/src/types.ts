@@ -12,6 +12,21 @@ export interface ChatProposal {
   title: string
   summary?: string
   status?: 'pending' | 'approved' | 'rejected'
+  /** Preserved from the `action/model/payload` shape, when that was used. */
+  action?: string
+  model?: string
+  payload?: unknown
+}
+
+/** Wire shape accepted for proposals: `title/summary` or `action/model/payload`. */
+export interface RawProposal {
+  id: string | number
+  title?: string
+  summary?: string
+  action?: string
+  model?: string
+  payload?: unknown
+  status?: 'pending' | 'approved' | 'rejected'
 }
 
 export interface ChatMessage {
@@ -93,6 +108,13 @@ export interface CopilotLabels {
   newChat: string
   emptyTitle: string
   error: string
+  retry: string
+  offline: string
+  demo: string
+  decideError: string
+  historyError: string
+  sessions: string
+  newSession: string
 }
 
 export const DEFAULT_LABELS: CopilotLabels = {
@@ -107,4 +129,11 @@ export const DEFAULT_LABELS: CopilotLabels = {
   newChat: 'Nueva conversación',
   emptyTitle: '¿En qué te ayudo?',
   error: 'No pude completar la solicitud. Intenta de nuevo.',
+  retry: 'Reintentar',
+  offline: 'Sin conexión. Podrás enviar mensajes cuando vuelva la red.',
+  demo: 'Datos demostrativos',
+  decideError: 'No se pudo registrar la decisión. Intenta de nuevo.',
+  historyError: 'No se pudo cargar la conversación.',
+  sessions: 'Conversaciones',
+  newSession: 'Conversación actual',
 }
