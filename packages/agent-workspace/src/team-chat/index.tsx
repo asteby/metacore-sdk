@@ -554,7 +554,7 @@ export function TeamChat() {
           <div className='relative flex w-full min-h-0 flex-1 flex-col gap-2 overflow-hidden sm:w-56 sm:flex-none lg:w-72 2xl:w-80'>
             {/* No sticky on mobile: top-16 under the SDK header left a huge empty gap.
                 Title/search stay pinned via flex; only the channel list scrolls. */}
-            <div className='shrink-0 -mx-4 bg-background px-4 pb-2 sm:mx-0 sm:p-0'>
+            <div className='shrink-0 -mx-4 px-4 pb-2 sm:mx-0 sm:p-0'>
               <div className='flex items-center justify-between py-1.5 sm:py-2'>
                 <div className='flex gap-2'>
                   <h1 className='text-2xl font-bold'>{t('team_chat.title', 'Mensajes')}</h1>
@@ -674,7 +674,7 @@ export function TeamChat() {
             <div
               className={cn(
                 // Mobile: own the viewport above app chrome so back/X aren't covered.
-                'bg-background fixed inset-0 z-[110] flex w-full flex-col border shadow-xs',
+                'bg-background sm:bg-card fixed inset-0 z-[110] flex w-full flex-col border shadow-xs',
                 'sm:static sm:inset-auto sm:z-auto sm:flex-1 sm:rounded-md',
               )}
               style={{
@@ -712,7 +712,7 @@ export function TeamChat() {
           ) : activeChannel ? (
             <div
               className={cn(
-                'bg-background fixed inset-0 z-[110] flex w-full flex-col border shadow-xs',
+                'bg-background sm:bg-card fixed inset-0 z-[110] flex w-full flex-col border shadow-xs',
                 'sm:static sm:inset-auto sm:z-auto sm:flex sm:flex-1 sm:rounded-md',
               )}
               style={{
