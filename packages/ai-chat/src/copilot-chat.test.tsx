@@ -68,4 +68,26 @@ describe('CopilotChat', () => {
     fireEvent.click(screen.getByLabelText('Abrir copiloto'))
     expect(screen.getByRole('log')).toBeTruthy()
   })
+
+  it('does not crash when scrollIntoView returns a Promise (effect must not return it as cleanup)', async () => {
+    const orig = Element.prototype.scrollIntoView
+    Element.prototype.scrollIntoView = vi.fn(() => Promise.resolve()) as any
+    const errors: unknown[] = []
+    const spy = vi.spyOn(console, 'error').mockImplementation((...a) => void errors.push(a))
+    try {
+      const c = client()
+      render(
+        <CopilotProvider client={c} suggestions={['Hola']}>
+          <CopilotChat />
+        </CopilotProvider>,
+      )
+      fireEvent.click(screen.getByText('Hola'))
+      await screen.findByText('respuesta')
+      cleanup() // runs effect cleanups; a Promise cleanup throws "destroy is not a function"
+      expect(errors.flat().map(String).join('\n')).not.toMatch(/destroy|cleanup function/i)
+    } finally {
+      spy.mockRestore()
+      Element.prototype.scrollIntoView = orig
+    }
+  })
 })

@@ -91,7 +91,10 @@ export function CopilotChat({ className, sessionId, onClose }: CopilotChatProps)
   const [draft, setDraft] = useState('')
   const endRef = useRef<HTMLDivElement>(null)
   const scroll = () => endRef.current?.scrollIntoView?.({ block: 'end' })
-  useEffect(scroll, [chat.messages.length, chat.loading])
+  useEffect(() => {
+    // Do not return scroll()'s value: scrollIntoView may yield a Promise, which React would treat as a cleanup.
+    scroll()
+  }, [chat.messages.length, chat.loading])
 
   if (!permissions.canChat) {
     return (
