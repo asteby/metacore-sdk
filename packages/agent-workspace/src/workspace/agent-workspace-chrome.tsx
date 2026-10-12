@@ -14,6 +14,7 @@ import { cn } from '@asteby/metacore-ui'
 import { stripMarkdownLite } from '../lib/plain-text'
 import { Mascot } from './mascot'
 import { scrubToolDump } from '../lib/aby-tool-dump'
+import { useAgentSuggestions } from '../lib/agent-suggestions'
 import { AGENT_ENTER, AGENT_PANEL } from './agent-surfaces'
 
 export type WorkspaceSession = {
@@ -52,13 +53,6 @@ function groupSessions(sessions: WorkspaceSession[]): Group[] {
   return out
 }
 
-const SUGGESTIONS = [
-  'Buscar un cliente',
-  'Crear un pedido',
-  '¿Cómo va el inventario?',
-  'Resumen de ventas de hoy',
-]
-
 export function AgentWorkspaceChrome({
   mascotName,
   mascotSkin,
@@ -91,6 +85,7 @@ export function AgentWorkspaceChrome({
   onSuggestion: (text: string) => void
 }) {
   const [query, setQuery] = useState('')
+  const suggestions = useAgentSuggestions()
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     if (!q) return sessions
@@ -259,7 +254,7 @@ export function AgentWorkspaceChrome({
                 {mascotName} puede consultar datos, crear registros y guiarte.
               </p>
               <div className="mt-8 flex max-w-xl flex-wrap justify-center gap-2">
-                {SUGGESTIONS.map((s) => (
+                {suggestions.map((s) => (
                   <button
                     key={s}
                     type="button"

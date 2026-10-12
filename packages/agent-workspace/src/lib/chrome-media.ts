@@ -663,6 +663,8 @@ export type AbyPiPModel = {
   micMuted?: boolean
   /** Pending proposal — show Aceptar/Rechazar in the PiP. */
   proposal?: { id: string; ids?: string[]; title: string; deciding?: boolean } | null
+  /** Org's mascot display name (branding.mascot_name). Falls back to "Aby". */
+  mascotName?: string
 }
 
 const ABY_PIP_PHASE: Record<
@@ -1027,7 +1029,7 @@ export function syncAbyDocumentPiP(pip: Window, model: AbyPiPModel): void {
       } else if (muted) {
         main = 'Mic apagado'
       } else if (model.phase === 'speaking') {
-        main = hint && !/^cuando termine/i.test(hint) ? hint : 'Aby hablando…'
+        main = hint && !/^cuando termine/i.test(hint) ? hint : `${model.mascotName || 'Aby'} hablando…`
       } else if (model.phase === 'listening') {
         main = hint || 'Te escucho'
       } else if (model.phase === 'thinking') {

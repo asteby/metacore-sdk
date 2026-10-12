@@ -47,6 +47,7 @@ export function useSpeechDictation({
   onFinal,
   onInterim,
   continuous = false,
+  mascotName = 'Aby',
 }: {
   lang?: string
   onFinal: (transcript: string) => void
@@ -54,6 +55,8 @@ export function useSpeechDictation({
   onInterim?: (transcript: string) => void
   /** Keep mic open (live mode). Default false = one utterance then stop. */
   continuous?: boolean
+  /** Org's mascot display name (branding.mascot_name), for the mic-denied toast. */
+  mascotName?: string
 }) {
   const [listening, setListening] = useState(false)
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
@@ -176,7 +179,7 @@ export function useSpeechDictation({
         if (code === 'not-allowed') {
           wantListenRef.current = false
           setListening(false)
-          toast.error('Activa el micrófono para Aby (ajustes del navegador o de la app).', {
+          toast.error(`Activa el micrófono para ${mascotName} (ajustes del navegador o de la app).`, {
             id: 'aby-speech-denied',
           })
           return
@@ -256,7 +259,7 @@ export function useSpeechDictation({
     }
 
     begin()
-  }, [lang])
+  }, [lang, mascotName])
 
   const toggle = useCallback(() => {
     if (listening && recognitionRef.current) {

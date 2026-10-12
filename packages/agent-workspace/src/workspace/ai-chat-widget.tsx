@@ -438,6 +438,7 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
             thoughts: st.thoughts,
             micMuted: st.micMuted,
             proposal: st.pendingProposal,
+            mascotName,
           },
           { width: 420, height: 340 },
         )
@@ -483,7 +484,7 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
         toast.message('No se pudo abrir el PiP flotante; se minimiza en la página.')
       }
     }
-  }, [showAby, abyLiveActive, closeAbyDocPip, openAbyLive])
+  }, [showAby, abyLiveActive, closeAbyDocPip, openAbyLive, mascotName])
 
   minimizeChatRef.current = minimizeChat
 
@@ -499,6 +500,7 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
       thoughts: abyLiveThoughts,
       micMuted: abyLiveMicMuted,
       proposal: abyPendingProposal,
+      mascotName,
     })
   }, [
     abyDocPipOpen,
@@ -508,6 +510,7 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
     abyLiveThoughts,
     abyLiveMicMuted,
     abyPendingProposal,
+    mascotName,
   ])
 
   // Live off or widget closed → tear down floating PiP.
