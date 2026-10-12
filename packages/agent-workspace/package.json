@@ -1,0 +1,80 @@
+{
+  "name": "@asteby/metacore-agent-workspace",
+  "version": "0.1.0",
+  "description": "Metacore agent workspace \u2014 full agent chat (history, voice, attachments, charts, proposals), floating widget, team chat and calls, with every host concern injected through ports",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asteby/metacore-sdk",
+    "directory": "packages/agent-workspace"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@asteby/metacore-app-providers": "workspace:^",
+    "@asteby/metacore-runtime-react": "workspace:^",
+    "@asteby/metacore-ui": "workspace:^",
+    "@tanstack/react-query": ">=5",
+    "@tanstack/react-router": ">=1",
+    "date-fns": ">=3",
+    "lucide-react": ">=0.460",
+    "react": ">=18",
+    "react-dom": ">=18",
+    "react-i18next": ">=14",
+    "recharts": ">=2",
+    "sonner": ">=1",
+    "zustand": ">=4",
+    "@asteby/metacore-starter-core": "workspace:^"
+  },
+  "dependencies": {
+    "driver.js": "^1.4.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "@emoji-mart/data": "^1.2.1",
+    "@emoji-mart/react": "^1.1.1",
+    "emoji-mart": "^5.6.0"
+  },
+  "devDependencies": {
+    "@asteby/metacore-app-providers": "workspace:*",
+    "@asteby/metacore-runtime-react": "workspace:*",
+    "@asteby/metacore-ui": "workspace:*",
+    "@tanstack/react-query": "^5.95.0",
+    "@tanstack/react-router": "^1.168.0",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "date-fns": "^4.0.0",
+    "happy-dom": "^20.10.2",
+    "lucide-react": "^1.0.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-i18next": "^17.0.0",
+    "recharts": "^3.8.1",
+    "sonner": "^2.0.0",
+    "typescript": "^6.0.0",
+    "vitest": "^4.0.0",
+    "zustand": "^5.0.0",
+    "@asteby/metacore-starter-core": "workspace:*"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
