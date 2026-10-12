@@ -10,8 +10,13 @@ export interface UseMyPermissionsOptions {
   fetch: () => Promise<MyPermissions>
   /** Signed-in user id; the query is disabled while empty. */
   userId: string | undefined | null
-  /** Cache scope (org/user) for the persisted first-paint snapshot. */
-  scope: string
+  /**
+   * Cache scope (org/user) for the persisted first-paint snapshot. When
+   * null/undefined (e.g. before the org is known) the query still runs, but
+   * nothing is read from or written to the snapshot: a scopeless entry could
+   * leak one org's capabilities to another on a shared browser.
+   */
+  scope: string | null | undefined
   /** localStorage namespace of the snapshot. Default `metacore:permissions-me`. */
   snapshotKey?: string
   staleTime?: number
