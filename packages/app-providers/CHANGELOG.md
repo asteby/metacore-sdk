@@ -1,5 +1,12 @@
 # @asteby/metacore-app-providers
 
+## 146.2.0
+
+### Minor Changes
+
+- aadf22c: Copilot starter prompts become tenant branding: `PlatformBranding` gains an optional `agent_suggestions: string[]`, and the new `useAgentSuggestions(fallback?)` hook (plus the pure `resolveAgentSuggestions` and `DEFAULT_AGENT_SUGGESTIONS`) reads them from `PlatformConfigProvider`, ignoring blanks and falling back to a neutral set. A new vertical gets its own empty-state prompts from its backend config instead of hardcoding them in the chat component.
+- e82a12a: One face for every copilot avatar on screen: `usePublishMascotFace(state)` publishes a chat surface's `MascotState` while it is mounted and returns the shared face, `useMascotFace()` reads it, and `mascotFaceStore` / `createMascotFaceStore()` / `pickMascotFace()` expose the framework-free store. The most active state wins (`error` > `speaking` > `processing` > `thinking` > `listening` > `happy` > `idle`), so a hidden idle chat pane can no longer paint over a pane that is thinking. No new dependency (`useSyncExternalStore`).
+
 ## 146.1.0
 
 ### Minor Changes

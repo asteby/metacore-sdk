@@ -1,5 +1,11 @@
 # @asteby/metacore-auth
 
+## 31.1.0
+
+### Minor Changes
+
+- 3cbb8c6: New `GradientShowcase` in `@asteby/metacore-auth/showcases` (also `/showcases/gradient`): a decorative, CSS-only gradient backdrop for the sign-in showcase column. It follows the theme's `--primary` by default, takes custom `colors`/`angle`, optional blobs and scrim, and a `children` slot (or `title`/`subtitle`/`footer`) for content. Brand-neutral; no framer-motion needed. Also exports `buildGradient` and `DEFAULT_GRADIENT_COLORS`.
+
 ## 31.0.0
 
 ### Patch Changes
