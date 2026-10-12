@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-org-ai",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Metacore org AI settings - provider/model/API-key per organization and the Claude connect flow, with injected HTTP client, i18n and notifications.",
   "license": "Apache-2.0",
   "repository": {
