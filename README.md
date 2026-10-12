@@ -106,6 +106,7 @@ All published as `@asteby/metacore-*` on npm under Apache-2.0. Versions reflect 
 | [`@asteby/metacore-tools`](./packages/tools) | TypeScript client for the kernel Tools runtime — execution, registry, validation. | alpha |
 | [`@asteby/metacore-websocket`](./packages/websocket) | WebSocket provider — auto-reconnect, typed messages, channel subscriptions. | beta |
 | [`@asteby/metacore-notifications`](./packages/notifications) | Notifications dropdown, app badge, real-time WebSocket updates. | stable |
+| [`@asteby/metacore-ai-chat`](./packages/ai-chat) | Copilot chat: widget, panel, draggable FAB, injectable client/permissions/branding. | beta |
 | [`@asteby/metacore-webhooks`](./packages/webhooks) | Webhooks management UI — list, create, logs, test/replay, signing secrets. | stable |
 | [`@asteby/metacore-pwa`](./packages/pwa) | PWA helpers — Vite plugin wrapper, install/update prompts, push, offline. | beta |
 | [`@asteby/metacore-app-providers`](./packages/app-providers) | Generic providers — direction, font, layout, search palette. | beta |
