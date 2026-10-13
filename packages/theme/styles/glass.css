@@ -19,7 +19,14 @@
  * such as `bg-card` or `hover:bg-muted/50` in `@layer utilities`.
  */
 
-/* ─── Tokens ─── */
+/* ─── Tokens ───
+ * Readability floor: text never sits on the bare gradient. Every text
+ * surface (--background on the inset, --card, --popover, --sidebar) keeps an
+ * alpha high enough that, composited over the BRIGHTEST point of the backdrop
+ * (all three gradient peaks stacked, no blur), its foreground still clears
+ * WCAG AA — src/tokens-contrast.test.ts measures exactly that and fails CI
+ * when a brand pack lowers those alphas or brightens the blobs too far.
+ */
 [data-ui-theme='glass'] {
   --radius: 1.1rem;
   --font-sans: Manrope, Inter, sans-serif;
@@ -38,7 +45,8 @@
   --accent-foreground: oklch(0.24 0.04 250);
   /* Inner separators: a dark hairline reads on white glass, a white one doesn't. */
   --border: oklch(0.35 0.03 250 / 0.12);
-  --input: oklch(0.35 0.03 250 / 0.14);
+  /* Control boundary: ≥ 3:1 on the composited card (WCAG 1.4.11). */
+  --input: oklch(0.4 0.03 250 / 0.62);
   --sidebar: oklch(1 0 0 / 0.45);
   --sidebar-foreground: oklch(0.26 0.03 250);
   --sidebar-accent: oklch(1 0 0 / 0.6);
@@ -107,7 +115,7 @@
   --accent: oklch(1 0 0 / 0.1);
   --accent-foreground: oklch(0.97 0.01 250);
   --border: oklch(1 0 0 / 0.1);
-  --input: oklch(1 0 0 / 0.12);
+  --input: oklch(1 0 0 / 0.36);
   --sidebar: oklch(0.2 0.03 255 / 0.5);
   --sidebar-foreground: oklch(0.94 0.01 250);
   --sidebar-accent: oklch(1 0 0 / 0.1);

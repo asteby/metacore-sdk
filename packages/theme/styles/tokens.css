@@ -1,8 +1,18 @@
 :root {
-  /* Status hues for chips and badges (text-safe on --background). */
-  --success: oklch(0.56 0.14 155);
-  --warning: oklch(0.6 0.15 65);
-  --info: oklch(0.55 0.13 235);
+  /*
+   * Contrast contract (enforced by src/tokens-contrast.test.ts, WCAG 2.x AA):
+   * every *-foreground ≥ 4.5:1 on its surface; --primary, --destructive and
+   * the status hues ≥ 4.5:1 as text on --card (and on their own 14% tint,
+   * which is how Badge paints soft chips); --input (control boundary),
+   * --ring at 50% (focus) and --chart-1..8 ≥ 3:1 on --card.
+   */
+  /* Status hues for chips and badges (text-safe on --card and on their tint). */
+  --success: oklch(0.48 0.13 155);
+  --success-foreground: oklch(1 0 0);
+  --warning: oklch(0.5 0.13 60);
+  --warning-foreground: oklch(1 0 0);
+  --info: oklch(0.49 0.13 235);
+  --info-foreground: oklch(1 0 0);
 
   /*
    * Semantic surfaces for floating UI outside the metacore-ui primitives
@@ -27,24 +37,37 @@
   --card-foreground: oklch(0 0 0);
   --popover: oklch(0.9911 0 0);
   --popover-foreground: oklch(0 0 0);
-  --primary: oklch(0.55 0.14 175);
+  --primary: oklch(0.51 0.14 175);
   --primary-foreground: oklch(1.0000 0 0);
   --secondary: oklch(0.9540 0.0063 175);
   --secondary-foreground: oklch(0.1344 0 0);
   --muted: oklch(0.9702 0 0);
   --muted-foreground: oklch(0.4386 0 0);
   --accent: oklch(0.94 0.03 175);
-  --accent-foreground: oklch(0.5445 0.12 175);
-  --destructive: oklch(0.6290 0.1902 23.0704);
+  --accent-foreground: oklch(0.49 0.11 175);
+  --destructive: oklch(0.52 0.19 23);
   --destructive-foreground: oklch(1.0000 0 0);
   --border: oklch(0.9300 0.0094 175);
-  --input: oklch(0.9401 0 0);
+  /* Control boundary (inputs, selects, checkboxes): 1.4.11 needs 3:1. */
+  --input: oklch(0.64 0 0);
   --ring: oklch(0 0 0);
-  --chart-1: oklch(0.7459 0.1483 156.4499);
-  --chart-2: oklch(0.55 0.14 175);
-  --chart-3: oklch(0.7336 0.1758 50.5517);
-  --chart-4: oklch(0.5828 0.12 175);
-  --chart-5: oklch(0.5590 0 0);
+  /* Categorical series: distinct hues, each ≥ 3:1 on --card. */
+  --chart-1: oklch(0.62 0.14 156);
+  --chart-2: oklch(0.51 0.14 175);
+  --chart-3: oklch(0.64 0.16 50);
+  --chart-4: oklch(0.55 0.12 250);
+  --chart-5: oklch(0.56 0 0);
+  --chart-6: oklch(0.58 0.17 25);
+  --chart-7: oklch(0.6 0.12 85);
+  --chart-8: oklch(0.55 0.1 210);
+  /* Dashboard widget accents (@asteby/metacore-runtime-react CHART_PALETTE):
+     -600 shades, ≥ 3:1 on --card. */
+  --color-widget-emerald: #059669;
+  --color-widget-sky: #0284c7;
+  --color-widget-violet: #7c3aed;
+  --color-widget-amber: #d97706;
+  --color-widget-rose: #e11d48;
+  --color-widget-slate: #475569;
   --sidebar: oklch(0.9777 0.0051 175);
   --sidebar-foreground: oklch(0 0 0);
   --sidebar-primary: oklch(0 0 0);
@@ -91,7 +114,7 @@
   --popover: oklch(0.24 0.01 131);
   --popover-foreground: oklch(0.9551 0 0);
   --primary: oklch(0.65 0.14 175);
-  --primary-foreground: oklch(1.0000 0 0);
+  --primary-foreground: oklch(0.18 0 0);
   --secondary: oklch(0.29 0.02 175);
   --secondary-foreground: oklch(0.9551 0 0);
   --muted: oklch(0.29 0.02 175);
@@ -99,15 +122,26 @@
   --accent: oklch(0.28 0.05 175);
   --accent-foreground: oklch(0.80 0.10 175);
   --destructive: oklch(0.7106 0.1661 22.2162);
-  --destructive-foreground: oklch(1.0000 0 0);
+  --destructive-foreground: oklch(0.18 0 0);
   --border: oklch(0.33 0.02 175);
-  --input: oklch(0.33 0.02 175);
-  --ring: oklch(0.65 0.14 175);
-  --chart-1: oklch(0.8003 0.1821 151.7110);
-  --chart-2: oklch(0.65 0.14 175);
-  --chart-3: oklch(0.8077 0.1035 19.5706);
-  --chart-4: oklch(0.6691 0.10 175);
-  --chart-5: oklch(0.7058 0 0);
+  --input: oklch(0.55 0.02 175);
+  --ring: oklch(0.8 0.12 175);
+  /* High lightness on the dark canvas: every series ≥ 3:1 on --card. */
+  --chart-1: oklch(0.8 0.18 152);
+  --chart-2: oklch(0.72 0.14 175);
+  --chart-3: oklch(0.81 0.1 20);
+  --chart-4: oklch(0.75 0.11 250);
+  --chart-5: oklch(0.71 0 0);
+  --chart-6: oklch(0.74 0.15 25);
+  --chart-7: oklch(0.82 0.12 85);
+  --chart-8: oklch(0.78 0.1 210);
+  /* Widget accents: -400 shades, ≥ 3:1 on the dark --card. */
+  --color-widget-emerald: #34d399;
+  --color-widget-sky: #38bdf8;
+  --color-widget-violet: #a78bfa;
+  --color-widget-amber: #fbbf24;
+  --color-widget-rose: #fb7185;
+  --color-widget-slate: #94a3b8;
   --sidebar: oklch(0.20 0.01 131);
   --sidebar-foreground: oklch(0.9551 0 0);
   --sidebar-primary: oklch(0.65 0.14 175);
@@ -115,7 +149,7 @@
   --sidebar-accent: oklch(0.29 0.02 175);
   --sidebar-accent-foreground: oklch(0.65 0.14 175);
   --sidebar-border: oklch(0.33 0.02 175);
-  --sidebar-ring: oklch(0.65 0.14 175);
+  --sidebar-ring: oklch(0.8 0.12 175);
 
   --radius: 1.4rem;
   --shadow-x: 0px;
@@ -133,8 +167,11 @@
   --shadow-xl: 0px 2px 3px 0px hsl(0 0% 0% / 0.16), 0px 8px 10px -1px hsl(0 0% 0% / 0.16);
   --shadow-2xl: 0px 2px 3px 0px hsl(0 0% 0% / 0.40);
   --success: oklch(0.78 0.14 155);
+  --success-foreground: oklch(0.18 0 0);
   --warning: oklch(0.82 0.14 80);
+  --warning-foreground: oklch(0.18 0 0);
   --info: oklch(0.78 0.11 235);
+  --info-foreground: oklch(0.18 0 0);
 }
 
 @theme inline {
@@ -162,6 +199,15 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
