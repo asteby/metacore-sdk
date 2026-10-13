@@ -42,6 +42,14 @@ describe('helpers', () => {
     expect(formatRelativeTime('2026-09-29T12:00:00Z', { now: NOW, locale: 'en' })).toBe('2 weeks ago')
     expect(formatRelativeTime('no-es-fecha', { now: NOW })).toBe('')
   })
+
+  it('formatRelativeTime treats YYYY-MM-DD as a local calendar day (no fake hours)', () => {
+    const now = new Date(2026, 9, 13, 9, 30)
+    expect(formatRelativeTime('2026-10-13', { now })).toBe('hoy')
+    expect(formatRelativeTime('2026-10-12', { now })).toBe('ayer')
+    expect(formatRelativeTime('2026-10-10', { now })).toBe('hace 3 días')
+    expect(formatRelativeTime('2026-09-29', { now, locale: 'en' })).toBe('2 weeks ago')
+  })
 })
 
 describe('LinkPreviewCard', () => {

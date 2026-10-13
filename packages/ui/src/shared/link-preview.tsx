@@ -78,9 +78,24 @@ const UNITS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
   ['second', 1],
 ]
 
+const DATE_ONLY = /^(\d{4})-(\d{2})-(\d{2})$/
+
+/** `YYYY-MM-DD` (no time) is a calendar day: parsed at LOCAL midnight, not UTC. */
+function isDateOnly(date: string | Date): date is string {
+  return typeof date === 'string' && DATE_ONLY.test(date.trim())
+}
+
 function toDate(date: string | Date): Date | null {
+  if (isDateOnly(date)) {
+    const [, y, m, d] = DATE_ONLY.exec(date.trim())!
+    return new Date(Number(y), Number(m) - 1, Number(d))
+  }
   const d = date instanceof Date ? date : new Date(date)
   return Number.isNaN(d.getTime()) ? null : d
+}
+
+function startOfDay(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate())
 }
 
 /** «hace 3 horas», «ayer», «hace 2 semanas»... via `Intl.RelativeTimeFormat`. */
@@ -91,6 +106,16 @@ export function formatRelativeTime(
   const d = toDate(date)
   if (!d) return ''
   const now = opts.now ?? new Date()
+  // A date without time has day precision: «hoy», «ayer», «hace 3 días»… never hours.
+  if (isDateOnly(date)) {
+    const days = Math.round((startOfDay(d).getTime() - startOfDay(now).getTime()) / 86_400_000)
+    const rtfDay = new Intl.RelativeTimeFormat(opts.locale ?? 'es', { numeric: 'auto' })
+    const absDays = Math.abs(days)
+    if (absDays < 7) return rtfDay.format(days, 'day')
+    if (absDays < 30) return rtfDay.format(Math.round(days / 7), 'week')
+    if (absDays < 365) return rtfDay.format(Math.round(days / 30), 'month')
+    return rtfDay.format(Math.round(days / 365), 'year')
+  }
   const diff = (d.getTime() - now.getTime()) / 1000
   const abs = Math.abs(diff)
   const rtf = new Intl.RelativeTimeFormat(opts.locale ?? 'es', { numeric: 'auto' })
@@ -425,6 +450,7 @@ export function LinkPreviewCard({
   const linkHref = href === undefined ? data.url : href
   const title = data.title?.trim() || data.siteName?.trim() || domain || data.url
   const published = data.publishedAt ? toDate(data.publishedAt) : null
+  const dateOnly = !!data.publishedAt && isDateOnly(data.publishedAt)
   const kindLabel = data.kind ? KIND_LABEL[es ? 'es' : 'en'][data.kind] : undefined
   const horizontal = variant === 'compact' || variant === 'row'
   const externalProps = external ? { target: '_blank', rel: 'noopener noreferrer nofollow' } : {}
@@ -501,11 +527,15 @@ export function LinkPreviewCard({
                   <>
                     <span aria-hidden='true'>·</span>
                     <time
-                      dateTime={published.toISOString()}
-                      title={published.toLocaleString(locale, { dateStyle: 'long', timeStyle: 'short' })}
+                      dateTime={dateOnly ? String(data.publishedAt).trim() : published.toISOString()}
+                      title={
+                        dateOnly
+                          ? published.toLocaleDateString(locale, { dateStyle: 'long' })
+                          : published.toLocaleString(locale, { dateStyle: 'long', timeStyle: 'short' })
+                      }
                       className='shrink-0 whitespace-nowrap'
                     >
-                      {formatRelativeTime(published, { now, locale })}
+                      {formatRelativeTime(dateOnly ? String(data.publishedAt).trim() : published, { now, locale })}
                     </time>
                   </>
                 )}
