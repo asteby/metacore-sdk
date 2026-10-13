@@ -5,5 +5,5 @@ export { DefinitionList, type DefinitionItem, type DefinitionListProps } from '.
 export { RecordList, RecordRow, type RecordRowProps } from './record-row'
 export { ContactLink, type ContactLinkProps } from './contact-link'
 export { EmptyState, type EmptyStateProps } from './empty-state'
-export { PillTabsList, PillTabsTrigger } from './pill-tabs'
+export { PillTabsList, PillTabsTrigger, type PillTabsTriggerProps } from './pill-tabs'
 export { ProfileHeader, type ProfileHeaderProps } from './profile-header'

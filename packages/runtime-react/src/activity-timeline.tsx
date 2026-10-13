@@ -14,6 +14,7 @@
  */
 
 import * as React from 'react'
+import { useSystemActor } from './org-runtime-context'
 import { formatDistanceToNow } from 'date-fns'
 import { es, enUS } from 'date-fns/locale'
 import type { Locale } from 'date-fns'
@@ -201,7 +202,8 @@ const GroupCard: React.FC<GroupCardProps> = ({
 }) => {
     const { root, events, changedFieldCount } = group
     const isMulti = events.length > 1
-    const actor = root.actor_label || root.actor_id || 'Sistema'
+    const systemName = useSystemActor()?.name || 'Sistema'
+    const actor = root.actor_label || root.actor_id || systemName
     const dotColor = actionDotColor(root.action)
 
     const timeAgo = (() => {
@@ -294,7 +296,7 @@ const GroupCard: React.FC<GroupCardProps> = ({
                         <div className="border-t border-border/40 divide-y divide-border/30">
                             {events.map((ev, idx) => {
                                 const cols = resolveColumns(ev.model)
-                                const evActor = ev.actor_label || ev.actor_id || 'Sistema'
+                                const evActor = ev.actor_label || ev.actor_id || systemName
                                 return (
                                     <div key={ev.id} className="px-4 py-3 space-y-2">
                                         {/* Show sub-actor + model when group has multiple events */}

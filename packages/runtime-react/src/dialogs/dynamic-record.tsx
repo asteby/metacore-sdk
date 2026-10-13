@@ -88,7 +88,7 @@ import { CollectionCell, type ItemField } from '../collection-cell'
 import type { ActionFieldDef, RelationMeta } from '../types'
 import { ImageUrlContext, identityImageUrl, type GetImageUrl } from '../image-url-context'
 import { getFieldWidget, useFieldWidgetRegistryVersion } from '../field-widget-registry'
-import { TimeZoneContext, CurrencyContext } from '../org-runtime-context'
+import { TimeZoneContext, CurrencyContext, useNumberLocale, useSystemActor } from '../org-runtime-context'
 
 // Re-export the resolver type so `index.ts`'s
 // `export type { … GetImageUrl } from './dialogs/dynamic-record'` keeps working.
@@ -1706,6 +1706,8 @@ export function ViewValue({
     currency?: string
 }) {
     const { t, i18n } = useTranslation()
+    const numberLocale = useNumberLocale(i18n.language)
+    const systemActor = useSystemActor()
     const ctxImageUrl = useContext(ImageUrlContext)
     const ctxTimeZone = useContext(TimeZoneContext)
     const ctxCurrency = useContext(CurrencyContext)
@@ -1748,7 +1750,7 @@ export function ViewValue({
             (typeof field.key === 'string' && field.key.startsWith('created_by.')) ||
             renderAs === 'creator'
         if (isCreatedBy) {
-            return <p className="text-sm py-1">Sistema</p>
+            return <p className="text-sm py-1">{systemActor?.name || t('common.system', { defaultValue: 'Sistema' })}</p>
         }
         return <p className="text-sm py-1 text-muted-foreground">—</p>
     }
@@ -1897,7 +1899,7 @@ export function ViewValue({
         const num = typeof value === 'number' ? value : Number(value)
         if (!isNaN(num)) {
             const resolvedCurrency = field.styleConfig?.currency || currency || 'USD'
-            const localeTag = i18n.language || 'es'
+            const localeTag = numberLocale || 'es'
             const formatted = new Intl.NumberFormat(localeTag, {
                 style: 'currency',
                 currency: resolvedCurrency,
@@ -1988,7 +1990,7 @@ export function ViewValue({
             <StructuredViewValue
                 value={value}
                 field={field}
-                locale={i18n.language}
+                locale={numberLocale}
                 t={t}
             />
         )
@@ -2221,6 +2223,7 @@ export function EditField({ field, value, onChange, record, invalid, error }: {
         : undefined
 
     const { t, i18n } = useTranslation()
+    const numberLocale = useNumberLocale(i18n.language)
     const editFieldImageUrl = useContext(ImageUrlContext)
     const dialogModel = useContext(RecordDialogModelContext)
 
@@ -2252,7 +2255,7 @@ export function EditField({ field, value, onChange, record, invalid, error }: {
                         value={value}
                         itemFields={fieldItemFields(field)}
                         variant="inline"
-                        locale={i18n.language}
+                        locale={numberLocale}
                         t={t}
                         getImageUrl={editFieldImageUrl}
                     />

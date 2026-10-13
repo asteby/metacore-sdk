@@ -24,7 +24,7 @@ import { cn } from '@asteby/metacore-ui/lib'
 import { formatDateCell } from './dynamic-columns'
 import { objectLabel } from './dynamic-relation-helpers'
 import { isNilUuid } from './nil-uuid'
-import { useTimeZone } from './org-runtime-context'
+import { useSystemActor, useTimeZone } from './org-runtime-context'
 import type { AuditMeta } from './types'
 
 /** The kernel's actor for unattended work (schedules, webhooks, connectors). */
@@ -145,6 +145,7 @@ export function AuditInfo({
 }: AuditInfoProps) {
     const { t, i18n } = useTranslation()
     const ctxTz = useTimeZone()
+    const systemActor = useSystemActor()
     const [open, setOpen] = React.useState(defaultOpen)
 
     const meta = readAuditMeta(audit)
@@ -166,7 +167,7 @@ export function AuditInfo({
     ): Line | null => {
         const f = atCol ? formatDateCell(record[atCol], undefined, dfLocale, tz) : null
         if (!f) return null
-        const actor = resolveAuditActor(record, byCol, { resolveActor, systemLabel: tt('system') })
+        const actor = resolveAuditActor(record, byCol, { resolveActor, systemLabel: systemActor?.name || tt('system') })
         const date = new Date(record[atCol as string] as string)
         const relative = formatDistanceToNow(date, { addSuffix: true, locale: dfLocale })
         return {

@@ -11,6 +11,7 @@
  */
 
 import * as React from 'react'
+import { useSystemActor } from './org-runtime-context'
 import { formatDistanceToNow } from 'date-fns'
 import { es, enUS } from 'date-fns/locale'
 import { ChevronDown, ChevronRight, Clock, ExternalLink } from 'lucide-react'
@@ -124,6 +125,7 @@ export const RecordHistory: React.FC<RecordHistoryProps> = ({
     const dateLocale = locale === 'en' ? enUS : es
 
     // Sort: most recent first
+    const systemName = useSystemActor()?.name || 'Sistema'
     const sorted = React.useMemo(
         () => [...events].sort((a, b) => new Date(b.occurred_at).getTime() - new Date(a.occurred_at).getTime()),
         [events],
@@ -164,7 +166,7 @@ export const RecordHistory: React.FC<RecordHistoryProps> = ({
                 {sorted.map((event) => {
                     const isOpen = openIds.has(event.id)
                     const dotColor = actionDotColor(event.action)
-                    const actor = event.actor_label || event.actor_id || 'Sistema'
+                    const actor = event.actor_label || event.actor_id || systemName
                     const timeAgo = (() => {
                         try {
                             return formatDistanceToNow(new Date(event.occurred_at), { addSuffix: true, locale: dateLocale })

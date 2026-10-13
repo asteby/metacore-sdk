@@ -129,6 +129,25 @@ describe('RowActionsMenu', () => {
         expect(screen.getByText('Enviar al chat')).toBeTruthy()
     })
 
+    it('con groupSecondary={false} todas las acciones salen en el primer nivel, sin «Más…»', async () => {
+        const run = shareToChat()
+        render(
+            <InstalledAddonsProvider addons={['link']}>
+                <RowActionsMenu actions={ACTIONS} row={ROW} model="Invoice" groupSecondary={false} />
+            </InstalledAddonsProvider>,
+        )
+        await openMenu()
+        const top = [...document.querySelectorAll('[role="menu"] > [role="menuitem"]')].map(
+            (el) => el.getAttribute('data-action') ?? el.textContent,
+        )
+        expect(top).toEqual(['stamp', 'cancel', 'approve', 'send_cfdi_email', 'reprint_cfdi', 'team_chat.share'])
+        expect(screen.queryByText('Más…')).toBeNull()
+        await act(async () => {
+            fireEvent.click(screen.getByText('Enviar al chat'))
+        })
+        expect(run).toHaveBeenCalledWith({ model: 'Invoice', record: ROW })
+    })
+
     it('primaria única destacada; las secundarias van bajo «Más…», no en el primer nivel', async () => {
         const run = shareToChat()
         render(

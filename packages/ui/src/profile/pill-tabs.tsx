@@ -26,7 +26,17 @@ export function PillTabsList({ className, children, ...props }: React.ComponentP
   )
 }
 
-export function PillTabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsTrigger>) {
+export interface PillTabsTriggerProps extends React.ComponentProps<typeof TabsTrigger> {
+  /**
+   * Optional counter shown after the label (filter tabs: «Abiertas 12»). It is
+   * part of the accessible name; `undefined` hides it, `0` shows it.
+   */
+  count?: number
+  /** Formats the counter (e.g. compact or locale-aware). Default `String`. */
+  formatCount?: (n: number) => string
+}
+
+export function PillTabsTrigger({ className, count, formatCount = String, children, ...props }: PillTabsTriggerProps) {
   return (
     <TabsTrigger
       className={cn(
@@ -34,6 +44,16 @@ export function PillTabsTrigger({ className, ...props }: React.ComponentProps<ty
         className
       )}
       {...props}
-    />
+    >
+      {children}
+      {count !== undefined && (
+        <span
+          data-slot='pill-tabs-count'
+          className='bg-foreground/10 rounded-full px-1.5 text-xs leading-5 font-semibold tabular-nums'
+        >
+          {formatCount(count)}
+        </span>
+      )}
+    </TabsTrigger>
   )
 }

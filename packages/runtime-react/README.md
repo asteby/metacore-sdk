@@ -148,6 +148,32 @@ export function Shell({ children }) {
 - Activación exitosa desbloquea **sin recargar**: el host refresca el `state` y el gate se desmonta.
 - **Gateo por rol** con `canActivate` (default `true`): cuando es `false`, el modal bloqueante se muestra **sin formulario** de activación y en su lugar aparece `readOnlyMessage` (default: *"Contacta al administrador de la plataforma para activar la licencia."*). Así solo el Platform Root/superadmin activa; los demás usuarios ven el bloqueo con la indicación de a quién contactar.
 
+## Configuración de la organización (`OrgRuntimeProvider`)
+
+Envuelve la app autenticada una vez y todas las tablas, kanban, diálogos y
+fichas leen la configuración de la org por contexto:
+
+```tsx
+<OrgRuntimeProvider
+  timeZone={org.timezone}            // 'America/Mexico_City' — fechas en la zona de la org
+  currency={org.currency_code}       // 'MXN' — moneda por defecto
+  numberLocales={{ es: 'es-MX' }}    // números y dinero como en México: 11,461.50 (no 11.461,50)
+  systemActor={{ name: 'Gobi', avatarUrl: '/brand/gobi.png' }} // quién aparece cuando "lo hizo el sistema"
+>
+  <App />
+</OrgRuntimeProvider>
+```
+
+- `numberLocales` mapea idioma de la UI → locale de `Intl` (primero el idioma
+  completo, luego la base). Aplica a celdas `number`/`currency`, totales del
+  pie, kanban (tarjetas y totales por carril) y el diálogo de registro. Las
+  fechas siguen el idioma (`es`/`en`). Hooks: `useNumberLocale(lang)`,
+  `resolveNumberLocale(lang, map)`.
+- `systemActor` reemplaza el «Sistema» genérico en celdas `creator` /
+  `created_by.*`, `AuditInfo`, `ActivityTimeline`, `RecordHistory` y el diálogo
+  de registro. Sin provider se conserva «Sistema». Hook: `useSystemActor()`;
+  regla compartida: `isSystemActorColumn(renderAs, key, namePath)`.
+
 ## Minimal usage
 
 ```tsx

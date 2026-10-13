@@ -55,3 +55,40 @@ export function truncate(value: string, maxLength: number, suffix: string = '…
   if (maxLength <= 0) return ''
   return value.slice(0, maxLength) + suffix
 }
+
+export interface FormatDurationOptions {
+  /** BCP-47 locale for the unit labels. Default 'es-MX'. */
+  locale?: string
+  /** Text for invalid or negative input. Default '—'. */
+  invalid?: string
+}
+
+function unitPart(value: number, unit: 'second' | 'minute' | 'hour' | 'day', locale: string): string {
+  try {
+    return new Intl.NumberFormat(locale, { style: 'unit', unit, unitDisplay: 'short', maximumFractionDigits: 0 }).format(value)
+  } catch {
+    const fallback = { second: 's', minute: 'min', hour: 'h', day: 'd' }[unit]
+    return `${value} ${fallback}`
+  }
+}
+
+/**
+ * Human duration from seconds, at most two units, locale-aware via
+ * Intl unit formatting: "45 s", "12 min", "3 h 20 min", "2 días 5 h".
+ * @example formatDuration(12000) -> "3 h 20 min" (es-MX)
+ * @example formatDuration(12000, { locale: 'en-US' }) -> "3 hr 20 min"
+ */
+export function formatDuration(seconds: number, options: FormatDurationOptions = {}): string {
+  const { locale = 'es-MX', invalid = '—' } = options
+  if (!Number.isFinite(seconds) || seconds < 0) return invalid
+  const s = Math.round(seconds)
+  if (s < 60) return unitPart(s, 'second', locale)
+  const min = Math.round(s / 60)
+  if (min < 60) return unitPart(min, 'minute', locale)
+  const h = Math.floor(min / 60)
+  const restMin = min % 60
+  if (h < 24) return restMin ? `${unitPart(h, 'hour', locale)} ${unitPart(restMin, 'minute', locale)}` : unitPart(h, 'hour', locale)
+  const d = Math.floor(h / 24)
+  const restH = h % 24
+  return restH ? `${unitPart(d, 'day', locale)} ${unitPart(restH, 'hour', locale)}` : unitPart(d, 'day', locale)
+}

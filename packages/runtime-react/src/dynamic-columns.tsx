@@ -38,6 +38,7 @@ import {
     relationChipStyles,
 } from '@asteby/metacore-ui/lib'
 import { Progress } from './dialogs/_primitives'
+import { useSystemActor } from './org-runtime-context'
 import { humanizeToken, translateMetadataLabel } from './dynamic-columns-helpers'
 import { objectLabel } from './dynamic-relation-helpers'
 import {
@@ -604,19 +605,33 @@ export function resolveMissingActorLabel(
     namePath: string | undefined,
     t?: (key: string, options?: { defaultValue?: string }) => string,
 ): string {
+    if (isSystemActorColumn(renderAs, colKey, namePath)) {
+        return t ? t('common.system', { defaultValue: 'Sistema' }) : 'Sistema'
+    }
+    return 'N/A'
+}
+
+/**
+ * True when an EMPTY actor in this cell means "the system did it": `creator`
+ * cells and `created_by.*` columns. Exported so hosts and renderers share the
+ * rule with resolveMissingActorLabel.
+ */
+export function isSystemActorColumn(
+    renderAs: string | undefined,
+    colKey: string | undefined,
+    namePath: string | undefined,
+): boolean {
     const path = namePath || ''
     const key = colKey || ''
-    const isCreatedByColumn =
+    return (
+        renderAs === 'creator' ||
         key === 'created_by' ||
         key === 'created_by_id' ||
         key.startsWith('created_by.') ||
         path === 'created_by' ||
         path === 'created_by.name' ||
         path.startsWith('created_by.')
-    if (renderAs === 'creator' || isCreatedByColumn) {
-        return t ? t('common.system', { defaultValue: 'Sistema' }) : 'Sistema'
-    }
-    return 'N/A'
+    )
 }
 
 /**
@@ -867,6 +882,27 @@ const AvatarCell: React.FC<{
 )
 
 /**
+ * Avatar cell for the system actor: the OrgRuntimeProvider `systemActor`
+ * name/avatar when set, else the localized fallback label with initials.
+ */
+const identityUrl = (p: string) => p
+const SystemActorCell: React.FC<{
+    fallbackName: string
+    desc?: string
+    getImageUrl: (path: string) => string
+}> = ({ fallbackName, desc, getImageUrl }) => {
+    const actor = useSystemActor()
+    return (
+        <AvatarCell
+            name={actor?.name || fallbackName}
+            desc={desc}
+            avatarSrc={actor?.avatarUrl}
+            getImageUrl={actor?.avatarUrl ? identityUrl : getImageUrl}
+        />
+    )
+}
+
+/**
  * Builds the canonical column factory used by `<DynamicTable>` when the host
  * does not supply its own. Pass `{ getImageUrl, apiBaseUrl }` to wire avatar
  * URL resolution.
@@ -934,7 +970,9 @@ export function makeDefaultGetDynamicColumns(
         currency?: string,
         rowActionPredicate?: RowActionPredicate,
     ): ColumnDef<any>[] {
-        const dateLocale = currentLanguage === 'en' ? enUS : es
+        // currentLanguage may be a regional number locale (es-MX, en-US) when
+        // the host sets OrgRuntimeProvider numberLocales; dates key off its base.
+        const dateLocale = currentLanguage?.toLowerCase().startsWith('en') ? enUS : es
         const columns: ColumnDef<any>[] = [
             {
                 id: 'select',
@@ -1185,6 +1223,16 @@ export function makeDefaultGetDynamicColumns(
                                 resolvedName ||
                                 resolveMissingActorLabel(renderAs, col.key, namePath, t)
                             const desc = getNestedValue(row.original, col.description || '')
+
+                            if (!resolvedName && isSystemActorColumn(renderAs, col.key, namePath)) {
+                                return (
+                                    <SystemActorCell
+                                        fallbackName={String(name)}
+                                        desc={desc ? String(desc) : undefined}
+                                        getImageUrl={getImageUrl}
+                                    />
+                                )
+                            }
 
                             const avatarSrc = resolveAvatarSrc(col, row.original, value, apiBaseUrl)
 

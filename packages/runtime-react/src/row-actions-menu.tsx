@@ -1,7 +1,7 @@
 // RowActionsMenu — el «…» de una fila: la acción primaria (si hay) arriba y
 // destacada, las principales debajo y las secundarias (compartir, imprimir,
 // correo, chat, PDF/XML y lo que aporten addons vía registerRecordAction)
-// agrupadas en un «Más…» discreto. Una acción por capacidad sin proveedor
+// agrupadas en un «Más…» discreto (o en el primer nivel con groupSecondary={false}). Una acción por capacidad sin proveedor
 // activo, o una contribución cuyo addon no está instalado, no aparece.
 //
 // DynamicTable lo usa por defecto (getDynamicColumns) y los hosts que arman su
@@ -71,6 +71,12 @@ export interface RowActionsMenuProps {
     /** Sustituye el ícono del disparador (p. ej. un spinner mientras imprime). */
     triggerIcon?: React.ReactNode
     disabled?: boolean
+    /**
+     * Agrupa las acciones secundarias en un submenú «Más…» (por defecto). Con
+     * `false` todas se listan en el primer nivel: las secundarias van después
+     * de un separador, sin submenú.
+     */
+    groupSecondary?: boolean
 }
 
 /**
@@ -84,7 +90,7 @@ type MenuEntry =
     | { kind: 'action'; action: any }
     | { kind: 'contribution'; item: ResolvedRecordAction }
 
-export function RowActionsMenu({ actions, row, model, onAction, triggerIcon, disabled }: RowActionsMenuProps) {
+export function RowActionsMenu({ actions, row, model, onAction, triggerIcon, disabled, groupSecondary = true }: RowActionsMenuProps) {
     const { t } = useTranslation()
     const installed = useInstalledAddons()
     const ctxModel = React.useContext(RowActionsModelContext)
@@ -138,7 +144,12 @@ export function RowActionsMenu({ actions, row, model, onAction, triggerIcon, dis
                         />
                     ) : null}
                     {mainEntries.map(renderEntry)}
-                    {secondaryEntries.length > 0 && hasMain ? (
+                    {secondaryEntries.length > 0 && hasMain && !groupSecondary ? (
+                        <>
+                            <DropdownMenuSeparator />
+                            {secondaryEntries.map(renderEntry)}
+                        </>
+                    ) : secondaryEntries.length > 0 && hasMain ? (
                         <>
                             <DropdownMenuSeparator />
                             <DropdownMenuSub>

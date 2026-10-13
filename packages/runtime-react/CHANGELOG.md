@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 50.2.0
+
+### Minor Changes
+
+- b285f48: RowActionsMenu: nueva prop `groupSecondary` (por defecto `true`, sin cambios). Con `false` todas las acciones de la fila salen en el primer nivel del menú, sin el submenú «Más…».
+
 ## 50.1.0
 
 ### Minor Changes
