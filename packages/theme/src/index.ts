@@ -35,3 +35,18 @@ export type {
   ThemeBootScriptOptions,
   ThemeBootWatchOptions,
 } from './boot.js'
+
+export {
+  WCAG,
+  parseColor,
+  oklchToRgb,
+  rgbToOklch,
+  composite,
+  flatten,
+  relativeLuminance,
+  contrastRatio,
+  ensureContrast,
+  mostReadable,
+  toHex,
+} from './contrast.js'
+export type { Rgba } from './contrast.js'

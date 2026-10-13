@@ -142,6 +142,29 @@ The bundled `<ThemeProvider>` (light/dark/system, cookie-persisted) is the
 recommended entry; consumer apps can drop their local copies and use
 `useTheme()` for the toggle UI.
 
+## Contrast contract
+
+Every semantic pair the UI paints is held to WCAG 2.x AA, in light, dark and
+the glass pack (measured on the composited surface, over the brightest and
+darkest point of the backdrop):
+
+| Pair | Minimum |
+| --- | --- |
+| `*-foreground` on its surface, `--muted-foreground` on `--card`/`--muted` | 4.5:1 |
+| `--primary`, `--destructive`, `--success`/`--warning`/`--info` as text on `--card` and on their own badge tint | 4.5:1 |
+| `--input` (control boundary), `--ring` at 50% (focus halo), `--chart-1..8`, `--color-widget-*` on `--card` | 3:1 |
+
+`src/tokens-contrast.test.ts` measures them and fails CI below the minimum,
+so a token edit (or a brand pack in a fork) cannot silently regress. The same
+math is exported for runtime-derived colors:
+
+```ts
+import { contrastRatio, ensureContrast, composite } from '@asteby/metacore-theme/contrast'
+
+contrastRatio('oklch(0.8 0.07 255)', '#14202d') // ≈ 8.6
+ensureContrast('#102E6B', '#14202d', 4.5)        // same hue, lifted until it reads
+```
+
 ## No flash on reload
 
 `<ThemeProvider>` stores what `<html>` ends up painting — light/dark, the

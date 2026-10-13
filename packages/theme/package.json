@@ -35,6 +35,10 @@
     "./preset": {
       "types": "./dist/preset.d.ts",
       "import": "./dist/preset.js"
+    },
+    "./contrast": {
+      "types": "./dist/contrast.d.ts",
+      "import": "./dist/contrast.js"
     }
   },
   "scripts": {
