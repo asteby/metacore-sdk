@@ -52,6 +52,40 @@ Several components that in the source app depended on a zustand `auth-store`, a 
 
 Features intentionally **not** vendored: `branch-switcher`, `organization`, `top-nav`, `config-drawer`, `notifications-dropdown`, `ai-chat` — those are app-specific and belong in the consumer app.
 
+## States, page header, QR and segmented control
+
+Theme tokens only (the app sets the palette), keyboard- and screen-reader-ready:
+
+```tsx
+import { DataState, PageHeader, QrCodeFrame } from '@asteby/metacore-ui/shared'
+import { SegmentedControl } from '@asteby/metacore-ui/primitives'
+import { PillTabsList, PillTabsTrigger } from '@asteby/metacore-ui/profile'
+
+// Every non-success state of a query-backed surface
+<DataState kind="error" description="Hace 5 min" onRetry={refetch} />
+<DataState kind="demo" compact description="Datos demostrativos, no mediciones" />
+// kinds: loading | empty | error | forbidden | offline | stale | partial | demo
+
+<PageHeader
+  icon={Inbox}
+  title="Bandeja"
+  description="Conversaciones de todos los canales"
+  badges={<Badge variant="muted">Demo</Badge>}
+  actions={<Button>Nueva</Button>}
+  overflowActions={[{ key: 'export', label: 'Exportar', onSelect: exportCsv }]}
+/>
+
+<QrCodeFrame src={qrDataUrl} alt="Código QR para vincular WhatsApp" expired={expired} onRefresh={restart} />
+
+<SegmentedControl aria-label="Vista" value={view} onValueChange={setView}
+  items={[{ value: 'list', label: 'Lista', icon: List }, { value: 'kanban', label: 'Kanban', icon: Columns3 }]} />
+
+<PillTabsTrigger value="open" count={12}>Abiertas</PillTabsTrigger>
+```
+
+Optional i18n keys (Spanish fallbacks): `data_state.<kind>`, `data_state.retry`,
+`page_header.more`, `qr_frame.loading`, `qr_frame.expired`, `qr_frame.refresh`.
+
 ## i18n
 
 Components that render user-facing strings (`DataTablePagination`, `DataTableViewOptions`, `DataTableColumnHeader`, `CommandMenu`) use `react-i18next`'s `useTranslation()` hook and expect these keys:
