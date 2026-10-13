@@ -114,12 +114,35 @@ export function WidgetEmpty({ message }: { message: string }) {
     )
 }
 
-/** Per-widget error state — isolated so a broken widget never tumbles the grid. */
-export function WidgetError({ message }: { message: string }) {
+/**
+ * Per-widget error state — isolated so a broken widget never tumbles the grid.
+ * Pass `onRetry` to offer a retry (e.g. the widget query's `refetch`).
+ */
+export function WidgetError({
+    message,
+    onRetry,
+    retryLabel = 'Reintentar',
+}: {
+    message: string
+    onRetry?: () => void
+    retryLabel?: string
+}) {
     return (
-        <div className="flex flex-1 items-center justify-center gap-2 py-6 text-center text-xs text-destructive">
+        <div
+            role="alert"
+            className="flex flex-1 flex-wrap items-center justify-center gap-2 py-6 text-center text-xs text-destructive"
+        >
             <DynamicIcon name="TriangleAlert" className="size-4" />
             <span>{message}</span>
+            {onRetry && (
+                <button
+                    type="button"
+                    onClick={onRetry}
+                    className="rounded-md border px-2 py-0.5 font-medium text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                    {retryLabel}
+                </button>
+            )}
         </div>
     )
 }
