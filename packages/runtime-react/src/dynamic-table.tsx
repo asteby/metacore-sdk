@@ -12,7 +12,7 @@
 //     column cells are tightly coupled to their design system).
 import { useEffect, useState, useMemo, useCallback, useRef, type MouseEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useTimeZone, useCurrency } from './org-runtime-context'
+import { useTimeZone, useCurrency, useNumberLocale } from './org-runtime-context'
 import { format } from 'date-fns'
 import type { DateRange } from 'react-day-picker'
 import { useVirtualizer } from '@tanstack/react-virtual'
@@ -417,6 +417,8 @@ export function DynamicTable({
     // still selects the mode when `pagination` is absent (back-compat).
     const infiniteScroll = paginationMode ? paginationMode === 'infinite' : infiniteScrollProp
     const { t, i18n } = useTranslation()
+    // Number/currency locale (org override, e.g. es → es-MX); dates keep i18n.
+    const numberLocale = useNumberLocale(i18n.language)
     const api = useApi()
     const currentBranch = useCurrentBranch()
 
@@ -1502,12 +1504,12 @@ export function DynamicTable({
             }
             return actions === viewMetadata.actions ? viewMetadata : { ...viewMetadata, actions }
         })()
-        const baseColumns = getDynamicColumns(rowMetadata, handleInternalAction, t, i18n.language, columnFilterConfigs, timeZone, currency, rowActionPredicate)
+        const baseColumns = getDynamicColumns(rowMetadata, handleInternalAction, t, numberLocale, columnFilterConfigs, timeZone, currency, rowActionPredicate)
         const filteredBase = baseColumns.filter((col: ColumnDef<any>) => !effectiveHiddenColumns.includes(col.id as string))
         const actionsCol = filteredBase.find((c: ColumnDef<any>) => c.id === 'actions')
         const otherCols = filteredBase.filter((c: ColumnDef<any>) => c.id !== 'actions')
         return [...otherCols, ...extraColumns, ...(actionsCol ? [actionsCol] : [])]
-    }, [viewMetadata, handleInternalAction, effectiveHiddenColumns, allowedActionKeys, extraColumns, t, i18n.language, columnFilterConfigs, getDynamicColumns, timeZone, currency, rowActionPredicate])
+    }, [viewMetadata, handleInternalAction, effectiveHiddenColumns, allowedActionKeys, extraColumns, t, numberLocale, columnFilterConfigs, getDynamicColumns, timeZone, currency, rowActionPredicate])
 
     const filters = useMemo(() => [], [])
 
@@ -1837,7 +1839,7 @@ export function DynamicTable({
                                                         col as any,
                                                         footerTotals[leaf.id],
                                                         currency,
-                                                        i18n.language,
+                                                        numberLocale,
                                                     )}
                                                 </TableCell>
                                             )

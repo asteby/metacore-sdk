@@ -439,6 +439,7 @@ export {
     resolveAvatarSrc,
     resolveImageSrc,
     resolveMissingActorLabel,
+    isSystemActorColumn,
     resolveActorDisplayName,
     resolveRelationLabel,
     type DynamicColumnsHelpers,

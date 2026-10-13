@@ -37,7 +37,7 @@ import {
     useSyncExternalStore,
 } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useTimeZone, useCurrency } from './org-runtime-context'
+import { useTimeZone, useCurrency, useNumberLocale } from './org-runtime-context'
 import {
     QueryClient,
     QueryClientContext,
@@ -950,6 +950,7 @@ function DynamicKanbanBoard({
     groupBy: groupByProp,
 }: DynamicKanbanProps) {
     const { t, i18n } = useTranslation()
+    const numberLocale = useNumberLocale(i18n.language)
     // The org's timezone/currency: an explicit prop wins, else the app-wide
     // OrgRuntimeProvider (without it, money fell back to USD).
     const orgTimeZone = useTimeZone()
@@ -2096,7 +2097,7 @@ function DynamicKanbanBoard({
                           col,
                           (laneSums[col.key] ?? 0) + (delta?.sums[col.key] ?? 0),
                           currency,
-                          i18n.language,
+                          numberLocale,
                       ),
                   }))
                 : []
@@ -2160,7 +2161,7 @@ function DynamicKanbanBoard({
                             actions={rowActions}
                             stageField={lifecycleStageField(metadata)}
                             rowActionPredicate={rowActionPredicate}
-                            locale={i18n.language}
+                            locale={numberLocale}
                             timeZone={timeZone}
                             currency={currency}
                             onClick={onCardClick}
@@ -2194,7 +2195,7 @@ function DynamicKanbanBoard({
                 actions={rowActions}
                 stageField={lifecycleStageField(metadata)}
                 rowActionPredicate={rowActionPredicate}
-                locale={i18n.language}
+                locale={numberLocale}
                 timeZone={timeZone}
                 currency={currency}
                 onClick={onCardClick}
@@ -2404,7 +2405,7 @@ function DynamicKanbanBoard({
                         titleCol={titleCol}
                         fieldCols={fieldCols}
                         showAllFields={explicitCard}
-                        locale={i18n.language}
+                        locale={numberLocale}
                         timeZone={timeZone}
                         currency={currency}
                         blocked={overBlocked}

@@ -36,3 +36,59 @@ export const TaxRateContext = createContext<number | undefined>(undefined)
 
 /** Reads the nearest org default tax rate (undefined outside a provider). */
 export const useOrgTaxRate = () => useContext(TaxRateContext)
+
+/**
+ * Number-locale overrides keyed by UI language: `{ es: 'es-MX' }` makes a
+ * Spanish UI format numbers and money the Mexican way (11,461.50) instead of
+ * Intl's bare `'es'` (Spain: 11.461,50). Keys match the full language
+ * (`'es-mx'`) first, then its base (`'es'`), case-insensitive. `undefined`
+ * outside a provider → numbers use the UI language as-is (legacy behaviour).
+ */
+export type NumberLocales = Readonly<Record<string, string>>
+
+export const NumberLocalesContext = createContext<NumberLocales | undefined>(undefined)
+
+/**
+ * Pure resolver: the Intl locale numbers should use for `language` given the
+ * org's overrides. Returns `language` unchanged when nothing matches.
+ */
+export function resolveNumberLocale(
+    language: string | undefined,
+    locales: NumberLocales | undefined,
+): string | undefined {
+    if (!language || !locales) return language
+    const lower = language.toLowerCase()
+    const byKey = new Map(Object.entries(locales).map(([k, v]) => [k.toLowerCase(), v]))
+    return byKey.get(lower) ?? byKey.get(lower.split('-')[0]) ?? language
+}
+
+/**
+ * The Intl locale for number/currency formatting of the current UI language
+ * (`language`, usually `i18n.language`), honouring the nearest
+ * `OrgRuntimeProvider numberLocales`.
+ */
+export function useNumberLocale(language: string): string
+export function useNumberLocale(language: string | undefined): string | undefined
+export function useNumberLocale(language: string | undefined): string | undefined {
+    return resolveNumberLocale(language, useContext(NumberLocalesContext))
+}
+
+/**
+ * How the SYSTEM actor (records created or changed by a seed, an event, an
+ * agent or an automation — `created_by` empty or `SYSTEM_ACTOR_ID`) is
+ * presented: e.g. `{ name: 'Gobi', avatarUrl: '/brand/gobi.png' }`. Read by
+ * creator/created_by table cells, AuditInfo, ActivityTimeline, RecordHistory
+ * and the record dialog. `undefined` outside a provider → the localized
+ * "Sistema"/"System" label and initials (legacy behaviour).
+ */
+export interface SystemActor {
+    /** Display name (already localized). */
+    name?: string
+    /** Absolute URL or app path of the avatar image; used as-is. */
+    avatarUrl?: string
+}
+
+export const SystemActorContext = createContext<SystemActor | undefined>(undefined)
+
+/** Reads the nearest system-actor presentation (undefined outside a provider). */
+export const useSystemActor = () => useContext(SystemActorContext)
