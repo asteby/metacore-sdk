@@ -1,5 +1,18 @@
 # @asteby/metacore-runtime-react
 
+## 51.0.0
+
+### Minor Changes
+
+- bdc8a60: OrgRuntimeProvider: nuevas props opcionales `numberLocales` (p. ej. `{ es: 'es-MX' }`, formatea números y dinero de celdas, totales del pie, kanban y diálogo de registro con el locale de la org) y `systemActor` (`{ name, avatarUrl }` para el actor de sistema en celdas `creator`/`created_by.*`, AuditInfo, ActivityTimeline, RecordHistory y el diálogo). Nuevos `useNumberLocale`, `resolveNumberLocale`, `useSystemActor` e `isSystemActorColumn`. Sin las props no cambia nada. Corrige que un idioma `en-US` fechara en español en las columnas dinámicas.
+- bdc8a60: `WidgetError` acepta `onRetry` y `retryLabel` para reintentar un widget fallido; ahora anuncia el error con `role="alert"`.
+
+### Patch Changes
+
+- Updated dependencies [019192d]
+- Updated dependencies [bdc8a60]
+  - @asteby/metacore-ui@2.27.0
+
 ## 50.2.0
 
 ### Minor Changes

@@ -1,5 +1,12 @@
 # @asteby/metacore-ui
 
+## 2.27.0
+
+### Minor Changes
+
+- 019192d: Vista previa de enlaces en `shared`: `LinkPreviewCard` (variantes `compact`/`row`/`rich`/`hero`, imagen lazy con aspect-ratio fijo, skeleton/blur, fallback favicon+dominio+inicial, fecha relativa con `<time>`, badges, tarjeta clicable accesible con enlace externo secundario), `FaviconAvatar`, `SourceBadge`, `MediaGrid` (feed responsivo en grid o lista) y los helpers `formatRelativeTime` y `domainFromUrl`. Solo tokens de tema; nunca hacen fetch a sitios externos: los metadatos vienen del backend y `resolveImageUrl` permite pasar las imágenes por un proxy propio.
+- bdc8a60: Nuevos primitivos sin colores fijos y accesibles: `DataState` (loading/empty/error/forbidden/offline/stale/partial/demo con reintento), `PageHeader` (título, badges, acciones y menú «⋯»), `QrCodeFrame` (QR fácil de escanear: fondo blanco forzado, zona de silencio, escalado nítido, estados de carga/vencido) en `shared`, y `SegmentedControl` (radiogroup con teclado) en `primitives`. `PillTabsTrigger` acepta `count` para pestañas-filtro con contador.
+
 ## 2.25.0
 
 ### Minor Changes

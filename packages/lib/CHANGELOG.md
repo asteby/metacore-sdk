@@ -1,5 +1,11 @@
 # @asteby/metacore-lib
 
+## 0.7.0
+
+### Minor Changes
+
+- bdc8a60: `formatDuration(seconds, { locale, invalid })`: duración legible con a lo sumo dos unidades («3 h 20 min»), con etiquetas de `Intl` según el locale (es-MX por defecto).
+
 ## 0.6.0
 
 ### Minor Changes

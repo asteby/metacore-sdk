@@ -1,5 +1,11 @@
 # @asteby/metacore-ai-chat
 
+## 3.0.0
+
+### Patch Changes
+
+- @asteby/metacore-app-providers@149.0.0
+
 ## 2.0.0
 
 ### Patch Changes

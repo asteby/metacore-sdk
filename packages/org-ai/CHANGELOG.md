@@ -1,5 +1,13 @@
 # @asteby/metacore-org-ai
 
+## 1.0.0
+
+### Patch Changes
+
+- Updated dependencies [019192d]
+- Updated dependencies [bdc8a60]
+  - @asteby/metacore-ui@2.27.0
+
 ## 0.1.0
 
 ### Minor Changes
