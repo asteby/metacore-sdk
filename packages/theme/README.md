@@ -94,6 +94,24 @@ behaves exactly as before.
 }
 ```
 
+### Brand backdrop
+
+The backdrop is three radial blobs over a base color. A brand changes the hues
+by overriding the variables only — never `background-image` — so pack updates
+keep applying (import after `glass.css`):
+
+```css
+[data-ui-theme='glass'] {
+  --glass-gradient-1: radial-gradient(48rem 34rem at 10% -8%, oklch(0.42 0.1 255 / 0.55), transparent 70%);
+  --glass-gradient-2: radial-gradient(40rem 30rem at 105% 20%, oklch(0.5 0.09 250 / 0.4), transparent 68%);
+  --glass-gradient-3: radial-gradient(38rem 28rem at 60% 115%, oklch(0.6 0.07 235 / 0.35), transparent 70%);
+}
+.dark[data-ui-theme='glass'] { /* same three variables for dark */ }
+```
+
+`--glass-backdrop` sets the base color under the blobs. Set a gradient to
+`none` to drop it.
+
 An inset with no sidebar sibling (chat-like screens) floats on desktop with
 `<SidebarInset data-glass-float>`.
 

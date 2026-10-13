@@ -81,11 +81,15 @@
   --ui-surface-blur: var(--glass-blur);
   --ui-card-alpha: 0.5;
 
-  background-color: oklch(0.93 0.035 270);
-  background-image:
-    radial-gradient(48rem 34rem at 10% -8%, oklch(0.8 0.11 250 / 0.9), transparent 70%),
-    radial-gradient(40rem 30rem at 105% 20%, oklch(0.78 0.12 295 / 0.75), transparent 68%),
-    radial-gradient(38rem 28rem at 60% 115%, oklch(0.9 0.12 90 / 0.7), transparent 70%);
+  /* Backdrop: brand packs override these three blobs (or --glass-backdrop)
+     instead of rewriting background-image. */
+  --glass-gradient-1: radial-gradient(48rem 34rem at 10% -8%, oklch(0.8 0.11 250 / 0.9), transparent 70%);
+  --glass-gradient-2: radial-gradient(40rem 30rem at 105% 20%, oklch(0.78 0.12 295 / 0.75), transparent 68%);
+  --glass-gradient-3: radial-gradient(38rem 28rem at 60% 115%, oklch(0.9 0.12 90 / 0.7), transparent 70%);
+  --glass-backdrop: oklch(0.93 0.035 270);
+
+  background-color: var(--glass-backdrop);
+  background-image: var(--glass-gradient-1), var(--glass-gradient-2), var(--glass-gradient-3);
   background-attachment: fixed;
 }
 
@@ -126,11 +130,13 @@
   --glass-row-hover: oklch(1 0 0 / 0.05);
   --glass-thead: oklch(0.25 0.03 255 / 0.7);
 
-  background-color: oklch(0.16 0.03 260);
-  background-image:
-    radial-gradient(42rem 28rem at 8% -8%, oklch(0.45 0.16 250 / 0.7), transparent 70%),
-    radial-gradient(32rem 24rem at 100% 0%, oklch(0.4 0.12 200 / 0.55), transparent 68%),
-    radial-gradient(28rem 22rem at 70% 100%, oklch(0.42 0.14 300 / 0.45), transparent 70%);
+  --glass-gradient-1: radial-gradient(42rem 28rem at 8% -8%, oklch(0.45 0.16 250 / 0.7), transparent 70%);
+  --glass-gradient-2: radial-gradient(32rem 24rem at 100% 0%, oklch(0.4 0.12 200 / 0.55), transparent 68%);
+  --glass-gradient-3: radial-gradient(28rem 22rem at 70% 100%, oklch(0.42 0.14 300 / 0.45), transparent 70%);
+  --glass-backdrop: oklch(0.16 0.03 260);
+
+  background-color: var(--glass-backdrop);
+  background-image: var(--glass-gradient-1), var(--glass-gradient-2), var(--glass-gradient-3);
   background-attachment: fixed;
 }
 
