@@ -1,7 +1,7 @@
 {
   "name": "@asteby/metacore-app-providers",
   "version": "149.0.0",
-  "description": "Providers genéricos reutilizables para apps metacore (direction, font, layout, search, platform-config)",
+  "description": "Providers gen\u00e9ricos reutilizables para apps metacore (direction, font, layout, search, platform-config)",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -60,6 +60,7 @@
   "devDependencies": {
     "@asteby/metacore-pwa": "workspace:*",
     "@asteby/metacore-runtime-react": "workspace:*",
+    "@asteby/metacore-theme": "workspace:*",
     "@asteby/metacore-ui": "workspace:*",
     "@radix-ui/react-direction": "^1.1.1",
     "@tanstack/react-query": "^5.59.0",

@@ -370,6 +370,9 @@ importers:
       '@asteby/metacore-runtime-react':
         specifier: workspace:*
         version: link:../runtime-react
+      '@asteby/metacore-theme':
+        specifier: workspace:*
+        version: link:../theme
       '@asteby/metacore-ui':
         specifier: workspace:*
         version: link:../ui

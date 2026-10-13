@@ -5,6 +5,7 @@ const vars = {
   '--primary': 'oklch(0.6 0.19 260)',
   '--primary-foreground': 'oklch(0.98 0 0)',
   '--chart-2': 'oklch(0.6 0.19 260)',
+  '--ring': 'oklch(0.8 0.19 260)',
   '--background': 'oklch(0.994 0 0)',
   '--card': 'oklch(0.994 0 0)',
   '--sidebar': 'oklch(0.97 0.005 260)',
@@ -35,7 +36,9 @@ describe('buildBrandingSurfaceCss', () => {
   })
 
   it('makes a pack follow the brand accent on ring and active sidebar item', () => {
-    expect(pack).toContain('--ring: oklch(0.6 0.19 260);')
+    // The ring is the brand shade tuned for a 50% focus halo, not the raw primary.
+    expect(pack).toContain('--ring: oklch(0.8 0.19 260);')
+    expect(pack).toContain('--sidebar-ring: oklch(0.8 0.19 260);')
     expect(pack).toContain('--sidebar-primary: oklch(0.6 0.19 260);')
     expect(pack).toContain('--sidebar-primary-foreground: oklch(0.98 0 0);')
   })

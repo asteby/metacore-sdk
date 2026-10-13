@@ -17,6 +17,7 @@ export {
   applyBranding,
   applyCachedBranding,
   buildBrandingSurfaceCss,
+  deriveBrandTokens,
   THEME_PACK_ATTRIBUTE,
   FALLBACK_BRANDING,
   type PlatformBranding,

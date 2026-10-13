@@ -92,10 +92,9 @@ function hexToOklch(hex: string): string | null {
   return `oklch(${L.toFixed(4)} ${C.toFixed(4)} ${h.toFixed(4)})`
 }
 
-// oklch → linear-sRGB relative luminance (CIE Y, 0..1). Used to choose a
-// readable text color over an arbitrary brand surface. Inverse of the
-// matrices in hexToOklch.
-function oklchLuminance(L: number, C: number, hDeg: number): number {
+// oklch → gamma-encoded sRGB, out-of-gamut channels clipped the way browsers
+// paint them. Inverse of the matrices in hexToOklch.
+function oklchToSrgb(L: number, C: number, hDeg: number): [number, number, number] {
   const h = (hDeg * Math.PI) / 180
   const a = C * Math.cos(h)
   const b = C * Math.sin(h)
@@ -108,11 +107,61 @@ function oklchLuminance(L: number, C: number, hDeg: number): number {
   const m = m_ * m_ * m_
   const s = s_ * s_ * s_
 
-  const lr = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s
-  const lg = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s
-  const lb = -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s
+  const lin = [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
+  ]
+  return lin.map((v) => {
+    const x = Math.min(1, Math.max(0, v))
+    return x <= 0.0031308 ? 12.92 * x : 1.055 * Math.pow(x, 1 / 2.4) - 0.055
+  }) as [number, number, number]
+}
 
-  return 0.2126 * lr + 0.7152 * lg + 0.0722 * lb
+// WCAG relative luminance of a gamma-encoded sRGB triple.
+function srgbLuminance([r, g, b]: [number, number, number]): number {
+  const lin = (v: number) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4))
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+}
+
+// oklch → WCAG relative luminance (0..1).
+function oklchLuminance(L: number, C: number, hDeg: number): number {
+  return srgbLuminance(oklchToSrgb(L, C, hDeg))
+}
+
+// WCAG contrast ratio between two relative luminances.
+function contrastY(a: number, b: number): number {
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+}
+
+// WCAG 2.x AA minimums the derived tokens are held to.
+const AA_TEXT = 4.5
+const AA_NON_TEXT = 3
+
+/**
+ * Moves the lightness of an oklch color (hue/chroma kept) away from a surface
+ * until it reaches `min` contrast with it — lighter on dark surfaces, darker on
+ * light ones. `alpha` < 1 measures the color painted translucently over the
+ * surface (focus rings are drawn at 50%).
+ */
+function ensureL(
+  l: number,
+  c: number,
+  h: number,
+  surface: [number, number, number],
+  min: number,
+  alpha = 1,
+): number {
+  const surfaceY = srgbLuminance(surface)
+  const up = surfaceY < 0.18
+  const ratio = (x: number) => {
+    const fg = oklchToSrgb(x, c, h)
+    const mixed = fg.map((v, i) => v * alpha + surface[i]! * (1 - alpha)) as [number, number, number]
+    return contrastY(srgbLuminance(mixed), surfaceY)
+  }
+  let x = l
+  while (ratio(x) < min && x > 0 && x < 1) x = Math.min(1, Math.max(0, x + (up ? 0.005 : -0.005)))
+  return x
 }
 
 // Pick near-black or near-white for text on a brand surface, by a perceptual
@@ -127,8 +176,18 @@ function oklchLuminance(L: number, C: number, hDeg: number): number {
 const FG_LIGHT = 'oklch(0.985 0 0)'
 const FG_DARK = 'oklch(0.18 0 0)'
 const FG_LUMINANCE_THRESHOLD = 0.3
+const FG_LIGHT_Y = oklchLuminance(0.985, 0, 0)
+const FG_DARK_Y = oklchLuminance(0.18, 0, 0)
 function readableForeground(l: number, c: number, h: number): string {
-  return oklchLuminance(l, c, h) > FG_LUMINANCE_THRESHOLD ? FG_DARK : FG_LIGHT
+  const y = oklchLuminance(l, c, h)
+  const pick = y > FG_LUMINANCE_THRESHOLD ? FG_DARK : FG_LIGHT
+  const pickY = pick === FG_DARK ? FG_DARK_Y : FG_LIGHT_Y
+  const otherY = pick === FG_DARK ? FG_LIGHT_Y : FG_DARK_Y
+  // The threshold reads better on mid tones, but never at the cost of AA.
+  if (contrastY(pickY, y) < AA_TEXT && contrastY(otherY, y) > contrastY(pickY, y)) {
+    return pick === FG_DARK ? FG_LIGHT : FG_DARK
+  }
+  return pick
 }
 
 // The full set of CSS custom properties the branding system owns. Both
@@ -169,6 +228,22 @@ function clampL(l: number, min: number, max: number) {
 }
 
 function generateThemeVars(primaryHex: string, accentHex: string) {
+  const isDark = document.documentElement.classList.contains('dark')
+  return deriveBrandTokens(primaryHex, accentHex, isDark ? 'dark' : 'light')
+}
+
+/**
+ * Pure derivation of the brand tokens for one mode (what applyBranding
+ * paints). Every pair it emits holds WCAG AA: primary/primary-foreground and
+ * accent-foreground/accent at 4.5:1, the dark primary at 4.5:1 as text on the
+ * dark surfaces, the light primary at 3:1 on the canvas, the 50% focus ring
+ * and the input boundary at 3:1 on the card.
+ */
+export function deriveBrandTokens(
+  primaryHex: string,
+  accentHex: string,
+  mode: 'light' | 'dark',
+): Record<string, string> | null {
   const primary = hexToOklch(primaryHex)
   const accent = hexToOklch(accentHex)
   if (!primary || !accent) return null
@@ -182,7 +257,7 @@ function generateThemeVars(primaryHex: string, accentHex: string) {
   const p = parseOklch(primary)
   if (!p) return null
 
-  const isDark = document.documentElement.classList.contains('dark')
+  const isDark = mode === 'dark'
 
   // A grey/near-grey brand has no meaningful hue — hexToOklch returns float
   // noise for it (e.g. #2b2b2b → h≈90). Applying the surfaces' fixed chroma
@@ -206,18 +281,34 @@ function generateThemeVars(primaryHex: string, accentHex: string) {
     // a mid-grey primary on a dark-grey canvas reads as muddy, not branded.
     // Invert it instead: a near-white primary, like a neutral dark theme, so
     // buttons/active states are crisp light-on-dark.
-    const lPrimary = isAchromatic ? 0.92 : clampL(p.l + 0.05, 0.55, 0.7)
-    const fgPrimary = readableForeground(lPrimary, isAchromatic ? 0 : p.c, p.h)
+    //
+    // Contrast floor (WCAG AA): the primary is also link/label text and the
+    // active nav item text, so it is lifted until it reads at 4.5:1 on the
+    // lightest dark surface it sits on (secondary/muted/sidebar-accent, L 0.29).
+    // A deep brand (navy, indigo, wine) therefore lands lighter than the old
+    // 0.55 floor — readable instead of dissolving into the canvas.
+    const c0 = isAchromatic ? 0 : p.c
+    const hN = isAchromatic ? 0 : p.h
+    const scN = (c: number) => (isAchromatic ? 0 : c)
+    let lPrimary = isAchromatic ? 0.92 : clampL(p.l + 0.05, 0.55, 0.7)
+    lPrimary = ensureL(lPrimary, c0, hN, oklchToSrgb(0.29, scN(0.02), hN), AA_TEXT)
+    const fgPrimary = readableForeground(lPrimary, c0, p.h)
+    // Focus rings are painted at 50% (ring-ring/50): lift until that still
+    // clears 3:1 on the card.
+    const lRing = ensureL(lPrimary, c0, hN, oklchToSrgb(0.24, scN(0.01), hN), AA_NON_TEXT, 0.5)
+    const lAccentFg = ensureL(0.8, scN(0.1), hN, oklchToSrgb(0.28, scN(0.05), hN), AA_TEXT)
+    // Control boundary (inputs, checkboxes): 3:1 on the card.
+    const lInput = ensureL(0.33, scN(0.02), hN, oklchToSrgb(0.24, scN(0.01), hN), AA_NON_TEXT)
     vars['--primary'] = `oklch(${lPrimary.toFixed(4)} ${pc} ${h})`
     vars['--primary-foreground'] = fgPrimary
-    vars['--ring'] = vars['--primary']
+    vars['--ring'] = `oklch(${lRing.toFixed(4)} ${pc} ${h})`
     vars['--chart-2'] = vars['--primary']
     vars['--secondary'] = `oklch(0.29 ${sc(0.02)} ${h})`
     vars['--muted'] = `oklch(0.29 ${sc(0.02)} ${h})`
     vars['--accent'] = `oklch(0.28 ${sc(0.05)} ${h})`
-    vars['--accent-foreground'] = `oklch(0.80 ${sc(0.10)} ${h})`
+    vars['--accent-foreground'] = `oklch(${lAccentFg.toFixed(4)} ${sc(0.10)} ${h})`
     vars['--border'] = `oklch(0.33 ${sc(0.02)} ${h})`
-    vars['--input'] = `oklch(0.33 ${sc(0.02)} ${h})`
+    vars['--input'] = `oklch(${lInput.toFixed(4)} ${sc(0.02)} ${h})`
     vars['--background'] = `oklch(0.22 ${sc(0.01)} ${h})`
     vars['--card'] = `oklch(0.24 ${sc(0.01)} ${h})`
     vars['--popover'] = `oklch(0.24 ${sc(0.01)} ${h})`
@@ -227,24 +318,44 @@ function generateThemeVars(primaryHex: string, accentHex: string) {
     vars['--sidebar-accent'] = `oklch(0.29 ${sc(0.02)} ${h})`
     vars['--sidebar-accent-foreground'] = vars['--primary']
     vars['--sidebar-border'] = `oklch(0.33 ${sc(0.02)} ${h})`
-    vars['--sidebar-ring'] = vars['--primary']
+    vars['--sidebar-ring'] = vars['--ring']
   } else {
     // Symmetric to the dark branch: a grey/near-black brand inverts to a
     // near-black primary on the light canvas (crisp dark-on-light), instead
     // of a washed mid-grey.
-    const lPrimary = isAchromatic ? 0.21 : clampL(p.l, 0.45, 0.65)
+    //
+    // Contrast floor (WCAG AA): the primary keeps 3:1 against the canvas as a
+    // button/graphic boundary, and its foreground 4.5:1 on it — a mid-tone
+    // brand where neither black nor white reaches 4.5:1 is darkened until
+    // white does. Bright brands (lime, yellow) keep their look with dark text.
+    const c0 = isAchromatic ? 0 : p.c
+    const hN = isAchromatic ? 0 : p.h
+    const scN = (c: number) => (isAchromatic ? 0 : c)
+    const canvas = oklchToSrgb(0.994, 0, 0)
+    let lPrimary = isAchromatic ? 0.21 : clampL(p.l, 0.45, 0.65)
+    lPrimary = ensureL(lPrimary, c0, hN, canvas, AA_NON_TEXT)
+    let fgPrimary = readableForeground(lPrimary, c0, p.h)
+    const fgY = fgPrimary === FG_DARK ? FG_DARK_Y : FG_LIGHT_Y
+    if (contrastY(oklchLuminance(lPrimary, c0, hN), fgY) < AA_TEXT) {
+      const fgL = fgPrimary === FG_DARK ? 0.18 : 0.985
+      lPrimary = ensureL(lPrimary, c0, hN, oklchToSrgb(fgL, 0, 0), AA_TEXT)
+      fgPrimary = readableForeground(lPrimary, c0, p.h)
+    }
     const primaryClamped = `oklch(${lPrimary.toFixed(4)} ${pc} ${h})`
-    const fgPrimary = readableForeground(lPrimary, isAchromatic ? 0 : p.c, p.h)
+    // Focus ring at 50%: a deep shade of the brand that still clears 3:1.
+    const lRing = ensureL(Math.min(lPrimary, 0.35), c0, hN, canvas, AA_NON_TEXT, 0.5)
+    const lAccentFg = ensureL(0.5445, scN(0.1903), hN, oklchToSrgb(0.94, scN(0.03), hN), AA_TEXT)
+    const lInput = ensureL(0.9401, 0, 0, canvas, AA_NON_TEXT)
     vars['--primary'] = primaryClamped
     vars['--primary-foreground'] = fgPrimary
-    vars['--ring'] = `oklch(0 0 0)`
+    vars['--ring'] = `oklch(${lRing.toFixed(4)} ${pc} ${h})`
     vars['--chart-2'] = primaryClamped
     vars['--secondary'] = `oklch(0.9540 ${sc(0.0063)} ${h})`
     vars['--muted'] = `oklch(0.9702 0 0)`
     vars['--accent'] = `oklch(0.94 ${sc(0.03)} ${h})`
-    vars['--accent-foreground'] = `oklch(0.5445 ${sc(0.1903)} ${h})`
+    vars['--accent-foreground'] = `oklch(${lAccentFg.toFixed(4)} ${sc(0.1903)} ${h})`
     vars['--border'] = `oklch(0.9300 ${sc(0.0094)} ${h})`
-    vars['--input'] = `oklch(0.9401 0 0)`
+    vars['--input'] = `oklch(${lInput.toFixed(4)} 0 0)`
     vars['--background'] = `oklch(0.9940 0 0)`
     vars['--card'] = `oklch(0.9940 0 0)`
     vars['--popover'] = `oklch(0.9911 0 0)`
@@ -254,7 +365,7 @@ function generateThemeVars(primaryHex: string, accentHex: string) {
     vars['--sidebar-accent'] = `oklch(0.9401 0 0)`
     vars['--sidebar-accent-foreground'] = `oklch(0 0 0)`
     vars['--sidebar-border'] = `oklch(0.9401 0 0)`
-    vars['--sidebar-ring'] = `oklch(0 0 0)`
+    vars['--sidebar-ring'] = vars['--ring']
   }
 
   return vars
@@ -273,11 +384,12 @@ const BRAND_ACCENT_KEYS = ['--primary', '--primary-foreground', '--chart-2'] as 
 
 // Tokens that follow the brand accent under a theme pack (active nav item,
 // focus ring) so a custom brand color doesn't leave the pack's own hue there.
-const PACK_ACCENT_FOLLOW: Record<string, '--primary' | '--primary-foreground'> = {
-  '--ring': '--primary',
+const PACK_ACCENT_FOLLOW: Record<string, '--primary' | '--primary-foreground' | '--ring'> = {
+  // The ring is the brand shade tuned for a 50% focus halo (see generateThemeVars).
+  '--ring': '--ring',
   '--sidebar-primary': '--primary',
   '--sidebar-primary-foreground': '--primary-foreground',
-  '--sidebar-ring': '--primary',
+  '--sidebar-ring': '--ring',
 }
 
 const BRANDING_STYLE_ID = 'metacore-branding-surfaces'
