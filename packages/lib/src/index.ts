@@ -7,8 +7,8 @@ export {
 } from './date'
 export type { TimezoneInfo } from './date'
 
-export { formatNumber, formatPercentage, truncate } from './format'
-export type { FormatNumberOptions } from './format'
+export { formatNumber, formatPercentage, formatDuration, truncate } from './format'
+export type { FormatNumberOptions, FormatDurationOptions } from './format'
 
 export {
   formatCurrency,
