@@ -458,7 +458,8 @@ export function LinkPreviewCard({
 
   const root = cn(
     'group/link-preview bg-card text-card-foreground relative isolate flex overflow-hidden rounded-xl border shadow-xs transition-[border-color,box-shadow] motion-reduce:transition-none',
-    'has-[:focus-visible]:ring-ring/50 has-[:focus-visible]:ring-[3px] hover:border-foreground/20 hover:shadow-sm',
+    // Outline (not ring): themes that restyle the card's box-shadow must not hide the focus.
+    'has-[:focus-visible]:outline-ring has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 hover:border-foreground/20 hover:shadow-sm',
     horizontal ? 'flex-row items-start gap-3 p-3' : 'flex-col',
     className
   )
