@@ -86,6 +86,43 @@ import { PillTabsList, PillTabsTrigger } from '@asteby/metacore-ui/profile'
 Optional i18n keys (Spanish fallbacks): `data_state.<kind>`, `data_state.retry`,
 `page_header.more`, `qr_frame.loading`, `qr_frame.expired`, `qr_frame.refresh`.
 
+## Link previews
+
+WhatsApp/Slack-style cards for news, posts and evidence. The components **never fetch external sites**:
+the backend extracts the metadata (`og:title`, `og:image`, site name, favicon...) and the app passes it in.
+Route images through your own proxy with `resolveImageUrl`.
+
+```tsx
+import { LinkPreviewCard, MediaGrid, SourceBadge, FaviconAvatar } from '@asteby/metacore-ui/shared'
+
+const proxy = (u: string) => `/api/media/proxy?url=${encodeURIComponent(u)}`
+
+<MediaGrid aria-label="Evidencias" minItemWidth={300}>
+  {items.map(n => (
+    <LinkPreviewCard
+      key={n.id}
+      variant="rich"               // compact | row | rich | hero
+      data={{ url: n.url, title: n.title, description: n.summary, imageUrl: n.ogImage,
+              siteName: n.siteName, faviconUrl: n.favicon, kind: 'article', publishedAt: n.publishedAt }}
+      resolveImageUrl={proxy}
+      meta="Colima · Seguridad"
+      badges={<Badge variant="outline">+3 medios</Badge>}
+      onSelect={() => openDetail(n.id)} // optional: card becomes a button, external link stays secondary
+    />
+  ))}
+</MediaGrid>
+
+<SourceBadge domain="medio.mx" siteName="El Medio" faviconUrl={fav} suffix="· hace 2 h" />
+<FaviconAvatar domain="medio.mx" size="md" />
+```
+
+- Fixed aspect ratios (16:9 for `rich`/`hero`, square thumbnails for `row`/`compact`) → no layout shift;
+  skeleton + blur while loading; favicon + domain + initial fallback when there is no image or it fails.
+- Whole card clickable (stretched link/button) with visible focus; badges, footer and the secondary
+  external link remain focusable. External links use `target="_blank" rel="noopener noreferrer nofollow"`.
+- `loading` renders a skeleton with the same footprint. `formatRelativeTime(date, { now, locale })` and
+  `domainFromUrl(url)` are exported. Labels follow `locale` (`es` default, `en`).
+
 ## i18n
 
 Components that render user-facing strings (`DataTablePagination`, `DataTableViewOptions`, `DataTableColumnHeader`, `CommandMenu`) use `react-i18next`'s `useTranslation()` hook and expect these keys:
