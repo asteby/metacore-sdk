@@ -56,9 +56,37 @@ interface BadgeStyleOptions {
   isDark: boolean
 }
 
+type Rgb = [number, number, number]
+
+// Surfaces a badge is assumed to sit on: a near-white card in light mode and
+// a slightly lifted dark card in dark mode (covers plain dark and glass).
+const LIGHT_SURFACE: Rgb = [255, 255, 255]
+const DARK_SURFACE: Rgb = [33, 38, 47]
+const AA_TEXT = 4.5
+
+function luminance([r, g, b]: Rgb): number {
+  const lin = (v: number) => {
+    const c = v / 255
+    return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
+  }
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
+}
+
+function contrast(a: Rgb, b: Rgb): number {
+  const la = luminance(a)
+  const lb = luminance(b)
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)
+}
+
+const mix = (a: Rgb, b: Rgb, t: number): Rgb =>
+  [0, 1, 2].map((i) => Math.round(a[i]! + (b[i]! - a[i]!) * t)) as Rgb
+
 /**
  * Builds the inline style object for a colored badge (background + border +
- * text), tinted in the OptionDef color and adapted to light/dark mode.
+ * text), tinted in the OptionDef color and adapted to light/dark mode. The
+ * text is pushed toward white (dark) or black (light) until it reads at WCAG
+ * AA 4.5:1 on the tinted background — a navy or wine option color no longer
+ * vanishes on a dark card.
  */
 export const generateBadgeStyles = (
   input: string,
@@ -69,19 +97,22 @@ export const generateBadgeStyles = (
   const r = parseInt(hex.substring(0, 2), 16)
   const g = parseInt(hex.substring(2, 4), 16)
   const b = parseInt(hex.substring(4, 6), 16)
-
-  if (isDark) {
-    return {
-      backgroundColor: `rgba(${r}, ${g}, ${b}, 0.2)`,
-      color: `rgb(${Math.min(255, Math.floor(r * 1.2))}, ${Math.min(255, Math.floor(g * 1.2))}, ${Math.min(255, Math.floor(b * 1.2))})`,
-      border: `1px solid rgba(${r}, ${g}, ${b}, 0.5)`,
-      fontWeight: 500,
-    }
+  const base: Rgb = [r, g, b]
+  const bgAlpha = isDark ? 0.2 : 0.12
+  const surface = isDark ? DARK_SURFACE : LIGHT_SURFACE
+  const tinted = mix(surface, base, bgAlpha)
+  let text: Rgb = isDark
+    ? (base.map((v) => Math.min(255, Math.floor(v * 1.2))) as Rgb)
+    : (base.map((v) => Math.floor(v * 0.5)) as Rgb)
+  const target: Rgb = isDark ? [255, 255, 255] : [0, 0, 0]
+  for (let t = 0.05; contrast(text, tinted) < AA_TEXT && t <= 1; t += 0.05) {
+    text = mix(text, target, t)
   }
+
   return {
-    backgroundColor: `rgba(${r}, ${g}, ${b}, 0.12)`,
-    color: `rgb(${Math.floor(r * 0.5)}, ${Math.floor(g * 0.5)}, ${Math.floor(b * 0.5)})`,
-    border: `1px solid rgba(${r}, ${g}, ${b}, 0.25)`,
+    backgroundColor: `rgba(${r}, ${g}, ${b}, ${bgAlpha})`,
+    color: `rgb(${text[0]}, ${text[1]}, ${text[2]})`,
+    border: `1px solid rgba(${r}, ${g}, ${b}, ${isDark ? 0.5 : 0.25})`,
     fontWeight: 500,
   }
 }
