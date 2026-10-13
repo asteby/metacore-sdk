@@ -146,8 +146,9 @@ export function FaviconAvatar({
   resolveImageUrl,
   className,
 }: FaviconAvatarProps) {
-  const [failed, setFailed] = React.useState(false)
-  React.useEffect(() => setFailed(false), [faviconUrl])
+  // Remember WHICH url failed: a new url retries without an effect.
+  const [failedUrl, setFailedUrl] = React.useState<string | null>(null)
+  const failed = !!faviconUrl && failedUrl === faviconUrl
   const src = faviconUrl && !failed ? (resolveImageUrl ? resolveImageUrl(faviconUrl) : faviconUrl) : null
   return (
     <span
@@ -167,7 +168,7 @@ export function FaviconAvatar({
           decoding='async'
           referrerPolicy='no-referrer'
           className='size-full object-contain'
-          onError={() => setFailed(true)}
+          onError={() => setFailedUrl(faviconUrl ?? null)}
         />
       ) : (
         initialOf(name || domain)
@@ -291,16 +292,20 @@ function PreviewMedia({
   kindLabel,
   resolveImageUrl,
 }: PreviewMediaProps) {
-  const [status, setStatus] = React.useState<'loading' | 'loaded' | 'error'>('loading')
-  const imgRef = React.useRef<HTMLImageElement>(null)
-  React.useEffect(() => {
-    setStatus('loading')
-  }, [imageUrl])
+  // Status is keyed by url: a new url starts as `loading` without an effect.
+  const [state, setState] = React.useState<{ url: string | null | undefined; status: 'loading' | 'loaded' | 'error' }>(
+    { url: imageUrl, status: 'loading' }
+  )
+  const status = state.url === imageUrl ? state.status : 'loading'
+  const setStatus = (next: 'loaded' | 'error') => setState({ url: imageUrl, status: next })
   // Cached images may finish before React attaches onLoad.
-  React.useEffect(() => {
-    const img = imgRef.current
-    if (img?.complete && img.naturalWidth > 0) setStatus('loaded')
-  }, [imageUrl])
+  const imgRef = React.useCallback(
+    (img: HTMLImageElement | null) => {
+      if (img?.complete && img.naturalWidth > 0)
+        setState((prev) => (prev.url === imageUrl && prev.status === 'loaded' ? prev : { url: imageUrl, status: 'loaded' }))
+    },
+    [imageUrl]
+  )
 
   const src = imageUrl ? (resolveImageUrl ? resolveImageUrl(imageUrl) : imageUrl) : null
   const showImage = !!src && status !== 'error'
