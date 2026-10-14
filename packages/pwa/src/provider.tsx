@@ -74,6 +74,13 @@ export interface PWAProviderProps {
   pushOptions?: PushServiceOptions
   /** Override user-facing toast messages. */
   messages?: PWAProviderMessages
+  /**
+   * Toast shown when the service worker finished precaching ("App lista para
+   * funcionar sin conexión"). `true` (default) shows the default toast,
+   * `false` silences it, and a function replaces it (receives the resolved
+   * `messages.offlineReady`).
+   */
+  offlineReadyToast?: boolean | ((message: string) => void)
   /** Interval in ms between SW update checks. Default: 1 hour (5 min when `updateStrategy="prompt"`). Set to 0 to disable. */
   updateCheckIntervalMs?: number
   /**
@@ -120,6 +127,7 @@ export function PWAProvider({
   api,
   pushOptions,
   messages,
+  offlineReadyToast = true,
   updateCheckIntervalMs,
   updateStrategy = 'auto',
   autoApplyAfterMs,
@@ -177,7 +185,16 @@ export function PWAProvider({
       onRegisterError?.(error)
     },
     onOfflineReady() {
-      toast.success(msgs.offlineReady)
+      if (typeof offlineReadyToast === 'function') {
+        try {
+          offlineReadyToast(msgs.offlineReady)
+        } catch (error) {
+          // eslint-disable-next-line no-console
+          console.error('offlineReadyToast failed:', error)
+        }
+      } else if (offlineReadyToast) {
+        toast.success(msgs.offlineReady)
+      }
     },
   })
 

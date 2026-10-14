@@ -50,6 +50,7 @@ export {
   OfflineIndicator,
   NotificationPermissionPrompt,
 } from './components'
+export type { UpdatePromptProps, UpdatePromptToastContext } from './components'
 
 // `metacorePWA` lives in the dedicated `@asteby/metacore-pwa/vite-plugin`
 // sub-export. Re-exporting it from the root would drag `vite-plugin-pwa`

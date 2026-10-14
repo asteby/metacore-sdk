@@ -20,6 +20,27 @@ export interface UpdatePromptProps {
    * replace this card instead of stacking. Default: `sys:app-update`.
    */
   toastId?: string | number
+  /** `false` never shows the update toast (default `true`). */
+  enabled?: boolean
+  /**
+   * Replaces the default card. Called once per pending update (and again
+   * after a modal closes) with the resolved texts and handlers. Use `toastId`
+   * for your toast so it is retracted while a modal is open.
+   */
+  renderToast?: (ctx: UpdatePromptToastContext) => void
+}
+
+/** What a custom `renderToast` receives. */
+export interface UpdatePromptToastContext {
+  toastId: string | number
+  title: string
+  description: string
+  updateLabel: string
+  dismissLabel: string
+  /** Sticky when `Infinity`. */
+  duration: number
+  update: () => void
+  dismiss: () => void
 }
 
 const DEFAULTS: Required<UpdatePromptMessages> = {
@@ -41,6 +62,8 @@ export function PWAUpdatePrompt({
   messages,
   duration = 0,
   toastId = PWA_UPDATE_TOAST_ID,
+  enabled = true,
+  renderToast,
 }: UpdatePromptProps = {}) {
   const { needRefresh, updateApp, closeUpdatePrompt } = usePWAContext()
   const msgs = { ...DEFAULTS, ...messages }
@@ -57,8 +80,29 @@ export function PWAUpdatePrompt({
       }
       return
     }
+    if (!enabled) {
+      if (shown.current) {
+        toast.dismiss(toastId)
+        shown.current = false
+      }
+      return
+    }
     if (!needRefresh || shown.current) return
     shown.current = true
+
+    if (renderToast) {
+      renderToast({
+        toastId,
+        title: msgs.title,
+        description: msgs.description,
+        updateLabel: msgs.updateLabel,
+        dismissLabel: msgs.dismissLabel,
+        duration: duration || Infinity,
+        update: updateApp,
+        dismiss: closeUpdatePrompt,
+      })
+      return
+    }
 
     showNotificationToast({
       id: toastId,
@@ -77,7 +121,7 @@ export function PWAUpdatePrompt({
       },
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [needRefresh, modalOpen])
+  }, [needRefresh, modalOpen, enabled])
 
   return null
 }
