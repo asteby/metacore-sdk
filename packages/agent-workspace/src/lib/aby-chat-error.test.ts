@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { abyErrorActionLabel, abyTurnErrorOf } from './aby-chat-error'
+import { abyErrorActionLabel, abyTurnErrorFromMeta, abyTurnErrorOf } from './aby-chat-error'
 
 describe('abyTurnErrorOf', () => {
   it('lee el error clasificado del servidor', () => {
@@ -60,5 +60,34 @@ describe('isClaudeProvider', () => {
     expect(isClaudeProvider('claude_code_proxy')).toBe(true)
     expect(isClaudeProvider('codex')).toBe(false)
     expect(isClaudeProvider(undefined)).toBe(false)
+  })
+})
+
+describe('abyTurnErrorFromMeta', () => {
+  const turnError = {
+    code: 'unavailable',
+    message: 'No pude conectarme con el proveedor de IA.',
+    actions: ['retry', 'switch_provider'],
+  }
+
+  it('lee metadata.turn_error como objeto o JSON', () => {
+    for (const meta of [{ turn_error: turnError }, JSON.stringify({ turn_error: turnError })]) {
+      const err = abyTurnErrorFromMeta(meta)
+      expect(err?.code).toBe('unavailable')
+      expect(err?.message).toBe(turnError.message)
+      expect(err?.actions).toEqual(['retry', 'switch_provider'])
+    }
+  })
+
+  it('usa el contenido de la fila si el aviso no trae mensaje y retry por defecto', () => {
+    const err = abyTurnErrorFromMeta({ turn_error: { code: 'empty_reply' } }, 'Texto guardado')
+    expect(err?.message).toBe('Texto guardado')
+    expect(err?.actions).toEqual(['retry'])
+  })
+
+  it('devuelve null para respuestas normales o metadata inválida', () => {
+    expect(abyTurnErrorFromMeta(undefined)).toBeNull()
+    expect(abyTurnErrorFromMeta('{no json')).toBeNull()
+    expect(abyTurnErrorFromMeta({ embeds: [] })).toBeNull()
   })
 })

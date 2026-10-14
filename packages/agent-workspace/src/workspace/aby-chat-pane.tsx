@@ -42,6 +42,7 @@ import { readLastAbySession, rememberAbySession } from '../lib/chat-context'
 import { stripMarkdownLite } from '../lib/plain-text'
 import { matchProposalDecision } from '../lib/aby-proposal-intent'
 import {
+  AbyNetworkDownError,
   isAbyStillProcessing,
   isAbyTransportError,
   pollAbyAssistantReply,
@@ -50,6 +51,7 @@ import {
 import {
   abyErrorActionLabel,
   isClaudeProvider,
+  abyTurnErrorFromMeta,
   abyTurnErrorOf,
   type AbyTurnError,
   type AbyTurnErrorAction,
@@ -135,11 +137,89 @@ function attachmentThumb(f: PendingFile): string | null {
   return null
 }
 
+type HistoryMeta = {
+  embeds?: ChatAttachment[]
+  proposals?: AbyProposal[]
+  attachments?: ChatAttachment[]
+  suggested_guide?: { id: string; title: string; confidence: number }
+  turn_error?: unknown
+}
+
+type HistoryRow = {
+  role: string
+  content: string
+  media_url?: string
+  metadata?: HistoryMeta | string
+}
+
+/**
+ * One persisted row as a chat message. A saved failed-turn notice
+ * (`metadata.turn_error`) comes back as an error bubble whose «Reintentar»
+ * resends the preceding user question, exactly like a live failure.
+ */
+function historyRowToMessage(r: HistoryRow, prev?: Message): Message {
+  let meta: unknown = r.metadata
+  if (typeof meta === 'string') {
+    try {
+      meta = JSON.parse(meta)
+    } catch {
+      meta = undefined
+    }
+  }
+  const m = (meta && typeof meta === 'object' ? meta : undefined) as HistoryMeta | undefined
+  if (r.role === 'user') {
+    const atts = (m?.attachments || []) as ChatAttachment[]
+    const fileAtts: PendingFile[] = atts
+      .filter((a) => a.url && !isChatEmbed(a))
+      .map((a) => ({
+        url: a.url!,
+        name: a.name || a.title || 'archivo',
+        mime_type: a.mime_type || '',
+        size: a.size,
+      }))
+    if (!fileAtts.length && r.media_url) {
+      fileAtts.push({
+        url: r.media_url,
+        name: 'adjunto',
+        mime_type: guessMimeFromUrl(r.media_url),
+      })
+    }
+    return {
+      role: 'user' as const,
+      content: r.content,
+      attachments: fileAtts.length ? fileAtts : undefined,
+      embeds: atts.filter(isChatEmbed).length ? atts.filter(isChatEmbed) : m?.embeds,
+    }
+  }
+  const turnError = abyTurnErrorFromMeta(m, r.content)
+  if (turnError) {
+    return {
+      role: 'ai' as const,
+      content: turnError.message,
+      error: turnError,
+      retry:
+        prev?.role === 'user'
+          ? { text: prev.content, files: prev.attachments || [], embeds: prev.embeds || [] }
+          : undefined,
+    }
+  }
+  return {
+    role: 'ai' as const,
+    content: r.content,
+    embeds: m?.embeds,
+    proposals: m?.proposals,
+    suggestedGuide: m?.suggested_guide,
+  }
+}
+
 function friendlyAbyError(err: unknown): string {
   const ax = err as {
     code?: string
     message?: string
     response?: { status?: number; data?: unknown }
+  }
+  if (err instanceof AbyNetworkDownError) {
+    return 'Sin conexión a internet. Revisa tu red y reintenta.'
   }
   // Axios "Network Error" = no HTTP response (proxy timeout / connection reset).
   // Vision + tools often exceed Cloudflare's origin wait → user sees this blank.
@@ -537,63 +617,11 @@ export function AbyChatPane({
   const openSession = useCallback(async (sessionId: string, title: string) => {
     try {
       const { data } = await api.get(`/chat/history/${sessionId}`)
-      const rows = (data?.data || []) as Array<{
-        role: string
-        content: string
-        media_url?: string
-        metadata?: {
-          embeds?: ChatAttachment[]
-          proposals?: AbyProposal[]
-          attachments?: ChatAttachment[]
-          suggested_guide?: { id: string; title: string; confidence: number }
-        } | string
-      }>
-      const messages: Message[] = rows.map((r) => {
-        let meta = r.metadata
-        if (typeof meta === 'string') {
-          try {
-            meta = JSON.parse(meta)
-          } catch {
-            meta = undefined
-          }
-        }
-        const m = meta as
-          | { embeds?: ChatAttachment[]; proposals?: AbyProposal[]; attachments?: ChatAttachment[]; suggested_guide?: { id: string; title: string; confidence: number } }
-          | undefined
-        if (r.role === 'user') {
-          const atts = (m?.attachments || []) as ChatAttachment[]
-          const fileAtts: PendingFile[] = atts
-            .filter((a) => a.url && !isChatEmbed(a))
-            .map((a) => ({
-              url: a.url!,
-              name: a.name || a.title || 'archivo',
-              mime_type: a.mime_type || '',
-              size: a.size,
-            }))
-          if (!fileAtts.length && r.media_url) {
-            fileAtts.push({
-              url: r.media_url,
-              name: 'adjunto',
-              mime_type: guessMimeFromUrl(r.media_url),
-            })
-          }
-          return {
-            role: 'user' as const,
-            content: r.content,
-            attachments: fileAtts.length ? fileAtts : undefined,
-            embeds: atts.filter(isChatEmbed).length
-              ? atts.filter(isChatEmbed)
-              : m?.embeds,
-          }
-        }
-        return {
-          role: 'ai' as const,
-          content: r.content,
-          embeds: m?.embeds,
-          proposals: m?.proposals,
-          suggestedGuide: m?.suggested_guide,
-        }
-      })
+      const rows = (data?.data || []) as HistoryRow[]
+      const messages: Message[] = []
+      for (const r of rows) {
+        messages.push(historyRowToMessage(r, messages[messages.length - 1]))
+      }
       setThread({
         sessionId,
         title: title || 'Conversación',

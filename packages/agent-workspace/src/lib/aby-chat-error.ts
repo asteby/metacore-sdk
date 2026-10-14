@@ -23,11 +23,33 @@ const KNOWN_ACTIONS: AbyTurnErrorAction[] = ['retry', 'reconnect', 'switch_provi
 export function abyTurnErrorOf(err: unknown): AbyTurnError | null {
   const data = (err as { response?: { data?: { error?: unknown; message?: unknown } } })?.response
     ?.data
-  const e = data?.error as Partial<AbyTurnError> | undefined
+  return normalizeTurnError(data?.error, data?.message)
+}
+
+/**
+ * The failed-turn notice the server saved in the thread (history row
+ * `metadata.turn_error`), or null when the row is a normal reply. Accepts the
+ * metadata as object or JSON string.
+ */
+export function abyTurnErrorFromMeta(meta: unknown, fallbackMessage?: string): AbyTurnError | null {
+  let m = meta
+  if (typeof m === 'string') {
+    try {
+      m = JSON.parse(m)
+    } catch {
+      return null
+    }
+  }
+  if (!m || typeof m !== 'object') return null
+  return normalizeTurnError((m as { turn_error?: unknown }).turn_error, fallbackMessage)
+}
+
+function normalizeTurnError(raw: unknown, fallbackMessage?: unknown): AbyTurnError | null {
+  const e = raw as Partial<AbyTurnError> | undefined
   if (!e || typeof e !== 'object' || typeof e.code !== 'string') return null
   const message =
     (typeof e.message === 'string' && e.message) ||
-    (typeof data?.message === 'string' && data.message) ||
+    (typeof fallbackMessage === 'string' && fallbackMessage) ||
     ''
   if (!message) return null
   const actions = (Array.isArray(e.actions) ? e.actions : []).filter(
