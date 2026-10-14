@@ -1,5 +1,12 @@
 # @asteby/metacore-agent-workspace
 
+## 4.0.0
+
+### Patch Changes
+
+- 0cd5ba5: El chat flotante muestra la mascota de la plataforma (piel y estado animado, `mascot_skin`) en la fila de Aby y en la cabecera de su conversación, igual que la bandeja de `/team-chat`, en vez de un ícono genérico de Lucide.
+  - @asteby/metacore-app-providers@151.0.0
+
 ## 3.1.0
 
 ### Minor Changes

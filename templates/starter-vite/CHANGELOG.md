@@ -1,5 +1,12 @@
 # @asteby/metacore-starter-vite
 
+## 0.1.316
+
+### Patch Changes
+
+- Updated dependencies [8a83c3b]
+  - @asteby/metacore-pwa@0.9.0
+
 ## 0.1.315
 
 ### Patch Changes
