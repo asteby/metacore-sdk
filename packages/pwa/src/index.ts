@@ -1,4 +1,14 @@
 export { PWAProvider, usePWAContext } from './provider'
+export {
+  attachConnectionReporter,
+  configureConnectionProbe,
+  getConnectionState,
+  onConnectionRestored,
+  reportNetworkError,
+  reportReachable,
+  useConnectionState,
+} from './connection'
+export type { ConnectionState, ConnectionProbeOptions } from './connection'
 export type {
   PWAContextValue,
   PWAProviderProps,

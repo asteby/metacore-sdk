@@ -81,6 +81,12 @@ export interface PWAProviderProps {
    * `messages.offlineReady`).
    */
   offlineReadyToast?: boolean | ((message: string) => void)
+  /**
+   * Toasts al perder/recuperar la red del dispositivo. `true` (default, sin
+   * cambios). Con `<OfflineIndicator />` (que ya avisa de la red y del
+   * servidor de forma discreta) conviene `false` para no duplicar avisos.
+   */
+  connectionToasts?: boolean
   /** Interval in ms between SW update checks. Default: 1 hour (5 min when `updateStrategy="prompt"`). Set to 0 to disable. */
   updateCheckIntervalMs?: number
   /**
@@ -128,6 +134,7 @@ export function PWAProvider({
   pushOptions,
   messages,
   offlineReadyToast = true,
+  connectionToasts = true,
   updateCheckIntervalMs,
   updateStrategy = 'auto',
   autoApplyAfterMs,
@@ -279,12 +286,12 @@ export function PWAProvider({
 
     const handleOnline = () => {
       setIsOnline(true)
-      toast.success(msgs.connectionRestored)
+      if (connectionToasts) toast.success(msgs.connectionRestored)
     }
 
     const handleOffline = () => {
       setIsOnline(false)
-      toast.warning(msgs.offline)
+      if (connectionToasts) toast.warning(msgs.offline)
     }
 
     const handleBeforeInstallPrompt = (e: Event) => {
@@ -313,7 +320,7 @@ export function PWAProvider({
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
       window.removeEventListener('appinstalled', handleAppInstalled)
     }
-  }, [msgs])
+  }, [msgs, connectionToasts])
 
   useEffect(() => {
     // Prompt strategy: the reload is owned by the update policy (single reload

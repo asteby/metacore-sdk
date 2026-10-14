@@ -101,6 +101,26 @@ function Settings() {
 }
 ```
 
+## Estado de conexión
+
+`<OfflineIndicator />` es una pastilla discreta (abajo al centro, `aria-live`) que avisa «Sin internet», «Sin conexión con el servidor · reintentando…» y «Conexión restablecida». Un error de red suelto no avisa: inicia una comprobación en silencio con reintentos espaciados y solo se muestra si la caída dura más de 6 s. Los fallos con la pestaña oculta o recién recuperada (peticiones cortadas por el sistema en móvil) no cuentan, y 502–504 del proxy cuentan como backend reiniciando.
+
+```tsx
+import { attachConnectionReporter, onConnectionRestored, OfflineIndicator, PWAProvider } from '@asteby/metacore-pwa'
+
+attachConnectionReporter(api) // axios: errores de red alimentan el estado; cualquier respuesta lo recupera
+onConnectionRestored(() => queryClient.invalidateQueries({ refetchType: 'active' }))
+
+<PWAProvider api={api} connectionToasts={false}>
+  <OfflineIndicator />
+</PWAProvider>
+```
+
+- `configureConnectionProbe({ url, graceMs })`: URL pública y barata para comprobar el servidor (por defecto `/api/push/public-key`) y gracia en ms.
+- `connectionToasts={false}` en `PWAProvider` evita duplicar el aviso con los toasts de red del dispositivo.
+- Sin `attachConnectionReporter`, el indicador solo detecta la red del dispositivo.
+- `useConnectionState()` y `getConnectionState()` exponen el estado (`online`, `checking`, `offline`, `no-internet`, `restored`).
+
 ## Push endpoints
 
 By default, `PushNotificationService` calls these endpoints on your injected `api`:
