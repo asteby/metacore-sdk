@@ -1,5 +1,21 @@
 # @asteby/metacore-agent-workspace
 
+## 3.0.0
+
+### Minor Changes
+
+- 47d97d9: Chat del asistente: al recargar el historial, los avisos de turno fallido guardados (`metadata.turn_error`) vuelven como burbuja de error con «Reintentar» (reenvía la pregunta previa) en lugar de texto plano; nuevo `abyTurnErrorFromMeta`. `pollAbyAssistantReply` ya no sondea el historial ~5 min con la red caída: se detiene si el navegador está sin conexión o tras `maxNetworkFailures` (3) fallos consecutivos sin respuesta HTTP (`AbyNetworkDownError`), y un aviso `turn_error` encontrado al sondear se reporta como error clasificado (`AbyHistoryTurnError`) en vez de como respuesta.
+
+### Patch Changes
+
+- Updated dependencies [944dd83]
+- Updated dependencies [420ff5b]
+- Updated dependencies [47d97d9]
+  - @asteby/metacore-app-providers@150.0.0
+  - @asteby/metacore-ui@2.28.0
+  - @asteby/metacore-runtime-react@52.0.0
+  - @asteby/metacore-starter-core@160.0.0
+
 ## 2.0.0
 
 ### Patch Changes

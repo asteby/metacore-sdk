@@ -1,5 +1,12 @@
 # @asteby/metacore-ai-chat
 
+## 4.0.0
+
+### Patch Changes
+
+- Updated dependencies [944dd83]
+  - @asteby/metacore-app-providers@150.0.0
+
 ## 3.0.0
 
 ### Patch Changes

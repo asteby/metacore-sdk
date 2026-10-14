@@ -1,5 +1,17 @@
 # @asteby/metacore-runtime-react
 
+## 52.0.0
+
+### Minor Changes
+
+- 420ff5b: Procedencia de registros: `ProvenanceBadge`, `AuthorshipCell`, `ProvenanceActorChip` y `NotificationProvenanceAvatar` muestran persona sola, agente solo (nombre/avatar de `OrgRuntimeProvider agentActor`), sistema/integración con su origen y «persona con agente» con avatar superpuesto y tooltip accesible (quién autorizó, qué propuso el agente y cuándo). La columna created_by de las tablas dinámicas, el detalle del registro, `AuditInfo`, `RecordHistory` y `ActivityTimeline` los usan por defecto cuando la fila trae `created_by.provenance` (kernel `provenance`). Nuevos `agentActor` y `provenanceOrigin` en `OrgRuntimeProvider`; claves i18n `provenance.*` en es/en.
+- 47d97d9: Textos en español neutro (es-MX) en lugar de voseo: «Elige una fecha» en `DynamicDateField`, «Apunta al código de barras», «Usa un lector físico o escribe el código a mano» y «toca la linterna» en el escáner, y «Arrastra, renombra y agrupa» / «Crea una sección o recarga el menú actual» en el gestor del menú lateral.
+
+### Patch Changes
+
+- Updated dependencies [944dd83]
+  - @asteby/metacore-ui@2.28.0
+
 ## 51.0.0
 
 ### Minor Changes
