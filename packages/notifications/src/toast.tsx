@@ -2,7 +2,11 @@ import { toast } from 'sonner'
 import { formatNotificationBodyHtml } from './rich-text'
 import { resolveNotificationVisual } from './visual'
 import type { NotificationType } from './types'
-import type { ReactNode, MouseEvent as ReactMouseEvent } from 'react'
+import type {
+  FocusEvent as ReactFocusEvent,
+  MouseEvent as ReactMouseEvent,
+  ReactNode,
+} from 'react'
 
 export type ToastActionButton = {
   label: ReactNode
@@ -12,6 +16,11 @@ export type ToastActionButton = {
 export type ShowNotificationToastOptions = {
   title: string
   body?: string
+  /**
+   * Short plain-text summary shown instead of `body` in the toast (the full
+   * body stays in the bell inbox). Always escaped, never rendered as HTML.
+   */
+  summary?: string
   type?: NotificationType | string
   icon?: string
   image?: string
@@ -30,6 +39,11 @@ export type ShowNotificationToastOptions = {
   action?: ToastActionButton | ReactNode
   /** Sonner-compatible secondary/cancel action. */
   cancel?: ToastActionButton | ReactNode
+  /**
+   * Extra action buttons rendered after `action` (e.g. «Ver evidencia»,
+   * «Asignar»). Each one runs its handler and dismisses the toast.
+   */
+  actions?: ToastActionButton[]
   /**
    * Stable id so concurrent toasts stack instead of replacing each other.
    * Auto-generated when omitted.
@@ -73,59 +87,69 @@ function isActionButton(value: unknown): value is ToastActionButton {
   )
 }
 
+const PRIMARY_BUTTON =
+  'inline-flex h-7 shrink-0 cursor-pointer items-center rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 pointer-events-auto'
+const SECONDARY_BUTTON =
+  'inline-flex h-7 shrink-0 cursor-pointer items-center rounded-md bg-muted px-2.5 text-xs font-medium text-foreground hover:bg-muted/80 pointer-events-auto'
+
+function ToastButton(props: {
+  toastId: string | number
+  button: ToastActionButton
+  className: string
+}) {
+  const { toastId, button, className } = props
+  return (
+    <button
+      type='button'
+      className={className}
+      onClick={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        const fn = button.onClick
+        // Run handler first so dismiss/snooze flags stick before any
+        // concurrent re-show (SSE) can race the deferred path.
+        try {
+          fn(e)
+        } catch {
+          /* never block */
+        }
+        toast.dismiss(toastId)
+      }}
+    >
+      {button.label}
+    </button>
+  )
+}
+
 function ActionButtons(props: {
   toastId: string | number
   action?: ToastActionButton | ReactNode
   cancel?: ToastActionButton | ReactNode
+  actions?: ToastActionButton[]
 }) {
   const { toastId, action, cancel } = props
-  if (!action && !cancel) return null
+  const extra = (props.actions ?? []).filter(isActionButton)
+  if (!action && !cancel && extra.length === 0) return null
 
   return (
     <span className='relative z-10 mt-2 flex flex-wrap items-center gap-2 pointer-events-auto'>
       {isActionButton(action) ? (
-        <button
-          type='button'
-          className='inline-flex h-7 shrink-0 cursor-pointer items-center rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 pointer-events-auto'
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            const fn = action.onClick
-            // Run handler first so dismiss/snooze flags stick before any
-            // concurrent re-show (SSE) can race the deferred path.
-            try {
-              fn(e)
-            } catch {
-              /* never block */
-            }
-            toast.dismiss(toastId)
-          }}
-        >
-          {action.label}
-        </button>
+        <ToastButton toastId={toastId} button={action} className={PRIMARY_BUTTON} />
       ) : action ? (
         <span className='inline-flex pointer-events-auto' onClick={(e) => e.stopPropagation()}>
           {action}
         </span>
       ) : null}
+      {extra.map((button, i) => (
+        <ToastButton
+          key={i}
+          toastId={toastId}
+          button={button}
+          className={!action && i === 0 ? PRIMARY_BUTTON : SECONDARY_BUTTON}
+        />
+      ))}
       {isActionButton(cancel) ? (
-        <button
-          type='button'
-          className='inline-flex h-7 shrink-0 cursor-pointer items-center rounded-md bg-muted px-2.5 text-xs font-medium text-foreground hover:bg-muted/80 pointer-events-auto'
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            const fn = cancel.onClick
-            try {
-              fn(e)
-            } catch {
-              /* never block */
-            }
-            toast.dismiss(toastId)
-          }}
-        >
-          {cancel.label}
-        </button>
+        <ToastButton toastId={toastId} button={cancel} className={SECONDARY_BUTTON} />
       ) : cancel ? (
         <span className='inline-flex pointer-events-auto' onClick={(e) => e.stopPropagation()}>
           {cancel}
@@ -154,8 +178,10 @@ export function showNotificationToast(opts: ShowNotificationToastOptions): strin
     addonKey: opts.addonKey,
   })
   const apartado = (opts.apartado || moduleLabel || '').trim()
-  const body = (opts.body || '').trim()
-  const plainBody = opts.richText === false
+  const summary = (opts.summary || '').trim()
+  // A summary replaces the body in the toast and is always plain text.
+  const body = summary || (opts.body || '').trim()
+  const plainBody = Boolean(summary) || opts.richText === false
   const bodyHtml = plainBody ? '' : formatNotificationBodyHtml(body)
   // Multi-line bodies (e.g. a bulk-delete summary: "• motivo (×2)\n• otro\ny 2 más")
   // keep their line breaks and get a taller clamp. We rely on CSS
@@ -165,7 +191,9 @@ export function showNotificationToast(opts: ShowNotificationToastOptions): strin
   // the exact classes they always had.
   const multiline = body.includes('\n')
   const bodyClamp = multiline ? 'whitespace-pre-line line-clamp-6' : 'line-clamp-2'
-  const hasActions = Boolean(opts.action || opts.cancel)
+  const hasActions = Boolean(
+    opts.action || opts.cancel || (opts.actions ?? []).some(isActionButton),
+  )
   // Title-only: vertically center with the icon. Chip/body/actions keep items-start.
   const titleOnly = !apartado && !body && !hasActions
   const duration = opts.duration ?? 5000
@@ -183,8 +211,31 @@ export function showNotificationToast(opts: ShowNotificationToastOptions): strin
     .filter(Boolean)
     .join(' ')
 
-  toast.custom(
-    (tId) => {
+  const toastOptions = {
+    id,
+    duration,
+    unstyled: true,
+    className: `!bg-transparent !border-0 !shadow-none !p-0 ${TOAST_WIDTH}`,
+  }
+  // Sonner only pauses the auto-close timer on hover. Keyboard and screen
+  // reader users who focus the card (or one of its actions) get the same
+  // pause: the toast is re-issued with an infinite duration while focus is
+  // inside and gets its duration back when focus leaves.
+  let paused = false
+  const onFocus = () => {
+    if (paused || duration === Infinity) return
+    paused = true
+    toast.custom(render, { ...toastOptions, duration: Infinity })
+  }
+  const onBlur = (e: ReactFocusEvent<HTMLElement>) => {
+    if (!paused) return
+    const next = e.relatedTarget as Node | null
+    if (next && e.currentTarget.contains(next)) return
+    paused = false
+    toast.custom(render, toastOptions)
+  }
+
+  const render = (tId: string | number) => {
       const inner = (
         <>
           {opts.image ? (
@@ -207,18 +258,28 @@ export function showNotificationToast(opts: ShowNotificationToastOptions): strin
                 {apartado}
               </span>
             ) : null}
-            <span className='block text-sm font-semibold text-foreground'>{opts.title}</span>
+            <span
+              className='block truncate text-sm font-semibold text-foreground'
+              title={opts.title}
+            >
+              {opts.title}
+            </span>
             {plainBody && body ? (
-              <span className={`mt-0.5 block text-xs text-muted-foreground ${bodyClamp}`}>
+              <span className={`mt-0.5 text-xs text-muted-foreground ${bodyClamp}`}>
                 {body}
               </span>
             ) : bodyHtml ? (
               <span
-                className={`mt-0.5 block text-xs text-muted-foreground ${bodyClamp} [&_strong]:font-semibold [&_strong]:text-foreground/85 [&_b]:font-semibold [&_b]:text-foreground/85 [&_em]:italic [&_i]:italic [&_u]:underline [&_mark]:rounded-sm [&_mark]:bg-amber-500/20 [&_mark]:px-0.5 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:font-mono [&_code]:text-[10px]`}
+                className={`mt-0.5 text-xs text-muted-foreground ${bodyClamp} [&_strong]:font-semibold [&_strong]:text-foreground/85 [&_b]:font-semibold [&_b]:text-foreground/85 [&_em]:italic [&_i]:italic [&_u]:underline [&_mark]:rounded-sm [&_mark]:bg-amber-500/20 [&_mark]:px-0.5 [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:font-mono [&_code]:text-[10px]`}
                 dangerouslySetInnerHTML={{ __html: bodyHtml }}
               />
             ) : null}
-            <ActionButtons toastId={tId} action={opts.action} cancel={opts.cancel} />
+            <ActionButtons
+              toastId={tId}
+              action={opts.action}
+              cancel={opts.cancel}
+              actions={opts.actions}
+            />
           </span>
         </>
       )
@@ -227,7 +288,7 @@ export function showNotificationToast(opts: ShowNotificationToastOptions): strin
       // actions are present; keep the whole card clickable otherwise.
       if (hasActions) {
         return (
-          <div className={cardClass} role='status'>
+          <div className={cardClass} role='status' onFocus={onFocus} onBlur={onBlur}>
             {inner}
           </div>
         )
@@ -237,6 +298,8 @@ export function showNotificationToast(opts: ShowNotificationToastOptions): strin
         <button
           type='button'
           className={cardClass}
+          onFocus={onFocus}
+          onBlur={onBlur}
           onClick={() => {
             opts.onClick?.()
             toast.dismiss(tId)
@@ -245,14 +308,9 @@ export function showNotificationToast(opts: ShowNotificationToastOptions): strin
           {inner}
         </button>
       )
-    },
-    {
-      id,
-      duration,
-      unstyled: true,
-      className: `!bg-transparent !border-0 !shadow-none !p-0 ${TOAST_WIDTH}`,
-    },
-  )
+  }
+
+  toast.custom(render, toastOptions)
 
   return id
 }
@@ -269,6 +327,8 @@ type ToastData = {
   addon_key?: string
   action?: ToastActionButton | ReactNode
   cancel?: ToastActionButton | ReactNode
+  actions?: ToastActionButton[]
+  summary?: string
   /** Opt out of bell persistence for ephemeral noise. */
   persist?: boolean
   id?: string | number
@@ -299,6 +359,8 @@ function extract(message: unknown, data?: ToastData) {
       undefined,
     action: data?.action,
     cancel: data?.cancel,
+    actions: Array.isArray(data?.actions) ? data.actions : undefined,
+    summary: typeof data?.summary === 'string' ? data.summary : undefined,
     persist: data?.persist,
     id: data?.id,
   }
@@ -338,6 +400,8 @@ export function installUnifiedToasts(options?: InstallUnifiedToastsOptions): voi
         addonKey: x.addonKey,
         action: x.action,
         cancel: x.cancel,
+        actions: x.actions,
+        summary: x.summary,
         id: x.id,
       })
 

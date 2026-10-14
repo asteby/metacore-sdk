@@ -1,4 +1,4 @@
-export { NotificationsDropdown } from './dropdown'
+export { NotificationsDropdown, linkActions } from './dropdown'
 export { useAppBadge, useNotifications } from './hooks'
 export {
   showNotificationToast,
@@ -33,6 +33,7 @@ export {
 export type {
   NotificationId,
   NotificationItem,
+  NotificationLinkAction,
   NotificationListResult,
   NotificationType,
   NotificationsApiClient,

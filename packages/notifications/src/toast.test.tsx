@@ -93,3 +93,81 @@ describe('showNotificationToast body', () => {
     })
   })
 })
+
+describe('showNotificationToast layout', () => {
+  const bodyEl = (c: HTMLElement) =>
+    Array.from(c.querySelectorAll('span.text-xs')).find((n) =>
+      n.className.includes('text-muted-foreground'),
+    ) as HTMLElement
+
+  it('body span has no `block` that would cancel line-clamp', () => {
+    for (const richText of [true, false]) {
+      const { container } = renderToast({ title: 'T', body: 'texto', richText })
+      const classes = bodyEl(container).className.split(/\s+/)
+      expect(classes).toContain('line-clamp-2')
+      expect(classes).not.toContain('block')
+      cleanup()
+      vi.restoreAllMocks()
+    }
+  })
+
+  it('truncates the title and exposes the full text as tooltip', () => {
+    const long = 'Título muy largo '.repeat(10).trim()
+    const { getByText } = renderToast({ title: long })
+    const el = getByText(long)
+    expect(el.className).toContain('truncate')
+    expect(el.getAttribute('title')).toBe(long)
+  })
+
+  it('summary replaces the body as escaped plain text', () => {
+    const { container } = renderToast({
+      title: 'T',
+      body: 'cuerpo completo <b>x</b>',
+      summary: 'Resumen <i>breve</i>',
+    })
+    const el = bodyEl(container)
+    expect(el.textContent).toBe('Resumen <i>breve</i>')
+    expect(container.querySelector('i')).toBeNull()
+    expect(container.textContent).not.toContain('cuerpo completo')
+  })
+})
+
+describe('showNotificationToast actions', () => {
+  it('renders extra actions; each runs its handler and dismisses', () => {
+    const dismiss = vi.spyOn(toast, 'dismiss').mockImplementation(() => 'x')
+    const a = vi.fn()
+    const b = vi.fn()
+    const { getByText, container } = renderToast({
+      title: 'T',
+      actions: [
+        { label: 'Ver evidencia', onClick: a },
+        { label: 'Asignar', onClick: b },
+      ],
+    })
+    // With actions the card is a div (no nested buttons inside a button).
+    expect(container.firstElementChild?.tagName).toBe('DIV')
+    ;(getByText('Asignar') as HTMLButtonElement).click()
+    expect(b).toHaveBeenCalledTimes(1)
+    expect(a).not.toHaveBeenCalled()
+    expect(dismiss).toHaveBeenCalledWith('tid')
+  })
+})
+
+describe('showNotificationToast focus pause', () => {
+  it('pauses the auto-close while focused and restores it on blur', () => {
+    const custom = vi.spyOn(toast, 'custom').mockImplementation(() => 'x')
+    showNotificationToast({ title: 'T', duration: 4000, id: 'n1' })
+    const factory = custom.mock.calls[0]![0] as (id: string | number) => ReactElement
+    expect(custom.mock.calls[0]![1]).toMatchObject({ id: 'n1', duration: 4000 })
+    const { container } = render(factory('n1'))
+    const card = container.querySelector('button') as HTMLButtonElement
+
+    card.focus()
+    expect(custom).toHaveBeenCalledTimes(2)
+    expect(custom.mock.calls[1]![1]).toMatchObject({ id: 'n1', duration: Infinity })
+
+    card.blur()
+    expect(custom).toHaveBeenCalledTimes(3)
+    expect(custom.mock.calls[2]![1]).toMatchObject({ id: 'n1', duration: 4000 })
+  })
+})

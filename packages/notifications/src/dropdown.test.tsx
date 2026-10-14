@@ -820,3 +820,26 @@ describe('listParams robustness', () => {
     ).not.toThrow()
   })
 })
+
+describe('linkActions', () => {
+  it('keeps only {label, link} strings, trims and caps at 3', async () => {
+    const { linkActions } = await import('./dropdown')
+    expect(linkActions(undefined)).toEqual([])
+    expect(linkActions('x')).toEqual([])
+    expect(
+      linkActions([
+        { label: ' Ver ', link: ' /hallazgos/1 ' },
+        { label: 'sin link' },
+        { label: 1, link: '/x' },
+        null,
+        { label: 'B', link: '/b' },
+        { label: 'C', link: '/c' },
+        { label: 'D', link: '/d' },
+      ]),
+    ).toEqual([
+      { label: 'Ver', link: '/hallazgos/1' },
+      { label: 'B', link: '/b' },
+      { label: 'C', link: '/c' },
+    ])
+  })
+})

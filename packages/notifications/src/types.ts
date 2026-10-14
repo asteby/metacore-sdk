@@ -90,6 +90,23 @@ export interface NotificationWsPayload {
   addon_key?: string
   /** Optional CSS/hex colour for the icon disc. */
   color?: string
+  /**
+   * Short plain-text summary for the live toast (falls back to
+   * `metadata.summary`). The bell keeps the full `body`.
+   */
+  summary?: string
+  /**
+   * Toast action buttons (falls back to `metadata.actions`). Each click goes
+   * through `onNotificationClick` with the action's `link` as the
+   * notification link, so the host keeps control of navigation.
+   */
+  actions?: NotificationLinkAction[]
+}
+
+/** A toast action that navigates to `link` through the host click handler. */
+export interface NotificationLinkAction {
+  label: string
+  link: string
 }
 
 /**

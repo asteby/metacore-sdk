@@ -28,6 +28,7 @@ import {
 import type {
   NotificationId,
   NotificationItem,
+  NotificationLinkAction,
   NotificationListResult,
   NotificationWsPayload,
   NotificationsDropdownLabels,
@@ -375,6 +376,22 @@ export function NotificationsDropdown({
         metaObj.source === 'toast'
 
       if (showToastOnIngest && !skipToast) {
+        const openNotification = (target: NotificationItem) => {
+          const click = latestRef.current.onNotificationClick
+          if (click) click(target)
+          else if (target.link?.startsWith('http'))
+            window.open(target.link, '_blank', 'noopener,noreferrer')
+        }
+        const summary =
+          typeof payload.summary === 'string'
+            ? payload.summary
+            : typeof metaObj.summary === 'string'
+              ? metaObj.summary
+              : undefined
+        const actions = linkActions(payload.actions ?? metaObj.actions).map((a) => ({
+          label: a.label,
+          onClick: () => openNotification({ ...newNotification, link: a.link }),
+        }))
         showNotificationToast({
           // String id with a prefix: a raw numeric id could collide with
           // sonner's own auto-incremented numeric toast ids.
@@ -388,12 +405,9 @@ export function NotificationsDropdown({
           addonKey: payload.addon_key || (metaObj.addon_key as string | undefined),
           metadata: metaObj,
           richText: latestRef.current.richText,
-          onClick: () => {
-            const click = latestRef.current.onNotificationClick
-            if (click) click(newNotification)
-            else if (newNotification.link?.startsWith('http'))
-              window.open(newNotification.link, '_blank', 'noopener,noreferrer')
-          },
+          summary,
+          actions: actions.length ? actions : undefined,
+          onClick: () => openNotification(newNotification),
         })
       }
 
@@ -641,6 +655,26 @@ function DropdownWithWebSocket({
     if (message.payload) ingestWsPayload(message.payload)
   })
   return <DropdownShell {...rest} />
+}
+
+/** Max toast actions taken from a live payload. */
+const MAX_LIVE_ACTIONS = 3
+
+/** Validates `actions` from an untrusted live payload: `{label, link}` only. */
+export function linkActions(value: unknown): NotificationLinkAction[] {
+  if (!Array.isArray(value)) return []
+  const out: NotificationLinkAction[] = []
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue
+    const { label, link } = item as Record<string, unknown>
+    if (typeof label !== 'string' || typeof link !== 'string') continue
+    const l = label.trim()
+    const href = link.trim()
+    if (!l || !href) continue
+    out.push({ label: l.slice(0, 40), link: href })
+    if (out.length >= MAX_LIVE_ACTIONS) break
+  }
+  return out
 }
 
 const MESSAGE_CLASS =
