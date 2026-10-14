@@ -19,6 +19,12 @@ export type AbyOpenDraft = {
   /** Optional: open an existing Aby session instead of forcing a new one. */
   sessionId?: string
   sessionTitle?: string
+  /**
+   * Envía `message` en una conversación nueva en cuanto se abre el panel, en vez
+   * de dejarlo en el compositor. Para preguntas hechas fuera del chat (buscador,
+   * tablero, voz). Se ignora si viene `sessionId`.
+   */
+  send?: boolean
 }
 
 export type TeamOpenOpts = {

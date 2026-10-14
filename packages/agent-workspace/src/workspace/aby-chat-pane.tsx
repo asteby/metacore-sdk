@@ -38,6 +38,7 @@ import { useRevealText } from './use-reveal-text'
 import { scrubToolDump } from '../lib/aby-tool-dump'
 import { useNavigate } from '@tanstack/react-router'
 import { consumeAbyDraft, requestChatWidgetMinimize } from '../lib/aby-widget'
+import { resolveAbyDraftTarget } from '../lib/aby-draft-target'
 import { readLastAbySession, rememberAbySession } from '../lib/chat-context'
 import { stripMarkdownLite } from '../lib/plain-text'
 import { matchProposalDecision } from '../lib/aby-proposal-intent'
@@ -665,12 +666,19 @@ export function AbyChatPane({
     }
   }, [thread?.sessionId, thread?.title])
 
-  // Share-to-Aby: stage embeds; open last/requested thread (not empty picker).
+  // Borrador desde fuera del chat (openAbyWidget): ver resolveAbyDraftTarget.
+  // Una pregunta con `send` abre una conversación nueva y se envía sola; lo
+  // demás (compartir registros, adjuntos) queda en el compositor de la última
+  // conversación o de una nueva, nunca escondido detrás de la lista.
+  const autoSendRef = useRef<string | null>(null)
   useEffect(() => {
     const apply = () => {
       const draft = consumeAbyDraft()
       if (!draft) return
-      if (draft.message) setInput((prev) => (prev ? `${prev} ${draft.message}` : draft.message!).trim())
+      const target = resolveAbyDraftTarget(draft, readLastAbySession())
+      if (target.kind !== 'send' && draft.message) {
+        setInput((prev) => (prev ? `${prev} ${draft.message}` : draft.message!).trim())
+      }
       if (draft.attachments?.length) {
         const embeds = draft.attachments.filter(isChatEmbed)
         const files = draft.attachments.filter((a) => a.url && !isChatEmbed(a))
@@ -687,29 +695,24 @@ export function AbyChatPane({
           ])
         }
       }
-      const sid = draft.sessionId || readLastAbySession()?.id
-      const title = draft.sessionTitle || readLastAbySession()?.title || 'Conversación'
-      if (sid) {
-        void openSession(sid, title)
-      } else if (isWorkspace) {
-        setThread({
-          sessionId: '',
-          title: 'Nueva conversación',
-          messages: [],
-          loading: false,
-          steps: [],
-        })
-        setView('thread')
-      } else {
-        setView('list')
-        setThread(null)
-        void loadSessions()
+      if (target.kind === 'open') {
+        void openSession(target.sessionId, target.title)
+        return
       }
+      if (target.kind === 'send') autoSendRef.current = target.message
+      setThread({
+        sessionId: '',
+        title: 'Nueva conversación',
+        messages: [],
+        loading: false,
+        steps: [],
+      })
+      setView('thread')
     }
     apply()
     const id = window.setInterval(apply, 400)
     return () => window.clearInterval(id)
-  }, [loadSessions, openSession, isWorkspace])
+  }, [openSession])
 
   // Reopen last Aby thread when mounting the pane (widget / inbox).
   const didResumeRef = useRef(false)
@@ -1031,6 +1034,15 @@ export function AbyChatPane({
       }
     }
   }, [input, thread, pendingFiles, pendingEmbeds, uploading, startDictation, stopDictation, speakLive])
+
+  // Envía la pregunta pendiente cuando la conversación nueva ya está montada.
+  useEffect(() => {
+    const text = autoSendRef.current
+    if (!text || !thread || thread.sessionId || thread.messages.length || thread.loading) return
+    autoSendRef.current = null
+    void sendMessage(text)
+  }, [thread, sendMessage])
+
 
   sendMessageRef.current = (overrideText?: string) => sendMessage(overrideText)
 
