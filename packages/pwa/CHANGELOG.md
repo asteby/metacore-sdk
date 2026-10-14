@@ -1,5 +1,11 @@
 # @asteby/metacore-pwa
 
+## 0.9.2
+
+### Patch Changes
+
+- 03f96be: El estado de conexión ya no ignora los fallos de los primeros segundos tras cargar la página: solo tras volver de segundo plano. Abrir la app con el servidor caído sí avisa.
+
 ## 0.9.1
 
 ### Patch Changes
