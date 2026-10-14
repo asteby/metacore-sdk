@@ -175,7 +175,7 @@ export function BarcodeScanner({
     continuous = true,
     beepOnScan = true,
     title = 'Escanear código',
-    hint = 'Apuntá al código de barras',
+    hint = 'Apunta al código de barras',
     position = 'absolute',
     feedback = null,
 }: BarcodeScannerProps) {
@@ -220,7 +220,7 @@ export function BarcodeScanner({
         const Ctor = getDetectorCtor()
         if (!navigator.mediaDevices?.getUserMedia || !Ctor) {
             setError(
-                'Tu navegador no soporta escaneo por cámara. Usá un lector físico (escribe en el campo) o escribí el código a mano.',
+                'Tu navegador no soporta escaneo por cámara. Usa un lector físico (escribe en el campo) o escribe el código a mano.',
             )
             return
         }
@@ -281,7 +281,7 @@ export function BarcodeScanner({
                 setError(
                     name === 'NotAllowedError'
                         ? 'Permiso de cámara denegado. Habilitalo en el navegador para escanear.'
-                        : 'No se pudo abrir la cámara. Usá un lector físico o escribí el código a mano.',
+                        : 'No se pudo abrir la cámara. Usa un lector físico o escribe el código a mano.',
                 )
             }
         })()
@@ -384,7 +384,7 @@ export function BarcodeScanner({
                             {!ready
                                 ? 'Abriendo cámara…'
                                 : torchAvailable
-                                  ? `${hint} · tocá la linterna si está oscuro`
+                                  ? `${hint} · toca la linterna si está oscuro`
                                   : hint}
                         </p>
                     </>

@@ -395,7 +395,7 @@ export function SidebarLayoutManager({
   currentGroups,
   resolveLabel = (s) => s,
   title = 'Menú lateral',
-  description = 'Arrastrá, renombrá y agrupá como en Discord. Así lo verá toda la organización.',
+  description = 'Arrastra, renombra y agrupa como en Discord. Así lo verá toda la organización.',
 }: SidebarLayoutManagerProps) {
   const [tree, setTree] = React.useState<SidebarLayoutNode[]>([])
   const [baseline, setBaseline] = React.useState('[]')
@@ -728,7 +728,7 @@ export function SidebarLayoutManager({
                 >
                   {tree.length === 0 ? (
                     <p className="text-muted-foreground px-3 py-8 text-center text-sm">
-                      Menú vacío. Creá una sección o recargá el menú actual.
+                      Menú vacío. Crea una sección o recarga el menú actual.
                     </p>
                   ) : (
                     renderList(tree, [])

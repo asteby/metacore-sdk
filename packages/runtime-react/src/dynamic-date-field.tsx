@@ -71,7 +71,7 @@ export function DynamicDateField({ field, value, onChange, invalid }: DynamicDat
                 >
                     <CalendarIcon className="mr-2 size-4 shrink-0 opacity-50" />
                     <span className="truncate">
-                        {selected ? label(selected) : (field.placeholder || 'Elegí una fecha')}
+                        {selected ? label(selected) : (field.placeholder || 'Elige una fecha')}
                     </span>
                 </Button>
             </PopoverTrigger>

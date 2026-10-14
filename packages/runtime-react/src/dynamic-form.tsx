@@ -528,7 +528,7 @@ function FieldRenderer({
  * Input de texto/número con opción de ESCANEO por cámara para "llenar rápido".
  * Cuando el campo declara `scan` (alias `scannable`) y el navegador soporta
  * `BarcodeDetector`, agrega un botón de cámara: el código escaneado se escribe
- * en el input y el escáner SE QUEDA ABIERTO (continuo) por si querés corregir o
+ * en el input y el escáner SE QUEDA ABIERTO (continuo) por si quieres corregir o
  * escanear otro — lo cerrás con la X. Sin el flag o sin soporte, es un Input
  * normal (retrocompat total).
  */
@@ -544,7 +544,7 @@ function ScannableInput({
     // `isCameraScanSupported()`: en un navegador sin `BarcodeDetector` el botón
     // seguía sin verse en escritorio aunque el campo lo pidiera, y el usuario no
     // entendía por qué el POS sí lo mostraba y el form no. El BarcodeScanner ya
-    // degrada con un mensaje ("usá un lector físico / escribí a mano") cuando no
+    // degrada con un mensaje ("usa un lector físico / escribe a mano") cuando no
     // hay soporte, así que mostrar el botón es seguro y consistente.
     const scanEnabled = !!(field.scan ?? field.scannable)
     const input = (
