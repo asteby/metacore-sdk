@@ -29,6 +29,10 @@
       "types": "./dist/hooks.d.ts",
       "import": "./dist/hooks.js"
     },
+    "./connection": {
+      "types": "./dist/connection.d.ts",
+      "import": "./dist/connection.js"
+    },
     "./components": {
       "types": "./dist/components/index.d.ts",
       "import": "./dist/components/index.js"

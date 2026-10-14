@@ -119,6 +119,7 @@ onConnectionRestored(() => queryClient.invalidateQueries({ refetchType: 'active'
 - `configureConnectionProbe({ url, graceMs })`: URL pública y barata para comprobar el servidor (por defecto `/api/push/public-key`) y gracia en ms.
 - `connectionToasts={false}` en `PWAProvider` evita duplicar el aviso con los toasts de red del dispositivo.
 - Sin `attachConnectionReporter`, el indicador solo detecta la red del dispositivo.
+- Para módulos que no deben cargar el provider (p. ej. el cliente HTTP, que también se importa en pruebas sin el plugin PWA), importa desde `@asteby/metacore-pwa/connection`.
 - `useConnectionState()` y `getConnectionState()` exponen el estado (`online`, `checking`, `offline`, `no-internet`, `restored`).
 
 ## Push endpoints
