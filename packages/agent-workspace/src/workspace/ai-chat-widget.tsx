@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, type ClipboardEvent } from 'react'
 import { useLocation, Link } from '@tanstack/react-router'
 import {
-  X, Send, Bot, Minimize2,
+  X, Send, Minimize2,
   ArrowLeft, MessagesSquare, Phone, Video,
   Maximize2, ScreenShare,
 } from 'lucide-react'
@@ -41,6 +41,8 @@ import { readLastAbySession, readLastChatFocus, rememberAbyFocus, rememberTeamCh
 import { AbyChatPane } from './aby-chat-pane'
 import { AbyLivePip } from './aby-live-pip'
 import { useDraggableFab } from './use-draggable-fab'
+import { Mascot } from './mascot'
+import { useMascotFaceStore } from '../lib/mascot-face-store'
 import { AGENT_BAR, AGENT_PANEL } from './agent-surfaces'
 import { useAbyLiveStore } from '../lib/aby-live-store'
 import {
@@ -61,7 +63,9 @@ const TEAM_WS = 'INTERNAL_CHAT_MESSAGE'
  * addon's primary bottom-right action.
  */
 export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) {
-  const { mascot_name: mascotName } = useWorkspacePlatformConfig()
+  const { mascot_name: mascotName, mascot_skin: mascotSkin } = useWorkspacePlatformConfig()
+  // Misma mascota (piel y estado animado) que la bandeja de /team-chat.
+  const mascotState = useMascotFaceStore((s) => s.state)
   const location = useLocation()
   const onTeamChatPage = location.pathname.includes('/team-chat')
   const onAgentPage = location.pathname.includes('/agent')
@@ -641,6 +645,7 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
               >
                 <ArrowLeft className="h-4 w-4" />
               </button>
+              <Mascot skin={mascotSkin} size={22} state={mascotState} className="shrink-0" />
               <span className="truncate">{mascotName}</span>
             </>
           ) : (
@@ -1148,9 +1153,7 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
                       className="flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-muted/60"
                       onClick={() => setTeamChannelId(ABY_CHANNEL_ID)}
                     >
-                      <span className="bg-primary/15 text-primary flex size-9 shrink-0 items-center justify-center rounded-lg">
-                        <Bot className="size-4" />
-                      </span>
+                      <Mascot skin={mascotSkin} size={36} state={mascotState} className="shrink-0" />
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium">{mascotName || 'Aby'}</p>
                         <p className="truncate text-xs text-muted-foreground">Asistente de IA</p>
