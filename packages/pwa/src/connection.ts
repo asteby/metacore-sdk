@@ -154,10 +154,16 @@ export function reportReachable() {
   recovered()
 }
 
-type InterceptorClient = {
+/**
+ * Cliente con interceptores de respuesta al estilo de axios. Genérico en la
+ * respuesta para aceptar `AxiosInstance` tal cual (sus callbacks están tipados
+ * con AxiosResponse y el rechazo con `any`).
+ */
+export type ConnectionReporterClient<R> = {
   interceptors: {
     response: {
-      use: (onFulfilled: (r: unknown) => unknown, onRejected: (e: unknown) => unknown) => number
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- axios tipa el rechazo con any
+      use: (onFulfilled: (r: R) => R | Promise<R>, onRejected: (e: any) => any) => number
     }
   }
 }
@@ -172,13 +178,13 @@ function isNetworkError(err: unknown): boolean {
  * Conecta una instancia de axios (o compatible): los errores de red alimentan
  * el estado y cualquier respuesta lo recupera. Devuelve el id del interceptor.
  */
-export function attachConnectionReporter(client: InterceptorClient): number {
+export function attachConnectionReporter<R>(client: ConnectionReporterClient<R>): number {
   return client.interceptors.response.use(
-    (res) => {
+    (res: R) => {
       reportReachable()
       return res
     },
-    (err) => {
+    (err: unknown) => {
       if (isNetworkError(err)) reportNetworkError()
       else if ((err as { response?: unknown } | null)?.response) reportReachable()
       return Promise.reject(err)

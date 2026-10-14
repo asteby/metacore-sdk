@@ -93,6 +93,24 @@ describe('connection', () => {
     expect(state()).toBe('online')
   })
 
+  it('acepta un cliente tipado como axios (genérico, rechazo any)', () => {
+    type Res = { status: number; data: unknown }
+    // Misma forma que AxiosInterceptorManager<AxiosResponse>.use
+    const axiosLike: {
+      interceptors: {
+        response: {
+          use(
+            onFulfilled?: ((value: Res) => Res | Promise<Res>) | null,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            onRejected?: ((error: any) => any) | null,
+            options?: unknown,
+          ): number
+        }
+      }
+    } = { interceptors: { response: { use: () => 7 } } }
+    expect(attachConnectionReporter(axiosLike)).toBe(7)
+  })
+
   it('OfflineIndicator solo se ve cuando hay algo que decir', async () => {
     const { container } = render(<OfflineIndicator />)
     expect(container.textContent).toBe('')

@@ -8,7 +8,7 @@ export {
   reportReachable,
   useConnectionState,
 } from './connection'
-export type { ConnectionState, ConnectionProbeOptions } from './connection'
+export type { ConnectionState, ConnectionProbeOptions, ConnectionReporterClient } from './connection'
 export type {
   PWAContextValue,
   PWAProviderProps,
