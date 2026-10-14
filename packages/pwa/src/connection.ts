@@ -47,7 +47,9 @@ let failingSince = 0
 let attempt = 0
 let probeTimer: ReturnType<typeof setTimeout> | null = null
 let restoredTimer: ReturnType<typeof setTimeout> | null = null
-let lastVisibleAt = typeof document === 'undefined' ? 0 : Date.now()
+// Solo al volver de segundo plano (visibilitychange), no al cargar la página:
+// abrir la app con el servidor caído sí debe avisar.
+let lastVisibleAt = 0
 const listeners = new Set<() => void>()
 const restoredListeners = new Set<() => void>()
 

@@ -72,6 +72,21 @@ describe('connection', () => {
     expect(state()).toBe('online')
   })
 
+  it('al volver de segundo plano ignora los cortes de los primeros segundos, pero no al cargar', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+    // Sin visibilitychange (página recién cargada): el fallo sí cuenta.
+    reportNetworkError()
+    expect(state()).toBe('checking')
+    __resetConnectionState()
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'))
+    document.dispatchEvent(new Event('visibilitychange'))
+    reportNetworkError()
+    expect(state()).toBe('online')
+    await vi.advanceTimersByTimeAsync(4_100)
+    reportNetworkError()
+    expect(state()).toBe('checking')
+  })
+
   it('sin red del dispositivo avisa «no-internet» sin consultar al servidor', async () => {
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true })
     reportNetworkError()
