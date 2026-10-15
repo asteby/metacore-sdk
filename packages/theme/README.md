@@ -162,3 +162,32 @@ config. Pass `persistBoot={false}` to the provider to opt out.
 ## License
 
 Apache-2.0
+
+
+## UI theme packs (glass, ocean, midnight, …)
+
+13 surface packs (`default`, `classic`, `glass`, `soft`, `sharp`, `bold_tech`,
+`amber_minimal`, `ocean`, `rose`, `midnight`, `candyland`, `caffeine`,
+`clean_slate`) plus independent font / density / radius axes. A pack only
+brings surfaces, type and density — **never the accent**, which stays the
+host's brand.
+
+```css
+/* app css, after your base tokens (glass.css is included) */
+@import '@asteby/metacore-theme/ui-themes.css';
+@source '../node_modules/@asteby/metacore-theme'; /* Tailwind scans the picker classes */
+```
+
+```ts
+import { applyCachedUiTheme, applyUiTheme, setUiThemeBrandPainter, UiThemePicker } from '@asteby/metacore-theme'
+import { applyBranding } from '@asteby/metacore-app-providers'
+
+setUiThemeBrandPainter(applyBranding) // how the host paints --primary
+applyCachedUiTheme()                  // before first render: no flash
+applyUiTheme({ theme_key: 'glass', font: 'manrope', density: 'comfortable' })
+// <UiThemePicker value={key} onChange={(k, pack) => applyUiTheme({ theme_key: k, font: pack.defaultFont, density: pack.defaultDensity })} />
+```
+
+A host that consumes the SDK by path (e.g. `local`) links the packages with
+`"@asteby/metacore-theme": "link:../../metacore-sdk/packages/theme"` and builds
+the package first (`pnpm --filter @asteby/metacore-theme build`).

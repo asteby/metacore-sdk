@@ -35,7 +35,8 @@
     "./preset": {
       "types": "./dist/preset.d.ts",
       "import": "./dist/preset.js"
-    }
+    },
+    "./ui-themes.css": "./styles/ui-themes.css"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

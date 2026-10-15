@@ -35,3 +35,24 @@ export type {
   ThemeBootScriptOptions,
   ThemeBootWatchOptions,
 } from './boot.js'
+
+export {
+  UI_THEME_PACKS,
+  getThemePack,
+  applyUiTheme,
+  applyCachedUiTheme,
+  applyBrandColorLive,
+  paintLiveDesign,
+  setUiThemeBrandPainter,
+} from './ui-theme.js'
+export type {
+  UIThemeKey,
+  UIFontKey,
+  UIDensityKey,
+  UIRadiusKey,
+  UIThemePack,
+  OrgUiThemeState,
+  UiBrandPainter,
+} from './ui-theme.js'
+export { UiThemePicker, UiThemePreview } from './ui-theme-picker.js'
+export type { UiThemePickerProps } from './ui-theme-picker.js'
