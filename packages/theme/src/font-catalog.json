@@ -1,0 +1,16 @@
+[
+  { "id": "inter", "family": "Inter", "spec": "400..800", "kind": "sans", "label": "Inter" },
+  { "id": "manrope", "family": "Manrope", "spec": "400..800", "kind": "sans", "label": "Manrope" },
+  { "id": "sora", "family": "Sora", "spec": "400..800", "kind": "sans", "label": "Sora" },
+  { "id": "instrument-sans", "family": "Instrument Sans", "spec": "400..700", "kind": "sans", "label": "Instrument Sans" },
+  { "id": "dm-sans", "family": "DM Sans", "spec": "400..800", "kind": "sans", "label": "DM Sans" },
+  { "id": "outfit", "family": "Outfit", "spec": "400..800", "kind": "sans", "label": "Outfit" },
+  { "id": "space-grotesk", "family": "Space Grotesk", "spec": "400..700", "kind": "sans", "label": "Space Grotesk" },
+  { "id": "jakarta", "family": "Plus Jakarta Sans", "spec": "400..800", "kind": "sans", "label": "Plus Jakarta Sans" },
+  { "id": "montserrat", "family": "Montserrat", "spec": "400..800", "kind": "sans", "label": "Montserrat" },
+  { "id": "krub", "family": "Krub", "spec": "400;600;700", "kind": "sans", "label": "Krub" },
+  { "id": "oswald", "family": "Oswald", "spec": "400..700", "kind": "condensed", "label": "Oswald (condensada)" },
+  { "id": "bebas", "family": "Bebas Neue", "spec": "400", "kind": "condensed", "label": "Bebas Neue (condensada)" },
+  { "id": "playfair", "family": "Playfair Display", "spec": "400..800", "kind": "serif", "label": "Playfair Display (serif)" },
+  { "id": "lora", "family": "Lora", "spec": "400..700", "kind": "serif", "label": "Lora (serif)" }
+]

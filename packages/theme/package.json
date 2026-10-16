@@ -39,6 +39,10 @@
     "./contrast": {
       "types": "./dist/contrast.d.ts",
       "import": "./dist/contrast.js"
+    },
+    "./storefront": {
+      "types": "./dist/storefront.d.ts",
+      "import": "./dist/storefront.js"
     }
   },
   "scripts": {

@@ -2,6 +2,26 @@ export { fonts, fontFamilies } from './fonts.js'
 export type { FontFamily } from './fonts.js'
 
 export {
+  isHex,
+  normalizeHex,
+  luminance,
+  contrastRatio,
+  readableOn,
+  ctaInk,
+  ctaSolid,
+  onDarkSurface,
+  applyThemeColors,
+  paletteCss,
+  themeCss,
+  LIGHT_INK,
+  DARK_INK,
+  INK_SURFACE_LIGHT,
+  INK_SURFACE_DARK,
+  fontCatalog,
+} from './storefront.js'
+export type { ThemeLike, CatalogFont, BrandColors } from './storefront.js'
+
+export {
   colorTokens,
   chartTokens,
   radiusTokens,
