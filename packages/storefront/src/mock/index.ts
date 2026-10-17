@@ -93,7 +93,6 @@ export type MockState = {
   otps: Map<string, string>
   sessions: Map<string, string>
   idempotency: Map<string, { status: number; body: unknown }>
-  checkouts: Map<string, { result: Record<string, unknown>; created_at: string; order_id: string }>
   seq: number
 }
 
@@ -194,7 +193,6 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       otps: new Map(),
       sessions: new Map(),
       idempotency: new Map(),
-      checkouts: new Map(),
       seq: 0,
     }
   }
@@ -609,9 +607,13 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     const cart = renderCart(getCartRecord(params[0]!))
     const net = toCents(cart.cost.subtotal.amount) - toCents(cart.cost.discount.amount)
     return {
-      body: { rates: shippingRates(net), pickup: state.shop.branches.map((b) => ({ branch_id: b.id, name: b.name })) },
+      body: { rates: shippingRates(net), pickup: state.shop.branches.map((b) => ({ branch_id: b.id, name: b.name })), partial: false, unavailable: [] },
       cache: 'private',
     }
+  })
+  route('GET', '/carts/:id/payment-methods', 'cart:write', ({ params }) => {
+    getCartRecord(params[0]!)
+    return { body: { methods: [{ key: 'mock', kind: 'builtin', default: true }], market: null }, cache: 'private' }
   })
   route('PUT', '/carts/:id/delivery', 'cart:write', ({ params, body }) => {
     const cart = getCartRecord(params[0]!)
@@ -694,16 +696,8 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
         stock_hold_expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
       },
     }
-    state.checkouts.set(checkoutId, { result, created_at: now(), order_id: orderId })
     if (key) state.idempotency.set(`${params[0]}:${key}`, { status: 201, body: result })
     return { status: 201, body: result, cache: 'private' }
-  })
-
-  route('GET', '/checkouts/:id', 'checkout:write', ({ params }) => {
-    const rec = state.checkouts.get(params[0]!)
-    if (!rec) throw new HttpError(404, 'not_found', `Checkout ${params[0]} not found`, 'id')
-    const order = state.orders.find((o) => o.id === rec.order_id)!
-    return { body: { ...rec.result, created_at: rec.created_at, lines: order.lines }, cache: 'private' }
   })
 
   // Customer

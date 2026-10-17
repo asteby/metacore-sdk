@@ -152,6 +152,11 @@ export type Address = {
   zip: string
   country_code: string
   phone: string | null
+  /** Colonia. Sent and echoed by the cart API. */
+  neighborhood?: string | null
+  province_code?: string | null
+  /** Delivery reference ("between streets", gate code...). */
+  reference?: string | null
 }
 
 export type AddressInput = Partial<Omit<Address, 'id' | 'address1' | 'city' | 'zip' | 'country_code'>> &
@@ -165,10 +170,15 @@ export type CartLine = {
   id: string
   quantity: number
   merchandise: CartLineMerchandise
-  cost: { total: Money; unit: Money; compare_at_unit: Money | null }
+  cost: { total: Money; unit: Money; compare_at_unit: Money | null; discount?: Money }
 }
 
-export type CartDiscountCode = { code: string; applicable: boolean }
+export type CartDiscountCode = {
+  code: string
+  applicable: boolean
+  /** Why an inapplicable code was not applied. */
+  reason?: string
+}
 
 export type CartBuyer = { email: string | null; phone: string | null; customer_id: string | null }
 
@@ -178,6 +188,12 @@ export type CartDelivery = {
   method: DeliveryMethod | null
   rate_id: string | null
   branch_id: string | null
+  /** Present when the chosen option is no longer valid (e.g. the quote expired). */
+  problem?: string
+  /** Description of the chosen carrier rate (carrier addons only). */
+  title?: string | null
+  carrier?: string | null
+  eta?: string | null
 }
 
 export type CartCost = {
@@ -191,6 +207,9 @@ export type CartCost = {
 
 export type Cart = {
   id: string
+  /** `active` while it can be edited; anything else is a cart already turned into an order. */
+  status?: string
+  currency_code?: string
   lines: CartLine[]
   total_quantity: number
   discount_codes: CartDiscountCode[]
@@ -198,6 +217,7 @@ export type Cart = {
   shipping_address: Address | null
   delivery: CartDelivery
   cost: CartCost
+  note?: string | null
   updated_at: string
 }
 
@@ -207,28 +227,84 @@ export type CartLineUpdateInput = { id: string; quantity: number }
 
 export type CartBuyerInput = { email?: string | null; phone?: string | null }
 
-export type ShippingRate = { id: string; title: string; cost: Money; eta: string | null }
+/**
+ * A delivery rate. `id`, `title`, `cost` and `eta` are always present. The rest only
+ * comes from carrier addons (`commerce.shipping.rates`); `cost` already reflects a
+ * free-shipping code. Show it as is; never recompute.
+ */
+export type ShippingRate = {
+  id: string
+  title: string
+  cost: Money
+  eta: string | null
+  /** Addon key of the rate provider. */
+  provider?: string
+  carrier?: string | null
+  service_code?: string | null
+  eta_days_min?: number
+  eta_days_max?: number
+  /** e.g. `home`, `pickup_point`. */
+  delivery_type?: string | null
+  pickup?: boolean
+  taxes_included?: boolean | null
+  /** RFC 3339: the quote is valid until then. */
+  expires_at?: string | null
+}
 
-export type PickupOption = { branch_id: string; name: string }
+export type PickupOption = { branch_id: string; name: string; address?: string | null; city?: string | null }
 
-export type DeliveryOptions = { rates: ShippingRate[]; pickup: PickupOption[] }
+/** A rate provider that did not answer in time. */
+export type UnavailableRateProvider = { provider: string; code: string }
+
+export type DeliveryOptions = {
+  /** Empty until the cart has a shipping address. Cheapest first. */
+  rates: ShippingRate[]
+  pickup: PickupOption[]
+  /** `true` when some provider failed: `rates` holds only what arrived. */
+  partial?: boolean
+  unavailable?: UnavailableRateProvider[]
+}
+
+/** One way to pay (`GET /storefront/carts/:id/payment-methods`). `key` is sent as `payment_method` at checkout. */
+export type PaymentMethod = {
+  key: string
+  /** `builtin` (manual transfer/cash) or `provider` (a payment addon). */
+  kind: 'builtin' | 'provider'
+  default: boolean
+}
+
+export type PaymentMethods = {
+  methods: PaymentMethod[]
+  /** Market the request acted in; `null` when none. */
+  market: string | null
+}
 
 export type DeliveryInput = { method: DeliveryMethod; rate_id?: string; branch_id?: string }
 
 export type InvoiceRequest = {
-  rfc?: string
+  requested?: boolean
+  tax_id?: string
   legal_name?: string
   tax_regime?: string
-  zip?: string
-  cfdi_use?: string
-  email?: string
+  /** CFDI use. */
+  use?: string
+  postal_code?: string
+  /** Spanish aliases the API also accepts. */
+  rfc?: string
+  razon_social?: string
+  regimen?: string
+  uso_cfdi?: string
+  cp?: string
   [key: string]: unknown
 }
 
 export type CheckoutInput = {
+  /** `manual` or the `key` of a method from `carts.paymentMethods`. */
   payment_method: string
   invoice?: InvoiceRequest
+  /** Absolute URL; the API appends `?checkout=<id>` to it. */
   return_url: string
+  note?: string
 }
 
 export type CheckoutPayment = {
@@ -236,12 +312,18 @@ export type CheckoutPayment = {
   status: string
   redirect_url?: string | null
   client_secret?: string | null
+  /** What to do next (provider addons): `redirect`, `embed`, `voucher` or `none`. */
+  action_type?: string | null
+  /** Isolated iframe URL of an embedded payment widget. */
+  embed_url?: string | null
+  /** Offline instructions as data (OXXO reference, SPEI CLABE, deadline...). */
+  instructions_data?: Record<string, unknown>
   /** Offline payment instructions (OXXO reference, SPEI CLABE, manual transfer data) as text; `null` when none. */
   instructions?: string | null
 }
 
 export type CheckoutInfo = {
-  /** Checkout session id; use it with `carts.checkoutStatus` / `checkouts.get`. */
+  /** Checkout session id; use it with `payment.instructions`. */
   id: string
   /** e.g. `pending`, `paid`, `failed`, `cancelled`, `converted`. */
   status: string
@@ -259,11 +341,6 @@ export type CheckoutResult = {
   checkout: CheckoutInfo
 }
 
-/** Guest-safe view of a checkout (`GET /storefront/checkouts/:id`). No address, email or phone. */
-export type CheckoutStatus = CheckoutResult & {
-  created_at: string
-  lines: OrderLine[]
-}
 
 // ---------------------------------------------------------------------------
 // Customer

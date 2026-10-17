@@ -178,15 +178,12 @@ describe('helpers', () => {
     expect(isTokenPublishable(undefined)).toBe(false)
   })
 
-  it('looks up a guest checkout by id and returns null on 404', async () => {
-    const { calls, fetch } = recorder((c) =>
-      c.url.endsWith('/checkouts/missing')
-        ? Response.json({ error: { code: 'not_found', message: 'x' } }, { status: 404 })
-        : Response.json({ order: { id: 'o1', number: null } }),
-    )
+  it('reads payment methods of a cart', async () => {
+    const { calls, fetch } = recorder(() => Response.json({ methods: [{ key: 'manual', kind: 'builtin', default: true }], market: 'mx' }))
     const sf = createStorefrontClient({ ...base, fetch })
-    expect((await sf.checkouts.get('chk 1'))?.order.number).toBeNull()
-    expect(calls[0]!.url).toMatch(/\/storefront\/checkouts\/chk%201$/)
-    expect(await sf.checkouts.get('missing')).toBeNull()
+    const res = await sf.carts.paymentMethods('c 1')
+    expect(res.methods[0]!.key).toBe('manual')
+    expect(res.market).toBe('mx')
+    expect(calls[0]!.url).toMatch(/\/storefront\/carts\/c%201\/payment-methods$/)
   })
 })

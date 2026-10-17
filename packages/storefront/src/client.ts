@@ -19,7 +19,6 @@ import type {
   CartLineUpdateInput,
   CheckoutInput,
   CheckoutResult,
-  CheckoutStatus,
   Collection,
   Connection,
   Customer,
@@ -28,6 +27,7 @@ import type {
   CustomerSessionInput,
   DeliveryInput,
   DeliveryOptions,
+  PaymentMethods,
   InvoiceRequest,
   InvoiceResult,
   Menu,
@@ -341,6 +341,9 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
         write<Cart>('PUT', cartPath(id, '/shipping-address'), address, options),
       deliveryOptions: (id: string, options?: RequestOptions) =>
         get<DeliveryOptions>(cartPath(id, '/delivery-options'), undefined, options),
+      /** Payment providers active for the cart's market; send the chosen `key` as `payment_method`. */
+      paymentMethods: (id: string, options?: RequestOptions) =>
+        get<PaymentMethods>(cartPath(id, '/payment-methods'), undefined, options),
       setDelivery: (id: string, delivery: DeliveryInput, options?: WriteOptions) =>
         write<Cart>('PUT', cartPath(id, '/delivery'), delivery, options),
       /** Reserves stock and creates the order. Sends `Idempotency-Key` (auto-generated if omitted). */
@@ -349,15 +352,6 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
           ...options,
           idempotencyKey: options.idempotencyKey ?? generateIdempotencyKey(),
         }),
-    },
-
-    checkouts: {
-      /**
-       * Guest order lookup by checkout id (scope `checkout:write`, server-side `sk_` only).
-       * `null` when the checkout does not exist or belongs to another organization.
-       */
-      get: (id: string, options?: RequestOptions) =>
-        getOrNull<CheckoutStatus>(`/storefront/checkouts/${enc(id)}`, undefined, options),
     },
 
     customer: {

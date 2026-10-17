@@ -131,6 +131,8 @@ describe('mock end-to-end purchase', () => {
     const options = await pub.carts.deliveryOptions(cart.id)
     expect(options.rates[0]).toMatchObject({ id: 'flat', cost: { amount: '0.00' } }) // free over 999
     expect(options.pickup.map((p) => p.branch_id)).toEqual(['br_centro', 'br_norte'])
+    expect(options).toMatchObject({ partial: false, unavailable: [] })
+    expect(await pub.carts.paymentMethods(cart.id)).toEqual({ methods: [{ key: 'mock', kind: 'builtin', default: true }], market: null })
     cart = await pub.carts.setDelivery(cart.id, { method: 'shipping', rate_id: 'express' })
     expect(cart.cost.shipping?.amount).toBe('249.00')
     cart = await pub.carts.setDelivery(cart.id, { method: 'pickup', branch_id: 'br_centro' })
@@ -150,11 +152,6 @@ describe('mock end-to-end purchase', () => {
 
     expect(result.checkout.total).toEqual(cart.cost.total)
     expect(result.checkout.stock_hold_expires_at).toMatch(/^\d{4}-/)
-    const status = await sf.checkouts.get(result.checkout.id)
-    expect(status).toMatchObject({ order: { id: result.order.id }, checkout: { id: result.checkout.id } })
-    expect(status!.lines.length).toBeGreaterThan(0)
-    expect(await sf.checkouts.get('chk_nope')).toBeNull()
-    await expect(pub.checkouts.get(result.checkout.id)).rejects.toMatchObject({ status: 403 })
   })
 
   it('rejects over-stock and checkout without delivery', async () => {
