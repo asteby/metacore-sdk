@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-permissions",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "description": "Metacore permissions — capability feed, role/grant API factory, screen-implied capabilities, nav gating and a PermissionsPage, all with injected transport, i18n and nav.",
   "license": "Apache-2.0",
   "repository": {

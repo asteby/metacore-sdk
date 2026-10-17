@@ -1,5 +1,12 @@
 # @asteby/storefront
 
+## 0.5.0
+
+### Minor Changes
+
+- 01d87e3: Reenvía la IP del comprador en las llamadas del servidor: opción `clientIp` del cliente, `client.withClientIp(ip)` y `{ clientIp }` por llamada. Se manda como `X-Storefront-Client-IP`, solo con tokens `sk_`/`pt_` (nunca con `pk_`) y descarta valores que no sean una sola IP. OPS la usa únicamente en tokens emitidos con `opts:trust_client_ip`: el cupo de tasa y el límite de códigos OTP pasan a contarse por comprador y no por el servidor SSR. Se exportan `normalizeClientIp` y `CLIENT_IP_HEADER`.
+- f9eea88: Mockups de respaldo para productos sin imagen. `@asteby/storefront/mockup` (puro, sin DOM): `resolveMockupKind` (atributo `mockup_kind` → atributos de llanta/refacción → palabras en tipo, categoría y etiquetas → `generic`, con reglas configurables) y extractores tipados (`tireMockupData`, `partMockupData`, `supplementMockupData`, `genericMockupData`, `mockupDataFromProduct`) que solo leen lo que trae el producto, nunca precios, con textos limpios y recortados. `@asteby/storefront-react/mockups`: `<ProductImage>` usa la imagen de OPS (`Image` con `alt`, tamaño y `priority`) y si no hay dibuja un SVG SSR sin JS ni red (`role="img"` + `<title>` que dice "Ilustración de referencia"; `alt=""` lo vuelve decorativo): llanta con medida en cifras e índices, ficha de refacción con número de parte y compatibilidad, bote/frasco/bolsa de suplemento con sabor y presentación, y caja genérica con monograma. Registro extensible (`createMockupRegistry`, `registerMockup`, `MockupProvider` con `resolveKind` y textos), `MockupFrame`/`MockupText` para mockups propios y tema por variables CSS (`--mockup-bg`, `--mockup-ink`, `--mockup-accent`…) que heredan del tema de la tienda y soportan modo oscuro.
+
 ## 0.4.0
 
 ### Minor Changes
