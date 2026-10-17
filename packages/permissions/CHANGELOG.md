@@ -1,5 +1,12 @@
 # @asteby/metacore-permissions
 
+## 4.0.0
+
+### Patch Changes
+
+- Updated dependencies [ecaa56c]
+  - @asteby/metacore-runtime-react@52.1.0
+
 ## 3.0.0
 
 ### Patch Changes
