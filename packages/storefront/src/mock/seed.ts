@@ -3,6 +3,7 @@ import type {
   Collection,
   Customer,
   Image,
+  Location,
   Menu,
   Page,
   Product,
@@ -184,6 +185,48 @@ export function buildCollections(imageUrl: MockImageUrl = MOCK_IMAGE_URL): Colle
   }))
 }
 
+const MX_TZ = 'America/Mexico_City'
+const weekdays = (open: string, close: string, days = [1, 2, 3, 4, 5]) => days.map((day) => ({ day, open, close }))
+
+/** Three example branches (CDMX, Monterrey, Guadalajara) with structured hours. */
+export function buildLocations(currency: string): Location[] {
+  const contacts = (phone: string | null) => ({ phone, email: null, whatsapp: null })
+  return [
+    {
+      id: 'br_centro', name: 'Sucursal Centro', kind: 'store', address: 'Av. Principal 100, Col. Centro', city: 'Ciudad de México', postal_code: '06000',
+      phone: '+52 55 0000 0001', lat: 19.4326, lng: -99.1332, timezone: MX_TZ,
+      hours: 'Mo-Fr 09:00-19:00, Sa 09:00-14:00', opening_hours_text: 'Lun–Vie 9:00–19:00 · Sáb 9:00–14:00',
+      opening_hours: { weekly: [...weekdays('09:00', '19:00'), { day: 6, open: '09:00', close: '14:00' }] },
+      services: ['pickup', 'returns'], contacts: contacts('+52 55 0000 0001'),
+      pickup: { enabled: true, fee: null, prep_days: 0 },
+    },
+    {
+      id: 'br_norte', name: 'Sucursal Norte', kind: 'store', address: 'Calle Secundaria 25, Col. Norte', city: 'Monterrey', postal_code: '64000',
+      phone: null, lat: 25.6866, lng: -100.3161, timezone: MX_TZ,
+      hours: 'Mo-Sa 10:00-18:00', opening_hours_text: 'Lun–Sáb 10:00–18:00',
+      opening_hours: { weekly: weekdays('10:00', '18:00', [1, 2, 3, 4, 5, 6]) },
+      services: ['pickup'], contacts: contacts(null),
+      pickup: { enabled: true, fee: money(30, currency), prep_days: 1 },
+    },
+    {
+      id: 'br_occidente', name: 'Punto de recolección Occidente', kind: 'pickup_point', address: 'Av. Vallarta 1500, Col. Americana', city: 'Guadalajara', postal_code: '44100',
+      phone: '+52 33 0000 0003', lat: 20.6736, lng: -103.3897, timezone: MX_TZ,
+      hours: 'Mo-Fr 11:00-20:00', opening_hours_text: 'Lun–Vie 11:00–20:00',
+      opening_hours: { weekly: weekdays('11:00', '20:00') },
+      services: ['pickup'], contacts: contacts('+52 33 0000 0003'),
+      pickup: { enabled: false, fee: null, prep_days: 2 },
+    },
+  ]
+}
+
+/** Postal-code centroids the mock can resolve (the real API resolves any Mexican CP). */
+export const MOCK_POSTAL_CENTROIDS: Record<string, { lat: number; lng: number }> = {
+  '06000': { lat: 19.4326, lng: -99.1332 },
+  '64000': { lat: 25.6714, lng: -100.309 },
+  '44100': { lat: 20.6767, lng: -103.3475 },
+  '03100': { lat: 19.3885, lng: -99.1719 },
+}
+
 export function buildShop(currency: string, imageUrl: MockImageUrl = MOCK_IMAGE_URL): Shop {
   return {
     name: 'Mi tienda',
@@ -195,10 +238,7 @@ export function buildShop(currency: string, imageUrl: MockImageUrl = MOCK_IMAGE_
     country_code: 'MX',
     logo: { url: imageUrl('logo', 256, 256), alt: 'Mi tienda', width: 256, height: 256 },
     contact: { email: 'hola@mi-tienda.example', phone: '+52 55 0000 0000', whatsapp: '+5215500000000' },
-    branches: [
-      { id: 'br_centro', name: 'Sucursal Centro', address: 'Av. Principal 100, Col. Centro', city: 'Ciudad de México', phone: '+52 55 0000 0001', lat: 19.4326, lng: -99.1332, hours: 'Mo-Fr 09:00-19:00, Sa 09:00-14:00' },
-      { id: 'br_norte', name: 'Sucursal Norte', address: 'Calle Secundaria 25, Col. Norte', city: 'Monterrey', phone: null, lat: 25.6866, lng: -100.3161, hours: 'Mo-Sa 10:00-18:00' },
-    ],
+    branches: buildLocations(currency),
     policies: { free_shipping_min: money(999, currency), returns_days: 30 },
   }
 }

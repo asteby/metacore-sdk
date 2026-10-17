@@ -187,3 +187,41 @@ describe('helpers', () => {
     expect(calls[0]!.url).toMatch(/\/storefront\/carts\/c%201\/payment-methods$/)
   })
 })
+
+describe('locations', () => {
+  const sf = (respond?: (c: Call) => Response) => {
+    const r = recorder(respond)
+    return { ...r, client: createStorefrontClient({ ...base, fetch: r.fetch }) }
+  }
+
+  it('lists with an optional postal_code and gets by id (null on 404)', async () => {
+    const { client, calls } = sf((c) => (c.url.includes('/nope') ? new Response('', { status: 404 }) : Response.json({ nodes: [] })))
+    await client.locations.list()
+    await client.locations.list({ postal_code: '06000' })
+    expect(calls[0]!.url).toBe('https://ops.example.com/api/gw/storefront/locations')
+    expect(calls[1]!.url).toBe('https://ops.example.com/api/gw/storefront/locations?postal_code=06000')
+    expect(await client.locations.get('nope')).toBeNull()
+    await client.locations.get('br 1/x')
+    expect(calls[3]!.url).toMatch(/\/storefront\/locations\/br%201%2Fx$/)
+  })
+
+  it('nearest sends lat/lng, bypasses caches and never logs the point', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const { client, calls } = sf(() => Response.json({ nodes: [] }))
+    await client.locations.nearest({ lat: 19.4326, lng: -99.1332 })
+    const url = new URL(calls[0]!.url)
+    expect(url.pathname).toBe('/api/gw/storefront/locations/nearest')
+    expect(url.searchParams.get('lat')).toBe('19.4326')
+    expect(url.searchParams.get('lng')).toBe('-99.1332')
+    expect(calls[0]!.init.cache).toBe('no-store')
+    expect(log).not.toHaveBeenCalled()
+    log.mockRestore()
+  })
+
+  it('nearest rejects invalid points before any request', () => {
+    const { client, calls } = sf()
+    expect(() => client.locations.nearest({ lat: 91, lng: 0 })).toThrow(TypeError)
+    expect(() => client.locations.nearest({ lat: Number.NaN, lng: 1 })).toThrow(TypeError)
+    expect(calls).toHaveLength(0)
+  })
+})

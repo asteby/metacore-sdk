@@ -124,6 +124,41 @@ export type ShopBranch = {
   timezone?: string
   /** Human-readable hours, authoritative for display. Comes with `locations.v1`. */
   opening_hours_text?: string
+  /** Postal code of the branch. Comes with `locations.v1`. */
+  postal_code?: string | null
+  /** What kind of place it is. Comes with `locations.v1`. */
+  kind?: LocationKind
+  /** What can be done there (free-form keys such as `pickup`, `returns`, `repairs`). Comes with `locations.v1`. */
+  services?: string[]
+  /** Contact channels of the branch. Comes with `locations.v1`. */
+  contacts?: LocationContacts
+  /** Pickup ("recoge en sucursal") terms. Comes with `locations.v1`. */
+  pickup?: LocationPickup
+}
+
+export type LocationKind = 'store' | 'warehouse' | 'pickup_point' | 'office' | (string & {})
+
+export type LocationContacts = { phone: string | null; email: string | null; whatsapp: string | null }
+
+/** `fee` is `null` when pickup is free. `prep_days`: days until the order is ready (0 = same day). */
+export type LocationPickup = { enabled: boolean; fee: Money | null; prep_days: number }
+
+/**
+ * A branch as served by `/storefront/locations` (`locations.v1`): a `ShopBranch`
+ * whose structured fields are always present. `distance_km` is set only when
+ * the answer is ordered by distance (`nearest`, or `list` with `postal_code`).
+ */
+export type Location = ShopBranch &
+  Required<Pick<ShopBranch, 'kind' | 'services' | 'contacts' | 'pickup' | 'postal_code'>> & {
+    distance_km?: number | null
+  }
+
+/** Answer of `locations.nearest`: always ordered by distance, closest first. */
+export type NearestLocation = Location & { distance_km: number }
+
+export type LocationListParams = {
+  /** Orders the branches by distance to the centroid of this postal code. */
+  postal_code?: string
 }
 
 export type ShopPolicies = { free_shipping_min: Money | null; returns_days: number | null }

@@ -13,6 +13,7 @@ import type {
   Collection,
   Customer,
   Facet,
+  Location,
   Menu,
   Order,
   Page,
@@ -22,11 +23,13 @@ import type {
   StorefrontErrorCode,
   Theme,
 } from '../types.js'
+import { isValidPoint, rankByDistance } from '../geo.js'
 import {
   MOCK_CURRENCY,
   MOCK_IMAGE_URL,
   buildArticles,
   buildCollections,
+  MOCK_POSTAL_CENTROIDS,
   buildCustomers,
   buildMemberships,
   buildMenus,
@@ -37,7 +40,7 @@ import {
   type MockImageUrl,
 } from './seed.js'
 
-export { MOCK_CURRENCY, MOCK_CUSTOMER_EMAIL, MOCK_IMAGE_URL } from './seed.js'
+export { MOCK_CURRENCY, MOCK_CUSTOMER_EMAIL, MOCK_IMAGE_URL, MOCK_POSTAL_CENTROIDS } from './seed.js'
 export type { MockImageUrl } from './seed.js'
 
 export type MockStorefrontOptions = {
@@ -414,7 +417,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     const percent = codes.filter((d) => d.applicable).reduce((max, d) => Math.max(max, percentFor(d.code)), 0)
     const discount = Math.round((subtotal * percent) / 100)
     let shipping: number | null = null
-    if (cart.delivery.method === 'pickup') shipping = 0
+    if (cart.delivery.method === 'pickup') shipping = toCents(state.shop.branches.find((b) => b.id === cart.delivery.branch_id)?.pickup?.fee?.amount ?? '0')
     else if (cart.delivery.method === 'shipping' && cart.delivery.rate_id) {
       const rate = shippingRates(subtotal - discount).find((r) => r.id === cart.delivery.rate_id)
       shipping = rate ? toCents(rate.cost.amount) : null
@@ -524,6 +527,27 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     body: requireNode(state.collections.find((c) => c.handle === params[0]), `Collection ${params[0]}`),
     cache: 'public',
   }))
+  // Locations. `nearest` must be registered before `:id`. Like the real API it rounds the point to 0.01° and keeps nothing.
+  const visibleLocations = () => state.shop.branches as Location[]
+  const round2 = (n: number) => Math.round(n * 100) / 100
+  const withDistance = (origin: { lat: number; lng: number }) =>
+    rankByDistance(visibleLocations(), origin).map(({ item, distanceKm }) => ({ ...item, distance_km: Math.round(distanceKm * 10) / 10 }))
+  route('GET', '/locations', 'catalog:read', ({ search }) => {
+    const cp = search.get('postal_code')
+    const origin = cp ? MOCK_POSTAL_CENTROIDS[cp] : undefined
+    return { body: { nodes: origin ? withDistance(origin) : visibleLocations() }, cache: 'public' }
+  })
+  route('GET', '/locations/nearest', 'catalog:read', ({ search }) => {
+    const origin = { lat: Number(search.get('lat') ?? NaN), lng: Number(search.get('lng') ?? NaN) }
+    if (search.get('lat') === null || search.get('lng') === null || !isValidPoint(origin)) {
+      throw new HttpError(400, 'validation', 'lat and lng must be a valid point', 'lat')
+    }
+    return { body: { nodes: withDistance({ lat: round2(origin.lat), lng: round2(origin.lng) }) }, cache: 'private' }
+  })
+  route('GET', '/locations/:id', 'catalog:read', ({ params }) => ({
+    body: requireNode(visibleLocations().find((b) => b.id === params[0]), `Location ${params[0]}`, 'id'),
+    cache: 'public',
+  }))
   route('GET', '/stock', 'catalog:read', ({ search }) => {
     const skus = search.getAll('sku')
     if (skus.length > 250) throw new HttpError(400, 'validation', 'At most 250 SKUs', 'sku')
@@ -609,7 +633,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     const cart = renderCart(getCartRecord(params[0]!))
     const net = toCents(cart.cost.subtotal.amount) - toCents(cart.cost.discount.amount)
     return {
-      body: { rates: shippingRates(net), pickup: state.shop.branches.map((b) => ({ branch_id: b.id, name: b.name })), partial: false, unavailable: [] },
+      body: { rates: shippingRates(net), pickup: state.shop.branches.filter((b) => b.pickup?.enabled !== false).map((b) => ({ branch_id: b.id, name: b.name, address: b.address, city: b.city })), partial: false, unavailable: [] },
       cache: 'private',
     }
   })
@@ -627,7 +651,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       cart.delivery = { method: 'shipping', rate_id: rateId, branch_id: null }
     } else if (body.method === 'pickup') {
       const branchId = body.branch_id
-      if (typeof branchId !== 'string' || !state.shop.branches.some((b) => b.id === branchId)) {
+      if (typeof branchId !== 'string' || !state.shop.branches.some((b) => b.id === branchId && b.pickup?.enabled !== false)) {
         throw new HttpError(400, 'validation', 'Unknown branch_id', 'branch_id')
       }
       cart.delivery = { method: 'pickup', rate_id: null, branch_id: branchId }

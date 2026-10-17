@@ -156,6 +156,27 @@ dated `exceptions` and daylight saving time (uses `Intl.DateTimeFormat`; throws
 `opening_hours`, `timezone` and `opening_hours_text`; they arrive with Storefront
 API `locations.v1` and are not populated yet.
 
+## Locations (`client.locations`, Storefront API `locations.v1`)
+
+```ts
+const { nodes } = await sf.locations.list()                        // visible branches
+const byCp = await sf.locations.list({ postal_code: '06000' })     // ordered by distance_km
+const one = await sf.locations.get('br_centro')                    // null when unknown
+const near = await sf.locations.nearest({ lat: 19.4326, lng: -99.1332 }) // closest first, nodes[i].distance_km
+```
+
+`Location` is a `ShopBranch` whose structured fields are always present: `kind`,
+`postal_code`, `timezone`, `opening_hours`, `services`, `contacts` and
+`pickup { enabled, fee, prep_days }` (`fee: null` = free). `nearest` is
+`private, no-store`: the server rounds the point to 0.01° and never stores it,
+and the client neither logs nor keeps it (hooks such as `onRequest` do see the
+URL, so do not log it). To rank branches you already have without sending the
+point anywhere, use `rankByDistance` from `/geo` on `shop.branches`.
+The mock serves the three routes with three example branches (CDMX, Monterrey,
+Guadalajara) ordered by haversine; it knows the centroid of a few postal codes
+(`MOCK_POSTAL_CENTROIDS`), pickup is offered only where `pickup.enabled`, and
+the pickup `fee` is charged on the cart.
+
 ## API
 
 `createStorefrontClient(options)`:

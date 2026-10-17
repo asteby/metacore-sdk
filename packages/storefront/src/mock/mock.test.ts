@@ -204,3 +204,53 @@ describe('mock customer and content', () => {
     await expect(pub.content.articles({ first: 50 })).resolves.toBeTruthy()
   })
 })
+
+describe('locations', () => {
+  const sf = () => createStorefrontClient({ baseUrl: 'https://mock.local/api/gw', token: 'pk_mock', fetch: createMockStorefront().fetch })
+
+  it('lists the three example branches with structured fields', async () => {
+    const { nodes } = await sf().locations.list()
+    expect(nodes.map((l) => l.id)).toEqual(['br_centro', 'br_norte', 'br_occidente'])
+    expect(nodes[0]).toMatchObject({ kind: 'store', timezone: 'America/Mexico_City', pickup: { enabled: true, fee: null, prep_days: 0 } })
+    expect(nodes[0]!.opening_hours!.weekly.length).toBeGreaterThan(0)
+    expect(nodes[0]!.distance_km).toBeUndefined()
+  })
+
+  it('orders by haversine distance from a postal code or a point, closest first', async () => {
+    const client = sf()
+    const byCp = await client.locations.list({ postal_code: '64000' })
+    expect(byCp.nodes.map((l) => l.id)).toEqual(['br_norte', 'br_occidente', 'br_centro'])
+    expect(byCp.nodes[0]!.distance_km).toBeLessThan(5)
+    const near = await client.locations.nearest({ lat: 20.67, lng: -103.35 })
+    expect(near.nodes.map((l) => l.id)).toEqual(['br_occidente', 'br_centro', 'br_norte'])
+    expect(near.nodes[0]!.distance_km).toBeGreaterThan(0)
+    // Unknown postal code: unordered, no distance.
+    expect((await client.locations.list({ postal_code: '99999' })).nodes[0]!.distance_km).toBeUndefined()
+  })
+
+  it('rounds the point to 0.01 degrees like the server and rejects invalid points', async () => {
+    const client = sf()
+    const a = await client.locations.nearest({ lat: 19.43261, lng: -99.13321 })
+    const b = await client.locations.nearest({ lat: 19.4349, lng: -99.1349 })
+    expect(a.nodes.map((l) => l.distance_km)).toEqual(b.nodes.map((l) => l.distance_km))
+    expect(() => client.locations.nearest({ lat: 0, lng: 0 })).toThrow(TypeError)
+    await expect(client.request({ method: 'GET', path: '/storefront/locations/nearest', query: { lat: 'x', lng: '1' } })).rejects.toMatchObject({ status: 400 })
+  })
+
+  it('gets one branch, null when unknown, and marks nearest as private', async () => {
+    const client = sf()
+    expect((await client.locations.get('br_norte'))?.city).toBe('Monterrey')
+    expect(await client.locations.get('nope')).toBeNull()
+    const res = await createMockStorefront().fetch('https://mock.local/api/gw/storefront/locations/nearest?lat=19.4&lng=-99.1', { headers: { Authorization: 'Bearer pk_mock' } })
+    expect(res.headers.get('cache-control')).toMatch(/no-store/)
+  })
+
+  it('only offers pickup at branches with pickup enabled and charges the fee', async () => {
+    const sf2 = createStorefrontClient({ baseUrl: 'https://mock.local/api/gw', token: 'pk_mock', fetch: createMockStorefront().fetch })
+    const product = (await sf2.products.list({ first: 1 })).nodes[0]!
+    let cart = await sf2.carts.create({ lines: [{ variant_id: product.variants[0]!.id, quantity: 1 }] })
+    await expect(sf2.carts.setDelivery(cart.id, { method: 'pickup', branch_id: 'br_occidente' })).rejects.toMatchObject({ status: 400 })
+    cart = await sf2.carts.setDelivery(cart.id, { method: 'pickup', branch_id: 'br_norte' })
+    expect(cart.cost.shipping?.amount).toBe('30.00')
+  })
+})

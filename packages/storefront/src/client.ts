@@ -1,4 +1,5 @@
 import { StorefrontError, defaultCodeForStatus } from './errors.js'
+import { isValidPoint, type GeoPoint } from './geo.js'
 import { isTokenPublishable } from './money.js'
 import {
   appendParams,
@@ -29,6 +30,9 @@ import type {
   DeliveryOptions,
   PaymentMethods,
   InvoiceRequest,
+  Location,
+  LocationListParams,
+  NearestLocation,
   InvoiceResult,
   Menu,
   Order,
@@ -313,6 +317,25 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
       /** `null` when the collection does not exist. */
       get: (handle: string, options?: RequestOptions) =>
         getOrNull<Collection>(`/storefront/collections/${enc(handle)}`, undefined, options),
+    },
+
+    locations: {
+      /** Branches of the shop. With `postal_code` they come ordered by distance (`distance_km`). */
+      list: (params?: LocationListParams, options?: RequestOptions) =>
+        get<{ nodes: Location[] }>('/storefront/locations', params as QueryParams, options),
+      /** `null` when the branch does not exist or is not visible. */
+      get: (id: string, options?: RequestOptions) =>
+        getOrNull<Location>(`/storefront/locations/${enc(id)}`, undefined, options),
+      /**
+       * Branches ordered by distance to a point, closest first. The server rounds the coordinates (0.01°, ~1 km)
+       * and never stores them; this client does not log or keep them either. The answer is `private, no-store`
+       * (it depends on the buyer's position), so do not put it in a shared cache. Note `onRequest` hooks and
+       * `fetch` wrappers do see the URL: do not log it. Throws `TypeError` for an invalid point.
+       */
+      nearest: (point: GeoPoint, options?: RequestOptions) => {
+        if (!isValidPoint(point)) throw new TypeError('locations.nearest: lat/lng must be a valid point')
+        return get<{ nodes: NearestLocation[] }>('/storefront/locations/nearest', { lat: point.lat, lng: point.lng }, { cache: 'no-store', ...options })
+      },
     },
 
     stock: {
