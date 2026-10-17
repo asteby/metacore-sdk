@@ -22,6 +22,10 @@
     "./marketplace": {
       "types": "./dist/marketplace.d.ts",
       "import": "./dist/marketplace.js"
+    },
+    "./page": {
+      "types": "./dist/page.d.ts",
+      "import": "./dist/page.js"
     }
   },
   "scripts": {

@@ -19,6 +19,8 @@
  *     `DynamicTable` / `DynamicKanban`.
  */
 
+import type { HostBranch, HostOrg } from "./host.js";
+
 /** CRUD action carried by a data event. `resync` is synthesised client-side
  *  when the server reports dropped frames: treat it as "refetch everything
  *  you show for this model". */
@@ -88,7 +90,8 @@ export interface RealtimeAPI {
 }
 
 /**
- * Shape of the `host` prop the shell forwards to immersive addon routes
+ * Shape of the `host` prop the shell forwards to federated pages (embedded and
+ * full screen, see `AddonPageProps`) and immersive addon routes
  * (`layout: "immersive"` — POS terminal, kiosk, kitchen display). Every field
  * is optional so hosts can grow it incrementally; addons must tolerate a
  * missing key. Hosts may extend it with their own fields.
@@ -100,6 +103,14 @@ export interface AddonHostContext {
   user?: { id: string; name: string; [key: string]: unknown } | null;
   /** Org currency (ISO 4217). */
   currencyCode?: string;
+  /** Organization the operator works in (embedded and full-screen pages). */
+  org?: HostOrg | null;
+  /** Selected branch with its label (`branchId` stays for older remotes). */
+  branch?: HostBranch | null;
+  /** Active UI locale (BCP 47, e.g. `es-MX`). */
+  locale?: string;
+  /** Keys of the addons installed and enabled for the org. */
+  installedAddons?: readonly string[];
   /** Live data changes for the operator's org — see {@link RealtimeAPI}. */
   realtime?: RealtimeAPI;
   /**
