@@ -107,7 +107,7 @@ func cmdInit(args []string) error {
 		},
 	}
 
-	mb, err := json.MarshalIndent(m, "", "  ")
+	mb, err := marshalManifest(m)
 	if err != nil {
 		return err
 	}
@@ -160,4 +160,39 @@ export default {
 	}
 	fmt.Printf("scaffolded ./%s (key=%s version=%s, apiVersion=%s)\n", key, key, m.Metadata.Version, v3.APIVersion)
 	return nil
+}
+
+// marshalManifest encodes a typed v3 manifest without null members. The
+// kernel's v3.FieldOptions is a struct whose MarshalJSON yields `null` when
+// empty, and `omitempty` never drops a struct, so every column would carry
+// `"options": null`, which the v3 schema rejects. Nulls carry no meaning in
+// the contract, so they are dropped before writing.
+func marshalManifest(m any) ([]byte, error) {
+	raw, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	var doc any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return nil, err
+	}
+	return json.MarshalIndent(dropNulls(doc), "", "  ")
+}
+
+func dropNulls(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		for k, val := range t {
+			if val == nil {
+				delete(t, k)
+				continue
+			}
+			t[k] = dropNulls(val)
+		}
+	case []any:
+		for i := range t {
+			t[i] = dropNulls(t[i])
+		}
+	}
+	return v
 }
