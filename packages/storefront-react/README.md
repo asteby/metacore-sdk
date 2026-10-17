@@ -158,6 +158,44 @@ metacore-ui components pick it up), fonts as `--font-<role>` and `--radius`.
 Unsafe values (`;`, `{}`, `<`, `url(`) are dropped. `<ThemeStyle theme />`
 renders it as a `<style>`; `themeFontsHref(theme)` gives a Google Fonts URL.
 
+## Sucursales (headless)
+
+Primitivos sin estilos ni clases (render props), accesibles y SSR-safe. Con cero
+sucursales todos renderizan `null`. Leen `shop.branches` del `StorefrontProvider`
+si no recibes `locations`.
+
+```tsx
+const [origin, setOrigin] = useState<GeoPoint | null>(null)
+const cp = new URLSearchParams(search).get('cp')
+const { locations } = useNearestLocations({ origin, postalCode: cp, limit: 3 })
+const mine = useSelectedLocation({ initialId: urlSucursal }) // ?sucursal= + localStorage, nunca cookie
+
+<NearestLocationForm action="/sucursales" onLocate={setOrigin} /> {/* GET ?cp=06000 sin JS */}
+<LocationList locations={locations}>
+  {(l, { selected }) => (
+    <>
+      <strong>{l.name}</strong> <OpenStatus location={l} /> <DirectionsLink location={l} />
+      <PickupOption location={l} />
+      <button onClick={() => mine.select(l.id)} aria-pressed={selected}>Mi sucursal</button>
+    </>
+  )}
+</LocationList>
+```
+
+- `useGeolocation()`: solo pide la ubicación al llamar `request()` desde un gesto
+  del usuario; expone `supported`, `permission`, `status`, `position` y un error
+  tipado (`denied | unavailable | timeout | unsupported | insecure`). La posición
+  no se guarda ni se envía.
+- `useNearestLocations({ origin, postalCode, locations, limit, radiusKm, remote })`:
+  con `origin` ordena en el navegador (haversine; las coordenadas no salen). Con
+  `postalCode` (o `remote`) pregunta al servidor (`client.locations`).
+- `useSelectedLocation()`: "Mi sucursal" en `?sucursal=` y `localStorage`
+  (`sf_sucursal`); valida contra las sucursales y olvida ids obsoletos. Pasa
+  `initialId` desde el loader para que SSR e hidratación coincidan.
+- `LocationList`, `LocationPicker` (radios nativos, `name="sucursal"`),
+  `OpenStatus` (calcula tras montar; `now` fija el instante), `DirectionsLink`,
+  `PickupOption` (muestra lo que manda OPS: costo y días), `NearestLocationForm`.
+
 ## API
 
 | Export | |

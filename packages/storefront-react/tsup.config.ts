@@ -8,6 +8,6 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   target: 'es2022',
-  external: ['react', 'react/jsx-runtime', '@asteby/storefront'],
+  external: ['react', 'react/jsx-runtime', '@asteby/storefront', '@asteby/storefront/geo'],
   treeshake: true,
 })

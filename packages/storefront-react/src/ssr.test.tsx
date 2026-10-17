@@ -155,7 +155,7 @@ describe('seo', () => {
   it('builds organization, local business, breadcrumb, faq and collection JSON-LD', () => {
     expect(organizationJsonLd(shop)).toMatchObject({ '@type': 'Organization', name: 'Mi tienda', url: 'https://mi-tienda.example' })
     const branches = localBusinessJsonLd(shop, { type: 'ClothingStore' })
-    expect(branches).toHaveLength(2)
+    expect(branches).toHaveLength(3)
     expect(branches[0]).toMatchObject({ '@type': 'ClothingStore', geo: { latitude: 19.4326 }, openingHours: ['Mo-Fr 09:00-19:00', 'Sa 09:00-14:00'] })
     expect(branches[1]!.telephone).toBe(shop.contact.phone)
     expect(breadcrumbJsonLd([{ name: 'Inicio', url: 'https://x/' }, { name: 'Ropa', url: 'https://x/c' }]).itemListElement).toEqual([
