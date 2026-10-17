@@ -1,5 +1,12 @@
 # @asteby/metacore-websocket
 
+## 9.0.0
+
+### Patch Changes
+
+- Updated dependencies [df0c760]
+  - @asteby/metacore-sdk@3.15.0
+
 ## 8.0.0
 
 ### Patch Changes

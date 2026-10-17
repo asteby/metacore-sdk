@@ -1,5 +1,14 @@
 # @asteby/metacore-agent-workspace
 
+## 6.0.0
+
+### Patch Changes
+
+- Updated dependencies [df0c760]
+  - @asteby/metacore-runtime-react@53.0.0
+  - @asteby/metacore-app-providers@153.0.0
+  - @asteby/metacore-starter-core@162.0.0
+
 ## 5.0.0
 
 ### Patch Changes

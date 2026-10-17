@@ -1,5 +1,11 @@
 # @asteby/metacore-notifications
 
+## 42.0.0
+
+### Patch Changes
+
+- @asteby/metacore-websocket@9.0.0
+
 ## 41.0.0
 
 ### Minor Changes

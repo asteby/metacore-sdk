@@ -1,5 +1,12 @@
 # @asteby/metacore-tools
 
+## 20.0.0
+
+### Patch Changes
+
+- Updated dependencies [df0c760]
+  - @asteby/metacore-sdk@3.15.0
+
 ## 19.0.0
 
 ### Patch Changes
