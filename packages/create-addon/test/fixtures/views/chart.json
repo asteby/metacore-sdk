@@ -1,0 +1,113 @@
+{
+  "apiVersion": "asteby.com/v3",
+  "kind": "Addon",
+  "metadata": {
+    "key": "shipping",
+    "name": "Envíos",
+    "description": "Fixture for `create-metacore-addon add view`.",
+    "version": "0.1.0",
+    "category": "logistics",
+    "icon": {
+      "type": "lucide",
+      "slug": "Truck"
+    }
+  },
+  "compatibility": {
+    "requires": [
+      {
+        "key": "kernel",
+        "version": ">=3.0.0 <4.0.0"
+      }
+    ]
+  },
+  "tenancy": {
+    "isolation": "shared",
+    "rls_column": "organization_id"
+  },
+  "capabilities": [
+    {
+      "kind": "db:write",
+      "target": "addon_shipping.*"
+    }
+  ],
+  "models": [
+    {
+      "key": "Shipment",
+      "table": "shipments",
+      "label": "Envíos",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "primary_key": true,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "organization_id",
+          "type": "uuid",
+          "not_null": true
+        },
+        {
+          "name": "tracking_number",
+          "type": "text"
+        },
+        {
+          "name": "carrier",
+          "type": "text"
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "not_null": true,
+          "default": "'created'"
+        },
+        {
+          "name": "eta",
+          "type": "timestamptz"
+        },
+        {
+          "name": "dest_lat",
+          "type": "numeric"
+        },
+        {
+          "name": "dest_lng",
+          "type": "numeric"
+        },
+        {
+          "name": "cost",
+          "type": "numeric"
+        }
+      ]
+    }
+  ],
+  "contributions": {
+    "navigation": [
+      {
+        "title": "Envíos",
+        "icon": "Truck",
+        "items": [
+          {
+            "title": "Envíos",
+            "model": "Shipment"
+          },
+          {
+            "title": "shipping.nav.by_carrier",
+            "model": "Shipment",
+            "icon": "BarChart3",
+            "view_type": "chart",
+            "view": {
+              "chart": {
+                "kind": "bar",
+                "query": {
+                  "model": "Shipment",
+                  "group_by": "carrier",
+                  "range": "last_30_days"
+                }
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

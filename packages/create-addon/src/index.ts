@@ -6,6 +6,8 @@
  *
  * Usage:
  *   npm create metacore-addon@latest my-addon
+ *   npx create-metacore-addon my-addon --template embedded-page
+ *   npx create-metacore-addon add view --type map --model Shipment [dir]
  *   npx create-metacore-addon my-addon --template minimal
  *   npx create-metacore-addon my-addon --template crud-model --no-install
  */
@@ -65,6 +67,12 @@ const TEMPLATES: TemplateDescriptor[] = [
     hint: 'frontend.layout = "immersive", owns the whole viewport.',
     hasBackend: false,
   },
+  {
+    id: 'embedded-page',
+    label: 'Embedded page — federated page inside the host chrome + WASM API route',
+    hint: 'frontend.pages[] (layout shell) + contributions.api + a declarative split view. Declarative first: justify the page in README.',
+    hasBackend: true,
+  },
 ]
 
 interface CliOptions {
@@ -93,6 +101,23 @@ interface ScaffoldVars {
 }
 
 async function main(): Promise<void> {
+  // `add view …` edits an existing addon's manifest (declarative views only).
+  if (process.argv[2] === 'add') {
+    if (process.argv[3] !== 'view') {
+      console.error(red('Usage: create-metacore-addon add view --type <map|timeline|calendar|chart|split> [dir]'))
+      process.exit(1)
+    }
+    const { runAddView } = await import('./add-view.js')
+    try {
+      await runAddView(process.argv.slice(4))
+    } catch (err) {
+      const e = err as { code?: string; message?: string }
+      if (e.code?.startsWith('commander.')) process.exit(1)
+      console.error(red(e.message ?? String(err)))
+      process.exit(1)
+    }
+    return
+  }
   const program = new Command()
   program
     .name('create-metacore-addon')
@@ -415,24 +440,15 @@ async function copyTemplate(
   }
 }
 
+// Text files get placeholder substitution; anything else is copied verbatim.
+const TEMPLATED_EXT = new Set([
+  '.json', '.md', '.html', '.ts', '.tsx', '.css', '.sh', '.go', '.mod', '.sql', '.example',
+])
+
 function shouldTemplate(rel: string): boolean {
   const base = path.basename(rel)
-  if (base.endsWith('.sql')) return true
-  return (
-    base === 'package.json' ||
-    base === 'README.md' ||
-    base === 'manifest.json' ||
-    base === 'index.html' ||
-    base === 'vite.config.ts' ||
-    base === 'plugin.tsx' ||
-    base === 'main.tsx' ||
-    base === 'index.css' ||
-    base === 'build.sh' ||
-    base === 'main.go' ||
-    base === 'go.mod' ||
-    base === '.env.example' ||
-    base === '_env.example'
-  )
+  if (base === '_env.example' || base === '.env.example') return true
+  return TEMPLATED_EXT.has(path.extname(base))
 }
 
 function renderTemplate(raw: string, vars: ScaffoldVars): string {

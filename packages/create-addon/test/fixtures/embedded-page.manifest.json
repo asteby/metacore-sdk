@@ -1,0 +1,193 @@
+{
+  "apiVersion": "asteby.com/v3",
+  "kind": "Addon",
+  "metadata": {
+    "key": "my_addon",
+    "name": "My Addon",
+    "description": "A metacore addon.",
+    "version": "0.1.0",
+    "category": "operations",
+    "icon": {
+      "type": "lucide",
+      "slug": "LayoutDashboard",
+      "color": "#6366F1"
+    },
+    "author": "Asteby Tests",
+    "license": "Apache-2.0"
+  },
+  "compatibility": {
+    "requires": [
+      {
+        "key": "kernel",
+        "version": ">=3.0.0 <4.0.0"
+      }
+    ]
+  },
+  "tenancy": {
+    "isolation": "shared",
+    "rls_column": "organization_id"
+  },
+  "capabilities": [
+    {
+      "kind": "db:read",
+      "target": "addon_my_addon.*",
+      "reason": "Summarize the addon's own rows for the board page."
+    },
+    {
+      "kind": "db:write",
+      "target": "addon_my_addon.*",
+      "reason": "Persist the addon's rows."
+    }
+  ],
+  "models": [
+    {
+      "key": "Item",
+      "table": "my_addon_items",
+      "label": "Items",
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "primary_key": true,
+          "default": "gen_random_uuid()"
+        },
+        {
+          "name": "organization_id",
+          "type": "uuid",
+          "not_null": true
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "not_null": true
+        },
+        {
+          "name": "status",
+          "type": "text",
+          "not_null": true,
+          "default": "'open'"
+        },
+        {
+          "name": "due_at",
+          "type": "timestamptz"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "not_null": true,
+          "default": "now()"
+        }
+      ],
+      "detail": {
+        "panels": [
+          {
+            "key": "figures",
+            "kind": "stats",
+            "title": "Resumen",
+            "stats": {
+              "items": [
+                {
+                  "field": "status"
+                },
+                {
+                  "field": "due_at",
+                  "format": "relative_date"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "frontend": {
+    "entry": "/api/metacore/addons/my_addon/frontend/remoteEntry.js",
+    "format": "federation",
+    "container": "metacore_my_addon",
+    "expose": "./register",
+    "layout": "shell",
+    "load": "route",
+    "pages": [
+      {
+        "key": "board",
+        "path": "board",
+        "expose": "./pages/board",
+        "layout": "shell",
+        "title": "My Addon",
+        "icon": "LayoutDashboard",
+        "permission": "my_addon.item.read",
+        "requires": [
+          {
+            "model": "Item",
+            "actions": [
+              "index"
+            ]
+          }
+        ],
+        "budget_kb": 60,
+        "breadcrumbs": [
+          {
+            "title": "My Addon"
+          }
+        ]
+      }
+    ]
+  },
+  "contributions": {
+    "navigation": [
+      {
+        "title": "My Addon",
+        "icon": "LayoutDashboard",
+        "target": "sidebar.operations",
+        "items": [
+          {
+            "title": "Items",
+            "model": "Item",
+            "icon": "List",
+            "permission": "my_addon.item.read",
+            "view_type": "split",
+            "view": {
+              "split": {
+                "columns": [
+                  "title",
+                  "status",
+                  "due_at"
+                ]
+              }
+            }
+          },
+          {
+            "title": "Tablero",
+            "url": "addon://my_addon/board",
+            "icon": "LayoutDashboard",
+            "permission": "my_addon.item.read"
+          }
+        ]
+      }
+    ],
+    "api": [
+      {
+        "key": "summary",
+        "method": "GET",
+        "path": "/my_addon/summary",
+        "auth": "staff",
+        "cache": {
+          "private": true
+        },
+        "do": "wasm:summary"
+      }
+    ]
+  },
+  "rbac": {
+    "permissions": [
+      {
+        "key": "my_addon.item.read",
+        "label": "Read items"
+      },
+      {
+        "key": "my_addon.item.write",
+        "label": "Create/update/delete items"
+      }
+    ]
+  }
+}

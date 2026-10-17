@@ -1,0 +1,8 @@
+node_modules
+dist
+.cache
+.parcel-cache
+.turbo
+.DS_Store
+*.log
+*.tar.gz

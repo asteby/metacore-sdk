@@ -1,0 +1,91 @@
+{
+  "apiVersion": "asteby.com/v3",
+  "kind": "Addon",
+  "metadata": {
+    "key": "{{ADDON_KEY}}",
+    "name": "{{ADDON_NAME}}",
+    "description": "{{ADDON_DESCRIPTION}}",
+    "version": "0.1.0",
+    "category": "operations",
+    "icon": { "type": "lucide", "slug": "LayoutDashboard", "color": "#6366F1" },
+    "author": "{{AUTHOR}}",
+    "license": "{{LICENSE}}"
+  },
+  "compatibility": {
+    "requires": [{ "key": "kernel", "version": ">=3.0.0 <4.0.0" }]
+  },
+  "tenancy": { "isolation": "shared", "rls_column": "organization_id" },
+  "capabilities": [
+    { "kind": "db:read", "target": "addon_{{ADDON_KEY}}.*", "reason": "Summarize the addon's own rows for the board page." },
+    { "kind": "db:write", "target": "addon_{{ADDON_KEY}}.*", "reason": "Persist the addon's rows." }
+  ],
+  "models": [
+    {
+      "key": "Item",
+      "table": "{{ADDON_KEY}}_items",
+      "label": "Items",
+      "columns": [
+        { "name": "id", "type": "uuid", "primary_key": true, "default": "gen_random_uuid()" },
+        { "name": "organization_id", "type": "uuid", "not_null": true },
+        { "name": "title", "type": "text", "not_null": true },
+        { "name": "status", "type": "text", "not_null": true, "default": "'open'" },
+        { "name": "due_at", "type": "timestamptz" },
+        { "name": "created_at", "type": "timestamptz", "not_null": true, "default": "now()" }
+      ],
+      "detail": {
+        "panels": [
+          { "key": "figures", "kind": "stats", "title": "Resumen",
+            "stats": { "items": [{ "field": "status" }, { "field": "due_at", "format": "relative_date" }] } }
+        ]
+      }
+    }
+  ],
+  "frontend": {
+    "entry": "/api/metacore/addons/{{ADDON_KEY}}/frontend/remoteEntry.js",
+    "format": "federation",
+    "container": "metacore_{{ADDON_KEY}}",
+    "expose": "./register",
+    "layout": "shell",
+    "load": "route",
+    "pages": [
+      {
+        "key": "board",
+        "path": "board",
+        "expose": "./pages/board",
+        "layout": "shell",
+        "title": "{{ADDON_NAME}}",
+        "icon": "LayoutDashboard",
+        "permission": "{{ADDON_KEY}}.item.read",
+        "requires": [{ "model": "Item", "actions": ["index"] }],
+        "budget_kb": 60,
+        "breadcrumbs": [{ "title": "{{ADDON_NAME}}" }]
+      }
+    ]
+  },
+  "contributions": {
+    "navigation": [
+      {
+        "title": "{{ADDON_NAME}}",
+        "icon": "LayoutDashboard",
+        "target": "sidebar.operations",
+        "items": [
+          { "title": "Items", "model": "Item", "icon": "List", "permission": "{{ADDON_KEY}}.item.read",
+            "view_type": "split",
+            "view": { "split": { "columns": ["title", "status", "due_at"] } } },
+          { "title": "Tablero", "url": "addon://{{ADDON_KEY}}/board", "icon": "LayoutDashboard",
+            "permission": "{{ADDON_KEY}}.item.read" }
+        ]
+      }
+    ],
+    "api": [
+      { "key": "summary", "method": "GET", "path": "/{{ADDON_KEY}}/summary", "auth": "staff",
+        "cache": { "private": true }, "do": "wasm:summary" }
+    ]
+  },
+  "rbac": {
+    "permissions": [
+      { "key": "{{ADDON_KEY}}.item.read", "label": "Read items" },
+      { "key": "{{ADDON_KEY}}.item.write", "label": "Create/update/delete items" }
+    ]
+  }
+}
