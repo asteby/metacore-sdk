@@ -38,6 +38,21 @@ You'll be asked for:
 | `minimal`     | no                | Manifest + one sidebar entry + one route. Smallest possible addon.           |
 | `crud-model`  | yes (TinyGo)      | Manifest with `model_definitions`, one action, and a `backend/main.go` stub that handles the action via the WASM ABI. |
 | `full-page`   | no                | `frontend.layout = "immersive"` — the addon owns the whole viewport (POS / kiosk / KDS). |
+| `embedded-page` | yes (TinyGo)    | `frontend.pages[]` page inside the host chrome (`definePage` + host hooks, test with `renderWithHost`), a `contributions.api` route served by WASM, and a declarative `split` view next to it. Justify the page in the README: declarative first. |
+
+### Adding a declarative view (`add view`)
+
+```sh
+npx create-metacore-addon add view --type map --model Shipment [dir]
+npx create-metacore-addon add view --type chart --model Shipment --group-by carrier
+npx create-metacore-addon add view --type split --columns tracking_number,carrier,status --dry-run
+```
+
+Writes one navigation entry with `view_type` + `view.<type>` (map, timeline,
+calendar, chart, split) into `manifest.json` — JSON only, zero JavaScript.
+Missing fields are inferred from the model's columns; unknown columns,
+types outside the set and duplicate views are rejected. See
+[`docs/declarative-views.md`](../../docs/declarative-views.md).
 
 ### Non-interactive
 

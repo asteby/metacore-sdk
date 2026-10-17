@@ -186,7 +186,20 @@ plugins: [
 | `overrides` | `Record<string, MetacoreFederationShareConfig>`   | `{}`               | Forzar `requiredVersion: '^X'` u otro flag por package. Se mergea encima de la entry base. |
 
 La constante exportada `METACORE_FEDERATION_SINGLETONS` está disponible para tests
-o validaciones custom (ej. asegurarse de que un addon migrado declara las 11).
+o validaciones custom (ej. asegurarse de que un addon migrado declara todas).
+`@tanstack/react-router` es singleton; en remotes (`role: 'remote'`, por omisión
+cuando hay `exposes`) va con `import: false`.
+
+#### Páginas federadas: shares perezosos y presupuesto por expose
+
+| Opción / export | Qué hace |
+|---|---|
+| `manifest` (opción) | `manifest.json` (ruta o objeto). Cada `frontend.pages[].expose` debe estar en `exposes`; los `shares` de cada página se declaran perezosos. |
+| `pageShares` (opción) | Shares perezosos explícitos (hosts: `[...METACORE_PAGE_SHARES]`). |
+| `METACORE_PAGE_SHARES` | `@asteby/metacore-maps`, `maplibre-gl`, `@asteby/metacore-charts`, `recharts`: `singleton`, `eager: false`, `import: false` en remotes. Nada más se acepta. |
+| `metacorePageBudgetPlugin({ manifest, exposes })` | Mide el gzip del cierre estático de cada expose (sin shares ni runtime MF), falla sobre `budget_kb` (≤ 150) y escribe `dist/metacore-pages.json` para `metacore build`. |
+
+Ver [`docs/full-page-federation.md`](../../docs/full-page-federation.md).
 
 > `@module-federation/vite` es dependency de este paquete; la app consumidora lo
 > importa como `import { federation } from '@module-federation/vite'` e instancia
