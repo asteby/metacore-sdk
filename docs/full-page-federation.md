@@ -95,7 +95,7 @@ No `register()` is needed for pages — the manifest is the registry.
 
 | Hook | Gives the page |
 |---|---|
-| `useHostApi()` | `HostApi`: `get/post/put/patch/delete` (bodies only), `q(path)` batched through `/q`, `capability(key, input)` |
+| `useHostApi()` | `HostApi`: `get/post/put/patch/delete` (bodies only; `{ responseType: 'blob' }` returns a `Blob`), `q(path)` batched through `/q`, `capability(key, input)` |
 | `useHostContext()` | `org {id,name,currency,timezone,taxLabel}`, `user`, `branch`, `locale`, `installedAddons`, `realtime` |
 | `useAddonNavigate()` | `navigate('shipments/42')` → `<base>/shipments/42`; `./x`, `../x` relative; never escapes the base; `navigate(-1)` |
 | `useAddonLocation()` / `useAddonSearchParams()` | path below the base and the query, through the host router |
@@ -108,6 +108,21 @@ stores for credentials, and never uses `window.location` to navigate.
 (`status`, `code`, `message`, server body) — never the transport error, whose
 config carries the `Authorization` header. The addon's own backend is reached
 through `contributions.api` routes on the host gateway (ops: `/gw/<path>`).
+
+**Documents and downloads.** To print or save a PDF (ticket, invoice, CSV
+export) ask for a blob; the host attaches the credentials, the page only gets
+the bytes:
+
+```ts
+const pdf = await api.get<Blob>(`/data/WarehouseOrder/${id}/documents/picking_ticket.pdf`, { responseType: 'blob' })
+const url = URL.createObjectURL(pdf)           // open in an iframe / window.print(), or <a download>
+// ...later: URL.revokeObjectURL(url)
+```
+
+`responseType` is accepted by `get`, `post`, `put`, `patch` and `delete`. A
+failed request still rejects with `HostApiError` (`code`/`message` are read
+from the server's JSON error body); a successful response that is not binary
+also rejects. In tests, `createMockHostApi({ get: { '/doc.pdf': new Blob([...]) } })`.
 
 **Dependencies.** React, the router, react-query, i18n and the UI kit are host
 singletons. Maps and charts can only come as lazy host shares listed in

@@ -43,6 +43,72 @@ describe('createHostApi', () => {
         expect(client.get).toHaveBeenLastCalledWith('/plain')
     })
 
+    it('responseType blob: asks the transport for a Blob and resolves to it, nothing else', async () => {
+        const pdf = new Blob(['%PDF-1.4'], { type: 'application/pdf' })
+        const client = axiosLike()
+        ;(client.get as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+            data: pdf,
+            headers: { 'content-type': 'application/pdf' },
+            config: { headers: { Authorization: TOKEN } },
+        })
+        const api = createHostApi(client, { batchGets: true })
+        const out = await api.get<Blob>('/data/WarehouseOrder/1/documents/ticket.pdf', { responseType: 'blob' })
+        expect(out).toBe(pdf)
+        expect(client.get).toHaveBeenCalledWith('/data/WarehouseOrder/1/documents/ticket.pdf', { responseType: 'blob' })
+    })
+
+    it('responseType blob works on post and wraps raw bytes in a Blob', async () => {
+        const client = axiosLike()
+        ;(client.post as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ data: new Uint8Array([1, 2, 3]) })
+        const out = await createHostApi(client).post<Blob>('/export', { a: 1 }, { responseType: 'blob' })
+        expect(out).toBeInstanceOf(Blob)
+        expect(out.size).toBe(3)
+        expect(client.post).toHaveBeenCalledWith('/export', { a: 1 }, { responseType: 'blob' })
+    })
+
+    it('responseType blob: a non-binary success body is rejected', async () => {
+        const client = axiosLike()
+        await expect(
+            createHostApi(client).get('/x', { responseType: 'blob' }),
+        ).rejects.toBeInstanceOf(HostApiError)
+    })
+
+    it('responseType blob: error bodies delivered as Blob are decoded to code/message and never leak the token', async () => {
+        const client = axiosLike()
+        ;(client.get as ReturnType<typeof vi.fn>).mockRejectedValueOnce({
+            message: 'boom',
+            config: { headers: { Authorization: TOKEN } },
+            response: {
+                status: 409,
+                data: new Blob([JSON.stringify({ code: 'invalid_state', message: 'No imprimible' })]),
+            },
+        })
+        const err = await createHostApi(client)
+            .get('/doc.pdf', { responseType: 'blob' })
+            .catch((e) => e)
+        expect(err).toBeInstanceOf(HostApiError)
+        expect(err.status).toBe(409)
+        expect(err.code).toBe('invalid_state')
+        expect(err.message).toBe('No imprimible')
+        expect(JSON.stringify(err)).not.toContain('secret-jwt')
+    })
+
+    it('responseType blob: a non-JSON error blob falls back to the status message', async () => {
+        const client = axiosLike()
+        ;(client.get as ReturnType<typeof vi.fn>).mockRejectedValueOnce({
+            response: { status: 500, data: new Blob(['<html>'])},
+        })
+        const err = await createHostApi(client).get('/doc.pdf', { responseType: 'blob' }).catch((e) => e)
+        expect(err.status).toBe(500)
+        expect(err.message).toBe('Request failed with status 500')
+    })
+
+    it('json (default) requests are unchanged: no responseType forwarded', async () => {
+        const client = axiosLike()
+        await createHostApi(client).get('/x', { responseType: 'json' })
+        expect(client.get).toHaveBeenCalledWith('/x', {})
+    })
+
     it('posts capability queries to the host endpoint', async () => {
         const client = axiosLike()
         const api = createHostApi(client, { capabilityPath: '/caps' })

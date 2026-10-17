@@ -81,15 +81,37 @@ function toConfig(opts?: HostApiRequestOptions): Record<string, unknown> | undef
     const config: Record<string, unknown> = {}
     if (opts.params) config.params = opts.params
     if (opts.signal) config.signal = opts.signal
+    if (opts.responseType === 'blob') config.responseType = 'blob'
     return config
 }
 
-async function bodyOf<T>(p: Promise<{ data: unknown }>): Promise<T> {
+// With `responseType: 'blob'` axios also delivers the error body as a Blob.
+// Decode it back to JSON so `code`/`message` survive; non-JSON bodies are dropped.
+async function decodeBlobError(e: unknown): Promise<unknown> {
+    const resp = (e as AxiosLikeError | null)?.response
+    if (!resp || typeof Blob === 'undefined' || !(resp.data instanceof Blob)) return e
+    let data: unknown
+    try {
+        data = JSON.parse(await resp.data.text())
+    } catch {
+        data = undefined
+    }
+    return { ...(e as object), response: { ...resp, data } }
+}
+
+async function bodyOf<T>(p: Promise<{ data: unknown }>, opts?: HostApiRequestOptions): Promise<T> {
     try {
         const res = await p
+        if (opts?.responseType === 'blob') {
+            const d = res.data
+            if (typeof Blob !== 'undefined' && d instanceof Blob) return d as T
+            // Some transports hand back raw bytes; normalize so callers always get a Blob.
+            if (d instanceof ArrayBuffer || ArrayBuffer.isView(d)) return new Blob([d as BlobPart]) as T
+            throw new HostApiError('Expected a binary response', 0)
+        }
         return res.data as T
     } catch (e) {
-        throw toHostApiError(e)
+        throw toHostApiError(opts?.responseType === 'blob' ? await decodeBlobError(e) : e)
     }
 }
 
@@ -106,20 +128,21 @@ export function createHostApi(client: ApiClient, options: CreateHostApiOptions =
     return Object.freeze({
         get: <T,>(path: string, opts?: HostApiRequestOptions) => {
             const args = withConfig([path], opts) as [string, { params?: Record<string, unknown> }?]
-            return bodyOf<T>(options.batchGets ? batchGet(client, ...args) : client.get(...args))
+            const batch = options.batchGets && opts?.responseType !== 'blob'
+            return bodyOf<T>(batch ? batchGet(client, ...args) : client.get(...args), opts)
         },
         post: <T,>(path: string, body?: unknown, opts?: HostApiRequestOptions) =>
-            bodyOf<T>(client.post(...(withConfig([path, body], opts) as [string, unknown, unknown?]))),
+            bodyOf<T>(client.post(...(withConfig([path, body], opts) as [string, unknown, unknown?])), opts),
         put: <T,>(path: string, body?: unknown, opts?: HostApiRequestOptions) =>
-            bodyOf<T>(client.put(...(withConfig([path, body], opts) as [string, unknown, unknown?]))),
+            bodyOf<T>(client.put(...(withConfig([path, body], opts) as [string, unknown, unknown?])), opts),
         patch: <T,>(path: string, body?: unknown, opts?: HostApiRequestOptions) => {
             if (typeof patch !== 'function') {
                 return Promise.reject(new HostApiError('PATCH is not supported by this host', 0))
             }
-            return bodyOf<T>(patch.call(client, ...(withConfig([path, body], opts) as [string, unknown, unknown?])))
+            return bodyOf<T>(patch.call(client, ...(withConfig([path, body], opts) as [string, unknown, unknown?])), opts)
         },
         delete: <T,>(path: string, opts?: HostApiRequestOptions) =>
-            bodyOf<T>(client.delete(...(withConfig([path], opts) as [string, unknown?]))),
+            bodyOf<T>(client.delete(...(withConfig([path], opts) as [string, unknown?])), opts),
         q: async <T,>(path: string, opts?: Pick<HostApiRequestOptions, 'params'>): Promise<HostQueryPart<T>> => {
             try {
                 const url = path.startsWith('/') ? path : `/${path}`

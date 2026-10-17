@@ -22,6 +22,18 @@ export interface HostApiRequestOptions {
   params?: HostApiParams;
   /** Abort the request (unmount, superseded search…). */
   signal?: AbortSignal;
+  /**
+   * How the host decodes the response body. `"json"` (default) resolves to the
+   * parsed body; `"blob"` resolves to a `Blob` (PDF, image, CSV…), so a page
+   * can print or download a document without ever seeing the credentials the
+   * host attached:
+   *
+   *   const pdf = await api.get<Blob>(`/data/Order/${id}/documents/ticket.pdf`, { responseType: "blob" });
+   *
+   * A failed blob request still rejects with a {@link HostApiError} whose
+   * `code`/`data` come from the server's JSON error body.
+   */
+  responseType?: "json" | "blob";
 }
 
 /**
