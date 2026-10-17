@@ -10,11 +10,164 @@
  */
 
 //////////
+// source: connector_access.go
+
+/**
+ * Capability kinds that authorise reading a connector's credentials.
+ * CapSecretsRead is the spelling published manifests use; CapConnectorRead is
+ * the one the gate consumes and the one new manifests should declare.
+ */
+export const CapConnectorRead = "connector:read";
+/**
+ * Capability kinds that authorise reading a connector's credentials.
+ * CapSecretsRead is the spelling published manifests use; CapConnectorRead is
+ * the one the gate consumes and the one new manifests should declare.
+ */
+export const CapSecretsRead = "secrets:read";
+/**
+ * ConnectorAccess is what a manifest says about the connectors its addon reads.
+ */
+export interface ConnectorAccess {
+  /**
+   * Granted is every connector key the addon may read, deduped. It comes
+   * only from explicit `connector:read` / `secrets:read` declarations:
+   * declaring a connector in the manifest's own `connectors` block defines
+   * it (and drives its configuration form in the Installed view) but does
+   * NOT authorise reading its credentials.
+   */
+  Granted: string[];
+  /**
+   * Implicit is retired and always empty.
+   * It used to carry the transitional grant that authorised an addon to read
+   * a connector purely because it declared it in its own `connectors` block,
+   * which existed only because `connector:read` was absent from the v3 enum
+   * until v0.80 and so the declaration could not be written. Every addon that
+   * actually calls connector_get — fiscal_mexico, waybill-cartaporte,
+   * integration-github — now declares the capability explicitly, so the
+   * branch was removed: defining a connector and reading its secrets are
+   * different claims, and only the latter is a grant.
+   * The field survives its branch so hosts logging it keep compiling; drop
+   * those log loops and then this field.
+   * Deprecated: always empty since v0.81.
+   */
+  Implicit: string[];
+  /**
+   * Refused are declarations that were NOT honoured: a wildcard target on a
+   * connector kind. `*` is exactly the host-wide grant ops#870 removed, and
+   * honouring it from inside a manifest would let an addon re-open the hole
+   * for itself. Surfaced so callers can report it rather than silently drop it.
+   */
+  Refused: Capability[];
+}
+
+//////////
 // source: from_v3.go
 
 /**
  * kernelRequirementKey is the reserved compatibility.requires[] key whose
  * version range the kernel reads as the legacy `Manifest.Kernel` field.
+ */
+
+//////////
+// source: host_capability.go
+
+/**
+ * HostCapabilityProfile is what a host declares about itself before it
+ * attempts to install a preset or an addon: the kernel version it runs, the
+ * SDK version it exposes to addon code, and the set of named runtime
+ * capabilities it has actually wired up (e.g. "wasm-runtime",
+ * "native-service", "webhooks", "connectors"). It carries no reference to any
+ * specific host implementation (no hub/ops/link concept) — it is a plain
+ * value type any host builds and passes to EvaluateCompatibility.
+ */
+export interface HostCapabilityProfile {
+  /**
+   * KernelVersion is the running kernel's semver (see manifest.APIVersion
+   * for the version this package implements).
+   */
+  KernelVersion: string;
+  /**
+   * SDKVersion is the semver of the addon SDK surface the host exposes.
+   * Empty means the host cannot prove SDK compatibility. A manifest with an
+   * SDK constraint therefore fails closed; kernel and SDK releases are
+   * independent contracts and must never be substituted for one another.
+   */
+  SDKVersion: string;
+  /**
+   * RuntimeVersion is the metacore-kernel Go module release the host is
+   * built with (e.g. "0.154.1"; see HostRuntimeVersion). Empty means the
+   * host cannot prove it: a manifest with a Runtime range fails closed.
+   */
+  RuntimeVersion: string;
+  /**
+   * Capabilities is the set of named host capabilities available. Order
+   * and duplicates are insignificant — lookups are by membership.
+   */
+  Capabilities: string[];
+}
+/**
+ * CompatibilityIssueKind classifies a single CompatibilityIssue so callers
+ * can branch on the reason without parsing Detail strings.
+ */
+export type CompatibilityIssueKind = string;
+/**
+ * IssueKernelRange: the profile's KernelVersion does not satisfy the
+ * manifest's Kernel semver range.
+ */
+export const IssueKernelRange: CompatibilityIssueKind = "kernel_range";
+/**
+ * IssueSDKRange: the profile's SDKVersion does not satisfy the manifest's
+ * SDK semver range.
+ */
+export const IssueSDKRange: CompatibilityIssueKind = "sdk_range";
+/**
+ * IssueRuntimeRange: the profile's RuntimeVersion (host metacore-kernel
+ * release) does not satisfy the manifest's Runtime range, or the host
+ * does not report it.
+ */
+export const IssueRuntimeRange: CompatibilityIssueKind = "runtime_range";
+/**
+ * IssueMissingCapability: the manifest declares a HostCapabilities entry
+ * the profile does not have.
+ */
+export const IssueMissingCapability: CompatibilityIssueKind = "missing_capability";
+/**
+ * IssueInvalidRange: the manifest's Kernel/SDK field is not a parseable
+ * semver constraint, or the profile's corresponding version is not
+ * parseable semver. Distinguished from a real mismatch so callers don't
+ * conflate "addon manifest is malformed" with "host is too old".
+ */
+export const IssueInvalidRange: CompatibilityIssueKind = "invalid_range";
+/**
+ * CompatibilityIssue is one structured reason a manifest is not installable
+ * against a given HostCapabilityProfile.
+ */
+export interface CompatibilityIssue {
+  Kind: CompatibilityIssueKind;
+  /**
+   * Field names the manifest field the issue is about ("kernel", "sdk",
+   * "frontend.sdk", "runtime" or "host_capabilities").
+   */
+  Field: string;
+  /**
+   * Capability is set only for IssueMissingCapability: the missing name.
+   */
+  Capability: string;
+  /**
+   * Detail is a human-readable explanation, safe to surface directly.
+   */
+  Detail: string;
+}
+/**
+ * CompatibilityResult is the deterministic outcome of evaluating a manifest
+ * against a HostCapabilityProfile. Compatible is true iff Issues is empty.
+ */
+export interface CompatibilityResult {
+  Compatible: boolean;
+  Issues: CompatibilityIssue[];
+}
+/**
+ * kernelModulePath is the Go module whose release HostRuntimeVersion reports.
  */
 
 //////////
@@ -47,8 +200,9 @@ export interface Manifest {
   icon?: string;
   /**
    * IconType: "brand" (simple-icons slug), "lucide" (PascalCase icon
-   * name) or "url" (absolute URL). Mirrors the host MarketplaceIntegration
-   * shape so frontends consume them identically.
+   * name), "url" (absolute URL) or "svg" (IconSlug is a relative path to an
+   * SVG asset bundled inside the addon, served by the hub). Mirrors the host
+   * MarketplaceIntegration shape so frontends consume them identically.
    */
   icon_type?: string;
   icon_slug?: string;
@@ -57,8 +211,42 @@ export interface Manifest {
    * Kernel is a semver range the host kernel must satisfy. Empty = legacy.
    */
   kernel?: string;
+  /**
+   * SDK is a semver range the host's addon SDK version must satisfy. Empty
+   * = no constraint (the addon does not depend on SDK-surface behaviour
+   * beyond what Kernel already implies). Distinct from Kernel because a
+   * host can ship a newer SDK (client-facing helpers/types) on an older
+   * kernel minor, or vice versa — see HostCapabilityProfile.
+   */
+  sdk?: string;
+  /**
+   * Runtime is a semver range the HOST's metacore-kernel Go module version
+   * (e.g. 0.154.1) must satisfy, declared under the reserved
+   * compatibility.requires[] key "metacore-kernel". Distinct from Kernel,
+   * which is the manifest CONTRACT major every v3 addon targets (">=3.0.0
+   * <4.0.0") and says nothing about which kernel release the host runs. An
+   * addon that relies on a host behaviour shipped in a specific kernel
+   * release (a new primitive, a fixed dispatch path) declares it here, so an
+   * older host refuses the install / upgrade instead of breaking at runtime.
+   * Empty = no constraint.
+   */
+  runtime?: string;
+  /**
+   * HostCapabilities lists named host runtime capabilities the addon
+   * requires to be present (e.g. "wasm-runtime", "native-service",
+   * "webhooks"). Unlike Capabilities (scoped permissions the runtime
+   * enforces) and RequiresCapabilities on NavItem (RBAC gating), these
+   * describe host BUILD/FEATURE presence checked once before install —
+   * see HostCapabilityProfile.EvaluateCompatibility.
+   */
+  host_capabilities?: string[];
   requires?: Module[];
   models?: Module[];
+  /**
+   * Provides lists other addon keys this package satisfies for install /
+   * marketplace coverage (e.g. full "hr" provides "hr_lite"). Empty = none.
+   */
+  provides?: string[];
   /**
    * TenantIsolation declares how the addon's data is isolated across orgs.
    *   "shared"            — single schema addon_<key>, organization_id column
@@ -82,6 +270,23 @@ export interface Manifest {
    * are semantic and carry extraction hints for parameter inference.
    */
   tools?: ToolDef[];
+  /**
+   * Subscriptions are the addon's declarative event handlers (v3
+   * contributions.subscriptions[]), carried over to the host's dispatch
+   * plane. Fase D (asteby-platform-continuation-2026-09-10.md §6): a
+   * wasm/native Trigger here is invoked by the SAME
+   * NativeOperationInvoker/wasm export runtime actions already use — the
+   * host matches Event against its canonical bus name
+   * (`<addonKey>.<event.type>`) for every INSTALLED addon with an effective
+   * grant and dispatches Trigger exactly like an ActionDef.Trigger.
+   */
+  subscriptions?: SubscriptionDef[];
+  /**
+   * Routes are the addon's entries in the host's declarative routing tables
+   * (which named handler wins for a record, per decision domain). See
+   * RouteDef and the routing package.
+   */
+  routes?: RouteDef[];
   model_definitions?: ModelDefinition[];
   /**
    * Events lists the event names the addon may emit. It predates the
@@ -117,6 +322,11 @@ export interface Manifest {
    */
   backend?: BackendSpec;
   /**
+   * NativeService is independent of the request-scoped Backend. An addon may
+   * combine WASM handlers with one supervised long-lived sidecar.
+   */
+  native_service?: any /* native.Spec */;
+  /**
    * Capabilities are the scoped permissions the addon requests. The host
    * prompts the admin for approval and the runtime enforces them.
    */
@@ -149,6 +359,314 @@ export interface Manifest {
    * bundles) already owns the "i18n" JSON key.
    */
   metadata_i18n?: { [key: string]: MetadataLocale};
+  /**
+   * Connectors / Schedules / Webhooks are the host projection of the v3
+   * pipeline-runtime primitives (see manifest/v3.Connector/Schedule/
+   * InboundWebhook). Connectors enumerate the per-org credential providers the
+   * host stores and the connectors runtime resolves; Schedules are the cron
+   * jobs the kernel scheduler fires per org; Webhooks are the inbound routes
+   * the host mounts and the kernel webhookin receiver routes. All optional —
+   * empty slices leave the addon with no runtime primitives (back-compat).
+   */
+  connectors?: ConnectorDef[];
+  schedules?: ScheduleDef[];
+  webhooks?: InboundWebhookDef[];
+  /**
+   * EdgeDevices is the host projection of v3 edge_devices[]: local-network
+   * hardware (a cash recycler, a card terminal) the addon integrates with
+   * through a persistent channel a store-local agent maintains. The host's
+   * edge gateway (outside this package) owns pairing, the session table and
+   * the actual WebSocket transport; this projection only carries the
+   * contract — which events dispatch to which wasm export, which commands
+   * the addon may send. Empty = the addon drives no edge hardware.
+   */
+  edge_devices?: EdgeDeviceDef[];
+  /**
+   * DesktopClients is the host projection of v3 desktop_clients[]: per-user
+   * desktop/mobile agents (Tauri/Electron) that authenticate as Ops users.
+   * Hub and Ops surface download CTAs from this list. Empty = none.
+   */
+  desktop_clients?: DesktopClientDef[];
+  /**
+   * ProvidesOptions is the host projection of the v3 provides_options block:
+   * the models this addon publishes as reusable option catalogs. The host's
+   * generic dynamic-options provider reads these off every installed addon
+   * and resolves any consumer's options_source key against them, so a new
+   * catalog never requires host code. See OptionCatalogDef.
+   */
+  provides_options?: OptionCatalogDef[];
+  /**
+   * OptionMetrics is the host projection of v3 option_metrics[]: computed
+   * values this addon contributes to another model's options, with the
+   * aggregated model (and a scope's through model) resolved to its table.
+   * The host serves them to dynamic.Service (Config.OptionDisplayResolver)
+   * only while this addon is enabled for the org. See OptionMetricDef.
+   */
+  option_metrics?: OptionMetricDef[];
+  /**
+   * ProvidesCapabilities is the host projection of v3
+   * provides_capabilities[]: the capability contracts this addon implements.
+   */
+  provides_capabilities?: CapabilityProviderDef[];
+  /**
+   * Backfills is the host projection of the v3 Backfills block: one-shot
+   * materialization sweeps the host runs at install/upgrade, dispatching
+   * Do once per distinct source key. See v3.Backfill.
+   */
+  backfills?: BackfillDef[];
+  /**
+   * Documents is the host projection of v3 contributions.documents[]: the
+   * printable-document templates the addon binds to its models. The host
+   * render engine reads these off the installed manifest to serve per-record
+   * PDFs. Empty = the addon prints nothing (back-compat default).
+   */
+  documents?: DocumentDef[];
+  /**
+   * AgentCapabilities is the host projection of v3
+   * contributions.agent_capabilities[]: the discoverable AI capabilities
+   * (guided walkthroughs, actions) the host copilot surfaces to users. Pure
+   * declarative UI metadata consumed verbatim by the frontend guidance
+   * engine, so the v3 type passes through unchanged rather than being
+   * re-projected. Empty = the addon exposes nothing to the copilot.
+   */
+  agent_capabilities?: any /* v3.AgentCapability */[];
+  /**
+   * PublicRoutes is the host projection of v3 contributions.public_routes[]:
+   * the org-scoped, token-addressed public views (shareable quote, order
+   * tracking, statement) the host serves without a login. Pure declarative
+   * metadata the host runtime consumes verbatim (route resolution, allowlist
+   * projection, expiry/enabled_when gates), so the v3 type passes through
+   * unchanged. Empty = the addon exposes nothing publicly.
+   */
+  public_routes?: any /* v3.PublicRoute */[];
+  /**
+   * APIRoutes is the host projection of v3 contributions.api[]: the HTTP API
+   * routes the host registers in the kernel runtime/apiroute gateway (see
+   * apiroute.RoutesFromManifest). The v3 type passes through unchanged.
+   * Empty = the addon exposes no API.
+   */
+  api_routes?: any /* v3.APIRoute */[];
+}
+/**
+ * DocumentDef is the host/runtime projection of a v3 DocumentDef: a printable
+ * document template bound to a model. Template is a bundle-relative path to an
+ * HTML file the host render engine hydrates (with {{record.*}},
+ * {{org.branding.*}}, {{line_items}}, {{now}} tokens) and converts to PDF.
+ * Paper is A4|letter|ticket80; Filename is an optional download-name template.
+ */
+export interface DocumentDef {
+  key: string;
+  model: string;
+  template: string;
+  paper: string;
+  filename?: string;
+  label?: string;
+  /**
+   * RequiresState gates the print action on the target record's lifecycle
+   * column (`status`, or `state` when status is empty): the host only
+   * surfaces the document (and Render rejects deep links) when that value
+   * is one of these. Empty/omitted means always available. Projected
+   * verbatim from v3.DocumentDef.RequiresState.
+   */
+  requires_state?: string[];
+  /**
+   * Condition is an optional field gate on the target record (e.g.
+   * fiscal_uuid must be set before printing a CFDI), evaluated by the host
+   * against the row being printed. Projected verbatim from
+   * v3.DocumentDef.Condition.
+   */
+  condition?: any /* v3.RecordFieldCondition */;
+}
+/**
+ * ConnectorDef is the host/runtime projection of a v3 Connector: a third-party
+ * credential provider whose Credentials the host stores per org (encrypted) and
+ * the connectors runtime resolves for wasm handlers and webhook secrets.
+ */
+export interface ConnectorDef {
+  key: string;
+  label?: string;
+  auth?: string;
+  credentials?: CredentialDef[];
+  /**
+   * FormLayout groups the credentials into sections/a wizard for the config UI
+   * (projected verbatim from the v3 Connector; nil = flat form).
+   */
+  form_layout?: any /* v3.FormLayout */;
+  /**
+   * TestExport names the WASM export the host invokes to validate the
+   * credentials (config UI "test connection"); "" = no health-check.
+   */
+  test_export?: string;
+}
+/**
+ * CredentialDef is one field of a ConnectorDef the org supplies. Secret==true
+ * (derived from a "secret" credential type) signals the host to store it
+ * encrypted. Mirrors the v3 Setting fields used by connector credentials.
+ */
+export interface CredentialDef {
+  key: string;
+  type?: string;
+  /**
+   * Label, Description and Options are what the connect form renders: i18n
+   * keys for the field and its help, and the choices of a static "select"
+   * (e.g. environment = Sandbox / Producción). Dropping them left the SAT
+   * wizard with humanized keys ("Razon Social") and a free-text environment.
+   */
+  label?: string;
+  description?: string;
+  options?: Option[];
+  default?: any;
+  required?: boolean;
+  validation?: string;
+  secret?: boolean;
+  /**
+   * OptionsSource names the WASM export the host invokes to fetch this
+   * credential's options at config time (type "dynamic_select"); "" = a plain
+   * input or a static "select".
+   */
+  options_source?: string;
+  /**
+   * Section binds the credential to a ConnectorDef.FormLayout section/step.
+   */
+  section?: string;
+}
+/**
+ * ScheduleDef is the host/runtime projection of a v3 Schedule: a cron job the
+ * kernel scheduler fires per org. Every is a Go duration string; Do is the
+ * dispatchable handler reference ("wasm:"/"webhook:"/"compiled:").
+ */
+export interface ScheduleDef {
+  key: string;
+  every: string;
+  do: string;
+}
+/**
+ * BackfillDef is the host/runtime projection of a v3 Backfill. The host
+ * enumerates Source once per (org, addon) at install/upgrade and dispatches Do
+ * per key — one invocation each, so no single call has to finish the whole
+ * sweep. Handlers must be idempotent: dispatch is at-least-once.
+ */
+export interface BackfillDef {
+  key: string;
+  on?: string[];
+  source: BackfillSourceDef;
+  do: string;
+  arg?: string;
+  with?: { [key: string]: any};
+}
+/**
+ * OptionCatalogDef is the host/runtime projection of a v3 OptionCatalog: one
+ * model published as a named, reusable {value,label} option list. Unlike the
+ * v3 shape it carries the resolved physical Table alongside the Model key —
+ * the projection is the only place that still sees models[], so resolving it
+ * here spares the host from re-deriving it on every metadata request.
+ * The host serves a catalog ONLY while its owning addon is installed and
+ * enabled for the requesting org, always scopes the query to that org, skips
+ * soft-deleted rows and caps the row count. Key collisions across addons are
+ * broken by the host (compiled provider > declared catalog; then the
+ * alphabetically first owning addon key).
+ */
+export interface OptionCatalogDef {
+  key: string;
+  model: string;
+  table: string;
+  value: string;
+  label: string;
+  where?: { [key: string]: any};
+  order_by?: string;
+  extras?: string[];
+}
+/**
+ * OptionMetricDef is the host projection of one v3.OptionMetric: the
+ * declaration verbatim plus the physical tables of the aggregated model and of
+ * every scope's through model (index-aligned with Metric.Scope; "" when the
+ * scope has no through), resolved from the manifest's own models[] so the host
+ * never re-derives them.
+ */
+export interface OptionMetricDef {
+  OptionMetric: any /* v3.OptionMetric */;
+  table: string;
+  through_tables?: string[];
+}
+/**
+ * BackfillSourceDef is the host projection of v3.BackfillSource.
+ */
+export interface BackfillSourceDef {
+  table: string;
+  distinct: string;
+  where?: { [key: string]: any};
+}
+/**
+ * InboundWebhookDef is the host/runtime projection of a v3 InboundWebhook: a
+ * route the host mounts and the kernel webhookin receiver routes after
+ * verifying the signature (Verify) against the secret resolved from SecretRef.
+ */
+export interface InboundWebhookDef {
+  key: string;
+  path: string;
+  verify?: string;
+  secret_ref?: string;
+  do: string;
+  headers?: string[];
+}
+/**
+ * EdgeDeviceDef is the host/runtime projection of a v3 EdgeDevice: one class
+ * of local hardware the addon drives through a persistent channel a
+ * store-local agent maintains outside the addon's own wasm code.
+ */
+export interface EdgeDeviceDef {
+  key: string;
+  label?: string;
+  kind?: string;
+  capabilities: string[];
+  transport: string;
+  pairing_credentials?: CredentialDef[];
+  form_layout?: any /* v3.FormLayout */;
+  events?: EdgeDeviceEventDef[];
+  commands?: EdgeDeviceCommandDef[];
+  heartbeat_interval_seconds?: number /* int */;
+}
+/**
+ * DesktopClientDef is the host projection of a v3 DesktopClient: a per-user
+ * desktop/mobile agent installer authenticated as an Ops user (not edge
+ * pairing). Hub/Ops read DownloadURL to render download CTAs.
+ */
+export interface DesktopClientDef {
+  key: string;
+  label?: string;
+  auth: string;
+  download_url: string;
+  list_on_hub?: boolean;
+  brand?: string;
+  logo?: string;
+  files?: DesktopClientFilesDef;
+}
+/**
+ * DesktopClientFilesDef names optional installer filenames under DownloadURL.
+ */
+export interface DesktopClientFilesDef {
+  mac?: string;
+  windows?: string;
+  linux?: string;
+}
+/**
+ * EdgeDeviceEventDef is one inbound event type an EdgeDeviceDef's paired
+ * device can push. Do is the dispatchable handler reference ("wasm:"/
+ * "webhook:"/"compiled:") the host routes the validated payload to.
+ */
+export interface EdgeDeviceEventDef {
+  type: string;
+  do: string;
+  idempotent?: boolean;
+}
+/**
+ * EdgeDeviceCommandDef is one outbound operation the addon can request
+ * against a paired device. TimeoutSeconds bounds the agent ack, not the
+ * physical operation — its result arrives later as a correlated event.
+ */
+export interface EdgeDeviceCommandDef {
+  type: string;
+  timeout_seconds?: number /* int */;
 }
 /**
  * MetadataLocale is one locale's catalog copy (name/description/features).
@@ -175,6 +693,11 @@ export interface NavGroup {
   icon: string;
   target?: string;
   items: NavItem[];
+  /**
+   * Condition is the host projection of the v3 contribution condition: the
+   * group is only served to orgs satisfying it. See ConditionDef.
+   */
+  condition?: ConditionDef;
 }
 /**
  * NavItem is a single sidebar entry. Model, if set, binds to a dynamic CRUD page.
@@ -187,11 +710,48 @@ export interface NavItem {
   permission?: string;
   items?: NavItem[];
   /**
-   * Filter is a static column→value filter the host applies when rendering this
-   * entry's list view (e.g. {"status":"reception"}), so an addon can publish
-   * one nav entry per status. Empty/omitted means no filter.
+   * Filter is a static column→value filter the host applies when rendering
+   * this entry's list view (e.g. {"status":"reception"}), so an addon can
+   * publish one nav entry per status. Empty/omitted means no filter.
+   * When LockedScope is true, Filter is also a server-enforced authorization
+   * predicate gated by Permission.
    */
   filter?: { [key: string]: string};
+  /**
+   * LockedScope marks Filter as security view scope (not a cosmetic deep-link).
+   */
+  locked_scope?: boolean;
+  /**
+   * ViewType / GroupBy are the host projection of the v3 NavItem kanban hint:
+   * ViewType "kanban" makes the SDK render a board grouped by GroupBy (else the
+   * default DynamicTable). Empty ViewType = table. See manifest/v3.NavItem.
+   */
+  viewType?: string;
+  groupBy?: string;
+  /**
+   * View is the host projection of v3 NavItem.view: the configuration of a
+   * declarative ViewType (map|timeline|calendar|chart|split). The host serves
+   * it with the model's table metadata (on demand); Lite drops it.
+   */
+  view?: any /* v3.NavView */;
+  /**
+   * RequiresCapabilities is the host projection of v3 NavItem.requires_capabilities:
+   * API capabilities implied by granting Acceder to this screen. See v3.NavItem.
+   */
+  requires_capabilities?: string[];
+  /**
+   * Columns / Actions are the host projection of v3 NavItem.columns/actions:
+   * an allowlist restricting which columns/actions the SDK renders for THIS
+   * entry's model, instead of the model's full set. Omitted = unchanged
+   * (every column, every action). See v3.NavItem.
+   */
+  columns?: string[];
+  actions?: string[];
+  /**
+   * Condition is the host projection of the v3 contribution condition: the
+   * entry is only served to orgs satisfying it. See ConditionDef.
+   */
+  condition?: ConditionDef;
 }
 /**
  * FrontendSpec describes the federated module the host loads at runtime.
@@ -240,13 +800,32 @@ export interface FrontendSpec {
   layout?: string;
   /**
    * Load tells the host WHEN to mount the federated remoteEntry.
-   * 	"" / omitted — host default (typically "action").
+   * 	"" / omitted — host default (typically "action": mount on first
+   * 	               federated action / ensureAddonRemote).
    * 	"eager"      — mount as soon as manifests arrive (shell tax; rare).
-   * 	"route"      — mount when navigating to a surface that needs it.
+   * 	"route"      — mount when navigating to a surface that needs it
+   * 	               (immersive routes, model pages with custom UI).
    * 	"action"     — mount only on hover/click of a federated action.
-   * 	"idle"       — reserved; hosts MAY treat as "action".
+   * 	"idle"       — reserved; hosts MAY treat as "action" (no idle-prefetch
+   * 	               of remotes — that regresses cold TTI with large fleets).
+   * Closed set validated at install time. See ops addon-load-policy +
+   * PLAN-ESCALA shell-fino for host behaviour.
    */
   load?: string;
+  /**
+   * SDK is the semver range of @asteby/metacore-sdk the bundle was built
+   * against (v3 frontend.sdk). EvaluateCompatibility checks it against
+   * HostCapabilityProfile.SDKVersion. Empty = no constraint.
+   */
+  sdk?: string;
+  /**
+   * Pages are the remote's federated pages (v3 frontend.pages[]): one
+   * expose, path, layout and permission each. The host uses them (they ride
+   * in the lite manifest) to route a nav "addon://<key>/<path>" link to the
+   * embedded (/a/…) or full-screen (/addons/…) mount BEFORE downloading the
+   * remote. Empty = runtime registerRoute only, as before.
+   */
+  pages?: any /* v3.FrontendPage */[];
 }
 /**
  * BackendSpec declares how the addon's backend code is executed.
@@ -270,16 +849,35 @@ export interface BackendSpec {
   exports?: string[]; // function names the module exports
   memory_limit_mb?: number /* int */; // default 64
   timeout_ms?: number /* int */; // default 10000
+  /**
+   * Concurrency is the maximum number of parallel wasm instances per
+   * installation (organization): 1..MaxConcurrency. 0 = host default (1,
+   * serialised calls). Instances do not share guest state; the host may cap
+   * it by memory and an operator may override it. See docs/wasm-abi.md § 22.2.
+   */
+  concurrency?: number /* int */;
 }
+/**
+ * MaxConcurrency is the largest accepted BackendSpec.Concurrency (the
+ * runtime's own pool ceiling).
+ */
+export const MaxConcurrency = 64;
+/**
+ * DefaultAPIConcurrency is the concurrency a v3 addon with
+ * contributions.api gets when it declares none: its routes serve a store's
+ * shoppers in parallel, and one serialised instance turns a page's
+ * Promise.all into a queue.
+ */
+export const DefaultAPIConcurrency = 4;
 /**
  * Capability is a scoped permission request. The runtime enforces these by
  * injecting an AddonContext with only the declared access.
  * Examples:
- *   { "kind": "db:read",   "target": "orders"                  }
- *   { "kind": "db:write",  "target": "addon_tickets.*"         }
- *   { "kind": "http:fetch","target": "https://api.stripe.com/*"}
- *   { "kind": "event:emit","target": "sale.created"            }
- *   { "kind": "event:subscribe", "target": "invoice.stamped"   }
+ * 	{ "kind": "db:read",   "target": "orders"                  }
+ * 	{ "kind": "db:write",  "target": "addon_tickets.*"         }
+ * 	{ "kind": "http:fetch","target": "https://api.stripe.com/*"}
+ * 	{ "kind": "event:emit","target": "sale.created"            }
+ * 	{ "kind": "event:subscribe", "target": "invoice.stamped"   }
  */
 export interface Capability {
   kind: string;
@@ -304,13 +902,64 @@ export interface SettingDef {
   default_value?: any;
   options?: Option[];
   secret?: boolean;
+  /**
+   * Scope is "org" (default, "" = org) or "branch": each branch may override
+   * the org value. See ResolveSetting.
+   */
+  scope?: string;
 }
 /**
+ * ReasonRequiredDef is the legacy projection of v3 ReasonRequired.
+ */
+export interface ReasonRequiredDef {
+  delete?: boolean;
+  actions?: string[];
+  min_length?: number /* int */;
+}
+/**
+ * DefaultReasonMinLength is the trimmed length a reason must reach when the
+ * policy declares no min_length.
+ */
+export const DefaultReasonMinLength = 3;
+/**
+ * Setting scopes.
+ */
+export const SettingScopeOrg = "org";
+/**
+ * Setting scopes.
+ */
+export const SettingScopeBranch = "branch";
+/**
  * Option is a select-field choice.
+ * Icon/Color/Image are OPTIONAL visual hints forwarded verbatim from
+ * manifest/v3 FieldOption so a STATIC option list can render richly (a coloured
+ * status dot, a brand icon, a thumbnail). They ride the legacy Option as a
+ * carrier so they survive the v3 → host conversion and land on the served
+ * modelbase.OptionDef. All optional; the runtime ignores them.
  */
 export interface Option {
   value: string;
   label: string;
+  icon?: string;
+  color?: string;
+  image?: string;
+  /**
+   * When is the OPTIONAL static cascade guard forwarded verbatim from
+   * manifest/v3 FieldOption.When so it survives the v3 → host conversion
+   * and lands on the served modelbase.OptionDef.When. Nil = always applies.
+   */
+  when?: OptionCondition;
+}
+/**
+ * OptionCondition is the legacy carrier for the static option cascade guard —
+ * it forwards manifest/v3 OptionCondition through the host conversion onto the
+ * served modelbase.OptionCondition. Field names the sibling enum field (falls
+ * back to the container's DependsOn when empty); In / NotIn scope the value.
+ */
+export interface OptionCondition {
+  field?: string;
+  in?: string[];
+  not_in?: string[];
 }
 /**
  * ToolDef is an LLM-callable function the addon exposes. Hosts with
@@ -333,6 +982,15 @@ export interface ToolDef {
   timeout?: number /* int */; // seconds
   cache_ttl?: number /* int */;
   priority?: number /* int */;
+  /**
+   * Trigger is the v3 → legacy projection of the tool's handler when it is
+   * wasm/connector/native (mirrors ActionDef.Trigger). Nil for a plain
+   * webhook tool (Endpoint/Method above already cover that case). A native
+   * trigger here reuses the EXACT same NativeOperationInvoker contract the
+   * host wires for actions (metacore-kernel#344/asteby-hq/ops#1433) — no
+   * second dispatch mechanism.
+   */
+  trigger?: ActionTrigger;
 }
 /**
  * ToolInputParam describes a single LLM-extractable argument for a tool.
@@ -359,9 +1017,25 @@ export interface ActionDef {
   icon?: string;
   fields?: FieldDef[];
   requiresState?: string[];
+  /**
+   * SupervisorPolicy is the projection of v3 Action.supervisor_policy: the
+   * action needs a supervisor authorization of that policy (capability
+   * `general.approve_<policy>` or a single-use PIN grant id in
+   * payload.approval_id). See dynamic.ConsumePINGrant.
+   */
+  supervisorPolicy?: string;
   confirm?: boolean;
   confirmMessage?: string;
   modal?: string; // slot name for a custom modal
+  /**
+   * Steps is the host/runtime projection of a v3 Action.steps wizard: one
+   * page per step, per-step validation, single submit with the union of all
+   * steps' values. Mutually exclusive with Fields. See manifest/v3.ActionStep.
+   */
+  steps?: ActionStepDef[];
+  placement?: string; // "row" (default), "table", or "create" — see v3.Action.Placement
+  priority?: string; // "primary", "secondary" or "" (auto) — see v3.Action.Priority
+  modalWidth?: string; // explicit modal width (CSS length / px); SDK reads action.modalWidth
   /**
    * Trigger declares how the action dispatches when invoked. Optional —
    * when nil the legacy behaviour applies (the host resolves the action via
@@ -370,6 +1044,45 @@ export interface ActionDef {
    * new field up incrementally in follow-up PRs.
    */
   trigger?: ActionTrigger;
+  /**
+   * Idempotency is the host/runtime projection of a v3 Action.idempotency
+   * block. When non-nil the kernel's ExecAction keys a stored response by
+   * (org, model, action, <payload[KeyField]>) and replays it on repeats,
+   * skipping the dispatch. Nil = the action is not replay-guarded. See
+   * manifest/v3.ActionIdempotency and dynamic.Service.ExecAction.
+   */
+  idempotency?: IdempotencyDef;
+  /**
+   * Approval is the host/runtime projection of a v3 Action.approval block: a
+   * SUPERVISED action. When non-nil (and When is empty or evaluates true), the
+   * kernel's ExecAction parks the invocation as a pending ApprovalRequest and
+   * answers `approval_required` instead of dispatching; an approver holding
+   * one of Roles later triggers the real dispatch. Nil = ordinary action. See
+   * manifest/v3.ApprovalPolicy and dynamic approvals.
+   */
+  approval?: ApprovalDef;
+  /**
+   * Condition is the host projection of the v3 contribution condition: the
+   * action is only served to orgs satisfying it. See ConditionDef.
+   */
+  condition?: ConditionDef;
+}
+/**
+ * ActionStepDef is the host/runtime projection of a v3 ActionStep: one wizard
+ * page (title + optional description + the fields rendered on that page).
+ */
+export interface ActionStepDef {
+  title: string;
+  description?: string;
+  fields: FieldDef[];
+}
+/**
+ * IdempotencyDef is the host/runtime projection of a v3 ActionIdempotency: the
+ * payload field whose value is the idempotency key. See manifest/v3 for the
+ * full contract.
+ */
+export interface IdempotencyDef {
+  keyField: string;
 }
 /**
  * ActionTrigger declares how an ActionDef is dispatched when invoked from
@@ -397,9 +1110,60 @@ export interface ActionDef {
  * the linked log entry atomically" without leaking partially-applied state.
  */
 export interface ActionTrigger {
-  type: string; // "wasm" | "webhook" | "noop"
-  export?: string; // wasm export name; required when Type=wasm
+  type: string; // "wasm" | "webhook" | "noop" | "connector" | "native"
+  export?: string; // wasm export name; required when Type=wasm or connector
   run_in_tx?: boolean;
+  /**
+   * Operation is required for native triggers and is dispatched over the
+   * authenticated metacore.native/v1 local channel.
+   */
+  operation?: string;
+  /**
+   * Connector names the connector (declared by any installed addon) whose
+   * Export the host invokes when Type=="connector" — a cross-addon dispatch:
+   * the export runs in the connector-owning addon, org-scoped, so an action can
+   * drive a connector it does not own without duplicating its client.
+   */
+  connector?: string;
+  /**
+   * Capability + Input (Type=="capability") require a provider-neutral
+   * capability contract instead of a named connector; the host dispatches to
+   * the addon installed in the org that provides it. Input maps contract
+   * fields to record.<col> | payload.<field> | const:<literal>.
+   */
+  capability?: string;
+  input?: { [key: string]: string};
+}
+/**
+ * CapabilityProviderDef is the host projection of one v3
+ * provides_capabilities[] entry: the contract key, the provider's own trigger
+ * (wasm or native) and the provider-side input mapping.
+ */
+export interface CapabilityProviderDef {
+  key: string;
+  label?: string;
+  trigger?: ActionTrigger;
+  input?: { [key: string]: string};
+  /**
+   * Countries the provider serves (ISO 3166-1 alpha-2); empty = any.
+   * Hosts copy it to capability.Provider.Countries.
+   */
+  countries?: string[];
+}
+/**
+ * SubscriptionDef is the legacy/host projection of a v3
+ * contributions.subscriptions[] entry: an event name plus an ActionTrigger
+ * reused verbatim so the host dispatches wasm/native/connector subscription
+ * handlers through the exact same invoker as actions (Fase D,
+ * asteby-platform-continuation-2026-09-10.md §6). Trigger.Type=="webhook" is
+ * carried for completeness (legacy inbound-webhook subscriptions) but the
+ * host has no generic outbound-webhook subscription dispatcher today; only
+ * wasm/native/connector are actually invoked by the reference host (ops).
+ */
+export interface SubscriptionDef {
+  event: string;
+  trigger?: ActionTrigger;
+  filter?: string;
 }
 /**
  * FieldDef is an input field used by action forms and model definitions.
@@ -412,6 +1176,146 @@ export interface FieldDef {
   default?: any;
   options?: Option[];
   size?: number /* int */;
+  /**
+   * Key carries the field identifier with the SAME json tag the host
+   * (modelbase.FieldDef) and the SDK read. Name (json:"name") is kept for
+   * legacy consumers, but the host JSON round-trip keys off "key" — without
+   * this the field key arrived empty at the renderer.
+   */
+  key?: string;
+  /**
+   * Rich action-field properties forwarded verbatim from manifest/v3
+   * ActionField so the declarative modal renders fully (searchable pickers,
+   * multi-column line-items with totals/balance) instead of collapsing every
+   * field to a plain input. The legacy flat FieldDef intentionally had no slot
+   * for these; the SDK reads them off the host-served action metadata, so they
+   * must survive the v3 → host conversion. JSON tags match modelbase.FieldDef.
+   */
+  widget?: string;
+  ref?: string;
+  /**
+   * Multiple opts a Ref field into the multi-select picker (SDK
+   * DynamicMultiSelectField) instead of the default single-value
+   * dynamic_select. JSON tag matches modelbase.FieldDef.Multiple.
+   */
+  multiple?: boolean;
+  placeholder?: string;
+  searchEndpoint?: string;
+  item_fields?: FieldDef[];
+  lock_rows?: boolean;
+  readonly?: boolean;
+  total?: boolean;
+  balance?: FieldBalanceRule;
+  /**
+   * DependsOn and OptionsConfig forward the v3 dependent-picker declaration
+   * (ActionField.depends_on + the `options` object form). DependsOn names the
+   * sibling field whose value supplies the cascade filter_value; OptionsConfig
+   * carries the dynamic source declaration (source/filter_by/value/label_ref/
+   * description) the host projects onto modelbase.FieldDef so the served action
+   * spec reaches the SDK and the host's OptionsConfigResolver. JSON tags match
+   * modelbase.FieldDef so they survive the host round-trip. Nil/empty = none.
+   */
+  depends_on?: string;
+  optionsConfig?: DynamicOptionsDef;
+  /**
+   * Scan opts this field/column into camera barcode scan-to-fill (see
+   * modelbase.FieldDef.Scan). Forwarded through the host round-trip.
+   */
+  scan?: boolean;
+  /**
+   * OptionsSource forwards the v3 ActionField.options_source (a host-registered
+   * dynamic options provider key, e.g. "connector_repos"). It rides the matching
+   * modelbase.FieldDef json tag so the key survives the v3 → host conversion and
+   * lands on the served action metadata; the host then materialises the
+   * value/label list from its provider registry. Empty = static/no options.
+   */
+  options_source?: string;
+  /**
+   * Upload-field properties forwarded verbatim from manifest/v3 ActionField
+   * for a field with type "upload". Accept is the file-picker allow-list,
+   * MaxSize the byte cap and StoragePath the logical storage prefix. The SDK
+   * reads them off the host-served action metadata; matching JSON tags keep
+   * them intact through the v3 → host conversion. Ignored on non-upload fields.
+   */
+  accept?: string;
+  max_size?: number /* int64 */;
+  storage_path?: string;
+  /**
+   * LabelImage/LabelIcon/LabelColor name a column on the REMOTE model a
+   * dynamic_select resolves against whose value the SDK renders as a visual
+   * beside each option's label (a product thumbnail, a brand icon, a status
+   * colour). Forwarded verbatim from manifest/v3 ActionField with matching
+   * JSON tags so they survive the v3 → host conversion and reach the SDK off
+   * the served action metadata. Ignored on non-reference fields.
+   */
+  label_image?: string;
+  label_icon?: string;
+  label_color?: string;
+  /**
+   * VisibleWhen carries the v3 conditional-visibility predicate onto the served
+   * action FieldDef so the SDK's action-modal renderer shows/hides the field
+   * against the live form values. Nil = always visible. Pure UI metadata.
+   */
+  visible_when?: VisibleWhenDef;
+  /**
+   * Validation is the structured write-time constraint the kernel enforces
+   * on action payloads (and the SDK pre-flights). JSON tag matches the v3
+   * ActionField / served modelbase field so regex/min/max/custom survive the
+   * host round-trip. Nil = no extra rules (required still applies).
+   */
+  validation?: ValidationRule;
+  /**
+   * OptionFilter forwards the v3 ActionField.option_filter so the SDK hides
+   * ineligible options of this field's relation / dynamic picker. JSON tag
+   * matches modelbase.FieldDef.OptionFilter. Empty = every option is listed.
+   */
+  option_filter?: any /* v3.OptionFilter */;
+  /**
+   * DefaultFromRecord forwards the v3 ActionField.default_from_record (a
+   * column name, or a list whose first non-empty value wins) so the SDK seeds
+   * the field from the record the action was opened on. JSON tag matches
+   * modelbase.FieldDef.DefaultFromRecord. Nil = no record seeding.
+   */
+  default_from_record?: any;
+}
+/**
+ * FieldBalanceRule mirrors manifest/v3 FieldBalanceRule with identical JSON
+ * tags so it round-trips through the host's action metadata untouched.
+ */
+export interface FieldBalanceRule {
+  debit_column: string;
+  credit_column: string;
+  message?: string;
+  require_nonzero?: boolean;
+}
+/**
+ * DynamicOptionsDef is the legacy carrier for the v3 `options` OBJECT form (a
+ * dependent-picker source declaration). It rides ColumnDef/FieldDef so the
+ * {source, filter_by, value, label_ref, description} block survives the v3 →
+ * host conversion and lands on the served modelbase.FieldOptionsConfig the host
+ * reads to build the kernel's OptionsConfigResolver entry. JSON tags match both
+ * modelbase.FieldOptionsConfig and the v3 contract so it round-trips intact.
+ */
+export interface DynamicOptionsDef {
+  /**
+   * Type is always "dynamic" for this carrier (the object form is the dynamic
+   * source declaration). It rides so the JSON round-trip onto
+   * modelbase.FieldOptionsConfig.Type lands "dynamic" and the kernel's
+   * Service.Options takes the query branch without the host re-stamping it.
+   */
+  type?: string;
+  source?: string;
+  filter_by?: string;
+  value?: string;
+  label?: string;
+  label_ref?: string;
+  description?: string;
+  /**
+   * ExtraColumns are additional Source columns /options returns on every
+   * option (sibling keys of id/value/label) for the field's option_filter.
+   * Lands on modelbase.FieldOptionsConfig.ExtraColumns.
+   */
+  extra_columns?: string[];
 }
 /**
  * HookDef is one declared lifecycle hook entry. The kernel dispatches
@@ -436,14 +1340,14 @@ export interface HookDef {
 }
 /**
  * HookTarget describes where a lifecycle hook dispatches to.
- *   Type = "wasm"    — invoke the exported function `Function` on the
- *                      addon's compiled wasm module. The function MUST
- *                      appear in Backend.Exports.
- *   Type = "webhook" — POST the event payload to URL (HMAC-signed via
- *                      the host's webhook dispatcher).
- *   Type = "prompt"  — reserved for a future LLM dispatcher; validates
- *                      but currently runs as a no-op unless the host
- *                      registers a custom prompt dispatcher.
+ * 	Type = "wasm"    — invoke the exported function `Function` on the
+ * 	                   addon's compiled wasm module. The function MUST
+ * 	                   appear in Backend.Exports.
+ * 	Type = "webhook" — POST the event payload to URL (HMAC-signed via
+ * 	                   the host's webhook dispatcher).
+ * 	Type = "prompt"  — reserved for a future LLM dispatcher; validates
+ * 	                   but currently runs as a no-op unless the host
+ * 	                   registers a custom prompt dispatcher.
  */
 export interface HookTarget {
   type: string;
@@ -460,6 +1364,29 @@ export interface ModelExtension {
   actions?: ActionDef[];
 }
 /**
+ * SearchKeyDef is a normalized search key: a sequence of literal and column
+ * parts. Normalized keys keep only the column values, uppercased and without
+ * anything that is not a letter or a digit ("205/55R16" is stored as
+ * "2055516"), so a search typed with any separator matches once the typed text
+ * gets the same treatment. Exact keys keep the literals as composed.
+ */
+export interface SearchKeyDef {
+  parts: SearchKeyPart[];
+  /**
+   * Match is "normalized" (default), "normalized_prefix" or "exact".
+   */
+  match?: string;
+}
+/**
+ * SearchKeyPart is either a Literal or a Column (with its declared Type, so
+ * the DDL plane can render numbers without trailing zeros).
+ */
+export interface SearchKeyPart {
+  literal?: string;
+  column?: string;
+  type?: string;
+}
+/**
  * ModelDefinition declares a new table the addon installs. The host creates
  * it in the addon's isolated schema (addon_{key}.{table}).
  */
@@ -467,9 +1394,28 @@ export interface ModelDefinition {
   table_name: string;
   model_key: string;
   label: string;
+  /**
+   * Extends carries v3 Model.extends ("<addon_key>.<ModelKey>"): this table is
+   * the 1:1 extension of that model. The DDL plane emits `id` WITHOUT a default
+   * (it is the target row's id) and, when the host resolves where the target
+   * table lives, a FOREIGN KEY to it with ON DELETE CASCADE. Empty = an
+   * ordinary model.
+   */
+  extends?: string;
   org_scoped?: boolean;
   soft_delete?: boolean;
   columns: ColumnDef[];
+  /**
+   * Indices carries the v3 model's PARTIAL indices (those with a Where). Plain
+   * single-column indices keep riding ColumnDef.Index/Unique; only entries with
+   * a Where are emitted from here (see IndexDef).
+   */
+  indices?: IndexDef[];
+  /**
+   * AttributeClasses carries v3 Model.attribute_classes (extension tables
+   * only): named sets of the table's columns a category can be assigned.
+   */
+  attribute_classes?: AttributeClassDef[];
   /**
    * Relations declares model-to-model edges the kernel uses to derive
    * joins, eager loading, REST sub-resources and SDK metadata. The slice
@@ -479,6 +1425,365 @@ export interface ModelDefinition {
   relations?: RelationDef[];
   table?: any; // UI table spec (opaque)
   modal?: any; // UI modal spec (opaque)
+  /**
+   * Seed declares default data the installer inserts on install, idempotent
+   * by a natural key column (Seed.Key). The host (ops executor) reads
+   * def.Seed to perform the seeding after migrations. Optional — flat models
+   * without seed data leave it nil and keep the legacy behaviour.
+   */
+  seed?: SeedDef;
+  /**
+   * Formulas declare columns whose value the kernel computes from a pure
+   * arithmetic expression over the SAME row's other columns, evaluated
+   * before every create/update write (Tier-2 of the declarative compute
+   * engine). Optional. See Formula and dynamic.RegisterComputeHooks.
+   */
+  formulas?: Formula[];
+  /**
+   * StageField / Stages / Transitions / OnTransition are the host-side
+   * projection of a v3 model's stage machine (see manifest/v3.Model). The
+   * dynamic engine reads them to derive the `status` display of StageField, to
+   * validate stage moves on Update, and to fire OnTransition hooks. Empty
+   * StageField/Stages = no stage machine (the legacy, unrestricted behaviour).
+   */
+  stageField?: string;
+  stages?: StageDef[];
+  transitions?: TransitionDef[];
+  onTransition?: TransitionHookDef[];
+  /**
+   * Sequences carries the v3 Model.sequences (atomic per-org/branch folio
+   * counters) through the v3 → host conversion so the dynamic engine can stamp
+   * auto-folios on create and the wasm sequence_next import can resolve them.
+   * See manifest/v3.Sequence. Empty = the model has no folios.
+   */
+  sequences?: SequenceDef[];
+  /**
+   * Locking is the host/runtime projection of a v3 Model.locking. "row" makes
+   * dynamic.Service.Update take a SELECT … FOR UPDATE lock on the target row
+   * inside a transaction before evaluating column Constraints, so a concurrent
+   * increment-then-check guard is race-free. Empty = no extra locking. See
+   * manifest/v3.Model and dynamic constraint evaluation.
+   */
+  locking?: string;
+  /**
+   * ReasonRequired is the host/runtime projection of v3 Model.reason_required
+   * (PER-4): the dynamic engine refuses a delete / the listed actions unless
+   * the request carries a reason (dynamic.ReasonPolicyResolver). Nil = none.
+   */
+  reason_required?: ReasonRequiredDef;
+  /**
+   * AppendOnly is the host/runtime projection of v3 Model.append_only: the
+   * model is an append-only ledger and every UPDATE/DELETE on it is refused
+   * (dynamic.Service and the wasm data_mutate / data_batch imports).
+   */
+  append_only?: boolean;
+  /**
+   * NoAudit is the host/runtime projection of v3 Model `audit: false`: the
+   * model opts out of the kernel audit-column standard (who-columns and the
+   * deleted_at tombstone) and keeps only created_at/updated_at. The zero value
+   * (false) is the standard: every model gets the six audit columns. See
+   * dynamic.AuditColumns and docs/audit-columns.md.
+   */
+  no_audit?: boolean;
+  /**
+   * Rules is the host/runtime projection of v3 Model.rules: cross-record
+   * guards over the parent row referenced by FK, evaluated inside the write
+   * transaction (dynamic.EvalCrossRecordRules). Empty = none.
+   */
+  rules?: CrossRuleDef[];
+  /**
+   * FormLayout carries the v3 Model.form_layout (create/edit form grouping —
+   * collapsible sections or a step wizard) through the v3 → host conversion so
+   * the host can project it onto the served form metadata. Columns bind to a
+   * section/step via ColumnDef.Section. Pure UI metadata; the DDL/write planes
+   * ignore it. Nil = a flat form (legacy). See manifest/v3.FormLayout.
+   */
+  form_layout?: FormLayoutDef;
+  /**
+   * DocumentForms carries the v3 Model.document_forms (guided per-document-type
+   * create flow) through the v3 → host conversion so the host can serve it as
+   * TableMetadata.document_forms (see dynamic.DeriveDocumentForms). Pure UI
+   * metadata; the DDL/write planes ignore it. Nil = the generic create modal.
+   */
+  document_forms?: DocumentFormsDef;
+  /**
+   * OptionDisplay carries the v3 Model.option_display (how the model's rows
+   * read as picker options) so the host can hand it to dynamic.Service via
+   * Config.OptionDisplayResolver. Pure UI metadata. Nil = plain options.
+   */
+  option_display?: any /* v3.OptionDisplay */;
+  /**
+   * Detail carries v3 Model.detail verbatim: the record detail page panels
+   * (map, timeline, chart, relation, stats, custom) the host serves with the
+   * model's table metadata. Pure UI metadata. Nil = the default detail page.
+   */
+  detail?: any /* v3.ModelDetail */;
+  /**
+   * OptionMetrics are the option_metrics[] of this addon that AGGREGATE this
+   * model (Metric.Model == ModelKey), copied here so a host persisting only
+   * model definitions keeps them. The same entries are in
+   * Manifest.OptionMetrics.
+   */
+  option_metrics?: OptionMetricDef[];
+  /**
+   * Import carries the v3 Model.import (spreadsheet-import template) through
+   * the v3 → host conversion, so an addon-owned model declares its import
+   * columns the same way a compiled Go model does via
+   * modelbase.HasImportSpec. Nil = the kernel derives the spec from the
+   * model's own columns. See manifest/v3.ImportSpec.
+   */
+  import?: ImportSpecDef;
+}
+/**
+ * ImportSpecDef is the legacy carrier for the v3 `import` block: the
+ * spreadsheet-import template of an addon-owned model. It rides the
+ * ModelDefinition so the declaration survives the v3 → host conversion and
+ * lands on the served metadata as a modelbase.ImportSpec — the same shape a
+ * compiled Go model produces via modelbase.HasImportSpec, so both kinds of
+ * model feed one import engine. JSON tags match the served host contract.
+ */
+export interface ImportSpecDef {
+  columns: ImportColumnDef[];
+  maxRows?: number /* int */;
+  sheetName?: string;
+  instructions?: string[];
+}
+/**
+ * ImportColumnDef is the legacy carrier for one v3 ImportColumn.
+ */
+export interface ImportColumnDef {
+  key: string;
+  header: string;
+  aliases?: string[];
+  required?: boolean;
+  type?: string;
+  example?: string;
+  hint?: string;
+  generator?: string;
+  transform?: string;
+}
+/**
+ * DocumentFormsDef is the legacy carrier for the v3 DocumentForms block. JSON
+ * tags match the v3 contract and modelbase.DocumentForms so it round-trips onto
+ * the served table metadata.
+ */
+export interface DocumentFormsDef {
+  type_field?: string;
+  lines_field?: string;
+  types: DocumentFormTypeDef[];
+}
+/**
+ * DocumentFormTypeDef is the legacy carrier for one v3 DocumentFormType. Its
+ * Fields are FieldDef (the action-field carrier), so the whole field vocabulary
+ * of an action modal is available per document type.
+ */
+export interface DocumentFormTypeDef {
+  key: string;
+  label: string;
+  description?: string;
+  icon?: string;
+  value?: string;
+  fields: FieldDef[];
+  defaults?: { [key: string]: any};
+  /**
+   * Lines is the line-items step (nil = none; an option-less step serializes
+   * as `true`).
+   */
+  lines?: any /* v3.DocumentFormLines */;
+  endpoint?: string;
+  submit_label?: string;
+  /**
+   * DocumentEditor block (layout/party/sources/preview/submit_action) rides
+   * through with the v3 shapes so it reaches modelbase.DocumentFormType.
+   */
+  layout?: string;
+  party?: any /* v3.DocumentFormParty */;
+  sources?: any /* v3.DocumentFormSource */[];
+  preview?: any /* v3.DocumentFormPreview */;
+  submit_action?: string;
+  /**
+   * CreateModel delegates the type's creation to another model's create flow
+   * (v3 DocumentFormType.CreateModel).
+   */
+  create_model?: string;
+}
+/**
+ * FormLayoutDef is the legacy carrier for the v3 FormLayout block. It rides the
+ * ModelDefinition so the {mode, sections} grouping survives the v3 → host
+ * conversion and lands on the served form metadata the SDK reads. JSON tags
+ * match the v3 + host contract so it round-trips byte-for-byte.
+ */
+export interface FormLayoutDef {
+  mode: string;
+  sections: FormSectionDef[];
+}
+/**
+ * FormSectionDef is the legacy carrier for one v3 FormSection (a collapsible
+ * section or a wizard step). Title/Description may be a literal or an i18n key.
+ */
+export interface FormSectionDef {
+  key: string;
+  title?: string;
+  description?: string;
+  collapsed?: boolean;
+  visible_when?: VisibleWhenDef;
+  /**
+   * Assist is the AI-assisted step declaration (v3 FormSection.Assist),
+   * carried through to the served form_layout.
+   */
+  assist?: FormAssistDef;
+}
+/**
+ * FormAssistDef mirrors v3.FormAssist on the host/runtime side.
+ */
+export interface FormAssistDef {
+  provider: string;
+  label?: string;
+  description?: string;
+  input?: string[];
+  output?: string[];
+  trigger?: string;
+}
+/**
+ * StageDef is the host/runtime projection of a v3 Stage. See manifest/v3.Stage
+ * for the full contract.
+ */
+export interface StageDef {
+  key: string;
+  label?: string;
+  color?: string;
+  order?: number /* int */;
+  isFinal?: boolean;
+  /**
+   * Locked: a record in this stage is read-only (v3 Stage.Locked).
+   */
+  locked?: boolean;
+}
+/**
+ * TransitionDef is the host/runtime projection of a v3 Transition: one allowed
+ * (from → to) stage move.
+ */
+export interface TransitionDef {
+  from: string;
+  to: string;
+}
+/**
+ * TransitionHookDef is the host/runtime projection of a v3 TransitionHook. Set
+ * assigns fields on the transitioning row itself (scalar = direct assignment;
+ * "+tag"/"-tag" on a json column = idempotent append/remove) and is applied
+ * before the row is persisted. Do references the dispatchable handler
+ * (`wasm:`/`webhook:`/`compiled:`); Required makes a dispatch failure roll back
+ * the transition. A hook carries Set, Do, or both. See manifest/v3.TransitionHook.
+ */
+export interface TransitionHookDef {
+  from: string;
+  to: string;
+  set?: { [key: string]: any};
+  do?: string;
+  required?: boolean;
+}
+/**
+ * Formula declares a column on the owning model whose value the kernel
+ * computes from a pure arithmetic expression over the SAME row's other
+ * columns, evaluated before every create/update DB write (Tier-2 of the
+ * declarative compute engine). See manifest/v3.Formula for the full contract;
+ * this is the legacy/runtime projection the installer and dynamic engine read.
+ * SECURITY: Expr is parsed with a strict allowlist (identifiers resolving to
+ * real columns, decimal numbers, + - * / and parentheses only); anything else
+ * is rejected at validation time.
+ */
+export interface Formula {
+  target: string;
+  expr?: string;
+  /**
+   * Tier selects the compute engine: 0/2 = arithmetic Tier-2 over Expr (the
+   * default); 3 = a wasm handler (Handler) computes the value. See
+   * manifest/v3.Formula.
+   */
+  tier?: number /* int */;
+  /**
+   * Handler is the Tier-3 backend, "wasm:<export>". Set only when Tier is 3.
+   */
+  handler?: string;
+}
+/**
+ * SequenceDef is the host/runtime projection of a v3 Model.Sequence: an atomic
+ * folio counter the kernel maintains per org (or branch). See manifest/v3.Sequence.
+ */
+export interface SequenceDef {
+  key: string;
+  scope?: string;
+  format: string;
+}
+/**
+ * ConstraintDef is the host/runtime projection of a v3 Column.Constraint: a
+ * boolean guard predicate the dynamic engine evaluates inside the create/update
+ * transaction. See manifest/v3.Constraint for the full contract and the
+ * security note on Expr.
+ */
+export interface ConstraintDef {
+  expr: string;
+  errorKey: string;
+  /**
+   * OnViolation is the host/runtime projection of v3 Constraint.on_violation:
+   * ""/"reject" aborts the write (422 + ErrorKey); "request_approval" parks
+   * the mutation as a pending ApprovalRequest instead (see dynamic approvals).
+   */
+  onViolation?: string;
+  /**
+   * Approval carries the v3 Constraint.approval policy (who may approve, reason
+   * / expiry / label). Only meaningful with OnViolation == "request_approval".
+   */
+  approval?: ApprovalDef;
+}
+/**
+ * ApprovalDef is the host/runtime projection of a v3 ApprovalPolicy: the org
+ * roles that may approve a pending mutation, whether a reason is mandatory, an
+ * optional expiry and an inbox label. When is the action-only conditional
+ * predicate (approval required only when it evaluates true). See
+ * manifest/v3.ApprovalPolicy for the full contract.
+ */
+export interface ApprovalDef {
+  roles: string[];
+  reasonRequired?: boolean;
+  expiresHours?: number /* int */;
+  label?: string;
+  when?: string;
+}
+/**
+ * Rollup declares a PARENT column the kernel maintains as an aggregate
+ * (sum/count/avg/min/max) over a relation's child rows (Tier-1 of the
+ * declarative compute engine). See manifest/v3.Rollup for the full contract;
+ * this is the legacy/runtime projection the dynamic engine reads.
+ * Either From (a single child column) or Expr (a child arithmetic expression)
+ * supplies the aggregated value; fn=count ignores both. Exactly one of
+ * From/Expr may be set (count may omit both).
+ * SECURITY: Expr goes raw into aggregate SQL — parsed with the same strict
+ * arithmetic allowlist as Formula.Expr and every identifier double-quoted.
+ */
+export interface Rollup {
+  target: string;
+  fn?: string;
+  from?: string;
+  expr?: string;
+}
+/**
+ * SeedDef is the host-side projection of a v3 model's seed block. The installer
+ * inserts each row in Rows on install, treating Key as the natural key for
+ * idempotency: a row is only inserted when no existing row (scoped to the
+ * installing org) already carries that Key value. Key names a declared column
+ * on the owning ModelDefinition; each Row is an object of column name → value.
+ */
+export interface SeedDef {
+  /**
+   * Key is the column used for idempotency (the natural key the installer
+   * matches on to decide whether a row already exists).
+   */
+  key: string;
+  /**
+   * Rows are the default records, each an object of column name → value.
+   */
+  rows: { [key: string]: any}[];
 }
 /**
  * RelationDef declares an inter-model relationship rooted at the owning
@@ -542,6 +1847,58 @@ export interface RelationDef {
    * live in the addon schema; the kernel only needs the name here.
    */
   pivot?: string;
+  /**
+   * Scope is a static equality filter applied to the child query, the
+   * mechanism that makes POLYMORPHIC children addressable: a shared
+   * Attachment/Address/Note table carries an `owner_model` discriminator,
+   * so a Customer's attachments relation declares Scope
+   * {"owner_model":"Customer"} alongside ForeignKey "owner_id". Empty =
+   * no extra filter (the common, non-polymorphic case).
+   */
+  scope?: { [key: string]: string};
+  /**
+   * Label is an optional i18n key / human label for the related-records
+   * panel the SDK renders on a detail page. Empty falls back to Name.
+   */
+  label?: string;
+  /**
+   * Readonly declares that the related-records panel must not allow
+   * creating/editing/deleting child rows. Used for relations pointing at an
+   * append-only ledger (e.g. an inventory kardex). Optional; defaults false.
+   */
+  readonly?: boolean;
+  /**
+   * Embed declares that this relation is a COMPOSITION (a document's LINES),
+   * so the record modal renders its children inline as a sub-table. Opt-in:
+   * the modal embeds ONLY relations that declare it, which keeps opening a
+   * parent from dragging an entire independently-managed collection (stock
+   * movements, transfers) into the form. Mirrors v3 ModelRelation.embed.
+   * Optional; defaults false. Pure UI metadata.
+   */
+  embed?: boolean;
+  /**
+   * Rollups declare PARENT columns the kernel maintains as aggregates over
+   * this relation's child rows (Tier-1 of the declarative compute engine).
+   * On every child create/update/delete the dynamic engine recomputes each
+   * rollup target on the affected parent. Optional; only meaningful for
+   * one_to_many. See Rollup.
+   */
+  rollups?: Rollup[];
+}
+/**
+ * IndexDef is a declared index on an addon-installed table. The DDL plane emits
+ * only entries with a Where (partial indices); everything else is expressed by
+ * the column-level Index/Unique flags and the entry is informational.
+ */
+export interface IndexDef {
+  name?: string;
+  columns: string[];
+  unique?: boolean;
+  method?: string;
+  /**
+   * Where is the partial-index predicate (see v3.ParseIndexWhere).
+   */
+  where?: string;
 }
 /**
  * ColumnDef is a column on an addon-installed table.
@@ -565,6 +1922,101 @@ export interface ColumnDef {
    */
   default?: any;
   ref?: string; // foreign key target: "orders" or "addon_tickets.comments"
+  /**
+   * Multiple carries the v3 Column.multiple flag through the v3 → host
+   * conversion onto modelbase.ColumnDef/FieldDef.Multiple, opting a Ref
+   * column into the multi-select picker (SDK DynamicMultiSelectField) —
+   * the value round-trips as a plain JSON array of target ids. Only
+   * meaningful alongside Ref; pure UI metadata, ignored by the DDL plane.
+   */
+  multiple?: boolean;
+  /**
+   * Options is a STATIC select choice list for the column. It rides the
+   * legacy ColumnDef as a carrier for the v3 Column.Options so a declared
+   * enum survives the v3 → host conversion and lands on the served
+   * modelbase.ColumnDef.Options / modelbase.FieldDef.Options — the SDK then
+   * renders a plain select in the native create/edit form. Ref (above) is the
+   * relation-picker twin (dynamic_select). Both are pure UI metadata; the DDL
+   * plane ignores them. The Icon/Color/Image hints on each Option forward the
+   * v3 FieldOption visuals so a status/brand list renders richly.
+   */
+  options?: Option[];
+  /**
+   * OptionsSource names a DYNAMIC options provider (e.g. "registered_models",
+   * "installed_addons") the HOST resolves at metadata-serve time instead of a
+   * hardcoded Options list. It rides the legacy ColumnDef as a carrier for the
+   * v3 Column.options_source so the key survives the v3 → host conversion and
+   * lands on the served modelbase.ColumnDef.OptionsSource /
+   * modelbase.FieldDef.OptionsSource — the host then materialises the
+   * localized value/label list onto the served Options. The kernel implements
+   * no providers (open enum, host-registered); an unknown key yields no
+   * options. Pure UI metadata; the DDL plane ignores it.
+   */
+  options_source?: string;
+  /**
+   * Generated carries the v3 Column.generated expression through the v3 → host
+   * conversion so the DDL builder (dynamic.schema) can emit the column as
+   * `GENERATED ALWAYS AS (<expr>) STORED`. A pure arithmetic expression over
+   * sibling columns, validated with the strict computeexpr allowlist and
+   * incompatible with Default/Required. Empty = ordinary column.
+   */
+  generated?: string;
+  /**
+   * SearchKey marks a column the DDL plane emits as a STORED generated search
+   * key composed from sibling columns (v3 Model.search_keys). The column is
+   * derived by the v3 conversion, never authored. Nil = ordinary column.
+   */
+  search_key?: SearchKeyDef;
+  /**
+   * Readonly carries the v3 Column.readonly flag through the v3 → host
+   * conversion onto modelbase.ColumnDef/FieldDef.Readonly, marking a
+   * SYSTEM-GENERATED column that DeriveFormFields excludes from the create form
+   * and marks read-only in edit. Pure UI metadata; the DDL plane ignores it.
+   */
+  readonly?: boolean;
+  /**
+   * Protected carries the v3 Column.protected flag through the v3 → host
+   * conversion. Unlike Readonly (UI-only guidance), this is a SERVER-ENFORCED
+   * write gate: dynamic.Service.Create/Update rejects the column whenever it
+   * is present in the caller's input, with no bypass by role or permission.
+   * A declared Action is unaffected — action handlers write through the wasm
+   * data_mutate host import, a separate path the generic gate never
+   * intercepts. Use for a state-machine field or any column whose only valid
+   * mutation is a business action with its own gate (e.g. a return's
+   * refund_outcome). Empty/false = ordinary column (fully backward
+   * compatible).
+   */
+  protected?: boolean;
+  /**
+   * RejectDeletedRef carries the v3 Column.reject_deleted_ref opt-in: a
+   * create whose Ref points at a soft-deleted row is rejected. See
+   * manifest/v3.Column.RejectDeletedRef.
+   */
+  reject_deleted_ref?: boolean;
+  /**
+   * Constraints carries the v3 Column.constraints (declarative guard
+   * predicates) through the v3 → host conversion so the dynamic engine can
+   * evaluate them inside the create/update transaction. See manifest/v3.Constraint
+   * and dynamic constraint evaluation. Empty = no guards on this column.
+   */
+  constraints?: ConstraintDef[];
+  /**
+   * Sequence carries the v3 Column.sequence binding (the sequence key whose
+   * next formatted value is auto-stamped on create) through the v3 → host
+   * conversion. Empty = no auto-folio on this column.
+   */
+  sequence?: string;
+  /**
+   * Label is the column's human header OR an i18n key resolving to it. It
+   * rides the legacy ColumnDef as a carrier for the v3 Column.label so a
+   * declared label survives the v3 → host conversion: dynamic.DeriveTableColumns
+   * / DeriveFormFields prefer it over the humanized column name, and when it
+   * is an i18n key (e.g. "models.product.sku") the host's localized metadata
+   * transformer (metadata.NewLocalizedTableTransformer) resolves it to the
+   * browsed locale at serve time instead of showing the raw key. Empty =
+   * fall back to the humanized column name. Pure UI metadata; never DDL.
+   */
+  label?: string;
   /**
    * Visibility scopes where the column is rendered. Allowed values:
    *   ""      — legacy / current behaviour (visible everywhere).
@@ -594,6 +2046,139 @@ export interface ColumnDef {
    * for int). The whitelist lives in validate.go (validWidgets).
    */
   widget?: string;
+  /**
+   * Display hints — pure table/cell rendering metadata projected onto the
+   * served modelbase.ColumnDef. They never touch the DDL plane. They exist
+   * on the legacy struct only as a carrier so the v3 Column display hints
+   * survive the v3 → legacy ModelDefinition conversion (mapModels) and the
+   * subsequent derivation into modelbase.ColumnDef. All optional.
+   * CellStyle selects the SDK cell renderer (url, email, currency, creator,
+   * status, badge, image, …). StyleConfig carries renderer options
+   * (label_field, currency, decimals, base_path, …). Tooltip/Description are
+   * paths to a primary text and a subtitle. BasePath is a URL/route prefix.
+   */
+  cellStyle?: string;
+  styleConfig?: { [key: string]: any};
+  tooltip?: string;
+  description?: string;
+  basePath?: string;
+  /**
+   * DependsOn and OptionsConfig forward the v3 dependent-picker declaration
+   * (Column.depends_on + the `options` object form) so a dynamic_select column
+   * scopes its candidates by a sibling field and resolves its label from a
+   * related model. DependsOn names the sibling whose value supplies the cascade
+   * filter_value; OptionsConfig carries the dynamic source declaration. The
+   * host projects both onto the served modelbase.ColumnDef so they reach the
+   * SDK and the OptionsConfigResolver. Pure UI/query metadata; never DDL.
+   */
+  depends_on?: string;
+  optionsConfig?: DynamicOptionsDef;
+  /**
+   * Scan opts this field/column into camera barcode scan-to-fill (see
+   * modelbase.FieldDef.Scan). Forwarded through the host round-trip.
+   */
+  scan?: boolean;
+  /**
+   * VisibleWhen carries the v3 Column.visible_when conditional-visibility
+   * predicate through the v3 → host conversion so form derivation
+   * (DeriveFormFields) projects it onto the served modelbase.FieldDef and the
+   * SDK shows/hides the field against the live form values. Pure UI metadata;
+   * the DDL plane ignores it. Nil = always visible.
+   */
+  visible_when?: VisibleWhenDef;
+  /**
+   * Section carries the v3 Column.section through the v3 → host conversion so
+   * form derivation (DeriveFormFields) projects it onto the served
+   * modelbase.FieldDef.Section and the SDK places the field inside the matching
+   * form_layout section/step. Pure UI metadata; the DDL plane ignores it. Empty
+   * = the implicit "General" block.
+   */
+  section?: string;
+  /**
+   * OptionFilter carries the v3 Column.option_filter (hide options of a
+   * relation / dynamic picker, evaluated by the SDK over the extra columns
+   * /options returns) through the v3 → host conversion onto the served
+   * modelbase.ColumnDef/FieldDef.OptionFilter. Pure UI metadata.
+   */
+  option_filter?: any /* v3.OptionFilter */;
+}
+/**
+ * VisibleWhenDef is the legacy carrier for the v3 VisibleWhen block. It rides
+ * ColumnDef/FieldDef so the {field, equals, in} predicate survives the v3 →
+ * host conversion and lands on the served modelbase.VisibleWhen the SDK reads.
+ * JSON tags match the v3 + host contract so it round-trips byte-for-byte.
+ */
+export interface VisibleWhenDef {
+  field: string;
+  equals?: string;
+  in?: string[];
+  /**
+   * Class: visible when the record's category carries this attribute class.
+   */
+  class?: string;
+}
+/**
+ * AttributeClassDef is the host carrier of a v3 AttributeClass.
+ */
+export interface AttributeClassDef {
+  key: string;
+  label?: string;
+  sections: AttributeClassSectionDef[];
+}
+/**
+ * AttributeClassSectionDef is one titled block of an AttributeClassDef.
+ */
+export interface AttributeClassSectionDef {
+  key: string;
+  label?: string;
+  fields: string[];
+}
+/**
+ * ConditionDef is the host projection of a v3 contribution Condition: a
+ * SERVER-SIDE gate the host evaluates per organization before serving a
+ * contribution (nav entry, action, slot, widget). It is how an addon declares a
+ * SOFT dependency — "surface this only where addon X is installed", or "only
+ * where connector Y is actually connected" — without requiring either at
+ * install time. Nil (or no org-level predicate) means always.
+ */
+export interface ConditionDef {
+  /**
+   * AddonInstalled is the addon key that must be installed for the org.
+   */
+  addon_installed?: string;
+  /**
+   * ConnectorConnected is the connector key that must be CONNECTED for the
+   * org (credentials supplied, integration healthy). See v3.Condition.
+   */
+  connector_connected?: string;
+  /**
+   * Unmet is the policy when the predicate fails: "hide" | "disable". Empty
+   * = the per-predicate default (see UnmetPolicy).
+   */
+  unmet?: string;
+  /**
+   * Field/Operator/Value are the host projection of a v3 record-level
+   * Condition gate: the SDK surfaces the action only when the target row
+   * matches (isActionConditionMet). SatisfiedBy deliberately ignores them —
+   * they are not org-level. Without this projection, authors that declare
+   * condition.field on an action (e.g. reject_credit → credit_pending) lose
+   * the predicate at FromV3 and the host must hardcode it again.
+   */
+  field?: string;
+  operator?: string;
+  value?: any;
+}
+/**
+ * RouteDef is the host projection of a v3 contribution Route: one entry of a
+ * declarative routing table. Domain and Handler are opaque to the kernel — see
+ * manifest/v3.Route for the contract and the routing package for resolution.
+ */
+export interface RouteDef {
+  domain: string;
+  match?: { [key: string]: string};
+  handler: string;
+  priority?: number /* int */;
+  condition?: ConditionDef;
 }
 /**
  * ValidationRule expresses server-side input constraints. All fields are
@@ -638,3 +2223,62 @@ export interface Signature {
   value: string;
   checksums?: { [key: string]: string};
 }
+/**
+ * CrossRuleDef is the host/runtime projection of a v3 CrossRule.
+ */
+export interface CrossRuleDef {
+  kind: string;
+  errorKey: string;
+  ref: string;
+  parent: string;
+  require?: { [key: string]: any};
+  sum?: string;
+  max?: string;
+  where?: { [key: string]: any};
+  /**
+   * Columns / Field: unique rules only. See v3.CrossRule.
+   */
+  columns?: string[];
+  field?: string;
+  /**
+   * OnMissingParent: "" / "reject" (default, fail closed) or "skip".
+   */
+  onMissingParent?: string;
+  /**
+   * Enforce: "" (default: create + Ref change) or "always" (every create,
+   * update and delete; ref_state only). See v3.CrossRule.Enforce.
+   */
+  enforce?: string;
+}
+
+//////////
+// source: ui_capabilities.go
+
+/**
+ * HostCapUIPages: the host routes frontend.pages[] (any layout).
+ */
+export const HostCapUIPages = "ui.pages";
+/**
+ * HostCapUIEmbeddedPages: the host mounts layout "shell" pages inside its
+ * chrome (/a/<addon>/<path>).
+ */
+export const HostCapUIEmbeddedPages = "ui.embedded_pages";
+/**
+ * HostCapUIDetailPanels: the host renders models[].detail.panels and
+ * split-view panels.
+ */
+export const HostCapUIDetailPanels = "ui.detail_panels";
+/**
+ * HostCapUIMaps: the host provides the lazy maps share to remotes.
+ */
+export const HostCapUIMaps = "ui.maps";
+/**
+ * HostCapUICharts: the host provides the lazy charts share to remotes.
+ */
+export const HostCapUICharts = "ui.charts";
+/**
+ * HostCapUIViewPrefix prefixes the declarative view renderers:
+ * "ui.views.map", "ui.views.timeline", "ui.views.calendar",
+ * "ui.views.chart", "ui.views.split".
+ */
+export const HostCapUIViewPrefix = "ui.views.";

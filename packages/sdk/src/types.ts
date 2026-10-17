@@ -72,7 +72,57 @@ export type {
   ConnectorProvider,
   Signature,
   Frontend,
+  // Federated pages (frontend.pages[]) and declarative UI (view_type + view,
+  // models[].detail.panels[]). Generated from the kernel — never hand-written.
+  FrontendPage,
+  PageBreadcrumb,
+  NavRequire,
+  NavView,
+  MapView,
+  MapPoint,
+  MapLayer,
+  MapRoute,
+  TimelineView,
+  TimelineSource,
+  CalendarView,
+  ChartView,
+  SplitView,
+  ModelDetail,
+  DetailPanel,
+  RelationPanel,
+  StatsPanel,
+  StatItem,
+  WidgetQuery,
 } from "./generated/manifest-v3";
+
+export {
+  PageLayoutShell,
+  PageLayoutImmersive,
+  MaxPageBudgetKB,
+  MaxPageBreadcrumbs,
+  ViewTypeTable,
+  ViewTypeKanban,
+  ViewTypeMap,
+  ViewTypeTimeline,
+  ViewTypeCalendar,
+  ViewTypeChart,
+  ViewTypeSplit,
+  PanelKindMap,
+  PanelKindTimeline,
+  PanelKindChart,
+  PanelKindRelation,
+  PanelKindStats,
+  PanelKindCustom,
+} from "./generated/manifest-v3";
+
+export {
+  HostCapUIPages,
+  HostCapUIEmbeddedPages,
+  HostCapUIDetailPanels,
+  HostCapUIMaps,
+  HostCapUICharts,
+  HostCapUIViewPrefix,
+} from "./generated/manifest";
 
 // ---------------------------------------------------------------------------
 // Legacy Module Contract v2 — retained for backwards compatibility.

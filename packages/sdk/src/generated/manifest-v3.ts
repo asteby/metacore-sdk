@@ -6,6 +6,367 @@
  */
 
 //////////
+// source: api_routes_validate.go
+
+/**
+ * apiRouteMaxPathLn bounds an APIRoute path pattern.
+ */
+/**
+ * APIPathSegmentKind classifies one segment of an APIRoute path pattern.
+ */
+export type APIPathSegmentKind = number /* int */;
+/**
+ * APISegmentStatic matches the literal Value.
+ */
+export const APISegmentStatic: APIPathSegmentKind = 0;
+/**
+ * APISegmentParam matches any single non-empty segment, captured as Value.
+ */
+export const APISegmentParam: APIPathSegmentKind = 1;
+/**
+ * APISegmentWildcard matches the rest of the path (zero or more
+ * segments), captured as Value ("*" when the wildcard is unnamed).
+ */
+export const APISegmentWildcard: APIPathSegmentKind = 2;
+/**
+ * APIPathSegment is one parsed segment of an APIRoute path pattern. Value is
+ * the literal for static segments and the capture name otherwise.
+ */
+export interface APIPathSegment {
+  Kind: APIPathSegmentKind;
+  Value: string;
+}
+
+//////////
+// source: compat.go
+
+/**
+ * Options selects how ValidateWithOptions treats legacy-tolerated rules.
+ */
+export interface Options {
+  /**
+   * Strict makes every rule a hard error. Use it when a manifest is being
+   * PUBLISHED (hub) or authored (CI). Leave it false when INSTALLING or
+   * UPGRADING an already-published bundle (ops, installer): tolerated rules
+   * then come back as warnings.
+   */
+  Strict: boolean;
+}
+/**
+ * RuleRequiresStateInStages: contributions.actions[].requires_state values
+ * must be stages of the target model's stage machine (kernel #453).
+ * Promote to a hard error everywhere one minor release after it ships.
+ */
+export const RuleRequiresStateInStages = "requires_state_in_stages";
+/**
+ * RuleAuditColumnType: a model that declares one of the kernel's standard
+ * audit columns (created_at, updated_at, deleted_at, created_by_id,
+ * updated_by_id, deleted_by_id) must declare it with the standard type
+ * (timestamp/timestamptz for *_at, uuid for *_by_id). Introduced with the
+ * audit-column standard (docs/audit-columns.md). Promote to a hard error
+ * everywhere one minor release after it ships.
+ */
+export const RuleAuditColumnType = "audit_column_type";
+
+//////////
+// source: option_display.go
+
+/**
+ * OptionDisplay declares HOW a model's rows read as options of a picker: the
+ * title, a muted subtitle, a leading image, right-aligned metrics with their
+ * format and a declarative tone, and badges. The options endpoint resolves it
+ * server-side on every option it returns (listing and `?ids=` resolve mode) as
+ * a ready-to-paint `display` object, so every picker of the model — a form's
+ * dynamic_select, the document editor's product cell, a custom addon screen —
+ * shows the same rich row with zero per-screen code. Nil = the plain
+ * {label, image, description} option (the legacy behaviour).
+ * Values come from two places:
+ *   - `field`: a column of the row itself (price, sku, folio, total, status);
+ *   - `metric`: a value COMPUTED by another addon and contributed through its
+ *     top-level option_metrics[] (stock available = sum of inventory stock rows
+ *     of the product, optionally in the warehouse / branch of the document).
+ *     A trailing item whose metric no installed+enabled addon provides is
+ *     simply omitted — products declares the stock column once and works the
+ *     same with or without inventory installed.
+ */
+export interface OptionDisplay {
+  /**
+   * Title of the option. A column name ("name") or a template with {column}
+   * placeholders ("{folio} · {customer_name}"). Empty = the option's label.
+   */
+  title?: string;
+  /**
+   * Subtitle parts joined with " · ". Each part is a column name ("sku") or a
+   * template ("RFC {tax_id}"); a part whose placeholders all resolve empty is
+   * dropped together with its separator. Empty = no subtitle.
+   */
+  subtitle?: string[];
+  /**
+   * Image names the column holding the option's image url (32px avatar).
+   * Empty = the option's existing image (if any); the SDK falls back to
+   * initials.
+   */
+  image?: string;
+  /**
+   * Trailing are the right-aligned metrics, in order.
+   */
+  trailing?: OptionTrailing[];
+  /**
+   * Badges are small chips next to the title (status, kind…).
+   */
+  badges?: OptionBadge[];
+}
+/**
+ * OptionTrailing is one right-aligned metric of an option row.
+ */
+export interface OptionTrailing {
+  /**
+   * Key identifies the metric in the served display (unique per display).
+   */
+  key: string;
+  /**
+   * Label is a short caption (i18n key or literal), e.g. "Disp." / "Precio".
+   */
+  label?: string;
+  /**
+   * Field names a column of the row. Exactly one of Field / Metric.
+   */
+  field?: string;
+  /**
+   * Metric names a computed value contributed by an addon's option_metrics[]
+   * for this model. Exactly one of Field / Metric. Unprovided = item omitted.
+   */
+  metric?: string;
+  /**
+   * Format: money | number | integer | percent | date | relative_date | text.
+   * money uses CurrencyField when set, else the organization currency.
+   */
+  format?: string;
+  /**
+   * CurrencyField names a column holding the ISO currency of a money value.
+   */
+  currency_field?: string;
+  /**
+   * Tones are evaluated in order against the item's value; the FIRST match
+   * sets the tone (and optionally replaces the text, dims or blocks the row).
+   */
+  tones?: OptionTone[];
+  /**
+   * When gates the item per row: shown only when the condition holds
+   * (`field` names the column tested; without it the item's own value is
+   * tested). E.g. no stock column for a service product. Nil = always.
+   */
+  when?: OptionDisplayCondition;
+}
+/**
+ * OptionTone is one conditional style rule of a trailing metric.
+ */
+export interface OptionTone {
+  when: OptionDisplayCondition;
+  /**
+   * Tone: success | warning | danger | info | neutral.
+   */
+  tone: string;
+  /**
+   * Text replaces the formatted value (e.g. "Agotado"). i18n key or literal.
+   */
+  text?: string;
+  /**
+   * Dim attenuates the whole option row (still selectable).
+   */
+  dim?: boolean;
+  /**
+   * Block makes the option not selectable in the picker (UI hint).
+   */
+  block?: boolean;
+}
+/**
+ * OptionDisplayCondition compares a value (the trailing item's value, or Field for a
+ * badge) against a literal Value, a column (Ref) or a metric (RefMetric).
+ */
+export interface OptionDisplayCondition {
+  /**
+   * Field is the column tested — badges only (a tone tests its own value).
+   */
+  field?: string;
+  /**
+   * Op: lt | lte | gt | gte | eq | neq | empty | not_empty.
+   */
+  op: string;
+  value?: any;
+  ref?: string;
+  ref_metric?: string;
+}
+/**
+ * OptionBadge is a chip next to the option's title.
+ */
+export interface OptionBadge {
+  /**
+   * Field names the column the badge reads (shown as text when Text is empty
+   * and Values has no entry for it).
+   */
+  field?: string;
+  /**
+   * When gates the badge; nil = shown whenever Field is non-empty (or always
+   * when there is no Field and Text is set).
+   */
+  when?: OptionDisplayCondition;
+  text?: string;
+  tone?: string;
+  /**
+   * Values maps a Field value to its text/tone (a status chip).
+   */
+  values?: { [key: string]: OptionBadgeValue};
+}
+/**
+ * OptionBadgeValue is the text and tone of one value of a badge's Field.
+ */
+export interface OptionBadgeValue {
+  text?: string;
+  tone?: string;
+}
+/**
+ * OptionMetric CONTRIBUTES a computed value to the options of a model (own or
+ * another addon's): an aggregate over one of THIS addon's models related to the
+ * target by a foreign key — inventory publishes "stock_available" for
+ * products.Product as SUM(stock.available) GROUP BY product_id. The options
+ * endpoint resolves every metric a display references with ONE grouped query
+ * per page (never per option), scoped to the caller's organization, and the
+ * host only serves it while this addon is installed and enabled for the org.
+ */
+export interface OptionMetric {
+  /**
+   * Key the target's option_display references in trailing[].metric.
+   */
+  key: string;
+  /**
+   * Target is the model whose options receive the value, "<addon>.<Model>"
+   * (e.g. "products.Product").
+   */
+  target: string;
+  /**
+   * Model is the Key of one of THIS manifest's models[] aggregated.
+   */
+  model: string;
+  /**
+   * ForeignKey is the column of Model holding the target row's id.
+   */
+  foreign_key: string;
+  /**
+   * Aggregate: sum | count | min | max | avg.
+   */
+  aggregate: string;
+  /**
+   * Column aggregated (required unless aggregate is count).
+   */
+  column?: string;
+  /**
+   * Where narrows the aggregated rows with equality predicates; a null value
+   * means IS NULL. Column names must exist on Model.
+   */
+  where?: { [key: string]: any};
+  /**
+   * Scope narrows by the picker's CONTEXT (the document's warehouse, the
+   * session's branch). A scope whose context key is absent from the request
+   * does not apply (the aggregate spans the whole organization).
+   */
+  scope?: OptionMetricScope[];
+}
+/**
+ * OptionMetricScope binds one context key of the options request to a column
+ * of the aggregated model, directly or THROUGH another model of this addon
+ * (stock.warehouse_id IN (SELECT id FROM warehouses WHERE branch_id = ctx)).
+ */
+export interface OptionMetricScope {
+  /**
+   * Context key sent by the picker (?ctx.<key>=) or injected by the host.
+   */
+  context: string;
+  /**
+   * Column of the aggregated model compared.
+   */
+  column: string;
+  /**
+   * Through, when set, matches Column against the ids of Through.Model rows
+   * whose Through.Column equals the context value.
+   */
+  through?: OptionMetricThrough;
+}
+/**
+ * OptionMetricThrough is the indirection of a scope (see OptionMetricScope).
+ */
+export interface OptionMetricThrough {
+  model: string;
+  column: string;
+}
+
+//////////
+// source: recordexpr.go
+
+/**
+ * RecordExpr is a parsed record predicate — the value of
+ * PublicRoute.EnabledWhen — evaluated by hosts against a record map
+ * (column name → JSON-decoded value) to decide whether a contribution applies
+ * to that record.
+ * Grammar (whitespace-insensitive):
+ * 	expr    := or
+ * 	or      := and ( "||" and )*
+ * 	and     := unit ( "&&" unit )*
+ * 	unit    := "(" expr ")" | cmp
+ * 	cmp     := path op literal | path ("in" | "not_in" | "not in") list
+ * 	op      := "==" | "=" | "!=" | "<>" | "<" | "<=" | ">" | ">="
+ * 	literal := 'string' | "string" | number | true | false | null
+ * 	list    := "(" literal ("," literal)* ")" | "[" literal ("," literal)* "]"
+ * 	path    := [a-z_][a-z0-9_]* ( "." [a-z_][a-z0-9_]* )*
+ * Semantics: a comparison against a number is numeric when the record value
+ * parses as a number; against true/false it is boolean (record booleans and
+ * the strings "true"/"false"/"1"/"0" coerce); `== null` holds when the value
+ * is missing, nil or the empty string; everything else compares as trimmed
+ * strings (so `<`/`>` on ISO dates order correctly). A missing column compares
+ * as "" — `status != 'draft'` therefore holds for a record with no status,
+ * which is the permissive default hosts expect from an optional gate.
+ * The zero RecordExpr (or one parsed from an empty string) evaluates true.
+ */
+export interface RecordExpr {
+}
+
+//////////
+// source: requires_enables.go
+
+/**
+ * Enable ref kinds accepted in Requirement.Enables.
+ */
+export const EnableKindAction = "action";
+/**
+ * Enable ref kinds accepted in Requirement.Enables.
+ */
+export const EnableKindNav = "nav";
+/**
+ * Enable ref kinds accepted in Requirement.Enables.
+ */
+export const EnableKindWidget = "widget";
+/**
+ * EnableRef is a parsed Requirement.Enables item. Model and Action are set only
+ * for Kind "action"; Key is set only for "nav" and "widget".
+ */
+export interface EnableRef {
+  Kind: string;
+  Model: string;
+  Action: string;
+  Key: string;
+}
+/**
+ * OptionalRequirement is an optional peer addon and the capabilities of this
+ * addon that depend on it (see Requirement.Enables).
+ */
+export interface OptionalRequirement {
+  Key: string;
+  Version: string;
+  Reason: string;
+  Enables: string[];
+}
+
+//////////
 // source: types.go
 /*
 Package v3 implements the Module Contract v3 manifest types and
@@ -51,6 +412,7 @@ export interface Manifest {
   capabilities?: Capability[];
   models?: Model[];
   frontend?: Frontend;
+  runtime?: Runtime;
   contributions?: Contributions;
   extension_points?: ExtensionPoints;
   lifecycle?: Lifecycle;
@@ -61,7 +423,587 @@ export interface Manifest {
   preset?: Preset;
   theme?: Theme;
   connector_pack?: ConnectorPack;
+  /**
+   * Connectors declares the third-party credential providers this addon needs
+   * (e.g. "github"). Unlike the standalone kind:ConnectorPack manifest, these
+   * ride embedded in a normal Addon: the host stores their Credentials per org
+   * (encrypted) and the connectors runtime resolves them for wasm handlers
+   * (connector_get) and for a webhook's secret_ref. Empty = no connectors.
+   */
+  connectors?: Connector[];
+  /**
+   * Schedules declares declarative cron jobs the kernel scheduler fires per
+   * org: every Schedule.Every it dispatches Schedule.Do (a wasm:/webhook:/
+   * compiled: handler). The webhook-primary + cron-reconcile pattern uses this
+   * as the backstop that reconciles what an inbound webhook missed. Empty = none.
+   */
+  schedules?: Schedule[];
+  /**
+   * Webhooks declares inbound webhook routes the host mounts and the kernel
+   * webhookin receiver routes: a verified request to InboundWebhook.Path
+   * dispatches InboundWebhook.Do. Signature is checked per Verify, the secret
+   * resolved from SecretRef (a connector credential). Empty = no webhooks.
+   */
+  webhooks?: InboundWebhook[];
+  /**
+   * EdgeDevices declares local-network hardware this addon integrates with
+   * through a persistent channel (a store-local agent, not the addon's own
+   * WASM code, holds the physical connection — a cash recycler, a card
+   * terminal). Unlike Connector (request/response credentials to a remote
+   * API), an EdgeDevice pushes Events and accepts Commands over a
+   * long-lived session the host's edge gateway terminates; the addon only
+   * ever sees normalized events routed to a wasm export and issues
+   * Commands through its own action handlers. Empty = no edge devices.
+   */
+  edge_devices?: EdgeDevice[];
+  /**
+   * DesktopClients declares per-user desktop (or mobile) agents the product
+   * ships separately from the Ops addon — e.g. a Tauri time tracker that
+   * each worker installs on their PC and signs into with their Ops email/
+   * password. This is NOT EdgeDevice: no pairing codes, no store hardware,
+   * no edge gateway. Hub/Ops read this block to surface download CTAs on
+   * catalog/preset pages and after install without hardcoding product
+   * lists in the landing. Empty = no desktop client. Valid on Addon and
+   * Preset (a vertical may advertise the same agent its bundled addon
+   * ships).
+   */
+  desktop_clients?: DesktopClient[];
+  /**
+   * Backfills declares one-shot materialization sweeps the host runs after
+   * install and after every version upgrade, so an addon whose data is
+   * maintained incrementally (an event subscription that refreshes a
+   * projection when a row changes) also covers the rows that already
+   * existed before it was installed.
+   * The host — not the guest — enumerates the work: ONE org-scoped
+   * `SELECT DISTINCT <source.distinct> FROM <source.table>` produces the
+   * key set, and `do` is dispatched once per key with its own fresh
+   * invocation and its own deadline. That inversion is the whole point.
+   * A guest cannot enumerate its own backlog: the data_query import is
+   * capped at 200 rows with equality-only filters and no offset or cursor
+   * (docs/wasm-abi.md §15.2), so a "regenerate everything" export can
+   * neither see past the first page nor finish inside one wasm deadline.
+   * Empty = no backfill (the pre-primitive default).
+   */
+  backfills?: Backfill[];
+  /**
+   * ProvidesOptions PUBLISHES one of this addon's models as a reusable
+   * CATALOG: any other addon can then feed a select from it by naming the
+   * catalog's Key in a column's or action field's `options_source`, with no
+   * code in the host and no hardcoded `options` list in the consumer.
+   * It is the PRODUCER half of the options_source contract. Until now the
+   * consumer half existed (Column.OptionsSource / ActionField.OptionsSource
+   * name a provider key the host resolves) but every provider was a Go
+   * function compiled into the host, so publishing a new catalog — payment
+   * methods, warehouses, cost centres, fiscal series — meant a pull request
+   * against the host. This block moves that declaration into the manifest:
+   * the host implements ONE generic provider that resolves any declaration,
+   * and no future catalog touches host code again.
+   * The host always scopes the query to the invoking org and serves a
+   * catalog only while its owning addon is installed and enabled for that
+   * org, so a consumer's select is empty — never wrong — when the producer
+   * is absent. Empty = the addon publishes no catalogs (the default).
+   */
+  provides_options?: OptionCatalog[];
+  /**
+   * ProvidesCapabilities declares the provider-neutral capability contracts
+   * this addon implements (package capability). Another addon's action /
+   * tool / subscription with handler.type "capability" reaches it without
+   * naming this addon or its connector; the host picks the provider
+   * installed in the org (the org's default when several are). Empty = the
+   * addon provides no capability (the default).
+   */
+  provides_capabilities?: ProvidedCapability[];
+  /**
+   * OptionMetrics CONTRIBUTES computed values to the options of a model (own
+   * or another addon's), e.g. inventory's "stock_available" for
+   * products.Product. A target's option_display references them by key in
+   * trailing[].metric; the host serves a metric only while this addon is
+   * installed and enabled for the org, so the consumer degrades to "no
+   * metric" — never to an error — without it. See OptionMetric.
+   */
+  option_metrics?: OptionMetric[];
   signature?: Signature;
+}
+/**
+ * ProvidedCapability binds one capability contract to this addon's own
+ * handler. Handler is restricted to "wasm" (Function) or "native" (Operation).
+ * Input maps the provider handler's payload fields from the contract input
+ * (payload.<contract field>) or constants; unmapped contract fields are passed
+ * through under their own names.
+ * Countries optionally restricts the provider to markets selling in those
+ * ISO 3166-1 alpha-2 countries (a CFDI provider declares ["MX"]); empty =
+ * any country. The host resolves a capability per (org, market, capability):
+ * see capability.Select.
+ */
+export interface ProvidedCapability {
+  key: string;
+  label?: string;
+  description?: string;
+  handler: Handler;
+  input?: { [key: string]: string};
+  countries?: string[];
+}
+/**
+ * Runtime declares addon-owned executable services. The wrapper is
+ * intentionally extensible: request-scoped WASM continues to be inferred from
+ * handlers while long-lived services are explicit desired state.
+ */
+export interface Runtime {
+  native_service?: any /* native.Spec */;
+  /**
+   * WASM tunes the request-scoped WASM runtime (the module itself is inferred
+   * from handlers). Optional.
+   */
+  wasm?: WasmRuntime;
+}
+/**
+ * WasmRuntime is the per-addon tuning of the in-process WASM runtime.
+ */
+export interface WasmRuntime {
+  /**
+   * Concurrency is the maximum number of parallel module instances per
+   * installation (organization): 1..64. 0 = the default (1, or
+   * manifest.DefaultAPIConcurrency for an addon with contributions.api).
+   * Instances do NOT share guest state, so only raise it for handlers that
+   * keep state in the database. The host caps it by memory and an operator
+   * may override it (runtime/wasm § 22.2).
+   */
+  concurrency?: number /* int */;
+}
+/**
+ * Connector declares a third-party credential provider an addon depends on. The
+ * host (ops) collects + encrypts the Credentials per org and the connectors
+ * runtime resolves them; wasm handlers read a credential via connector_get
+ * (gated by the connector:read capability) and a webhook's secret_ref resolves
+ * to one of these credentials.
+ */
+export interface Connector {
+  /**
+   * Key identifies the connector (e.g. "github"); connector_get(key) and a
+   * webhook's secret_ref ("<key>.<credential>") reference it.
+   */
+  key: string;
+  /**
+   * Label is the human/i18n name shown in the authorization UI.
+   */
+  label?: string;
+  /**
+   * Auth is the credential-acquisition flow: "oauth2" | "token".
+   */
+  auth?: string;
+  /**
+   * Credentials enumerates the fields the org supplies (an access_token,
+   * repo, webhook_secret …). Reuses the Setting shape (key/type/default/
+   * required/validation); "secret"-typed fields are stored encrypted.
+   */
+  credentials?: Setting[];
+  /**
+   * FormLayout groups the credentials into declarative sections or a multi-step
+   * WIZARD for the config UI (same shape models use). A token connector can put
+   * api_key/secret in step 1 and dynamic_select fields (fed by OptionsSource)
+   * that need a live connection in a later step gated by visible_when.
+   */
+  form_layout?: FormLayout;
+  /**
+   * TestExport names a WASM export the host invokes to VALIDATE the credentials
+   * (a cheap read-only call to the third-party API). It runs with the org's
+   * connector context and returns {success,data:{ok,message}}. Powers the
+   * config UI's "test connection" button. Empty = no health-check offered.
+   */
+  test_export?: string;
+  /**
+   * Scopes lists the OAuth scopes this connector needs when Auth is "oauth2"
+   * (e.g. "calendar.readonly", "mail.send"). The host/broker joins them into
+   * the authorize URL's `scope` query param instead of an addon documenting
+   * the required scope as free text in a credential's help. Empty is valid
+   * for a provider with no scope concept, or for Auth "token". Order is
+   * preserved; the host does not dedupe or sort.
+   */
+  scopes?: string[];
+}
+/**
+ * Schedule is one declarative cron job. The kernel scheduler parses Every as a
+ * Go duration ("30s","5m","1h") and, per installed org, fires Do on that
+ * interval. Do references the same dispatchable handler set as a transition
+ * hook: "wasm:<export>" | "webhook:<key>" | "compiled:<fn>".
+ */
+export interface Schedule {
+  /**
+   * Key identifies the schedule within the addon (e.g. "sync_issues").
+   */
+  key: string;
+  /**
+   * Every is the Go duration between fires (time.ParseDuration).
+   */
+  every: string;
+  /**
+   * Do is the handler reference dispatched on each tick.
+   */
+  do: string;
+}
+/**
+ * BackfillOn enumerates the lifecycle moments a Backfill may be triggered at.
+ * An empty Backfill.On means both — an addon declaring a backfill wants its
+ * projection complete after an install AND after every upgrade, which is the
+ * only combination that keeps a long-installed org from staying stale forever.
+ */
+export const BackfillOnInstall = "install";
+/**
+ * BackfillOn enumerates the lifecycle moments a Backfill may be triggered at.
+ * An empty Backfill.On means both — an addon declaring a backfill wants its
+ * projection complete after an install AND after every upgrade, which is the
+ * only combination that keeps a long-installed org from staying stale forever.
+ */
+export const BackfillOnUpgrade = "upgrade";
+/**
+ * Backfill is one declarative materialization sweep. The host enumerates
+ * Source, then dispatches Do once per distinct value with the payload
+ * 	{"backfill": "<key>", "<arg>": <value>, ...with}
+ * Each dispatch is an independent invocation, so per-key work stays inside the
+ * normal handler deadline and a failure isolates to that key. The sweep is
+ * expected to be idempotent: the host makes no ordering promise, may re-run a
+ * sweep that was interrupted, and dispatches at-least-once.
+ */
+export interface Backfill {
+  /**
+   * Key identifies the backfill within the addon (e.g. "customer_statements").
+   */
+  key: string;
+  /**
+   * On selects the triggering transitions: "install" and/or "upgrade".
+   * Empty means both.
+   */
+  on?: string[];
+  /**
+   * Source is the row set the key list is drawn from.
+   */
+  source: BackfillSource;
+  /**
+   * Do is the handler reference dispatched per key, same reference grammar
+   * as Schedule.Do ("wasm:<export>" | "webhook:<key>" | "compiled:<fn>").
+   */
+  do: string;
+  /**
+   * Arg names the payload field each distinct value is passed as. Defaults
+   * to "id" when empty.
+   */
+  arg?: string;
+  /**
+   * With carries constant fields merged into every dispatched payload — how
+   * one export serves several sweeps (e.g. {"party_type": "customer"} and
+   * {"party_type": "supplier"} against the same handler). Keys colliding
+   * with Arg or "backfill" are rejected at validation.
+   */
+  with?: { [key: string]: any};
+}
+/**
+ * BackfillSource names the rows a Backfill enumerates. The host always scopes
+ * the query to the invoking org and skips soft-deleted rows; Where adds
+ * equality-only predicates on top, mirroring the data_query contract so a
+ * declaration cannot express a filter the guest could not have expressed
+ * itself.
+ */
+export interface BackfillSource {
+  /**
+   * Table is the logical, unqualified table the keys are read from.
+   */
+  table: string;
+  /**
+   * Distinct is the column whose distinct non-null values form the key set.
+   */
+  distinct: string;
+  /**
+   * Where narrows the source with equality-only predicates. Optional.
+   */
+  where?: { [key: string]: any};
+}
+/**
+ * OptionCatalog publishes one of the addon's models as a named, reusable
+ * option list. A consumer addon references it by Key from
+ * Column.OptionsSource / ActionField.OptionsSource; the host materializes
+ * the rows into the served `{value,label}` option shape at metadata time, so
+ * the consumer never queries the producer's table and never learns its
+ * schema.
+ * The declaration is deliberately the SAME expressive power as the guest's
+ * own data_query import (docs/wasm-abi.md §15.2): equality-only Where, one
+ * order column, a row cap. An addon must not be able to publish a catalog it
+ * could not have read itself.
+ * Key collisions are unresolvable here — validation only ever sees ONE
+ * manifest, and two addons may legitimately both declare "payment_methods".
+ * The rule therefore lives in the host and is documented in
+ * docs/manifest-v3.md: a provider compiled into the host always wins over a
+ * declared catalog, and among declared catalogs the owning addon key that
+ * sorts first alphabetically wins. Deterministic, install-order independent,
+ * and logged by the host so the shadowed catalog is discoverable.
+ */
+export interface OptionCatalog {
+  /**
+   * Key is the catalog's public name — the exact string a consuming addon
+   * puts in `options_source`. It is GLOBAL across the installed set, not
+   * namespaced by addon: that is the point (a fiscal addon consumes
+   * "payment_methods" without naming the POS). Same identifier grammar as
+   * every other manifest key: ^[a-z][a-z0-9_]*$.
+   */
+  key: string;
+  /**
+   * Model is the Key of one of THIS manifest's models[] (e.g.
+   * "POSPaymentMethod"). Validation rejects a model the manifest does not
+   * declare, and the host projection resolves it to the physical table so
+   * the host never has to re-derive it.
+   */
+  model: string;
+  /**
+   * Value names the column supplying each option's `value` — the string the
+   * consumer actually persists. Prefer a stable business code over a uuid:
+   * it is what a downstream mapping (a SAT payment-form table, a bank
+   * channel) will be keyed by.
+   */
+  value: string;
+  /**
+   * Label names the column supplying each option's human `label`.
+   */
+  label: string;
+  /**
+   * Where narrows the published rows with equality-only predicates (e.g.
+   * {"is_active": true}). Values are always bound by the host; column names
+   * are validated against the model. Optional.
+   */
+  where?: { [key: string]: any};
+  /**
+   * OrderBy names the column the options are sorted by, ascending. The host
+   * appends Value as a tiebreaker so the list is fully deterministic.
+   * Empty = ordered by Label. Optional.
+   */
+  order_by?: string;
+  /**
+   * Extras names additional columns that travel WITH each option, served
+   * under a nested "extras" object:
+   * 	{"value":"cash","label":"Efectivo","extras":{"is_cash":true,"sat_code":"01"}}
+   * This is what lets a consumer act on the catalog without a second
+   * round-trip into a table it does not own — a fiscal addon reads the SAT
+   * configuration of the selected payment method straight off the option it
+   * was given. Nested rather than flattened so a column called "label" or
+   * "value" can never shadow the two fields the SDK requires. Optional.
+   */
+  extras?: string[];
+}
+/**
+ * InboundWebhook declares a webhook route the host mounts under the addon+org
+ * namespace. On a verified request the kernel webhookin receiver routes the
+ * body to Do. Verify selects the signature scheme; SecretRef names the connector
+ * credential holding the signing secret.
+ */
+export interface InboundWebhook {
+  /**
+   * Key identifies the webhook within the addon (e.g. "github_push").
+   */
+  key: string;
+  /**
+   * Path is the route mounted under the addon+org namespace (e.g.
+   * "/webhooks/github").
+   */
+  path: string;
+  /**
+   * Verify is the signature scheme: "" (none) | "hmac-sha256" | "bearer"
+   * (a static token in Authorization: Bearer|Token <secret>) | "addon" (the
+   * handler verifies from raw_body_b64/query/headers; no kernel secret).
+   */
+  verify?: string;
+  /**
+   * SecretRef resolves the signing secret as "<connector>.<credential>"
+   * (e.g. "github.webhook_secret"). Required when Verify is hmac-sha256 or
+   * bearer; optional (validated when set) for "addon".
+   */
+  secret_ref?: string;
+  /**
+   * Do is the handler reference the verified body is routed to.
+   */
+  do: string;
+  /**
+   * Headers extends the kernel's default request-header allowlist
+   * (webhookin.DefaultHeaders) for this route: lowercase names, a trailing
+   * "*" matches a prefix (e.g. "x-acme-*"). Optional.
+   */
+  headers?: string[];
+}
+/**
+ * EdgeDevice describes one class of local hardware (a cash recycler, a card
+ * terminal, a scale, a fiscal printer) the addon can drive through a
+ * persistent channel a store-local agent maintains. The agent itself is not
+ * part of the addon (it is not WASM — it needs USB/serial/vendor-SDK access
+ * and a socket open 24/7); the addon only declares the contract the host's
+ * edge gateway enforces: which events it can receive and which commands it
+ * can send to a paired device.
+ */
+export interface EdgeDevice {
+  /**
+   * Key identifies the device class within the addon (e.g. "cashdro",
+   * "mp_point"). Sessions and pairing reference "<addon_key>.<device_key>".
+   */
+  key: string;
+  /**
+   * Label is the human/i18n name shown in the device pairing UI.
+   */
+  label?: string;
+  /**
+   * Kind is an optional legacy/UI hint: when set to one of the v1 closed
+   * categories ("cash_recycler" | "card_terminal" | "scale" |
+   * "fiscal_printer" | "receipt_printer") it still drives the pairing
+   * wizard's copy/icon. It is no longer the discriminator an addon MUST
+   * use to describe what a device can do — Capabilities is. An addon may
+   * set Kind to any value (including one outside the legacy set, or leave
+   * it empty) without failing validation; a value inside the legacy set
+   * keeps the existing UI treatment, anything else is opaque metadata the
+   * host does not interpret.
+   */
+  kind?: string;
+  /**
+   * Capabilities is the open list of operations this device class exposes
+   * (e.g. "print", "scan", "weigh", "pay_terminal", "open_cash_drawer").
+   * This is the same "open list of free strings" primitive as
+   * Manifest's top-level Capabilities/RequiresCapabilities: any addon can
+   * declare a new capability string without a kernel change. The host's
+   * edge gateway and the local agent's `hello` frame both key off these
+   * strings (not Kind) to match a device instance to the operations an
+   * addon needs — Kind never gates dispatch. Must be non-empty.
+   */
+  capabilities: string[];
+  /**
+   * Transport is how the local agent reaches the host. "ws" is the only
+   * value accepted in v1.
+   */
+  transport: string;
+  /**
+   * PairingCredentials enumerates the fields an operator supplies to bind a
+   * physical device/agent instance to an org+branch (a serial number, a
+   * branch_id, a pairing PIN shown on the agent's local UI). Reuses the
+   * Setting shape exactly like Connector.Credentials — same dynamic_select/
+   * FormLayout machinery, no new form primitive.
+   */
+  pairing_credentials?: Setting[];
+  /**
+   * FormLayout groups PairingCredentials into sections or a wizard for the
+   * pairing UI (same shape Connector.FormLayout uses).
+   */
+  form_layout?: FormLayout;
+  /**
+   * Events lists the event types this device kind can push. The host
+   * validates an inbound frame's type against this list before dispatching
+   * to Do; unknown types are dropped and logged, never routed.
+   */
+  events?: EdgeDeviceEvent[];
+  /**
+   * Commands lists the operations the addon can send to a paired device.
+   */
+  commands?: EdgeDeviceCommand[];
+  /**
+   * HeartbeatIntervalSeconds is the max gap the host tolerates between
+   * agent heartbeats before marking the device session "offline". 0 = host
+   * default (a kernel-side floor, not addon-tunable below it — prevents an
+   * addon from disabling liveness checks).
+   */
+  heartbeat_interval_seconds?: number /* int */;
+}
+/**
+ * EdgeDeviceEvent is one inbound event type a paired device can push.
+ */
+export interface EdgeDeviceEvent {
+  /**
+   * Type is the event name (e.g. "cash.deposited", "payment.approved",
+   * "device.error"). Namespaced by convention "<noun>.<verb_past>".
+   */
+  type: string;
+  /**
+   * Do is the dispatchable handler reference invoked with the event
+   * payload once validated: "wasm:<export>" | "webhook:<key>" |
+   * "compiled:<fn>" — same grammar and prefix set as InboundWebhook.Do.
+   */
+  do: string;
+  /**
+   * Idempotent, when true, tells the host this event is safe to redeliver
+   * (the addon dedupes by an id in the payload). Financial events (cash
+   * deposited, payment approved) SHOULD declare an idempotency key field
+   * in their payload schema and set this true.
+   */
+  idempotent?: boolean;
+}
+/**
+ * EdgeDeviceCommand is one outbound operation the addon can request against a
+ * paired device. The addon issues it from its own action handler (already
+ * covered by the normal wasm export whitelist); the host acks receipt by the
+ * agent within TimeoutSeconds and the physical result arrives later as a
+ * correlated Event, so Command carries no handler reference of its own.
+ */
+export interface EdgeDeviceCommand {
+  /**
+   * Type is the command name (e.g. "open_session", "dispense_change",
+   * "cancel_session").
+   */
+  type: string;
+  /**
+   * TimeoutSeconds bounds how long the host waits for the agent to ack
+   * (not for the physical operation to finish — that arrives later as an
+   * Event). 0 = host default.
+   */
+  timeout_seconds?: number /* int */;
+}
+/**
+ * DesktopClient describes one per-user desktop/mobile agent the product ships
+ * as a separate installer (Tauri, Electron, native). Hub serves the binaries;
+ * Ops/Hub UIs surface the download CTA from this declaration so adding a new
+ * product agent is a manifest change, not a landing hardcode.
+ */
+export interface DesktopClient {
+  /**
+   * Key identifies the client within the addon/preset (e.g. "agent").
+   */
+  key: string;
+  /**
+   * Label is the human/i18n title shown on download CTAs.
+   */
+  label?: string;
+  /**
+   * Auth is how the client identifies the worker. v1 accepts only
+   * "ops_user" (Ops email/password). Not an edge pairing flow.
+   */
+  auth: string;
+  /**
+   * DownloadURL is an https URL for the Hub download page or the
+   * /latest/ artifact directory (e.g.
+   * "https://hub.asteby.com/downloads/visor" or
+   * ".../downloads/visor-agent/latest/").
+   */
+  download_url: string;
+  /**
+   * ListOnHub, when true, asks Hub's /downloads index to list this client
+   * as a platform-wide download. Product-tied agents leave this false and
+   * rely on the catalog/preset page CTA.
+   */
+  list_on_hub?: boolean;
+  /**
+   * Brand is an optional accent hex for Hub download chrome (e.g. "#0EA5E9").
+   */
+  brand?: string;
+  /**
+   * Logo is an optional public path or Hub-relative asset hint for the
+   * download UI (e.g. "/visor.svg").
+   */
+  logo?: string;
+  /**
+   * Files optionally names OS installers when DownloadURL points at an
+   * artifact directory. Hub may also probe disk; this is a hint.
+   */
+  files?: DesktopClientFiles;
+}
+/**
+ * DesktopClientFiles names installer filenames under DownloadURL (when that
+ * URL is a directory of artifacts). Values are bare filenames — no path
+ * separators.
+ */
+export interface DesktopClientFiles {
+  mac?: string;
+  windows?: string;
+  linux?: string;
 }
 /**
  * Frontend describes the federated UI bundle the host loads at runtime for
@@ -99,6 +1041,19 @@ export interface Frontend {
    * ("eager" | "route" | "action" | "idle"). Empty = host default (action).
    */
   load?: string;
+  /**
+   * SDK is the semver range of @asteby/metacore-sdk the bundle was built
+   * against (e.g. "^4.0.0"). The host checks it against the SDK it exposes
+   * to remotes (HostCapabilityProfile.SDKVersion) before install. Empty = no
+   * constraint beyond compatibility.requires "sdk".
+   */
+  sdk?: string;
+  /**
+   * Pages are federated pages of this remote, each with its own expose,
+   * route, layout and permission. Requires Format "federation". Empty = the
+   * addon registers its routes at runtime (registerRoute), as before.
+   */
+  pages?: FrontendPage[];
 }
 /**
  * Metadata is identity + presentation + authorship.
@@ -156,15 +1111,46 @@ export interface Icon {
  */
 export interface Compatibility {
   requires: Requirement[];
+  /**
+   * Provides lists other addon keys this package satisfies for install /
+   * marketplace purposes. Hosts that already have this addon installed
+   * treat those keys as covered (e.g. full "hr" provides "hr_lite") so the
+   * catalog does not offer a conflicting twin under the same display name.
+   */
+  provides?: string[];
+  /**
+   * HostCapabilities names host features the addon needs present before it
+   * installs (e.g. "ui.maps"). The host checks them with
+   * manifest.EvaluateCompatibility. Capabilities implied by what the manifest
+   * declares (a view_type "map" implies "ui.views.map", a shell page
+   * "ui.embedded_pages"…) are added automatically and need not be listed.
+   */
+  host_capabilities?: string[];
 }
 /**
- * Requirement is a single peer dependency. Key "kernel" is reserved.
+ * Requirement is a single peer dependency. Key "kernel" is reserved for the
+ * host kernel range (→ Manifest.Kernel). Keys "sdk", "metacore-sdk", and
+ * "@asteby/metacore-sdk" are reserved for the host metacore-sdk range
+ * (→ Manifest.SDK). Key "metacore-kernel" is reserved for the host's
+ * metacore-kernel Go module release (→ Manifest.Runtime), e.g. ">=0.154.1"
+ * when the addon relies on a primitive shipped in that release. All other keys
+ * are installable peer addons.
  */
 export interface Requirement {
   key: string;
   version: string;
   optional?: boolean;
   reason?: string;
+  /**
+   * Enables lists the capabilities of THIS addon that only work while the
+   * required addon is installed, so the host can hide or disable them when
+   * it is missing instead of letting them fail at runtime. Valid only with
+   * Optional (a mandatory require already blocks the install). Each item is
+   * "action:<ModelKey>.<action_key>" (a contributions.actions entry of this
+   * manifest); "nav:<key>" and "widget:<key>" are reserved and accepted, not
+   * yet resolved. See ParseEnableRef and Manifest.OptionalRequirements.
+   */
+  enables?: string[];
 }
 /**
  * Tenancy declares per-tenant data isolation strategy.
@@ -191,10 +1177,425 @@ export interface Model {
   columns: Column[];
   indices?: Index[];
   foreign_keys?: ForeignKey[];
+  /**
+   * Extensions attaches columns to another addon's model through a jsonb bag
+   * on the target (see ModelExtension). Deprecated for anything that needs a
+   * type, an index or its own lifecycle: declare a model with Extends instead.
+   */
   extensions?: ModelExtension[];
+  /**
+   * Extends makes this model a 1:1 EXTENSION TABLE of another model,
+   * "<addon_key>.<ModelKey>" (e.g. "products.Product"). The installer creates
+   * the table with `id` as both primary key and foreign key to the target's id
+   * (ON DELETE CASCADE) plus the tenancy column, so the model declares neither;
+   * the dynamic service joins it on read and upserts it in the same
+   * transaction as the target on write, projecting each column as
+   * "<ThisModelKey>.<column>". The target's addon must list the target model
+   * in its extension_points.model_extensions_accepted. Unlike Extensions (a jsonb bag
+   * on the target) the columns are real: typed, indexable, validated by the
+   * kernel and dropped with this addon's schema on uninstall. Empty = an
+   * ordinary model. See CONTRACT-item-master.md §3.1.
+   */
+  extends?: string;
+  /**
+   * SearchKeys declares normalized search keys composed from this model's
+   * columns, e.g. a tire size "{section_width_mm}/{aspect_ratio}R{rim_diameter_in}".
+   * The installer materializes each as an indexed generated column and the
+   * list search resolves free text typed in any spacing/separator variant of
+   * the format to it ("205/55r16", "2055516", "205 55 16"). Optional.
+   */
+  search_keys?: SearchKey[];
+  /**
+   * AttributeClasses groups an extension table's columns (its
+   * characteristics) into named classes, SAP-classification style: which
+   * categories use a class is organization data (the category's assigned
+   * classes), not manifest. A column shows on the form of a record whose
+   * category carries its class (VisibleWhen.Class), in the class's sections.
+   * Only valid on a model with Extends. Optional.
+   */
+  attribute_classes?: AttributeClass[];
+  /**
+   * Relations declares the INVERSE edges of this model — the child records a
+   * detail page should be able to list under it (e.g. a Customer's vehicles,
+   * addresses and attachments). Unlike ForeignKeys (which declare the physical
+   * FK constraints carried by the OWNING column) Relations are owner-rooted
+   * view hints the host projects into served TableMetadata so the SDK can
+   * render a "related records" panel with zero per-app wiring. Optional —
+   * flat models omit it and keep the legacy behaviour. See ModelRelation for
+   * the supported shapes (including polymorphic children via Scope).
+   */
+  relations?: ModelRelation[];
+  /**
+   * Seed declares DEFAULT seed data the installer inserts on install,
+   * analogous to how it runs migrations — but declarative and idempotent.
+   * On install the host upserts/skips each row keyed by Seed.Key (a natural
+   * key column) scoped to the installing org, so re-installs and upgrades do
+   * not duplicate rows. Optional — models without seed data omit it and are
+   * unaffected. See Seed for the shape.
+   */
+  seed?: Seed;
+  /**
+   * Formulas declare columns whose value is COMPUTED from other columns on
+   * the SAME row via a pure arithmetic expression, evaluated by the kernel
+   * before every create/update write (Tier-2 of the declarative compute
+   * engine). Optional — models without computed columns omit it. See Formula
+   * for the shape and the security contract on Expr.
+   */
+  formulas?: Formula[];
+  /**
+   * Sequences declare atomic, gap-tolerant counters the kernel maintains per
+   * org (or per branch) for this model — the primitive behind invoice folios,
+   * remission numbers, service-order tickets, etc. Each Sequence has a Key, a
+   * Scope (org|branch) and a Format template ("A-{seq:06}"). A Column may bind
+   * to a sequence via Column.Sequence so the next value is stamped
+   * automatically on create; a wasm handler can also pull one via the
+   * `sequence_next` host import. Optional — models without folios omit it.
+   */
+  sequences?: Sequence[];
+  /**
+   * FormLayout declares declarative grouping for the model's native create/edit
+   * form — collapsible sections on one scroll (mode "sections") or a step
+   * wizard (mode "steps"). Columns bind to a section/step via Column.Section.
+   * Pure UI metadata; the DDL and write planes ignore it. Nil = a flat form
+   * (the legacy behaviour). See FormLayout.
+   */
+  form_layout?: FormLayout;
+  /**
+   * OptionDisplay declares how this model's rows read as picker options:
+   * title, subtitle, image, right-aligned metrics with format and tone
+   * (own columns or values another addon contributes via option_metrics[])
+   * and badges. Resolved server-side by the options endpoint into each
+   * option's `display`. Nil = the plain option. See OptionDisplay.
+   */
+  option_display?: OptionDisplay;
+  /**
+   * DocumentForms declares the guided, per-document-type create flow the SDK
+   * renders instead of the generic create modal: one card per type (invoice,
+   * credit note, payment receipt...), the type's own fields and an optional
+   * line-items step. Pure UI metadata; the DDL and write planes ignore it.
+   * Nil = the generic create modal (the legacy behaviour). See DocumentForms
+   * and docs/document-forms.md.
+   */
+  document_forms?: DocumentForms;
+  /**
+   * Import declares the model's spreadsheet-import template: the columns of
+   * the generated file and the headers accepted when reading it back. Nil
+   * falls back to the spec the kernel derives from the model's importable
+   * columns, so an addon only declares this to get friendlier headers,
+   * example values, header aliases or generated cells. Pure UI/ingest
+   * metadata; the DDL and write planes ignore it. See ImportSpec.
+   */
+  import?: ImportSpec;
+  /**
+   * Locking selects the row-locking strategy the kernel applies on Update.
+   *   ""     — no extra locking (default; the legacy behaviour).
+   *   "row"  — the kernel wraps the whole Update in a transaction and loads
+   *            the target row with SELECT … FOR UPDATE before evaluating the
+   *            column Constraints, so an increment-then-check guard (e.g.
+   *            "quantity >= 0" after a concurrent decrement) is race-free: two
+   *            transactions touching the same row serialise instead of both
+   *            reading a stale value. Only meaningful together with column
+   *            Constraints; harmless otherwise.
+   */
+  locking?: string;
+  /**
+   * ReasonRequired makes the kernel refuse a destructive operation on this
+   * model unless the caller states WHY (PER-4): soft-deleting a row and/or
+   * invoking the named actions (cancel, void, refund…). The reason travels in
+   * the request (`reason` query/body/header on DELETE, `reason` in an action
+   * payload) and is stamped on the canonical event (CanonicalEvent.Reason), so
+   * the activity log answers who removed/cancelled what, when, and why. Nil =
+   * no reason needed (the legacy behaviour). See ReasonRequired.
+   */
+  reason_required?: ReasonRequired;
+  /**
+   * AppendOnly marks the model as an append-only ledger: rows may be created
+   * but never modified or removed. The kernel refuses every UPDATE and DELETE
+   * on it (REST, the wasm data_mutate / data_batch imports and their `inc`
+   * form) with the stable code "append_only", so a payment book, a stock or
+   * audit ledger cannot be rewritten after the fact — a mistake is fixed with
+   * a reversing row, not by editing history. Incompatible with a stage
+   * machine (a stage is a mutation by definition) and with model extensions.
+   */
+  append_only?: boolean;
+  /**
+   * Audit controls the kernel's audit-column standard (created_at, updated_at,
+   * deleted_at, created_by_id, updated_by_id, deleted_by_id — docs/audit-columns.md).
+   * The kernel adds those columns to EVERY model whether or not the manifest
+   * declares them, so a migration may assume them. nil/true (the default) keeps
+   * the standard; `audit: false` opts a purely technical table (a cache, a join
+   * table nobody edits) out of the *who* columns and the soft-delete tombstone,
+   * leaving only the historical created_at/updated_at pair. An append_only
+   * model already gets the reduced ledger set (created_at, created_by_id).
+   */
+  audit?: boolean;
+  /**
+   * Rules declare CROSS-RECORD guards: predicates over the PARENT row this
+   * model references by FK (a payment over a closed session, payments summing
+   * past the order total). Evaluated inside the same transaction as the write
+   * on every path (CRUD and wasm data_mutate/data_batch); a violation rolls it
+   * back with 422 constraint_violation + ErrorKey. See CrossRule.
+   */
+  rules?: CrossRule[];
+  /**
+   * StageField names the column that carries the model's pipeline stage
+   * (e.g. "stage"). Declaring it — together with Stages — turns the model
+   * into a stage machine: the kernel derives a `status` display type for the
+   * column from Stages (colour/label/order, no separate `options` needed) and,
+   * on every Update that changes the column, validates the move against
+   * Transitions and fires the matching OnTransition hooks. Empty = the model
+   * has no stage machine (the default; flat models are unaffected).
+   */
+  stage_field?: string;
+  /**
+   * Stages enumerates the ordered lifecycle stages of the StageField column.
+   * Each Stage supplies the value/label/colour the kernel projects onto the
+   * derived `status` display. Empty = no stage machine (back-compat): the
+   * Update path applies no transition restriction at all.
+   */
+  stages?: Stage[];
+  /**
+   * Transitions whitelists the allowed (from → to) stage moves. On an Update
+   * that changes StageField, the kernel rejects a move that is not listed here
+   * with HTTP 422 (invalid_transition). Only enforced when Stages is non-empty.
+   */
+  transitions?: Transition[];
+  /**
+   * OnTransition declares Bitrix-style hooks the kernel fires AFTER a valid
+   * stage move is persisted and BEFORE the canonical event. Each hook matches a
+   * (from, to) pair ("*" = wildcard) and dispatches Do (a `wasm:`/`webhook:`/
+   * `compiled:` handler reference) with the {before, after, actor, org} payload.
+   */
+  on_transition?: TransitionHook[];
+  /**
+   * Detail declares the panels of the record detail page (map, timeline,
+   * chart, relation, stats or a federated custom component). Pure UI
+   * metadata: the host serves it with the model's table metadata and needs
+   * host capability "ui.detail_panels". Nil = the default detail page.
+   */
+  detail?: ModelDetail;
+}
+/**
+ * Stage is one lifecycle stage of a model's StageField column. The kernel
+ * projects the set onto the column's derived `status` display (each Stage
+ * becoming a value/label option with a colour), ordered by Order, so a board
+ * or a status badge renders without a separate `options` declaration.
+ */
+export interface Stage {
+  /**
+   * Key is the stored column value for this stage (e.g. "in_progress").
+   */
+  key: string;
+  /**
+   * Label is the human/i18n label rendered for the stage.
+   */
+  label?: string;
+  /**
+   * Color is a colour token (e.g. "slate", "blue", "green") for the badge.
+   */
+  color?: string;
+  /**
+   * Order positions the stage left-to-right on a board / in a status select.
+   */
+  order?: number /* int */;
+  /**
+   * IsFinal marks a terminal stage (no outgoing transitions expected).
+   */
+  is_final?: boolean;
+  /**
+   * Locked makes a record in this stage read-only: the kernel rejects an
+   * Update that changes any field other than the stage itself (which still
+   * has to follow a declared transition) and a Delete, with 422
+   * `record_locked`. For documents that must not change once issued — a
+   * posted journal entry, a stamped invoice. Writes from an action (wasm
+   * data_mutate) are not this gate's business. Opt-in: IsFinal alone keeps
+   * the record editable.
+   */
+  locked?: boolean;
+}
+/**
+ * Transition is one allowed move between two stages of a stage machine. From
+ * and To are Stage keys; the kernel rejects any Update that moves the
+ * StageField to a (from, to) pair not present in the model's Transitions.
+ */
+export interface Transition {
+  from: string;
+  to: string;
+}
+/**
+ * TransitionHook is a declarative side effect the kernel fires when a record
+ * transitions between stages. From/To select the matching moves ("*" matches
+ * any stage).
+ * A hook carries Set, Do, or both — at least one is required:
+ *   - Set assigns fields on the transitioning row itself, with no handler
+ *     (Bitrix-style "on entering this stage, stamp these fields"). It is applied
+ *     BEFORE the row is persisted, so the writes ride the same Save and appear in
+ *     the Issue.updated canonical event (subscribers see them). Value semantics:
+ *     a scalar is assigned directly; on a json/array column a "+tag" string
+ *     appends idempotently and a "-tag" string removes. When Set is present Do
+ *     becomes optional; when both are present Set is applied before Do dispatches.
+ *   - Do references the handler to dispatch as
+ *     `wasm:<export>` | `webhook:<key>` | `compiled:<fn>`.
+ * When Required is true a Do dispatch failure rolls back the whole transition
+ * (HTTP 422); otherwise the failure is logged and the transition stands.
+ */
+export interface TransitionHook {
+  from: string;
+  to: string;
+  set?: { [key: string]: any};
+  do?: string;
+  required?: boolean;
+}
+/**
+ * Formula declares a column on the owning model whose value the kernel
+ * computes from a pure arithmetic expression over the SAME row's other
+ * columns, evaluated before every create/update DB write. This is Tier-2 of
+ * the declarative compute engine (e.g. SalesOrderItem.subtotal =
+ * quantity * unit_price - discount), so the parent's Tier-1 rollup sums
+ * already-correct values.
+ * SECURITY: Expr is parsed with a strict allowlist — only identifiers
+ * ([A-Za-z_][A-Za-z0-9_]*) that resolve to real columns on the model,
+ * decimal numbers, whitespace, the operators + - * / and parentheses. Any
+ * other character (quotes, semicolons, comments, function calls) is rejected
+ * at validation time.
+ */
+export interface Formula {
+  /**
+   * Target is the column this formula writes. Must be a declared column on
+   * the owning model.
+   */
+  target: string;
+  /**
+   * Expr is the arithmetic expression, e.g. "quantity * unit_price - discount".
+   * Required for the arithmetic tiers; MUST be empty when Tier is 3 (the wasm
+   * handler replaces the expression entirely).
+   */
+  expr?: string;
+  /**
+   * Tier selects the compute engine for this formula:
+   *   0 / 2 — the default pure-arithmetic Tier-2 evaluator over Expr.
+   *   3     — a wasm handler computes the value: the kernel invokes Handler
+   *           with the (merged) row as payload and writes the returned value
+   *           into Target. Use it when the computation needs data or logic an
+   *           arithmetic expression cannot express (price-list resolution,
+   *           tiered margins, rounding policies).
+   */
+  tier?: number /* int */;
+  /**
+   * Handler is the Tier-3 backend, "wasm:<export>" — an export the addon's
+   * wasm module declares. Required (and only allowed) when Tier is 3. The
+   * invocation is host-wired (dynamic.HookRegistry.SetFormulaInvoker); when no
+   * invoker is configured the formula is skipped, never a hard failure.
+   */
+  handler?: string;
+}
+/**
+ * Seed is a model's declarative default-data block. The installer inserts Rows
+ * on install, treating Key as the natural key for idempotency: a row is only
+ * inserted when no existing row (for the installing org) already carries that
+ * Key value. Key MUST name a declared column on the owning model; each entry in
+ * Rows is an object mapping column name → value.
+ */
+export interface Seed {
+  /**
+   * Key is the column used for idempotency — the natural key the installer
+   * matches on to decide whether a row already exists (upsert/skip).
+   */
+  key: string;
+  /**
+   * Rows are the default records, each an object of column name → value.
+   */
+  rows: { [key: string]: any}[];
+}
+/**
+ * ModelRelation is one inverse 1:N / N:M edge rooted at the owning Model. The
+ * host projects it into modelbase.TableMetadata.Relations so a detail page can
+ * list the owner's child records.
+ * 	Kind = "one_to_many"  — the owner has many rows on Through; ForeignKey is
+ * 	                        the column on Through pointing back at the owner.
+ * 	Kind = "many_to_many" — Through is the target model joined to the owner;
+ * 	                        ForeignKey is the join column pointing at the owner.
+ * Scope adds a static equality filter applied to the child query, which is what
+ * makes POLYMORPHIC children addressable: an Attachment table shared by many
+ * owners carries an `owner_model` discriminator, so a Customer's attachments
+ * relation declares Scope {"owner_model":"Customer"} alongside
+ * ForeignKey "owner_id". Empty Scope = no extra filter (the common case).
+ */
+export interface ModelRelation {
+  name: string; // stable identifier, e.g. "vehicles"
+  kind: string; // "one_to_many" | "many_to_many"
+  through: string; // child model key, e.g. "Vehicle"
+  foreign_key: string; // child column pointing back, e.g. "customer_id"
+  scope?: { [key: string]: string}; // static child filter for polymorphic children
+  label?: string; // i18n key / human label for the panel
+  /**
+   * Readonly declares that the relation panel in the UI must not allow
+   * creating/editing/deleting child rows. Used for relations pointing at an
+   * append-only ledger (e.g. an inventory kardex). Optional; defaults false.
+   */
+  readonly?: boolean;
+  /**
+   * Embed declares that this relation is a COMPOSITION: its child rows are
+   * part of the parent record (a document's LINES), so the record modal
+   * renders them inline as a sub-table. Opt-in: the modal embeds ONLY the
+   * relations that declare it. Relations pointing at large, independently
+   * managed collections (stock movements, transfers, a kardex) must leave it
+   * false so opening the parent never drags thousands of rows into the form;
+   * they remain reachable from the model's own page / the detail view.
+   * Optional; defaults false. Only meaningful for one_to_many.
+   */
+  embed?: boolean;
+  /**
+   * Rollups declare PARENT columns whose value is an aggregate over this
+   * relation's child rows (Tier-1 of the declarative compute engine, akin to
+   * a Salesforce Roll-Up Summary or an Odoo stored computed field). On every
+   * child create/update/delete the kernel recomputes each rollup target on
+   * the affected parent via a single UPDATE. Optional — relations without
+   * aggregates omit it. Only meaningful for one_to_many. See Rollup.
+   */
+  rollups?: Rollup[];
+}
+/**
+ * Rollup declares a PARENT column whose value the kernel maintains as an
+ * aggregate (sum/count/avg/min/max) over the child rows of the relation it is
+ * attached to. This is Tier-1 of the declarative compute engine.
+ * Either From (a single child column) or Expr (a child arithmetic expression)
+ * supplies the aggregated value; fn=count ignores both. Exactly one of
+ * From/Expr may be set (count may omit both).
+ * SECURITY: Expr goes RAW into the aggregate SQL, so it is parsed with the
+ * same strict arithmetic allowlist as Formula.Expr (identifiers resolving to
+ * real child columns, decimal numbers, + - * / and parentheses only). Any
+ * other character is rejected at validation time, and every identifier is
+ * double-quoted when the SQL is built.
+ */
+export interface Rollup {
+  /**
+   * Target is the PARENT column the aggregate is written to. Must be a
+   * declared column on the model owning the relation.
+   */
+  target: string;
+  /**
+   * Fn is the aggregate function: sum (default) | count | avg | min | max.
+   */
+  fn?: string;
+  /**
+   * From is a single child column to aggregate. Mutually exclusive with Expr.
+   */
+  from?: string;
+  /**
+   * Expr is a child arithmetic expression to aggregate, e.g.
+   * "subtotal + tax_amount". Mutually exclusive with From.
+   */
+  expr?: string;
 }
 /**
  * Column is a single physical column declaration.
+ * Beyond the DDL plane (Name/Type/PrimaryKey/NotNull/Default) the struct also
+ * carries OPTIONAL display hints the host projects onto the served
+ * modelbase.ColumnDef so the SDK can render a column richly (a clickable URL,
+ * the creator's avatar, a currency, a status badge) without per-app wiring.
+ * These hints are pure UI metadata: they never touch the SQL/DDL plane — the
+ * installer ignores them exactly as it ignores Label and Comment.
  */
 export interface Column {
   name: string;
@@ -204,6 +1605,499 @@ export interface Column {
   default?: any;
   label?: string;
   comment?: string;
+  /**
+   * Display selects the cell renderer the SDK applies to the column's
+   * values, mapping to modelbase.ColumnDef.CellStyle. Examples: url, email,
+   * phone, currency, creator, status, badge, tags, color, code, percent,
+   * image, boolean, date. Empty = inferred from name/type (see auto-detect
+   * in dynamic.DeriveTableColumns) or the plain text fallback.
+   */
+  display?: string;
+  /**
+   * Widget selects the FORM input the SDK renders for this column in the
+   * create/edit modal, mapping to modelbase.FieldDef.Type/Widget. It is the
+   * DDL-agnostic input plane (Display is the read-only cell plane): a column
+   * stored as `text` can declare widget "image" or "upload" so a product
+   * photo / logo / attachment renders a file picker (upload → store → save
+   * the URL) instead of a raw text box. Other useful values: textarea,
+   * select, email, url, date, number, boolean, dynamic_select. Empty = the
+   * host infers the widget from the storage type plus the name heuristics in
+   * dynamic.DeriveFormFields (which already promote logo/image/photo columns
+   * to a picker). Pure UI metadata; ignored by the DDL plane.
+   */
+  widget?: string;
+  /**
+   * DisplayConfig carries renderer-specific options (maps to
+   * modelbase.ColumnDef.StyleConfig). Common keys: label_field, url_field,
+   * currency, decimals, base_path, new_tab, name_field, max_length.
+   * A `base_path` here is additionally projected onto ColumnDef.BasePath.
+   */
+  display_config?: { [key: string]: any};
+  /**
+   * Tooltip is a path to the primary text rendered on hover/secondary slot
+   * (e.g. the creator's name). Maps to modelbase.ColumnDef.Tooltip.
+   */
+  tooltip?: string;
+  /**
+   * Description is a path to a subtitle (e.g. the creator's email). Maps to
+   * modelbase.ColumnDef.Description.
+   */
+  description?: string;
+  /**
+   * Ref turns the column into a FOREIGN-KEY picker: it names the target
+   * model key or table (e.g. "Customer" or "addon_customers") the column
+   * points at. The host projects it onto modelbase.ColumnDef.Ref /
+   * modelbase.FieldDef.Ref so the SDK renders a searchable dynamic_select
+   * in the native create/edit form (resolving options against
+   * `/api/options/:Ref`) — no per-app action required. It is the explicit,
+   * declarative twin of the host's belongs_to auto-derivation: an author
+   * states the relation directly on the column instead of relying on name
+   * heuristics. Pure UI metadata; the DDL/install plane ignores it.
+   */
+  ref?: string;
+  /**
+   * Multiple opts a Ref column into the MULTI-select picker (SDK
+   * DynamicMultiSelectField) instead of the default single-value
+   * dynamic_select — the column's value is then a plain JSON array of
+   * target ids, so the backing column type must be jsonb. Only meaningful
+   * alongside Ref; pure UI metadata, ignored by the DDL plane.
+   */
+  multiple?: boolean;
+  /**
+   * Options declares a STATIC select for the column: a fixed value/label
+   * choice list (with optional icon/color/image visuals per FieldOption,
+   * from #127) the host projects onto modelbase.ColumnDef.Options /
+   * modelbase.FieldDef.Options so the SDK renders a plain select in the
+   * native create/edit form — again with no custom action. Use Ref for a
+   * relation picker and Options for a hardcoded enum (status, type, …).
+   * Both are pure UI metadata and never touch the SQL/DDL plane.
+   * Options may ALSO be the OBJECT form (DynamicOptions): a dependent-picker
+   * declaration {source, filter_by, value, label_ref, description} that the
+   * host projects onto modelbase.FieldOptionsConfig so a dynamic_select column
+   * scopes its candidates by a sibling field and resolves its label from a
+   * related model. The array form (static enum) and object form (dynamic
+   * source) are mutually exclusive on one column.
+   */
+  options?: FieldOptions;
+  /**
+   * Scan opts the column's create/edit form field into CAMERA BARCODE SCANNING:
+   * the SDK shows a camera button that scans a barcode to FILL the input fast
+   * (e.g. a product SKU) when the browser supports it. The host projects it
+   * onto modelbase.ColumnDef.Scan → FieldDef.Scan. Country/business-agnostic UI
+   * metadata; the DDL/install plane ignores it. Optional.
+   */
+  scan?: boolean;
+  /**
+   * DependsOn names a SIBLING column whose current value supplies the cascade
+   * `filter_value` for this column's dependent picker (used with the
+   * Options object form). The host projects it onto modelbase.ColumnDef.DependsOn
+   * (json `depends_on`) so the SDK re-fetches the options whenever the
+   * depended-on field changes. Empty = no cascade (lists everything). Optional.
+   */
+  depends_on?: string;
+  /**
+   * OptionFilter hides options of this column's relation / dynamic picker
+   * (e.g. {"field":"status","not_in":["cancelada"]}). Evaluated by the SDK over
+   * the extra columns /options returns, so list them in the options object's
+   * extra_columns. Pure UI metadata; the DDL plane ignores it. Optional.
+   */
+  option_filter?: OptionFilter;
+  /**
+   * OptionsSource declares a DYNAMIC select for the column: instead of a
+   * hardcoded Options list, it names a PROVIDER key (e.g.
+   * "registered_models", "installed_addons") the HOST registers and resolves
+   * at metadata-serve time, materialising the localized value/label list
+   * onto the served modelbase Options. The kernel itself implements no
+   * providers — it only carries the key through the v3 → host conversion
+   * (manifest.ColumnDef.OptionsSource → modelbase OptionsSource) so any host
+   * in the ecosystem can plug its own sources. Open enum (schema pattern
+   * ^[a-z][a-z0-9_]*$): an unknown key simply yields no options on hosts
+   * that don't register it. Use Ref for a row-level relation picker, Options
+   * for a hardcoded enum, OptionsSource for host-computed lists. Pure UI
+   * metadata; the DDL/install plane ignores it.
+   */
+  options_source?: string;
+  /**
+   * Constraints declare GUARD predicates the kernel evaluates inside the
+   * create/update transaction, BEFORE the row is written. Each is a boolean
+   * comparison over the SAME row's columns (e.g. "quantity >= 0" or
+   * "price >= cost"); a false result aborts the write with a 422 carrying the
+   * ErrorKey. This is the declarative twin of a CHECK constraint that the
+   * kernel enforces at the application layer so an addon gets stock-never-
+   * negative / price-≥-cost without a wasm handler or raw db_exec. Combine with
+   * the owning Model.Locking = "row" to make an increment-then-check guard
+   * safe under concurrency (SELECT … FOR UPDATE). Optional; the SAME strict
+   * arithmetic allowlist as Formula.Expr governs each side of the comparison.
+   */
+  constraints?: Constraint[];
+  /**
+   * Sequence binds this column to one of the owning Model.Sequences by key: on
+   * create, when the column is empty, the kernel stamps the next formatted
+   * folio value automatically. The column is treated as system-generated (like
+   * Readonly) for form derivation. Empty = the column carries no auto-folio.
+   */
+  sequence?: string;
+  /**
+   * Generated declares a POSTGRES STORED GENERATED column: a pure arithmetic
+   * expression over OTHER columns of the SAME row (e.g. "quantity - reserved")
+   * that Postgres maintains on every write. The kernel emits it as
+   * `GENERATED ALWAYS AS (<expr>) STORED`, so the value is path-independent and
+   * SQL-native (filters/sorts/aggregates/exports in the database, no compute
+   * hook or wasm handler). The expression is validated with the SAME strict
+   * arithmetic allowlist as Formula.Expr (computeexpr): only +-*\/, parentheses,
+   * numbers, and identifiers resolving to sibling columns — no self-reference.
+   * A STORED generated column is INCOMPATIBLE with Default and NotNull: the DDL
+   * carries no DEFAULT and is never declared NOT NULL (Postgres rejects both on
+   * a generated column). Empty = ordinary column. Optional.
+   */
+  generated?: string;
+  /**
+   * VisibleWhen declares CONDITIONAL VISIBILITY for this column in the native
+   * create/edit modal: the SDK renders the field only when a SIBLING field's
+   * current value matches the predicate. It is pure UI-plane metadata (like
+   * Widget/Display) the host projects onto modelbase.ColumnDef/FieldDef.VisibleWhen
+   * — the DDL and write planes ignore it. A hidden field's value never gates
+   * submit (no required-check while hidden). Shape:
+   *   "visible_when": {"field": "rule_scope", "equals": "product"}
+   *   "visible_when": {"field": "rule_scope", "in": ["product", "category"]}
+   * Empty = always visible. Optional.
+   */
+  visible_when?: VisibleWhen;
+  /**
+   * Searchable asks the installer for a btree index on this column and makes
+   * it a list filter / facet candidate. Meant for extension characteristics
+   * (a tire's rim diameter) that are searched by value. Scalar types only.
+   * Optional.
+   */
+  searchable?: boolean;
+  /**
+   * Section assigns this column to a form_layout section/step by its key: the
+   * SDK places the field's input inside the matching Model.FormLayout.Sections
+   * entry (a collapsible block in mode "sections", a wizard step in mode
+   * "steps"). Columns without a Section fall into an implicit "General" block
+   * (or the first declared one). It is pure UI-plane metadata the host projects
+   * onto modelbase.ColumnDef/FieldDef.Section — the DDL and write planes ignore
+   * it. Empty = the implicit General block. Optional.
+   */
+  section?: string;
+  /**
+   * Visibility scopes where the column is rendered, with the same closed set
+   * as the host ColumnDef.Visibility:
+   *   ""/"all" — everywhere (default);
+   *   "table"  — only the list/index table (left out of the create/edit form
+   *              and of embedded line subtables);
+   *   "modal"  — only the create/edit form;
+   *   "list"   — only API payloads: no table column, no form field.
+   * Pure UI-plane metadata: the value is still stored, read and written. Use
+   * "list" for an internal mirror (money in minor units next to its currency
+   * column) that the user never needs to see. Optional.
+   */
+  visibility?: string;
+  /**
+   * Readonly marks a SYSTEM-GENERATED column: a value the addon/host populates
+   * (e.g. an id or number a remote API returns after a write), NOT something a
+   * user types. It is pure UI-plane metadata that the host projects onto
+   * modelbase.ColumnDef.Readonly / FieldDef.Readonly so DeriveFormFields
+   * EXCLUDES the column from the create form and marks it read-only in edit;
+   * the column still renders normally in tables/kanban/detail. The DDL and
+   * write planes ignore it — an addon (or a compute rule) writes the value
+   * server-side as usual. Use it for columns filled by an outbound sync, an
+   * external id, or any value the user must never hand-edit.
+   */
+  readonly?: boolean;
+  /**
+   * Protected marks a column that a GENERIC create/update (a bare PATCH/POST
+   * against the model's HTTP endpoint) must NEVER write, regardless of the
+   * caller's role or update permission — unlike Readonly (UI-only guidance),
+   * this is a SERVER-ENFORCED write gate. Use it for a state-machine field
+   * (paired with Model.StageField/Stages) or any column whose only valid
+   * mutation path is a declared business action (e.g. a return's
+   * refund_outcome, only settable by an "approve_refund"/"reject_refund"
+   * action, never a direct attribute edit that skips the action's own
+   * business gate). The column still reads normally everywhere.
+   * Enforcement lives at the generic dynamic.Service.Create/Update boundary
+   * (the ONLY path a bare authenticated PATCH can reach): a Protected column
+   * present in the caller's input is always rejected with a validation error,
+   * with NO bypass — not by role, not by permission grant. A declared Action
+   * (ActionDef) is unaffected: action handlers write through the wasm
+   * data_mutate host import, an entirely separate write path the generic
+   * gate never intercepts, so the action's own business logic (its
+   * requires_state gate, its handler code) remains the sole way to change
+   * the value. Optional; defaults false (fully backward compatible).
+   */
+  protected?: boolean;
+  /**
+   * RejectDeletedRef, on a column with a Ref, makes a CREATE fail when the
+   * referenced row exists but is soft-deleted (deleted_at set): a NEW sale
+   * line must not point at a product removed from the catalog (QA 7Leguas
+   * VEN-N08). Enforced by dynamic.Service.Create (POST /data, 422 not_found)
+   * and, when the host wires wasm.Host.WithCreateCheck, by data_mutate /
+   * data_batch creates (invalid_reference). OPT-IN: documents that must
+   * keep pointing at history — a return line for a product deleted after the
+   * sale, a credit note — leave it unset. Updates are never affected.
+   */
+  reject_deleted_ref?: boolean;
+  /**
+   * Validation is the write-time constraint the kernel enforces on create/
+   * update (regex / min / max / custom) and the SDK pre-flights in the form.
+   * Same shape as ActionField.validation. Nil = no extra rules (not_null
+   * still applies as `required`). Optional.
+   */
+  validation?: FieldValidation;
+}
+/**
+ * VisibleWhen is a single-sibling conditional-visibility predicate for a form
+ * field in the native create/edit modal. Field names the OTHER field whose
+ * current value drives visibility; the owning field is shown when that value
+ * equals Equals (exact string match) OR is a member of In (any-of). When both
+ * are set In wins. It is pure UI metadata — the kernel only carries it through
+ * the v3 → host conversion onto modelbase.ColumnDef/FieldDef.VisibleWhen; the
+ * SDK does the actual show/hide against the live form values. JSON tags match
+ * the host contract so the block round-trips byte-for-byte.
+ */
+export interface VisibleWhen {
+  /**
+   * Field is the sibling field key whose value drives visibility.
+   */
+  field?: string;
+  /**
+   * Equals shows the owning field when the sibling value == this string.
+   */
+  equals?: string;
+  /**
+   * In shows the owning field when the sibling value is one of these strings.
+   */
+  in?: string[];
+  /**
+   * Class shows the owning field when the record's category carries this
+   * attribute class (Model.AttributeClasses, assigned to categories as data
+   * by each organization). Used alone, without Field. See
+   * CONTRACT-item-master.md §3.2.
+   */
+  class?: string;
+}
+/**
+ * FormLayout declares declarative GROUPING for the model's native create/edit
+ * form. Mode "sections" renders the Sections as titled, collapsible blocks on a
+ * single scroll; mode "steps" renders them as a step-by-step wizard (the SDK
+ * validates step-by-step). A section and a step share the SAME FormSection
+ * shape — the mode only changes how the SDK presents them. Columns assign
+ * themselves to a section/step via Column.Section == FormSection.Key; unassigned
+ * columns fall into an implicit "General" block. It is pure UI metadata — the
+ * kernel only carries it through the v3 → host conversion onto the served
+ * form_layout; the DDL and write planes ignore it. Nil = a flat form (legacy).
+ */
+export interface FormLayout {
+  /**
+   * Mode selects the presentation: "sections" (collapsible blocks in one
+   * scroll, the default) or "steps" (a wizard, one section per step).
+   */
+  mode: string;
+  /**
+   * Sections is the ordered list of blocks (mode "sections") or steps
+   * (mode "steps").
+   */
+  sections: FormSection[];
+}
+/**
+ * FormSection is one block of the create/edit form, reused for both a
+ * collapsible section (mode "sections") and a wizard step (mode "steps").
+ * Columns bind to it via Column.Section == Key. Title/Description may be a
+ * literal or an i18n key the host's localized transformer resolves at serve
+ * time (the SAME mechanism as column/action labels). JSON tags match the host
+ * contract so the block round-trips byte-for-byte.
+ */
+export interface FormSection {
+  /**
+   * Key is the stable identifier of the section/step, unique within the
+   * model. Columns reference it via Column.Section.
+   */
+  key: string;
+  /**
+   * Title is the human header (literal text or an i18n key).
+   */
+  title?: string;
+  /**
+   * Description is optional secondary text under the title (literal or i18n key).
+   */
+  description?: string;
+  /**
+   * Collapsed renders the block initially collapsed in mode "sections".
+   * Ignored in mode "steps".
+   */
+  collapsed?: boolean;
+  /**
+   * VisibleWhen declares CONDITIONAL VISIBILITY for the whole section: the SDK
+   * hides the entire block (all its fields) when the predicate is false against
+   * the live form values, using the SAME {field, equals?, in?} shape as
+   * Column.VisibleWhen. Pure UI metadata — the kernel only carries it through
+   * the v3 → host conversion onto the served form_layout; the SDK does the
+   * actual show/hide. Nil = always visible.
+   */
+  visible_when?: VisibleWhen;
+  /**
+   * Assist declares an AI-ASSISTED step: the SDK renders a provider-driven
+   * panel inside this section (button or auto-run) that sends the listed
+   * input fields to the host's assist provider and merges the returned
+   * output fields into the form, showing progress while it works. The
+   * kernel only carries it through; the host owns the provider registry
+   * and the SDK the panel. Nil = a plain section.
+   */
+  assist?: FormAssist;
+}
+/**
+ * FormAssist is the declaration of an AI-assisted form step (see
+ * FormSection.Assist).
+ */
+export interface FormAssist {
+  /**
+   * Provider is the host-registered assist provider key (e.g.
+   * "brand.website_dna"). The host maps it to an implementation.
+   */
+  provider: string;
+  /**
+   * Label / Description are the button text and helper copy (literal or
+   * i18n key).
+   */
+  label?: string;
+  description?: string;
+  /**
+   * Input lists the form fields sent to the provider; Output the fields the
+   * provider may fill. Both are column names of the owning model.
+   */
+  input?: string[];
+  output?: string[];
+  /**
+   * Trigger: "button" (default) renders a call-to-action; "auto" runs the
+   * provider as soon as the step opens with every input filled.
+   */
+  trigger?: string;
+}
+/**
+ * ReasonRequired is the model-level "mandatory reason" policy (PER-4).
+ */
+export interface ReasonRequired {
+  /**
+   * Delete requires a reason on DELETE /dynamic/:model/:id.
+   */
+  delete?: boolean;
+  /**
+   * Actions are the keys of actions targeting this model that require a
+   * reason in their payload (`reason`). Each must be a declared action whose
+   * target_model is this model.
+   */
+  actions?: string[];
+  /**
+   * MinLength is the minimum trimmed length of the reason (default 3).
+   */
+  min_length?: number /* int */;
+}
+/**
+ * Sequence declares one atomic counter the kernel maintains for the owning
+ * model, formatted through a template. The counter increments atomically
+ * (UPDATE … RETURNING) so concurrent creates never collide on a folio.
+ */
+export interface Sequence {
+  /**
+   * Key is the sequence identifier, unique within the model (e.g. "invoice").
+   * A Column binds to it via Column.Sequence, and the wasm `sequence_next`
+   * import addresses it by (model, key).
+   */
+  key: string;
+  /**
+   * Scope selects the counter's partitioning: "org" (one counter per
+   * organization, the default) or "branch" (one counter per branch, so each
+   * branch has its own folio series). Empty = "org".
+   */
+  scope?: string;
+  /**
+   * Format is the template rendered around the numeric value. It MUST contain
+   * exactly one `{seq}` or zero-padded `{seq:0N}` placeholder (e.g. "A-{seq:06}"
+   * → "A-000042"). Any other text is emitted verbatim.
+   */
+  format: string;
+}
+/**
+ * Constraint is one declarative GUARD predicate on a column: a boolean
+ * comparison the kernel evaluates before every create/update write.
+ * SECURITY: Expr is a single comparison `<arith> <op> <arith>` where op is one
+ * of >= <= > < == != (and `=` as an alias for ==). Each side is parsed with the
+ * SAME strict arithmetic allowlist as Formula.Expr (identifiers resolving to
+ * real columns, decimal numbers, + - * / and parentheses only), so a constraint
+ * can never inject SQL — it is evaluated in Go against the row's numeric values.
+ */
+export interface Constraint {
+  /**
+   * Expr is the guard predicate, e.g. "quantity >= 0" or "price >= cost".
+   */
+  expr: string;
+  /**
+   * ErrorKey is the i18n key / stable code surfaced to the client (422) when
+   * the predicate is false, e.g. "stock.negative".
+   */
+  error_key: string;
+  /**
+   * OnViolation selects what the kernel does when the predicate is false:
+   *   ""/"reject"          — abort the write with 422 + ErrorKey (the default).
+   *   "request_approval"   — do NOT write. The kernel rolls the business
+   *                          mutation back, stores the full pending mutation
+   *                          as an ApprovalRequest (status pending), emits
+   *                          `approval.requested` and answers the caller with
+   *                          `success:false`, `error.code = "approval_required"`
+   *                          and `meta.approval_request_id`. A user holding one
+   *                          of Approval.Roles later approves it and the kernel
+   *                          re-applies the SAME mutation skipping ONLY this
+   *                          constraint (every other guard still runs). This is
+   *                          the declarative "sell below the minimum price needs
+   *                          a supervisor" primitive. Requires Approval.
+   */
+  on_violation?: string;
+  /**
+   * Approval configures WHO may approve a violation of this constraint and
+   * how. Required when OnViolation is "request_approval"; ignored otherwise.
+   */
+  approval?: ApprovalPolicy;
+}
+/**
+ * ApprovalPolicy declares who may approve a pending mutation and the shape of
+ * the decision. It is shared by Constraint.Approval (a guard that requests
+ * approval instead of rejecting) and Action.Approval (an action that always —
+ * or conditionally — needs a supervisor). The kernel stores the pending
+ * mutation in its own `approval_requests` model, notifies the host (canonical
+ * `approval.requested` event) and re-applies the mutation when approved.
+ */
+export interface ApprovalPolicy {
+  /**
+   * Roles are the org role keys allowed to approve (e.g. ["manager","owner"]).
+   * The host resolves the acting user's roles (dynamic.Config.ActorRolesResolver);
+   * an approver holding none of them is refused (403). Required, non-empty.
+   */
+  roles: string[];
+  /**
+   * ReasonRequired forces the approver to supply a non-empty reason on
+   * approve AND reject. Optional; defaults false.
+   */
+  reason_required?: boolean;
+  /**
+   * ExpiresHours auto-expires a pending request after this many hours
+   * (status "expired"; it can no longer be approved). 0 = never expires.
+   */
+  expires_hours?: number /* int */;
+  /**
+   * Label is the human/i18n title shown on the approval inbox card (e.g.
+   * "approvals.below_min_price"). Optional; the host falls back to the
+   * constraint ErrorKey / action label.
+   */
+  label?: string;
+  /**
+   * When is an OPTIONAL predicate — ONLY meaningful on Action.Approval — that
+   * gates the approval on the invocation: the action needs approval only when
+   * the predicate is TRUE against the merged (record ∪ payload) numeric
+   * environment, e.g. "discount_pct > 10". Empty = the action always needs
+   * approval. Same strict `<arith> <op> <arith>` grammar as Constraint.Expr.
+   * Rejected by validation when set on a column constraint.
+   */
+  when?: string;
 }
 /**
  * Index is a single index declaration.
@@ -213,6 +2107,16 @@ export interface Index {
   columns: string[];
   unique?: boolean;
   method?: string;
+  /**
+   * Where makes the index PARTIAL: it only covers rows matching the predicate
+   * (e.g. "external_id IS NOT NULL" so many NULL/empty rows never collide). A
+   * conjunction of `<column> IS [NOT] NULL` and `<column> <op> <literal>`
+   * terms joined by AND (see manifest.ParseIndexWhere). A unique index with a
+   * Where is NEVER folded onto ColumnDef.Unique (that would create the global
+   * unique index the predicate exists to avoid): the DDL plane emits it as its
+   * own CREATE UNIQUE INDEX ... WHERE at install time.
+   */
+  where?: string;
 }
 /**
  * ForeignKey is a cross-model reference, materialised physically or logically.
@@ -236,6 +2140,59 @@ export interface Reference {
 export interface ModelExtension {
   target_model: string;
   columns: Column[];
+  /**
+   * JSONBag is the jsonb column on the target model that stores these
+   * extension fields (dotted form keys `<bag>.<column>`). Empty defaults to
+   * "fiscal_data" — the conventional fiscal extension bag. Tire catalog
+   * extensions (products_tires) set this to "product_specs". Hosts read it
+   * from here instead of inferring the bag from column names.
+   */
+  jsonb_bag?: string;
+}
+/**
+ * AttributeClass is a named set of an extension table's columns.
+ */
+export interface AttributeClass {
+  /**
+   * Key identifies the class across addons ("tire"); categories store it.
+   */
+  key: string;
+  label?: string;
+  /**
+   * Sections order the class's columns into titled form blocks.
+   */
+  sections: AttributeClassSection[];
+}
+/**
+ * AttributeClassSection is one titled block of an AttributeClass.
+ */
+export interface AttributeClassSection {
+  key: string;
+  label?: string;
+  fields: string[];
+}
+/**
+ * SearchKey is a normalized search key composed from a model's columns.
+ */
+export interface SearchKey {
+  /**
+   * Name is the generated column the installer adds (snake_case). It must not
+   * collide with a declared column.
+   */
+  name: string;
+  /**
+   * Format composes the key from literal text and {column} placeholders, each
+   * a column declared on the same model: "{section_width_mm}/{aspect_ratio}R{rim_diameter_in}".
+   */
+  format: string;
+  /**
+   * Match is how typed text is compared: "normalized" (default) folds case,
+   * whitespace and separators on both sides so "205 55 r16" finds
+   * "205/55R16"; "normalized_prefix" is the same folding but matches the
+   * START of the key, so a partly typed "205/55" already finds "205/55R16";
+   * "exact" compares the composed value as is.
+   */
+  match?: string;
 }
 /**
  * Contributions is what this addon contributes to other modules' extension points.
@@ -245,7 +2202,597 @@ export interface Contributions {
   slots?: SlotContribution[];
   actions?: Action[];
   tools?: Tool[];
+  /**
+   * AgentCapabilities declares discoverable AI capabilities exposed to the
+   * host copilot (Aby). Guides may navigate and highlight federated UI
+   * targets; mutating capabilities declare risk and confirmation policy.
+   * Optional. See AgentCapability.
+   */
+  agent_capabilities?: AgentCapability[];
   subscriptions?: Subscription[];
+  /**
+   * Notifications declares in-app bell notifications the host should emit
+   * when matching canonical CRUD events fire (addon.Model.action). The host
+   * (ops) evaluates these rules — no wasm required. Optional.
+   */
+  notifications?: NotificationRule[];
+  /**
+   * Routes contributes entries to the host's declarative ROUTING TABLES: for
+   * a given decision domain, which named handler wins for a record with these
+   * attributes. It is how a family of addons agrees on "who fulfils this
+   * order line" without any of them importing the others — each addon
+   * declares the routes it can serve, gated by its own installation, and the
+   * host resolves the winner per org. Optional. See Route.
+   */
+  routes?: Route[];
+  /**
+   * Dashboard contributes one or more widgets to the host's modular
+   * dashboard. Two flavours coexist in the same grid: DECLARATIVE widgets
+   * (every kind except "custom") carry a Query the host computes with the
+   * kernel aggregation engine (org-scoped, soft-delete aware, permission-
+   * gated) and the SDK paints with a built-in renderer — zero per-addon
+   * code. FEDERATED widgets (kind "custom") reference an Expose from the
+   * addon's frontend bundle so the addon ships a 100%-custom React widget,
+   * placed and sized inside the same grid. Optional — addons with no
+   * dashboard surface omit it. See DashboardWidget for the full contract.
+   */
+  dashboard?: DashboardWidget[];
+  /**
+   * Documents contributes printable document templates. Each entry binds a
+   * bundle-relative HTML template to one of the addon's models; the host
+   * hydrates the template with the record (and its child rows) and the org
+   * branding, then renders it to PDF. Optional — addons with nothing to
+   * print omit it. See DocumentDef for the full contract.
+   */
+  documents?: DocumentDef[];
+  /**
+   * PublicRoutes contributes org-scoped, token-addressed PUBLIC views of a
+   * record — a shareable quote, an order-tracking page, a customer
+   * statement, a waiting-room screen — served by the host WITHOUT a login.
+   * Each entry binds a model + the column holding the per-record secret
+   * token to a rendering kind (a printable document, an allowlisted JSON
+   * projection, or a minimal branded HTML page). Optional — addons that
+   * expose nothing publicly omit it. See PublicRoute for the full contract.
+   */
+  public_routes?: PublicRoute[];
+  /**
+   * API contributes HTTP API routes the host serves through the kernel
+   * runtime/apiroute gateway: each entry binds a method + path pattern
+   * (with :param segments and an optional trailing *rest) to a handler,
+   * gated by an authentication kind and a set of scopes, optionally
+   * cacheable. Unlike Webhooks (POST-only, body-only, no response), the
+   * handler sees the method, path params, query, allowlisted headers and
+   * the resolved principal, and answers with a status, allowlisted headers
+   * and a body. Optional — addons that expose no API omit it. See APIRoute.
+   */
+  api?: APIRoute[];
+  /**
+   * Config declares the addon's configuration surface so hosts can render a
+   * "Configure" affordance (e.g. in the installed-addons view). Optional —
+   * an addon with nothing to configure omits it and hosts show nothing.
+   */
+  config?: ConfigEntry;
+  /**
+   * Rules contributes declarative anomaly/business rules evaluated by the
+   * host against canonical CRUD events (contributions.rules[]). Each rule
+   * pairs an arithmetic `when` predicate over the record with an outcome
+   * (flag a row for review, or notify roles) — no wasm, no hardcoded
+   * business logic in the kernel. Optional. See RuleDef.
+   */
+  rules?: RuleDef[];
+}
+/**
+ * RuleDef is one declarative rule (contributions.rules[]) the host evaluates
+ * against a canonical CRUD event's AFTER snapshot. `When` is an arithmetic
+ * comparison ("amount_paid + amount_due != total", "qty_on_hand < reorder_point")
+ * parsed and evaluated by manifest/rulesexpr — the same computeexpr engine
+ * that backs rollup/formula columns, so it can only reference numeric columns
+ * with + - * / and one comparison operator; it can never run arbitrary SQL or
+ * call out. When the predicate holds, the host applies Then: "flag" records a
+ * rule_flags row (surfaced in a review queue); "notify" pushes an in-app
+ * notification to NotifyRoles (reusing the same audience mechanism as
+ * contributions.notifications[]).
+ */
+export interface RuleDef {
+  /**
+   * Key is the rule's stable id, unique within the addon.
+   */
+  key: string;
+  /**
+   * Model is the model key (own model or one this addon extends) the rule
+   * evaluates against.
+   */
+  model: string;
+  /**
+   * When is the arithmetic predicate. Required.
+   */
+  when: string;
+  /**
+   * EventTypes restricts which canonical actions trigger evaluation:
+   * created | updated | transitioned. Empty means all three.
+   */
+  event_types?: string[];
+  /**
+   * Then is the rule's outcome. Required.
+   */
+  then: RuleThen;
+}
+/**
+ * RuleThen is the outcome of a RuleDef whose When predicate holds.
+ */
+export interface RuleThen {
+  /**
+   * Kind is "flag" (record a rule_flags row) or "notify" (in-app
+   * notification). Required.
+   */
+  kind: string;
+  /**
+   * Severity is info | warning | error. Defaults to "warning".
+   */
+  severity?: string;
+  /**
+   * Message is an i18n key (or literal) shown on the flag / notification.
+   * Required.
+   */
+  message: string;
+  /**
+   * NotifyRoles lists the roles to notify when Kind is "notify". Required
+   * (non-empty) for "notify"; ignored for "flag".
+   */
+  notify_roles?: string[];
+}
+/**
+ * PublicRoute is one public, login-less view of a record an addon contributes
+ * (contributions.public_routes[]). The host serves it at
+ * 	GET /p/<orgRef>/<addon>/<key>/<token>[.pdf|.json]
+ * where <orgRef> identifies the organization (or is omitted when the request
+ * arrives on the org's own custom domain) and <token> is the value stored in
+ * TokenColumn on exactly one record of Model. The lookup is ALWAYS scoped to
+ * the resolved organization — a token never resolves across tenants — and the
+ * host answers 404 for an unknown token, 410 once ExpiresColumn is in the past
+ * and 404 when EnabledWhen evaluates false for the record.
+ * Kind selects the rendering:
+ *   - "document": the host renders the printable document named by Document
+ *     (a contributions.documents[] key bound to the same model) and streams
+ *     the PDF inline. Columns/Relations are ignored.
+ *   - "json": the host returns ONLY the columns listed in Columns (plus the
+ *     relations listed in Relations, resolved to {value,label} / child rows).
+ *     Nothing outside the allowlist is ever serialised — not even the token.
+ *   - "html": a minimal server-rendered page carrying the org branding
+ *     (logo, colours, name) that lists Columns (and Relations) and, when
+ *     Document is also set, offers a "download PDF" button.
+ */
+export interface PublicRoute {
+  /**
+   * Key is the route's stable id, unique within the addon. It is the
+   * "<key>" path segment of the public URL. Required, snake_case.
+   */
+  key: string;
+  /**
+   * Model is the model key (own model or a model this addon extends) whose
+   * records the route exposes. Required.
+   */
+  model: string;
+  /**
+   * TokenColumn is the text column of Model that holds the per-record
+   * secret. The host generates/rotates it (32 random bytes, base64url) on
+   * demand and matches it in constant time. Required; must be a text-typed
+   * column (text | varchar(n)).
+   */
+  token_column: string;
+  /**
+   * Kind is the rendering: document | json | html. Required.
+   */
+  kind: string;
+  /**
+   * Document is the contributions.documents[] key rendered as PDF. Required
+   * when Kind is "document"; optional for "html" (adds a download button)
+   * and "json" (adds a document_url to the payload). Must bind to Model.
+   */
+  document?: string;
+  /**
+   * Columns is the allowlist of Model columns the json/html renderings may
+   * expose. Anything not listed here is never serialised. Required for
+   * "json"; for "html" it may be empty only when Document is set. Ignored
+   * for "document". The token column itself is never allowed.
+   */
+  columns?: string[];
+  /**
+   * Relations is the allowlist of Model relation names (models[].relations[]
+   * .name, or a ref column's resolved sibling) included in json/html
+   * renderings: FK refs resolve to {value,label}, one_to_many edges to their
+   * child rows. Optional.
+   */
+  relations?: string[];
+  /**
+   * ExpiresColumn optionally names a date/timestamp column of Model; once
+   * its value is in the past the host answers 410 Gone. Empty = never
+   * expires.
+   */
+  expires_column?: string;
+  /**
+   * Label is an optional i18n key (or literal) hosts show on the "public
+   * link" affordance. Falls back to Key.
+   */
+  label?: string;
+  /**
+   * EnabledWhen is an optional predicate over the record that must hold for
+   * the route to serve it, e.g. `status != 'draft'` or
+   * `status in ('sent','accepted') && total > 0`. Grammar: comparisons
+   * `<column> <op> <literal>` with ops == != < <= > >= in not_in, literals
+   * 'string' | number | true | false | null | ('a','b'), joined by && and ||
+   * (&& binds tighter). See ParseRecordExpr. Empty = always enabled.
+   */
+  enabled_when?: string;
+  /**
+   * Actions lets the holder of the token ACT on the record from the public
+   * page — accept or reject a quote, approve a work order — without a login.
+   * Only the listed row actions are reachable; the host renders one button per
+   * entry on the "html" kind and serves
+   * 	POST /p/<orgRef>/<addon>/<key>/<token>/actions/<action>
+   * which runs the addon's own action handler as the organization's system
+   * actor (no user session). The action keeps its own guards: RequiresState is
+   * enforced (and mandatory here, so a link can never fire an action outside
+   * its window), and EnabledWhen / ExpiresColumn gate the POST like the GET.
+   * Optional; only valid on kind "html".
+   */
+  actions?: PublicRouteAction[];
+}
+/**
+ * PublicRouteAction exposes one row action of the route's model on the public
+ * page (PublicRoute.Actions). The action must be a contributions.actions[] row
+ * action targeting the route's model with a non-empty requires_state whose
+ * fields, if any, are free text or a select over a static option list (the page
+ * renders a text input / dropdown per field; a required field is enforced, and
+ * a select value outside its options is refused). No steps or modal.
+ */
+export interface PublicRouteAction {
+  /**
+   * Action is the contributions.actions[] key. Required.
+   */
+  action: string;
+  /**
+   * Label is the button text: an i18n key or a literal. Falls back to the
+   * action's own label.
+   */
+  label?: string;
+  /**
+   * Confirm is the confirmation the page asks before posting (i18n key or
+   * literal). Empty = no confirmation.
+   */
+  confirm?: string;
+  /**
+   * Style is a hint for the button emphasis: "primary" (default) or
+   * "danger". Hosts that do not know a value use "primary".
+   */
+  style?: string;
+  /**
+   * ShowMessage lets the public page show the handler's own message — the
+   * confirmation on success and the reason of a business refusal ("el RFC no
+   * es válido") — instead of the generic "answer recorded / no longer
+   * possible" copy. The addon opts in because it takes responsibility for the
+   * text being safe to show to anyone holding the link; without it the host
+   * never echoes handler output to an anonymous visitor.
+   */
+  show_message?: boolean;
+}
+/**
+ * APIRoute is one HTTP API route an addon contributes (contributions.api[]).
+ * The host mounts the kernel gateway (runtime/apiroute) under a prefix of its
+ * choosing (e.g. /api/gw) and every installed addon's routes share that
+ * namespace: two addons may not declare the same Method + Path shape.
+ * Path is a slash-separated pattern: static segments, ":name" parameters and
+ * an optional trailing "*name" (or bare "*") wildcard that captures the rest of
+ * the path. When several patterns match a request, static segments beat
+ * parameters and parameters beat the wildcard, segment by segment from the
+ * left, so "/products/featured" wins over "/products/:handle".
+ * 	{ "key": "product_get", "method": "GET",
+ * 	  "path": "/storefront/products/:handle",
+ * 	  "auth": "token", "scopes": ["catalog:read"],
+ * 	  "cache": { "max_age": 60, "swr": 600 },
+ * 	  "do": "wasm:product_get" }
+ */
+export interface APIRoute {
+  /**
+   * Key is the route's stable id, unique within the addon. Required,
+   * snake_case.
+   */
+  key: string;
+  /**
+   * Method is the HTTP method: GET | POST | PUT | PATCH | DELETE. HEAD is
+   * served by GET routes. Required.
+   */
+  method: string;
+  /**
+   * Path is the route pattern, starting with "/". Required.
+   */
+  path: string;
+  /**
+   * Auth is the principal the route requires: "none" (public; the host
+   * still resolves the organization, e.g. by domain), "token" (a scoped API
+   * token, see package apitoken), "customer" (an end-customer session) or
+   * "staff" (a back-office user). Required.
+   */
+  auth: string;
+  /**
+   * Scopes the principal must hold, each "<area>:<verb>" (e.g.
+   * "catalog:read"). All are required. Not allowed when Auth is "none".
+   */
+  scopes?: string[];
+  /**
+   * Cache makes a GET route cacheable: the gateway derives Cache-Control
+   * (unless the handler sets it), computes a weak ETag and answers
+   * If-None-Match with 304. Only valid on GET.
+   */
+  cache?: APICache;
+  /**
+   * Do is the handler reference: "wasm:<export>" | "compiled:<fn>".
+   * Required.
+   */
+  do: string;
+}
+/**
+ * APICache is the HTTP caching policy of a GET APIRoute. With Private the
+ * gateway emits "private, no-store" (buyer-specific data); otherwise
+ * "public, max-age=<MaxAge>[, stale-while-revalidate=<SWR>]".
+ */
+export interface APICache {
+  /**
+   * MaxAge is the freshness lifetime in seconds (>= 0).
+   */
+  max_age?: number /* int */;
+  /**
+   * SWR is the stale-while-revalidate window in seconds (>= 0).
+   */
+  swr?: number /* int */;
+  /**
+   * Private marks the response as caller-specific: never stored by shared
+   * caches. Mutually exclusive with MaxAge/SWR.
+   */
+  private?: boolean;
+}
+/**
+ * ConfigEntry points at where an addon's configuration lives: a declarative
+ * model (the host renders its generic CRUD page, e.g. /m/<model>) or an
+ * addon-owned URL (a custom screen the addon's frontend ships). Exactly one of
+ * Model/URL should be set; Title optionally overrides the affordance label
+ * with an i18n key.
+ */
+export interface ConfigEntry {
+  model?: string;
+  url?: string;
+  title?: string;
+}
+/**
+ * RecordFieldCondition gates a row action or printable document on a field
+ * value read from the target record (status/state gates use requires_state).
+ */
+export interface RecordFieldCondition {
+  field: string;
+  operator?: string; // eq|neq|in|not_in|truthy|falsy (default eq)
+  value?: any;
+}
+/**
+ * DocumentDef is one printable document an addon contributes
+ * (contributions.documents[]). It binds a bundle-relative HTML template to a
+ * model so the host can render a per-record PDF (delivery notes, tickets,
+ * invoices) hydrated with the record, its line-items and the org branding.
+ * The host serves it at GET /api/data/:model/:id/documents/:key.pdf, gated by
+ * the model's read permission and scoped to the caller's organization. The
+ * template body uses {{record.<col>}}, {{org.branding.<field>}}, {{line_items}}
+ * and {{now}} tokens the host substitutes at render time.
+ */
+export interface DocumentDef {
+  /**
+   * Key is the document's stable id, unique within the addon. It is the
+   * ":key" path segment of the PDF route. Required, snake_case.
+   */
+  key: string;
+  /**
+   * Model is the model key (from this addon's models or model extensions)
+   * the document renders a record of. Required.
+   */
+  model: string;
+  /**
+   * Template is the bundle-relative path to the HTML template, e.g.
+   * "templates/remision.html". Required, must end in .html.
+   */
+  template: string;
+  /**
+   * Paper is the page geometry: A4|letter|ticket80. ticket80 is an 80mm-wide
+   * receipt roll for POS. Required.
+   */
+  paper: string;
+  /**
+   * Filename is an optional download filename (without the .pdf extension).
+   * It may contain {{record.<col>}} tokens the host expands. When empty the
+   * host falls back to "<key>-<id>".
+   */
+  filename?: string;
+  /**
+   * Label is an optional human title for the host Plantillas catalog
+   * ("Ticket de venta"). When empty the host falls back to the key.
+   */
+  label?: string;
+  /**
+   * RequiresState gates the print action on the target record's lifecycle
+   * column (`status`, or `state` when status is empty): the host only
+   * surfaces the document (and Render rejects deep links) when that value
+   * is one of these. Empty/omitted means always available.
+   */
+  requires_state?: string[];
+  /**
+   * Condition is an optional field gate on the target record (e.g.
+   * fiscal_uuid must be set before printing a CFDI). Evaluated by the host
+   * against the row being printed; distinct from org-level Condition on
+   * actions/routes.
+   */
+  condition?: RecordFieldCondition;
+  /**
+   * Comment is an optional author note for the Plantillas catalog; not
+   * shown to end users unless the host chooses to surface it.
+   */
+  comment?: string;
+}
+/**
+ * DashboardWidget is one tile an addon contributes to the host's modular
+ * dashboard (manifest.contributions.dashboard[]). The host renders the union
+ * of every enabled addon's widgets, grouped by Group and ordered by Order,
+ * filtered by the viewer's permissions.
+ * Kind selects the shape. Every kind except "custom" is DECLARATIVE: the host
+ * computes the aggregate from Query with the kernel aggregation engine and the
+ * SDK paints it with a built-in renderer. Kind "custom" is FEDERATED: the host
+ * mounts the addon's own React component (named by Expose, from the addon's
+ * frontend bundle) into Slot, with the same Card chrome so it blends in.
+ */
+export interface DashboardWidget {
+  /**
+   * Key is the widget's stable id, unique within the addon. The capability
+   * gating it is "<addon>.dashboard.<key>". Required, snake_case.
+   */
+  key: string;
+  /**
+   * Title is the i18n key for the widget heading. Required.
+   */
+  title: string;
+  /**
+   * Subtitle is an optional i18n key shown under the title.
+   */
+  subtitle?: string;
+  /**
+   * Icon is an optional lucide slug rendered in the accent colour.
+   */
+  icon?: string;
+  /**
+   * Kind is the renderer selector: stat|bar|line|area|pie|donut|list|
+   * progress|custom. Required.
+   */
+  kind: string;
+  /**
+   * Size is the grid span over a 4-column grid: sm(1)|md(2)|lg(3)|full(4).
+   * Default sm.
+   */
+  size?: string;
+  /**
+   * Group is the optional i18n key the widget is bucketed under. Default:
+   * the addon's name.
+   */
+  group?: string;
+  /**
+   * Order positions the widget within its group (ascending). Default 100.
+   */
+  order?: number /* int */;
+  /**
+   * Accent is an optional colour token: emerald|sky|violet|amber|rose|slate.
+   */
+  accent?: string;
+  /**
+   * Format applies to the scalar value and series points:
+   * number|currency|percent|compact. Default number.
+   */
+  format?: string;
+  /**
+   * Permission optionally gates visibility. If empty and Query.Model is set
+   * the host derives "<table>.index".
+   */
+  permission?: string;
+  /**
+   * Empty is an optional i18n key for the widget's empty state.
+   */
+  empty?: string;
+  /**
+   * Query is the aggregation spec for declarative widgets (every kind but
+   * "custom"). Required for those kinds; ignored for "custom".
+   */
+  query?: WidgetQuery;
+  /**
+   * Compare optionally requests a delta vs the previous window (a "+14.2%"
+   * chip). Requires Query.DateField + Query.Range.
+   */
+  compare?: WidgetCompare;
+  /**
+   * Slot is the federation slot the host mounts a kind:"custom" widget into.
+   * Default "dashboard.widgets". Ignored for declarative kinds.
+   */
+  slot?: string;
+  /**
+   * Expose is the federated module name from the addon's frontend bundle
+   * (e.g. "./StockHeatmap") rendered for a kind:"custom" widget. Required for
+   * "custom"; the addon must also declare a frontend block. Ignored otherwise.
+   */
+  expose?: string;
+  /**
+   * Condition gates this contribution server-side: when set, the host only
+   * serves it to organizations where the predicate holds (e.g. another addon
+   * is installed). Nil = always served. See Condition.
+   */
+  condition?: Condition;
+}
+/**
+ * WidgetQuery is the aggregation spec a declarative DashboardWidget carries.
+ * The host resolves Model to a logical table, then runs the kernel aggregation
+ * engine org-scoped and soft-delete aware.
+ */
+export interface WidgetQuery {
+  /**
+   * Model is the model key of the SAME addon to aggregate over. Required.
+   */
+  model: string;
+  /**
+   * Aggregate is the aggregate function: count|sum|avg|min|max. count
+   * ignores Field. Default count.
+   */
+  aggregate?: string;
+  /**
+   * Field is the column to aggregate. Required unless Aggregate is count.
+   */
+  field?: string;
+  /**
+   * Where is a filter map: equality by default, or {op: value} where op is
+   * eq|neq|gt|gte|lt|lte|contains — the same operators the list builder uses.
+   * Values are raw JSON so booleans/numbers/strings round-trip faithfully.
+   */
+  where?: { [key: string]: unknown};
+  /**
+   * GroupBy buckets the result by a column (bar/line/area/pie/donut/list).
+   */
+  group_by?: string;
+  /**
+   * LabelField names a column whose value labels each bucket. If it is a ref
+   * (FK) the host resolves a human-readable name.
+   */
+  label_field?: string;
+  /**
+   * DateField drives a time series for line/area widgets.
+   */
+  date_field?: string;
+  /**
+   * Interval buckets the time series: day|week|month. Used with DateField.
+   */
+  interval?: string;
+  /**
+   * Range is the time window: last_7_days|last_30_days|last_12_months|
+   * this_month|this_year|this_day|all.
+   */
+  range?: string;
+  /**
+   * Order sorts buckets by value: asc|desc.
+   */
+  order?: string;
+  /**
+   * Limit caps the number of buckets (host clamps to 1..24).
+   */
+  limit?: number /* int */;
+}
+/**
+ * WidgetCompare requests a delta computation against an earlier window.
+ */
+export interface WidgetCompare {
+  /**
+   * To is the comparison window. "previous_period" compares against the
+   * window immediately preceding Query.Range.
+   */
+  to: string;
 }
 /**
  * NavGroup is a sidebar group.
@@ -255,6 +2802,12 @@ export interface NavGroup {
   icon?: string;
   target?: string;
   items: NavItem[];
+  /**
+   * Condition gates this contribution server-side: when set, the host only
+   * serves it to organizations where the predicate holds (e.g. another addon
+   * is installed). Nil = always served. See Condition.
+   */
+  condition?: Condition;
 }
 /**
  * NavItem is a single sidebar entry.
@@ -272,8 +2825,95 @@ export interface NavItem {
    * status (e.g. {"status":"reception"} for an "En recepción" entry pointing
    * at the same model). The host AND-combines these with any runtime filters.
    * Empty/omitted means no filter (the default, unfiltered list).
+   * When LockedScope is true, Filter is also a server-side authorization
+   * predicate gated by Permission (not a removable UI chip).
    */
   filter?: { [key: string]: string};
+  /**
+   * LockedScope marks Filter as a security view scope. Hosts must enforce it
+   * on list/show/export for callers that hold Permission. Default false keeps
+   * cosmetic status/type sidebar tabs as client-only deep-links.
+   */
+  locked_scope?: boolean;
+  /**
+   * ViewType selects the renderer the SDK mounts for this entry's model.
+   * "table" (the default when empty) renders the DynamicTable; "kanban"
+   * renders a board grouped by GroupBy. The same model can have one table nav
+   * and one kanban nav. Hosts that don't understand a value fall back to table.
+   * map|timeline|calendar|chart|split are declarative views configured by
+   * View and need host capability "ui.views.<type>" (checked at install).
+   */
+  view_type?: string;
+  /**
+   * View configures the declarative renderer ViewType selects: exactly the
+   * block named like ViewType (view.map for view_type "map"…). Required for
+   * map|timeline|calendar|chart, optional for split, invalid otherwise.
+   */
+  view?: NavView;
+  /**
+   * GroupBy names the column the kanban board groups its columns by (typically
+   * the model's stage_field). Required when ViewType is "kanban"; ignored
+   * otherwise. The host projects ViewType + GroupBy onto the served
+   * TableMetadata so the SDK picks the renderer with zero per-app wiring.
+   */
+  group_by?: string;
+  /**
+   * Requires declares the screen's public data surface as model + actions
+   * (same vocabulary as dynamic tables / /api/data/<Model>). The host projects
+   * each entry to ModelKey capability strings (Product + index → product.index)
+   * and expands Acceder (`screen.<slug>.access`) with them. Prefer this over
+   * RequiresCapabilities for new manifests.
+   */
+  requires?: NavRequire[];
+  /**
+   * Columns, when set, is the exact allowlist (and order) of column keys the
+   * SDK's DynamicTable renders for THIS nav entry — not the model's full
+   * column set. Two nav entries filtering the SAME model (e.g. "Pedidos de
+   * venta" and a credit-approval addon's "Solicitudes pendientes", both on
+   * SalesOrder) otherwise render identically: same generic columns, same
+   * title, every action the model declares, regardless of what the entry is
+   * actually FOR. Empty/omitted means the model's default column set (the
+   * existing behaviour, unchanged). Column keys not present on the model are
+   * silently ignored by the SDK rather than erroring, so a stale override
+   * after a model rename degrades instead of breaking the screen.
+   */
+  columns?: string[];
+  /**
+   * Actions, when set, is the allowlist of action keys visible for THIS nav
+   * entry (row/table actions the model declares elsewhere in the manifest).
+   * Empty/omitted means every action the model declares (the existing
+   * behaviour, unchanged) — so a generic "Pedidos de venta" list keeps
+   * showing "Generar factura", "Cancelar", etc., while a purpose-built
+   * "Solicitudes de crédito" entry can restrict itself to just
+   * authorize_credit/reject_credit without hiding those actions from the
+   * generic view. Action keys not declared by the model are silently
+   * ignored, same reasoning as Columns.
+   */
+  actions?: string[];
+  /**
+   * RequiresCapabilities lists host RBAC capability strings this screen needs
+   * when its Acceder grant (`screen.<slug>.access`) is given — typically
+   * ModelKey CRUD / custom actions the federated UI calls via `/api/data/*`
+   * (e.g. "product.index", "salesreturn.confirm_return"). Prefer Requires
+   * (structured); this flat list is kept as an escape hatch / projected form.
+   * Empty means Acceder alone is enough (unless Requires is set).
+   */
+  requires_capabilities?: string[];
+  /**
+   * Condition gates this contribution server-side: when set, the host only
+   * serves it to organizations where the predicate holds (e.g. another addon
+   * is installed). Nil = always served. See Condition.
+   */
+  condition?: Condition;
+}
+/**
+ * NavRequire binds a screen to one model's actions the federated UI needs at
+ * runtime. Model is the manifest model key (e.g. "Product", "SalesOrder");
+ * Actions are capability suffixes (index/create/update/delete or custom keys).
+ */
+export interface NavRequire {
+  model: string;
+  actions: string[];
 }
 /**
  * SlotContribution renders into a slot_kind published by another addon.
@@ -283,6 +2923,12 @@ export interface SlotContribution {
   entry: string;
   order?: number /* int */;
   permission?: string;
+  /**
+   * Condition gates this contribution server-side: when set, the host only
+   * serves it to organizations where the predicate holds (e.g. another addon
+   * is installed). Nil = always served. See Condition.
+   */
+  condition?: Condition;
 }
 /**
  * Action is a UI-triggered operation. Beyond the thin {key,label,handler,
@@ -298,11 +2944,47 @@ export interface Action {
   handler: Handler;
   target_model?: string;
   /**
+   * Placement declares where the host surfaces the action's trigger.
+   *   ""/"row" — a per-row action in the model's table (default; executes
+   *              against the hovered record).
+   *   "table"  — a toolbar button at the page level (no record context).
+   *   "create" — a toolbar button that REPLACES the generic "create" button,
+   *              for addons that ship a custom create experience (e.g. a
+   *              journal entry with debit/credit lines). Opens with an empty
+   *              record; the host suppresses its default create button.
+   * Hosts that don't understand a value fall back to "row".
+   */
+  placement?: string;
+  /**
+   * Priority ranks the action among the record's actions so the host keeps
+   * ONE prominent trigger and tucks the rest away:
+   *   "primary"   — the highlighted action of the row menu / document header
+   *                 (the host shows only one; the first declared wins).
+   *   "secondary" — share / print / email / send-to-chat style actions: the
+   *                 host moves them to the document's secondary bar (footer)
+   *                 and to a discreet «Más…» group in the row menu.
+   *   ""          — auto: the host classifies by convention (share, print,
+   *                 email, chat, download keys → secondary; the rest stay in
+   *                 the main menu).
+   * Hosts that don't understand it ignore it (no layout change).
+   */
+  priority?: string;
+  /**
    * Fields declares a declarative form the host renders in the action modal
    * before dispatching the handler. Optional — an action with no fields and
    * no modal is a plain one-click action.
    */
   fields?: ActionField[];
+  /**
+   * Steps splits the declarative action form into a MULTI-STEP WIZARD: the
+   * SDK renders one page per step (title + its fields) with per-step
+   * validation, and submits the union of all steps' values on finish —
+   * exactly as if they had been declared flat in Fields. Mutually exclusive
+   * with Fields (a wizard IS the form). Use it for guided flows a flat field
+   * list serves poorly (a workshop checklist, a purchase reception); anything
+   * richer belongs in a federated Modal.
+   */
+  steps?: ActionStep[];
   /**
    * Modal is the slot_kind of a custom federated modal component the host
    * mounts instead of (or alongside) the declarative form — for actions whose
@@ -318,6 +3000,97 @@ export interface Action {
    * ConfirmMessage is the body shown in that confirmation step.
    */
   confirm_message?: string;
+  /**
+   * RequiresState gates the action on the target record's lifecycle column
+   * (`status`, or `state` when status is empty): the action is only valid
+   * (and the host only surfaces it) when that value is one of these. The
+   * kernel ENFORCES this at dispatch — an action invoked against a record in
+   * a disallowed state is rejected. Empty/omitted means no state gate (the
+   * action is always valid), so existing actions are unaffected.
+   */
+  requires_state?: string[];
+  /**
+   * SupervisorPolicy makes the action require an on-the-spot supervisor
+   * authorization of that policy (`general.approve_<policy>`: discount,
+   * refund, cancel_cfdi, inventory_adjust…). A caller holding the capability
+   * runs it directly; anyone else first obtains a PIN grant from a supervisor
+   * (POST /approvals/pin-grant) and sends its id as `approval_id` in the action
+   * payload. The grant is SINGLE-USE, must be for this policy and (when it was
+   * anchored to a record) this record, comes from the same caller and expires
+   * (dynamic.ConsumePINGrant). The SDK asks for the PIN by itself when the served
+   * action carries the policy. Empty = no supervisor gate. Distinct from
+   * Approval, which parks the request for an asynchronous decision.
+   */
+  supervisor_policy?: string;
+  /**
+   * ModalWidth lets an addon size the action's modal explicitly: a CSS length
+   * ("720px", "60rem") or a number (px). Empty = the host's default (compact
+   * for a flat field list, roomy for line-items). The SDK reads it as
+   * `action.modalWidth`. Lets a rich create/edit form declare a wider modal.
+   */
+  modal_width?: string;
+  /**
+   * Idempotency makes the action REPLAY-SAFE. When set, the kernel keys a
+   * stored response by (org, model, action, <the KeyField value read from the
+   * invocation payload>) and returns the SAME response on any later invocation
+   * carrying that key, WITHOUT dispatching the handler again. This is what lets
+   * a payment capture or a fiscal stamp be retried over a flaky network without
+   * double-charging / double-stamping. Optional — omit for ordinary actions.
+   */
+  idempotency?: ActionIdempotency;
+  /**
+   * Approval makes the action SUPERVISED: instead of dispatching, the kernel
+   * stores the invocation (record id + payload) as a pending ApprovalRequest,
+   * emits `approval.requested` and answers `success:false` with
+   * `error.code = "approval_required"` + `meta.approval_request_id`. When a
+   * user holding one of Approval.Roles approves it, the kernel dispatches the
+   * SAME invocation (same payload, on behalf of the original requester).
+   * Approval.When makes it conditional (approval only when the predicate is
+   * true, e.g. "discount_pct > 10"); empty When = always. Nil = an ordinary,
+   * immediately-dispatched action. See ApprovalPolicy.
+   */
+  approval?: ApprovalPolicy;
+  /**
+   * Condition gates this contribution server-side: when set, the host only
+   * serves it to organizations where the predicate holds (e.g. another addon
+   * is installed). Nil = always served. See Condition.
+   */
+  condition?: Condition;
+}
+/**
+ * ActionIdempotency declares the payload field that carries an action's
+ * idempotency key. The client supplies a stable, unique value in that field
+ * (a UUID it generates per logical attempt); the kernel replays the first
+ * response for any repeat of the same (org, model, action, key).
+ */
+export interface ActionIdempotency {
+  /**
+   * KeyField names the field in the action PAYLOAD whose value is the
+   * idempotency key (e.g. "request_id"). Required when idempotency is set;
+   * an invocation that omits the field (empty key) is dispatched normally
+   * with no replay guarantee.
+   */
+  key_field: string;
+}
+/**
+ * ActionStep is one page of a multi-step declarative action wizard (see
+ * Action.Steps): a title, an optional description, and the fields the SDK
+ * renders and validates on that page. Field semantics are identical to
+ * Action.Fields entries.
+ */
+export interface ActionStep {
+  /**
+   * Title is the step's heading (or an i18n key resolving to it).
+   */
+  title: string;
+  /**
+   * Description is optional helper text rendered under the title.
+   */
+  description?: string;
+  /**
+   * Fields are the step's form fields — same contract as Action.Fields.
+   */
+  fields: ActionField[];
 }
 /**
  * ActionField is one input in an action modal's declarative form. It mirrors
@@ -329,13 +3102,70 @@ export interface ActionField {
   label?: string;
   type: string;
   required?: boolean;
-  options?: FieldOption[];
+  options?: FieldOptions;
   default?: any;
   placeholder?: string;
   widget?: string;
   ref?: string;
+  /**
+   * Multiple opts a Ref field into the multi-select picker (SDK
+   * DynamicMultiSelectField) instead of the default single-value
+   * dynamic_select — submitted as a plain array of target ids.
+   */
+  multiple?: boolean;
   search_endpoint?: string;
   validation?: FieldValidation;
+  /**
+   * DefaultFromRecord siembra el campo con una columna (o la primera no vacía
+   * de una lista) del registro sobre el que se abrió la acción: el SDK ya lo
+   * lee (action-modal-dispatcher scalarDefaultFromRecord) pero el kernel lo
+   * tiraba al servir la metadata. Ej.: register_payment.invoice_id ← "id".
+   */
+  default_from_record?: any;
+  /**
+   * OptionsSource declares a DYNAMIC select for this action field: instead of
+   * a hardcoded Options list, it names a PROVIDER key (e.g. "connector_repos",
+   * "installed_addons") the HOST registers and resolves at metadata-serve time,
+   * materialising the localized value/label list onto the served
+   * modelbase.FieldDef.Options. It is the action-field twin of Column.OptionsSource
+   * (both map onto modelbase FieldDef.OptionsSource); the kernel implements no
+   * providers — it only carries the key through the v3 → host conversion so any
+   * host can plug its own sources. Open enum (schema pattern ^[a-z][a-z0-9_]*$):
+   * an unknown key simply yields no options on hosts that don't register it. Use
+   * Ref for a relation picker, Options for a hardcoded enum, OptionsSource for
+   * host-computed lists. Pure UI metadata.
+   */
+  options_source?: string;
+  /**
+   * DependsOn names ANOTHER field in the same action form (a header field or a
+   * sibling item-field) whose current value supplies this picker's cascade
+   * `filter_value`. Used with the Options object form (DynamicOptions) on a
+   * dynamic_select. The host projects it onto modelbase.FieldDef.DependsOn
+   * (json `depends_on`) so the SDK scopes + re-fetches the picker's options
+   * when the depended-on field changes. Empty = no cascade. Optional.
+   */
+  depends_on?: string;
+  /**
+   * OptionFilter hides options of this field's relation / dynamic picker (see
+   * Column.OptionFilter). The host projects it onto modelbase.FieldDef.OptionFilter.
+   */
+  option_filter?: OptionFilter;
+  /**
+   * Scan opts this action field into CAMERA BARCODE SCANNING: the SDK shows a
+   * camera button that scans a barcode to FILL the field fast — a text/number
+   * input (e.g. a SKU) or a dynamic_select reference (scan feeds the picker's
+   * search so you pick without typing the UUID). The host projects it onto
+   * modelbase.FieldDef.Scan. Country/business-agnostic UI metadata. Optional.
+   */
+  scan?: boolean;
+  /**
+   * VisibleWhen declares CONDITIONAL VISIBILITY for this action field: the SDK
+   * renders it only when a SIBLING field's current value matches the predicate
+   * (see VisibleWhen). The host projects it onto modelbase.FieldDef.VisibleWhen
+   * so the action-modal renderer shows/hides the field against the live form
+   * values. A hidden field's value never gates submit. Nil = always visible.
+   */
+  visible_when?: VisibleWhen;
   /**
    * ItemFields declares the columns of a repeatable line-items group. It is
    * set on a field with type "array" (the multi-row container — e.g. the
@@ -347,22 +3177,210 @@ export interface ActionField {
    */
   item_fields?: ActionField[];
   /**
-   * LockRows fixes the set of rows of a line-items (type "array") field. When
-   * true the SDK hides the add-row and per-row delete controls, so the served
-   * rows can only have their cells edited — never added to or removed.
+   * LockRows, set on a type:"array" line-items field, declares that its rows
+   * are FIXED: the SDK (dynamic-line-items) hides the add-row and delete-row
+   * controls so the user can only edit existing rows' cells (e.g. a receive
+   * form prefilled from the ordered lines). Ignored on non-array fields.
    */
   lock_rows?: boolean;
+  /**
+   * Accept, MaxSize and StoragePath configure a field with type "upload" (a
+   * file attachment input). They are declarative hints the SDK reads off the
+   * served action metadata — the actual upload HANDLER lives in the host
+   * (ops/SDK); this contract only lets authors DECLARE an upload field.
+   *   Accept      — a comma-separated MIME / extension allow-list passed to the
+   *                 file picker's `accept` attribute, e.g. "image/*,.pdf".
+   *   MaxSize     — max accepted file size in BYTES (0 = host default).
+   *   StoragePath — optional logical bucket / path prefix the host stores the
+   *                 file under, e.g. "attachments/customers". Empty = host default.
+   * All three are ignored on non-upload fields.
+   */
+  accept?: string;
+  max_size?: number /* int64 */;
+  storage_path?: string;
+  /**
+   * LabelImage, LabelIcon and LabelColor map a column of the REMOTE model a
+   * dynamic_select (Ref / search_endpoint) resolves against to a visual the
+   * SDK renders beside each option's label. They make a relation picker read
+   * richly — a product thumbnail, a brand icon, a status colour — without
+   * hardcoding per-option visuals (which Options[] covers for STATIC lists).
+   * Each is the NAME of a field on the referenced model whose value the SDK
+   * reads:
+   *   LabelImage — a column holding an image URL (e.g. "image_url" → product
+   *                photo / contact avatar / brand logo).
+   *   LabelIcon  — a column holding an icon identifier.
+   *   LabelColor — a column holding a CSS colour.
+   * All optional and ignored on non-reference fields; existing pickers are
+   * unaffected.
+   */
+  label_image?: string;
+  label_icon?: string;
+  label_color?: string;
+  /**
+   * Readonly marks the field (typically an ItemFields column, e.g. a computed
+   * subtotal alongside Total) as display-only: the SDK renders its current
+   * value but disables input. Pure UI metadata — the kernel neither derives
+   * nor validates the value; the addon's own action handler computes it.
+   */
+  readonly?: boolean;
+  /**
+   * Total, on an ItemFields column, flags it for summation in the line-items
+   * footer. The SDK renders a totals row summing every numeric column marked
+   * Total (e.g. debit and credit of a journal entry). Ignored on flat fields.
+   */
+  total?: boolean;
+  /**
+   * Balance declares an optional, generic balance constraint on a line-items
+   * (type "array") field: the summed Total of one column must equal the summed
+   * Total of another (e.g. Σdebit == Σcredit). The SDK shows a balanced /
+   * out-of-balance indicator and blocks submit until the two sides match. It
+   * is deliberately domain-agnostic — "debit"/"credit" are just the two column
+   * keys to reconcile. Ignored when ItemFields is empty.
+   */
+  balance?: FieldBalanceRule;
+}
+/**
+ * FieldBalanceRule is a declarative reconciliation constraint between two summed
+ * columns of a line-items field. Generic by design: the SDK sums DebitColumn and
+ * CreditColumn across all rows and reports balanced only when they are equal
+ * (and, unless RequireNonzero is false, strictly positive). A journal entry sets
+ * {debit_column:"debit", credit_column:"credit"}, but any two reconcilable
+ * columns work.
+ */
+export interface FieldBalanceRule {
+  debit_column: string;
+  credit_column: string;
+  message?: string;
+  require_nonzero?: boolean;
+}
+/**
+ * DynamicOptions is the OBJECT form of a field/column `options` block: instead
+ * of a static value/label list, it declares WHERE a dependent picker's choices
+ * come from and HOW to project each option. It is the kernel-side mirror of the
+ * dependent-options contract — a dynamic_select whose candidates are scoped by a
+ * sibling field (DependsOn) and whose label is resolved from a related model.
+ * All fields map onto modelbase.FieldOptionsConfig so the host's
+ * OptionsConfigResolver can build the runtime query with zero per-app glue:
+ * 	Source      — the real table the candidates come from (scope + computed cols).
+ * 	FilterBy    — column on Source compared to the cascade `filter_value`.
+ * 	Value       — column on Source that becomes the option's value.
+ * 	LabelRef    — related model (key/table) whose row, looked up by Value (a
+ * 	              foreign id), supplies the human label. Optional: when empty the
+ * 	              label is Value itself.
+ * 	Description — column on Source projected onto option.description (e.g. qty).
+ * Generic by design — no domain model name is baked into the kernel; an addon
+ * names its own tables here.
+ */
+export interface DynamicOptions {
+  source?: string;
+  filter_by?: string;
+  value?: string;
+  /**
+   * Label names the column ON the Source row used as the option's display
+   * text (and the column the `q` typeahead + ordering match against). When
+   * empty the projection defaults to "name". Use it for a SAME-source picker
+   * whose label is a column on Source itself (e.g. a product picker labelled
+   * by `name`); LabelRef is its cross-model twin for when the label lives on
+   * ANOTHER model keyed by Value. Setting Label also fixes search/ordering,
+   * which otherwise fall back to Value (the raw id) when no label is declared.
+   */
+  label?: string;
+  label_ref?: string;
+  description?: string;
+  /**
+   * ExtraColumns lists additional scalar columns of Source that /options
+   * returns on every option (as sibling keys of id/value/label), so a picker's
+   * option_filter can test them client-side (e.g. ["status"] to hide cancelled
+   * invoices). Names are lowercase snake_case identifiers; each must be a
+   * column of Source when Source is an own model. Optional.
+   */
+  extra_columns?: string[];
+}
+/**
+ * OptionFilterRule hides options of a relation / dynamic picker. The SDK
+ * evaluates it client-side over the extra columns /options returns (see
+ * DynamicOptions.ExtraColumns). Field names the option property tested: an
+ * extra column (e.g. "status") or id/value/label/name/description/color/icon.
+ * Declare at least one of Equals / NotEquals / In / NotIn. Values are string,
+ * number or boolean. Comparison is trimmed + case-insensitive; positive rules
+ * need the property to exist, negative rules keep an option that lacks it.
+ */
+export interface OptionFilterRule {
+  field: string;
+  equals?: any;
+  not_equals?: any;
+  in?: any[];
+  not_in?: any[];
+}
+/**
+ * OptionFilter is one rule or a list of rules that must ALL pass (AND). The
+ * manifest accepts either an object or an array; it is always served as an
+ * array.
+ */
+export type OptionFilter = OptionFilterRule[];
+/**
+ * FieldOptions carries a field/column `options` declaration that is EITHER a
+ * static value/label list (the historical array form) OR a dynamic-source
+ * object (DynamicOptions). The two never coexist for one field — a static enum
+ * uses the array, a dependent picker uses the object — so a single json key
+ * (`options`) holds whichever shape the author wrote. UnmarshalJSON peeks the
+ * first significant byte (`[` vs `{`) to pick the branch; MarshalJSON re-emits
+ * the shape that was set so the value round-trips byte-compatibly. A nil/empty
+ * FieldOptions marshals to nothing (omitempty-friendly via len()/IsZero()).
+ */
+export interface FieldOptions {
+  Static: FieldOption[];
+  Dynamic?: DynamicOptions;
 }
 /**
  * FieldOption is a value/label choice for select-typed action fields.
+ * Beyond {value,label} an option can carry OPTIONAL visual hints the SDK
+ * renders alongside the label so a static choice list reads richly (a coloured
+ * status dot, a brand icon, a thumbnail). They are generic, domain-agnostic
+ * presentation metadata — the runtime ignores them entirely; only the SDK
+ * option renderer reads them. All optional, so existing two-field options keep
+ * working unchanged.
+ * 	Icon  — an icon identifier (lucide PascalCase or simple-icons slug) shown
+ * 	        before the label.
+ * 	Color — a CSS colour (hex / token) used for a dot / chip / text accent.
+ * 	Image — a URL (or bundle-relative path) to a small image / avatar / logo
+ * 	        rendered beside the label.
+ * 	When  — an OPTIONAL cascade guard that gates THIS static option by the
+ * 	        current value of a sibling enum field. When set, the option is only
+ * 	        offered while the sibling's value satisfies the condition; the SDK
+ * 	        hides the select entirely once no option applies. Omitted = the
+ * 	        option always applies (retro-compatible with existing enums).
  */
 export interface FieldOption {
   value: string;
   label: string;
+  icon?: string;
+  color?: string;
+  image?: string;
+  when?: OptionCondition;
 }
 /**
- * FieldValidation carries client-side validation hints for an action field.
- * The SDK reads these directly from the manifest-served action metadata.
+ * OptionCondition gates a single STATIC FieldOption by the current value of a
+ * sibling enum field — the static twin of the relational cascade (DependsOn +
+ * the DynamicOptions object). It only ever appears inside the array form of
+ * `options`; the object form (DynamicOptions) already scopes via FilterBy.
+ * 	Field — the sibling field whose value is evaluated. Optional: when empty the
+ * 	        evaluation falls back to the container column/field's DependsOn, so an
+ * 	        author can name the governing field once at the field level.
+ * 	In    — the option applies when the sibling's value ∈ In (string compare).
+ * 	NotIn — the option applies when the sibling's value ∉ NotIn.
+ * At least one of In / NotIn must be non-empty, and at least one of Field /
+ * container DependsOn must resolve a sibling — enforced by validation.
+ */
+export interface OptionCondition {
+  field?: string;
+  in?: string[];
+  not_in?: string[];
+}
+/**
+ * FieldValidation carries write-time + client-side validation for a column or
+ * action field. The kernel enforces these on create/update / action payload
+ * (locale-agnostic codes); the SDK localizes them to the operator's language.
  */
 export interface FieldValidation {
   regex?: string;
@@ -380,6 +3398,67 @@ export interface Tool {
   handler?: Handler;
 }
 /**
+ * AgentCapability declares one discoverable AI capability (contributions.
+ * agent_capabilities[]) the host copilot (Aby) can surface to a user: an
+ * answer, a guided walkthrough, an action, or a transaction, each carrying
+ * its own risk/confirmation policy so the copilot host can gate execution
+ * consistently across addons.
+ */
+export interface AgentCapability {
+  id: string;
+  title: string;
+  description: string;
+  kind: string; // answer|guide|act|transact
+  risk: string; // none|low|medium|high|critical
+  permission?: string;
+  route?: string;
+  input_schema?: { [key: string]: any};
+  requires_confirmation?: boolean;
+  reversible?: boolean;
+  tags?: string[];
+  guide?: AgentGuide;
+}
+/**
+ * AgentGuide is the step-by-step walkthrough body of an AgentCapability of
+ * kind "guide": the copilot host drives the user through Steps, matching
+ * natural-language Intents to trigger the guide.
+ */
+export interface AgentGuide {
+  id: string;
+  title?: string;
+  description?: string;
+  intents?: string[];
+  /**
+   * Prerequisites lists other guide IDs that should run (or be offered) before
+   * this one — e.g. customer segments before price lists.
+   */
+  prerequisites?: string[];
+  steps: AgentGuideStep[];
+}
+/**
+ * AgentGuideStep is one highlighted stop of an AgentGuide: Target names the
+ * federated UI element the host highlights (e.g. a data-testid-like anchor),
+ * optionally scoped to Route. AdvanceOn, when set, lets the SDK auto-advance
+ * on a DOM event instead of waiting for an explicit "next" from the user.
+ * Kind "concept" (or an empty Target) is a teaching popover without a DOM
+ * spotlight — used for domain context before UI steps.
+ */
+export interface AgentGuideStep {
+  id: string;
+  route?: string;
+  target?: string;
+  title: string;
+  description: string;
+  kind?: string; // ui (default) | concept
+  advanceOn?: AgentGuideAdvance;
+}
+/**
+ * AgentGuideAdvance declares the DOM event that auto-advances a guide step.
+ */
+export interface AgentGuideAdvance {
+  event: string; // click|change|input
+}
+/**
  * Subscription is an event handler. Must be backed by an event:subscribe capability.
  */
 export interface Subscription {
@@ -389,12 +3468,70 @@ export interface Subscription {
   comment?: string; // author note; ignored by the runtime
 }
 /**
+ * NotificationRule is one declarative in-app notification
+ * (contributions.notifications[]). The host matches `On` against canonical
+ * CRUD event names (addon.Model.action), renders Title/Body/Link with a tiny
+ * Mustache subset, and fans out to the audience described by To.
+ */
+export interface NotificationRule {
+  key: string;
+  on: string;
+  title: string;
+  body?: string;
+  severity?: string; // info|success|warning|error
+  icon?: string;
+  link?: string;
+  to?: NotificationAudience;
+  exclude_actor?: boolean;
+  when?: { [key: string]: any};
+  entered?: NotificationEntered;
+  comment?: string;
+}
+/**
+ * NotificationAudience selects recipients for a NotificationRule.
+ * Type: "org" (default) | "roles" | "actor" | "field".
+ */
+export interface NotificationAudience {
+  type?: string;
+  roles?: string[];
+  path?: string;
+}
+/**
+ * NotificationEntered gates a rule on a before→after field transition.
+ */
+export interface NotificationEntered {
+  field: string;
+  values: string[];
+}
+/**
  * Handler is the polymorphic invocation target for actions/tools/subscriptions.
  */
 export interface Handler {
-  type: string; // "wasm" | "webhook"
+  type: string; // "wasm" | "webhook" | "compiled" | "connector" | "native"
   function?: string;
   url?: string;
+  /**
+   * Operation names the metacore.native/v1 operation when Type=="native".
+   */
+  operation?: string;
+  /**
+   * Connector + Export target the export of ANOTHER addon's connector when
+   * Type=="connector": the action runs `Export` on the addon that provides
+   * connector `Connector`, org-scoped, with the action's field payload. This
+   * lets an addon action drive a connector (messaging/payments/fiscal) it does
+   * not own, WITHOUT duplicating that connector's client.
+   */
+  connector?: string;
+  export?: string;
+  /**
+   * Capability + Input, when Type=="capability", require a provider-neutral
+   * capability contract (package capability, e.g. "messaging.whatsapp.send")
+   * instead of naming a connector: the host dispatches to whichever installed
+   * addon PROVIDES it (provides_capabilities[]) in the invoking org. Input
+   * maps contract fields to record.<col> | payload.<field> | const:<literal>.
+   */
+  capability?: string;
+  input?: { [key: string]: string};
 }
 /**
  * ExtensionPoints is what this addon publishes for others to extend.
@@ -466,6 +3603,16 @@ export interface Role {
   key: string;
   label: string;
   description?: string;
+  /**
+   * Icon is an optional Lucide PascalCase name (e.g. "Wrench") the host
+   * materializes onto the org Role row for Equipo / Permisos chips.
+   */
+  icon?: string;
+  /**
+   * Color is an optional hex accent (#rrggbb). Hosts may ignore and pick a
+   * default palette entry when empty.
+   */
+  color?: string;
   permissions?: string[];
 }
 /**
@@ -475,6 +3622,30 @@ export interface PermissionDef {
   key: string;
   label?: string;
   description?: string;
+  /**
+   * Models is the explicit capability -> (model, actions) mapping. Hosts
+   * resolve a grant of Key against the data gate through it, so a capability
+   * can cover a model owned by ANOTHER addon (pos.sale.read over the
+   * customers-owned SalesOrder) or a model with no owner segment in the key
+   * (caja.queue.read, refund_claims.settle). Only the listed (model, action)
+   * pairs are authorized: a capability never leaks onto unmapped models.
+   */
+  models?: PermissionModel[];
+}
+/**
+ * PermissionModel is one (model, actions) entry of PermissionDef.Models.
+ */
+export interface PermissionModel {
+  /**
+   * Model is the model key ("SalesOrder"), table name, or "addon.Model"
+   * qualified key of any addon's model (cross-addon grants are the point).
+   */
+  model: string;
+  /**
+   * Actions are the data-gate actions the capability authorizes: index, show,
+   * create, update, delete, export, import, or a declared custom action key.
+   */
+  actions: string[];
 }
 /**
  * Setting is a user-facing tenant-scoped setting.
@@ -487,6 +3658,35 @@ export interface Setting {
   default?: any;
   required?: boolean;
   options?: SettingOption[];
+  /**
+   * OptionsSource names a WASM export the host invokes to fetch this setting's
+   * options at config time (type "dynamic_select"). For a CONNECTOR credential
+   * the export runs with the org's connector context (connector_get resolves
+   * the same connector), so options can be pulled live from the third-party API
+   * (e.g. factura.com /v4/series). The export returns
+   * {success,data:{options:[{value,label}]}}. Empty = static Options only.
+   */
+  options_source?: string;
+  /**
+   * Section binds this setting to a FormLayout section (by its key), exactly
+   * like a Column.Section — lets a connector's credentials group into the
+   * connector's form_layout sections / wizard steps. Empty = the implicit
+   * first/General section.
+   */
+  section?: string;
+  /**
+   * Validation is an optional constraint hint (e.g. a regex or a named rule)
+   * the host applies when collecting the value. Used by connector credentials.
+   */
+  validation?: string;
+  /**
+   * Scope says at which level the value lives. "org" (default) is one value
+   * per organization. "branch" lets each branch override it: the effective
+   * value for a branch is its own override, else the org value, else Default
+   * (see manifest.ResolveSetting). Lets a chain run a strict stock policy in
+   * one store and a permissive one in another (POS-1).
+   */
+  scope?: string;
 }
 /**
  * SettingOption is a value/label pair for select-typed settings.
@@ -518,11 +3718,20 @@ export interface Preset {
 }
 /**
  * PresetAddon is one entry in a preset's bundle list.
+ * Requires names other addon keys in the SAME preset that must be
+ * installed before this one. The preset resolver topologically sorts the
+ * addons on this field so the install loop respects ordering even when
+ * the preset author lists them out of order. Empty/nil = no constraint
+ * beyond the preset's declared manifest order. References to keys that
+ * are not part of the preset are reported as errors at resolve time —
+ * cross-preset dependencies are not modelled here (those are the host's
+ * concern, e.g. ops's marketplace catalog).
  */
 export interface PresetAddon {
   key: string;
   version: string;
   optional?: boolean;
+  requires?: string[];
 }
 /**
  * Theme block for kind: "Theme" manifests.
@@ -555,3 +3764,930 @@ export interface Signature {
   value: string;
   signed_at: string;
 }
+/**
+ * ImportSpec is a model's spreadsheet-import declaration in a v3 manifest —
+ * the addon-authored twin of modelbase.ImportSpec. It is the single source of
+ * truth for BOTH the template the user downloads and the parser that reads the
+ * filled file back, so a column cannot be renamed in one half without the
+ * other following. Omitting the block lets the kernel derive a spec from the
+ * model's own columns.
+ */
+export interface ImportSpec {
+  /**
+   * Columns is the ordered column list of the template.
+   */
+  columns: ImportColumn[];
+  /**
+   * MaxRows caps a single upload. Zero uses the kernel default.
+   */
+  max_rows?: number /* int */;
+  /**
+   * SheetName titles the data sheet of the generated workbook. Empty uses
+   * the model's label.
+   */
+  sheet_name?: string;
+  /**
+   * Instructions are free-form lines rendered on a second sheet — the place
+   * to state what the import does NOT cover.
+   */
+  instructions?: string[];
+}
+/**
+ * ImportColumn is one spreadsheet column of an ImportSpec.
+ */
+export interface ImportColumn {
+  /**
+   * Key is the column (or dot-path) the cell value is written to.
+   */
+  key: string;
+  /**
+   * Header is the human title written into the template, and the primary
+   * match when reading a file back.
+   */
+  header: string;
+  /**
+   * Aliases are extra headers accepted on the way in. Matching ignores case
+   * and a trailing "*", so those variants need not be listed.
+   */
+  aliases?: string[];
+  /**
+   * Required rejects the row when the cell is empty.
+   */
+  required?: boolean;
+  /**
+   * Type mirrors the column type and drives cell validation.
+   */
+  type?: string;
+  /**
+   * Example fills the sample row of the template.
+   */
+  example?: string;
+  /**
+   * Hint is the short description rendered under the example row.
+   */
+  hint?: string;
+  /**
+   * Generator names a host-registered value provider used when the cell is
+   * left blank (e.g. "random_secret"). Unknown names leave the value absent.
+   */
+  generator?: string;
+  /**
+   * Transform names a cell post-processor (e.g. "media_url") run after
+   * coercion. Unknown names fail the row at import time.
+   */
+  transform?: string;
+}
+/**
+ * Condition is a declarative predicate the HOST evaluates server-side before it
+ * serves a contribution to an organization. It is the cross-addon visibility
+ * primitive: an addon can contribute a nav entry, an action or a widget that
+ * only materialises when some OTHER addon is present in that org, or when a
+ * third-party CONNECTOR the contribution depends on is actually connected.
+ * 	"condition": { "addon_installed": "workshop" }
+ * 	"condition": { "connector_connected": "factura_com" }
+ * A nil Condition means "always". An empty Condition (no predicate set) is also
+ * "always" — forward-compatible with hosts that don't know a newer predicate.
+ * Unlike VisibleWhen (a client-side, single-sibling form predicate the SDK
+ * evaluates against the record being edited), Condition is resolved on the
+ * server against org-level installation state, so a contribution filtered out
+ * by it never reaches the browser.
+ */
+export interface Condition {
+  /**
+   * AddonInstalled is the addon key that must be installed in the current
+   * organization for the contribution to be served (e.g. "workshop"). The
+   * host answers it with its authoritative installation table — in the
+   * kernel that is installer.Installer.IsInstalled. Empty = no constraint.
+   */
+  addon_installed?: string;
+  /**
+   * ConnectorConnected is the key of a connector — one of this manifest's own
+   * connectors[] — that must be CONNECTED for the organization (credentials
+   * supplied, integration healthy) for the contribution to be usable. It is
+   * the capability gate for everything that talks to a third party: stamping
+   * a CFDI through a PAC, sending a WhatsApp message, charging a card.
+   * Declaring it is what stops a button from looking operational on an org
+   * that never configured the integration. Empty = no constraint.
+   * Unlike AddonInstalled (a soft dependency the operator cannot act on from
+   * the screen where it bites), an unmet connector gate is REMEDIABLE — the
+   * operator can go connect it — which is why the default Unmet policy
+   * differs. See Unmet.
+   */
+  connector_connected?: string;
+  /**
+   * Unmet selects what the host does when the org-level predicate does NOT
+   * hold:
+   * 	"disable" — serve the contribution but mark it inert, carrying a
+   * 	            machine-readable reason the SDK renders as a tooltip
+   * 	            ("Conecta factura.com para timbrar"). Default for a
+   * 	            ConnectorConnected gate: a button that silently vanishes
+   * 	            teaches nothing, a disabled one names the fix.
+   * 	"hide"    — do not serve the contribution at all. Default for an
+   * 	            AddonInstalled gate: an addon the org has not installed is
+   * 	            not a fix the operator can apply from this screen.
+   * Empty = the per-predicate default above (see UnmetPolicy). A host that
+   * does not understand a value falls back to "hide", never less safe than
+   * serving the contribution.
+   */
+  unmet?: string;
+  /**
+   * Field/Operator/Value optionally gate a row action on the target record.
+   */
+  field?: string;
+  operator?: string;
+  value?: any;
+}
+/**
+ * Unmet policies for Condition.Unmet.
+ */
+export const UnmetHide = "hide";
+/**
+ * Unmet policies for Condition.Unmet.
+ */
+export const UnmetDisable = "disable";
+/**
+ * Route is one entry of a declarative routing table
+ * (contributions.routes[]). It answers a single question — "for this decision
+ * DOMAIN, when the record looks like MATCH, which named HANDLER wins?" — and
+ * the host resolves it per organization over the routes of every INSTALLED
+ * addon.
+ * The kernel is deliberately agnostic about what any of these strings mean.
+ * Domain and Handler are opaque vocabulary owned by the addons that agree on
+ * them; the kernel only matches attributes, applies precedence and honours the
+ * installation gate. That is what keeps a cross-addon decision (which addon
+ * fulfils an order line: move stock directly, allocate across warehouses, open
+ * a work order) out of the framework as domain knowledge while still being
+ * resolvable by it.
+ * 	{ "domain": "fulfillment",
+ * 	  "match": { "product_type": "service" },
+ * 	  "handler": "service_workorder",
+ * 	  "priority": 100,
+ * 	  "condition": { "addon_installed": "workshop" } }
+ */
+export interface Route {
+  /**
+   * Domain is the decision table this route belongs to (e.g. "fulfillment").
+   * Required, snake_case.
+   */
+  domain: string;
+  /**
+   * Match is the attribute predicate: every key must equal the corresponding
+   * attribute of the record being routed. An EMPTY match is the domain's
+   * CATCH-ALL (it matches anything) — that is how an addon declares the
+   * default handler. Values are compared as strings, exactly.
+   */
+  match?: { [key: string]: string};
+  /**
+   * Handler is the opaque name the winning route resolves to. Required.
+   */
+  handler: string;
+  /**
+   * Priority breaks ties: the highest priority wins. Default 0. Routes with
+   * a more specific Match should carry a higher priority than the catch-all
+   * they override. Equal priorities are broken deterministically — see
+   * routing.Table.Resolve.
+   */
+  priority?: number /* int */;
+  /**
+   * Condition gates this contribution server-side: when set, the host only
+   * serves it to organizations where the predicate holds (e.g. another addon
+   * is installed). Nil = always served. See Condition.
+   */
+  condition?: Condition;
+}
+/**
+ * CrossRule is one declarative cross-record rule. Kind selects the shape:
+ * 	ref_state — the parent row (Parent, addressed by this row's Ref column)
+ * 	            must match Require (parent column -> scalar or list). Checked
+ * 	            on create and when Ref changes on update.
+ * 	            With Enforce "always" it is checked on every create, update
+ * 	            and delete instead (the row is frozen while the parent is
+ * 	            outside Require).
+ * 	sum_lte   — sum(Sum over this model's rows sharing the same Ref and
+ * 	            matching Where) must stay <= parent.Max. The parent row is
+ * 	            locked FOR UPDATE first so concurrent writers serialize.
+ * 	unique    — no other live row of THIS model in the organization (matching
+ * 	            Where) has the same values in Columns. Validated on write, with
+ * 	            no DDL index, so installing it never fails on a tenant that
+ * 	            already holds duplicates; an edit that leaves Columns and Where
+ * 	            untouched is not re-checked. Ref/Parent are not used. The
+ * 	            installer then backs the rule with a partial UNIQUE index
+ * 	            (CONCURRENTLY) only when the table holds no duplicates; with
+ * 	            duplicates the upgrade still succeeds and the host lists them
+ * 	            (GET /dynamic/:model/unique-violations).
+ * SECURITY: nothing here is free-form SQL — columns are identifiers checked
+ * against the manifest, values are bound parameters.
+ */
+export interface CrossRule {
+  kind: string;
+  error_key: string;
+  ref: string;
+  parent: string;
+  require?: { [key: string]: any};
+  sum?: string;
+  max?: string;
+  where?: { [key: string]: any};
+  /**
+   * Columns are the own columns a unique rule keeps unique together (e.g.
+   * ["branch_id", "code"]). A row with any of them empty is not checked.
+   */
+  columns?: string[];
+  /**
+   * Field is the column a unique violation is reported on (a 422 field
+   * error with code "duplicate"); one of Columns, defaults to the last one.
+   */
+  field?: string;
+  /**
+   * OnMissingParent decides what happens when the referenced parent row does
+   * not exist (yet): "reject" (default, fail closed) or "skip" (the rule is
+   * not applied for this write). Use "skip" only when the flow legitimately
+   * writes children before their parent (e.g. POS tenders before the order).
+   */
+  on_missing_parent?: string;
+  /**
+   * Enforce widens WHEN a ref_state rule is checked:
+   *   ""       (default) — on create and when Ref changes on update. A later
+   *                        edit of a row whose parent moved on is allowed
+   *                        (a payment edited after its session closed).
+   *   "always" — on EVERY write of the row: create, any update (even one that
+   *              keeps Ref) and delete. The row is FROZEN while its parent is
+   *              outside Require — e.g. the lines of a quote once it is
+   *              accepted: none can be added, edited or removed (QA LIVE-10).
+   * Only valid on ref_state.
+   */
+  enforce?: string;
+}
+/**
+ * DocumentForms is the guided create flow of a document-like model. Mirrors the
+ * SDK's DocumentFormsManifest (runtime-react/src/types.ts) 1:1.
+ */
+export interface DocumentForms {
+  /**
+   * TypeField is the model column that discriminates the document type (e.g.
+   * "type"); the SDK writes the picked type's value into it. Must be a column
+   * of the owning model. Empty = the type is not written.
+   */
+  type_field?: string;
+  /**
+   * LinesField is the default payload field receiving the line items (a type's
+   * lines.field overrides it). Empty = "lines".
+   */
+  lines_field?: string;
+  /**
+   * Types are the selectable document types, in display order. At least one.
+   */
+  types: DocumentFormType[];
+}
+/**
+ * DocumentFormType is one selectable document type.
+ */
+export interface DocumentFormType {
+  /**
+   * Key identifies the type within the model (lowercase snake_case, unique).
+   */
+  key: string;
+  /**
+   * Label is the card title (literal or i18n key).
+   */
+  label: string;
+  description?: string;
+  icon?: string;
+  /**
+   * Value is what the SDK writes into type_field (e.g. "E"). Empty = key.
+   */
+  value?: string;
+  /**
+   * Fields are the type's header fields, same vocabulary as Action.Fields.
+   */
+  fields: ActionField[];
+  /**
+   * Defaults are fixed values that travel with this type's create payload.
+   */
+  defaults?: { [key: string]: any};
+  /**
+   * Lines gives the type a line-items step: `true` (all defaults) or an object.
+   * `false` / absent = no lines step.
+   */
+  lines?: DocumentFormLines;
+  /**
+   * Endpoint overrides the create endpoint for this type. Empty = the model's.
+   */
+  endpoint?: string;
+  /**
+   * SubmitLabel is the final button text (literal or i18n key).
+   */
+  submit_label?: string;
+  /**
+   * --- DocumentEditor (plan Pitsline 2026-10-05, patches 07/09) ---------
+   * Layout is "wizard" (default, today's flow) or "editor" (one screen).
+   */
+  layout?: string;
+  /**
+   * Party is the counterparty card (customer / supplier) of the editor.
+   */
+  party?: DocumentFormParty;
+  /**
+   * Sources are the «Cargar desde…» documents whose lines are copied.
+   */
+  sources?: DocumentFormSource[];
+  /**
+   * Preview names the analyze-only action that renders the pre-stamp preview.
+   */
+  preview?: DocumentFormPreview;
+  /**
+   * SubmitAction saves through a create-placed model action instead of the
+   * generic create (e.g. Payment → collect_multi_payment_create).
+   */
+  submit_action?: string;
+  /**
+   * CreateModel delegates this type's creation to ANOTHER model's own create
+   * flow: «Crear» opens that model's page with its create (document form or
+   * record form) already open, instead of a form here. For a listing whose
+   * rows are born elsewhere — fiscal_mexico's FiscalDocument invoices are
+   * stamped from customers.Invoice — so the filtered view still offers
+   * «Crear» without duplicating the other addon's form. Model key, optionally
+   * addon-qualified ("customers.Invoice"). Excludes fields, lines, endpoint,
+   * submit_action and the editor block: nothing is created here.
+   */
+  create_model?: string;
+}
+/**
+ * DocumentFormParty: which header field picks the counterparty and what the
+ * PartyCard shows. Extension columns (fiscal_data.*) are always appended.
+ */
+export interface DocumentFormParty {
+  field: string;
+  model: string;
+  endpoint?: string;
+  summary?: string[];
+  credit?: { [key: string]: string};
+}
+/**
+ * DocumentFormSource is one «Cargar desde…» origin.
+ */
+export interface DocumentFormSource {
+  key: string;
+  label: string;
+  model: string;
+  lines: string;
+  map?: { [key: string]: string};
+  header?: { [key: string]: string};
+  link_field?: string;
+  option_filter?: unknown;
+  requires_addon?: string;
+  /**
+   * --- Cantidad pendiente (crear desde otro documento) -------------------
+   * QtyField is the source line's quantity column. Empty = "quantity".
+   */
+  qty_field?: string;
+  /**
+   * LineLinkField is the column of THIS document's line model that stores
+   * the source line id (e.g. invoice_items.sales_order_item_id). With it the
+   * runtime serves the pending quantity per source line (source quantity −
+   * what live documents of this model already consumed) and rejects a save
+   * that exceeds it.
+   */
+  line_link_field?: string;
+  /**
+   * RemainingQtyField is a source line column that already holds the pending
+   * quantity (kept by the source's addon). Wins over the computed one.
+   */
+  remaining_qty_field?: string;
+  /**
+   * RemainingEndpoint is an addon-owned GET endpoint that serves the source
+   * lines with their pending quantity (`?id=<source id>`). The SDK reads it
+   * instead of the runtime's; the addon's own handler validates the save.
+   */
+  remaining_endpoint?: string;
+  /**
+   * ExcludeStates are states of THIS document that do not consume the
+   * source (e.g. cancelled, void). Read from the model's stage_field (or
+   * `state`).
+   */
+  exclude_states?: string[];
+}
+/**
+ * DocumentFormPreview: row action called with analyze=true on the draft.
+ */
+export interface DocumentFormPreview {
+  action: string;
+  requires_addon?: string;
+  label?: string;
+}
+/**
+ * DocumentFormOpenDocuments feeds PaymentAllocator (lines.kind = allocation).
+ */
+export interface DocumentFormOpenDocuments {
+  model: string;
+  party_field: string;
+  balance_field: string;
+  number_field: string;
+  total_field?: string;
+  due_field?: string;
+  issued_field?: string;
+  method_field?: string;
+  line_document_field: string;
+  line_amount_field: string;
+  option_filter?: unknown;
+}
+/**
+ * DocumentFormLines configures the line-items step of a document type. In the
+ * manifest it is `true` or an object; `false` disables it.
+ */
+export interface DocumentFormLines {
+  /**
+   * Field is the payload field receiving the lines. Empty = DocumentForms.LinesField.
+   */
+  field?: string;
+  /**
+   * Columns are optional editor columns ("discount", "tax", "unit"...).
+   */
+  columns?: string[];
+  /**
+   * PriceSource is "sale" (list price, default) or "cost" (purchases).
+   */
+  price_source?: string;
+  /**
+   * Required: at least one line is needed to save. Nil = true.
+   */
+  required?: boolean;
+  /**
+   * Title is the step heading. Empty = the SDK default.
+   */
+  title?: string;
+  /**
+   * DiscountMode: "percent" (default), "amount" or "both". Must match the
+   * line model's formula (customers.InvoiceItem subtracts an AMOUNT).
+   */
+  discount_mode?: string;
+  /**
+   * Kind: sale (default) | purchase | credit | allocation | workorder.
+   */
+  kind?: string;
+  /**
+   * OpenDocuments is required when Kind = allocation.
+   */
+  open_documents?: DocumentFormOpenDocuments;
+}
+
+//////////
+// source: ui.go
+
+/**
+ * PageLayoutShell mounts the page inside the host chrome (sidebar,
+ * header, breadcrumbs): an embedded page.
+ */
+export const PageLayoutShell = "shell";
+/**
+ * PageLayoutImmersive gives the page the whole viewport (POS, kiosk,
+ * kitchen display).
+ */
+export const PageLayoutImmersive = "immersive";
+/**
+ * MaxFrontendPages caps the pages one addon declares.
+ */
+export const MaxFrontendPages = 32;
+/**
+ * MaxPageBudgetKB is the largest per-page JavaScript budget (gzip KB of
+ * the page's own chunks, shares excluded) an addon may declare. The hub
+ * enforces min(budget_kb, MaxPageBudgetKB) on publish.
+ */
+export const MaxPageBudgetKB = 150;
+/**
+ * MaxPageBreadcrumbs caps the static breadcrumb trail of a page.
+ */
+export const MaxPageBreadcrumbs = 4;
+/**
+ * View types a NavItem may declare. ViewTypeTable and ViewTypeKanban predate
+ * the declarative views and need no host capability; the rest are rendered by
+ * a lazily loaded SDK renderer and require host capability "ui.views.<type>".
+ */
+export const ViewTypeTable = "table";
+/**
+ * View types a NavItem may declare. ViewTypeTable and ViewTypeKanban predate
+ * the declarative views and need no host capability; the rest are rendered by
+ * a lazily loaded SDK renderer and require host capability "ui.views.<type>".
+ */
+export const ViewTypeKanban = "kanban";
+/**
+ * View types a NavItem may declare. ViewTypeTable and ViewTypeKanban predate
+ * the declarative views and need no host capability; the rest are rendered by
+ * a lazily loaded SDK renderer and require host capability "ui.views.<type>".
+ */
+export const ViewTypeMap = "map";
+/**
+ * View types a NavItem may declare. ViewTypeTable and ViewTypeKanban predate
+ * the declarative views and need no host capability; the rest are rendered by
+ * a lazily loaded SDK renderer and require host capability "ui.views.<type>".
+ */
+export const ViewTypeTimeline = "timeline";
+/**
+ * View types a NavItem may declare. ViewTypeTable and ViewTypeKanban predate
+ * the declarative views and need no host capability; the rest are rendered by
+ * a lazily loaded SDK renderer and require host capability "ui.views.<type>".
+ */
+export const ViewTypeCalendar = "calendar";
+/**
+ * View types a NavItem may declare. ViewTypeTable and ViewTypeKanban predate
+ * the declarative views and need no host capability; the rest are rendered by
+ * a lazily loaded SDK renderer and require host capability "ui.views.<type>".
+ */
+export const ViewTypeChart = "chart";
+/**
+ * View types a NavItem may declare. ViewTypeTable and ViewTypeKanban predate
+ * the declarative views and need no host capability; the rest are rendered by
+ * a lazily loaded SDK renderer and require host capability "ui.views.<type>".
+ */
+export const ViewTypeSplit = "split";
+/**
+ * Detail panel kinds (Model.Detail.Panels[].Kind).
+ */
+export const PanelKindMap = "map";
+/**
+ * Detail panel kinds (Model.Detail.Panels[].Kind).
+ */
+export const PanelKindTimeline = "timeline";
+/**
+ * Detail panel kinds (Model.Detail.Panels[].Kind).
+ */
+export const PanelKindChart = "chart";
+/**
+ * Detail panel kinds (Model.Detail.Panels[].Kind).
+ */
+export const PanelKindRelation = "relation";
+/**
+ * Detail panel kinds (Model.Detail.Panels[].Kind).
+ */
+export const PanelKindStats = "stats";
+/**
+ * Detail panel kinds (Model.Detail.Panels[].Kind).
+ */
+export const PanelKindCustom = "custom";
+/**
+ * FrontendPage is one federated page of the addon's remote. Each page has its
+ * own Expose (a separate chunk with its own budget), so one remote serves many
+ * screens without sibling manifests. The host resolves where to mount it
+ * BEFORE downloading the remote: Layout "shell" mounts it embedded under
+ * /a/<addon>/<path>, "immersive" full screen under /addons/<addon>/<path>.
+ * A nav entry links to it with url "addon://<addon>/<path>".
+ */
+export interface FrontendPage {
+  /**
+   * Key is the page's stable id, unique within the addon (snake_case).
+   */
+  key: string;
+  /**
+   * Path is the URL segment(s) under the addon base, lowercase kebab-case
+   * ("control-tower", "reports/daily"). Deep links below it reach the page.
+   */
+  path: string;
+  /**
+   * Expose is the federated module that default-exports the page component
+   * (e.g. "./pages/control-tower"). Must differ from Frontend.Expose.
+   */
+  expose: string;
+  /**
+   * Layout is "shell" (embedded) or "immersive" (full screen). Empty =
+   * Frontend.Layout, then "shell".
+   */
+  layout?: string;
+  /**
+   * Title is the i18n key of the page title (header, document title).
+   */
+  title: string;
+  /**
+   * Icon is an optional lucide icon name.
+   */
+  icon?: string;
+  /**
+   * Permission gates the page: the host does not mount it (its own 403)
+   * when the viewer lacks it. Same vocabulary as NavItem.Permission.
+   */
+  permission?: string;
+  /**
+   * Requires declares the data surface the page calls, projected to
+   * capability strings exactly like NavItem.Requires (Acceder expansion).
+   */
+  requires?: NavRequire[];
+  /**
+   * Shares lists lazy host-provided modules the page imports (closed set:
+   * see PageShares). Each implies a host capability (ui.maps, ui.charts).
+   */
+  shares?: string[];
+  /**
+   * BudgetKB is the page's own JavaScript budget in gzip KB, shares
+   * excluded. 0 = the default (MaxPageBudgetKB). The hub rejects a publish
+   * whose page chunk exceeds it.
+   */
+  budget_kb?: number /* int */;
+  /**
+   * Breadcrumbs is the static trail shown before the page title. Empty =
+   * derived from the navigation entry that links to the page.
+   */
+  breadcrumbs?: PageBreadcrumb[];
+}
+/**
+ * PageBreadcrumb is one static breadcrumb of a page.
+ */
+export interface PageBreadcrumb {
+  /**
+   * Title is the i18n key shown.
+   */
+  title: string;
+  /**
+   * URL is an optional host URL the crumb links to.
+   */
+  url?: string;
+}
+/**
+ * NavView configures the declarative renderer a NavItem's ViewType selects.
+ * Exactly the block matching ViewType is read; the others must be absent. It
+ * travels in the served table metadata (on demand), never in the lite
+ * manifest: the shell only needs ViewType to build the link.
+ */
+export interface NavView {
+  map?: MapView;
+  timeline?: TimelineView;
+  calendar?: CalendarView;
+  chart?: ChartView;
+  split?: SplitView;
+}
+/**
+ * MapView renders a model's rows (or, in a detail panel, one record) as map
+ * features. Coordinates come from Point (two numeric columns) or Geometry (a
+ * GeoJSON column), never both.
+ */
+export interface MapView {
+  /**
+   * Point names the latitude/longitude columns.
+   */
+  point?: MapPoint;
+  /**
+   * Geometry names a GeoJSON (jsonb) column.
+   */
+  geometry?: string;
+  /**
+   * Cluster groups nearby points.
+   */
+  cluster?: boolean;
+  /**
+   * ColorBy names a column whose option colours tint each feature.
+   */
+  color_by?: string;
+  /**
+   * Popup lists the columns shown when a feature is selected (max 8).
+   */
+  popup?: string[];
+  /**
+   * Layers adds features from other models (branches, coverage zones).
+   */
+  layers?: MapLayer[];
+  /**
+   * Route draws the record's ordered child points (detail panels only).
+   */
+  route?: MapRoute;
+  /**
+   * Fit is the initial viewport: "data" (default, fit the features) or
+   * "org_default" (the organization's default area).
+   */
+  fit?: string;
+}
+/**
+ * MapPoint names a latitude and a longitude column (WGS84 degrees).
+ */
+export interface MapPoint {
+  lat: string;
+  lng: string;
+}
+/**
+ * MapLayer is an extra feature layer from another model, own or another
+ * addon's ("locations.Branch").
+ */
+export interface MapLayer {
+  /**
+   * Kind is "points" (needs Point) or "zones" (needs Geometry polygons).
+   */
+  kind: string;
+  model: string;
+  /**
+   * Point / Geometry are columns of Model.
+   */
+  point?: MapPoint;
+  geometry?: string;
+  /**
+   * Icon is an optional lucide icon name for points.
+   */
+  icon?: string;
+  /**
+   * Label names a column of Model used as the feature label.
+   */
+  label?: string;
+  /**
+   * ColorBy names a column of Model whose option colours tint features.
+   */
+  color_by?: string;
+}
+/**
+ * MapRoute draws a line through a record's child rows in order (e.g. a
+ * shipment's scans): Relation is one of the model's relations, Point names
+ * the child's coordinate columns and OrderBy the child column that orders them.
+ */
+export interface MapRoute {
+  relation: string;
+  point?: MapPoint;
+  order_by: string;
+}
+/**
+ * TimelineView renders dated entries in order. On a nav entry the entries are
+ * the model's rows; in a detail panel they come from Source.
+ */
+export interface TimelineView {
+  /**
+   * DateField orders and dates each entry. Required.
+   */
+  date_field: string;
+  /**
+   * TitleField is each entry's heading. Required.
+   */
+  title_field: string;
+  /**
+   * StatusField, DescriptionField and GroupBy are optional.
+   */
+  status_field?: string;
+  description_field?: string;
+  group_by?: string;
+  /**
+   * Source is where a detail panel reads its entries (required there,
+   * invalid on a nav entry).
+   */
+  source?: TimelineSource;
+}
+/**
+ * TimelineSource is the origin of a timeline panel's entries: the child rows
+ * of one of the model's relations, OR the array field Items of a capability
+ * query's output, called with Input mapped from the record (record.<column> or
+ * const:<literal>). The host runs the capability query with the viewer's
+ * permissions and a short cache; the addon copies no data.
+ */
+export interface TimelineSource {
+  relation?: string;
+  capability?: string;
+  input?: { [key: string]: string};
+  items?: string;
+}
+/**
+ * CalendarView places a model's rows on a calendar.
+ */
+export interface CalendarView {
+  /**
+   * StartField is the date/timestamp column each entry starts at. Required.
+   */
+  start_field: string;
+  /**
+   * EndField is an optional end column (single-point entries without it).
+   */
+  end_field?: string;
+  /**
+   * TitleField is the entry label (default: the model's display column).
+   */
+  title_field?: string;
+  /**
+   * ColorBy names a column whose option colours tint entries.
+   */
+  color_by?: string;
+  /**
+   * AllDayField names a boolean column marking all-day entries.
+   */
+  all_day_field?: string;
+}
+/**
+ * ChartView renders one aggregate with the dashboard engine (the same
+ * WidgetQuery as contributions.dashboard[]): no new aggregation logic.
+ */
+export interface ChartView {
+  /**
+   * Kind is bar|line|area|pie|donut.
+   */
+  kind: string;
+  query?: WidgetQuery;
+  /**
+   * Format applies to values: number|currency|percent|compact.
+   */
+  format?: string;
+  /**
+   * Relation scopes the query to the record's children (detail panels
+   * only): Query.Model must be the relation's child model.
+   */
+  relation?: string;
+}
+/**
+ * SplitView is master-detail on one screen: the list on one side, the
+ * selected record's panels on the other.
+ */
+export interface SplitView {
+  /**
+   * Columns are the list columns (default: NavItem.Columns, then the
+   * model's defaults).
+   */
+  columns?: string[];
+  /**
+   * Panels are the detail panels (default: the model's Detail.Panels).
+   */
+  panels?: DetailPanel[];
+}
+/**
+ * ModelDetail declares the panels of a model's record detail page, rendered
+ * by the SDK next to the record's fields (master-detail).
+ */
+export interface ModelDetail {
+  panels: DetailPanel[];
+}
+/**
+ * DetailPanel is one block of a record's detail page. Kind selects the block
+ * read: map → Map, timeline → Timeline, chart → Chart, relation → Relation,
+ * stats → Stats, custom → Expose (a federated component; needs a frontend).
+ */
+export interface DetailPanel {
+  /**
+   * Key is unique within the model (snake_case).
+   */
+  key: string;
+  /**
+   * Kind is map|timeline|chart|relation|stats|custom.
+   */
+  kind: string;
+  /**
+   * Title is the i18n key of the panel heading.
+   */
+  title: string;
+  /**
+   * Span is the panel width: "full" (default) or "half".
+   */
+  span?: string;
+  /**
+   * Permission optionally hides the panel from viewers without it.
+   */
+  permission?: string;
+  map?: MapView;
+  timeline?: TimelineView;
+  chart?: ChartView;
+  relation?: RelationPanel;
+  stats?: StatsPanel;
+  /**
+   * Expose is the federated component of a kind=custom panel.
+   */
+  expose?: string;
+}
+/**
+ * RelationPanel lists the record's children through one of the model's
+ * relations.
+ */
+export interface RelationPanel {
+  /**
+   * Name is the relation (Model.Relations[].Name).
+   */
+  name: string;
+  /**
+   * Columns are child columns shown (default: the child's defaults).
+   */
+  columns?: string[];
+  /**
+   * Limit caps the rows shown before "see all" (1..50, default 10).
+   */
+  limit?: number /* int */;
+}
+/**
+ * StatsPanel shows a few of the record's own values as figures.
+ */
+export interface StatsPanel {
+  items: StatItem[];
+}
+/**
+ * StatItem is one figure of a stats panel.
+ */
+export interface StatItem {
+  /**
+   * Field is a column of the model.
+   */
+  field: string;
+  /**
+   * Label is an optional i18n key (default: the column label).
+   */
+  label?: string;
+  /**
+   * Format: number|currency|percent|compact|date|datetime|relative_date.
+   */
+  format?: string;
+}
+
+//////////
+// source: ui_validate.go
+
+/**
+ * modelShape is what UI validation knows about one model of the addon.
+ */
+/**
+ * uiChecker accumulates UI-grammar errors. lookup resolves the addon's own
+ * models; nil (the legacy carrier, cross-addon models) skips column and
+ * relation existence checks but keeps every structural rule.
+ */

@@ -10,36 +10,21 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
-import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
-import { Route as Errors500RouteImport } from './routes/errors/500'
-import { Route as Errors404RouteImport } from './routes/errors/404'
-import { Route as authSignUpRouteImport } from './routes/(auth)/sign-up'
-import { Route as authSignInRouteImport } from './routes/(auth)/sign-in'
 import { Route as authForgotPasswordRouteImport } from './routes/(auth)/forgot-password'
+import { Route as authSignInRouteImport } from './routes/(auth)/sign-in'
+import { Route as authSignUpRouteImport } from './routes/(auth)/sign-up'
+import { Route as AuthenticatedIndexRouteImport } from './routes/_authenticated/index'
+import { Route as Errors404RouteImport } from './routes/errors/404'
+import { Route as Errors500RouteImport } from './routes/errors/500'
 import { Route as AuthenticatedUsersIndexRouteImport } from './routes/_authenticated/users/index'
 
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AuthenticatedRouteRoute,
-} as any)
-const Errors500Route = Errors500RouteImport.update({
-  id: '/errors/500',
-  path: '/errors/500',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const Errors404Route = Errors404RouteImport.update({
-  id: '/errors/404',
-  path: '/errors/404',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const authSignUpRoute = authSignUpRouteImport.update({
-  id: '/(auth)/sign-up',
-  path: '/sign-up',
+const authForgotPasswordRoute = authForgotPasswordRouteImport.update({
+  id: '/(auth)/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const authSignInRoute = authSignInRouteImport.update({
@@ -47,9 +32,24 @@ const authSignInRoute = authSignInRouteImport.update({
   path: '/sign-in',
   getParentRoute: () => rootRouteImport,
 } as any)
-const authForgotPasswordRoute = authForgotPasswordRouteImport.update({
-  id: '/(auth)/forgot-password',
-  path: '/forgot-password',
+const authSignUpRoute = authSignUpRouteImport.update({
+  id: '/(auth)/sign-up',
+  path: '/sign-up',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedIndexRoute = AuthenticatedIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const Errors404Route = Errors404RouteImport.update({
+  id: '/errors/404',
+  path: '/errors/404',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const Errors500Route = Errors500RouteImport.update({
+  id: '/errors/500',
+  path: '/errors/500',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedUsersIndexRoute = AuthenticatedUsersIndexRouteImport.update({
@@ -136,32 +136,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/': {
-      id: '/_authenticated/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof AuthenticatedIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
-    '/errors/500': {
-      id: '/errors/500'
-      path: '/errors/500'
-      fullPath: '/errors/500'
-      preLoaderRoute: typeof Errors500RouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/errors/404': {
-      id: '/errors/404'
-      path: '/errors/404'
-      fullPath: '/errors/404'
-      preLoaderRoute: typeof Errors404RouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/(auth)/sign-up': {
-      id: '/(auth)/sign-up'
-      path: '/sign-up'
-      fullPath: '/sign-up'
-      preLoaderRoute: typeof authSignUpRouteImport
+    '/(auth)/forgot-password': {
+      id: '/(auth)/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof authForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/(auth)/sign-in': {
@@ -171,11 +150,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof authSignInRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/(auth)/forgot-password': {
-      id: '/(auth)/forgot-password'
-      path: '/forgot-password'
-      fullPath: '/forgot-password'
-      preLoaderRoute: typeof authForgotPasswordRouteImport
+    '/(auth)/sign-up': {
+      id: '/(auth)/sign-up'
+      path: '/sign-up'
+      fullPath: '/sign-up'
+      preLoaderRoute: typeof authSignUpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated/': {
+      id: '/_authenticated/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedIndexRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/errors/404': {
+      id: '/errors/404'
+      path: '/errors/404'
+      fullPath: '/errors/404'
+      preLoaderRoute: typeof Errors404RouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/errors/500': {
+      id: '/errors/500'
+      path: '/errors/500'
+      fullPath: '/errors/500'
+      preLoaderRoute: typeof Errors500RouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/users/': {
