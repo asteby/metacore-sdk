@@ -93,6 +93,7 @@ export type MockState = {
   otps: Map<string, string>
   sessions: Map<string, string>
   idempotency: Map<string, { status: number; body: unknown }>
+  checkouts: Map<string, unknown>
   seq: number
 }
 
@@ -193,6 +194,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       otps: new Map(),
       sessions: new Map(),
       idempotency: new Map(),
+      checkouts: new Map(),
       seq: 0,
     }
   }
@@ -696,8 +698,14 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
         stock_hold_expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
       },
     }
+    state.checkouts.set(checkoutId, result)
     if (key) state.idempotency.set(`${params[0]}:${key}`, { status: 201, body: result })
     return { status: 201, body: result, cache: 'private' }
+  })
+  route('GET', '/checkouts/:id', 'checkout:write', ({ params }) => {
+    const found = state.checkouts.get(params[0]!)
+    if (!found) throw new HttpError(404, 'not_found', 'Checkout not found')
+    return { body: found, cache: 'private' }
   })
 
   // Customer

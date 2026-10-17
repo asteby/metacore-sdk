@@ -354,6 +354,17 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
         }),
     },
 
+    checkouts: {
+      /**
+       * Reads a placed checkout (same shape as the `carts.checkout` result). `order.number` is `null` until OPS
+       * has created the order (a few hundred ms after checkout); poll once or twice and, if it is still `null`,
+       * keep telling the buyer the number will arrive by email. Needs a server token (`checkout:write`).
+       * `null` when the checkout does not exist. Never cache.
+       */
+      get: (id: string, options?: RequestOptions) =>
+        getOrNull<CheckoutResult>(`/storefront/checkouts/${enc(id)}`, undefined, options),
+    },
+
     customer: {
       /** Sends a one-time code by email or SMS/WhatsApp. */
       requestOtp: (identifier: CustomerIdentifier, options?: WriteOptions) =>

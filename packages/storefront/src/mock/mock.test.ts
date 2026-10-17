@@ -152,6 +152,9 @@ describe('mock end-to-end purchase', () => {
 
     expect(result.checkout.total).toEqual(cart.cost.total)
     expect(result.checkout.stock_hold_expires_at).toMatch(/^\d{4}-/)
+    // The placed checkout can be read back (order number resolves later in real OPS).
+    await expect(sf.checkouts.get(result.checkout.id)).resolves.toEqual(result)
+    await expect(sf.checkouts.get('chk_unknown')).resolves.toBeNull()
   })
 
   it('rejects over-stock and checkout without delivery', async () => {
