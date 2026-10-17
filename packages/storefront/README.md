@@ -177,6 +177,26 @@ Guadalajara) ordered by haversine; it knows the centroid of a few postal codes
 (`MOCK_POSTAL_CENTROIDS`), pickup is offered only where `pickup.enabled`, and
 the pickup `fee` is charged on the cart.
 
+## Mockup data (`@asteby/storefront/mockup`)
+
+Pure helpers behind the fallback mockups of `@asteby/storefront-react/mockups`
+(products without an image): which illustration to draw and what it may show.
+
+```ts
+import { resolveMockupKind, mockupDataFromProduct, cleanMockupText } from '@asteby/storefront/mockup'
+
+resolveMockupKind(product)                 // 'tire' | 'part' | 'supplement' | 'generic' | a custom kind
+resolveMockupKind(product, { rules, kinds, fallback })
+mockupDataFromProduct('tire', product)     // { size, width, aspect, rim, service, model, brand, lightTruck, runFlat, title }
+mockupDataFromProduct('supplement', product, variant) // flavor/presentation from the selected variant
+```
+
+Resolution: `mockup_kind` attribute (set in OPS) → attribute rules (tire specs,
+part numbers) → words in `product_type`, category and tags (never the title) →
+`generic`. Extractors only read the product (attributes, `vendor`, title,
+options, variant), never prices, and never fill a missing value; every string
+is cleaned and capped (`MOCKUP_TEXT_LIMITS`).
+
 ## API
 
 `createStorefrontClient(options)`:

@@ -47,6 +47,16 @@
         "default": "./dist/geo.cjs"
       }
     },
+    "./mockup": {
+      "import": {
+        "types": "./dist/mockup.d.ts",
+        "default": "./dist/mockup.js"
+      },
+      "require": {
+        "types": "./dist/mockup.d.cts",
+        "default": "./dist/mockup.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "sideEffects": false,
