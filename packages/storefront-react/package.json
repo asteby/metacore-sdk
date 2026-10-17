@@ -27,6 +27,16 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./mockups": {
+      "import": {
+        "types": "./dist/mockups.d.ts",
+        "default": "./dist/mockups.js"
+      },
+      "require": {
+        "types": "./dist/mockups.d.cts",
+        "default": "./dist/mockups.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "sideEffects": false,

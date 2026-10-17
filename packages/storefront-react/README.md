@@ -196,6 +196,138 @@ const mine = useSelectedLocation({ initialId: urlSucursal }) // ?sucursal= + loc
   `OpenStatus` (calcula tras montar; `now` fija el instante), `DirectionsLink`,
   `PickupOption` (muestra lo que manda OPS: costo y días), `NearestLocationForm`.
 
+## Mockups de respaldo (`@asteby/storefront-react/mockups`)
+
+Cuando un producto de OPS no trae imagen, `ProductImage` dibuja una ilustración
+SVG según el tipo de producto en lugar de un hueco: **llanta** (medida en cifras,
+marca, modelo, índice de carga/velocidad, LT, run flat), **refacción** (ficha con
+número de parte, OEM, compatibilidad y posición), **suplemento** (bote, frasco o
+bolsa con nombre, sabor y presentación) y **genérico** (caja con monograma).
+SSR, sin JavaScript en el cliente, sin red, sin `id`s; ~1–2 KB gzip por mockup.
+
+```tsx
+import { ProductImage } from '@asteby/storefront-react/mockups'
+
+// Sustituye el `product.featured_image ? <Image …/> : null` de las tarjetas:
+<ProductImage
+  product={product}
+  variant={selectedVariant}            // opcional: su imagen gana; su sabor/presentación alimenta el mockup
+  widths={[240, 360, 480, 720]}
+  sizes="(min-width: 1024px) 25vw, 50vw"
+  priority={index < 4}                  // LCP (solo aplica a la imagen real)
+  className="h-full w-full object-cover"
+/>
+```
+
+- **Con imagen** renderiza `<Image>` (srcset, `width`/`height`, `priority`); el
+  `alt` es el de OPS, o el título del producto si viene vacío.
+- **Sin imagen** renderiza `<svg role="img" aria-label="Ilustración de referencia: …">`
+  con `<title>`: nunca se anuncia como foto. `alt=""` lo vuelve decorativo
+  (`aria-hidden`), útil cuando el nombre ya está junto a la imagen.
+- **Nunca inventa ni muestra precios**: solo pinta lo que trae el producto
+  (atributos, `vendor`, título, opciones, variante). Sin medida no hay medida;
+  el sabor solo aparece con variante elegida o si la opción tiene un único valor.
+  Todo texto se limpia (controles/bidi), se recorta con `…` y React lo escapa.
+- `image={null}` fuerza el mockup (p. ej. en una galería); `kind="tire"` fuerza el tipo.
+
+### Qué tipo se dibuja
+
+`kind` → `resolveKind` (prop o `MockupProvider`) → `resolveMockupKind(product)`:
+
+1. Atributo `mockup_kind` (o `mockup`) en OPS, si ese tipo está registrado: el
+   dueño puede elegirlo sin tocar código.
+2. Atributos: `size_key`, `section_width_mm`, `rim_diameter_in`, `speed_rating`… → `tire`;
+   `part_number`, `oem_number`, `mpn` → `part`.
+3. Palabras en `product_type`, categoría y etiquetas (no en el título): llanta,
+   neumático, refacción, autoparte, proteína, creatina, colágeno, suplemento…
+4. `generic`.
+
+Atributos que lee cada uno (los del pack del giro, más alias comunes):
+llanta `size_key|size`, `section_width_mm|width`, `aspect_ratio|aspect`,
+`rim_diameter_in|rim`, `load_index`/`load_service`, `speed_rating`, `model`,
+`light_truck`, `runflat`; refacción `part_number|mpn`, `oem_number`,
+`fitment|compatibility|compatibilidad`, `position`; suplemento opción
+`Sabor`/`Presentación` o atributos `flavor|sabor`, `presentation|net_content`,
+`servings` (número) y `form|envase` (`cápsulas` → frasco, `bolsa` → bolsa).
+
+### Personalizar sin tocar el SDK
+
+**Colores y tipografía** con variables CSS. Por defecto toman el tema de la tienda
+(`--color-muted`, `--color-foreground`, `--color-background`, `--color-primary`,
+`--color-primary-foreground`, `--font-heading`/`--font-sans`, los que emite
+`ThemeStyle`) y si no hay, grises neutros con `light-dark()` (modo oscuro cuando
+la página declara `color-scheme: dark` o `light dark`).
+
+```css
+/* app/app.css de la tienda */
+:root {
+  --mockup-bg: var(--color-muted);        /* fondo del cuadro */
+  --mockup-ink: var(--color-foreground);  /* texto sobre el fondo */
+  --mockup-muted: #6b7280;                /* texto secundario sobre el fondo */
+  --mockup-surface: #001963;              /* hule, envase, caja */
+  --mockup-surface-ink: #ffffff;          /* texto sobre el envase */
+  --mockup-label: #ffffff;                /* etiqueta / ficha */
+  --mockup-label-ink: #000c3c;            /* texto sobre la etiqueta */
+  --mockup-accent: #f66123;               /* acento: R16, banda de la ficha, tapa */
+  --mockup-accent-ink: #ffffff;
+  --mockup-font: "Archivo", sans-serif;
+  --mockup-font-mono: ui-monospace, monospace;  /* números de parte */
+  --mockup-text-transform: uppercase;     /* p. ej. nombres en MAYÚSCULAS */
+}
+.dark { --mockup-surface: #0b1440; }
+```
+
+**Tipo por tienda** (sin recompilar el SDK) y textos de la interfaz:
+
+```tsx
+// app/root.tsx
+import { MockupProvider } from '@asteby/storefront-react/mockups'
+
+<MockupProvider
+  resolveKind={(product, guess) => (product.category?.handle === 'shakers' ? 'generic' : guess)}
+  labels={{ illustration: 'Imagen ilustrativa', servings: 'servicios' }}
+>
+  <Outlet />
+</MockupProvider>
+```
+
+**Un mockup propio** (o reemplazar uno base). `MockupFrame` da el `<svg>`, el
+fondo, las variables y la accesibilidad; `MockupText`, `wrapMockupText` y
+`fitMockupFontSize` acomodan el texto sin medir el DOM.
+
+```tsx
+import {
+  BUILTIN_MOCKUPS, MockupFrame, MockupText, MockupProvider, createMockupRegistry,
+  cleanMockupText, tone, wrapMockupText, type MockupComponentProps,
+} from '@asteby/storefront-react/mockups'
+
+type Helmet = { title: string; shell: string | null }
+
+function HelmetMockup({ data, label, labels, ...svg }: MockupComponentProps<Helmet>) {
+  return (
+    <MockupFrame kind="helmet" label={label} {...svg}>
+      <path d="M90 230a110 110 0 0 1 220 0v40H90z" style={tone('surface')} />
+      <MockupText lines={wrapMockupText(data.title, 24, 2)} x={200} y={330} size={22} />
+      {data.shell ? <MockupText lines={[data.shell]} x={200} y={372} size={14} tone="muted" /> : null}
+    </MockupFrame>
+  )
+}
+
+const registry = createMockupRegistry(BUILTIN_MOCKUPS).register('helmet', {
+  component: HelmetMockup,
+  fromProduct: (p) => ({ title: cleanMockupText(p.title) ?? '', shell: cleanMockupText(p.attributes?.shell, 24) }),
+  // describe: (d, labels) => `${labels.illustration}: ${d.title}`  (opcional)
+})
+
+<MockupProvider registry={registry} resolveKind={(p, guess) => (p.product_type === 'Casco' ? 'helmet' : guess)}>…</MockupProvider>
+```
+
+`registerMockup(kind, renderer)` hace lo mismo sobre el registro por defecto
+(llámalo una vez a nivel de módulo). Si registras solo un componente para un
+tipo base (`registerMockup('tire', MiLlanta)`), recibe los datos del extractor
+base (`TireMockupData`). Para dibujar sin producto completo:
+`<ProductMockup kind="part" data={partMockupData(product)} />`.
+
 ## API
 
 | Export | |
@@ -209,3 +341,4 @@ const mine = useSelectedLocation({ initialId: urlSucursal }) // ?sucursal= + loc
 | `productJsonLd`, `organizationJsonLd`, `localBusinessJsonLd`, `breadcrumbJsonLd`, `faqJsonLd`, `collectionJsonLd`, `JsonLd`, `serializeJsonLd` | schema.org JSON-LD |
 | `defineSection`, `SectionRegistry`, `createSectionRegistry`, `Sections`, `resolveSectionProps`, `sectionJsonSchema` | Content sections |
 | `themeToCss`, `themeToCssVariables`, `ThemeStyle`, `themeFontsHref`, `tokenName` | SSR theme |
+| `ProductImage`, `ProductMockup`, `MockupProvider`, `createMockupRegistry`, `registerMockup`, `BUILTIN_MOCKUPS`, `MockupFrame`, `MockupText`, `TireMockup`, `PartMockup`, `SupplementMockup`, `GenericMockup` | Mockups de respaldo (subpath `/mockups`) |
