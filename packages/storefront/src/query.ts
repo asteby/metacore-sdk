@@ -4,7 +4,7 @@ export type QueryValue = string | number | boolean | null | undefined
 export type QueryParams = Record<string, QueryValue | QueryValue[]>
 
 export type PaginationParams = {
-  /** Page size (1–100). */
+  /** Page size (1–100; articles accept at most 50). */
   first?: number
   /** Cursor from `page_info.end_cursor`. */
   after?: string | null
@@ -32,7 +32,12 @@ export type ProductListParams = PaginationParams & {
 
 export type CollectionListParams = PaginationParams
 
-export type ArticleListParams = PaginationParams & { tag?: string; q?: string }
+export type ArticleListParams = Omit<PaginationParams, 'first'> & {
+  /** Page size (1–50). The API answers 400 `validation` above 50. */
+  first?: number
+  tag?: string
+  q?: string
+}
 
 /** Appends params to a URLSearchParams, repeating keys for arrays and skipping nullish values. */
 export function appendParams(search: URLSearchParams, params: QueryParams | undefined): URLSearchParams {

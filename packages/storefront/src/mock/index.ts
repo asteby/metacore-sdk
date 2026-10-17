@@ -93,6 +93,7 @@ export type MockState = {
   otps: Map<string, string>
   sessions: Map<string, string>
   idempotency: Map<string, { status: number; body: unknown }>
+  checkouts: Map<string, { result: Record<string, unknown>; created_at: string; order_id: string }>
   seq: number
 }
 
@@ -139,9 +140,9 @@ function decodeCursor(cursor: string | null): number {
   }
 }
 
-function paginate<T>(items: T[], search: URLSearchParams, defaultFirst = 24) {
+function paginate<T>(items: T[], search: URLSearchParams, defaultFirst = 24, maxFirst = 100) {
   const first = search.has('first') ? Number(search.get('first')) : defaultFirst
-  if (!Number.isInteger(first) || first < 1 || first > 100) throw new HttpError(400, 'validation', '`first` must be between 1 and 100', 'first')
+  if (!Number.isInteger(first) || first < 1 || first > maxFirst) throw new HttpError(400, 'validation', `\`first\` must be between 1 and ${maxFirst}`, 'first')
   const start = decodeCursor(search.get('after'))
   const nodes = items.slice(start, start + first)
   const end = start + nodes.length
@@ -193,6 +194,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       otps: new Map(),
       sessions: new Map(),
       idempotency: new Map(),
+      checkouts: new Map(),
       seq: 0,
     }
   }
@@ -528,7 +530,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     const nodes = skus.flatMap((sku) => {
       for (const p of state.products) {
         const v = p.variants.find((x) => x.sku === sku)
-        if (v) return [{ sku, quantity_available: v.quantity_available ?? 0 }]
+        if (v) return [{ sku, quantity_available: v.quantity_available }]
       }
       return []
     })
@@ -680,12 +682,28 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     })
     const redirect = new URL(`https://mock.local/pay/${orderId}`)
     redirect.searchParams.set('return_url', body.return_url)
+    const checkoutId = nextId('chk')
     const result = {
       order: { id: orderId, number },
-      payment: { provider: 'mock', status: 'pending', redirect_url: redirect.toString(), client_secret: null },
+      payment: { provider: 'mock', status: 'pending', redirect_url: redirect.toString(), client_secret: null, instructions: null },
+      checkout: {
+        id: checkoutId,
+        status: 'pending',
+        external_order_id: orderId,
+        total: cart.cost.total,
+        stock_hold_expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
+      },
     }
+    state.checkouts.set(checkoutId, { result, created_at: now(), order_id: orderId })
     if (key) state.idempotency.set(`${params[0]}:${key}`, { status: 201, body: result })
     return { status: 201, body: result, cache: 'private' }
+  })
+
+  route('GET', '/checkouts/:id', 'checkout:write', ({ params }) => {
+    const rec = state.checkouts.get(params[0]!)
+    if (!rec) throw new HttpError(404, 'not_found', `Checkout ${params[0]} not found`, 'id')
+    const order = state.orders.find((o) => o.id === rec.order_id)!
+    return { body: { ...rec.result, created_at: rec.created_at, lines: order.lines }, cache: 'private' }
   })
 
   // Customer
@@ -789,7 +807,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     if (tag) items = items.filter((a) => a.tags.includes(tag))
     const q = search.get('q')?.toLowerCase()
     if (q) items = items.filter((a) => `${a.title} ${a.excerpt ?? ''}`.toLowerCase().includes(q))
-    return { body: paginate(items, search, 10), cache: 'public' }
+    return { body: paginate(items, search, 10, 50), cache: 'public' }
   })
   route('GET', '/content/articles/:handle', 'content:read', ({ params, search }) => ({
     body: requireNode(state.articles.find((a) => a.handle === params[0]), `Article ${params[0]}`),

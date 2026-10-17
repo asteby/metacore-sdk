@@ -19,6 +19,7 @@ import type {
   CartLineUpdateInput,
   CheckoutInput,
   CheckoutResult,
+  CheckoutStatus,
   Collection,
   Connection,
   Customer,
@@ -348,6 +349,15 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
           ...options,
           idempotencyKey: options.idempotencyKey ?? generateIdempotencyKey(),
         }),
+    },
+
+    checkouts: {
+      /**
+       * Guest order lookup by checkout id (scope `checkout:write`, server-side `sk_` only).
+       * `null` when the checkout does not exist or belongs to another organization.
+       */
+      get: (id: string, options?: RequestOptions) =>
+        getOrNull<CheckoutStatus>(`/storefront/checkouts/${enc(id)}`, undefined, options),
     },
 
     customer: {

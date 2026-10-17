@@ -177,4 +177,16 @@ describe('helpers', () => {
     expect(isTokenPublishable('sk_live_1')).toBe(false)
     expect(isTokenPublishable(undefined)).toBe(false)
   })
+
+  it('looks up a guest checkout by id and returns null on 404', async () => {
+    const { calls, fetch } = recorder((c) =>
+      c.url.endsWith('/checkouts/missing')
+        ? Response.json({ error: { code: 'not_found', message: 'x' } }, { status: 404 })
+        : Response.json({ order: { id: 'o1', number: null } }),
+    )
+    const sf = createStorefrontClient({ ...base, fetch })
+    expect((await sf.checkouts.get('chk 1'))?.order.number).toBeNull()
+    expect(calls[0]!.url).toMatch(/\/storefront\/checkouts\/chk%201$/)
+    expect(await sf.checkouts.get('missing')).toBeNull()
+  })
 })

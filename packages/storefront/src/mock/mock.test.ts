@@ -147,6 +147,14 @@ describe('mock end-to-end purchase', () => {
 
     const after = await sf.stock.get([variant.sku])
     expect(after.nodes[0]!.quantity_available).toBe(14)
+
+    expect(result.checkout.total).toEqual(cart.cost.total)
+    expect(result.checkout.stock_hold_expires_at).toMatch(/^\d{4}-/)
+    const status = await sf.checkouts.get(result.checkout.id)
+    expect(status).toMatchObject({ order: { id: result.order.id }, checkout: { id: result.checkout.id } })
+    expect(status!.lines.length).toBeGreaterThan(0)
+    expect(await sf.checkouts.get('chk_nope')).toBeNull()
+    await expect(pub.checkouts.get(result.checkout.id)).rejects.toMatchObject({ status: 403 })
   })
 
   it('rejects over-stock and checkout without delivery', async () => {
@@ -192,5 +200,7 @@ describe('mock customer and content', () => {
     expect(articles.nodes).toHaveLength(2)
     expect(await pub.content.article(articles.nodes[0]!.handle)).not.toBeNull()
     expect(await pub.content.article('nope')).toBeNull()
+    await expect(pub.content.articles({ first: 51 })).rejects.toMatchObject({ status: 400 })
+    await expect(pub.content.articles({ first: 50 })).resolves.toBeTruthy()
   })
 })

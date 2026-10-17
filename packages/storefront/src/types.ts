@@ -95,7 +95,8 @@ export type ProductSort = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 
 
 export type ProductConnection = Connection<Product> & { facets: Facet[] }
 
-export type StockLevel = { sku: string; quantity_available: number }
+/** `quantity_available` is `null` when the variant's stock is not tracked (always sellable). */
+export type StockLevel = { sku: string; quantity_available: number | null }
 
 // ---------------------------------------------------------------------------
 // Shop
@@ -235,11 +236,33 @@ export type CheckoutPayment = {
   status: string
   redirect_url?: string | null
   client_secret?: string | null
+  /** Offline payment instructions (OXXO reference, SPEI CLABE, manual transfer data) as text; `null` when none. */
+  instructions?: string | null
+}
+
+export type CheckoutInfo = {
+  /** Checkout session id; use it with `carts.checkoutStatus` / `checkouts.get`. */
+  id: string
+  /** e.g. `pending`, `paid`, `failed`, `cancelled`, `converted`. */
+  status: string
+  external_order_id: string
+  /** Amount to charge, computed by OPS (includes shipping and taxes). */
+  total: Money
+  /** RFC 3339. Stock is held until then; `null` when nothing is held. */
+  stock_hold_expires_at: string | null
 }
 
 export type CheckoutResult = {
-  order: { id: string; number: string }
+  /** `number` is `null` until the order exists in OPS (it is created asynchronously after checkout). */
+  order: { id: string; number: string | null }
   payment: CheckoutPayment
+  checkout: CheckoutInfo
+}
+
+/** Guest-safe view of a checkout (`GET /storefront/checkouts/:id`). No address, email or phone. */
+export type CheckoutStatus = CheckoutResult & {
+  created_at: string
+  lines: OrderLine[]
 }
 
 // ---------------------------------------------------------------------------
