@@ -1,4 +1,4 @@
-export { createStorefrontClient, generateIdempotencyKey } from './client.js'
+export { createStorefrontClient, generateIdempotencyKey, normalizeClientIp, CLIENT_IP_HEADER } from './client.js'
 export type {
   FetchLike,
   PreviewOptions,

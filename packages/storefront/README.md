@@ -186,6 +186,7 @@ the pickup `fee` is charged on the cart.
 | `baseUrl` | Gateway base, e.g. `https://ops.example.com/api/gw` |
 | `token` | `pk_...` or `sk_...` → `Authorization: Bearer` |
 | `customerToken?` | Buyer session → `X-Customer-Token` |
+| `clientIp?` | Shopper IP for server-side calls → `X-Storefront-Client-IP` (see below) |
 | `fetch?` | Custom fetch (default `globalThis.fetch`) |
 | `locale?` | `Accept-Language` |
 | `headers?` | Extra headers on every request |
@@ -198,9 +199,18 @@ Resources: `shop.get`, `products.list/get/recommendations`,
 `carts.create/get/addLines/updateLines/removeLines/setDiscountCodes/setBuyer/setShippingAddress/deliveryOptions/setDelivery/checkout`,
 `customer.requestOtp/createSession/get/orders/order/requestReturn/requestInvoice/addresses.{list,create,update,delete}`,
 `content.theme/page/menu/articles/article`. Every method takes a last
-`options` argument: `{ cache, signal, next, headers, timeoutMs, customerToken }`
+`options` argument: `{ cache, signal, next, headers, timeoutMs, customerToken, clientIp }`
 (plus `idempotencyKey` on writes and `preview` on pages/articles); unknown keys
 are forwarded to `fetch`.
+
+**Shopper IP (SSR).** A server that renders for many shoppers with one `sk_`/`pt_`
+token shares a single rate-limit bucket, and the OTP limiter would see only the
+server's address. Issue the token with the `trust_client_ip` option (OPS
+`opts:trust_client_ip` scope) and pass the shopper's IP taken from your own
+connection or trusted proxy (never from a browser-forgeable header):
+`createStorefrontClient({ ..., clientIp })`, `client.withClientIp(ip)` or
+`{ clientIp }` per call. It is sent as `X-Storefront-Client-IP`, never with a
+`pk_` token, and invalid values (lists, ports, text) are dropped.
 
 `get`-by-handle methods (`products.get`, `collections.get`, `carts.get`,
 `customer.order`, `content.page/menu/article`) resolve `null` on 404. Every

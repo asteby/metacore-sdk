@@ -5,6 +5,7 @@ import {
   formatMoney,
   isStorefrontError,
   isTokenPublishable,
+  normalizeClientIp,
   parseMoney,
   parseProductFilters,
   productListQuery,
@@ -223,5 +224,47 @@ describe('locations', () => {
     expect(() => client.locations.nearest({ lat: 91, lng: 0 })).toThrow(TypeError)
     expect(() => client.locations.nearest({ lat: Number.NaN, lng: 1 })).toThrow(TypeError)
     expect(calls).toHaveLength(0)
+  })
+})
+
+describe('shopper IP (X-Storefront-Client-IP)', () => {
+  it('sends the configured IP with a server token', async () => {
+    const { calls, fetch } = recorder()
+    await createStorefrontClient({ ...base, fetch, clientIp: '203.0.113.7' }).shop.get()
+    expect(calls[0]!.init.headers.get('X-Storefront-Client-IP')).toBe('203.0.113.7')
+  })
+
+  it('withClientIp binds a new client and a per-call value overrides it', async () => {
+    const { calls, fetch } = recorder()
+    const sf = createStorefrontClient({ ...base, fetch }).withClientIp('198.51.100.1')
+    await sf.shop.get()
+    await sf.shop.get({ clientIp: '2001:db8::1' })
+    await sf.shop.get({ clientIp: null })
+    expect(calls[0]!.init.headers.get('X-Storefront-Client-IP')).toBe('198.51.100.1')
+    expect(calls[1]!.init.headers.get('X-Storefront-Client-IP')).toBe('2001:db8::1')
+    expect(calls[2]!.init.headers.has('X-Storefront-Client-IP')).toBe(false)
+  })
+
+  it('never sends it with a publishable token', async () => {
+    const { calls, fetch } = recorder()
+    await createStorefrontClient({ baseUrl: base.baseUrl, token: 'pk_test', fetch, clientIp: '203.0.113.7' }).shop.get()
+    expect(calls[0]!.init.headers.has('X-Storefront-Client-IP')).toBe(false)
+  })
+
+  it('does not forward the option to fetch and drops invalid values', async () => {
+    const { calls, fetch } = recorder()
+    const sf = createStorefrontClient({ ...base, fetch })
+    for (const bad of ['1.2.3.4, 5.6.7.8', '1.2.3.4:80', 'fe80::1%eth0', 'unknown', '999.1.1.1', '']) {
+      await sf.shop.get({ clientIp: bad })
+    }
+    await sf.shop.get({ clientIp: '203.0.113.7' })
+    for (const c of calls.slice(0, -1)) expect(c.init.headers.has('X-Storefront-Client-IP')).toBe(false)
+    expect('clientIp' in (calls.at(-1)!.init as object)).toBe(false)
+  })
+
+  it('normalizes bracketed IPv6 and IPv4-mapped addresses', () => {
+    expect(normalizeClientIp('[2001:db8::1]')).toBe('2001:db8::1')
+    expect(normalizeClientIp('::ffff:203.0.113.7')).toBe('::ffff:203.0.113.7')
+    expect(normalizeClientIp(' 203.0.113.7 ')).toBe('203.0.113.7')
   })
 })

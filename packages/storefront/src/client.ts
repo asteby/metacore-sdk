@@ -81,6 +81,16 @@ export type StorefrontClientOptions = {
   locale?: string
   /** Extra headers on every request. */
   headers?: Record<string, string>
+  /**
+   * IP address of the shopper, for SERVER-side calls (SSR, route actions) made with an
+   * `sk_`/`pt_` token. Sent as `X-Storefront-Client-IP`, which the gateway honors only for
+   * tokens issued with the `trust_client_ip` option: the rate limit is then charged per
+   * shopper instead of to the store's single token bucket, and the OTP flow limits the
+   * shopper's IP instead of the server's. Pass the IP from your own connection or trusted
+   * proxy, never from a header the browser can forge. Never sent with a `pk_` token (the
+   * gateway already separates those by caller IP). Invalid values are dropped.
+   */
+  clientIp?: string | null
   /** Abort requests that take longer than this (default: no timeout). */
   timeoutMs?: number
   /**
@@ -103,6 +113,8 @@ export type RequestOptions = {
   timeoutMs?: number
   /** Overrides the client-level customer token for this call. */
   customerToken?: string | null
+  /** Overrides the client-level shopper IP for this call (see `StorefrontClientOptions.clientIp`). */
+  clientIp?: string | null
   [key: string]: unknown
 }
 
@@ -128,7 +140,33 @@ type RequestSpec = {
   nullOn404?: boolean
 }
 
-const OWN_OPTION_KEYS = new Set(['headers', 'timeoutMs', 'customerToken', 'idempotencyKey', 'preview', 'signal'])
+const OWN_OPTION_KEYS = new Set(['headers', 'timeoutMs', 'customerToken', 'clientIp', 'idempotencyKey', 'preview', 'signal'])
+
+/** Header the gateway reads (only for tokens with `trust_client_ip`). */
+export const CLIENT_IP_HEADER = 'X-Storefront-Client-IP'
+
+/**
+ * Returns the single IP literal in `raw`, or undefined. Takes the form a server hands over
+ * (`::ffff:1.2.3.4`, `[2001:db8::1]`) and rejects lists, ports, zones and text so the
+ * header is never a forgery vector.
+ */
+export function normalizeClientIp(raw: string | null | undefined): string | undefined {
+  if (!raw) return undefined
+  let v = raw.trim()
+  if (v.startsWith('[') && v.endsWith(']')) v = v.slice(1, -1)
+  if (!v || v.length > 45 || /[\s,%/]/.test(v)) return undefined
+  if (/^[0-9]{1,3}(\.[0-9]{1,3}){3}$/.test(v)) {
+    return v.split('.').every((o) => Number(o) <= 255) ? v : undefined
+  }
+  // IPv6 (incl. IPv4-mapped): hex groups and colons, at most one "::".
+  if (!v.includes(':') || !/^[0-9a-fA-F:.]+$/.test(v) || v.split('::').length > 2) return undefined
+  try {
+    new URL(`http://[${v}]/`)
+  } catch {
+    return undefined
+  }
+  return v
+}
 
 /** Generates an idempotency key (crypto.randomUUID when available). */
 export function generateIdempotencyKey(): string {
@@ -210,6 +248,10 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
     if (config.locale) headers.set('Accept-Language', config.locale)
     const customerToken = options.customerToken !== undefined ? options.customerToken : config.customerToken
     if (customerToken) headers.set('X-Customer-Token', customerToken)
+    const clientIp = options.clientIp !== undefined ? options.clientIp : config.clientIp
+    // Server-side tokens only: a pk_ token already gets a per-caller bucket from the gateway.
+    const ip = isTokenPublishable(config.token) ? undefined : normalizeClientIp(clientIp)
+    if (ip) headers.set(CLIENT_IP_HEADER, ip)
     if (options.idempotencyKey) headers.set('Idempotency-Key', options.idempotencyKey)
     if (spec.body !== undefined) headers.set('Content-Type', 'application/json')
     for (const [k, v] of Object.entries(options.headers ?? {})) headers.set(k, v)
@@ -295,6 +337,11 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
     /** Returns a new client that sends the given buyer session token. */
     withCustomerToken(customerToken: string | null) {
       return createStorefrontClient({ ...config, customerToken })
+    },
+
+    /** Returns a new client that reports the shopper's IP (`X-Storefront-Client-IP`) on every call. */
+    withClientIp(clientIp: string | null | undefined) {
+      return createStorefrontClient({ ...config, clientIp: clientIp ?? null })
     },
 
     shop: {
