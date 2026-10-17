@@ -222,6 +222,23 @@ func cmdBuild(args []string) error {
 		fmt.Fprintf(os.Stderr, "metacore: warning: %s exists but %s does not — skipping frontend. Run `./frontend/build.sh` first.\n", feSrc, feDist)
 	}
 
+	// Federated pages: budget per page (from the Vite build report), then
+	// stamp frontend.sdk and frontend.integrity into the packed manifest.
+	if err := checkPageBudgets(feDist, m); err != nil {
+		return err
+	}
+	stamped, notes, err := stampFrontend(raw, srcDir, m, b.Frontend)
+	if err != nil {
+		return fmt.Errorf("build: stamp frontend: %w", err)
+	}
+	if len(notes) > 0 {
+		if err := v3.Validate(stamped); err != nil {
+			return fmt.Errorf("build: stamped manifest invalid: %w", err)
+		}
+		b.RawManifest = stamped
+		fmt.Printf("stamped %s\n", strings.Join(notes, ", "))
+	}
+
 	// README.md
 	if data, err := os.ReadFile(filepath.Join(srcDir, "README.md")); err == nil {
 		b.Readme = string(data)
