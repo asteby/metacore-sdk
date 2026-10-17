@@ -1,5 +1,12 @@
 # @asteby/storefront
 
+## 0.4.0
+
+### Minor Changes
+
+- 270b5d8: Nuevo subpath `@asteby/storefront/geo` (haversine, ranking por distancia, estado de apertura con zona horaria, formato de horarios y `openingHours` de schema.org) y campos opcionales `opening_hours`, `timezone` y `opening_hours_text` en `ShopBranch`.
+- 21994a8: `client.locations.list({ postal_code })`, `.get(id)` y `.nearest({ lat, lng })` (Storefront API `locations.v1`), tipos `Location`, `NearestLocation`, `LocationKind`, `LocationContacts` y `LocationPickup` (y campos opcionales equivalentes en `ShopBranch`), y las tres rutas en `createMockStorefront` con tres sucursales de ejemplo ordenadas por haversine. En el mock, la recolección solo se ofrece donde `pickup.enabled` y se cobra `pickup.fee`.
+
 ## 0.3.0
 
 ### Minor Changes

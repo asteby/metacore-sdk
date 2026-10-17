@@ -1,5 +1,18 @@
 # @asteby/storefront-react
 
+## 0.2.0
+
+### Minor Changes
+
+- 21994a8: Primitivos headless de sucursales: `useGeolocation` (solo bajo acción del usuario, errores tipados), `useNearestLocations`, `useSelectedLocation` ("Mi sucursal" en `?sucursal=` y localStorage, nunca cookie), `LocationList`, `LocationPicker`, `OpenStatus`, `DirectionsLink`, `PickupOption` y `NearestLocationForm` (GET a `?cp=` sin JavaScript). Sin estilos, SSR-safe y sin dependencias nuevas; con cero sucursales renderizan `null`.
+
+### Patch Changes
+
+- 270b5d8: `localBusinessJsonLd` ya no emite `openingHours` inválido con horarios de texto libre: solo se emite si cada token es sintaxis schema.org estricta (o si hay `opening_hours` estructurado), y `geo` solo con coordenadas válidas. Nuevo helper `openingHoursJsonLd`.
+- Updated dependencies [270b5d8]
+- Updated dependencies [21994a8]
+  - @asteby/storefront@0.4.0
+
 ## 0.1.2
 
 ### Patch Changes
