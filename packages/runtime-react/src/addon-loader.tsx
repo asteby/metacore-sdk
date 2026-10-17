@@ -24,7 +24,9 @@ function getMfRuntime(): Promise<MfRuntime> {
     return mfRuntime
 }
 import type { AddonAPI, AddonLayout, Registry } from '@asteby/metacore-sdk'
+import { ensureRemoteIntegrity, RemoteIntegrityError } from '@asteby/metacore-sdk'
 import { useDeclareAddonLayout } from './addon-layout-context'
+import { FederatedErrorBoundary, type FederatedErrorInfo } from './federated-error-boundary'
 import {
     composeDisposables,
     disposableFromRegisterResult,
@@ -80,6 +82,18 @@ export interface AddonLoaderProps {
      * — the loader sets the context value via {@link useDeclareAddonLayout}.
      */
     layout?: AddonLayout
+    /**
+     * SRI of `remoteEntry.js` (`manifest.frontend.integrity`). When set, the
+     * entry is verified before the MF runtime imports it and a mismatch fails
+     * the load permanently (no retry). Unset = previous behaviour.
+     */
+    integrity?: string
+    /**
+     * Render errors thrown by `children` (the addon's UI mounted under this
+     * fiber) are contained by a {@link FederatedErrorBoundary}; this reports
+     * them (ops: reportFrontendIncident).
+     */
+    onRenderError?: (error: Error, info: FederatedErrorInfo) => void
     children?: React.ReactNode
 }
 
@@ -108,6 +122,7 @@ function isRuntimeNotReady(e: unknown): boolean {
 
 /** Transient network / gateway failures while the host API is restarting. */
 function isTransientRemoteLoadError(e: unknown): boolean {
+    if (e instanceof RemoteIntegrityError) return false
     if (isRuntimeNotReady(e)) return true
     const msg = e instanceof Error ? e.message : String(e)
     return (
@@ -134,11 +149,20 @@ async function withRemoteLoadRetry<T>(op: () => T | Promise<T>): Promise<T> {
     }
 }
 
-async function loadAddon(
+/**
+ * Load one exposed module of a federated remote through the MF runtime:
+ * verifies `integrity` (SRI) first, (re)registers the remote when its URL
+ * changed, then `loadRemote("<scope>/<expose>")`. Transient failures (host
+ * boot race, gateway blips) are retried; an integrity mismatch is not.
+ * Shared by {@link AddonLoader} (`./register`) and `AddonPageLoader` (pages).
+ */
+export async function loadFederatedModule<T = unknown>(
     scope: string,
     url: string,
     module: string,
-): Promise<AddonRegisterModule | null> {
+    integrity?: string,
+): Promise<T | null> {
+    if (integrity) await withRemoteLoadRetry(() => ensureRemoteIntegrity(url, integrity))
     // Re-register whenever the `?v=` URL changes so a fiber swap actually
     // fetches the new remoteEntry. `force: true` wipes that remote's module
     // cache — without it, loadRemote would keep serving the previous bundle.
@@ -151,10 +175,17 @@ async function loadAddon(
         markRemoteRegistered(scope, url)
     }
     return withRemoteLoadRetry(() =>
-        getMfRuntime().then((mf) =>
-            mf.loadRemote<AddonRegisterModule>(remoteId(scope, module)),
-        ),
+        getMfRuntime().then((mf) => mf.loadRemote<T>(remoteId(scope, module))),
     )
+}
+
+async function loadAddon(
+    scope: string,
+    url: string,
+    module: string,
+    integrity?: string,
+): Promise<AddonRegisterModule | null> {
+    return loadFederatedModule<AddonRegisterModule>(scope, url, module, integrity)
 }
 
 export function AddonLoader({
@@ -169,6 +200,8 @@ export function AddonLoader({
     onReady,
     onError,
     layout,
+    integrity,
+    onRenderError,
     children,
 }: AddonLoaderProps) {
     const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -189,7 +222,7 @@ export function AddonLoader({
             try {
                 setStatus('loading')
                 if (key) await purgeAddonFrontendCache(key)
-                const mod = await loadAddon(scope, url, module)
+                const mod = await loadAddon(scope, url, module, integrity)
                 if (cancelled) return
                 const plugin = resolvePluginExports(mod)
                 if (typeof plugin.register !== 'function') {
@@ -225,7 +258,7 @@ export function AddonLoader({
         // api identity is expected to be stable per addon; including it would
         // re-register on every parent render. Fiber identity is (scope, url, module).
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [scope, url, module, addonKey, unbindKey, hostRegistry])
+    }, [scope, url, module, addonKey, unbindKey, hostRegistry, integrity])
 
     if (status === 'loading') return <>{fallback}</>
     if (status === 'error') {
@@ -236,5 +269,15 @@ export function AddonLoader({
         if (onError) return null
         return <div className="text-sm text-red-500">Addon load error: {error?.message}</div>
     }
-    return <>{children}</>
+    if (children === undefined || children === null) return null
+    return (
+        <FederatedErrorBoundary
+            addonKey={addonKey || api.manifest?.key || scope}
+            expose={module}
+            onError={onRenderError}
+            resetKeys={[url]}
+        >
+            {children}
+        </FederatedErrorBoundary>
+    )
 }

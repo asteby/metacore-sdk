@@ -118,8 +118,16 @@ function canModulePreload(): boolean {
   return !!link.relList?.supports?.("modulepreload");
 }
 
+// A preload that never settles (old engines, blocked by an extension) must not
+// hang the page: after this long the diagnostic fetch decides.
+const PRELOAD_TIMEOUT_MS = 8000;
+
 function preloadWithIntegrity(url: string, integrity: string): Promise<void> {
   return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`metacore: modulepreload timed out for ${url}`)),
+      PRELOAD_TIMEOUT_MS,
+    );
     const link = document.createElement("link");
     link.rel = "modulepreload";
     link.href = url;
@@ -127,8 +135,14 @@ function preloadWithIntegrity(url: string, integrity: string): Promise<void> {
     // Same-origin by default; anonymous CORS keeps CDN-fronted remotes working
     // (SRI requires a CORS-enabled response for cross-origin URLs).
     link.crossOrigin = "anonymous";
-    link.onload = () => resolve();
-    link.onerror = () => reject(new Error(`metacore: modulepreload failed for ${url}`));
+    link.onload = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    link.onerror = () => {
+      clearTimeout(timer);
+      reject(new Error(`metacore: modulepreload failed for ${url}`));
+    };
     document.head.appendChild(link);
   });
 }

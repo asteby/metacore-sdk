@@ -1,4 +1,5 @@
 import type { OptionFilter } from './option-filter'
+import type { ModelDetail, NavView } from '@asteby/metacore-sdk'
 // Shared metadata shape consumed by every host. Some hosts add a `link`
 // action type with a `linkUrl` template — represented here as part of the
 // `type` union so the SDK can render it uniformly.
@@ -287,6 +288,18 @@ export interface TableMetadata {
      * Absent → any move is allowed (the kernel still validates server-side).
      */
     transitions?: StageTransition[]
+    /**
+     * Configuration of a declarative `view_type` (map, timeline, calendar,
+     * chart, split): the nav entry's `view` block (kernel `NavView`), served on
+     * demand with the table metadata, never in the lite manifest. Rendered by
+     * `<DeclarativeView>`; absent on hosts that do not serve it.
+     */
+    view?: NavView
+    /**
+     * The model's record detail panels (kernel `ModelDetail`), served with
+     * the table metadata. Rendered by `<DetailPanels>` and the split view.
+     */
+    detail?: ModelDetail
 }
 
 /**

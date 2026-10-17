@@ -129,6 +129,7 @@ export {
 export {
     DynamicView,
     resolveViewRenderer,
+    resolveViewKind,
     readViewFromSearch,
     resolveActiveView,
     type DynamicViewProps,
@@ -234,6 +235,43 @@ export {
 } from './cfdi-stamp-panel'
 export { useRecordMutationTick } from './use-record-mutation-tick'
 export * from './addon-loader'
+// Federated pages (frontend.pages[]): host-side loader + remote-facing hooks.
+export {
+    AddonPageLoader,
+    AddonPageSkeleton,
+    type AddonPageLoaderProps,
+} from './addon-page-loader'
+export {
+    AddonPageHost,
+    createPageChromeStore,
+    usePageChromeState,
+    useHostContext,
+    useHostApi,
+    useAddonNavigate,
+    useAddonLocation,
+    useAddonSearchParams,
+    useBreadcrumbs,
+    usePageChrome,
+    useIsInAddonPage,
+    resolveAddonPath,
+    addonSubpath,
+    type AddonPageHostProps,
+    type AddonPageHostValue,
+    type AddonPageLocation,
+    type AddonNavigateOptions,
+    type PageChromeState,
+    type PageChromeStore,
+} from './addon-page-host'
+export { createHostApi, toHostApiError, type CreateHostApiOptions } from './host-api'
+export {
+    FederatedErrorBoundary,
+    type FederatedErrorBoundaryProps,
+    type FederatedErrorFallbackProps,
+    type FederatedErrorInfo,
+    type FederatedErrorStrings,
+} from './federated-error-boundary'
+// Declarative views & detail panels: registry + lazy renderers by type.
+export * from './views'
 export {
     PURGE_ADDON_MESSAGE,
     isAddonFrontendCacheUrl,

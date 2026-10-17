@@ -58,6 +58,24 @@ describe('runtime-react index static graph', () => {
         expect(hit && `${hit[0]} imported from ${hit[1]}`).toBeUndefined()
     })
 
+    it.each([
+        'views/chart-view.tsx',
+        'views/timeline-view.tsx',
+        'views/calendar-view.tsx',
+        'views/split-view.tsx',
+        'views/map-view.tsx',
+        'views/panels.tsx',
+        'testing.tsx',
+    ])('loads %s lazily (declarative renderers by type, test helpers never)', (file) => {
+        expect(seen.has(join(SRC, file))).toBe(false)
+    })
+
+    it('reaches the view registry and the federated page host (light modules)', () => {
+        expect(seen.has(join(SRC, 'views/registry.tsx'))).toBe(true)
+        expect(seen.has(join(SRC, 'addon-page-loader.tsx'))).toBe(true)
+        expect(external.has('@testing-library/react')).toBe(false)
+    })
+
     it('keeps the recharts-backed module out of the static graph', () => {
         expect(seen.has(join(SRC, 'widgets/charts.tsx'))).toBe(false)
         expect(seen.has(join(SRC, 'widgets/lazy-charts.tsx'))).toBe(true)

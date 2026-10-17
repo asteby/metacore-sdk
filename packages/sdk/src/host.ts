@@ -25,9 +25,9 @@ export interface HostApiRequestOptions {
 }
 
 /**
- * One read of the batched `POST /api/q` endpoint. `token` is the wire token the
- * host's batcher understands (`t:<Model>?…` list, `r:<Model>/<id>` record,
- * `m:<Model>` metadata…); see `@asteby/metacore-runtime-react` query-batch.
+ * Result of one batched read ({@link HostApi.q}): the envelope the kernel
+ * returns for a list, record or metadata read, resolved on its own even when
+ * other reads of the same batch fail.
  */
 export interface HostQueryPart<T = unknown> {
   success: boolean;
@@ -48,10 +48,12 @@ export interface HostApi {
   patch<T = unknown>(path: string, body?: unknown, opts?: HostApiRequestOptions): Promise<T>;
   delete<T = unknown>(path: string, opts?: HostApiRequestOptions): Promise<T>;
   /**
-   * Batched reads through `POST /q`: tokens arriving in the same tick share
-   * one request; each part resolves on its own.
+   * Batched read through `POST /q`: list, record and metadata reads
+   * (`/data/Shipment`, `/data/Shipment/42`, `/metadata/table/Shipment`)
+   * issued in the same tick share one request; each resolves on its own.
+   * Paths the batch does not understand fall back to a plain GET.
    */
-  q<T = unknown>(token: string): Promise<HostQueryPart<T>>;
+  q<T = unknown>(path: string, opts?: Pick<HostApiRequestOptions, "params">): Promise<HostQueryPart<T>>;
   /**
    * Run a capability query (e.g. `commerce.shipping.track`) with the viewer's
    * permissions. The host resolves the provider and caches briefly; the

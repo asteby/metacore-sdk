@@ -18,6 +18,14 @@
     "./charts": {
       "types": "./dist/widgets/charts.d.ts",
       "import": "./dist/widgets/charts.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    },
+    "./views/map": {
+      "types": "./dist/views/map-view.d.ts",
+      "import": "./dist/views/map-view.js"
     }
   },
   "scripts": {
@@ -50,7 +58,8 @@
     "react-i18next": ">=13",
     "sonner": ">=1.7",
     "zustand": ">=5",
-    "@module-federation/runtime": ">=2.5"
+    "@module-federation/runtime": ">=2.5",
+    "@testing-library/react": ">=14"
   },
   "peerDependenciesMeta": {
     "@tanstack/react-router": {
@@ -60,6 +69,9 @@
       "optional": true
     },
     "@module-federation/runtime": {
+      "optional": true
+    },
+    "@testing-library/react": {
       "optional": true
     }
   },
