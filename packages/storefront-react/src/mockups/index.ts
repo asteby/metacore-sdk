@@ -25,12 +25,15 @@ export type {
 } from './registry.js'
 export type { MockupComponent, MockupComponentProps, MockupRenderer } from './types.js'
 
+export { createStoreMockups, defineMockup } from './define.js'
+export type { CreateStoreMockupsOptions, MockupDefinition, StoreMockups } from './define.js'
+
 export { TireMockup } from './tire.js'
 export { PartMockup } from './part.js'
 export { SupplementMockup } from './supplement.js'
 export { GenericMockup } from './generic.js'
 
-export { MockupFrame, MockupText, MOCKUP_MONO, MOCKUP_SIZE, MOCKUP_TOKENS, fitMockupFontSize, tone, wrapMockupText } from './frame.js'
+export { MockupFrame, MockupText, MOCKUP_MONO, MOCKUP_SIZE, MOCKUP_TOKENS, fitMockupFontSize, mockupWordMax, tone, wrapMockupText } from './frame.js'
 export type { MockupFrameProps, MockupTextProps, MockupTone } from './frame.js'
 
 export { DEFAULT_MOCKUP_LABELS, describeMockup } from './labels.js'

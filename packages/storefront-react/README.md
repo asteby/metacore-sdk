@@ -328,6 +328,74 @@ tipo base (`registerMockup('tire', MiLlanta)`), recibe los datos del extractor
 base (`TireMockupData`). Para dibujar sin producto completo:
 `<ProductMockup kind="part" data={partMockupData(product)} />`.
 
+### Los mockups de la tienda: un archivo por tipo (`defineMockup` + `createStoreMockups`)
+
+Cada tienda trae sus mockups en **su repo**, con el mismo marco (convención
+`app/mockups/` del starter `local`): un archivo por tipo con `defineMockup` y un
+`index.ts` que los junta con `createStoreMockups`. Es azúcar sobre
+`createMockupRegistry` + `resolveKind`, así que todo lo anterior sigue igual.
+
+```ts
+defineMockup<D>({
+  kind,                          // 'supplement', 'tire', 'casco-moto'… (reusar un tipo base lo reemplaza)
+  match?: (product, guess) => boolean,           // reclama productos; se pregunta en orden, antes de la propuesta del SDK
+  data?: (product, variant?) => D,               // por omisión, el extractor base del tipo (genérico para tipos nuevos)
+  describe?: (data, labels) => string,           // nombre accesible; por omisión describeMockup
+  render: (props: MockupComponentProps<D>) => JSX,  // un <MockupFrame>… o una pieza base: SupplementMockup, TireMockup…
+})
+
+createStoreMockups(definitions, { base?: 'builtin' | 'none' | registry, labels? })
+  // → { registry, resolveKind, labels?, kinds }  listo para <MockupProvider {...storeMockups}>
+```
+
+```tsx
+// app/mockups/supplement.tsx: la pieza base tal cual, con la regla de la tienda
+import { SupplementMockup, defineMockup } from '@asteby/storefront-react/mockups'
+
+export const supplement = defineMockup({
+  kind: 'supplement',
+  match: (product) => product.category?.handle !== 'accesorios', // "todo es suplemento salvo accesorios"
+  render: SupplementMockup,
+})
+
+// app/mockups/accessory.tsx: un tipo nuevo dibujado por la tienda
+import { MockupFrame, MockupText, defineMockup, tone, wrapMockupText, cleanMockupText } from '@asteby/storefront-react/mockups'
+
+export const accessory = defineMockup<{ title: string }>({
+  kind: 'accessory',
+  match: (product) => product.category?.handle === 'accesorios',
+  data: (product) => ({ title: cleanMockupText(product.title) ?? '' }),
+  render: ({ data, label, labels: _labels, ...svg }) => (
+    <MockupFrame kind="accessory" label={label} {...svg}>
+      <rect x={120} y={60} width={160} height={240} rx={28} style={tone('surface')} />
+      <MockupText lines={wrapMockupText(data.title, 26, 2)} x={200} y={350} size={20} />
+    </MockupFrame>
+  ),
+})
+
+// app/mockups/index.ts: lo único que importa root.tsx
+import { createStoreMockups } from '@asteby/storefront-react/mockups'
+import { accessory } from './accessory'
+import { supplement } from './supplement'
+
+export const storeMockups = createStoreMockups([accessory, supplement])
+
+// app/root.tsx
+<MockupProvider {...storeMockups}><Outlet /></MockupProvider>
+```
+
+Reglas: `data` solo lee el producto (atributos, `vendor`, título, opciones,
+variante), nunca precios, y limpia el texto con `cleanMockupText`; `render`
+pinta con `tone(...)`/`--mockup-*` (sin colores de marca en el SVG), devuelve un
+`<MockupFrame>` (accesibilidad y tokens) y no usa `id`s, imágenes ni red.
+
+Los textos de tamaño automático aceptan palabras más largas que el ancho de
+línea sin cortarlas: `wrapMockupText(texto, chars, lines, wordMax)` deja la
+palabra en su propia línea y `fitMockupFontSize` ajusta la letra a la más
+larga; `mockupWordMax(ancho, letraMínima, ratio)` da el `wordMax` que todavía
+cabe. El suplemento base ya lo usa (`CREATINA MONOHIDRATADA` ya no queda en
+`MONOHIDRATA…`).
+
 ## API
 
 | Export | |

@@ -41,18 +41,24 @@ export const MOCKUP_MONO = 'var(--mockup-font-mono, var(--font-mono, ui-monospac
 // Text layout (no DOM measuring: works the same in SSR)
 // ---------------------------------------------------------------------------
 
-/** Greedy word wrap by characters; the last allowed line ends in `…` when text is cut. */
-export function wrapMockupText(text: string | null | undefined, maxChars: number, maxLines: number): string[] {
+/**
+ * Greedy word wrap by characters; the last allowed line ends in `…` when text
+ * is cut. Words longer than `wordMax` (default `maxChars`) are cut with `…`; a
+ * word between `maxChars` and `wordMax` keeps a line of its own, so the caller
+ * can shrink the font to fit it (`fitMockupFontSize`) instead of cutting it.
+ */
+export function wrapMockupText(text: string | null | undefined, maxChars: number, maxLines: number, wordMax: number = maxChars): string[] {
   if (!text || maxLines < 1) return []
+  const cap = Math.max(maxChars, wordMax)
   const words = text.split(' ').filter(Boolean)
   const lines: string[] = []
   let current = ''
   let cut = false
   for (let i = 0; i < words.length; i++) {
     let word = words[i]!
-    if (Array.from(word).length > maxChars) word = Array.from(word).slice(0, maxChars - 1).join('') + '…'
+    if (Array.from(word).length > cap) word = Array.from(word).slice(0, cap - 1).join('') + '…'
     const next = current ? `${current} ${word}` : word
-    if (Array.from(next).length <= maxChars) {
+    if (Array.from(next).length <= maxChars || !current) {
       current = next
       continue
     }
@@ -68,10 +74,16 @@ export function wrapMockupText(text: string | null | undefined, maxChars: number
   if (cut || lines.length > maxLines) {
     const kept = lines.slice(0, maxLines)
     const last = Array.from(kept[maxLines - 1] ?? '')
-    kept[maxLines - 1] = (last.length >= maxChars ? last.slice(0, maxChars - 1).join('') : last.join('')).replace(/[\s.,;:…-]+$/, '') + '…'
+    const limit = Math.max(maxChars, Math.min(cap, last.length))
+    kept[maxLines - 1] = (last.length >= limit ? last.slice(0, limit - 1).join('') : last.join('')).replace(/[\s.,;:…-]+$/, '') + '…'
     return kept
   }
   return lines
+}
+
+/** Longest word (in characters) that still fits `width` at font size `min` (glyph width `ratio` em). */
+export function mockupWordMax(width: number, min: number, ratio = 0.62): number {
+  return Math.max(1, Math.floor(width / (min * ratio)))
 }
 
 /** Font size so the longest line fits `width` (approximate glyph width `ratio` em). */

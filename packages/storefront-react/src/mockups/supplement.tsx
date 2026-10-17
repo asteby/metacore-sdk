@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import type { SupplementMockupData, SupplementShape } from '@asteby/storefront/mockup'
-import { MockupFrame, MockupText, fitMockupFontSize, tone, wrapMockupText } from './frame.js'
+import { MockupFrame, MockupText, fitMockupFontSize, mockupWordMax, tone, wrapMockupText } from './frame.js'
 import type { MockupComponentProps } from './types.js'
 
 type Box = { x: number; y: number; w: number; h: number }
@@ -48,7 +48,9 @@ export function SupplementMockup({ data, label, labels, ...rest }: MockupCompone
   const cx = box.x + box.w / 2
   const inner = box.w - 20
   const amount = data.presentation ?? (data.servings ? `${data.servings} ${labels.servings}` : null)
-  const nameLines = wrapMockupText(data.title, 12, 3)
+  // Long words (CREATINA MONOHIDRATADA) keep a line of their own and the font shrinks to the longest one;
+  // only words that would not fit even at the minimum size are cut.
+  const nameLines = wrapMockupText(data.title, 12, 3, mockupWordMax(inner, 12, 0.64))
   const nameFont = fitMockupFontSize(nameLines, inner, 26, 12, 0.64)
   const flavor = data.flavor ? wrapMockupText(data.flavor, 18, 1)[0]! : null
   const flavorW = flavor ? Math.min(inner, Array.from(flavor).length * 6.6 + 20) : 0
