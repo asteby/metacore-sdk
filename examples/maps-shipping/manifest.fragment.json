@@ -1,0 +1,32 @@
+{
+  "navigation": [
+    {
+      "title": "shipping.nav.map",
+      "model": "Shipment",
+      "view_type": "map",
+      "view": {
+        "map": {
+          "point": { "lat": "dest_lat", "lng": "dest_lng" },
+          "cluster": true,
+          "color_by": "status",
+          "popup": ["tracking_number", "carrier", "status", "eta"],
+          "layers": [{ "kind": "points", "model": "Branch", "point": { "lat": "lat", "lng": "lng" }, "label": "name" }]
+        }
+      }
+    }
+  ],
+  "models": [
+    {
+      "name": "Shipment",
+      "detail": {
+        "panels": [
+          { "key": "events", "kind": "timeline", "title": "shipping.panels.events", "span": "half",
+            "timeline": { "date_field": "at", "title_field": "description", "status_field": "status",
+              "source": { "capability": "commerce.shipping.track", "input": { "tracking_number": "record.tracking_number" }, "items": "events" } } },
+          { "key": "route", "kind": "map", "title": "shipping.panels.route", "span": "half",
+            "map": { "point": { "lat": "dest_lat", "lng": "dest_lng" }, "route": { "relation": "stops", "point": { "lat": "lat", "lng": "lng" }, "order_by": "seq" } } }
+        ]
+      }
+    }
+  ]
+}
