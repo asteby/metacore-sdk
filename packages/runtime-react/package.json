@@ -14,6 +14,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./charts": {
+      "types": "./dist/widgets/charts.d.ts",
+      "import": "./dist/widgets/charts.js"
     }
   },
   "scripts": {
@@ -28,7 +32,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@tanstack/react-virtual": "^3.14.13",
-    "recharts": "^2.15.0",
+    "recharts": "^3.8.1",
     "zod": "^4.3.0"
   },
   "peerDependencies": {

@@ -8,15 +8,17 @@ import type { DashboardWidgetSpec, WidgetData, WidgetSize } from '../dashboard-t
 import { WidgetCard, WidgetError } from './widget-card'
 import {
     StatWidget,
+    ListWidget,
+    ProgressWidget,
+    type WidgetRenderProps,
+} from './renderers'
+import {
     BarWidget,
     LineWidget,
     AreaWidget,
     PieWidget,
     DonutWidget,
-    ListWidget,
-    ProgressWidget,
-    type WidgetRenderProps,
-} from './renderers'
+} from './lazy-charts'
 
 /** Maps a widget size to its column span in the 4-col grid. */
 export const SIZE_SPAN: Record<WidgetSize, number> = {

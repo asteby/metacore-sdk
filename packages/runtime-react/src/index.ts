@@ -701,15 +701,20 @@ export type {
 } from './dashboard-types'
 export {
     StatWidget,
+    ListWidget,
+    ProgressWidget,
+    type WidgetRenderProps,
+} from './widgets/renderers'
+// recharts-backed widgets: lazy facades, recharts stays out of the index graph.
+// The eager components are at '@asteby/metacore-runtime-react/charts'.
+export {
     BarWidget,
     LineWidget,
     AreaWidget,
     PieWidget,
     DonutWidget,
-    ListWidget,
-    ProgressWidget,
-    type WidgetRenderProps,
-} from './widgets/renderers'
+    preloadWidgetCharts,
+} from './widgets/lazy-charts'
 export {
     WidgetRenderer,
     WidgetSkeleton,
