@@ -26,4 +26,5 @@ export type {
   QueryValue,
 } from './query.js'
 
+export type { GeoPoint, OpeningHours, OpenStatus } from './geo.js'
 export type * from './types.js'

@@ -37,6 +37,16 @@
         "default": "./dist/mock.cjs"
       }
     },
+    "./geo": {
+      "import": {
+        "types": "./dist/geo.d.ts",
+        "default": "./dist/geo.js"
+      },
+      "require": {
+        "types": "./dist/geo.d.cts",
+        "default": "./dist/geo.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "sideEffects": false,

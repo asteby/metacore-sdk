@@ -1,0 +1,124 @@
+{
+  "_doc": "Shared geo test vectors (storefront TS + Go addons). Times are ISO instants; compare as instants, not strings. openStatus uses a minute-resolution clock, closing minute is exclusive.",
+  "earthRadiusKm": 6371.0088,
+  "distance": [
+    { "name": "identical points", "a": { "lat": 19.4326, "lng": -99.1332 }, "b": { "lat": 19.4326, "lng": -99.1332 }, "km": 0, "tol": 1e-9 },
+    { "name": "CDMX to Monterrey", "a": { "lat": 19.4326, "lng": -99.1332 }, "b": { "lat": 25.6866, "lng": -100.3161 }, "km": 706, "tol": 1.5 },
+    { "name": "one degree of latitude", "a": { "lat": 10, "lng": 20 }, "b": { "lat": 11, "lng": 20 }, "km": 111.195, "tol": 0.01 },
+    { "name": "symmetric", "a": { "lat": 25.6866, "lng": -100.3161 }, "b": { "lat": 19.4326, "lng": -99.1332 }, "km": 706, "tol": 1.5 },
+    { "name": "across the antimeridian", "a": { "lat": 0.5, "lng": 179.5 }, "b": { "lat": 0.5, "lng": -179.5 }, "km": 111.18, "tol": 0.05 }
+  ],
+  "validPoint": [
+    { "lat": 19.4326, "lng": -99.1332, "valid": true },
+    { "lat": 0, "lng": 0, "valid": false },
+    { "lat": 0, "lng": 12.5, "valid": true },
+    { "lat": 90, "lng": 180, "valid": true },
+    { "lat": -90, "lng": -180, "valid": true },
+    { "lat": 90.0001, "lng": 0.5, "valid": false },
+    { "lat": 10, "lng": 180.5, "valid": false },
+    { "lat": -91, "lng": 10, "valid": false },
+    { "lat": null, "lng": 10, "valid": false }
+  ],
+  "parseLatLng": [
+    { "input": "19.43,-99.13", "expected": { "lat": 19.43, "lng": -99.13 } },
+    { "input": " 19.43 , -99.13 ", "expected": { "lat": 19.43, "lng": -99.13 } },
+    { "input": "0,0", "expected": null },
+    { "input": "91,10", "expected": null },
+    { "input": "abc", "expected": null },
+    { "input": "19.43", "expected": null },
+    { "input": "", "expected": null }
+  ],
+  "rank": {
+    "origin": { "lat": 19.4326, "lng": -99.1332 },
+    "items": [
+      { "id": "monterrey", "lat": 25.6866, "lng": -100.3161 },
+      { "id": "unset", "lat": 0, "lng": 0 },
+      { "id": "toluca", "lat": 19.2826, "lng": -99.6557 },
+      { "id": "coyoacan", "lat": 19.3467, "lng": -99.1617 },
+      { "id": "no-coords", "lat": null, "lng": null },
+      { "id": "puebla", "lat": 19.0414, "lng": -98.2063 },
+      { "id": "coyoacan-twin", "lat": 19.3467, "lng": -99.1617 }
+    ],
+    "cases": [
+      { "name": "all valid sorted, ties keep input order, invalid excluded", "options": {}, "ids": ["coyoacan", "coyoacan-twin", "toluca", "puebla", "monterrey"] },
+      { "name": "radius 100 km", "options": { "radiusKm": 100 }, "ids": ["coyoacan", "coyoacan-twin", "toluca"] },
+      { "name": "limit 2", "options": { "limit": 2 }, "ids": ["coyoacan", "coyoacan-twin"] },
+      { "name": "radius and limit", "options": { "radiusKm": 150, "limit": 3 }, "ids": ["coyoacan", "coyoacan-twin", "toluca"] },
+      { "name": "radius 0 is inclusive at equality", "options": { "radiusKm": 0 }, "origin": { "lat": 19.3467, "lng": -99.1617 }, "ids": ["coyoacan", "coyoacan-twin"] },
+      { "name": "limit 0", "options": { "limit": 0 }, "ids": [] }
+    ]
+  },
+  "formatDistance": [
+    { "km": 0.02, "locale": "es-MX", "text": "0 m" },
+    { "km": 0.3, "locale": "es-MX", "text": "300 m" },
+    { "km": 0.97, "locale": "es-MX", "text": "950 m" },
+    { "km": 0.98, "locale": "es-MX", "text": "1.0 km" },
+    { "km": 1.234, "locale": "es-MX", "text": "1.2 km" },
+    { "km": 706.44, "locale": "en-US", "text": "706.4 km" }
+  ],
+  "directionsUrl": [
+    { "location": { "lat": 19.4326, "lng": -99.1332, "address": "Av. Principal 100" }, "provider": "google", "url": "https://www.google.com/maps/dir/?api=1&destination=19.4326%2C-99.1332" },
+    { "location": { "lat": 0, "lng": 0, "address": "Av. Juárez 5 #2", "city": "Monterrey" }, "provider": "google", "url": "https://www.google.com/maps/dir/?api=1&destination=Av.%20Ju%C3%A1rez%205%20%232%2C%20Monterrey" },
+    { "location": { "lat": 19.4326, "lng": -99.1332 }, "provider": "apple", "url": "https://maps.apple.com/?daddr=19.4326%2C-99.1332" },
+    { "location": { "lat": 19.4326, "lng": -99.1332 }, "provider": "geo", "url": "geo:19.4326,-99.1332?q=19.4326,-99.1332" },
+    { "location": { "address": "Calle 1 & 2" }, "provider": "geo", "url": "geo:0,0?q=Calle%201%20%26%202" },
+    { "location": {}, "provider": "google", "url": null }
+  ],
+  "hours": {
+    "office": { "weekly": [
+      { "day": 1, "open": "09:00", "close": "19:00" }, { "day": 2, "open": "09:00", "close": "19:00" },
+      { "day": 3, "open": "09:00", "close": "19:00" }, { "day": 4, "open": "09:00", "close": "19:00" },
+      { "day": 5, "open": "09:00", "close": "19:00" }, { "day": 6, "open": "09:00", "close": "14:00" }
+    ] },
+    "bar": { "weekly": [ { "day": 5, "open": "20:00", "close": "02:00" }, { "day": 6, "open": "20:00", "close": "03:00" } ] },
+    "split": { "weekly": [
+      { "day": 1, "open": "16:00", "close": "20:00" }, { "day": 1, "open": "09:00", "close": "14:00" },
+      { "day": 2, "open": "09:00", "close": "14:00" }, { "day": 2, "open": "16:00", "close": "20:00" },
+      { "day": 3, "open": "09:00", "close": "14:00" }, { "day": 3, "open": "16:00", "close": "20:00" },
+      { "day": 4, "open": "09:00", "close": "14:00" }, { "day": 4, "open": "16:00", "close": "20:00" },
+      { "day": 5, "open": "09:00", "close": "14:00" }, { "day": 5, "open": "16:00", "close": "20:00" }
+    ] },
+    "sunday": { "weekly": [ { "day": 7, "open": "09:00", "close": "18:00" } ] },
+    "satNight": { "weekly": [ { "day": 6, "open": "22:00", "close": "04:00" } ] },
+    "wednesday": { "weekly": [ { "day": 3, "open": "10:00", "close": "12:00" } ] },
+    "officeClosedWed": { "base": "office", "exceptions": [ { "date": "2025-06-04", "closed": true, "note": "Inventario" } ] },
+    "officeShortWed": { "base": "office", "exceptions": [ { "date": "2025-06-04", "open": "10:00", "close": "13:00" } ] }
+  },
+  "openStatus": [
+    { "name": "inside hours", "hours": "office", "tz": "America/Mexico_City", "now": "2025-06-04T18:00:00Z", "open": true, "closesAt": "2025-06-05T01:00:00Z", "nextOpenAt": null },
+    { "name": "before opening", "hours": "office", "tz": "America/Mexico_City", "now": "2025-06-04T14:00:00Z", "open": false, "closesAt": null, "nextOpenAt": "2025-06-04T15:00:00Z" },
+    { "name": "closing minute is exclusive", "hours": "office", "tz": "America/Mexico_City", "now": "2025-06-05T01:00:00Z", "open": false, "closesAt": null, "nextOpenAt": "2025-06-05T15:00:00Z" },
+    { "name": "opening minute is inclusive", "hours": "office", "tz": "America/Mexico_City", "now": "2025-06-04T15:00:00Z", "open": true, "closesAt": "2025-06-05T01:00:00Z", "nextOpenAt": null },
+    { "name": "saturday after close skips to monday", "hours": "office", "tz": "America/Mexico_City", "now": "2025-06-07T21:00:00Z", "open": false, "closesAt": null, "nextOpenAt": "2025-06-09T15:00:00Z" },
+    { "name": "Cancun is UTC-5 all year (open)", "hours": "office", "tz": "America/Cancun", "now": "2025-06-04T18:00:00Z", "open": true, "closesAt": "2025-06-05T00:00:00Z", "nextOpenAt": null },
+    { "name": "same instant, Mexico_City still open", "hours": "office", "tz": "America/Mexico_City", "now": "2025-06-05T00:30:00Z", "open": true, "closesAt": "2025-06-05T01:00:00Z", "nextOpenAt": null },
+    { "name": "same instant, Cancun already closed", "hours": "office", "tz": "America/Cancun", "now": "2025-06-05T00:30:00Z", "open": false, "closesAt": null, "nextOpenAt": "2025-06-05T14:00:00Z" },
+    { "name": "Tijuana in summer is UTC-7", "hours": "office", "tz": "America/Tijuana", "now": "2025-06-04T18:00:00Z", "open": true, "closesAt": "2025-06-05T02:00:00Z", "nextOpenAt": null },
+    { "name": "over midnight, after midnight (Friday spill)", "hours": "bar", "tz": "America/Mexico_City", "now": "2025-06-07T07:00:00Z", "open": true, "closesAt": "2025-06-07T08:00:00Z", "nextOpenAt": null },
+    { "name": "over midnight, Saturday night into Sunday", "hours": "bar", "tz": "America/Mexico_City", "now": "2025-06-08T04:00:00Z", "open": true, "closesAt": "2025-06-08T09:00:00Z", "nextOpenAt": null },
+    { "name": "over midnight, closed in the gap", "hours": "bar", "tz": "America/Mexico_City", "now": "2025-06-07T09:00:00Z", "open": false, "closesAt": null, "nextOpenAt": "2025-06-08T02:00:00Z" },
+    { "name": "exception closed day", "hours": "officeClosedWed", "tz": "America/Mexico_City", "now": "2025-06-04T18:00:00Z", "open": false, "closesAt": null, "nextOpenAt": "2025-06-05T15:00:00Z" },
+    { "name": "exception special hours (open)", "hours": "officeShortWed", "tz": "America/Mexico_City", "now": "2025-06-04T18:00:00Z", "open": true, "closesAt": "2025-06-04T19:00:00Z", "nextOpenAt": null },
+    { "name": "exception special hours (after them)", "hours": "officeShortWed", "tz": "America/Mexico_City", "now": "2025-06-04T20:00:00Z", "open": false, "closesAt": null, "nextOpenAt": "2025-06-05T15:00:00Z" },
+    { "name": "two intervals, lunch break", "hours": "split", "tz": "America/Mexico_City", "now": "2025-06-04T21:00:00Z", "open": false, "closesAt": null, "nextOpenAt": "2025-06-04T22:00:00Z" },
+    { "name": "two intervals, afternoon", "hours": "split", "tz": "America/Mexico_City", "now": "2025-06-04T23:00:00Z", "open": true, "closesAt": "2025-06-05T02:00:00Z", "nextOpenAt": null },
+    { "name": "DST starts (Tijuana, 2025-03-09): next open is 09:00 PDT", "hours": "sunday", "tz": "America/Tijuana", "now": "2025-03-09T04:00:00Z", "open": false, "closesAt": null, "nextOpenAt": "2025-03-09T16:00:00Z" },
+    { "name": "DST day, open in PDT", "hours": "sunday", "tz": "America/Tijuana", "now": "2025-03-09T17:00:00Z", "open": true, "closesAt": "2025-03-10T01:00:00Z", "nextOpenAt": null },
+    { "name": "DST ends (Tijuana, 2025-11-02): next open is 09:00 PST", "hours": "sunday", "tz": "America/Tijuana", "now": "2025-11-02T03:00:00Z", "open": false, "closesAt": null, "nextOpenAt": "2025-11-02T17:00:00Z" },
+    { "name": "after DST ends, 07:00 PST", "hours": "sunday", "tz": "America/Tijuana", "now": "2025-11-02T15:00:00Z", "open": false, "closesAt": null, "nextOpenAt": "2025-11-02T17:00:00Z" },
+    { "name": "closing time lands after the fall-back change", "hours": "satNight", "tz": "America/Tijuana", "now": "2025-11-02T08:30:00Z", "open": true, "closesAt": "2025-11-02T12:00:00Z", "nextOpenAt": null }
+  ],
+  "formatOpeningHours": [
+    { "hours": "office", "locale": "es-MX", "text": "Lun–Vie 9:00–19:00 · Sáb 9:00–14:00" },
+    { "hours": "office", "locale": "en-US", "text": "Mon–Fri 9:00 AM–7:00 PM · Sat 9:00 AM–2:00 PM" },
+    { "hours": "split", "locale": "es-MX", "text": "Lun–Vie 9:00–14:00, 16:00–20:00" },
+    { "hours": "bar", "locale": "es-MX", "text": "Vie 20:00–2:00 · Sáb 20:00–3:00" },
+    { "hours": "wednesday", "locale": "es-MX", "text": "Mié 10:00–12:00" }
+  ],
+  "toSchemaOpeningHours": [
+    { "hours": "office", "strings": ["Mo-Fr 09:00-19:00", "Sa 09:00-14:00"] },
+    { "hours": "split", "strings": ["Mo-Fr 09:00-14:00", "Mo-Fr 16:00-20:00"] },
+    { "hours": "bar", "strings": ["Fr 20:00-02:00", "Sa 20:00-03:00"] },
+    { "hours": "sunday", "strings": ["Su 09:00-18:00"] }
+  ]
+}

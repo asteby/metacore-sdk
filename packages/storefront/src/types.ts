@@ -5,6 +5,8 @@
  * decimal strings ("1899.00") so no precision is lost in transit.
  */
 
+import type { OpeningHours } from './geo.js'
+
 // ---------------------------------------------------------------------------
 // Primitives
 // ---------------------------------------------------------------------------
@@ -113,6 +115,15 @@ export type ShopBranch = {
   lat: number | null
   lng: number | null
   hours: string | null
+  /**
+   * Structured hours. Optional: only present once the Storefront API ships
+   * `locations.v1`; today's API returns `hours` (free text) only.
+   */
+  opening_hours?: OpeningHours
+  /** IANA time zone of the branch (e.g. `America/Mexico_City`). Comes with `locations.v1`. */
+  timezone?: string
+  /** Human-readable hours, authoritative for display. Comes with `locations.v1`. */
+  opening_hours_text?: string
 }
 
 export type ShopPolicies = { free_shipping_min: Money | null; returns_days: number | null }

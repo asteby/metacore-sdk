@@ -126,6 +126,36 @@ Images are `https://picsum.photos/seed/<handle>/800/800` placeholders built by
 `MOCK_IMAGE_URL`; pass `createMockStorefront({ imageUrl })` to swap them.
 `mock.reset()` restores the seed and `mock.state` exposes the live data.
 
+## Geo helpers (`@asteby/storefront/geo`)
+
+Pure TypeScript (no network, no DOM; Node 20, edge and browsers). Behaviour is
+pinned by `src/geo-vectors.json`, shared with the Go implementation.
+
+```ts
+import {
+  distanceKm, rankByDistance, formatDistance, directionsUrl, parseLatLng,
+  openStatus, formatOpeningHours, toSchemaOpeningHours,
+} from '@asteby/storefront/geo'
+
+const origin = parseLatLng('19.4326,-99.1332') // null when malformed or (0,0)
+const near = rankByDistance(shop.branches, origin!, { radiusKm: 25, limit: 3 })
+// [{ item, distanceKm }] sorted by distance, ties keep input order.
+// Items without a valid point (null, out of range or the "unset" (0,0)) are excluded.
+formatDistance(near[0]!.distanceKm, 'es-MX') // "300 m" (50 m steps) or "4.2 km"
+directionsUrl(near[0]!.item, { provider: 'google' }) // coordinates, else address text
+
+const hours = { weekly: [{ day: 1, open: '09:00', close: '19:00' }, /* 1 = Mon ... 7 = Sun */] }
+openStatus(hours, 'America/Mexico_City') // { open, closesAt, nextOpenAt } as ISO instants
+formatOpeningHours(hours, 'es-MX')       // "Lun–Vie 9:00–19:00 · Sáb 9:00–14:00"
+toSchemaOpeningHours(hours)              // ["Mo-Fr 09:00-19:00", "Sa 09:00-14:00"]
+```
+
+`openStatus` honors intervals that cross midnight, several intervals per day,
+dated `exceptions` and daylight saving time (uses `Intl.DateTimeFormat`; throws
+`RangeError` for an unknown time zone). `ShopBranch` has optional
+`opening_hours`, `timezone` and `opening_hours_text`; they arrive with Storefront
+API `locations.v1` and are not populated yet.
+
 ## API
 
 `createStorefrontClient(options)`:
