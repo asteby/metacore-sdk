@@ -4,6 +4,7 @@
  * Nothing here touches the DOM, so it is safe in loaders and SSR.
  */
 import type { Collection, Image, Product, SEO, Shop } from '@asteby/storefront'
+import { isValidPoint, toSchemaOpeningHours, type OpeningHours } from '@asteby/storefront/geo'
 
 /** Same shape as React Router's `MetaDescriptor`. */
 export type MetaDescriptor =
@@ -193,7 +194,28 @@ export type LocalBusinessOptions = {
   priceRange?: string
 }
 
-/** One schema.org `LocalBusiness` (default `Store`) per shop branch. */
+const SCHEMA_HOURS = /^(Mo|Tu|We|Th|Fr|Sa|Su)(-(Mo|Tu|We|Th|Fr|Sa|Su))?( \d{2}:\d{2}-\d{2}:\d{2})?$/
+
+/**
+ * schema.org `openingHours` values from structured hours or a legacy string.
+ * A string is accepted only if EVERY comma-separated token is strict schema.org
+ * syntax (`Mo-Fr 09:00-19:00`); free text such as `Lun-Sáb 8:00 a 18:00` yields
+ * `undefined` so no invalid markup is ever emitted.
+ */
+export function openingHoursJsonLd(hours: OpeningHours | string | null | undefined): string[] | undefined {
+  if (!hours) return undefined
+  if (typeof hours !== 'string') {
+    const list = hours.weekly ? toSchemaOpeningHours(hours) : []
+    return list.length ? list : undefined
+  }
+  const tokens = hours.split(',').map((t) => t.trim())
+  return tokens.length && tokens.every((t) => SCHEMA_HOURS.test(t)) ? tokens : undefined
+}
+
+/**
+ * One schema.org `LocalBusiness` (default `Store`) per shop branch. Hours come
+ * from `opening_hours` when present, else from the legacy `hours` string.
+ */
 export function localBusinessJsonLd(shop: Shop, options: LocalBusinessOptions = {}): JsonLdObject[] {
   const site = shopUrl(shop, options.url)
   return shop.branches.map((b) =>
@@ -207,8 +229,8 @@ export function localBusinessJsonLd(shop: Shop, options: LocalBusinessOptions = 
       telephone: b.phone ?? shop.contact.phone ?? undefined,
       priceRange: options.priceRange,
       address: compact({ '@type': 'PostalAddress', streetAddress: b.address, addressLocality: b.city, addressCountry: shop.country_code }),
-      geo: b.lat !== null && b.lng !== null ? { '@type': 'GeoCoordinates', latitude: b.lat, longitude: b.lng } : undefined,
-      openingHours: b.hours ? b.hours.split(/\s*,\s*/).filter(Boolean) : undefined,
+      geo: isValidPoint(b) ? { '@type': 'GeoCoordinates', latitude: b.lat, longitude: b.lng } : undefined,
+      openingHours: openingHoursJsonLd(b.opening_hours ?? b.hours),
       parentOrganization: site ? { '@id': `${site}#organization` } : { '@type': 'Organization', name: shop.name },
     }),
   )

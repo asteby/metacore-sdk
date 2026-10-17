@@ -28,6 +28,7 @@ export {
   productJsonLd,
   organizationJsonLd,
   localBusinessJsonLd,
+  openingHoursJsonLd,
   breadcrumbJsonLd,
   faqJsonLd,
   collectionJsonLd,
