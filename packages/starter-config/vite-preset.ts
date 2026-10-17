@@ -17,6 +17,15 @@ import { fileURLToPath } from 'node:url'
 import type { UserConfig, Plugin, PluginOption, DepOptimizationOptions } from 'vite'
 import react from '@vitejs/plugin-react-swc'
 import tailwindcss from '@tailwindcss/vite'
+import {
+  assertMetacorePageShares,
+  assertPagesExposed,
+  metacorePageShareConfig,
+  readMetacoreManifest,
+  type MetacoreManifestLike,
+} from './federation-pages.js'
+
+export * from './federation-pages.js'
 
 /** Align with hub `validateFrontendBudgets` (512 KiB remoteEntry). */
 export const METACORE_REMOTE_ENTRY_MAX_BYTES = 512 * 1024
@@ -102,7 +111,15 @@ export const METACORE_FEDERATION_SINGLETONS = [
   '@asteby/metacore-app-providers',
   '@asteby/metacore-theme',
   '@asteby/metacore-auth',
+  // The host router is a singleton: a remote page navigates through the host's
+  // TanStack router (useAddonNavigate), never a second copy. Remotes get it
+  // with `import: false` (the host always provides it), so an addon that does
+  // not install the router still builds.
+  '@tanstack/react-router',
 ] as const
+
+/** Singletons a remote never bundles a fallback for (always host-provided). */
+export const METACORE_REMOTE_HOST_ONLY_SINGLETONS = ['@tanstack/react-router'] as const
 
 /**
  * Forma estructural compatible con la entry de `shared` de
@@ -116,6 +133,8 @@ export interface MetacoreFederationShareConfig {
   version?: string
   eager?: boolean
   shareScope?: string
+  /** `false`: never bundle a fallback copy; the host must provide it. */
+  import?: false
 }
 
 export interface MetacoreFederationOptions {
@@ -159,6 +178,25 @@ export interface MetacoreFederationOptions {
    * `overrides` para AJUSTAR defaults, `extra` para AÑADIR paquetes nuevos.
    */
   overrides?: Record<string, MetacoreFederationShareConfig>
+  /**
+   * `host` (ops, starter-core) or `remote` (an addon). Default: `remote` when
+   * `exposes` is given, else `host`. Remotes declare host-only singletons and
+   * page shares with `import: false`.
+   */
+  role?: 'host' | 'remote'
+  /**
+   * The addon's manifest.json (path relative to `root`, or the parsed object).
+   * Every `frontend.pages[].expose` must be in `exposes`, and each page's
+   * `shares` become lazy shares.
+   */
+  manifest?: string | MetacoreManifestLike
+  /**
+   * Lazy page shares to declare (subset of METACORE_PAGE_SHARES). Hosts pass
+   * the full list; remotes usually rely on `manifest`.
+   */
+  pageShares?: string[]
+  /** Base dir for a relative `manifest` path. Default `process.cwd()`. */
+  root?: string
 }
 
 export interface MetacoreFederationConfig {
@@ -241,7 +279,11 @@ export function metacoreFederationShared(
     extras = [],
     extra = {},
     overrides = {},
+    manifest,
+    pageShares = [],
+    root = process.cwd(),
   } = opts
+  const role = opts.role ?? (exposes ? 'remote' : 'host')
 
   const shared: Record<string, MetacoreFederationShareConfig> = {}
   // Defaults canónicos: cada paquete del ecosistema se declara `{ singleton:true }`
@@ -251,6 +293,20 @@ export function metacoreFederationShared(
   for (const name of METACORE_FEDERATION_SINGLETONS) {
     shared[name] = { singleton: true }
   }
+  if (role === 'remote') {
+    for (const name of METACORE_REMOTE_HOST_ONLY_SINGLETONS) {
+      shared[name] = { singleton: true, import: false }
+    }
+  }
+  // Páginas federadas: cada `pages[].expose` debe construirse y sus `shares`
+  // (mapas/gráficos, conjunto cerrado) se declaran perezosos.
+  const lazy = new Set<string>(pageShares)
+  if (manifest) {
+    const pages = assertPagesExposed(readMetacoreManifest(manifest, root)!, exposes)
+    for (const p of pages) for (const sh of p.shares) lazy.add(sh)
+  }
+  assertMetacorePageShares([...lazy], 'pageShares')
+  Object.assign(shared, metacorePageShareConfig(role, [...lazy]))
   // `extras` (string[]) — paquetes extra que solo necesitan el default singleton.
   for (const name of extras) {
     shared[name] ??= { singleton: true }

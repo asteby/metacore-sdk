@@ -16,6 +16,8 @@
     "vite-preset.ts",
     "vite-preset.js",
     "vite-preset.d.ts",
+    "federation-pages.js",
+    "federation-pages.d.ts",
     "pwa-register-stub.js",
     "pwa-register-stub.d.ts",
     "eslint-preset.js",
@@ -76,7 +78,7 @@
     }
   },
   "scripts": {
-    "test": "node --test test/federation-budget.test.js"
+    "test": "node --test test/*.test.js"
   },
   "publishConfig": {
     "access": "public"

@@ -3,6 +3,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react-swc";
 import tailwindcss from "@tailwindcss/vite";
+import {
+  assertMetacorePageShares,
+  assertPagesExposed,
+  metacorePageShareConfig,
+  readMetacoreManifest
+} from "./federation-pages.js";
+
+export * from "./federation-pages.js";
 
 /** Align with hub `validateFrontendBudgets` (512 KiB remoteEntry). */
 const METACORE_REMOTE_ENTRY_MAX_BYTES = 512 * 1024;
@@ -45,8 +53,10 @@ const METACORE_FEDERATION_SINGLETONS = [
   "@asteby/metacore-sdk",
   "@asteby/metacore-app-providers",
   "@asteby/metacore-theme",
-  "@asteby/metacore-auth"
+  "@asteby/metacore-auth",
+  "@tanstack/react-router"
 ];
+const METACORE_REMOTE_HOST_ONLY_SINGLETONS = ["@tanstack/react-router"];
 function metacoreFederationShared(opts) {
   const {
     host,
@@ -55,12 +65,28 @@ function metacoreFederationShared(opts) {
     exposes,
     extras = [],
     extra = {},
-    overrides = {}
+    overrides = {},
+    manifest,
+    pageShares = [],
+    root = process.cwd()
   } = opts;
+  const role = opts.role ?? (exposes ? "remote" : "host");
   const shared = {};
   for (const name of METACORE_FEDERATION_SINGLETONS) {
     shared[name] = { singleton: true };
   }
+  if (role === "remote") {
+    for (const name of METACORE_REMOTE_HOST_ONLY_SINGLETONS) {
+      shared[name] = { singleton: true, import: false };
+    }
+  }
+  const lazy = new Set(pageShares);
+  if (manifest) {
+    const pages = assertPagesExposed(readMetacoreManifest(manifest, root), exposes);
+    for (const p of pages) for (const sh of p.shares) lazy.add(sh);
+  }
+  assertMetacorePageShares([...lazy], "pageShares");
+  Object.assign(shared, metacorePageShareConfig(role, [...lazy]));
   for (const name of extras) {
     shared[name] ??= { singleton: true };
   }
@@ -223,6 +249,7 @@ export {
   METACORE_FEDERATION_SINGLETONS,
   METACORE_FRONTEND_MAX_BYTES,
   METACORE_REMOTE_ENTRY_MAX_BYTES,
+  METACORE_REMOTE_HOST_ONLY_SINGLETONS,
   assertFederationDistBudgets,
   assertMetacoreFederationShared,
   defineMetacoreConfig,
