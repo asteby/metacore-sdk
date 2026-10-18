@@ -636,7 +636,18 @@ export const abyGuidance: GuidanceAPI = {
     await runStep(guide, 0)
   },
   stopGuide() {
+    // A guide that was running (pending marks the current step) is being
+    // dismissed: tell the host so it can record a skipped tour. Completion has
+    // its own event (ops:aby-guide-completed) and clears pending first.
+    const pending = readPending()
     sessionStorage.removeItem(PENDING_KEY())
+    if (pending) {
+      window.dispatchEvent(
+        new CustomEvent('ops:aby-guide-stopped', {
+          detail: { guideId: pending.guideId, stepIndex: pending.stepIndex },
+        })
+      )
+    }
     activeStepCleanup?.()
     activeStepCleanup = null
     activeDriver?.destroy()
