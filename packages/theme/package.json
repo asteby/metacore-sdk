@@ -36,6 +36,10 @@
       "types": "./dist/preset.d.ts",
       "import": "./dist/preset.js"
     },
+    "./touch": {
+      "types": "./dist/touch.d.ts",
+      "import": "./dist/touch.js"
+    },
     "./contrast": {
       "types": "./dist/contrast.d.ts",
       "import": "./dist/contrast.js"

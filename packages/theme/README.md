@@ -203,3 +203,18 @@ config. Pass `persistBoot={false}` to the provider to opt out.
 ## License
 
 Apache-2.0
+
+## Touch tokens (`@asteby/metacore-theme/touch`)
+
+Geometría para pantallas táctiles (kioskos, pantalla de cliente), sin colores ni fuentes:
+
+```ts
+import { resolveTouchTokens, touchCss, touchCssVars } from '@asteby/metacore-theme/touch'
+
+const touch = resolveTouchTokens({ minTarget: 72 }) // { minTarget: 72, fontScale: 1.25 }
+style.textContent += touchCss(touch, '.kiosk')      // .kiosk{--touch-min-target:72px;--touch-font-scale:1.25}
+```
+
+Defaults: `minTarget` 60 px (rango 44–160) y `fontScale` 1.25 (rango 0.75–2). Los primitivos de `@asteby/metacore-ui/touch` leen esas variables con los mismos defaults como fallback.
+
+Encaje con ThemePack: el contrato completo (`ThemePack.tokens`) aún no está en `main`; esto define solo la extensión `tokens.touch?: Partial<TouchTokens>`. Cuando el contrato aterrice, el pack pasa `tokens.touch` por `resolveTouchTokens` y aplica `touchCss` junto al resto de variables.

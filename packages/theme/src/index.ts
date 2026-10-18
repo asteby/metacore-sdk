@@ -50,3 +50,14 @@ export {
   toHex,
 } from './contrast.js'
 export type { Rgba } from './contrast.js'
+
+export {
+  DEFAULT_TOUCH_TOKENS,
+  TOUCH_MIN_TARGET_RANGE,
+  TOUCH_FONT_SCALE_RANGE,
+  TOUCH_CSS_VARS,
+  resolveTouchTokens,
+  touchCssVars,
+  touchCss,
+} from './touch.js'
+export type { TouchTokens } from './touch.js'

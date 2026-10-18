@@ -83,6 +83,10 @@
       "types": "./dist/profile/index.d.ts",
       "import": "./dist/profile/index.js"
     },
+    "./touch": {
+      "types": "./dist/touch/index.d.ts",
+      "import": "./dist/touch/index.js"
+    },
     "./till": {
       "types": "./dist/till/index.d.ts",
       "import": "./dist/till/index.js"

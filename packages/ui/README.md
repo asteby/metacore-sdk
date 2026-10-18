@@ -152,3 +152,21 @@ pnpm --filter @asteby/metacore-ui build
 ## License
 
 Apache-2.0
+
+## Touch (`@asteby/metacore-ui/touch`)
+
+Primitivos sin marca para kioskos y pantallas de cliente. El tamaño sale de `--touch-min-target` (60 px por defecto) y `--touch-font-scale`, que pinta `@asteby/metacore-theme/touch`; cada componente acepta `minTarget` para sobrescribirlo.
+
+```tsx
+import { VirtualKeyboard, TouchButton, TouchGrid, useIdleReset, useWakeLock } from '@asteby/metacore-ui/touch'
+
+const [email, setEmail] = useState('')
+<VirtualKeyboard layout='email' value={email} onValueChange={setEmail} onEnter={next} />
+
+const { warning, secondsLeft, reset } = useIdleReset(60, 10, () => navigate('/attract'))
+useWakeLock()
+```
+
+- `VirtualKeyboard`: `layout` `text | numeric | email`, `decimal` (numérico), shift `off → una vez → bloqueo`, `labels` para i18n, `onKey` para el flujo crudo de teclas.
+- `useIdleReset`: cualquier pointer/tecla/touch/rueda reinicia; `warning` se activa los últimos `warnSeconds`.
+- `useWakeLock`: re-adquiere al volver la pestaña a visible; sin soporte es no-op.
