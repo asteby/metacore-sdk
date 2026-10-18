@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { apiErrorMessage, createDataloadApi } from './api'
+import { apiErrorMessage, apiErrorStatus, createDataloadApi, reviewQuery } from './api'
 import { plan, run } from './fixtures'
 
 const ok = (data: unknown) => ({ data: { success: true, data } })
-const http = () => ({ get: vi.fn(async (_u: string) => ok([])), post: vi.fn(async (_u: string, _b?: unknown) => ok({})) })
+const http = () => ({ get: vi.fn(async (_u: string) => ok([])), post: vi.fn(async (_u: string, _b?: unknown, _c?: unknown) => ok({})) })
 const source = { format: 'csv' as const, name: 'a.csv', content: 'sku\n1' }
 
 describe('createDataloadApi', () => {
@@ -61,8 +61,55 @@ describe('createDataloadApi', () => {
     expect(h.post).toHaveBeenLastCalledWith('/dataload/media/retry', { run_id: 'r1' })
   })
 
+  it('builds the review queue calls', async () => {
+    const h = http()
+    const api = createDataloadApi(h)
+    h.get.mockResolvedValueOnce(ok([{ key: 'k', items: null, record: null, state: 'pending' }]))
+    const list = await api.reviews({ entity: 'product', state: 'pending', runId: 'r 1', code: 'value_suspect', limit: 50 })
+    expect(h.get).toHaveBeenLastCalledWith('/dataload/reviews?entity=product&state=pending&run_id=r+1&code=value_suspect&limit=50')
+    expect(list[0]?.items).toEqual([])
+    expect(list[0]?.record).toEqual({})
+    await api.reviews()
+    expect(h.get).toHaveBeenLastCalledWith('/dataload/reviews')
+    expect(reviewQuery({})).toBe('')
+
+    const decisions = [{ entity: 'product', key: 'k', hash: 'h', approve: true, note: 'ok' }]
+    h.post.mockResolvedValueOnce(ok(null))
+    expect(await api.decideReviews(decisions)).toEqual([])
+    expect(h.post).toHaveBeenLastCalledWith('/dataload/reviews/decide', { decisions })
+    h.post.mockResolvedValueOnce(ok({ ...run({ mode: 'apply_reviewed' }), issues: null, review: null }))
+    const r = await api.applyApproved('product')
+    expect(h.post).toHaveBeenLastCalledWith('/dataload/reviews/apply', { entity: 'product' })
+    expect(r.review).toEqual([])
+  })
+
+  it('builds the chunked upload calls', async () => {
+    const h = http()
+    const api = createDataloadApi(h)
+    h.post.mockResolvedValueOnce(ok({ id: 'u/1', name: 'a.csv', size: 10, chunkSize: 4, received: null }))
+    const s = await api.createUpload({ name: 'a.csv', size: 10, chunkSize: 4 })
+    expect(h.post).toHaveBeenLastCalledWith('/dataload/uploads', { name: 'a.csv', size: 10, chunkSize: 4 })
+    expect(s.received).toEqual([])
+    const blob = new Blob(['abcd'])
+    const ctrl = new AbortController()
+    await api.uploadPart('u/1', 2, blob, { sha256: 'ff', signal: ctrl.signal })
+    expect(h.post).toHaveBeenLastCalledWith('/dataload/uploads/u%2F1/parts/2', blob, {
+      headers: { 'Content-Type': 'application/octet-stream', 'X-Content-Sha256': 'ff' },
+      signal: ctrl.signal,
+    })
+    await api.completeUpload('u/1')
+    expect(h.post).toHaveBeenLastCalledWith('/dataload/uploads/u%2F1/complete', {})
+    await api.abortUpload('u/1')
+    expect(h.post).toHaveBeenLastCalledWith('/dataload/uploads/u%2F1/abort')
+    h.get.mockResolvedValueOnce(ok({ id: 'u/1', received: [0, 1] }))
+    expect((await api.upload('u/1')).received).toEqual([0, 1])
+    expect(h.get).toHaveBeenLastCalledWith('/dataload/uploads/u%2F1')
+  })
+
   it('extracts server messages', () => {
     expect(apiErrorMessage({ response: { data: { message: 'perfil inválido' } } }, 'x')).toBe('perfil inválido')
     expect(apiErrorMessage(new Error('boom'), 'x')).toBe('x')
+    expect(apiErrorStatus({ response: { status: 409 } })).toBe(409)
+    expect(apiErrorStatus(new Error('net'))).toBeUndefined()
   })
 })

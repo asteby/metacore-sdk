@@ -1,6 +1,6 @@
 import type {
   DataloadPlan,
-  DataloadSourceInput,
+  InlineSourceInput,
   MediaBackupStatus,
   PlanAction,
   RowPlan,
@@ -45,6 +45,8 @@ export interface PlanSummary {
   unchanged: number
   invalid: number
   duplicate: number
+  /** Valid rows held for a person's decision; an apply never writes them. */
+  review: number
   /** Rows an apply would write (create + update). */
   applicable: number
   /** Valid rows (apply also queues their media, even when unchanged). */
@@ -65,6 +67,7 @@ export function summarizePlan(plan: DataloadPlan): PlanSummary {
     unchanged,
     invalid: g('invalid'),
     duplicate: g('duplicate'),
+    review: g('review'),
     applicable: create + update,
     valid: create + update + unchanged,
     mediaUrls: plan.mediaUrls ?? 0,
@@ -84,13 +87,17 @@ export function filterRows(rows: RowPlan[], filter: RowFilter, search = ''): Row
     if (filter === 'changes' ? r.action !== 'create' && r.action !== 'update' : filter !== 'all' && r.action !== filter) return false
     if (!q) return true
     if ((r.key ?? '').toLowerCase().includes(q) || String(r.row) === q) return true
-    return r.diffs.some((d) => d.field.toLowerCase().includes(q)) || r.issues.some((i) => i.message.toLowerCase().includes(q))
+    return (
+      r.diffs.some((d) => d.field.toLowerCase().includes(q)) ||
+      r.issues.some((i) => i.message.toLowerCase().includes(q)) ||
+      (r.review ?? []).some((i) => `${i.code} ${i.field ?? ''} ${i.detail ?? ''}`.toLowerCase().includes(q))
+    )
   })
 }
 
 /** Short, safe text for any diff value (null, objects, long strings). */
-export function formatValue(v: unknown, max = 120): string {
-  if (v === null || v === undefined || v === '') return '—'
+export function formatValue(v: unknown, max = 120, empty = '—'): string {
+  if (v === null || v === undefined || v === '') return empty
   const s = typeof v === 'string' ? v : typeof v === 'object' ? JSON.stringify(v) : String(v)
   return s.length > max ? `${s.slice(0, max - 1)}…` : s
 }
@@ -122,11 +129,11 @@ export function inferFormat(fileName: string, bundlePath?: string): SourceFormat
   return null
 }
 
-/** Reads a browser File into the text payload the API takes. Never uploads or stores anything. */
+/** Reads a browser File into the text payload the API takes. Never uploads or stores anything. For files above the inline limit use `uploadSourceFile`. */
 export async function readSourceFile(
   file: Pick<File, 'name' | 'size' | 'text'>,
   opts: { maxBytes?: number; bundlePath?: string } = {},
-): Promise<DataloadSourceInput> {
+): Promise<InlineSourceInput> {
   if (file.size > (opts.maxBytes ?? DEFAULT_MAX_FILE_BYTES)) throw new SourceFileError('too_large')
   const format = inferFormat(file.name, opts.bundlePath?.trim() || undefined)
   if (!format) throw new SourceFileError('unsupported')

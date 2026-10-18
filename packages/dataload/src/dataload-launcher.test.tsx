@@ -1,37 +1,13 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
-import type { DataloadApi } from './api'
+import { cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { DataloadLauncher } from './dataload-launcher'
 import { MediaBackupPanel } from './media-backup-panel'
+import { DATALOAD_MESSAGES_EN_US, DATALOAD_MESSAGES_ES_MX } from './messages'
 import { media, plan, run } from './fixtures'
+import { fakeApi, wrap } from './test-utils'
 
 afterEach(cleanup)
-
-function wrap(ui: ReactNode) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(<QueryClientProvider client={qc}>{ui}</QueryClientProvider>)
-}
-
-function fakeApi(over: Partial<DataloadApi> = {}): DataloadApi {
-  return {
-    listProfiles: vi.fn(async () => [{ profile: { name: 'catalogo', version: '1', entity: 'product', key: ['sku'], fields: [] } }]),
-    saveProfile: vi.fn(),
-    dryRun: vi.fn(async () => ({ plan, run: run({ mode: 'dry_run', state: 'succeeded' }) })),
-    execute: vi.fn(async () => run({ state: 'running' })),
-    run: vi.fn(async () => run({ state: 'succeeded', progress: { ...run().progress, done: 2 } })),
-    runPlan: vi.fn(),
-    runs: vi.fn(async () => [run({ state: 'succeeded' })]),
-    cancel: vi.fn(async () => run({ state: 'canceled' })),
-    mediaStatus: vi.fn(async () => media),
-    mediaManifest: vi.fn(async () => []),
-    mediaVerify: vi.fn(async () => ({ checked: 5, ok: 5, missing: [], corrupt: [] })),
-    mediaRetry: vi.fn(async () => 1),
-    ...over,
-  }
-}
 
 const pick = (label: RegExp, name: string, content: string) => {
   const input = screen.getByLabelText(label) as HTMLInputElement
@@ -111,7 +87,104 @@ describe('DataloadLauncher', () => {
   })
 })
 
+async function toPlan(api: ReturnType<typeof fakeApi>, label = 'Simular carga', fileLabel = /Archivo/) {
+  await waitFor(() => expect(screen.getByRole('option', { name: /catalogo/ })).toBeTruthy())
+  pick(fileLabel, 'a.csv', 'sku\n1')
+  const btn = screen.getByRole('button', { name: label }) as HTMLButtonElement
+  await waitFor(() => expect(btn.disabled).toBe(false))
+  fireEvent.click(btn)
+  await waitFor(() => expect(api.dryRun).toHaveBeenCalled())
+}
+
+describe('DataloadLauncher: review rows, permissions, i18n, big files', () => {
+  it('shows rows held for review with their reason and outcome', async () => {
+    const api = fakeApi()
+    wrap(<DataloadLauncher api={api} defaultProfile='catalogo' showMedia={false} showHistory={false} showReviews={false} />)
+    await toPlan(api)
+    await screen.findByText('1 filas esperan una decisión y no se cargarán solas.')
+    fireEvent.click(screen.getByRole('button', { name: 'Por revisar' }))
+    expect(screen.getByText('value_suspect')).toBeTruthy()
+    expect(screen.getByText('Se actualizaría')).toBeTruthy()
+    expect(screen.getByRole('table', { name: 'Fila 5' })).toBeTruthy()
+  })
+
+  it('lets a person without launch simulate but not apply, and hides cancel', async () => {
+    const api = fakeApi({ run: vi.fn(async () => run({ state: 'running' })) })
+    wrap(<DataloadLauncher api={api} defaultProfile='catalogo' capabilities={{}} showMedia={false} showHistory={false} showReviews={false} />)
+    await toPlan(api)
+    await screen.findByText('Puedes simular, pero no tienes permiso para aplicar cargas.')
+    const apply = screen.getByRole('button', { name: 'Aplicar carga' }) as HTMLButtonElement
+    expect(apply.disabled).toBe(true)
+    expect(apply.getAttribute('aria-describedby')).toBeTruthy()
+    expect(screen.queryByLabelText(/No aplicar nada/)).toBeNull()
+  })
+
+  it('offers cancel only with the cancel capability', async () => {
+    const api = fakeApi({ run: vi.fn(async () => run({ state: 'running' })) })
+    wrap(<DataloadLauncher api={api} defaultProfile='catalogo' capabilities={{ launch: true }} showMedia={false} showHistory={false} showReviews={false} />)
+    await toPlan(api)
+    fireEvent.click(await screen.findByRole('button', { name: 'Aplicar carga' }))
+    await screen.findByRole('progressbar', { name: 'Avance de la carga' })
+    expect(screen.queryByRole('button', { name: /Cancelar carga/ })).toBeNull()
+  })
+
+  it('renders in en-US with no Spanish text left', async () => {
+    const api = fakeApi()
+    const { container } = wrap(<DataloadLauncher api={api} locale='en-US' defaultProfile='catalogo' />)
+    await toPlan(api, 'Simulate load', /File/)
+    await screen.findByText('With changes')
+    await screen.findByText('Image backup')
+    const text = container.textContent ?? ''
+    const spanishOnly = Object.entries(DATALOAD_MESSAGES_ES_MX)
+      .filter(([k, v]) => v.length > 3 && !v.includes('{{') && DATALOAD_MESSAGES_EN_US[k as keyof typeof DATALOAD_MESSAGES_EN_US] !== v)
+      .map(([, v]) => v)
+    expect(spanishOnly.filter((v) => text.includes(v))).toEqual([])
+    expect(screen.getByRole('button', { name: 'Apply load' })).toBeTruthy()
+  })
+
+  it('uploads files above the inline limit in parts and dry-runs by upload id', async () => {
+    const api = fakeApi()
+    wrap(<DataloadLauncher api={api} defaultProfile='catalogo' maxFileBytes={4} chunkedUpload={{ upload: { chunkSize: 4, hashParts: false } }} showMedia={false} showHistory={false} showReviews={false} />)
+    await waitFor(() => expect(screen.getByRole('option', { name: /catalogo/ })).toBeTruthy())
+    pick(/Archivo/, 'big.csv', 'sku,name\nSKU-1,Uno')
+    await screen.findByText('Archivo subido: big.csv')
+    expect(api.uploadPart).toHaveBeenCalledTimes(5)
+    expect(api.completeUpload).toHaveBeenCalledWith('up1')
+    const btn = screen.getByRole('button', { name: 'Simular carga' }) as HTMLButtonElement
+    await waitFor(() => expect(btn.disabled).toBe(false))
+    fireEvent.click(btn)
+    await waitFor(() => expect(api.dryRun).toHaveBeenCalledWith({ profile: 'catalogo', source: { format: 'csv', name: 'big.csv', uploadId: 'up1' } }))
+  })
+
+  it('retries an interrupted upload from where it stopped', async () => {
+    let fail = true
+    const api = fakeApi({
+      uploadPart: vi.fn(async () => {
+        if (fail) {
+          fail = false
+          throw { response: { status: 400 } }
+        }
+      }),
+    })
+    wrap(<DataloadLauncher api={api} defaultProfile='catalogo' maxFileBytes={4} chunkedUpload={{ upload: { chunkSize: 4, hashParts: false } }} showMedia={false} showHistory={false} showReviews={false} />)
+    await waitFor(() => expect(screen.getByRole('option', { name: /catalogo/ })).toBeTruthy())
+    pick(/Archivo/, 'big.csv', 'abcdefgh')
+    await screen.findByText(/La subida se interrumpió/)
+    fireEvent.click(screen.getByRole('button', { name: /Reintentar subida/ }))
+    await screen.findByText('Archivo subido: big.csv')
+    expect(api.upload).toHaveBeenCalledWith('up1')
+  })
+})
+
 describe('MediaBackupPanel', () => {
+  it('hides verify and retry without those capabilities', async () => {
+    const api = fakeApi()
+    wrap(<MediaBackupPanel api={api} watch={false} capabilities={{ launch: true }} />)
+    await screen.findByText('Requiere atención')
+    expect(screen.queryByRole('button', { name: /Verificar respaldo/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Reintentar fallidas/ })).toBeNull()
+  })
+
   it('shows integrity, dead jobs, and verifies / retries', async () => {
     const api = fakeApi()
     const notify = { success: vi.fn(), error: vi.fn() }

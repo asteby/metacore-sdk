@@ -44,7 +44,7 @@ describe('utils', () => {
 
   it('summarizes a plan and decides if it can apply', () => {
     const s = summarizePlan(plan)
-    expect(s).toMatchObject({ create: 1, update: 1, unchanged: 1, invalid: 1, duplicate: 0, applicable: 2, valid: 3, mediaUrls: 3 })
+    expect(s).toMatchObject({ create: 1, update: 1, unchanged: 1, invalid: 1, duplicate: 0, review: 1, applicable: 2, valid: 3, mediaUrls: 3 })
     expect(canApply(plan)).toBe(true)
     expect(canApply({ ...plan, counts: { invalid: 2 } })).toBe(false)
     expect(canApply(undefined)).toBe(false)
@@ -52,7 +52,10 @@ describe('utils', () => {
 
   it('filters rows by action and text', () => {
     expect(filterRows(plan.rows, 'changes').map((r) => r.row)).toEqual([1, 2])
-    expect(filterRows(plan.rows, 'all')).toHaveLength(4)
+    expect(filterRows(plan.rows, 'all')).toHaveLength(5)
+    expect(filterRows(plan.rows, 'review').map((r) => r.row)).toEqual([5])
+    expect(filterRows(plan.rows, 'all', 'value_suspect').map((r) => r.row)).toEqual([5])
+    expect(filterRows(plan.rows, 'all', 'fuera de rango').map((r) => r.row)).toEqual([5])
     expect(filterRows(plan.rows, 'invalid').map((r) => r.row)).toEqual([4])
     expect(filterRows(plan.rows, 'all', 'sku-3').map((r) => r.row)).toEqual([3])
     expect(filterRows(plan.rows, 'all', 'NAME').map((r) => r.row)).toEqual([2])

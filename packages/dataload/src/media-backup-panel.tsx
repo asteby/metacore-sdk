@@ -1,20 +1,17 @@
-import { useMemo } from 'react'
 import { AlertTriangle, DatabaseBackup, RefreshCw, ShieldCheck } from 'lucide-react'
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, cn } from '@asteby/metacore-ui'
 import { apiErrorMessage, type DataloadApi } from './api'
+import { useDataloadUi, type DataloadUiProps } from './context'
 import { useDataloadActions, useMediaBackupStatus } from './hooks'
-import { makeT } from './messages'
-import type { TranslateFn } from './types'
+import { Stat } from './ui'
 import { formatBytes, mediaHealth, type MediaHealth } from './utils'
 
-export interface MediaBackupPanelProps {
+export interface MediaBackupPanelProps extends DataloadUiProps {
   api: DataloadApi
   /** Limit the queue to one run; omit for the whole organization. */
   runId?: string
   /** Poll while something is being downloaded. Defaults to true. */
   watch?: boolean
-  t?: TranslateFn
-  notify?: { success(msg: string): void; error(msg: string): void }
   className?: string
 }
 
@@ -25,18 +22,9 @@ const TONE: Record<MediaHealth, 'muted' | 'success' | 'info' | 'danger'> = {
   attention: 'danger',
 }
 
-function Stat({ label, value, warn }: { label: string; value: string | number; warn?: boolean }) {
-  return (
-    <div className='min-w-0 rounded-lg border bg-background p-2.5'>
-      <dt className='truncate text-xs text-muted-foreground'>{label}</dt>
-      <dd className={cn('m-0 mt-0.5 text-lg font-semibold tabular-nums', warn && 'text-destructive')}>{value}</dd>
-    </div>
-  )
-}
-
 /** Status of the immutable sha256 media backup: queue, manifest integrity, verify and retry. */
-export function MediaBackupPanel({ api, runId, watch = true, t: tIn, notify, className }: MediaBackupPanelProps) {
-  const t = useMemo(() => makeT(tIn), [tIn])
+export function MediaBackupPanel({ api, runId, watch = true, className, ...ui }: MediaBackupPanelProps) {
+  const { t, caps, notify } = useDataloadUi(ui)
   const status = useMediaBackupStatus(api, { runId, watch })
   const actions = useDataloadActions(api)
   const s = status.data
@@ -67,8 +55,8 @@ export function MediaBackupPanel({ api, runId, watch = true, t: tIn, notify, cla
       <CardHeader className='px-4'>
         <div className='flex flex-wrap items-center gap-2'>
           <DatabaseBackup className='size-4 text-primary' aria-hidden />
-          <CardTitle className='text-base'>{t('dataload.media.title')}</CardTitle>
-          <Badge variant={TONE[health]}>{t(`dataload.media.health.${health}` as never)}</Badge>
+          <CardTitle className='text-base'><h2 className='m-0 text-base font-semibold'>{t('dataload.media.title')}</h2></CardTitle>
+          <Badge variant={TONE[health]} aria-live='polite'>{t(`dataload.media.health.${health}`)}</Badge>
         </div>
         <CardDescription>{t('dataload.media.subtitle')}</CardDescription>
       </CardHeader>
@@ -95,7 +83,7 @@ export function MediaBackupPanel({ api, runId, watch = true, t: tIn, notify, cla
             {s.dead.length > 0 ? (
               <details className='rounded-lg border bg-background p-2.5 text-sm'>
                 <summary className='cursor-pointer font-medium focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'>
-                  {t('dataload.media.dead_list')} ({s.dead.length})
+                  {t('dataload.media.dead_list', { n: s.dead.length })}
                 </summary>
                 <ul className='m-0 mt-2 flex list-none flex-col gap-2 p-0'>
                   {s.dead.slice(0, 20).map((j) => (
@@ -113,11 +101,13 @@ export function MediaBackupPanel({ api, runId, watch = true, t: tIn, notify, cla
           </>
         )}
         <div className='flex flex-wrap gap-2'>
-          <Button variant='outline' size='sm' onClick={verify} disabled={actions.verifyMedia.isPending}>
-            <ShieldCheck className='size-4' aria-hidden />
-            {actions.verifyMedia.isPending ? t('dataload.media.verifying') : t('dataload.media.verify')}
-          </Button>
-          {s && s.queue.dead > 0 ? (
+          {caps.verifyMedia ? (
+            <Button variant='outline' size='sm' onClick={verify} disabled={actions.verifyMedia.isPending}>
+              <ShieldCheck className='size-4' aria-hidden />
+              {actions.verifyMedia.isPending ? t('dataload.media.verifying') : t('dataload.media.verify')}
+            </Button>
+          ) : null}
+          {caps.retryMedia && s && s.queue.dead > 0 ? (
             <Button variant='outline' size='sm' onClick={retry} disabled={actions.retryMedia.isPending}>
               <RefreshCw className='size-4' aria-hidden />
               {t('dataload.media.retry')}
