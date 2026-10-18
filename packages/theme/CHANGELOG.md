@@ -1,5 +1,11 @@
 # @asteby/metacore-theme
 
+## 2.29.0
+
+### Minor Changes
+
+- 08a7add: Tokens `touch` (`minTarget`, `fontScale`) para kioskos y pantallas de cliente: `resolveTouchTokens` (con límites), `touchCssVars`/`touchCss` que pintan `--touch-min-target` y `--touch-font-scale`, y el subpath `@asteby/metacore-theme/touch`. Sin marca: solo geometría. Es la extensión `touch` del contrato ThemePack.
+
 ## 2.28.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @asteby/metacore-ui
 
+## 2.29.0
+
+### Minor Changes
+
+- 08a7add: Primitivos táctiles sin marca en `@asteby/metacore-ui/touch`: `VirtualKeyboard` (layouts `text`, `numeric`, `email`, con shift, teclas ≥60 px y accesible), `TouchButton`, `TouchGrid` con target mínimo configurable, y los hooks `useIdleReset(seconds, warnSeconds, onReset)` y `useWakeLock`. Leen `--touch-min-target` y `--touch-font-scale` de `@asteby/metacore-theme/touch`.
+
 ## 2.28.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @asteby/metacore-sdk
 
+## 3.16.0
+
+### Minor Changes
+
+- fa551df: HostApi: `responseType: "blob"` request option. Federated pages can fetch PDFs and other binary documents (print tickets, download exports) through `useHostApi()` and get a `Blob` back, without reading tokens from `localStorage`. Error bodies of failed blob requests are decoded so `HostApiError.code`/`message` still work. Default (`"json"`) behavior is unchanged.
+
 ## 3.15.0
 
 ### Minor Changes

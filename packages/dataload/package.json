@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-dataload",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Metacore dataload - typed client, hooks and a launcher UI for the kernel's generic bulk-load engine: declarative profiles, dry-run and diff, idempotent async runs with progress and history, and the status of the immutable sha256 media backup.",
   "license": "Apache-2.0",
   "repository": {
