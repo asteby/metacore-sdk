@@ -25,7 +25,13 @@ export const TouchGrid = React.forwardRef<HTMLDivElement, TouchGridProps>(
     const cols =
       columns != null
         ? `repeat(${Math.max(1, Math.floor(columns))}, minmax(0, 1fr))`
-        : `repeat(auto-fit, minmax(${minCellWidth ?? (minTarget ?? 60) * 3}px, 1fr))`
+        : `repeat(auto-fit, minmax(${
+            minCellWidth != null
+              ? `${minCellWidth}px`
+              : minTarget != null
+                ? `${minTarget * 3}px`
+                : `calc(${touchMinTargetCss()} * 3)`
+          }, 1fr))`
     return (
       <div
         ref={ref}

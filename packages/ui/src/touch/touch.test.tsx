@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { TouchButton } from './touch-button'
 import { TouchGrid } from './touch-grid'
 import { VirtualKeyboard } from './virtual-keyboard'
-import { applyKeyAction, nextShift, rowsFor } from './keyboard-layouts'
+import { applyKeyAction, charFor, nextShift, rowsFor, type KeyDef } from './keyboard-layouts'
 
 describe('TouchButton', () => {
   it('defaults the min target to the theme var with a 60px fallback', () => {
@@ -24,12 +24,22 @@ describe('TouchGrid', () => {
     expect(html).toContain('repeat(3, minmax(0, 1fr))')
   })
   it('auto-fits at 3x the target by default', () => {
-    expect(renderToStaticMarkup(<TouchGrid>x</TouchGrid>)).toContain('minmax(180px, 1fr)')
+    expect(renderToStaticMarkup(<TouchGrid>x</TouchGrid>)).toContain('minmax(calc(var(--touch-min-target, 60px) * 3), 1fr)')
     expect(renderToStaticMarkup(<TouchGrid minTarget={80}>x</TouchGrid>)).toContain('minmax(240px, 1fr)')
   })
 })
 
 describe('keyboard layouts', () => {
+  it('numeric puts enter last on the right', () => {
+    for (const d of [false, true]) {
+      const last = rowsFor('numeric', d).at(-1)!
+      expect(last.at(-1)!.kind).toBe('enter')
+    }
+  })
+  it('email .com stays lowercase under shift', () => {
+    const k = rowsFor('email').flat().find((x) => x.kind === 'char' && x.value === '.com')!
+    expect(charFor(k as Extract<KeyDef, { kind: 'char' }>, 'lock')).toBe('.com')
+  })
   it('numeric has digits, backspace and enter; decimal is opt-in', () => {
     const keys = (d: boolean) => rowsFor('numeric', d).flat().map((k) => (k.kind === 'char' ? k.value : k.kind))
     expect(keys(false)).toEqual(expect.arrayContaining(['0', '9', 'backspace', 'enter']))
@@ -61,6 +71,13 @@ describe('VirtualKeyboard markup', () => {
     expect(html).toContain('aria-label="Borrar"')
     expect(html).toContain('aria-pressed="false"')
     expect(html).toContain('min-height:var(--touch-min-target, 60px)')
+  })
+  it('renders custom rows', () => {
+    const html = renderToStaticMarkup(
+      <VirtualKeyboard rows={[[{ kind: 'char', value: 'ж' }, { kind: 'enter' }]]} />,
+    )
+    expect(html).toContain('data-key="ж"')
+    expect(html).not.toContain('data-key="q"')
   })
   it('honours label overrides and minTarget', () => {
     const html = renderToStaticMarkup(

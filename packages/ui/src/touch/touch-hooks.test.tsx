@@ -48,6 +48,26 @@ describe('useIdleReset', () => {
     expect(state.warning).toBe(false)
   })
 
+  it('resets on activity even if a handler stops propagation', () => {
+    vi.useFakeTimers()
+    const onReset = vi.fn()
+    function C() {
+      useIdleReset(10, 3, onReset)
+      return <button data-b onPointerDown={(e) => e.stopPropagation()} />
+    }
+    act(() => root.render(<C />))
+    act(() => vi.advanceTimersByTime(8000))
+    const b = host.querySelector('[data-b]')!
+    act(() => {
+      const ev = new Event('pointerdown', { bubbles: true })
+      ev.stopPropagation = ev.stopPropagation.bind(ev)
+      b.addEventListener('pointerdown', (e) => e.stopPropagation())
+      b.dispatchEvent(ev)
+    })
+    act(() => vi.advanceTimersByTime(5000))
+    expect(onReset).not.toHaveBeenCalled()
+  })
+
   it('is disabled with seconds <= 0', () => {
     vi.useFakeTimers()
     const onReset = vi.fn()

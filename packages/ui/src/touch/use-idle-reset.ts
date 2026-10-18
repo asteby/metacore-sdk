@@ -55,12 +55,11 @@ export function useIdleReset(
       }
     }
     const id = setInterval(tick, 250)
-    // While the warning is up, plain pointer jitter must not hide it silently
-    // forever, but any real interaction is an answer: restart on all activity.
-    for (const ev of ACTIVITY_EVENTS) window.addEventListener(ev, restart, { passive: true })
+    // Capture phase: a handler that calls stopPropagation must not block the reset.
+    for (const ev of ACTIVITY_EVENTS) window.addEventListener(ev, restart, { passive: true, capture: true })
     return () => {
       clearInterval(id)
-      for (const ev of ACTIVITY_EVENTS) window.removeEventListener(ev, restart)
+      for (const ev of ACTIVITY_EVENTS) window.removeEventListener(ev, restart, { capture: true })
     }
   }, [seconds, warnSeconds, restart])
 

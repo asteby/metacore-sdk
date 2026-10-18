@@ -40,22 +40,23 @@ export const EMAIL_ROWS: KeyDef[][] = [
     { kind: 'char', value: '.' },
     { kind: 'char', value: '_' },
     { kind: 'char', value: '-' },
-    { kind: 'char', value: '.com', grow: 2 },
+    { kind: 'char', value: '.com', shifted: '.com', grow: 2 },
     { kind: 'enter', grow: 2 },
   ],
 ]
 
 export function numericRows(decimal: boolean): KeyDef[][] {
+  const g = decimal ? 0.75 : 1
   return [
     chars('123'),
     chars('456'),
     chars('789'),
     [
-      decimal ? { kind: 'char', value: '.' } : { kind: 'enter' },
-      { kind: 'char', value: '0' },
-      { kind: 'backspace' },
+      ...(decimal ? [{ kind: 'char', value: '.', grow: g } as KeyDef] : []),
+      { kind: 'char', value: '0', grow: g },
+      { kind: 'backspace', grow: g },
+      { kind: 'enter', grow: g },
     ],
-    ...(decimal ? [[{ kind: 'enter' } as KeyDef]] : []),
   ]
 }
 

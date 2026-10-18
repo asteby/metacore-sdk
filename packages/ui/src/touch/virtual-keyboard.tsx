@@ -41,6 +41,8 @@ export interface VirtualKeyboardProps
   onEnter?: () => void
   /** Numeric layout only: show a decimal point key. */
   decimal?: boolean
+  /** Custom key rows (other languages/alphabets). Overrides `layout`. */
+  rows?: KeyDef[][]
   /** Key edge floor in px. Defaults to the theme's `--touch-min-target` (60). */
   minTarget?: number
   /** Gap between keys in px. */
@@ -61,6 +63,7 @@ export function VirtualKeyboard({
   onKey,
   onEnter,
   decimal = false,
+  rows: customRows,
   minTarget,
   gap = 8,
   labels,
@@ -70,7 +73,7 @@ export function VirtualKeyboard({
 }: VirtualKeyboardProps) {
   const l = { ...DEFAULT_LABELS, ...labels }
   const [shift, setShift] = React.useState<ShiftState>('off')
-  const rows = rowsFor(layout, decimal)
+  const rows = customRows ?? rowsFor(layout, decimal)
   const valueRef = React.useRef(value ?? '')
   valueRef.current = value ?? valueRef.current
 
