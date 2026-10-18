@@ -1,9 +1,17 @@
 import { useId, useState, type ChangeEvent } from 'react'
 import { FileUp, Play, RefreshCw, RotateCcw, Square, X } from 'lucide-react'
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, Progress, cn } from '@asteby/metacore-ui'
-import { apiErrorMessage, type DataloadApi } from './api'
+import { apiErrorMessage, profileRef, type DataloadApi } from './api'
 import { useDataloadUi, type DataloadUiProps } from './context'
-import { useDataloadActions, useDataloadProfiles, useDataloadRuns, useDataloadLauncher, useSourceFile, type SourceFileOptions } from './hooks'
+import {
+  useDataloadActions,
+  useDataloadProfiles,
+  useDataloadRuns,
+  useDataloadLauncher,
+  useResolvedVersion,
+  useSourceFile,
+  type SourceFileOptions,
+} from './hooks'
 import type { DataloadT } from './messages'
 import { MediaBackupPanel } from './media-backup-panel'
 import { OverridesEditor } from './overrides-editor'
@@ -17,7 +25,7 @@ export interface DataloadLauncherProps extends DataloadUiProps {
   api: DataloadApi
   /** Per-organization overrides sent with every dry-run / run (initial value when the editor is shown). */
   overrides?: DataloadOverrides
-  /** Preselect a registered profile by name. */
+  /** Preselect a registered profile: `name@version`, `base/name@version`, or just a name (its newest version of the organization, else of the base). */
   defaultProfile?: string
   /** Inline limit: bigger files are uploaded in parts (see `chunkedUpload`). Default 25 MB. */
   maxFileBytes?: number
@@ -110,9 +118,27 @@ export function DataloadLauncher({
   const pathId = useId()
   const uploadId = useId()
   const { phase, plan, run } = launcher
-  const names = (profiles.data ?? []).map((p) => p.profile.name)
-  const profile = launcher.profile || (defaultProfile && names.includes(defaultProfile) ? defaultProfile : '')
-  const stored = (profiles.data ?? []).find((p) => p.profile.name === profile)
+  const list = profiles.data ?? []
+  const names = list.map(profileRef)
+  const byDefault = defaultProfile
+    ? names.includes(defaultProfile)
+      ? defaultProfile
+      : (() => {
+          const own = list.filter((p) => p.name === defaultProfile && !p.shared)
+          const pick = own.length ? own : list.filter((p) => p.name === defaultProfile)
+          const last = [...pick].sort((a, b) => a.createdAt.localeCompare(b.createdAt)).pop()
+          return last ? profileRef(last) : ''
+        })()
+    : ''
+  const profile = launcher.profile || byDefault
+  const stored = list.find((p) => profileRef(p) === profile)
+  const resolved = useResolvedVersion(api, stored)
+  const suggestVersion = (() => {
+    if (!stored) return ''
+    const taken = new Set(list.filter((p) => p.name === stored.name && !p.shared).map((p) => p.version))
+    const base = resolved.data?.baseKey.version ?? stored.version
+    for (let n = 1; ; n++) if (!taken.has(`${base}-org.${n}`)) return `${base}-org.${n}`
+  })()
   const isJson = !!fileName && fileName.toLowerCase().endsWith('.json')
 
   // The rows path only changes how the server reads the JSON: patch the source, never re-read or re-upload.
@@ -171,8 +197,10 @@ export function DataloadLauncher({
           <label htmlFor={profileId} className='text-sm font-medium'>{t('dataload.profile')}</label>
           <select id={profileId} className={fieldCls} value={profile} disabled={launcher.locked || profiles.isLoading} onChange={(e) => launcher.setProfile(e.target.value)}>
             <option value=''>{t('dataload.profile.choose')}</option>
-            {(profiles.data ?? []).map((p) => (
-              <option key={p.profile.name} value={p.profile.name}>{t('dataload.profile.option', { name: p.profile.name, version: p.profile.version })}</option>
+            {list.map((p) => (
+              <option key={profileRef(p)} value={profileRef(p)}>
+                {t(p.shared ? 'dataload.profile.option.shared' : 'dataload.profile.option', { name: p.name, version: p.version })}
+              </option>
             ))}
           </select>
           {profiles.isSuccess && names.length === 0 ? <p className='m-0 text-xs text-muted-foreground'>{t('dataload.profile.none')}</p> : null}
@@ -239,18 +267,20 @@ export function DataloadLauncher({
             <p id={`${pathId}-hint`} className='m-0 text-xs text-muted-foreground'>{t('dataload.bundle_path.hint')}</p>
           </div>
         ) : null}
-        {showOverrides && stored ? (
+        {showOverrides && stored && resolved.data ? (
           <details className='rounded-lg border bg-background p-2.5'>
             <summary className='cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50'>
               {t('dataload.overrides.title')}
             </summary>
             <OverridesEditor
-              key={stored.profile.name}
+              key={profileRef(stored)}
               className='mt-3'
               api={api}
-              profile={stored.profile}
-              value={launcher.overrides ?? stored.overrides}
-              onChange={launcher.setOverrides}
+              profile={resolved.data.profile}
+              profileRef={resolved.data.baseRef}
+              value={launcher.overrides ?? resolved.data.overrides}
+              onChange={(o) => launcher.setOverrides(o, resolved.data!.baseRef)}
+              publish={{ name: stored.name, base: resolved.data.baseKey, suggestVersion }}
               disabled={launcher.locked}
               embedded
               {...i18n}
@@ -284,7 +314,9 @@ export function DataloadLauncher({
             </Button>
           ) : null}
         </div>
-        {launcher.error && phase !== 'planning' ? (
+        {launcher.planChanged ? (
+          <p role='alert' className='m-0 break-words text-sm text-destructive'>{t('dataload.plan.changed')}</p>
+        ) : launcher.error && phase !== 'planning' ? (
           <p role='alert' className='m-0 break-words text-sm text-destructive'>{apiErrorMessage(launcher.error, t('dataload.dry_run.error'))}</p>
         ) : null}
       </Step>

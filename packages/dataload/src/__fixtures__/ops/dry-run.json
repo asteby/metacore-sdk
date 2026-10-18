@@ -1,0 +1,169 @@
+{
+  "data": {
+    "plan": {
+      "counts": {
+        "create": 1,
+        "duplicate": 1,
+        "invalid": 1,
+        "review": 1
+      },
+      "entity": "product",
+      "ignoredColumns": 4,
+      "inputHash": "\u003chash\u003e",
+      "mediaUrls": 0,
+      "org": "\u003cuuid\u003e",
+      "planHash": "\u003chash\u003e",
+      "profile": "catalogo",
+      "profileHash": "\u003chash\u003e",
+      "profileVersion": "1",
+      "rows": [
+        {
+          "action": "create",
+          "hash": "\u003chash\u003e",
+          "key": "A1",
+          "record": {
+            "name": "TAZA",
+            "price": 120,
+            "sku": "A1"
+          },
+          "row": 1
+        },
+        {
+          "action": "review",
+          "hash": "\u003chash\u003e",
+          "key": "B2",
+          "outcome": "create",
+          "record": {
+            "name": "PLAYERA",
+            "price": 250,
+            "sku": "B2"
+          },
+          "review": [
+            {
+              "code": "duplicate_key",
+              "detail": "la identidad se repite en las filas 3; ninguna se carga sola: decide cuál vale",
+              "detailCode": "dataload.row.duplicate_key",
+              "detailParams": {
+                "rows": "3"
+              },
+              "severity": "revisar"
+            }
+          ],
+          "row": 2
+        },
+        {
+          "action": "duplicate",
+          "hash": "\u003chash\u003e",
+          "issues": [
+            {
+              "code": "dataload.row.duplicate_held",
+              "message": "identidad repetida de la fila 2; ninguna se carga hasta que se decida en revisión",
+              "params": {
+                "first": 2
+              },
+              "row": 3
+            }
+          ],
+          "key": "B2",
+          "record": {
+            "name": "PLAYERA ROJA",
+            "price": 260,
+            "sku": "B2"
+          },
+          "row": 3
+        },
+        {
+          "action": "invalid",
+          "issues": [
+            {
+              "code": "importer.required",
+              "column": "SKU",
+              "message": "falta 'SKU'",
+              "params": {
+                "column": "SKU"
+              },
+              "row": 4
+            }
+          ],
+          "row": 4
+        }
+      ],
+      "source": "catalogo.csv"
+    },
+    "run": {
+      "actor": "\u003cuuid\u003e",
+      "createdAt": "2026-01-01T00:00:00Z",
+      "finishedAt": "2026-01-01T00:00:00Z",
+      "id": "\u003chash\u003e",
+      "inputHash": "\u003chash\u003e",
+      "issues": [
+        {
+          "code": "dataload.row.duplicate_held",
+          "message": "identidad repetida de la fila 2; ninguna se carga hasta que se decida en revisión",
+          "params": {
+            "first": 2
+          },
+          "row": 3
+        },
+        {
+          "code": "importer.required",
+          "column": "SKU",
+          "message": "falta 'SKU'",
+          "params": {
+            "column": "SKU"
+          },
+          "row": 4
+        }
+      ],
+      "key": "\u003chash\u003e",
+      "mode": "dry_run",
+      "org": "\u003cuuid\u003e",
+      "planHash": "\u003chash\u003e",
+      "profile": "catalogo",
+      "profileHash": "\u003chash\u003e",
+      "profileVersion": "1",
+      "progress": {
+        "created": 1,
+        "done": 0,
+        "duplicates": 1,
+        "invalid": 1,
+        "mediaQueued": 0,
+        "review": 1,
+        "total": 1,
+        "unchanged": 0,
+        "updated": 0
+      },
+      "registry": {
+        "fingerprint": "\u003chash\u003e",
+        "key": {
+          "name": "catalogo",
+          "org": "\u003cuuid\u003e",
+          "version": "1-org"
+        }
+      },
+      "review": [
+        {
+          "items": [
+            {
+              "code": "duplicate_key",
+              "detail": "la identidad se repite en las filas 3; ninguna se carga sola: decide cuál vale",
+              "detailCode": "dataload.row.duplicate_key",
+              "detailParams": {
+                "rows": "3"
+              },
+              "severity": "revisar"
+            }
+          ],
+          "key": "B2",
+          "outcome": "create",
+          "row": 2
+        }
+      ],
+      "source": "catalogo.csv",
+      "startedAt": "2026-01-01T00:00:00Z",
+      "state": "succeeded"
+    },
+    "source": "\u003chash\u003e"
+  },
+  "success": true
+}

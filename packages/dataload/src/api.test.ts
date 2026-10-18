@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { apiErrorMessage, apiErrorStatus, createDataloadApi, reviewQuery } from './api'
+import { apiErrorMessage, apiErrorStatus, createDataloadApi, isPlanChanged, listAllReviews, planQuery, profileRef, reviewQuery } from './api'
 import { plan, run } from './fixtures'
 
 const ok = (data: unknown) => ({ data: { success: true, data } })
@@ -24,17 +24,25 @@ describe('createDataloadApi', () => {
 
   it('posts profiles, dry-run and execute bodies as given', async () => {
     const h = http()
-    h.post.mockResolvedValueOnce(ok({ profile: { name: 'p' } }))
-    h.post.mockResolvedValueOnce(ok({ plan, run: run({ mode: 'dry_run' }) }))
+    h.post.mockResolvedValueOnce(ok({ name: 'p', version: '1-org', org: 'o1', base: { name: 'p', version: '1' } }))
+    h.post.mockResolvedValueOnce(ok({ plan, run: run({ mode: 'dry_run' }), source: 'sha-1' }))
     h.post.mockResolvedValueOnce(ok(run()))
     const api = createDataloadApi(h)
-    await api.saveProfile({ profile: { name: 'p', version: '1', entity: 'e', key: ['sku'], fields: [] } })
-    expect(h.post).toHaveBeenLastCalledWith('/dataload/profiles', expect.objectContaining({ profile: expect.objectContaining({ name: 'p' }) }))
-    await api.dryRun({ profile: 'p', source })
+    const v = await api.publishVersion({ name: 'p', version: '1-org', base: { name: 'p', version: '1' }, overrides: { ignoreHeaders: ['tmp*'] } })
+    expect(h.post).toHaveBeenLastCalledWith('/dataload/profiles', { name: 'p', version: '1-org', base: { name: 'p', version: '1' }, overrides: { ignoreHeaders: ['tmp*'] } })
+    expect(v.version).toBe('1-org')
+    const dr = await api.dryRun({ profile: 'p', source })
     expect(h.post).toHaveBeenLastCalledWith('/dataload/dry-run', { profile: 'p', source })
-    const r = await api.execute({ profile: 'p', source, force: true })
-    expect(h.post).toHaveBeenLastCalledWith('/dataload/runs', { profile: 'p', source, force: true })
+    expect(dr.source).toBe('sha-1')
+    const r = await api.execute({ profile: 'p@1-org', source: { id: 'sha-1' }, force: true, expectPlanHash: 'plh' })
+    expect(h.post).toHaveBeenLastCalledWith('/dataload/runs', { profile: 'p@1-org', source: { id: 'sha-1' }, force: true, expectPlanHash: 'plh' })
     expect(r.id).toBe('r1')
+    await api.profileVersion({ name: 'woocommerce-csv', version: '1', shared: true })
+    expect(h.get).toHaveBeenLastCalledWith('/dataload/profiles/woocommerce-csv/versions/1?base=1')
+    await api.profileVersion({ org: 'o1', name: 'p', version: '1-org' })
+    expect(h.get).toHaveBeenLastCalledWith('/dataload/profiles/p/versions/1-org')
+    expect(profileRef({ name: 'p', version: '1', shared: true })).toBe('base/p@1')
+    expect(profileRef({ name: 'p', version: '1-org', org: 'o1' })).toBe('p@1-org')
   })
 
   it('normalizes the kernel nulls into arrays', async () => {
@@ -64,13 +72,19 @@ describe('createDataloadApi', () => {
   it('builds the review queue calls', async () => {
     const h = http()
     const api = createDataloadApi(h)
-    h.get.mockResolvedValueOnce(ok([{ key: 'k', items: null, record: null, state: 'pending' }]))
-    const list = await api.reviews({ entity: 'product', state: 'pending', runId: 'r 1', code: 'value_suspect', limit: 50 })
+    h.get.mockResolvedValueOnce(ok({ items: [{ key: 'k', items: null, record: null, state: 'pending' }], counts: { pending: 1 }, next: 'c2' }))
+    const page = await api.reviews({ entity: 'product', state: 'pending', runId: 'r 1', code: 'value_suspect', limit: 50 })
     expect(h.get).toHaveBeenLastCalledWith('/dataload/reviews?entity=product&state=pending&run_id=r+1&code=value_suspect&limit=50')
-    expect(list[0]?.items).toEqual([])
-    expect(list[0]?.record).toEqual({})
-    await api.reviews()
-    expect(h.get).toHaveBeenLastCalledWith('/dataload/reviews')
+    expect(page.items[0]?.items).toEqual([])
+    expect(page.items[0]?.record).toEqual({})
+    expect(page.next).toBe('c2')
+    expect(page.counts.pending).toBe(1)
+    h.get.mockResolvedValueOnce(ok({ items: null, counts: null }))
+    expect(await api.reviews({ cursor: 'c2' })).toEqual({ items: [], counts: {} })
+    expect(h.get).toHaveBeenLastCalledWith('/dataload/reviews?cursor=c2')
+    await api.runPlan('r1', { action: 'review', offset: 100, limit: 50 })
+    expect(h.get).toHaveBeenLastCalledWith('/dataload/runs/r1/plan?action=review&offset=100&limit=50')
+    expect(planQuery({})).toBe('')
     expect(reviewQuery({})).toBe('')
 
     const decisions = [{ entity: 'product', key: 'k', hash: 'h', approve: true, note: 'ok' }]
@@ -111,6 +125,18 @@ describe('createDataloadApi', () => {
     expect(apiErrorMessage(new Error('boom'), 'x')).toBe('x')
     expect(apiErrorStatus({ response: { status: 409 } })).toBe(409)
     expect(apiErrorStatus(new Error('net'))).toBeUndefined()
+    expect(isPlanChanged({ response: { status: 409, data: { message: 'dataload: el plan cambió desde la simulación' } } })).toBe(true)
+    expect(isPlanChanged({ response: { status: 409, data: { message: 'ya hay una importación en curso' } } })).toBe(false)
+  })
+
+  it('follows the review cursor until the last page', async () => {
+    const h = http()
+    h.get.mockResolvedValueOnce(ok({ items: [{ key: 'a', state: 'pending' }], counts: { pending: 2 }, next: 'n1' }))
+    h.get.mockResolvedValueOnce(ok({ items: [{ key: 'b', state: 'pending' }], counts: { pending: 2 } }))
+    const all = await listAllReviews(createDataloadApi(h), { entity: 'product' })
+    expect(all.items.map((e) => e.key)).toEqual(['a', 'b'])
+    expect(h.get).toHaveBeenNthCalledWith(1, '/dataload/reviews?entity=product&limit=500')
+    expect(h.get).toHaveBeenNthCalledWith(2, '/dataload/reviews?entity=product&limit=500&cursor=n1')
   })
 
   it('turns the kernel unset times (0001-01-01) into absent fields', async () => {
@@ -118,7 +144,7 @@ describe('createDataloadApi', () => {
     const h = http()
     h.get.mockImplementation(async (u: string) =>
       u.includes('/reviews')
-        ? ok([{ key: 'P5', entity: 'product', items: null, record: null, decidedAt: zero, state: 'pending' }])
+        ? ok({ items: [{ key: 'P5', entity: 'product', items: null, record: null, decidedAt: zero, state: 'pending' }], counts: {} })
         : ok({ ...run({ state: 'queued' }), startedAt: zero, finishedAt: zero, createdAt: '2026-10-01T10:00:00Z', issues: null, review: null }),
     )
     const api = createDataloadApi(h)
@@ -126,7 +152,7 @@ describe('createDataloadApi', () => {
     expect(r.startedAt).toBeUndefined()
     expect(r.finishedAt).toBeUndefined()
     expect(r.createdAt).toBe('2026-10-01T10:00:00Z')
-    const [e] = await api.reviews()
+    const [e] = (await api.reviews()).items
     expect(e?.decidedAt).toBeUndefined()
     expect(e?.items).toEqual([])
     expect(e?.record).toEqual({})

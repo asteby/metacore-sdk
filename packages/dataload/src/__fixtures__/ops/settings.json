@@ -1,0 +1,20 @@
+{
+  "data": {
+    "limits": {
+      "activeDryRuns": 3,
+      "cellBytes": 65536,
+      "columns": 512,
+      "decisionsPerRequest": 500,
+      "inlineBytes": 5242880,
+      "mediaConcurrent": 2,
+      "mediaPending": 50000,
+      "originalsBytes": 10737418240,
+      "profileBytes": 262144,
+      "rows": 200000,
+      "sourceBytes": 26214400,
+      "sourcesBytes": 1073741824,
+      "uploadsPerHour": 30
+    }
+  },
+  "success": true
+}

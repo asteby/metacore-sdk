@@ -1,0 +1,29 @@
+{
+  "data": {
+    "actor": "\u003cuuid\u003e",
+    "createdAt": "2026-01-01T00:00:00Z",
+    "finishedAt": "2026-01-01T00:00:00Z",
+    "id": "\u003chash\u003e",
+    "inputHash": "\u003chash\u003e",
+    "key": "\u003chash\u003e",
+    "mode": "apply_reviewed",
+    "org": "\u003cuuid\u003e",
+    "profile": "catalogo",
+    "profileHash": "\u003chash\u003e",
+    "profileVersion": "1",
+    "progress": {
+      "created": 1,
+      "done": 1,
+      "duplicates": 0,
+      "invalid": 0,
+      "mediaQueued": 0,
+      "total": 1,
+      "unchanged": 0,
+      "updated": 0
+    },
+    "source": "review",
+    "startedAt": "2026-01-01T00:00:00Z",
+    "state": "succeeded"
+  },
+  "success": true
+}

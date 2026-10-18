@@ -1,0 +1,21 @@
+{
+  "data": {
+    "base": {
+      "name": "catalogo",
+      "org": "\u003cuuid\u003e",
+      "version": "1"
+    },
+    "createdAt": "2026-01-01T00:00:00Z",
+    "createdBy": "\u003cuuid\u003e",
+    "fingerprint": "\u003chash\u003e",
+    "name": "catalogo",
+    "org": "\u003cuuid\u003e",
+    "overrides": {
+      "ignoreHeaders": [
+        "Meta:*"
+      ]
+    },
+    "version": "1-org"
+  },
+  "success": true
+}

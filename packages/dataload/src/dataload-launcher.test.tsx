@@ -26,13 +26,13 @@ describe('DataloadLauncher', () => {
     expect(dryBtn.disabled).toBe(true)
 
     await waitFor(() => expect(screen.getByRole('option', { name: /catalogo/ })).toBeTruthy())
-    fireEvent.change(screen.getByLabelText('Perfil'), { target: { value: 'catalogo' } })
+    fireEvent.change(screen.getByLabelText('Perfil'), { target: { value: 'catalogo@1' } })
     pick(/Archivo/, 'catalogo.csv', 'sku,name\nSKU-1,Uno')
     await waitFor(() => expect(dryBtn.disabled).toBe(false))
 
     fireEvent.click(dryBtn)
     await waitFor(() => expect(api.dryRun).toHaveBeenCalled())
-    expect(api.dryRun).toHaveBeenCalledWith({ profile: 'catalogo', source: { format: 'csv', name: 'catalogo.csv', content: 'sku,name\nSKU-1,Uno' } })
+    expect(api.dryRun).toHaveBeenCalledWith({ profile: 'catalogo@1', source: { format: 'csv', name: 'catalogo.csv', content: 'sku,name\nSKU-1,Uno' } })
 
     // Default filter shows only the rows with changes; the field diff is visible.
     await screen.findByText('SKU-2')
@@ -45,7 +45,7 @@ describe('DataloadLauncher', () => {
     fireEvent.click(screen.getByLabelText(/No aplicar nada si alguna fila es inválida/))
     fireEvent.click(screen.getByRole('button', { name: 'Aplicar carga' }))
     await waitFor(() => expect(api.execute).toHaveBeenCalled())
-    expect(api.execute).toHaveBeenCalledWith(expect.objectContaining({ profile: 'catalogo', force: false, failOnInvalid: true }))
+    expect(api.execute).toHaveBeenCalledWith(expect.objectContaining({ profile: 'catalogo@1', source: { id: 'src-sha' }, expectPlanHash: 'plh', force: false, failOnInvalid: true }))
 
     await waitFor(() => expect(onFinished).toHaveBeenCalledTimes(1))
     expect(onFinished.mock.calls[0]?.[0].state).toBe('succeeded')
@@ -153,7 +153,7 @@ describe('DataloadLauncher: review rows, permissions, i18n, big files', () => {
     const btn = screen.getByRole('button', { name: 'Simular carga' }) as HTMLButtonElement
     await waitFor(() => expect(btn.disabled).toBe(false))
     fireEvent.click(btn)
-    await waitFor(() => expect(api.dryRun).toHaveBeenCalledWith({ profile: 'catalogo', source: { format: 'csv', name: 'big.csv', uploadId: 'up1' } }))
+    await waitFor(() => expect(api.dryRun).toHaveBeenCalledWith({ profile: 'catalogo@1', source: { format: 'csv', name: 'big.csv', uploadId: 'up1' } }))
   })
 
   it('retries an interrupted upload from where it stopped', async () => {

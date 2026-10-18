@@ -1,0 +1,12 @@
+{
+  "data": {
+    "bytes": 92,
+    "expiresAt": "2026-01-01T00:00:00Z",
+    "format": "csv",
+    "id": "\u003chash\u003e",
+    "name": "catalogo.csv",
+    "rows": 4,
+    "sha256": "\u003chash\u003e"
+  },
+  "success": true
+}

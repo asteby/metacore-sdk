@@ -1,5 +1,5 @@
 import type { DataloadApi } from './api'
-import type { DataloadPlan, DataloadProfile, DataloadRun, MediaBackupStatus, ReviewEntry } from './types'
+import type { DataloadPlan, DataloadProfile, DataloadRun, MediaBackupStatus, PlanPage, ProfileSummary, ReviewEntry } from './types'
 
 export const plan: DataloadPlan = {
   org: 'o1',
@@ -90,22 +90,45 @@ export const review = (over: Partial<ReviewEntry> = {}): ReviewEntry => ({
   ...over,
 })
 
+export const summary = (over: Partial<ProfileSummary> = {}): ProfileSummary => ({
+  org: 'o1',
+  name: 'catalogo',
+  version: '1',
+  entity: 'product',
+  hasExtract: false,
+  fingerprint: 'fp',
+  createdAt: '2026-10-18T10:00:00Z',
+  shared: false,
+  ...over,
+})
+
+/** A stored plan as `GET /runs/:id/plan` pages it. */
+export const planPage = (p: DataloadPlan = plan, offset = 0, limit = 100): PlanPage => {
+  const { org: _o, profileHash: _h, source: _s, extractHash: _e, ...rest } = p
+  return { ...rest, total: p.rows.length, offset, limit, rows: p.rows.slice(offset, offset + limit) }
+}
+
 /** In-memory API for component tests; every method is a vi-free plain async function the test can wrap. */
 export function baseApi(): DataloadApi {
   return {
-    listProfiles: async () => [{ profile }],
-    saveProfile: async (b) => b,
-    dryRun: async () => ({ plan, run: run({ mode: 'dry_run', state: 'succeeded' }) }),
+    listProfiles: async () => [summary()],
+    publishVersion: async (b) => ({ ...b, org: 'o1', fingerprint: 'fp2' }),
+    profileVersion: async (k) => ({ org: k.org ?? 'o1', name: k.name, version: k.version, profile }),
+    dryRun: async () => ({
+      plan,
+      run: run({ mode: 'dry_run', state: 'succeeded', registry: { key: { org: 'o1', name: 'catalogo', version: '1' }, fingerprint: 'fp' } }),
+      source: 'src-sha',
+    }),
     execute: async () => run({ state: 'running' }),
     run: async () => run({ state: 'succeeded', progress: { ...run().progress, done: 2 } }),
-    runPlan: async () => plan,
+    runPlan: async (_id, q = {}) => planPage(plan, q.offset ?? 0, q.limit ?? 100),
     runs: async () => [run({ state: 'succeeded' })],
     cancel: async () => run({ state: 'canceled' }),
     mediaStatus: async () => media,
     mediaManifest: async () => [],
     mediaVerify: async () => ({ checked: 5, ok: 5, missing: [], corrupt: [] }),
     mediaRetry: async () => 1,
-    reviews: async () => [],
+    reviews: async () => ({ items: [], counts: {} }),
     decideReviews: async (ds) => ds.map((d) => review({ key: d.key, hash: d.hash, state: d.approve ? 'approved' : 'rejected', note: d.note })),
     applyApproved: async () => run({ mode: 'apply_reviewed', state: 'succeeded', progress: { ...run().progress, created: 0, updated: 1, unchanged: 0 } }),
     createUpload: async (b) => ({ id: 'up1', name: b.name, size: b.size, chunkSize: b.chunkSize ?? 8, received: [] }),

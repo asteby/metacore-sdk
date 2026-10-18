@@ -1,7 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { DataloadApi } from './api'
-import type { DataloadOverrides, DataloadPlan, DataloadRun, DataloadSourceInput, ReviewDecision, ReviewFilter } from './types'
+import { isPlanChanged, listAllReviews, profileRef, type DataloadApi } from './api'
+import type {
+  DataloadOverrides,
+  DataloadPlan,
+  DataloadProfile,
+  DataloadRun,
+  DataloadSourceInput,
+  PlanPageQuery,
+  ProfileKey,
+  ProfileSummary,
+  ReviewDecision,
+  ReviewFilter,
+} from './types'
 import { DEFAULT_MAX_FILE_BYTES, SourceFileError, isTerminal, readSourceFile } from './utils'
 import { DEFAULT_MAX_UPLOAD_BYTES, UploadError, uploadSourceFile, type ChunkedUploadOptions, type UploadProgress } from './upload'
 
@@ -10,7 +21,8 @@ export const dataloadKeys = {
   profiles: ['dataload', 'profiles'] as const,
   runs: ['dataload', 'runs'] as const,
   run: (id: string) => ['dataload', 'run', id] as const,
-  runPlan: (id: string) => ['dataload', 'run-plan', id] as const,
+  runPlan: (id: string, q: PlanPageQuery = {}) => ['dataload', 'run-plan', id, q] as const,
+  profileVersion: (ref: string) => ['dataload', 'profile-version', ref] as const,
   media: (runId?: string) => ['dataload', 'media', runId ?? 'all'] as const,
   reviews: ['dataload', 'reviews'] as const,
   reviewList: (f: ReviewFilter) => ['dataload', 'reviews', f] as const,
@@ -18,6 +30,38 @@ export const dataloadKeys = {
 
 export function useDataloadProfiles(api: DataloadApi) {
   return useQuery({ queryKey: dataloadKeys.profiles, queryFn: () => api.listProfiles(), staleTime: 60_000 })
+}
+
+/** A version resolved for editing: the full profile it ends in and the overrides on top of it. */
+export interface ResolvedVersion {
+  /** Full profile at the bottom of the `base` chain. */
+  profile: DataloadProfile
+  /** Reference of that full profile (send it with edited overrides). */
+  baseRef: string
+  baseKey: ProfileKey
+  /** Overrides of the selected version (undefined for a full profile). */
+  overrides?: DataloadOverrides
+}
+
+/** Fetches a version and follows its `base` until a full profile (one level in practice). */
+export function useResolvedVersion(api: DataloadApi, summary: ProfileSummary | undefined) {
+  const ref = summary ? profileRef(summary) : ''
+  return useQuery({
+    queryKey: dataloadKeys.profileVersion(ref),
+    enabled: !!summary,
+    staleTime: 5 * 60_000,
+    queryFn: async (): Promise<ResolvedVersion> => {
+      const top = await api.profileVersion(summary!)
+      let cur = top
+      let key: ProfileKey & { shared?: boolean } = { org: summary!.org, name: summary!.name, version: summary!.version, shared: summary!.shared }
+      for (let i = 0; i < 5 && !cur.profile && cur.base; i++) {
+        key = { ...cur.base, shared: !cur.base.org }
+        cur = await api.profileVersion(key)
+      }
+      if (!cur.profile) throw new Error(`dataload: ${ref} no termina en un perfil completo`)
+      return { profile: cur.profile, baseRef: profileRef(key), baseKey: { org: key.org ?? '', name: key.name, version: key.version }, ...(top.overrides ? { overrides: top.overrides } : {}) }
+    },
+  })
 }
 
 /** Run history, newest first. */
@@ -35,9 +79,9 @@ export function useDataloadRun(api: DataloadApi, id: string | undefined, pollMs 
   })
 }
 
-/** Plan stored with a run, for the diff of a past run. */
-export function useDataloadRunPlan(api: DataloadApi, id: string | undefined) {
-  return useQuery({ queryKey: dataloadKeys.runPlan(id ?? ''), queryFn: () => api.runPlan(id!), enabled: !!id, staleTime: 60_000 })
+/** One page of the plan stored with a run (paginated on the server). */
+export function useDataloadRunPlan(api: DataloadApi, id: string | undefined, query: PlanPageQuery = {}) {
+  return useQuery({ queryKey: dataloadKeys.runPlan(id ?? '', query), queryFn: () => api.runPlan(id!, query), enabled: !!id, staleTime: 60_000 })
 }
 
 /** Media backup status (queue + manifest). Polls while `watch` is true (e.g. a run is in flight). */
@@ -61,9 +105,9 @@ export function useDataloadActions(api: DataloadApi) {
   }
 }
 
-/** Rows held for a decision. */
-export function useDataloadReviews(api: DataloadApi, filter: ReviewFilter = {}) {
-  return useQuery({ queryKey: dataloadKeys.reviewList(filter), queryFn: () => api.reviews(filter), staleTime: 5_000 })
+/** Rows held for a decision: every page (the server pages by cursor), up to `max`. */
+export function useDataloadReviews(api: DataloadApi, filter: ReviewFilter = {}, max = 5000) {
+  return useQuery({ queryKey: dataloadKeys.reviewList(filter), queryFn: async () => (await listAllReviews(api, filter, max)).items, staleTime: 5_000 })
 }
 
 /** Decide (approve / reject, one or many) and apply the approved rows. Both refresh the queue and the history. */
@@ -199,6 +243,10 @@ export function useDataloadLauncher(api: DataloadApi, opts: LauncherOptions = {}
   const [profile, setProfileState] = useState('')
   const [source, setSourceState] = useState<DataloadSourceInput | undefined>()
   const [overrides, setOverridesState] = useState<DataloadOverrides | undefined>(opts.overrides)
+  // Edited overrides are the COMPLETE set: they go over the full base profile, not over a derived version's own overrides.
+  const [overridesBase, setOverridesBase] = useState<string | undefined>()
+  const [sourceId, setSourceId] = useState<string | undefined>()
+  const [planChanged, setPlanChanged] = useState(false)
   const [plan, setPlan] = useState<DataloadPlan | undefined>()
   const [previewRun, setPreviewRun] = useState<DataloadRun | undefined>()
   const [force, setForce] = useState(false)
@@ -231,37 +279,46 @@ export function useDataloadLauncher(api: DataloadApi, opts: LauncherOptions = {}
     setPlan(undefined)
     setPreviewRun(undefined)
     setError(undefined)
+    setPlanChanged(false)
   }
   const initialOverrides = useRef(opts.overrides)
   initialOverrides.current = opts.overrides
   const setProfile = useCallback((name: string) => {
     if (locked) return
     // Overrides belong to a profile: switching profiles goes back to the host's (or the stored) ones.
-    if (profile && profile !== name) setOverridesState(initialOverrides.current)
+    if (profile && profile !== name) {
+      setOverridesState(initialOverrides.current)
+      setOverridesBase(undefined)
+    }
     setProfileState(name)
     dropPlan()
   }, [locked, profile])
   const setSource = useCallback((s: DataloadSourceInput | undefined) => {
     if (locked) return
     setSourceState(s)
+    setSourceId(undefined)
     dropPlan()
   }, [locked])
-  const setOverrides = useCallback((o: DataloadOverrides | undefined) => {
+  /** `baseRef`: the full profile the edited overrides go over (see `useResolvedVersion`). */
+  const setOverrides = useCallback((o: DataloadOverrides | undefined, baseRef?: string) => {
     if (locked) return
     setOverridesState(o)
+    setOverridesBase(baseRef)
     dropPlan()
   }, [locked])
 
-  const request = () => ({ profile, source: source!, ...(overrides ? { overrides } : {}) })
+  const request = () => ({ profile: overrides && overridesBase ? overridesBase : profile, source: source!, ...(overrides ? { overrides } : {}) })
   const ready = !!profile && !!source
 
   const dryRun = async () => {
     if (!ready || locked) return undefined
     setError(undefined)
     try {
-      const r = await dry.mutateAsync(request())
+      const r = await dry.mutateAsync(sourceId ? { ...request(), source: { id: sourceId } } : request())
       setPlan(r.plan)
       setPreviewRun(r.run)
+      setPlanChanged(false)
+      if (r.source) setSourceId(r.source)
       return r
     } catch (e) {
       setError(e)
@@ -273,12 +330,29 @@ export function useDataloadLauncher(api: DataloadApi, opts: LauncherOptions = {}
     if (!ready || !plan || locked) return undefined
     setError(undefined)
     try {
-      const r = await exec.mutateAsync({ ...request(), force, failOnInvalid })
+      // Apply exactly what was simulated: the stored source (not sent again), the
+      // registry version the dry-run resolved, and the reviewed plan hash (409 if it changed).
+      const key = previewRun?.registry?.key
+      const pinned = key && typeof request().profile === 'string' ? profileRef({ ...key, org: key.org ?? '' }) : request().profile
+      const r = await exec.mutateAsync({
+        ...request(),
+        profile: pinned,
+        ...(sourceId ? { source: { id: sourceId } } : {}),
+        expectPlanHash: plan.planHash,
+        force,
+        failOnInvalid,
+      })
       setStartedRun(r)
       setRunId(r.id)
       qc.invalidateQueries({ queryKey: dataloadKeys.runs })
       return r
     } catch (e) {
+      if (isPlanChanged(e)) {
+        // What would be applied is not what the person reviewed: drop the plan, simulate again.
+        setPlan(undefined)
+        setPreviewRun(undefined)
+        setPlanChanged(true)
+      }
       setError(e)
       throw e
     }
@@ -293,6 +367,8 @@ export function useDataloadLauncher(api: DataloadApi, opts: LauncherOptions = {}
     setError(undefined)
     setForce(false)
     setFailOnInvalid(false)
+    setSourceId(undefined)
+    setPlanChanged(false)
     dry.reset()
     exec.reset()
   }
@@ -318,6 +394,10 @@ export function useDataloadLauncher(api: DataloadApi, opts: LauncherOptions = {}
     overrides,
     setOverrides,
     plan,
+    /** The server rejected the apply because the plan changed since the dry-run: simulate again. */
+    planChanged,
+    /** Id of the stored source after the first dry-run (later calls send only this). */
+    sourceId,
     /** The dry-run's history entry (shows `replayOf` when the input was already applied). */
     previewRun,
     run,

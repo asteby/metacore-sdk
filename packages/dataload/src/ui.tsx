@@ -24,6 +24,7 @@ export const STATE_TONE: Record<RunState, Tone> = {
 export const REVIEW_TONE: Record<ReviewState, Tone> = {
   pending: 'warning',
   approved: 'success',
+  applying: 'info',
   rejected: 'danger',
   applied: 'info',
   superseded: 'muted',

@@ -1,0 +1,42 @@
+{
+  "data": {
+    "counts": {
+      "pending": 1
+    },
+    "items": [
+      {
+        "createdAt": "2026-01-01T00:00:00Z",
+        "decidedAt": "2026-01-01T00:00:00Z",
+        "entity": "product",
+        "hash": "\u003chash\u003e",
+        "items": [
+          {
+            "code": "duplicate_key",
+            "detail": "la identidad se repite en las filas 3; ninguna se carga sola: decide cuál vale",
+            "detailCode": "dataload.row.duplicate_key",
+            "detailParams": {
+              "rows": "3"
+            },
+            "severity": "revisar"
+          }
+        ],
+        "key": "B2",
+        "org": "\u003cuuid\u003e",
+        "outcome": "create",
+        "profile": "catalogo",
+        "profileHash": "\u003chash\u003e",
+        "profileVersion": "1",
+        "record": {
+          "name": "PLAYERA",
+          "price": 250,
+          "sku": "B2"
+        },
+        "row": 2,
+        "runId": "\u003chash\u003e",
+        "state": "pending",
+        "updatedAt": "2026-01-01T00:00:00Z"
+      }
+    ]
+  },
+  "success": true
+}

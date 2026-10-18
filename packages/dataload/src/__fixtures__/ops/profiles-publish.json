@@ -1,0 +1,45 @@
+{
+  "data": {
+    "createdAt": "2026-01-01T00:00:00Z",
+    "createdBy": "\u003cuuid\u003e",
+    "fingerprint": "\u003chash\u003e",
+    "name": "catalogo",
+    "note": "contrato",
+    "org": "\u003cuuid\u003e",
+    "profile": {
+      "clean": [
+        "trim"
+      ],
+      "entity": "product",
+      "fields": [
+        {
+          "from": [
+            "SKU"
+          ],
+          "required": true,
+          "target": "sku"
+        },
+        {
+          "from": [
+            "Nombre"
+          ],
+          "target": "name"
+        },
+        {
+          "from": [
+            "Precio"
+          ],
+          "target": "price",
+          "type": "number"
+        }
+      ],
+      "key": [
+        "sku"
+      ],
+      "name": "catalogo",
+      "version": "1"
+    },
+    "version": "1"
+  },
+  "success": true
+}

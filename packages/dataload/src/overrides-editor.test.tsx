@@ -8,6 +8,7 @@ import { fakeApi, wrap } from './test-utils'
 afterEach(cleanup)
 
 const source = { format: 'csv' as const, name: 'a.csv', content: 'SKU\n1' }
+const publish = { name: 'catalogo', base: { org: '', name: 'catalogo', version: '1' }, suggestVersion: '1-org.1' }
 
 describe('OverridesEditor', () => {
   it('edits ignore, rename, drop, defaults and cleaning and emits compact overrides', () => {
@@ -42,7 +43,7 @@ describe('OverridesEditor', () => {
 
   it('validates against the kernel rules and blocks save and preview', () => {
     const api = fakeApi()
-    wrap(<OverridesEditor api={api} profile={profile} source={source} />)
+    wrap(<OverridesEditor api={api} profile={profile} source={source} publish={publish} />)
     fireEvent.change(screen.getByLabelText('Limpieza adicional de name (reglas separadas por coma)'), { target: { value: 'upper, mayus' } })
     expect(screen.getByText('Limpieza adicional: regla de limpieza desconocida «mayus».')).toBeTruthy()
     expect((screen.getByRole('button', { name: /Guardar ajustes/ }) as HTMLButtonElement).disabled).toBe(true)
@@ -54,19 +55,26 @@ describe('OverridesEditor', () => {
   it('previews the plan with the edited overrides and saves them with the profile', async () => {
     const api = fakeApi()
     const notify = { success: vi.fn(), error: vi.fn() }
-    wrap(<OverridesEditor api={api} profile={profile} source={source} notify={notify} />)
+    const onPublished = vi.fn()
+    wrap(<OverridesEditor api={api} profile={profile} profileRef='base/catalogo@1' source={source} notify={notify} publish={{ ...publish, onPublished }} />)
     fireEvent.change(screen.getByLabelText('Columnas a ignorar'), { target: { value: 'tmp*' } })
     fireEvent.click(screen.getByRole('button', { name: /Vista previa del plan/ }))
-    await waitFor(() => expect(api.dryRun).toHaveBeenCalledWith({ profile: 'catalogo', overrides: { ignoreHeaders: ['tmp*'] }, source }))
+    await waitFor(() => expect(api.dryRun).toHaveBeenCalledWith({ profile: 'base/catalogo@1', overrides: { ignoreHeaders: ['tmp*'] }, source }))
     await screen.findByText('SKU-2')
+    // Versions are immutable: saving publishes a NEW version derived from the base.
+    expect((screen.getByLabelText('Versión nueva') as HTMLInputElement).value).toBe('1-org.1')
+    fireEvent.change(screen.getByLabelText('Versión nueva'), { target: { value: '1-org.2' } })
     fireEvent.click(screen.getByRole('button', { name: /Guardar ajustes/ }))
-    await waitFor(() => expect(api.saveProfile).toHaveBeenCalledWith({ profile, overrides: { ignoreHeaders: ['tmp*'] } }))
+    await waitFor(() =>
+      expect(api.publishVersion).toHaveBeenCalledWith({ name: 'catalogo', version: '1-org.2', base: { org: '', name: 'catalogo', version: '1' }, overrides: { ignoreHeaders: ['tmp*'] } }),
+    )
     expect(notify.success).toHaveBeenCalledWith('Ajustes guardados.')
+    expect(onPublished).toHaveBeenCalledWith(expect.objectContaining({ version: '1-org.2' }))
   })
 
   it('is read-only without editOverrides', () => {
     const api = fakeApi()
-    wrap(<OverridesEditor api={api} profile={profile} capabilities={{ launch: true }} />)
+    wrap(<OverridesEditor api={api} profile={profile} capabilities={{ launch: true }} publish={publish} />)
     expect(screen.getByText('Puedes ver los ajustes, pero no tienes permiso para cambiarlos.')).toBeTruthy()
     expect((screen.getByLabelText('Columnas a ignorar') as HTMLTextAreaElement).disabled).toBe(true)
     expect(screen.queryByRole('button', { name: /Guardar ajustes/ })).toBeNull()

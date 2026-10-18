@@ -6,7 +6,16 @@ import { useDataloadUi, type DataloadUiProps } from './context'
 import { PlanReview } from './plan-review'
 import type { DataloadT } from './messages'
 import { blockingIssues, compactOverrides, parseDefault, resolveProfile, splitList, validateOverrides, type OverrideIssue } from './overrides'
-import { CLEAN_RULES, type CleanRule, type DataloadOverrides, type DataloadPlan, type DataloadProfile, type DataloadSourceInput } from './types'
+import {
+  CLEAN_RULES,
+  type CleanRule,
+  type DataloadOverrides,
+  type DataloadPlan,
+  type DataloadProfile,
+  type DataloadSourceInput,
+  type ProfileKey,
+  type StoredProfileVersion,
+} from './types'
 import { areaCls, checkCls, fieldCls } from './ui'
 
 export interface OverridesEditorProps extends DataloadUiProps {
@@ -22,6 +31,14 @@ export interface OverridesEditorProps extends DataloadUiProps {
   source?: DataloadSourceInput
   /** Organization of the session, to flag overrides that belong to another one. */
   org?: string
+  /** Reference of `profile` in the registry (for the preview dry-run). Default `profile.name`. */
+  profileRef?: string
+  /**
+   * Where "save" publishes: a NEW immutable version `name@version` (editable,
+   * prefilled with `suggestVersion`) derived from `base` with these overrides.
+   * Without it there is no save button.
+   */
+  publish?: { name: string; base: ProfileKey; suggestVersion: string; onPublished?: (v: StoredProfileVersion) => void }
   disabled?: boolean
   /** Inside another card (the launcher): no card or title of its own. */
   embedded?: boolean
@@ -105,9 +122,9 @@ function issueText(i: OverrideIssue, t: DataloadT): string {
  * extra headers per field, removed fields, default values and cleaning (global
  * and per field). Checked against the kernel rules as you type, with the resolved
  * profile summary and an optional dry-run preview of the plan; saved with the
- * profile (`saveProfile`), never in code.
+ * profile as a new immutable version (`publishVersion`), never in code.
  */
-export function OverridesEditor({ profile, value, onChange, api, source, org, disabled, embedded, className, ...uiProps }: OverridesEditorProps) {
+export function OverridesEditor({ profile, value, onChange, api, source, org, profileRef, publish, disabled, embedded, className, ...uiProps }: OverridesEditorProps) {
   const ui = useDataloadUi(uiProps)
   const { t, caps, notify, i18n } = ui
   const initial = useRef(value)
@@ -115,7 +132,8 @@ export function OverridesEditor({ profile, value, onChange, api, source, org, di
   const [preview, setPreview] = useState<DataloadPlan | undefined>()
   const [previewError, setPreviewError] = useState<string | undefined>()
   const [busy, setBusy] = useState<'preview' | 'save' | undefined>()
-  const ids = { ignore: useId(), dropLines: useId(), issues: useId(), title: useId(), list: useId() }
+  const [version, setVersion] = useState(publish?.suggestVersion ?? '')
+  const ids = { ignore: useId(), dropLines: useId(), issues: useId(), title: useId(), list: useId(), version: useId() }
   const readOnly = disabled || !caps.editOverrides
 
   const overrides = useMemo(() => fromDraft(draft, profile, initial.current), [draft, profile])
@@ -137,7 +155,7 @@ export function OverridesEditor({ profile, value, onChange, api, source, org, di
     setBusy('preview')
     setPreviewError(undefined)
     try {
-      const r = await api.dryRun({ profile: profile.name, overrides: overrides ?? {}, source })
+      const r = await api.dryRun({ profile: profileRef ?? profile.name, overrides: overrides ?? {}, source })
       setPreview(r.plan)
     } catch (e) {
       setPreviewError(apiErrorMessage(e, t('dataload.overrides.preview.error')))
@@ -147,11 +165,12 @@ export function OverridesEditor({ profile, value, onChange, api, source, org, di
   }
 
   const save = async () => {
-    if (!api || blocking.length) return
+    if (!api || !publish || !version.trim() || blocking.length) return
     setBusy('save')
     try {
-      await api.saveProfile({ profile, ...(overrides ? { overrides } : {}) })
+      const v = await api.publishVersion({ name: publish.name, version: version.trim(), base: publish.base, overrides: overrides ?? {} })
       notify?.success(t('dataload.overrides.saved'))
+      publish.onPublished?.(v)
     } catch (e) {
       notify?.error(apiErrorMessage(e, t('dataload.overrides.save.error')))
     } finally {
@@ -371,11 +390,19 @@ export function OverridesEditor({ profile, value, onChange, api, source, org, di
             {busy === 'preview' ? t('dataload.overrides.previewing') : t('dataload.overrides.preview')}
           </Button>
         ) : null}
-        {api && caps.editOverrides ? (
-          <Button size='sm' disabled={readOnly || blocking.length > 0 || !!busy} onClick={save}>
-            <Save className='size-4' aria-hidden />
-            {busy === 'save' ? t('dataload.overrides.saving') : t('dataload.overrides.save')}
-          </Button>
+        {api && publish && caps.editOverrides ? (
+          <div className='flex flex-wrap items-end gap-2'>
+            <div className='flex flex-col gap-1'>
+              <label htmlFor={ids.version} className='text-xs font-medium'>{t('dataload.overrides.version')}</label>
+              <input id={ids.version} className={cn(fieldCls, 'h-8 w-36')} value={version} disabled={readOnly || !!busy} aria-describedby={`${ids.version}-hint`}
+                onChange={(e) => setVersion(e.target.value)} />
+            </div>
+            <Button size='sm' disabled={readOnly || blocking.length > 0 || !!busy || !version.trim()} onClick={save}>
+              <Save className='size-4' aria-hidden />
+              {busy === 'save' ? t('dataload.overrides.saving') : t('dataload.overrides.save')}
+            </Button>
+            <p id={`${ids.version}-hint`} className='m-0 basis-full text-xs text-muted-foreground'>{t('dataload.overrides.version.hint')}</p>
+          </div>
         ) : null}
         {!readOnly ? (
           <Button variant='ghost' size='sm' disabled={!!busy} onClick={reset}>

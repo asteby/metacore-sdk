@@ -3,6 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { ReviewQueue } from './review-queue'
 import { review } from './fixtures'
+import type { ReviewEntry } from './types'
+
+const pageOf = (items: ReviewEntry[]) => ({ items, counts: {} })
 import { fakeApi, wrap } from './test-utils'
 
 afterEach(cleanup)
@@ -11,7 +14,7 @@ const two = [review(), review({ key: 'SKU-6', row: 6, hash: 'h6', outcome: 'crea
 
 describe('ReviewQueue', () => {
   it('lists the held rows in a table with reason, outcome and state', async () => {
-    const api = fakeApi({ reviews: vi.fn(async (f) => (f?.state === 'approved' ? [] : two)) })
+    const api = fakeApi({ reviews: vi.fn(async (f) => pageOf(f?.state === 'approved' ? [] : two)) })
     wrap(<ReviewQueue api={api} entity='product' />)
     const table = await screen.findByRole('table', { name: 'Filas en revisión' })
     const headers = within(table).getAllByRole('columnheader').map((h) => h.textContent)
@@ -20,17 +23,18 @@ describe('ReviewQueue', () => {
     expect(within(table).getByText('Se actualizaría')).toBeTruthy()
     expect(within(table).getByText('Se crearía')).toBeTruthy()
     expect(within(table).getAllByText('Pendiente')).toHaveLength(2)
-    expect(api.reviews).toHaveBeenCalledWith({ entity: 'product', state: 'pending', limit: 1000 })
+    expect(api.reviews).toHaveBeenCalledWith({ limit: 500, entity: 'product', state: 'pending' })
   })
 
   it('shows the field diff from the stored plan of the run', async () => {
-    const api = fakeApi({ reviews: vi.fn(async (f) => (f?.state === 'approved' ? [] : two)) })
+    const api = fakeApi({ reviews: vi.fn(async (f) => pageOf(f?.state === 'approved' ? [] : two)) })
     wrap(<ReviewQueue api={api} />)
     const btn = await screen.findByRole('button', { name: 'Ver detalle de la fila 5' })
     expect(btn.getAttribute('aria-expanded')).toBe('false')
     fireEvent.click(btn)
     await screen.findByText('100')
-    expect(api.runPlan).toHaveBeenCalledWith('r1')
+    // The plan is paged on the server: exactly the held row is asked for.
+    expect(api.runPlan).toHaveBeenCalledWith('r1', { offset: 4, limit: 1 })
     expect(screen.getByText('valor fuera de rango')).toBeTruthy()
     expect(btn.getAttribute('aria-expanded')).toBe('true')
   })
@@ -38,7 +42,7 @@ describe('ReviewQueue', () => {
   it('approves in batch with a comment, then applies the approved rows', async () => {
     const notify = { success: vi.fn(), error: vi.fn() }
     let approved = false
-    const api = fakeApi({ reviews: vi.fn(async (f) => (f?.state === 'approved' ? (approved ? two.map((e) => ({ ...e, state: 'approved' as const })) : []) : two)) })
+    const api = fakeApi({ reviews: vi.fn(async (f) => pageOf(f?.state === 'approved' ? (approved ? two.map((e) => ({ ...e, state: 'approved' as const })) : []) : two)) })
     const decide = api.decideReviews as ReturnType<typeof vi.fn>
     decide.mockImplementation(async (ds: never[]) => {
       approved = true
@@ -65,7 +69,7 @@ describe('ReviewQueue', () => {
 
   it('rejects one row and explains a stale decision', async () => {
     const api = fakeApi({
-      reviews: vi.fn(async (f) => (f?.state === 'approved' ? [] : two)),
+      reviews: vi.fn(async (f) => pageOf(f?.state === 'approved' ? [] : two)),
       decideReviews: vi.fn(async () => {
         throw { response: { status: 409, data: { message: 'cambió' } } }
       }),
@@ -79,7 +83,7 @@ describe('ReviewQueue', () => {
   })
 
   it('is read-only without the approve capability', async () => {
-    const api = fakeApi({ reviews: vi.fn(async () => two) })
+    const api = fakeApi({ reviews: vi.fn(async () => pageOf(two)) })
     wrap(<ReviewQueue api={api} capabilities={{ launch: true }} />)
     await screen.findByRole('table')
     expect(screen.getByText('Puedes ver la cola, pero no tienes permiso para decidir.')).toBeTruthy()

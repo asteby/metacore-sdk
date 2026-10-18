@@ -10,15 +10,16 @@ The kernel package has no HTTP layer; the host (ops / an addon) mounts a handler
 
 | Method | Path | Kernel call | Returns |
 | --- | --- | --- | --- |
-| GET | `/profiles` | registered profiles | `StoredProfile[]` |
-| POST | `/profiles` | save (validated by `Profile.Validate` / `Resolve`) | `StoredProfile` |
-| POST | `/dry-run` | `Runner.DryRun` | `{ plan, run }` |
+| GET | `/profiles` | every published version (shared base catalog + the organization's) | `ProfileSummary[]` |
+| GET | `/profiles/:name/versions/:version[?base=1]` | one full version | `StoredProfileVersion` |
+| POST | `/profiles` `{ name, version, profile? \| base + overrides, extract?, note? }` | `Registry.Publish` (immutable; same content = no-op, other content = 409) | `StoredProfileVersion` |
+| POST | `/dry-run` | `Runner.DryRun` | `{ plan, run, source }` (`source` = id of the stored source) |
 | POST | `/runs` | `Runner.Start` (returns at once) | `DataloadRun` |
 | GET | `/runs?limit=` | `Ledger.List` | `DataloadRun[]` |
 | GET | `/runs/:id` | `Runner.Status` | `DataloadRun` |
-| GET | `/runs/:id/plan` | plan stored with the run | `DataloadPlan` |
+| GET | `/runs/:id/plan?action=&offset=&limit=` | page of the plan stored with the run (server default 100) | `PlanPage` |
 | POST | `/runs/:id/cancel` | `Runner.Cancel` | `DataloadRun` |
-| GET | `/reviews?entity=&state=&run_id=&code=&limit=` | `ReviewStore.List` | `ReviewEntry[]` |
+| GET | `/reviews?entity=&state=&run_id=&code=&limit=&cursor=` | `ReviewStore.List` (cursor pages, limit ≤ 500) | `ReviewPage` (`items`, `counts`, `next`) |
 | POST | `/reviews/decide` `{ decisions: ReviewDecision[] }` | `Runner.Decide` (all or nothing) | `ReviewEntry[]` |
 | POST | `/reviews/apply` `{ entity }` | `Runner.ApplyApproved` | `DataloadRun` (`mode: apply_reviewed`) |
 | POST | `/uploads` `{ name, size, contentType?, chunkSize? }` | host storage | `UploadSession` |
@@ -31,7 +32,7 @@ The kernel package has no HTTP layer; the host (ops / an addon) mounts a handler
 | POST | `/media/verify` | `Backuper.VerifyAll` | `VerifyReport` |
 | POST | `/media/retry` `{ run_id? }` | `MediaQueue.RetryFailed` | `{ requeued }` |
 
-`dry-run` and `runs` take `{ profile: name | inline profile, overrides?, source }`, where `source` is either `{ format: 'csv'|'json'|'bundle', name, content, path? }` (inline text) or `{ format, name, uploadId, path? }` (a completed chunked upload); `runs` also takes `force` and `failOnInvalid`. An explicit `overrides: {}` means "no overrides" (omitting it lets the server use the ones stored with the profile). The organization and the actor always come from the session, never from the body. Tokens and passwords are never part of any payload.
+`dry-run` and `runs` take `{ profile: ref | inline profile, overrides?, source }`, where `ref` is `name@version` (the organization's) or `base/name@version` (the shared catalog, see `profileRef`) and `source` is `{ id }` (a source the server already stored: what the first dry-run returns), `{ format: 'csv'|'json'|'bundle', name, content, path? }` (inline text) or `{ format, name, uploadId, path? }` (a completed chunked upload); `runs` also takes `force`, `failOnInvalid` and **`expectPlanHash`**. The launcher applies exactly what was simulated: the registry version the dry-run resolved (`run.registry`), the stored source id (nothing is re-sent, so an import costs one upload) and the reviewed `planHash`; if the plan the server would apply now is different it answers **409** (`isPlanChanged`) and the UI drops the plan and asks to simulate again. Edited overrides are the complete set and go over the full base profile of the selected version. `src/__fixtures__/ops/` holds the server's real responses and `contract.test.ts` checks the client against them. An explicit `overrides: {}` means "no overrides" (omitting it lets the server use the ones stored with the profile). The organization and the actor always come from the session, never from the body. Tokens and passwords are never part of any payload.
 
 **Reviews.** A decision carries the `hash` of the row the person saw; the server answers **409** when the row changed since (`ErrReviewStale`) or is closed (`ErrReviewClosed`), and the UI reloads the queue. Approved rows are written only by `/reviews/apply`.
 
@@ -63,7 +64,7 @@ Pure helpers: `summarizePlan`, `filterRows`, `canApply`, `progressPercent`, `par
 
 ### Overrides editor
 
-`OverridesEditor` edits one organization's overrides over a base profile: columns to ignore (exact or `prefix*`), extra headers per field, removed fields (never the identity), default values (typed by the field), and cleaning (replace the global rules, add rules per field, `drop_lines:<regex>`). Full field replacements and value translations are kept as they came. It validates as you type with the kernel's rules (`validateOverrides`: unknown or removed targets, unknown rules, invalid regexes, identity removal, another org's overrides), shows the resolved profile summary, runs a dry-run preview of the plan with the edited overrides when it has a `source`, and saves through `saveProfile`. The server validates again and is the authority (JS RegExp only approximates Go RE2).
+`OverridesEditor` edits one organization's overrides over a base profile: columns to ignore (exact or `prefix*`), extra headers per field, removed fields (never the identity), default values (typed by the field), and cleaning (replace the global rules, add rules per field, `drop_lines:<regex>`). Full field replacements and value translations are kept as they came. It validates as you type with the kernel's rules (`validateOverrides`: unknown or removed targets, unknown rules, invalid regexes, identity removal, another org's overrides), shows the resolved profile summary, runs a dry-run preview of the plan with the edited overrides when it has a `source`, and saves by publishing a NEW immutable version (`publishVersion`, base + overrides; versions are never rewritten). The server validates again and is the authority (JS RegExp only approximates Go RE2).
 
 ### Permissions
 

@@ -1,0 +1,19 @@
+{
+  "data": {
+    "dead": [],
+    "manifest": {
+      "bytes": 0,
+      "corrupt": 0,
+      "missing": 0,
+      "ok": 0,
+      "total": 0
+    },
+    "queue": {
+      "dead": 0,
+      "done": 0,
+      "pending": 0,
+      "running": 0
+    }
+  },
+  "success": true
+}

@@ -1,0 +1,43 @@
+{
+  "data": [
+    {
+      "createdAt": "2026-01-01T00:00:00Z",
+      "createdBy": "\u003cuuid\u003e",
+      "entity": "product",
+      "fingerprint": "\u003chash\u003e",
+      "hasExtract": false,
+      "name": "catalogo",
+      "note": "contrato",
+      "org": "\u003cuuid\u003e",
+      "shared": false,
+      "version": "1"
+    },
+    {
+      "base": {
+        "name": "catalogo",
+        "org": "\u003cuuid\u003e",
+        "version": "1"
+      },
+      "createdAt": "2026-01-01T00:00:00Z",
+      "createdBy": "\u003cuuid\u003e",
+      "fingerprint": "\u003chash\u003e",
+      "hasExtract": false,
+      "name": "catalogo",
+      "org": "\u003cuuid\u003e",
+      "shared": false,
+      "version": "1-org"
+    },
+    {
+      "createdAt": "2026-01-01T00:00:00Z",
+      "entity": "catalog_row",
+      "fingerprint": "\u003chash\u003e",
+      "hasExtract": false,
+      "name": "woocommerce-csv",
+      "note": "catálogo base de OPS",
+      "org": "",
+      "shared": true,
+      "version": "1"
+    }
+  ],
+  "success": true
+}

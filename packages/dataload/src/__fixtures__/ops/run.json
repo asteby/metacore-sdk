@@ -1,0 +1,82 @@
+{
+  "data": {
+    "actor": "\u003cuuid\u003e",
+    "checkpoint": {
+      "batches": 1,
+      "lastKey": "A1",
+      "rows": 1,
+      "updatedAt": "2026-01-01T00:00:00Z"
+    },
+    "createdAt": "2026-01-01T00:00:00Z",
+    "finishedAt": "2026-01-01T00:00:00Z",
+    "id": "\u003chash\u003e",
+    "inputHash": "\u003chash\u003e",
+    "issues": [
+      {
+        "code": "dataload.row.duplicate_held",
+        "message": "identidad repetida de la fila 2; ninguna se carga hasta que se decida en revisión",
+        "params": {
+          "first": 2
+        },
+        "row": 3
+      },
+      {
+        "code": "importer.required",
+        "column": "SKU",
+        "message": "falta 'SKU'",
+        "params": {
+          "column": "SKU"
+        },
+        "row": 4
+      }
+    ],
+    "key": "\u003chash\u003e",
+    "mode": "apply",
+    "org": "\u003cuuid\u003e",
+    "planHash": "\u003chash\u003e",
+    "profile": "catalogo",
+    "profileHash": "\u003chash\u003e",
+    "profileVersion": "1",
+    "progress": {
+      "created": 1,
+      "done": 1,
+      "duplicates": 1,
+      "invalid": 1,
+      "mediaQueued": 0,
+      "review": 1,
+      "total": 1,
+      "unchanged": 0,
+      "updated": 0
+    },
+    "registry": {
+      "fingerprint": "\u003chash\u003e",
+      "key": {
+        "name": "catalogo",
+        "org": "\u003cuuid\u003e",
+        "version": "1-org"
+      }
+    },
+    "review": [
+      {
+        "items": [
+          {
+            "code": "duplicate_key",
+            "detail": "la identidad se repite en las filas 3; ninguna se carga sola: decide cuál vale",
+            "detailCode": "dataload.row.duplicate_key",
+            "detailParams": {
+              "rows": "3"
+            },
+            "severity": "revisar"
+          }
+        ],
+        "key": "B2",
+        "outcome": "create",
+        "row": 2
+      }
+    ],
+    "source": "catalogo.csv",
+    "startedAt": "2026-01-01T00:00:00Z",
+    "state": "succeeded"
+  },
+  "success": true
+}

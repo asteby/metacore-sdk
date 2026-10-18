@@ -23,7 +23,7 @@ export interface ReviewQueueProps extends DataloadUiProps {
   className?: string
 }
 
-const STATES: ReviewState[] = ['pending', 'approved', 'rejected', 'applied', 'superseded']
+const STATES: ReviewState[] = ['pending', 'approved', 'applying', 'rejected', 'applied', 'superseded']
 const rowId = (e: Pick<ReviewEntry, 'entity' | 'key'>) => `${e.entity}\u001f${e.key}`
 /** Composite identities are joined with U+001F by the kernel; show them readable. */
 export const displayKey = (k: string) => k.split('\u001f').join(' · ')
@@ -32,7 +32,8 @@ const NOT_MOUNTED = [404, 405, 501]
 
 /** Diff of a held row: from the plan stored with the run that held it, when it still has this version of the row. */
 function ReviewDetail({ api, entry, t }: { api: DataloadApi; entry: ReviewEntry; t: DataloadT }) {
-  const plan = useDataloadRunPlan(api, entry.runId)
+  // The stored plan is paginated on the server: ask for exactly this row (rows are numbered in order).
+  const plan = useDataloadRunPlan(api, entry.runId, { offset: Math.max(0, entry.row - 1), limit: 1 })
   const row = plan.data?.rows.find((r) => r.key === entry.key && r.hash === entry.hash)
   const outcome = entry.outcome ?? row?.outcome
   return (
@@ -73,8 +74,8 @@ export function ReviewQueue({ api, entity, runId, defaultState = 'pending', page
   const [error, setError] = useState<string | undefined>()
   const ids = { state: useId(), code: useId(), note: useId(), title: useId() }
 
-  const list = useDataloadReviews(api, { entity, runId, ...(state !== 'all' ? { state } : {}), ...(code ? { code } : {}), limit: 1000 })
-  const approved = useDataloadReviews(api, { entity, state: 'approved', limit: 1000 })
+  const list = useDataloadReviews(api, { entity, runId, ...(state !== 'all' ? { state } : {}), ...(code ? { code } : {}), limit: 500 })
+  const approved = useDataloadReviews(api, { entity, state: 'approved', limit: 500 })
   const actions = useReviewActions(api)
   const entries = list.data ?? []
   const page = entries.slice(0, shown)
