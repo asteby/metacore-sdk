@@ -6,6 +6,8 @@ import { inferFormat } from './utils'
 export const DEFAULT_CHUNK_BYTES = 8 * 1024 * 1024
 /** Default ceiling of a chunked upload. The host can raise or lower it; the server has the last word. */
 export const DEFAULT_MAX_UPLOAD_BYTES = 2 * 1024 * 1024 * 1024
+/** Largest part the client accepts: each part is read into memory to hash it. */
+export const MAX_CHUNK_BYTES = 64 * 1024 * 1024
 
 export interface UploadProgress {
   loaded: number
@@ -88,13 +90,33 @@ export async function uploadSourceFile(api: DataloadApi, file: UploadFile, opts:
   const hash = opts.hashParts ?? !!globalThis.crypto?.subtle
   const { signal } = opts
 
+  const create = () =>
+    api.createUpload({ name: file.name, size: file.size, contentType: file.type || undefined, chunkSize: Math.min(opts.chunkSize ?? DEFAULT_CHUNK_BYTES, MAX_CHUNK_BYTES) })
+  const discard = async (uploadId: string) => {
+    try {
+      await api.abortUpload(uploadId)
+    } catch {
+      // Best effort: the server expires abandoned uploads anyway.
+    }
+  }
+
   let session
   try {
-    session = opts.resumeId
-      ? await api.upload(opts.resumeId)
-      : await api.createUpload({ name: file.name, size: file.size, contentType: file.type || undefined, chunkSize: opts.chunkSize ?? DEFAULT_CHUNK_BYTES })
+    session = opts.resumeId ? await api.upload(opts.resumeId) : await create()
+    // An upload of another file (other size or name) is never continued: its
+    // parts would be mixed with this file's. Start over instead.
+    if (opts.resumeId && (session.size !== file.size || (session.name && session.name !== file.name))) {
+      await discard(opts.resumeId)
+      session = await create()
+    }
   } catch (e) {
     throw new UploadError(isAbort(signal, e) ? 'aborted' : 'failed', opts.resumeId, e)
+  }
+  // Each part is held in memory (to hash and send it): a server-chosen part size
+  // beyond the cap is refused rather than reading a huge slice of the file.
+  if ((session.chunkSize || 0) > MAX_CHUNK_BYTES) {
+    await discard(session.id)
+    throw new UploadError('failed')
   }
   const id = session.id
   const chunk = Math.max(1, session.chunkSize || opts.chunkSize || DEFAULT_CHUNK_BYTES)
@@ -107,11 +129,7 @@ export async function uploadSourceFile(api: DataloadApi, file: UploadFile, opts:
   report()
 
   const abort = async (e?: unknown): Promise<never> => {
-    try {
-      await api.abortUpload(id)
-    } catch {
-      // Best effort: the server expires abandoned uploads anyway.
-    }
+    await discard(id)
     throw new UploadError('aborted', undefined, e)
   }
 

@@ -112,4 +112,23 @@ describe('createDataloadApi', () => {
     expect(apiErrorStatus({ response: { status: 409 } })).toBe(409)
     expect(apiErrorStatus(new Error('net'))).toBeUndefined()
   })
+
+  it('turns the kernel unset times (0001-01-01) into absent fields', async () => {
+    const zero = '0001-01-01T00:00:00Z'
+    const h = http()
+    h.get.mockImplementation(async (u: string) =>
+      u.includes('/reviews')
+        ? ok([{ key: 'P5', entity: 'product', items: null, record: null, decidedAt: zero, state: 'pending' }])
+        : ok({ ...run({ state: 'queued' }), startedAt: zero, finishedAt: zero, createdAt: '2026-10-01T10:00:00Z', issues: null, review: null }),
+    )
+    const api = createDataloadApi(h)
+    const r = await api.run('r1')
+    expect(r.startedAt).toBeUndefined()
+    expect(r.finishedAt).toBeUndefined()
+    expect(r.createdAt).toBe('2026-10-01T10:00:00Z')
+    const [e] = await api.reviews()
+    expect(e?.decidedAt).toBeUndefined()
+    expect(e?.items).toEqual([])
+    expect(e?.record).toEqual({})
+  })
 })

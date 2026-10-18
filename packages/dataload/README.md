@@ -35,7 +35,7 @@ The kernel package has no HTTP layer; the host (ops / an addon) mounts a handler
 
 **Reviews.** A decision carries the `hash` of the row the person saw; the server answers **409** when the row changed since (`ErrReviewStale`) or is closed (`ErrReviewClosed`), and the UI reloads the queue. Approved rows are written only by `/reviews/apply`.
 
-**Chunked uploads.** The server chooses (or caps) `chunkSize` and answers which parts it already has, so an interrupted upload resumes without resending them. Each part is sent as `application/octet-stream` with `X-Content-Sha256` (hex) when the browser has WebCrypto, so the server can reject a corrupted part; parts can arrive again (idempotent by index). `complete` assembles the file and returns its sha256. The server should expire unfinished uploads. The row cap of the profile (`maxRows`) still applies when the file is read.
+**Chunked uploads.** The server chooses (or caps) `chunkSize` and answers which parts it already has, so an interrupted upload resumes without resending them. Each part is sent as `application/octet-stream` with `X-Content-Sha256` (hex) when the browser has WebCrypto, so the server can reject a corrupted part; parts can arrive again (idempotent by index). `complete` assembles the file and returns its sha256. The client never continues an upload whose `size` or `name` differ from the picked file (it discards it and starts a new one, so parts of two files are never mixed), and it refuses a `chunkSize` above 64 MB (each part is held in memory to hash it). The server should expire unfinished uploads. The row cap of the profile (`maxRows`) still applies when the file is read.
 
 ## Use
 

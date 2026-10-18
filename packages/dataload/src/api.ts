@@ -1,3 +1,4 @@
+import { parseTime } from './utils'
 import type {
   DataloadHttpClient,
   DataloadPlan,
@@ -77,12 +78,22 @@ export function normalizePlan(p: DataloadPlan): DataloadPlan {
   }
 }
 
-export function normalizeRun(r: DataloadRun): DataloadRun {
-  return { ...r, issues: nz(r.issues), review: nz(r.review).map((n) => ({ ...n, items: nz(n.items) })) }
+/** Go serializes an unset `time.Time` as 0001-01-01T00:00:00Z even with omitempty: drop those fields. */
+function dropUnsetTimes<T extends object>(o: T, keys: (keyof T)[]): T {
+  const out = { ...o }
+  for (const k of keys) {
+    const v = out[k]
+    if (v == null || (typeof v === 'string' && !parseTime(v))) delete out[k]
+  }
+  return out
 }
 
-function normalizeReview(e: ReviewEntry): ReviewEntry {
-  return { ...e, items: nz(e.items), record: e.record ?? {} }
+export function normalizeRun(r: DataloadRun): DataloadRun {
+  return dropUnsetTimes({ ...r, issues: nz(r.issues), review: nz(r.review).map((n) => ({ ...n, items: nz(n.items) })) }, ['startedAt', 'finishedAt'])
+}
+
+export function normalizeReview(e: ReviewEntry): ReviewEntry {
+  return dropUnsetTimes({ ...e, items: nz(e.items), record: e.record ?? {} }, ['decidedAt'])
 }
 
 function normalizeUpload(u: UploadSession): UploadSession {

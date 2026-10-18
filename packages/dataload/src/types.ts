@@ -113,12 +113,18 @@ export interface ReviewItem {
   field?: string
   severity: ReviewSeverity
   detail?: string
+  /** Stable code and parameters of `detail`, to translate it. */
+  detailCode?: string
+  detailParams?: Record<string, unknown>
 }
 
 export interface RowIssue {
   row: number
   column?: string
   message: string
+  /** Stable code (`importer.*` / `dataload.*`) and parameters of `message`, to translate it. */
+  code?: string
+  params?: Record<string, unknown>
 }
 
 export interface FieldDiff {
@@ -191,6 +197,8 @@ export interface RunCheckpoint {
   rows: number
   lastKey?: string
   resumes?: number
+  /** Rows a resume recovered from apply marks written after the last checkpoint. */
+  recovered?: number
   updatedAt: string
 }
 
@@ -214,6 +222,9 @@ export interface DataloadRun {
   review: ReviewNote[]
   checkpoint?: RunCheckpoint
   error?: string
+  /** Stable code and parameters of `error` (kernel catalog), to translate it. */
+  errorCode?: string
+  errorParams?: Record<string, unknown>
   /** Id of the run that already resolved this very input: this one wrote nothing. */
   replayOf?: string
   createdAt: string
@@ -262,6 +273,8 @@ export interface MediaJob {
   state: MediaState
   attempts: number
   lastError?: string
+  /** Stable code of `lastError` when it comes from the engine (absent for network or origin errors). */
+  lastErrorCode?: string
   nextAttempt: string
   sha256?: string
   deriveError?: string

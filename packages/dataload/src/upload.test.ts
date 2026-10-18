@@ -97,4 +97,22 @@ describe('uploadSourceFile', () => {
     const src = await uploadSourceFile(a, file('{"items":[]}', 'a.json'), { bundlePath: ' items ', sleep: noWait })
     expect(src).toEqual({ format: 'bundle', name: 'a.json', uploadId: 'up1', path: 'items' })
   })
+
+  it('never resumes an upload of a different file: it starts over instead of mixing parts', async () => {
+    const { a, parts } = api({ upload: vi.fn(async (id) => ({ id, name: 'otro.csv', size: 4, chunkSize: 4, received: [0] })) })
+    const src = await uploadSourceFile(a, file('abcdefgh'), { resumeId: 'viejo', sleep: noWait })
+    expect(a.createUpload).toHaveBeenCalledTimes(1)
+    expect(a.abortUpload).toHaveBeenCalledWith('viejo')
+    expect(parts.map((p) => p.text)).toEqual(['abcd', 'efgh'])
+    expect(src.uploadId).toBe('up1')
+  })
+
+  it('refuses a part size it would have to hold in memory beyond the cap', async () => {
+    const big = { name: 'big.csv', size: 300 * 1024 * 1024, type: 'text/csv', slice: () => new Blob(['x']) }
+    const { a } = api({ createUpload: vi.fn(async (body) => ({ id: 'up1', name: body.name, size: body.size, chunkSize: body.size, received: [] })) })
+    const err = await uploadSourceFile(a, big, { sleep: noWait }).catch((e) => e)
+    expect(err).toMatchObject({ code: 'failed' })
+    expect(a.uploadPart).not.toHaveBeenCalled()
+    expect(a.abortUpload).toHaveBeenCalledWith('up1')
+  })
 })
