@@ -1,0 +1,54 @@
+{
+  "name": "@asteby/metacore-dataload",
+  "version": "0.0.0",
+  "description": "Metacore dataload - typed client, hooks and a launcher UI for the kernel's generic bulk-load engine: declarative profiles, dry-run and diff, idempotent async runs with progress and history, and the status of the immutable sha256 media backup.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asteby/metacore-sdk",
+    "directory": "packages/dataload"
+  },
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "tsc -w -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@asteby/metacore-ui": ">=2.28.0",
+    "react": ">=18",
+    "react-dom": ">=18",
+    "lucide-react": ">=0.460",
+    "@tanstack/react-query": ">=5"
+  },
+  "devDependencies": {
+    "@asteby/metacore-ui": "workspace:*",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "happy-dom": "^20.10.2",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "typescript": "^6.0.0",
+    "vitest": "^4.0.0",
+    "lucide-react": "^1.0.0",
+    "@tanstack/react-query": "^5.95.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
