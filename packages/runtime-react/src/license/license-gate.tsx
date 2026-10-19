@@ -13,8 +13,9 @@
  *     no descartable, con el formulario de activación. Al activar con éxito el
  *     host refresca el estado y el gate se abre sin recargar.
  *
- * Es branding-aware si el host pasa `branding` (logo/nombre desde el
- * PlatformConfig del SDK); si no, cae a un encabezado neutro.
+ * Es branding-aware: usa la prop `branding` si el host la pasa y, si no, la
+ * marca de `<BrandProvider>` (`useBrand()`). Sin ninguna de las dos cae a un
+ * encabezado neutro.
  *
  * INDEPENDIENTE del kernel: no importa su cliente ni fija su versión. Solo
  * consume `LicenseState` y una promesa `onActivate`.
@@ -32,6 +33,7 @@ import {
 } from './types'
 import { LicenseStatusBadge } from './license-status-badge'
 import { LicenseExpiryBanner } from './license-expiry-banner'
+import { useBrand } from '../brand/context'
 
 function cx(...parts: Array<string | false | undefined>): string {
     return parts.filter(Boolean).join(' ')
@@ -46,7 +48,8 @@ export interface LicenseGateProps {
      * se muestra al usuario. */
     onActivate: (code: string) => Promise<void>
     children: ReactNode
-    /** Branding opcional (logo/nombre) para el encabezado del modal. */
+    /** Branding opcional (logo/nombre) para el encabezado del modal. Si se
+     * omite, se usa la marca de `<BrandProvider>` (`useBrand()`). */
     branding?: LicenseBranding
     /** Acción "Gestionar licencia" del banner degradado (opcional). */
     onManage?: () => void
@@ -71,6 +74,12 @@ export function LicenseGate({
     className,
 }: LicenseGateProps) {
     const blocking = isLicenseBlocking(state)
+    const brand = useBrand()
+    const effectiveBranding: LicenseBranding | undefined =
+        branding ??
+        (brand.name || brand.logo
+            ? { name: brand.name || undefined, logo: brand.logo || undefined }
+            : undefined)
 
     return (
         <>
@@ -84,7 +93,7 @@ export function LicenseGate({
                 <LicenseGateModal
                     state={state}
                     onActivate={onActivate}
-                    branding={branding}
+                    branding={effectiveBranding}
                     canActivate={canActivate}
                     readOnlyMessage={readOnlyMessage}
                     className={className}
