@@ -21,8 +21,10 @@ peer ranges declared in `package.json`.
 pnpm add @asteby/metacore-app-providers @radix-ui/react-direction
 # transports / kits used by MetacoreAppShell + PlatformConfigProvider
 pnpm add @tanstack/react-query sonner
+# PlatformConfigProvider feeds the BrandProvider of runtime-react (/brand subpath):
+pnpm add @asteby/metacore-runtime-react
 # optional, only if you mount MetacoreAppShell:
-pnpm add @asteby/metacore-pwa @asteby/metacore-runtime-react @asteby/metacore-ui
+pnpm add @asteby/metacore-pwa @asteby/metacore-ui
 ```
 
 ## Exports at a glance
@@ -35,6 +37,7 @@ pnpm add @asteby/metacore-pwa @asteby/metacore-runtime-react @asteby/metacore-ui
 | `SearchProvider`, `useSearch`                   | Cmd/Ctrl+K hotkey + `open`/`setOpen` for command palettes. |
 | `PlatformConfigProvider`, `usePlatformConfig`   | Tenant branding (name, logo, primary/accent color, support URLs) — transport-agnostic. |
 | `useAgentSuggestions`, `resolveAgentSuggestions`, `DEFAULT_AGENT_SUGGESTIONS` | Copilot starter prompts from `PlatformBranding.agent_suggestions` (blanks ignored, neutral fallback). |
+| `toBrand`, `useBrand`                           | `PlatformBranding` → `Brand` of `@asteby/metacore-runtime-react/brand`; `useBrand()` reads it (empty name without a provider). |
 | `applyBranding`, `applyCachedBranding`          | Imperative helpers for pre-React paint and SW updates. |
 | `FALLBACK_BRANDING`                             | Empty defaults consumers can spread over. |
 | `usePublishMascotFace`, `useMascotFace`, `mascotFaceStore` | One shared mascot face across chat surfaces; the most active `MascotState` wins (`error` > `speaking` > `processing` > `thinking` > `listening` > `happy` > `idle`). |
@@ -125,6 +128,14 @@ const { platform_name, primary_color, refetch } = usePlatformConfig()
 
 `refetch()` invalidates the query if the host knows the branding just
 changed (e.g. after a settings save).
+
+The provider also wraps its children in `<BrandProvider value={toBrand(config)}>`
+(from `@asteby/metacore-runtime-react/brand`), so `useBrand()` and `<LicenseGate>`
+see the tenant brand with no extra wiring. `syncBrandDocument` mounts
+`BrandDocumentSync` (document title, favicon, `--brand-primary`/`--brand-accent`);
+`resolveBrandAsset` turns bare asset references into servable URLs for the
+brand's logo/favicon. `brand_locked` / `brand_source` carry whether the platform
+fixed the brand and which layer issued it.
 
 ### Contract
 

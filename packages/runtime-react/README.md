@@ -30,7 +30,8 @@ Peers: `react`, `react-dom`, `react-i18next`, `i18next`, `@tanstack/react-router
 | `useMetadataCache()` | Zustand store for table/modal metadata, persisted to LocalStorage. `prefetchAll(api)` warms it from `/metadata/all`. |
 | `defaultGetDynamicColumns` / `makeDefaultGetDynamicColumns(helpers)` | The factory `<DynamicTable>` uses to convert metadata into TanStack column defs. The default reads from `col.key` (matching the kernel contract). |
 | `DynamicIcon` | Lucide icon resolver by name. |
-| `<LicenseGate state={…} onActivate={…}>` | El blindaje del negocio: envuelve la app; bloquea con un modal full-screen no descartable cuando la licencia de instancia falta/venció, degrada con banner en `grace`/`stale`. Branding-aware. |
+| `<LicenseGate state={…} onActivate={…}>` | El blindaje del negocio: envuelve la app; bloquea con un modal full-screen no descartable cuando la licencia de instancia falta/venció, degrada con banner en `grace`/`stale`. Branding-aware: prop `branding` o, sin ella, `useBrand()`. |
+| `<BrandProvider value={…}>` / `useBrand()` / `<BrandDocumentSync />` | Marca del cliente como contexto puro (también en el subpath ligero `@asteby/metacore-runtime-react/brand`). Sin provider el nombre es vacío. `BrandDocumentSync` aplica título, favicon y `--brand-primary`/`--brand-accent`. |
 | `<LicenseExpiryBanner state={…} />` / `<LicenseStatusBadge status={…} />` | Piezas sueltas del gate para Ajustes u otros lugares. |
 | `isLicenseOperable` / `isLicenseBlocking` / `isPresetEntitled` / `isTrialExpired` | Helpers puros sobre `LicenseState`, espejo de `State.Operable()/Blocking()` del backend. |
 | `<RealtimeProvider client={…} />` / `useRealtime()` / `useRealtimeInvalidate()` / `useRealtimeStatus()` / `useRealtimeTick()` | Reacción en vivo a `DATA_EVENT` del host (ver [Realtime](#realtime)). |
