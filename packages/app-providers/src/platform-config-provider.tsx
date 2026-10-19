@@ -14,6 +14,8 @@ import {
   type ReactNode,
 } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { BrandProvider } from '@asteby/metacore-runtime-react/brand'
+import { toBrand } from './brand'
 
 export interface PlatformBranding {
   platform_name: string
@@ -37,6 +39,12 @@ export interface PlatformBranding {
   // branding. Absent/unknown keys are a no-op — never required for
   // existing consumers.
   default_preset_key?: string
+  // The platform fixed the brand (e.g. a hub-issued instance brand) and the
+  // tenant can't edit it. Absent means false.
+  brand_locked?: boolean
+  // Layer the brand came from as reported by the backend (`hub`, `manual`…).
+  // Absent means unknown.
+  brand_source?: 'hub' | 'manual' | (string & {})
 }
 
 export const FALLBACK_BRANDING: PlatformBranding = {
@@ -541,6 +549,17 @@ export interface PlatformConfigProviderProps {
   staleTime?: number
   /** localStorage key for the persisted branding cache. */
   storageKey?: string
+  /**
+   * Mounts `BrandDocumentSync` (document title, favicon, `--brand-*` CSS
+   * vars) from the resolved brand. Default false: hosts that still sync the
+   * document themselves keep doing it.
+   */
+  syncBrandDocument?: boolean
+  /**
+   * Resolves a branding asset reference (bare filename, path or URL) to a
+   * servable URL for the `useBrand()` logo/favicon. Default: as-is.
+   */
+  resolveBrandAsset?: (ref: string) => string
 }
 
 export function PlatformConfigProvider({
@@ -549,6 +568,8 @@ export function PlatformConfigProvider({
   defaults = FALLBACK_BRANDING,
   staleTime = 5 * 60 * 1000,
   storageKey = STORAGE_KEY,
+  syncBrandDocument = false,
+  resolveBrandAsset,
 }: PlatformConfigProviderProps) {
   const queryClient = useQueryClient()
 
@@ -602,7 +623,12 @@ export function PlatformConfigProvider({
 
   return (
     <PlatformConfigContext value={{ ...current, refetch }}>
-      {children}
+      <BrandProvider
+        value={toBrand(current, { resolveAssetUrl: resolveBrandAsset })}
+        syncDocument={syncBrandDocument}
+      >
+        {children}
+      </BrandProvider>
     </PlatformConfigContext>
   )
 }

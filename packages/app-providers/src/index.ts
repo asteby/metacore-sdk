@@ -24,6 +24,8 @@ export {
   type BrandingFetcher,
   type PlatformConfigProviderProps,
 } from './platform-config-provider'
+export { toBrand, type ToBrandOptions } from './brand'
+export { useBrand, type Brand } from '@asteby/metacore-runtime-react/brand'
 export {
   DEFAULT_AGENT_SUGGESTIONS,
   resolveAgentSuggestions,
