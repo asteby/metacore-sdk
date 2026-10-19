@@ -20,6 +20,18 @@ export {
     type LicenseStatus,
     type LicenseBranding,
 } from './license'
+export {
+    BrandProvider,
+    BrandDocumentSync,
+    useBrand,
+    normalizeBrand,
+    applyBrandFavicon,
+    EMPTY_BRAND,
+    BRAND_CSS_VARS,
+    type Brand,
+    type BrandSource,
+    type BrandProviderProps,
+} from './brand'
 export * from './options-context'
 export {
     extractServerError,

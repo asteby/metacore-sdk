@@ -19,6 +19,10 @@
       "types": "./dist/widgets/charts.d.ts",
       "import": "./dist/widgets/charts.js"
     },
+    "./brand": {
+      "types": "./dist/brand/index.d.ts",
+      "import": "./dist/brand/index.js"
+    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js"
