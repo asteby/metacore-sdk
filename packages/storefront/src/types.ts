@@ -29,6 +29,32 @@ export type ProductOption = { name: string; values: string[] }
 
 export type SelectedOption = { name: string; value: string }
 
+/**
+ * Server-resolved availability state (stock policy of the market x `show_stock`).
+ * The storefront never computes it. Treat an unknown value as `out_of_stock`.
+ */
+export type AvailabilityStatus = 'in_stock' | 'low_stock' | 'out_of_stock' | 'backorder' | 'preorder'
+
+/**
+ * Availability of a variant (or the summary of a product). `quantity` and
+ * `max_per_order` are already filtered by the shop's `show_stock`: with `none`
+ * or `in_stock_label` the quantity is always `null`. Never infer a number from
+ * any other field.
+ */
+export type Availability = {
+  status: AvailabilityStatus
+  /** Units the buyer may see; `null` when hidden. With `low_stock_threshold:N` it only comes when `status` is `low_stock`. */
+  quantity: number | null
+  /** Max per order: min(max line quantity, visible quantity). `null` = no cap to show. */
+  max_per_order: number | null
+  /** `YYYY-MM-DD`, only `backorder` / `preorder`, when OPS knows it. */
+  restock_eta: string | null
+  /** RFC 3339, release of a `preorder`. */
+  preorder_release_at: string | null
+  /** The buyer can subscribe to "notify me when it is back" (`restock.subscribe`). */
+  notify_available: boolean
+}
+
 export type ProductVariant = {
   id: string
   sku: string
@@ -36,8 +62,12 @@ export type ProductVariant = {
   selected_options: SelectedOption[]
   price: Money
   compare_at_price: Money | null
+  /** Derived from `availability.status` when the server sends it. */
   available_for_sale: boolean
+  /** `null` when the stock is not tracked. Derived from `availability.quantity` when the server sends it. */
   quantity_available: number | null
+  /** Absent on servers older than contract 1.1: use `resolveAvailability` to polyfill it. */
+  availability?: Availability
   image: Image | null
   barcode: string | null
 }
@@ -69,6 +99,8 @@ export type Product = {
   price_range: MoneyRange
   compare_at_price_range: MoneyRange | null
   available_for_sale: boolean
+  /** Summary: the best state among the variants. Absent on servers older than contract 1.1. */
+  availability?: Availability
   seo: SEO
   /** RFC 3339. */
   updated_at: string
@@ -98,7 +130,7 @@ export type ProductSort = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 
 export type ProductConnection = Connection<Product> & { facets: Facet[] }
 
 /** `quantity_available` is `null` when the variant's stock is not tracked (always sellable). */
-export type StockLevel = { sku: string; quantity_available: number | null }
+export type StockLevel = { sku: string; quantity_available: number | null; availability?: Availability }
 
 // ---------------------------------------------------------------------------
 // Shop
@@ -212,10 +244,15 @@ export type CartLineMerchandise = ProductVariant & {
   product: Pick<Product, 'handle' | 'title' | 'featured_image'>
 }
 
+/** Why a cart line cannot be bought as it is. `max_quantity` is `null` when `show_stock` hides it. */
+export type CartLineProblem = { code: 'out_of_stock' | 'insufficient_stock'; max_quantity: number | null }
+
 export type CartLine = {
   id: string
   quantity: number
   merchandise: CartLineMerchandise
+  /** Computed when the cart is read, before checkout. `null`/absent = fine. */
+  problem?: CartLineProblem | null
   cost: { total: Money; unit: Money; compare_at_unit: Money | null; discount?: Money }
 }
 
@@ -501,6 +538,31 @@ export type StorefrontErrorCode =
   | 'invalid_response'
   | (string & {})
 
-export type StorefrontErrorBody = {
-  error: { code: StorefrontErrorCode; message: string; field?: string }
+/** One affected line of a `409 insufficient_stock`. `line_id` is `null` when the line did not exist yet (add). */
+export type InsufficientStockLine = {
+  line_id: string | null
+  variant_id: string
+  sku: string
+  status: AvailabilityStatus
+  max_quantity: number | null
 }
+
+export type InsufficientStockDetails = { lines: InsufficientStockLine[] }
+
+export type StorefrontErrorBody = {
+  error: { code: StorefrontErrorCode; message: string; field?: string; details?: unknown }
+}
+
+export type RestockSubscriptionInput = {
+  sku: string
+  /** At least one of `email` / `phone`. */
+  email?: string
+  phone?: string
+  /** Language of the notice, e.g. `es-MX`. */
+  locale: string
+  market?: string
+  /** Explicit consent to receive the notice. */
+  consent: true
+}
+
+export type RestockSubscriptionResult = { status: 'pending' }

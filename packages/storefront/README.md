@@ -177,6 +177,26 @@ Guadalajara) ordered by haversine; it knows the centroid of a few postal codes
 (`MOCK_POSTAL_CENTROIDS`), pickup is offered only where `pickup.enabled`, and
 the pickup `fee` is charged on the cart.
 
+## Availability (Storefront API 1.1)
+
+The server resolves the state (`availability.status`: `in_stock | low_stock | out_of_stock | backorder | preorder`)
+and filters the quantity by the shop's `show_stock`; the storefront never calculates it nor invents a number.
+
+```ts
+import { availabilityView, resolveAvailability, cartLineProblemView } from '@asteby/storefront'
+
+const a = resolveAvailability(variant)            // server `availability`, or polyfill from available_for_sale / quantity_available
+const view = availabilityView(a, 'es-MX')         // { tone, label, sublabel, ctaLabel, ctaEnabled, showNotify, srText, maxPerOrder, showOnCard }
+```
+
+- Texts are es/en by key (`availabilityMessages(locale, overrides)`); a shop overrides texts, never the logic.
+- The "Quedan N" threshold comes from the server (`availability.quantity` only arrives when it applies). The polyfill
+  only reports `low_stock` if you pass the shop's own `lowStockThreshold`.
+- `409 insufficient_stock`: `error.stockLines` lists `{ line_id, variant_id, sku, status, max_quantity }`; the cart is untouched.
+  `CartLine.problem` is computed when the cart is read.
+- `client.restock.subscribe({ sku, email | phone, locale, consent: true })` -> `202 { status: 'pending' }` ("Avísame cuando vuelva").
+- `schemaAvailability(status)` returns the schema.org `ItemAvailability` URL.
+
 ## Mockup data (`@asteby/storefront/mockup`)
 
 Pure helpers behind the fallback mockups of `@asteby/storefront-react/mockups`

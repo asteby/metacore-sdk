@@ -7,6 +7,8 @@
  */
 import type {
   Address,
+  Availability,
+  InsufficientStockLine,
   Article,
   Cart,
   CartLine,
@@ -24,6 +26,7 @@ import type {
   Theme,
 } from '../types.js'
 import { isValidPoint, rankByDistance } from '../geo.js'
+import { resolveAvailability } from '../availability.js'
 import {
   MOCK_CURRENCY,
   MOCK_IMAGE_URL,
@@ -56,6 +59,11 @@ export type MockStorefrontOptions = {
   flatShipping?: number
   /** Enforce token scopes (`pk_` cannot checkout or use customer routes). Default true. */
   enforceScopes?: boolean
+  /**
+   * Mock `show_stock`: `low_stock_threshold:N` semantics. At or below this quantity a variant is `low_stock`
+   * and only then `availability.quantity` is published (default 5; `0` disables `low_stock`).
+   */
+  lowStockThreshold?: number
   /** Artificial latency per request, in ms (default 0). */
   latencyMs?: number
   /** Override seed data. */
@@ -97,6 +105,8 @@ export type MockState = {
   sessions: Map<string, string>
   idempotency: Map<string, { status: number; body: unknown }>
   checkouts: Map<string, unknown>
+  /** `contact|sku` of accepted "notify me" subscriptions. */
+  restock: Set<string>
   seq: number
 }
 
@@ -106,6 +116,7 @@ class HttpError extends Error {
     readonly code: StorefrontErrorCode,
     message: string,
     readonly field?: string,
+    readonly details?: unknown,
   ) {
     super(message)
   }
@@ -198,11 +209,39 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       sessions: new Map(),
       idempotency: new Map(),
       checkouts: new Map(),
+      restock: new Set(),
       seq: 0,
     }
   }
 
+  const lowStockThreshold = options.lowStockThreshold ?? 5
+
+  /** Recomputes `availability` (and the legacy fields) of every variant/product from `quantity_available`. */
+  function syncAvailability(products: Product[]) {
+    for (const p of products) {
+      for (const v of p.variants) {
+        const qty = v.quantity_available
+        const sellable = v.available_for_sale && (qty === null || qty > 0)
+        v.available_for_sale = sellable
+        const low = sellable && qty !== null && lowStockThreshold > 0 && qty <= lowStockThreshold
+        v.availability = {
+          status: !sellable ? 'out_of_stock' : low ? 'low_stock' : 'in_stock',
+          quantity: low ? qty : null,
+          max_per_order: sellable ? (qty === null ? null : Math.min(qty, 10)) : null,
+          restock_eta: null,
+          preorder_release_at: null,
+          notify_available: !sellable,
+        }
+      }
+      p.available_for_sale = p.variants.some((v) => v.available_for_sale)
+      const rank = ['in_stock', 'low_stock', 'backorder', 'preorder', 'out_of_stock']
+      const best = p.variants.map((v) => v.availability as Availability).sort((a, b) => rank.indexOf(a.status) - rank.indexOf(b.status))[0]
+      p.availability = best ?? resolveAvailability(p)
+    }
+  }
+
   let state = seed()
+  syncAvailability(state.products)
   const nextId = (prefix: string) => `${prefix}_${(++state.seq).toString(36)}${Math.random().toString(36).slice(2, 8)}`
 
   // -------------------------------------------------------------------------
@@ -347,7 +386,8 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
 
   function validateLines(lines: unknown, cart?: CartRecord): { variant_id: string; quantity: number }[] {
     if (!Array.isArray(lines)) throw new HttpError(400, 'validation', '`lines` must be an array', 'lines')
-    return lines.map((raw, i) => {
+    const toCheck: Parameters<typeof checkStock>[0] = []
+    const out = lines.map((raw, i) => {
       const l = raw as { variant_id?: unknown; quantity?: unknown }
       if (typeof l.variant_id !== 'string') throw new HttpError(400, 'validation', 'variant_id is required', `lines[${i}].variant_id`)
       const quantity = l.quantity === undefined ? 1 : l.quantity
@@ -356,16 +396,41 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       }
       const found = findVariant(l.variant_id)
       if (!found) throw new HttpError(400, 'validation', `Unknown variant ${l.variant_id}`, `lines[${i}].variant_id`)
-      const already = cart?.lines.find((x) => x.variant_id === l.variant_id)?.quantity ?? 0
-      checkStock(found.variant, already + quantity, `lines[${i}].quantity`)
+      const existing = cart?.lines.find((x) => x.variant_id === l.variant_id)
+      toCheck.push({ variant: found.variant, quantity: (existing?.quantity ?? 0) + quantity, lineId: existing?.id ?? null, field: `lines[${i}].quantity` })
       return { variant_id: l.variant_id, quantity }
     })
+    checkStock(toCheck)
+    return out
   }
 
-  function checkStock(variant: ProductVariant, quantity: number, field: string) {
-    if (!variant.available_for_sale || (variant.quantity_available !== null && quantity > variant.quantity_available)) {
-      throw new HttpError(409, 'insufficient_stock', `Only ${variant.quantity_available ?? 0} available for ${variant.sku}`, field)
+  /** Visible cap for a variant: only published when the mock's show_stock lets the buyer see it. */
+  function visibleMax(variant: ProductVariant): number | null {
+    const a = variant.availability
+    if (!a || a.status === 'out_of_stock') return 0
+    return a.status === 'low_stock' ? a.quantity : null
+  }
+
+  function lineProblem(variant: ProductVariant, quantity: number): CartLine['problem'] {
+    if (!variant.available_for_sale) return { code: 'out_of_stock', max_quantity: 0 }
+    if (variant.quantity_available !== null && quantity > variant.quantity_available) {
+      return { code: 'insufficient_stock', max_quantity: visibleMax(variant) }
     }
+    return null
+  }
+
+  /** Throws one `409 insufficient_stock` listing every affected line; the message never carries quantities. */
+  function checkStock(items: { variant: ProductVariant; quantity: number; lineId: string | null; field: string }[]) {
+    const bad = items.filter((i) => lineProblem(i.variant, i.quantity))
+    if (bad.length === 0) return
+    const lines: InsufficientStockLine[] = bad.map((i) => ({
+      line_id: i.lineId,
+      variant_id: i.variant.id,
+      sku: i.variant.sku,
+      status: i.variant.availability?.status ?? 'out_of_stock',
+      max_quantity: visibleMax(i.variant),
+    }))
+    throw new HttpError(409, 'insufficient_stock', 'Algunos productos ya no tienen existencias suficientes', bad[0]!.field, { lines })
   }
 
   function addLines(cart: CartRecord, lines: { variant_id: string; quantity: number }[]) {
@@ -402,6 +467,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       lines.push({
         id: l.id,
         quantity: l.quantity,
+        problem: lineProblem(variant, l.quantity),
         merchandise: {
           ...variant,
           product: { handle: product.handle, title: product.title, featured_image: product.featured_image },
@@ -554,7 +620,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     const nodes = skus.flatMap((sku) => {
       for (const p of state.products) {
         const v = p.variants.find((x) => x.sku === sku)
-        if (v) return [{ sku, quantity_available: v.quantity_available }]
+        if (v) return [{ sku, quantity_available: v.quantity_available, ...(v.availability ? { availability: v.availability } : {}) }]
       }
       return []
     })
@@ -593,8 +659,15 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       if (typeof u.quantity !== 'number' || !Number.isInteger(u.quantity) || u.quantity < 0) {
         throw new HttpError(400, 'validation', 'quantity must be a non-negative integer', `lines[${i}].quantity`)
       }
-      if (u.quantity > 0) checkStock(findVariant(line.variant_id)!.variant, u.quantity, `lines[${i}].quantity`)
     })
+    checkStock(
+      updates.flatMap((u, i) => {
+        const line = cart.lines.find((l) => l.id === u.id)!
+        return (u.quantity as number) > 0
+          ? [{ variant: findVariant(line.variant_id)!.variant, quantity: u.quantity as number, lineId: line.id, field: `lines[${i}].quantity` }]
+          : []
+      }),
+    )
     for (const u of updates) {
       const line = cart.lines.find((l) => l.id === u.id)!
       line.quantity = u.quantity as number
@@ -678,7 +751,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     if (typeof body.payment_method !== 'string' || !body.payment_method) throw new HttpError(400, 'validation', 'payment_method is required', 'payment_method')
     if (typeof body.return_url !== 'string' || !body.return_url) throw new HttpError(400, 'validation', 'return_url is required', 'return_url')
     // Reserve stock.
-    record.lines.forEach((l, i) => checkStock(findVariant(l.variant_id)!.variant, l.quantity, `lines[${i}].quantity`))
+    checkStock(record.lines.map((l, i) => ({ variant: findVariant(l.variant_id)!.variant, quantity: l.quantity, lineId: l.id, field: `lines[${i}].quantity` })))
     for (const l of record.lines) {
       const v = findVariant(l.variant_id)!.variant
       if (v.quantity_available !== null) {
@@ -686,7 +759,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
         v.available_for_sale = v.quantity_available > 0
       }
     }
-    for (const p of state.products) p.available_for_sale = p.variants.some((v) => v.available_for_sale)
+    syncAvailability(state.products)
 
     const orderId = nextId('ord')
     const number = String(1001 + state.orders.length - 1)
@@ -730,6 +803,19 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     const found = state.checkouts.get(params[0]!)
     if (!found) throw new HttpError(404, 'not_found', 'Checkout not found')
     return { body: found, cache: 'private' }
+  })
+
+  // Restock subscriptions ("notify me when it is back")
+  route('POST', '/restock-subscriptions', 'customer:write', ({ body }) => {
+    if (typeof body.sku !== 'string' || !body.sku) throw new HttpError(400, 'validation', 'sku is required', 'sku')
+    if (typeof body.locale !== 'string' || !body.locale) throw new HttpError(400, 'validation', 'locale is required', 'locale')
+    if (body.consent !== true) throw new HttpError(422, 'invalid_state', 'consent must be true', 'consent')
+    const contact = typeof body.email === 'string' && body.email ? body.email.toLowerCase() : typeof body.phone === 'string' ? body.phone : ''
+    if (!contact) throw new HttpError(400, 'validation', 'email or phone is required', 'email')
+    const known = state.products.some((p) => p.variants.some((v) => v.sku === body.sku))
+    if (!known) throw new HttpError(404, 'not_found', `SKU ${body.sku} not found`, 'sku')
+    state.restock.add(`${contact}|${body.sku}`)
+    return { status: 202, body: { status: 'pending' }, cache: 'private' }
   })
 
   // Customer
@@ -859,7 +945,11 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
   }
 
   function errorResponse(err: HttpError): Response {
-    return json(err.status, { error: { code: err.code, message: err.message, ...(err.field ? { field: err.field } : {}) } }, { 'Cache-Control': PRIVATE_CACHE })
+    return json(
+      err.status,
+      { error: { code: err.code, message: err.message, ...(err.field ? { field: err.field } : {}), ...(err.details !== undefined ? { details: err.details } : {}) } },
+      { 'Cache-Control': PRIVATE_CACHE },
+    )
   }
 
   async function handle(request: Request): Promise<Response> {
@@ -930,6 +1020,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     /** Restores the seed data and clears carts, sessions and orders. */
     reset() {
       state = seed()
+      syncAvailability(state.products)
     },
     /** OTP code accepted by `/customer/session`. */
     otpCode,

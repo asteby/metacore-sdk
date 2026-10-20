@@ -1,10 +1,12 @@
-import type { StorefrontErrorCode } from './types.js'
+import type { InsufficientStockLine, StorefrontErrorCode } from './types.js'
 
 export type StorefrontErrorInit = {
   status: number
   code: StorefrontErrorCode
   message: string
   field?: string
+  /** Raw `error.details` from the body (untrusted shape). */
+  details?: unknown
   /** Request URL that failed (without credentials). */
   url?: string
   cause?: unknown
@@ -19,6 +21,7 @@ export class StorefrontError extends Error {
   readonly status: number
   readonly code: StorefrontErrorCode
   readonly field: string | undefined
+  readonly details: unknown
   readonly url: string | undefined
 
   constructor(init: StorefrontErrorInit) {
@@ -26,7 +29,19 @@ export class StorefrontError extends Error {
     this.status = init.status
     this.code = init.code
     this.field = init.field
+    this.details = init.details
     this.url = init.url
+  }
+
+  /**
+   * Affected lines of a `409 insufficient_stock` (empty for any other error or a
+   * server older than contract 1.1). The cart is untouched: show the lines and
+   * let the buyer adjust or remove them.
+   */
+  get stockLines(): InsufficientStockLine[] {
+    const lines = (this.details as { lines?: unknown } | null | undefined)?.lines
+    if (this.code !== 'insufficient_stock' || !Array.isArray(lines)) return []
+    return lines.filter((l): l is InsufficientStockLine => typeof l === 'object' && l !== null && typeof (l as { sku?: unknown }).sku === 'string')
   }
 
   toJSON() {

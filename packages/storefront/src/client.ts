@@ -42,6 +42,8 @@ import type {
   ReturnRequest,
   ReturnRequestInput,
   Shop,
+  RestockSubscriptionInput,
+  RestockSubscriptionResult,
   StockLevel,
   StorefrontErrorBody,
   Theme,
@@ -219,6 +221,7 @@ async function readError(res: Response, url: string): Promise<StorefrontError> {
     code: e?.code ?? defaultCodeForStatus(res.status),
     message: e?.message ?? `Storefront API responded ${res.status}${res.statusText ? ' ' + res.statusText : ''}`,
     ...(e?.field ? { field: e.field } : {}),
+    ...(e?.details !== undefined ? { details: e.details } : {}),
     url,
   })
 }
@@ -389,6 +392,15 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
       /** Stock for up to 250 SKUs. */
       get: (skus: string[], options?: RequestOptions) =>
         get<{ nodes: StockLevel[] }>('/storefront/stock', { sku: skus }, options),
+    },
+
+    restock: {
+      /**
+       * "Notify me when it is back". Idempotent per contact + SKU; always answers `202 pending`.
+       * Only offered when `availability.notify_available` is true. Needs `customer:write`.
+       */
+      subscribe: (input: RestockSubscriptionInput, options?: WriteOptions) =>
+        write<RestockSubscriptionResult>('POST', '/storefront/restock-subscriptions', input, options),
     },
 
     carts: {

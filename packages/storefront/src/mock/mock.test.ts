@@ -77,7 +77,7 @@ describe('mock catalog', () => {
     expect(recs.nodes.length).toBeGreaterThan(0)
     expect(recs.nodes.some((r) => r.handle === 'playera-basica')).toBe(false)
     const stock = await sf.stock.get([p.variants[0]!.sku, 'UNKNOWN'])
-    expect(stock.nodes).toEqual([{ sku: p.variants[0]!.sku, quantity_available: 15 }])
+    expect(stock.nodes).toMatchObject([{ sku: p.variants[0]!.sku, quantity_available: 15 }])
   })
 
   it('answers 304 to If-None-Match', async () => {
@@ -163,6 +163,55 @@ describe('mock end-to-end purchase', () => {
     const cart = await sf.carts.create({ lines: [{ variant_id: p.variants[0]!.id, quantity: 1 }] })
     await sf.carts.setBuyer(cart.id, { email: 'a@b.co' })
     await expect(sf.carts.checkout(cart.id, { payment_method: 'card', return_url: 'https://x' })).rejects.toMatchObject({ status: 422, field: 'delivery' })
+  })
+})
+
+describe('mock availability', () => {
+  it('publishes availability on variants and products; quantity only when low_stock', async () => {
+    const umbrella = (await sf.products.get('paraguas-compacto'))! // stock 3 -> low
+    expect(umbrella.variants[0]!.availability).toMatchObject({ status: 'low_stock', quantity: 3 })
+    const socks = (await sf.products.get('calcetines-paquete'))! // stock 0
+    expect(socks.variants[0]!.availability).toMatchObject({ status: 'out_of_stock', quantity: null, notify_available: true })
+    expect(socks.availability?.status).toBe('out_of_stock')
+    const shirt = (await sf.products.get('playera-basica'))! // stock 15
+    expect(shirt.variants[0]!.availability).toMatchObject({ status: 'in_stock', quantity: null })
+    expect(shirt.availability?.status).toBe('in_stock')
+  })
+
+  it('409 carries a quantity-free message and the affected lines; the cart is kept', async () => {
+    const p = (await sf.products.get('paraguas-compacto'))!
+    const v = p.variants[0]!
+    const cart = await sf.carts.create({ lines: [{ variant_id: v.id, quantity: 2 }] })
+    expect(cart.lines[0]!.problem).toBeNull()
+    const err = await sf.carts.updateLines(cart.id, [{ id: cart.lines[0]!.id, quantity: 9 }]).catch((e) => e)
+    expect(err).toMatchObject({ status: 409, code: 'insufficient_stock' })
+    expect(err.message).not.toMatch(/\d/)
+    expect(err.stockLines).toEqual([{ line_id: cart.lines[0]!.id, variant_id: v.id, sku: v.sku, status: 'low_stock', max_quantity: 3 }])
+    expect((await sf.carts.get(cart.id))!.lines).toHaveLength(1)
+  })
+
+  it('flags a line that lost its stock between cart and checkout', async () => {
+    const p = (await sf.products.get('llanta-225-45-r17-runflat'))! // stock 2
+    const v = p.variants[0]!
+    const a = await sf.carts.create({ lines: [{ variant_id: v.id, quantity: 2 }] })
+    const b = await sf.carts.create({ lines: [{ variant_id: v.id, quantity: 2 }] })
+    for (const c of [a, b]) {
+      await sf.carts.setBuyer(c.id, { email: 'a@b.co' })
+      await sf.carts.setDelivery(c.id, { method: 'pickup', branch_id: (await sf.shop.get()).branches[0]!.id })
+    }
+    await sf.carts.checkout(a.id, { payment_method: 'card', return_url: 'https://x' })
+    const seen = (await sf.carts.get(b.id))!
+    expect(seen.lines[0]!.problem).toEqual({ code: 'out_of_stock', max_quantity: 0 })
+    await expect(sf.carts.checkout(b.id, { payment_method: 'card', return_url: 'https://x' })).rejects.toMatchObject({ code: 'insufficient_stock' })
+  })
+
+  it('accepts restock subscriptions idempotently and validates input', async () => {
+    const sku = (await sf.products.get('calcetines-paquete'))!.variants[0]!.sku
+    const input = { sku, email: 'a@b.co', locale: 'es-MX', consent: true } as const
+    await expect(sf.restock.subscribe(input)).resolves.toEqual({ status: 'pending' })
+    await expect(sf.restock.subscribe(input)).resolves.toEqual({ status: 'pending' })
+    await expect(sf.restock.subscribe({ sku, locale: 'es', consent: true })).rejects.toMatchObject({ status: 400 })
+    await expect(sf.restock.subscribe({ ...input, sku: 'NOPE' })).rejects.toMatchObject({ status: 404 })
   })
 })
 

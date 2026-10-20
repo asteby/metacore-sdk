@@ -26,5 +26,26 @@ export type {
   QueryValue,
 } from './query.js'
 
+export {
+  availabilityView,
+  availabilityMessages,
+  availabilityLocale,
+  formatAvailabilityMessage,
+  resolveAvailability,
+  productAvailability,
+  cartLineProblemView,
+  schemaAvailability,
+} from './availability.js'
+export type {
+  AvailabilityLocale,
+  AvailabilityMessageKey,
+  AvailabilityMessages,
+  AvailabilityTone,
+  AvailabilityView,
+  AvailabilityViewOptions,
+  CartLineProblemView,
+  ResolveAvailabilityOptions,
+} from './availability.js'
+
 export type { GeoPoint, OpeningHours, OpenStatus } from './geo.js'
 export type * from './types.js'
