@@ -1,21 +1,24 @@
 /**
- * Banner de vencimiento de licencia — la señal degradada que acompaña a las
- * posturas que NO bloquean la app pero exigen atención:
- *   - valid && days_remaining <= threshold  → aviso de renovación próxima
- *   - stale                                  → check-in con el hub pendiente
- *   - grace                                  → vencida, dentro de la gracia
- *   - expired                                → vencida en duro (persistente)
+ * Banner de licencia — la señal que acompaña a los estados que NO bloquean la
+ * app pero piden atención (ver `deriveLicenseView`):
+ *   - por vencer           aviso de renovación próxima
+ *   - en gracia            vencida, todavía se puede operar
+ *   - vencida (solo lectura) / desactivada con plazo: se consulta y se exporta
+ *   - hub caído            sin contacto con el hub pero opera con su lease (solo dueño)
+ *   - clonada              licencia vista en otro servidor (solo dueño)
  *
  * Silencioso sin enforcement o si el estado aún no cargó — nunca rompe el shell.
+ * Descartable con TTL en localStorage, MENOS los estados de solo lectura, que se
+ * quedan fijos porque el backend ya rechaza escrituras nuevas.
  *
- * Descartabilidad: todas las posturas son descartables con TTL en localStorage
- * (re-aparecen pasado el TTL) MENOS `expired`, que se queda fijo como recordatorio
- * porque el backend ya bloquea escrituras nuevas.
+ * Cuando la licencia trae el contacto del vendedor, se muestra en el propio aviso.
  */
 import { useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import { AlertTriangle, Clock, CloudOff, X } from 'lucide-react'
+import { AlertTriangle, Clock, CloudOff, Copy, X } from 'lucide-react'
 import { Button } from '@asteby/metacore-ui'
+import { formatLicenseDate } from './messages'
+import { deriveLicenseView, sellerContactLine } from './view'
+import { useLicenseT } from './use-license-t'
 import type { LicenseState } from './types'
 
 const DISMISS_KEY = 'license_banner_dismissed_at'
@@ -24,6 +27,17 @@ const UPCOMING_THRESHOLD_DAYS = 15
 
 function cx(...parts: Array<string | false | undefined>): string {
     return parts.filter(Boolean).join(' ')
+}
+
+function readDismissed(key: string): boolean {
+    try {
+        if (typeof window === 'undefined') return false
+        const raw = window.localStorage.getItem(key)
+        if (!raw) return false
+        return Date.now() - Number(raw) < DISMISS_TTL_MS
+    } catch {
+        return false // sin storage (modo privado, SSR): el aviso se muestra
+    }
 }
 
 export interface LicenseExpiryBannerProps {
@@ -37,6 +51,12 @@ export interface LicenseExpiryBannerProps {
     onManage?: () => void
     /** Etiqueta del botón de gestión (default localizado). */
     manageLabel?: string
+    /** Exportar los datos (solo lectura): el host abre su flujo de exportación.
+     * Sin él, no se muestra el botón. */
+    onExport?: () => void
+    /** El usuario actual es el dueño/superadmin de la instancia. Los avisos de
+     * hub caído y de clonado son solo para él. Default true. */
+    isOwner?: boolean
     className?: string
 }
 
@@ -46,27 +66,30 @@ export function LicenseExpiryBanner({
     dismissStorageKey = DISMISS_KEY,
     onManage,
     manageLabel,
+    onExport,
+    isOwner = true,
     className,
 }: LicenseExpiryBannerProps) {
-    const { t } = useTranslation()
-    const [dismissed, setDismissed] = useState(() => {
-        if (typeof window === 'undefined') return false
-        const raw = window.localStorage.getItem(dismissStorageKey)
-        if (!raw) return false
-        return Date.now() - Number(raw) < DISMISS_TTL_MS
-    })
+    const { t, lang } = useLicenseT()
+    const [dismissed, setDismissed] = useState(() => readDismissed(dismissStorageKey))
 
-    if (!state || !state.enforced) return null
+    const view = deriveLicenseView(state, { upcomingThresholdDays })
+    if (!state || !view) return null
 
-    const isUpcoming =
-        state.status === 'valid' && state.days_remaining <= upcomingThresholdDays
-    const isStale = state.status === 'stale'
-    const isGrace = state.status === 'grace'
-    const isExpired = state.status === 'expired'
-    if (!isUpcoming && !isStale && !isGrace && !isExpired) return null
+    const showMain =
+        view.condition === 'expiring' ||
+        view.condition === 'grace' ||
+        view.condition === 'hub_unreachable' ||
+        (view.condition === 'expired' && view.readOnly) ||
+        (view.condition === 'revoked' && view.readOnly) ||
+        // expired en modo bloqueo se pinta aquí solo si el host no monta el gate.
+        (view.condition === 'expired' && !view.readOnly)
+    const showClone = view.cloned && isOwner
+    const mainVisible = showMain && !(view.ownerOnly && !isOwner)
+    if (!mainVisible && !showClone) return null
 
-    // Expired no es descartable — se queda como recordatorio constante.
-    if (dismissed && !isExpired) return null
+    const sticky = view.readOnly || view.condition === 'expired'
+    if (dismissed && !sticky) return null
 
     const dismiss = () => {
         setDismissed(true)
@@ -77,75 +100,112 @@ export function LicenseExpiryBanner({
         }
     }
 
-    const message = isExpired
-        ? t('license.banner.expired', {
-              defaultValue:
-                  'Tu licencia venció. Algunas acciones pueden estar bloqueadas.',
-          })
-        : isStale
-          ? t('license.banner.stale', {
-                defaultValue:
-                    'Esta instancia no ha podido verificar su licencia con el hub. Reconéctala para completar el check-in.',
-            })
-          : isGrace
-            ? t('license.banner.grace', {
-                  defaultValue:
-                      'Tu licencia venció y está en periodo de gracia hasta {{date}} ({{days}} días restantes).',
-                  date: state.grace_until
-                      ? new Date(state.grace_until).toLocaleDateString()
-                      : '—',
-                  days: state.days_remaining,
-              })
-            : t('license.banner.upcoming', {
-                  defaultValue: 'Tu licencia vence en {{days}} días.',
-                  days: state.days_remaining,
-              })
+    const provider = t('license.banner.provider')
+    const who = state.seller?.name?.trim() || provider
+    const whoCap = state.seller?.name?.trim() || t('license.gate.provider')
+    const contact = sellerContactLine(state)
+    const expiredOn = formatLicenseDate(state.expires_at, lang)
+    const graceUntil = formatLicenseDate(state.grace_until, lang)
+    const lastSeen = formatLicenseDate(state.last_checked_at, lang)
 
-    const Icon = isExpired ? AlertTriangle : isStale ? CloudOff : Clock
+    const mainMessage = ((): string => {
+        switch (view.condition) {
+            case 'expiring':
+                return state.days_remaining <= 0
+                    ? t('license.banner.upcoming_today')
+                    : state.days_remaining === 1
+                      ? t('license.banner.upcoming_one')
+                      : t('license.banner.upcoming', { days: state.days_remaining })
+            case 'grace':
+                return expiredOn
+                    ? t('license.banner.grace', { date: expiredOn, days: state.days_remaining })
+                    : t('license.banner.grace_nodate', { days: state.days_remaining })
+            case 'expired':
+                if (!view.readOnly) return t('license.banner.expired')
+                return expiredOn
+                    ? t('license.banner.expired_read_only', { date: expiredOn })
+                    : t('license.banner.expired_read_only_nodate')
+            case 'revoked':
+                return graceUntil
+                    ? t('license.banner.revoked', { who: whoCap, date: graceUntil })
+                    : t('license.banner.revoked_nodate', { who: whoCap })
+            default: // hub_unreachable
+                return lastSeen
+                    ? t('license.banner.stale', { date: lastSeen })
+                    : t('license.banner.stale_nodate')
+        }
+    })()
+
+    const critical = view.severity === 'critical'
+    const rows: Array<{ id: string; message: string; Icon: typeof Clock; critical: boolean }> = []
+    if (mainVisible) {
+        rows.push({
+            id: 'main',
+            message: mainMessage,
+            Icon: critical ? AlertTriangle : view.condition === 'hub_unreachable' ? CloudOff : Clock,
+            critical,
+        })
+    }
+    if (showClone) {
+        rows.push({
+            id: 'clone',
+            message: t('license.banner.cloned', { who }),
+            Icon: Copy,
+            critical: false,
+        })
+    }
 
     return (
-        <div
-            role="alert"
-            data-license-status={state.status}
-            className={cx(
-                'flex items-center justify-between gap-3 border-b px-4 py-2.5 text-sm',
-                isExpired
-                    ? 'border-destructive/30 bg-destructive text-white'
-                    : 'border-amber-500/30 bg-amber-500/10 text-foreground',
-                className,
-            )}
-        >
-            <div className="flex min-w-0 items-center gap-2">
-                <Icon className="h-4 w-4 shrink-0" aria-hidden />
-                <span className="truncate">{message}</span>
-            </div>
-            <div className="flex shrink-0 items-center gap-2">
-                {onManage && (
-                    <Button
-                        size="sm"
-                        variant={isExpired ? 'secondary' : 'outline'}
-                        onClick={onManage}
-                    >
-                        {manageLabel ??
-                            t('license.banner.manage', {
-                                defaultValue: 'Gestionar licencia',
-                            })}
-                    </Button>
-                )}
-                {!isExpired && (
-                    <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-7 w-7"
-                        onClick={dismiss}
-                        title={t('license.banner.dismiss', {
-                            defaultValue: 'Descartar',
-                        })}
-                    >
-                        <X className="h-4 w-4" />
-                    </Button>
-                )}
-            </div>
+        <div data-license-status={state.status} data-license-condition={view.condition} className={className}>
+            {rows.map((row, i) => (
+                <div
+                    key={row.id}
+                    role="alert"
+                    data-license-row={row.id}
+                    className={cx(
+                        'flex items-center justify-between gap-3 border-b px-4 py-2.5 text-sm',
+                        row.critical
+                            ? 'border-destructive/30 bg-destructive text-white'
+                            : 'border-amber-500/30 bg-amber-500/10 text-foreground',
+                    )}
+                >
+                    <div className="flex min-w-0 items-center gap-2">
+                        <row.Icon className="h-4 w-4 shrink-0" aria-hidden />
+                        <span className="min-w-0">
+                            {row.message}
+                            {row.id === 'main' && contact && (view.condition === 'expired' || view.condition === 'revoked' || view.condition === 'grace') && (
+                                <span className="ml-1 opacity-90">
+                                    {t('license.banner.contact', { contact: `${state.seller?.name ? `${state.seller.name} · ` : ''}${contact}` })}
+                                </span>
+                            )}
+                        </span>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                        {i === 0 && onExport && view.readOnly && (
+                            <Button size="sm" variant="secondary" onClick={onExport}>
+                                {t('license.banner.export')}
+                            </Button>
+                        )}
+                        {i === 0 && onManage && (
+                            <Button size="sm" variant={row.critical ? 'secondary' : 'outline'} onClick={onManage}>
+                                {manageLabel ?? t('license.banner.manage')}
+                            </Button>
+                        )}
+                        {!(sticky && row.id === 'main') && (
+                            <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-7 w-7"
+                                onClick={dismiss}
+                                title={t('license.banner.dismiss')}
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            ))}
         </div>
     )
 }
+

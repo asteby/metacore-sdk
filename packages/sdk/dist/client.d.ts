@@ -41,6 +41,7 @@ export declare class MarketplaceClient {
     private post;
     private del;
     private request;
+    private requestOnce;
 }
 export declare class MarketplaceError extends Error {
     readonly status: number;

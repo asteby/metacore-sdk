@@ -3,7 +3,6 @@
  * color + etiqueta legible. Reutilizable suelto (p. ej. en Ajustes de licencia)
  * o embebido en el encabezado del <LicenseGate>.
  */
-import { useTranslation } from 'react-i18next'
 import {
     ShieldCheck,
     ShieldAlert,
@@ -13,6 +12,7 @@ import {
 } from 'lucide-react'
 import { Badge } from '@asteby/metacore-ui'
 import type { LicenseStatus } from './types'
+import { useLicenseT } from './use-license-t'
 
 type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline'
 
@@ -20,7 +20,6 @@ interface StatusMeta {
     variant: BadgeVariant
     Icon: typeof ShieldCheck
     key: string
-    defaultValue: string
     /** Tinte amarillo para posturas degradadas (grace/stale) que `variant` no
      * cubre — el sistema de badges no tiene "warning". */
     warn?: boolean
@@ -31,39 +30,38 @@ const STATUS_META: Record<LicenseStatus, StatusMeta> = {
         variant: 'default',
         Icon: ShieldCheck,
         key: 'license.status.valid',
-        defaultValue: 'Activa',
     },
     stale: {
         variant: 'outline',
         Icon: CloudOff,
         key: 'license.status.stale',
-        defaultValue: 'Sin verificar',
         warn: true,
     },
     grace: {
         variant: 'outline',
         Icon: Clock,
         key: 'license.status.grace',
-        defaultValue: 'En gracia',
         warn: true,
     },
     expired: {
         variant: 'destructive',
         Icon: ShieldAlert,
         key: 'license.status.expired',
-        defaultValue: 'Vencida',
     },
     missing: {
         variant: 'secondary',
         Icon: ShieldQuestion,
         key: 'license.status.missing',
-        defaultValue: 'Sin licencia',
     },
     invalid: {
         variant: 'destructive',
         Icon: ShieldAlert,
         key: 'license.status.invalid',
-        defaultValue: 'Inválida',
+    },
+    revoked: {
+        variant: 'destructive',
+        Icon: ShieldAlert,
+        key: 'license.status.revoked',
     },
 }
 
@@ -73,7 +71,7 @@ export interface LicenseStatusBadgeProps {
 }
 
 export function LicenseStatusBadge({ status, className }: LicenseStatusBadgeProps) {
-    const { t } = useTranslation()
+    const { t } = useLicenseT()
     const meta = STATUS_META[status] ?? STATUS_META.missing
     const { Icon } = meta
 
@@ -87,7 +85,7 @@ export function LicenseStatusBadge({ status, className }: LicenseStatusBadgeProp
             }
         >
             <Icon aria-hidden />
-            {t(meta.key, { defaultValue: meta.defaultValue })}
+            {t(meta.key)}
         </Badge>
     )
 }
