@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useMemo, useRef, useState, type ComponentPropsWithoutRef, type ReactNode } from 'react'
-import type { CartLineMerchandise, Product, ProductVariant } from '@asteby/storefront'
+import { availabilityView, productAvailability, resolveAvailability, type Availability, type CartLineMerchandise, type Product, type ProductVariant } from '@asteby/storefront'
 import { useCart } from './cart.js'
+import { useOptionalStorefront } from './context.js'
 
 export type ProductOptionValueState = {
   value: string
@@ -12,6 +13,8 @@ export type ProductOptionValueState = {
   available: boolean
   /** The variant this value would select, if it exists. */
   variant: ProductVariant | null
+  /** Availability of that variant (polyfilled for servers older than contract 1.1); with the other options not chosen yet, the best among matching variants. `null` when no variant matches. Feed it to `<VariantOptionState availability>`. */
+  availability: Availability | null
   /** Query string (`?Talla=M&Color=Rojo`) selecting this value, preserving other params. */
   search: string
 }
@@ -118,6 +121,7 @@ export function useProductOptions(product: ProductLike, config: UseProductOption
             exists: exact ? true : loose.length > 0 && Object.keys(selectedOptions).length < product.options.length,
             available: exact ? exact.available_for_sale : Object.keys(selectedOptions).length < product.options.length && loose.some((v) => v.available_for_sale),
             variant: exact,
+            availability: exact ? resolveAvailability(exact) : loose.length ? productAvailability({ variants: loose, available_for_sale: loose.some((v) => v.available_for_sale) }) : null,
             search: `?${search.toString()}`,
           }
         }),
@@ -177,6 +181,18 @@ export function toMerchandise(product: Pick<Product, 'handle' | 'title' | 'featu
 export type AddToCartButtonProps = Omit<ComponentPropsWithoutRef<'button'>, 'onClick'> & {
   variantId: string | null | undefined
   quantity?: number
+  /**
+   * Availability of the variant (server `availability`, or the variant itself to polyfill). When given: the label
+   * comes from the server state ("Agotado", "Pedir bajo pedido"...) unless `children` is set, the button is
+   * disabled when it cannot be bought, and the quantity is capped at `max_per_order`.
+   */
+  availability?: Availability | null
+  /** Variant to derive the availability from when the server did not send it. */
+  availabilitySource?: ProductVariant | null
+  /** Polyfill only: shop-level low-stock threshold. */
+  lowStockThreshold?: number | null
+  /** BCP 47; defaults to the provider locale. */
+  locale?: string
   /** Variant data for an instant optimistic cart line. */
   merchandise?: CartLineMerchandise
   onAdded?: () => void
@@ -187,20 +203,31 @@ export type AddToCartButtonProps = Omit<ComponentPropsWithoutRef<'button'>, 'onC
 export function AddToCartButton({
   variantId,
   quantity = 1,
+  availability,
+  availabilitySource,
+  lowStockThreshold,
+  locale,
   merchandise,
   onAdded,
   onClick,
   disabled,
-  children = 'Agregar al carrito',
+  children,
   type = 'button',
   ...rest
 }: AddToCartButtonProps) {
   const cart = useCart()
+  const sf = useOptionalStorefront()
+  const resolved = availability ?? (availabilitySource ? resolveAvailability(availabilitySource, { lowStockThreshold: lowStockThreshold ?? null }) : null)
+  const view = resolved ? availabilityView(resolved, locale ?? sf?.locale ?? 'es-MX') : null
+  const blocked = view ? !view.ctaEnabled : false
+  const qty = view?.maxPerOrder != null ? Math.min(quantity, view.maxPerOrder) : quantity
+  const label = children ?? view?.ctaLabel ?? 'Agregar al carrito'
   const [adding, setAdding] = useState(false)
   return (
     <button
       type={type}
-      disabled={disabled || !variantId || adding}
+      disabled={disabled || !variantId || adding || blocked}
+      data-availability={view?.status}
       aria-busy={adding || undefined}
       data-adding={adding || undefined}
       onClick={async (event) => {
@@ -208,7 +235,7 @@ export function AddToCartButton({
         if (event.defaultPrevented || !variantId) return
         setAdding(true)
         try {
-          const result = await cart.addLines([{ variant_id: variantId, quantity, ...(merchandise ? { merchandise } : {}) }])
+          const result = await cart.addLines([{ variant_id: variantId, quantity: qty, ...(merchandise ? { merchandise } : {}) }])
           if (result) onAdded?.()
         } finally {
           setAdding(false)
@@ -216,7 +243,7 @@ export function AddToCartButton({
       }}
       {...rest}
     >
-      {children}
+      {label}
     </button>
   )
 }

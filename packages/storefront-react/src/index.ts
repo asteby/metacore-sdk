@@ -22,6 +22,24 @@ export type {
 } from './variants.js'
 
 export {
+  AvailabilityBadge,
+  CartLineProblem,
+  RestockNotifyForm,
+  SrOnly,
+  StockConflictAlert,
+  VariantOptionState,
+  useAvailability,
+} from './availability.js'
+export type {
+  AvailabilityBadgeProps,
+  AvailabilityInput,
+  CartLineProblemProps,
+  RestockNotifyFormProps,
+  StockConflictAlertProps,
+  VariantOptionStateProps,
+} from './availability.js'
+
+export {
   seoMeta,
   productMeta,
   collectionMeta,

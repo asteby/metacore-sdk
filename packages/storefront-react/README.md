@@ -158,6 +158,23 @@ metacore-ui components pick it up), fonts as `--font-<role>` and `--radius`.
 Unsafe values (`;`, `{}`, `<`, `url(`) are dropped. `<ThemeStyle theme />`
 renders it as a `<style>`; `themeFontsHref(theme)` gives a Google Fonts URL.
 
+## Disponibilidad (headless)
+
+Todo sale de `availability` del servidor (o del polyfill para servidores sin contrato 1.1); sin umbrales ni topes fijos en la tienda.
+
+```tsx
+<AvailabilityBadge availability={variant.availability} source={variant} placement="card" />   {/* listado: nada si hay stock */}
+<AvailabilityBadge source={variant} />                                                         {/* ficha: Quedan N, ETA, máximo por pedido */}
+<AddToCartButton variantId={variant.id} availabilitySource={variant} />                         {/* «Agotado» deshabilitado, «Pedir bajo pedido»... */}
+<VariantOptionState availability={value.availability}>{value.value}</VariantOptionState>        {/* opción tachada + «agotado» sr-only */}
+<RestockNotifyForm sku={variant.sku} availability={a} action="/avisame" />                      {/* «Avísame»; <form method=post> sin JS */}
+<StockConflictAlert />                                                                           {/* 409 recuperable, lee useCart().error */}
+{cart.lines.map((l) => <CartLineProblem key={l.id} line={l} />)}                                 {/* problema de línea al cargar el carrito */}
+```
+
+Textos es/en por clave: `messages={{ 'status.low_stock_n': '¡Últimas {n}!' }}`. El JSON-LD (`productJsonLd`) publica
+`schema.org availability` desde el estado del servidor y nunca la cantidad.
+
 ## Sucursales (headless)
 
 Primitivos sin estilos ni clases (render props), accesibles y SSR-safe. Con cero

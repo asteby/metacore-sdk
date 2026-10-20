@@ -76,7 +76,7 @@ describe('CartProvider', () => {
       await first
       await second
     })
-    expect(screen.getByTestId('cart').textContent).toBe('2|idle|598.00|Only 3 available for PARAGUASCOMPACTO-1')
+    expect(screen.getByTestId('cart').textContent).toBe('2|idle|598.00|Algunos productos ya no tienen existencias suficientes')
     expect(api.error).toMatchObject({ status: 409, code: 'insufficient_stock' })
   })
 

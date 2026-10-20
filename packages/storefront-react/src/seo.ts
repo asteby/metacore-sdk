@@ -3,7 +3,7 @@
  * `meta` export shape) and schema.org JSON-LD objects (`<JsonLd>` renders them).
  * Nothing here touches the DOM, so it is safe in loaders and SSR.
  */
-import type { Collection, Image, Product, SEO, Shop } from '@asteby/storefront'
+import { productAvailability, resolveAvailability, schemaAvailability, type Collection, type Image, type Product, type ResolveAvailabilityOptions, type SEO, type Shop } from '@asteby/storefront'
 import { isValidPoint, toSchemaOpeningHours, type OpeningHours } from '@asteby/storefront/geo'
 
 /** Same shape as React Router's `MetaDescriptor`. */
@@ -69,7 +69,9 @@ function seoOf(seo: SEO, fallbackTitle: string, fallbackDescription: string | nu
 }
 
 /** Product page descriptors (`og:type=product` and price tags). */
-export function productMeta(product: Product, shop: Pick<Shop, 'name' | 'locale'> | null, url: string): MetaDescriptor[] {
+const OG_AVAILABILITY = { in_stock: 'in stock', low_stock: 'in stock', out_of_stock: 'out of stock', backorder: 'backorder', preorder: 'preorder' } as const
+
+export function productMeta(product: Product, shop: Pick<Shop, 'name' | 'locale'> | null, url: string, options: ResolveAvailabilityOptions = {}): MetaDescriptor[] {
   const { title, description } = seoOf(product.seo, product.title, product.description)
   const meta = seoMeta({
     title,
@@ -84,7 +86,7 @@ export function productMeta(product: Product, shop: Pick<Shop, 'name' | 'locale'
   meta.push(
     { property: 'product:price:amount', content: product.price_range.min.amount },
     { property: 'product:price:currency', content: product.price_range.min.currency_code },
-    { property: 'product:availability', content: product.available_for_sale ? 'in stock' : 'out of stock' },
+    { property: 'product:availability', content: OG_AVAILABILITY[productAvailability(product, options).status] ?? 'out of stock' },
   )
   if (product.vendor) meta.push({ property: 'product:brand', content: product.vendor })
   return meta
@@ -133,22 +135,25 @@ function withVariant(url: string, variantId: string): string {
 }
 
 /** schema.org `Product` with one `Offer` per variant. */
-export function productJsonLd(product: Product, shop: Pick<Shop, 'name' | 'domain'> | null, url: string): JsonLdObject {
+export function productJsonLd(product: Product, shop: Pick<Shop, 'name' | 'domain'> | null, url: string, options: ResolveAvailabilityOptions = {}): JsonLdObject {
   const images = product.images.length ? product.images.map((i) => i.url) : product.featured_image ? [product.featured_image.url] : []
-  const offers = product.variants.map((v) =>
-    compact({
+  const offers = product.variants.map((v) => {
+    // schema.org availability comes from the server state; the quantity is never published.
+    const availability = resolveAvailability(v, options)
+    return compact({
       '@type': 'Offer',
       sku: v.sku,
       gtin: v.barcode ?? undefined,
       name: product.variants.length > 1 ? `${product.title} - ${v.title}` : undefined,
       price: v.price.amount,
       priceCurrency: v.price.currency_code,
-      availability: v.available_for_sale ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      availability: schemaAvailability(availability.status),
+      availabilityStarts: availability.status === 'preorder' ? (availability.preorder_release_at ?? undefined) : undefined,
       itemCondition: 'https://schema.org/NewCondition',
       url: product.variants.length > 1 ? withVariant(url, v.id) : url,
       seller: shop ? { '@type': 'Organization', name: shop.name } : undefined,
-    }),
-  )
+    })
+  })
   const additionalProperty = Object.entries(product.attributes).map(([name, value]) => ({ '@type': 'PropertyValue', name, value }))
   return compact({
     '@context': CONTEXT,
