@@ -202,6 +202,16 @@ export function invalidateQueryBatchData(): void {
     }
     entityCache.clear()
 }
+/**
+ * Forgets EVERYTHING the batch remembered, metadata and i18n reads included
+ * (invalidateQueryBatchData keeps those on purpose: a save does not change
+ * them). Used when the cache epoch moves — an addon was installed, upgraded,
+ * enabled, disabled or uninstalled — because then they are exactly what is stale.
+ */
+export function invalidateQueryBatchAll(): void {
+    partCache.clear()
+    entityCache.clear()
+}
 let waiters: Waiter[] = []
 let timer: ReturnType<typeof setTimeout> | null = null
 let transport: ApiClient | null = null

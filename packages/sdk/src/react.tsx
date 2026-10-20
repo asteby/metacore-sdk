@@ -31,6 +31,7 @@ import {
 } from "react";
 
 import type { MarketplaceClient } from "./client.js";
+import { onCacheEpochChange, wireCacheEpochPush, type CacheEpochPushClient } from "./cache-epoch.js";
 import type { Registry, SlotContribution } from "./registry.js";
 // Runtime/host-facing manifest shape (the kernel's legacy/flat projection
 // served by MarketplaceClient.manifests()), not the v3 authoring contract.
@@ -224,9 +225,17 @@ export function MetacoreProvider({ client, registry, children, cacheScope }: Met
       document.addEventListener("visibilitychange", onFocus);
     }
     const interval = setInterval(revalidate, 5 * 60 * 1000);
+    // The cache epoch moved (an addon was installed / upgraded / enabled /
+    // disabled / uninstalled, possibly by another user, or the server
+    // restarted): the manifests and navigation this window holds are from the
+    // previous world. Revalidate now instead of waiting for the 5-minute tick.
+    const offEpoch = onCacheEpochChange(() => {
+      void revalidate();
+    });
     return () => {
       cancelled = true;
       clearInterval(interval);
+      offEpoch();
       if (typeof document !== "undefined") {
         document.removeEventListener("visibilitychange", onFocus);
       }
@@ -247,6 +256,19 @@ export function MetacoreProvider({ client, registry, children, cacheScope }: Met
   );
 
   return <MetacoreCtx.Provider value={value}>{children}</MetacoreCtx.Provider>;
+}
+
+/**
+ * Feed the cache epoch from the host's WebSocket client (`CACHE_EPOCH_CHANGED`
+ * frame). Mount it once next to <MetacoreProvider>; the provider (and any other
+ * `onCacheEpochChange` subscriber) then revalidates the moment the backend
+ * flushes its caches, with no request needed.
+ *
+ *   const ws = useWebSocket()
+ *   useCacheEpochPush(ws)
+ */
+export function useCacheEpochPush(client: CacheEpochPushClient | undefined | null): void {
+  useEffect(() => wireCacheEpochPush(client), [client]);
 }
 
 export function useMetacore(): Ctx {

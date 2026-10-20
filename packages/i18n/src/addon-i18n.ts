@@ -35,6 +35,73 @@ type CacheEntry = {
 
 const memoryCache = new Map<string, Promise<Record<string, string>>>()
 
+// --- cache coherence --------------------------------------------------------
+// A bundle is "near-immutable per version", but an addon UPGRADE changes it, and
+// one installed or enabled while the tab is open ships labels this window never
+// fetched. The backend moves a cache epoch on every such change and the SDK core
+// announces it with a window event (see cache-epoch in @asteby/metacore-sdk);
+// that is the signal to forget what was cached and fetch again.
+const CACHE_EPOCH_CHANGED_EVENT = 'metacore:cache-epoch-changed'
+
+let generation = 0
+const generationListeners = new Set<() => void>()
+
+/**
+ * Forget the cached bundle of one addon (all addons when omitted): the in-flight
+ * promises, the localStorage copies, and make every mounted `useAddonI18n` /
+ * `useAddonNames` fetch again. Called automatically when the server's cache
+ * epoch changes; hosts may call it after their own install/upgrade flows.
+ */
+export function invalidateAddonI18n(addonKey?: string): void {
+  const marker = addonKey ? `|${addonKey}|` : null
+  for (const k of [...memoryCache.keys()]) {
+    if (!marker || k.includes(marker)) memoryCache.delete(k)
+  }
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const doomed: string[] = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i)
+        if (k && k.startsWith(`${STORAGE_PREFIX}:`) && (!marker || k.includes(marker))) doomed.push(k)
+      }
+      for (const k of doomed) localStorage.removeItem(k)
+    } catch {
+      /* storage disabled */
+    }
+  }
+  generation++
+  for (const fn of [...generationListeners]) {
+    try {
+      fn()
+    } catch {
+      /* a misbehaving listener must not block the others */
+    }
+  }
+}
+
+let epochWired = false
+function wireEpochInvalidation(): void {
+  if (epochWired || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return
+  epochWired = true
+  window.addEventListener(CACHE_EPOCH_CHANGED_EVENT, () => invalidateAddonI18n())
+}
+wireEpochInvalidation()
+
+function useI18nGeneration(): number {
+  const [gen, setGen] = useState(generation)
+  useEffect(() => {
+    const fn = () => setGen(generation)
+    generationListeners.add(fn)
+    // An invalidation between render and effect must not be missed.
+    if (generation !== gen) setGen(generation)
+    return () => {
+      generationListeners.delete(fn)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  return gen
+}
+
 function readLocalStorage(cacheKey: string): Record<string, string> | null {
   if (typeof localStorage === 'undefined') return null
   try {
@@ -112,6 +179,7 @@ export function useAddonI18n(
   const lang = locale.split('-')[0] || locale || 'en'
   const hubURL = resolveHubURL(options.hubURL)
   const cacheKey = `${hubURL}|${addonKey ?? ''}|${lang}`
+  const gen = useI18nGeneration()
 
   // Synchronous initial state from localStorage so the first render already
   // has the right label and the sidebar doesn't flash with the raw key.
@@ -126,8 +194,9 @@ export function useAddonI18n(
       setReady(true)
       return
     }
-    if (lastKeyRef.current === cacheKey) return
-    lastKeyRef.current = cacheKey
+    const guard = `${cacheKey}#${gen}`
+    if (lastKeyRef.current === guard) return
+    lastKeyRef.current = guard
 
     const cached = options.disablePersistence ? null : readLocalStorage(cacheKey)
     if (cached) {
@@ -176,7 +245,7 @@ export function useAddonI18n(
     return () => {
       cancelled = true
     }
-  }, [addonKey, lang, hubURL, cacheKey, options.disablePersistence])
+  }, [addonKey, lang, hubURL, cacheKey, options.disablePersistence, gen])
 
   return {
     labels,
@@ -206,6 +275,7 @@ export function useAddonNames(
 
   // Stable cache key so a re-render with the same key list doesn't refetch.
   const keysSig = keys.join(',')
+  const gen = useI18nGeneration()
 
   const [names, setNames] = useState<Record<string, string>>(() => {
     if (options.disablePersistence) return {}
@@ -268,7 +338,7 @@ export function useAddonNames(
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keysSig, lang, hubURL, options.disablePersistence])
+  }, [keysSig, lang, hubURL, options.disablePersistence, gen])
 
   return names
 }

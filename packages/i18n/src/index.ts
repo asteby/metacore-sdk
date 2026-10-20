@@ -26,6 +26,7 @@ export {
 export {
   useAddonI18n,
   useAddonNames,
+  invalidateAddonI18n,
   type UseAddonI18nOptions,
   type UseAddonI18nResult,
 } from './addon-i18n'

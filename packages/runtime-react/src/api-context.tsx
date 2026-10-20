@@ -5,6 +5,13 @@
 import React, { createContext, useContext, useEffect, useMemo } from 'react'
 import { batchGet, invalidateQueryBatchData } from './query-batch'
 import { invalidateOptionsCache } from './use-options-resolver'
+import {
+    epochFromAxiosHeaders,
+    isStaleStateError,
+    reportCacheEpoch,
+    STALE_RETRIED_FLAG,
+    STALE_RETRY_DELAY_MS,
+} from './cache-coherence'
 
 /** Minimal axios-compatible client shape consumed by runtime-react. */
 export interface ApiClient {
@@ -42,11 +49,24 @@ export function ApiProvider({ client, batch = true, children }: ApiProviderProps
         }
         const id = interceptors.use(
             (res: any) => {
+                // Every answer carries the server's cache epoch: a token that
+                // moved means an addon changed since this tab last looked.
+                reportCacheEpoch(epochFromAxiosHeaders(res?.headers))
                 onSettled(res?.config)
                 return res
             },
-            (err: any) => {
+            async (err: any) => {
+                reportCacheEpoch(epochFromAxiosHeaders(err?.response?.headers))
                 onSettled(err?.config)
+                // A prepared plan outdated by an addon migration fails ONCE
+                // (SQLSTATE 0A000 / 26000) before the statement runs and the
+                // server drops it: re-send the request one time.
+                const config = err?.config as Record<string, unknown> | undefined
+                if (config && !config[STALE_RETRIED_FLAG] && isStaleStateError(err) && typeof (client as AxiosLike).request === 'function') {
+                    config[STALE_RETRIED_FLAG] = true
+                    await new Promise((r) => setTimeout(r, STALE_RETRY_DELAY_MS))
+                    return (client as AxiosLike).request!(config)
+                }
                 return Promise.reject(err)
             },
         )
@@ -60,6 +80,7 @@ export function ApiProvider({ client, batch = true, children }: ApiProviderProps
 }
 
 interface AxiosLike {
+    request?: (config: any) => Promise<any>
     interceptors?: {
         response?: {
             use?: (onFulfilled: (res: any) => any, onRejected: (err: any) => any) => number

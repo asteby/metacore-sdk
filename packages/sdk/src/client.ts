@@ -10,6 +10,7 @@
 // keeps the shape the host actually returns while the SDK's canonical authoring
 // type (./types.js Manifest) is the v3 contract.
 import type { LegacyManifest as Manifest, Installation, NavGroup } from "./types.js";
+import { epochFromHeaders, observeCacheEpoch, withStaleRetry } from "./cache-epoch.js";
 
 export interface Fetcher {
   <T>(path: string, init?: RequestInit): Promise<T>;
@@ -110,11 +111,28 @@ export class MarketplaceClient {
   }
 
   private async request<T>(path: string, init: RequestInit): Promise<T> {
+    // A server whose prepared plan was outdated by an addon migration answers
+    // once with SQLSTATE 0A000 / 26000 and has already dropped it: one retry
+    // is enough and safe (the statement never ran).
+    return withStaleRetry(() => this.requestOnce<T>(path, init));
+  }
+
+  private async requestOnce<T>(path: string, init: RequestInit): Promise<T> {
     const fetchImpl = this.opts.fetch ?? globalThis.fetch;
     const headers = new Headers(init.headers ?? {});
     const custom = this.opts.headers?.() ?? {};
     for (const [k, v] of Object.entries(custom)) headers.set(k, v);
-    const res = await fetchImpl(`${this.opts.baseUrl}${path}`, { ...init, headers });
+    // Manifests, navigation and the installed list are a function of the
+    // installed addons: always revalidate (ETag -> cheap 304), never reuse a
+    // browser-cached copy, whatever Cache-Control the host sent.
+    const res = await fetchImpl(`${this.opts.baseUrl}${path}`, {
+      cache: init.method === "GET" ? "no-cache" : undefined,
+      ...init,
+      headers,
+    });
+    // Every answer carries the cache epoch: a token that moved means an addon
+    // changed since this tab last looked (see ./cache-epoch).
+    observeCacheEpoch(epochFromHeaders(res.headers));
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       throw new MarketplaceError(res.status, text || res.statusText);

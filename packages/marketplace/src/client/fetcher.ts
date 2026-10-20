@@ -7,6 +7,33 @@
  * JSON out, so this contract stays intentionally tiny.
  */
 
+/** Pause before the single stale-state retry, ms. */
+const STALE_RETRY_DELAY_MS = 200
+
+const STALE_PATTERNS = [
+  /cached plan must not change result type/i,
+  /SQLSTATE\s*0A000/i,
+  /prepared statement\s+"?[^"\s]*"?\s+does not exist/i,
+  /SQLSTATE\s*26000/i,
+]
+
+/** True when the failure text says the server's cached plan/state was outdated. */
+function isStaleStateMessage(err: unknown): boolean {
+  const text = err instanceof Error ? err.message : typeof err === 'string' ? err : ''
+  return STALE_PATTERNS.some((re) => re.test(text))
+}
+
+/** Report a response's cache epoch token to the SDK core (window protocol). */
+function reportCacheEpoch(token: unknown): void {
+  if (typeof token !== 'string' || !token.trim()) return
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return
+  try {
+    window.dispatchEvent(new CustomEvent('metacore:cache-epoch-observed', { detail: { epoch: token } }))
+  } catch {
+    /* non-DOM environment */
+  }
+}
+
 /** Optional query-string-friendly param helper. */
 export type QueryParams = Record<
   string,
@@ -113,12 +140,34 @@ export function createFetchFetcher(opts: CreateFetchFetcherOptions): Marketplace
     path: string,
     init: { method: string; body?: unknown; params?: QueryParams },
   ): Promise<T> => {
+    // A server whose prepared plan was outdated by an addon migration answers
+    // once with SQLSTATE 0A000 / 26000 and has already dropped it: one retry is
+    // enough, and safe (the statement never ran).
+    try {
+      return await requestOnce<T>(path, init)
+    } catch (err) {
+      if (!isStaleStateMessage(err)) throw err
+      await new Promise((r) => setTimeout(r, STALE_RETRY_DELAY_MS))
+      return requestOnce<T>(path, init)
+    }
+  }
+
+  const requestOnce = async <T>(
+    path: string,
+    init: { method: string; body?: unknown; params?: QueryParams },
+  ): Promise<T> => {
     const headers = await buildHeaders()
     const res = await f(url(path) + toQueryString(init.params), {
       method: init.method,
       headers,
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
+      // The catalog, the installed list and addon details are a function of
+      // the installed addons: always revalidate (ETag -> cheap 304).
+      ...(init.method === 'GET' ? { cache: 'no-cache' as const } : {}),
     })
+    // Every answer carries the server's cache epoch; the SDK core compares it
+    // (window protocol, see cache-epoch in @asteby/metacore-sdk).
+    reportCacheEpoch(res.headers?.get?.('x-cache-epoch'))
     if (!res.ok) {
       const text = await res.text().catch(() => '')
       throw new Error(
