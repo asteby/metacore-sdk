@@ -254,7 +254,7 @@ export function showNotificationToast(opts: ShowNotificationToastOptions): strin
           )}
           <span className='min-w-0 flex-1'>
             {apartado ? (
-              <span className='mb-0.5 inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium capitalize text-muted-foreground'>
+              <span className='mb-0.5 inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground'>
                 {apartado}
               </span>
             ) : null}
