@@ -40,7 +40,7 @@ import {
 import { Progress } from './dialogs/_primitives'
 import { useSystemActor } from './org-runtime-context'
 import { AuthorshipCell, hasSpecialAuthorship } from './provenance'
-import { humanizeToken, translateMetadataLabel } from './dynamic-columns-helpers'
+import { humanizeToken, resolveColumnOptions, translateMetadataLabel } from './dynamic-columns-helpers'
 import { objectLabel } from './dynamic-relation-helpers'
 import {
     OptionBadge,
@@ -1004,10 +1004,33 @@ export function makeDefaultGetDynamicColumns(
             },
         ]
 
-        metadata.columns.forEach((col) => {
+        const stageField = lifecycleStageField(metadata)
+        metadata.columns.forEach((rawCol) => {
             // Honors both the legacy `hidden` boolean and the kernel's
             // `visibility` scope (skips `'modal'` and `'list'`).
-            if (!isColumnVisibleInTable(col)) return
+            if (!isColumnVisibleInTable(rawCol)) return
+
+            // Enum/status cells paint from translated option labels: the
+            // column's own options, or the stage labels for the stage column
+            // («Listo», not the humanized raw value «Ready»).
+            const resolvedOptions = resolveColumnOptions({
+                columnKey: rawCol.key,
+                options: rawCol.options as any,
+                stages: metadata.stages,
+                stageField,
+                translate: t,
+            })
+            const fromStages = !!resolvedOptions && !(rawCol.options && rawCol.options.length > 0)
+            const col: typeof rawCol = resolvedOptions
+                ? {
+                      ...rawCol,
+                      options: resolvedOptions as any,
+                      // A stage column served as plain text paints as a status badge.
+                      ...(fromStages && !rawCol.cellStyle && (!rawCol.type || rawCol.type === 'text')
+                          ? { type: 'status' as any }
+                          : {}),
+                  } as typeof rawCol
+                : rawCol
 
             const translatedLabel = translateMetadataLabel(col.label, t)
             const filterConfig = filterConfigs?.get(col.key)

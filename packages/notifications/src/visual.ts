@@ -11,8 +11,12 @@ export function toPascalCase(str: string): string {
     .join('')
 }
 
-/** Known addon → human label (bell chip / toast eyebrow). Hosts may extend via registerModuleLabel. */
-const MODULE_LABELS: Record<string, string> = {
+/**
+ * Legacy built-in names (Spanish) used ONLY when nothing better is known: no
+ * label registered by the host and no `metadata.addon_name` from the server.
+ * Prefer the translated addon name; see {@link moduleLabelFromMeta}.
+ */
+const LEGACY_MODULE_LABELS: Record<string, string> = {
   inventory: 'Inventario',
   warehouse: 'Almacén',
   customers: 'Clientes',
@@ -30,15 +34,49 @@ const MODULE_LABELS: Record<string, string> = {
   team_chat: 'Equipo',
 }
 
-/** Hosts can register extra addon keys without forking the package. */
+/**
+ * Names the host registered (addon key → name in the viewer's language). The
+ * host fills this from the addon catalog it already loads (e.g. the org i18n
+ * bundle's `addon_names.<key>`), so it also labels notifications that were
+ * stored before the server started stamping `metadata.addon_name`.
+ */
+const REGISTERED_MODULE_LABELS: Record<string, string> = {}
+
+/** Hosts can register an addon's display name without forking the package. */
 export function registerModuleLabel(addonKey: string, label: string): void {
   const k = addonKey.trim()
   if (!k || !label.trim()) return
-  MODULE_LABELS[k] = label.trim()
+  REGISTERED_MODULE_LABELS[k] = label.trim()
 }
+
+/** Bulk form of {@link registerModuleLabel}: `{ channel_orders: 'Pedidos de canal' }`. */
+export function registerModuleLabels(labels: Record<string, string | undefined | null>): void {
+  for (const [key, label] of Object.entries(labels)) {
+    if (typeof label === 'string') registerModuleLabel(key, label)
+  }
+}
+
+/**
+ * Last-resort label for an addon key: `channel_orders` → `Channel Orders`,
+ * `pos` → `POS`. Never the raw key.
+ */
+export function humanizeModuleKey(key: string): string {
+  return key
+    .split(/[-_.\s]+/)
+    .filter(Boolean)
+    .map((part) => {
+      const lower = part.toLowerCase()
+      return MODULE_ACRONYMS.has(lower) ? lower.toUpperCase() : lower.charAt(0).toUpperCase() + lower.slice(1)
+    })
+    .join(' ')
+}
+
+const MODULE_ACRONYMS = new Set(['pos', 'sku', 'api', 'crm', 'erp', 'hr', 'iva', 'rfc', 'cfdi'])
 
 export type NotificationMeta = {
   addon_key?: string
+  /** Translated addon name stamped by the server when it created the notification. */
+  addon_name?: string
   apartado?: string
   module?: string
   model?: string
@@ -59,13 +97,24 @@ export function parseNotificationMeta(raw?: string | NotificationMeta | null): N
   }
 }
 
-/** Chip label for Inventario / Almacén / POS / … */
+/**
+ * Chip / eyebrow label of a notification's origin. Always the addon's
+ * translated name; resolution order:
+ *
+ *  1. `apartado` / `module`: explicit label set by whoever created the notice
+ *  2. name the host registered for `addon_key` (viewer's language, live)
+ *  3. `addon_name` stamped by the server (platform language)
+ *  4. legacy built-in Spanish names
+ *  5. the humanized key (`channel_orders` → "Channel Orders"), never the raw key
+ */
 export function moduleLabelFromMeta(meta: NotificationMeta): string {
   if (typeof meta.apartado === 'string' && meta.apartado.trim()) return meta.apartado.trim()
   if (typeof meta.module === 'string' && meta.module.trim()) return meta.module.trim()
   const key = (meta.addon_key || '').trim()
+  if (key && REGISTERED_MODULE_LABELS[key]) return REGISTERED_MODULE_LABELS[key]
+  if (typeof meta.addon_name === 'string' && meta.addon_name.trim()) return meta.addon_name.trim()
   if (!key) return ''
-  return MODULE_LABELS[key] || key.replace(/_/g, ' ')
+  return LEGACY_MODULE_LABELS[key] || humanizeModuleKey(key)
 }
 
 export type NotificationTone = {

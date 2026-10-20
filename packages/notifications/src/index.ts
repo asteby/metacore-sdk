@@ -20,6 +20,8 @@ export {
   moduleLabelFromMeta,
   parseNotificationMeta,
   registerModuleLabel,
+  registerModuleLabels,
+  humanizeModuleKey,
   toPascalCase,
   type NotificationMeta,
   type NotificationTone,

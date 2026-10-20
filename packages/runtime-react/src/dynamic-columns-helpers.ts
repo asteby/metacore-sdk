@@ -100,3 +100,51 @@ export function localizeFieldLabel(
     if (!CATALOG_KEY_RE.test(label)) return label
     return translateMetadataLabel(label, translate)
 }
+
+/** An option as the table cell paints it (`labelKey` is the unresolved catalog key the host could not translate). */
+export interface CellOption {
+    value: string | boolean
+    label: string
+    labelKey?: string
+    icon?: string
+    color?: string
+}
+
+/**
+ * The options a table cell must use to paint an enum/status value, so the cell
+ * never shows the raw value («Ready») when a translated label exists:
+ *
+ *   1. the column's own `options`, or — for the model's stage column
+ *      (`stage_field`) with none — the `stages[]` labels (Listo, Cumplido…);
+ *   2. every label is resolved: an unresolved catalog key (`labelKey`, or a
+ *      label that is itself a key) goes through the client catalog and, failing
+ *      that, is humanized. A human label is returned untouched.
+ *
+ * Returns undefined when there is nothing to paint from (the cell then
+ * humanizes the token as its last resort).
+ */
+export function resolveColumnOptions(args: {
+    columnKey: string
+    options?: CellOption[]
+    stages?: { key: string; label?: string; color?: string }[]
+    stageField?: string
+    translate?: MetadataTranslator
+}): CellOption[] | undefined {
+    const { columnKey, options, stages, stageField, translate } = args
+    let base: CellOption[] | undefined = options && options.length > 0 ? options : undefined
+    if (!base && stageField && columnKey === stageField && stages && stages.length > 0) {
+        base = stages
+            .filter((st) => st && st.key)
+            .map((st) => ({ value: st.key, label: st.label || '', color: st.color }))
+    }
+    if (!base) return undefined
+    return base.map((opt) => {
+        const source = opt.labelKey || opt.label
+        const label = opt.labelKey
+            ? translateMetadataLabel(opt.labelKey, translate)
+            : opt.label
+              ? localizeFieldLabel(opt.label, translate)
+              : humanizeToken(String(opt.value))
+        return source === label && !opt.labelKey ? opt : { ...opt, label }
+    })
+}
