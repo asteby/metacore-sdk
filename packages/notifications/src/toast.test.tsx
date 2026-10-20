@@ -111,11 +111,13 @@ describe('showNotificationToast layout', () => {
     }
   })
 
-  it('truncates the title and exposes the full text as tooltip', () => {
-    const long = 'Título muy largo '.repeat(10).trim()
+  it('wraps a long title (up to 3 lines, no one-line ellipsis) and keeps the tooltip', () => {
+    const long = 'No se pudo verificar la conexión: Mercado Pago respondió HTTP 403 '.repeat(3).trim()
     const { getByText } = renderToast({ title: long })
     const el = getByText(long)
-    expect(el.className).toContain('truncate')
+    expect(el.className).not.toContain('truncate')
+    expect(el.className).toContain('line-clamp-3')
+    expect(el.className).toContain('break-words')
     expect(el.getAttribute('title')).toBe(long)
   })
 

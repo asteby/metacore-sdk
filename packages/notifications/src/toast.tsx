@@ -258,8 +258,11 @@ export function showNotificationToast(opts: ShowNotificationToastOptions): strin
                 {apartado}
               </span>
             ) : null}
+            {/* Wraps up to 3 lines instead of a one-line ellipsis: an error
+                title such as "No se pudo verificar la conexión: Mercado Pago
+                respondió HTTP 403…" lost its cause at "Mercad…". */}
             <span
-              className='block truncate text-sm font-semibold text-foreground'
+              className='block line-clamp-3 break-words text-sm font-semibold text-foreground'
               title={opts.title}
             >
               {opts.title}
