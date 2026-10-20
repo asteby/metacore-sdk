@@ -55,7 +55,8 @@ export interface LicenseExpiryBannerProps {
      * Sin él, no se muestra el botón. */
     onExport?: () => void
     /** El usuario actual es el dueño/superadmin de la instancia. Los avisos de
-     * hub caído y de clonado son solo para él. Default true. */
+     * hub caído y de clonado son solo para él. Default false: un host que no
+     * informa el rol nunca los muestra a usuarios que no son dueños. */
     isOwner?: boolean
     className?: string
 }
@@ -67,7 +68,7 @@ export function LicenseExpiryBanner({
     onManage,
     manageLabel,
     onExport,
-    isOwner = true,
+    isOwner = false,
     className,
 }: LicenseExpiryBannerProps) {
     const { t, lang } = useLicenseT()
@@ -85,11 +86,11 @@ export function LicenseExpiryBanner({
         // expired en modo bloqueo se pinta aquí solo si el host no monta el gate.
         (view.condition === 'expired' && !view.readOnly)
     const showClone = view.cloned && isOwner
-    const mainVisible = showMain && !(view.ownerOnly && !isOwner)
-    if (!mainVisible && !showClone) return null
-
     const sticky = view.readOnly || view.condition === 'expired'
-    if (dismissed && !sticky) return null
+    // El descarte solo oculta la fila principal no fija; la fila de clonado
+    // nunca se descarta con ella (un aviso menor no puede apagar el de clonado).
+    const mainVisible = showMain && !(view.ownerOnly && !isOwner) && !(dismissed && !sticky)
+    if (!mainVisible && !showClone) return null
 
     const dismiss = () => {
         setDismissed(true)
@@ -191,7 +192,7 @@ export function LicenseExpiryBanner({
                                 {manageLabel ?? t('license.banner.manage')}
                             </Button>
                         )}
-                        {!(sticky && row.id === 'main') && (
+                        {row.id === 'main' && !sticky && (
                             <Button
                                 size="icon"
                                 variant="ghost"

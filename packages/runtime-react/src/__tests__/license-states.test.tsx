@@ -149,21 +149,33 @@ describe('banner: texto exacto por estado (es)', () => {
     })
     it('hub caído: el dueño lo ve; los demás usuarios no', () => {
         const stale = { status: 'stale', stale: true, valid: true, last_checked_at: '2026-10-10T08:00:00Z' } as const
-        expect(txt(stale)[0]).toContain('No pudimos contactar al servidor de licencias desde el 10 de octubre de 2026. Seguimos funcionando.')
+        expect(txt(stale, { isOwner: true })[0]).toContain('No pudimos contactar al servidor de licencias desde el 10 de octubre de 2026. Seguimos funcionando.')
         cleanup()
         expect(txt(stale, { isOwner: false })).toEqual([])
+        cleanup()
+        // Sin informar el rol, tampoco se muestra (default seguro).
+        expect(txt(stale)).toEqual([])
     })
     it('clonada: solo el dueño, con el nombre del vendedor', () => {
         const s = { status: 'valid', valid: true, days_remaining: 300, notices: ['clone_suspected'], seller: SELLER } as const
-        expect(txt(s)[0]).toContain('Detectamos esta licencia activa en otro servidor. Si no fue a propósito, avisa a Distribuidora Norte.')
+        expect(txt(s, { isOwner: true })[0]).toContain('Detectamos esta licencia activa en otro servidor. Si no fue a propósito, avisa a Distribuidora Norte.')
         cleanup()
         expect(txt(s, { isOwner: false })).toEqual([])
         cleanup()
-        expect(txt({ ...s, seller: undefined })[0]).toContain('avisa a tu proveedor.')
+        expect(txt({ ...s, seller: undefined }, { isOwner: true })[0]).toContain('avisa a tu proveedor.')
     })
     it('clonada y por vencer se muestran juntas', () => {
-        const rows = txt({ status: 'valid', valid: true, days_remaining: 5, notices: ['clone_suspected'] })
+        const rows = txt({ status: 'valid', valid: true, days_remaining: 5, notices: ['clone_suspected'] }, { isOwner: true })
         expect(rows).toHaveLength(2)
+    })
+    it('descartar un aviso menor no oculta la fila de clonado, que no se descarta', () => {
+        const st = { status: 'valid', valid: true, days_remaining: 5, notices: ['clone_suspected'] } as const
+        const { container } = render(<LicenseExpiryBanner state={make(st)} isOwner />)
+        fireEvent.click(screen.getByTitle('Descartar')) // solo hay un botón: el de la fila principal
+        const rows = Array.from(container.querySelectorAll('[role="alert"]')).map((n) => n.textContent ?? '')
+        expect(rows).toHaveLength(1)
+        expect(rows[0]).toContain('otro servidor')
+        expect(screen.queryByTitle('Descartar')).toBeNull()
     })
 })
 

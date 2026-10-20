@@ -60,7 +60,7 @@ export interface LicenseGateProps {
      * modal de una licencia vencida. Sin él no se muestra el botón. */
     onExport?: () => void
     /** El usuario actual es el dueño/superadmin. Los avisos de hub caído y de
-     * clonado son solo para él. Default true. */
+     * clonado son solo para él. Default false (un host que no informa el rol nunca los muestra). */
     isOwner?: boolean
     /** El host acepta enlaces de activación (acs_…) además de lic_…: cambia la
      * etiqueta y el ejemplo del campo. Default false (texto clásico). */
@@ -82,7 +82,7 @@ export function LicenseGate({
     branding,
     onManage,
     onExport,
-    isOwner = true,
+    isOwner = false,
     acceptsActivationLink = false,
     canActivate = true,
     readOnlyMessage,
