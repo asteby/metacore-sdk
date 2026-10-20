@@ -1,5 +1,11 @@
 # @asteby/metacore-lib
 
+## 0.8.0
+
+### Minor Changes
+
+- 4be706e: Nuevo módulo `@asteby/metacore-lib/money` (también exportado desde el índice): tipo `Money = { amount, currency_code }` (mismo contrato que `@asteby/storefront` y que el kernel), `CurrencySpec`, `RoundingMode` (`halfAwayFromZero` por defecto, `halfEven`, `towardZero`, `awayFromZero`, `floor`, `ceil`) y la clase inmutable `MoneyValue` sobre `bigint` con `parse`/`parseRound`, `add`, `sub`, `mulDecimal`, `allocate` por resto mayor (las partes suman el total), `roundCash`, `convert` (tasa = unidades de QUOTE por 1 de BASE), `toJSON` y `toString`; errores `CurrencyMismatchError`, `PrecisionError`, `OverflowError` e `InvalidMoneyError`. `inverseRate` (escala 12, `halfEven`), `currencySpec(code)` con la tabla ISO 4217 del kernel (las desconocidas caen a `Intl`) y `formatMoney(m, { locale, spec, display })`, que pasa el string decimal a `Intl.NumberFormat` sin `parseFloat` y con `minorUnits` decimales. Comparte con el kernel el archivo golden de vectores (verificado por sha256). `formatCurrency` no cambia.
+
 ## 0.7.0
 
 ### Minor Changes

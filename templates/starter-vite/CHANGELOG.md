@@ -1,5 +1,11 @@
 # @asteby/metacore-starter-vite
 
+## 0.1.322
+
+### Patch Changes
+
+- @asteby/metacore-auth@33.0.1
+
 ## 0.1.321
 
 ### Patch Changes

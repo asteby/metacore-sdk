@@ -1,5 +1,11 @@
 # @asteby/metacore-agent-workspace
 
+## 6.1.0
+
+### Minor Changes
+
+- 9134fa7: abyGuidance emite `ops:aby-guide-stopped` ({ guideId, stepIndex }) cuando el usuario descarta un tour en curso, para que el host registre un tour saltado. El fin de tour ya emitía `ops:aby-guide-completed`.
+
 ## 6.0.0
 
 ### Patch Changes

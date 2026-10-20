@@ -1,5 +1,13 @@
 # @asteby/metacore-fullstack-example
 
+## 0.1.341
+
+### Patch Changes
+
+- Updated dependencies [4be706e]
+  - @asteby/metacore-lib@0.8.0
+  - @asteby/metacore-auth@33.0.1
+
 ## 0.1.340
 
 ### Patch Changes
