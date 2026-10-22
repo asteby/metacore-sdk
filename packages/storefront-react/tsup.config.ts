@@ -7,6 +7,7 @@ export default defineConfig({
     cart: 'src/cart-drawer/index.ts',
     fitment: 'src/fitment/index.ts',
     payments: 'src/payments/index.ts',
+    'payments-server': 'src/payments/server.ts',
     promotions: 'src/promos/index.ts',
     ui: 'src/ui/index.ts',
   },

@@ -68,6 +68,17 @@
         "default": "./dist/payments.cjs"
       }
     },
+    "./payments/server": {
+      "import": {
+        "types": "./dist/payments-server.d.ts",
+        "default": "./dist/payments-server.js"
+      },
+      "require": {
+        "types": "./dist/payments-server.d.cts",
+        "default": "./dist/payments-server.cjs"
+      }
+    },
+    "./payments.css": "./dist/payments.css",
     "./promotions": {
       "import": {
         "types": "./dist/promotions.d.ts",

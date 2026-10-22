@@ -481,6 +481,43 @@ return Response.json(result)    // PaymentAttemptResult; 409/422/429 se devuelve
 - **Tema**: `--sf-pay-text`, `-text-muted`, `-background`, `-input-background`, `-primary`, `-primary-contrast`, `-error`, `-success`, `-outline`, `-radius` se leen al montar y se pasan al Brick; `--sf-pay-min-height` reserva el alto (sin saltos).
 - **Otro proveedor**: implementa `PaymentFormAdapter` (`load`, `mount → { collect, unmount }`) y pásalo en `adapter`/`adapters={{ stripe_elements: … }}`.
 
+### «Método de pago» híbrido (`PaymentMethodSection` + `/payments/server`)
+
+Lo que hace falta alrededor del Brick, listo para usar: filas por opción que publica OPS (tarjeta, efectivo, cuenta del proveedor, pagos sin tarjeta), tarjeta con el formulario seguro DENTRO de la página, efectivo con puntos de pago y ficha, y redirección para el resto. Sin JavaScript, o si el formulario no carga, todo cae al envío normal del formulario de la página (redirección). Textos, rutas, iconos y clases por props; el total es siempre `cart.cost.total` de OPS (nunca se suma ni se recalcula).
+
+```tsx
+// loader: filas desde GET payment-methods (la tienda oculta lo que no ofrece)
+import { buildPayChoices } from '@asteby/storefront-react/payments'
+const choices = buildPayChoices(payment.methods, { hide: ['manual'] })
+
+// componente, dentro del <form> de /pagar
+import '@asteby/storefront-react/payments.css'   // opcional: muestra el panel de la fila marcada sin JS
+<PaymentMethodSection
+  choices={choices} amount={cart.cost.total} scope={cart.id} formRef={formRef}
+  payUrl="/pagar/cobrar" statusUrl="/pagar/estado" nonce={nonce}
+  delivery={delivery} deliveryReady={delivery !== '' && !delivery.startsWith('ship:')}
+  syncDelivery={saveDeliveryAndReloadCart}     // guarda la entrega en el carrito de OPS y resuelve true al releer el total
+  onAmountChanged={revalidate} onDone={() => navigate('/pagar/gracias')}
+  rebuildHref="/carrito" messages={{ legend: 'Método de pago' }} icons={{ card: <CardIcon /> }}
+  classNames={{ radioLabel: '...', submit: 'btn-primary' }} />
+```
+
+```ts
+// servidor: dos rutas de recurso (POST JSON) y el efectivo del formulario
+import { createEmbeddedPayHandlers, paymentCspHeaders, paymentCspMode, paymentNonce } from '@asteby/storefront-react/payments/server'
+export const pay = createEmbeddedPayHandlers({
+  client, site, returnPath: '/pagar/gracias', readCartId, readSession, serializeSession,
+  validateFields, prepareCart, createDraft, settle, hide: ['manual'],
+})
+// action de /pagar/cobrar -> pay.pay(request); action de /pagar/estado -> pay.status(request)
+// efectivo (en la action de /pagar): const out = await pay.cash({ sf, request, cartId, fields, choice, before })
+```
+
+- La tienda aporta lo suyo por callbacks: cookies (`readSession`/`serializeSession`), qué campos exige (`validateFields`), cómo guarda contacto, dirección y entrega (`prepareCart`), el comprobante (`createDraft`) y cuándo queda cerrado el pedido (`settle`: añade las cookies y devuelve `true` si fue aprobado, en revisión o ficha).
+- El servidor decide qué se paga en la página: un `payment_choice` falsificado u oculto se rechaza (422), un punto de efectivo se arma de la lista del proveedor, el monto nunca viaja en `provider_data`, el reintento reutiliza el checkout y la llave de pago, hay límite por IP y validación de origen.
+- CSP solo para `/pagar`: `paymentCspHeaders([client], { mode: paymentCspMode(env.PAY_CSP, isProd), nonce: paymentNonce(), scriptHashes, imgHttps })` y `paymentNonceFromHeaders` para `ServerRouter`.
+- Accesibilidad: un `fieldset` con leyenda y radios nativos, avisos en `role="status"`/`alert`, botón de 44 px que explica su estado ocupado; pruebas con axe.
+
 ## Promociones y venta cruzada (`@asteby/storefront-react/promotions`)
 
 Mecanismos sin contenido: los textos y montos llegan como datos de OPS (`Cart.promotions`, `GET /storefront/promotions`, `carts.recommendations`).
@@ -566,7 +603,7 @@ La cookie, el formulario y el redirect son de la tienda; `safeRedirect` valida e
 | `defineSection`, `SectionRegistry`, `createSectionRegistry`, `Sections`, `resolveSectionProps`, `sectionJsonSchema` | Content sections |
 | `themeToCss`, `themeToCssVariables`, `ThemeStyle`, `themeFontsHref`, `tokenName` | SSR theme |
 | `ProductImage`, `ProductMockup`, `MockupProvider`, `createMockupRegistry`, `registerMockup`, `BUILTIN_MOCKUPS`, `MockupFrame`, `MockupText`, `TireMockup`, `PartMockup`, `SupplementMockup`, `GenericMockup` | Mockups de respaldo (subpath `/mockups`) |
-| `PaymentBrick`, `useEmbeddedPayment`, `VoucherCard`, `PaymentChallenge`, `createFetchTransport`, `mercadoPagoBricksAdapter`, `loadPaymentSdk`, `paymentCsp`, `readPaymentTheme` | Pago integrado (subpath `/payments`) |
+| `PaymentMethodSection`, `buildPayChoices`, `createEmbeddedPayHandlers` (`/payments/server`), `PaymentBrick`, `useEmbeddedPayment`, `VoucherCard`, `PaymentChallenge`, `createFetchTransport`, `mercadoPagoBricksAdapter`, `loadPaymentSdk`, `paymentCsp`, `readPaymentTheme` | Pago integrado (subpath `/payments`) |
 | `PromoPopup`, `CartProgressBars`, `PromoProgressBar`, `CrossSellModal`, `OrderNote`, `isExcludedPath`, `frequencyAllows`, `isCrawler` | Promociones y venta cruzada (subpath `/promotions`) |
 
 ## `@asteby/storefront-react/ui`

@@ -1,0 +1,118 @@
+import { describe, expect, it } from 'vitest'
+import type { CheckoutResult, PaymentClient, PaymentMethod } from '@asteby/storefront'
+import { buildPayChoices, cashProviderData, checkoutToAttempt, parseChoice, payErrorResponse, voucherRows } from './choices.js'
+
+const client: PaymentClient = { kind: 'fake', sdk_url: 'https://sdk.example.com/js', public_key: 'pk' }
+const points = [
+  { id: 'a', payment_method_id: 'store', payment_point: 'shop-1', label: 'Tienda 1', group: 'main' as const },
+  { id: 'b', payment_method_id: 'bank', label: 'Banco', group: 'more' as const },
+]
+const mp: PaymentMethod = {
+  key: 'prov',
+  kind: 'provider',
+  default: true,
+  client,
+  options: [
+    { key: 'card', redirect: false, max_installments: 6, label: ' Tarjeta ' },
+    { key: 'cash', redirect: false, points },
+    { key: 'wallet', redirect: true },
+    { key: 'credits', redirect: true },
+  ],
+}
+
+describe('buildPayChoices', () => {
+  it('unfolds options in server order and picks the first row of the default method', () => {
+    const r = buildPayChoices([mp])
+    expect(r.choices.map((c) => [c.value, c.mode])).toEqual([
+      ['prov|card', 'card'],
+      ['prov|cash', 'cash'],
+      ['prov|wallet', 'redirect'],
+      ['prov|credits', 'redirect'],
+    ])
+    expect(r.choices[0]).toMatchObject({ label: 'Tarjeta', maxInstallments: 6 })
+    expect(r.choices[1]!.points).toHaveLength(2)
+    expect(r.cardClient).toBe(client)
+    expect(r.defaultValue).toBe('prov|card')
+  })
+  it('a card without client or flagged redirect is paid by redirect', () => {
+    const noClient = buildPayChoices([{ ...mp, client: undefined }])
+    expect(noClient.cardClient).toBeNull()
+    expect(noClient.choices[0]!.mode).toBe('redirect')
+    const flagged = buildPayChoices([{ ...mp, options: [{ key: 'card', redirect: true }] }])
+    expect(flagged.choices[0]!.mode).toBe('redirect')
+  })
+  it('a method without options is a plain row and hidden methods never show', () => {
+    const manual: PaymentMethod = { key: 'manual', kind: 'builtin', default: false }
+    const r = buildPayChoices([manual, mp], { hide: ['manual'] })
+    expect(r.choices.some((c) => c.methodKey === 'manual')).toBe(false)
+    const plain = buildPayChoices([manual])
+    expect(plain.choices).toEqual([expect.objectContaining({ value: 'manual', mode: 'plain', option: null })])
+    expect(plain.defaultValue).toBe('manual')
+    expect(buildPayChoices([]).defaultValue).toBeNull()
+  })
+  it('keeps the payment points only for cash', () => {
+    expect(buildPayChoices([mp]).choices.filter((c) => c.points.length).map((c) => c.option)).toEqual(['cash'])
+  })
+})
+
+describe('parseChoice', () => {
+  it('reads method and option, rejects unknown options', () => {
+    expect(parseChoice('prov|card')).toEqual({ methodKey: 'prov', option: 'card' })
+    expect(parseChoice('manual')).toEqual({ methodKey: 'manual', option: null })
+    expect(parseChoice('prov|nope')).toBeNull()
+    expect(parseChoice('  ')).toBeNull()
+    expect(parseChoice(undefined)).toBeNull()
+  })
+})
+
+describe('cashProviderData', () => {
+  it('builds provider_data from the server list, never from the browser', () => {
+    expect(cashProviderData(points, 'a')).toEqual({ payment_method_id: 'store', payment_point: 'shop-1' })
+    expect(cashProviderData(points, 'b')).toEqual({ payment_method_id: 'bank' })
+    expect(cashProviderData(points, undefined)).toEqual({ payment_method_id: 'store', payment_point: 'shop-1' })
+    expect(cashProviderData(points, 'forged')).toBeNull()
+    expect(cashProviderData([], undefined)).toBeNull()
+  })
+})
+
+const total = { amount: '10.00', currency_code: 'MXN' }
+const result = (status: string, payment: Record<string, unknown> = {}): CheckoutResult =>
+  ({ order: { id: 'o', number: null }, checkout: { id: 'c', status, total }, payment: { provider: 'p', status: 'pending', ...payment } }) as unknown as CheckoutResult
+
+describe('checkoutToAttempt', () => {
+  it('translates server states and never invents an approval', () => {
+    expect(checkoutToAttempt(result('paid')).payment).toMatchObject({ status: 'paid', outcome: 'approved' })
+    expect(checkoutToAttempt(result('converted')).payment.status).toBe('paid')
+    expect(checkoutToAttempt(result('canceled')).payment.status).toBe('cancelled')
+    expect(checkoutToAttempt(result('expired')).payment.status).toBe('expired')
+    expect(checkoutToAttempt(result('failed')).payment).toMatchObject({ status: 'failed', outcome: 'rejected', decline_code: 'declined' })
+    expect(checkoutToAttempt(result('pending')).payment).toMatchObject({ status: 'pending', outcome: 'pending' })
+    expect(checkoutToAttempt(result('weird')).payment.outcome).toBe('pending')
+  })
+  it('keeps a pending challenge as a challenge', () => {
+    const action = { type: 'challenge', url: 'https://bank.example.com/3ds' }
+    expect(checkoutToAttempt(result('pending', { action })).payment).toMatchObject({ status: 'requires_action', outcome: 'challenge' })
+  })
+})
+
+describe('payErrorResponse', () => {
+  it('keeps the codes the SDK reads', () => {
+    expect(payErrorResponse({ status: 422, field: 'expected_total', message: 'm' })).toMatchObject({ status: 422, body: { error: { code: 'price_mismatch' } } })
+    expect(payErrorResponse({ status: 409, field: 'payment_in_progress' }).body.error.code).toBe('payment_in_progress')
+    expect(payErrorResponse({ status: 429, code: 'x' }).body.error.code).toBe('too_many_attempts')
+    expect(payErrorResponse({ status: 500, code: 'boom', details: { a: 1 } }).body.error).toEqual({ code: 'boom', message: '', details: { a: 1 } })
+    expect(payErrorResponse({}).status).toBe(503)
+  })
+})
+
+describe('voucherRows', () => {
+  const labels = { point: 'Punto', reference: 'Ref', clabe: 'CLABE', barcode: 'Barras', expires: 'Vence' }
+  it('bounds values and prints the deadline in UTC', () => {
+    const rows = voucherRows({ payment_point: 'Tienda', reference: 'R'.repeat(200), expires_at: '2026-10-30T18:00:00Z' } as never, labels, 'es-MX')
+    expect(rows[0]).toEqual(['Punto', 'Tienda'])
+    expect(rows[1]![1]).toHaveLength(80)
+    expect(rows[2]![0]).toBe('Vence')
+    expect(rows[2]![1]).toContain('UTC')
+    expect(voucherRows(null, labels, 'es-MX')).toEqual([])
+  })
+})

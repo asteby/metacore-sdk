@@ -7,6 +7,10 @@ export type PaymentCspOptions = {
   extra?: { script?: string[]; frame?: string[]; connect?: string[]; img?: string[]; form?: string[] }
   /** `report-uri` / `report-to` target for the report-only rollout. */
   reportUri?: string
+  /** Inline scripts allowed by hash (`'sha256-…'`), e.g. a theme bootstrap that runs before paint. */
+  scriptHashes?: string[]
+  /** Allow any https image source (product photos from a CDN). */
+  imgHttps?: boolean
 }
 
 /** One origin source: `https://host`, `https://*.host`, optional port. Anything else (`;`, spaces, `'unsafe-eval'`) is dropped. */
@@ -40,10 +44,10 @@ export function paymentCsp(clients: readonly (PaymentClient | null | undefined)[
   const dir = (name: string, values: string[]) => `${name} ${values.join(' ')}`
   const parts = [
     "default-src 'self'",
-    dir('script-src', ["'self'", ...(nonce ? [`'nonce-${nonce}'`] : []), ...origins(sdkOrigins, ...pick('script'), options.extra?.script)]),
+    dir('script-src', ["'self'", ...(options.scriptHashes ?? []).filter((h) => /^'sha(256|384|512)-[A-Za-z0-9+/=]+'$/.test(h)), ...(nonce ? [`'nonce-${nonce}'`] : []), ...origins(sdkOrigins, ...pick('script'), options.extra?.script)]),
     dir('frame-src', origins(...pick('frame'), options.extra?.frame).length ? origins(...pick('frame'), options.extra?.frame) : ["'none'"]),
     dir('connect-src', ["'self'", ...origins(...pick('connect'), options.extra?.connect)]),
-    dir('img-src', ["'self'", 'data:', ...origins(...pick('img'), options.extra?.img)]),
+    dir('img-src', ["'self'", 'data:', ...(options.imgHttps ? ['https:'] : []), ...origins(...pick('img'), options.extra?.img)]),
     "style-src 'self' 'unsafe-inline'",
     dir('form-action', ["'self'", ...origins(...pick('form'), options.extra?.form)]),
     "frame-ancestors 'none'",
@@ -57,4 +61,37 @@ export function paymentCsp(clients: readonly (PaymentClient | null | undefined)[
 /** `Content-Security-Policy` or, during the rollout week, `Content-Security-Policy-Report-Only`. */
 export function paymentCspHeaderName(reportOnly: boolean): string {
   return reportOnly ? 'Content-Security-Policy-Report-Only' : 'Content-Security-Policy'
+}
+
+export type PaymentCspMode = 'off' | 'report-only' | 'enforce'
+
+/** `PAYMENT_CSP`-style value: `off`, `report-only` or `enforce`. Unset: report-only in production, off elsewhere (dev servers inject scripts). */
+export function paymentCspMode(value: string | null | undefined, production: boolean): PaymentCspMode {
+  const raw = (value ?? '').trim().toLowerCase()
+  if (raw === 'off' || raw === 'report-only' || raw === 'enforce') return raw
+  return production ? 'report-only' : 'off'
+}
+
+/** Fresh per-request nonce (128 bits, base64). Works in Node, edge and browsers. */
+export function paymentNonce(): string {
+  const bytes = new Uint8Array(16)
+  crypto.getRandomValues(bytes)
+  let bin = ''
+  for (const b of bytes) bin += String.fromCharCode(b)
+  return btoa(bin)
+}
+
+/** Header ready for the response (`{}` when `off`): policy from the providers' `client.csp`, never the whole site. */
+export function paymentCspHeaders(
+  clients: readonly (PaymentClient | null | undefined)[],
+  options: PaymentCspOptions & { mode: PaymentCspMode },
+): Record<string, string> {
+  if (options.mode === 'off') return {}
+  return { [paymentCspHeaderName(options.mode === 'report-only')]: paymentCsp(clients, options) }
+}
+
+/** The nonce the route left in the CSP header, to hand to `ServerRouter` / `<Scripts>`. */
+export function paymentNonceFromHeaders(headers: Headers): string | undefined {
+  const csp = headers.get('Content-Security-Policy') ?? headers.get('Content-Security-Policy-Report-Only') ?? ''
+  return /'nonce-([A-Za-z0-9+/=_-]+)'/.exec(csp)?.[1]
 }

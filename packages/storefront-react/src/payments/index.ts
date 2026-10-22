@@ -28,7 +28,15 @@ export type { MercadoPagoAdapterOptions, MercadoPagoCtor } from './mercadopago.j
 export { loadPaymentSdk, resetPaymentSdkCache } from './sdk-loader.js'
 export type { LoadScriptOptions } from './sdk-loader.js'
 
-export { paymentCsp, paymentCspHeaderName } from './csp.js'
-export type { PaymentCspOptions } from './csp.js'
+export { paymentCsp, paymentCspHeaderName, paymentCspHeaders, paymentCspMode, paymentNonce, paymentNonceFromHeaders } from './csp.js'
+export type { PaymentCspMode, PaymentCspOptions } from './csp.js'
+
+export { PAYMENT_CHOICE_FIELD, CASH_POINT_FIELD, PaymentMethodSection, formFields } from './payment-method.js'
+export type { PaymentMethodClassNames, PaymentMethodSectionProps, PaymentMethodTestIds } from './payment-method.js'
+export { paymentMethodMessages } from './payment-method.messages.js'
+export type { PaymentMethodMessages } from './payment-method.messages.js'
+
+export { buildPayChoices, cashProviderData, checkoutToAttempt, choiceValue, parseChoice, payErrorResponse, voucherRows } from './choices.js'
+export type { BuildPayChoicesOptions, PayChoice, PayChoices, PayErrorBody, VoucherRowLabels } from './choices.js'
 
 export { PAYMENT_THEME_TOKENS, readPaymentTheme } from './theme.js'

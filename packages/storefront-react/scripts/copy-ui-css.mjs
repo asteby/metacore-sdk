@@ -9,3 +9,6 @@ writeFileSync(new URL('../dist/ui.css', import.meta.url), `${scrollbars}\n${read
 
 // Hoja por omisión del cajón del carrito (subpath /cart).
 writeFileSync(new URL('../dist/cart.css', import.meta.url), readFileSync(new URL('../src/cart-drawer/cart-drawer.css', import.meta.url), 'utf8'))
+
+// Hoja por omisión de la sección «Método de pago» (subpath /payments).
+writeFileSync(new URL('../dist/payments.css', import.meta.url), readFileSync(new URL('../src/payments/payments.css', import.meta.url), 'utf8'))
