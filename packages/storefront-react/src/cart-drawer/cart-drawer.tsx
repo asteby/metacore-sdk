@@ -62,7 +62,8 @@ export type CartDrawerLinkProps = { href: string; className?: string | undefined
 export type CartDrawerSlot =
   | 'dialog' | 'panel' | 'header' | 'title' | 'close' | 'empty' | 'body' | 'shipping' | 'bar' | 'barFill' | 'lines' | 'line'
   | 'image' | 'lineTitle' | 'variant' | 'price' | 'qty' | 'qtyButton' | 'qtyValue' | 'remove' | 'upsell' | 'footer' | 'subtotal'
-  | 'note' | 'actions' | 'checkout' | 'viewCart'
+  | 'note' | 'actions' | 'checkout' | 'viewCart' | 'browse' | 'emptyTitle' | 'emptyHint' | 'shippingMessage' | 'lineMain'
+  | 'lineHead' | 'lineText' | 'controls' | 'upsellTitle' | 'subtotalLabel' | 'subtotalValue'
 
 export type CartDrawerIcons = { close?: ReactNode; decrease?: ReactNode; increase?: ReactNode; shipping?: ReactNode; shippingReached?: ReactNode }
 
@@ -172,16 +173,16 @@ export function CartDrawer(props: CartDrawerProps) {
 
         {empty ? (
           <div className={cx.empty} data-sf-cart-empty="">
-            <p data-sf-cart-empty-title="">{labels.empty}</p>
-            {labels.emptyHint ? <p data-sf-cart-empty-hint="">{labels.emptyHint}</p> : null}
-            {paths.browse && labels.browse ? link({ href: paths.browse, className: cx.viewCart, children: labels.browse, onClick: close }) : null}
+            <p className={cx.emptyTitle} data-sf-cart-empty-title="">{labels.empty}</p>
+            {labels.emptyHint ? <p className={cx.emptyHint} data-sf-cart-empty-hint="">{labels.emptyHint}</p> : null}
+            {paths.browse && labels.browse ? link({ href: paths.browse, className: cx.browse, children: labels.browse, onClick: close }) : null}
           </div>
         ) : (
           <>
             <div className={cx.body} data-sf-cart-body="">
               {shipping ? (
                 <div className={cx.shipping} data-sf-cart-shipping="" data-reached={shipping.reached || undefined}>
-                  <p>
+                  <p className={cx.shippingMessage}>
                     {shipping.reached ? icons?.shippingReached : icons?.shipping}
                     {shipping.message}
                   </p>
@@ -209,7 +210,7 @@ export function CartDrawer(props: CartDrawerProps) {
 
               {upsell ? (
                 <section className={cx.upsell} data-sf-cart-upsell="" aria-labelledby={upsellTitle ? upsellId : undefined}>
-                  {upsellTitle ? <h3 id={upsellId}>{upsellTitle}</h3> : null}
+                  {upsellTitle ? <h3 id={upsellId} className={cx.upsellTitle}>{upsellTitle}</h3> : null}
                   {upsell}
                 </section>
               ) : null}
@@ -217,8 +218,8 @@ export function CartDrawer(props: CartDrawerProps) {
 
             <div className={cx.footer} data-sf-cart-footer="">
               <div className={cx.subtotal} data-sf-cart-subtotal="">
-                <span>{labels.subtotal}</span>
-                <span data-sf-cart-subtotal-value="">{cart ? money(cart.cost.subtotal) : null}</span>
+                <span className={cx.subtotalLabel}>{labels.subtotal}</span>
+                <span className={cx.subtotalValue} data-sf-cart-subtotal-value="">{cart ? money(cart.cost.subtotal) : null}</span>
               </div>
               {labels.note ? <p className={cx.note} data-sf-cart-note="">{labels.note}</p> : null}
               <div className={cx.actions} data-sf-cart-actions="">
@@ -264,7 +265,7 @@ function DrawerLine({
   const imageNode = <span className={cx.image} data-sf-cart-image="">{image}</span>
   const price = <span className={cx.price} data-sf-cart-price="">{money(line.cost.total)}</span>
   const controls = (
-    <div data-sf-cart-controls="">
+    <div className={cx.controls} data-sf-cart-controls="">
       <Form method="post" action={paths.cart} className={cx.qty} data-sf-cart-qty="">
         <input type="hidden" name={f.intentField} value={f.updateIntent} />
         <input type="hidden" name={f.lineField} value={line.id} />
@@ -289,9 +290,9 @@ function DrawerLine({
   return (
     <li className={cx.line} data-sf-cart-line="">
       {imageNode}
-      <div data-sf-cart-line-main="">
-        <div data-sf-cart-line-head="">
-          <div data-sf-cart-line-text="">
+      <div className={cx.lineMain} data-sf-cart-line-main="">
+        <div className={cx.lineHead} data-sf-cart-line-head="">
+          <div className={cx.lineText} data-sf-cart-line-text="">
             {href ? link({ href, className: cx.lineTitle, children: title, onClick: close }) : <span className={cx.lineTitle} data-sf-cart-line-title="">{title}</span>}
             {!isDefault(merch.title) ? <p className={cx.variant} data-sf-cart-variant="">{merch.title}</p> : null}
           </div>
