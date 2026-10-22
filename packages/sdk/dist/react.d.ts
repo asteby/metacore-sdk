@@ -20,7 +20,6 @@
  */
 import { type ReactNode } from "react";
 import type { MarketplaceClient } from "./client.js";
-import { type CacheEpochPushClient } from "./cache-epoch.js";
 import type { Registry } from "./registry.js";
 import type { LegacyManifest as Manifest, NavGroup } from "./types.js";
 /**
@@ -66,16 +65,6 @@ export interface MetacoreProviderProps {
     cacheScope?: string;
 }
 export declare function MetacoreProvider({ client, registry, children, cacheScope }: MetacoreProviderProps): import("react").JSX.Element;
-/**
- * Feed the cache epoch from the host's WebSocket client (`CACHE_EPOCH_CHANGED`
- * frame). Mount it once next to <MetacoreProvider>; the provider (and any other
- * `onCacheEpochChange` subscriber) then revalidates the moment the backend
- * flushes its caches, with no request needed.
- *
- *   const ws = useWebSocket()
- *   useCacheEpochPush(ws)
- */
-export declare function useCacheEpochPush(client: CacheEpochPushClient | undefined | null): void;
 export declare function useMetacore(): Ctx;
 export declare function useAddonRoutes(): import("./registry.js").RouteContribution[];
 export declare function useNavigation(): NavGroup[];
