@@ -472,6 +472,8 @@ export interface ColumnDefinition {
         // Declarative pro cell renderers (resolved via `cellStyle ?? type`).
         | 'url'
         | 'link'
+        // "hace X" with optional freshness tone (display_config.fresh_within/stale_after).
+        | 'relative_date'
         | 'email'
         | 'currency'
         | 'percent'

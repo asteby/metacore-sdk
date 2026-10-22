@@ -38,6 +38,7 @@ import {
     relationChipStyles,
 } from '@asteby/metacore-ui/lib'
 import { Progress } from './dialogs/_primitives'
+import { RelativeDateCell, brandAvatarColors } from './relative-date'
 import { useSystemActor } from './org-runtime-context'
 import { AuthorshipCell, hasSpecialAuthorship } from './provenance'
 import { humanizeToken, resolveColumnOptions, translateMetadataLabel } from './dynamic-columns-helpers'
@@ -673,7 +674,13 @@ export const resolveAvatarSrc = (
     apiBaseUrl = '',
 ): string | undefined => {
     let raw: string | undefined
-    if (col.key.includes('.')) {
+    // Explicit per-row logo column (`display_config.image_field`) wins.
+    const imageField = styleCfg(col, 'image_field', 'imageField')
+    if (imageField) {
+        const fromField = getNestedValue(row, String(imageField))
+        if (fromField !== undefined && fromField !== null && fromField !== '') raw = String(fromField)
+    }
+    if (!raw && col.key.includes('.')) {
         const parentPath = col.key.split('.').slice(0, -1).join('.')
         const sibling =
             getNestedValue(row, `${parentPath}.avatar`) ||
@@ -857,15 +864,25 @@ const AvatarCell: React.FC<{
     desc?: string
     avatarSrc?: string
     getImageUrl: (path: string) => string
-}> = ({ name, desc, avatarSrc, getImageUrl }) => (
+    /** `display_config.shape`: rounded (default, logos) | circle (people). */
+    shape?: 'rounded' | 'circle'
+    /** Per-row brand colour (hex) for the initials fallback. */
+    color?: string
+}> = ({ name, desc, avatarSrc, getImageUrl, shape, color }) => {
+    const radius = shape === 'circle' ? 'rounded-full' : 'rounded-lg'
+    const brand = brandAvatarColors(color)
+    return (
     <div className="flex items-center gap-3 min-w-0">
-        <Avatar className="h-8 w-8 rounded-lg ring-1 ring-border/50">
+        <Avatar className={`h-8 w-8 ${radius} ring-1 ring-border/50`}>
             <AvatarImage
                 src={avatarSrc ? getImageUrl(avatarSrc) : ''}
                 alt={name}
                 className="object-cover"
             />
-            <AvatarFallback className="text-[10px] font-bold bg-primary/5 text-primary rounded-lg">
+            <AvatarFallback
+                className={`text-[10px] font-bold ${radius} ${brand ? '' : 'bg-primary/5 text-primary'}`}
+                style={brand ? { backgroundColor: brand.background, color: brand.color } : undefined}
+            >
                 {getInitials(name)}
             </AvatarFallback>
         </Avatar>
@@ -880,7 +897,8 @@ const AvatarCell: React.FC<{
             )}
         </div>
     </div>
-)
+    )
+}
 
 /**
  * Avatar cell for the system actor: the OrgRuntimeProvider `systemActor`
@@ -1249,7 +1267,17 @@ export function makeDefaultGetDynamicColumns(
                             const name =
                                 resolvedName ||
                                 resolveMissingActorLabel(renderAs, col.key, namePath, t)
-                            const desc = getNestedValue(row.original, col.description || '')
+                            const subtitleField = styleCfg(col, 'subtitle_field', 'subtitleField')
+                            const desc = getNestedValue(
+                                row.original,
+                                subtitleField ? String(subtitleField) : col.description || '',
+                            )
+                            const colorField = styleCfg(col, 'color_field', 'colorField')
+                            const brandColor = colorField
+                                ? getNestedValue(row.original, String(colorField))
+                                : undefined
+                            const avatarShape =
+                                styleCfg(col, 'shape') === 'circle' ? 'circle' : 'rounded'
 
                             // Provenance (kernel `provenance`): a person with
                             // the agent, the agent alone, or the system /
@@ -1279,6 +1307,20 @@ export function makeDefaultGetDynamicColumns(
                                     desc={desc ? String(desc) : undefined}
                                     avatarSrc={avatarSrc}
                                     getImageUrl={getImageUrl}
+                                    shape={avatarShape}
+                                    color={brandColor ? String(brandColor) : undefined}
+                                />
+                            )
+                        }
+
+                        case 'relative_date': {
+                            const fmt = formatDateCell(value, 'datetime', dateLocale, timeZone)
+                            return (
+                                <RelativeDateCell
+                                    value={value}
+                                    locale={dateLocale}
+                                    config={col.styleConfig}
+                                    absolute={fmt ? fmt.title ?? fmt.display : undefined}
                                 />
                             )
                         }
