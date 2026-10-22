@@ -27,6 +27,17 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./cart": {
+      "import": {
+        "types": "./dist/cart.d.ts",
+        "default": "./dist/cart.js"
+      },
+      "require": {
+        "types": "./dist/cart.d.cts",
+        "default": "./dist/cart.cjs"
+      }
+    },
+    "./cart.css": "./dist/cart.css",
     "./fitment": {
       "import": {
         "types": "./dist/fitment.d.ts",

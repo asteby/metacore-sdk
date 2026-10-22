@@ -503,6 +503,39 @@ import { CartProgressBars, CrossSellModal, OrderNote, PromoPopup } from '@asteby
 - `OrderNote`: `<textarea>` con etiqueta, 1000 caracteres, guardado con *debounce* (800 ms) y al salir del campo; sin JS es un `<form method="post">` con botón «Guardar nota».
 - Funciones puras testeables: `isExcludedPath`, `frequencyAllows`, `isCrawler`, `withinWindow`, `resolveTrigger`, `safeInternalPath`.
 
+## Cajón del carrito (`@asteby/storefront-react/cart`)
+
+Cajón lateral derecho "Tu carrito (N)" que se abre al agregar. Subpath opcional, sin textos, rutas, moneda, iconos ni marca fijos: todo entra por props. Muestra `cart.cost` y los totales de línea de OPS; no recalcula nada. Muta el carrito con la acción de ruta que la tienda ya tiene (formularios `POST` nativos que funcionan sin JavaScript; con `useLineForm` se mejoran con un fetcher).
+
+```tsx
+import { CartDrawer, openCartDrawer, handleCartLinkClick, useOpenCartDrawerWhenDone } from '@asteby/storefront-react/cart'
+import '@asteby/storefront-react/cart.css' // opcional: usa --background, --card, --border, --primary...
+
+// root.tsx, una sola vez
+<CartDrawer
+  cart={cart}
+  labels={{ title: t.cart.yourCart, close: t.cart.close, empty: t.cart.empty, subtotal: t.cart.subtotal, note: t.cart.calcAtCheckout,
+            checkout: t.cart.checkout, viewCart: t.cart.viewCart, remove: t.cart.remove, increase: t.add.increase, decrease: t.add.decrease }}
+  paths={{ cart: paths.cart(), checkout: paths.checkout(), browse: paths.collections(), product: (h, v) => paths.product(h, v) }}
+  shipping={free && { message: '...', percent: free.progress, reached: free.reached, progressLabel: '...' }}  // calculado con lo que manda OPS
+  upsell={<Suggestions />} upsellTitle={t.cart.suggestions}
+  renderMoney={(m) => <Money data={m} />}
+  renderLink={({ href, ...p }) => <Link to={href} {...p} />}   // navegación del router
+  useLineForm={() => { const f = useFetcher(); return { Form: f.Form, formData: f.formData } }}  // opcional, optimista
+/>
+
+// Abrir tras agregar: busy = hay un agregado en vuelo
+useOpenCartDrawerWhenDone(fetchers.some(isAdd), { skip: silent })
+// Enlace de cabecera: href="/carrito" funciona sin JS; con JS abre el cajón
+<a href={paths.cart()} onClick={handleCartLinkClick}>Mi carrito</a>
+```
+
+- `openCartDrawer()`, `closeCartDrawer()`, `toggleCartDrawer()`, `isCartDrawerOpen()` y el hook `useCartDrawer()` (`open`, `openDrawer`, `closeDrawer`, `toggle`).
+- `form` ajusta el contrato de la acción (por omisión `intent=update|remove`, `line_id`, `quantity`).
+- Accesibilidad: `<dialog>` modal con `role="dialog"` y `aria-modal`, foco atrapado y devuelto al abridor, Esc, clic fuera y botón de cierre, el scroll del fondo se bloquea, `prefers-reduced-motion` respetado en `cart.css`.
+- Estilos: `cart.css` (CSS plano con los tokens de la tienda) y/o `classNames` por pieza (Tailwind). Cada pieza lleva `data-sf-cart-*`.
+- `renderLine`, `renderImage`, `icons`, `notice` y `isDefaultVariantTitle` cubren las variaciones de cada tienda.
+
 ## Compatibilidad de vehículos (`@asteby/storefront-react/fitment`)
 
 Módulo opcional y sin interfaz para tiendas de refacciones: catálogo marca → modelo → año → motor, clave de vehículo, opciones en cascada del selector y estado de compatibilidad de cada pieza. No trae textos ni marcas: los prefijos de etiqueta, el atributo de la tabla de compatibilidad y las grafías del backend se inyectan con `fitmentConfig` / `parseCatalog`.
