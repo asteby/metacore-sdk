@@ -16,7 +16,7 @@ import { createContext, useContext, useEffect, useId, useRef, useState } from 'r
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { Cable, Check, CheckCircle2, Loader2, Plug, RefreshCw, Settings, XCircle } from 'lucide-react'
+import { AlertCircle, Cable, Check, Link2, Loader2, RefreshCw, Settings } from 'lucide-react'
 import {
   Badge,
   Button,
@@ -40,6 +40,17 @@ import { useApi, type ApiClient } from '../api-context'
 import { evaluateVisibleWhen, getVisibleWhen } from '../dynamic-form-schema'
 import type { VisibleWhen } from '../types'
 import { useSetupT } from './messages'
+import { StepStatusBadge } from './step-status-badge'
+import { ConnectorBlocks, HelpText } from './connector-blocks'
+import {
+  buildWizardSteps,
+  errorMessage,
+  hasExplicitTest,
+  normalizeBlockResult,
+  stepStatus,
+  type BlockResult,
+  type ConnectorFormBlock,
+} from './connector-blocks-model'
 import {
   isSecretCredential,
   missingRequired,
@@ -91,6 +102,8 @@ export interface ConnectorFormLayoutSection {
   key: string
   title?: string // i18n key
   description?: string // i18n key
+  /** Setup blocks (webhook_url / instructions / action), host-filled. */
+  blocks?: ConnectorFormBlock[]
 }
 export interface ConnectorFormLayout {
   mode?: 'sections' | 'steps'
@@ -154,7 +167,17 @@ export interface AddonConfigSurfaceProps {
   expectedOptionKinds?: Record<string, string>
   /** Title name; default `manifest.display_name ?? manifest.name`. */
   displayName?: string
+  /**
+   * OAuth connectors (auth != "token") have no credential form: the surface
+   * shows the connection state and a "Conectar cuenta" button that calls this
+   * (the host starts its OAuth flow). Absent → no button.
+   */
+  onConnectOAuth?: (connector: ConnectorEntry) => void
 }
+
+/** Key of the implicit "Probar conexión" block (connector.test_export). */
+const TEST_BLOCK_KEY = '__test_connection'
+const SYNC_BLOCK_KEY = '__sync'
 
 // ─── Connector credential field (reusable render) ───────────────────────────
 // One connector credential field: label (i18n) + control (select|password|text)
@@ -287,7 +310,7 @@ function ConnectorCredentialFieldControl({
           {warning}
         </p>
       ) : null}
-      {help ? <p className='text-xs text-muted-foreground'>{help}</p> : null}
+      {help ? <HelpText text={help} /> : null}
     </div>
   )
 }
@@ -465,6 +488,7 @@ export function AddonConfigSurface({
   client,
   expectedOptionKinds = NO_OPTION_KINDS,
   displayName,
+  onConnectOAuth,
 }: AddonConfigSurfaceProps) {
   const idPrefix = useId()
   const { t, i18n } = useTranslation()
@@ -498,8 +522,15 @@ export function AddonConfigSurface({
   const [formError, setFormError] = useState<string | null>(null)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const errorRef = useRef<HTMLDivElement>(null)
+  // Results of the step actions (by block key) and whether the operator typed
+  // credentials not saved yet (an action tests what is STORED: it saves first).
+  const [blockResults, setBlockResults] = useState<Record<string, BlockResult | undefined>>({})
+  const [credDirty, setCredDirty] = useState(false)
+  const stepHeadingRef = useRef<HTMLHeadingElement>(null)
+  const stepMoved = useRef(false)
   const setCred = (key: string, val: string) => {
     setCredValues((v) => ({ ...v, [key]: val }))
+    setCredDirty(true)
     if (fieldErrors[key]) {
       setFieldErrors((e) => {
         const { [key]: _drop, ...rest } = e
@@ -550,8 +581,11 @@ export function AddonConfigSurface({
     }
     setCredValues(seed)
     setCurrentStep(0)
+    stepMoved.current = false
     setFormError(null)
     setFieldErrors({})
+    setBlockResults({})
+    setCredDirty(false)
     if (!canManageIssuer || !connector?.provider || credFields.length === 0) return
     let cancelled = false
     api
@@ -617,11 +651,19 @@ export function AddonConfigSurface({
     const keys = [
       ...credFields.flatMap((f) => [f.label, f.description]),
       ...layoutSections.flatMap((sec) => [sec.title, sec.description]),
+      ...layoutSections.flatMap((sec) => (sec.blocks ?? []).flatMap((b) => [b.title, b.description, b.label])),
     ].filter((k): k is string => !!k)
     if (keys.length === 0 || keys.every((k) => i18n.exists(k))) return
     void ensureAddonBundle?.(connector.addon_key, i18n)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, connector?.addon_key, credFields.length])
+
+  // Section/step help: an i18n key or a literal sentence (never a raw key).
+  const addonText = (key?: string) => {
+    if (!key) return ''
+    const out = textOrFallback(t(key, { defaultValue: '' }), key, '')
+    return out || (/\s/.test(key) ? key : '')
+  }
 
   const credLabel = (f: ConnectorCredentialField) => {
     const fallback = humanizeKey(f.key)
@@ -666,6 +708,7 @@ export function AddonConfigSurface({
     onSuccess: () => {
       setFormError(null)
       setFieldErrors({})
+      setCredDirty(false)
       notify.success(st('installed_addons.config_saved'))
       onOpenChange(false)
       onSaved?.()
@@ -698,8 +741,9 @@ export function AddonConfigSurface({
     }
     const sectionKey = credFields.find((f) => f.key === first)?.section
     if (sectionKey) {
-      const idx = layoutSections.findIndex((sec) => sec.key === sectionKey)
-      if (idx >= 0) setCurrentStep(idx)
+      // Index among the WIZARD steps (sections without fields/blocks are not steps).
+      const idx = wizardSteps.findIndex((sec) => sec.key === sectionKey)
+      if (idx >= 0) goToStep(idx)
     }
     window.setTimeout(() => {
       const el = document.getElementById(`${idPrefix}-cred-${first}`)
@@ -735,68 +779,78 @@ export function AddonConfigSurface({
     saveMutation.mutate()
   }
 
-  // "Probar conexión": runs the connector's test_export health-check against the
-  // SAVED credentials (connector_get reads what's stored), so it validates a
-  // real round-trip to the provider without saving a stamp/order.
-  const testMutation = useMutation({
-    mutationFn: async () => {
-      const res = await api.post(`/integrations/${connector?.provider}/test`, {})
-      return res.data?.data as { ok?: boolean; message?: string } | undefined
-    },
-    onSuccess: (data) => {
-      if (data?.ok) {
-        notify.success(
-          data.message ||
-            st('installed_addons.test_ok', { defaultValue: 'Conexión válida' }),
-        )
-      } else {
-        notify.error(
-          data?.message ||
-            st('installed_addons.test_failed', { defaultValue: 'No se pudo conectar' }),
-        )
-      }
-    },
-    onError: (err: any) =>
-      notify.error(err.response?.data?.message || st('installed_addons.settings_error')),
-  })
+  // Saves typed-but-unsaved credentials before an action runs: actions (and
+  // the connector test) read the STORED credentials, so testing what is on
+  // screen requires persisting it first. Returns an error message, or null.
+  const persistCredsIfDirty = async (): Promise<string | null> => {
+    if (!credDirty || !connector || !canManageIssuer) return null
+    const miss = missingRequired(credFields, credValues, !!connector.connected)
+    if (miss.length > 0) {
+      const errs: Record<string, string> = {}
+      for (const k of miss) errs[k] = st('installed_addons.field_required')
+      setFieldErrors(errs)
+      return st('installed_addons.missing_fields', {
+        fields: miss.map((k) => credLabel(credFields.find((f) => f.key === k)!)).join(', '),
+      })
+    }
+    const payload: Record<string, string> = {}
+    for (const [k, v] of Object.entries(credValues)) {
+      if (v != null && v !== '') payload[k] = v
+    }
+    await api.post(`/integrations/${connector.provider}`, payload)
+    setCredDirty(false)
+    onSaved?.()
+    return null
+  }
+
+  // Runs a step action: the implicit connection test (connector.test_export)
+  // or a declared action block (host route /blocks/:key/run). The result is
+  // shown inline (aria-live) with retry, never as a toast that disappears.
+  const runAction = async (block: ConnectorFormBlock): Promise<BlockResult> => {
+    const fail = st('blocks.failed')
+    try {
+      const pre = await persistCredsIfDirty()
+      if (pre) return { status: 'error', message: pre, details: [] }
+      if (block.key === SYNC_BLOCK_KEY) return await runSync()
+      const url =
+        block.key === TEST_BLOCK_KEY
+          ? `/integrations/${connector?.provider}/test`
+          : `/integrations/${connector?.provider}/blocks/${encodeURIComponent(block.key)}/run`
+      const res = await api.post(url, {})
+      return normalizeBlockResult(res.data, fail)
+    } catch (err) {
+      return { status: 'error', message: errorMessage(err, fail), details: [] }
+    }
+  }
+  const setResult = (key: string, r: BlockResult) => setBlockResults((prev) => ({ ...prev, [key]: r }))
 
   // "Sincronizar ahora": ops-native connectors with a sync worker (hub →
   // partner read-models) run one sync now and report the run summary.
-  const syncMutation = useMutation({
-    mutationFn: async () => {
-      const res = await api.post(connector?.sync_endpoint ?? '', {})
-      return res.data?.data as
-        | {
-            status?: string
-            message?: string
-            licenses?: { fetched?: number }
-            instances?: { fetched?: number }
-            accounts?: { fetched?: number }
-            errors?: string[]
-          }
-        | undefined
-    },
-    onSuccess: (data) => {
-      if (data?.status === 'skipped') {
-        notify.info(data.message || st('installed_addons.sync_skipped'))
-        return
-      }
-      const summary = st('installed_addons.sync_done', {
-        licenses: data?.licenses?.fetched ?? 0,
-        instances: data?.instances?.fetched ?? 0,
-        accounts: data?.accounts?.fetched ?? 0,
-      })
-      if (data?.status === 'partial') {
-        notify.warning(`${summary} · ${(data.errors ?? []).join('; ')}`)
-      } else {
-        notify.success(summary)
-      }
-    },
-    onError: (err: unknown) => {
-      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message
-      notify.error(msg || st('installed_addons.sync_failed'))
-    },
-  })
+  const runSync = async (): Promise<BlockResult> => {
+    const res = await api.post(connector?.sync_endpoint ?? '', {})
+    const data = res.data?.data as
+      | {
+          status?: string
+          message?: string
+          licenses?: { fetched?: number }
+          instances?: { fetched?: number }
+          accounts?: { fetched?: number }
+          errors?: string[]
+        }
+      | undefined
+    if (data?.status === 'skipped') {
+      return { status: 'warn', message: data.message || st('installed_addons.sync_skipped'), details: [] }
+    }
+    const summary = st('installed_addons.sync_done', {
+      licenses: data?.licenses?.fetched ?? 0,
+      instances: data?.instances?.fetched ?? 0,
+      accounts: data?.accounts?.fetched ?? 0,
+    })
+    if (data?.status === 'partial') {
+      return { status: 'warn', message: `${summary} · ${(data.errors ?? []).join('; ')}`, details: [] }
+    }
+    return { status: 'ok', message: summary, details: [] }
+  }
 
   const hasCredentials = credFields.length > 0
   const hasSettings = definitions.length > 0
@@ -949,36 +1003,142 @@ export function AddonConfigSurface({
     </div>
   )
 
-  // Wizard steps: credential sections that actually have fields, + a final
+  // OAuth connectors have no credential form: the surface shows their state and
+  // hands "Conectar cuenta" to the host (its OAuth redirect flow).
+  const isOAuth = !!connector && !!connector.auth && connector.auth !== 'token'
+  const oauthPanel = isOAuth ? (
+    <section className='flex flex-col gap-3 rounded-lg border border-border/70 p-3'>
+      <div className='flex flex-wrap items-center justify-between gap-2'>
+        <h4 className='flex items-center gap-2 text-sm font-medium'>
+          <Link2 aria-hidden='true' className='h-4 w-4 text-muted-foreground' />
+          {st('oauth.title')}
+        </h4>
+        <StepStatusBadge
+          status={connector!.connected ? 'ok' : 'pending'}
+          label={connector!.connected ? st('oauth.connected') : st('oauth.not_connected')}
+        />
+      </div>
+      <HelpText text={st('oauth.help')} />
+      {onConnectOAuth ? (
+        <Button
+          type='button'
+          variant={connector!.connected ? 'outline' : 'default'}
+          className='h-auto min-h-11 w-full sm:w-fit'
+          onClick={() => onConnectOAuth(connector!)}
+        >
+          {connector!.connected ? st('oauth.reconnect') : st('oauth.connect')}
+        </Button>
+      ) : null}
+    </section>
+  ) : null
+
+  // Wizard steps: form_layout sections with fields OR blocks, + a final
   // "Ajustes" step when the addon also ships settings.
-  const credSteps = stepMode
-    ? layoutSections.filter((sec) => credFields.some((f) => f.section === sec.key))
+  const wizardSteps = stepMode
+    ? buildWizardSteps(
+        layoutSections,
+        credFields.map((f) => f.section),
+        hasSettings,
+      )
     : []
-  const wizardSteps = [
-    ...credSteps.map((sec) => ({
-      key: sec.key,
-      title: sec.title,
-      description: sec.description,
-      kind: 'creds' as const,
-    })),
-    ...(stepMode && hasSettings
-      ? [{ key: '__settings', title: 'installed_addons.section_settings', description: undefined, kind: 'settings' as const }]
-      : []),
-  ]
   const totalSteps = wizardSteps.length
   const useStepper = stepMode && totalSteps > 1
   const stepIdx = Math.min(currentStep, Math.max(0, totalSteps - 1))
   const activeStep = wizardSteps[stepIdx]
   const isLastStep = stepIdx >= totalSteps - 1
 
+  // "Probar conexión" (connector.test_export) is a verification INSIDE the
+  // flow (last credentials step / end of the credentials), not a footer
+  // button — unless the addon already declares an action block for it.
+  const implicitTest: ConnectorFormBlock | null =
+    canTest && !hasExplicitTest(layoutSections, connector?.test_export)
+      ? {
+          key: TEST_BLOCK_KEY,
+          kind: 'action',
+          title: st('blocks.test_title'),
+          description: st('blocks.test_help'),
+          label: st('installed_addons.test_connection'),
+        }
+      : null
+  const syncBlock: ConnectorFormBlock | null = canSync
+    ? { key: SYNC_BLOCK_KEY, kind: 'action', title: st('blocks.sync_title'), label: st('installed_addons.sync_now') }
+    : null
+  const lastCredStep = (() => {
+    for (let i = wizardSteps.length - 1; i >= 0; i--) if (wizardSteps[i].kind === 'creds') return wizardSteps[i].key
+    return undefined
+  })()
+  const extraBlocks = [implicitTest, syncBlock].filter((b): b is ConnectorFormBlock => !!b)
+  const blocksFor = (sectionKey: string, declared: ConnectorFormBlock[] = []) =>
+    sectionKey === lastCredStep ? [...declared, ...extraBlocks] : declared
+
+  const renderBlocks = (blocks: ConnectorFormBlock[]) => (
+    <ConnectorBlocks
+      blocks={blocks}
+      runAction={runAction}
+      results={blockResults}
+      onResult={setResult}
+      actionsDisabled={!canManageIssuer}
+      actionNote={credDirty ? st('blocks.save_first') : undefined}
+    />
+  )
+
+  const stepState = (i: number) => {
+    const s = wizardSteps[i]
+    return stepStatus({
+      index: i,
+      current: stepIdx,
+      fieldKeys: s.kind === 'creds' ? credFields.filter((f) => f.section === s.key).map((f) => f.key) : [],
+      fieldErrors,
+      blockKeys: blocksFor(s.key, s.blocks).map((b) => b.key),
+      results: blockResults,
+    })
+  }
+
+  // Moving between steps puts focus on the new step's heading (keyboard and
+  // screen-reader users land on the content, not on the footer).
+  const goToStep = (i: number) => {
+    stepMoved.current = true
+    setCurrentStep(i)
+  }
+  useEffect(() => {
+    if (stepMoved.current) stepHeadingRef.current?.focus()
+  }, [stepIdx])
+
+  // "Siguiente" checks the current step's required credentials first, so the
+  // operator learns what is missing where it is, not at the end.
+  const handleNext = () => {
+    if (activeStep?.kind === 'creds' && connector && canManageIssuer) {
+      const stepFields = credFields.filter((f) => f.section === activeStep.key)
+      const miss = missingRequired(stepFields, credValues, !!connector.connected)
+      if (miss.length > 0) {
+        const errs: Record<string, string> = {}
+        for (const k of miss) errs[k] = st('installed_addons.field_required')
+        setFieldErrors(errs)
+        setFormError(
+          st('installed_addons.missing_fields', {
+            fields: miss.map((k) => credLabel(credFields.find((f) => f.key === k)!)).join(', '),
+          }),
+        )
+        focusFirstInvalid(miss)
+        return
+      }
+    }
+    setFormError(null)
+    goToStep(stepIdx + 1)
+  }
+
+  const hasAnyBlocks = layoutSections.some((s) => (s.blocks?.length ?? 0) > 0) || extraBlocks.length > 0
+  const nothingToConfigure = !hasCredentials && !hasSettings && !isOAuth && !hasAnyBlocks
+  const nothingToSave = !hasCredentials && !hasSettings
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className='flex max-h-[85vh] flex-col'>
+      <DialogContent className='flex max-h-[85vh] flex-col max-sm:max-h-[calc(100dvh-1rem)] max-sm:gap-3 max-sm:p-4'>
        <ConnectorFormStateContext.Provider
         value={{ fields: credFields, errors: fieldErrors, idPrefix, client: api, expectedOptionKinds }}
       >
-        <DialogHeader className='shrink-0'>
-          <DialogTitle>
+        <DialogHeader className='shrink-0 pe-8 text-start'>
+          <DialogTitle className='leading-snug'>
             {st('installed_addons.configure_title', { name: displayName ?? addon.manifest.display_name ?? addon.manifest.name })}
           </DialogTitle>
           <DialogDescription>
@@ -986,7 +1146,7 @@ export function AddonConfigSurface({
           </DialogDescription>
         </DialogHeader>
 
-        <div className='-mr-2 flex flex-col gap-6 overflow-y-auto py-2 pr-2'>
+        <div className='-mr-2 flex min-h-0 flex-col gap-6 overflow-y-auto py-2 pr-2'>
           {loading ? (
             <div className='flex justify-center py-8'>
               <Loader2 className='h-5 w-5 animate-spin text-muted-foreground' />
@@ -994,42 +1154,60 @@ export function AddonConfigSurface({
           ) : useStepper ? (
             /* WIZARD por pasos: indicador + un paso a la vez (sin card-in-card). */
             <div className='flex flex-col gap-5'>
-              {/* Pro stepper: filled progress line + check on done + ringed active,
-                  no inline labels (never wraps); the active step title sits below. */}
-              <div className='flex flex-col gap-2.5'>
+              {/* Stepper: 44px targets, a check on done steps, an alert on a
+                  step with errors; the step title wraps (never truncated). */}
+              <nav aria-label={st('wizard.steps')} className='flex flex-col gap-2'>
                 <ol className='flex items-center'>
                   {wizardSteps.map((s, i) => {
-                    const done = i < stepIdx
+                    const status = stepState(i)
                     const active = i === stepIdx
+                    const title = t(s.title ?? '', { defaultValue: humanizeKey(s.title) })
                     return (
                       <li
                         key={s.key}
-                        className={cn(
-                          'flex items-center',
-                          i < wizardSteps.length - 1 && 'flex-1',
-                        )}
+                        className={cn('flex items-center', i < wizardSteps.length - 1 && 'flex-1')}
                       >
                         <button
                           type='button'
-                          onClick={() => setCurrentStep(i)}
-                          title={t(s.title ?? '', { defaultValue: humanizeKey(s.title) })}
+                          onClick={() => goToStep(i)}
                           aria-current={active ? 'step' : undefined}
-                          className={cn(
-                            'flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold transition-all',
-                            active
-                              ? 'border-primary bg-primary text-primary-foreground ring-4 ring-primary/15'
-                              : done
-                                ? 'border-primary bg-primary/10 text-primary'
-                                : 'border-border text-muted-foreground',
-                          )}
+                          aria-label={st('wizard.step_label', {
+                            n: i + 1,
+                            total: totalSteps,
+                            title,
+                            status: st(`status.${status}`),
+                          })}
+                          data-step-status={status}
+                          className='flex h-11 w-11 shrink-0 items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring'
                         >
-                          {done ? <Check className='h-3.5 w-3.5' /> : i + 1}
+                          <span
+                            aria-hidden='true'
+                            className={cn(
+                              'flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold transition-all',
+                              active
+                                ? 'border-primary bg-primary text-primary-foreground ring-4 ring-primary/15'
+                                : status === 'error'
+                                  ? 'border-destructive bg-destructive/10 text-destructive'
+                                  : status === 'ok'
+                                    ? 'border-primary bg-primary/10 text-primary'
+                                    : 'border-border text-muted-foreground',
+                            )}
+                          >
+                            {!active && status === 'error' ? (
+                              <AlertCircle className='h-4 w-4' />
+                            ) : !active && status === 'ok' ? (
+                              <Check className='h-4 w-4' />
+                            ) : (
+                              i + 1
+                            )}
+                          </span>
                         </button>
                         {i < wizardSteps.length - 1 && (
                           <span
+                            aria-hidden='true'
                             className={cn(
-                              'mx-1.5 h-0.5 flex-1 rounded-full transition-colors',
-                              done ? 'bg-primary' : 'bg-border',
+                              'mx-1 h-0.5 flex-1 rounded-full transition-colors',
+                              i < stepIdx ? 'bg-primary' : 'bg-border',
                             )}
                           />
                         )}
@@ -1037,35 +1215,44 @@ export function AddonConfigSurface({
                     )
                   })}
                 </ol>
-                <div className='flex items-baseline justify-between gap-2'>
-                  <h4 className='truncate text-sm font-semibold'>
+                <div className='flex items-start justify-between gap-3'>
+                  <h3
+                    ref={stepHeadingRef}
+                    tabIndex={-1}
+                    className='min-w-0 text-base leading-snug font-semibold break-words outline-none'
+                  >
                     {t(activeStep?.title ?? '', {
                       defaultValue: humanizeKey(activeStep?.title),
                     })}
-                  </h4>
-                  <span className='shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground'>
-                    {stepIdx + 1} / {totalSteps}
+                  </h3>
+                  <span className='mt-0.5 shrink-0 text-xs font-medium tabular-nums text-muted-foreground'>
+                    {st('flow.step_of', { n: stepIdx + 1, total: totalSteps })}
                   </span>
                 </div>
-              </div>
+              </nav>
 
-              <div className='flex flex-col gap-3'>
+              <div className='flex flex-col gap-4'>
                 {activeStep?.description && (
-                  <p className='text-xs text-muted-foreground'>
-                    {t(activeStep.description, { defaultValue: '' })}
-                  </p>
+                  <HelpText text={addonText(activeStep.description)} />
                 )}
-                {activeStep?.kind === 'settings'
-                  ? settingsBody
-                  : !canManageIssuer
-                    ? issuerAdminNote
-                    : credFields
-                      .filter((f) => f.section === activeStep?.key)
-                      .map(renderCred)}
+                {activeStep?.kind === 'settings' ? (
+                  settingsBody
+                ) : !canManageIssuer ? (
+                  <>
+                    {issuerAdminNote}
+                    {renderBlocks(blocksFor(activeStep?.key ?? '', activeStep?.blocks))}
+                  </>
+                ) : (
+                  <>
+                    {credFields.filter((f) => f.section === activeStep?.key).map(renderCred)}
+                    {renderBlocks(blocksFor(activeStep?.key ?? '', activeStep?.blocks))}
+                  </>
+                )}
               </div>
             </div>
           ) : (
             <>
+              {oauthPanel}
               {/* Credenciales */}
               {hasCredentials && (
                 <section className='flex flex-col gap-3'>
@@ -1081,21 +1268,19 @@ export function AddonConfigSurface({
                     // form_layout: one titled group per section, in declared order.
                     layoutSections.map((sec) => {
                       const fields = credFields.filter((f) => f.section === sec.key)
-                      if (fields.length === 0) return null
+                      if (fields.length === 0 && (sec.blocks?.length ?? 0) === 0) return null
                       return (
                         <div
                           key={sec.key}
                           className='flex flex-col gap-3 rounded-md border border-border/60 px-3 py-3'
                         >
                           {sec.title && (
-                            <div>
+                            <div className='flex flex-col gap-1'>
                               <h4 className='text-sm font-medium'>
                                 {t(sec.title, { defaultValue: sec.title })}
                               </h4>
                               {sec.description && (
-                                <p className='text-xs text-muted-foreground'>
-                                  {t(sec.description, { defaultValue: '' })}
-                                </p>
+                                <HelpText text={addonText(sec.description)} />
                               )}
                             </div>
                           )}
@@ -1109,6 +1294,7 @@ export function AddonConfigSurface({
                               onChange={(val) => setCred(f.key, val)}
                             />
                           ))}
+                          {renderBlocks(sec.blocks ?? [])}
                         </div>
                       )
                     })
@@ -1129,7 +1315,7 @@ export function AddonConfigSurface({
                           className='rounded-md border border-border/60 px-3 py-2'
                           open={advancedFields.some((f) => !!fieldErrors[f.key]) || undefined}
                         >
-                          <summary className='cursor-pointer select-none text-sm font-medium text-muted-foreground'>
+                          <summary className='flex min-h-11 cursor-pointer items-center text-sm font-medium text-muted-foreground select-none sm:min-h-8'>
                             {st('installed_addons.advanced')}
                           </summary>
                           <div className='flex flex-col gap-3 pt-3'>
@@ -1151,6 +1337,9 @@ export function AddonConfigSurface({
                 </section>
               )}
 
+              {/* Verificación (probar conexión / sincronizar) al final de las credenciales. */}
+              {extraBlocks.length > 0 && renderBlocks(extraBlocks)}
+
               {/* Ajustes */}
               {hasSettings && (
                 <section className='flex flex-col gap-3'>
@@ -1165,10 +1354,11 @@ export function AddonConfigSurface({
                 </section>
               )}
 
-              {!hasCredentials && !hasSettings && (
-                <p className='text-sm text-muted-foreground'>
-                  {st('installed_addons.no_settings')}
-                </p>
+              {nothingToConfigure && (
+                <div className='flex flex-col items-start gap-1 rounded-lg border border-dashed p-4'>
+                  <p className='text-sm font-medium'>{st('empty.title')}</p>
+                  <HelpText text={st('empty.help')} />
+                </div>
               )}
             </>
           )}
@@ -1184,76 +1374,42 @@ export function AddonConfigSurface({
           </div>
         ) : null}
 
-        <DialogFooter className='shrink-0 sm:justify-between'>
-          {canTest ? (
-            <Button
-              variant='outline'
-              onClick={() => testMutation.mutate()}
-              disabled={testMutation.isPending}
-              className='gap-2'
-            >
-              {testMutation.isPending ? (
-                <Loader2 className='h-4 w-4 animate-spin' />
-              ) : testMutation.data?.ok ? (
-                <CheckCircle2 className='h-4 w-4 text-emerald-500' />
-              ) : testMutation.isError ||
-                (testMutation.data && !testMutation.data.ok) ? (
-                <XCircle className='h-4 w-4 text-destructive' />
-              ) : (
-                <Plug className='h-4 w-4' />
-              )}
-              {st('installed_addons.test_connection', {
-                defaultValue: 'Probar conexión',
-              })}
+        {/* Footer: always visible (outside the scroll). ONE primary action
+            (Siguiente / Guardar) full width on phones, Atrás + Cancelar
+            sharing the row below; a single right-aligned row from sm up.
+            Verifications live inside the steps, not here. */}
+        <DialogFooter
+          data-wizard-footer=''
+          className='grid shrink-0 grid-cols-2 gap-2 border-t pt-3 sm:flex sm:flex-row sm:justify-end sm:border-t-0 sm:pt-0'
+        >
+          {nothingToSave ? (
+            <Button className='col-span-2 h-11 sm:h-9' onClick={() => onOpenChange(false)}>
+              {st('common.close')}
             </Button>
           ) : (
-            <span />
-          )}
-          {canSync ? (
-            <Button
-              variant='outline'
-              onClick={() => syncMutation.mutate()}
-              disabled={syncMutation.isPending}
-              className='gap-2'
-            >
-              {syncMutation.isPending ? (
-                <Loader2 className='h-4 w-4 animate-spin' />
-              ) : (
-                <RefreshCw className='h-4 w-4' />
+            <>
+              <Button
+                className='order-first col-span-2 h-11 sm:order-last sm:h-9'
+                onClick={useStepper && !isLastStep ? handleNext : handleSave}
+                disabled={!(useStepper && !isLastStep) && (saveMutation.isPending || loading)}
+              >
+                {saveMutation.isPending && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
+                {useStepper && !isLastStep ? st('common.next') : st('common.save')}
+              </Button>
+              {useStepper && stepIdx > 0 && (
+                <Button variant='outline' className='h-11 sm:h-9' onClick={() => goToStep(Math.max(0, stepIdx - 1))}>
+                  {st('common.back')}
+                </Button>
               )}
-              {st('installed_addons.sync_now', { defaultValue: 'Sincronizar ahora' })}
-            </Button>
-          ) : null}
-          <div className='flex gap-2'>
-            {useStepper && stepIdx > 0 && (
               <Button
-                variant='outline'
-                onClick={() => setCurrentStep((s) => Math.max(0, s - 1))}
+                variant='ghost'
+                className={cn('h-11 sm:order-first sm:h-9', !(useStepper && stepIdx > 0) && 'col-span-2')}
+                onClick={() => onOpenChange(false)}
               >
-                {st('common.back', { defaultValue: 'Atrás' })}
+                {st('common.cancel')}
               </Button>
-            )}
-            <Button variant='outline' onClick={() => onOpenChange(false)}>
-              {st('common.cancel')}
-            </Button>
-            {useStepper && !isLastStep ? (
-              <Button onClick={() => setCurrentStep((s) => s + 1)}>
-                {st('common.next', { defaultValue: 'Siguiente' })}
-              </Button>
-            ) : (
-              <Button
-                onClick={handleSave}
-                disabled={
-                  saveMutation.isPending || loading || (!hasCredentials && !hasSettings)
-                }
-              >
-                {saveMutation.isPending && (
-                  <Loader2 className='mr-2 h-4 w-4 animate-spin' />
-                )}
-                {st('common.save')}
-              </Button>
-            )}
-          </div>
+            </>
+          )}
         </DialogFooter>
        </ConnectorFormStateContext.Provider>
       </DialogContent>

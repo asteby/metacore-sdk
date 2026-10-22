@@ -21,3 +21,15 @@ export {
     type ConnectorFormLayout,
 } from './addon-config-surface'
 export * from './connector-form-model'
+export * from './connector-blocks-model'
+export {
+    ConnectorBlocks,
+    WebhookUrlBlock,
+    InstructionsBlock,
+    ActionBlock,
+    BlockResultView,
+    HelpText,
+    CopyValue,
+    type ConnectorBlocksProps,
+    type ActionBlockProps,
+} from './connector-blocks'

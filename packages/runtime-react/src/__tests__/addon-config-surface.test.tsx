@@ -131,15 +131,27 @@ describe('AddonConfigSurface', () => {
         setup({ connector })
         const secret = await screen.findByLabelText(/Token/)
         fireEvent.change(secret, { target: { value: PUB } })
-        const warn = await screen.findByRole('status')
-        expect(warn.textContent).toContain('Llave pública')
+        await waitFor(() =>
+            expect(screen.getAllByRole('status').some((w) => w.textContent?.includes('Llave pública'))).toBe(true),
+        )
     })
 
-    it('Probar conexión posts to /test and reports ok / failure', async () => {
-        const { calls, notify } = setup({ connector }, { 'POST /integrations/mp/test': { data: { ok: false, message: 'Credenciales inválidas' } } })
-        fireEvent.click(await screen.findByText('Probar conexión'))
-        await waitFor(() => expect(notify.error).toHaveBeenCalledWith('Credenciales inválidas'))
+    it('Probar conexión runs inside the form (not the footer) and shows the result inline', async () => {
+        const { calls, notify } = setup(
+            { connector },
+            { 'POST /integrations/mp/test': { success: true, data: { ok: false, message: 'Credenciales inválidas' } } },
+        )
+        const btn = await screen.findByText('Probar conexión')
+        const footer = document.querySelector('[data-wizard-footer]') as HTMLElement
+        expect(footer.contains(btn)).toBe(false)
+        fireEvent.click(btn)
+        const msg = await screen.findByText('Credenciales inválidas')
+        expect(msg.closest('[data-result-status]')?.getAttribute('data-result-status')).toBe('error')
+        expect(msg.closest('[aria-live="polite"]')).toBeTruthy()
         expect(calls.some((c) => c.m === 'POST' && c.url === '/integrations/mp/test')).toBe(true)
+        expect(notify.error).not.toHaveBeenCalled()
+        // The retry keeps the same action reachable.
+        expect(screen.getByText(/Reintentar: Probar conexión/)).toBeTruthy()
     })
 
     it('dynamic_select lists options from the host lookup once per export', async () => {
