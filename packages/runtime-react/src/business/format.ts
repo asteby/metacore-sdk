@@ -5,6 +5,7 @@
 // fechas por zona horaria. La moneda y la zona son config de la org — nunca se
 // hardcodean: salen de <CurrencyContext>/<TimeZoneContext> o de `opts`.
 import { useMemo } from 'react'
+import { formatMoney as formatExactMoney, moneyFromNumber } from '@asteby/metacore-lib/money'
 import { useCurrency, useTimeZone } from '../org-runtime-context'
 
 /** Locale por defecto del producto. */
@@ -51,11 +52,11 @@ export function formatMoney(amount: unknown, opts: FormatOptions = {}): string {
     if (!Number.isFinite(n)) return ''
     const currency = opts.currency || FALLBACK_CURRENCY
     try {
-        return new Intl.NumberFormat(opts.locale || DEFAULT_LOCALE, {
-            style: 'currency',
-            currency,
-            currencyDisplay: 'narrowSymbol',
-        }).format(n)
+        // Envoltorio del módulo money: los decimales salen de la moneda (JPY 0, KWD 3).
+        return formatExactMoney(moneyFromNumber(n, currency), {
+            locale: opts.locale || DEFAULT_LOCALE,
+            display: 'narrowSymbol',
+        })
     } catch {
         return `${currency} ${n.toFixed(2)}`
     }

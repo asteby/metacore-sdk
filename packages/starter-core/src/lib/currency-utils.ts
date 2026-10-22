@@ -2,6 +2,8 @@
  * Enhanced Currency Utility focusing on correct symbols for Spanish-speaking countries
  */
 
+import { formatCurrency as formatCurrencyExact } from '@asteby/metacore-lib/currency'
+
 export interface CurrencyInfo {
     code: string
     name: string
@@ -34,15 +36,9 @@ export const SPANISH_SYMBOLS: Record<string, string> = {
     'USD': '$'
 }
 
+/** Envoltorio de `formatCurrency` de metacore-lib (módulo money): decimales por moneda. */
 export function formatCurrency(amount: number, currencyCode: string = 'USD', locale: string = 'es'): string {
-    try {
-        return new Intl.NumberFormat(locale, {
-            style: 'currency',
-            currency: currencyCode,
-        }).format(amount)
-    } catch (e) {
-        return `${currencyCode} ${amount}`
-    }
+    return formatCurrencyExact(amount, currencyCode, locale)
 }
 export function getCurrencySymbol(code: string): string {
     return SPANISH_SYMBOLS[code] ||

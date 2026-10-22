@@ -1,7 +1,7 @@
 // Locks the org-currency fallback contract for money rendering: the table cell
 // (`resolveCurrency`) and the record dialog (`isMoneyField`). Pure logic, no DOM.
 import { describe, it, expect } from 'vitest'
-import { resolveCurrency } from '../dynamic-columns'
+import { formatAggregateTotal, resolveCurrency } from '../dynamic-columns'
 import { isMoneyField } from '../dialogs/dynamic-record'
 import type { ColumnDefinition } from '../types'
 import type { FieldDef } from '../dialogs/dynamic-record'
@@ -58,5 +58,17 @@ describe('isMoneyField', () => {
         expect(isMoneyField(field({ key: 'quantity' }), 3)).toBe(false)
         expect(isMoneyField(field({ key: 'total' }), 'n/a')).toBe(false)
         expect(isMoneyField(field({ key: 'total' }), null)).toBe(false)
+    })
+})
+
+describe('formatAggregateTotal: decimales por moneda', () => {
+    const nb = (s: string) => s.replace(/\u00a0/g, ' ')
+    it('JPY 0 y KWD 3 decimales; USD 2; styleConfig.decimals manda', () => {
+        const c = col({ type: 'currency' })
+        expect(nb(formatAggregateTotal(c, 1234, 'JPY', 'en'))).toBe('¥1,234')
+        expect(nb(formatAggregateTotal(c, 1.5, 'KWD', 'en'))).toBe('KWD 1.500')
+        expect(nb(formatAggregateTotal(c, 1.5, 'USD', 'en'))).toBe('$1.50')
+        const pinned = col({ type: 'currency', styleConfig: { decimals: 1 } } as Partial<ColumnDefinition>)
+        expect(nb(formatAggregateTotal(pinned, 1.5, 'USD', 'en'))).toBe('$1.5')
     })
 })
