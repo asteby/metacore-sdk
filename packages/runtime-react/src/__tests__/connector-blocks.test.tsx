@@ -162,6 +162,12 @@ describe('AddonConfigSurface with setup blocks', () => {
         expect(screen.getByText('Probar conexión')).toBeTruthy()
         // Focus moved to the new step heading.
         expect(document.activeElement?.textContent).toBe('Avanzado')
+        // Reading order: URL to paste, then the secret field, then the verifications.
+        const url = screen.getByText(WEBHOOK)
+        const secret = screen.getByLabelText(/Secreto del webhook/)
+        const action = screen.getByText('Crear orden de prueba')
+        expect(url.compareDocumentPosition(secret) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+        expect(secret.compareDocumentPosition(action) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     })
 
     it('runs the action block through the host route and shows ID + status live', async () => {

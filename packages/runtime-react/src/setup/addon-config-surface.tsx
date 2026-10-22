@@ -1071,6 +1071,12 @@ export function AddonConfigSurface({
   const blocksFor = (sectionKey: string, declared: ConnectorFormBlock[] = []) =>
     sectionKey === lastCredStep ? [...declared, ...extraBlocks] : declared
 
+  // Reading order inside a step: what the operator needs BEFORE typing
+  // (instructions, the URL to paste in the provider's panel) goes above the
+  // fields; verifications (actions) go below them.
+  const leadBlocks = (blocks: ConnectorFormBlock[] = []) => blocks.filter((b) => b.kind !== 'action')
+  const trailBlocks = (blocks: ConnectorFormBlock[] = []) => blocks.filter((b) => b.kind === 'action')
+
   const renderBlocks = (blocks: ConnectorFormBlock[]) => (
     <ConnectorBlocks
       blocks={blocks}
@@ -1244,8 +1250,9 @@ export function AddonConfigSurface({
                   </>
                 ) : (
                   <>
+                    {renderBlocks(leadBlocks(blocksFor(activeStep?.key ?? '', activeStep?.blocks)))}
                     {credFields.filter((f) => f.section === activeStep?.key).map(renderCred)}
-                    {renderBlocks(blocksFor(activeStep?.key ?? '', activeStep?.blocks))}
+                    {renderBlocks(trailBlocks(blocksFor(activeStep?.key ?? '', activeStep?.blocks)))}
                   </>
                 )}
               </div>
@@ -1284,6 +1291,7 @@ export function AddonConfigSurface({
                               )}
                             </div>
                           )}
+                          {renderBlocks(leadBlocks(sec.blocks))}
                           {fields.map((f) => (
                             <ConnectorCredentialFieldControl
                               key={f.key}
@@ -1294,7 +1302,7 @@ export function AddonConfigSurface({
                               onChange={(val) => setCred(f.key, val)}
                             />
                           ))}
-                          {renderBlocks(sec.blocks ?? [])}
+                          {renderBlocks(trailBlocks(sec.blocks))}
                         </div>
                       )
                     })
