@@ -2,6 +2,7 @@
 // approach as the table cells (dynamic-columns) so dashboard numbers read
 // identically to the grids: org currency + locale, compact notation, percent.
 
+import { formatMoney, moneyFromNumber } from '@asteby/metacore-lib/money'
 import type { WidgetAccent, WidgetFormat } from '../dashboard-types'
 
 export interface WidgetFormatCtx {
@@ -24,11 +25,11 @@ export function formatWidgetValue(
     const loc = locale || undefined
     switch (format) {
         case 'currency':
-            return new Intl.NumberFormat(loc, {
-                style: 'currency',
-                currency: currency || 'USD',
-                maximumFractionDigits: 2,
-            }).format(value)
+            try {
+                return formatMoney(moneyFromNumber(value, currency || 'USD'), { locale: loc })
+            } catch {
+                return `${currency || 'USD'} ${value}`
+            }
         case 'percent':
             return new Intl.NumberFormat(loc, {
                 style: 'percent',

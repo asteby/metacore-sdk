@@ -30,6 +30,9 @@
     "test": "vitest run",
     "clean": "rm -rf dist"
   },
+  "dependencies": {
+    "@asteby/metacore-lib": "workspace:^"
+  },
   "peerDependencies": {
     "@asteby/metacore-auth": "workspace:^",
     "@asteby/metacore-runtime-react": "workspace:^",

@@ -567,6 +567,42 @@ export function inverseRate(rate: Rate, scale: number = INVERSE_SCALE): Rate {
   return out
 }
 
+// ------------------------------------------------------------ from number
+
+/**
+ * Plain (no exponent) decimal string for a finite JS number, so UI code that
+ * still holds `number` can enter the exact-money pipeline. Uses the shortest
+ * round-trip digits of the number (`1.005` stays "1.005", never 1.00499999...).
+ */
+export function numberToDecimal(n: number): string {
+  if (!Number.isFinite(n)) throw new InvalidMoneyError(`${n} is not a finite number`)
+  const s = String(n)
+  if (!/e/i.test(s)) return s
+  const [mant = '', exp = '0'] = s.toLowerCase().split('e')
+  const e = Number(exp)
+  const neg = mant.startsWith('-')
+  const [int = '', frac = ''] = mant.replace('-', '').split('.')
+  const digits = int + frac
+  const point = int.length + e
+  let out: string
+  if (point <= 0) out = '0.' + '0'.repeat(-point) + digits
+  else if (point >= digits.length) out = digits + '0'.repeat(point - digits.length)
+  else out = digits.slice(0, point) + '.' + digits.slice(point)
+  return neg ? '-' + out : out
+}
+
+/**
+ * Money from a JS number, rounded to the currency's minor units (default
+ * `halfAwayFromZero`). `spec` may be an ISO code or a full spec.
+ */
+export function moneyFromNumber(
+  amount: number,
+  spec: CurrencySpec | string,
+  mode: RoundingMode = 'halfAwayFromZero',
+): MoneyValue {
+  return MoneyValue.parseRound(numberToDecimal(amount), spec, mode)
+}
+
 // ------------------------------------------------------------ formatting
 
 export interface FormatMoneyOptions {
