@@ -71,6 +71,34 @@ export function statusColorFor(value: string): string {
  * an addon-arbitrary Tailwind class never gets dropped by a consuming app's
  * class scan). Rendered inline alongside a label — never alone.
  */
+/**
+ * Manejador de `onError` para <img> que un host puede reescribir (p. ej. el
+ * respaldo miniatura -> derivado principal que ops instala en `document` en
+ * fase de captura, ANTES que React). Si al llegar el error el `src` del DOM ya
+ * no es el que React conocía, el host cambió la URL y la nueva carga sigue en
+ * curso: NO se debe marcar la imagen como rota (antes se desmontaba y quedaban
+ * las iniciales aunque el respaldo cargara). Solo un fallo sin reescritura
+ * (el `src` no cambió desde el último error) invoca `onFail`.
+ * Exportado para pruebas.
+ */
+export function useImageErrorGuard(resolved: string | undefined, onFail: () => void) {
+    const seen = React.useRef<string | undefined>(resolved)
+    React.useEffect(() => {
+        seen.current = resolved
+    }, [resolved])
+    return React.useCallback(
+        (e: React.SyntheticEvent<HTMLImageElement>) => {
+            const cur = e.currentTarget.getAttribute('src') ?? undefined
+            if (cur !== undefined && cur !== seen.current) {
+                seen.current = cur
+                return
+            }
+            onFail()
+        },
+        [onFail],
+    )
+}
+
 export const RelationThumbnail: React.FC<{
     src: string
     alt: string
@@ -134,6 +162,7 @@ export const ImageStack: React.FC<{
     React.useEffect(() => {
         setBroken(false)
     }, [resolved])
+    const onImgError = useImageErrorGuard(resolved, () => setBroken(true))
 
     return (
         <span
@@ -146,7 +175,7 @@ export const ImageStack: React.FC<{
                     alt={alt}
                     className="block object-contain"
                     style={{ maxWidth: dims.w, maxHeight: dims.h, width: 'auto', height: 'auto' }}
-                    onError={() => setBroken(true)}
+                    onError={onImgError}
                 />
             ) : (
                 <span

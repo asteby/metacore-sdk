@@ -49,6 +49,7 @@ import {
     ImageStack,
     statusColorFor,
     useIsDarkTheme,
+    useImageErrorGuard,
 } from './display-value'
 import { MediaValue } from './rich-url'
 import { OptionsContext } from './options-context'
@@ -958,15 +959,24 @@ export const ImageCell: React.FC<{
         )
     }
     if (!value) return <span className="text-muted-foreground">-</span>
+    return <ThumbImage src={getImageUrl(String(value))} />
+}
+
+/** <img> 40x40 de `type: image`; se oculta solo si la carga falla sin respaldo del host. */
+const ThumbImage: React.FC<{ src: string }> = ({ src }) => {
+    const [broken, setBroken] = React.useState(false)
+    React.useEffect(() => {
+        setBroken(false)
+    }, [src])
+    const onImgError = useImageErrorGuard(src, () => setBroken(true))
     return (
         <div className="h-10 w-10 relative rounded overflow-hidden bg-muted flex items-center justify-center">
             <img
-                src={getImageUrl(String(value))}
+                src={src}
                 alt="Thumbnail"
                 className="h-full w-full object-contain"
-                onError={(e) => {
-                    ;(e.currentTarget as HTMLImageElement).style.display = 'none'
-                }}
+                style={broken ? { display: 'none' } : undefined}
+                onError={onImgError}
             />
         </div>
     )
@@ -1173,9 +1183,15 @@ export function makeDefaultGetDynamicColumns(
                         const caption = labelField
                             ? String(getNestedValue(row.original, labelField) ?? '')
                             : undefined
+                        // Misma resolución que `type: image` (base_path,
+                        // normalizeImagePath); `/storage/...` y http(s) pasan intactos.
+                        const stackSrc =
+                            value && !isLucideIconName(value)
+                                ? resolveImageSrc(col, String(value), apiBaseUrl, normalizeImagePath)
+                                : value
                         return (
                             <ImageCell
-                                value={value}
+                                value={stackSrc}
                                 getImageUrl={getImageUrl}
                                 label={caption || undefined}
                                 stack
