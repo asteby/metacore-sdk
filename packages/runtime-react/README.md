@@ -174,6 +174,70 @@ fichas leen la configuración de la org por contexto:
   de registro. Sin provider se conserva «Sistema». Hook: `useSystemActor()`;
   regla compartida: `isSystemActorColumn(renderAs, key, namePath)`.
 
+## Setup y salud de addons (`SetupFlow`, `HealthCard`, `AddonConfigSurface`)
+
+UI declarativa para `contributions.setup` / `contributions.health`. También se
+importa suelta con `@asteby/metacore-runtime-react/setup` (solo esta porción).
+
+```tsx
+import { SetupFlow, HealthCard, RecordsTable, StepStatusBadge, AddonConfigSurface } from '@asteby/metacore-runtime-react'
+
+<SetupFlow flow={flowDef} client={client} onComplete={...} renderCustom={...} />
+```
+
+- **`SetupFlowClient`** es el adaptador: `getState()`, `runStep(key, {values?, action?})`,
+  `skipStep(key)`, y opcionales `saveStep(key, values)` (autoguardado visible) y
+  `subscribe(cb)` (push). El estado vive en el servidor, así que el flujo es reanudable:
+  abre en el primer paso pendiente y no bloqueado.
+- Estados por paso: `pending | running | ok | warn | error | blocked`. `depends_on` bloquea
+  hasta que la dependencia esté `ok`, `warn` u omitida; los pasos `optional` se pueden omitir
+  y no frenan la finalización.
+- Polling con backoff (2 s x1.6, tope 30 s) mientras algo corre; `retry_after_s` del paso manda
+  (1 s a 5 min). Tras `maxPollAttempts` (40) deja de consultar y ofrece «Revisar ahora».
+- `kind=form` reutiliza `groupFieldsBySection` + `FieldSection`/`WizardProgress` de
+  `form-layout(-ui)` (secciones o sub-pasos), `visible_when` y campos `write_only` (nunca se leen
+  de vuelta; vacío = conservar). `kind=records` usa `RecordsTable` (copiar con fallback,
+  estado y diagnóstico por fila). `kind=custom` usa `renderCustom` o el slot federado
+  `step.slot ?? setup.<flow.key>.<step.key>` (props: `step, state, run, refresh`).
+- `fix` de un diagnóstico: `{action}` corre el paso con esa acción, `{step}` salta a otro
+  paso, `{url}` solo http(s) o ruta relativa (`onNavigate` si el host enruta).
+- Textos es/en incluidos (`useSetupT`); se pueden sobrescribir con claves i18next `setup.*`.
+
+### Migrar `UnifiedAddonConfigDialog` (ops) a `AddonConfigSurface`
+
+En `ops/frontend/src/features/installed-addons/index.tsx`:
+
+1. Borrar `UnifiedAddonConfigDialog`, `ConnectorCredentialFieldControl`, `DynamicConnectorSelect`,
+   `fetchLookupOptions` y `connector-form-model.ts` (ahora viven en el SDK; los helpers se
+   exportan por si se necesitan: `shapeMismatch`, `missingRequired`, `parseSaveError`...).
+2. Importar y montar:
+
+```tsx
+import { AddonConfigSurface } from '@asteby/metacore-runtime-react'
+import { ensureAddonBundle } from '@/features/metacore/use-addon-locales'
+
+const role = useAuthStore((s) => s.auth.user?.role)
+const { activeBranch } = useActiveBranch()
+
+<AddonConfigSurface
+  addon={addon}
+  connector={connector}
+  open={open}
+  onOpenChange={setOpen}
+  onSaved={refetch}
+  canManageIssuer={['owner', 'admin', 'superadmin'].includes((role ?? '').trim().toLowerCase())}
+  activeBranch={activeBranch ? { id: activeBranchId, name: activeBranch.name } : null}
+  ensureAddonBundle={(key, i18n) => ensureAddonBundle(i18n as any, key)}
+  displayName={addonDisplayName(addon)}
+/>
+```
+
+   Requiere `<ApiProvider>` (o pasar `client={api}`) y `QueryClientProvider`; `toast` de sonner
+   es el notificador por defecto (`notify` lo reemplaza). Las claves `installed_addons.*` y
+   `common.*` siguen siendo las de ops: sus traducciones tienen prioridad sobre el texto del SDK.
+3. Diferencia deliberada: un secreto nunca se rellena desde `GET /integrations/:p/values`,
+   aunque el backend lo devolviera.
+
 ## Minimal usage
 
 ```tsx

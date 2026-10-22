@@ -189,6 +189,7 @@ export {
 export * from './barcode-scanner'
 export * from './form-layout'
 export * from './form-layout-ui'
+export * from './setup'
 export { FieldGrid, FieldCell, FieldLabel } from './field-grid'
 export {
     ActionModalDispatcher,

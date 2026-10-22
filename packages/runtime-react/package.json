@@ -15,6 +15,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./setup": {
+      "types": "./dist/setup/index.d.ts",
+      "import": "./dist/setup/index.js"
+    },
     "./charts": {
       "types": "./dist/widgets/charts.d.ts",
       "import": "./dist/widgets/charts.js"
