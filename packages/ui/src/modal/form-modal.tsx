@@ -1,8 +1,8 @@
 import * as React from 'react'
-import { Button } from '@/primitives/button'
 import { Modal, type ModalProps } from './modal'
+import type { ResponsiveDialogAction } from './responsive-dialog'
 
-export type FormModalProps = Omit<ModalProps, 'footer' | 'dismissable'> & {
+export type FormModalProps = Omit<ModalProps, 'footer' | 'footerActions' | 'dismissable'> & {
   /** Submit handler. Receives the native submit event. */
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void
   /** Disables inputs/close and shows a busy submit button. */
@@ -17,12 +17,15 @@ export type FormModalProps = Omit<ModalProps, 'footer' | 'dismissable'> & {
   hideCancel?: boolean
   /** Extra footer content rendered to the start of the action row. */
   footerStart?: React.ReactNode
+  /** Extra footer actions from the host (e.g. «Ver historial»). */
+  footerExtra?: ResponsiveDialogAction[]
 }
 
 /**
  * FormModal — a Modal wired for the dominant CRUD pattern: a form body plus a
  * Cancel/Submit footer, submit-on-enter, and a busy state that locks the modal
- * closed while the request is in flight.
+ * closed while the request is in flight. On phones it is a bottom sheet with
+ * the submit button full width in the sticky footer.
  *
  * The children are the form fields; the `<form>` and footer buttons are supplied.
  *
@@ -41,6 +44,7 @@ export function FormModal({
   destructive,
   hideCancel,
   footerStart,
+  footerExtra,
   onOpenChange,
   children,
   ...modalProps
@@ -52,38 +56,24 @@ export function FormModal({
       {...modalProps}
       onOpenChange={onOpenChange}
       dismissable={!isSubmitting}
-      footer={
-        <>
-          {footerStart ? (
-            <div className='mr-auto flex items-center'>{footerStart}</div>
-          ) : null}
-          {!hideCancel ? (
-            <Button
-              type='button'
-              variant='outline'
-              disabled={isSubmitting}
-              onClick={() => onOpenChange(false)}
-            >
-              {cancelText ?? 'Cancel'}
-            </Button>
-          ) : null}
-          <Button
-            type='submit'
-            form={formId}
-            variant={destructive ? 'destructive' : 'default'}
-            disabled={isSubmitting || submitDisabled}
-          >
-            {submitText ?? 'Save'}
-          </Button>
-        </>
-      }
+      footerActions={{
+        start: footerStart,
+        primary: {
+          key: 'submit',
+          label: submitText ?? 'Save',
+          type: 'submit',
+          form: formId,
+          loading: isSubmitting,
+          disabled: submitDisabled,
+          destructive,
+        },
+        secondary: hideCancel
+          ? []
+          : [{ key: 'cancel', label: cancelText ?? 'Cancel', disabled: isSubmitting, run: () => onOpenChange(false) }],
+        extra: footerExtra,
+      }}
     >
-      <form
-        id={formId}
-        onSubmit={onSubmit}
-        className='flex flex-col gap-4'
-        noValidate
-      >
+      <form id={formId} onSubmit={onSubmit} className='flex flex-col gap-4' noValidate>
         {children}
       </form>
     </Modal>

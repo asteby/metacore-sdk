@@ -125,6 +125,36 @@ const items: ActionItem[] = [
 
 i18n keys (all with Spanish defaults): `action_bar.more`, `action_bar.label`, `action_bar.sheet_description`, `action_bar.confirm_title` (`{{label}}`), `action_bar.confirm_description`, `action_bar.cancel`, `back_link.label`, `page_header.more`.
 
+## ResponsiveDialog, Modal and FormModal (`@asteby/metacore-ui/modal`)
+
+```tsx
+import { ResponsiveDialog } from '@asteby/metacore-ui/modal'
+
+<ResponsiveDialog open={open} onOpenChange={setOpen} title='Despacho SO-00004' icon={<Warehouse />}
+  header={<ProcessStepper … />}            // fixed, does not scroll
+  footer={{
+    primary: { label: 'Confirmar picking', run: confirmPicking },          // one CTA per step
+    secondary: [{ label: 'Imprimir surtido', icon: <Printer />, run: print }],
+    destructive: [{ label: 'Liberar apartado', run: release, confirm: { title: '¿Liberar el apartado?' } }],
+    extra: footerExtra,                     // host actions, e.g. ModalProps.footerExtra
+  }}
+  size='md'                                 // sm | md | lg | xl | full (desktop)
+  mobile='sheet'>                           // sheet (default) | fullscreen | dialog
+  {body}
+</ResponsiveDialog>
+```
+
+- **From 768px (`MOBILE_BREAKPOINT`)**: centered dialog, `max-h-[90dvh]`, footer `[destructive] ··· [start] [extra] [secondary] [PRIMARY]`.
+- **Below**: bottom sheet with a drag handle (swipe down closes when `dismissable`), `max-h-[92dvh]`, scrolling body, and a sticky footer with `env(safe-area-inset-bottom)` that rises above the on-screen keyboard (`visualViewport`). Stacked: PRIMARY full width, then the first secondary + «⋯» (other secondaries, `extra`, and destructive last in red).
+- No «Cerrar» button in the footer: the 44px X, Esc, swipe and back close it. `dismissable={false}` blocks all of them.
+- Destructive actions confirm with `ConfirmDialog destructive` (`confirm: false` to skip, or an object to customise). `run` may return a promise: spinner on that action, the others lock.
+- Titles wrap, they are never truncated. Focus goes to the dialog on open, is trapped while open, and returns to the trigger on close.
+- `footerContent` renders custom footer nodes in the same sticky footer (legacy).
+
+`Modal` and `FormModal` are now built on `ResponsiveDialog` with the same props. `Modal` adds `footerActions` (slots) and `mobile`. `FormModal` puts the submit button as the primary (full width on phones) and accepts `footerExtra`.
+
+i18n keys (Spanish defaults): `responsive_dialog.close`, `responsive_dialog.more`, `responsive_dialog.confirm_title` (`{{label}}`), `responsive_dialog.confirm_generic`, `responsive_dialog.confirm_description`, `responsive_dialog.cancel`.
+
 ## Link previews
 
 WhatsApp/Slack-style cards for news, posts and evidence. The components **never fetch external sites**:

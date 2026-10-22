@@ -1,4 +1,5 @@
 import { createElement, type ComponentType } from 'react'
+import type { ModalFooterAction } from './registry.js'
 
 // Canonical action registry. Hosts re-export this module so every addon
 // modal lives in a single registry regardless of which host loaded it.
@@ -98,6 +99,11 @@ export interface ActionModalProps {
     record: any
     endpoint?: string
     onSuccess: () => void
+    /**
+     * Optional host actions for the modal footer (see `ModalFooterAction`).
+     * Render them in `ResponsiveDialog`'s `footer.extra`; older modals ignore it.
+     */
+    footerExtra?: ModalFooterAction[]
 }
 
 type ActionComponentEntry = ComponentType<ActionModalProps>

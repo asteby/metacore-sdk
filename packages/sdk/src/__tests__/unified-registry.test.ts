@@ -100,3 +100,22 @@ describe("adaptActionProps", () => {
   });
 });
 
+
+describe("footerExtra (ModalProps / ActionModalProps)", () => {
+  it("es opcional y adaptActionProps lo deja pasar al contrato de slug", () => {
+    const run = vi.fn();
+    const base = {
+      open: true,
+      onOpenChange: vi.fn(),
+      onSuccess: vi.fn(),
+      action: { key: "k", label: "K", icon: "Zap" },
+      model: "M",
+      record: { id: 1 },
+    };
+    expect(adaptActionProps(base).footerExtra).toBeUndefined();
+    const p = adaptActionProps({ ...base, footerExtra: [{ key: "history", label: "Ver historial", run }] });
+    expect(p.footerExtra?.map((a) => a.key)).toEqual(["history"]);
+    p.footerExtra?.[0].run();
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+});
