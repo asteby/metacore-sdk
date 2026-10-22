@@ -1,5 +1,12 @@
 # @asteby/storefront-react
 
+## 0.8.0
+
+### Minor Changes
+
+- b2ee62c: Nuevo subpath opcional `@asteby/storefront-react/cart` (y hoja `cart.css`): `CartDrawer`, el cajón lateral "Tu carrito (N)" para tiendas con OPS. Sin textos, rutas, moneda ni marca fijos (labels, paths, renderers, iconos y `classNames` por props); muestra `cart.cost` de OPS y muta por la acción de ruta de la tienda con formularios nativos (sin JavaScript) o un `Form` de fetcher inyectable. Incluye `openCartDrawer`/`closeCartDrawer`/`useCartDrawer`, `useOpenCartDrawerWhenDone` (abre al terminar un agregado) y `handleCartLinkClick` (el enlace de la cabecera abre el cajón, con `href` de respaldo). `<dialog>` modal con foco atrapado, Esc, clic fuera, scroll del fondo bloqueado y `prefers-reduced-motion`.
+- 71e099c: Nuevo subpath opcional `@asteby/storefront-react/fitment`: compatibilidad de vehículos para tiendas de refacciones (catálogo marca → modelo → año → motor, clave de vehículo, opciones en cascada del selector, estado de compatibilidad `withFit`/`fitStatus`, tabla de compatibilidad y `safeRedirect`). Funciones puras sin textos ni marcas: los prefijos de etiqueta, el atributo de la tabla y las grafías de prioridad se inyectan con `fitmentConfig` y `parseCatalog`.
+
 ## 0.7.0
 
 ### Minor Changes
