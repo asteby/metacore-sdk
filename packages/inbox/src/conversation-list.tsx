@@ -4,7 +4,7 @@ import type { ConversationSummary, InboxTag } from './types'
 import { useInboxLabels, type InboxLabels } from './i18n'
 import { useVirtualList } from './use-virtual-list'
 import { EmptyState, ErrorState, ListSkeleton } from './states'
-import { cx, FOCUS, formatListTime, initials, toDate } from './utils'
+import { cx, FOCUS, formatListTime, initials, safeUrl, toDate } from './utils'
 
 const TAG_TONE: Record<NonNullable<InboxTag['tone']>, string> = {
   neutral: 'bg-muted text-muted-foreground',
@@ -50,7 +50,7 @@ const Row = memo(function Row({ item, index, setSize, top, height, selected, loc
         className={cx('flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted text-xs font-semibold text-muted-foreground')}
         aria-hidden
       >
-        {item.avatarUrl ? <img src={item.avatarUrl} alt="" className="size-full object-cover" loading="lazy" /> : initials(item.participants)}
+        {safeUrl(item.avatarUrl) ? <img src={safeUrl(item.avatarUrl)} alt="" className="size-full object-cover" loading="lazy" /> : initials(item.participants)}
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-baseline gap-2">

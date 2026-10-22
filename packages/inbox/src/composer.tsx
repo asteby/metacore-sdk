@@ -119,11 +119,19 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     el.style.height = `${Math.min(el.scrollHeight, 320)}px`
   }, [text])
 
+  const pending = useRef<{ key: string; draft: Parameters<DraftStore['save']>[1] } | null>(null)
+  // The key whose draft is loaded into the fields. Autosave only writes for this key,
+  // so text typed in conversation A can never be saved under conversation B.
+  const hydratedKey = useRef<string | null | undefined>(undefined)
+
   // Hydrate the draft when the key changes.
   useEffect(() => {
     setHydrated(false)
+    hydratedKey.current = undefined
+    pending.current = null
     dirty.current = false
     if (!draftKey) {
+      hydratedKey.current = null
       setHydrated(true)
       return
     }
@@ -137,6 +145,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         if (d?.identityId) setIdentity(d.identityId)
         setItems((d?.attachments ?? []).map((a) => ({ ...a, status: 'ready' as const })))
       }
+      hydratedKey.current = draftKey
       setHydrated(true)
     })
     return () => {
@@ -145,7 +154,6 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   }, [draftKey, draftStore])
 
   // Debounced autosave; a flush on key change / unmount avoids losing the last words.
-  const pending = useRef<{ key: string; draft: Parameters<DraftStore['save']>[1] } | null>(null)
   const flush = useCallback(() => {
     const p = pending.current
     if (!p) return
@@ -155,7 +163,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   }, [draftStore])
 
   useEffect(() => {
-    if (!draftKey || !hydrated) return
+    if (!draftKey || !hydrated || hydratedKey.current !== draftKey) return
     const ready = items.filter((i) => i.status === 'ready' && !i.file).map(({ id, name, size }) => ({ id, name, size }))
     pending.current = { key: draftKey, draft: { text, subject: subject || undefined, identityId: identity, attachments: ready.length ? ready : undefined } }
     setDraftState('saving')

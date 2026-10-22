@@ -5,7 +5,7 @@ import { useInboxLabels, type InboxLabels } from './i18n'
 import { groupMessages, linkify, splitQuoted, type MessageGroup } from './thread-utils'
 import { HtmlSandboxFrame } from './html-sandbox-frame'
 import { EmptyState, ErrorState, ThreadSkeleton } from './states'
-import { cx, FOCUS, formatBytes, formatFullTime, initials } from './utils'
+import { cx, FOCUS, formatBytes, formatFullTime, initials, safeUrl } from './utils'
 
 const senderName = (p: InboxParticipant, fallback: string) => p.name || p.address || fallback
 
@@ -92,8 +92,8 @@ function Attachments({ items, onOpen, labels }: { items: InboxAttachment[]; onOp
               <button type="button" className={cls} onClick={() => onOpen(a)}>
                 {inner}
               </button>
-            ) : a.url ? (
-              <a className={cls} href={a.url} download={a.name} target="_blank" rel="noopener noreferrer">
+            ) : safeUrl(a.url) ? (
+              <a className={cls} href={safeUrl(a.url)} download={a.name} target="_blank" rel="noopener noreferrer">
                 {inner}
               </a>
             ) : (
@@ -148,7 +148,7 @@ const Group = memo(function Group({ group, locale, labels, collapseQuotes, rewri
           out ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground',
         )}
       >
-        {group.sender.avatarUrl ? <img src={group.sender.avatarUrl} alt="" className="size-full object-cover" loading="lazy" /> : initials(name)}
+        {safeUrl(group.sender.avatarUrl) ? <img src={safeUrl(group.sender.avatarUrl)} alt="" className="size-full object-cover" loading="lazy" /> : initials(name)}
       </span>
       <div className="min-w-0 flex-1 space-y-2">
         <header className="flex items-baseline gap-2">

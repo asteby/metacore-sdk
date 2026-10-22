@@ -46,3 +46,11 @@ export function initials(name: string): string {
   const b = parts.length > 1 ? parts[parts.length - 1]!.charAt(0) : ''
   return (a + b).toUpperCase()
 }
+
+/** Returns the URL only when it is http(s), blob: or scheme-less (relative); otherwise undefined (blocks javascript:, data:...). */
+export function safeUrl(url: string | undefined | null): string | undefined {
+  if (!url) return undefined
+  const clean = url.replace(/[\u0000-\u0020]/g, '')
+  if (!clean) return undefined
+  return /^[a-z][a-z0-9+.-]*:/i.test(clean) ? (/^(https?|blob):/i.test(clean) ? url.trim() : undefined) : url.trim()
+}

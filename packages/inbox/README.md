@@ -73,3 +73,14 @@ useInboxShortcuts({
 `draftStore` (`load/save/remove`) defaults to localStorage; swap it for an API.
 `uploadAttachment(file)` uploads on pick and returns a server reference; without
 it, `onSend` receives the raw `File` objects.
+
+## Borradores y sandbox HTML
+
+- `createLocalDraftStore(prefix)` guarda el texto de los borradores en
+  localStorage. Usa un prefijo por usuario/tenant
+  (`metacore.inbox.draft:${userId}:`) y llama a `store.clear()` al cerrar
+  sesión o cambiar de cuenta.
+- El iframe del HTML recibido NUNCA debe combinar `allow-scripts` con
+  `allow-same-origin`. El sanitizador es propio (el repo no depende de
+  DOMPurify); la frontera real es el sandbox del iframe más la CSP. Con
+  `rewriteImageUrl`, la CSP limita `img-src` al origen del proxy.

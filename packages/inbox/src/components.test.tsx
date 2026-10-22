@@ -85,13 +85,22 @@ describe('ThreadView', () => {
   })
 })
 
+describe('ThreadView url hygiene', () => {
+  it('drops javascript: attachment links and avatars', () => {
+    const m = [{ id: '1', direction: 'in' as const, sender: { name: 'Ana', address: 'a@x.com', avatarUrl: 'javascript:alert(1)' }, sentAt: '2026-10-22T10:00:00Z', text: 'x', attachments: [{ id: 'f', name: 'evil.pdf', size: 1, url: 'javascript:alert(1)' }, { id: 'g', name: 'ok.pdf', size: 1, url: 'https://x.com/ok.pdf' }] }]
+    const { container } = render(<ThreadView messages={m} title="t" />)
+    expect(container.innerHTML).not.toContain('javascript:')
+    expect(container.querySelector('a[href="https://x.com/ok.pdf"]')).toBeTruthy()
+  })
+})
+
 describe('HtmlSandboxFrame', () => {
   it('uses a script-less sandbox, blocks images and offers an opt-in', () => {
     const onLoad = vi.fn()
     render(<HtmlSandboxFrame html={'<p>x</p><img src="https://t.example/p.gif">'} onLoadImages={onLoad} />)
     const frame = screen.getByTitle('Contenido del mensaje') as HTMLIFrameElement
     const sandbox = frame.getAttribute('sandbox') ?? ''
-    expect(sandbox).not.toMatch(/allow-scripts/)
+    expect(sandbox).not.toMatch(/allow-scripts/) // INVARIANT: never allow-scripts together with allow-same-origin
     expect(frame.getAttribute('srcdoc')).not.toContain('p.gif')
     fireEvent.click(screen.getByRole('button', { name: 'Cargar imágenes' }))
     expect(onLoad).toHaveBeenCalled()
@@ -137,6 +146,32 @@ describe('Composer', () => {
     unmount()
     render(<Composer onSend={() => {}} draftKey="conv1" draftStore={store} draftDelayMs={20} />)
     await waitFor(() => expect((screen.getByRole('textbox') as HTMLTextAreaElement).value).toBe('borrador'))
+  })
+  it('never saves the previous conversation text under the new draftKey', async () => {
+    const saved: Record<string, string> = {}
+    let release: (v: null) => void = () => {}
+    const store = {
+      load: (k: string) => (k === 'conv2' ? new Promise<null>((r) => (release = r)) : null),
+      save: (k: string, d: { text: string }) => void (saved[k] = d.text),
+      remove: (k: string) => void delete saved[k],
+    }
+    const { rerender, unmount } = render(<Composer onSend={() => {}} draftKey="conv1" draftStore={store} draftDelayMs={20} />)
+    await new Promise((r) => setTimeout(r, 10)) // conv1 hydrated
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'texto A' } })
+    rerender(<Composer onSend={() => {}} draftKey="conv2" draftStore={store} draftDelayMs={20} />)
+    await new Promise((r) => setTimeout(r, 60))
+    unmount()
+    release(null)
+    expect(saved.conv1).toBe('texto A')
+    expect(saved.conv2).toBeUndefined()
+  })
+  it('draft store clear() removes only its own prefix', () => {
+    localStorage.setItem('other:x', '1')
+    const store = createLocalDraftStore('mine:')
+    store.save('a', { text: 'x' })
+    store.clear?.()
+    expect(store.load('a')).toBeNull()
+    expect(localStorage.getItem('other:x')).toBe('1')
   })
   it('uploads attachments through the adapter and rejects oversize', async () => {
     const upload = vi.fn().mockResolvedValue({ id: 'srv1', name: 'a.txt', size: 3 })

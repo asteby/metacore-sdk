@@ -50,6 +50,7 @@ function detect(): 'light' | 'dark' {
 /**
  * Renders untrusted HTML in an iframe with no script capability:
  * `sandbox` without allow-scripts, plus a strict CSP in the document.
+ * INVARIANT: never add `allow-scripts` next to `allow-same-origin`.
  * `allow-same-origin` is granted only so the host can measure the height;
  * with scripts disabled it cannot be used to reach the host page.
  * Styles cannot leak either way because the document is isolated.

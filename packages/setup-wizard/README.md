@@ -34,3 +34,18 @@ and ends as `ok`, `error`, or `error` with `exhaustedMessage` when attempts run 
   onComplete={() => navigate('/mail')}
 />
 ```
+
+## Decisión pendiente: dos implementaciones paralelas (I10)
+
+Existe un asistente por pasos en este paquete (`StepWizard` / `useStepWizard`)
+y otro en `@asteby/metacore-runtime-react` (`setup`). Hoy conviven con
+máquinas de estado, persistencia y etiquetas separadas. Unificarlas (una sola
+fuente en SDK, la otra como adaptador) queda como decisión pendiente del
+equipo; este PR no la resuelve. Hasta decidir, no copies funciones entre ambas.
+
+## Notas de seguridad / operación
+
+- Los pasos dinámicos (`steps`/`methods` que llegan tras el montaje) se
+  sincronizan solos; los pasos nuevos arrancan en `pending`.
+- `createLocalWizardPersistence` guarda estado en localStorage: usa un prefijo
+  por usuario/tenant y límpialo al cerrar sesión.
