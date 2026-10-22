@@ -86,6 +86,45 @@ import { PillTabsList, PillTabsTrigger } from '@asteby/metacore-ui/profile'
 Optional i18n keys (Spanish fallbacks): `data_state.<kind>`, `data_state.retry`,
 `page_header.more`, `qr_frame.loading`, `qr_frame.expired`, `qr_frame.refresh`.
 
+## Page header, ActionBar, PageShell and BackLink (mobile-first)
+
+```tsx
+import { ActionBar, BackLink, PageHeader, PageShell, type ActionItem } from '@asteby/metacore-ui/shared'
+
+const items: ActionItem[] = [
+  { key: 'dispatch', label: 'Despachar', priority: 'primary', run: dispatch },
+  { key: 'edit', label: 'Editar', icon: <Pencil />, run: edit },
+  { key: 'print', label: 'Imprimir', icon: <Printer />, priority: 'overflow', run: print },
+  { key: 'delete', label: 'Eliminar', destructive: true, confirm: { title: '¿Eliminar SO-00004?' }, run: remove },
+]
+
+<PageShell header={
+  <PageHeader
+    leading={<BackLink asChild><Link to='/m/warehouse_orders'>Órdenes</Link></BackLink>}
+    title='SO-00004' titleKind='identifier' subtitle={customerLink}
+    badges={<Badge>Por surtir</Badge>}
+    actions={<ActionBar items={items} />}
+  />
+}>
+  {body}
+</PageShell>
+```
+
+`ActionBar` rules (pure planner exported as `planActionBar` for adapters/tests):
+
+- **One primary.** The first `priority: 'primary'` is the only `variant=default`; later ones are demoted to secondary.
+- **Collapse by measurement, not only breakpoint.** A `ResizeObserver` measures the bar and moves secondaries into «⋯» from the end until primary + secondaries + «⋯» fit. `maxVisible` (default `{ base: 2, md: 3, lg: 4 }`, primary included, viewport breakpoints) is an upper bound and the first-paint plan. The bar never wraps to two lines; the primary never collapses (its label wraps instead).
+- **Destructive** items never render inline: they go last in «⋯», after a divider, in `text-destructive`, and confirm (`ConfirmDialog destructive`) before `run`. Pass `confirm: false` if the host already confirms; pass `{ title, description, confirmLabel, cancelLabel }` to customise.
+- **Overflow** opens as a dropdown from `md` (768px, `MOBILE_BREAKPOINT`) up and as a bottom sheet below (`overflowAs='auto' | 'menu' | 'sheet'`). Below `md`, secondaries with an `icon` render icon-only (labelled) and buttons use the 44px `comfortable` sizes.
+- `run` may return a promise: the button shows a spinner and the other actions lock until it settles. Errors go to `onActionError` or are rethrown. `disabledReason` disables the action and explains why (tooltip on desktop, text in the menu/sheet).
+- The bar fills its parent (`w-full`, inline-size containment): give it the room it may use.
+
+`PageHeader` lays out by its own width (`@container`): under 448px it stacks leading → title + badges → actions; wider, title left (max 60%, shrinks) and actions right. `titleKind='identifier'` keeps folios/SKUs on one line (`truncate`, full value in `title`); `text` (default) wraps. Title size is fluid (`clamp(1.25rem, 1rem + 2vw, 1.5rem)`). `overflowActions` still works but `ActionBar` is preferred.
+
+`PageShell` is the page container: single gutter `px-4 sm:px-6 lg:px-8`, `min-w-0`, bottom safe-area, `@container/page`, `width='narrow' | 'default' | 'wide' | 'full'`. `BackLink` is a 44px «‹ Atrás» that renders an `<a href>`, a `<button>` (no `href`) or your router link (`asChild`).
+
+i18n keys (all with Spanish defaults): `action_bar.more`, `action_bar.label`, `action_bar.sheet_description`, `action_bar.confirm_title` (`{{label}}`), `action_bar.confirm_description`, `action_bar.cancel`, `back_link.label`, `page_header.more`.
+
 ## Link previews
 
 WhatsApp/Slack-style cards for news, posts and evidence. The components **never fetch external sites**:
