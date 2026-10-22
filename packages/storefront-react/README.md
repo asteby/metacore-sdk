@@ -503,6 +503,22 @@ import { CartProgressBars, CrossSellModal, OrderNote, PromoPopup } from '@asteby
 - `OrderNote`: `<textarea>` con etiqueta, 1000 caracteres, guardado con *debounce* (800 ms) y al salir del campo; sin JS es un `<form method="post">` con botón «Guardar nota».
 - Funciones puras testeables: `isExcludedPath`, `frequencyAllows`, `isCrawler`, `withinWindow`, `resolveTrigger`, `safeInternalPath`.
 
+## Compatibilidad de vehículos (`@asteby/storefront-react/fitment`)
+
+Módulo opcional y sin interfaz para tiendas de refacciones: catálogo marca → modelo → año → motor, clave de vehículo, opciones en cascada del selector y estado de compatibilidad de cada pieza. No trae textos ni marcas: los prefijos de etiqueta, el atributo de la tabla de compatibilidad y las grafías del backend se inyectan con `fitmentConfig` / `parseCatalog`.
+
+```ts
+import { parseCatalog, resolveVehicle, fitmentConfig, fitFilterTags, withFit, safeRedirect } from '@asteby/storefront-react/fitment'
+
+const config = fitmentConfig({ compatAttribute: 'compatibilidad' })        // por defecto: tags `fit:*`, atributo `compatibility`
+const catalog = parseCatalog(section.props, { priorityAliases: { alta: 'high' } })
+const vehicle = resolveVehicle(catalog, cookieKey)                         // null si la clave ya no existe
+const tags = vehicle ? fitFilterTags(vehicle, config) : []                 // filter.tag = alguno de
+const product = withFit(rawProduct, vehicle, config)                       // cientos de tags fit:* → UNA etiqueta de estado
+```
+
+La cookie, el formulario y el redirect son de la tienda; `safeRedirect` valida el destino. Un componente de selector sobre estas funciones llega en una versión posterior.
+
 ## API
 
 | Export | |

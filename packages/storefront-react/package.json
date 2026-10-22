@@ -27,6 +27,16 @@
         "default": "./dist/index.cjs"
       }
     },
+    "./fitment": {
+      "import": {
+        "types": "./dist/fitment.d.ts",
+        "default": "./dist/fitment.js"
+      },
+      "require": {
+        "types": "./dist/fitment.d.cts",
+        "default": "./dist/fitment.cjs"
+      }
+    },
     "./mockups": {
       "import": {
         "types": "./dist/mockups.d.ts",

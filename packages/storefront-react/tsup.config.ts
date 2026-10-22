@@ -4,6 +4,7 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     mockups: 'src/mockups/index.ts',
+    fitment: 'src/fitment/index.ts',
     payments: 'src/payments/index.ts',
     promotions: 'src/promos/index.ts',
     ui: 'src/ui/index.ts',
