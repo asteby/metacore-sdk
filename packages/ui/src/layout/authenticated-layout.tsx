@@ -75,7 +75,7 @@ export function AuthenticatedLayout({
         </Header>
         <main
           id='main-content'
-          className='flex-1 flex flex-col min-h-0 outline-none'
+          className='flex-1 flex flex-col min-h-0 min-w-0 overflow-x-clip outline-none'
         >
           {children}
         </main>

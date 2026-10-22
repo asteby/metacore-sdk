@@ -1,6 +1,8 @@
 import * as React from 'react'
 
-const MOBILE_BREAKPOINT = 768
+/** Single source of truth for the "mobile" cut-off (px). Below this width the
+ * viewport is considered mobile. */
+export const MOBILE_BREAKPOINT = 768
 
 export function useIsMobile() {
   const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)

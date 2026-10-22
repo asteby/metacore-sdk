@@ -8,7 +8,7 @@
  * `null`, `undefined` and `''`.
  */
 export function headerActionsHasBadge(
-  badge: number | string | boolean | null | undefined
+  badge: number | string | boolean | null | undefined | 'dot'
 ): boolean {
   if (typeof badge === 'number') return badge !== 0
   if (typeof badge === 'boolean') return badge

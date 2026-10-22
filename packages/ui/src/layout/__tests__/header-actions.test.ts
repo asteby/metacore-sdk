@@ -18,5 +18,6 @@ describe('headerActionsHasBadge', () => {
     expect(headerActionsHasBadge(99)).toBe(true)
     expect(headerActionsHasBadge('new')).toBe(true)
     expect(headerActionsHasBadge(true)).toBe(true)
+    expect(headerActionsHasBadge('dot')).toBe(true)
   })
 })

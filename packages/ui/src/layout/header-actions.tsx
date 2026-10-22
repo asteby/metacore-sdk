@@ -24,10 +24,11 @@ export interface HeaderActionsProps {
    * Aggregate badge bubbled onto the collapsed overflow trigger so a pending
    * notification (e.g. the "1" of a core update) is still visible when the
    * toggles are hidden in the popover. A numeric `0`, `false`, `null`,
-   * `undefined` or `''` renders no badge. Hosts compute this from the same
+   * `undefined` or `''` renders no badge. `'dot'` renders a small number-less
+   * dot (for informational, non-actionable items). Hosts compute this from the same
    * counts that drive the individual toggles' badges.
    */
-  overflowBadge?: number | string | boolean | null
+  overflowBadge?: number | string | boolean | null | 'dot'
   /** Accessible label for the overflow trigger. Defaults to "More". */
   overflowLabel?: string
   /** Extra classes on the inline (desktop) container. */
@@ -156,7 +157,13 @@ export function HeaderActions({
               aria-label={overflowLabel}
             >
               <MoreVertical className='h-5 w-5' />
-              {showBadge && (
+              {showBadge && overflowBadge === 'dot' && (
+                <span
+                  className='bg-primary absolute right-1.5 top-1.5 size-2 rounded-full'
+                  aria-hidden
+                />
+              )}
+              {showBadge && overflowBadge !== 'dot' && (
                 <Badge
                   className='absolute -right-0.5 -top-0.5 h-4 min-w-4 justify-center rounded-full px-1 py-0 text-[10px] leading-none'
                   aria-hidden
