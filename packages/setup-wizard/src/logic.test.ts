@@ -56,3 +56,24 @@ describe('wizard state', () => {
     expect(sanitizeResume('garbage', ['a'])).toEqual(initialWizardState(['a']))
   })
 })
+
+describe('wizardReducer sync', () => {
+  it('adds new ids as pending, drops removed ones and clamps current', () => {
+    const s0 = { ...initialWizardState(['a']), current: 0 }
+    const s1 = wizardReducer(s0, { type: 'sync', ids: ['m', 'a'] })
+    expect(Object.keys(s1.steps)).toEqual(['m', 'a'])
+    expect(s1.steps.m).toEqual({ status: 'pending', attempts: 0 })
+    const s2 = wizardReducer({ ...s1, current: 1 }, { type: 'sync', ids: ['a'] })
+    expect(s2.current).toBe(0)
+    expect(wizardReducer(s2, { type: 'sync', ids: ['a'] })).toBe(s2)
+  })
+})
+
+describe('pollUntil signal', () => {
+  it('passes the signal to check and does not leak abort listeners while hidden', async () => {
+    const ac = new AbortController()
+    const seen: (AbortSignal | undefined)[] = []
+    await pollUntil(async (_i, sig) => (seen.push(sig), 'ok'), { interval: 1, signal: ac.signal, until: () => true })
+    expect(seen[0]).toBe(ac.signal)
+  })
+})

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { CheckCircle2, RefreshCw } from 'lucide-react'
 import { DnsRecordRow, type DnsRecord, type DnsRecordStatus } from './dns-record-row'
 import { useWizardLabels, type WizardLabels } from './i18n'
@@ -65,6 +65,7 @@ export function DomainSetupWizard({
 }: DomainSetupWizardProps) {
   const labels = useWizardLabels(o)
   const [method, setMethod] = useState(MANUAL)
+  const methodGroup = useId()
   const [checks, setChecks] = useState<Record<string, RecordCheck>>({})
   const [checking, setChecking] = useState(false)
   const check = useRef(checkRecords)
@@ -112,7 +113,7 @@ export function DomainSetupWizard({
                   busy && 'pointer-events-none opacity-60',
                 )}
               >
-                <input type="radio" name="dns-method" className="sr-only" checked={method === m.id} onChange={() => setMethod(m.id)} />
+                <input type="radio" name={`${methodGroup}-dns-method`} className="sr-only" checked={method === m.id} onChange={() => setMethod(m.id)} />
                 {m.icon && <span aria-hidden>{m.icon}</span>}
                 <span className="min-w-0">
                   <span className="block text-sm font-medium text-foreground">{m.title}</span>

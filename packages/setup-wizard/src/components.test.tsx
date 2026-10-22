@@ -129,3 +129,24 @@ describe('DomainSetupWizard', () => {
     expect(onApply).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('dynamic steps', () => {
+  const rec: DomainRecordSpec[] = [{ id: 'r1', type: 'TXT', name: 'a', value: 'b' }]
+  it('does not crash when methods arrive after mount (steps grow)', async () => {
+    const checkRecords = vi.fn().mockResolvedValue({ r1: { status: 'missing' } })
+    const m = { id: 'cf', title: 'Cloudflare', onApply: vi.fn().mockResolvedValue(undefined) }
+    const { rerender } = render(<DomainSetupWizard domain="acme.com" records={rec} checkRecords={checkRecords} methods={[]} />)
+    rerender(<DomainSetupWizard domain="acme.com" records={rec} checkRecords={checkRecords} methods={[m]} />)
+    expect(await screen.findAllByText('Cloudflare')).toBeTruthy()
+  })
+
+  it('does not fire onComplete on mount when the persisted flow is already complete', async () => {
+    const onComplete = vi.fn()
+    const p = createLocalWizardPersistence()
+    p.save('k', { current: 0, steps: { a: { status: 'ok', attempts: 0 } } })
+    render(<StepWizard steps={[{ id: 'a', title: 'A' }]} persistKey="k" persistence={p} onComplete={onComplete} />)
+    await screen.findByText('A', { selector: 'h2, h3, span, p' }).catch(() => undefined)
+    await new Promise((r) => setTimeout(r, 30))
+    expect(onComplete).not.toHaveBeenCalled()
+  })
+})

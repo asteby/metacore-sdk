@@ -1,7 +1,7 @@
 import { AlertCircle, Check, Loader2 } from 'lucide-react'
 import { useWizardLabels, type WizardLabels } from './i18n'
 import { useStepWizard, type WizardStepDef } from './use-step-wizard'
-import { createLocalWizardPersistence, type StepStatus, type WizardPersistence } from './wizard-state'
+import { createLocalWizardPersistence, type StepState, type StepStatus, type WizardPersistence } from './wizard-state'
 import { cx, FOCUS } from './utils'
 
 export interface StepWizardProps {
@@ -27,6 +27,9 @@ function StepIcon({ status, index }: { status: StepStatus; index: number }) {
   return <span className={cx(base, 'border border-border bg-background text-muted-foreground')}>{index + 1}</span>
 }
 
+/** Fallback while the reducer syncs steps that appeared after mount. */
+const PENDING: StepState = { status: 'pending', attempts: 0 }
+
 /**
  * Generic step wizard. Each step declares an action (`run`), optionally a
  * polling schedule for live verification, and a body. Status, diagnostics,
@@ -39,7 +42,7 @@ export function StepWizard({ steps, persistKey, persistence, autoAdvance, onComp
   const { state } = w
   const step = steps[state.current]
   if (!step) return null
-  const st = state.steps[step.id]!
+  const st = state.steps[step.id] ?? PENDING
   const busy = st.status === 'running'
   const last = state.current === steps.length - 1
   const statusText: Record<StepStatus, string> = { pending: labels.stepPending, running: labels.stepRunning, ok: labels.stepOk, error: labels.stepError }
@@ -81,7 +84,7 @@ export function StepWizard({ steps, persistKey, persistence, autoAdvance, onComp
         </p>
         <ol className="flex items-center gap-2">
           {steps.map((s, i) => {
-            const ss = state.steps[s.id]!
+            const ss = state.steps[s.id] ?? PENDING
             const active = i === state.current
             return (
               <li key={s.id} className={cx('flex min-w-0 items-center gap-2', active ? 'flex-1' : 'max-sm:hidden', i < steps.length - 1 && 'sm:flex-1')} aria-current={active ? 'step' : undefined}>

@@ -37,7 +37,7 @@ export const sleep = (ms: number, signal?: AbortSignal) =>
   })
 
 /** Runs `check` immediately and then on the schedule until `until`, exhaustion or abort. Errors propagate. */
-export async function pollUntil<T>(check: (attempt: number) => Promise<T>, opts: PollOptions<T>): Promise<PollOutcome<T>> {
+export async function pollUntil<T>(check: (attempt: number, signal?: AbortSignal) => Promise<T>, opts: PollOptions<T>): Promise<PollOutcome<T>> {
   const { interval, maxAttempts = Infinity, signal, until, onTick, pauseWhenHidden = true, sleep: wait = sleep } = opts
   let last: T | undefined
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -47,13 +47,17 @@ export async function pollUntil<T>(check: (attempt: number) => Promise<T>, opts:
       if (signal?.aborted) return { status: 'aborted', attempts: attempt }
       while (pauseWhenHidden && typeof document !== 'undefined' && document.hidden && !signal?.aborted) {
         await new Promise<void>((r) => {
-          const on = () => (document.removeEventListener('visibilitychange', on), r())
+          const on = () => {
+            document.removeEventListener('visibilitychange', on)
+            signal?.removeEventListener('abort', on)
+            r()
+          }
           document.addEventListener('visibilitychange', on)
           signal?.addEventListener('abort', on, { once: true })
         })
       }
     }
-    const value = await check(attempt)
+    const value = await check(attempt, signal)
     if (signal?.aborted) return { status: 'aborted', attempts: attempt + 1 }
     last = value
     onTick?.(value, attempt + 1)
@@ -72,7 +76,7 @@ export interface UsePollingOptions<T> extends Omit<PollOptions<T>, 'signal' | 'o
  * Live verification hook: polls `check` while enabled and exposes the latest
  * value, attempt count and state. `restart()` re-arms it after exhaustion.
  */
-export function usePolling<T>(check: (attempt: number) => Promise<T>, opts: UsePollingOptions<T>) {
+export function usePolling<T>(check: (attempt: number, signal?: AbortSignal) => Promise<T>, opts: UsePollingOptions<T>) {
   const { enabled = true } = opts
   const [value, setValue] = useState<T | undefined>()
   const [attempts, setAttempts] = useState(0)
@@ -89,7 +93,7 @@ export function usePolling<T>(check: (attempt: number) => Promise<T>, opts: UseP
     const ac = new AbortController()
     setState('polling')
     setError(undefined)
-    pollUntil((a) => checkRef.current(a), {
+    pollUntil((a, sig) => checkRef.current(a, sig), {
       ...optsRef.current,
       signal: ac.signal,
       onTick: (v, n) => (setValue(v), setAttempts(n)),

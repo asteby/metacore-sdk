@@ -52,13 +52,20 @@ const errMsg = (e: unknown) => (e instanceof Error && e.message ? e.message : St
 export function useStepWizard({ steps, persistKey, persistence, autoAdvance = true, onComplete }: UseStepWizardOptions) {
   const ids = useMemo(() => steps.map((s) => s.id), [steps])
   const [state, dispatch] = useReducer(wizardReducer, ids, initialWizardState)
+  // Steps/methods may arrive after mount: keep the state in sync with the ids.
+  const idsKey = ids.join('\u0000')
+  useEffect(() => {
+    dispatch({ type: 'sync', ids })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idsKey])
   const [ready, setReady] = useState(!(persistKey && persistence))
   const stepsRef = useRef(steps)
   stepsRef.current = steps
   const stateRef = useRef<WizardState>(state)
   stateRef.current = state
   const controllers = useRef(new Map<string, AbortController>())
-  const completed = useRef(false)
+  // undefined until the first ready evaluation: a flow that was already complete when mounted must not re-fire onComplete.
+  const completed = useRef<boolean | undefined>(undefined)
   const onCompleteRef = useRef(onComplete)
   onCompleteRef.current = onComplete
 
@@ -137,12 +144,14 @@ export function useStepWizard({ steps, persistKey, persistence, autoAdvance = tr
 
   const isComplete = steps.length > 0 && steps.every((s) => state.steps[s.id]?.status === 'ok')
   useEffect(() => {
-    if (isComplete && !completed.current) {
-      completed.current = true
-      onCompleteRef.current?.()
+    if (!ready) return
+    if (completed.current === undefined) {
+      completed.current = isComplete
+      return
     }
-    if (!isComplete) completed.current = false
-  }, [isComplete])
+    if (isComplete && !completed.current) onCompleteRef.current?.()
+    completed.current = isComplete
+  }, [isComplete, ready])
 
   const markOk = useCallback(
     (id: string) => {

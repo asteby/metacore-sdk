@@ -18,6 +18,7 @@ export type WizardAction =
   | { type: 'goto'; index: number }
   | { type: 'hydrate'; state: WizardState }
   | { type: 'reset'; ids: string[] }
+  | { type: 'sync'; ids: string[] }
 
 export const initialWizardState = (ids: string[]): WizardState => ({
   current: 0,
@@ -43,6 +44,15 @@ export function wizardReducer(state: WizardState, a: WizardAction): WizardState 
       return a.state
     case 'reset':
       return initialWizardState(a.ids)
+    case 'sync': {
+      // Steps can change after mount (async options): add new ids as pending,
+      // drop the ones that disappeared and keep `current` in range.
+      const known = Object.keys(state.steps)
+      if (known.length === a.ids.length && a.ids.every((id) => id in state.steps)) return state
+      const steps: Record<string, StepState> = {}
+      for (const id of a.ids) steps[id] = state.steps[id] ?? { status: 'pending', attempts: 0 }
+      return { current: Math.max(0, Math.min(a.ids.length - 1, state.current)), steps }
+    }
   }
 }
 
