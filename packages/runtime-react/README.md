@@ -209,7 +209,8 @@ En `ops/frontend/src/features/installed-addons/index.tsx`:
 
 1. Borrar `UnifiedAddonConfigDialog`, `ConnectorCredentialFieldControl`, `DynamicConnectorSelect`,
    `fetchLookupOptions` y `connector-form-model.ts` (ahora viven en el SDK; los helpers se
-   exportan por si se necesitan: `shapeMismatch`, `missingRequired`, `parseSaveError`...).
+   exportan desde el subpath `@asteby/metacore-runtime-react/setup`: `shapeMismatch`,
+   `missingRequired`, `parseSaveError`, `safeUrl`...; la raíz solo expone los componentes).
 2. Importar y montar:
 
 ```tsx
@@ -229,12 +230,20 @@ const { activeBranch } = useActiveBranch()
   activeBranch={activeBranch ? { id: activeBranchId, name: activeBranch.name } : null}
   ensureAddonBundle={(key, i18n) => ensureAddonBundle(i18n as any, key)}
   displayName={addonDisplayName(addon)}
+  expectedOptionKinds={{
+    serie_invoice: 'factura',
+    serie_credit_note: 'nota_credito',
+    serie_payment_complement: 'pago',
+  }}
 />
 ```
 
    Requiere `<ApiProvider>` (o pasar `client={api}`) y `QueryClientProvider`; `toast` de sonner
    es el notificador por defecto (`notify` lo reemplaza). Las claves `installed_addons.*` y
    `common.*` siguen siendo las de ops: sus traducciones tienen prioridad sobre el texto del SDK.
+   **`expectedOptionKinds`** (credencial -> `tipo` esperado de las opciones del lookup) es
+   inyectable y vacío por defecto: el SDK ya no trae lógica fiscal. Ops **debe pasarlo**
+   (como arriba) para conservar el filtrado actual de series por tipo de documento.
 3. Diferencia deliberada: un secreto nunca se rellena desde `GET /integrations/:p/values`,
    aunque el backend lo devolviera.
 

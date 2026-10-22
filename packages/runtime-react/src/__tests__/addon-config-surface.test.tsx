@@ -10,7 +10,7 @@ vi.mock('react-i18next', () => {
 })
 
 import { ApiProvider } from '../api-context'
-import { AddonConfigSurface, type ConnectorEntry } from '../setup/addon-config-surface'
+import { AddonConfigSurface, clearConnectorLookupCache, type ConnectorEntry } from '../setup/addon-config-surface'
 import { shapeMismatch, missingRequired, credentialShape } from '../setup/connector-form-model'
 
 afterEach(cleanup)
@@ -191,5 +191,58 @@ describe('AddonConfigSurface', () => {
         const put = calls.find((c) => c.m === 'PUT')!
         expect(put.url).toBe('/addons/pay/settings?branch_id=b1')
         expect(put.body).toEqual({ tip: '10' })
+    })
+
+    it('a write_only setting typed then erased does not send "" over the stored secret', async () => {
+        const defs = [
+            { key: 'token', label: 'Token de ajustes', type: 'text', write_only: true, stored: true },
+            { key: 'limit', label: 'Límite', type: 'number' },
+        ]
+        const { calls, notify } = setup({ connector: null }, { 'GET /addons/pay/settings': { data: {}, definitions: defs } })
+        const tok = (await screen.findByLabelText('Token de ajustes')) as HTMLInputElement
+        fireEvent.change(tok, { target: { value: 'abc' } })
+        fireEvent.change(tok, { target: { value: '' } })
+        const limit = screen.getByLabelText('Límite') as HTMLInputElement
+        fireEvent.change(limit, { target: { value: '5' } })
+        fireEvent.change(limit, { target: { value: '' } })
+        fireEvent.click(screen.getByText('Guardar'))
+        await waitFor(() => expect(notify.success).toHaveBeenCalled())
+        const put = calls.find((c) => c.m === 'PUT')!
+        expect('token' in put.body).toBe(false)
+        expect(put.body.limit).toBeUndefined() // empty number is not 0
+    })
+
+    it('dynamic_select uses the `client` prop and the injected expectedOptionKinds', async () => {
+        const dyn: ConnectorEntry = {
+            ...connector,
+            credentials: [{ key: 'serie_x', type: 'dynamic_select', options_source: 'list_series', label: 'pay.serie_x' }],
+        }
+        const opts = [
+            { value: 'F1', label: 'Serie F1', tipo: 'factura' },
+            { value: 'N1', label: 'Serie N1', tipo: 'nota' },
+        ]
+        clearConnectorLookupCache()
+        const prop = makeApi({ 'POST /integrations/mp/lookup': { data: { options: opts } } })
+        const host = makeApi()
+        const qc = new QueryClient()
+        render(
+            <QueryClientProvider client={qc}>
+                <ApiProvider client={host.client as any} batch={false}>
+                    <AddonConfigSurface
+                        addon={addon}
+                        connector={dyn}
+                        open
+                        onOpenChange={() => {}}
+                        client={prop.client as any}
+                        expectedOptionKinds={{ serie_x: 'factura' }}
+                    />
+                </ApiProvider>
+            </QueryClientProvider>,
+        )
+        await waitFor(() => expect(prop.calls.some((c) => c.url === '/integrations/mp/lookup')).toBe(true))
+        expect(host.calls.some((c) => c.url === '/integrations/mp/lookup')).toBe(false)
+        fireEvent.click(await screen.findByRole('combobox', { name: /Serie X/i }))
+        expect(await screen.findByText('Serie F1')).toBeTruthy()
+        expect(screen.queryByText('Serie N1')).toBeNull()
     })
 })

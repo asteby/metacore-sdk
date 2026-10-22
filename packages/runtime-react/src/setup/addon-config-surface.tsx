@@ -12,7 +12,7 @@
 // fields). Everything host-specific is injected: the API client (ApiProvider
 // or `client`), the admin gate (`canManageIssuer`), the active branch, the
 // addon i18n bundle loader and the notifier.
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useId, useRef, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -121,6 +121,11 @@ export interface AddonConfigNotifier {
   warning: (message: string) => void
 }
 
+// Empty write_only value (typed then erased) must not overwrite the stored secret.
+const isBlank = (v: unknown) => v == null || (typeof v === 'string' && v.trim() === '')
+
+const NO_OPTION_KINDS: Record<string, string> = {}
+
 export interface AddonConfigSurfaceProps {
   addon: AddonConfigAddon
   connector: ConnectorEntry | null
@@ -141,6 +146,12 @@ export interface AddonConfigSurfaceProps {
   notify?: AddonConfigNotifier
   /** Overrides the `useApi()` client. */
   client?: ApiClient
+  /**
+   * credential key -> expected `tipo` of the lookup options. When the source
+   * reports a `tipo`, the field lists only the matching options. Default: none
+   * (no filtering). Example: `{ serie_invoice: 'factura' }`.
+   */
+  expectedOptionKinds?: Record<string, string>
   /** Title name; default `manifest.display_name ?? manifest.name`. */
   displayName?: string
 }
@@ -164,8 +175,19 @@ const humanizeKey = (k?: string) =>
 interface ConnectorFormState {
   fields: ConnectorCredentialField[]
   errors: Record<string, string>
+  /** Unique DOM-id prefix of this surface instance (useId). */
+  idPrefix: string
+  /** API client used by dynamic selects (prop `client` or the host's). */
+  client?: ApiClient
+  /** Host-injected: credential key -> expected option `tipo`. */
+  expectedOptionKinds: Record<string, string>
 }
-const ConnectorFormStateContext = createContext<ConnectorFormState>({ fields: [], errors: {} })
+const ConnectorFormStateContext = createContext<ConnectorFormState>({
+  fields: [],
+  errors: {},
+  idPrefix: 'addon-config',
+  expectedOptionKinds: {},
+})
 
 function ConnectorCredentialFieldControl({
   field,
@@ -211,7 +233,7 @@ function ConnectorCredentialFieldControl({
 
   return (
     <div className='flex flex-col gap-1' data-field={field.key}>
-      <Label htmlFor={`cred-${field.key}`}>
+      <Label htmlFor={`${form.idPrefix}-cred-${field.key}`}>
         {label}
         {field.required ? <span className='text-destructive'> *</span> : null}
       </Label>
@@ -225,7 +247,7 @@ function ConnectorCredentialFieldControl({
         />
       ) : field.type === 'select' && field.options?.length ? (
         <Select value={value} onValueChange={onChange}>
-          <SelectTrigger id={`cred-${field.key}`} aria-invalid={!!error || undefined}>
+          <SelectTrigger id={`${form.idPrefix}-cred-${field.key}`} aria-invalid={!!error || undefined}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -238,7 +260,7 @@ function ConnectorCredentialFieldControl({
         </Select>
       ) : (
         <Input
-          id={`cred-${field.key}`}
+          id={`${form.idPrefix}-cred-${field.key}`}
           type={isSecret ? 'password' : 'text'}
           // A secret must never be offered to (or filled by) the browser's
           // password manager: "new-password" is the value browsers respect.
@@ -248,7 +270,7 @@ function ConnectorCredentialFieldControl({
           spellCheck={false}
           autoCapitalize='off'
           aria-invalid={!!error || undefined}
-          aria-describedby={error ? `cred-${field.key}-error` : undefined}
+          aria-describedby={error ? `${form.idPrefix}-cred-${field.key}-error` : undefined}
           className={cn(error && 'border-destructive focus-visible:ring-destructive/40')}
           placeholder={connected && isSecret ? '••••••••' : ''}
           value={value}
@@ -256,7 +278,7 @@ function ConnectorCredentialFieldControl({
         />
       )}
       {error ? (
-        <p id={`cred-${field.key}-error`} role='alert' className='text-xs text-destructive'>
+        <p id={`${form.idPrefix}-cred-${field.key}-error`} role='alert' className='text-xs text-destructive'>
           {error}
         </p>
       ) : null}
@@ -323,7 +345,9 @@ function DynamicConnectorSelect({
   onChange: (value: string) => void
 }) {
   const st = useSetupT()
-  const api = useApi()
+  const form = useContext(ConnectorFormStateContext)
+  const hostApi = useApi()
+  const api = form.client ?? hostApi
   const [options, setOptions] = useState<
     { value: string; label: string; tipo?: string }[]
   >([])
@@ -342,7 +366,7 @@ function DynamicConnectorSelect({
         err.response?.data?.message ||
           st('installed_addons.dynamic_select_error', {
             defaultValue:
-              'No se pudieron listar las opciones. Guardá la conexión y volvé a intentar.',
+              'No se pudieron listar las opciones. Guarda la conexión y vuelve a intentar.',
           }),
       )
       setState('error')
@@ -356,15 +380,10 @@ function DynamicConnectorSelect({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected])
 
-  // Scope the options to the credential's document type when the source reports
-  // one (serie_invoice → factura, serie_credit_note → nota_credito, …), so each
-  // serie field lists only its relevant series instead of the whole catalogue.
-  const EXPECTED_TIPO: Record<string, string> = {
-    serie_invoice: 'factura',
-    serie_credit_note: 'nota_credito',
-    serie_payment_complement: 'pago',
-  }
-  const expected = EXPECTED_TIPO[field.key]
+  // Scope the options to the kind (`tipo`) the host expects for this field,
+  // when the source reports one. The mapping is injected by the host
+  // (`expectedOptionKinds`); empty by default, so the SDK stays domain-agnostic.
+  const expected = form.expectedOptionKinds[field.key]
   const filtered =
     expected && options.some((o) => o.tipo === expected)
       ? options.filter((o) => o.tipo === expected)
@@ -375,10 +394,10 @@ function DynamicConnectorSelect({
       <div className='flex items-center gap-2'>
         {filtered.length > 0 ? (
           <Select value={value} onValueChange={onChange}>
-            <SelectTrigger id={`cred-${field.key}`} className='flex-1'>
+            <SelectTrigger id={`${form.idPrefix}-cred-${field.key}`} className='flex-1'>
               <SelectValue
                 placeholder={st('installed_addons.dynamic_select_choose', {
-                  defaultValue: 'Elegí una opción',
+                  defaultValue: 'Elige una opción',
                 })}
               />
             </SelectTrigger>
@@ -392,10 +411,10 @@ function DynamicConnectorSelect({
           </Select>
         ) : (
           <Input
-            id={`cred-${field.key}`}
+            id={`${form.idPrefix}-cred-${field.key}`}
             value={value}
             placeholder={st('installed_addons.dynamic_select_placeholder', {
-              defaultValue: 'Guardá la conexión y actualizá para elegir',
+              defaultValue: 'Guarda la conexión y actualiza para elegir',
             })}
             onChange={(e) => onChange(e.target.value)}
           />
@@ -444,8 +463,10 @@ export function AddonConfigSurface({
   ensureAddonBundle,
   notify = toast,
   client,
+  expectedOptionKinds = NO_OPTION_KINDS,
   displayName,
 }: AddonConfigSurfaceProps) {
+  const idPrefix = useId()
   const { t, i18n } = useTranslation()
   const st = useSetupT()
   const hostApi = useApi()
@@ -621,7 +642,11 @@ export function AddonConfigSurface({
       if (branchMode) {
         // Only what the operator touched: an untouched key keeps inheriting.
         const payload: Record<string, unknown> = {}
-        for (const k of touched) payload[k] = settingsValues[k]
+        for (const k of touched) {
+          const d = definitions.find((x) => x.key === k)
+          if (d?.write_only && isBlank(settingsValues[k])) continue
+          payload[k] = settingsValues[k]
+        }
         for (const k of cleared) payload[k] = null
         if (Object.keys(payload).length > 0) {
           await api.put(
@@ -633,7 +658,7 @@ export function AddonConfigSurface({
         // write_only settings are never read back: send them only when typed.
         const payload: Record<string, unknown> = { ...settingsValues }
         for (const d of definitions) {
-          if (d.write_only && !touched.has(d.key)) delete payload[d.key]
+          if (d.write_only && (!touched.has(d.key) || isBlank(payload[d.key]))) delete payload[d.key]
         }
         await api.put(`/addons/${addon.addon_key}/settings`, payload)
       }
@@ -677,7 +702,7 @@ export function AddonConfigSurface({
       if (idx >= 0) setCurrentStep(idx)
     }
     window.setTimeout(() => {
-      const el = document.getElementById(`cred-${first}`)
+      const el = document.getElementById(`${idPrefix}-cred-${first}`)
       el?.closest('details')?.setAttribute('open', '')
       el?.scrollIntoView({ block: 'center' })
       el?.focus()
@@ -799,7 +824,7 @@ export function AddonConfigSurface({
 
   // One setting control, shared by the flat layout and the wizard's last step.
   const renderSetting = (def: AddonSettingDef) => {
-    const id = `setting-${def.key}`
+    const id = `${idPrefix}-setting-${def.key}`
     const value = settingsValues[def.key] ?? def.default_value
     const isCleared = cleared.has(def.key)
     const overridden = branchMode && def.key in overrides && !isCleared
@@ -875,7 +900,14 @@ export function AddonConfigSurface({
             type={def.type === 'number' ? 'number' : 'text'}
             value={String(value ?? '')}
             onChange={(e) =>
-              setSetting(def.key, def.type === 'number' ? Number(e.target.value) : e.target.value)
+              setSetting(
+                def.key,
+                def.type === 'number'
+                  ? e.target.value === ''
+                    ? undefined
+                    : Number(e.target.value)
+                  : e.target.value,
+              )
             }
           />
         )}
@@ -942,7 +974,9 @@ export function AddonConfigSurface({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className='flex max-h-[85vh] flex-col'>
-       <ConnectorFormStateContext.Provider value={{ fields: credFields, errors: fieldErrors }}>
+       <ConnectorFormStateContext.Provider
+        value={{ fields: credFields, errors: fieldErrors, idPrefix, client: api, expectedOptionKinds }}
+      >
         <DialogHeader className='shrink-0'>
           <DialogTitle>
             {st('installed_addons.configure_title', { name: displayName ?? addon.manifest.display_name ?? addon.manifest.name })}

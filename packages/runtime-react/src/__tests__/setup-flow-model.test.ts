@@ -94,6 +94,17 @@ describe('safeUrl', () => {
         expect(safeUrl('//evil.test')).toBeNull()
         expect(safeUrl('data:text/html,hi')).toBeNull()
     })
+    it('refuses relative paths that browsers resolve to another host', () => {
+        expect(safeUrl('/\\evil.com/x')).toBeNull()
+        expect(safeUrl('/\t/evil.com')).toBeNull()
+        expect(safeUrl('/\n/evil.com')).toBeNull()
+        expect(safeUrl('\\\\evil.com')).toBeNull()
+        expect(safeUrl('  //evil.com  ')).toBeNull()
+        expect(safeUrl(' javascript:alert(1)')).toBeNull()
+        expect(safeUrl('/ok/path?x=1#h')).toBe('/ok/path?x=1#h')
+        expect(safeUrl('  /padded  ')).toBe('/padded')
+        expect(safeUrl('')).toBeNull()
+    })
 })
 
 describe('mergeAnswer', () => {

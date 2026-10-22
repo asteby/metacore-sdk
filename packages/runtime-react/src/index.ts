@@ -189,7 +189,31 @@ export {
 export * from './barcode-scanner'
 export * from './form-layout'
 export * from './form-layout-ui'
-export * from './setup'
+// Setup/health: only the documented public components and their types live at
+// the root; helpers (flow-model, connector-form-model, messages…) come from the
+// `@asteby/metacore-runtime-react/setup` subpath so they do not pollute this namespace.
+export {
+    SetupFlow,
+    SetupFormStep,
+    RecordsTable,
+    HealthCard,
+    StepStatusBadge,
+    AddonConfigSurface,
+    type SetupFlowProps,
+    type SetupCustomStepProps,
+    type SetupFormStepProps,
+    type RecordsTableProps,
+    type HealthCardProps,
+    type StepStatusBadgeProps,
+    type AddonConfigSurfaceProps,
+    type AddonConfigAddon,
+    type AddonConfigNotifier,
+    type AddonSettingDef,
+    type ConnectorEntry,
+    type ConnectorCredentialField,
+    type ConnectorFormLayout,
+} from './setup'
+export type * from './setup/types'
 export { FieldGrid, FieldCell, FieldLabel } from './field-grid'
 export {
     ActionModalDispatcher,

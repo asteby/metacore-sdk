@@ -82,7 +82,8 @@ export function SetupFlow({
     const [loading, setLoading] = useState(!initialState)
     const [loadError, setLoadError] = useState<string | null>(null)
     const [selected, setSelected] = useState<string | null>(null)
-    const [busy, setBusy] = useState<string | null>(null)
+    const [busyCount, setBusyCount] = useState<Record<string, number>>({})
+    const [refreshing, setRefreshing] = useState(false)
     const [stepErrors, setStepErrors] = useState<Record<string, string>>({})
     const [pollStopped, setPollStopped] = useState(false)
     const [tick, setTick] = useState(0)
@@ -90,7 +91,13 @@ export function SetupFlow({
     const attempts = useRef(0)
     const sig = useRef('')
     const prevStatuses = useRef<Record<string, string>>({})
-    const completeFired = useRef(false)
+    const wasIncomplete = useRef(false)
+    const clientRef = useRef(client)
+    clientRef.current = client
+    const onCompleteRef = useRef(onComplete)
+    onCompleteRef.current = onComplete
+    const hasSubscribe = !!client.subscribe
+    const inflight = useRef<Promise<void> | null>(null)
     const alive = useRef(true)
     useEffect(() => {
         alive.current = true
@@ -104,33 +111,43 @@ export function SetupFlow({
         setServerCompleted(s.completed)
     }, [])
 
-    const refresh = useCallback(async () => {
-        try {
-            const s = await client.getState()
-            if (!alive.current) return
-            apply(s)
-            setLoadError(null)
-        } catch (e) {
-            if (alive.current) setLoadError(errorMessage(e, t('flow.load_error')))
-        } finally {
-            if (alive.current) {
-                setLoading(false)
-                setTick((n) => n + 1)
+    // `client` / `subscribe` live in refs: a host passing an inline client object
+    // (new identity every render) must not restart the fetch/subscribe effects.
+    const refresh = useCallback((): Promise<void> => {
+        if (inflight.current) return inflight.current
+        const run = (async () => {
+            if (alive.current) setRefreshing(true)
+            try {
+                const s = await clientRef.current.getState()
+                if (!alive.current) return
+                apply(s)
+                setLoadError(null)
+            } catch (e) {
+                if (alive.current) setLoadError(errorMessage(e, t('flow.load_error')))
+            } finally {
+                inflight.current = null
+                if (alive.current) {
+                    setRefreshing(false)
+                    setLoading(false)
+                    setTick((n) => n + 1)
+                }
             }
-        }
+        })()
+        inflight.current = run
+        return run
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [client, apply])
+    }, [apply])
 
     useEffect(() => {
         void refresh()
     }, [refresh])
 
     useEffect(() => {
-        if (!client.subscribe) return
-        return client.subscribe((s) => {
+        if (!hasSubscribe) return
+        return clientRef.current.subscribe?.((s) => {
             if (alive.current) apply(s)
         })
-    }, [client, apply])
+    }, [hasSubscribe, apply])
 
     const defs = flow.steps
     const progress = flowProgress(defs, states, serverCompleted)
@@ -185,36 +202,62 @@ export function SetupFlow({
     }, [states, defs, t])
 
     useEffect(() => {
-        if (progress.complete && !completeFired.current) {
-            completeFired.current = true
-            onComplete?.()
+        // Fires on the incomplete -> complete transition only: a flow that was
+        // already complete when it mounted does not re-announce itself.
+        if (loading) return
+        if (!progress.complete) {
+            wasIncomplete.current = true
+        } else if (wasIncomplete.current) {
+            wasIncomplete.current = false
+            onCompleteRef.current?.()
         }
-        if (!progress.complete) completeFired.current = false
-    }, [progress.complete, onComplete])
+    }, [progress.complete, loading])
 
     const settle = useCallback(
         async (key: string, call: () => Promise<SetupStepState | SetupFlowState | void>, optimistic: boolean) => {
-            const before = states
-            setBusy(key)
+            // Functional updates only: polling/subscribe may have written newer
+            // state while the call was in flight, and `busy` is tracked per step.
+            const mark = (d: number) =>
+                setBusyCount((p) => {
+                    const n = (p[key] ?? 0) + d
+                    const { [key]: _d, ...rest } = p
+                    return n > 0 ? { ...rest, [key]: n } : rest
+                })
+            mark(1)
             setStepErrors(({ [key]: _d, ...rest }) => rest)
-            if (optimistic) setStates((p) => ({ ...p, [key]: { ...(p[key] ?? { key, status: 'pending' }), key, status: 'running' } }))
+            let marker: SetupStepState | null = null
+            let prev: SetupStepState | undefined
+            if (optimistic) {
+                setStates((p) => {
+                    prev = p[key]
+                    marker = { ...(p[key] ?? { key, status: 'pending' }), key, status: 'running' }
+                    return { ...p, [key]: marker }
+                })
+            }
             try {
                 const answer = await call()
                 if (!alive.current) return
-                const { next, needsRefetch } = mergeAnswer(before, key, answer)
                 if (answer && 'steps' in answer) setServerCompleted(answer.completed)
-                setStates(next)
-                if (needsRefetch) await refresh()
+                setStates((p) => mergeAnswer(p, key, answer).next)
+                if (!answer) await refresh()
                 else setTick((n) => n + 1)
             } catch (e) {
                 if (!alive.current) return
-                setStates(before)
+                if (marker) {
+                    const m = marker
+                    // Undo only our optimistic marker, never a newer server state.
+                    setStates((p) => {
+                        if (p[key] !== m) return p
+                        const { [key]: _d, ...rest } = p
+                        return prev ? { ...rest, [key]: prev } : rest
+                    })
+                }
                 setStepErrors((p) => ({ ...p, [key]: errorMessage(e, t('flow.step_failed')) }))
             } finally {
-                if (alive.current) setBusy(null)
+                if (alive.current) mark(-1)
             }
         },
-        [states, refresh, t],
+        [refresh, t],
     )
 
     const run = useCallback(
@@ -333,7 +376,8 @@ export function SetupFlow({
                         total={defs.length}
                         defs={defs}
                         states={states}
-                        busy={busy === current.key}
+                        busy={(busyCount[current.key] ?? 0) > 0}
+                        refreshing={refreshing}
                         error={stepErrors[current.key]}
                         pollStopped={pollStopped && watching.some((w) => w.key === current.key)}
                         client={client}
@@ -361,6 +405,7 @@ function StepPanel({
     defs,
     states,
     busy,
+    refreshing,
     error,
     pollStopped,
     client,
@@ -377,6 +422,7 @@ function StepPanel({
     defs: SetupStepDef[]
     states: Record<string, SetupStepState>
     busy: boolean
+    refreshing: boolean
     error?: string
     pollStopped: boolean
     client: SetupFlowClient
@@ -497,7 +543,7 @@ function StepPanel({
                     <Loader2 className='h-3.5 w-3.5 animate-spin motion-reduce:animate-none' aria-hidden='true' />
                     <span>{t('flow.running')}</span>
                     {pollStopped ? <span>{t('flow.poll_stopped')}</span> : null}
-                    <Button type='button' size='sm' variant='ghost' className='h-7 gap-1' onClick={() => void onRefresh()}>
+                    <Button type='button' size='sm' variant='ghost' className='h-7 gap-1' onClick={() => void onRefresh()} disabled={refreshing}>
                         <RefreshCw className='h-3.5 w-3.5' aria-hidden='true' />
                         {t('flow.refresh')}
                     </Button>

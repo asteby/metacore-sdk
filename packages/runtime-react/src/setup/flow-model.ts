@@ -122,7 +122,20 @@ export function nextPollDelayMs(
 export function safeUrl(url: string | undefined): string | null {
     if (!url) return null
     const u = url.trim()
-    if (/^\/(?!\/)/.test(u)) return u
+    // Browsers strip tabs/newlines and treat `\` as `/`, so `/\evil.com` or
+    // `/<TAB>/evil.com` resolve to another host: reject control chars and
+    // backslashes outright, then require the resolved origin to be ours.
+    // eslint-disable-next-line no-control-regex
+    if (/[\\\u0000-\u001f\u007f]/.test(u)) return null
+    if (u.startsWith('/')) {
+        if (u.startsWith('//')) return null
+        const origin = typeof location !== 'undefined' && location.origin ? location.origin : 'http://localhost'
+        try {
+            return new URL(u, origin).origin === origin ? u : null
+        } catch {
+            return null
+        }
+    }
     try {
         const p = new URL(u)
         return p.protocol === 'https:' || p.protocol === 'http:' ? p.toString() : null

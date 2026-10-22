@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import {
     Button,
@@ -64,6 +64,8 @@ export function SetupFormStep({ step, state, busy, onAutosave, onSubmit }: Setup
     const [stepIdx, setStepIdx] = useState(0)
     const dirty = useRef<Set<string>>(new Set())
     const [dirtyTick, setDirtyTick] = useState(0)
+    const idPrefix = useId()
+    const formRef = useRef<HTMLFormElement>(null)
     const valuesRef = useRef(values)
     valuesRef.current = values
 
@@ -105,22 +107,22 @@ export function SetupFormStep({ step, state, busy, onAutosave, onSubmit }: Setup
     // Debounced autosave of what changed.
     useEffect(() => {
         if (!onAutosave || dirty.current.size === 0) return
-        const snapshot = new Set(dirty.current)
+        // Write-only fields (secrets) never autosave: a half-typed secret would be
+        // stored truncated. They travel only in the explicit submit.
+        const snapshot = new Set(
+            [...dirty.current].filter((k) => {
+                const f = fields.find((x) => x.key === k)
+                return !!f && !isWriteOnly(f)
+            }),
+        )
+        if (snapshot.size === 0) return
         const id = setTimeout(async () => {
             const payload = payloadFor(snapshot)
             if (Object.keys(payload).length === 0) return
             setAutosave('saving')
             try {
                 await onAutosave(payload)
-                for (const k of snapshot) {
-                    const f = fields.find((x) => x.key === k)
-                    if (f && isWriteOnly(f)) {
-                        // Stored now: the input empties, the placeholder says so.
-                        setStored((s) => new Set(s).add(k))
-                        if (valuesRef.current[k] === payload[k]) setValues((p) => ({ ...p, [k]: '' }))
-                    }
-                    dirty.current.delete(k)
-                }
+                for (const k of snapshot) dirty.current.delete(k)
                 setAutosave('saved')
             } catch {
                 setAutosave('error')
@@ -159,7 +161,10 @@ export function SetupFormStep({ step, state, busy, onAutosave, onSubmit }: Setup
                 const gi = groups.findIndex((g) => g.fields.some((x) => (x as SetupField).key === first.key))
                 if (gi >= 0) setStepIdx(gi)
             }
-            window.setTimeout(() => document.getElementById(`setup-field-${missing[0]}`)?.focus(), 30)
+            window.setTimeout(
+                () => formRef.current?.querySelector<HTMLElement>(`[id="${idPrefix}-${missing[0]}"]`)?.focus(),
+                30,
+            )
             return
         }
         const keys = new Set<string>([...dirty.current, ...visible.filter((f) => !isWriteOnly(f)).map((f) => f.key)])
@@ -170,6 +175,7 @@ export function SetupFormStep({ step, state, busy, onAutosave, onSubmit }: Setup
 
     return (
         <form
+            ref={formRef}
             className='flex flex-col gap-4'
             noValidate
             onSubmit={(e) => {
@@ -193,6 +199,7 @@ export function SetupFormStep({ step, state, busy, onAutosave, onSubmit }: Setup
                             <FieldControl
                                 key={f.key}
                                 field={f}
+                                idPrefix={idPrefix}
                                 label={labelOf(f)}
                                 value={values[f.key]}
                                 stored={stored.has(f.key)}
@@ -248,6 +255,7 @@ export function SetupFormStep({ step, state, busy, onAutosave, onSubmit }: Setup
 
 function FieldControl({
     field,
+    idPrefix,
     label,
     value,
     stored,
@@ -255,6 +263,7 @@ function FieldControl({
     onChange,
 }: {
     field: SetupField
+    idPrefix: string
     label: string
     value: unknown
     stored: boolean
@@ -262,7 +271,7 @@ function FieldControl({
     onChange: (v: unknown) => void
 }) {
     const t = useSetupT()
-    const id = `setup-field-${field.key}`
+    const id = `${idPrefix}-${field.key}`
     const secret = isWriteOnly(field)
     const describedBy = [field.description ? `${id}-help` : '', error ? `${id}-error` : '', secret && stored ? `${id}-stored` : '']
         .filter(Boolean)
@@ -302,7 +311,15 @@ function FieldControl({
                     placeholder={secret && stored ? '••••••••' : field.placeholder}
                     value={String(value ?? '')}
                     className={cn(error && 'border-destructive')}
-                    onChange={(e) => onChange(field.type === 'number' && e.target.value !== '' ? Number(e.target.value) : e.target.value)}
+                    onChange={(e) =>
+                        onChange(
+                            field.type === 'number'
+                                ? e.target.value === ''
+                                    ? undefined
+                                    : Number(e.target.value)
+                                : e.target.value,
+                        )
+                    }
                 />
             )}
             {field.description ? (

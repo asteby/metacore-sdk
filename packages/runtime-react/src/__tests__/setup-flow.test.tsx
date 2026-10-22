@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
+import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 
 vi.mock('react-i18next', () => {
     const t = (k: string, o?: { defaultValue?: string }) => o?.defaultValue ?? k
@@ -135,15 +136,81 @@ describe('SetupFlow', () => {
         expect(await screen.findByText('Este paso no tiene una pantalla disponible.')).toBeTruthy()
     })
 
-    it('reports completion once every required step is satisfied', async () => {
+    it('reports completion once, on the transition to complete', async () => {
         const onComplete = vi.fn()
-        const client = makeClient({ steps: [st('domain', 'ok'), st('dns', 'ok'), st('send', 'ok')] })
+        let push: (s: SetupFlowState) => void = () => {}
+        const client = makeClient({ steps: [st('domain', 'ok'), st('dns', 'ok'), st('send', 'pending')] }, {
+            subscribe: (cb) => {
+                push = cb
+                return () => {}
+            },
+        })
         render(<SetupFlow flow={flow} client={client} onComplete={onComplete} />)
+        await screen.findByRole('heading', { name: 'Enviar prueba' })
+        expect(onComplete).not.toHaveBeenCalled()
+        act(() => push({ steps: [st('domain', 'ok'), st('dns', 'ok'), st('send', 'ok')] }))
         expect(await screen.findByText('La configuración está completa.')).toBeTruthy()
+        await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1))
+        act(() => push({ steps: [st('domain', 'ok'), st('dns', 'ok'), st('send', 'ok')] }))
         expect(onComplete).toHaveBeenCalledTimes(1)
         expect(screen.getByRole('progressbar', { name: 'Progreso de la configuración' }).getAttribute('aria-valuenow')).toBe('100')
     })
 
+    it('does not fire onComplete when the flow was already complete on mount', async () => {
+        const onComplete = vi.fn()
+        const client = makeClient({ steps: [st('domain', 'ok'), st('dns', 'ok'), st('send', 'ok')] })
+        render(<SetupFlow flow={flow} client={client} onComplete={onComplete} />)
+        expect(await screen.findByText('La configuración está completa.')).toBeTruthy()
+        await act(async () => {
+            await new Promise((r) => setTimeout(r, 20))
+        })
+        expect(onComplete).not.toHaveBeenCalled()
+    })
+
+    it('an inline client (new identity every render) does not loop requests', async () => {
+        const getState = vi.fn().mockResolvedValue({ steps: [st('domain', 'ok'), st('dns', 'pending')] })
+        function Host() {
+            const [n, setN] = useState(0)
+            return (
+                <>
+                    <button onClick={() => setN(n + 1)}>rerender {n}</button>
+                    <SetupFlow
+                        flow={flow}
+                        client={{ getState, runStep: vi.fn(), skipStep: vi.fn(), subscribe: () => () => {} }}
+                    />
+                </>
+            )
+        }
+        render(<Host />)
+        await screen.findByRole('heading', { name: 'Registros DNS' })
+        fireEvent.click(screen.getByText(/rerender/))
+        fireEvent.click(screen.getByText(/rerender/))
+        await act(async () => {
+            await new Promise((r) => setTimeout(r, 30))
+        })
+        expect(getState).toHaveBeenCalledTimes(1)
+    })
+
+    it('state pushed while a run is in flight is not overwritten by its answer', async () => {
+        let push: (s: SetupFlowState) => void = () => {}
+        let resolveRun: (v: SetupStepState) => void = () => {}
+        const client = makeClient({ steps: [st('domain', 'ok'), st('dns', 'ok'), st('send', 'pending')] }, {
+            subscribe: (cb) => {
+                push = cb
+                return () => {}
+            },
+            runStep: vi.fn().mockReturnValue(new Promise<SetupStepState>((r) => (resolveRun = r))),
+        })
+        render(<SetupFlow flow={flow} client={client} />)
+        fireEvent.click(await screen.findByText('Enviar correo de prueba'))
+        // Meanwhile the server reports `extras` as done.
+        act(() => push({ steps: [st('domain', 'ok'), st('dns', 'ok'), st('send', 'running'), st('extras', 'ok')] }))
+        await act(async () => {
+            resolveRun(st('send', 'ok'))
+        })
+        const extrasNav = within(screen.getByRole('navigation')).getByText('Extras').closest('button')!
+        await waitFor(() => expect(extrasNav.textContent).toContain('Listo'))
+    })
     it('load error offers retry', async () => {
         const client = makeClient({ steps: [] })
         client.getState.mockRejectedValueOnce(new Error('boom')).mockResolvedValue({ steps: [st('domain', 'pending')] })
@@ -287,6 +354,33 @@ describe('SetupFlow form step', () => {
         })
         expect(saveStep).toHaveBeenCalledWith('domain', { domain: 'acme.test' })
         expect(screen.getByText('Guardado automáticamente')).toBeTruthy()
+    })
+
+    it('never autosaves write-only fields; they travel only on submit', async () => {
+        const saveStep = vi.fn().mockResolvedValue(undefined)
+        const client = makeClient({ steps: [st('domain', 'pending')] }, { saveStep })
+        render(<SetupFlow flow={flow} client={client} />)
+        const input = await screen.findByLabelText(/Dominio de correo/)
+        const secret = screen.getByLabelText(/Llave API/) as HTMLInputElement
+        vi.useFakeTimers()
+        fireEvent.change(input, { target: { value: 'acme.test' } })
+        fireEvent.change(secret, { target: { value: 'sk_half' } })
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(900)
+        })
+        expect(saveStep).toHaveBeenCalledTimes(1)
+        expect(saveStep).toHaveBeenCalledWith('domain', { domain: 'acme.test' })
+        expect(secret.value).toBe('sk_half')
+        fireEvent.change(secret, { target: { value: 'sk_half_done' } })
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(900)
+        })
+        expect(saveStep).toHaveBeenCalledTimes(1)
+        fireEvent.click(screen.getByText('Guardar y continuar'))
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(0)
+        })
+        expect(client.runStep).toHaveBeenCalledWith('domain', { values: expect.objectContaining({ domain: 'acme.test', api_key: 'sk_half_done' }) })
     })
 
     it('autosave failure is visible', async () => {
