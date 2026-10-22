@@ -1,6 +1,6 @@
 {
   "name": "@asteby/storefront-react",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "React bindings for @asteby/storefront — SSR-safe provider, optimistic cart, Money, responsive Image, prices, variant selection, SEO meta and JSON-LD, section registry and server-rendered theme CSS.",
   "license": "Apache-2.0",
   "repository": {
