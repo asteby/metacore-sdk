@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-setup-wizard",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Generic resumable step wizard with live polling verification, plus the domain setup wizard, DNS record rows and live status badge",
   "license": "Apache-2.0",
   "repository": {

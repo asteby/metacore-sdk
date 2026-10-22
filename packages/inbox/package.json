@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-inbox",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Channel-agnostic inbox components for Metacore: virtualized conversation list, thread view, composer with drafts, sandboxed HTML frame, AI proposal card and Superhuman-style shortcuts",
   "license": "Apache-2.0",
   "repository": {
