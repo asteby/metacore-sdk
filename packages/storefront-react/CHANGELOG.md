@@ -1,5 +1,11 @@
 # @asteby/storefront-react
 
+## 0.9.0
+
+### Minor Changes
+
+- f6c4953: `@asteby/storefront-react/payments` ahora cubre el «Método de pago» híbrido completo: `PaymentMethodSection` (filas por opción de OPS, tarjeta con formulario seguro dentro de la página, efectivo con puntos de pago, redirección para cuenta del proveedor y pagos sin tarjeta; degrada al envío normal sin JavaScript o si el formulario no carga; textos, iconos, clases y rutas por props; hoja opcional `payments.css`), las funciones puras `buildPayChoices`/`parseChoice`/`cashProviderData`/`checkoutToAttempt`/`payErrorResponse`/`voucherRows`, `paymentMethodMessages` (es/en) y ayudas de CSP (`paymentCspMode`, `paymentNonce`, `paymentCspHeaders`, `scriptHashes`/`imgHttps`). Nuevo subpath `@asteby/storefront-react/payments/server` con `createEmbeddedPayHandlers`: cobro de tarjeta, estado del pago y ficha de efectivo, parametrizados por callbacks de cookie/comprobante, con límite por IP, validación de origen y filas ocultables. Los montos salen siempre del total de OPS.
+
 ## 0.8.0
 
 ### Minor Changes
