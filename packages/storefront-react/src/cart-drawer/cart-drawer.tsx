@@ -199,7 +199,7 @@ export function CartDrawer(props: CartDrawerProps) {
                   </div>
                 </div>
               ) : notice ? (
-                <p className={cx.shipping} data-sf-cart-shipping="" data-notice="">{icons?.shippingReached}{notice}</p>
+                <p className={[cx.shipping, cx.shippingMessage].filter(Boolean).join(" ") || undefined} data-sf-cart-shipping="" data-notice="">{icons?.shippingReached}{notice}</p>
               ) : null}
 
               <ul className={cx.lines} data-sf-cart-lines="">
