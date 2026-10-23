@@ -2,7 +2,7 @@ import { useMemo, useSyncExternalStore, type CSSProperties, type ReactNode } fro
 import { formatMoney, type Money, type PickupOption, type ShippingRate } from '@asteby/storefront'
 import { useResolvedLocale } from '../locale.js'
 import { BrandMark } from './brand-mark.js'
-import { recommendRates, type RateTag } from './recommend.js'
+import { flatRates, recommendRates, type RateTag } from './recommend.js'
 import {
   deliveryMessages,
   quoteDeadline,
@@ -80,9 +80,12 @@ export type DeliveryOptionsProps = {
    * `list` (default): every rate, as the server orders them. `recommended`: up to `recommendedCount` rates (cheapest,
    * fastest and the best balance, tagged) and the rest under "Show more options (N)", grouped by carrier so the carrier
    * name is not repeated on every row. Repeated services are dropped (the cheapest stays). Works without JavaScript
-   * (`<details>`); it opens by itself when the chosen rate is inside.
+   * (`<details>`); it opens by itself when the chosen rate is inside. `flat`: ONE plain list like most online shops:
+   * every service ordered from the lowest to the highest price, repeated services dropped (the cheapest stays), the
+   * cheapest / fastest / recommended tags on the rows that earn them, no `<details>` and no groups. The chosen rate is
+   * always listed, and with no explicit default the preselected row is the first one (the cheapest).
    */
-  layout?: 'list' | 'recommended'
+  layout?: 'list' | 'recommended' | 'flat'
   /** Rates recommended in `layout="recommended"`. Default 3. */
   recommendedCount?: number
   /**
@@ -152,7 +155,13 @@ export function DeliveryOptions(props: DeliveryOptionsProps) {
   const m = useMemo(() => deliveryMessages(locale, props.messages), [locale, props.messages])
   const hydrated = useHydrated()
   const badges = useMemo(() => (showBadges ? rateBadges(rates) : new Map<string, RateBadge[]>()), [rates, showBadges])
-  const firstValue = rates[0] ? rateValue(rates[0]) : null
+  const flat = useMemo(
+    () => (layout === 'flat' ? flatRates(rates, { count: props.recommendedCount ?? 3, keepId: value ? rates.find((r) => rateValue(r) === value)?.id ?? null : null }) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [layout, rates, props.recommendedCount, value],
+  )
+  const firstRate = flat ? flat[0]?.rate : rates[0]
+  const firstValue = firstRate ? rateValue(firstRate) : null
   const defaultValue = props.defaultValue === undefined ? firstValue : props.defaultValue
   const amount = (money: Money) => (Number(money.amount) === 0 ? <span className={cx.free} data-sf-delivery-free>{m.free}</span> : renderAmount ? renderAmount(money) : formatMoney(money, locale))
   const mode = props.quoteNote ?? 'always'
@@ -278,7 +287,9 @@ export function DeliveryOptions(props: DeliveryOptionsProps) {
       {loading && rates.length === 0
         ? [0, 1, 2].map((i) => <div key={i} className={cx.skeleton} data-sf-delivery-skeleton aria-hidden="true" />)
         : null}
-      {plan
+      {flat
+        ? flat.map(({ rate, tags }) => rateRow(rate, { tags: showBadges ? tags : [] }))
+        : plan
         ? plan.recommended.map(({ rate, tags }) => rateRow(rate, { tags: showBadges ? tags : [] }))
         : rates.map((rate) => rateRow(rate, { tags: badges.get(rate.id) ?? [] }))}
       {plan && plan.moreCount > 0 ? (

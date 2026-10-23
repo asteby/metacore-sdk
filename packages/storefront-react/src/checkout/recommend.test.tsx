@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { renderToString } from 'react-dom/server'
 import axe from 'axe-core'
 import type { ShippingRate } from '@asteby/storefront'
-import { DeliveryOptions, dedupeRates, recommendRates } from './index.js'
+import { DeliveryOptions, dedupeRates, flatRates, recommendRates } from './index.js'
 
 afterEach(cleanup)
 
@@ -130,5 +130,72 @@ describe('DeliveryOptions layout="recommended"', () => {
     ;(container.querySelector('[data-sf-delivery-more]') as HTMLDetailsElement).open = true
     const res = await axe.run(container, { rules: { 'color-contrast': { enabled: false } } })
     expect(res.violations.map((v) => v.id)).toEqual([])
+  })
+})
+
+describe('flatRates / DeliveryOptions layout="flat"', () => {
+  const dup = r('fx-so-b', 'fedex', 'Standard Overnight', '121.00', 4) // same service as fx-so from another provider, pricier
+
+  it('orders from the lowest to the highest price and drops repeated services (the cheapest stays)', () => {
+    const flat = flatRates([dup, ...quote])
+    expect(flat).toHaveLength(11)
+    expect(flat.map((x) => x.rate.id)).not.toContain('fx-so-b')
+    const prices = flat.map((x) => Number(x.rate.cost.amount))
+    expect(prices).toEqual([...prices].sort((a, b) => a - b))
+    expect(flat[0]!.rate.id).toBe('fx-so')
+    expect(flat.at(-1)!.rate.id).toBe('fx-es')
+  })
+
+  it('tags the cheapest, the fastest and the recommended rows; short quotes get no recommended tag', () => {
+    const flat = flatRates(quote)
+    expect(flat.filter((x) => x.tags.length).map((x) => [x.rate.id, x.tags])).toEqual([
+      ['fx-so', ['cheapest']],
+      ['es-ex', ['best_value']],
+      ['px-sr', ['fastest']],
+    ])
+    expect(flatRates(quote.slice(0, 3)).flatMap((x) => x.tags)).not.toContain('best_value')
+  })
+
+  it('keeps the chosen rate in the list even when it is a repeated service', () => {
+    expect(flatRates([dup, ...quote], { keepId: 'fx-so-b' }).map((x) => x.rate.id)).toContain('fx-so-b')
+  })
+
+  it('renders ONE flat list: no details, no groups, a mark and a full name per row, tags in place', () => {
+    const { container } = render(<DeliveryOptions rates={[dup, ...quote]} layout="flat" />)
+    expect(container.querySelector('details')).toBeNull()
+    expect(container.querySelector('[role="group"]')).toBeNull()
+    const rows = container.querySelectorAll('[data-sf-delivery-option]')
+    expect(rows).toHaveLength(11)
+    expect(rows[0]!.querySelectorAll('[data-sf-brand-mark]')).toHaveLength(1)
+    expect(rows[0]!.textContent).toContain('FedEx')
+    expect(rows[0]!.textContent).toContain('Más económico')
+    expect(screen.getAllByText('Más rápido')).toHaveLength(1)
+    expect(screen.getAllByText('Recomendado')).toHaveLength(1)
+    const radios = screen.getAllByRole('radio') as HTMLInputElement[]
+    expect(new Set(radios.map((x) => x.name)).size).toBe(1)
+    // Preselects the first row (the cheapest), not the first one the server sent.
+    expect(radios[0]!.value).toBe('rate:fx-so')
+    expect(radios[0]!.checked).toBe(true)
+    expect(screen.getByRole('radio', { name: /FedEx Priority Overnight/ })).toBeTruthy()
+  })
+
+  it('always lists the chosen rate, also in the server HTML, and leaves `list` and `recommended` untouched', () => {
+    const html = renderToString(<DeliveryOptions rates={[dup, ...quote]} layout="flat" value="rate:fx-so-b" onValueChange={() => {}} />)
+    expect(html).toContain('value="rate:fx-so-b"')
+    expect(html.match(/type="radio"/g)).toHaveLength(12)
+    const list = renderToString(<DeliveryOptions rates={[dup, ...quote]} layout="list" />)
+    expect(list.match(/type="radio"/g)).toHaveLength(12)
+    expect(list).not.toContain('data-sf-delivery-badge="best_value"')
+  })
+
+  it('has no accessibility violations', async () => {
+    const { container } = render(
+      <fieldset>
+        <legend>Envío</legend>
+        <DeliveryOptions rates={quote} layout="flat" />
+      </fieldset>,
+    )
+    const res = await axe.run(container)
+    expect(res.violations).toEqual([])
   })
 })

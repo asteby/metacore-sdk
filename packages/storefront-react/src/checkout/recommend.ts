@@ -131,3 +131,30 @@ export function recommendRates<R extends ShippingRate>(input: readonly R[], opti
   const more = [...groups.values()]
   return { recommended, more, moreCount: more.reduce((n, g) => n + g.rates.length, 0) }
 }
+
+export type FlatRatesOptions = {
+  /** Count used to decide the `best_value` tag, as in `recommendRates` (default 3: only with more than 4 services). */
+  count?: number
+  /** Drop repeated services keeping the cheapest. Default true. */
+  dedupe?: boolean
+  /** Id of the chosen rate: it stays in the list even if it is a repeated service. */
+  keepId?: string | null
+}
+
+/**
+ * ONE flat list for `layout="flat"`: every service (repeated ones dropped, the cheapest stays), ordered from the
+ * lowest to the highest price, with the same tags `recommendRates` assigns (cheapest, fastest and, on long quotes,
+ * best_value) on the rows that earn them. Nothing is hidden or grouped.
+ */
+export function flatRates<R extends ShippingRate>(input: readonly R[], options: FlatRatesOptions = {}): RecommendedRate<R>[] {
+  const count = options.count ?? 3
+  const rates = options.dedupe === false ? [...input] : dedupeRates(input)
+  const tags = new Map<R, RateTag[]>()
+  for (const { rate, tags: t } of recommendRates(rates, { count, dedupe: false }).recommended) tags.set(rate, t)
+  const list = [...rates]
+  const kept = options.keepId ? input.find((r) => r.id === options.keepId) : undefined
+  if (kept && !list.includes(kept)) list.push(kept)
+  const byCost = (a: R, b: R) => (costOf(a) ?? Infinity) - (costOf(b) ?? Infinity)
+  // Array.prototype.sort is stable: equal prices keep the server order.
+  return list.sort(byCost).map((rate) => ({ rate, tags: tags.get(rate) ?? [] }))
+}
