@@ -30,8 +30,15 @@ import type {
   Connection,
   Customer,
   CustomerIdentifier,
+  CustomerCapabilities,
+  CustomerPasswordLoginInput,
+  CustomerRegisterInput,
+  CustomerRegisterResult,
+  CustomerResetPasswordInput,
   CustomerSession,
   CustomerSessionInput,
+  CustomerSetPasswordInput,
+  CustomerVerifyRegistrationInput,
   DeliveryInput,
   DeliveryOptions,
   PaymentMethods,
@@ -501,6 +508,29 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
       /** Exchanges the code for a buyer session (`token` goes in `customerToken`). */
       createSession: (input: CustomerSessionInput, options?: WriteOptions) =>
         write<CustomerSession>('POST', '/storefront/customer/session', input, options),
+      /** What the store supports (password login, email verification, OTP channels). Drives which forms to show. */
+      capabilities: (options?: RequestOptions) =>
+        get<CustomerCapabilities>('/storefront/customer/capabilities', undefined, options),
+      /**
+       * Creates an account with email + password. `verification_required` (202): a code was emailed, finish with
+       * `verifyRegistration`. `created` (201): the account exists and `session` is ready. `409` when the email is taken.
+       */
+      register: async (input: CustomerRegisterInput, options?: WriteOptions): Promise<CustomerRegisterResult> => {
+        const res = await write<{ status: 'verification_required' } | CustomerSession>('POST', '/storefront/customer/register', input, options)
+        return res && 'token' in res ? { status: 'created', session: res } : { status: 'verification_required' }
+      },
+      /** Confirms the emailed registration code and returns the new buyer session. */
+      verifyRegistration: (input: CustomerVerifyRegistrationInput, options?: WriteOptions) =>
+        write<CustomerSession>('POST', '/storefront/customer/register/verify', input, options),
+      /** Email + password login. `401` for wrong credentials. */
+      loginWithPassword: (input: CustomerPasswordLoginInput, options?: WriteOptions) =>
+        write<CustomerSession>('POST', '/storefront/customer/login', input, options),
+      /** Sets or changes the password of the signed-in buyer (`options.customerToken`, or a `withCustomerToken` client). */
+      setPassword: (input: CustomerSetPasswordInput, options?: WriteOptions) =>
+        write<void>('PUT', '/storefront/customer/password', input, options),
+      /** Resets a forgotten password with the code from `requestOtp({ email })`. */
+      resetPassword: (input: CustomerResetPasswordInput, options?: WriteOptions) =>
+        write<void>('POST', '/storefront/customer/password/reset', input, options),
       get: (options?: RequestOptions) => get<Customer>('/storefront/customer', undefined, options),
       orders: (params?: PaginationParams, options?: RequestOptions) =>
         get<Connection<Order>>('/storefront/customer/orders', params as QueryParams, options),

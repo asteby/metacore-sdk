@@ -466,6 +466,37 @@ export type CustomerSessionInput = CustomerIdentifier & { code: string }
 
 export type CustomerSession = { token: string; expires_at: string; customer: Customer }
 
+/** What the store's buyer accounts support (`GET /storefront/customer/capabilities`). Cache briefly, not forever. */
+export type CustomerCapabilities = {
+  /** Email + password registration and login are enabled. */
+  password: boolean
+  /** Registration needs an emailed code (`customer.verifyRegistration`) before the account exists. */
+  email_verification: boolean
+  /** Channels `customer.requestOtp` can deliver the code through. */
+  otp_channels: ('email' | 'whatsapp')[]
+}
+
+export type CustomerRegisterInput = {
+  email: string
+  password: string
+  first_name?: string
+  last_name?: string
+}
+
+/** `verification_required`: a code was emailed, finish with `customer.verifyRegistration`. `created`: the account is ready and signed in. */
+export type CustomerRegisterResult =
+  | { status: 'verification_required' }
+  | { status: 'created'; session: CustomerSession }
+
+export type CustomerVerifyRegistrationInput = { email: string; code: string }
+
+export type CustomerPasswordLoginInput = { email: string; password: string }
+
+/** `current_password` is required by the server when the account already has a password. */
+export type CustomerSetPasswordInput = { password: string; current_password?: string }
+
+export type CustomerResetPasswordInput = { email: string; code: string; password: string }
+
 export type OrderLine = {
   title: string
   variant_title: string | null

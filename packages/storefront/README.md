@@ -65,6 +65,30 @@ const me = storefront.withCustomerToken(token) // sends X-Customer-Token
 await me.customer.orders()
 ```
 
+Stores that also offer email + password accounts ask what the store supports and
+then use the password routes (the `StorefrontError` codes are `unauthorized` for
+wrong credentials or codes, `conflict` for an email already registered and
+`rate_limited` for too many attempts):
+
+```ts
+const caps = await storefront.customer.capabilities()
+// { password: boolean, email_verification: boolean, otp_channels: ('email' | 'whatsapp')[] }
+
+const res = await storefront.customer.register({ email, password, first_name, last_name })
+const session =
+  res.status === 'created'
+    ? res.session // no verification required: already signed in
+    : await storefront.customer.verifyRegistration({ email, code }) // code from the email
+
+const again = await storefront.customer.loginWithPassword({ email, password })
+
+// Signed-in buyer sets or changes the password (current_password when it already has one):
+await storefront.customer.setPassword({ password, current_password }, { customerToken: session.token })
+
+// Forgot password: requestOtp({ email }) emails a code, then
+await storefront.customer.resetPassword({ email, code, password })
+```
+
 Checkout always sends an `Idempotency-Key` (generated with
 `crypto.randomUUID()` unless you pass `{ idempotencyKey }`):
 
@@ -118,6 +142,14 @@ Mock behaviour:
 - Checkout: returns a fake order and a `redirect_url`, decrements stock and
   honours `Idempotency-Key`.
 - Buyer: OTP code `000000`; seed customer `cliente@example.com` with one order.
+- Password accounts: `customer.capabilities()` is configurable
+  (`createMockStorefront({ customerCapabilities })`, default
+  `{ password: true, email_verification: true, otp_channels: ['email'] }`).
+  `register` answers `verification_required` and the code is `000000`; accounts
+  live in memory (passwords of 8+ characters); `409` for a registered email,
+  `401` for wrong credentials/codes, `429` after `maxLoginAttempts` (5) failed
+  logins, `403` when `password` is disabled. The seed customer has no password
+  until `setPassword` (or `resetPassword` with the OTP code).
 - Content: theme tokens, `home` page (hero, product_grid, collection_list,
   rich_text, faq), `main` and `footer` menus, legal pages (`terminos`,
   `privacidad`, `devoluciones`) and two articles. `?preview=` returns a draft.
@@ -291,7 +323,7 @@ over language) and `hreflangLinks` for per-market SEO.
 Resources: `shop.get`, `products.list/get/recommendations`,
 `collections.list/get`, `stock.get`,
 `carts.create/get/addLines/updateLines/removeLines/setDiscountCodes/setBuyer/setShippingAddress/deliveryOptions/setDelivery/checkout`,
-`customer.requestOtp/createSession/get/orders/order/requestReturn/requestInvoice/addresses.{list,create,update,delete}`,
+`customer.requestOtp/createSession/capabilities/register/verifyRegistration/loginWithPassword/setPassword/resetPassword/get/orders/order/requestReturn/requestInvoice/addresses.{list,create,update,delete}`,
 `content.theme/page/menu/articles/article`. Every method takes a last
 `options` argument: `{ cache, signal, next, headers, timeoutMs, customerToken, clientIp }`
 (plus `idempotencyKey` on writes and `preview` on pages/articles); unknown keys

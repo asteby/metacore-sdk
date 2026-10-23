@@ -15,6 +15,8 @@ import type {
   CartRecommendation,
   Collection,
   Customer,
+  CustomerCapabilities,
+  CustomerSession,
   Facet,
   Location,
   Menu,
@@ -59,6 +61,14 @@ export type MockStorefrontOptions = {
   imageUrl?: MockImageUrl
   /** OTP code accepted by `/customer/session` (default `000000`). */
   otpCode?: string
+  /**
+   * What `GET /customer/capabilities` reports (default `{ password: true, email_verification: true, otp_channels: ['email'] }`).
+   * `password: false` makes register / login / password routes answer `403`; `email_verification: false` makes `register`
+   * create the account straight away (`201`).
+   */
+  customerCapabilities?: Partial<CustomerCapabilities>
+  /** Failed password logins per email before `429 rate_limited` (default 5; a success or a reset clears the count). */
+  maxLoginAttempts?: number
   /** Discount codes → percentage off the subtotal (default `{ BIENVENIDA10: 10 }`). */
   discountCodes?: Record<string, number>
   /** Flat shipping rate (default 149). Free from `shop.policies.free_shipping_min`. */
@@ -120,6 +130,12 @@ export type MockState = {
   addresses: Map<string, Address[]>
   orders: (Order & { customer_id: string | null })[]
   otps: Map<string, string>
+  /** Email → password (plain text: it is a mock). The seed customer starts without one. */
+  passwords: Map<string, string>
+  /** Registrations waiting for their code, by email. */
+  pendingRegistrations: Map<string, { password: string; first_name: string | null; last_name: string | null }>
+  /** Consecutive failed password logins by email. */
+  loginFailures: Map<string, number>
   sessions: Map<string, string>
   idempotency: Map<string, { status: number; body: unknown }>
   checkouts: Map<string, unknown>
@@ -193,6 +209,14 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
   const currency = options.currency ?? MOCK_CURRENCY
   const imageUrl = options.imageUrl ?? MOCK_IMAGE_URL
   const otpCode = options.otpCode ?? '000000'
+  const capabilities: CustomerCapabilities = {
+    password: true,
+    email_verification: true,
+    otp_channels: ['email'],
+    ...options.customerCapabilities,
+  }
+  const maxLoginAttempts = options.maxLoginAttempts ?? 5
+  const MIN_PASSWORD = 8
   const discountCodes = Object.fromEntries(
     Object.entries(options.discountCodes ?? { BIENVENIDA10: 10 }).map(([k, v]) => [k.toUpperCase(), v]),
   )
@@ -226,6 +250,9 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
         },
       ],
       otps: new Map(),
+      passwords: new Map(),
+      pendingRegistrations: new Map(),
+      loginFailures: new Map(),
       sessions: new Map(),
       idempotency: new Map(),
       checkouts: new Map(),
@@ -555,6 +582,43 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     if (!email && !phone) throw new HttpError(400, 'validation', 'email or phone is required', 'email')
     if (email && !/^[^@\s]+@[^@\s]+$/.test(email)) throw new HttpError(400, 'validation', 'Invalid email', 'email')
     return email ? `email:${email}` : `phone:${phone}`
+  }
+
+  function emailOf(body: Record<string, unknown>): string {
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+    if (!email || !/^[^@\s]+@[^@\s]+$/.test(email)) throw new HttpError(400, 'validation', 'Invalid email', 'email')
+    return email
+  }
+
+  function passwordOf(body: Record<string, unknown>, field = 'password'): string {
+    const value = body[field]
+    if (typeof value !== 'string' || value.length < MIN_PASSWORD) {
+      throw new HttpError(400, 'validation', `${field} must be at least ${MIN_PASSWORD} characters`, field)
+    }
+    return value
+  }
+
+  function requirePasswordEnabled() {
+    if (!capabilities.password) throw new HttpError(403, 'forbidden', 'Password accounts are disabled for this store')
+  }
+
+  function sessionFor(email: string, extra: { first_name?: string | null; last_name?: string | null } = {}): CustomerSession {
+    let customer = state.customers.find((c) => c.email === email)
+    if (!customer) {
+      customer = {
+        id: nextId('cus'),
+        email,
+        phone: null,
+        first_name: extra.first_name ?? null,
+        last_name: extra.last_name ?? null,
+        default_address_id: null,
+        created_at: now(),
+      }
+      state.customers.push(customer)
+    }
+    const token = `ct_${customer.id}_${Math.random().toString(36).slice(2)}`
+    state.sessions.set(token, customer.id)
+    return { token, expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(), customer }
   }
 
   function validateAddress(body: Record<string, unknown>, partial = false): Partial<Address> {
@@ -1009,6 +1073,74 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       body: { token, expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(), customer },
       cache: 'private',
     }
+  })
+  route('GET', '/customer/capabilities', 'customer:read', () => ({ body: capabilities, cache: 'private' }))
+  route('POST', '/customer/register', 'customer:write', ({ body }) => {
+    requirePasswordEnabled()
+    const email = emailOf(body)
+    const password = passwordOf(body)
+    const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null)
+    const first_name = text(body.first_name)
+    const last_name = text(body.last_name)
+    if (state.passwords.has(email)) throw new HttpError(409, 'conflict', 'An account with this email already exists', 'email')
+    if (capabilities.email_verification) {
+      state.pendingRegistrations.set(email, { password, first_name, last_name })
+      state.otps.set(`email:${email}`, otpCode)
+      return { status: 202, body: { status: 'verification_required' }, cache: 'private' }
+    }
+    state.passwords.set(email, password)
+    return { status: 201, body: sessionFor(email, { first_name, last_name }), cache: 'private' }
+  })
+  route('POST', '/customer/register/verify', 'customer:write', ({ body }) => {
+    requirePasswordEnabled()
+    const email = emailOf(body)
+    const pending = state.pendingRegistrations.get(email)
+    if (!pending || typeof body.code !== 'string' || state.otps.get(`email:${email}`) !== body.code) {
+      throw new HttpError(401, 'unauthorized', 'Invalid or expired code', 'code')
+    }
+    state.pendingRegistrations.delete(email)
+    state.otps.delete(`email:${email}`)
+    state.passwords.set(email, pending.password)
+    return { status: 201, body: sessionFor(email, pending), cache: 'private' }
+  })
+  route('POST', '/customer/login', 'customer:write', ({ body }) => {
+    requirePasswordEnabled()
+    const email = emailOf(body)
+    if ((state.loginFailures.get(email) ?? 0) >= maxLoginAttempts) {
+      throw new HttpError(429, 'rate_limited', 'Too many failed attempts, try again later')
+    }
+    const stored = state.passwords.get(email)
+    if (stored === undefined || typeof body.password !== 'string' || body.password !== stored) {
+      state.loginFailures.set(email, (state.loginFailures.get(email) ?? 0) + 1)
+      throw new HttpError(401, 'unauthorized', 'Invalid email or password')
+    }
+    state.loginFailures.delete(email)
+    return { status: 201, body: sessionFor(email), cache: 'private' }
+  })
+  route('PUT', '/customer/password', 'customer:write', ({ headers, body }) => {
+    requirePasswordEnabled()
+    const customer = requireCustomer(headers)
+    const password = passwordOf(body)
+    const email = customer.email
+    if (!email) throw new HttpError(422, 'invalid_state', 'The account has no email', 'email')
+    const current = state.passwords.get(email)
+    if (current !== undefined && body.current_password !== current) {
+      throw new HttpError(401, 'unauthorized', 'current_password is missing or wrong', 'current_password')
+    }
+    state.passwords.set(email, password)
+    return { status: 204 }
+  })
+  route('POST', '/customer/password/reset', 'customer:write', ({ body }) => {
+    requirePasswordEnabled()
+    const email = emailOf(body)
+    const password = passwordOf(body)
+    if (typeof body.code !== 'string' || state.otps.get(`email:${email}`) !== body.code || !state.customers.some((c) => c.email === email)) {
+      throw new HttpError(401, 'unauthorized', 'Invalid or expired code', 'code')
+    }
+    state.otps.delete(`email:${email}`)
+    state.passwords.set(email, password)
+    state.loginFailures.delete(email)
+    return { status: 204 }
   })
   route('GET', '/customer', 'customer:read', ({ headers }) => ({ body: requireCustomer(headers), cache: 'private' }))
   const stripOrder = ({ customer_id: _c, ...o }: MockState['orders'][number]): Order => o

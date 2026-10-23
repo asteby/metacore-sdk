@@ -157,6 +157,60 @@ describe('writes', () => {
     await expect(sf.customer.requestOtp({ email: 'a@b.c' })).resolves.toBeUndefined()
   })
 
+  it('password auth: capabilities, register, verify, login, setPassword and reset hit the contract routes', async () => {
+    const session = { token: 'ct_1', expires_at: '2027-01-01T00:00:00Z', customer: { id: 'c1', email: 'a@b.co' } }
+    const { calls, fetch } = recorder((call) => {
+      if (call.url.endsWith('/capabilities')) return Response.json({ password: true, email_verification: true, otp_channels: ['email', 'whatsapp'] })
+      if (call.url.endsWith('/register')) {
+        const body = JSON.parse(call.init.body as string)
+        return body.email === 'new@b.co' ? Response.json({ status: 'verification_required' }, { status: 202 }) : Response.json(session, { status: 201 })
+      }
+      if (call.url.endsWith('/password') || call.url.endsWith('/reset')) return new Response(null, { status: 204 })
+      return Response.json(session, { status: 201 })
+    })
+    const sf = createStorefrontClient({ ...base, fetch })
+
+    await expect(sf.customer.capabilities()).resolves.toEqual({ password: true, email_verification: true, otp_channels: ['email', 'whatsapp'] })
+    expect(calls[0]!.init.method).toBe('GET')
+    expect(calls[0]!.url).toMatch(/\/storefront\/customer\/capabilities$/)
+
+    await expect(sf.customer.register({ email: 'new@b.co', password: 'secret123', first_name: 'Ana' })).resolves.toEqual({ status: 'verification_required' })
+    expect(calls[1]!.init.method).toBe('POST')
+    expect(calls[1]!.url).toMatch(/\/storefront\/customer\/register$/)
+    expect(JSON.parse(calls[1]!.init.body as string)).toEqual({ email: 'new@b.co', password: 'secret123', first_name: 'Ana' })
+
+    await expect(sf.customer.register({ email: 'a@b.co', password: 'secret123' }, { idempotencyKey: 'reg-1' })).resolves.toEqual({ status: 'created', session })
+    expect(calls[2]!.init.headers.get('Idempotency-Key')).toBe('reg-1')
+
+    await expect(sf.customer.verifyRegistration({ email: 'new@b.co', code: '000000' })).resolves.toEqual(session)
+    expect(calls[3]!.url).toMatch(/\/storefront\/customer\/register\/verify$/)
+    expect(JSON.parse(calls[3]!.init.body as string)).toEqual({ email: 'new@b.co', code: '000000' })
+
+    await expect(sf.customer.loginWithPassword({ email: 'a@b.co', password: 'secret123' })).resolves.toEqual(session)
+    expect(calls[4]!.init.method).toBe('POST')
+    expect(calls[4]!.url).toMatch(/\/storefront\/customer\/login$/)
+
+    await expect(sf.customer.setPassword({ password: 'newsecret1', current_password: 'secret123' }, { customerToken: 'ct_1' })).resolves.toBeUndefined()
+    expect(calls[5]!.init.method).toBe('PUT')
+    expect(calls[5]!.url).toMatch(/\/storefront\/customer\/password$/)
+    expect(calls[5]!.init.headers.get('X-Customer-Token')).toBe('ct_1')
+    expect(JSON.parse(calls[5]!.init.body as string)).toEqual({ password: 'newsecret1', current_password: 'secret123' })
+
+    await expect(sf.customer.resetPassword({ email: 'a@b.co', code: '123456', password: 'newsecret1' })).resolves.toBeUndefined()
+    expect(calls[6]!.url).toMatch(/\/storefront\/customer\/password\/reset$/)
+    expect(calls[6]!.init.headers.has('X-Customer-Token')).toBe(false)
+  })
+
+  it('password auth errors surface as StorefrontError', async () => {
+    const errs: Record<number, string> = { 401: 'unauthorized', 409: 'conflict', 429: 'rate_limited' }
+    for (const [status, code] of Object.entries(errs)) {
+      const { fetch } = recorder(() => Response.json({ error: { code, message: 'x' } }, { status: Number(status) }))
+      const sf = createStorefrontClient({ ...base, fetch })
+      const call = Number(status) === 409 ? sf.customer.register({ email: 'a@b.co', password: 'secret123' }) : sf.customer.loginWithPassword({ email: 'a@b.co', password: 'bad' })
+      await expect(call).rejects.toMatchObject({ name: 'StorefrontError', status: Number(status), code })
+    }
+  })
+
   it('withCustomerToken returns a client bound to the buyer session', async () => {
     const { calls, fetch } = recorder(() => Response.json({}))
     const sf = createStorefrontClient({ ...base, fetch }).withCustomerToken('jwt-2')
