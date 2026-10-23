@@ -38,6 +38,17 @@
       }
     },
     "./cart.css": "./dist/cart.css",
+    "./checkout": {
+      "import": {
+        "types": "./dist/checkout.d.ts",
+        "default": "./dist/checkout.js"
+      },
+      "require": {
+        "types": "./dist/checkout.d.cts",
+        "default": "./dist/checkout.cjs"
+      }
+    },
+    "./checkout.css": "./dist/checkout.css",
     "./fitment": {
       "import": {
         "types": "./dist/fitment.d.ts",

@@ -518,6 +518,26 @@ export const pay = createEmbeddedPayHandlers({
 - CSP solo para `/pagar`: `paymentCspHeaders([client], { mode: paymentCspMode(env.PAY_CSP, isProd), nonce: paymentNonce(), scriptHashes, imgHttps })` y `paymentNonceFromHeaders` para `ServerRouter`.
 - Accesibilidad: un `fieldset` con leyenda y radios nativos, avisos en `role="status"`/`alert`, botón de 44 px que explica su estado ocupado; pruebas con axe.
 
+- Marcas (por omisión, `brandMarks`): la marca del proveedor en sus filas de cuenta y sin tarjeta, las de los primeros puntos de pago en la fila de efectivo y junto a cada punto (`payment_point` o `id`; `logo_url` del proveedor gana), y las redes que pase la tienda en la fila de tarjeta (`cardBrands={['visa', 'mastercard', 'amex']}`). `brandMarks={false}` deja las filas en texto.
+- El total del botón siempre lleva la entrega: `syncDelivery` se llama una vez por entrega con cualquier fila (no solo con tarjeta); mientras se guarda, el botón no muestra un total viejo.
+
+## Entrega y marcas (`@asteby/storefront-react/checkout`)
+
+Las tarifas de envío y las sucursales de «Entrega» como radios nativos, iguales en todas las tiendas: marca y nombre comercial de la paquetería (`fedex` → FedEx), servicio sin repetir la paquetería, llegada en días hábiles («Llega en 4 días hábiles»), insignias discretas de «Más económico» / «Más rápido» (solo si una tarifa lo es estrictamente) y el precio tal cual lo manda OPS. La vigencia de la cotización es UNA sola nota para toda la lista, en la zona horaria del comprador («Precios de envío vigentes hasta las 9:39 p.m.»), que aparece tras hidratar en una línea reservada (sin salto de diseño). `loading` pinta filas esqueleto al recotizar.
+
+```tsx
+import { DeliveryOptions } from '@asteby/storefront-react/checkout'
+import '@asteby/storefront-react/checkout.css' // opcional: disposición, insignias, esqueleto y nota
+
+<fieldset>
+  <legend>Entrega</legend>
+  <DeliveryOptions rates={delivery.rates} pickup={delivery.pickup} partial={delivery.partial}
+    renderAmount={(m) => <Money data={m} />} classNames={{ option: 'card has-checked:border-accent' }} />
+</fieldset>
+```
+
+Catálogo compartido de marcas (`brandKey`, `brandName`, `findBrand`, `<BrandMark brand="oxxo" />`): paqueterías (FedEx, DHL, Estafeta, Paquetexpress, UPS, Redpack, 99 Minutos, J&T…), redes de tarjeta (Visa, Mastercard, American Express, Carnet), billeteras (Mercado Pago, PayPal…) y puntos de efectivo y bancos de México (OXXO, SPEI/STP, 7-Eleven, Circle K, Soriana, Extra, BBVA…). La clave es el identificador que ya mandan los proveedores. Las marcas son insignias tipográficas en SVG en línea con el color de la marca (sin archivos de logos de terceros, sin peticiones); una marca desconocida lleva un monograma neutro, y un `logo_url` https del proveedor reemplaza la insignia. Cada insignia trae su propio fondo (contraste igual en tema claro y oscuro); `--sf-brand-mark-ring` ajusta el filo.
+
 ## Promociones y venta cruzada (`@asteby/storefront-react/promotions`)
 
 Mecanismos sin contenido: los textos y montos llegan como datos de OPS (`Cart.promotions`, `GET /storefront/promotions`, `carts.recommendations`).

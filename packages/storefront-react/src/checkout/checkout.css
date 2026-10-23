@@ -1,0 +1,100 @@
+/*
+ * Default sheet for <DeliveryOptions> and the brand marks (`@asteby/storefront-react/checkout.css`). Optional and
+ * neutral: layout, badges, skeleton and the reserved line of the quote note. Colors come from `currentColor` and a few
+ * variables the shop can set (light and dark):
+ *   --sf-brand-mark-ring   hairline around a mark            (default rgb(127 127 127 / .35))
+ *   --sf-brand-mark-bg/fg  badge of a brand outside the catalog
+ *   --sf-delivery-badge-bg / --sf-delivery-badge-fg
+ *   --sf-delivery-muted    secondary text                     (default currentColor at 70%)
+ */
+[data-sf-delivery] {
+  display: grid;
+  gap: 0.75rem;
+}
+[data-sf-delivery-option] {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 44px;
+  cursor: pointer;
+}
+[data-sf-delivery-option][data-loading] {
+  opacity: 0.6;
+  transition: opacity 150ms;
+}
+[data-sf-delivery-body] {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+[data-sf-delivery-title] {
+  overflow-wrap: anywhere;
+}
+[data-sf-delivery-carrier] {
+  font-weight: 600;
+}
+[data-sf-delivery-service],
+[data-sf-delivery-eta] {
+  color: var(--sf-delivery-muted, color-mix(in srgb, currentColor 72%, transparent));
+}
+[data-sf-delivery-eta] {
+  font-size: 0.875em;
+}
+[data-sf-delivery-badges] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+}
+[data-sf-delivery-badge] {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.0625rem 0.5rem;
+  font-size: 0.75em;
+  font-weight: 600;
+  line-height: 1.5;
+  background: var(--sf-delivery-badge-bg, color-mix(in srgb, currentColor 10%, transparent));
+  color: var(--sf-delivery-badge-fg, inherit);
+}
+[data-sf-delivery-price] {
+  flex: none;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+[data-sf-delivery-note] {
+  min-height: 1.5em; /* reserved before hydration: the text never shifts the layout */
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--sf-delivery-muted, color-mix(in srgb, currentColor 72%, transparent));
+}
+[data-sf-delivery-skeleton] {
+  height: 4.5rem;
+  border-radius: 0.375rem;
+  background: linear-gradient(90deg, color-mix(in srgb, currentColor 6%, transparent) 0%, color-mix(in srgb, currentColor 12%, transparent) 50%, color-mix(in srgb, currentColor 6%, transparent) 100%);
+  background-size: 200% 100%;
+  animation: sf-delivery-shimmer 1.2s ease-in-out infinite;
+}
+@keyframes sf-delivery-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-sf-delivery-skeleton] {
+    animation: none;
+  }
+  [data-sf-delivery-option][data-loading] {
+    transition: none;
+  }
+}
+[data-sf-brand-mark] {
+  display: inline-block;
+  vertical-align: middle;
+}

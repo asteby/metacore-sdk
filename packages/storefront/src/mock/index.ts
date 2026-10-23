@@ -22,9 +22,11 @@ import type {
   Page,
   PaymentAttemptResult,
   PaymentConfig,
+  PaymentMethod,
   Product,
   ProductVariant,
   PromotionAnnouncement,
+  ShippingRate,
   Shop,
   StorefrontErrorCode,
   Theme,
@@ -84,6 +86,13 @@ export type MockStorefrontOptions = {
   announcements?: PromotionAnnouncement[]
   /** Payment attempts allowed per checkout before `429 too_many_attempts` (default 5). */
   maxPaymentAttempts?: number
+  /**
+   * Carrier-style rates served by `delivery-options` instead of the flat / express pair (to design a checkout with
+   * carriers, ETAs and quote deadlines). `expires_at` missing: 24 h from the request. Free shipping still applies.
+   */
+  shippingRates?: ShippingRate[]
+  /** Methods served by `payment-methods` (default one builtin `mock`). */
+  paymentMethods?: PaymentMethod[]
 }
 
 type CartRecord = {
@@ -456,9 +465,13 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
   const isKnownCode = (code: string) => code.toUpperCase() in discountCodes
   const percentFor = (code: string) => discountCodes[code.toUpperCase()] ?? 0
 
-  function shippingRates(subtotalCents: number) {
+  function shippingRates(subtotalCents: number): ShippingRate[] {
     const freeMin = state.shop.policies.free_shipping_min
     const free = freeMin !== null && subtotalCents >= toCents(freeMin.amount)
+    if (options.shippingRates?.length) {
+      const expires = new Date(Date.now() + 24 * 3_600_000).toISOString()
+      return options.shippingRates.map((r) => ({ ...r, expires_at: r.expires_at ?? expires, cost: free ? fromCents(0, r.cost.currency_code) : r.cost }))
+    }
     return [
       { id: 'flat', title: free ? 'Envío estándar (gratis)' : 'Envío estándar', cost: fromCents(free ? 0 : flatShippingCents, currency), eta: '2 a 5 días hábiles' },
       { id: 'express', title: 'Envío exprés', cost: fromCents(flatShippingCents + 10000, currency), eta: '1 a 2 días hábiles' },
@@ -726,7 +739,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
   })
   route('GET', '/carts/:id/payment-methods', 'cart:write', ({ params }) => {
     getCartRecord(params[0]!)
-    return { body: { methods: [{ key: 'mock', kind: 'builtin', default: true }], market: null }, cache: 'private' }
+    return { body: { methods: options.paymentMethods ?? [{ key: 'mock', kind: 'builtin', default: true }], market: null }, cache: 'private' }
   })
   route('PUT', '/carts/:id/delivery', 'cart:write', ({ params, body }) => {
     const cart = getCartRecord(params[0]!)

@@ -5,6 +5,7 @@ export default defineConfig({
     index: 'src/index.ts',
     mockups: 'src/mockups/index.ts',
     cart: 'src/cart-drawer/index.ts',
+    checkout: 'src/checkout/index.ts',
     fitment: 'src/fitment/index.ts',
     payments: 'src/payments/index.ts',
     'payments-server': 'src/payments/server.ts',

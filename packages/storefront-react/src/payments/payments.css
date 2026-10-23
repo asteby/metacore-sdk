@@ -28,3 +28,26 @@
 [data-sf-pay-method] [data-sf-pay-method-submit] {
   min-height: 44px;
 }
+/* Brand marks (`brandMarks`): trailing marks of a row (card networks, first cash points) and the mark of each point. */
+[data-sf-pay-method] [data-sf-pay-brands] {
+  display: inline-flex;
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  margin-inline-start: auto;
+}
+[data-sf-pay-method] [data-sf-pay-glyph] {
+  display: block;
+  opacity: 0.8;
+}
+[data-sf-pay-method] [data-sf-brand-mark] {
+  display: inline-block;
+  vertical-align: middle;
+}
+@media (max-width: 24rem) {
+  /* Narrow phones: the row text wins over the preview marks. */
+  [data-sf-pay-method] [data-sf-pay-choice] [data-sf-pay-brands] [data-sf-brand-mark]:nth-child(n + 3) {
+    display: none;
+  }
+}

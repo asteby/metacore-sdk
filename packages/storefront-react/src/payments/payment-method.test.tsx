@@ -108,6 +108,49 @@ describe('PaymentMethodSection', () => {
     expect(submit).toHaveBeenCalled()
     expect(formFields(container.querySelector('form'))).toMatchObject({ payment_choice: 'prov|cash', cash_point: 'a', email: 'a@b.co' })
   })
+  it('cash also saves the delivery first, so the button total holds the shipping', async () => {
+    const syncDelivery = vi.fn(async () => true)
+    const choices = buildPayChoices([method])
+    setup({ syncDelivery, choices, defaultChoice: 'prov|cash' })
+    await waitFor(() => expect(syncDelivery).toHaveBeenCalledWith('rate:1'))
+    expect(syncDelivery).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(screen.getByRole('button', { name: /Realizar el pedido/ }).textContent).toContain('2,185.00'))
+    // Changing the row with the same delivery does not save it again.
+    fireEvent.click(screen.getByRole('radio', { name: 'Mi cuenta' }))
+    expect(syncDelivery).toHaveBeenCalledTimes(1)
+  })
+  it('the button hides the stale total while the delivery is being saved', async () => {
+    let resolve: (ok: boolean) => void = () => {}
+    const syncDelivery = vi.fn(() => new Promise<boolean>((r) => (resolve = r)))
+    setup({ syncDelivery, defaultChoice: 'prov|cash' })
+    await waitFor(() => expect(syncDelivery).toHaveBeenCalled())
+    expect(screen.getByRole('button').textContent).toBe('Realizar el pedido')
+    resolve(true)
+    await waitFor(() => expect(screen.getByRole('button').textContent).toMatch(/Realizar el pedido .*2,185/))
+  })
+  it('draws brand marks: card networks, cash points and the provider on its own rows', () => {
+    const mp: PaymentMethod = { ...method, key: 'mercadopago', options: [
+      { key: 'card', redirect: false },
+      { key: 'cash', redirect: false, points: [
+        { id: 'oxxo', payment_method_id: 'oxxo', label: 'OXXO', group: 'main' },
+        { id: '7eleven', payment_method_id: 'paycash', payment_point: '7eleven', label: '7 Eleven', group: 'main' },
+        { id: 'bbva', payment_method_id: 'bancomer', label: 'BBVA', group: 'more' },
+      ] },
+      { key: 'wallet', redirect: true },
+    ] }
+    const { container } = setup({ cardBrands: ['visa', 'mastercard', 'amex'] }, [mp])
+    const row = (v: string) => container.querySelector(`input[value="${v}"]`)!.closest('label')!
+    const marks = (el: Element) => [...el.querySelectorAll('[data-sf-brand-mark]')].map((n) => n.getAttribute('data-sf-brand-mark'))
+    expect(marks(row('mercadopago|card'))).toEqual(['visa', 'mastercard', 'amex'])
+    expect(marks(row('mercadopago|cash'))).toEqual(['oxxo', '7eleven'])
+    expect(marks(row('mercadopago|wallet'))).toEqual(['mercadopago'])
+    const points = container.querySelectorAll('[data-sf-pay-point]')
+    expect([...points].map((p) => p.querySelector('[data-sf-brand-mark]')?.getAttribute('data-sf-brand-mark'))).toEqual(['oxxo', '7eleven', 'bbva'])
+    // Text-only when the shop turns them off.
+    cleanup()
+    const plain = setup({ brandMarks: false, cardBrands: ['visa'] }, [mp])
+    expect(plain.container.querySelector('[data-sf-brand-mark]')).toBeNull()
+  })
   it('redirect rows explain the redirect and the button says so', () => {
     setup()
     fireEvent.click(screen.getByRole('radio', { name: 'Mi cuenta' }))

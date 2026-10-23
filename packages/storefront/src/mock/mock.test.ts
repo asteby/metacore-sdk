@@ -303,3 +303,19 @@ describe('locations', () => {
     expect(cart.cost.shipping?.amount).toBe('30.00')
   })
 })
+
+describe('mock: carrier rates and payment methods', () => {
+  it('serves the given rates (24 h deadline) and charges the chosen one', async () => {
+    const m = createMockStorefront({
+      shippingRates: [{ id: 'fx', title: 'Standard Overnight', carrier: 'fedex', cost: { amount: '108.82', currency_code: 'MXN' }, eta: null, eta_days_min: 4, eta_days_max: 4 }],
+      paymentMethods: [{ key: 'mercadopago', kind: 'provider', default: true, options: [{ key: 'cash', redirect: false }] }],
+    })
+    const sf = createStorefrontClient({ baseUrl: 'https://mock.local/api/gw', token: 'sk_mock', fetch: m.fetch })
+    const cart = await sf.carts.create({ lines: [] })
+    const opts = await sf.carts.deliveryOptions(cart.id)
+    expect(opts.rates.map((r) => r.carrier)).toEqual(['fedex'])
+    expect(Date.parse(opts.rates[0]!.expires_at!)).toBeGreaterThan(Date.now())
+    const pm = await sf.carts.paymentMethods(cart.id)
+    expect(pm.methods[0]!.key).toBe('mercadopago')
+  })
+})
