@@ -19,6 +19,11 @@ export type AuthErrorCode =
   | 'validation'
   /** The store does not offer this way of signing in. */
   | 'unsupported'
+  /**
+   * The store's own credential lacks a permission (`403 insufficient_scope`): the shop is misconfigured, not the
+   * buyer's data. The buyer can still check out as a guest; the server already logged how to repair it.
+   */
+  | 'store_misconfigured'
   /** Anything else (network, server). */
   | 'unavailable'
 

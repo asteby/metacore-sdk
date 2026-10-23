@@ -5,7 +5,7 @@
  * The browser never talks to OPS. The action signs the buyer in with the store's `sk_` client and keeps the session
  * token in the store's own cookie, which is passed in (`customerCookie`), so name, flags and signing stay the store's.
  */
-import { isStorefrontError, type CustomerCapabilities, type CustomerSession, type StorefrontClient } from '@asteby/storefront'
+import { isStorefrontError, repairPath, type CustomerCapabilities, type CustomerSession, type StorefrontClient } from '@asteby/storefront'
 import type { AuthActionData, AuthErrorCode, AuthIntent } from './types.js'
 
 export type { AuthActionData, AuthErrorCode, AuthIntent, AuthStep } from './types.js'
@@ -18,6 +18,19 @@ export const SAFE_AUTH_CAPABILITIES: Readonly<CustomerCapabilities> = Object.fre
 })
 
 const FAILURE_TTL_MS = 5_000
+const LOG_EVERY_MS = 60_000
+let lastLogAt = -Infinity
+
+/** Server log (never the buyer's data): says what is missing and where it is repaired. At most once a minute. */
+function logMisconfigured(scopes: readonly string[]): void {
+  const t = Date.now()
+  if (t - lastLogAt < LOG_EVERY_MS) return
+  lastLogAt = t
+  console.error(
+    `[@asteby/storefront-react] La credencial de la tienda no tiene permisos${scopes.length ? ` (${scopes.join(', ')})` : ''}; ` +
+      `las cuentas de comprador no funcionan hasta repararlo en ${repairPath()}.`,
+  )
+}
 const cache = new WeakMap<object, { at: number; ok: boolean; value: CustomerCapabilities }>()
 
 export type LoadAuthCapabilitiesOptions = {
@@ -40,14 +53,32 @@ export async function loadAuthCapabilities(sf: StorefrontClient, options: LoadAu
   if (hit && now() - hit.at < (hit.ok ? ttl : FAILURE_TTL_MS)) return hit.value
   try {
     const got = await sf.customer.capabilities(options.signal ? { signal: options.signal } : undefined)
+    const missing = Array.isArray(got?.missing_scopes) ? got.missing_scopes.filter((x): x is string => typeof x === 'string') : []
     const value: CustomerCapabilities = {
+      // `password: false` (including for a missing scope) is respected: the form never offers what the token cannot do.
       password: got?.password !== false,
       email_verification: got?.email_verification === true,
       otp_channels: Array.isArray(got?.otp_channels) ? got.otp_channels : [],
+      ...(typeof got?.unavailable_reason === 'string' ? { unavailable_reason: got.unavailable_reason } : {}),
+      ...(missing.length ? { missing_scopes: missing } : {}),
     }
+    if (value.unavailable_reason === 'missing_scope') logMisconfigured(missing)
     cache.set(sf, { at: now(), ok: true, value })
     return value
-  } catch {
+  } catch (err) {
+    if (isStorefrontError(err) && err.code === 'insufficient_scope') {
+      // The token cannot even read capabilities: do not offer password sign-in it could not complete.
+      const value: CustomerCapabilities = {
+        password: false,
+        email_verification: false,
+        otp_channels: [],
+        unavailable_reason: 'missing_scope',
+        missing_scopes: err.requiredScopes,
+      }
+      logMisconfigured(err.requiredScopes)
+      cache.set(sf, { at: now(), ok: false, value })
+      return value
+    }
     cache.set(sf, { at: now(), ok: false, value: SAFE_AUTH_CAPABILITIES })
     return SAFE_AUTH_CAPABILITIES
   }
@@ -91,6 +122,10 @@ const fail = (code: AuthErrorCode, extra: Partial<AuthActionData> = {}, field?: 
 /** Maps what the SDK threw to the error the form shows. `ctx` tells what a 401 means on this step. */
 function toFailure(err: unknown, ctx: 'credentials' | 'code' | 'other', extra: Partial<AuthActionData>): AuthActionData {
   if (!isStorefrontError(err)) return fail('unavailable', extra)
+  if (err.code === 'insufficient_scope') {
+    logMisconfigured(err.requiredScopes)
+    return fail('store_misconfigured', extra)
+  }
   switch (err.status) {
     case 401:
       return fail(ctx === 'credentials' ? 'invalid_credentials' : ctx === 'code' ? 'invalid_code' : 'unavailable', extra, ctx === 'code' ? 'code' : undefined)
@@ -155,17 +190,20 @@ export function createAuthAction(options: CreateAuthActionOptions) {
 
     const caps = await loadCaps(sf)
     const passwordOn = caps.password
+    // Off because the store's token lacks a scope (not a merchant choice): say so instead of "not available".
+    const misconfigured = caps.unavailable_reason === 'missing_scope'
+    const off = (): AuthActionData => fail(misconfigured ? 'store_misconfigured' : 'unsupported', carry)
     const otpOn = caps.otp_channels.includes('email')
 
     try {
       switch (intent) {
         case 'login': {
-          if (!passwordOn) return fail('unsupported', carry)
+          if (!passwordOn) return off()
           if (!password) return fail('validation', carry, 'password')
           return await signedIn(await sf.customer.loginWithPassword({ email, password }, w), next)
         }
         case 'register': {
-          if (!passwordOn) return fail('unsupported', carry)
+          if (!passwordOn) return off()
           if (!password) return fail('validation', carry, 'password')
           const res = await sf.customer.register(
             { email, password, ...(text('first_name').trim() ? { first_name: text('first_name').trim() } : {}), ...(text('last_name').trim() ? { last_name: text('last_name').trim() } : {}) },
@@ -178,17 +216,17 @@ export function createAuthAction(options: CreateAuthActionOptions) {
           return await signedIn(await sf.customer.verifyRegistration({ email, code }, w), next)
         }
         case 'otp-request': {
-          if (!otpOn) return fail('unsupported', carry)
+          if (!otpOn) return off()
           await sf.customer.requestOtp({ email }, w)
           return { ok: true, step: 'otp', email }
         }
         case 'otp-login': {
-          if (!otpOn) return fail('unsupported', carry)
+          if (!otpOn) return off()
           if (!code) return fail('validation', carry, 'code')
           return await signedIn(await sf.customer.createSession({ email, code }, w), next)
         }
         case 'forgot': {
-          if (!passwordOn || !otpOn) return fail('unsupported', carry)
+          if (!passwordOn || !otpOn) return off()
           try {
             await sf.customer.requestOtp({ email }, w)
           } catch (err) {
@@ -198,7 +236,7 @@ export function createAuthAction(options: CreateAuthActionOptions) {
           return { ok: true, step: 'reset', email }
         }
         case 'reset': {
-          if (!passwordOn) return fail('unsupported', carry)
+          if (!passwordOn) return off()
           if (!code) return fail('validation', carry, 'code')
           if (!password) return fail('validation', carry, 'password')
           await sf.customer.resetPassword({ email, code, password }, w)

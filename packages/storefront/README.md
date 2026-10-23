@@ -405,6 +405,47 @@ a rule that produces a `discard_fields` field. `qr_canonical` (top level) is a t
 (`fiscal_regime`, `invoice_use`). A text that does not match yields `missing` (required fields); only a spec that cannot
 run throws `IdentityRulesError`.
 
+## Connecting the store to OPS (`connect`, `diagnose`, token files)
+
+A server-side store (`sk_`) is connected to OPS with a one-time code, never by copying a secret around.
+
+```sh
+# on the store's server; the code (K7QM-2XPA, 10 min, single use) is typed at the prompt, never an argument
+npx @asteby/storefront connect --ops https://ops.example.com --env-file .env --token-file /etc/mystore/storefront_token
+# Conectada ✓ · 7 alcances · sk_…a91f
+```
+
+`connect` redeems the code (`POST {ops}/api/connect/v1/redeem`), writes the key ATOMICALLY (temp file + rename, mode
+`0600`; default `./storefront_token`) with its non-secret state beside it (`<file>.json`), leaves ONLY `OPS_URL` and
+`STOREFRONT_TOKEN_FILE` in the env file (never the key), prints just the prefix and last four characters, and checks
+the key with `token.introspect()`. Exit code is `1` with an es-MX message for an expired or used code, an unreachable
+OPS or a non-TTY stdin.
+
+Read the key without restarting when it rotates (`@asteby/storefront/node`, Node only):
+
+```ts
+import { createStorefrontClient, diagnose } from '@asteby/storefront'
+import { connectStore, storefrontTokenFromEnv } from '@asteby/storefront/node'
+
+const storefront = createStorefrontClient({
+  baseUrl: `${process.env.OPS_URL}/api/gw`,
+  // STOREFRONT_TOKEN_FILE, then $CREDENTIALS_DIRECTORY/storefront_token (systemd LoadCredential=), then STOREFRONT_TOKEN.
+  // Files are re-read every 30 s (only when the mtime changed); a failed re-read keeps the last good key.
+  token: storefrontTokenFromEnv()!,
+})
+void diagnose(storefront)                 // one warning if scopes are missing; never throws, never delays boot
+connectStore().keepFresh()                // heartbeat + rotation (POST /api/connect/v1/rotate) when rotate_after passes
+```
+
+`token` also accepts any `() => string`, called on every request. `diagnose` logs, at most once, which scopes are
+missing and where to repair them (`OPS → Conexiones y API → <conexión> → Reparar permisos`), showing `sk_…a91f` and never
+the key. Repairing permissions does not change the key.
+
+Errors: a `403 insufficient_scope` is a `StorefrontError` with `code: 'insufficient_scope'`, `status: 403` and
+`requiredScopes: ['customer:write']`. `customer.capabilities()` reports `password: false`, `unavailable_reason:
+'missing_scope'` and `missing_scopes` when the key cannot create accounts. The mock rehearses all of it with
+`createMockStorefront({ missingScopes: ['customer:write'] })`.
+
 ## API
 
 `createStorefrontClient(options)`:

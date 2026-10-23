@@ -76,6 +76,7 @@ const ES: AccountAuthMessages = {
     rate_limited: 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.',
     validation: 'Revisa los datos e inténtalo de nuevo.',
     unsupported: 'Esta forma de entrar no está disponible en esta tienda.',
+    store_misconfigured: 'No pudimos crear tu cuenta por un problema de configuración de la tienda. Puedes comprar como invitado; ya avisamos a la tienda.',
     unavailable: 'No pudimos completar la acción. Inténtalo de nuevo en un momento.',
   },
 }
@@ -121,6 +122,7 @@ const EN: AccountAuthMessages = {
     rate_limited: 'Too many attempts. Wait a few minutes and try again.',
     validation: 'Check the details and try again.',
     unsupported: 'This way of signing in is not available in this store.',
+    store_misconfigured: 'We could not create your account because of a store configuration problem. You can check out as a guest; we have already told the store.',
     unavailable: 'We could not complete that. Try again in a moment.',
   },
 }
@@ -309,7 +311,7 @@ export function AccountAuth({ capabilities, data, next, pending = false, initial
     return (
       <section className={cx.root} data-sf-account-auth data-sf-account-view="unavailable">
         <p className={cx.notice} role="status">
-          {m.nothingAvailable}
+          {capabilities.unavailable_reason === 'missing_scope' ? m.errors.store_misconfigured : m.nothingAvailable}
         </p>
       </section>
     )

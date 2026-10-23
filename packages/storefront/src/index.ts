@@ -13,6 +13,9 @@ export type {
 export { StorefrontError, isStorefrontError } from './errors.js'
 export type { StorefrontErrorInit } from './errors.js'
 
+export { diagnose, maskToken, repairPath } from './diagnose.js'
+export type { DiagnoseOptions } from './diagnose.js'
+
 export { formatMoney, parseMoney, toMoney, isTokenPublishable } from './money.js'
 export type { FormatMoneyOptions } from './money.js'
 

@@ -92,7 +92,7 @@ describe('mock catalog', () => {
     const res = await mock.fetch('https://mock.local/api/gw/storefront/shop')
     expect(res.status).toBe(401)
     const cart = await pub.carts.create({})
-    await expect(pub.carts.checkout(cart.id, { payment_method: 'card', return_url: 'https://x' })).rejects.toMatchObject({ status: 403, code: 'forbidden' })
+    await expect(pub.carts.checkout(cart.id, { payment_method: 'card', return_url: 'https://x' })).rejects.toMatchObject({ status: 403, code: 'insufficient_scope' })
   })
 })
 

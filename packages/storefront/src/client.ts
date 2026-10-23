@@ -62,6 +62,7 @@ import type {
   StockLevel,
   StorefrontErrorBody,
   Theme,
+  TokenIntrospection,
 } from './types.js'
 
 export type FetchLike = (input: string | URL | Request, init?: RequestInit) => Promise<Response>
@@ -88,8 +89,12 @@ export type StorefrontResponseContext = StorefrontRequestContext & {
 export type StorefrontClientOptions = {
   /** Base URL of the gateway, e.g. `https://ops.example.com/api/gw`. Routes are appended as `/storefront/...`. */
   baseUrl: string
-  /** `pk_...` (browser) or `sk_...` (server only). Sent as `Authorization: Bearer <token>`. */
-  token: string
+  /**
+   * `pk_...` (browser) or `sk_...` (server only). Sent as `Authorization: Bearer <token>`. A function is called on
+   * EVERY request, so a token read from a file (`createFileTokenSource` in `@asteby/storefront/node`) can rotate
+   * without restarting the server.
+   */
+  token: string | (() => string)
   /** Buyer session (`X-Customer-Token`) for `/storefront/customer/*` routes. */
   customerToken?: string | null
   /** Custom fetch (defaults to `globalThis.fetch`). */
@@ -234,6 +239,10 @@ function linkSignals(signals: (AbortSignal | undefined)[]): { signal: AbortSigna
   }
 }
 
+function scopeList(raw: unknown): string[] {
+  return Array.isArray(raw) ? raw.filter((s): s is string => typeof s === 'string' && s.length > 0) : []
+}
+
 async function readError(res: Response, url: string): Promise<StorefrontError> {
   let body: Partial<StorefrontErrorBody> | undefined
   try {
@@ -243,9 +252,14 @@ async function readError(res: Response, url: string): Promise<StorefrontError> {
     body = undefined
   }
   const e = body?.error
+  // The gateway may put `code` / `required_scopes` at the top level or inside `error` (or its `details`).
+  const top = body as { code?: unknown; required_scopes?: unknown } | undefined
+  const code = e?.code ?? (typeof top?.code === 'string' ? top.code : undefined)
+  const requiredScopes = code === 'insufficient_scope' ? scopeList(e?.required_scopes ?? top?.required_scopes ?? (e?.details as { required_scopes?: unknown } | undefined)?.required_scopes) : []
   return new StorefrontError({
     status: res.status,
-    code: e?.code ?? defaultCodeForStatus(res.status),
+    code: code ?? defaultCodeForStatus(res.status),
+    ...(requiredScopes.length ? { requiredScopes } : {}),
     message: e?.message ?? `Storefront API responded ${res.status}${res.statusText ? ' ' + res.statusText : ''}`,
     ...(e?.field ? { field: e.field } : {}),
     ...(e?.details !== undefined ? { details: e.details } : {}),
@@ -256,8 +270,14 @@ async function readError(res: Response, url: string): Promise<StorefrontError> {
 export function createStorefrontClient(config: StorefrontClientOptions) {
   if (!config.baseUrl) throw new TypeError('createStorefrontClient: baseUrl is required')
   if (!config.token) throw new TypeError('createStorefrontClient: token is required')
+  const currentToken = (): string => {
+    const t = typeof config.token === 'function' ? config.token() : config.token
+    if (!t) throw new StorefrontError({ status: 0, code: 'unauthorized', message: 'Storefront token is empty (token source returned nothing)' })
+    return t
+  }
   const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined'
-  if (isBrowser && !isTokenPublishable(config.token) && config.token.startsWith('sk_')) {
+  const initialToken = typeof config.token === 'string' ? config.token : ''
+  if (isBrowser && initialToken.startsWith('sk_')) {
     console.warn('[@asteby/storefront] A private sk_ token is being used in a browser. Use a public pk_ token instead.')
   }
 
@@ -274,14 +294,15 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
 
     const headers = new Headers(config.headers)
     headers.set('Accept', 'application/json')
-    headers.set('Authorization', `Bearer ${config.token}`)
+    const token = currentToken()
+    headers.set('Authorization', `Bearer ${token}`)
     if (config.locale) headers.set('Accept-Language', config.locale)
     if (config.domain) headers.set('X-Storefront-Domain', storefrontDomainHeader(config.domain, config.market))
     const customerToken = options.customerToken !== undefined ? options.customerToken : config.customerToken
     if (customerToken) headers.set('X-Customer-Token', customerToken)
     const clientIp = options.clientIp !== undefined ? options.clientIp : config.clientIp
     // Server-side tokens only: a pk_ token already gets a per-caller bucket from the gateway.
-    const ip = isTokenPublishable(config.token) ? undefined : normalizeClientIp(clientIp)
+    const ip = isTokenPublishable(token) ? undefined : normalizeClientIp(clientIp)
     if (ip) headers.set(CLIENT_IP_HEADER, ip)
     if (options.idempotencyKey) headers.set('Idempotency-Key', options.idempotencyKey)
     if (spec.body !== undefined) headers.set('Content-Type', 'application/json')
@@ -364,6 +385,14 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
 
     /** Low-level escape hatch: any route under `baseUrl`. */
     request,
+
+    token: {
+      /**
+       * What the token in use is and can do (`GET {baseUrl}/_token`, a gateway route, not a `/storefront` one).
+       * Needs no scope, so it answers even when the token is under-provisioned: `missing_scopes` says what to repair.
+       */
+      introspect: (options?: RequestOptions) => get<TokenIntrospection>('/_token', undefined, options),
+    },
 
     /** Returns a new client that sends the given buyer session token. */
     withCustomerToken(customerToken: string | null) {

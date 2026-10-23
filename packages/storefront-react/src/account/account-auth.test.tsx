@@ -37,6 +37,21 @@ describe('<AccountAuth />', () => {
     expect(c.container.textContent).toContain('no admite iniciar sesión')
   })
 
+  it('shows the store-misconfigured message, with no password form, and passes axe', async () => {
+    const miss: CustomerCapabilities = { password: false, email_verification: false, otp_channels: [], unavailable_reason: 'missing_scope', missing_scopes: ['customer:write'] }
+    const a = render(<AccountAuth capabilities={miss} />)
+    expect(a.container.textContent).toContain('problema de configuración de la tienda')
+    expect(a.container.textContent).toContain('Puedes comprar como invitado')
+    expect(a.container.querySelector('[name=password]')).toBeNull()
+    expect((await axe.run(a.container, AXE)).violations).toEqual([])
+    a.unmount()
+    const b = render(<AccountAuth capabilities={full} data={{ ok: false, email: 'a@b.co', error: { code: 'store_misconfigured' } }} />)
+    const alert = b.container.querySelector('[data-sf-account-error=store_misconfigured]')!
+    expect(alert.getAttribute('role')).toBe('alert')
+    expect(alert.textContent).toContain('ya avisamos a la tienda')
+    expect((await axe.run(b.container, AXE)).violations).toEqual([])
+  })
+
   it('switches between register, forgot and code sign-in with the right intent', () => {
     const { container } = render(<AccountAuth capabilities={full} />)
     const intent = () => (container.querySelector('[data-sf-account-submit]') as HTMLButtonElement).value

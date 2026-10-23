@@ -491,6 +491,24 @@ export type CustomerCapabilities = {
   otp_channels: ('email' | 'whatsapp')[]
   /** What invoicing the store offers. Absent on older servers: treat as `available: false`. */
   invoicing?: InvoicingCapabilities
+  /**
+   * Why a way of signing in is off. `missing_scope`: the store's token lacks a scope (see `missing_scopes`), so
+   * the store is misconfigured; it is not a choice of the merchant. Absent when everything is as configured.
+   */
+  unavailable_reason?: 'missing_scope' | (string & {})
+  /** Scopes the token lacks (e.g. `customer:write`) when `unavailable_reason` is `missing_scope`. */
+  missing_scopes?: string[]
+}
+
+/** `GET {gateway}/_token`: what the token in use is and what it can do. Needs no scope. */
+export type TokenIntrospection = {
+  kind: string
+  environment: 'sandbox' | 'production' | (string & {})
+  scopes: string[]
+  /** Scopes the connection should have but the token lacks. Empty when healthy. */
+  missing_scopes: string[]
+  connection_id: string | null
+  expires_at: string | null
 }
 
 export type CustomerRegisterInput = {
@@ -608,6 +626,8 @@ export type StorefrontErrorCode =
   | 'timeout'
   | 'aborted'
   | 'invalid_response'
+  /** `403`: the token lacks a scope the route needs. `StorefrontError.requiredScopes` lists them. */
+  | 'insufficient_scope'
   | (string & {})
 
 /** One affected line of a `409 insufficient_stock`. `line_id` is `null` when the line did not exist yet (add). */
@@ -622,7 +642,7 @@ export type InsufficientStockLine = {
 export type InsufficientStockDetails = { lines: InsufficientStockLine[] }
 
 export type StorefrontErrorBody = {
-  error: { code: StorefrontErrorCode; message: string; field?: string; details?: unknown }
+  error: { code: StorefrontErrorCode; message: string; field?: string; details?: unknown; required_scopes?: string[] }
 }
 
 export type RestockSubscriptionInput = {

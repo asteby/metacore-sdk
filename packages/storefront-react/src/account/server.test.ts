@@ -51,10 +51,12 @@ describe('loadAuthCapabilities', () => {
     expect(spy).toHaveBeenCalledTimes(2)
   })
 
-  it('degrades on a token without scope (403)', async () => {
+  it('offers nothing on a token without scope (403 insufficient_scope), and says why', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
     const mock = createMockStorefront()
     const pk = createStorefrontClient({ baseUrl: 'https://mock.local/api/gw', token: 'pk_mock', fetch: mock.fetch })
-    expect(await loadAuthCapabilities(pk)).toEqual(SAFE_AUTH_CAPABILITIES)
+    expect(await loadAuthCapabilities(pk)).toEqual({ password: false, email_verification: false, otp_channels: [], unavailable_reason: 'missing_scope', missing_scopes: ['customer:read'] })
+    log.mockRestore()
   })
 })
 
@@ -139,6 +141,26 @@ describe('createAuthAction', () => {
     const degraded = createAuthAction({ storefront: noOtp.sf, customerCookie: cookie, capabilities: async () => SAFE_AUTH_CAPABILITIES })
     const res = await degraded({ request: new Request('https://shop.test/a', { method: 'POST', body: new URLSearchParams({ intent: 'otp-request', email: 'a@example.com' }) }) })
     expect(res).toMatchObject({ error: { code: 'unsupported' } })
+  })
+
+  it('turns insufficient_scope into store_misconfigured, logs the repair path once and does not offer a password', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(Date.now() + 3_600_000) // past the once-a-minute log throttle of earlier tests
+    const c = setup({ missingScopes: ['customer:write'] })
+    // The store announces password:false with its reason, and loadAuthCapabilities keeps both.
+    expect(await loadAuthCapabilities(c.sf)).toMatchObject({ password: false, unavailable_reason: 'missing_scope', missing_scopes: ['customer:write'] })
+    for (const intent of ['login', 'register'] as const) {
+      expect(await c.post({ intent, email: 'a@example.com', password: 'secret1234' })).toMatchObject({ ok: false, error: { code: 'store_misconfigured' } })
+    }
+    // Even when capabilities claim password:true, a 403 insufficient_scope on the real call gets the same answer.
+    const liar = createAuthAction({ storefront: c.sf, customerCookie: cookie, capabilities: async () => ({ password: true, email_verification: false, otp_channels: [] }) })
+    const res = await liar({ request: new Request('https://shop.test/a', { method: 'POST', body: new URLSearchParams({ intent: 'register', email: 'a@example.com', password: 'secret1234' }) }) })
+    expect(res).toMatchObject({ error: { code: 'store_misconfigured' } })
+    expect(log.mock.calls.length).toBeLessThanOrEqual(1)
+    expect(String(log.mock.calls[0]?.[0])).toContain('Reparar permisos')
+    log.mockRestore()
+    vi.useRealTimers()
   })
 
   it('maps network failures to unavailable and forwards the shopper IP', async () => {

@@ -74,6 +74,13 @@ export type MockStorefrontOptions = {
    * create the account straight away (`201`).
    */
   customerCapabilities?: Partial<CustomerCapabilities>
+  /**
+   * Scopes the mock's `sk_`/`pk_` tokens do NOT have (e.g. `['customer:write']`), to rehearse an under-provisioned
+   * store. Routes needing one answer `403 insufficient_scope` with `required_scopes`; `GET /_token` lists them in
+   * `missing_scopes`; and `customer/capabilities` reports `password: false`, `unavailable_reason: 'missing_scope'`
+   * when `customer:write` is among them. Implies scope enforcement.
+   */
+  missingScopes?: string[]
   /** Failed password logins per email before `429 rate_limited` (default 5; a success or a reset clears the count). */
   maxLoginAttempts?: number
   /** Discount codes → percentage off the subtotal (default `{ BIENVENIDA10: 10 }`). */
@@ -170,6 +177,7 @@ class HttpError extends Error {
     message: string,
     readonly field?: string,
     readonly details?: unknown,
+    readonly requiredScopes?: string[],
   ) {
     super(message)
   }
@@ -240,6 +248,12 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       online_verify: false,
     },
     ...options.customerCapabilities,
+  }
+  const missingScopes = options.missingScopes ?? []
+  if (missingScopes.includes('customer:write')) {
+    capabilities.password = false
+    capabilities.unavailable_reason = 'missing_scope'
+    capabilities.missing_scopes = ['customer:write']
   }
   const region = options.region === undefined ? MOCK_REGION_MX : options.region
   const maxLoginAttempts = options.maxLoginAttempts ?? 5
@@ -1345,9 +1359,11 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
 
   function scopesFor(token: string | null): Set<string> | null {
     if (!token) return null
-    if (token.startsWith('pk_')) return new Set(['catalog:read', 'content:read', 'cart:write'])
-    if (token.startsWith('sk_')) return new Set(['catalog:read', 'content:read', 'cart:write', 'checkout:write', 'customer:read', 'customer:write', 'orders:read'])
-    return null
+    let all: string[]
+    if (token.startsWith('pk_')) all = ['catalog:read', 'content:read', 'cart:write']
+    else if (token.startsWith('sk_')) all = ['catalog:read', 'content:read', 'cart:write', 'checkout:write', 'customer:read', 'customer:write', 'orders:read']
+    else return null
+    return new Set(all.filter((sc) => !missingScopes.includes(sc)))
   }
 
   function json(status: number, body: unknown, headers: Record<string, string> = {}): Response {
@@ -1360,13 +1376,19 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
   function errorResponse(err: HttpError): Response {
     return json(
       err.status,
-      { error: { code: err.code, message: err.message, ...(err.field ? { field: err.field } : {}), ...(err.details !== undefined ? { details: err.details } : {}) } },
+      { error: { code: err.code, message: err.message, ...(err.field ? { field: err.field } : {}), ...(err.details !== undefined ? { details: err.details } : {}), ...(err.requiredScopes ? { required_scopes: err.requiredScopes } : {}) } },
       { 'Cache-Control': PRIVATE_CACHE },
     )
   }
 
   async function handle(request: Request): Promise<Response> {
     const url = new URL(request.url)
+    if (/\/_token\/?$/.test(url.pathname)) {
+      const tok = request.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1] ?? null
+      const granted = scopesFor(tok)
+      if (!tok || !granted) return errorResponse(new HttpError(401, 'unauthorized', 'Missing or invalid storefront token'))
+      return json(200, { kind: tok.startsWith('pk_') ? 'publishable' : 'secret', environment: 'sandbox', scopes: [...granted], missing_scopes: missingScopes, connection_id: 'conn_mock', expires_at: null }, { 'Cache-Control': PRIVATE_CACHE })
+    }
     const idx = url.pathname.indexOf('/storefront/')
     if (idx < 0) return errorResponse(new HttpError(404, 'not_found', `No route for ${url.pathname}`))
     const path = url.pathname.slice(idx + '/storefront'.length).replace(/\/+$/, '') || '/'
@@ -1381,7 +1403,9 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     const token = auth?.match(/^Bearer\s+(.+)$/i)?.[1] ?? null
     const scopes = scopesFor(token)
     if (!scopes) return errorResponse(new HttpError(401, 'unauthorized', 'Missing or invalid storefront token'))
-    if (enforceScopes && !scopes.has(r.scope)) return errorResponse(new HttpError(403, 'forbidden', `Token lacks scope ${r.scope}`))
+    if ((enforceScopes || missingScopes.length > 0) && !scopes.has(r.scope)) {
+      return errorResponse(new HttpError(403, 'insufficient_scope', `Token lacks scope ${r.scope}`, undefined, undefined, [r.scope]))
+    }
 
     let body: Record<string, unknown> = {}
     if (method !== 'GET' && method !== 'DELETE') {

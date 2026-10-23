@@ -10,6 +10,8 @@ export type StorefrontErrorInit = {
   /** Request URL that failed (without credentials). */
   url?: string
   cause?: unknown
+  /** Scopes named by the gateway on a `403 insufficient_scope`. */
+  requiredScopes?: string[]
 }
 
 /**
@@ -23,6 +25,8 @@ export class StorefrontError extends Error {
   readonly field: string | undefined
   readonly details: unknown
   readonly url: string | undefined
+  /** Scopes a `403 insufficient_scope` says the route needs (empty for any other error). */
+  readonly requiredScopes: string[]
 
   constructor(init: StorefrontErrorInit) {
     super(init.message, init.cause === undefined ? undefined : { cause: init.cause })
@@ -31,6 +35,7 @@ export class StorefrontError extends Error {
     this.field = init.field
     this.details = init.details
     this.url = init.url
+    this.requiredScopes = init.requiredScopes ?? []
   }
 
   /**
@@ -45,7 +50,14 @@ export class StorefrontError extends Error {
   }
 
   toJSON() {
-    return { name: this.name, status: this.status, code: this.code, message: this.message, field: this.field }
+    return {
+      name: this.name,
+      status: this.status,
+      code: this.code,
+      message: this.message,
+      field: this.field,
+      ...(this.requiredScopes.length ? { requiredScopes: this.requiredScopes } : {}),
+    }
   }
 }
 
