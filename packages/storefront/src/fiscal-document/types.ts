@@ -31,8 +31,11 @@ export type IdentityExtraction = {
   missing: string[]
   /** Names (never values) of the fields the spec discards: the store does not keep them, and the UI can say so. */
   discarded: string[]
-  /** `match`: every field present in both the text and the QR agrees. `null`: nothing to compare. */
-  qr: { match: boolean | null }
+  /**
+   * `match`: every field present in both the text and the QR agrees (`null`: nothing to compare). `canonical`: the
+   * rules' `qr_canonical` URL rebuilt from what the QR carried, even if the reader garbled it; `''` when none.
+   */
+  qr: { match: boolean | null; canonical: string }
   /** `issued_on` is older than `freshness_days`. `null` when it cannot be told. */
   stale: boolean | null
   age_days: number | null

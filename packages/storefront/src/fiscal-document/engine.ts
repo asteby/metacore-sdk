@@ -12,8 +12,10 @@ const MAX_PATTERN = 1024
 const STRATEGIES = new Set(['regex', 'labeled_lines', 'concat_labeled', 'catalog_phrases', 'date', 'qr_param'])
 const STRATEGY_KEYS = new Set([
   'strategy', 'pattern', 'flags', 'group', 'label', 'labels', 'separator', 'catalog', 'start', 'end', 'order', 'months',
-  'param', 'split', 'parts', 'match', 'upper', 'capture',
+  'param', 'split', 'parts', 'match', 'upper', 'capture', 'scan',
 ])
+const RULES_KEYS = new Set(['version', 'normalize', 'labels', 'qr_canonical', 'fields'])
+const PLACEHOLDER = /\{([a-z0-9_]+)\}/g
 
 /** Thrown for a spec that cannot run (unknown engine, rules that do not validate, no extractor registered). */
 export class IdentityRulesError extends Error {
@@ -83,10 +85,17 @@ function validateStrategy(s: IdentityStrategy, haveLabels: boolean): void {
       if (s.months && s.months.length !== 0 && s.months.length !== 12) throw new IdentityRulesError('rules: date months wants 12 names')
       return
     }
-    case 'qr_param':
-      if (!s.param) throw new IdentityRulesError('rules: qr_param needs a param')
+    case 'qr_param': {
+      if (!s.param && !s.scan) throw new IdentityRulesError('rules: qr_param needs a param or a scan')
       if ((s.parts ?? 0) < 0) throw new IdentityRulesError('rules: qr_param parts must not be negative')
-      return checkPattern('match', s.match)
+      if (s.scan) {
+        checkPattern('scan', s.scan, s.flags)
+        const groups = new RegExp(s.scan + '|').exec('')!.length - 1
+        if ((s.group ?? 0) < 1 || (s.group ?? 0) > groups) throw new IdentityRulesError('rules: scan group does not exist')
+      }
+      if (s.param) checkPattern('match', s.match)
+      return
+    }
     default:
       throw new IdentityRulesError(`rules: unknown strategy "${String(s.strategy)}"`)
   }
@@ -94,10 +103,15 @@ function validateStrategy(s: IdentityStrategy, haveLabels: boolean): void {
 
 /** Checks rules are well formed and portable; no rule may produce a `discard` field. Throws `IdentityRulesError`. */
 export function validateRules(rules: IdentityRulesV1, discard: string[] = []): void {
+  for (const k of Object.keys(rules ?? {})) if (!RULES_KEYS.has(k)) throw new IdentityRulesError(`rules: unknown member "${k}"`)
   if (rules?.version !== 1) throw new IdentityRulesError(`rules: version ${String(rules?.version)} is not 1`)
   for (const n of rules.normalize ?? []) if (n !== 'nbsp' && n !== 'collapse_ws') throw new IdentityRulesError(`rules: unknown normalize step "${String(n)}"`)
   for (const l of rules.labels ?? []) checkPattern('labels', l)
   if (!Array.isArray(rules.fields) || rules.fields.length === 0 || rules.fields.length > MAX_FIELDS) throw new IdentityRulesError(`rules: want 1..${MAX_FIELDS} fields`)
+  if (rules.qr_canonical) {
+    const keys = new Set(rules.fields.map((f) => f.key))
+    for (const m of rules.qr_canonical.matchAll(PLACEHOLDER)) if (!keys.has(m[1]!)) throw new IdentityRulesError(`rules: qr_canonical names unknown field "${m[1]}"`)
+  }
   const drop = new Set(discard.map((d) => d.trim().toLowerCase()))
   const seen = new Set<string>()
   for (const f of rules.fields) {
@@ -122,7 +136,8 @@ function parseRules(spec: IdentityDocumentSpec): IdentityRulesV1 {
     }
   }
   if (!rules || typeof rules !== 'object') throw new IdentityRulesError(`${spec.kind}: rules@1 needs rules`)
-  validateRules(rules, spec.discard_fields ?? [])
+  // A rule that produces a discarded field is the publisher's error (`validateRules` flags it); reading still drops it.
+  validateRules(rules)
   return rules
 }
 
@@ -178,8 +193,8 @@ function section(text: string, start?: string, end?: string): string {
   return text.slice(from, to)
 }
 
-function phrasesOf(e: { label: string; match_phrases?: string[] }): string[] {
-  const src = e.match_phrases?.length ? e.match_phrases : [e.label]
+function phrasesOf(e: { label: string; label_en?: string; match_phrases?: string[] }): string[] {
+  const src = e.match_phrases?.length ? e.match_phrases : [e.label, e.label_en ?? '']
   return [...new Set(src.map(foldText).filter(Boolean))]
 }
 
@@ -223,11 +238,18 @@ function parseDate(text: string, s: IdentityStrategy): string {
   return `${String(y).padStart(4, '0')}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 }
 
+function qrScan(qr: string, s: IdentityStrategy): string {
+  if (!s.scan) return ''
+  const m = compiled(s.scan, s.flags ?? '').exec(qr)
+  return m ? (m[s.group ?? 0] ?? '').trim().toUpperCase() : ''
+}
+
 function qrPart(qr: string, s: IdentityStrategy): string {
   const url = qr.trim()
   if (!url) return ''
-  const m = new RegExp(`[?&]${s.param!.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}=([^&\\s#]+)`, 'i').exec(url)
-  if (!m) return ''
+  if (!s.param) return qrScan(url, s)
+  const m = new RegExp(`[?&]${s.param.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}=([^&\\s#]+)`, 'i').exec(url)
+  if (!m) return qrScan(url, s)
   let val: string
   try {
     val = decodeURIComponent(m[1]!.replaceAll('+', ' '))
@@ -235,13 +257,20 @@ function qrPart(qr: string, s: IdentityStrategy): string {
     return ''
   }
   const parts = s.split ? val.split(s.split) : [val]
-  if ((s.parts ?? 0) > 0 && parts.length !== s.parts) return ''
+  if ((s.parts ?? 0) > 0 && parts.length !== s.parts) return qrScan(url, s)
   const re = compiled(s.match!)
   for (const raw of parts) {
     const p = raw.trim().toUpperCase()
     if (re.test(p)) return p
   }
-  return ''
+  return qrScan(url, s)
+}
+
+/** Go's url.QueryEscape: space as +, everything but letters, digits and -_.~ percent-encoded. */
+function queryEscape(v: string): string {
+  return encodeURIComponent(v)
+    .replace(/[!'()*]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase())
+    .replaceAll('%20', '+')
 }
 
 function post(s: IdentityStrategy, value: string): string {
@@ -294,7 +323,7 @@ export function extractIdentityDocument(text: string, spec: IdentityDocumentSpec
     sources: {},
     missing: [],
     discarded: [...(spec.discard_fields ?? [])],
-    qr: { match: null },
+    qr: { match: null, canonical: '' },
     stale: null,
     age_days: null,
   }
@@ -306,6 +335,7 @@ export function extractIdentityDocument(text: string, spec: IdentityDocumentSpec
     const catalogs = options.catalogs ?? {}
     let compared = 0
     let equal = 0
+    const qrBest: Record<string, string> = {}
     for (const f of rules.fields) {
       let textVals: string[] = []
       const qrVals: string[] = []
@@ -326,6 +356,7 @@ export function extractIdentityDocument(text: string, spec: IdentityDocumentSpec
         got = qrVals.slice(0, 1)
         out.sources[f.key] = 'qr'
       }
+      if (qrVals.length > 0) qrBest[f.key] = qrVals[0]!
       if (textVals.length > 0 && qrVals.length > 0) {
         compared++
         if (textVals[0]!.toUpperCase() === qrVals[0]!.toUpperCase()) equal++
@@ -335,6 +366,15 @@ export function extractIdentityDocument(text: string, spec: IdentityDocumentSpec
       } else out.fields[f.key] = f.multiple ? got : got[0]!
     }
     if (compared > 0) out.qr.match = compared === equal
+    if (rules.qr_canonical && (options.qr ?? '').trim()) {
+      let ok = true
+      const canon = rules.qr_canonical.replace(PLACEHOLDER, (_p, key: string) => {
+        const v = qrBest[key]
+        if (!v) ok = false
+        return queryEscape(v ?? '')
+      })
+      if (ok) out.qr.canonical = canon
+    }
   } else {
     const id = spec.engine.startsWith('plugin:') ? spec.engine.slice('plugin:'.length) : spec.engine
     const fn = getIdentityExtractor(id) ?? getIdentityExtractor(spec.kind)

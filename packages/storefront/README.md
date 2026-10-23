@@ -395,13 +395,13 @@ tries its strategies in order and the first non-empty value wins.
 | `concat_labeled` | the values of several captions joined with `separator` (first names + surnames) |
 | `catalog_phrases` | the codes of the catalog entries whose phrases appear between `start` and `end`, in order of first mention. Phrases come from `match_phrases`, or the label when absent. No `start` found: no section |
 | `date` | `pattern` with three groups in the order of `order` (`dmy`, `ymd`...); `months` (12 names) reads a month in text; calendar-invalid dates are dropped. Result `YYYY-MM-DD` |
-| `qr_param` | from the QR URL: parameter `param`, split on `split` into exactly `parts` parts; the part matching `match` (uppercased) |
+| `qr_param` | from the QR URL: parameter `param`, split on `split` into exactly `parts` parts; the part matching `match` (uppercased). `scan` (+ `flags`, `group`) is the fallback for QRs read by a keyboard-wedge scanner that garbled the punctuation: a pattern over the raw text |
 
 Any strategy takes `upper` and `capture` (`{pattern, flags, group}`: the value must match it and the group replaces
 the value). **The text wins over the QR**; a `qr_param` strategy only fills what the text lacks, and `extraction.qr.match`
 is `false` when both carry a field and differ (a warning, never a block). Patterns are limited to the subset common to Go and
 JavaScript (no lookaround, backreferences, named groups, inline flags or `\p`); `validateRules` rejects the rest, and
-a rule that produces a `discard_fields` field. Catalogs for `catalog_phrases` come from `catalogsFromRegion(region.fiscal_id)`
+a rule that produces a `discard_fields` field. `qr_canonical` (top level) is a template, e.g. `https://host/path?D3={document_id}_{tax_id}`, filled with what the QR carried; `extraction.qr.canonical` returns it rebuilt (always the canonical form, however the scanner garbled it). Catalogs for `catalog_phrases` come from `catalogsFromRegion(region.fiscal_id)`
 (`fiscal_regime`, `invoice_use`). A text that does not match yields `missing` (required fields); only a spec that cannot
 run throws `IdentityRulesError`.
 

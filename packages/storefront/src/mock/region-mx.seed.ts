@@ -55,6 +55,7 @@ export const SEED_MX_CSF: IdentityDocumentSpec = {
       "Obligaciones",
       "Correo Electr[óo]nico"
     ],
+    "qr_canonical": "https://siat.sat.gob.mx/app/qr/faces/pages/mobile/validadorqr.jsf?D1=10&D2=1&D3={document_id}_{tax_id}",
     "fields": [
       {
         "key": "tax_id",
@@ -65,13 +66,14 @@ export const SEED_MX_CSF: IdentityDocumentSpec = {
             "label": "RFC",
             "upper": true,
             "capture": {
-              "pattern": "\\b([A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3})\\b",
+              "pattern": "(?:^|[^A-Z0-9Ñ&])([A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3})(?:[^A-Z0-9Ñ&]|$)",
+              "flags": "i",
               "group": 1
             }
           },
           {
             "strategy": "regex",
-            "pattern": "\\b([A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3})\\b",
+            "pattern": "(?:^|[^A-Z0-9Ñ&])([A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3})(?:[^A-Z0-9Ñ&]|$)",
             "flags": "i",
             "group": 1,
             "upper": true
@@ -82,6 +84,12 @@ export const SEED_MX_CSF: IdentityDocumentSpec = {
             "split": "_",
             "parts": 2,
             "match": "^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$"
+          },
+          {
+            "strategy": "qr_param",
+            "scan": "(?:D3)?([0-9]{11})[^A-Z0-9]{0,3}([A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3})(?:[^A-Z0-9]|$)",
+            "flags": "i",
+            "group": 2
           }
         ]
       },
@@ -146,6 +154,12 @@ export const SEED_MX_CSF: IdentityDocumentSpec = {
             "split": "_",
             "parts": 2,
             "match": "^[0-9]+$"
+          },
+          {
+            "strategy": "qr_param",
+            "scan": "(?:D3)?([0-9]{11})[^A-Z0-9]{0,3}([A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3})(?:[^A-Z0-9]|$)",
+            "flags": "i",
+            "group": 1
           }
         ]
       },

@@ -942,6 +942,7 @@ export type InvoicingCapabilities = {
 export type RegionFiscalEntry = {
   code: string
   label: string
+  label_en?: string
   /** Region-defined (`individual`, `company`...); compare as opaque strings. */
   person_types: string[]
   /** Invoice uses only: the regimes that may use it. Absent: any. */
@@ -1099,6 +1100,8 @@ export type IdentityStrategy = {
   order?: string
   /** 12 month names, to read a month written in text. */
   months?: string[]
+  /** `qr_param` fallback for a QR read by a keyboard scanner that garbled the punctuation: a pattern over the raw text whose group `group` is the value. Runs when `param` finds nothing. */
+  scan?: string
   param?: string
   split?: string
   parts?: number
@@ -1128,5 +1131,7 @@ export type IdentityRulesV1 = {
   normalize?: ('nbsp' | 'collapse_ws')[]
   /** Captions of the document (regex fragments, case-insensitive, followed by a colon). A labelled value ends at the next caption. */
   labels?: string[]
+  /** Template of the canonical QR URL, rebuilt from the fields the QR carried (`{field}` placeholders). It survives readers that garble the URL. */
+  qr_canonical?: string
   fields: IdentityFieldRule[]
 }
