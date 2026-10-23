@@ -45,7 +45,7 @@
   height: 1.1em;
   margin-top: 0.15em;
   border-radius: 999px;
-  background: currentColor;
+  background: var(--sf-field-error, #b42318);
   color: var(--sf-field-error-contrast, #fff);
   font-size: 0.8em;
   line-height: 1;
