@@ -26,6 +26,8 @@ export type DeliveryMessages = {
   quoteSoon: string
   partial: string
   loading: string
+  /** The quote expired or changed and the rates were reloaded. */
+  requoted: string
 }
 
 const ES: DeliveryMessages = {
@@ -44,6 +46,7 @@ const ES: DeliveryMessages = {
   quoteSoon: 'Los precios de envío vencen pronto ({time}).',
   partial: 'No pudimos consultar todas las paqueterías. Estas son las opciones disponibles ahora.',
   loading: 'Buscando opciones de envío…',
+  requoted: 'Las tarifas de envío cambiaron y ya están actualizadas. Revisa tu envío antes de pagar.',
 }
 
 const EN: DeliveryMessages = {
@@ -62,6 +65,7 @@ const EN: DeliveryMessages = {
   quoteSoon: 'Shipping prices expire soon ({time}).',
   partial: "We couldn't reach every carrier. These are the options available now.",
   loading: 'Looking for delivery options…',
+  requoted: 'Shipping rates changed and are now up to date. Check your delivery before paying.',
 }
 
 /** Messages for a locale (`es*` default, `en*`), with optional overrides. */
@@ -179,4 +183,35 @@ export function quoteNote(
   if (day(deadline) === day(new Date(now.getTime() + 86_400_000))) return { text: fill(m.quoteTomorrow, { time }), soon: false }
   const date = new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit', ...tz }).format(deadline)
   return { text: fill(m.quoteLater, { date }), soon: false }
+}
+
+/** Error codes a server uses (or will use) when the chosen rate is no longer quotable. */
+const QUOTE_CODES = new Set(['quote_expired', 'rate_expired', 'rate_changed', 'rate_unavailable', 'rate_not_found', 'stale_rate', 'invalid_rate'])
+
+/**
+ * `true` when saving a shipping rate failed because the quote expired or the rates changed, so the shop should reload
+ * the rates (and keep the address) instead of showing a generic failure. Recognizes the explicit codes
+ * (`quote_expired`, `rate_expired`…, any status), a `409`, and the generic `422` on the rate field that older servers
+ * answer when the provider re-quoted with new ids. 5xx and other 4xx stay real failures.
+ */
+export function isQuoteChange(err: { status?: number; code?: string | null; field?: string | null } | null | undefined): boolean {
+  if (!err) return false
+  if (err.code && QUOTE_CODES.has(err.code)) return true
+  if (err.status === 409) return true
+  return err.status === 422 && (err.field === 'rate_id' || err.field === 'delivery' || err.field === 'delivery.rate_id' || !err.field)
+}
+
+/**
+ * The rate of a fresh quote that matches the one the buyer had chosen (same carrier and service), so a re-quote keeps
+ * the choice even though the provider issued new ids. `null` when that service is no longer offered.
+ */
+export function matchRate<R extends Pick<ShippingRate, 'id' | 'carrier' | 'service_code' | 'title'>>(previous: Pick<ShippingRate, 'carrier' | 'service_code' | 'title'> | null | undefined, rates: readonly R[]): R | null {
+  if (!previous) return null
+  const norm = (s: string | null | undefined) => (s ?? '').trim().toLowerCase()
+  const sameCarrier = (r: R) => norm(r.carrier) === norm(previous.carrier)
+  if (previous.service_code) {
+    const hit = rates.find((r) => sameCarrier(r) && norm(r.service_code) === norm(previous.service_code))
+    if (hit) return hit
+  }
+  return rates.find((r) => sameCarrier(r) && norm(r.title) === norm(previous.title)) ?? null
 }

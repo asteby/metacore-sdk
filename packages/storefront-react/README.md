@@ -536,6 +536,8 @@ import '@asteby/storefront-react/checkout.css' // opcional: disposición, insign
 </fieldset>
 ```
 
+Tarifa vencida o cambiada: si guardar la entrega falla con `isQuoteChange(err)` (códigos `quote_expired`/`rate_expired`…, un 409, o el 422 genérico de servidores anteriores), la tienda recarga las tarifas conservando la dirección, vuelve a elegir el mismo servicio con `matchRate(anterior, nuevas)`, pasa `requoted` a `DeliveryOptions` y resuelve `syncDelivery` con `'requote'`: `PaymentMethodSection` muestra un aviso (no un error) y vuelve a intentar con la nueva tarifa.
+
 Catálogo compartido de marcas (`brandKey`, `brandName`, `findBrand`, `<BrandMark brand="oxxo" />`): paqueterías (FedEx, DHL, Estafeta, Paquetexpress, UPS, Redpack, 99 Minutos, J&T…), redes de tarjeta (Visa, Mastercard, American Express, Carnet), billeteras (Mercado Pago, PayPal…) y puntos de efectivo y bancos de México (OXXO, SPEI/STP, 7-Eleven, Circle K, Soriana, Extra, BBVA…). La clave es el identificador que ya mandan los proveedores. Las marcas son insignias tipográficas en SVG en línea con el color de la marca (sin archivos de logos de terceros, sin peticiones); una marca desconocida lleva un monograma neutro, y un `logo_url` https del proveedor reemplaza la insignia. Cada insignia trae su propio fondo (contraste igual en tema claro y oscuro); `--sf-brand-mark-ring` ajusta el filo.
 
 ## Promociones y venta cruzada (`@asteby/storefront-react/promotions`)

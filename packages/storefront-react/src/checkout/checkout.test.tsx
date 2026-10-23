@@ -4,7 +4,7 @@ import { cleanup, render, waitFor } from '@testing-library/react'
 import { renderToString } from 'react-dom/server'
 import axe from 'axe-core'
 import type { ShippingRate } from '@asteby/storefront'
-import { BrandMark, DeliveryOptions, brandKey, brandName, findBrand, listBrands, quoteDeadline, quoteNote, rateBadges, rateEta, rateService } from './index.js'
+import { BrandMark, DeliveryOptions, isQuoteChange, matchRate, brandKey, brandName, findBrand, listBrands, quoteDeadline, quoteNote, rateBadges, rateEta, rateService } from './index.js'
 
 afterEach(cleanup)
 
@@ -129,6 +129,30 @@ describe('delivery helpers', () => {
     const soon = quoteNote(deadline, { now: new Date('2026-10-24T03:30:00Z'), timeZone: tz })!
     expect(soon.soon).toBe(true)
     expect(quoteNote(deadline, { now: new Date('2026-10-25T00:00:00Z') })).toBeNull()
+  })
+})
+
+describe('re-quote', () => {
+  it('recognizes an expired or changed quote, today (generic 422) and with an explicit code', () => {
+    expect(isQuoteChange({ status: 409, code: 'quote_expired' })).toBe(true)
+    expect(isQuoteChange({ status: 422, code: 'rate_expired' })).toBe(true)
+    expect(isQuoteChange({ status: 409 })).toBe(true)
+    expect(isQuoteChange({ status: 422, code: 'invalid_input' })).toBe(true)
+    expect(isQuoteChange({ status: 422, code: 'invalid_input', field: 'rate_id' })).toBe(true)
+    expect(isQuoteChange({ status: 422, field: 'email' })).toBe(false)
+    expect(isQuoteChange({ status: 404, code: 'not_found' })).toBe(false)
+    expect(isQuoteChange({ status: 503 })).toBe(false)
+    expect(isQuoteChange(null)).toBe(false)
+  })
+  it('keeps the chosen service across new rate ids', () => {
+    const fresh = rates.map((r) => ({ ...r, id: `${r.id}-2` }))
+    expect(matchRate(rates[1], fresh)?.id).toBe('b-2')
+    expect(matchRate({ carrier: 'ups', title: 'Ground' }, fresh)).toBeNull()
+    expect(matchRate({ carrier: 'fedex', service_code: 'SO', title: 'x' }, [{ ...fresh[0]!, service_code: 'SO' }])?.id).toBe('a-2')
+  })
+  it('DeliveryOptions says the rates were refreshed', () => {
+    const { container } = render(<DeliveryOptions rates={rates} requoted />)
+    expect(container.querySelector('[data-sf-delivery-requoted]')!.textContent).toMatch(/cambiaron/)
   })
 })
 

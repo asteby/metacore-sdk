@@ -57,8 +57,12 @@ export type PaymentMethodSectionProps = {
    * Saves the chosen delivery on the server cart so the server total includes it. Resolve `true` once the new total
    * has been read back (the `amount` prop is then up to date). Called once per delivery, whatever the payment row (so
    * the total on the button and in the shop's summary always holds the chosen delivery). Without it nothing waits.
+   *
+   * Resolve `'requote'` when the server refused the rate because the quote expired or changed and the shop is loading
+   * fresh rates: the section then says so (`quoteChanged`, a status, not an error), keeps the card in the page and
+   * tries again with the next delivery value. `false` is a real failure (the card degrades to the redirect).
    */
-  syncDelivery?: (delivery: string) => Promise<boolean>
+  syncDelivery?: (delivery: string) => Promise<boolean | 'requote'>
   /** A two-step checkout still collecting the address: the button reads "continue" and no card form shows. */
   addressFirst?: boolean
   /** The address must be saved again before paying. */
@@ -176,7 +180,7 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
   // button: the shop saves it on the cart and re-reads the cart. Once per delivery, for every payment row (cash and
   // redirect included, otherwise the button and the summary show the cart without shipping).
   const wantSync = hydrated && selected !== null && !addressFirst && !retryAddress && deliveryReady && Boolean(syncDelivery)
-  const [sync, setSync] = useState<{ key: string; ok: boolean } | null>(null)
+  const [sync, setSync] = useState<{ key: string; ok: boolean; requote?: boolean } | null>(null)
   const syncRef = useRef(syncDelivery)
   syncRef.current = syncDelivery
   useEffect(() => {
@@ -184,7 +188,7 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
     if (sync?.key === delivery && sync.ok) return
     let cancelled = false
     syncRef.current(delivery).then(
-      (ok) => !cancelled && setSync({ key: delivery, ok }),
+      (ok) => !cancelled && setSync(ok === 'requote' ? { key: delivery, ok: false, requote: true } : { key: delivery, ok }),
       () => !cancelled && setSync({ key: delivery, ok: false }),
     )
     return () => {
@@ -194,7 +198,8 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
   }, [wantSync, delivery])
   const settled = sync?.key === delivery
   const synced = !syncDelivery || (settled && sync!.ok)
-  const syncFailed = wantSync && settled && !sync!.ok
+  const requote = wantSync && settled && sync!.requote === true
+  const syncFailed = wantSync && settled && !sync!.ok && !requote
   const brickReady = cardActive && deliveryReady && synced && !syncFailed
 
   const transport = useMemo(
@@ -221,7 +226,7 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
   }
 
   // While the delivery is being saved the amount is stale: the button reads without it.
-  const total = wantSync && !settled ? null : renderAmount ? renderAmount(amount) : formatMoney(amount, locale)
+  const total = wantSync && (!settled || requote) ? null : renderAmount ? renderAmount(amount) : formatMoney(amount, locale)
   const label: ReactNode = retryAddress ? (
     m.retryAddress
   ) : addressFirst ? (
@@ -249,7 +254,7 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
     if (brickReady) void brick.current?.submit()
   }
 
-  const cardNotice = (k: 'syncing' | 'syncFailed' | 'pickDelivery', node: ReactNode) =>
+  const cardNotice = (k: 'syncing' | 'syncFailed' | 'pickDelivery' | 'requote', node: ReactNode) =>
     k === 'syncFailed' ? (
       <p role="alert" className={cx.alert} data-sf-pay-notice="sync-failed" {...tid('syncFailed')}>
         {node}
@@ -330,7 +335,9 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
               ? cardNotice('pickDelivery', m.pickDeliveryFirst)
               : syncFailed
                 ? cardNotice('syncFailed', m.syncFailed)
-                : !synced
+                : requote
+                  ? cardNotice('requote', m.quoteChanged)
+                  : !synced
                   ? cardNotice('syncing', m.updatingTotal)
                   : null}
           {brickReady || fallback ? (

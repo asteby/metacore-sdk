@@ -52,6 +52,8 @@ export type DeliveryOptionsProps = {
   onValueChange?: (value: string) => void
   /** Some provider did not answer (`DeliveryOptions.partial`): one neutral note above the list. */
   partial?: boolean
+  /** The previous quote expired or changed and these rates are fresh: one status note above the list. */
+  requoted?: boolean
   /** Rates are being quoted again: skeleton rows (no rates yet) or the current rows dimmed, `aria-busy`. */
   loading?: boolean
   /** Quote deadline note: `always` (default), only when it is `soon`, or `never`. */
@@ -110,6 +112,7 @@ export function DeliveryOptions(props: DeliveryOptionsProps) {
     value,
     onValueChange,
     partial = false,
+    requoted = false,
     loading = false,
     timeZone,
     marks = true,
@@ -149,6 +152,11 @@ export function DeliveryOptions(props: DeliveryOptionsProps) {
       {partial ? (
         <p role="status" className={cx.partial} data-sf-delivery-partial>
           {m.partial}
+        </p>
+      ) : null}
+      {requoted ? (
+        <p role="status" className={cx.partial} data-sf-delivery-requoted>
+          {m.requoted}
         </p>
       ) : null}
       {loading ? (
