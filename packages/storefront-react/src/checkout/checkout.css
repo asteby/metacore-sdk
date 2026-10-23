@@ -158,3 +158,13 @@
     transition: none;
   }
 }
+@media (max-width: 30rem) {
+  /* Phones: a lower carrier mark leaves the service name room on one or two lines. */
+  [data-sf-delivery-option] {
+    gap: 0.625rem;
+  }
+  [data-sf-delivery-option] > [data-sf-brand-mark] {
+    height: 20px;
+    width: auto;
+  }
+}

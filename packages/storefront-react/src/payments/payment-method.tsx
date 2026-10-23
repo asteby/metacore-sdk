@@ -296,13 +296,24 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
     onEvent?.(e)
   }
 
-  // The buyer's e-mail from the page form: the provider form then skips its own e-mail block.
-  const payerEmail = (() => {
-    if (!payerEmailField || !brickReady) return undefined
-    const el = formRef.current?.querySelector<HTMLInputElement>(`[name="${CSS.escape ? CSS.escape(payerEmailField) : payerEmailField}"]`)
-    const v = el ? String(el.value ?? '').trim() : ''
-    return EMAIL_RE.test(v) ? v : undefined
-  })()
+  // The buyer's e-mail from the page form: the provider form then skips its own e-mail block. Read on mount and on
+  // every committed change of that field; a form mounted before the e-mail was typed is mounted again once with it.
+  const [payerEmail, setPayerEmail] = useState<string | undefined>(undefined)
+  useEffect(() => {
+    const form = formRef.current
+    if (!payerEmailField || !form) return
+    const selector = `[name="${typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(payerEmailField) : payerEmailField}"]`
+    const read = () => {
+      const v = String(form.querySelector<HTMLInputElement>(selector)?.value ?? '').trim()
+      setPayerEmail(EMAIL_RE.test(v) ? v : undefined)
+    }
+    read()
+    const onChange = (e: Event) => {
+      if ((e.target as HTMLInputElement | null)?.name === payerEmailField) read()
+    }
+    form.addEventListener('change', onChange)
+    return () => form.removeEventListener('change', onChange)
+  }, [formRef, payerEmailField])
 
   // While the delivery is being saved the amount is stale: the button reads without it.
   const total = wantSync && (!settled || requote) ? null : renderAmount ? renderAmount(amount) : formatMoney(amount, locale)
@@ -423,6 +434,7 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
                         : null}
                 {brickReady || fallback ? (
                   <PaymentBrick
+                    key={payerEmail || brickProps?.email ? 'with-email' : 'without-email'}
                     {...brickProps}
                     ref={brick}
                     client={choices.cardClient}

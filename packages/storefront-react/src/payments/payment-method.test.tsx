@@ -248,6 +248,34 @@ describe('PaymentMethodSection', () => {
     setup({ syncDelivery: async () => true, payerEmailField: null, brickProps: { adapter, storage: null } })
     await waitFor(() => expect(emails).toEqual([undefined]))
   })
+  it('a card form mounted before the e-mail was typed is mounted again once with it', async () => {
+    const emails: Array<string | undefined> = []
+    const adapter: PaymentFormAdapter = {
+      kind: 'fake',
+      async load() {},
+      async mount(o) {
+        emails.push(o.email)
+        queueMicrotask(() => o.onReady())
+        return { collect: async () => ({ provider_data: { token: 't' } }), unmount() {} }
+      },
+    }
+    // A guest arrives with the e-mail still empty.
+    const formRef = createRef<HTMLFormElement>()
+    render(
+      <form ref={formRef}>
+        <input name="email" aria-label="Correo" defaultValue="" />
+        <PaymentMethodSection choices={buildPayChoices([method])} amount={total} scope="cart_9" formRef={formRef} payUrl="/p" delivery="rate:1" syncDelivery={async () => true} onDone={() => {}} brickProps={{ adapter, storage: null }} />
+      </form>,
+    )
+    await waitFor(() => expect(emails).toEqual([undefined]))
+    const field = screen.getByLabelText('Correo') as HTMLInputElement
+    fireEvent.change(field, { target: { value: 'ana@correo.mx' } })
+    await waitFor(() => expect(emails).toEqual([undefined, 'ana@correo.mx']))
+    // Further edits do not remount it (the server uses the cart e-mail).
+    fireEvent.change(field, { target: { value: 'otra@correo.mx' } })
+    await new Promise((r) => setTimeout(r, 30))
+    expect(emails).toHaveLength(2)
+  })
   it('remembers the chosen row and cash point for the cart: a reload does not ask again', async () => {
     const first = setup()
     fireEvent.click(screen.getByRole('radio', { name: /Efectivo/ }))
