@@ -538,6 +538,25 @@ import '@asteby/storefront-react/checkout.css' // opcional: disposición, insign
 
 Tarifa vencida o cambiada: si guardar la entrega falla con `isQuoteChange(err)` (códigos `quote_expired`/`rate_expired`…, un 409, o el 422 genérico de servidores anteriores), la tienda recarga las tarifas conservando la dirección, vuelve a elegir el mismo servicio con `matchRate(anterior, nuevas)`, pasa `requoted` a `DeliveryOptions` y resuelve `syncDelivery` con `'requote'`: `PaymentMethodSection` muestra un aviso (no un error) y vuelve a intentar con la nueva tarifa.
 
+### Campos, validación en línea y resumen del pedido
+
+Piezas del formulario de pago iguales en todas las tiendas (también en `@asteby/storefront-react/checkout`):
+
+- `ContactFields` y `AddressFields`: correo (`type="email"`, `inputMode="email"`), teléfono (`tel`), nombre (`given-name`) y apellidos (`family-name`); dirección en el orden en que se llena en México: código postal primero, estado, ciudad o municipio, colonia (`address-level3`, campo propio `neighborhood` de la API), calle y número, número interior (opcional) y referencias (opcional, `reference`). Sin país escrito en el código: el formato del código postal (`postalCode={{ pattern, maxLength, inputMode, title }}`), la lista de estados (`provinces`, de la configuración de la región) y la consulta por código postal (`lookupPostalCode`, una ruta propia sobre un catálogo) los pone la tienda. Con la consulta, estado y ciudad se llenan solos (nunca sobre lo que el comprador escribió) y las colonias salen como sugerencias (`<datalist>`). Sin ella, son campos de texto normales.
+- `useFieldErrors(formRef)` + `CheckoutField` + `ErrorSummary`: validación en línea con las reglas del propio HTML (`required`, `type`, `pattern`…). Al salir de un campo con un valor inválido aparece el texto debajo del campo (`aria-invalid`, `aria-describedby`); se borra al corregirlo. Al enviar (o con `reportValidity()`, que usa `PaymentMethodSection`) los globos del navegador se reemplazan por los textos en línea y un resumen enfocable con enlaces a cada campo (WCAG 3.3.1). Los campos que rechace el servidor (`serverFields`) salen igual. Sin JavaScript, el navegador valida como siempre.
+- `OrderSummary`: líneas y totales de `cart.cost` tal cual (subtotal, descuentos por código, envío «Al elegir la entrega» / «Actualizando…» / «Gratis», impuestos aparte o «Incluye $X de impuestos», total con `aria-live`). `OrderSummaryDisclosure` lo envuelve para teléfono: barra plegada arriba con el total («Ver resumen del pedido · $857.82»), `<details>` nativo, sin salto al hidratar. La tienda la muestra solo en pantallas angostas y el resumen fijo (`sticky`) en escritorio.
+
+```tsx
+const v = useFieldErrors(formRef, { serverFields: actionData?.fields })
+<ErrorSummary items={v.summary} focusKey={v.summaryKey} />
+<ContactFields errors={v.errors} defaults={{ email: cart.buyer.email }} />
+<AddressFields errors={v.errors} countryCode="MX" defaults={cart.shipping_address}
+  postalCode={{ pattern: '[0-9]{5}', maxLength: 5, inputMode: 'numeric', title: 'Escribe los 5 dígitos.' }} />
+<OrderSummaryDisclosure total={cart.cost.total} className="lg:hidden">
+  <OrderSummary title={false} lines={cart.lines} cost={cart.cost} />
+</OrderSummaryDisclosure>
+```
+
 Catálogo compartido de marcas (`brandKey`, `brandName`, `findBrand`, `<BrandMark brand="oxxo" />`): paqueterías (FedEx, DHL, Estafeta, Paquetexpress, UPS, Redpack, 99 Minutos, J&T…), redes de tarjeta (Visa, Mastercard, American Express, Carnet), billeteras (Mercado Pago, PayPal…) y puntos de efectivo y bancos de México (OXXO, SPEI/STP, 7-Eleven, Circle K, Soriana, Extra, BBVA…). La clave es el identificador que ya mandan los proveedores. Precedencia de lo que dibuja `<BrandMark>`: `logo_url` https del proveedor > logo real incluido > insignia tipográfica de respaldo (marcas sin logo disponible) > monograma neutro (marca desconocida). Los logos reales van incrustados como data URI (cero peticiones a terceros, mismo tamaño en servidor y navegador), sin recolorear, sobre una placa blanca con filo sutil para que se lean igual en tema claro y oscuro (`--sf-brand-mark-plate` y `--sf-brand-mark-ring` la ajustan). El elemento lleva `data-sf-brand-mark="<clave>"` y `data-sf-brand-source="provider|logo|badge"`; con `title` se anuncia con el nombre comercial, sin él es decorativo.
 
 **Procedencia de los logos.** Son marcas registradas de sus titulares y se muestran sin alteración solo para identificar el servicio o método de pago que la tienda ofrece, sin sugerir patrocinio; cada tienda debe respetar las guías de marca de cada titular. Fuente, licencia, fecha y versión (color/monocroma) de cada uno, y las marcas que quedaron con insignia por no tener fuente con condiciones claras, están en `src/checkout/brands/LOGOS.md` (se regenera con `node scripts/build-logos.mjs`). Para usar un logo propio o licenciado: `<BrandMark brand="redpack" logoUrl="https://cdn.mitienda.mx/redpack.svg" title="Redpack" />`; en pagos, `PaymentPoint.logo_url`. Solo se acepta `https:`.

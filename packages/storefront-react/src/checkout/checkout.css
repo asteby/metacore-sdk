@@ -7,6 +7,158 @@
  *   --sf-delivery-badge-bg / --sf-delivery-badge-fg
  *   --sf-delivery-muted    secondary text                     (default currentColor at 70%)
  */
+/* Checkout fields (`CheckoutField`, `AddressFields`, `ContactFields`): label, hint and the error right under the field. */
+[data-sf-field] {
+  display: grid;
+  gap: 0.25rem;
+  align-content: start;
+  min-width: 0;
+}
+[data-sf-field-optional],
+[data-sf-field-hint] {
+  font-weight: 400;
+  color: var(--sf-delivery-muted, color-mix(in srgb, currentColor 72%, transparent));
+}
+[data-sf-field-hint] {
+  margin: 0;
+  font-size: 0.8125rem;
+}
+[data-sf-field-control] {
+  min-height: 44px;
+  width: 100%;
+}
+[data-sf-field-error] {
+  display: flex;
+  gap: 0.375rem;
+  align-items: flex-start;
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--sf-field-error, #b42318);
+}
+[data-sf-field-error]::before {
+  content: '!';
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 1.1em;
+  height: 1.1em;
+  margin-top: 0.15em;
+  border-radius: 999px;
+  background: currentColor;
+  color: var(--sf-field-error-contrast, #fff);
+  font-size: 0.8em;
+  line-height: 1;
+}
+[data-sf-error-summary] {
+  outline-offset: 2px;
+}
+[data-sf-error-summary] ul {
+  margin: 0.5rem 0 0;
+  padding-inline-start: 1.25rem;
+}
+[data-sf-error-summary] a {
+  color: inherit;
+  text-decoration: underline;
+}
+/* Order summary (`OrderSummary`, `OrderSummaryDisclosure`). */
+[data-sf-summary-lines] {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+[data-sf-summary-line] {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+[data-sf-summary-media] {
+  position: relative;
+  flex: none;
+  width: 3.5rem;
+  height: 3.5rem;
+}
+[data-sf-summary-qty] {
+  position: absolute;
+  top: -0.4rem;
+  right: -0.4rem;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: var(--sf-summary-qty-bg, #4a5878);
+  color: var(--sf-summary-qty-fg, #fff);
+}
+[data-sf-summary-line-body] {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+[data-sf-summary-variant] {
+  font-size: 0.875em;
+  color: var(--sf-delivery-muted, color-mix(in srgb, currentColor 72%, transparent));
+}
+[data-sf-summary-line-price],
+[data-sf-summary-totals] dd {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+[data-sf-summary-totals] {
+  display: grid;
+  gap: 0.5rem;
+  margin: 1rem 0 0;
+}
+[data-sf-summary-totals] > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+[data-sf-summary-totals] dd {
+  margin: 0;
+}
+[data-sf-summary-totals] dd[data-updating] {
+  opacity: 0.6;
+}
+[data-sf-summary-toggle] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 48px;
+  cursor: pointer;
+  list-style: none;
+}
+[data-sf-summary-toggle]::-webkit-details-marker {
+  display: none;
+}
+[data-sf-summary-toggle-label]::after {
+  content: '';
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  margin-inline-start: 0.5rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-0.15rem) rotate(45deg);
+}
+[data-sf-summary-disclosure][open] [data-sf-summary-toggle-label]::after {
+  transform: translateY(0.1rem) rotate(-135deg);
+}
+[data-sf-summary-disclosure]:not([open]) [data-sf-summary-hide],
+[data-sf-summary-disclosure][open] [data-sf-summary-show] {
+  display: none;
+}
+[data-sf-summary-toggle-total] {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
 [data-sf-delivery] {
   display: grid;
   gap: 0.75rem;
