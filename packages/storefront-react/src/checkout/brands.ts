@@ -5,10 +5,13 @@
  * `PaymentPoint.payment_point` or `id` of the payment addon, a `PaymentMethod.key`). Nothing here decides what a shop
  * offers: the server lists the rates and methods; this only gives each one its commercial name and a mark.
  *
- * Marks are typographic badges drawn by `<BrandMark>` (brand color + short wordmark): no third-party logo files are
- * bundled, so there is no licensing question and no extra request. A provider that holds a licensed logo sends it as
- * `logo_url` and it wins over the badge. Colors are close approximations of each brand's public color.
+ * Marks are drawn by `<BrandMark>` with this precedence: the provider's `logo_url` > the real logo bundled in
+ * `brands/assets` (inline data URI, no request; provenance in `brands/LOGOS.md`) > a typographic badge (brand color +
+ * short wordmark) for the brands without an available logo. The `bg`/`fg` colors here are close approximations of each
+ * brand's public color and only paint that fallback badge.
  */
+
+import { LOGOS, type LogoAsset } from './brands/logos.generated.js'
 
 export type BrandKind = 'carrier' | 'card' | 'wallet' | 'cash' | 'bank'
 
@@ -82,7 +85,12 @@ const LIST: Brand[] = [
   B('casaley', 'Casa Ley', 'cash', '#C8102E', '#FFFFFF', 'Ley'),
   B('telecomm', 'Telecomm', 'cash', '#6F1D46', '#FFFFFF'),
   B('walmart', 'Walmart', 'cash', '#0071CE', '#FFFFFF'),
+  B('bodegaaurrera', 'Bodega Aurrerá', 'cash', '#0F4C97', '#FFFFFF', 'Bodega\nAurrerá'),
+  B('farmaciasguadalajara', 'Farmacias Guadalajara', 'cash', '#005BAC', '#FFFFFF', 'Farm.\nGuadalajara'),
+  B('farmaciadelahorro', 'Farmacia del Ahorro', 'cash', '#00539F', '#FFFFFF', 'Farmacia\ndel Ahorro'),
   B('santander', 'Santander', 'bank', '#C00000', '#FFFFFF'),
+  B('hsbc', 'HSBC', 'bank', '#DB0011', '#FFFFFF'),
+  B('scotiabank', 'Scotiabank', 'bank', '#EC111A', '#FFFFFF', 'Scotia'),
   B('bbva', 'BBVA', 'bank', '#004481', '#FFFFFF'),
   B('citibanamex', 'Citibanamex', 'bank', '#004B8D', '#FFFFFF', 'Citi'),
   B('banorte', 'Banorte', 'bank', '#C8102E', '#FFFFFF'),
@@ -114,6 +122,20 @@ const ALIASES: Record<string, string> = {
   bancomer: 'bbva',
   banamex: 'citibanamex',
   ley: 'casaley',
+  aurrera: 'bodegaaurrera',
+  guadalajara: 'farmaciasguadalajara',
+  fguadalajara: 'farmaciasguadalajara',
+  farmaciaguadalajara: 'farmaciasguadalajara',
+  fahorro: 'farmaciadelahorro',
+  delahorro: 'farmaciadelahorro',
+  farmaciasdelahorro: 'farmaciadelahorro',
+  hsbcmexico: 'hsbc',
+  scotia: 'scotiabank',
+  walmartmexico: 'walmart',
+  walmartsupercenter: 'walmart',
+  oxxopay: 'oxxo',
+  upsexpress: 'ups',
+  estafetamexicana: 'estafeta',
 }
 
 const BY_KEY = new Map(LIST.map((b) => [b.key, b]))
@@ -157,4 +179,11 @@ export function brandName(raw: string | null | undefined): string | null {
 /** Every brand of the catalog (for docs, previews and tests). */
 export function listBrands(kind?: BrandKind): Brand[] {
   return kind ? LIST.filter((b) => b.kind === kind) : [...LIST]
+}
+
+/** Real logo bundled for a provider identifier (inline data URI), or `null` when the brand only has the fallback badge. */
+export function brandLogo(raw: string | null | undefined): (LogoAsset & { key: string }) | null {
+  const b = findBrand(raw)
+  const logo = b ? LOGOS[b.key] : undefined
+  return b && logo ? { ...logo, key: b.key } : null
 }

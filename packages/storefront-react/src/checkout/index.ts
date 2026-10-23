@@ -1,6 +1,6 @@
 export { BrandMark } from './brand-mark.js'
-export type { BrandMarkProps } from './brand-mark.js'
-export { brandKey, brandName, findBrand, listBrands } from './brands.js'
+export type { BrandMarkProps, BrandMarkSource } from './brand-mark.js'
+export { brandKey, brandLogo, brandName, findBrand, listBrands } from './brands.js'
 export type { Brand, BrandKind } from './brands.js'
 export { DeliveryOptions } from './delivery-options.js'
 export type { DeliveryOptionsClassNames, DeliveryOptionsProps } from './delivery-options.js'

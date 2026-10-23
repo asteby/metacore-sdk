@@ -64,14 +64,16 @@ describe('brand catalog', () => {
 })
 
 describe('BrandMark', () => {
-  it('is a decorative inline SVG with a fixed box (no request, no layout shift)', () => {
-    const html = renderToString(<BrandMark brand="oxxo" size={20} />)
+  it('the typographic fallback is a decorative inline SVG with a fixed box (no request, no layout shift)', () => {
+    // `stp` has no available logo (see brands/LOGOS.md): it keeps the badge.
+    const html = renderToString(<BrandMark brand="stp" size={20} />)
     expect(html).toContain('<svg')
     expect(html).toContain('aria-hidden="true"')
     expect(html).toContain('width="30"')
     expect(html).toContain('height="20"')
-    expect(html).toContain('OXXO')
-    expect(html).toContain('data-sf-brand-mark="oxxo"')
+    expect(html).toContain('SPEI')
+    expect(html).toContain('data-sf-brand-mark="stp"')
+    expect(html).toContain('data-sf-brand-source="badge"')
   })
 
   it('draws a monogram for an unknown brand and names itself with title', () => {
@@ -85,9 +87,10 @@ describe('BrandMark', () => {
     const ok = renderToString(<BrandMark brand="oxxo" logoUrl="https://cdn.example.com/oxxo.svg" />)
     expect(ok).toContain('<img')
     expect(ok).toContain('loading="lazy"')
-    expect(ok).toContain('width="36"')
+    expect(ok).toContain('data-sf-brand-source="provider"')
     const bad = renderToString(<BrandMark brand="oxxo" logoUrl="javascript:alert(1)" />)
-    expect(bad).not.toContain('<img')
+    expect(bad).not.toContain('javascript:')
+    expect(bad).toContain('data-sf-brand-source="logo"')
   })
 })
 
