@@ -7,7 +7,7 @@
  * Styling: `data-sf-account-*` attributes and `classNames` slots, fields reuse `CheckoutField` (and `checkout.css`);
  * `account.css` is an optional neutral sheet. Texts are Spanish by default, English with `locale="en"`, any with `messages`.
  */
-import { useEffect, useRef, useState, type ComponentType, type FormHTMLAttributes, type ReactNode, type Ref } from 'react'
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import type { CustomerCapabilities } from '@asteby/storefront'
 import { CheckoutField, ErrorSummary, useFieldErrors, type CheckoutFieldClassNames } from '../checkout/fields.js'
 import type { AuthActionData, AuthErrorCode, AuthStep } from './types.js'
@@ -144,6 +144,18 @@ export type AccountAuthClassNames = Partial<Record<'root' | 'title' | 'form' | '
   field?: CheckoutFieldClassNames
 }
 
+/** What `<AccountAuth>` passes to its `form` component: the few props a router `Form` and the HTML `<form>` both accept. */
+export type AccountFormProps = {
+  method?: 'post'
+  action?: string
+  className?: string
+  children?: ReactNode
+  /** Loose on purpose: a router `Form` types its ref with its own copy of `@types/react`. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  ref?: any
+  'data-sf-account-form'?: boolean | string
+}
+
 export type AccountAuthProps = {
   /** From `loadAuthCapabilities` (the loader). */
   capabilities: CustomerCapabilities
@@ -156,7 +168,7 @@ export type AccountAuthProps = {
   /** First screen. Default `login`, or `otp-email` when the store has no password sign-in. */
   initialView?: AccountAuthView
   /** Form component, e.g. React Router's `Form`, to submit without a reload. It must forward `ref` to the `<form>` (React 19: a prop). Default: the HTML `<form>`. */
-  form?: 'form' | ComponentType<FormHTMLAttributes<HTMLFormElement> & { ref?: Ref<HTMLFormElement> }>
+  form?: 'form' | ComponentType<AccountFormProps>
   /** `action` of the form (default: the current URL). */
   action?: string
   locale?: string

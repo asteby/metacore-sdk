@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { renderToString } from 'react-dom/server'
 import axe from 'axe-core'
 import type { CustomerCapabilities } from '@asteby/storefront'
-import { AccountAuth, accountAuthMessages } from './index.js'
+import { AccountAuth, accountAuthMessages, type AccountFormProps } from './index.js'
 
 afterEach(cleanup)
 const AXE = { rules: { 'color-contrast': { enabled: false } } }
@@ -81,7 +81,7 @@ describe('<AccountAuth />', () => {
 
   it('accepts message overrides, a custom form component and pending', () => {
     let used = false
-    const MyForm = (props: React.FormHTMLAttributes<HTMLFormElement> & { ref?: React.Ref<HTMLFormElement> }) => {
+    const MyForm = (props: AccountFormProps) => {
       used = true
       return <form {...props} data-mine="" />
     }
