@@ -48,7 +48,7 @@ const ES: AccountAuthMessages = {
   email: 'Correo electrónico',
   password: 'Contraseña',
   newPassword: 'Contraseña nueva',
-  passwordHint: 'Al menos 8 caracteres.',
+  passwordHint: 'Entre 10 y 128 caracteres.',
   firstName: 'Nombre',
   lastName: 'Apellido',
   code: 'Código',
@@ -93,7 +93,7 @@ const EN: AccountAuthMessages = {
   email: 'Email',
   password: 'Password',
   newPassword: 'New password',
-  passwordHint: 'At least 8 characters.',
+  passwordHint: 'Between 10 and 128 characters.',
   firstName: 'First name',
   lastName: 'Last name',
   code: 'Code',
@@ -209,7 +209,7 @@ export function AccountAuth({ capabilities, data, next, pending = false, initial
       label={label}
       autoComplete={autoComplete}
       error={v.errors.password ?? null}
-      {...(newPassword ? { minLength: 8, hint: m.passwordHint } : {})}
+      {...(newPassword ? { minLength: 10, maxLength: 128, hint: m.passwordHint } : {})}
     />
   )
   const link = (to: AccountAuthView, text: string) => (

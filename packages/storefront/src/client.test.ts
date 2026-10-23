@@ -174,29 +174,29 @@ describe('writes', () => {
     expect(calls[0]!.init.method).toBe('GET')
     expect(calls[0]!.url).toMatch(/\/storefront\/customer\/capabilities$/)
 
-    await expect(sf.customer.register({ email: 'new@b.co', password: 'secret123', first_name: 'Ana' })).resolves.toEqual({ status: 'verification_required' })
+    await expect(sf.customer.register({ email: 'new@b.co', password: 'secret1234', first_name: 'Ana' })).resolves.toEqual({ status: 'verification_required' })
     expect(calls[1]!.init.method).toBe('POST')
     expect(calls[1]!.url).toMatch(/\/storefront\/customer\/register$/)
-    expect(JSON.parse(calls[1]!.init.body as string)).toEqual({ email: 'new@b.co', password: 'secret123', first_name: 'Ana' })
+    expect(JSON.parse(calls[1]!.init.body as string)).toEqual({ email: 'new@b.co', password: 'secret1234', first_name: 'Ana' })
 
-    await expect(sf.customer.register({ email: 'a@b.co', password: 'secret123' }, { idempotencyKey: 'reg-1' })).resolves.toEqual({ status: 'created', session })
+    await expect(sf.customer.register({ email: 'a@b.co', password: 'secret1234' }, { idempotencyKey: 'reg-1' })).resolves.toEqual({ status: 'created', session })
     expect(calls[2]!.init.headers.get('Idempotency-Key')).toBe('reg-1')
 
     await expect(sf.customer.verifyRegistration({ email: 'new@b.co', code: '000000' })).resolves.toEqual(session)
     expect(calls[3]!.url).toMatch(/\/storefront\/customer\/register\/verify$/)
     expect(JSON.parse(calls[3]!.init.body as string)).toEqual({ email: 'new@b.co', code: '000000' })
 
-    await expect(sf.customer.loginWithPassword({ email: 'a@b.co', password: 'secret123' })).resolves.toEqual(session)
+    await expect(sf.customer.loginWithPassword({ email: 'a@b.co', password: 'secret1234' })).resolves.toEqual(session)
     expect(calls[4]!.init.method).toBe('POST')
     expect(calls[4]!.url).toMatch(/\/storefront\/customer\/login$/)
 
-    await expect(sf.customer.setPassword({ password: 'newsecret1', current_password: 'secret123' }, { customerToken: 'ct_1' })).resolves.toBeUndefined()
+    await expect(sf.customer.setPassword({ password: 'newsecret12', current_password: 'secret1234' }, { customerToken: 'ct_1' })).resolves.toBeUndefined()
     expect(calls[5]!.init.method).toBe('PUT')
     expect(calls[5]!.url).toMatch(/\/storefront\/customer\/password$/)
     expect(calls[5]!.init.headers.get('X-Customer-Token')).toBe('ct_1')
-    expect(JSON.parse(calls[5]!.init.body as string)).toEqual({ password: 'newsecret1', current_password: 'secret123' })
+    expect(JSON.parse(calls[5]!.init.body as string)).toEqual({ password: 'newsecret12', current_password: 'secret1234' })
 
-    await expect(sf.customer.resetPassword({ email: 'a@b.co', code: '123456', password: 'newsecret1' })).resolves.toBeUndefined()
+    await expect(sf.customer.resetPassword({ email: 'a@b.co', code: '123456', password: 'newsecret12' })).resolves.toBeUndefined()
     expect(calls[6]!.url).toMatch(/\/storefront\/customer\/password\/reset$/)
     expect(calls[6]!.init.headers.has('X-Customer-Token')).toBe(false)
   })
@@ -206,7 +206,7 @@ describe('writes', () => {
     for (const [status, code] of Object.entries(errs)) {
       const { fetch } = recorder(() => Response.json({ error: { code, message: 'x' } }, { status: Number(status) }))
       const sf = createStorefrontClient({ ...base, fetch })
-      const call = Number(status) === 409 ? sf.customer.register({ email: 'a@b.co', password: 'secret123' }) : sf.customer.loginWithPassword({ email: 'a@b.co', password: 'bad' })
+      const call = Number(status) === 409 ? sf.customer.register({ email: 'a@b.co', password: 'secret1234' }) : sf.customer.loginWithPassword({ email: 'a@b.co', password: 'bad' })
       await expect(call).rejects.toMatchObject({ name: 'StorefrontError', status: Number(status), code })
     }
   })

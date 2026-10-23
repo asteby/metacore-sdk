@@ -146,7 +146,7 @@ Mock behaviour:
   (`createMockStorefront({ customerCapabilities })`, default
   `{ password: true, email_verification: true, otp_channels: ['email'] }`).
   `register` answers `verification_required` and the code is `000000`; accounts
-  live in memory (passwords of 8+ characters); `409` for a registered email,
+  live in memory (passwords of 10-128 characters); `409` for a registered email,
   `401` for wrong credentials/codes, `429` after `maxLoginAttempts` (5) failed
   logins, `403` when `password` is disabled. The seed customer has no password
   until `setPassword` (or `resetPassword` with the OTP code).

@@ -241,41 +241,43 @@ describe('mock customer and content', () => {
     const custom = createMockStorefront({ customerCapabilities: { password: false, otp_channels: ['email', 'whatsapp'] } })
     const c = createStorefrontClient({ baseUrl: 'https://mock.local/api/gw', token: 'sk_mock', fetch: custom.fetch })
     expect(await c.customer.capabilities()).toEqual({ password: false, email_verification: true, otp_channels: ['email', 'whatsapp'] })
-    await expect(c.customer.register({ email: 'x@y.co', password: 'secret123' })).rejects.toMatchObject({ status: 403 })
-    await expect(c.customer.loginWithPassword({ email: 'x@y.co', password: 'secret123' })).rejects.toMatchObject({ status: 403 })
+    await expect(c.customer.register({ email: 'x@y.co', password: 'secret1234' })).rejects.toMatchObject({ status: 403 })
+    await expect(c.customer.loginWithPassword({ email: 'x@y.co', password: 'secret1234' })).rejects.toMatchObject({ status: 403 })
   })
 
   it('registers with email verification (000000), then logs in with the password', async () => {
-    const input = { email: 'Nueva@Example.com', password: 'secret123', first_name: 'Nora' }
+    const input = { email: 'Nueva@Example.com', password: 'secret1234', first_name: 'Nora' }
     await expect(sf.customer.register(input)).resolves.toEqual({ status: 'verification_required' })
-    await expect(sf.customer.loginWithPassword({ email: 'nueva@example.com', password: 'secret123' })).rejects.toMatchObject({ status: 401 })
+    await expect(sf.customer.loginWithPassword({ email: 'nueva@example.com', password: 'secret1234' })).rejects.toMatchObject({ status: 401 })
     await expect(sf.customer.verifyRegistration({ email: 'nueva@example.com', code: '111111' })).rejects.toMatchObject({ status: 401 })
     const session = await sf.customer.verifyRegistration({ email: 'nueva@example.com', code: '000000' })
     expect(session.customer).toMatchObject({ email: 'nueva@example.com', first_name: 'Nora' })
     expect((await sf.withCustomerToken(session.token).customer.get()).email).toBe('nueva@example.com')
     await expect(sf.customer.verifyRegistration({ email: 'nueva@example.com', code: '000000' })).rejects.toMatchObject({ status: 401 })
     await expect(sf.customer.register(input)).rejects.toMatchObject({ status: 409, code: 'conflict' })
-    const again = await sf.customer.loginWithPassword({ email: 'nueva@example.com', password: 'secret123' })
+    const again = await sf.customer.loginWithPassword({ email: 'nueva@example.com', password: 'secret1234' })
     expect(again.customer.id).toBe(session.customer.id)
-    await expect(sf.customer.register({ email: 'bad', password: 'secret123' })).rejects.toMatchObject({ status: 400 })
+    await expect(sf.customer.register({ email: 'bad', password: 'secret1234' })).rejects.toMatchObject({ status: 400 })
     await expect(sf.customer.register({ email: 'otra@example.com', password: 'short' })).rejects.toMatchObject({ status: 400, field: 'password' })
+    await expect(sf.customer.register({ email: 'otra@example.com', password: 'a'.repeat(9) })).rejects.toMatchObject({ status: 400, field: 'password' })
+    await expect(sf.customer.register({ email: 'otra@example.com', password: 'a'.repeat(129) })).rejects.toMatchObject({ status: 400, field: 'password' })
   })
 
   it('creates the account straight away without email verification', async () => {
     const m = createMockStorefront({ customerCapabilities: { email_verification: false } })
     const c = createStorefrontClient({ baseUrl: 'https://mock.local/api/gw', token: 'sk_mock', fetch: m.fetch })
-    const res = await c.customer.register({ email: 'directa@example.com', password: 'secret123' })
+    const res = await c.customer.register({ email: 'directa@example.com', password: 'secret1234' })
     expect(res.status).toBe('created')
     if (res.status === 'created') expect((await c.withCustomerToken(res.session.token).customer.get()).email).toBe('directa@example.com')
   })
 
   it('rate-limits repeated failed logins with 429 and clears the count on success', async () => {
-    await sf.customer.register({ email: 'lim@example.com', password: 'secret123' })
+    await sf.customer.register({ email: 'lim@example.com', password: 'secret1234' })
     await sf.customer.verifyRegistration({ email: 'lim@example.com', code: '000000' })
     for (let i = 0; i < 4; i++) await expect(sf.customer.loginWithPassword({ email: 'lim@example.com', password: 'nope' })).rejects.toMatchObject({ status: 401 })
-    await sf.customer.loginWithPassword({ email: 'lim@example.com', password: 'secret123' })
+    await sf.customer.loginWithPassword({ email: 'lim@example.com', password: 'secret1234' })
     for (let i = 0; i < 5; i++) await expect(sf.customer.loginWithPassword({ email: 'lim@example.com', password: 'nope' })).rejects.toMatchObject({ status: 401 })
-    await expect(sf.customer.loginWithPassword({ email: 'lim@example.com', password: 'secret123' })).rejects.toMatchObject({ status: 429, code: 'rate_limited' })
+    await expect(sf.customer.loginWithPassword({ email: 'lim@example.com', password: 'secret1234' })).rejects.toMatchObject({ status: 429, code: 'rate_limited' })
   })
 
   it('sets a password for an OTP-only account, requires the current one afterwards, and resets with a code', async () => {

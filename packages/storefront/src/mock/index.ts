@@ -216,7 +216,8 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     ...options.customerCapabilities,
   }
   const maxLoginAttempts = options.maxLoginAttempts ?? 5
-  const MIN_PASSWORD = 8
+  const MIN_PASSWORD = 10
+  const MAX_PASSWORD = 128
   const discountCodes = Object.fromEntries(
     Object.entries(options.discountCodes ?? { BIENVENIDA10: 10 }).map(([k, v]) => [k.toUpperCase(), v]),
   )
@@ -592,8 +593,8 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
 
   function passwordOf(body: Record<string, unknown>, field = 'password'): string {
     const value = body[field]
-    if (typeof value !== 'string' || value.length < MIN_PASSWORD) {
-      throw new HttpError(400, 'validation', `${field} must be at least ${MIN_PASSWORD} characters`, field)
+    if (typeof value !== 'string' || value.length < MIN_PASSWORD || value.length > MAX_PASSWORD) {
+      throw new HttpError(400, 'validation', `${field} must be ${MIN_PASSWORD}-${MAX_PASSWORD} characters`, field)
     }
     return value
   }

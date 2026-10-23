@@ -75,7 +75,7 @@ describe('createAuthAction', () => {
   })
 
   it('registers with email verification, then verifies with 000000 and redirects with the session cookie', async () => {
-    const res = await ctx.post({ intent: 'register', email: 'nueva@example.com', password: 'secret123', first_name: 'Nora' })
+    const res = await ctx.post({ intent: 'register', email: 'nueva@example.com', password: 'secret1234', first_name: 'Nora' })
     expect(res).toEqual({ ok: true, step: 'verify', email: 'nueva@example.com' })
     expect(await ctx.post({ intent: 'verify', email: 'nueva@example.com', code: '111111' })).toEqual({
       ok: false,
@@ -89,9 +89,9 @@ describe('createAuthAction', () => {
   })
 
   it('signs in with the password and ignores an unsafe next', async () => {
-    await ctx.post({ intent: 'register', email: 'a@example.com', password: 'secret123' })
+    await ctx.post({ intent: 'register', email: 'a@example.com', password: 'secret1234' })
     await ctx.post({ intent: 'verify', email: 'a@example.com', code: '000000' })
-    expect(redirectOf(await ctx.post({ intent: 'login', email: 'a@example.com', password: 'secret123', next: '//evil.com' })).location).toBe('/account')
+    expect(redirectOf(await ctx.post({ intent: 'login', email: 'a@example.com', password: 'secret1234', next: '//evil.com' })).location).toBe('/account')
     expect(await ctx.post({ intent: 'login', email: 'a@example.com', password: 'bad' })).toEqual({
       ok: false,
       email: 'a@example.com',
@@ -100,19 +100,19 @@ describe('createAuthAction', () => {
   })
 
   it('reports an existing email, throttling and validation', async () => {
-    await ctx.post({ intent: 'register', email: 'b@example.com', password: 'secret123' })
+    await ctx.post({ intent: 'register', email: 'b@example.com', password: 'secret1234' })
     await ctx.post({ intent: 'verify', email: 'b@example.com', code: '000000' })
-    expect(await ctx.post({ intent: 'register', email: 'b@example.com', password: 'secret123' })).toMatchObject({ error: { code: 'email_taken', field: 'email' } })
+    expect(await ctx.post({ intent: 'register', email: 'b@example.com', password: 'secret1234' })).toMatchObject({ error: { code: 'email_taken', field: 'email' } })
     expect(await ctx.post({ intent: 'register', email: 'c@example.com', password: 'short' })).toMatchObject({ error: { code: 'validation', field: 'password' } })
     expect(await ctx.post({ intent: 'login', email: '', password: 'x' })).toMatchObject({ error: { code: 'validation', field: 'email' } })
     for (let i = 0; i < 5; i++) await ctx.post({ intent: 'login', email: 'b@example.com', password: 'bad' })
-    expect(await ctx.post({ intent: 'login', email: 'b@example.com', password: 'secret123' })).toMatchObject({ error: { code: 'rate_limited' } })
+    expect(await ctx.post({ intent: 'login', email: 'b@example.com', password: 'secret1234' })).toMatchObject({ error: { code: 'rate_limited' } })
     expect(await ctx.post({ intent: 'nope', email: 'b@example.com' })).toMatchObject({ error: { code: 'validation' } })
   })
 
   it('creates the account straight away when the store does not verify emails', async () => {
     const c = setup({ customerCapabilities: { email_verification: false } })
-    const r = redirectOf(await c.post({ intent: 'register', email: 'd@example.com', password: 'secret123' }))
+    const r = redirectOf(await c.post({ intent: 'register', email: 'd@example.com', password: 'secret1234' }))
     expect(r.cookie).toMatch(/^sf_customer=ct_/)
   })
 
@@ -125,15 +125,15 @@ describe('createAuthAction', () => {
   it('recovers a password: forgot never says who has an account, reset signs in with the new one', async () => {
     expect(await ctx.post({ intent: 'forgot', email: 'nadie@example.com' })).toEqual({ ok: true, step: 'reset', email: 'nadie@example.com' })
     expect(await ctx.post({ intent: 'forgot', email: MOCK_CUSTOMER_EMAIL })).toEqual({ ok: true, step: 'reset', email: MOCK_CUSTOMER_EMAIL })
-    expect(await ctx.post({ intent: 'reset', email: MOCK_CUSTOMER_EMAIL, code: '123456', password: 'newsecret1' })).toMatchObject({ step: 'reset', error: { code: 'invalid_code' } })
-    const r = redirectOf(await ctx.post({ intent: 'reset', email: MOCK_CUSTOMER_EMAIL, code: '000000', password: 'newsecret1' }))
+    expect(await ctx.post({ intent: 'reset', email: MOCK_CUSTOMER_EMAIL, code: '123456', password: 'newsecret12' })).toMatchObject({ step: 'reset', error: { code: 'invalid_code' } })
+    const r = redirectOf(await ctx.post({ intent: 'reset', email: MOCK_CUSTOMER_EMAIL, code: '000000', password: 'newsecret12' }))
     expect(r.cookie).toMatch(/^sf_customer=ct_/)
-    expect(redirectOf(await ctx.post({ intent: 'login', email: MOCK_CUSTOMER_EMAIL, password: 'newsecret1' })).location).toBe('/account')
+    expect(redirectOf(await ctx.post({ intent: 'login', email: MOCK_CUSTOMER_EMAIL, password: 'newsecret12' })).location).toBe('/account')
   })
 
   it('refuses ways of signing in the store does not offer', async () => {
     const c = setup({ customerCapabilities: { password: false, otp_channels: [] } })
-    expect(await c.post({ intent: 'login', email: 'a@example.com', password: 'secret123' })).toMatchObject({ error: { code: 'unsupported' } })
+    expect(await c.post({ intent: 'login', email: 'a@example.com', password: 'secret1234' })).toMatchObject({ error: { code: 'unsupported' } })
     expect(await c.post({ intent: 'otp-request', email: 'a@example.com' })).toMatchObject({ error: { code: 'unsupported' } })
     const noOtp = setup()
     const degraded = createAuthAction({ storefront: noOtp.sf, customerCookie: cookie, capabilities: async () => SAFE_AUTH_CAPABILITIES })
