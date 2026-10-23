@@ -164,7 +164,6 @@
     gap: 0.625rem;
   }
   [data-sf-delivery-option] > [data-sf-brand-mark] {
-    height: 20px;
-    width: auto;
+    zoom: 0.78;
   }
 }
