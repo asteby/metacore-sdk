@@ -47,7 +47,7 @@ describe('real brand logos', () => {
       expect(documented || alsoListed, `${b.key} has neither a logo nor a documented reason`).toBe(true)
     }
     expect(withLogo.length).toBeGreaterThanOrEqual(25)
-    for (const key of ['fedex', 'dhl', 'estafeta', 'ups', 'oxxo', '7eleven', 'circlek', 'soriana', 'bbva', 'visa', 'mastercard', 'amex', 'mercadopago', 'imile']) {
+    for (const key of ['fedex', 'dhl', 'estafeta', 'ups', 'oxxo', '7eleven', 'circlek', 'soriana', 'bbva', 'visa', 'mastercard', 'amex', 'mercadopago', 'imile', 'paquetexpress']) {
       expect(brandLogo(key), key).not.toBeNull()
     }
   })

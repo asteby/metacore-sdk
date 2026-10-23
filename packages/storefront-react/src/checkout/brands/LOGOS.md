@@ -32,6 +32,7 @@ Orden de fuentes: (a) kit de prensa de la empresa, (b) logo que la propia empres
 | `mastercard` | Mastercard | https://commons.wikimedia.org/wiki/File%3AMastercard_2019_logo.svg | Public domain (Commons; marca registrada) | 2026-10-23 | Color | SVG — Solo el símbolo de los círculos (sin la palabra), tal como lo publica Commons. |
 | `mercadopago` | Mercado Pago | https://http2.mlstatic.com/frontend-assets/mp-web-navigation/ui-navigation/7.8.2/mercadopago/logo__large@2x.png | Sin licencia explícita: logo que la propia empresa publica en su sitio, usado para identificar su servicio (marca registrada de su titular) | 2026-10-23 | Color | PNG — PNG de 284x74 px con paleta de 8 bits (3.5 KB): la fuente no ofrece SVG; Simple Icons solo tiene una versión monocroma. |
 | `oxxo` | OXXO | https://commons.wikimedia.org/wiki/File%3AOxxo_Logo.svg | Public domain (Commons; marca registrada) | 2026-10-23 | Color | SVG |
+| `paquetexpress` | Paquetexpress | https://www.paquetexpress.com.mx/ | Sin licencia explícita: logo que la propia empresa publica en su sitio, usado para identificar su servicio (marca registrada de su titular) | 2026-10-23 | Color | SVG — La empresa solo publica el wordmark en blanco (fill #FFF) sobre el azul de su encabezado (--px-blue-logo #002A52); se conserva tal cual, con ese azul como fondo del propio SVG para que sea legible sobre la placa blanca. Sin recolorear el logo. |
 | `paypal` | PayPal | https://commons.wikimedia.org/wiki/File%3APayPal_2024.svg | Public domain (Commons; marca registrada) | 2026-10-23 | Monocroma | SVG — Versión negra del wordmark. |
 | `santander` | Santander | https://commons.wikimedia.org/wiki/File:Banco_santander_logo.svg | Public domain (Commons; marca registrada) | 2026-10-23 | Color | SVG |
 | `scotiabank` | Scotiabank | https://commons.wikimedia.org/wiki/File%3AScotiabank_logo.svg | Public domain (Commons; marca registrada) | 2026-10-23 | Color | SVG |
@@ -45,7 +46,6 @@ Orden de fuentes: (a) kit de prensa de la empresa, (b) logo que la propia empres
 
 No se incluyen por no tener una fuente con condiciones claras:
 
-- `paquetexpress`: Paquetexpress: no hay logo en Commons y el sitio no publica un SVG/PNG de marca localizable ni kit de prensa; sin condiciones claras.
 - `redpack`: Redpack: no hay logo en Commons y el sitio no expone un archivo de marca localizable; sin condiciones claras.
 - `sendex`: Sendex: el sitio solo publica un fragmento (isotipo) en SVG, no el logo completo; no se incluye para no mostrar un logo parcial.
 - `spei / stp`: SPEI: el logo de Banxico no está en Commons ni en una URL pública estable (la página de Banxico respondió 404); sin condiciones claras.
