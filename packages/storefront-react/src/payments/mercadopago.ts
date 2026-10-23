@@ -76,6 +76,11 @@ export function mercadoPagoBricksAdapter(options: MercadoPagoAdapterOptions = {}
           paymentMethods: { minInstallments: 1, ...(card?.max_installments ? { maxInstallments: card.max_installments } : {}) },
           visual: {
             hidePaymentButton: true,
+            // El encabezado del Brick ("Tarjeta de crédito o débito" + banderas de tarjetas
+            // aceptadas) lo dibuja Mercado Pago, repite lo que la tienda ya muestra en su propia
+            // fila de método de pago y se veía cortado (p. ej. AMEX partido). hideFormTitle oculta
+            // la línea del título y las banderas.
+            hideFormTitle: true,
             style: { theme: 'default', ...(opts.theme && Object.keys(opts.theme).length ? { customVariables: opts.theme } : {}) },
           },
         },

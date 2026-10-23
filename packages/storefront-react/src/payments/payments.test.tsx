@@ -521,6 +521,8 @@ describe('Mercado Pago adapter', () => {
     expect(id).toBe('brick1')
     expect(settings.initialization).toEqual({ amount: 2185, payer: { email: 'a@b.mx' } })
     expect(settings.customization.visual.hidePaymentButton).toBe(true)
+    // El título y las banderas del Brick repiten la fila de la tienda y se veían cortados.
+    expect(settings.customization.visual.hideFormTitle).toBe(true)
     expect(settings.customization.visual.style.customVariables).toEqual({ baseColor: '#123456' })
     expect(settings.customization.paymentMethods).toEqual({ minInstallments: 1, maxInstallments: 12 })
     await Promise.resolve()
