@@ -9,6 +9,8 @@ export default defineConfig({
     fitment: 'src/fitment/index.ts',
     payments: 'src/payments/index.ts',
     'payments-server': 'src/payments/server.ts',
+    account: 'src/account/index.ts',
+    'account-server': 'src/account/server.ts',
     promotions: 'src/promos/index.ts',
     ui: 'src/ui/index.ts',
   },

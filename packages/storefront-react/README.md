@@ -668,3 +668,36 @@ y define los tokens `--background --foreground --border --tint --primary --prima
 | `ThemeToggle`, `THEME_INIT_SCRIPT` | Claro/oscuro con `html[data-theme]` y localStorage, sin parpadeo. |
 | `InstallApp`, `useServiceWorker` | Instalación PWA (Android/Chrome y pista para iOS) y registro del service worker. |
 | `.select`, `.check`, `.radio` | Controles de formulario con los tokens de la tienda. |
+
+## Cuenta del comprador: `/account`
+
+Pantalla de cuenta compartida (contraseña, crear cuenta, verificar código, entrar con código, olvidé mi contraseña). La tienda no escribe nada de esto: el loader pregunta qué admite OPS, la action la resuelve el SDK y el componente muestra solo lo que la tienda ofrece.
+
+```tsx
+// app/routes/account.login.tsx (React Router v7)
+import { Form, useActionData, useLoaderData, useNavigation, useSearchParams } from 'react-router'
+import { AccountAuth } from '@asteby/storefront-react/account'
+import { createAuthAction, loadAuthCapabilities } from '@asteby/storefront-react/account/server'
+import '@asteby/storefront-react/checkout.css' // campos
+import '@asteby/storefront-react/account.css'  // opcional
+
+export const loader = () => loadAuthCapabilities(storefront) // caché de 60 s por cliente; nunca lanza
+export const action = createAuthAction({
+  storefront,                  // cliente sk_
+  customerCookie,              // createCookie('sf_customer', ...): serialize(token, { expires })
+  safeNext,                    // opcional; por omisión solo rutas del mismo sitio (safeNextPath)
+})
+
+export default function Login() {
+  const caps = useLoaderData<typeof loader>()
+  const data = useActionData<typeof action>()
+  const nav = useNavigation()
+  const [params] = useSearchParams()
+  return <AccountAuth capabilities={caps} data={data} next={params.get('next')} pending={nav.state !== 'idle'} form={Form} />
+}
+```
+
+- `loadAuthCapabilities(sf, { ttlMs?, signal?, now? })` -> `CustomerCapabilities`. Si OPS no responde (servidor viejo, caída, token sin scope) devuelve `SAFE_AUTH_CAPABILITIES` (`{ password: true, email_verification: false, otp_channels: [] }`) y reintenta a los 5 s.
+- `createAuthAction({ storefront, customerCookie, safeNext?, defaultNext?, clientIp?, capabilities? })` -> `({ request }) => Promise<Response | AuthActionData>`. Un solo `POST` con campo `intent`: `login`, `register`, `verify`, `otp-request`, `otp-login`, `forgot`, `reset`. Éxito: `303` a `next` con `Set-Cookie` de la sesión. Si no, `AuthActionData` (`{ ok, step?, email?, error?: { code, field? } }`, sin textos ni contraseñas). `forgot` siempre avanza a `reset` (no revela qué correos tienen cuenta).
+- `<AccountAuth>`: `classNames` por pieza, atributos `data-sf-account-*`, `locale` (`es` por omisión, `en`), `messages` para cambiar cualquier texto, `form` para el `Form` del router. Con el mock (`createMockStorefront`) funciona entera: código `000000`.
+- Sin JavaScript funciona el inicio de sesión con contraseña y los pasos que devuelve la action; el cambio entre pantallas (enlaces) necesita JavaScript.

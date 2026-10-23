@@ -1,0 +1,40 @@
+/*
+ * Default sheet for <AccountAuth> (`@asteby/storefront-react/account.css`). Optional and neutral; the fields come from
+ * `checkout.css`. Variables: --sf-account-max (form width, default 26rem), --sf-account-gap, --sf-account-muted,
+ * --sf-field-error (error color, shared with the checkout fields).
+ */
+[data-sf-account-auth] {
+  max-width: var(--sf-account-max, 26rem);
+  margin-inline: auto;
+}
+[data-sf-account-form] {
+  display: grid;
+  gap: var(--sf-account-gap, 1rem);
+}
+[data-sf-account-error] {
+  margin: 0;
+  color: var(--sf-field-error, #b42318);
+}
+[data-sf-account-notice] {
+  margin: 0;
+  color: var(--sf-account-muted, color-mix(in srgb, currentColor 72%, transparent));
+}
+[data-sf-account-submit] {
+  min-height: 44px;
+  width: 100%;
+}
+[data-sf-account-links] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+[data-sf-account-link] {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}

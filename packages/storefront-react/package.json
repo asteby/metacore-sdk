@@ -69,6 +69,27 @@
         "default": "./dist/mockups.cjs"
       }
     },
+    "./account": {
+      "import": {
+        "types": "./dist/account.d.ts",
+        "default": "./dist/account.js"
+      },
+      "require": {
+        "types": "./dist/account.d.cts",
+        "default": "./dist/account.cjs"
+      }
+    },
+    "./account/server": {
+      "import": {
+        "types": "./dist/account-server.d.ts",
+        "default": "./dist/account-server.js"
+      },
+      "require": {
+        "types": "./dist/account-server.d.cts",
+        "default": "./dist/account-server.cjs"
+      }
+    },
+    "./account.css": "./dist/account.css",
     "./payments": {
       "import": {
         "types": "./dist/payments.d.ts",
