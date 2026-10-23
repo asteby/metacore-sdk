@@ -1,5 +1,18 @@
 # @asteby/storefront-react
 
+## 0.13.0
+
+### Minor Changes
+
+- 638eed6: Pantalla de cuenta compartida: `<AccountAuth>` (`/account`, con `account.css` opcional) y, del lado servidor, `loadAuthCapabilities(sf)` (caché corta, degrada a `{ password: true, email_verification: false, otp_channels: [] }`) y `createAuthAction({ storefront, customerCookie, safeNext })` (`/account/server`) para entrar con contraseña, crear cuenta, verificar el código, entrar con código y recuperar la contraseña. Las tiendas solo conectan loader, action y componente. Requiere `@asteby/storefront` con los métodos de contraseña de `customer`.
+
+### Patch Changes
+
+- 4495334: checkout: Paquetexpress muestra su logo real (el wordmark que la empresa publica en su sitio, sobre su azul de marca) en lugar de la insignia tipográfica. Procedencia en `brands/LOGOS.md`.
+- 39e1f61: checkout: la fila de transferencia SPEI/STP (y los alias clabe y banktransfer) usa una insignia genérica de transferencia bancaria (flechas + texto «SPEI») en lugar de un wordmark plano. No existe una fuente legítima y verificable del logo oficial de SPEI (Banxico no lo publica en URL estable y no está en Commons), así que no se incluye ni se imita; se documenta en `brands/LOGOS.md`.
+- Updated dependencies [638eed6]
+  - @asteby/storefront@0.10.0
+
 ## 0.12.0
 
 ### Minor Changes
