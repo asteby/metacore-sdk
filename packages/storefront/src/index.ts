@@ -84,3 +84,6 @@ export type { MarketInfo, MarketSuggestion } from './market.js'
 
 export type { GeoPoint, OpeningHours, OpenStatus } from './geo.js'
 export type * from './types.js'
+
+export { parseDelivery, deliveryInput, deliveryNotices, MISSING_WEIGHT } from './delivery.js'
+export type { DeliveryChoice, DeliveryChoiceKind, DeliveryNotices } from './delivery.js'
