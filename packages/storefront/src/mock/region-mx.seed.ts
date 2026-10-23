@@ -87,7 +87,7 @@ export const SEED_MX_CSF: IdentityDocumentSpec = {
           },
           {
             "strategy": "qr_param",
-            "scan": "(?:D3)?([0-9]{11})[^A-Z0-9]{0,3}([A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3})(?:[^A-Z0-9]|$)",
+            "scan": "(?:D3)?([0-9]{11})[^A-Z0-9Ñ&]{0,3}([A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3})(?:[^A-Z0-9]|$)",
             "flags": "i",
             "group": 2
           }
@@ -157,7 +157,7 @@ export const SEED_MX_CSF: IdentityDocumentSpec = {
           },
           {
             "strategy": "qr_param",
-            "scan": "(?:D3)?([0-9]{11})[^A-Z0-9]{0,3}([A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3})(?:[^A-Z0-9]|$)",
+            "scan": "(?:D3)?([0-9]{11})[^A-Z0-9Ñ&]{0,3}([A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3})(?:[^A-Z0-9]|$)",
             "flags": "i",
             "group": 1
           }

@@ -1,0 +1,360 @@
+{
+  "spec": {
+    "engine": "rules@1",
+    "rules": {
+      "version": 1,
+      "normalize": [
+        "nbsp",
+        "collapse_ws"
+      ],
+      "labels": [
+        "RFC",
+        "CURP",
+        "Nombre \\(s\\)",
+        "Nombre",
+        "Primer Apellido",
+        "Segundo Apellido",
+        "Denominaci[óo]n\\s*/\\s*Raz[óo]n Social",
+        "R[ée]gimen de capital",
+        "Nombre Comercial",
+        "Fecha (?:de )?inicio de operaciones",
+        "Fecha de constituci[óo]n",
+        "Estatus en el padr[óo]n",
+        "Fecha de [úu]ltimo cambio de estado",
+        "Datos del domicilio registrado",
+        "C[óo]digo Postal",
+        "Tipo de Vialidad",
+        "Nombre de Vialidad",
+        "N[úu]mero Exterior",
+        "N[úu]mero Interior",
+        "Nombre de la Colonia",
+        "Nombre de la Localidad",
+        "Nombre del Municipio o Demarcaci[óo]n Territorial",
+        "Nombre de la Entidad Federativa",
+        "Entre Calle",
+        "Y Calle",
+        "Actividades Econ[óo]micas",
+        "Reg[íi]menes",
+        "Obligaciones",
+        "Correo Electr[óo]nico"
+      ],
+      "qr_canonical": "https://siat.sat.gob.mx/app/qr/faces/pages/mobile/validadorqr.jsf?D1=10&D2=1&D3={document_id}_{tax_id}",
+      "fields": [
+        {
+          "key": "tax_id",
+          "required": true,
+          "strategies": [
+            {
+              "strategy": "labeled_lines",
+              "label": "RFC",
+              "upper": true,
+              "capture": {
+                "pattern": "(?:^|[^A-Z0-9Ñ&])([A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3})(?:[^A-Z0-9Ñ&]|$)",
+                "flags": "i",
+                "group": 1
+              }
+            },
+            {
+              "strategy": "regex",
+              "pattern": "(?:^|[^A-Z0-9Ñ&])([A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3})(?:[^A-Z0-9Ñ&]|$)",
+              "flags": "i",
+              "group": 1,
+              "upper": true
+            },
+            {
+              "strategy": "qr_param",
+              "param": "D3",
+              "split": "_",
+              "parts": 2,
+              "match": "^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$"
+            },
+            {
+              "strategy": "qr_param",
+              "scan": "(?:D3)?([0-9]{11})[^A-Z0-9Ñ&]{0,3}([A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3})(?:[^A-Z0-9]|$)",
+              "flags": "i",
+              "group": 2
+            }
+          ]
+        },
+        {
+          "key": "legal_name",
+          "required": true,
+          "strategies": [
+            {
+              "strategy": "labeled_lines",
+              "label": "Denominaci[óo]n\\s*/\\s*Raz[óo]n Social"
+            },
+            {
+              "strategy": "concat_labeled",
+              "labels": [
+                "Nombre \\(s\\)",
+                "Primer Apellido",
+                "Segundo Apellido"
+              ],
+              "separator": " "
+            }
+          ]
+        },
+        {
+          "key": "postal_code",
+          "required": true,
+          "strategies": [
+            {
+              "strategy": "labeled_lines",
+              "label": "C[óo]digo Postal",
+              "capture": {
+                "pattern": "\\b([0-9]{5})\\b",
+                "group": 1
+              }
+            }
+          ]
+        },
+        {
+          "key": "tax_regime",
+          "required": true,
+          "multiple": true,
+          "strategies": [
+            {
+              "strategy": "catalog_phrases",
+              "catalog": "fiscal_regime",
+              "start": "Reg[íi]menes\\s*:?",
+              "end": "Obligaciones\\s*:"
+            }
+          ]
+        },
+        {
+          "key": "document_id",
+          "strategies": [
+            {
+              "strategy": "regex",
+              "pattern": "id\\s*CIF\\s*:?\\s*([0-9]{6,})",
+              "flags": "i",
+              "group": 1
+            },
+            {
+              "strategy": "qr_param",
+              "param": "D3",
+              "split": "_",
+              "parts": 2,
+              "match": "^[0-9]+$"
+            },
+            {
+              "strategy": "qr_param",
+              "scan": "(?:D3)?([0-9]{11})[^A-Z0-9Ñ&]{0,3}([A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3})(?:[^A-Z0-9]|$)",
+              "flags": "i",
+              "group": 1
+            }
+          ]
+        },
+        {
+          "key": "issued_on",
+          "strategies": [
+            {
+              "strategy": "date",
+              "order": "dmy",
+              "pattern": "Fecha\\s+de\\s+Emisi[óo]n\\s*:?[^0-9]*?([0-9]{1,2})\\s+DE\\s+([A-Za-zÁÉÍÓÚÑáéíóúñ]+)\\s+DE\\s+([0-9]{4})",
+              "flags": "i",
+              "months": [
+                "enero",
+                "febrero",
+                "marzo",
+                "abril",
+                "mayo",
+                "junio",
+                "julio",
+                "agosto",
+                "septiembre",
+                "octubre",
+                "noviembre",
+                "diciembre"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "discard_fields": [
+      "curp",
+      "street",
+      "exterior_number",
+      "neighborhood",
+      "activities"
+    ],
+    "catalogs": {
+      "fiscal_regime": [
+        {
+          "code": "601",
+          "label": "General de Ley Personas Morales",
+          "label_en": "General law (legal entities)",
+          "match_phrases": [
+            "general de ley personas morales"
+          ]
+        },
+        {
+          "code": "603",
+          "label": "Personas Morales con Fines no Lucrativos",
+          "label_en": "Non-profit legal entities",
+          "match_phrases": [
+            "fines no lucrativos"
+          ]
+        },
+        {
+          "code": "605",
+          "label": "Sueldos y Salarios e Ingresos Asimilados a Salarios",
+          "label_en": "Wages and salaries",
+          "match_phrases": [
+            "sueldos y salarios"
+          ]
+        },
+        {
+          "code": "606",
+          "label": "Arrendamiento",
+          "label_en": "Leasing",
+          "match_phrases": [
+            "arrendamiento"
+          ]
+        },
+        {
+          "code": "607",
+          "label": "Régimen de Enajenación o Adquisición de Bienes",
+          "label_en": "Disposal or acquisition of goods",
+          "match_phrases": [
+            "enajenacion o adquisicion de bienes"
+          ]
+        },
+        {
+          "code": "608",
+          "label": "Demás ingresos",
+          "label_en": "Other income",
+          "match_phrases": [
+            "demas ingresos"
+          ]
+        },
+        {
+          "code": "610",
+          "label": "Residentes en el Extranjero sin Establecimiento Permanente en México",
+          "label_en": "Foreign residents without a permanent establishment in Mexico",
+          "match_phrases": [
+            "residentes en el extranjero"
+          ]
+        },
+        {
+          "code": "611",
+          "label": "Ingresos por Dividendos (socios y accionistas)",
+          "label_en": "Dividend income (partners and shareholders)",
+          "match_phrases": [
+            "dividendos"
+          ]
+        },
+        {
+          "code": "612",
+          "label": "Personas Físicas con Actividades Empresariales y Profesionales",
+          "label_en": "Individuals with business and professional activities",
+          "match_phrases": [
+            "actividades empresariales y profesionales"
+          ]
+        },
+        {
+          "code": "614",
+          "label": "Ingresos por intereses",
+          "label_en": "Interest income",
+          "match_phrases": [
+            "ingresos por intereses"
+          ]
+        },
+        {
+          "code": "615",
+          "label": "Régimen de los ingresos por obtención de premios",
+          "label_en": "Prize income",
+          "match_phrases": [
+            "premios"
+          ]
+        },
+        {
+          "code": "616",
+          "label": "Sin obligaciones fiscales",
+          "label_en": "No tax obligations",
+          "match_phrases": [
+            "sin obligaciones fiscales"
+          ]
+        },
+        {
+          "code": "620",
+          "label": "Sociedades Cooperativas de Producción que optan por diferir sus ingresos",
+          "label_en": "Production cooperatives deferring income",
+          "match_phrases": [
+            "sociedades cooperativas de produccion"
+          ]
+        },
+        {
+          "code": "621",
+          "label": "Incorporación Fiscal",
+          "label_en": "Tax incorporation",
+          "match_phrases": [
+            "incorporacion fiscal"
+          ]
+        },
+        {
+          "code": "622",
+          "label": "Actividades Agrícolas, Ganaderas, Silvícolas y Pesqueras",
+          "label_en": "Agricultural, livestock, forestry and fishing activities",
+          "match_phrases": [
+            "actividades agricolas"
+          ]
+        },
+        {
+          "code": "623",
+          "label": "Opcional para Grupos de Sociedades",
+          "label_en": "Optional for groups of companies",
+          "match_phrases": [
+            "opcional para grupos de sociedades"
+          ]
+        },
+        {
+          "code": "624",
+          "label": "Coordinados",
+          "label_en": "Coordinated",
+          "match_phrases": [
+            "coordinados"
+          ]
+        },
+        {
+          "code": "625",
+          "label": "Régimen de las Actividades Empresariales con ingresos a través de Plataformas Tecnológicas",
+          "label_en": "Business activities through technology platforms",
+          "match_phrases": [
+            "plataformas tecnologicas"
+          ]
+        },
+        {
+          "code": "626",
+          "label": "Régimen Simplificado de Confianza",
+          "label_en": "Simplified trust regime (RESICO)",
+          "match_phrases": [
+            "simplificado de confianza"
+          ]
+        }
+      ]
+    }
+  },
+  "text": "nada legible",
+  "qr_url": "httpsÑ--siat.sat.gob.mx-app-qr-faces-pages-mobile-validadorqr.jsf_d1)10/d2)1/d3)22032805709_ñaño800101ab1",
+  "expected": {
+    "values": {
+      "tax_id": "ÑAÑO800101AB1",
+      "document_id": "22032805709"
+    },
+    "lists": {},
+    "sources": {
+      "tax_id": "qr",
+      "document_id": "qr"
+    },
+    "qr_match": null,
+    "missing": [
+      "legal_name",
+      "postal_code",
+      "tax_regime"
+    ],
+    "qr_canonical": "https://siat.sat.gob.mx/app/qr/faces/pages/mobile/validadorqr.jsf?D1=10&D2=1&D3=22032805709_%C3%91A%C3%91O800101AB1"
+  }
+}

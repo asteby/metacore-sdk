@@ -24,7 +24,7 @@ const dir = new URL('./__fixtures__/identity/', import.meta.url)
 const files = readdirSync(dir).filter((f) => f.endsWith('.json')).sort()
 
 describe('parity with the reference interpreter', () => {
-  it('has the fixtures', () => expect(files.length).toBeGreaterThanOrEqual(11))
+  it('has the fixtures', () => expect(files.length).toBeGreaterThanOrEqual(13))
 
   it.each(files)('%s', (file) => {
     const fx = JSON.parse(readFileSync(new URL(file, dir), 'utf8')) as Fixture
@@ -62,7 +62,7 @@ describe('QR read by a keyboard-wedge scanner', () => {
   })
 
   it('tax ids with Ñ and & survive the scan', () => {
-    expect(qr('D3)19010203042/PEÑO800101ab1').fields.tax_id).toBe('PEÑO800101AB1')
+    expect(qr('D3)19010203042/ÑAÑO800101ab1').fields.tax_id).toBe('ÑAÑO800101AB1')
     expect(qr('https://x.test/?D3=19010203041_%26ab010203ab1').fields.tax_id).toBe('&AB010203AB1')
     expect(qr('D3)19010203041/&ab010203ab1').fields.tax_id).toBe('&AB010203AB1')
   })
