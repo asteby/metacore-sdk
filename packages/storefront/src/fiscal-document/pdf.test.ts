@@ -3,6 +3,7 @@ import { MOCK_FISCAL_ID_MX, MOCK_IDENTITY_DOCUMENT_MX_CSF as CSF } from '../mock
 import {
   IdentityDocumentError,
   buildDocumentEvidence,
+  catalogsFromRegion,
   decodePdfQr,
   extractIdentityDocument,
   isIdentityDocumentError,
@@ -50,19 +51,19 @@ describe('readPdfText (real pdf.js, Node)', () => {
 
   it('end to end: a synthetic constancia PDF yields the fiscal data and never the CURP', async () => {
     const { text, sha256 } = await readPdfText(makeTextPdf([CSF_FISICA_LINES]))
-    const x = extractIdentityDocument(text, CSF, { catalogs: { regimes: MOCK_FISCAL_ID_MX.regimes }, qr: QR_URL_FISICA })
-    expect(x.fields).toMatchObject({ tax_id: RFC_FISICA, legal_name: 'JUAN PEREZ PEREZ', postal_code: '06600', regimes: ['612', '605'], document_id: ID_CIF_FISICA })
+    const x = extractIdentityDocument(text, CSF, { catalogs: catalogsFromRegion(MOCK_FISCAL_ID_MX), qr: QR_URL_FISICA })
+    expect(x.fields).toMatchObject({ tax_id: RFC_FISICA, legal_name: 'JUAN CARLOS PEREZ PEREZ', postal_code: '06600', tax_regime: ['612', '605'], document_id: ID_CIF_FISICA })
     expect(x.qr.match).toBe(true)
     expect(JSON.stringify(x)).not.toContain(CURP_FISICA)
     expect(buildDocumentEvidence(x, { sha256, source: 'pdf_client' })).toMatchObject({ kind: 'MX:csf', document_id: ID_CIF_FISICA, sha256, source: 'pdf_client', qr_match: true })
 
     const moral = await readPdfText(makeTextPdf([CSF_MORAL_LINES]))
-    expect(extractIdentityDocument(moral.text, CSF, { catalogs: { regimes: MOCK_FISCAL_ID_MX.regimes } }).fields.regimes).toEqual(['601'])
+    expect(extractIdentityDocument(moral.text, CSF, { catalogs: catalogsFromRegion(MOCK_FISCAL_ID_MX) }).fields.tax_regime).toEqual(['601'])
   })
 
   it('a QR from another document does not match', async () => {
     const { text } = await readPdfText(makeTextPdf([CSF_FISICA_LINES]))
-    expect(extractIdentityDocument(text, CSF, { catalogs: { regimes: MOCK_FISCAL_ID_MX.regimes }, qr: QR_URL_OTRO }).qr.match).toBe(false)
+    expect(extractIdentityDocument(text, CSF, { catalogs: catalogsFromRegion(MOCK_FISCAL_ID_MX), qr: QR_URL_OTRO }).qr.match).toBe(false)
   })
 })
 
@@ -219,7 +220,7 @@ describe('decodePdfQr', () => {
     }))
     const url = await decodePdfQr(makeTextPdf([['Constancia sintetica de prueba']]))
     expect(url).toBe(QR_URL_FISICA)
-    const x = extractIdentityDocument(CSF_FISICA, CSF, { catalogs: { regimes: MOCK_FISCAL_ID_MX.regimes }, qr: url })
+    const x = extractIdentityDocument(CSF_FISICA, CSF, { catalogs: catalogsFromRegion(MOCK_FISCAL_ID_MX), qr: url })
     expect(x.qr.match).toBe(true)
   })
 

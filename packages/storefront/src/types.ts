@@ -396,6 +396,10 @@ export type InvoiceRequest = {
   regimen?: string
   uso_cfdi?: string
   cp?: string
+  /** Alias of `use`. */
+  invoice_use?: string
+  /** Also save the data to the buyer's account (needs a session). */
+  save?: boolean
   [key: string]: unknown
 }
 
@@ -887,13 +891,13 @@ export type InvoiceStage =
   | (string & {})
 
 /** What the buyer can do next about an invoice. */
-export type InvoiceAction = 'request' | 'fix_and_retry' | 'wait' | 'contact_store' | 'download' | 'none' | (string & {})
+export type InvoiceAction = 'none' | 'request' | 'wait' | 'correct_data' | 'download' | 'contact_store' | (string & {})
 
 export type InvoiceSummary = {
-  stage: InvoiceStage
+  /** Single-word status (`requested`, `issued`...). Prefer `stage`. */
+  status: string
+  stage?: InvoiceStage
   requested?: boolean
-  /** Legacy single-word status (`requested`, `issued`...). Prefer `stage`. */
-  status?: string
   /** Machine-readable cause when `stage` is `needs_data` / `needs_review` (e.g. `invoice.tax_regime`). */
   reason_code?: string | null
   action?: InvoiceAction
@@ -942,36 +946,37 @@ export type RegionFiscalEntry = {
   person_types: string[]
   /** Invoice uses only: the regimes that may use it. Absent: any. */
   allowed_regimes?: string[]
-  /** Phrases that identify the entry in a document (`catalog_phrases` strategy). */
+  /** Folded phrases that identify the entry in a document (`catalog_phrases`); without them the label is used. */
   match_phrases?: string[]
 }
 
 /**
  * A document the buyer can upload to prefill their fiscal data, with the rules to read it. Published by the
- * region; the SDK engine knows nothing about any country.
+ * region in `fiscal_id.documents[]` (texts already in the response locale); the SDK engine knows no country.
  */
 export type IdentityDocumentSpec = {
   /** `<COUNTRY>:<kind>`. */
   kind: string
+  country_code?: string
   label: string
-  label_en?: string
+  /** Explanation for the buyer; absent when the region has none in the response language. */
   help?: string
   /** Where the buyer gets the document from the authority. */
   obtain_url?: string
   /** MIME types the document comes in (the SDK reads PDFs). */
-  accept?: string | string[]
-  max_bytes?: number
+  accept: string[]
+  max_bytes: number
   max_pages?: number
   /** `rules@1` runs the generic engine on `rules`; `plugin:<id>` runs an extractor from `registerIdentityExtractor`. */
   engine: 'rules@1' | `plugin:${string}` | (string & {})
-  /** The `rules@1` rules, as an object or as JSON text. */
+  /** The `rules@1` rules (the API publishes them as an object; JSON text is accepted too). */
   rules?: IdentityRulesV1 | string | null
-  /** Kind the server-side verifier handles. */
-  verify_kind?: string | null
+  /** How the server can check the document against the authority (e.g. `qr_validator`). Informative. */
+  verify_kind?: string
   /** Days after `issued_on` in which the document counts as fresh. */
-  freshness_days?: number | null
+  freshness_days?: number
   /** Fields the extractor never returns (sensitive data the store has no use for). */
-  discard_fields?: string[]
+  discard_fields: string[]
 }
 
 /** Region fiscal identity (`Region.fiscal_id`). */
@@ -1001,7 +1006,7 @@ export type RegionPaymentMethod = {
   max_amount: Money | null
   expires_hours?: number
   icon?: string
-  /** Payment form the invoice reports for this method. */
+  /** Payment forms the invoice may report for this method, comma separated; the first is the default (e.g. `04,28`). */
   fiscal_payment_form?: string
 }
 
@@ -1069,41 +1074,59 @@ export type CustomerUpdateInput = {
   fiscal?: FiscalIdentityInput | null
 }
 
-export type IdentityTransform = 'upper' | 'lower' | 'trim' | 'digits' | 'alnum'
-
-type IdentityRuleBase = {
-  /** Applied in order to the value. */
-  transform?: IdentityTransform[]
-  /** The value must match this regex, else it counts as missing. */
-  accept?: string
-  /** Look only between `start` and `end` (regexes; `end` absent: to the end of the text). */
-  scope?: { start: string; end?: string }
-}
-
-export type IdentityFieldRule = IdentityRuleBase &
-  (
-    | { strategy: 'regex'; pattern: string; flags?: string; group?: number }
-    | { strategy: 'labeled_lines'; label: string }
-    | { strategy: 'concat_labeled'; labels: string[]; join?: string }
-    | { strategy: 'catalog_phrases'; catalog: string; multi?: boolean }
-    | { strategy: 'date'; label?: string; order?: 'dmy' | 'mdy' | 'ymd' }
-  )
-
-/** `qr_param`: the QR holds a URL; `param` is a query parameter whose parts (split on `separator`) are told apart by `accept`. */
-export type IdentityQrRule = { strategy: 'qr_param'; param: string; separator?: string; accept: string; transform?: IdentityTransform[] }
+/** Post-processing: the value must match `pattern`; `group` of it replaces the value. */
+export type IdentityCapture = { pattern: string; flags?: string; group?: number }
 
 /**
- * `rules@1`: declarative rules to read an identity document, published by the region. Patterns are JavaScript
- * regular expressions, case-insensitive unless `flags` says otherwise, matched against the text with accents
- * removed (`fold`, default true): write them without accents. Values are read from the original text.
+ * One way to find a field. Only the members of its `strategy` apply:
+ * `regex` (`pattern`, `flags`, `group`), `labeled_lines` (`label`), `concat_labeled` (`labels`, `separator`),
+ * `catalog_phrases` (`catalog`, `start`, `end`), `date` (`pattern` with three groups, `flags`, `order`, `months`),
+ * `qr_param` (`param`, `split`, `parts`, `match`). Any strategy takes `upper` and `capture`.
+ */
+export type IdentityStrategy = {
+  strategy: 'regex' | 'labeled_lines' | 'concat_labeled' | 'catalog_phrases' | 'date' | 'qr_param'
+  pattern?: string
+  /** `i`, `s`, `m`. */
+  flags?: string
+  group?: number
+  label?: string
+  labels?: string[]
+  separator?: string
+  catalog?: string
+  start?: string
+  end?: string
+  /** Permutation of `d`, `m`, `y`: the meaning of the three groups. */
+  order?: string
+  /** 12 month names, to read a month written in text. */
+  months?: string[]
+  param?: string
+  split?: string
+  parts?: number
+  match?: string
+  upper?: boolean
+  capture?: IdentityCapture
+}
+
+export type IdentityFieldRule = {
+  /** Output name: `tax_id`, `legal_name`, `postal_code`, `tax_regime`, `document_id`, `issued_on`... */
+  key: string
+  /** Listed in `missing` when not found. */
+  required?: boolean
+  /** A list (e.g. every regime the document names). */
+  multiple?: boolean
+  /** Tried in order; the first non-empty value wins. `qr_param` ones only fill what the text lacks. */
+  strategies: IdentityStrategy[]
+}
+
+/**
+ * `rules@1`, as the region publishes it (same semantics as the reference interpreter of the region packs). Text
+ * is normalized (`nbsp`, `collapse_ws`), then each field is resolved. Patterns are in the subset common to Go
+ * (RE2) and JavaScript: no lookaround, backreferences, named groups, inline flags or `\p`.
  */
 export type IdentityRulesV1 = {
-  /** Match on accent-less text (default true). */
-  fold?: boolean
-  /** Every label of the document, as regexes. A labelled value ends at the next label. */
+  version: 1
+  normalize?: ('nbsp' | 'collapse_ws')[]
+  /** Captions of the document (regex fragments, case-insensitive, followed by a colon). A labelled value ends at the next caption. */
   labels?: string[]
-  /** Output field -> how to read it. Conventional names: `tax_id`, `legal_name`, `postal_code`, `regimes`, `document_id`, `issued_on`. */
-  fields: Record<string, IdentityFieldRule | { first_of: IdentityFieldRule[] }>
-  /** How to read the QR of the document and which fields to compare with the text. */
-  qr?: { fields: Record<string, IdentityQrRule>; compare?: string[] }
+  fields: IdentityFieldRule[]
 }

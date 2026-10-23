@@ -29,7 +29,7 @@ describe('mock region', () => {
     expect(region?.country_code).toBe('MX')
     expect(region?.fiscal_id?.documents?.[0]).toMatchObject({ kind: 'MX:csf', engine: 'rules@1', freshness_days: 90 })
     expect(region?.fiscal_id?.documents?.[0]?.discard_fields).toContain('curp')
-    expect(region?.payment_methods?.map((m) => [m.code, m.fiscal_payment_form])).toEqual([['card', '04'], ['oxxo', '01'], ['spei', '03']])
+    expect(region?.payment_methods?.map((m) => [m.code, m.fiscal_payment_form])).toEqual([['card', '04,28'], ['mercadopago', '06,04,28'], ['oxxo', '01'], ['spei', '03']])
   })
 
   it('answers null (404) when the organization has no region', async () => {

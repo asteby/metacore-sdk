@@ -1,15 +1,15 @@
 import type { FiscalDocumentEvidence, FiscalDocumentSource, IdentityDocumentSpec, RegionFiscalEntry } from '../types.js'
 
-/** A value read from a document: text, or the codes of a catalog (`catalog_phrases`). */
+/** A value read from a document: text, or the codes of a catalog (`multiple` fields). */
 export type ExtractedValue = string | string[]
 
-/** Catalogs the `catalog_phrases` strategy matches against, by name (`regimes` = `Region.fiscal_id.regimes`). */
+/** Catalogs `catalog_phrases` matches against, by name. See `catalogsFromRegion`. */
 export type IdentityCatalogs = Record<string, RegionFiscalEntry[]>
 
 export type ExtractOptions = {
-  /** Catalogs for `catalog_phrases`. Pass `{ regimes: region.fiscal_id.regimes }`. */
+  /** Catalogs for `catalog_phrases`. Pass `catalogsFromRegion(region.fiscal_id)`. */
   catalogs?: IdentityCatalogs
-  /** The text the QR of the document decoded to (`decodePdfQr`), to compare with the text. */
+  /** The URL the QR of the document encodes (`decodePdfQr`). */
   qr?: string | null
   /** Clock for the freshness check (default `new Date()`). */
   now?: Date
@@ -21,16 +21,18 @@ export type IdentityExtraction = {
   /** `rules@1` or `plugin:<id>`. */
   extractor: string
   /**
-   * What was read, by field. NEVER contains a `discard_fields` field, nor the value of one inside another field.
-   * Conventional names: `tax_id`, `legal_name`, `postal_code`, `regimes` (codes), `document_id`, `issued_on`.
+   * What was read, by field (`multiple` fields are arrays). NEVER contains a `discard_fields` field.
+   * Conventional names: `tax_id`, `legal_name`, `postal_code`, `tax_regime`, `document_id`, `issued_on`.
    */
   fields: Record<string, ExtractedValue>
-  /** Fields the rules declare but the text did not yield. Show them empty for the buyer to fill in. */
+  /** Where each field came from: the document text or its QR. */
+  sources: Record<string, 'text' | 'qr'>
+  /** Required fields that were not found. Show them empty for the buyer to fill in. */
   missing: string[]
   /** Names (never values) of the fields the spec discards: the store does not keep them, and the UI can say so. */
   discarded: string[]
-  /** QR vs text. `match` is `null` when there was no QR or nothing to compare. */
-  qr: { fields: Record<string, string>; match: boolean | null; mismatched: string[] }
+  /** `match`: every field present in both the text and the QR agrees. `null`: nothing to compare. */
+  qr: { match: boolean | null }
   /** `issued_on` is older than `freshness_days`. `null` when it cannot be told. */
   stale: boolean | null
   age_days: number | null
@@ -41,7 +43,7 @@ export type IdentityExtractorFn = (
   text: string,
   spec: IdentityDocumentSpec,
   options: ExtractOptions,
-) => { fields: Record<string, ExtractedValue>; qr?: Record<string, string> }
+) => { fields: Record<string, ExtractedValue>; sources?: Record<string, 'text' | 'qr'>; qr_match?: boolean | null; missing?: string[] }
 
 export type EvidenceInput = {
   /** SHA-256 of the file (`PdfTextResult.sha256`). */

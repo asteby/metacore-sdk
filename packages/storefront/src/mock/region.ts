@@ -1,125 +1,22 @@
 /**
- * Region fixture of the mock. It mirrors the shape `GET /storefront/region` has for Mexico (the `MX:csf` identity
- * document included) so a storefront can be built and tested without a server. It lives here, and only here:
- * the real data belongs to the region package of the store, and the engine in `fiscal-document` knows no country.
+ * Region fixture of the mock: Mexico exactly as `GET /storefront/region` publishes it (see `region-mx.seed.ts`),
+ * identity document `MX:csf` included, so a storefront can be built and tested without a server. It lives here,
+ * and only here: the real data belongs to the region package, and the engine in `fiscal-document` knows no country.
  */
-import type { IdentityDocumentSpec, IdentityRulesV1, InvoiceRequest, Region, RegionFiscalEntry, RegionFiscalId } from '../types.js'
+import type { IdentityDocumentSpec, IdentityRulesV1, InvoiceRequest, Region, RegionFiscalId } from '../types.js'
+import { SEED_MX_CSF, SEED_MX_FISCAL_ID_PATTERN, SEED_MX_GENERIC_IDS, SEED_MX_INVOICE_USES, SEED_MX_PAYMENT_METHODS, SEED_MX_REGIMES } from './region-mx.seed.js'
 
-const PN = ['individual']
-const PM = ['company']
-
-const REGIMES: RegionFiscalEntry[] = [
-  { code: '601', label: 'General de Ley Personas Morales', person_types: PM, match_phrases: ['general de ley personas morales'] },
-  { code: '603', label: 'Personas Morales con Fines no Lucrativos', person_types: PM, match_phrases: ['fines no lucrativos'] },
-  { code: '605', label: 'Sueldos y Salarios e Ingresos Asimilados a Salarios', person_types: PN, match_phrases: ['sueldos y salarios'] },
-  { code: '606', label: 'Arrendamiento', person_types: PN, match_phrases: ['arrendamiento'] },
-  { code: '608', label: 'Demás ingresos', person_types: PN, match_phrases: ['demas ingresos'] },
-  { code: '612', label: 'Personas Físicas con Actividades Empresariales y Profesionales', person_types: PN, match_phrases: ['actividades empresariales y profesionales'] },
-  { code: '616', label: 'Sin obligaciones fiscales', person_types: PN, match_phrases: ['sin obligaciones fiscales'] },
-  { code: '621', label: 'Incorporación Fiscal', person_types: PN, match_phrases: ['incorporacion fiscal'] },
-  { code: '625', label: 'Actividades Empresariales con ingresos a través de Plataformas Tecnológicas', person_types: PN, match_phrases: ['plataformas tecnologicas'] },
-  { code: '626', label: 'Régimen Simplificado de Confianza', person_types: [...PN, ...PM], match_phrases: ['simplificado de confianza'] },
-]
-
-const BUSINESS = ['601', '603', '606', '612', '621', '625', '626']
-
-const USES: RegionFiscalEntry[] = [
-  { code: 'G01', label: 'Adquisición de mercancías', person_types: [...PN, ...PM], allowed_regimes: BUSINESS },
-  { code: 'G03', label: 'Gastos en general', person_types: [...PN, ...PM], allowed_regimes: BUSINESS },
-  { code: 'D10', label: 'Pagos por servicios educativos', person_types: PN, allowed_regimes: ['605', '606', '608', '612', '621', '625', '626'] },
-  { code: 'S01', label: 'Sin efectos fiscales', person_types: [...PN, ...PM], allowed_regimes: ['601', '603', '605', '606', '608', '612', '616', '621', '625', '626'] },
-]
-
-/** Labels of the constancia, accent-less (the engine matches on accent-less text). */
-const CSF_LABELS = [
-  'rfc',
-  'curp',
-  'nombre \\(s\\)',
-  'nombre',
-  'primer apellido',
-  'segundo apellido',
-  'denominacion\\s*/\\s*razon social',
-  'regimen de capital',
-  'nombre comercial',
-  'fecha (?:de )?inicio de operaciones',
-  'fecha de constitucion',
-  'estatus en el padron',
-  'fecha de ultimo cambio de estado',
-  'datos del domicilio registrado',
-  'codigo postal',
-  'tipo de vialidad',
-  'nombre de vialidad',
-  'numero exterior',
-  'numero interior',
-  'nombre de la colonia',
-  'nombre de la localidad',
-  'nombre del municipio o demarcacion territorial',
-  'nombre de la entidad federativa',
-  'entre calle',
-  'y calle',
-  'actividades economicas',
-  'regimenes',
-  'obligaciones',
-  'correo electronico',
-]
-
-const TAX_ID = '^[A-ZN&]{3,4}\\d{6}[A-Z0-9]{3}$'
-
-export const MOCK_CSF_RULES: IdentityRulesV1 = {
-  fold: true,
-  labels: CSF_LABELS,
-  fields: {
-    tax_id: {
-      first_of: [
-        { strategy: 'labeled_lines', label: 'rfc', transform: ['upper', 'alnum'], accept: TAX_ID },
-        { strategy: 'regex', pattern: '\\b([A-ZN&]{3,4}\\d{6}[A-Z0-9]{3})\\b', transform: ['upper'] },
-      ],
-    },
-    curp: { strategy: 'labeled_lines', label: 'curp', transform: ['upper', 'alnum'], accept: '^[A-Z0-9]{18}$' },
-    legal_name: {
-      first_of: [
-        { strategy: 'labeled_lines', label: 'denominacion\\s*/\\s*razon social' },
-        { strategy: 'concat_labeled', labels: ['nombre \\(s\\)', 'primer apellido', 'segundo apellido'] },
-      ],
-    },
-    postal_code: { strategy: 'labeled_lines', label: 'codigo postal', transform: ['digits'], accept: '^\\d{5}$' },
-    regimes: { strategy: 'catalog_phrases', catalog: 'regimes', scope: { start: 'regimenes\\s*:', end: 'obligaciones\\s*:' } },
-    document_id: { strategy: 'regex', pattern: 'id\\s*cif\\s*:?\\s*(\\d{6,})' },
-    issued_on: { strategy: 'date', scope: { start: 'lugar y fecha de emision' } },
-  },
-  qr: {
-    fields: {
-      tax_id: { strategy: 'qr_param', param: 'D3', separator: '_', accept: TAX_ID },
-      document_id: { strategy: 'qr_param', param: 'D3', separator: '_', accept: '^\\d{6,}$' },
-    },
-    compare: ['tax_id', 'document_id'],
-  },
-}
-
-export const MOCK_IDENTITY_DOCUMENT_MX_CSF: IdentityDocumentSpec = {
-  kind: 'MX:csf',
-  label: 'Constancia de situación fiscal',
-  label_en: 'Tax status certificate',
-  help: 'PDF que descargas del SAT con tu e.firma o contraseña.',
-  obtain_url: 'https://www.sat.gob.mx/aplicacion/53027/genera-tu-constancia-de-situacion-fiscal',
-  accept: ['application/pdf'],
-  max_bytes: 5 * 1024 * 1024,
-  max_pages: 6,
-  engine: 'rules@1',
-  rules: MOCK_CSF_RULES,
-  verify_kind: 'MX:csf',
-  freshness_days: 90,
-  discard_fields: ['curp', 'street', 'exterior_number', 'neighborhood', 'activities'],
-}
+export const MOCK_IDENTITY_DOCUMENT_MX_CSF: IdentityDocumentSpec = SEED_MX_CSF
+export const MOCK_CSF_RULES = SEED_MX_CSF.rules as IdentityRulesV1
 
 export const MOCK_FISCAL_ID_MX: RegionFiscalId = {
-  kind: 'RFC',
+  kind: 'mx_rfc',
   label: 'RFC',
-  pattern: '^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$',
-  generic_ids: ['XAXX010101000', 'XEXX010101000'],
-  regimes: REGIMES,
-  invoice_uses: USES,
-  documents: [MOCK_IDENTITY_DOCUMENT_MX_CSF],
+  pattern: SEED_MX_FISCAL_ID_PATTERN,
+  generic_ids: SEED_MX_GENERIC_IDS,
+  regimes: SEED_MX_REGIMES,
+  invoice_uses: SEED_MX_INVOICE_USES,
+  documents: [SEED_MX_CSF],
 }
 
 export const MOCK_REGION_MX: Region = {
@@ -128,15 +25,11 @@ export const MOCK_REGION_MX: Region = {
   locale: { default: 'es-MX', available: ['es-MX', 'en-US'], current: 'es-MX' },
   timezone: 'America/Mexico_City',
   currency: { code: 'MXN', symbol: '$', symbol_position: 'before', minor_units: 2 },
-  formats: { date: 'DD/MM/YYYY', measurement: 'metric' },
-  tax: { prices_include_tax: true, label: 'IVA', price_label: 'IVA incluido', show_breakdown: false, default_category: 'standard', categories: ['standard'] },
+  formats: { date: 'dd/MM/yyyy', measurement: 'metric' },
+  tax: { prices_include_tax: true, label: 'IVA', price_label: 'IVA incluido', show_breakdown: true, default_category: 'standard', categories: ['standard'] },
   address: { postal_code: { pattern: '^[0-9]{5}$', example: '06600' } },
   fiscal_id: MOCK_FISCAL_ID_MX,
-  payment_methods: [
-    { code: 'card', label: 'Tarjeta', kind: 'card', flow: 'inline', providers: ['mock'], installments: null, min_amount: null, max_amount: null, fiscal_payment_form: '04' },
-    { code: 'oxxo', label: 'OXXO', kind: 'cash_voucher', flow: 'voucher', providers: ['mock'], installments: null, min_amount: null, max_amount: null, expires_hours: 72, fiscal_payment_form: '01' },
-    { code: 'spei', label: 'SPEI', kind: 'bank_transfer', flow: 'instructions', providers: ['mock'], installments: null, min_amount: null, max_amount: null, fiscal_payment_form: '03' },
-  ],
+  payment_methods: SEED_MX_PAYMENT_METHODS,
 }
 
 export type InvoiceFieldError = { field: string; message: string }

@@ -334,15 +334,15 @@ read **on the buyer's device** (or in memory on your server for the no-JS path);
 logged. Only the fields the buyer reviews, plus minimal evidence (document id, SHA-256, extractor, QR match), travel.
 
 ```ts
-import { readPdfText, extractIdentityDocument, decodePdfQr, buildDocumentEvidence, isIdentityDocumentError } from '@asteby/storefront/fiscal-document'
+import { readPdfText, extractIdentityDocument, decodePdfQr, buildDocumentEvidence, catalogsFromRegion, isIdentityDocumentError } from '@asteby/storefront/fiscal-document'
 
 const spec = region.fiscal_id.documents.find((d) => d.kind === 'MX:csf')!
 
 try {
-  const { text, sha256 } = await readPdfText(file, { workerSrc: '/assets/pdf.worker.mjs' }) // browser: YOUR worker URL
-  const qr = await decodePdfQr(file, { workerSrc: '/assets/pdf.worker.mjs' })             // optional; null if it cannot
-  const x = extractIdentityDocument(text, spec, { catalogs: { regimes: region.fiscal_id.regimes }, qr })
-  x.fields      // { tax_id, legal_name, postal_code, regimes: ['612', '605'], document_id, issued_on } (what was read)
+  const { text, sha256 } = await readPdfText(file, { workerSrc: '/assets/pdf.worker.mjs', maxBytes: spec.max_bytes, maxPages: spec.max_pages }) // browser: YOUR worker URL
+  const qr = await decodePdfQr(file, { workerSrc: '/assets/pdf.worker.mjs' })             // optional; null if it cannot (the URL the QR encodes)
+  const x = extractIdentityDocument(text, spec, { catalogs: catalogsFromRegion(region.fiscal_id), qr })
+  x.fields      // { tax_id, legal_name, postal_code, tax_regime: ['612', '605'], document_id, issued_on } (what was read)
   x.missing     // fields to leave empty for the buyer to type
   x.qr.match    // true | false | null (no QR / nothing to compare)
   x.stale       // older than spec.freshness_days
@@ -353,8 +353,8 @@ try {
 ```
 
 - **Sensitive data never comes out.** The spec's `discard_fields` (a national person id, street, activities...) are
-  removed from the output, and the value of a discarded field is scrubbed from every other field. The extraction
-  carries no text and no error message contains document text.
+  removed from the output whatever produced them (rules may not even declare them). The extraction carries no
+  text and no error message contains document text.
 - **pdf.js is loaded on demand** (`import('pdfjs-dist/legacy/build/pdf.mjs')`) with `isEvalSupported: false`; the
   main entry point does not include it. Install `pdfjs-dist@>=4.2.67` (older versions are affected by CVE-2024-4367).
   In browsers there is deliberately **no default worker and no CDN**: copy `pdf.worker.mjs` to your own assets and pass
@@ -368,37 +368,42 @@ try {
 
 #### `rules@1`
 
-The generic engine runs the rules of the spec (`spec.rules`, object or JSON text). Patterns are JavaScript regexes,
-case-insensitive, matched on text **without accents** (write them without accents; values keep the original characters).
+The generic engine runs the rules of the spec (`spec.rules`; the API publishes an object, JSON text is accepted).
+It is the TypeScript twin of the reference interpreter of the region packs (`regionspec.ExtractIdentity`): same
+semantics, held to the same synthetic documents. The text is normalized (`nbsp`, `collapse_ws`), then each field
+tries its strategies in order and the first non-empty value wins.
 
 ```jsonc
 {
-  "fold": true,
-  "labels": ["rfc", "curp", "codigo postal", "regimenes", "obligaciones"],   // a labelled value ends at the next label
-  "fields": {
-    "tax_id":      { "first_of": [ { "strategy": "labeled_lines", "label": "rfc", "transform": ["upper", "alnum"], "accept": "^[A-Z]{4}\\d{6}\\w{3}$" },
-                                   { "strategy": "regex", "pattern": "\\b([A-Z]{4}\\d{6}\\w{3})\\b" } ] },
-    "legal_name":  { "strategy": "concat_labeled", "labels": ["nombre \\(s\\)", "primer apellido"], "join": " " },
-    "regimes":     { "strategy": "catalog_phrases", "catalog": "regimes", "scope": { "start": "regimenes\\s*:", "end": "obligaciones\\s*:" } },
-    "issued_on":   { "strategy": "date", "scope": { "start": "lugar y fecha de emision" } }
-  },
-  "qr": { "fields": { "tax_id": { "strategy": "qr_param", "param": "D3", "separator": "_", "accept": "^[A-Z]{4}\\d{6}\\w{3}$" } }, "compare": ["tax_id"] }
+  "version": 1,
+  "normalize": ["nbsp", "collapse_ws"],
+  "labels": ["RFC", "CURP", "C[óo]digo Postal", "Reg[íi]menes", "Obligaciones"],  // a labelled value ends at the next caption
+  "fields": [
+    { "key": "tax_id", "required": true, "strategies": [
+        { "strategy": "labeled_lines", "label": "RFC", "upper": true, "capture": { "pattern": "\\b([A-Z]{4}[0-9]{6}[A-Z0-9]{3})\\b", "group": 1 } },
+        { "strategy": "qr_param", "param": "D3", "split": "_", "parts": 2, "match": "^[A-Z]{4}[0-9]{6}[A-Z0-9]{3}$" } ] },
+    { "key": "tax_regime", "multiple": true, "strategies": [
+        { "strategy": "catalog_phrases", "catalog": "fiscal_regime", "start": "Reg[íi]menes\\s*:?", "end": "Obligaciones\\s*:" } ] }
+  ]
 }
 ```
 
 | Strategy | Reads |
 |---|---|
-| `regex` | `group` of `pattern` (default group 1, or the whole match) |
-| `labeled_lines` | the value after `label:` up to the next label |
-| `concat_labeled` | several labelled values joined (first names + surnames) |
-| `catalog_phrases` | the codes of a catalog (`catalogs.regimes` = `fiscal_id.regimes`) whose `match_phrases` occur, in order of appearance, longest phrase first, no overlaps |
-| `date` | the first date as `YYYY-MM-DD` (Spanish/English month names, ISO, `dd/mm/yyyy`; `order` for numeric) |
-| `qr_param` | (under `qr`) a part of a query parameter of the QR URL, told apart by `accept` |
+| `regex` | `group` (0 = whole match) of the first match of `pattern` (`flags`: `i`, `s`, `m`) |
+| `labeled_lines` | the value after the caption `label` up to the next caption of `labels`, line breaks or not |
+| `concat_labeled` | the values of several captions joined with `separator` (first names + surnames) |
+| `catalog_phrases` | the codes of the catalog entries whose phrases appear between `start` and `end`, in order of first mention. Phrases come from `match_phrases`, or the label when absent. No `start` found: no section |
+| `date` | `pattern` with three groups in the order of `order` (`dmy`, `ymd`...); `months` (12 names) reads a month in text; calendar-invalid dates are dropped. Result `YYYY-MM-DD` |
+| `qr_param` | from the QR URL: parameter `param`, split on `split` into exactly `parts` parts; the part matching `match` (uppercased) |
 
-Every rule takes `transform` (`upper`, `lower`, `trim`, `digits`, `alnum`), `accept` (the value must match) and `scope`
-(`start`/`end` regexes). `first_of` tries rules in order. Fields in `discard_fields` may be declared (they then serve to
-scrub other fields) but are never returned. An invalid or oversized pattern makes that field `missing`; a spec that cannot
-run at all throws `IdentityRulesError`.
+Any strategy takes `upper` and `capture` (`{pattern, flags, group}`: the value must match it and the group replaces
+the value). **The text wins over the QR**; a `qr_param` strategy only fills what the text lacks, and `extraction.qr.match`
+is `false` when both carry a field and differ (a warning, never a block). Patterns are limited to the subset common to Go and
+JavaScript (no lookaround, backreferences, named groups, inline flags or `\p`); `validateRules` rejects the rest, and
+a rule that produces a `discard_fields` field. Catalogs for `catalog_phrases` come from `catalogsFromRegion(region.fiscal_id)`
+(`fiscal_regime`, `invoice_use`). A text that does not match yields `missing` (required fields); only a spec that cannot
+run throws `IdentityRulesError`.
 
 ## API
 

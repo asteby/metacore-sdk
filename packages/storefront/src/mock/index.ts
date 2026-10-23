@@ -625,8 +625,8 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       return { stage, requested: true, status: stage === 'issued' ? 'issued' : 'requested', action: stage === 'awaiting_payment' ? 'wait' : 'none', can_request: false, url: null, xml_url: null }
     }
     return paid
-      ? { stage: 'not_requested', requested: false, action: 'request', can_request: true, blocked_reason: null }
-      : { stage: 'not_requested', requested: false, action: 'none', can_request: false, blocked_reason: 'awaiting_payment' }
+      ? { status: 'not_requested', stage: 'not_requested', requested: false, action: 'request', can_request: true, blocked_reason: null }
+      : { status: 'not_requested', stage: 'not_requested', requested: false, action: 'none', can_request: false, blocked_reason: 'awaiting_payment' }
   }
 
   // -------------------------------------------------------------------------
