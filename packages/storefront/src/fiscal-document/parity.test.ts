@@ -48,7 +48,7 @@ describe('QR read by a keyboard-wedge scanner', () => {
     ['punctuation replaced', 'httpsÑ--siat.sat.gob.mx-app-qr-faces-pages-mobile-validadorqr.jsf_d1)10/d2)1/d3)22032805709_pepj800101abc'],
     ['no separators at all, lower case', 'httpsÑ--siat.sat.gob.mx-app-qr-faces-pages-mobile-validadorqr.jsf_d1)10/d2)1/d322032805709pepj800101abc'],
     ['only the tail', '22032805709_pepj800101abc'],
-    ['trailing garbage', 'D322032805709Ñpepj800101abc\r\n'],
+    ['trailing garbage', 'D322032805709)pepj800101abc\r\n'],
   ])('%s', (_n, url) => {
     const x = qr(url)
     expect(x.fields).toMatchObject({ tax_id: 'PEPJ800101ABC', document_id: '22032805709' })
