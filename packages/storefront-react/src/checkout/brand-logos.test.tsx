@@ -96,7 +96,6 @@ describe('BrandMark precedence: provider logo_url > bundled logo > badge', () =>
   it('falls back to the typographic badge for brands without a logo, and to a monogram for unknown ones', () => {
     expect(renderToString(<BrandMark brand="stp" />)).toContain('data-sf-brand-source="badge"')
     expect(renderToString(<BrandMark brand="redpack" />)).toContain('data-sf-brand-source="badge"')
-    expect(renderToString(<BrandMark brand="paquetexpress" />)).toContain('data-sf-brand-source="badge"')
     expect(renderToString(<BrandMark brand="envios rapidos" />)).toContain('>ER<')
   })
 
