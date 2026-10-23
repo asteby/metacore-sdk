@@ -45,6 +45,10 @@
   display: inline-block;
   vertical-align: middle;
 }
+/* The open cash row already lists every point with its mark: the preview would repeat them. */
+[data-sf-pay-method] [data-sf-pay-choice]:has(input[name='payment_choice']:checked) [data-sf-pay-brands='cash'] {
+  display: none;
+}
 @media (max-width: 24rem) {
   /* Narrow phones: the row text wins over the preview marks. */
   [data-sf-pay-method] [data-sf-pay-choice] [data-sf-pay-brands] [data-sf-brand-mark]:nth-child(n + 3) {

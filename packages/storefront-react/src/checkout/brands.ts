@@ -21,7 +21,7 @@ export type Brand = {
   bg: string
   /** Badge text color (AA on `bg`). */
   fg: string
-  /** Short wordmark drawn in the badge. Default: `name`. */
+  /** Short wordmark drawn in the badge (`\n` = two lines). Default: `name`. */
   mark?: string
   /** Special drawings instead of a wordmark. */
   shape?: 'mastercard'
@@ -42,7 +42,7 @@ const LIST: Brand[] = [
   B('fedex', 'FedEx', 'carrier', '#4D148C', '#FFFFFF'),
   B('dhl', 'DHL', 'carrier', '#FFCC00', '#B00410'),
   B('estafeta', 'Estafeta', 'carrier', '#C8102E', '#FFFFFF'),
-  B('paquetexpress', 'Paquetexpress', 'carrier', '#0B4EA2', '#FFFFFF', 'PAQX'),
+  B('paquetexpress', 'Paquetexpress', 'carrier', '#0B4EA2', '#FFFFFF', 'Paquet\nexpress'),
   B('ups', 'UPS', 'carrier', '#351C15', '#FFB500'),
   B('redpack', 'Redpack', 'carrier', '#C8102E', '#FFFFFF'),
   B('99minutos', '99 Minutos', 'carrier', '#00704A', '#FFFFFF', '99'),
@@ -53,7 +53,7 @@ const LIST: Brand[] = [
   B('quiken', 'Quiken', 'carrier', '#1D1D1B', '#FFFFFF'),
   B('imile', 'iMile', 'carrier', '#0057B8', '#FFFFFF'),
   B('carssa', 'Carssa', 'carrier', '#00529B', '#FFFFFF'),
-  B('correosdemexico', 'Correos de México', 'carrier', '#7A1E3A', '#FFFFFF', 'Correos'),
+  B('correosdemexico', 'Correos de México', 'carrier', '#7A1E3A', '#FFFFFF', 'Correos\nMéxico'),
   B('usps', 'USPS', 'carrier', '#333366', '#FFFFFF'),
   B('canadapost', 'Canada Post', 'carrier', '#DA291C', '#FFFFFF', 'CPC'),
   // Card networks.
@@ -62,7 +62,7 @@ const LIST: Brand[] = [
   B('amex', 'American Express', 'card', '#1F72CD', '#FFFFFF', 'AMEX'),
   B('carnet', 'Carnet', 'card', '#003B71', '#FFFFFF'),
   // Wallets and payment providers.
-  B('mercadopago', 'Mercado Pago', 'wallet', '#00B1EA', '#0B1F4E', 'MP'),
+  B('mercadopago', 'Mercado Pago', 'wallet', '#00B1EA', '#0B1F4E', 'mercado\npago'),
   B('paypal', 'PayPal', 'wallet', '#003087', '#FFFFFF'),
   B('clip', 'Clip', 'wallet', '#FC4C02', '#1D1D1B'),
   B('applepay', 'Apple Pay', 'wallet', '#000000', '#FFFFFF', 'Pay'),

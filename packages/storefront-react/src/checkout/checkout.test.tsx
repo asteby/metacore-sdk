@@ -124,6 +124,7 @@ describe('delivery helpers', () => {
     expect(tomorrow.text).not.toContain('UTC')
     const today = quoteNote(deadline, { now: new Date('2026-10-23T22:00:00Z'), timeZone: tz })!
     expect(today.text).toMatch(/^Precios de envío vigentes hasta las 9:39/)
+    expect(today.text).not.toMatch(/\.\.$/)
     const later = quoteNote(deadline, { now: new Date('2026-10-20T12:00:00Z'), timeZone: tz })!
     expect(later.text).toContain('hasta el 23 oct')
     const soon = quoteNote(deadline, { now: new Date('2026-10-24T03:30:00Z'), timeZone: tz })!

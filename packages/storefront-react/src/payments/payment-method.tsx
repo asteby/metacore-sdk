@@ -305,7 +305,7 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
                 {hint ? <span className={cx.hint}> {hint}</span> : null}
               </span>
               {marks.length ? (
-                <span className={cx.brands} data-sf-pay-brands aria-hidden="true">
+                <span className={cx.brands} data-sf-pay-brands={choice.option ?? 'plain'} aria-hidden="true">
                   {marks.map((mk) => (
                     <BrandMark key={mk.key} brand={mk.key} logoUrl={mk.logoUrl ?? null} size={20} />
                   ))}
@@ -453,15 +453,16 @@ const CASH_GLYPH = 'M3 7h18v10H3zM12 14.5a2.5 2.5 0 1 0 0-5a2.5 2.5 0 0 0 0 5zM6
 
 /** Leading icon of a row: the provider's mark on its own account / no-card rows; a neutral glyph for card and cash. */
 function defaultIcon(choice: PayChoice): ReactNode {
-  if (choice.mode === 'card') return glyph(CARD_GLYPH)
-  if (choice.mode === 'cash') return glyph(CASH_GLYPH)
-  return findBrand(choice.methodKey) ? <BrandMark brand={choice.methodKey} size={20} /> : null
+  // By option, not mode: a card row without the in-page form still is a card.
+  if (choice.option === 'card') return glyph(CARD_GLYPH)
+  if (choice.option === 'cash') return glyph(CASH_GLYPH)
+  return findBrand(choice.methodKey) ? <BrandMark brand={choice.methodKey} size={24} /> : null
 }
 
 /** Trailing marks of a row: card networks on the card row, the first cash points on the cash row. */
 function rowMarks(choice: PayChoice, cardBrands: readonly string[]): Array<{ key: string; logoUrl?: string | null }> {
-  if (choice.mode === 'card') return cardBrands.map((key) => ({ key }))
-  if (choice.mode === 'cash') {
+  if (choice.option === 'card') return cardBrands.map((key) => ({ key }))
+  if (choice.option === 'cash') {
     const seen = new Set<string>()
     const out: Array<{ key: string; logoUrl?: string | null }> = []
     for (const p of choice.points) {

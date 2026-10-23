@@ -74,7 +74,8 @@ export function deliveryMessages(locale?: string | null, overrides?: Partial<Del
   return overrides ? { ...base, ...overrides } : base
 }
 
-const fill = (tpl: string, vars: Record<string, string | number>) => tpl.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? ''))
+// A value that already ends in a period ("9:39 p.m.") does not get a second one from the template.
+const fill = (tpl: string, vars: Record<string, string | number>) => tpl.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? '')).replace(/\.\.$/, '.')
 
 /** Commercial carrier name of a rate (`fedex` → "FedEx"); `null` without carrier. */
 export function rateCarrier(rate: Pick<ShippingRate, 'carrier'>): string | null {
