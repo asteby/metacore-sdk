@@ -65,7 +65,7 @@ describe('brand catalog', () => {
 
 describe('BrandMark', () => {
   it('the typographic fallback is a decorative inline SVG with a fixed box (no request, no layout shift)', () => {
-    // `stp` has no available logo (see brands/LOGOS.md): it keeps the badge.
+    // `stp` has no available logo (see brands/LOGOS.md): it keeps a generic transfer badge.
     const html = renderToString(<BrandMark brand="stp" size={20} />)
     expect(html).toContain('<svg')
     expect(html).toContain('aria-hidden="true"')
@@ -73,7 +73,9 @@ describe('BrandMark', () => {
     expect(html).toContain('height="20"')
     expect(html).toContain('SPEI')
     // Legible badge: a 4-letter text fills the 48x32 badge (font 16, fitted to 36 units), not the old tiny 12.
-    expect(html).toMatch(/font-size="16"[^>]*textLength="36"[^>]*>SPEI|textLength="36"[^>]*font-size="16"[^>]*>SPEI/)
+    // Generic transfer badge (arrows + text), not an imitation of the official mark.
+    expect(html).toMatch(/>SPEI<\/text>/)
+    expect(html).toContain('<path')
     expect(html).toContain('data-sf-brand-mark="stp"')
     expect(html).toContain('data-sf-brand-source="badge"')
   })

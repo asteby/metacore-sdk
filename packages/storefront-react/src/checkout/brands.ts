@@ -27,7 +27,7 @@ export type Brand = {
   /** Short wordmark drawn in the badge (`\n` = two lines). Default: `name`. */
   mark?: string
   /** Special drawings instead of a wordmark. */
-  shape?: 'mastercard'
+  shape?: 'mastercard' | 'transfer'
 }
 
 const B = (key: string, name: string, kind: BrandKind, bg: string, fg: string, mark?: string, shape?: Brand['shape']): Brand => ({
@@ -72,8 +72,8 @@ const LIST: Brand[] = [
   B('googlepay', 'Google Pay', 'wallet', '#FFFFFF', '#3C4043', 'G Pay'),
   // Cash points and transfers (Mexico).
   B('oxxo', 'OXXO', 'cash', '#E21E26', '#FFE600'),
-  B('spei', 'SPEI', 'bank', '#14365F', '#FFFFFF'),
-  B('stp', 'STP', 'bank', '#14365F', '#FFFFFF', 'SPEI'),
+  B('spei', 'SPEI', 'bank', '#14365F', '#FFFFFF', undefined, 'transfer'),
+  B('stp', 'STP', 'bank', '#14365F', '#FFFFFF', 'SPEI', 'transfer'),
   B('7eleven', '7-Eleven', 'cash', '#00704A', '#FFFFFF', '7-11'),
   B('circlek', 'Circle K', 'cash', '#DA291C', '#FFFFFF', 'K'),
   B('soriana', 'Soriana', 'cash', '#C8102E', '#FFFFFF'),

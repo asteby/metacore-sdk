@@ -120,6 +120,20 @@ export function BrandMark({ brand, logoUrl, size = 24, title, className }: Brand
       </svg>
     )
   }
+  if (found?.shape === 'transfer') {
+    // Generic bank-transfer badge (two opposing arrows + the name). SPEI has no logo we may redistribute (see
+    // brands/LOGOS.md), so this is deliberately NOT an imitation of the official mark.
+    const label = (found.mark ?? found.name).split('\n')[0]!
+    return (
+      <svg viewBox="0 0 48 32" width={width} height={height} className={className} style={style} data-sf-brand-mark={key} data-sf-brand-source="badge" focusable="false" {...a11y}>
+        <rect x="0.5" y="0.5" width="47" height="31" rx="5" fill={found.bg} stroke={ring} />
+        <path d="M6 12h11m0 0-3-3m3 3-3 3M17 20H6m0 0 3-3m-3 3 3 3" fill="none" stroke={found.fg} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+        <text x="33" y="16.5" dominantBaseline="central" textAnchor="middle" fill={found.fg} fontFamily="system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif" fontWeight={800} fontSize={11} textLength={22} lengthAdjust="spacingAndGlyphs">
+          {label}
+        </text>
+      </svg>
+    )
+  }
   const text = found ? (found.mark ?? found.name) : monogram(brand ?? '')
   const bg = found?.bg ?? 'var(--sf-brand-mark-bg, #E7E9EE)'
   const fg = found?.fg ?? 'var(--sf-brand-mark-fg, #2B2F38)'
