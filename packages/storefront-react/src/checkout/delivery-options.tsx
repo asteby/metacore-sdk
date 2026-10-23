@@ -190,7 +190,12 @@ export function DeliveryOptions(props: DeliveryOptionsProps) {
     return (
       <label key={rate.id} className={cx.option} data-sf-delivery-option data-loading={loading || undefined} data-grouped={opts.grouped || undefined}>
         {radio(rateValue(rate))}
-        {marks && !opts.grouped ? <BrandMark brand={rate.carrier ?? rate.provider ?? rate.title} size={28} {...(cx.mark ? { className: cx.mark } : {})} /> : null}
+        {marks && !opts.grouped ? (
+          // Fixed slot: logos of different widths do not push the text column out of line.
+          <span data-sf-delivery-mark aria-hidden="true">
+            <BrandMark brand={rate.carrier ?? rate.provider ?? rate.title} size={28} {...(cx.mark ? { className: cx.mark } : {})} />
+          </span>
+        ) : null}
         <span className={cx.body} data-sf-delivery-body>
           <span className={cx.title} data-sf-delivery-title>
             {carrier ? (
