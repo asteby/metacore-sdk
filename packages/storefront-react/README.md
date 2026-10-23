@@ -520,6 +520,10 @@ export const pay = createEmbeddedPayHandlers({
 
 - Marcas (por omisión, `brandMarks`): la marca del proveedor en sus filas de cuenta y sin tarjeta, las de los primeros puntos de pago en la fila de efectivo y junto a cada punto (`payment_point` o `id`; `logo_url` del proveedor gana), y las redes que pase la tienda en la fila de tarjeta (`cardBrands={['visa', 'mastercard', 'amex']}`). `brandMarks={false}` deja las filas en texto.
 - El total del botón siempre lleva la entrega: `syncDelivery` se llama una vez por entrega con cualquier fila (no solo con tarjeta); mientras se guarda, el botón no muestra un total viejo.
+- El formulario de tarjeta se abre justo debajo de su fila (no al final de todas), con el correo del formulario de la página ya puesto (`payerEmailField`, por omisión `email`): el Brick no vuelve a pedirlo. En página oscura monta el tema base `dark` del proveedor (`readPaymentScheme`: token `--sf-pay-scheme` o `color-scheme`), refinado con los tokens `--sf-pay-*` (texto, fondos, contorno, radios, relleno).
+- La elección se recuerda por carrito (`scope`) en `sessionStorage` (`rememberChoice`, por omisión sí): recargar, volver con «atrás» desde el proveedor o pasar por el paso de dirección no pide elegir de nuevo; si la fila ya no se publica, vuelve el valor por omisión del servidor. Solo se guarda el valor de la fila y el punto de efectivo.
+- `cashPointsVisible={4}` deja a la vista los primeros puntos de efectivo y manda el resto a «Ver más puntos de pago» (se abre solo si el punto recordado está ahí).
+- Botón: «Generar ficha de pago $X» con efectivo (`placeOrderCash`) y «Elige la entrega para continuar» mientras falta la entrega (`chooseDelivery`; al pulsarlo señala el campo que falta en vez de pagar).
 
 ## Entrega y marcas (`@asteby/storefront-react/checkout`)
 
@@ -535,6 +539,8 @@ import '@asteby/storefront-react/checkout.css' // opcional: disposición, insign
     renderAmount={(m) => <Money data={m} />} classNames={{ option: 'card has-checked:border-accent' }} />
 </fieldset>
 ```
+
+Cotizaciones largas (`layout="recommended"`): con 10+ servicios, la lista plana obliga a comparar todo. Con `layout="recommended"` se ven hasta tres tarifas (`recommendedCount`) con su etiqueta: la más económica, la más rápida y la de mejor equilibrio precio-tiempo («Recomendado»); el resto queda en «Ver más opciones (N)» (`<details>`, funciona sin JavaScript) agrupado por paquetería, con la marca y el nombre UNA vez por grupo (cada radio conserva su nombre completo para lectores de pantalla). Los servicios repetidos (misma paquetería y servicio cotizados por dos proveedores) se quedan con el más barato. Si la tarifa elegida está dentro, la lista se abre sola (también en el HTML del servidor). La lógica pura está en `recommendRates()` / `dedupeRates()`. `error` (+ `onRetry`) muestra un aviso amable con «Intentar de nuevo» cuando no se pudo cotizar.
 
 Tarifa vencida o cambiada: si guardar la entrega falla con `isQuoteChange(err)` (códigos `quote_expired`/`rate_expired`…, un 409, o el 422 genérico de servidores anteriores), la tienda recarga las tarifas conservando la dirección, vuelve a elegir el mismo servicio con `matchRate(anterior, nuevas)`, pasa `requoted` a `DeliveryOptions` y resuelve `syncDelivery` con `'requote'`: `PaymentMethodSection` muestra un aviso (no un error) y vuelve a intentar con la nueva tarifa.
 

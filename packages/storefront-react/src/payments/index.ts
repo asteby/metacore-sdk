@@ -39,4 +39,4 @@ export type { PaymentMethodMessages } from './payment-method.messages.js'
 export { buildPayChoices, cashProviderData, checkoutToAttempt, choiceValue, parseChoice, payErrorResponse, voucherRows } from './choices.js'
 export type { BuildPayChoicesOptions, PayChoice, PayChoices, PayErrorBody, VoucherRowLabels } from './choices.js'
 
-export { PAYMENT_THEME_TOKENS, readPaymentTheme } from './theme.js'
+export { PAYMENT_THEME_TOKENS, readPaymentScheme, readPaymentTheme } from './theme.js'

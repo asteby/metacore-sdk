@@ -2,6 +2,7 @@ import { useMemo, useSyncExternalStore, type CSSProperties, type ReactNode } fro
 import { formatMoney, type Money, type PickupOption, type ShippingRate } from '@asteby/storefront'
 import { useResolvedLocale } from '../locale.js'
 import { BrandMark } from './brand-mark.js'
+import { recommendRates, type RateTag } from './recommend.js'
 import {
   deliveryMessages,
   quoteDeadline,
@@ -31,7 +32,13 @@ export type DeliveryOptionsClassNames = Partial<
     | 'free'
     | 'note'
     | 'partial'
-    | 'skeleton',
+    | 'skeleton'
+    | 'more'
+    | 'moreSummary'
+    | 'group'
+    | 'groupTitle'
+    | 'error'
+    | 'retry',
     string
   >
 >
@@ -69,6 +76,21 @@ export type DeliveryOptionsProps = {
   messages?: Partial<DeliveryMessages>
   renderAmount?: (amount: Money) => ReactNode
   classNames?: DeliveryOptionsClassNames
+  /**
+   * `list` (default): every rate, as the server orders them. `recommended`: up to `recommendedCount` rates (cheapest,
+   * fastest and the best balance, tagged) and the rest under "Show more options (N)", grouped by carrier so the carrier
+   * name is not repeated on every row. Repeated services are dropped (the cheapest stays). Works without JavaScript
+   * (`<details>`); it opens by itself when the chosen rate is inside.
+   */
+  layout?: 'list' | 'recommended'
+  /** Rates recommended in `layout="recommended"`. Default 3. */
+  recommendedCount?: number
+  /**
+   * The rates could not be quoted (provider down, timeout): one friendly alert instead of the list, with a retry button
+   * when `onRetry` is set. `true` uses the default text; a string replaces it.
+   */
+  error?: boolean | string
+  onRetry?: () => void
   /** `data-testid` of every radio. */
   testId?: string
   /** Rows the shop renders before the rates (e.g. "home delivery, rates after the address"). */
@@ -122,6 +144,9 @@ export function DeliveryOptions(props: DeliveryOptionsProps) {
     classNames: cx = {},
     testId,
     children,
+    layout = 'list',
+    error,
+    onRetry,
   } = props
   const locale = useResolvedLocale(props.locale)
   const m = useMemo(() => deliveryMessages(locale, props.messages), [locale, props.messages])
@@ -135,21 +160,91 @@ export function DeliveryOptions(props: DeliveryOptionsProps) {
   const note = hydrated && deadline ? quoteNote(deadline, { locale, messages: m, ...(timeZone ? { timeZone } : {}) }) : null
   const shownNote = note && (mode === 'always' || note.soon) ? note : null
 
-  const radio = (v: string) => (
+  const current = value ?? defaultValue ?? null
+  const plan = useMemo(
+    () => (layout === 'recommended' ? recommendRates(rates, { count: props.recommendedCount ?? 3 }) : null),
+    [layout, rates, props.recommendedCount],
+  )
+  const inMore = plan ? plan.more.some((g) => g.rates.some((r) => rateValue(r) === current)) : false
+
+  const radio = (v: string, describedBy?: string) => (
     <input
       type="radio"
       name={name}
       value={v}
       required={required}
       className={cx.radio}
+      {...(describedBy ? { 'aria-describedby': describedBy } : {})}
       {...(value !== undefined ? { checked: value === v, onChange: () => onValueChange?.(v) } : { defaultChecked: v === defaultValue, ...(onValueChange ? { onChange: () => onValueChange(v) } : {}) })}
       {...(testId ? { 'data-testid': testId } : {})}
     />
   )
 
+  const tagText = (t: RateTag | RateBadge) => (t === 'cheapest' ? m.cheapest : t === 'fastest' ? m.fastest : m.bestValue)
+
+  /** One row: [radio] [mark] carrier + service / arrival / tags ........ price. In a carrier group the mark and the carrier name live in the group title. */
+  const rateRow = (rate: ShippingRate, opts: { tags: readonly (RateTag | RateBadge)[]; grouped?: boolean }) => {
+    const carrier = rateCarrier(rate)
+    const service = rateService(rate)
+    const eta = rateEta(rate, m)
+    return (
+      <label key={rate.id} className={cx.option} data-sf-delivery-option data-loading={loading || undefined} data-grouped={opts.grouped || undefined}>
+        {radio(rateValue(rate))}
+        {marks && !opts.grouped ? <BrandMark brand={rate.carrier ?? rate.provider ?? rate.title} size={28} {...(cx.mark ? { className: cx.mark } : {})} /> : null}
+        <span className={cx.body} data-sf-delivery-body>
+          <span className={cx.title} data-sf-delivery-title>
+            {carrier ? (
+              opts.grouped ? (
+                <>
+                  {/* The group title already shows the carrier: only screen readers hear it again (each radio keeps a full name). */}
+                  <span style={SR_ONLY}>{carrier} </span>
+                  <span className={cx.carrier} data-sf-delivery-carrier data-sf-delivery-service-only>
+                    {service}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className={cx.carrier} data-sf-delivery-carrier>
+                    {carrier}
+                  </span>{' '}
+                  <span className={cx.service} data-sf-delivery-service>
+                    {service}
+                  </span>
+                </>
+              )
+            ) : (
+              <span className={cx.carrier} data-sf-delivery-carrier>
+                {service}
+              </span>
+            )}
+          </span>
+          {eta ? (
+            <span className={cx.eta} data-sf-delivery-eta>
+              {eta}
+            </span>
+          ) : null}
+          {opts.tags.length ? (
+            <span className={cx.badges} data-sf-delivery-badges>
+              {opts.tags.map((b) => (
+                <span key={b} className={cx.badge} data-sf-delivery-badge={b}>
+                  {tagText(b)}
+                </span>
+              ))}
+            </span>
+          ) : null}
+        </span>
+        <span className={cx.price} data-sf-delivery-price>
+          {amount(rate.cost)}
+        </span>
+      </label>
+    )
+  }
+
+  const errorText = error ? (typeof error === 'string' ? error : m.error) : null
+
   return (
-    <div className={cx.root} data-sf-delivery aria-busy={loading || undefined}>
-      {partial ? (
+    <div className={cx.root} data-sf-delivery data-layout={layout} aria-busy={loading || undefined}>
+      {partial && !errorText ? (
         <p role="status" className={cx.partial} data-sf-delivery-partial>
           {m.partial}
         </p>
@@ -164,57 +259,45 @@ export function DeliveryOptions(props: DeliveryOptionsProps) {
           {m.loading}
         </span>
       ) : null}
+      {errorText && rates.length === 0 && !loading ? (
+        <div role="alert" className={cx.error} data-sf-delivery-error>
+          <p>{errorText}</p>
+          {onRetry ? (
+            <button type="button" className={cx.retry} onClick={onRetry} data-sf-delivery-retry>
+              {m.retry}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {children}
       {loading && rates.length === 0
         ? [0, 1, 2].map((i) => <div key={i} className={cx.skeleton} data-sf-delivery-skeleton aria-hidden="true" />)
         : null}
-      {rates.map((rate) => {
-        const carrier = rateCarrier(rate)
-        const service = rateService(rate)
-        const eta = rateEta(rate, m)
-        const own = badges.get(rate.id) ?? []
-        return (
-          <label key={rate.id} className={cx.option} data-sf-delivery-option data-loading={loading || undefined}>
-            {radio(rateValue(rate))}
-            {marks ? <BrandMark brand={rate.carrier ?? rate.provider ?? rate.title} size={28} {...(cx.mark ? { className: cx.mark } : {})} /> : null}
-            <span className={cx.body} data-sf-delivery-body>
-              <span className={cx.title} data-sf-delivery-title>
-                {carrier ? (
-                  <>
-                    <span className={cx.carrier} data-sf-delivery-carrier>
-                      {carrier}
-                    </span>{' '}
-                    <span className={cx.service} data-sf-delivery-service>
-                      {service}
-                    </span>
-                  </>
-                ) : (
-                  <span className={cx.carrier} data-sf-delivery-carrier>
-                    {service}
-                  </span>
-                )}
-              </span>
-              {eta ? (
-                <span className={cx.eta} data-sf-delivery-eta>
-                  {eta}
-                </span>
-              ) : null}
-              {own.length ? (
-                <span className={cx.badges} data-sf-delivery-badges>
-                  {own.map((b) => (
-                    <span key={b} className={cx.badge} data-sf-delivery-badge={b}>
-                      {b === 'cheapest' ? m.cheapest : m.fastest}
-                    </span>
-                  ))}
-                </span>
-              ) : null}
-            </span>
-            <span className={cx.price} data-sf-delivery-price>
-              {amount(rate.cost)}
-            </span>
-          </label>
-        )
-      })}
+      {plan
+        ? plan.recommended.map(({ rate, tags }) => rateRow(rate, { tags: showBadges ? tags : [] }))
+        : rates.map((rate) => rateRow(rate, { tags: badges.get(rate.id) ?? [] }))}
+      {plan && plan.moreCount > 0 ? (
+        <details className={cx.more} data-sf-delivery-more {...(inMore ? { open: true } : {})}>
+          <summary className={cx.moreSummary} data-sf-delivery-more-summary>
+            {m.moreOptions.replace('{n}', String(plan.moreCount))}
+          </summary>
+          <div data-sf-delivery-groups>
+            {plan.more.map((g) => {
+              const carrierName = g.carrier ? rateCarrier({ carrier: g.carrier }) : null
+              const id = `${name}-group-${g.key || 'other'}`
+              return (
+                <div key={g.key || 'other'} role="group" aria-labelledby={id} className={cx.group} data-sf-delivery-group={g.key || 'other'}>
+                  <p id={id} className={cx.groupTitle} data-sf-delivery-group-title>
+                    {marks && g.carrier ? <BrandMark brand={g.carrier} size={22} /> : null}
+                    <span>{carrierName ?? m.otherCarriers}</span>
+                  </p>
+                  {g.rates.map((rate) => rateRow(rate, { tags: [], grouped: Boolean(carrierName) }))}
+                </div>
+              )
+            })}
+          </div>
+        </details>
+      ) : null}
       {pickup.map((b) => (
         <label key={b.branch_id} className={cx.option} data-sf-delivery-option data-sf-delivery-pickup>
           {radio(pickupValue(b))}

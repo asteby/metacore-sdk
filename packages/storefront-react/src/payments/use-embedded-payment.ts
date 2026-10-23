@@ -16,7 +16,7 @@ import {
 } from '@asteby/storefront'
 import type { MountedPaymentForm, PaymentFormAdapter, PaymentTransport } from './adapter.js'
 import { mercadoPagoBricksAdapter } from './mercadopago.js'
-import { readPaymentTheme } from './theme.js'
+import { readPaymentScheme, readPaymentTheme } from './theme.js'
 
 export type EmbeddedPaymentStatus =
   | 'idle' // no client / disabled / not hydrated
@@ -80,6 +80,8 @@ export type UseEmbeddedPaymentOptions = {
   onEvent?: (event: PaymentEvent) => void
   /** Overrides the theme read from `--sf-pay-*` tokens. */
   theme?: Record<string, string>
+  /** Overrides the light / dark scheme read from the page (`--sf-pay-scheme` or `color-scheme`). */
+  colorScheme?: 'light' | 'dark'
   /** Test hooks. */
   newAttemptId?: () => string
 }
@@ -259,6 +261,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
         await adapter.load(client, { ...(live.current.nonce ? { nonce: live.current.nonce } : {}), timeoutMs: sdkTimeoutMs })
         if (stale()) return
         const theme = live.current.theme ?? readPaymentTheme(container)
+        const colorScheme = live.current.colorScheme ?? readPaymentScheme(container)
         const m = await adapter.mount({
           container,
           client,
@@ -266,6 +269,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
           ...(live.current.email ? { email: live.current.email } : {}),
           ...(live.current.locale ? { locale: live.current.locale } : {}),
           theme,
+          ...(colorScheme ? { colorScheme } : {}),
           onReady: () => {
             if (stale()) return
             clearTimeout(timer)

@@ -28,6 +28,15 @@ export type DeliveryMessages = {
   loading: string
   /** The quote expired or changed and the rates were reloaded. */
   requoted: string
+  /** Tag of the recommended rate that balances price and arrival time (`layout="recommended"`). */
+  bestValue: string
+  /** Toggle of the other rates, `{n}` = how many. */
+  moreOptions: string
+  /** Title of the group of rates without a carrier. */
+  otherCarriers: string
+  /** The rates could not be quoted (`error`). */
+  error: string
+  retry: string
 }
 
 const ES: DeliveryMessages = {
@@ -44,9 +53,14 @@ const ES: DeliveryMessages = {
   quoteTomorrow: 'Precios de envío vigentes hasta mañana a las {time}.',
   quoteLater: 'Precios de envío vigentes hasta el {date}.',
   quoteSoon: 'Los precios de envío vencen pronto ({time}).',
-  partial: 'No pudimos consultar todas las paqueterías. Estas son las opciones disponibles ahora.',
+  partial: 'Algunas paqueterías no respondieron a tiempo; estas son las opciones disponibles.',
   loading: 'Buscando opciones de envío…',
   requoted: 'Las tarifas de envío cambiaron y ya están actualizadas. Revisa tu envío antes de pagar.',
+  bestValue: 'Recomendado',
+  moreOptions: 'Ver más opciones ({n})',
+  otherCarriers: 'Otras opciones',
+  error: 'No pudimos consultar las opciones de envío en este momento.',
+  retry: 'Intentar de nuevo',
 }
 
 const EN: DeliveryMessages = {
@@ -66,6 +80,11 @@ const EN: DeliveryMessages = {
   partial: "We couldn't reach every carrier. These are the options available now.",
   loading: 'Looking for delivery options…',
   requoted: 'Shipping rates changed and are now up to date. Check your delivery before paying.',
+  bestValue: 'Recommended',
+  moreOptions: 'Show more options ({n})',
+  otherCarriers: 'Other options',
+  error: "We couldn't get delivery options right now.",
+  retry: 'Try again',
 }
 
 /** Messages for a locale (`es*` default, `en*`), with optional overrides. */

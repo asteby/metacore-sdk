@@ -81,7 +81,8 @@ export function mercadoPagoBricksAdapter(options: MercadoPagoAdapterOptions = {}
             // fila de método de pago y se veía cortado (p. ej. AMEX partido). hideFormTitle oculta
             // la línea del título y las banderas.
             hideFormTitle: true,
-            style: { theme: 'default', ...(opts.theme && Object.keys(opts.theme).length ? { customVariables: opts.theme } : {}) },
+            // Dark page: the Brick's `dark` base theme, so it does not draw a white card; the shop tokens refine it.
+            style: { theme: opts.colorScheme === 'dark' ? 'dark' : 'default', ...(opts.theme && Object.keys(opts.theme).length ? { customVariables: opts.theme } : {}) },
           },
         },
         callbacks: {

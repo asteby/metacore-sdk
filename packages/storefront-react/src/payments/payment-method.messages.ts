@@ -7,6 +7,10 @@ export type PaymentMethodMessages = {
   pay: string
   /** Button label for card and cash, before the total. */
   placeOrder: string
+  /** Button label for cash (the buyer gets a payment slip and pays later), before the total. */
+  placeOrderCash: string
+  /** Button label while no delivery is chosen yet. */
+  chooseDelivery: string
   /** Button label when the buyer leaves for the provider's page. */
   payRedirect: string
   /** Button label for the first step (address) of a two-step checkout. */
@@ -36,6 +40,8 @@ const ES: PaymentMethodMessages = {
   legend: 'Método de pago',
   pay: 'Pagar',
   placeOrder: 'Realizar el pedido',
+  placeOrderCash: 'Generar ficha de pago',
+  chooseDelivery: 'Elige la entrega para continuar',
   payRedirect: 'Continuar al pago',
   continue: 'Continuar',
   retryAddress: 'Guardar dirección y continuar',
@@ -65,6 +71,8 @@ const EN: PaymentMethodMessages = {
   legend: 'Payment method',
   pay: 'Pay',
   placeOrder: 'Place order',
+  placeOrderCash: 'Get payment slip',
+  chooseDelivery: 'Choose delivery to continue',
   payRedirect: 'Continue to payment',
   continue: 'Continue',
   retryAddress: 'Save address and continue',

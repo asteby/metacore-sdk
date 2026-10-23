@@ -7,7 +7,14 @@ import { createRef } from 'react'
 import type { PaymentClient, PaymentMethod } from '@asteby/storefront'
 import { PaymentMethodSection, buildPayChoices, formFields, paymentMethodMessages, type PaymentFormAdapter, type PaymentMethodSectionProps } from './index.js'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  try {
+    window.sessionStorage.clear()
+  } catch {
+    /* no storage */
+  }
+})
 
 const client: PaymentClient = { kind: 'fake', sdk_url: 'https://sdk.example.com/js', public_key: 'pk' }
 const method: PaymentMethod = {
@@ -104,7 +111,7 @@ describe('PaymentMethodSection', () => {
     expect((screen.getByRole('radio', { name: 'Tienda 1' }) as HTMLInputElement).checked).toBe(true)
     const submit = vi.fn()
     container.querySelector('form')!.addEventListener('submit', submit)
-    fireEvent.click(screen.getByRole('button', { name: /Realizar el pedido/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Generar ficha de pago/ }))
     expect(submit).toHaveBeenCalled()
     expect(formFields(container.querySelector('form'))).toMatchObject({ payment_choice: 'prov|cash', cash_point: 'a', email: 'a@b.co' })
   })
@@ -114,7 +121,7 @@ describe('PaymentMethodSection', () => {
     setup({ syncDelivery, choices, defaultChoice: 'prov|cash' })
     await waitFor(() => expect(syncDelivery).toHaveBeenCalledWith('rate:1'))
     expect(syncDelivery).toHaveBeenCalledTimes(1)
-    await waitFor(() => expect(screen.getByRole('button', { name: /Realizar el pedido/ }).textContent).toContain('2,185.00'))
+    await waitFor(() => expect(screen.getByRole('button', { name: /Generar ficha de pago/ }).textContent).toContain('2,185.00'))
     // Changing the row with the same delivery does not save it again.
     fireEvent.click(screen.getByRole('radio', { name: 'Mi cuenta' }))
     expect(syncDelivery).toHaveBeenCalledTimes(1)
@@ -124,9 +131,9 @@ describe('PaymentMethodSection', () => {
     const syncDelivery = vi.fn(() => new Promise<boolean>((r) => (resolve = r)))
     setup({ syncDelivery, defaultChoice: 'prov|cash' })
     await waitFor(() => expect(syncDelivery).toHaveBeenCalled())
-    expect(screen.getByRole('button').textContent).toBe('Realizar el pedido')
+    expect(screen.getByRole('button').textContent).toBe('Generar ficha de pago')
     resolve(true)
-    await waitFor(() => expect(screen.getByRole('button').textContent).toMatch(/Realizar el pedido .*2,185/))
+    await waitFor(() => expect(screen.getByRole('button').textContent).toMatch(/Generar ficha de pago .*2,185/))
   })
   it("a re-quote is a status, not a failure: the card stays and the sync runs again with the new rate", async () => {
     const syncDelivery = vi.fn(async (d: string) => (d === 'rate:1' ? ('requote' as const) : true))
@@ -211,7 +218,80 @@ describe('PaymentMethodSection', () => {
     expect(screen.getAllByTestId('payment-method')).toHaveLength(3)
     expect(screen.getByTestId('place-order').className).toBe('btn')
     fireEvent.click(screen.getByRole('radio', { name: /Cash/ }))
-    expect(screen.getByTestId('place-order').textContent).toBe('Place order TOTAL')
+    expect(screen.getByTestId('place-order').textContent).toBe('Get payment slip TOTAL')
+  })
+  it('opens the card form right under the card row, not after every row', async () => {
+    const { container } = setup({ syncDelivery: async () => true })
+    await waitFor(() => expect(container.querySelector('[data-sf-pay-card]')).toBeTruthy())
+    const cardRow = container.querySelector('input[value="prov|card"]')!.closest('[data-sf-pay-choice]')!
+    expect(cardRow.querySelector('[data-sf-pay-card]')).toBeTruthy()
+    const rows = [...container.querySelectorAll('[data-sf-pay-choice]')]
+    expect(rows.indexOf(cardRow)).toBe(0)
+    // Nothing of the card form after the last row.
+    expect(rows.at(-1)!.nextElementSibling?.hasAttribute('data-sf-pay-card')).toBeFalsy()
+  })
+  it('hands the e-mail of the page form to the card form (the provider does not ask for it again)', async () => {
+    const emails: Array<string | undefined> = []
+    const adapter: PaymentFormAdapter = {
+      kind: 'fake',
+      async load() {},
+      async mount(o) {
+        emails.push(o.email)
+        queueMicrotask(() => o.onReady())
+        return { collect: async () => ({ provider_data: { token: 't' } }), unmount() {} }
+      },
+    }
+    setup({ syncDelivery: async () => true, brickProps: { adapter, storage: null } })
+    await waitFor(() => expect(emails).toEqual(['a@b.co']))
+    cleanup()
+    emails.length = 0
+    setup({ syncDelivery: async () => true, payerEmailField: null, brickProps: { adapter, storage: null } })
+    await waitFor(() => expect(emails).toEqual([undefined]))
+  })
+  it('remembers the chosen row and cash point for the cart: a reload does not ask again', async () => {
+    const first = setup()
+    fireEvent.click(screen.getByRole('radio', { name: /Efectivo/ }))
+    fireEvent.click(screen.getByRole('radio', { name: 'Banco' }))
+    first.unmount()
+    const again = setup()
+    await waitFor(() => expect((screen.getByRole('radio', { name: /Efectivo/ }) as HTMLInputElement).checked).toBe(true))
+    await waitFor(() => expect((screen.getByRole('radio', { name: 'Banco' }) as HTMLInputElement).checked).toBe(true))
+    // The remembered point lives under "more": the list opens by itself.
+    expect((again.container.querySelector('[data-sf-pay-panel="cash"] details') as HTMLDetailsElement).open).toBe(true)
+    again.unmount()
+    // Another cart starts from the server default.
+    setup({ scope: 'cart_2' })
+    expect((screen.getByRole('radio', { name: /Tarjeta/ }) as HTMLInputElement).checked).toBe(true)
+  })
+  it('ignores a remembered row the server no longer publishes, and can be turned off', async () => {
+    window.sessionStorage.setItem('sf:pay-choice:cart_1', JSON.stringify({ choice: 'prov|credits' }))
+    const a = setup()
+    await new Promise((r) => setTimeout(r, 10))
+    expect((screen.getByRole('radio', { name: /Tarjeta/ }) as HTMLInputElement).checked).toBe(true)
+    a.unmount()
+    window.sessionStorage.clear()
+    const b = setup({ rememberChoice: false })
+    fireEvent.click(screen.getByRole('radio', { name: /Efectivo/ }))
+    expect(window.sessionStorage.getItem('sf:pay-choice:cart_1')).toBeNull()
+    b.unmount()
+  })
+  it('cashPointsVisible keeps the first N points in sight and moves the rest under "more"', () => {
+    const many: PaymentMethod = { ...method, options: [
+      { key: 'cash', redirect: false, points: ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, payment_method_id: id, label: `Punto ${id}`, group: 'main' as const })) },
+    ] }
+    const { container } = setup({ cashPointsVisible: 2 }, [many])
+    const panel = container.querySelector('[data-sf-pay-panel="cash"]')!
+    const direct = panel.querySelectorAll(':scope fieldset > [data-sf-pay-points] [data-sf-pay-point]')
+    expect([...direct].map((p) => (p.querySelector('input') as HTMLInputElement).value)).toEqual(['a', 'b'])
+    expect(panel.querySelectorAll('details [data-sf-pay-point]')).toHaveLength(3)
+  })
+  it('without a delivery the button says what is missing and does not pay', () => {
+    const { container } = setup({ deliveryReady: false, defaultChoice: 'prov|cash' })
+    const submit = vi.fn()
+    container.querySelector('form')!.addEventListener('submit', submit)
+    const button = screen.getByRole('button', { name: 'Elige la entrega para continuar' })
+    fireEvent.click(button)
+    expect(submit).not.toHaveBeenCalled()
   })
   it('has no axe violations in card, cash and empty states', async () => {
     const { container } = setup({ syncDelivery: async () => true })

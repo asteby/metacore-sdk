@@ -29,6 +29,8 @@ export type PaymentFormMountOptions = {
   locale?: string
   /** Visual tokens read from CSS variables (see `readPaymentTheme`). */
   theme?: Record<string, string>
+  /** Light or dark page (see `readPaymentScheme`): the adapter picks the provider's matching base theme. */
+  colorScheme?: 'light' | 'dark'
   onReady: () => void
   onError: (error: PaymentFormError) => void
 }

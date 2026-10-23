@@ -524,12 +524,32 @@ describe('Mercado Pago adapter', () => {
     // El título y las banderas del Brick repiten la fila de la tienda y se veían cortados.
     expect(settings.customization.visual.hideFormTitle).toBe(true)
     expect(settings.customization.visual.style.customVariables).toEqual({ baseColor: '#123456' })
+    // Página clara (o sin esquema): el tema base del Brick.
+    expect(settings.customization.visual.style.theme).toBe('default')
     expect(settings.customization.paymentMethods).toEqual({ minInstallments: 1, maxInstallments: 12 })
     await Promise.resolve()
     expect(onReady).toHaveBeenCalled()
     expect(await mounted.collect()).toEqual({ provider_data: { token: 'tok', payment_method_id: 'visa', installments: 1 }, device_session_id: 'dev-xyz' })
     await mounted.unmount()
     await expect(mounted.collect()).rejects.toThrow()
+  })
+
+  it('a dark page mounts the dark base theme of the brick (no white card inside a dark checkout)', async () => {
+    const create = vi.fn(async (_b: string, _id: string, settings: Record<string, any>) => {
+      queueMicrotask(() => settings.callbacks.onReady())
+      return { getFormData: async () => ({}), unmount: vi.fn() }
+    })
+    const ctor = vi.fn(function (this: unknown) {
+      return { bricks: () => ({ create }) }
+    }) as never
+    const adapter = mercadoPagoBricksAdapter({ getSdk: () => ctor })
+    const el = document.createElement('div')
+    el.id = 'brick2'
+    await adapter.mount({ container: el, client: { ...client, kind: 'mercadopago_bricks' }, amount: total, colorScheme: 'dark', theme: {}, onReady: vi.fn(), onError: vi.fn() })
+    const settings = create.mock.calls[0]![2]
+    expect(settings.customization.visual.style).toEqual({ theme: 'dark' })
+    // Sin correo de la tienda, el Brick lo pide él mismo.
+    expect(settings.initialization).toEqual({ amount: 2185 })
   })
 
   it('refuses SDK urls outside the allowed origin before touching the DOM', async () => {

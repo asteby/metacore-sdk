@@ -106,7 +106,50 @@ export type PaymentMethodSectionProps = {
   transport?: PaymentTransport
   /** Extra props for the card form (`adapter`, `adapters`, `messages`, `minHeight`, `storage`, timeouts...). */
   brickProps?: Partial<Omit<PaymentBrickProps, 'client' | 'amount' | 'transport' | 'onResult' | 'onEvent' | 'onFallback'>>
+  /**
+   * Remember the chosen row (and cash point) for this `scope` in `sessionStorage`, so a reload, the "back" button from
+   * the provider or the address step does not ask to choose again. Used only while that row is still published.
+   * Default true (needs `scope`); `false` turns it off. Nothing personal is stored: only the row value.
+   */
+  rememberChoice?: boolean
+  /**
+   * Cash points shown before "more payment points". Default: every point the provider marks `main`. With a number, the
+   * first N `main` points show and the rest join the "more" list (a remembered point inside it opens the list).
+   */
+  cashPointsVisible?: number
+  /**
+   * Name of the page form field with the buyer's e-mail. Its value is handed to the card form, so the provider does not
+   * ask for the e-mail again. Default `email`; `null` to never pass it. `brickProps.email` wins.
+   */
+  payerEmailField?: string | null
 }
+
+const CHOICE_STORAGE_PREFIX = 'sf:pay-choice:'
+
+type StoredChoice = { choice: string; point?: string | null }
+
+function readStoredChoice(scope: string | undefined): StoredChoice | null {
+  if (!scope || typeof window === 'undefined') return null
+  try {
+    const raw = window.sessionStorage.getItem(CHOICE_STORAGE_PREFIX + scope)
+    if (!raw) return null
+    const v = JSON.parse(raw) as StoredChoice
+    return typeof v?.choice === 'string' ? v : null
+  } catch {
+    return null
+  }
+}
+
+function writeStoredChoice(scope: string | undefined, value: StoredChoice): void {
+  if (!scope || typeof window === 'undefined') return
+  try {
+    window.sessionStorage.setItem(CHOICE_STORAGE_PREFIX + scope, JSON.stringify(value))
+  } catch {
+    /* private mode or storage full: the choice simply is not remembered */
+  }
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const useHydrated = () =>
   useSyncExternalStore(
@@ -158,11 +201,39 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
     testIds = {},
     hideSubmit,
     brickProps,
+    rememberChoice = true,
+    cashPointsVisible,
+    payerEmailField = 'email',
   } = props
   const locale = useResolvedLocale(props.locale)
   const m = useMemo(() => paymentMethodMessages(locale, props.messages), [locale, props.messages])
   const hydrated = useHydrated()
-  const [choiceValue, setChoiceValue] = useState(props.defaultChoice ?? choices.defaultValue)
+  const [choiceValue, setChoiceValueState] = useState(props.defaultChoice ?? choices.defaultValue)
+  const remember = rememberChoice && Boolean(scope)
+  const rootRef = useRef<HTMLFieldSetElement>(null)
+  const [storedPoint, setStoredPoint] = useState<string | null>(null)
+  const setChoiceValue = (v: string) => {
+    setChoiceValueState(v)
+    if (remember) writeStoredChoice(scope, { choice: v, point: readCheckedPoint(rootRef.current) })
+  }
+  // After hydration: the row (and cash point) chosen earlier in this cart, if the server still publishes it. The server
+  // HTML keeps the default row, so the page works the same without JavaScript.
+  useEffect(() => {
+    if (!remember) return
+    const stored = readStoredChoice(scope)
+    if (!stored) return
+    if (choices.choices.some((c) => c.value === stored.choice)) setChoiceValueState(stored.choice)
+    if (stored.point) setStoredPoint(stored.point)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remember, scope])
+  useEffect(() => {
+    if (!storedPoint || !rootRef.current) return
+    const input = Array.from(rootRef.current.querySelectorAll<HTMLInputElement>(`input[name="${CASH_POINT_FIELD}"]`)).find((i) => i.value === storedPoint)
+    if (input) input.checked = true
+  }, [storedPoint, choiceValue])
+  const onPointChange = (point: string) => {
+    if (remember && choiceValue) writeStoredChoice(scope, { choice: choiceValue, point })
+  }
   const selected = choices.choices.find((c) => c.value === choiceValue) ?? null
   const noPayment = choices.choices.length === 0
   const tid = (k: keyof PaymentMethodTestIds) => (testIds[k] ? { 'data-testid': testIds[k] } : {})
@@ -225,12 +296,28 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
     onEvent?.(e)
   }
 
+  // The buyer's e-mail from the page form: the provider form then skips its own e-mail block.
+  const payerEmail = (() => {
+    if (!payerEmailField || !brickReady) return undefined
+    const el = formRef.current?.querySelector<HTMLInputElement>(`[name="${CSS.escape ? CSS.escape(payerEmailField) : payerEmailField}"]`)
+    const v = el ? String(el.value ?? '').trim() : ''
+    return EMAIL_RE.test(v) ? v : undefined
+  })()
+
   // While the delivery is being saved the amount is stale: the button reads without it.
   const total = wantSync && (!settled || requote) ? null : renderAmount ? renderAmount(amount) : formatMoney(amount, locale)
   const label: ReactNode = retryAddress ? (
     m.retryAddress
   ) : addressFirst ? (
     m.continue
+  ) : !deliveryReady && selected ? (
+    // Says what is missing instead of a button that silently does nothing.
+    m.chooseDelivery
+  ) : selected?.mode === 'cash' ? (
+    <>
+      {m.placeOrderCash}
+      {total ? <> {total}</> : null}
+    </>
   ) : selected?.mode === 'plain' || !selected ? (
     <>
       {m.pay}
@@ -246,6 +333,12 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
   )
 
   function onPayClick(event: MouseEvent<HTMLButtonElement>) {
+    // No delivery yet: point at it (the browser or the shop's validation explains the required field) instead of paying.
+    if (!addressFirst && !retryAddress && !deliveryReady && selected) {
+      event.preventDefault()
+      formRef.current?.reportValidity()
+      return
+    }
     // Redirect, cash, plain method, or a card without a usable form: the page form's normal submit.
     if (!cardActive || syncFailed) return
     event.preventDefault()
@@ -272,7 +365,7 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
   ))
 
   return (
-    <fieldset id="pago" className={cx.root} data-sf-pay-method>
+    <fieldset id="pago" ref={rootRef} className={cx.root} data-sf-pay-method>
       <legend className={cx.legend}>{m.legend}</legend>
       {choices.choices.map((choice) => {
         const { label: rowLabel, hint } = rowText(choice, m, methodLabel)
@@ -313,7 +406,46 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
               ) : null}
             </label>
             {/* Always in the HTML and visible only with its radio checked (payments.css :has): without JavaScript the cash point is also chosen. */}
-            <ChoicePanel choice={choice} m={m} invalid={invalid} cx={cx} tid={tid} hidden={hydrated && !checked} marks={brandMarks} />
+            <ChoicePanel choice={choice} m={m} invalid={invalid} cx={cx} tid={tid} hidden={hydrated && !checked} marks={brandMarks} visible={cashPointsVisible} openMore={storedPoint} onPointChange={onPointChange} />
+            {/* The card form opens right under its own row (not after every row), so it reads as part of that choice. */}
+            {choice.mode === 'card' && checked && cardChosen && hydrated && choices.cardClient ? (
+              <div className={cx.brickWrap} data-sf-pay-card {...tid('card')}>
+                {fallback
+                  ? null
+                  : !deliveryReady
+                    ? cardNotice('pickDelivery', m.pickDeliveryFirst)
+                    : syncFailed
+                      ? cardNotice('syncFailed', m.syncFailed)
+                      : requote
+                        ? cardNotice('requote', m.quoteChanged)
+                        : !synced
+                        ? cardNotice('syncing', m.updatingTotal)
+                        : null}
+                {brickReady || fallback ? (
+                  <PaymentBrick
+                    {...brickProps}
+                    ref={brick}
+                    client={choices.cardClient}
+                    amount={amount}
+                    transport={transport}
+                    {...(nonce ? { nonce } : {})}
+                    locale={locale}
+                    {...(scope ? { scope } : {})}
+                    {...(payerEmail && !brickProps?.email ? { email: payerEmail } : {})}
+                    enabled={brickReady}
+                    {...(cx.brick ? { className: cx.brick } : {})}
+                    onEvent={handleEvent}
+                    onFallback={() => setFallback(true)}
+                    onResult={(o) => {
+                      // Approved, under review or voucher: the order is already closed and the receipt is in the cookie.
+                      if (o.kind === 'approved' || o.kind === 'in_review' || o.kind === 'voucher') onDone(o)
+                    }}
+                  />
+                ) : null}
+                <p className={cx.note}>{m.secureCard}</p>
+                {expired && rebuildHref ? Link({ href: rebuildHref, ...(cx.rebuild ? { className: cx.rebuild } : {}), children: m.rebuildCart, ...(testIds.rebuild ? { testId: testIds.rebuild } : {}) }) : null}
+              </div>
+            ) : null}
           </div>
         )
       })}
@@ -324,44 +456,6 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
             <strong>{m.noPaymentTitle}</strong>
           </p>
           <p>{m.noPayment}</p>
-        </div>
-      ) : null}
-
-      {cardChosen && hydrated && choices.cardClient ? (
-        <div className={cx.brickWrap} data-sf-pay-card {...tid('card')}>
-          {fallback
-            ? null
-            : !deliveryReady
-              ? cardNotice('pickDelivery', m.pickDeliveryFirst)
-              : syncFailed
-                ? cardNotice('syncFailed', m.syncFailed)
-                : requote
-                  ? cardNotice('requote', m.quoteChanged)
-                  : !synced
-                  ? cardNotice('syncing', m.updatingTotal)
-                  : null}
-          {brickReady || fallback ? (
-            <PaymentBrick
-              {...brickProps}
-              ref={brick}
-              client={choices.cardClient}
-              amount={amount}
-              transport={transport}
-              {...(nonce ? { nonce } : {})}
-              locale={locale}
-              {...(scope ? { scope } : {})}
-              enabled={brickReady}
-              {...(cx.brick ? { className: cx.brick } : {})}
-              onEvent={handleEvent}
-              onFallback={() => setFallback(true)}
-              onResult={(o) => {
-                // Approved, under review or voucher: the order is already closed and the receipt is in the cookie.
-                if (o.kind === 'approved' || o.kind === 'in_review' || o.kind === 'voucher') onDone(o)
-              }}
-            />
-          ) : null}
-          <p className={cx.note}>{m.secureCard}</p>
-          {expired && rebuildHref ? Link({ href: rebuildHref, ...(cx.rebuild ? { className: cx.rebuild } : {}), children: m.rebuildCart, ...(testIds.rebuild ? { testId: testIds.rebuild } : {}) }) : null}
         </div>
       ) : null}
 
@@ -398,6 +492,9 @@ function ChoicePanel({
   tid,
   hidden,
   marks = true,
+  visible,
+  openMore,
+  onPointChange,
 }: {
   choice: PayChoice
   m: PaymentMethodMessages
@@ -406,6 +503,9 @@ function ChoicePanel({
   tid: (k: keyof PaymentMethodTestIds) => { 'data-testid'?: string }
   hidden: boolean
   marks?: boolean
+  visible?: number | undefined
+  openMore?: string | null
+  onPointChange?: (point: string) => void
 }) {
   if (choice.mode === 'redirect') {
     return (
@@ -415,11 +515,22 @@ function ChoicePanel({
     )
   }
   if (choice.mode !== 'cash') return null
-  const main = choice.points.filter((p) => p.group === 'main')
-  const more = choice.points.filter((p) => p.group !== 'main')
+  const allMain = choice.points.filter((p) => p.group === 'main')
+  const cut = typeof visible === 'number' && visible > 0 ? visible : allMain.length
+  const main = allMain.slice(0, cut)
+  const more = [...allMain.slice(cut), ...choice.points.filter((p) => p.group !== 'main')]
+  const moreOpen = Boolean(openMore && more.some((p) => p.id === openMore))
   const row = (p: PayChoice['points'][number], i: number, first: boolean) => (
     <label key={p.id} className={cx.cashPoint} data-sf-pay-point>
-      <input type="radio" name={CASH_POINT_FIELD} value={p.id} defaultChecked={first && i === 0} className={cx.cashPointInput} aria-invalid={invalid?.has('cash_point') || undefined} />
+      <input
+        type="radio"
+        name={CASH_POINT_FIELD}
+        value={p.id}
+        defaultChecked={first && i === 0}
+        className={cx.cashPointInput}
+        aria-invalid={invalid?.has('cash_point') || undefined}
+        {...(onPointChange ? { onChange: () => onPointChange(p.id) } : {})}
+      />
       {marks ? <BrandMark brand={p.payment_point || p.id} logoUrl={p.logo_url ?? null} size={22} /> : null}
       <span>{p.label}</span>
     </label>
@@ -430,7 +541,7 @@ function ChoicePanel({
         <legend>{m.cashPoints}</legend>
         <div data-sf-pay-points>{main.map((p, i) => row(p, i, true))}</div>
         {more.length ? (
-          <details>
+          <details {...(moreOpen ? { open: true } : {})}>
             <summary className={cx.cashMore} style={{ minHeight: 44 }}>
               {m.cashMore}
             </summary>
@@ -457,6 +568,11 @@ function defaultIcon(choice: PayChoice): ReactNode {
   if (choice.option === 'card') return glyph(CARD_GLYPH)
   if (choice.option === 'cash') return glyph(CASH_GLYPH)
   return findBrand(choice.methodKey) ? <BrandMark brand={choice.methodKey} size={24} /> : null
+}
+
+function readCheckedPoint(root: HTMLElement | null): string | null {
+  const el = root?.querySelector<HTMLInputElement>(`input[name="${CASH_POINT_FIELD}"]:checked`)
+  return el?.value ?? null
 }
 
 /** Trailing marks of a row: card networks on the card row, the first cash points on the cash row. */
