@@ -1,5 +1,12 @@
 # @asteby/storefront-react
 
+## 0.13.1
+
+### Patch Changes
+
+- 3a79b32: account: `<AccountAuth form={Form} />` acepta el `Form` real de react-router sin casts (`form` es `'form' | ComponentType<AccountFormProps>`; `AccountFormProps` se exporta desde `@asteby/storefront-react/account`).
+- 64483ce: checkout: la fila «STP (transferencia SPEI)» muestra el logo real de STP (el que la propia empresa publica en stp.mx). SPEI no tiene logo publicado por Banxico ni por STP, así que `spei`, `clabe` y `banktransfer` conservan la insignia genérica de transferencia. Procedencia en `brands/LOGOS.md`.
+
 ## 0.13.0
 
 ### Minor Changes
