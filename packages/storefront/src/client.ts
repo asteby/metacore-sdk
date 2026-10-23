@@ -31,6 +31,7 @@ import type {
   Customer,
   CustomerIdentifier,
   CustomerCapabilities,
+  CustomerUpdateInput,
   CustomerPasswordLoginInput,
   CustomerRegisterInput,
   CustomerRegisterResult,
@@ -52,6 +53,7 @@ import type {
   Page,
   Product,
   ProductConnection,
+  Region,
   ReturnRequest,
   ReturnRequestInput,
   Shop,
@@ -377,6 +379,13 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
       get: (options?: RequestOptions) => get<Shop>('/storefront/shop', undefined, options),
     },
 
+    /**
+     * How the market formats, taxes, addresses and invoices (`fiscal_id` carries the tax-id pattern, the regimes,
+     * the invoice uses and the identity documents the buyer can upload). Cacheable; `null` when the organization
+     * has no region configured.
+     */
+    region: (options?: RequestOptions) => getOrNull<Region>('/storefront/region', undefined, options),
+
     products: {
       list: (params?: ProductListParams, options?: RequestOptions) =>
         get<ProductConnection>('/storefront/products', productListQuery(params), options),
@@ -458,6 +467,14 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
       setNote: (id: string, note: string | null, options?: WriteOptions) =>
         write<Cart>('PUT', cartPath(id, '/note'), { note }, options),
       /**
+       * Asks for an invoice for this cart (`null` or `{ requested: false }` withdraws it). The server validates the
+       * data against the region BEFORE any charge: `422` with `field: 'invoice.<field>'` (e.g. `invoice.tax_regime`)
+       * names what to fix. `409 already_checked_out` when the cart is already an order. Checkout uses it when
+       * `CheckoutInput.invoice` is omitted.
+       */
+      setInvoice: (id: string, invoice: InvoiceRequest | null, options?: WriteOptions) =>
+        write<Cart>('PUT', cartPath(id, '/invoice'), invoice ?? { requested: false }, options),
+      /**
        * Cross-sell suggestions: only sellable variants, with `unlocks` when adding one reaches the next
        * discount tier. `first` 1-8 (default 4). `private, no-store`; ask on demand, not on every render.
        */
@@ -532,6 +549,9 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
       resetPassword: (input: CustomerResetPasswordInput, options?: WriteOptions) =>
         write<void>('POST', '/storefront/customer/password/reset', input, options),
       get: (options?: RequestOptions) => get<Customer>('/storefront/customer', undefined, options),
+      /** Updates the profile and the saved fiscal data; `fiscal: null` deletes the latter. `422` with `field: 'fiscal.<field>'`. */
+      update: (input: CustomerUpdateInput, options?: WriteOptions) =>
+        write<Customer>('PATCH', '/storefront/customer', input, options),
       orders: (params?: PaginationParams, options?: RequestOptions) =>
         get<Connection<Order>>('/storefront/customer/orders', params as QueryParams, options),
       /** `null` when the order does not exist or belongs to someone else. */

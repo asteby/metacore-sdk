@@ -345,3 +345,41 @@ describe('domain and market', () => {
     expect(storefrontDomainHeader(' godsnutrition.com ', ' MX ')).toBe('godsnutrition.com#mx')
   })
 })
+
+describe('region and fiscal identity routes', () => {
+  it('region() reads GET /storefront/region and is null on 404', async () => {
+    const { calls, fetch } = recorder((call) => (call.url.includes('missing') ? Response.json({ error: { code: 'not_found', message: 'x' } }, { status: 404 }) : Response.json({ country_code: 'MX', name: 'México' })))
+    const sf = createStorefrontClient({ ...base, fetch })
+    await expect(sf.region()).resolves.toMatchObject({ country_code: 'MX' })
+    expect(calls[0]!.init.method).toBe('GET')
+    expect(calls[0]!.url).toBe('https://ops.example.com/api/gw/storefront/region')
+    const none = createStorefrontClient({ ...base, baseUrl: 'https://ops.example.com/api/gw/missing', fetch })
+    await expect(none.region()).resolves.toBeNull()
+  })
+
+  it('carts.setInvoice PUTs the request, and {requested:false} withdraws it', async () => {
+    const { calls, fetch } = recorder(() => Response.json({ id: 'c1' }))
+    const sf = createStorefrontClient({ ...base, fetch })
+    await sf.carts.setInvoice('c 1', { tax_id: 'PEPJ800101AB3', document: { kind: 'MX:csf', source: 'manual' } })
+    expect(calls[0]!.init.method).toBe('PUT')
+    expect(calls[0]!.url).toMatch(/\/storefront\/carts\/c%201\/invoice$/)
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ tax_id: 'PEPJ800101AB3', document: { kind: 'MX:csf', source: 'manual' } })
+    await sf.carts.setInvoice('c1', null)
+    expect(JSON.parse(calls[1]!.init.body as string)).toEqual({ requested: false })
+  })
+
+  it('a 422 names the exact field', async () => {
+    const { fetch } = recorder(() => Response.json({ error: { code: 'invalid_state', message: 'El régimen 626 no admite el uso D10', field: 'invoice.use' } }, { status: 422 }))
+    const sf = createStorefrontClient({ ...base, fetch })
+    await expect(sf.carts.setInvoice('c1', { tax_regime: '626', use: 'D10' })).rejects.toMatchObject({ status: 422, field: 'invoice.use' })
+  })
+
+  it('customer.update PATCHes /customer; fiscal: null is sent as null', async () => {
+    const { calls, fetch } = recorder(() => Response.json({ id: 'c1' }))
+    const sf = createStorefrontClient({ ...base, fetch })
+    await sf.customer.update({ fiscal: null })
+    expect(calls[0]!.init.method).toBe('PATCH')
+    expect(calls[0]!.url).toMatch(/\/storefront\/customer$/)
+    expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ fiscal: null })
+  })
+})

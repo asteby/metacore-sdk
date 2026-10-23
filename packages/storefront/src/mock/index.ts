@@ -17,6 +17,10 @@ import type {
   Customer,
   CustomerCapabilities,
   CustomerSession,
+  FiscalIdentity,
+  InvoiceRequest,
+  InvoiceStage,
+  InvoiceSummary,
   Facet,
   Location,
   Menu,
@@ -28,6 +32,7 @@ import type {
   Product,
   ProductVariant,
   PromotionAnnouncement,
+  Region,
   ShippingRate,
   Shop,
   StorefrontErrorCode,
@@ -35,6 +40,7 @@ import type {
 } from '../types.js'
 import { isValidPoint, rankByDistance } from '../geo.js'
 import { resolveAvailability } from '../availability.js'
+import { MOCK_REGION_MX, maskTaxId, validateInvoiceRequest } from './region.js'
 import {
   MOCK_CURRENCY,
   MOCK_IMAGE_URL,
@@ -52,6 +58,7 @@ import {
 } from './seed.js'
 
 export { MOCK_CURRENCY, MOCK_CUSTOMER_EMAIL, MOCK_IMAGE_URL, MOCK_POSTAL_CENTROIDS } from './seed.js'
+export { MOCK_CSF_RULES, MOCK_FISCAL_ID_MX, MOCK_IDENTITY_DOCUMENT_MX_CSF, MOCK_REGION_MX } from './region.js'
 export type { MockImageUrl } from './seed.js'
 
 export type MockStorefrontOptions = {
@@ -103,6 +110,11 @@ export type MockStorefrontOptions = {
   shippingRates?: ShippingRate[]
   /** Methods served by `payment-methods` (default one builtin `mock`). */
   paymentMethods?: PaymentMethod[]
+  /**
+   * What `GET /storefront/region` serves (default `MOCK_REGION_MX`, with its `MX:csf` identity document). `null`: the
+   * organization has no region, the route answers `404` and invoice requests are not validated against a region.
+   */
+  region?: Region | null
 }
 
 type CartRecord = {
@@ -113,6 +125,9 @@ type CartRecord = {
   shipping_address: Address | null
   delivery: Cart['delivery']
   note: string | null
+  /** Invoice asked for (`PUT /carts/:id/invoice`). */
+  invoice: InvoiceRequest | null
+  checkedOut: boolean
   updated_at: string
 }
 
@@ -143,6 +158,8 @@ export type MockState = {
   payments: Map<string, { attempts: number; last: PaymentAttemptResult | null }>
   /** `contact|sku` of accepted "notify me" subscriptions. */
   restock: Set<string>
+  /** Invoice requested per order id. */
+  invoices: Map<string, { stage: InvoiceStage; request: InvoiceRequest }>
   seq: number
 }
 
@@ -213,8 +230,18 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     password: true,
     email_verification: true,
     otp_channels: ['email'],
+    invoicing: {
+      available: true,
+      countries: ['MX'],
+      checkout: 'optional',
+      post_purchase: true,
+      window_days: 30,
+      identity_documents: ['MX:csf'],
+      online_verify: false,
+    },
     ...options.customerCapabilities,
   }
+  const region = options.region === undefined ? MOCK_REGION_MX : options.region
   const maxLoginAttempts = options.maxLoginAttempts ?? 5
   const MIN_PASSWORD = 10
   const MAX_PASSWORD = 128
@@ -259,6 +286,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       checkouts: new Map(),
       payments: new Map(),
       restock: new Set(),
+      invoices: new Map(),
       seq: 0,
     }
   }
@@ -561,8 +589,44 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
         tax_included: true,
       },
       note: cart.note,
+      invoice: cart.invoice ? cartInvoiceOf(cart.invoice) : null,
       updated_at: cart.updated_at,
     }
+  }
+
+  function cartInvoiceOf(inv: InvoiceRequest): NonNullable<Cart['invoice']> {
+    const taxId = typeof inv.tax_id === 'string' ? inv.tax_id : typeof inv.rfc === 'string' ? inv.rfc : ''
+    const name = typeof inv.legal_name === 'string' ? inv.legal_name : typeof inv.razon_social === 'string' ? inv.razon_social : null
+    return {
+      requested: true,
+      tax_id_masked: taxId ? maskTaxId(taxId) : null,
+      legal_name: name,
+      country_code: inv.country_code ?? region?.country_code ?? null,
+      document_kind: inv.document?.kind ?? null,
+    }
+  }
+
+  /** `null` for "no invoice" (absent, `requested: false`), the request when it is valid, a 422 `invoice.<field>` otherwise. */
+  function parseInvoice(raw: unknown, prefix = 'invoice'): InvoiceRequest | null {
+    if (raw === null || raw === undefined) return null
+    if (typeof raw !== 'object' || Array.isArray(raw)) throw new HttpError(400, 'validation', 'invoice must be an object', prefix)
+    const inv = raw as InvoiceRequest
+    if (inv.requested === false) return null
+    const problem = validateInvoiceRequest(region, inv, prefix)
+    if (problem) throw new HttpError(422, 'invalid_state', problem.message, problem.field)
+    return inv
+  }
+
+  const orderInvoice = (order: MockState['orders'][number]): InvoiceSummary => {
+    const entry = state.invoices.get(order.id)
+    const paid = order.status !== 'pending_payment'
+    if (entry) {
+      const stage: InvoiceStage = entry.stage === 'awaiting_payment' && paid ? 'queued' : entry.stage
+      return { stage, requested: true, status: stage === 'issued' ? 'issued' : 'requested', action: stage === 'awaiting_payment' ? 'wait' : 'none', can_request: false, url: null, xml_url: null }
+    }
+    return paid
+      ? { stage: 'not_requested', requested: false, action: 'request', can_request: true, blocked_reason: null }
+      : { stage: 'not_requested', requested: false, action: 'none', can_request: false, blocked_reason: 'awaiting_payment' }
   }
 
   // -------------------------------------------------------------------------
@@ -666,6 +730,10 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
 
   // Catalog
   route('GET', '/shop', 'catalog:read', () => ({ body: state.shop, cache: 'public' }))
+  route('GET', '/region', 'catalog:read', () => {
+    if (!region) throw new HttpError(404, 'not_found', 'No region configured')
+    return { body: region, cache: 'public' }
+  })
   route('GET', '/products', 'catalog:read', ({ search }) => ({ body: listProducts(search), cache: 'public' }))
   route('GET', '/products/:handle', 'catalog:read', ({ params }) => ({
     body: requireNode(state.products.find((p) => p.handle === params[0]), `Product ${params[0]}`),
@@ -728,6 +796,8 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       shipping_address: null,
       delivery: { method: null, rate_id: null, branch_id: null },
       note: null,
+      invoice: null,
+      checkedOut: false,
       updated_at: now(),
     }
     if (body.lines !== undefined) addLines(cart, validateLines(body.lines))
@@ -826,6 +896,13 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     cart.updated_at = now()
     return { body: renderCart(cart), cache: 'private' }
   })
+  route('PUT', '/carts/:id/invoice', 'cart:write', ({ params, body }) => {
+    const cart = getCartRecord(params[0]!)
+    if (cart.checkedOut) throw new HttpError(409, 'already_checked_out', 'The cart is already an order')
+    cart.invoice = parseInvoice(body)
+    cart.updated_at = now()
+    return { body: renderCart(cart), cache: 'private' }
+  })
   // Order note, cross-sell and promotions (contract 1.2)
   route('PUT', '/carts/:id/note', 'cart:write', ({ params, body }) => {
     const cart = getCartRecord(params[0]!)
@@ -878,6 +955,8 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     }
     if (typeof body.payment_method !== 'string' || !body.payment_method) throw new HttpError(400, 'validation', 'payment_method is required', 'payment_method')
     if (typeof body.return_url !== 'string' || !body.return_url) throw new HttpError(400, 'validation', 'return_url is required', 'return_url')
+    // The invoice is checked against the region BEFORE anything is reserved or charged.
+    const invoice = body.invoice !== undefined ? parseInvoice(body.invoice) : record.invoice
     // Reserve stock.
     checkStock(record.lines.map((l, i) => ({ variant: findVariant(l.variant_id)!.variant, quantity: l.quantity, lineId: l.id, field: `lines[${i}].quantity` })))
     for (const l of record.lines) {
@@ -924,6 +1003,8 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       },
     }
     state.checkouts.set(checkoutId, result)
+    record.checkedOut = true
+    if (invoice) state.invoices.set(orderId, { stage: 'awaiting_payment', request: invoice })
     if (key) state.idempotency.set(`${params[0]}:${key}`, { status: 201, body: result })
     return { status: 201, body: result, cache: 'private' }
   })
@@ -971,7 +1052,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     const id = params[0]!
     const prev = state.idempotency.get(`pay:${id}:${key}`)
     if (prev) return { status: prev.status, body: prev.body, cache: 'private' }
-    const found = state.checkouts.get(id) as { checkout: { status: string; total: { amount: string; currency_code: string }; stock_hold_expires_at: string | null } } | undefined
+    const found = state.checkouts.get(id) as { checkout: { status: string; external_order_id: string; total: { amount: string; currency_code: string }; stock_hold_expires_at: string | null } } | undefined
     if (!found) throw new HttpError(404, 'not_found', 'Checkout not found')
     const method = body.method
     if (method !== 'card' && method !== 'cash' && method !== 'bank_transfer') throw new HttpError(400, 'validation', 'method must be card, cash or bank_transfer', 'method')
@@ -1019,6 +1100,8 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     } else {
       payment = { provider: 'mock', status: 'paid' }
       found.checkout.status = 'paid'
+      const order = state.orders.find((o) => o.id === found.checkout.external_order_id)
+      if (order) order.status = 'paid'
     }
     payment.outcome =
       payment.status === 'paid' ? 'approved' : payment.status === 'failed' ? 'rejected' : payment.action?.type === 'challenge' ? 'challenge' : 'pending'
@@ -1143,8 +1226,39 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     state.loginFailures.delete(email)
     return { status: 204 }
   })
-  route('GET', '/customer', 'customer:read', ({ headers }) => ({ body: requireCustomer(headers), cache: 'private' }))
-  const stripOrder = ({ customer_id: _c, ...o }: MockState['orders'][number]): Order => o
+  /** The customer as the API serves it: the fiscal evidence keeps no file hash. */
+  const publicCustomer = (c: Customer): Customer => {
+    if (!c.fiscal?.document) return c
+    const { sha256: _sha, ...document } = c.fiscal.document
+    return { ...c, fiscal: { ...c.fiscal, document } }
+  }
+  route('GET', '/customer', 'customer:read', ({ headers }) => ({ body: publicCustomer(requireCustomer(headers)), cache: 'private' }))
+  route('PATCH', '/customer', 'customer:write', ({ headers, body }) => {
+    const c = requireCustomer(headers)
+    const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null)
+    if ('first_name' in body) c.first_name = text(body.first_name)
+    if ('last_name' in body) c.last_name = text(body.last_name)
+    if ('phone' in body) c.phone = text(body.phone)
+    if ('fiscal' in body) {
+      if (body.fiscal === null) c.fiscal = null
+      else {
+        const fiscal = parseInvoice({ ...(body.fiscal as object), requested: true }, 'fiscal') as InvoiceRequest
+        const fid: FiscalIdentity = {
+          country_code: String(fiscal.country_code ?? region?.country_code ?? ''),
+          tax_id: String(fiscal.tax_id ?? fiscal.rfc).toUpperCase(),
+          legal_name: String(fiscal.legal_name ?? fiscal.razon_social),
+          tax_regime: String(fiscal.tax_regime ?? fiscal.regimen),
+          postal_code: String(fiscal.postal_code ?? fiscal.cp),
+          invoice_use: String(fiscal.use ?? fiscal.uso_cfdi ?? '') || null,
+          document: fiscal.document ?? null,
+          verification: { status: 'reviewed', checked_at: now() },
+        }
+        c.fiscal = fid
+      }
+    }
+    return { body: publicCustomer(c), cache: 'private' }
+  })
+  const stripOrder = ({ customer_id: _c, ...o }: MockState['orders'][number]): Order => ({ ...o, invoice: orderInvoice(o as MockState['orders'][number]) })
   route('GET', '/customer/orders', 'orders:read', ({ headers, search }) => {
     const c = requireCustomer(headers)
     const orders = state.orders.filter((o) => o.customer_id === c.id).sort((a, b) => b.created_at.localeCompare(a.created_at)).map(stripOrder)
@@ -1160,9 +1274,16 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     if (!Array.isArray(body.lines) || body.lines.length === 0) throw new HttpError(400, 'validation', 'lines are required', 'lines')
     return { status: 201, body: { id: nextId('ret'), order_id: order.id, status: 'requested' }, cache: 'private' }
   })
-  route('POST', '/customer/orders/:id/invoice', 'customer:write', ({ headers, params }) => {
-    findOrder(headers, params[0]!)
-    return { status: 202, body: { status: 'requested', url: null }, cache: 'private' }
+  route('POST', '/customer/orders/:id/invoice', 'customer:write', ({ headers, params, body }) => {
+    const order = findOrder(headers, params[0]!)
+    const existing = state.invoices.get(order.id)
+    if (existing && existing.stage !== 'awaiting_payment') {
+      return { status: existing.stage === 'issued' ? 200 : 202, body: { status: existing.stage === 'issued' ? 'issued' : 'requested', url: null, stage: existing.stage, invoice: orderInvoice(order) }, cache: 'private' }
+    }
+    const request = parseInvoice({ ...body, requested: true }, 'invoice') as InvoiceRequest
+    if (order.status === 'pending_payment') throw new HttpError(409, 'awaiting_payment', 'The order is not paid yet')
+    state.invoices.set(order.id, { stage: 'queued', request })
+    return { status: 202, body: { status: 'requested', url: null, stage: 'queued', invoice: orderInvoice(order) }, cache: 'private' }
   })
   route('GET', '/customer/addresses', 'customer:read', ({ headers }) => {
     const c = requireCustomer(headers)

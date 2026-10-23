@@ -8,7 +8,9 @@ and CommonJS builds with types.
 
 Includes `@asteby/storefront/mock`: an in-memory implementation of the whole
 contract (catalog with facets, carts, discounts, delivery, checkout, OTP
-login, content) to build a store without OPS.
+login, content, region and invoices) to build a store without OPS, and
+`@asteby/storefront/fiscal-document`: reads a buyer's fiscal document (PDF)
+in the browser or Node with rules published by the region.
 
 React bindings (cart, prices, images, SEO, sections, theme) live in
 [`@asteby/storefront-react`](../storefront-react).
@@ -301,6 +303,103 @@ Pure helpers, no DOM: `visitorCountry(headers)` (CDN country headers),
 (suggests, never redirects; respects crawlers and a saved choice; country wins
 over language) and `hreflangLinks` for per-market SEO.
 
+## Fiscal identity and invoices (Storefront API 1.6)
+
+The buyer's tax data travels in four pieces, all country-agnostic. What changes per country is DATA the region
+publishes; the SDK knows no tax authority.
+
+```ts
+const region = await sf.region()              // GET /storefront/region (null on 404)
+const fid = region?.fiscal_id                 // { kind, label, pattern, generic_ids, regimes[], invoice_uses[], documents[] }
+
+// Ask for an invoice in the checkout. 422 names the exact field: `invoice.tax_id`, `invoice.tax_regime`, `invoice.use`...
+await sf.carts.setInvoice(cart.id, { tax_id, legal_name, tax_regime, use, postal_code, document })
+await sf.carts.setInvoice(cart.id, null)      // withdraw (sends { requested: false })
+// checkout uses `carts.invoice` when `CheckoutInput.invoice` is omitted; both are validated BEFORE any charge.
+
+await customer.customer.update({ fiscal: { ...data } })   // save to the account (PATCH /customer)
+await customer.customer.update({ fiscal: null })          // delete it (ARCO)
+await customer.customer.requestInvoice(order.id, data)    // later; order.invoice.stage / can_request / action drive the UI
+```
+
+`customer.capabilities().invoicing` says whether the store invoices (`available`, `countries`, `checkout`,
+`post_purchase`, `identity_documents`). Types: `Region`, `RegionFiscalId`, `IdentityDocumentSpec`, `FiscalIdentity`,
+`FiscalDocumentEvidence`, `InvoiceSummary` (`stage`, `reason_code`, `action`, `can_request`, `blocked_reason`, `url`,
+`xml_url`), `CartInvoice`, `InvoicingCapabilities`.
+
+### Reading the buyer's document (`@asteby/storefront/fiscal-document`)
+
+The buyer can upload the authority's PDF (in Mexico, the constancia de situación fiscal) to prefill the form. It is
+read **on the buyer's device** (or in memory on your server for the no-JS path); the PDF is never uploaded, stored or
+logged. Only the fields the buyer reviews, plus minimal evidence (document id, SHA-256, extractor, QR match), travel.
+
+```ts
+import { readPdfText, extractIdentityDocument, decodePdfQr, buildDocumentEvidence, isIdentityDocumentError } from '@asteby/storefront/fiscal-document'
+
+const spec = region.fiscal_id.documents.find((d) => d.kind === 'MX:csf')!
+
+try {
+  const { text, sha256 } = await readPdfText(file, { workerSrc: '/assets/pdf.worker.mjs' }) // browser: YOUR worker URL
+  const qr = await decodePdfQr(file, { workerSrc: '/assets/pdf.worker.mjs' })             // optional; null if it cannot
+  const x = extractIdentityDocument(text, spec, { catalogs: { regimes: region.fiscal_id.regimes }, qr })
+  x.fields      // { tax_id, legal_name, postal_code, regimes: ['612', '605'], document_id, issued_on } (what was read)
+  x.missing     // fields to leave empty for the buyer to type
+  x.qr.match    // true | false | null (no QR / nothing to compare)
+  x.stale       // older than spec.freshness_days
+  const document = buildDocumentEvidence(x, { sha256, source: 'pdf_client' }) // goes in InvoiceRequest.document
+} catch (err) {
+  if (isIdentityDocumentError(err)) err.code // 'too_large' | 'not_pdf' | 'unreadable' | 'no_text' | 'password'
+}
+```
+
+- **Sensitive data never comes out.** The spec's `discard_fields` (a national person id, street, activities...) are
+  removed from the output, and the value of a discarded field is scrubbed from every other field. The extraction
+  carries no text and no error message contains document text.
+- **pdf.js is loaded on demand** (`import('pdfjs-dist/legacy/build/pdf.mjs')`) with `isEvalSupported: false`; the
+  main entry point does not include it. Install `pdfjs-dist@>=4.2.67` (older versions are affected by CVE-2024-4367).
+  In browsers there is deliberately **no default worker and no CDN**: copy `pdf.worker.mjs` to your own assets and pass
+  `workerSrc` (or `setPdfjsLoader` to configure it once). Allow it in your CSP with `worker-src 'self'`. Node needs no worker file.
+- **Limits** (`readPdfText` options): `maxBytes` 5 MiB, `maxPages` 6, `timeoutMs` 3000, `%PDF-` signature checked first.
+  Scans have no text layer: `no_text` means "ask for manual entry" (no OCR).
+- **`decodePdfQr`** is best effort: `BarcodeDetector` or the optional `jsqr` package (both on demand) on a rendered page.
+  Without a canvas (Node) it returns `null` unless you pass your own `decode(imageData)`. It never blocks the flow.
+- **Countries with code**: `registerIdentityExtractor('<id or kind>', (text, spec, options) => ({ fields, qr }))`
+  for a spec with `engine: 'plugin:<id>'`. `discard_fields` still applies to it. The server-side validator is the region's.
+
+#### `rules@1`
+
+The generic engine runs the rules of the spec (`spec.rules`, object or JSON text). Patterns are JavaScript regexes,
+case-insensitive, matched on text **without accents** (write them without accents; values keep the original characters).
+
+```jsonc
+{
+  "fold": true,
+  "labels": ["rfc", "curp", "codigo postal", "regimenes", "obligaciones"],   // a labelled value ends at the next label
+  "fields": {
+    "tax_id":      { "first_of": [ { "strategy": "labeled_lines", "label": "rfc", "transform": ["upper", "alnum"], "accept": "^[A-Z]{4}\\d{6}\\w{3}$" },
+                                   { "strategy": "regex", "pattern": "\\b([A-Z]{4}\\d{6}\\w{3})\\b" } ] },
+    "legal_name":  { "strategy": "concat_labeled", "labels": ["nombre \\(s\\)", "primer apellido"], "join": " " },
+    "regimes":     { "strategy": "catalog_phrases", "catalog": "regimes", "scope": { "start": "regimenes\\s*:", "end": "obligaciones\\s*:" } },
+    "issued_on":   { "strategy": "date", "scope": { "start": "lugar y fecha de emision" } }
+  },
+  "qr": { "fields": { "tax_id": { "strategy": "qr_param", "param": "D3", "separator": "_", "accept": "^[A-Z]{4}\\d{6}\\w{3}$" } }, "compare": ["tax_id"] }
+}
+```
+
+| Strategy | Reads |
+|---|---|
+| `regex` | `group` of `pattern` (default group 1, or the whole match) |
+| `labeled_lines` | the value after `label:` up to the next label |
+| `concat_labeled` | several labelled values joined (first names + surnames) |
+| `catalog_phrases` | the codes of a catalog (`catalogs.regimes` = `fiscal_id.regimes`) whose `match_phrases` occur, in order of appearance, longest phrase first, no overlaps |
+| `date` | the first date as `YYYY-MM-DD` (Spanish/English month names, ISO, `dd/mm/yyyy`; `order` for numeric) |
+| `qr_param` | (under `qr`) a part of a query parameter of the QR URL, told apart by `accept` |
+
+Every rule takes `transform` (`upper`, `lower`, `trim`, `digits`, `alnum`), `accept` (the value must match) and `scope`
+(`start`/`end` regexes). `first_of` tries rules in order. Fields in `discard_fields` may be declared (they then serve to
+scrub other fields) but are never returned. An invalid or oversized pattern makes that field `missing`; a spec that cannot
+run at all throws `IdentityRulesError`.
+
 ## API
 
 `createStorefrontClient(options)`:
@@ -320,10 +419,10 @@ over language) and `hreflangLinks` for per-market SEO.
 | `onRequest?(ctx)` | Runs before each request; return a `Response` to short-circuit (SSR cache hit) |
 | `onResponse?(ctx)` | Runs after each response (cache store, logging, metrics) |
 
-Resources: `shop.get`, `products.list/get/recommendations`,
+Resources: `shop.get`, `region`, `products.list/get/recommendations`,
 `collections.list/get`, `stock.get`,
-`carts.create/get/addLines/updateLines/removeLines/setDiscountCodes/setBuyer/setShippingAddress/deliveryOptions/setDelivery/checkout`,
-`customer.requestOtp/createSession/capabilities/register/verifyRegistration/loginWithPassword/setPassword/resetPassword/get/orders/order/requestReturn/requestInvoice/addresses.{list,create,update,delete}`,
+`carts.create/get/addLines/updateLines/removeLines/setDiscountCodes/setBuyer/setShippingAddress/deliveryOptions/setDelivery/setInvoice/checkout`,
+`customer.requestOtp/createSession/capabilities/register/verifyRegistration/loginWithPassword/setPassword/resetPassword/get/update/orders/order/requestReturn/requestInvoice/addresses.{list,create,update,delete}`,
 `content.theme/page/menu/articles/article`. Every method takes a last
 `options` argument: `{ cache, signal, next, headers, timeoutMs, customerToken, clientIp }`
 (plus `idempotencyKey` on writes and `preview` on pages/articles); unknown keys

@@ -306,6 +306,8 @@ export type Cart = {
   note?: string | null
   /** Automatic-discount tiers and free-shipping progress (contract 1.2); `null`/absent without the promotions addon. */
   promotions?: CartPromotions | null
+  /** Invoice the buyer asked for (`carts.setInvoice`); `null`/absent when none. */
+  invoice?: CartInvoice | null
   updated_at: string
 }
 
@@ -373,14 +375,21 @@ export type PaymentMethods = {
 
 export type DeliveryInput = { method: DeliveryMethod; rate_id?: string; branch_id?: string }
 
+/**
+ * Fiscal data the buyer asks an invoice for. The Spanish aliases are still accepted by the API.
+ * `document` is the evidence of where the data came from (never the document itself).
+ */
 export type InvoiceRequest = {
   requested?: boolean
   tax_id?: string
   legal_name?: string
   tax_regime?: string
-  /** CFDI use. */
+  /** Invoice use; the region says which are allowed for `tax_regime`. */
   use?: string
   postal_code?: string
+  /** Defaults to the market's country. */
+  country_code?: string
+  document?: FiscalDocumentEvidence
   /** Spanish aliases the API also accepts. */
   rfc?: string
   razon_social?: string
@@ -457,6 +466,8 @@ export type Customer = {
   first_name: string | null
   last_name: string | null
   default_address_id: string | null
+  /** Saved fiscal data; `null`/absent when none. */
+  fiscal?: FiscalIdentity | null
   created_at: string
 }
 
@@ -474,6 +485,8 @@ export type CustomerCapabilities = {
   email_verification: boolean
   /** Channels `customer.requestOtp` can deliver the code through. */
   otp_channels: ('email' | 'whatsapp')[]
+  /** What invoicing the store offers. Absent on older servers: treat as `available: false`. */
+  invoicing?: InvoicingCapabilities
 }
 
 export type CustomerRegisterInput = {
@@ -514,6 +527,8 @@ export type Order = {
   created_at: string
   total: Money
   lines: OrderLine[]
+  /** Invoice state; absent on older servers. */
+  invoice?: InvoiceSummary
 }
 
 export type ReturnRequestInput = {
@@ -523,7 +538,8 @@ export type ReturnRequestInput = {
 
 export type ReturnRequest = { id: string; order_id: string; status: string }
 
-export type InvoiceResult = { status: string; url?: string | null }
+/** `200` issued, `202` pending. The 422 / 409 / 503 outcomes arrive as a `StorefrontError`. */
+export type InvoiceResult = { status: string; url?: string | null; stage?: InvoiceStage; invoice?: InvoiceSummary }
 
 // ---------------------------------------------------------------------------
 // Content
@@ -850,3 +866,244 @@ export type PromotionAnnouncement = {
 }
 
 export type PromotionsList = { nodes: unknown[]; announcements: PromotionAnnouncement[] }
+
+// ---------------------------------------------------------------------------
+// Region and fiscal identity (contract 1.6)
+// ---------------------------------------------------------------------------
+
+/** Where an invoice is. `needs_data`: the buyer must fix something. `needs_review`: the store must act. */
+export type InvoiceStage =
+  | 'not_requested'
+  | 'requested'
+  | 'awaiting_payment'
+  | 'queued'
+  | 'issuing'
+  | 'issued'
+  | 'cancelled'
+  | 'needs_data'
+  | 'retrying'
+  | 'needs_review'
+  | 'window_closed'
+  | (string & {})
+
+/** What the buyer can do next about an invoice. */
+export type InvoiceAction = 'request' | 'fix_and_retry' | 'wait' | 'contact_store' | 'download' | 'none' | (string & {})
+
+export type InvoiceSummary = {
+  stage: InvoiceStage
+  requested?: boolean
+  /** Legacy single-word status (`requested`, `issued`...). Prefer `stage`. */
+  status?: string
+  /** Machine-readable cause when `stage` is `needs_data` / `needs_review` (e.g. `invoice.tax_regime`). */
+  reason_code?: string | null
+  action?: InvoiceAction
+  /** The buyer may ask for it now. */
+  can_request?: boolean
+  /** Why `can_request` is `false` (e.g. `awaiting_payment`, `window_closed`, `not_invoiceable`). */
+  blocked_reason?: string | null
+  /** Fiscal folio (UUID in Mexico) once issued. */
+  folio?: string | null
+  /** Signed, short-lived download links. */
+  url?: string | null
+  xml_url?: string | null
+}
+
+/** The invoice request of a cart (`Cart.invoice`). The tax id is masked: the full value is never echoed back. */
+export type CartInvoice = {
+  requested: boolean
+  tax_id_masked?: string | null
+  legal_name?: string | null
+  country_code?: string | null
+  /** `IdentityDocumentSpec.kind` the data was read from, when it was. */
+  document_kind?: string | null
+}
+
+export type InvoicingCapabilities = {
+  available: boolean
+  /** Countries (ISO 3166-1 alpha-2) the store can invoice for. */
+  countries: string[]
+  /** `optional`: the checkout offers "I need an invoice". `off`: invoices can only be requested afterwards. */
+  checkout: 'off' | 'optional'
+  /** Invoices can be requested after the purchase (`customer.requestInvoice`). */
+  post_purchase: boolean
+  /** Days after the purchase in which an invoice can still be requested. */
+  window_days?: number
+  /** `IdentityDocumentSpec.kind` values the buyer can upload to prefill the data. */
+  identity_documents: string[]
+  /** The store can check the data against the tax authority online (informative, never blocks). */
+  online_verify: boolean
+}
+
+/** One regime or invoice use of the region's fiscal catalog. */
+export type RegionFiscalEntry = {
+  code: string
+  label: string
+  /** Region-defined (`individual`, `company`...); compare as opaque strings. */
+  person_types: string[]
+  /** Invoice uses only: the regimes that may use it. Absent: any. */
+  allowed_regimes?: string[]
+  /** Phrases that identify the entry in a document (`catalog_phrases` strategy). */
+  match_phrases?: string[]
+}
+
+/**
+ * A document the buyer can upload to prefill their fiscal data, with the rules to read it. Published by the
+ * region; the SDK engine knows nothing about any country.
+ */
+export type IdentityDocumentSpec = {
+  /** `<COUNTRY>:<kind>`. */
+  kind: string
+  label: string
+  label_en?: string
+  help?: string
+  /** Where the buyer gets the document from the authority. */
+  obtain_url?: string
+  /** MIME types the document comes in (the SDK reads PDFs). */
+  accept?: string | string[]
+  max_bytes?: number
+  max_pages?: number
+  /** `rules@1` runs the generic engine on `rules`; `plugin:<id>` runs an extractor from `registerIdentityExtractor`. */
+  engine: 'rules@1' | `plugin:${string}` | (string & {})
+  /** The `rules@1` rules, as an object or as JSON text. */
+  rules?: IdentityRulesV1 | string | null
+  /** Kind the server-side verifier handles. */
+  verify_kind?: string | null
+  /** Days after `issued_on` in which the document counts as fresh. */
+  freshness_days?: number | null
+  /** Fields the extractor never returns (sensitive data the store has no use for). */
+  discard_fields?: string[]
+}
+
+/** Region fiscal identity (`Region.fiscal_id`). */
+export type RegionFiscalId = {
+  /** Name of the tax id (`RFC`, `EIN`...). */
+  kind: string
+  label: string
+  /** Regular expression a valid tax id matches. */
+  pattern?: string
+  /** Generic ids valid without a document (e.g. the national generic public id). */
+  generic_ids: string[]
+  regimes: RegionFiscalEntry[]
+  invoice_uses: RegionFiscalEntry[]
+  /** Documents the buyer can upload; absent on older servers. */
+  documents?: IdentityDocumentSpec[]
+}
+
+export type RegionPaymentMethod = {
+  code: string
+  label: string
+  description?: string
+  kind: string
+  flow: string
+  providers: string[]
+  installments: { months: number[]; min_amount: Money | null } | null
+  min_amount: Money | null
+  max_amount: Money | null
+  expires_hours?: number
+  icon?: string
+  /** Payment form the invoice reports for this method. */
+  fiscal_payment_form?: string
+}
+
+/** `GET /storefront/region`: how the market formats, taxes, addresses and invoices. */
+export type Region = {
+  country_code: string
+  name: string
+  locale: { default: string; available: string[]; current: string }
+  timezone?: string
+  currency: Record<string, unknown>
+  formats?: Record<string, unknown>
+  tax: Record<string, unknown>
+  address?: { postal_code?: { pattern: string; example?: string }; [key: string]: unknown }
+  subdivisions?: Record<string, unknown>[]
+  phone?: Record<string, unknown>
+  fiscal_id?: RegionFiscalId
+  payment_methods?: RegionPaymentMethod[]
+}
+
+/** Where the fiscal data came from. `manual`: typed by the buyer. */
+export type FiscalDocumentSource = 'pdf_client' | 'pdf_server' | 'qr' | 'manual'
+
+/** What is kept about the document the data was read from. Never the document itself. */
+export type FiscalDocumentEvidence = {
+  /** `IdentityDocumentSpec.kind`. */
+  kind: string
+  /** The authority's id of the document. */
+  document_id?: string | null
+  /** ISO date the authority issued it. */
+  issued_on?: string | null
+  /** SHA-256 of the file, lowercase hex. */
+  sha256?: string | null
+  /** Engine that read it, e.g. `rules@1`. */
+  extractor?: string
+  source: FiscalDocumentSource
+  /** The QR agreed with the text: `true`/`false`, `null` when there was no QR to compare. */
+  qr_match?: boolean | null
+}
+
+export type FiscalVerification = {
+  /** `reviewed` (the buyer confirmed it), `verified`, `mismatch`, `unverified`, `stale`. */
+  status: 'reviewed' | 'verified' | 'mismatch' | 'unverified' | 'stale' | (string & {})
+  checked_at?: string | null
+}
+
+/** Fiscal data as stored for a buyer. */
+export type FiscalIdentity = {
+  country_code: string
+  tax_id: string
+  legal_name: string
+  tax_regime: string
+  postal_code: string
+  invoice_use?: string | null
+  document?: FiscalDocumentEvidence | null
+  verification?: FiscalVerification | null
+}
+
+export type FiscalIdentityInput = Omit<FiscalIdentity, 'verification' | 'country_code'> & { country_code?: string }
+
+/** `PATCH /customer`. `fiscal: null` deletes the saved fiscal data (ARCO). */
+export type CustomerUpdateInput = {
+  first_name?: string | null
+  last_name?: string | null
+  phone?: string | null
+  fiscal?: FiscalIdentityInput | null
+}
+
+export type IdentityTransform = 'upper' | 'lower' | 'trim' | 'digits' | 'alnum'
+
+type IdentityRuleBase = {
+  /** Applied in order to the value. */
+  transform?: IdentityTransform[]
+  /** The value must match this regex, else it counts as missing. */
+  accept?: string
+  /** Look only between `start` and `end` (regexes; `end` absent: to the end of the text). */
+  scope?: { start: string; end?: string }
+}
+
+export type IdentityFieldRule = IdentityRuleBase &
+  (
+    | { strategy: 'regex'; pattern: string; flags?: string; group?: number }
+    | { strategy: 'labeled_lines'; label: string }
+    | { strategy: 'concat_labeled'; labels: string[]; join?: string }
+    | { strategy: 'catalog_phrases'; catalog: string; multi?: boolean }
+    | { strategy: 'date'; label?: string; order?: 'dmy' | 'mdy' | 'ymd' }
+  )
+
+/** `qr_param`: the QR holds a URL; `param` is a query parameter whose parts (split on `separator`) are told apart by `accept`. */
+export type IdentityQrRule = { strategy: 'qr_param'; param: string; separator?: string; accept: string; transform?: IdentityTransform[] }
+
+/**
+ * `rules@1`: declarative rules to read an identity document, published by the region. Patterns are JavaScript
+ * regular expressions, case-insensitive unless `flags` says otherwise, matched against the text with accents
+ * removed (`fold`, default true): write them without accents. Values are read from the original text.
+ */
+export type IdentityRulesV1 = {
+  /** Match on accent-less text (default true). */
+  fold?: boolean
+  /** Every label of the document, as regexes. A labelled value ends at the next label. */
+  labels?: string[]
+  /** Output field -> how to read it. Conventional names: `tax_id`, `legal_name`, `postal_code`, `regimes`, `document_id`, `issued_on`. */
+  fields: Record<string, IdentityFieldRule | { first_of: IdentityFieldRule[] }>
+  /** How to read the QR of the document and which fields to compare with the text. */
+  qr?: { fields: Record<string, IdentityQrRule>; compare?: string[] }
+}

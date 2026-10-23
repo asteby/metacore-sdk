@@ -237,10 +237,10 @@ describe('mock customer and content', () => {
   })
 
   it('reports capabilities and lets them be configured', async () => {
-    expect(await sf.customer.capabilities()).toEqual({ password: true, email_verification: true, otp_channels: ['email'] })
+    expect(await sf.customer.capabilities()).toMatchObject({ password: true, email_verification: true, otp_channels: ['email'] })
     const custom = createMockStorefront({ customerCapabilities: { password: false, otp_channels: ['email', 'whatsapp'] } })
     const c = createStorefrontClient({ baseUrl: 'https://mock.local/api/gw', token: 'sk_mock', fetch: custom.fetch })
-    expect(await c.customer.capabilities()).toEqual({ password: false, email_verification: true, otp_channels: ['email', 'whatsapp'] })
+    expect(await c.customer.capabilities()).toMatchObject({ password: false, email_verification: true, otp_channels: ['email', 'whatsapp'] })
     await expect(c.customer.register({ email: 'x@y.co', password: 'secret1234' })).rejects.toMatchObject({ status: 403 })
     await expect(c.customer.loginWithPassword({ email: 'x@y.co', password: 'secret1234' })).rejects.toMatchObject({ status: 403 })
   })

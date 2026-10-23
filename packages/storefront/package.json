@@ -1,7 +1,7 @@
 {
   "name": "@asteby/storefront",
   "version": "0.10.0",
-  "description": "Typed client for the Storefront API v1 (catalog, cart, checkout, customer, content) using only global fetch — Node 20+, edge runtimes and browsers — plus an in-memory mock of the whole contract.",
+  "description": "Typed client for the Storefront API v1 (catalog, cart, checkout, customer, content) using only global fetch — Node 20+, edge runtimes and browsers — plus an in-memory mock of the whole contract and, in `@asteby/storefront/fiscal-document`, a country-agnostic engine that reads a buyer's fiscal document (PDF) in the browser or Node.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -57,6 +57,16 @@
         "default": "./dist/mockup.cjs"
       }
     },
+    "./fiscal-document": {
+      "import": {
+        "types": "./dist/fiscal-document.d.ts",
+        "default": "./dist/fiscal-document.js"
+      },
+      "require": {
+        "types": "./dist/fiscal-document.d.cts",
+        "default": "./dist/fiscal-document.cjs"
+      }
+    },
     "./package.json": "./package.json"
   },
   "sideEffects": false,
@@ -71,7 +81,21 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {},
+  "peerDependencies": {
+    "pdfjs-dist": ">=4.2.67",
+    "jsqr": "^1.4.0"
+  },
+  "peerDependenciesMeta": {
+    "pdfjs-dist": {
+      "optional": true
+    },
+    "jsqr": {
+      "optional": true
+    }
+  },
   "devDependencies": {
+    "jsqr": "^1.4.0",
+    "pdfjs-dist": "^5.7.284",
     "tsup": "^8.3.5",
     "typescript": "^6.0.0",
     "vitest": "^4.0.0"
