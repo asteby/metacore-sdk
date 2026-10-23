@@ -1,5 +1,11 @@
 # @asteby/storefront
 
+## 0.8.0
+
+### Minor Changes
+
+- 14274d0: Mock: opciones `shippingRates` (tarifas tipo paquetería con `carrier`, días hábiles y vigencia de 24 h por omisión) y `paymentMethods` para diseñar y probar el checkout como se ve con OPS real.
+
 ## 0.7.0
 
 ### Minor Changes
