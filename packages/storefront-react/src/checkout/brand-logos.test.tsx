@@ -47,7 +47,7 @@ describe('real brand logos', () => {
       expect(documented || alsoListed, `${b.key} has neither a logo nor a documented reason`).toBe(true)
     }
     expect(withLogo.length).toBeGreaterThanOrEqual(25)
-    for (const key of ['fedex', 'dhl', 'estafeta', 'ups', 'oxxo', '7eleven', 'circlek', 'soriana', 'bbva', 'visa', 'mastercard', 'amex', 'mercadopago', 'imile', 'paquetexpress']) {
+    for (const key of ['fedex', 'dhl', 'estafeta', 'ups', 'oxxo', '7eleven', 'circlek', 'soriana', 'bbva', 'visa', 'mastercard', 'amex', 'mercadopago', 'imile', 'paquetexpress', 'stp']) {
       expect(brandLogo(key), key).not.toBeNull()
     }
   })
@@ -94,7 +94,9 @@ describe('BrandMark precedence: provider logo_url > bundled logo > badge', () =>
   })
 
   it('falls back to the typographic badge for brands without a logo, and to a monogram for unknown ones', () => {
-    expect(renderToString(<BrandMark brand="stp" />)).toContain('data-sf-brand-source="badge"')
+    expect(renderToString(<BrandMark brand="spei" />)).toContain('data-sf-brand-source="badge"')
+    expect(renderToString(<BrandMark brand="clabe" />)).toContain('data-sf-brand-source="badge"')
+    expect(renderToString(<BrandMark brand="stp" />)).toContain('data-sf-brand-source="logo"')
     expect(renderToString(<BrandMark brand="redpack" />)).toContain('data-sf-brand-source="badge"')
     expect(renderToString(<BrandMark brand="envios rapidos" />)).toContain('>ER<')
   })

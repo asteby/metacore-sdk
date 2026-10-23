@@ -267,12 +267,21 @@
    "mode": "color",
    "format": "svg",
    "note": "La empresa solo publica el wordmark en blanco (fill #FFF) sobre el azul de su encabezado (--px-blue-logo #002A52); se conserva tal cual, con ese azul como fondo del propio SVG para que sea legible sobre la placa blanca. Sin recolorear el logo."
+  },
+  "stp": {
+   "name": "STP (Sistema de Transferencias y Pagos)",
+   "source": "https://stp.mx/hubfs/raw_assets/public/stp-theme/images/general/logo-stp-enlaces-externos.png",
+   "origin": "Sitio oficial de la empresa (logo del encabezado de stp.mx)",
+   "license": "Sin licencia explícita: logo que la propia empresa publica en su sitio, usado para identificar su servicio (marca registrada de su titular)",
+   "date": "2026-10-23",
+   "mode": "color",
+   "format": "png",
+   "note": "PNG de 1100x1080 de la fuente, recortado al contenido y reducido a 192x192 con paleta de 128 colores y transparencia (4 KB); la fuente no ofrece SVG. Es el logo de STP, no el de SPEI, que nadie publica; la fila «STP (transferencia SPEI)» lo usa y spei/clabe/banktransfer conservan la insignia genérica."
   }
  },
  "pending": {
   "redpack": "Redpack: no hay logo en Commons y el sitio no expone un archivo de marca localizable; sin condiciones claras.",
   "sendex": "Sendex: el sitio solo publica un fragmento (isotipo) en SVG, no el logo completo; no se incluye para no mostrar un logo parcial.",
-  "spei / stp": "SPEI: Banxico no publica el logo de SPEI en una URL estable (la página respondió 404), no está en Commons (búsqueda sin resultados) y solo hay copias en agregadores de logos (brandlogos, seeklogo, brandsoftheworld) sin licencia ni procedencia oficial. Se usa una insignia genérica de transferencia (flechas + texto «SPEI») que no imita la marca oficial; también para stp, clabe y banktransfer.",
   "farmaciasguadalajara": "Farmacias Guadalajara: el sitio bloquea la descarga (403) y no hay logo en Commons.",
   "farmaciadelahorro": "Farmacia del Ahorro: el sitio solo ofrece PNG raster sin licencia clara y sin versión vectorial; sin fuente aceptable.",
   "bodegaaurrera": "Bodega Aurrerá: el SVG de Commons tiene el wordmark en blanco (invisible sobre fondo claro) o es solo un fragmento; se deja la insignia.",
@@ -285,6 +294,7 @@
   "casaley": "Casa Ley: el sitio solo ofrece PNG raster grande, sin versión vectorial ni licencia clara.",
   "calimax, extra, kiosko, quiken, carssa": "Sin logo en Commons ni archivo de marca localizable en sus sitios.",
   "redpack/skydropx/envia (claves reales)": "No se pudo verificar contra packages/skydropx ni packages/envia: esos paquetes no existen en /home/user/projects/addons; las claves siguen siendo las del registro de #1218 más sus alias.",
-  "googlepay": "Google Pay: el SVG de Commons incrusta una imagen raster (no es vectorial); se deja la insignia."
+  "googlepay": "Google Pay: el SVG de Commons incrusta una imagen raster (no es vectorial); se deja la insignia.",
+  "spei": "SPEI: ni Banxico (su página de SPEI no publica ningún logo) ni STP (solo una ilustración, SPEI.webp, que no es un logo) publican el logo/wordmark de SPEI; no está en Commons y solo hay copias en agregadores sin licencia ni procedencia oficial. Se usa una insignia genérica de transferencia (flechas + texto «SPEI»), también para clabe y banktransfer."
  }
 }

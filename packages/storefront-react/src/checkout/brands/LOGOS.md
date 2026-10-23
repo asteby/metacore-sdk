@@ -37,6 +37,7 @@ Orden de fuentes: (a) kit de prensa de la empresa, (b) logo que la propia empres
 | `santander` | Santander | https://commons.wikimedia.org/wiki/File:Banco_santander_logo.svg | Public domain (Commons; marca registrada) | 2026-10-23 | Color | SVG |
 | `scotiabank` | Scotiabank | https://commons.wikimedia.org/wiki/File%3AScotiabank_logo.svg | Public domain (Commons; marca registrada) | 2026-10-23 | Color | SVG |
 | `soriana` | Soriana | https://commons.wikimedia.org/wiki/File%3ALogoSorianaSVG.svg | Public domain (Commons; marca registrada) | 2026-10-23 | Color | SVG |
+| `stp` | STP (Sistema de Transferencias y Pagos) | https://stp.mx/hubfs/raw_assets/public/stp-theme/images/general/logo-stp-enlaces-externos.png | Sin licencia explícita: logo que la propia empresa publica en su sitio, usado para identificar su servicio (marca registrada de su titular) | 2026-10-23 | Color | PNG — PNG de 1100x1080 de la fuente, recortado al contenido y reducido a 192x192 con paleta de 128 colores y transparencia (4 KB); la fuente no ofrece SVG. Es el logo de STP, no el de SPEI, que nadie publica; la fila «STP (transferencia SPEI)» lo usa y spei/clabe/banktransfer conservan la insignia genérica. |
 | `ups` | UPS | https://commons.wikimedia.org/wiki/File%3AUPS_Logo_Shield_2017.svg | Public domain (Commons; marca registrada) | 2026-10-23 | Color | SVG |
 | `usps` | USPS | https://commons.wikimedia.org/wiki/File%3AUSPS_-_Color_Logo.svg | Public domain (Commons; sin restricción declarada) | 2026-10-23 | Color | SVG |
 | `visa` | Visa | https://commons.wikimedia.org/wiki/File%3AVisa_Inc._logo_%282021%E2%80%93present%29.svg | Public domain (Commons; marca registrada) | 2026-10-23 | Color | SVG |
@@ -48,7 +49,6 @@ No se incluyen por no tener una fuente con condiciones claras:
 
 - `redpack`: Redpack: no hay logo en Commons y el sitio no expone un archivo de marca localizable; sin condiciones claras.
 - `sendex`: Sendex: el sitio solo publica un fragmento (isotipo) en SVG, no el logo completo; no se incluye para no mostrar un logo parcial.
-- `spei / stp`: SPEI: Banxico no publica el logo de SPEI en una URL estable (la página respondió 404), no está en Commons (búsqueda sin resultados) y solo hay copias en agregadores de logos (brandlogos, seeklogo, brandsoftheworld) sin licencia ni procedencia oficial. Se usa una insignia genérica de transferencia (flechas + texto «SPEI») que no imita la marca oficial; también para stp, clabe y banktransfer.
 - `farmaciasguadalajara`: Farmacias Guadalajara: el sitio bloquea la descarga (403) y no hay logo en Commons.
 - `farmaciadelahorro`: Farmacia del Ahorro: el sitio solo ofrece PNG raster sin licencia clara y sin versión vectorial; sin fuente aceptable.
 - `bodegaaurrera`: Bodega Aurrerá: el SVG de Commons tiene el wordmark en blanco (invisible sobre fondo claro) o es solo un fragmento; se deja la insignia.
@@ -62,6 +62,7 @@ No se incluyen por no tener una fuente con condiciones claras:
 - `calimax, extra, kiosko, quiken, carssa`: Sin logo en Commons ni archivo de marca localizable en sus sitios.
 - `redpack/skydropx/envia (claves reales)`: No se pudo verificar contra packages/skydropx ni packages/envia: esos paquetes no existen en /home/user/projects/addons; las claves siguen siendo las del registro de #1218 más sus alias.
 - `googlepay`: Google Pay: el SVG de Commons incrusta una imagen raster (no es vectorial); se deja la insignia.
+- `spei`: SPEI: ni Banxico (su página de SPEI no publica ningún logo) ni STP (solo una ilustración, SPEI.webp, que no es un logo) publican el logo/wordmark de SPEI; no está en Commons y solo hay copias en agregadores sin licencia ni procedencia oficial. Se usa una insignia genérica de transferencia (flechas + texto «SPEI»), también para clabe y banktransfer.
 
 Una tienda que tenga el logo licenciado de cualquiera de estas marcas lo pasa como `logo_url` (gana sobre todo lo demás).
 
