@@ -1,0 +1,5 @@
+{
+  "success": false,
+  "error": "rate_limited",
+  "message": "Demasiados intentos. Espera un momento y vuelve a intentarlo."
+}

@@ -1,0 +1,16 @@
+{
+  "success": true,
+  "data": {
+    "kind": "secret",
+    "environment": "sandbox",
+    "scopes": [
+      "catalog:read",
+      "cart:write"
+    ],
+    "missing_scopes": [
+      "customer:write"
+    ],
+    "connection_id": "7b0d6a52-3a51-4c1f-9d58-0c1c2a8f4e11",
+    "expires_at": null
+  }
+}

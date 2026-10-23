@@ -1,0 +1,13 @@
+{
+  "success": true,
+  "data": {
+    "status": "connected",
+    "scopes": [
+      "catalog:read"
+    ],
+    "missing_scopes": [],
+    "next_rotation_at": "2099-01-01T00:00:00Z",
+    "rotate_now": true,
+    "server_time": "2026-10-23T12:00:00Z"
+  }
+}

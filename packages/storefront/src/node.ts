@@ -114,21 +114,42 @@ export function writeFileAtomic(file: string, content: string, mode = 0o600): vo
 }
 
 // ---------------------------------------------------------------------------
-// Connection protocol
+// Connection protocol (OPS: docs/STOREFRONT-GATEWAY.md, "Conexión de tienda")
 // ---------------------------------------------------------------------------
 
-export type RedeemResponse = {
-  ops_url: string
-  connection_id: string
-  environment: string
-  secret_token: string
-  publishable_token?: string
+/** The connection a key belongs to, as OPS describes it. */
+export type ConnectionBrief = { id: string; name: string; kind: string; profile: string; environment: string }
+
+/** What `redeem` and `rotate` hand over (inside `data`). `rotate` carries no `rotation_days` or `api_base`. */
+export type ConnectionGrant = {
+  token: string
+  /** Always `null` today. */
+  publishable_token: string | null
+  connection: ConnectionBrief
   scopes: string[]
-  /** ISO time from which the token should be rotated. */
-  rotate_after: string
+  rotation_days?: number
+  /** `{OPS}/api/gw`: the base URL for `createStorefrontClient`. */
+  api_base?: string
+  /** After a rotation: until when the previous key still works. */
+  grace_until?: string | null
 }
 
-export type ConnectClientInfo = { sdk_version: string; hostname: string; site_url?: string }
+/** `POST /heartbeat` answer (inside `data`). */
+export type HeartbeatResult = {
+  status: string
+  scopes: string[]
+  missing_scopes: string[]
+  next_rotation_at?: string | null
+  rotate_now?: boolean
+  server_time?: string
+}
+
+/** `client` block of `redeem` and `heartbeat` requests. */
+export type ConnectClientInfo = { name: string; version: string; runtime: string; hostname: string }
+
+export function connectClientInfo(): ConnectClientInfo {
+  return { name: '@asteby/storefront', version: SDK_VERSION, runtime: `node ${process.version}`, hostname: hostname() }
+}
 
 /** Why a connection call failed, in terms an operator can act on. */
 export type ConnectErrorKind = 'invalid_code' | 'rate_limited' | 'network' | 'unauthorized' | 'server' | 'invalid_response'
@@ -139,12 +160,20 @@ export class ConnectError extends Error {
     readonly kind: ConnectErrorKind,
     message: string,
     readonly status = 0,
+    /** `Retry-After` of a 429, in seconds. */
+    readonly retryAfterSeconds?: number,
   ) {
     super(message)
   }
 }
 
 const trimSlash = (u: string) => u.replace(/\/+$/, '')
+const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+
+/** The kernel envelope `{success:true,data}` is unwrapped; a flat object is accepted as is. */
+export function unwrapEnvelope(body: unknown): unknown {
+  return isObj(body) && typeof body.success === 'boolean' && 'data' in body ? body.data : body
+}
 
 async function post<T>(fetchImpl: FetchLike, url: string, body: unknown, bearer?: string): Promise<T> {
   let res: Response
@@ -159,55 +188,84 @@ async function post<T>(fetchImpl: FetchLike, url: string, body: unknown, bearer?
     throw new ConnectError('network', 'No pudimos comunicarnos con OPS. Revisa la dirección y tu conexión a internet.')
   }
   const text = await res.text().catch(() => '')
-  if (!res.ok) {
-    if (res.status === 429) throw new ConnectError('rate_limited', 'Demasiados intentos. Espera unos minutos e inténtalo de nuevo.', 429)
-    if (res.status === 401 || res.status === 403) throw new ConnectError('unauthorized', 'OPS rechazó la credencial de esta tienda.', res.status)
-    if (res.status >= 500) throw new ConnectError('server', 'OPS no pudo atender la solicitud. Inténtalo de nuevo en un momento.', res.status)
-    throw new ConnectError('invalid_code', 'El código no es válido, ya se usó o venció. Genera uno nuevo en OPS → Conexiones y API.', res.status)
-  }
-  if (!text) return undefined as T
+  let json: unknown
   try {
-    return JSON.parse(text) as T
+    json = text ? JSON.parse(text) : undefined
   } catch {
-    throw new ConnectError('invalid_response', 'OPS respondió algo que no entendimos.', res.status)
+    json = undefined
   }
+  if (!res.ok) {
+    // Errors: `{success:false, error:"<code>", message:"<es-MX>"}` (or `error:{code,message}`).
+    const o = isObj(json) ? json : {}
+    const e = isObj(o.error) ? o.error : undefined
+    const code = typeof o.error === 'string' ? o.error : typeof e?.code === 'string' ? e.code : ''
+    const message = typeof o.message === 'string' ? o.message : typeof e?.message === 'string' ? e.message : ''
+    if (res.status === 429) {
+      const ra = Number(res.headers.get('Retry-After'))
+      throw new ConnectError('rate_limited', message || 'Demasiados intentos. Espera un momento y vuelve a intentarlo.', 429, Number.isFinite(ra) && ra > 0 ? ra : undefined)
+    }
+    if (res.status === 401 || code === 'invalid_token') throw new ConnectError('unauthorized', message || 'Clave inválida.', res.status)
+    if (code === 'invalid_code') throw new ConnectError('invalid_code', message || 'El código no es válido o ya venció. Genera uno nuevo desde OPS.', res.status)
+    if (res.status >= 500) throw new ConnectError('server', message || 'OPS no pudo atender la solicitud. Inténtalo de nuevo en un momento.', res.status)
+    throw new ConnectError('server', message || `OPS respondió ${res.status}.`, res.status)
+  }
+  if (json === undefined) throw new ConnectError('invalid_response', 'OPS respondió algo que no entendimos.', res.status)
+  return unwrapEnvelope(json) as T
 }
 
-function assertRedeem(r: unknown): asserts r is RedeemResponse {
-  const o = r as Partial<RedeemResponse> | undefined
-  if (!o || typeof o.secret_token !== 'string' || !o.secret_token || typeof o.connection_id !== 'string' || !Array.isArray(o.scopes)) {
+function assertGrant(r: unknown): asserts r is ConnectionGrant {
+  const o = r as Partial<ConnectionGrant> | undefined
+  if (!isObj(o) || typeof o.token !== 'string' || !o.token || !isObj(o.connection) || typeof o.connection.id !== 'string' || !Array.isArray(o.scopes)) {
     throw new ConnectError('invalid_response', 'OPS respondió algo que no entendimos.')
   }
 }
 
-export type RedeemOptions = { opsUrl: string; code: string; siteUrl?: string; fetch?: FetchLike }
+export type RedeemOptions = { opsUrl: string; code: string; fetch?: FetchLike }
 
-/** Exchanges the one-time connection code for the store's token. `POST {ops}/api/connect/v1/redeem`. */
-export async function redeemConnectionCode(opts: RedeemOptions): Promise<RedeemResponse> {
+/** Exchanges the one-time connection code for the store's key. `POST {ops}/api/connect/v1/redeem`. */
+export async function redeemConnectionCode(opts: RedeemOptions): Promise<ConnectionGrant> {
   const fetchImpl = opts.fetch ?? (globalThis.fetch.bind(globalThis) as FetchLike)
-  const client_info: ConnectClientInfo = { sdk_version: SDK_VERSION, hostname: hostname(), ...(opts.siteUrl ? { site_url: opts.siteUrl } : {}) }
-  const res = await post<unknown>(fetchImpl, `${trimSlash(opts.opsUrl)}/api/connect/v1/redeem`, { code: opts.code.trim(), client_info })
-  assertRedeem(res)
+  const res = await post<unknown>(fetchImpl, `${trimSlash(opts.opsUrl)}/api/connect/v1/redeem`, { code: opts.code.trim(), client: connectClientInfo() })
+  assertGrant(res)
   return res
 }
 
 /** What is kept next to the token file: everything but the secret. */
 export type ConnectionState = {
   ops_url: string
-  connection_id: string
-  environment: string
+  api_base: string
+  connection: ConnectionBrief
   scopes: string[]
+  rotation_days: number
+  /** ISO time from which the key should be rotated (`now + rotation_days`, or the heartbeat's `next_rotation_at`). */
   rotate_after: string
+  grace_until?: string | null
 }
 
 export const stateFileFor = (tokenFile: string) => `${tokenFile}.json`
 
-/** Saves a redeemed/rotated connection: the token (0600, atomic) and its non-secret state beside it. */
-export function saveConnection(tokenFile: string, r: RedeemResponse, opsUrl = r.ops_url): void {
-  const state: ConnectionState = { ops_url: trimSlash(r.ops_url || opsUrl), connection_id: r.connection_id, environment: r.environment, scopes: r.scopes, rotate_after: r.rotate_after }
-  // State first: if the process dies in between, the old token still works and rotation is just retried.
+const DEFAULT_ROTATION_DAYS = 90
+const DAY_MS = 86_400_000
+
+/** Builds the state after a redeem/rotate; a rotation keeps the `rotation_days` and `api_base` it does not carry. */
+export function stateFromGrant(g: ConnectionGrant, opsUrl: string, prev: ConnectionState | null, now = Date.now()): ConnectionState {
+  const days = g.rotation_days && g.rotation_days > 0 ? g.rotation_days : (prev?.rotation_days ?? DEFAULT_ROTATION_DAYS)
+  return {
+    ops_url: trimSlash(opsUrl),
+    api_base: g.api_base || prev?.api_base || `${trimSlash(opsUrl)}/api/gw`,
+    connection: g.connection,
+    scopes: g.scopes,
+    rotation_days: days,
+    rotate_after: new Date(now + days * DAY_MS).toISOString(),
+    ...(g.grace_until ? { grace_until: g.grace_until } : {}),
+  }
+}
+
+/** Saves a redeemed/rotated connection: the key (0600, atomic) and its non-secret state beside it. */
+export function saveConnection(tokenFile: string, g: ConnectionGrant, state: ConnectionState): void {
+  // State first: if the process dies in between, the old key still works and rotation is just retried.
   writeFileAtomic(stateFileFor(tokenFile), JSON.stringify(state, null, 2) + '\n')
-  writeFileAtomic(tokenFile, r.secret_token + '\n')
+  writeFileAtomic(tokenFile, g.token + '\n')
 }
 
 export function loadConnectionState(tokenFile: string): ConnectionState | null {
@@ -226,25 +284,28 @@ export type ConnectStoreOptions = {
   fetch?: FetchLike
   /** Clock, for tests. */
   now?: () => number
-  /** Called with a short message when a heartbeat or rotation fails. It never receives a token. */
+  /** Called with a short message when a heartbeat or rotation fails. It never receives a key. */
   onError?: (message: string) => void
 }
 
 export type KeepFreshOptions = {
-  /** Heartbeat period (default 10 min). */
+  /** Heartbeat period (default 10 min). A `429 Retry-After` longer than this delays the next one. */
   intervalMs?: number
 }
 
+export type TickResult = 'ok' | 'rotated' | 'failed'
+
 /**
- * The store's side of the connection after `connect`: `keepFresh()` sends a heartbeat and, when `rotate_after`
- * passes, rotates the token (`POST /api/connect/v1/rotate`, Bearer = current `sk_`), writes the new file and lets a
- * `createFileTokenSource` client pick it up within its re-read interval. The old token keeps working during a grace
- * period set by OPS. It never throws and never keeps the process alive.
+ * The store's side of the connection after `connect`: `keepFresh()` sends a heartbeat and rotates the key when OPS
+ * says `rotate_now`, or `next_rotation_at` / `rotate_after` has passed (`POST /api/connect/v1/rotate`, Bearer = current
+ * `sk_`). It writes the new file; a `createFileTokenSource` client picks it up within its re-read interval, and the
+ * old key keeps working during OPS's grace period. It never throws and never keeps the process alive.
  */
 export function connectStore(options: ConnectStoreOptions = {}) {
   const tokenFile = resolve(options.tokenFile ?? process.env.STOREFRONT_TOKEN_FILE ?? 'storefront_token')
   const fetchImpl = options.fetch ?? (globalThis.fetch.bind(globalThis) as FetchLike)
   const now = options.now ?? Date.now
+  let retryAfterMs = 0
   const report = (m: string) => {
     try {
       options.onError?.(m)
@@ -253,32 +314,38 @@ export function connectStore(options: ConnectStoreOptions = {}) {
     }
   }
 
-  async function tick(): Promise<'ok' | 'rotated' | 'failed'> {
-    const state = loadConnectionState(tokenFile)
+  async function tick(): Promise<TickResult> {
+    retryAfterMs = 0
+    let state = loadConnectionState(tokenFile)
     const opsUrl = options.opsUrl ?? state?.ops_url
     let token: string
     try {
       token = readFileSync(tokenFile, 'utf8').trim()
     } catch {
-      report(`No se pudo leer el archivo del token (${tokenFile}).`)
+      report(`No se pudo leer el archivo de la clave (${tokenFile}).`)
       return 'failed'
     }
     if (!opsUrl || !token) {
-      report('Falta la dirección de OPS o el token: vuelve a ejecutar `npx @asteby/storefront connect`.')
+      report('Falta la dirección de OPS o la clave: vuelve a ejecutar `npx @asteby/storefront connect`.')
       return 'failed'
     }
     const base = `${trimSlash(opsUrl)}/api/connect/v1`
     try {
-      await post<unknown>(fetchImpl, `${base}/heartbeat`, { sdk_version: SDK_VERSION, hostname: hostname() }, token)
-      const due = state?.rotate_after ? Date.parse(state.rotate_after) : NaN
-      if (!Number.isNaN(due) && now() >= due) {
+      const hb = await post<HeartbeatResult>(fetchImpl, `${base}/heartbeat`, { client: connectClientInfo() }, token)
+      if (state && hb?.next_rotation_at && hb.next_rotation_at !== state.rotate_after) {
+        state = { ...state, rotate_after: hb.next_rotation_at }
+        writeFileAtomic(stateFileFor(tokenFile), JSON.stringify(state, null, 2) + '\n')
+      }
+      const due = Date.parse(hb?.next_rotation_at ?? state?.rotate_after ?? '')
+      if (hb?.rotate_now === true || (!Number.isNaN(due) && now() >= due)) {
         const next = await post<unknown>(fetchImpl, `${base}/rotate`, {}, token)
-        assertRedeem(next)
-        saveConnection(tokenFile, { ...next, ops_url: next.ops_url || opsUrl }, opsUrl)
+        assertGrant(next)
+        saveConnection(tokenFile, next, stateFromGrant(next, opsUrl, state, now()))
         return 'rotated'
       }
       return 'ok'
     } catch (err) {
+      if (err instanceof ConnectError && err.retryAfterSeconds) retryAfterMs = err.retryAfterSeconds * 1000
       report(err instanceof ConnectError ? `${err.message} (${maskToken(token)})` : `Falló el latido de la conexión (${maskToken(token)}).`)
       return 'failed'
     }
@@ -290,10 +357,20 @@ export function connectStore(options: ConnectStoreOptions = {}) {
     tick,
     /** Starts the periodic heartbeat; returns `stop()`. */
     keepFresh(opts: KeepFreshOptions = {}): () => void {
-      const timer = setInterval(() => void tick(), opts.intervalMs ?? 600_000)
-      timer.unref?.()
-      void tick()
-      return () => clearInterval(timer)
+      const interval = opts.intervalMs ?? 600_000
+      let stopped = false
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const loop = async () => {
+        await tick()
+        if (stopped) return
+        timer = setTimeout(() => void loop(), Math.max(interval, retryAfterMs))
+        timer.unref?.()
+      }
+      void loop()
+      return () => {
+        stopped = true
+        if (timer) clearTimeout(timer)
+      }
     },
   }
 }

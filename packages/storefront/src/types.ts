@@ -503,7 +503,7 @@ export type CustomerCapabilities = {
 /** `GET {gateway}/_token`: what the token in use is and what it can do. Needs no scope. */
 export type TokenIntrospection = {
   kind: string
-  environment: 'sandbox' | 'production' | (string & {})
+  environment: 'sandbox' | 'production' | (string & {}) | null
   scopes: string[]
   /** Scopes the connection should have but the token lacks. Empty when healthy. */
   missing_scopes: string[]

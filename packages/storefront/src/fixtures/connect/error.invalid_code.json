@@ -1,0 +1,5 @@
+{
+  "success": false,
+  "error": "invalid_code",
+  "message": "El código no es válido o ya venció. Genera uno nuevo desde OPS."
+}

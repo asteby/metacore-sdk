@@ -415,8 +415,10 @@ npx @asteby/storefront connect --ops https://ops.example.com --env-file .env --t
 # Conectada ✓ · 7 alcances · sk_…a91f
 ```
 
-`connect` redeems the code (`POST {ops}/api/connect/v1/redeem`), writes the key ATOMICALLY (temp file + rename, mode
-`0600`; default `./storefront_token`) with its non-secret state beside it (`<file>.json`), leaves ONLY `OPS_URL` and
+`connect` redeems the code (`POST {ops}/api/connect/v1/redeem` with `{code, client:{name,version,runtime,hostname}}`; OPS
+answers `{success:true,data:{token, connection, scopes, rotation_days, api_base}}`, an invalid, expired or used code is one
+answer: `400 invalid_code`), writes the key ATOMICALLY (temp file + rename, mode `0600`; default `./storefront_token`)
+with its non-secret state beside it (`<file>.json`: connection, `api_base`, `rotation_days`, `rotate_after`), leaves ONLY `OPS_URL` and
 `STOREFRONT_TOKEN_FILE` in the env file (never the key), prints just the prefix and last four characters, and checks
 the key with `token.introspect()`. Exit code is `1` with an es-MX message for an expired or used code, an unreachable
 OPS or a non-TTY stdin.
@@ -434,7 +436,7 @@ const storefront = createStorefrontClient({
   token: storefrontTokenFromEnv()!,
 })
 void diagnose(storefront)                 // one warning if scopes are missing; never throws, never delays boot
-connectStore().keepFresh()                // heartbeat + rotation (POST /api/connect/v1/rotate) when rotate_after passes
+connectStore().keepFresh()                // heartbeat; rotates (POST /api/connect/v1/rotate) on rotate_now / next_rotation_at; honors Retry-After on 429
 ```
 
 `token` also accepts any `() => string`, called on every request. `diagnose` logs, at most once, which scopes are

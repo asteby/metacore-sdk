@@ -1387,7 +1387,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       const tok = request.headers.get('authorization')?.match(/^Bearer\s+(.+)$/i)?.[1] ?? null
       const granted = scopesFor(tok)
       if (!tok || !granted) return errorResponse(new HttpError(401, 'unauthorized', 'Missing or invalid storefront token'))
-      return json(200, { kind: tok.startsWith('pk_') ? 'publishable' : 'secret', environment: 'sandbox', scopes: [...granted], missing_scopes: missingScopes, connection_id: 'conn_mock', expires_at: null }, { 'Cache-Control': PRIVATE_CACHE })
+      return json(200, { success: true, data: { kind: tok.startsWith('pk_') ? 'publishable' : 'secret', environment: 'sandbox', scopes: [...granted], missing_scopes: missingScopes, connection_id: 'conn_mock', expires_at: null } }, { 'Cache-Control': PRIVATE_CACHE })
     }
     const idx = url.pathname.indexOf('/storefront/')
     if (idx < 0) return errorResponse(new HttpError(404, 'not_found', `No route for ${url.pathname}`))

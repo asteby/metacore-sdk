@@ -391,7 +391,12 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
        * What the token in use is and can do (`GET {baseUrl}/_token`, a gateway route, not a `/storefront` one).
        * Needs no scope, so it answers even when the token is under-provisioned: `missing_scopes` says what to repair.
        */
-      introspect: (options?: RequestOptions) => get<TokenIntrospection>('/_token', undefined, options),
+      introspect: async (options?: RequestOptions): Promise<TokenIntrospection> => {
+        // OPS answers with the kernel envelope `{success, data}`; a flat object is accepted too.
+        const body = await get<TokenIntrospection | { success?: boolean; data?: TokenIntrospection }>('/_token', undefined, options)
+        const env = body as { success?: unknown; data?: TokenIntrospection }
+        return typeof env?.success === 'boolean' && env.data ? env.data : (body as TokenIntrospection)
+      },
     },
 
     /** Returns a new client that sends the given buyer session token. */

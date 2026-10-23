@@ -5,9 +5,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStorefrontClient, diagnose, isStorefrontError, maskToken } from './index.js'
 import { createMockStorefront } from './mock/index.js'
-import { connectStore, createFileTokenSource, redeemConnectionCode, storefrontTokenFromEnv, writeFileAtomic } from './node.js'
+import { connectStore, createFileTokenSource, loadConnectionState, redeemConnectionCode, storefrontTokenFromEnv, writeFileAtomic } from './node.js'
 import { runCli, upsertEnv } from './cli.js'
 
+const fixture = (name: string) => readFileSync(new URL(`./fixtures/connect/${name}.json`, import.meta.url), 'utf8')
 const SECRET = 'sk_live_0123456789abcdefa91f'
 const BASE = 'https://mock.local/api/gw'
 
@@ -169,12 +170,14 @@ describe('writeFileAtomic', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Fake OPS
+// Fake OPS: answers with EXACTLY the shapes in src/fixtures/connect/*.json (the handlers of OPS's connect_public.go)
 // ---------------------------------------------------------------------------
 
-type Fake = { server: Server; url: string; hits: { path: string; auth?: string; body: unknown }[]; setRedeem: (fn: (body: any) => { status: number; json: unknown }) => void; setRotate: (r: unknown) => void }
+type Reply = { status: number; body: string; headers?: Record<string, string> }
+type Hit = { path: string; auth?: string; body: any }
+type Fake = { server: Server; url: string; hits: Hit[]; on: (path: string, fn: (b: any) => Reply) => void }
 
-async function body(req: IncomingMessage): Promise<unknown> {
+async function readBody(req: IncomingMessage): Promise<any> {
   const chunks: Buffer[] = []
   for await (const c of req) chunks.push(c as Buffer)
   const t = Buffer.concat(chunks).toString()
@@ -182,30 +185,56 @@ async function body(req: IncomingMessage): Promise<unknown> {
 }
 
 async function startFake(): Promise<Fake> {
-  const hits: Fake['hits'] = []
-  let redeem: (b: any) => { status: number; json: unknown } = () => ({ status: 200, json: okRedeem(SECRET) })
-  let rotate: unknown = okRedeem('sk_live_rotated_000000009999')
+  const hits: Hit[] = []
+  const handlers = new Map<string, (b: any) => Reply>()
   const server = createServer(async (req, res) => {
-    const b = await body(req)
+    const b = await readBody(req)
     hits.push({ path: req.url ?? '', ...(req.headers.authorization ? { auth: req.headers.authorization } : {}), body: b })
-    const send = (status: number, j: unknown) => (res.writeHead(status, { 'Content-Type': 'application/json' }), res.end(JSON.stringify(j)))
-    if (req.url === '/api/connect/v1/redeem') {
-      const r = redeem(b)
-      return send(r.status, r.json)
-    }
-    if (req.url === '/api/connect/v1/rotate') return send(200, rotate)
-    if (req.url === '/api/connect/v1/heartbeat') return send(200, { ok: true })
-    if (req.url === '/api/gw/_token') return send(200, { kind: 'secret', environment: 'sandbox', scopes: ['a'], missing_scopes: [], connection_id: 'c1', expires_at: null })
-    send(404, {})
+    const h = handlers.get(req.url ?? '')
+    const r: Reply = h ? h(b) : { status: 404, body: '{}' }
+    res.writeHead(r.status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...r.headers })
+    res.end(r.body)
   })
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
-  const port = (server.address() as { port: number }).port
-  return { server, url: `http://127.0.0.1:${port}`, hits, setRedeem: (f) => void (redeem = f), setRotate: (r) => void (rotate = r) }
+  const url = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+  const f: Fake = { server, url, hits, on: (p, fn) => void handlers.set(p, fn) }
+  const sub = (name: string) => fixture(name).replace('__API_BASE__', `${url}/api/gw`)
+  f.on('/api/connect/v1/redeem', () => ({ status: 200, body: sub('redeem.ok') }))
+  f.on('/api/connect/v1/rotate', () => ({ status: 200, body: sub('rotate.ok') }))
+  f.on('/api/connect/v1/heartbeat', () => ({ status: 200, body: sub('heartbeat.ok') }))
+  f.on('/api/gw/_token', () => ({ status: 200, body: sub('token.ok') }))
+  return f
 }
 
-function okRedeem(secret: string, rotateAfter = new Date(Date.now() + 86_400_000).toISOString()) {
-  return { ops_url: 'http://ops.invalid', connection_id: 'c1', environment: 'sandbox', secret_token: secret, scopes: ['catalog:read', 'customer:write', 'cart:write'], rotate_after: rotateAfter }
-}
+describe('contract fixtures', () => {
+  it('redeem.ok has the documented shape (token, connection, scopes, rotation_days, api_base; no planos)', () => {
+    const d = JSON.parse(fixture('redeem.ok'))
+    expect(d.success).toBe(true)
+    expect(Object.keys(d.data).sort()).toEqual(['api_base', 'connection', 'publishable_token', 'rotation_days', 'scopes', 'token'])
+    expect(Object.keys(d.data.connection).sort()).toEqual(['environment', 'id', 'kind', 'name', 'profile'])
+  })
+
+  it('rotate.ok carries grace_until and no rotation_days / api_base', () => {
+    const d = JSON.parse(fixture('rotate.ok')).data
+    expect(d.grace_until).toBeTruthy()
+    expect(d.rotation_days).toBeUndefined()
+    expect(d.api_base).toBeUndefined()
+  })
+
+  it('errors are {success:false,error:code,message}', () => {
+    for (const n of ['error.invalid_code', 'error.rate_limited', 'error.invalid_token']) {
+      const d = JSON.parse(fixture(n))
+      expect(d).toMatchObject({ success: false, error: expect.any(String), message: expect.any(String) })
+    }
+  })
+
+  it('token.introspect unwraps the envelope and also accepts the flat form', async () => {
+    const env = createStorefrontClient({ baseUrl: BASE, token: 'sk_x', fetch: async () => new Response(fixture('token.ok')) })
+    expect(await env.token.introspect()).toMatchObject({ kind: 'secret', missing_scopes: ['customer:write'], connection_id: '7b0d6a52-3a51-4c1f-9d58-0c1c2a8f4e11', expires_at: null })
+    const flat = createStorefrontClient({ baseUrl: BASE, token: 'sk_x', fetch: async () => new Response(JSON.stringify(JSON.parse(fixture('token.ok')).data)) })
+    expect((await flat.token.introspect()).missing_scopes).toEqual(['customer:write'])
+  })
+})
 
 describe('connect CLI against a fake OPS', () => {
   let fake: Fake
@@ -223,8 +252,7 @@ describe('connect CLI against a fake OPS', () => {
     return { status, out: out.join('\n'), err: err.join('\n') }
   }
 
-  it('redeems, writes the token 0600 and only OPS_URL + STOREFRONT_TOKEN_FILE to the env file', async () => {
-    fake.setRedeem(() => ({ status: 200, json: { ...okRedeem(SECRET), ops_url: fake.url } }))
+  it('redeems, writes the key 0600 and only OPS_URL + STOREFRONT_TOKEN_FILE to the env file', async () => {
     writeFileSync(join(dir, '.env'), 'FOO=bar\nOPS_URL=old\n')
     const r = await run(['connect', '--ops', fake.url, '--env-file', '.env'])
     expect(r.status).toBe(0)
@@ -238,19 +266,35 @@ describe('connect CLI against a fake OPS', () => {
     expect(env).toContain(`OPS_URL=${fake.url}`)
     expect(env).toContain(`STOREFRONT_TOKEN_FILE=${tf}`)
     expect(env).not.toContain(SECRET)
-    expect(readFileSync(tf + '.json', 'utf8')).not.toContain(SECRET)
     expect(readdirSync(dir).filter((n) => n.endsWith('.tmp'))).toEqual([])
     const redeem = fake.hits.find((h) => h.path.endsWith('/redeem'))!
-    expect(redeem.body).toMatchObject({ code: 'K7QM-2XPA', client_info: { sdk_version: expect.any(String), hostname: expect.any(String) } })
+    expect(redeem.body).toEqual({ code: 'K7QM-2XPA', client: { name: '@asteby/storefront', version: expect.any(String), runtime: `node ${process.version}`, hostname: expect.any(String) } })
+    expect(redeem.body.client_info).toBeUndefined()
+    // verifies through api_base with the new key
     expect(fake.hits.some((h) => h.path === '/api/gw/_token' && h.auth === `Bearer ${SECRET}`)).toBe(true)
+    // non-secret state: connection + rotation_days + computed rotate_after, no key
+    const stateText = readFileSync(tf + '.json', 'utf8')
+    expect(stateText).not.toContain(SECRET)
+    const st = loadConnectionState(tf)!
+    expect(st).toMatchObject({ api_base: `${fake.url}/api/gw`, rotation_days: 90, connection: { name: 'Tienda en línea', environment: 'sandbox' } })
+    const days = (Date.parse(st.rotate_after) - Date.now()) / 86_400_000
+    expect(days).toBeGreaterThan(89.9)
+    expect(days).toBeLessThan(90.1)
   })
 
-  it('reports an expired or used code and writes nothing', async () => {
-    fake.setRedeem(() => ({ status: 410, json: { error: { code: 'code_expired' } } }))
+  it('an invalid, expired or used code is one answer, and nothing is written', async () => {
+    fake.on('/api/connect/v1/redeem', () => ({ status: 400, body: fixture('error.invalid_code') }))
     const r = await run(['connect', '--ops', fake.url])
     expect(r.status).toBe(1)
-    expect(r.err).toContain('no es válido, ya se usó o venció')
+    expect(r.err).toContain('El código no es válido o ya venció')
     expect(existsSync(join(dir, 'storefront_token'))).toBe(false)
+  })
+
+  it('shows the 429 message', async () => {
+    fake.on('/api/connect/v1/redeem', () => ({ status: 429, body: fixture('error.rate_limited'), headers: { 'Retry-After': '30' } }))
+    const r = await run(['connect', '--ops', fake.url])
+    expect(r.status).toBe(1)
+    expect(r.err).toContain('Demasiados intentos')
   })
 
   it('reports an unreachable OPS', async () => {
@@ -267,48 +311,92 @@ describe('connect CLI against a fake OPS', () => {
     expect(fake.hits).toEqual([])
   })
 
+  it('accepts the flat form too (robustness)', async () => {
+    fake.on('/api/connect/v1/redeem', () => ({ status: 200, body: JSON.stringify(JSON.parse(fixture('redeem.ok').replace('__API_BASE__', `${fake.url}/api/gw`)).data) }))
+    expect((await run(['connect', '--ops', fake.url])).status).toBe(0)
+  })
+
   it('upsertEnv keeps other lines', () => {
     expect(upsertEnv('A=1\n', { OPS_URL: 'x' })).toBe('A=1\nOPS_URL=x\n')
   })
 
   it('redeemConnectionCode rejects a malformed answer', async () => {
-    fake.setRedeem(() => ({ status: 200, json: { nope: true } }))
+    fake.on('/api/connect/v1/redeem', () => ({ status: 200, body: JSON.stringify({ success: true, data: { nope: true } }) }))
     await expect(redeemConnectionCode({ opsUrl: fake.url, code: 'X' })).rejects.toMatchObject({ kind: 'invalid_response' })
   })
 })
 
-describe('connectStore.keepFresh', () => {
-  it('heartbeats and rotates once rotate_after passes, atomically', async () => {
-    const fake = await startFake()
+describe('connectStore', () => {
+  let fake: Fake
+  let tf: string
+  beforeEach(async () => {
+    fake = await startFake()
+    tf = join(mkdtempSync(join(tmpdir(), 'sf-rot-')), 'storefront_token')
+    await runCli(['connect', '--ops', fake.url, '--token-file', tf], { stdout: () => {}, stderr: () => {}, promptCode: async () => 'K7QM-2XPA', env: {} })
+    fake.hits.length = 0
+  })
+  afterEach(() => void fake.server.close())
+
+  it('heartbeats with the client block and does not rotate before it is due', async () => {
+    const store = connectStore({ tokenFile: tf })
+    expect(await store.tick()).toBe('ok')
+    const hb = fake.hits.find((h) => h.path.endsWith('/heartbeat'))!
+    expect(hb.auth).toBe(`Bearer ${SECRET}`)
+    expect(hb.body.client).toMatchObject({ name: '@asteby/storefront', runtime: `node ${process.version}` })
+    expect(fake.hits.some((h) => h.path.endsWith('/rotate'))).toBe(false)
+    // the heartbeat's next_rotation_at replaces the computed one
+    expect(loadConnectionState(tf)!.rotate_after).toBe('2099-01-01T00:00:00Z')
+  })
+
+  it('rotates when the heartbeat says rotate_now, keeping rotation_days and api_base', async () => {
+    fake.on('/api/connect/v1/heartbeat', () => ({ status: 200, body: fixture('heartbeat.rotate-now') }))
+    const errors: string[] = []
+    const store = connectStore({ tokenFile: tf, onError: (m) => errors.push(m) })
+    expect(await store.tick()).toBe('rotated')
+    expect(readFileSync(tf, 'utf8').trim()).toBe('sk_live_rotated_00000000009999')
+    expect(statSync(tf).mode & 0o777).toBe(0o600)
+    expect(fake.hits.find((h) => h.path.endsWith('/rotate'))).toMatchObject({ auth: `Bearer ${SECRET}`, body: {} })
+    const st = loadConnectionState(tf)!
+    expect(st).toMatchObject({ rotation_days: 90, api_base: `${fake.url}/api/gw`, grace_until: '2099-01-02T00:00:00Z' })
+    expect(errors).toEqual([])
+  })
+
+  it('rotates when now passes next_rotation_at', async () => {
+    const store = connectStore({ tokenFile: tf, now: () => Date.parse('2100-01-01T00:00:00Z') })
+    expect(await store.tick()).toBe('rotated')
+  })
+
+  it('a 401 invalid_token is reported with the masked key only', async () => {
+    fake.on('/api/connect/v1/heartbeat', () => ({ status: 401, body: fixture('error.invalid_token') }))
+    const errors: string[] = []
+    const store = connectStore({ tokenFile: tf, onError: (m) => errors.push(m) })
+    expect(await store.tick()).toBe('failed')
+    expect(errors.join()).toContain('Clave inválida.')
+    expect(errors.join()).toContain('sk_…a91f')
+    expect(errors.join()).not.toContain(SECRET)
+  })
+
+  it('respects Retry-After from a 429 when scheduling the next heartbeat', async () => {
+    vi.useFakeTimers()
     try {
-      const dir = mkdtempSync(join(tmpdir(), 'sf-rot-'))
-      const tf = join(dir, 'storefront_token')
-      fake.setRedeem(() => ({ status: 200, json: { ...okRedeem(SECRET, new Date(Date.now() - 1000).toISOString()), ops_url: fake.url } }))
-      const out: string[] = []
-      await runCli(['connect', '--ops', fake.url, '--token-file', tf], { stdout: (l) => out.push(l), stderr: () => {}, promptCode: async () => 'K7QM-2XPA', env: {} })
-      fake.setRotate({ ...okRedeem('sk_live_rotated_000000009999'), ops_url: fake.url })
-      const errors: string[] = []
-      const store = connectStore({ tokenFile: tf, onError: (m) => errors.push(m) })
-      expect(await store.tick()).toBe('rotated')
-      expect(readFileSync(tf, 'utf8').trim()).toBe('sk_live_rotated_000000009999')
-      expect(statSync(tf).mode & 0o777).toBe(0o600)
-      const rot = fake.hits.find((h) => h.path.endsWith('/rotate'))!
-      expect(rot.auth).toBe(`Bearer ${SECRET}`)
-      expect(errors).toEqual([])
-      expect(await store.tick()).toBe('ok') // new rotate_after is in the future
+      let calls = 0
+      fake.on('/api/connect/v1/heartbeat', () => (++calls === 1 ? { status: 429, body: fixture('error.rate_limited'), headers: { 'Retry-After': '120' } } : { status: 200, body: fixture('heartbeat.ok') }))
+      const stop = connectStore({ tokenFile: tf }).keepFresh({ intervalMs: 1000 })
+      await vi.waitFor(() => expect(calls).toBe(1), { interval: 10 })
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(calls).toBe(1) // 120 s wait, not 1 s
+      await vi.advanceTimersByTimeAsync(61_000)
+      await vi.waitFor(() => expect(calls).toBe(2), { interval: 10 })
+      stop()
     } finally {
-      fake.server.close()
+      vi.useRealTimers()
     }
   })
 
-  it('reports failures without a token and without throwing', async () => {
-    const dir = mkdtempSync(join(tmpdir(), 'sf-fail-'))
-    const tf = join(dir, 'storefront_token')
-    writeFileSync(tf, SECRET)
+  it('reports an unreachable OPS without throwing and without the key', async () => {
     const errors: string[] = []
     const store = connectStore({ tokenFile: tf, opsUrl: 'http://127.0.0.1:1', onError: (m) => errors.push(m) })
     expect(await store.tick()).toBe('failed')
     expect(errors.join()).not.toContain(SECRET)
-    expect(errors.join()).toContain('sk_…a91f')
   })
 })

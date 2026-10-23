@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { createStorefrontClient, type FetchLike } from './client.js'
 import { maskToken, repairPath } from './diagnose.js'
-import { ConnectError, SDK_VERSION, redeemConnectionCode, saveConnection, writeFileAtomic } from './node.js'
+import { ConnectError, SDK_VERSION, redeemConnectionCode, saveConnection, stateFromGrant, writeFileAtomic } from './node.js'
 
 export type CliIO = {
   stdout: (line: string) => void
@@ -15,14 +15,14 @@ export type CliIO = {
   cwd?: string
 }
 
-const HELP = `Uso: npx @asteby/storefront connect --ops <url> [--env-file <ruta>] [--token-file <ruta>] [--site <url>]
+const HELP = `Uso: npx @asteby/storefront connect --ops <url> [--env-file <ruta>] [--token-file <ruta>]
 
 Conecta esta tienda con OPS. El código de conexión (K7QM-2XPA) se pide en la terminal; nunca va como argumento.
 
   --ops          Dirección de OPS (https://ops.ejemplo.com). También OPS_URL.
   --token-file   Dónde guardar la clave (por omisión ./storefront_token). Modo 0600, escritura atómica.
   --env-file     Archivo .env donde dejar SOLO OPS_URL y STOREFRONT_TOKEN_FILE (nunca la clave).
-  --site         Dirección pública de la tienda (opcional, informativa).`
+`
 
 function parseArgs(argv: string[]): { cmd?: string; flags: Record<string, string>; bad?: string } {
   const flags: Record<string, string> = {}
@@ -31,7 +31,7 @@ function parseArgs(argv: string[]): { cmd?: string; flags: Record<string, string
     const a = rest[i]!
     const eq = a.indexOf('=')
     const key = (eq > 0 ? a.slice(0, eq) : a).replace(/^--/, '')
-    if (!a.startsWith('--') || !['ops', 'env-file', 'token-file', 'site', 'code'].includes(key)) return { cmd, flags, bad: a }
+    if (!a.startsWith('--') || !['ops', 'env-file', 'token-file', 'code'].includes(key)) return { cmd, flags, bad: a }
     if (key === 'code') return { cmd, flags, bad: '--code (el código se pide en la terminal, no como argumento)' }
     const val = eq > 0 ? a.slice(eq + 1) : rest[++i]
     if (!val) return { cmd, flags, bad: a }
@@ -89,27 +89,27 @@ export async function runCli(argv: string[], io: CliIO): Promise<number> {
   }
 
   try {
-    const r = await redeemConnectionCode({ opsUrl, code, ...(flags.site ? { siteUrl: flags.site } : {}), ...(io.fetch ? { fetch: io.fetch } : {}) })
-    saveConnection(tokenFile, r, opsUrl)
+    const r = await redeemConnectionCode({ opsUrl, code, ...(io.fetch ? { fetch: io.fetch } : {}) })
+    saveConnection(tokenFile, r, stateFromGrant(r, opsUrl, null))
     if (envFile) {
       const current = existsSync(envFile) ? readFileSync(envFile, 'utf8') : ''
       if (/^\s*(export\s+)?STOREFRONT_TOKEN\s*=/m.test(current)) {
         io.stderr('Aviso: tu .env aún tiene STOREFRONT_TOKEN con una clave anterior; bórrala, el archivo de clave tiene prioridad.')
       }
-      writeFileAtomic(envFile, upsertEnv(current, { OPS_URL: r.ops_url || opsUrl, STOREFRONT_TOKEN_FILE: tokenFile }), 0o600)
+      writeFileAtomic(envFile, upsertEnv(current, { OPS_URL: opsUrl, STOREFRONT_TOKEN_FILE: tokenFile }), 0o600)
     }
-    io.stdout(`Conectada ✓ · ${r.scopes.length} alcances · ${maskToken(r.secret_token)}`)
+    io.stdout(`Conectada ✓ · ${r.scopes.length} alcances · ${maskToken(r.token)}`)
     io.stdout(`Clave guardada en ${tokenFile} (modo 0600).${envFile ? ` Variables en ${envFile}.` : ` Usa STOREFRONT_TOKEN_FILE=${tokenFile}.`}`)
 
     // Verify with the freshly written credential, through the same path the store will use.
-    const base = `${(r.ops_url || opsUrl).replace(/\/+$/, '')}/api/gw`
-    const sf = createStorefrontClient({ baseUrl: base, token: r.secret_token, ...(io.fetch ? { fetch: io.fetch } : {}), timeoutMs: 10_000 })
+    const base = r.api_base || `${opsUrl}/api/gw`
+    const sf = createStorefrontClient({ baseUrl: base, token: r.token, ...(io.fetch ? { fetch: io.fetch } : {}), timeoutMs: 10_000 })
     try {
       const info = await sf.token.introspect()
       if (info.missing_scopes?.length) {
         io.stderr(`Aviso: a la clave le faltan permisos (${info.missing_scopes.join(', ')}). Repáralo en ${repairPath()}.`)
       } else {
-        io.stdout(`Verificada con OPS · entorno ${info.environment}.`)
+        io.stdout(`Verificada con OPS · entorno ${info.environment ?? r.connection.environment}.`)
       }
     } catch {
       io.stderr('Aviso: la clave se guardó pero no pudimos verificarla con OPS todavía.')

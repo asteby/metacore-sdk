@@ -1,0 +1,19 @@
+{
+  "success": true,
+  "data": {
+    "token": "sk_live_rotated_00000000009999",
+    "grace_until": "2099-01-02T00:00:00Z",
+    "scopes": [
+      "catalog:read",
+      "cart:write",
+      "customer:write"
+    ],
+    "connection": {
+      "id": "7b0d6a52-3a51-4c1f-9d58-0c1c2a8f4e11",
+      "name": "Tienda en línea",
+      "kind": "headless_server",
+      "profile": "storefront",
+      "environment": "sandbox"
+    }
+  }
+}
