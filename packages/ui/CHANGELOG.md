@@ -1,5 +1,13 @@
 # @asteby/metacore-ui
 
+## 2.31.0
+
+### Minor Changes
+
+- fc5268f: `ActionBar`, `PageShell` y `BackLink` en `@asteby/metacore-ui/shared`, y `PageHeader` móvil (PR S-2 del plan UI/UX móvil). `ActionBar` deja una sola primaria, colapsa las secundarias en «⋯» por ancho medido (`ResizeObserver`) con `maxVisible` como tope, abre el «⋯» como bottom sheet bajo `md` y manda las destructivas al final del menú, en rojo y con confirmación. `PageHeader` se acomoda por container query (`@md`), suma `leading`, `subtitle` y `titleKind='identifier'` (una línea con `truncate`); los títulos de texto ahora envuelven en vez de truncarse. El botón de cerrar de `Sheet` gana área táctil de 44px con `pointer: coarse`. Se exporta el planificador puro `planActionBar` para los adaptadores (S-4).
+- 9b86c0f: Guardas móviles (PR S-1 del plan UI/UX móvil): `SidebarInset` y el `<main>` de `AuthenticatedLayout` recortan el desborde horizontal (`overflow-x-clip`, `min-w-0`) para que una fila ancha ya no arrastre el header; `Button` amplía su área táctil a 44px con `pointer: coarse` sin cambiar su aspecto; `HeaderActions` acepta `overflowBadge="dot"`; se exporta `MOBILE_BREAKPOINT` desde `hooks`.
+- 1f87680: `ResponsiveDialog` en `@asteby/metacore-ui/modal` (PR S-3 del plan UI/UX móvil): diálogo centrado desde 768px y bottom sheet por debajo (asa, deslizar para cerrar, `max-h-[92dvh]`, cuerpo con scroll, pie sticky con safe-area y teclado). El pie es declarativo con jerarquía fija (`primary`, `secondary`, `destructive` con confirmación integrada y `extra` del host). `Modal` y `FormModal` pasan a montarse encima, con las mismas props más `footerActions`/`mobile` y `footerExtra`; en móvil ahora se abren como bottom sheet (`mobile='dialog'` conserva el centrado). En `@asteby/metacore-sdk`: `ModalProps.footerExtra` y `ActionModalProps.footerExtra` opcionales (`ModalFooterAction[]`), para que el host añada acciones al pie sin portales.
+
 ## 2.29.0
 
 ### Minor Changes
