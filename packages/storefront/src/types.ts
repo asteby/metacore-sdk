@@ -396,6 +396,10 @@ export type InvoiceRequest = {
   regimen?: string
   uso_cfdi?: string
   cp?: string
+  /** Alias of `postal_code`, already in production use by some storefronts. */
+  zip?: string
+  /** Alias of `use`, already in production use by some storefronts. */
+  cfdi_use?: string
   /** Alias of `use`. */
   invoice_use?: string
   /** Also save the data to the buyer's account (needs a session). */

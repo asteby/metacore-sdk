@@ -95,6 +95,13 @@ describe('carts.setInvoice', () => {
     await expect(sf.carts.setInvoice(cart.id, { rfc: 'XAXX010101000', razon_social: 'PUBLICO EN GENERAL', regimen: '616', uso_cfdi: 'S01', cp: '06600' })).resolves.toMatchObject({ invoice: { requested: true } })
   })
 
+  it('accepts zip and cfdi_use, already in production use by some storefronts', async () => {
+    const cart = await readyCart()
+    await expect(
+      sf.carts.setInvoice(cart.id, { rfc: 'PEPJ800101AB3', legal_name: 'JUAN PEREZ PEREZ', tax_regime: '612', cfdi_use: 'G03', zip: '06600' }),
+    ).resolves.toMatchObject({ invoice: { requested: true } })
+  })
+
   it('answers 404 for an unknown cart', async () => {
     await expect(sf.carts.setInvoice('nope', FISICA)).rejects.toMatchObject({ status: 404 })
   })

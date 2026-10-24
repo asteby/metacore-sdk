@@ -48,8 +48,8 @@ export function validateInvoiceRequest(region: Region | null, input: InvoiceRequ
   const taxId = text(input.tax_id, input.rfc).toUpperCase()
   const name = text(input.legal_name, input.razon_social)
   const regime = text(input.tax_regime, input.regimen)
-  const use = text(input.use, input.uso_cfdi, input.invoice_use)
-  const postal = text(input.postal_code, input.cp)
+  const use = text(input.use, input.uso_cfdi, input.invoice_use, input.cfdi_use)
+  const postal = text(input.postal_code, input.cp, input.zip)
   const bad = (field: string, message: string): InvoiceFieldError => ({ field: `${prefix}.${field}`, message })
 
   if (!taxId) return bad('tax_id', 'The tax id is required')
