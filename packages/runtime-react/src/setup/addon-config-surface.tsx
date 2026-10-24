@@ -16,7 +16,7 @@ import { createContext, useContext, useEffect, useId, useRef, useState } from 'r
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { AlertCircle, Cable, Check, Link2, Loader2, RefreshCw, Settings } from 'lucide-react'
+import { AlertCircle, Cable, Check, Eye, EyeOff, Link2, Loader2, Pencil, RefreshCw, Settings, X } from 'lucide-react'
 import {
   Badge,
   Button,
@@ -151,6 +151,12 @@ export interface AddonConfigSurfaceProps {
    * Default true.
    */
   canManageIssuer?: boolean
+  /**
+   * Owner-only: lets the eye on a stored secret fetch its value on demand
+   * (GET /integrations/:provider/values/:key/reveal). Default false: the
+   * secret stays write-only and the eye is hidden.
+   */
+  canRevealSecrets?: boolean
   /** Active branch (for per-branch settings); null/absent hides the branch picker. */
   activeBranch?: { id: string; name?: string } | null
   /** Pulls the addon's own i18n bundle when its labels do not resolve yet. */
@@ -218,12 +224,21 @@ function ConnectorCredentialFieldControl({
   connected,
   provider,
   onChange,
+  stored = false,
+  onReveal,
+  resetKey,
 }: {
   field: ConnectorCredentialField
   value: string
   connected: boolean
   provider: string
   onChange: (value: string) => void
+  /** The backend already holds a value for this field (secret or not). */
+  stored?: boolean
+  /** Fetches a stored secret's value (owner only); absent → no eye while locked. */
+  onReveal?: (key: string) => Promise<string>
+  /** Changes when the stored values were swapped (environment flipped): relock. */
+  resetKey?: string
 }) {
   const { t } = useTranslation()
   const st = useSetupT()
@@ -240,6 +255,55 @@ function ConnectorCredentialFieldControl({
     : ''
   const isSecret = isSecretCredential(field)
   const isDynamic = field.type === 'dynamic_select' || !!field.options_source
+  // A stored field opens LOCKED (pencil to edit, eye to view) so a value is
+  // never changed by accident; a fresh field is editable straight away.
+  const [editing, setEditing] = useState(false)
+  const [visible, setVisible] = useState(false)
+  const [revealed, setRevealed] = useState<string | null>(null)
+  const [revealing, setRevealing] = useState(false)
+  const [armed, setArmed] = useState(false)
+  const initial = useRef('')
+  const locked = stored && !editing
+  useEffect(() => {
+    setEditing(false)
+    setVisible(false)
+    setRevealed(null)
+  }, [resetKey])
+  const canEye = isSecret ? (locked ? !!onReveal : true) : false
+  const toggleEye = async () => {
+    if (visible) {
+      setVisible(false)
+      setRevealed(null)
+      return
+    }
+    if (locked && onReveal) {
+      setRevealing(true)
+      try {
+        setRevealed(await onReveal(field.key))
+        setVisible(true)
+      } catch {
+        setRevealed(null)
+      } finally {
+        setRevealing(false)
+      }
+      return
+    }
+    setVisible(true)
+  }
+  const startEdit = () => {
+    initial.current = value
+    if (isSecret) onChange('')
+    setVisible(false)
+    setRevealed(null)
+    setArmed(true)
+    setEditing(true)
+    requestAnimationFrame(() => document.getElementById(`${form.idPrefix}-cred-${field.key}`)?.focus())
+  }
+  const cancelEdit = () => {
+    onChange(initial.current)
+    setVisible(false)
+    setEditing(false)
+  }
   const error = form.errors[field.key]
   const mismatch = shapeMismatch(field, value, form.fields)
   const target = mismatch?.suggestedKey
@@ -282,23 +346,69 @@ function ConnectorCredentialFieldControl({
           </SelectContent>
         </Select>
       ) : (
-        <Input
-          id={`${form.idPrefix}-cred-${field.key}`}
-          type={isSecret ? 'password' : 'text'}
-          // A secret must never be offered to (or filled by) the browser's
-          // password manager: "new-password" is the value browsers respect.
-          autoComplete={isSecret ? 'new-password' : 'off'}
-          data-1p-ignore={isSecret ? true : undefined}
-          data-lpignore={isSecret ? 'true' : undefined}
-          spellCheck={false}
-          autoCapitalize='off'
-          aria-invalid={!!error || undefined}
-          aria-describedby={error ? `${form.idPrefix}-cred-${field.key}-error` : undefined}
-          className={cn(error && 'border-destructive focus-visible:ring-destructive/40')}
-          placeholder={connected && isSecret ? '••••••••' : ''}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        />
+        <div className='flex items-center gap-1.5'>
+          <Input
+            id={`${form.idPrefix}-cred-${field.key}`}
+            name={`cfg_${field.key}`}
+            type={isSecret && !visible ? 'password' : 'text'}
+            // Browsers ignore autocomplete=off and fill the text field that
+            // precedes a password input; a field stays read-only until the user
+            // focuses it (and while locked) so nothing is filled behind their back.
+            autoComplete={isSecret ? 'new-password' : 'off'}
+            data-1p-ignore
+            data-lpignore='true'
+            data-form-type='other'
+            readOnly={locked || !armed}
+            onFocus={() => setArmed(true)}
+            spellCheck={false}
+            autoCapitalize='off'
+            aria-invalid={!!error || undefined}
+            aria-describedby={error ? `${form.idPrefix}-cred-${field.key}-error` : undefined}
+            className={cn(
+              error && 'border-destructive focus-visible:ring-destructive/40',
+              locked && 'bg-muted/40 text-muted-foreground',
+            )}
+            placeholder={(connected || stored) && isSecret ? '••••••••' : ''}
+            value={locked && isSecret ? (revealed ?? '') : value}
+            onChange={(e) => onChange(e.target.value)}
+          />
+          {canEye && (
+            <Button
+              type='button'
+              variant='ghost'
+              size='icon'
+              className='size-9 shrink-0'
+              disabled={revealing}
+              aria-label={visible ? st('installed_addons.field_hide', { defaultValue: 'Ocultar' }) : st('installed_addons.field_view', { defaultValue: 'Ver' })}
+              onClick={() => void toggleEye()}
+            >
+              {revealing ? <Loader2 className='size-4 animate-spin' /> : visible ? <EyeOff className='size-4' /> : <Eye className='size-4' />}
+            </Button>
+          )}
+          {locked ? (
+            <Button
+              type='button'
+              variant='ghost'
+              size='icon'
+              className='size-9 shrink-0'
+              aria-label={st('installed_addons.field_edit', { defaultValue: 'Editar' })}
+              onClick={startEdit}
+            >
+              <Pencil className='size-4' />
+            </Button>
+          ) : stored ? (
+            <Button
+              type='button'
+              variant='ghost'
+              size='icon'
+              className='size-9 shrink-0'
+              aria-label={st('installed_addons.field_cancel_edit', { defaultValue: 'Cancelar edición' })}
+              onClick={cancelEdit}
+            >
+              <X className='size-4' />
+            </Button>
+          ) : null}
+        </div>
       )}
       {error ? (
         <p id={`${form.idPrefix}-cred-${field.key}-error`} role='alert' className='text-xs text-destructive'>
@@ -482,6 +592,7 @@ export function AddonConfigSurface({
   onOpenChange,
   onSaved,
   canManageIssuer = true,
+  canRevealSecrets = false,
   activeBranch = null,
   ensureAddonBundle,
   notify = toast,
@@ -526,6 +637,16 @@ export function AddonConfigSurface({
   // credentials not saved yet (an action tests what is STORED: it saves first).
   const [blockResults, setBlockResults] = useState<Record<string, BlockResult | undefined>>({})
   const [credDirty, setCredDirty] = useState(false)
+  // Credential keys the backend already holds (non-secret values + secrets_set).
+  const [storedKeys, setStoredKeys] = useState<Set<string>>(new Set())
+  // Credentials that differ between sandbox and production (served by /values) and
+  // the environment the stored values were loaded for: flipping the selector swaps them.
+  const envScoped = useRef<Set<string>>(new Set())
+  const loadedEnv = useRef<string | null>(null)
+  const envField = credFields.find(
+    (f) => f.type === 'select' && ['environment', 'mode', 'env'].includes(f.key),
+  )
+  const envValue = envField ? (credValues[envField.key] ?? '') : ''
   const stepHeadingRef = useRef<HTMLHeadingElement>(null)
   const stepMoved = useRef(false)
   const setCred = (key: string, val: string) => {
@@ -586,6 +707,9 @@ export function AddonConfigSurface({
     setFieldErrors({})
     setBlockResults({})
     setCredDirty(false)
+    setStoredKeys(new Set())
+    envScoped.current = new Set()
+    loadedEnv.current = null
     if (!canManageIssuer || !connector?.provider || credFields.length === 0) return
     let cancelled = false
     api
@@ -593,6 +717,12 @@ export function AddonConfigSurface({
       .then((res) => {
         const stored = (res.data?.data?.values ?? {}) as Record<string, string>
         if (cancelled) return
+        const secretsSet = (res.data?.data?.secrets_set ?? []) as string[]
+        envScoped.current = new Set((res.data?.data?.env_scoped ?? []) as string[])
+        if (envField) loadedEnv.current = stored[envField.key] ?? ''
+        setStoredKeys(
+          new Set([...Object.keys(stored).filter((k) => stored[k] !== ''), ...secretsSet]),
+        )
         // Only fields the user has not touched yet.
         setCredValues((prev) => {
           const next = { ...prev }
@@ -613,6 +743,37 @@ export function AddonConfigSurface({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, connector?.provider, canManageIssuer])
+
+  // Sandbox and production keep their own credentials: flipping the selector
+  // swaps the environment-scoped fields for the ones stored for that environment
+  // (locked when it has them, empty when it does not) instead of making the
+  // operator paste every key again. Nothing is saved until «Guardar».
+  useEffect(() => {
+    if (!open || !envField || !envValue || !canManageIssuer || !connector?.provider) return
+    if (loadedEnv.current === null || loadedEnv.current === envValue) return
+    let cancelled = false
+    api
+      .get(`/integrations/${connector.provider}/values?environment=${encodeURIComponent(envValue)}`)
+      .then((res) => {
+        if (cancelled) return
+        const stored = (res.data?.data?.values ?? {}) as Record<string, string>
+        const secretsSet = (res.data?.data?.secrets_set ?? []) as string[]
+        loadedEnv.current = envValue
+        setStoredKeys(new Set([...Object.keys(stored).filter((k) => stored[k] !== ''), ...secretsSet]))
+        setCredValues((prev) => {
+          const next = { ...prev }
+          for (const k of envScoped.current) next[k] = stored[k] ?? ''
+          return next
+        })
+      })
+      .catch(() => {
+        /* keep what is on screen */
+      })
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, envValue])
 
   // Load stored settings values + definitions. The backend returns the
   // manifest's setting definitions alongside the stored values; fall back to
@@ -865,12 +1026,32 @@ export function AddonConfigSurface({
   )
   const canSync = !!connector?.sync_endpoint && !!connector?.connected
 
+  const revealSecret = async (key: string) => {
+    try {
+      const res = await api.get(
+        `/integrations/${connector?.provider}/values/${encodeURIComponent(key)}/reveal${
+          envValue ? `?environment=${encodeURIComponent(envValue)}` : ''
+        }`,
+      )
+      return String(res.data?.data?.value ?? '')
+    } catch (err) {
+      notify.error(st('installed_addons.field_reveal_error', { defaultValue: 'No se pudo mostrar el valor.' }))
+      throw err
+    }
+  }
+  const storedProps = (key: string) => ({
+    stored: storedKeys.has(key),
+    resetKey: envValue,
+    onReveal: canRevealSecrets ? revealSecret : undefined,
+  })
+
   const renderCred = (f: ConnectorCredentialField) => (
     <ConnectorCredentialFieldControl
       key={f.key}
       field={f}
       connected={!!connector?.connected}
       provider={connector?.provider ?? ''}
+      {...storedProps(f.key)}
       value={credValues[f.key] ?? ''}
       onChange={(val) => setCred(f.key, val)}
     />
@@ -1298,6 +1479,7 @@ export function AddonConfigSurface({
                               field={f}
                               connected={!!connector?.connected}
                               provider={connector?.provider ?? ''}
+      {...storedProps(f.key)}
                               value={credValues[f.key] ?? ''}
                               onChange={(val) => setCred(f.key, val)}
                             />
@@ -1314,6 +1496,7 @@ export function AddonConfigSurface({
                           field={f}
                           connected={!!connector?.connected}
                           provider={connector?.provider ?? ''}
+      {...storedProps(f.key)}
                           value={credValues[f.key] ?? ''}
                           onChange={(val) => setCred(f.key, val)}
                         />
@@ -1333,6 +1516,7 @@ export function AddonConfigSurface({
                                 field={f}
                                 connected={!!connector?.connected}
                                 provider={connector?.provider ?? ''}
+      {...storedProps(f.key)}
                                 value={credValues[f.key] ?? ''}
                                 onChange={(val) => setCred(f.key, val)}
                               />

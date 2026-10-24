@@ -112,6 +112,61 @@ describe('AddonConfigSurface', () => {
         expect(onSaved).toHaveBeenCalled()
     })
 
+    it('stored fields open locked: pencil unlocks, eye reveals a secret only for owners', async () => {
+        const values = { 'GET /integrations/mp/values': { data: { values: { public_key: 'APP_USR-x' }, secrets_set: ['access_token'] } } }
+        const reveal = { 'GET /integrations/mp/values/access_token/reveal?environment=sandbox': { data: { value: 'APP_USR-secret' } } }
+        const { calls } = setup({ connector, canRevealSecrets: true }, { ...values, ...reveal })
+        const pub = (await screen.findByLabelText(/Llave pública/)) as HTMLInputElement
+        const secret = screen.getByLabelText(/Token/) as HTMLInputElement
+        await waitFor(() => expect(pub.readOnly).toBe(true))
+        expect(secret.readOnly).toBe(true)
+        // eye on the locked secret fetches the value on demand
+        fireEvent.click(screen.getAllByLabelText('Ver')[0])
+        await waitFor(() => expect(secret.value).toBe('APP_USR-secret'))
+        expect(calls.some((c) => c.url === '/integrations/mp/values/access_token/reveal?environment=sandbox')).toBe(true)
+        // pencil unlocks the public key for editing
+        fireEvent.click(screen.getAllByLabelText('Editar')[0])
+        await waitFor(() => expect(pub.readOnly).toBe(false))
+    })
+
+    it('flipping the environment swaps the scoped fields for that environment\'s stored ones', async () => {
+        const conn: ConnectorEntry = {
+            ...connector,
+            credentials: [connector.credentials![2], connector.credentials![0], connector.credentials![1]].map((f) =>
+                f.key === 'env' ? { ...f, default: 'sandbox' } : f,
+            ),
+        }
+        const { calls } = setup(
+            { connector: conn },
+            {
+                'GET /integrations/mp/values': { data: { values: { public_key: 'TEST-pub', env: 'sandbox' }, secrets_set: ['access_token'], env_scoped: ['public_key', 'access_token'] } },
+                'GET /integrations/mp/values?environment=prod': { data: { values: {}, secrets_set: [], env_scoped: ['public_key', 'access_token'] } },
+            },
+        )
+        const pub = (await screen.findByLabelText(/Llave pública/)) as HTMLInputElement
+        await waitFor(() => expect(pub.value).toBe('TEST-pub'))
+        expect(pub.readOnly).toBe(true)
+        // flip to production: the sandbox keys go away, the fields open empty (nothing stored there yet)
+        const trigger = screen.getByRole('combobox')
+        fireEvent.pointerDown(trigger)
+        fireEvent.click(trigger)
+        fireEvent.click(await screen.findByText('prod'))
+        await waitFor(() => expect(calls.some((c) => c.url === '/integrations/mp/values?environment=prod')).toBe(true))
+        await waitFor(() => expect(pub.value).toBe(''))
+        expect(screen.queryByLabelText('Editar')).toBeNull()
+    })
+
+    it('without owner rights a locked secret has no eye and nothing is fetched', async () => {
+        const { calls } = setup(
+            { connector },
+            { 'GET /integrations/mp/values': { data: { values: { public_key: 'APP_USR-x' }, secrets_set: ['access_token'] } } },
+        )
+        const secret = (await screen.findByLabelText(/Token/)) as HTMLInputElement
+        await waitFor(() => expect(secret.readOnly).toBe(true))
+        expect(screen.queryByLabelText('Ver')).toBeNull()
+        expect(calls.some((c) => c.url.endsWith('/reveal'))).toBe(false)
+    })
+
     it('does not fetch stored values for non-admins and explains why', async () => {
         const { calls } = setup({ connector, canManageIssuer: false })
         expect(await screen.findByText(/Solo un administrador de la organización/)).toBeTruthy()
