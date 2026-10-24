@@ -624,6 +624,42 @@ useOpenCartDrawerWhenDone(fetchers.some(isAdd), { skip: silent })
 - Estilos: `cart.css` (CSS plano con los tokens de la tienda) y/o `classNames` por pieza (Tailwind). Cada pieza lleva `data-sf-cart-*`.
 - `renderLine`, `renderImage`, `icons`, `notice` y `isDefaultVariantTitle` cubren las variaciones de cada tienda.
 
+### Agregado optimista (`cartOptimistic`, `useOptimisticAdd`)
+
+Al pulsar «Agregar» la fila aparece YA en el cajón, el contador sube y el cajón se abre (sin mover el foco al botón de cierre); cuando OPS responde, el carrito real la sustituye. Si la acción falla (409 sin existencias, `store_not_ready`, red, 5xx, tiempo agotado) la fila se quita, el contador regresa y aparece «No pudimos agregar X: motivo» (`role="alert"`, descartable); si el cajón queda vacío por el fallo, se cierra. **Solo es la fila**: precios, totales, envío e impuestos los dicta siempre OPS; el subtotal conserva el último valor de OPS con «calculando…» hasta confirmar. Sin JavaScript el formulario de la ruta sigue funcionando igual.
+
+```tsx
+import { useFetcher } from 'react-router'
+import { useOptimisticAdd, useOptimisticCartCount } from '@asteby/storefront-react/cart'
+
+function AddToCart({ product, variant }) {
+  const fetcher = useFetcher()
+  const { add } = useOptimisticAdd(fetcher) // confirma o revierte cuando el fetcher termina
+  return (
+    <fetcher.Form method="post" action="/carrito"
+      onSubmit={(e) => {
+        e.preventDefault()
+        const form = e.currentTarget
+        add(
+          { variantId: variant.id, title: product.title, variantTitle: variant.title, image: product.featured_image, price: variant.price, quantity: 1 },
+          () => fetcher.submit(form),
+        )
+      }}>
+      <input type="hidden" name="intent" value="add" />
+      <input type="hidden" name="variant_id" value={variant.id} />
+      <button type="submit">Agregar</button>
+    </fetcher.Form>
+  )
+}
+
+const badge = useOptimisticCartCount(cart?.total_quantity ?? 0) // contador de la cabecera
+```
+
+- La acción de ruta debe devolver el error en `fetcher.data` (`{ error: { code, status } }`, `{ ok: false }`, `{ success: false }` o `{ status >= 400 }`); para otro formato pasa `useOptimisticAdd(fetcher, { settle: (data) => ({ ok: true }) | ({ ok: false, reason }) })`. `describeAddFailure({ status, code })` da el motivo en es-MX.
+- API sin React: `cartOptimistic.add(input, { open?, timeoutMs? })` devuelve el id de la acción; `confirm(id)`, `rollback(id, reason)`, `discard(id)` (sin aviso), `dismissNotice(id)`, `reset()`. Con `input.key` repetir la llamada no suma otra vez (doble clic); la misma variante comparte una fila y cada acción se confirma o revierte por separado, en cualquier orden.
+- Un segundo `add` con el mismo fetcher antes de terminar da por entregado el anterior (el router lo reemplaza y manda el carrito real de la revalidación). Si el componente se desmonta, las filas en vuelo se descartan sin aviso.
+- `optimisticLabels` en `CartDrawer` cambia los textos (`adding`, `added` «Agregado al carrito» en región `aria-live="polite"`, `calculating`, `failed(title, reason)`, `dismiss`). `cart.css` ya estiliza `data-sf-cart-line-pending`, `data-sf-cart-notice` y respeta `prefers-reduced-motion`.
+
 ## Compatibilidad de vehículos (`@asteby/storefront-react/fitment`)
 
 Módulo opcional y sin interfaz para tiendas de refacciones: catálogo marca → modelo → año → motor, clave de vehículo, opciones en cascada del selector y estado de compatibilidad de cada pieza. No trae textos ni marcas: los prefijos de etiqueta, el atributo de la tabla de compatibilidad y las grafías del backend se inyectan con `fitmentConfig` / `parseCatalog`.

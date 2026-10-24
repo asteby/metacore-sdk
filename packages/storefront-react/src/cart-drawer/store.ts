@@ -6,9 +6,21 @@ import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 let isOpen = false
 const listeners = new Set<() => void>()
 
+let quietOpen = false
+
+/** Marca que el cajón lo abrió una acción optimista (la apertura no mueve el foco al botón de cierre). */
+export function setQuietOpen(next: boolean) {
+  quietOpen = next
+}
+
+export function isQuietOpen() {
+  return quietOpen
+}
+
 function set(next: boolean) {
   if (isOpen === next) return
   isOpen = next
+  if (!next) quietOpen = false
   for (const l of [...listeners]) l()
 }
 

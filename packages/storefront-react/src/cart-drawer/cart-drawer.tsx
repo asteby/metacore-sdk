@@ -2,7 +2,29 @@ import { useEffect, useId, type ElementType, type ReactNode } from 'react'
 import { formatMoney, type Cart, type CartLine, type Money } from '@asteby/storefront'
 import { useModalDialog } from '../dialog.js'
 import { useResolvedLocale } from '../locale.js'
-import { closeCartDrawer, useCartDrawer } from './store.js'
+import { closeCartDrawer, isQuietOpen, useCartDrawer } from './store.js'
+import { cartOptimistic, useOptimisticCart, type OptimisticNotice, type OptimisticRow } from './optimistic.js'
+
+/** Textos del estado optimista. Por omisión es-MX; la tienda puede traducirlos o cambiarlos. */
+export type CartDrawerOptimisticLabels = {
+  /** Estado discreto en la fila provisional. */
+  adding: string
+  /** Anuncio `aria-live="polite"` al mostrar/confirmar la fila. */
+  added: string
+  /** Junto al subtotal mientras OPS no confirma. */
+  calculating: string
+  /** Aviso de error: «No pudimos agregar X: motivo». */
+  failed: (title: string, reason: string) => string
+  dismiss: string
+}
+
+export const DEFAULT_OPTIMISTIC_LABELS: CartDrawerOptimisticLabels = {
+  adding: 'Agregando…',
+  added: 'Agregado al carrito',
+  calculating: 'calculando…',
+  failed: (title, reason) => `No pudimos agregar ${title}: ${reason}`,
+  dismiss: 'Descartar aviso',
+}
 
 export type CartDrawerLabels = {
   /** Título; el cajón agrega " (N)" con la cantidad de unidades. */
@@ -63,7 +85,7 @@ export type CartDrawerSlot =
   | 'dialog' | 'panel' | 'header' | 'title' | 'close' | 'empty' | 'body' | 'shipping' | 'bar' | 'barFill' | 'lines' | 'line'
   | 'image' | 'lineTitle' | 'variant' | 'price' | 'qty' | 'qtyButton' | 'qtyValue' | 'remove' | 'upsell' | 'footer' | 'subtotal'
   | 'note' | 'actions' | 'checkout' | 'viewCart' | 'browse' | 'emptyTitle' | 'emptyHint' | 'shippingMessage' | 'lineMain'
-  | 'lineHead' | 'lineText' | 'controls' | 'upsellTitle' | 'subtotalLabel' | 'subtotalValue'
+  | 'notices' | 'lineHead' | 'lineText' | 'controls' | 'upsellTitle' | 'subtotalLabel' | 'subtotalValue'
 
 export type CartDrawerIcons = { close?: ReactNode; decrease?: ReactNode; increase?: ReactNode; shipping?: ReactNode; shippingReached?: ReactNode }
 
@@ -90,6 +112,8 @@ export type CartDrawerProps = {
   icons?: CartDrawerIcons
   /** Clases por pieza (además de los `data-sf-cart-*`), para tiendas con Tailwind. */
   classNames?: Partial<Record<CartDrawerSlot, string>>
+  /** Textos de las filas provisionales y de los avisos (por omisión es-MX). */
+  optimisticLabels?: Partial<CartDrawerOptimisticLabels>
   locale?: string
   /** Se llama al abrir/cerrar por cualquier vía. */
   onOpenChange?: (open: boolean) => void
@@ -131,6 +155,9 @@ export function CartDrawer(props: CartDrawerProps) {
   const { cart, labels, paths, shipping, notice, upsell, upsellTitle, icons, classNames: cx = {}, onOpenChange } = props
   const locale = useResolvedLocale(props.locale)
   const { open } = useCartDrawer()
+  const opt = useOptimisticCart()
+  const ol = { ...DEFAULT_OPTIMISTIC_LABELS, ...props.optimisticLabels }
+  const quiet = open && isQuietOpen()
   const titleId = useId()
   const upsellId = useId()
   const { ref, onBackdropClick } = useModalDialog({ open, onClose: () => closeCartDrawer() })
@@ -139,15 +166,25 @@ export function CartDrawer(props: CartDrawerProps) {
     onOpenChange?.(open)
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!open) return null
+  const realLines = cart?.lines.length ?? 0
+  const rollbackEmpty = open && quiet && realLines === 0 && opt.rows.length === 0 && opt.notices.length > 0
+  useEffect(() => {
+    // Sin filas y con un aviso de fallo, un cajón vacío abierto por la acción sería engañoso: se cierra.
+    if (rollbackEmpty) closeCartDrawer()
+  }, [rollbackEmpty])
+
+  if (!open) return opt.notices.length ? <OptimisticNotices notices={opt.notices} labels={ol} classNames={cx} /> : null
 
   const money = props.renderMoney ?? ((m: Money) => formatMoney(m, locale))
   const link = props.renderLink ?? (({ href, className, children, onClick }: CartDrawerLinkProps) => (
     <a href={href} className={className} onClick={onClick}>{children}</a>
   ))
-  const count = cart?.total_quantity ?? 0
+  const pendingByVariant = new Map(opt.rows.map((r) => [r.variantId, r]))
+  const count = (cart?.total_quantity ?? 0) + opt.quantity
   const lines = cart?.lines ?? []
-  const empty = !cart || lines.length === 0
+  const extraRows = opt.rows.filter((r) => !lines.some((l) => l.merchandise.id === r.variantId))
+  const pending = opt.rows.length > 0
+  const empty = lines.length === 0 && extraRows.length === 0
   const close = () => closeCartDrawer()
 
   return (
@@ -166,10 +203,13 @@ export function CartDrawer(props: CartDrawerProps) {
           <h2 id={titleId} tabIndex={-1} className={cx.title} data-sf-cart-title="">
             {labels.title}{count > 0 ? ` (${count})` : ''}
           </h2>
-          <button type="button" onClick={close} aria-label={labels.close} className={cx.close} data-sf-cart-close="" data-sf-autofocus="">
+          <button type="button" onClick={close} aria-label={labels.close} className={cx.close} data-sf-cart-close="" data-sf-autofocus={quiet ? undefined : ''}>
             {icons?.close ?? <span aria-hidden="true">✕</span>}
           </button>
         </div>
+
+        <OptimisticNotices notices={opt.notices} labels={ol} classNames={cx} />
+        <OptimisticStatus kind={opt.announcement.kind} n={opt.announcement.n} text={ol.added} />
 
         {empty ? (
           <div className={cx.empty} data-sf-cart-empty="">
@@ -204,7 +244,10 @@ export function CartDrawer(props: CartDrawerProps) {
 
               <ul className={cx.lines} data-sf-cart-lines="">
                 {lines.map((line) => (
-                  <DrawerLine key={line.id} line={line} props={props} money={money} link={link} close={close} />
+                  <DrawerLine key={line.id} line={line} props={props} money={money} link={link} close={close} pending={pendingByVariant.get(line.merchandise.id)} pendingLabel={ol.adding} />
+                ))}
+                {extraRows.map((row) => (
+                  <PendingLine key={`pending-${row.variantId}`} row={row} props={props} money={money} label={ol.adding} />
                 ))}
               </ul>
 
@@ -217,9 +260,9 @@ export function CartDrawer(props: CartDrawerProps) {
             </div>
 
             <div className={cx.footer} data-sf-cart-footer="">
-              <div className={cx.subtotal} data-sf-cart-subtotal="">
+              <div className={cx.subtotal} data-sf-cart-subtotal="" aria-busy={pending || undefined}>
                 <span className={cx.subtotalLabel}>{labels.subtotal}</span>
-                <span className={cx.subtotalValue} data-sf-cart-subtotal-value="">{cart ? money(cart.cost.subtotal) : null}</span>
+                <span className={cx.subtotalValue} data-sf-cart-subtotal-value="">{cart ? money(cart.cost.subtotal) : null}{pending ? <span data-sf-cart-calculating="">{cart ? ' ' : ''}{ol.calculating}</span> : null}</span>
               </div>
               {labels.note ? <p className={cx.note} data-sf-cart-note="">{labels.note}</p> : null}
               <div className={cx.actions} data-sf-cart-actions="">
@@ -240,7 +283,11 @@ function DrawerLine({
   money,
   link,
   close,
+  pending,
+  pendingLabel,
 }: {
+  pending?: OptimisticRow | undefined
+  pendingLabel: string
   line: CartLine
   props: CartDrawerProps
   money: (m: Money) => ReactNode
@@ -250,7 +297,7 @@ function DrawerLine({
   const { labels, paths, icons, classNames: cx = {} } = props
   const f = { ...DEFAULT_FORM, ...props.form }
   const { Form, formData } = (props.useLineForm ?? useNativeForm)()
-  const quantity = formData ? Number(formData.get(f.quantityField) ?? 0) : line.quantity
+  const quantity = formData ? Number(formData.get(f.quantityField) ?? 0) : line.quantity + (pending?.quantity ?? 0)
   if (formData && (formData.get(f.intentField) === f.removeIntent || quantity === 0)) return null
 
   const merch = line.merchandise
@@ -299,7 +346,58 @@ function DrawerLine({
           {price}
         </div>
         {controls}
+        {pending ? <p className={cx.variant} data-sf-cart-pending-label="">{pendingLabel}</p> : null}
       </div>
     </li>
+  )
+}
+
+/** Fila que existe solo en el navegador hasta que OPS la confirma: sin controles, con el precio unitario mostrado. */
+function PendingLine({ row, props, money, label }: { row: OptimisticRow; props: CartDrawerProps; money: (m: Money) => ReactNode; label: string }) {
+  const { classNames: cx = {} } = props
+  const isDefault = props.isDefaultVariantTitle ?? defaultIsDefaultVariant
+  return (
+    <li className={cx.line} data-sf-cart-line="" data-sf-cart-line-pending="" aria-busy="true">
+      <span className={cx.image} data-sf-cart-image="">
+        {row.image ? <img src={row.image.url} alt={row.image.alt ?? ''} width={80} height={80} decoding="async" /> : null}
+      </span>
+      <div className={cx.lineMain} data-sf-cart-line-main="">
+        <div className={cx.lineHead} data-sf-cart-line-head="">
+          <div className={cx.lineText} data-sf-cart-line-text="">
+            <span className={cx.lineTitle} data-sf-cart-line-title="">{row.title}</span>
+            {row.variantTitle && !isDefault(row.variantTitle) ? <p className={cx.variant} data-sf-cart-variant="">{row.variantTitle}</p> : null}
+          </div>
+          {row.price ? <span className={cx.price} data-sf-cart-price="">{money(row.price)}</span> : null}
+        </div>
+        <p className={cx.variant} data-sf-cart-pending-label="">{label} · ×{row.quantity}</p>
+      </div>
+    </li>
+  )
+}
+
+/** Región `aria-live="polite"`: anuncia «Agregado al carrito». Alterna un espacio fino para repetir el mismo texto. */
+function OptimisticStatus({ kind, n, text }: { kind: 'added' | null; n: number; text: string }) {
+  return (
+    <div role="status" aria-live="polite" data-sf-cart-status="" style={VISUALLY_HIDDEN}>
+      {kind === 'added' ? `${text}${n % 2 ? '' : '\u200B'}` : ''}
+    </div>
+  )
+}
+
+const VISUALLY_HIDDEN = { position: 'absolute', width: 1, height: 1, margin: -1, padding: 0, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0 } as const
+
+/** Avisos de fallo (`role="alert"`, assertive), descartables. Se pintan dentro del cajón abierto o, si está cerrado, sueltos. */
+function OptimisticNotices({ notices, labels, classNames: cx }: { notices: readonly OptimisticNotice[]; labels: CartDrawerOptimisticLabels; classNames: Partial<Record<CartDrawerSlot, string>> }) {
+  return (
+    <div role="alert" aria-live="assertive" data-sf-cart-notices="" className={cx.notices}>
+      {notices.map((n) => (
+        <p key={n.id} data-sf-cart-notice="">
+          <span>{labels.failed(n.title, n.reason)}</span>
+          <button type="button" onClick={() => cartOptimistic.dismissNotice(n.id)} aria-label={labels.dismiss} data-sf-cart-notice-dismiss="">
+            <span aria-hidden="true">✕</span>
+          </button>
+        </p>
+      ))}
+    </div>
   )
 }
