@@ -11,7 +11,17 @@ afterEach(cleanup)
 
 const AXE = { rules: { 'color-contrast': { enabled: false } } }
 
-function Form({ lookup, serverFields, provinces }: { lookup?: (zip: string) => Promise<PostalCodeInfo | null>; serverFields?: string[]; provinces?: { name: string }[] }) {
+function Form({
+  lookup,
+  serverFields,
+  provinces,
+  lockProvinceOnFill,
+}: {
+  lookup?: (zip: string) => Promise<PostalCodeInfo | null>
+  serverFields?: string[]
+  provinces?: { name: string }[]
+  lockProvinceOnFill?: boolean
+}) {
   const ref = useRef<HTMLFormElement>(null)
   const v = useFieldErrors(ref, { serverFields: serverFields ?? null })
   return (
@@ -23,7 +33,14 @@ function Form({ lookup, serverFields, provinces }: { lookup?: (zip: string) => P
       </fieldset>
       <fieldset>
         <legend>Dirección</legend>
-        <AddressFields errors={v.errors} countryCode="MX" postalCode={{ pattern: '[0-9]{5}', maxLength: 5, inputMode: 'numeric', title: 'Escribe los 5 dígitos.' }} {...(lookup ? { lookupPostalCode: lookup } : {})} {...(provinces ? { provinces } : {})} />
+        <AddressFields
+          errors={v.errors}
+          countryCode="MX"
+          postalCode={{ pattern: '[0-9]{5}', maxLength: 5, inputMode: 'numeric', title: 'Escribe los 5 dígitos.' }}
+          {...(lookup ? { lookupPostalCode: lookup } : {})}
+          {...(provinces ? { provinces } : {})}
+          {...(lockProvinceOnFill ? { lockProvinceOnFill } : {})}
+        />
       </fieldset>
       <button type="submit">Continuar</button>
     </form>
@@ -73,6 +90,41 @@ describe('ContactFields + AddressFields', () => {
     expect([...container.querySelectorAll('datalist option')].map((o) => o.getAttribute('value'))).toEqual(['Roma Norte', 'Roma Sur'])
     expect(screen.getByLabelText(/Colonia/).getAttribute('list')).toBeTruthy()
     expect(screen.getByRole('status').textContent).toMatch(/Completamos estado y ciudad/)
+  })
+
+  it('lockProvinceOnFill locks a plain state field once the lookup fills it, but never one the buyer typed', async () => {
+    const lookup = vi.fn(async () => ({ province: 'Jalisco', city: 'Guadalajara', neighborhoods: [] }))
+    render(<Form lookup={lookup} lockProvinceOnFill />)
+    const province = screen.getByLabelText('Estado') as HTMLInputElement
+    expect(province.readOnly).toBe(false)
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '44100' } })
+    await waitFor(() => expect(province.value).toBe('Jalisco'))
+    expect(province.readOnly).toBe(true)
+    expect(province.getAttribute('aria-readonly')).toBe('true')
+    expect(province.getAttribute('data-sf-locked')).toBe('1')
+  })
+
+  it('lockProvinceOnFill never locks a state the buyer already typed themselves', async () => {
+    const lookup = vi.fn(async () => ({ province: 'Jalisco', city: 'Guadalajara', neighborhoods: [] }))
+    render(<Form lookup={lookup} lockProvinceOnFill />)
+    const province = screen.getByLabelText('Estado') as HTMLInputElement
+    fireEvent.input(province, { target: { value: 'Nayarit' } })
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '44100' } })
+    await waitFor(() => expect(lookup).toHaveBeenCalled())
+    expect(province.value).toBe('Nayarit')
+    expect(province.readOnly).toBe(false)
+  })
+
+  it('lockProvinceOnFill on a state <select> disables it but keeps submitting its value via a hidden field', async () => {
+    const lookup = vi.fn(async () => ({ province: 'Jalisco', city: 'Guadalajara', neighborhoods: [] }))
+    const { container } = render(<Form lookup={lookup} lockProvinceOnFill provinces={[{ name: 'Jalisco' }, { name: 'Nayarit' }]} />)
+    const province = screen.getByLabelText('Estado') as HTMLSelectElement
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '44100' } })
+    await waitFor(() => expect(province.value).toBe('Jalisco'))
+    expect(province.disabled).toBe(true)
+    expect(province.hasAttribute('name')).toBe(false)
+    const hidden = container.querySelector('input[type="hidden"][name="province"]') as HTMLInputElement
+    expect(hidden.value).toBe('Jalisco')
   })
 })
 
