@@ -1263,7 +1263,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
           legal_name: String(fiscal.legal_name ?? fiscal.razon_social),
           tax_regime: String(fiscal.tax_regime ?? fiscal.regimen),
           postal_code: String(fiscal.postal_code ?? fiscal.cp),
-          invoice_use: String(fiscal.use ?? fiscal.uso_cfdi ?? '') || null,
+          invoice_use: String(fiscal.use ?? fiscal.uso_cfdi ?? fiscal.invoice_use ?? '') || null,
           document: fiscal.document ?? null,
           verification: { status: 'reviewed', checked_at: now() },
         }

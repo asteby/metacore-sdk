@@ -1,0 +1,70 @@
+/**
+ * SYNTHETIC constancia texts for the tests: invented people and ids that follow the format only. Nothing here
+ * belongs to a real person or company. They are the same samples the region pack tests its seeded rules with
+ * (region_mx identity_mx_test.go), so both interpreters are held to the same readings.
+ */
+export const CURP_FISICA = 'PEPJ800101HDFRRN09'
+export const RFC_FISICA = 'PEPJ800101ABC'
+export const RFC_MORAL = 'ABC010203AB1'
+export const ID_CIF_FISICA = '22032805709'
+export const ID_CIF_MORAL = '19010203040'
+
+export const QR_URL_FISICA = 'https://siat.sat.gob.mx/app/qr/faces/pages/mobile/validadorqr.jsf?D1=10&D2=1&D3=22032805709_PEPJ800101ABC'
+/** Same document id, another RFC. */
+export const QR_URL_OTRO = 'https://siat.sat.gob.mx/v?D3=22032805709_ABC010203AB1'
+
+/** Persona física with TWO regimes; the activity says "empresariales" (not a regime) and the street is sensitive data. */
+export const CSF_FISICA = `
+CÉDULA DE IDENTIFICACIÓN FISCAL
+idCIF: 22032805709
+Registro Federal de Contribuyentes
+PEPJ800101ABC
+Constancia de Situación Fiscal
+Lugar y Fecha de Emisión
+CIUDAD DE MEXICO , CIUDAD DE MEXICO A 15 DE MARZO DE 2024
+Datos de Identificación del Contribuyente:
+RFC: PEPJ800101ABC
+CURP: PEPJ800101HDFRRN09
+Nombre (s): JUAN CARLOS
+Primer Apellido: PEREZ
+Segundo Apellido: PEREZ
+Fecha inicio de operaciones: 01 DE ENERO DE 2020
+Estatus en el padrón: ACTIVO
+Fecha de último cambio de estado: 01 DE ENERO DE 2020
+Nombre Comercial:
+Datos del domicilio registrado
+Código Postal: 06600 Tipo de Vialidad: CALLE Nombre de Vialidad: REFORMA
+Número Exterior: 10 Número Interior: Nombre de la Colonia: JUAREZ
+Actividades Económicas:
+Orden Actividad Económica Porcentaje Fecha Inicio Fecha Fin
+1 Actividades empresariales de comercio 100 01/01/2020
+Regímenes:
+Régimen Fecha Inicio Fecha Fin
+Régimen de Actividades Empresariales y Profesionales 01/01/2020
+Régimen de Sueldos y Salarios e Ingresos Asimilados a Salarios 01/02/2021
+Obligaciones:
+Descripción de la Obligación Descripción Vencimiento Fecha Inicio
+`
+
+/** Persona moral. */
+export const CSF_MORAL = `
+idCIF: 19010203040
+RFC: ABC010203AB1
+Denominación/Razón Social: EMPRESA DE PRUEBA SA DE CV
+Régimen de capital: SOCIEDAD ANONIMA DE CAPITAL VARIABLE
+Nombre Comercial: PRUEBAS
+Fecha de constitución: 03 DE FEBRERO DE 2001
+Estatus en el padrón: ACTIVO
+Datos del domicilio registrado
+Código Postal: 44100
+Tipo de Vialidad: AVENIDA
+Regímenes:
+Régimen General de Ley Personas Morales 03/02/2001
+Obligaciones:
+`
+
+export const CSF_FISICA_LINES = CSF_FISICA.split('\n').filter(Boolean)
+export const CSF_MORAL_LINES = CSF_MORAL.split('\n').filter(Boolean)
+
+/** A PDF protected with a user password (made with Ghostscript from a one-page text PDF). */
+export const LOCKED_PDF_BASE64 = 'JVBERi0xLjcKJcfsj6IKJSVJbnZvY2F0aW9uOiBncyAtcSAtZE5PUEFVU0UgLWRCQVRDSCAtc0RFVklDRT1wZGZ3cml0ZSAtc093bmVyUGFzc3dvcmQ9PyAtc1VzZXJQYXNzd29yZD0/IC1kRW5jcnlwdGlvblI9MyAtZEtleUxlbmd0aD0xMjggLXNPdXRwdXRGaWxlPT8gPwo1IDAgb2JqCjw8L0xlbmd0aCA2IDAgUi9GaWx0ZXIgL0ZsYXRlRGVjb2RlPj4Kc3RyZWFtCszZIb6VI6MRknR6V25sO4W60pVLo/2x2Fn05RGwRh025oZAva0nYrx42OJ9V7Yif4IHdX/8rUYFer/MxbRLOp7AE6i8S8YQ2RdZXaa0pYHkFpi22uRdyDRP6RlobACbDhJ90JgeMi6hisxCqkoMAyheIzYlurfBJ1plfgfX4r1x9vlWdGA9/k0Nc3joxOLYnGVuZHN0cmVhbQplbmRvYmoKNiAwIG9iagoxNDQKZW5kb2JqCjQgMCBvYmoKPDwvVHlwZS9QYWdlL01lZGlhQm94IFswIDAgNTk1IDg0Ml0KL1JvdGF0ZSAwL1BhcmVudCAzIDAgUgovUmVzb3VyY2VzPDwvUHJvY1NldFsvUERGIC9UZXh0XQovRm9udCA4IDAgUgo+PgovQ29udGVudHMgNSAwIFIKPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9LaWRzIFsKNCAwIFIKXSAvQ291bnQgMQo+PgplbmRvYmoKMSAwIG9iago8PC9UeXBlIC9DYXRhbG9nIC9QYWdlcyAzIDAgUgovTWV0YWRhdGEgOSAwIFIKPj4KZW5kb2JqCjggMCBvYmoKPDwvUjcKNyAwIFI+PgplbmRvYmoKNyAwIG9iago8PC9CYXNlRm9udC9IZWx2ZXRpY2EvVHlwZS9Gb250Ci9FbmNvZGluZy9XaW5BbnNpRW5jb2RpbmcvU3VidHlwZS9UeXBlMT4+CmVuZG9iago5IDAgb2JqCjw8L1R5cGUvTWV0YWRhdGEKL1N1YnR5cGUvWE1ML0xlbmd0aCAxMTgzPj5zdHJlYW0KPD94cGFja2V0IGJlZ2luPSfvu78nIGlkPSdXNU0wTXBDZWhpSHpyZVN6TlRjemtjOWQnPz4KPD9hZG9iZS14YXAtZmlsdGVycyBlc2M9IkNSTEYiPz4KPHg6eG1wbWV0YSB4bWxuczp4PSdhZG9iZTpuczptZXRhLycgeDp4bXB0az0nWE1QIHRvb2xraXQgMi45LjEtMTMsIGZyYW1ld29yayAxLjYnPgo8cmRmOlJERiB4bWxuczpyZGY9J2h0dHA6Ly93d3cudzMub3JnLzE5OTkvMDIvMjItcmRmLXN5bnRheC1ucyMnIHhtbG5zOmlYPSdodHRwOi8vbnMuYWRvYmUuY29tL2lYLzEuMC8nPgo8cmRmOkRlc2NyaXB0aW9uIHJkZjphYm91dD0iIiB4bWxuczpwZGY9J2h0dHA6Ly9ucy5hZG9iZS5jb20vcGRmLzEuMy8nIHBkZjpQcm9kdWNlcj0nR1BMIEdob3N0c2NyaXB0IDEwLjAyLjEnLz4KPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSdodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvJz48eG1wOk1vZGlmeURhdGU+MjAyNi0xMC0yM1QxNToyOTo0NC0wNTowMDwveG1wOk1vZGlmeURhdGU+Cjx4bXA6Q3JlYXRlRGF0ZT4yMDI2LTEwLTIzVDE1OjI5OjQ0LTA1OjAwPC94bXA6Q3JlYXRlRGF0ZT4KPHhtcDpDcmVhdG9yVG9vbD5Vbmtub3duQXBwbGljYXRpb248L3htcDpDcmVhdG9yVG9vbD48L3JkZjpEZXNjcmlwdGlvbj4KPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eGFwTU09J2h0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8nIHhhcE1NOkRvY3VtZW50SUQ9J3V1aWQ6MDgzNmJhYzEtMDczZC0xMWZkLTAwMDAtY2E1YTVlZmZhNjczJy8+CjxyZGY6RGVzY3JpcHRpb24gcmRmOmFib3V0PSIiIHhtbG5zOmRjPSdodHRwOi8vcHVybC5vcmcvZGMvZWxlbWVudHMvMS4xLycgZGM6Zm9ybWF0PSdhcHBsaWNhdGlvbi9wZGYnPjxkYzp0aXRsZT48cmRmOkFsdD48cmRmOmxpIHhtbDpsYW5nPSd4LWRlZmF1bHQnPlVudGl0bGVkPC9yZGY6bGk+PC9yZGY6QWx0PjwvZGM6dGl0bGU+PC9yZGY6RGVzY3JpcHRpb24+CjwvcmRmOlJERj4KPC94OnhtcG1ldGE+CiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIAogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAKPD94cGFja2V0IGVuZD0ndyc/PgplbmRzdHJlYW0KZW5kb2JqCjIgMCBvYmoKPDwvUHJvZHVjZXIoNFtcMjAxXDAwNiIzM1wyNDNafFwwMjVEXDMzNlwzNzZcMDMzXDI1NVwzNTQ5WSFcMzUyXDIzMEApCi9DcmVhdGlvbkRhdGUoNzFcMzc3XDAyNldtbVwzNDBcMDM0PEdcMDAzXDIwNVwyNjdbXDI3MVwzNjA5QjZcMzUwXDIwNlYpCi9Nb2REYXRlKDcxXDM3N1wwMjZXbW1cMzQwXDAzNDxHXDAwM1wyMDVcMjY3W1wyNzFcMzYwOUI2XDM1MFwyMDZWKT4+ZW5kb2JqCjEwIDAgb2JqCjw8L0ZpbHRlciAvU3RhbmRhcmQgL1YgMiAvTGVuZ3RoIDEyOCAvUiAzIC9QIC00IC9PIChotfW88DZK/Fg+vy2FAnl5flgFQnEbJmaKd15DmR+hDykKL1UgKH9JwRdNHWaqhq6R6wwT8k1cKL9OXk51ikFkAE5W//oBCCk+PgplbmRvYmoKeHJlZgowIDExCjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDU4OCAwMDAwMCBuIAowMDAwMDAyMDI5IDAwMDAwIG4gCjAwMDAwMDA1MjkgMDAwMDAgbiAKMDAwMDAwMDM4OCAwMDAwMCBuIAowMDAwMDAwMTU1IDAwMDAwIG4gCjAwMDAwMDAzNjkgMDAwMDAgbiAKMDAwMDAwMDY4MSAwMDAwMCBuIAowMDAwMDAwNjUyIDAwMDAwIG4gCjAwMDAwMDA3NzAgMDAwMDAgbiAKMDAwMDAwMjI1NCAwMDAwMCBuIAp0cmFpbGVyCjw8IC9TaXplIDExIC9Sb290IDEgMCBSIC9JbmZvIDIgMCBSCi9JRCBbPDhFQ0NCNDU0MjRFRkExN0JBMUI2QzY1QTdGQzlDMERDPjw4RUNDQjQ1NDI0RUZBMTdCQTFCNkM2NUE3RkM5QzBEQz5dCi9FbmNyeXB0IDEwIDAgUiA+PgpzdGFydHhyZWYKMjM5NwolJUVPRgo='

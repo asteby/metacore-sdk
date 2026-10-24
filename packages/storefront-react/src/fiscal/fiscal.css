@@ -1,0 +1,343 @@
+/*
+ * Default sheet for the fiscal components (`@asteby/storefront-react/fiscal.css`): <InvoiceToggle>, <IdentityDocumentReader>,
+ * <FiscalIdentityFields> and <InvoiceStatusCard>. Optional and neutral; it works next to `checkout.css` (the fields).
+ * Colors come from `currentColor` and these variables (set them in light and dark):
+ *   --sf-fiscal-border   hairlines and the drop zone          (default currentColor at 30%)
+ *   --sf-fiscal-muted    secondary text                       (default currentColor at 72%)
+ *   --sf-fiscal-accent   focus ring, primary button           (default #1d4ed8)
+ *   --sf-fiscal-accent-contrast  text on the accent           (default #fff)
+ *   --sf-fiscal-warn     warning text                         (default #8a4b00)
+ *   --sf-fiscal-ok       issued                               (default #166534)
+ * Targets are at least 44px; states carry an icon and a word, never color alone; motion stops with prefers-reduced-motion.
+ */
+[data-sf-invoice-toggle],
+[data-sf-document-reader],
+[data-sf-invoice-card] {
+  --_border: var(--sf-fiscal-border, color-mix(in srgb, currentColor 30%, transparent));
+  --_muted: var(--sf-fiscal-muted, color-mix(in srgb, currentColor 72%, transparent));
+  --_accent: var(--sf-fiscal-accent, #1d4ed8);
+}
+[data-sf-invoice-toggle] {
+  display: grid;
+  gap: 1rem;
+}
+[data-sf-invoice-label],
+[data-sf-reader-save],
+[data-sf-invoice-save],
+[data-sf-fiscal-radio] {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-height: 44px;
+  padding-block: 0.5rem;
+  cursor: pointer;
+}
+[data-sf-invoice-label] {
+  font-weight: 600;
+}
+[data-sf-invoice-label] input,
+[data-sf-reader-save] input,
+[data-sf-invoice-save] input,
+[data-sf-fiscal-radio] input {
+  flex: none;
+  width: 1.5rem;
+  height: 1.5rem;
+  margin: 0;
+  accent-color: var(--_accent);
+}
+[data-sf-invoice-body] {
+  display: grid;
+  gap: 1rem;
+}
+[data-sf-fiscal-fields] {
+  display: grid;
+  gap: 1rem;
+}
+[data-sf-from-document] {
+  font-weight: 600;
+  color: var(--sf-fiscal-ok, #166534);
+}
+[data-sf-fiscal-regimes] {
+  display: grid;
+  gap: 0.25rem;
+}
+[data-sf-fiscal-code] {
+  color: var(--_muted);
+}
+
+/* Reader */
+[data-sf-reader] {
+  display: grid;
+  gap: 0.75rem;
+}
+[data-sf-reader-title] {
+  margin: 0;
+  font-size: 1.0625rem;
+}
+[data-sf-reader-title]:focus {
+  outline: none;
+}
+[data-sf-reader-help],
+[data-sf-reader-privacy] {
+  margin: 0;
+  color: var(--_muted);
+  font-size: 0.875rem;
+}
+[data-sf-reader-zone] {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 0.25rem;
+  padding: 1.5rem 1rem;
+  min-height: 8rem;
+  border: 2px dashed var(--_border);
+  border-radius: 0.75rem;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+[data-sf-reader-zone][data-dragging],
+[data-sf-reader-zone]:hover {
+  border-color: var(--_accent);
+  background: color-mix(in srgb, var(--_accent) 6%, transparent);
+}
+[data-sf-reader-zone]:focus-within {
+  outline: 3px solid var(--_accent);
+  outline-offset: 2px;
+  border-style: solid;
+}
+[data-sf-reader-icon] {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+[data-sf-reader-choose] {
+  min-height: 44px;
+  display: inline-grid;
+  align-items: center;
+  padding-inline: 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid currentColor;
+  font-weight: 600;
+}
+/* The real input stays focusable and clickable, but invisible: the zone is its visible face. */
+[data-sf-reader-input] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+[data-sf-reader-links] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1.25rem;
+  margin: 0;
+}
+[data-sf-reader-links] a,
+[data-sf-reader-links] button,
+[data-sf-invoice-back],
+[data-sf-invoice-other] {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+[data-sf-reader-reading] {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+}
+[data-sf-reader-spinner] {
+  flex: none;
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 3px solid var(--_border);
+  border-top-color: var(--_accent);
+  border-radius: 50%;
+  animation: sf-fiscal-spin 0.9s linear infinite;
+}
+[data-sf-reader-error] {
+  padding: 0.75rem 1rem;
+  border: 2px solid var(--sf-field-error, #b42318);
+  border-radius: 0.5rem;
+  font-weight: 600;
+}
+[data-sf-reader-error]::before {
+  content: '! ';
+}
+[data-sf-reader-error]:focus {
+  outline: 3px solid var(--_accent);
+  outline-offset: 2px;
+}
+[data-sf-reader-warnings] {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  list-style: none;
+  display: grid;
+  gap: 0.5rem;
+  border: 1px solid var(--sf-fiscal-warn, #8a4b00);
+  border-radius: 0.5rem;
+  color: var(--sf-fiscal-warn, #8a4b00);
+}
+[data-sf-invoice-actions],
+[data-sf-reader-actions] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+}
+[data-sf-reader-confirm],
+[data-sf-reader-cancel],
+[data-sf-reader-retry],
+[data-sf-reader-upload],
+[data-sf-invoice-change],
+[data-sf-invoice-request],
+[data-sf-invoice-correct],
+[data-sf-invoice-refresh],
+[data-sf-invoice-pdf],
+[data-sf-invoice-xml],
+[data-sf-invoice-contact] {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 1.25rem;
+  border-radius: 0.5rem;
+  border: 1px solid currentColor;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+[data-sf-reader-confirm],
+[data-sf-invoice-request],
+[data-sf-invoice-correct],
+[data-sf-invoice-pdf] {
+  background: var(--_accent);
+  border-color: var(--_accent);
+  color: var(--sf-fiscal-accent-contrast, #fff);
+}
+:is([data-sf-reader-confirm], [data-sf-invoice-request], [data-sf-invoice-correct], [data-sf-invoice-pdf], [data-sf-invoice-change], [data-sf-invoice-refresh]):focus-visible,
+[data-sf-reader-links] :focus-visible,
+[data-sf-invoice-back]:focus-visible,
+[data-sf-invoice-other]:focus-visible {
+  outline: 3px solid var(--_accent);
+  outline-offset: 2px;
+}
+
+/* Saved profile card */
+[data-sf-invoice-profile],
+[data-sf-invoice-card] {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid var(--_border);
+  border-radius: 0.75rem;
+}
+[data-sf-invoice-profile] dl {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+}
+[data-sf-invoice-row] {
+  display: grid;
+  grid-template-columns: minmax(7rem, 35%) 1fr;
+  gap: 0.5rem;
+}
+[data-sf-invoice-row] dt {
+  color: var(--_muted);
+}
+[data-sf-invoice-row] dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+[data-sf-invoice-profile-title] {
+  margin: 0;
+  font-weight: 600;
+}
+[data-sf-invoice-privacy] {
+  margin: 0;
+  color: var(--_muted);
+  font-size: 0.875rem;
+}
+
+/* Status card */
+[data-sf-invoice-title] {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 1.0625rem;
+}
+[data-sf-invoice-icon] {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+[data-sf-invoice-card][data-state='issued'] [data-sf-invoice-icon] {
+  color: var(--sf-fiscal-ok, #166534);
+}
+[data-sf-invoice-card][data-state='needs_data'] [data-sf-invoice-icon] {
+  color: var(--sf-field-error, #b42318);
+}
+[data-sf-invoice-card][data-state='processing'] [data-sf-invoice-icon] {
+  animation: sf-fiscal-spin 1.6s linear infinite;
+}
+[data-sf-invoice-card] p {
+  margin: 0;
+}
+[data-sf-invoice-card] [data-sf-invoice-live] {
+  display: grid;
+  gap: 0.5rem;
+}
+[data-sf-invoice-folio] code {
+  overflow-wrap: anywhere;
+}
+
+@keyframes sf-fiscal-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-sf-reader-spinner],
+  [data-sf-invoice-card][data-state='processing'] [data-sf-invoice-icon] {
+    animation: none;
+  }
+  [data-sf-reader-zone] {
+    transition: none;
+  }
+}
+@media (max-width: 30rem) {
+  [data-sf-invoice-row] {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  [data-sf-invoice-actions] > *,
+  [data-sf-reader-confirm] {
+    flex: 1 1 100%;
+  }
+}
+
+[data-sf-fiscal-regimes] legend {
+  padding: 0;
+  font-weight: 600;
+}
+[data-sf-invoice-actions] {
+  align-items: center;
+}

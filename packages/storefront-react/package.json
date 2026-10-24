@@ -90,6 +90,27 @@
       }
     },
     "./account.css": "./dist/account.css",
+    "./fiscal": {
+      "import": {
+        "types": "./dist/fiscal.d.ts",
+        "default": "./dist/fiscal.js"
+      },
+      "require": {
+        "types": "./dist/fiscal.d.cts",
+        "default": "./dist/fiscal.cjs"
+      }
+    },
+    "./fiscal/server": {
+      "import": {
+        "types": "./dist/fiscal-server.d.ts",
+        "default": "./dist/fiscal-server.js"
+      },
+      "require": {
+        "types": "./dist/fiscal-server.d.cts",
+        "default": "./dist/fiscal-server.cjs"
+      }
+    },
+    "./fiscal.css": "./dist/fiscal.css",
     "./payments": {
       "import": {
         "types": "./dist/payments.d.ts",

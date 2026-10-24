@@ -703,3 +703,45 @@ export default function Login() {
 - `createAuthAction({ storefront, customerCookie, safeNext?, defaultNext?, clientIp?, capabilities? })` -> `({ request }) => Promise<Response | AuthActionData>`. Un solo `POST` con campo `intent`: `login`, `register`, `verify`, `otp-request`, `otp-login`, `forgot`, `reset`. Éxito: `303` a `next` con `Set-Cookie` de la sesión. Si no, `AuthActionData` (`{ ok, step?, email?, error?: { code, field? } }`, sin textos ni contraseñas). `forgot` siempre avanza a `reset` (no revela qué correos tienen cuenta).
 - `<AccountAuth>`: `classNames` por pieza, atributos `data-sf-account-*`, `locale` (`es` por omisión, `en`), `messages` para cambiar cualquier texto, `form` para el `Form` del router. Con el mock (`createMockStorefront`) funciona entera: código `000000`.
 - Sin JavaScript funciona el inicio de sesión con contraseña y los pasos que devuelve la action; el cambio entre pantallas (enlaces) necesita JavaScript.
+
+## Facturación y constancia fiscal (`/fiscal`)
+
+Subruta `@asteby/storefront-react/fiscal` (+ `/fiscal/server`, + `fiscal.css` opcional). Todo sale de `Region.fiscal_id` (etiquetas, formato, regímenes, usos, documentos); el núcleo no sabe de ningún país. Textos es-MX por omisión, `locale="en"` o `messages` para otros.
+
+- `FiscalIdentityFields`: ID fiscal (mayúsculas, sin espacios, validado con el patrón de la región), razón social, CP fiscal, régimen (filtrado por tipo de persona si pasas `personTypeOf`, p. ej. `personTypeByLength({ individual: 13, company: 12 })`) y uso (filtrado por `allowed_regimes`). Controles `invoice.<campo>`.
+- `IdentityDocumentReader`: «Sube tu constancia». Lee el PDF en el dispositivo (pdf.js se carga bajo demanda con `import()`, nunca en el bundle principal) y requiere `workerSrc`, un `pdf.worker.mjs` que sirve TU sitio (sin CDN). Muestra los campos prellenados con la marca «De tu constancia», avisos (QR, vigencia, régimen) y errores (no PDF, tamaño, escaneado, contraseña) con salida a captura manual. Nunca muestra ni conserva lo que la región lista en `discard_fields` (CURP, calle...). Entrega valores + evidencia (`buildDocumentEvidence`).
+- `InvoiceToggle`: «Necesito factura» colapsado; perfil guardado (RFC enmascarado, Cambiar / Usar otros datos), lector o captura manual. `onChange` da `{ requested, invoice, ready, source, payLabel }` (`Pagar` / `Pagar y facturar`).
+- `InvoiceStatusCard`: los estados de una `InvoiceSummary` (sin pedir, esperando pago, en proceso con `onRefresh` cada 10 s máx. 1 min, emitida, faltan datos, revisión, fuera de plazo, no disponible, cancelada).
+- `/fiscal/server`: `loadFiscalContext(sf)` (región + `capabilities.invoicing`, caché corta, degrada a «sin facturación» sin lanzar) y `createInvoiceAction({ storefront, customerCookie })` con intents `set-invoice`, `save-profile`, `request-invoice`, `clear-profile` y `extract-document` (subida sin JS: se lee en memoria con el mismo motor, 5 MiB / 6 páginas / 3 s, sin disco ni logs; el archivo se descarta).
+
+```tsx
+// app/routes/checkout.tsx (React Router)
+import { InvoiceToggle } from '@asteby/storefront-react/fiscal'
+import { createInvoiceAction, loadFiscalContext } from '@asteby/storefront-react/fiscal/server'
+import '@asteby/storefront-react/fiscal.css'
+
+export const loader = async () => ({ fiscal: await loadFiscalContext(storefront) })
+export const action = createInvoiceAction({ storefront, customerCookie })
+
+export default function Checkout() {
+  const { fiscal } = useLoaderData<typeof loader>()
+  const data = useActionData<typeof action>()
+  const [pay, setPay] = useState('Pagar')
+  return (
+    <Form method="post" encType="multipart/form-data">
+      {fiscal.region && (
+        <InvoiceToggle region={fiscal.region} capabilities={fiscal.invoicing} profile={customer?.fiscal} data={data}
+          canSave={!!customer} workerSrc="/assets/pdf.worker.mjs" serverUpload noJsHref="?factura=1"
+          personTypeOf={personTypeByLength({ individual: 13, company: 12 })}
+          onChange={(s) => setPay(s.payLabel)} />
+      )}
+      <button type="submit" name="intent" value="set-invoice">{pay}</button>
+    </Form>
+  )
+}
+
+// Cuenta: <IdentityDocumentReader region={region} workerSrc=... onConfirm={...} /> con intent save-profile (+ campo consent).
+// Pedido:  <InvoiceStatusCard invoice={order.invoice} available={fiscal.available} onRefresh={revalidate} />
+```
+
+CSP: el lector necesita `worker-src 'self'` (o el origen que sirva el worker). Sin `workerSrc` el navegador no puede leer el PDF y el comprador pasa a captura manual.
