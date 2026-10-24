@@ -135,6 +135,13 @@ export type AddressFieldsProps = Common & {
   neighborhood?: boolean | 'required'
   /** Show the delivery references field (default true, optional). */
   reference?: boolean
+  /**
+   * Once `lookupPostalCode` fills the state field (never over what the buyer already typed), lock it: a plain
+   * `<input>` turns read-only; a `<select>` (from `provinces`) turns disabled with a hidden field that keeps
+   * submitting its value. The buyer corrects the state by correcting the postal code. Default false: the filled
+   * state stays as editable as any other field. Marked with `data-sf-locked="1"` for the shop's own styling.
+   */
+  lockProvinceOnFill?: boolean
   /** Rendered after the fields (e.g. "save this address"). */
   children?: ReactNode
 }
@@ -144,8 +151,30 @@ export type AddressFieldsProps = Common & {
  * references. Autofill tokens: `postal-code`, `address-level1/2/3`, `address-line1/2`. The postal code uses the
  * numeric keyboard when the country format is numeric.
  */
+/** Locks a field the lookup just filled: read-only for an `<input>`, disabled + a hidden mirror for a `<select>`. */
+function lockField(el: HTMLInputElement | HTMLSelectElement) {
+  if (el.dataset.sfLocked === '1') return
+  el.dataset.sfLocked = '1'
+  el.setAttribute('aria-readonly', 'true')
+  if (el instanceof HTMLSelectElement) {
+    // A disabled `<select>` would stop submitting its value: a hidden sibling keeps it in the form.
+    const name = el.getAttribute('name')
+    if (name) {
+      const hidden = document.createElement('input')
+      hidden.type = 'hidden'
+      hidden.name = name
+      hidden.value = el.value
+      el.insertAdjacentElement('afterend', hidden)
+      el.removeAttribute('name')
+    }
+    el.disabled = true
+  } else {
+    el.readOnly = true
+  }
+}
+
 export function AddressFields(props: AddressFieldsProps) {
-  const { defaults, names = {}, errors = {}, countryCode, provinces, postalCode, lookupPostalCode, locale, messages, fieldMessages: fm, classNames: cx = {}, children } = props
+  const { defaults, names = {}, errors = {}, countryCode, provinces, postalCode, lookupPostalCode, lockProvinceOnFill, locale, messages, fieldMessages: fm, classNames: cx = {}, children } = props
   const showNeighborhood = props.neighborhood ?? true
   const showReference = props.reference ?? true
   const m = addressFieldsMessages(locale, messages)
@@ -168,18 +197,21 @@ export function AddressFields(props: AddressFieldsProps) {
     void lookup(zip).then(
       (info) => {
         if (!info || lastZip.current !== zip) return
-        const fill = (name: string, value: string | null | undefined) => {
+        const fill = (name: string, value: string | null | undefined, lock?: boolean) => {
           const el = form?.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | null
           if (!el || !value || ('length' in el && !(el instanceof HTMLSelectElement))) return false
+          // Already locked from a previous lookup: leave it (the buyer corrects the postal code instead).
+          if (el.dataset.sfLocked === '1') return false
           // Only an empty field, or one this lookup filled before: never what the buyer typed.
           if (el.value && el.dataset.sfAutofilled !== '1') return false
           if (el instanceof HTMLSelectElement && ![...el.options].some((o) => o.value === value)) return false
           el.value = value
           el.dataset.sfAutofilled = '1'
           el.dispatchEvent(new Event('input', { bubbles: true }))
+          if (lock) lockField(el)
           return true
         }
-        const a = fill(n('province'), info.province)
+        const a = fill(n('province'), info.province, lockProvinceOnFill)
         const b = fill(n('city'), info.city)
         setColonias(info.neighborhoods ?? [])
         setFilled(a || b)
