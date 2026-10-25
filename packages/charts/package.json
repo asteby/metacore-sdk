@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-charts",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Lazy charts for metacore hosts and addons — shared palette and value formatting, a dependency-free SVG Sparkline, and recharts-backed bar/line/area/pie/donut bodies that load on demand.",
   "license": "Apache-2.0",
   "repository": {

@@ -1,5 +1,27 @@
 # @asteby/metacore-runtime-react
 
+## 53.8.0
+
+### Minor Changes
+
+- bb03d31: New `@asteby/metacore-charts` package (the `ui.charts` page share): shared chart palette and value formatting, a dependency-free SVG `Sparkline`, and lazy `BarChart`/`LineChart`/`AreaChart`/`PieChart`/`DonutChart` (recharts loads on demand; eager bodies at `@asteby/metacore-charts/recharts`). `@asteby/metacore-runtime-react` now builds its dashboard chart widgets on it, keeps re-exporting everything it exposed before (`BarWidget`…, `formatWidgetValue`, `paletteColor`, …) and also re-exports `Sparkline`.
+- e529899: Nueva lista ordenable de proveedores con estado (`ProviderSortableList`: insignias Listo / Sin credenciales / Sandbox / Con fallas / No atiende / Desactivado, arrastre con puntero y teclado, interruptor «Hereda de la organización», interruptor de activación y acciones por elemento) y el modelo puro de resolución de capacidades por mercado (`resolveCapability`, `groupByDomain`, `bundleSelections`, `changeImpact`, `providerStatus`…) portado desde ops, para que la pantalla Mercados y otras apps host lo reutilicen. Genérico, sin nociones de pagos y sin dependencias nuevas. `CapabilityProvider` del modelo se exporta como `CapabilityProviderBinding` para no chocar con `capability-gate`.
+
+  Notas de contrato:
+  - `ProviderStatus` incluye ya `unhealthy` y `disabled` (alineado con ready / not_configured / unhealthy / disabled del diseño de mercados del kernel; `missing_credentials` equivale a `not_configured`). `providerStatus` marca `unavailable` a un proveedor no instalado y acepta `{ enabled, healthy }`.
+  - `resolveCapability` refleja `capability.Select` v1 (regla de hoy). Select v2 (prioridad y estado por mercado) sigue pendiente del release F2 del kernel; el orden que emite la lista no lo consume este modelo.
+  - `onReorder` emite solo los elegibles: un host que guarda la lista completa debe conservar sus entradas no elegibles.
+  - Las etiquetas por omisión pasan por i18n (`capability_providers.*`, con el español como `defaultValue`); `labels` sigue siendo el override.
+
+- c9910c4: Seguridad: las cachés del cliente (almacén de metadata persistido y cachés del lote `/q`) ahora se llavean por el alcance `org:user:lang` (`cacheScope()`); si falta la organización, el usuario o el idioma no se sirve ni se guarda nada. Al cambiar de alcance (logout, otra organización, otro usuario u otro idioma) se vacían las cachés en memoria y la persistida. Nuevas funciones para el host en logout: `clearQueryBatchCaches()` y `clearMetadataCache()`; además `syncCacheScope()` y `setCacheScopeLanguageProvider()` (el idioma sale de `i18nextLng` o `<html lang>`). El almacén `metacore-metadata-cache` sube a v6 y descarta lo anterior. El lote tolera un `status` por parte (403 prohibido, 424 rechaza, 5xx/413 un reintento por GET directo); sin `status` conserva la heurística por mensaje.
+
+  Revisión de seguridad: una respuesta del lote (filas o `not_modified`) que llega después de cambiar la identidad se rechaza antes de tocar cualquier caché. La identidad `auth_user` se contrasta con los claims del JWT guardado en `auth_token` (sin verificar la firma; si no coinciden el alcance es desconocido y no se cachea; un token que no es JWT conserva el comportamiento anterior) y el host puede alimentar el alcance con `setCacheScopeProvider(() => ({ org, user, lang }))`, que tiene precedencia. `setMetadata`/`setModalMetadata` aceptan `{ scope }` (el alcance capturado al pedir) y descartan la respuesta si la identidad cambió en el camino. El caché de opciones se llavea por `org:user:lang|sucursal`, se vacía al cambiar de alcance y no se usa sin identidad; un lote descartado por cambio de alcance cae al GET en vez de mostrar error. Las filas de primera página de `DynamicTable` en `sessionStorage` incluyen el alcance en la clave, se borran al cambiar de alcance y no se guardan sin alcance.
+
+### Patch Changes
+
+- Updated dependencies [bb03d31]
+  - @asteby/metacore-charts@0.1.0
+
 ## 53.7.0
 
 ### Minor Changes
