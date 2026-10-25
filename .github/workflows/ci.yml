@@ -47,6 +47,25 @@ jobs:
           git status --short packages/sdk/src/generated
           git diff --exit-code -- packages/sdk/src/generated
 
+  # Gate de codegen de genui/v2 (ADR 0001 del SDK, §2.7): los tipos TS y las
+  # tablas por bloque salen de packages/genui/schema/genui-v2.schema.json.
+  genui-codegen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - run: pnpm install --frozen-lockfile
+      - name: Regenerar tipos de genui/v2
+        run: pnpm --filter @asteby/metacore-genui codegen
+      - name: Fallar si hay diff (corre `pnpm --filter @asteby/metacore-genui codegen` y commitea)
+        run: |
+          git status --short packages/genui
+          git diff --exit-code -- packages/genui/src/generated
+
   # The fullstack starter is excluded from the node job above, so nothing else
   # notices when the kernel API moves under it: it sat on kernel v0.5.0 and
   # Fiber v2 long after the kernel went to Fiber v3. Building it here keeps the

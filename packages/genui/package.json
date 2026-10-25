@@ -13,26 +13,29 @@
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
+    "schema",
     "README.md"
   ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./schema.json": "./schema/genui-v2.schema.json"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -w -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "clean": "rm -rf dist",
-    "test": "vitest run"
+    "test": "vitest run",
+    "codegen": "node scripts/codegen.mjs"
   },
   "peerDependencies": {
     "@asteby/metacore-ui": ">=2.28.0",
+    "lucide-react": ">=0.460",
     "react": ">=18",
-    "react-dom": ">=18",
-    "lucide-react": ">=0.460"
+    "react-dom": ">=18"
   },
   "devDependencies": {
     "@asteby/metacore-ui": "workspace:*",
@@ -40,11 +43,12 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "happy-dom": "^20.10.2",
+    "json-schema-to-typescript": "15.0.4",
+    "lucide-react": "^1.0.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "typescript": "^6.0.0",
-    "vitest": "^4.0.0",
-    "lucide-react": "^1.0.0"
+    "vitest": "^4.0.0"
   },
   "publishConfig": {
     "access": "public"

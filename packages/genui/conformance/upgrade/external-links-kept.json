@@ -1,0 +1,34 @@
+{
+  "description": "Los enlaces http(s) de v1 se conservan (el host decide con allowExternalLinks al validar el v2).",
+  "input": {
+    "version": "genui/v1",
+    "blocks": [
+      {
+        "type": "links",
+        "items": [
+          {
+            "title": "Nota",
+            "url": "https://ejemplo.mx/a"
+          }
+        ]
+      }
+    ]
+  },
+  "expect": {
+    "ok": true,
+    "output": {
+      "version": "genui/v2",
+      "blocks": [
+        {
+          "type": "links",
+          "items": [
+            {
+              "title": "Nota",
+              "url": "https://ejemplo.mx/a"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
