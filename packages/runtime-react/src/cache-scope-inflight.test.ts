@@ -296,7 +296,8 @@ describe('row cache of the table (sessionStorage)', () => {
         clearTableDataCache()
         expect(sessionStorage.getItem('mc:tbl:data:v1|x')).toBeNull()
         sessionStorage.removeItem('unrelated')
-    })
+        // The first import of dynamic-table is heavy: slow CI runners exceeded the 5 s default.
+    }, 60_000)
 })
 
 describe('JWT decoding memo', () => {
