@@ -330,10 +330,10 @@ export function paymentErrorView(err: unknown, locale?: string | null, overrides
   if (status === 429 || code === 'too_many_attempts') {
     return { kind: 'too_many_attempts', message: m['error.too_many_attempts'], retrySameAttempt: false, canRetry: false }
   }
-  // What OPS declared wins over the status: `retryable:false` is an answer (generic), `retryable:true` on a 5xx is an outage.
+  // What OPS declared wins over the status: `retryable:false` is an answer (generic), any other 5xx (also a 500 with no readable body) is an outage whose charge may have happened: same key.
   const declared = (e as { retryable?: unknown }).retryable
   if (status >= 500 && declared === false) return { kind: 'generic', message: m['error.generic'], retrySameAttempt: false, canRetry: true }
-  if (status === 0 || status === 502 || status === 503 || status === 504 || code === 'network' || code === 'timeout' || (status >= 500 && declared === true)) {
+  if (status === 0 || status === 502 || status === 503 || status === 504 || code === 'network' || code === 'timeout' || status >= 500) {
     return { kind: 'network', message: m['error.network'], retrySameAttempt: true, canRetry: true }
   }
   return { kind: 'generic', message: m['error.generic'], retrySameAttempt: false, canRetry: true }

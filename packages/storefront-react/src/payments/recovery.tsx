@@ -79,6 +79,8 @@ export function usePaymentRecovery(options: UsePaymentRecoveryOptions = {}): Pay
   const [sectionKey, setSectionKey] = useState(0)
   const formFailures = useRef(0)
   const lastIssue = useRef<PaymentIssue | null>(null)
+  // The hook reported an unknown outcome through events (the shop may not wire `onIssue`): no new key until it resolves.
+  const unknownByEvent = useRef(false)
   const live = useRef(options)
   live.current = options
 
@@ -94,7 +96,7 @@ export function usePaymentRecovery(options: UsePaymentRecoveryOptions = {}): Pay
 
   const retry = useCallback((): boolean => {
     const issue = lastIssue.current
-    if (issue && INDETERMINATE.has(issue.kind)) return false
+    if (unknownByEvent.current || (issue && INDETERMINATE.has(issue.kind))) return false
     const store = live.current.storage === undefined ? safeStorage() : live.current.storage
     try {
       store?.removeItem(`sf:pay:attempt:${live.current.scope ?? 'default'}`)
@@ -103,6 +105,7 @@ export function usePaymentRecovery(options: UsePaymentRecoveryOptions = {}): Pay
     }
     formFailures.current = 0
     lastIssue.current = null
+    unknownByEvent.current = false
     setNotice(null)
     setSectionKey((k) => k + 1)
     return true
@@ -122,6 +125,12 @@ export function usePaymentRecovery(options: UsePaymentRecoveryOptions = {}): Pay
         } else {
           setNotice({ kind: 'form_failed' })
         }
+      }
+      // The charge may have happened (no answer / another attempt in progress) until a resolved answer arrives.
+      if (e.type === 'error') unknownByEvent.current = e.kind === 'network' || e.kind === 'payment_in_progress'
+      if (e.type === 'result') {
+        unknownByEvent.current = false
+        lastIssue.current = null
       }
       if (e.type === 'result' && e.status === 'rejected') setNotice({ kind: 'rejected' })
       // Only a closed store asks to re-read the page; an order already converted is explained by the notice.

@@ -185,11 +185,19 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   live.current = { ...options, msgs }
   const form = useRef<MountedPaymentForm | null>(null)
   const inFlight = useRef<Promise<void> | null>(null)
-  const pendingData = useRef<{ provider_data: Record<string, unknown>; device_session_id?: string } | null>(null)
+  type PayData = { provider_data: Record<string, unknown>; device_session_id?: string }
+  // Memory only, for `retry()`: the tokenized data AND the total the buyer saw when pressing PAY (same attempt, same body).
+  const pendingData = useRef<{ data: PayData; total: Money } | null>(null)
+  // Attempt key kept in memory too: with `storage: null` or blocked storage, `retry()` must reuse it.
+  const memAttempt = useRef<string | null>(null)
+  const memOnly = useRef(false)
+  const errorRef = useRef<PaymentErrorView | null>(null)
+  const retryRef = useRef<() => Promise<void>>(() => Promise.resolve())
   const alive = useRef(true)
   const generation = useRef(0)
   const statusRef = useRef<EmbeddedPaymentStatus>('idle')
   statusRef.current = status
+  errorRef.current = error
   // Total the form on screen was created / last updated with, and the update in flight.
   const amountKey = `${amount.amount}|${amount.currency_code}`
   const amountKeyRef = useRef(amountKey)
@@ -210,22 +218,34 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   const emit = useCallback((e: PaymentEvent) => live.current.onEvent?.(e), [])
 
   const readAttempt = useCallback((): string => {
-    try {
-      const saved = store?.getItem(storageKey)
-      if (saved) return saved
-    } catch {
-      /* private mode */
+    if (!memOnly.current) {
+      try {
+        const saved = store?.getItem(storageKey)
+        if (saved) {
+          memAttempt.current = saved
+          return saved
+        }
+      } catch {
+        memOnly.current = true // storage unreadable (blocked): the key lives in memory
+      }
+    }
+    if (memOnly.current && memAttempt.current) return memAttempt.current
+    if (!store) {
+      if (memAttempt.current) return memAttempt.current
     }
     const fresh = (live.current.newAttemptId ?? generateIdempotencyKey)()
+    memAttempt.current = fresh
     try {
       store?.setItem(storageKey, fresh)
+      if (store && store.getItem(storageKey) !== fresh) memOnly.current = true
     } catch {
-      /* keep in memory only */
+      memOnly.current = true // keep in memory only
     }
     return fresh
   }, [store, storageKey])
 
   const rotateAttempt = useCallback(() => {
+    memAttempt.current = null
     try {
       store?.removeItem(storageKey)
     } catch {
@@ -249,6 +269,8 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   const syncAmount = useCallback((): void => {
     const m = form.current
     if (!m || inFlight.current || updating.current || remountRequested.current) return
+    // The outcome of a charge is unknown: the form (and its single-use token) stays as it is until it is resolved.
+    if (statusRef.current === 'network_error' || (statusRef.current === 'blocked' && errorRef.current?.kind === 'payment_in_progress')) return
     if (appliedAmount.current === amountKeyRef.current) return
     const run = (async () => {
       while (form.current === m && alive.current && appliedAmount.current !== amountKeyRef.current) {
@@ -400,7 +422,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   )
 
   const send = useCallback(
-    async (data: { provider_data: Record<string, unknown>; device_session_id?: string }, attempt: string) => {
+    async (data: PayData, attempt: string, total: Money) => {
       const ctl = new AbortController()
       const maxRetries = live.current.autoRetries ?? autoRetries
       for (let n = 0; ; n++) {
@@ -412,7 +434,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
               idempotencyKey: attempt,
               provider_data: data.provider_data,
               ...(data.device_session_id ? { device_session_id: data.device_session_id } : {}),
-              expected_total: live.current.amount,
+              expected_total: total,
             },
             { signal: ctl.signal },
           )
@@ -430,7 +452,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
           emit({ type: 'error', kind: view.kind })
           setError(view)
           if (view.kind === 'network') {
-            pendingData.current = data // memory only, for `retry()` with the same attempt
+            pendingData.current = { data, total } // memory only, for `retry()` with the same attempt
             setStatus('network_error')
           } else if (view.kind === 'price_mismatch') {
             pendingData.current = null
@@ -457,6 +479,10 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     if (inFlight.current) return inFlight.current
     const m = form.current
     if (!m || (statusRef.current !== 'ready' && statusRef.current !== 'network_error')) return Promise.resolve()
+    // Unknown outcome: pressing PAY again must NOT tokenize anew (a new token with the same key is a 409): same data, same key.
+    if (statusRef.current === 'network_error' && pendingData.current) return retryRef.current()
+    // The total is read when the buyer presses PAY, and travels with the data.
+    const total = live.current.amount
     const run = (async () => {
       // A total update in flight finishes first, so the token is made for the form the buyer sees.
       if (updating.current) await updating.current.catch(() => {})
@@ -475,7 +501,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
       }
       const attempt = readAttempt()
       setAttemptId(attempt)
-      await send(data, attempt)
+      await send(data, attempt, total)
     })().finally(() => {
       inFlight.current = null
       // A total change that arrived during the charge is applied now, after the answer.
@@ -487,15 +513,15 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
 
   const retry = useCallback((): Promise<void> => {
     if (inFlight.current) return inFlight.current
-    const data = pendingData.current
-    if (!data) return submit()
+    const pending = pendingData.current
+    if (!pending) return submit()
     emit({ type: 'retry' })
     const run = (async () => {
       setStatus('processing')
       setError(null)
       const attempt = readAttempt()
       setAttemptId(attempt)
-      await send(data, attempt)
+      await send(pending.data, attempt, pending.total)
     })().finally(() => {
       inFlight.current = null
       syncAmount()
@@ -503,6 +529,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     inFlight.current = run
     return run
   }, [emit, readAttempt, send, submit, syncAmount])
+  retryRef.current = retry
 
   // Poll a pending 3DS challenge / review until it resolves or the window closes.
   useEffect(() => {
@@ -538,6 +565,10 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   // with growing waits for about two minutes. Only a RESOLVED answer ends it (paid, rejected, voucher, challenge...);
   // `pending` and `none` do not. The attempt (idempotency key) never changes while this runs.
   const unknownOutcome = status === 'network_error' || (status === 'blocked' && error?.kind === 'payment_in_progress')
+  // A total change that arrived while the outcome was unknown is applied once it is resolved.
+  useEffect(() => {
+    if (!unknownOutcome) syncAmount()
+  }, [unknownOutcome, syncAmount])
   useEffect(() => {
     if (!unknownOutcome || !transport.refresh) {
       setVerifying(false)

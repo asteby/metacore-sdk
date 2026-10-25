@@ -527,7 +527,7 @@ export const pay = createEmbeddedPayHandlers({
 
 ### Cobro resiliente: reintento, verificación, formulario estable y aviso con salida
 
-Un cobro con tarjeta puede quedar **indeterminado** (la respuesta se perdió, el proxy devolvió HTML, OPS tardó). La regla que nunca cambia: **un resultado indeterminado jamás se cobra con otra clave de idempotencia**; se repite con la MISMA clave o se consulta el estado. Todo lo de abajo es opcional y aditivo, y está pensado para que ninguna tienda tenga que copiar código de otra.
+Un cobro con tarjeta puede quedar **indeterminado** (la respuesta se perdió, el proxy devolvió HTML, OPS tardó). La regla que nunca cambia: **un resultado indeterminado jamás se cobra con otra clave de idempotencia**; se repite con la MISMA clave o se consulta el estado. Lo de abajo se adopta de forma opcional, pero **no es solo aditivo** (ver «Cambios que se notan» al final de esta sección), y está pensado para que ninguna tienda tenga que copiar código de otra.
 
 **1. Servidor (`/payments/server`).** `createEmbeddedPayHandlers` ya responde SIEMPRE JSON `{ error: { code, message, retryable, kind } }` (clasificado con `classifyPaymentError` de `@asteby/storefront`) y devuelve `500` en lugar de `502-504` (Traefik/CDN los cambian por HTML y se pierde el `Set-Cookie` de la sesión de pago). `/estado` sin cookie `sf_pay` responde `200 { payment: { status: 'none' }, recoverable }` en vez de `404`: `none` no es un resultado, así que un cobro indeterminado sigue con la misma clave; `recoverable` dice si la tienda aún tiene el carrito del comprador. Para rutas propias: `jsonPayRoute(run, 'pay', { locale, messages })`. Los textos de los errores salen del catálogo `error.<kind>` y se reemplazan con `errorMessages` (o `messages`/`locale` de `jsonPayRoute`).
 
@@ -567,6 +567,20 @@ const transport = useMemo(
 **4. `AddressFields` (checkout).** Un solo escritor en cola; no escribe en un campo con foco ni en uno que el comprador editó (evento `input` con `isTrusted`); la colonia solo se rellena si el código postal tiene UNA sola; los eventos `input` que dispara el autollenado llevan `event.sfSynthetic === true` (`isAddressFillEvent(event)`) para que la tienda los ignore.
 
 **Migrar una tienda que copió esto** (p. ej. `store-protekauto`): borra su `pay-errors`, `pay-transport`, `pay-route.server`, `brick-adapter` y `pay-recovery`; usa `createResilientTransport`, `usePaymentRecovery`, `<PaymentRecovery>` y los handlers del servidor; quita el `key` de `PaymentBrick` si lo tenía y el adaptador envuelto. Los textos propios van en `messages`.
+
+### Cambios que se notan
+
+Al subir el pin de `@asteby/storefront` / `@asteby/storefront-react` (en 0.x un caret no adopta un minor solo):
+
+- Los handlers de pago responden **500** donde antes respondían 502-504 (y `payErrorResponse({})` pasa de 503 a 500). La señal de «indeterminado» viaja en el cuerpo (`retryable`, `kind`); un 5xx sin cuerpo legible se trata como indeterminado (misma clave), nunca como rechazo.
+- Los mensajes salen del catálogo es-MX/en y no del texto de OPS para los tipos transitorio, en curso, límite de intentos, configuración, rechazo del proveedor, pedido ya registrado y tienda cerrada. Los textos propios de la tienda (`messages.tooManyRequests`, `fillFields`, etc.) se conservan.
+- `/estado` sin sesión o con un checkout inexistente responde **200** `{ status: 'none', recoverable }` en lugar de 404. `'none'` se suma a `PaymentAttemptStatus`.
+- Escribir el correo ya no remonta el formulario de tarjeta: un invitado que lo escribe después del montaje ve el campo de correo dentro del Brick.
+- Un cambio de total actualiza el formulario en su sitio (no lo remonta) y el formulario queda dentro de un `div` interno: un contenedor propio de `useEmbeddedPayment` no debe tener hijos renderizados por React (`replaceChildren`).
+- Con resultado indeterminado, PAGAR reintenta con los mismos datos y la misma clave (no vuelve a tokenizar), y un cambio de total espera a que se resuelva.
+- `createTimeoutMs` toma por omisión `sdkTimeoutMs`.
+- `AddressFields` rellena la colonia cuando el código postal tiene una sola, rellena un campo enfocado solo si está vacío y no lo editó el comprador, y marca sus eventos (`isAddressFillEvent`).
+- Tipos: `PayErrorBody` exige `retryable` y `kind`; `paymentErrorView` trata un 5xx (salvo `retryable:false`) como `network`.
 
 ## Entrega y marcas (`@asteby/storefront-react/checkout`)
 

@@ -253,7 +253,7 @@ describe('AddressFields: a single careful writer', () => {
     expect(ctl(many.container, 'neighborhood').value).toBe('')
   })
 
-  it('does not write into the field that has focus', async () => {
+  it('fills a focused field that is still empty (Tab from the postal code), but not one with text in it', async () => {
     let release!: () => void
     const gate = new Promise<void>((r) => (release = r))
     const { container } = render(
@@ -265,10 +265,11 @@ describe('AddressFields: a single careful writer', () => {
       />,
     )
     type(container, '44100')
-    ctl(container, 'city').focus()
+    ctl(container, 'province').focus()
+    ctl(container, 'city').value = 'Zapo'
     release()
     await waitFor(() => expect(ctl(container, 'province').value).toBe('Jalisco'))
-    expect(ctl(container, 'city').value).toBe('')
+    expect(ctl(container, 'city').value).toBe('Zapo')
   })
 
   it('does not write over a field the buyer edited (a real, trusted input)', async () => {

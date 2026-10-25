@@ -254,7 +254,7 @@ export function createEmbeddedPayHandlers<TDraft extends { checkout_id?: string 
   const errorOptions: PayErrorOptions = { locale, ...(config.errorMessages ? { messages: config.errorMessages } : {}) }
   /** The shop's own refusal, in the same body shape (`retryable`, `kind`) as an OPS failure. */
   const fail = (status: number, code: string, message: string, extra: Headers | Record<string, string> = {}, more: { field?: string; kind?: PaymentErrorClassKind } = {}) => {
-    const r = payErrorResponse({ status, code, message, ...(more.field ? { field: more.field } : {}) }, { ...errorOptions, ...(more.kind ? { kind: more.kind } : {}) })
+    const r = payErrorResponse({ status, code, message, ...(more.field ? { field: more.field } : {}) }, { ...errorOptions, ownMessage: true, ...(more.kind ? { kind: more.kind } : {}) })
     return json(r.body, { status: r.status, headers: extra })
   }
 

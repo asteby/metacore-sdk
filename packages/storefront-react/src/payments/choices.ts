@@ -167,6 +167,8 @@ export type PayErrorOptions = {
   messages?: Partial<PaymentRecoveryMessages>
   /** Forces the classification (for refusals the shop itself makes). */
   kind?: PaymentErrorClassKind
+  /** `err.message` was written by the shop itself (a refusal it makes, such as `tooManyRequests`): always kept. */
+  ownMessage?: boolean
 }
 
 /**
@@ -193,7 +195,7 @@ export function payErrorResponse(err: ErrorLike, options: PayErrorOptions = {}):
   if (status === 422 && err.field === 'expected_total') code = 'price_mismatch'
   // Texts the shop wrote itself (missing fields, expired cart, a row it does not offer) are kept; OPS' own message,
   // often technical or in English, is replaced by the catalog text for the kind.
-  const own = (kind === 'validation' || kind === 'expired' || kind === 'price_mismatch' || (kind === 'other' && status < 500)) && err.message
+  const own = (options.ownMessage || kind === 'validation' || kind === 'expired' || kind === 'price_mismatch' || (kind === 'other' && status < 500)) && err.message
   const message = own || paymentRecoveryMessages(options.locale, options.messages)[`error.${kind}`]
   return {
     status: safeHttpStatus(status),

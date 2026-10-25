@@ -143,7 +143,8 @@ describe('paymentErrorView', () => {
     [err(409, 'conflict'), 'generic', false, true],
     [err(409, 'expired'), 'expired', false, false],
     [err(429, 'rate_limited'), 'too_many_attempts', false, false],
-    [err(500, 'server_error'), 'generic', false, true],
+    [err(500, 'server_error'), 'network', true, true], // a 500 with no readable body: the charge may have happened
+    [new StorefrontError({ status: 500, code: 'server_error', message: 'x', retryable: false }), 'generic', false, true],
     [err(400, 'validation'), 'generic', false, true],
     [new TypeError('Failed to fetch'), 'network', true, true],
     [undefined, 'network', true, true],

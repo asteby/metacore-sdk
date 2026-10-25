@@ -241,8 +241,9 @@ export function AddressFields(props: AddressFieldsProps) {
             if (!el || !value || ('length' in el && !(el instanceof HTMLSelectElement))) return false
             // Already locked from a previous lookup: leave it (the buyer corrects the postal code instead).
             if (el.dataset.sfLocked === '1') return false
-            // Never write where the buyer is typing, nor over what they edited.
-            if (el.dataset.sfUserEdited === '1' || el.ownerDocument.activeElement === el) return false
+            // Never over what they edited, nor over text in the field they are typing in. A focused field that is still
+            // empty (Tab from the postal code lands on the next one) is filled: nothing of theirs is overwritten.
+            if (el.dataset.sfUserEdited === '1' || (el.ownerDocument.activeElement === el && el.value)) return false
             // Only an empty field, or one this lookup filled before: never what the buyer typed.
             if (el.value && el.dataset.sfAutofilled !== '1') return false
             if (el instanceof HTMLSelectElement && ![...el.options].some((o) => o.value === value)) return false
