@@ -1,5 +1,8 @@
 {
-  "description": "Los enlaces http(s) de v1 se conservan (el host decide con allowExternalLinks al validar el v2).",
+  "description": "Los enlaces http(s) de v1 se conservan cuando el host habilita allowExternalLinks.",
+  "options": {
+    "allowExternalLinks": true
+  },
   "input": {
     "version": "genui/v1",
     "blocks": [

@@ -41,7 +41,10 @@ export const GENUI_V2_SCHEMA = {
       "propertyNames": {
         "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
       },
-      "description": "Estado local: solo escalares, listas de escalares y objetos de escalares (se valida en código)."
+      "additionalProperties": {
+        "$ref": "#/$defs/stateValue"
+      },
+      "description": "Estado local: escalares, listas de escalares y objetos de escalares o listas de escalares."
     },
     "overlays": {
       "type": "object",
@@ -121,7 +124,8 @@ export const GENUI_V2_SCHEMA = {
         "boolean",
         "null"
       ],
-      "description": "Escalar; las cadenas no deben pasar de 2 000 caracteres (se valida en código)."
+      "maxLength": 2000,
+      "description": "Escalar; las cadenas, de hasta 2 000 puntos de código."
     },
     "id": {
       "type": "string",
@@ -171,7 +175,8 @@ export const GENUI_V2_SCHEMA = {
                   "string",
                   "number",
                   "boolean"
-                ]
+                ],
+                "maxLength": 2000
               },
               {
                 "$ref": "#/$defs/ref"
@@ -225,7 +230,20 @@ export const GENUI_V2_SCHEMA = {
     "link": {
       "type": "string",
       "maxLength": 2048,
-      "description": "Ruta relativa de la app o http(s) literal; nunca $ref (se valida en código)."
+      "pattern": "^(/(?!/)[^\\\\\\n\\r\\t]*|https?://[^\\s\\\\]+)$",
+      "x-error": "genui.unsafe_link",
+      "description": "Ruta relativa de la app o http(s) literal; nunca $ref. Los externos solo con allowExternalLinks."
+    },
+    "appPath": {
+      "type": "string",
+      "maxLength": 2048,
+      "pattern": "^/(?!/)[^\\\\\\n\\r\\t]*$",
+      "x-error": "genui.unsafe_link",
+      "description": "Ruta de la app (nunca http)."
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
     },
     "predicate": {
       "type": "object",
@@ -331,6 +349,40 @@ export const GENUI_V2_SCHEMA = {
         }
       }
     },
+    "stateList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/scalar"
+      },
+      "maxItems": 50
+    },
+    "stateValue": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/scalar"
+        },
+        {
+          "$ref": "#/$defs/stateList"
+        },
+        {
+          "type": "object",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+          },
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/scalar"
+              },
+              {
+                "$ref": "#/$defs/stateList"
+              }
+            ]
+          }
+        }
+      ]
+    },
     "row": {
       "type": "object",
       "maxProperties": 24,
@@ -393,23 +445,80 @@ export const GENUI_V2_SCHEMA = {
         }
       }
     },
-    "action": {
+    "route": {
       "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "name": {
+          "enum": [
+            "record",
+            "list",
+            "page"
+          ]
+        },
+        "model": {
+          "$ref": "#/$defs/key"
+        },
+        "id": {
+          "$ref": "#/$defs/value"
+        },
+        "filters": {
+          "type": "object",
+          "maxProperties": 8,
+          "additionalProperties": {
+            "$ref": "#/$defs/scalar"
+          }
+        },
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "path": {
+          "$ref": "#/$defs/appPath"
+        }
+      },
+      "description": "path o name; los requeridos por name se validan en código."
+    },
+    "action": {
+      "x-discriminator": "do",
+      "description": "Acción declarativa {do, ...}; un esquema por verbo.",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/action_navigate"
+        },
+        {
+          "$ref": "#/$defs/action_invoke"
+        },
+        {
+          "$ref": "#/$defs/action_submit"
+        },
+        {
+          "$ref": "#/$defs/action_open"
+        },
+        {
+          "$ref": "#/$defs/action_close"
+        },
+        {
+          "$ref": "#/$defs/action_set"
+        },
+        {
+          "$ref": "#/$defs/action_refresh"
+        },
+        {
+          "$ref": "#/$defs/action_emit"
+        }
+      ]
+    },
+    "action_navigate": {
+      "type": "object",
+      "additionalProperties": false,
       "required": [
-        "do"
+        "do",
+        "route"
       ],
       "properties": {
         "do": {
-          "enum": [
-            "navigate",
-            "invoke",
-            "submit",
-            "open",
-            "close",
-            "set",
-            "refresh",
-            "emit"
-          ]
+          "const": "navigate"
         },
         "label": {
           "$ref": "#/$defs/label"
@@ -449,41 +558,62 @@ export const GENUI_V2_SCHEMA = {
           "$ref": "#/$defs/predicate"
         },
         "route": {
+          "$ref": "#/$defs/route"
+        }
+      }
+    },
+    "action_invoke": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "do",
+        "action"
+      ],
+      "properties": {
+        "do": {
+          "const": "invoke"
+        },
+        "label": {
+          "$ref": "#/$defs/label"
+        },
+        "variant": {
+          "enum": [
+            "primary",
+            "secondary",
+            "ghost",
+            "danger"
+          ]
+        },
+        "icon": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "confirm": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "name": {
-              "enum": [
-                "record",
-                "list",
-                "page"
-              ]
+            "title": {
+              "$ref": "#/$defs/label"
             },
-            "model": {
-              "$ref": "#/$defs/key"
+            "body": {
+              "$ref": "#/$defs/text"
             },
-            "id": {
-              "$ref": "#/$defs/value"
+            "tone": {
+              "$ref": "#/$defs/tone"
             },
-            "filters": {
-              "type": "object",
-              "maxProperties": 8,
-              "additionalProperties": {
-                "$ref": "#/$defs/scalar"
-              }
-            },
-            "key": {
-              "$ref": "#/$defs/key"
-            },
-            "path": {
-              "$ref": "#/$defs/link"
+            "require_text": {
+              "type": "string",
+              "maxLength": 60
             }
           }
+        },
+        "when": {
+          "$ref": "#/$defs/predicate"
         },
         "action": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*){1,3}$",
-          "description": "Acción del manifest <addon>.<Model>.<key> (invoke)."
+          "description": "Acción del manifest <addon>.<Model>.<key>."
         },
         "record": {
           "$ref": "#/$defs/value"
@@ -501,23 +631,429 @@ export const GENUI_V2_SCHEMA = {
           "additionalProperties": {
             "$ref": "#/$defs/value"
           }
+        }
+      }
+    },
+    "action_submit": {
+      "properties": {
+        "do": {
+          "const": "submit"
+        }
+      },
+      "x-discriminator": "to",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/action_submit_invoke"
+        },
+        {
+          "$ref": "#/$defs/action_submit_settings"
+        },
+        {
+          "$ref": "#/$defs/action_submit_create"
+        },
+        {
+          "$ref": "#/$defs/action_submit_update"
+        }
+      ]
+    },
+    "action_submit_invoke": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "do",
+        "to",
+        "form",
+        "action"
+      ],
+      "properties": {
+        "do": {
+          "const": "submit"
+        },
+        "label": {
+          "$ref": "#/$defs/label"
+        },
+        "variant": {
+          "enum": [
+            "primary",
+            "secondary",
+            "ghost",
+            "danger"
+          ]
+        },
+        "icon": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "confirm": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "$ref": "#/$defs/label"
+            },
+            "body": {
+              "$ref": "#/$defs/text"
+            },
+            "tone": {
+              "$ref": "#/$defs/tone"
+            },
+            "require_text": {
+              "type": "string",
+              "maxLength": 60
+            }
+          }
+        },
+        "when": {
+          "$ref": "#/$defs/predicate"
+        },
+        "to": {
+          "const": "invoke"
         },
         "form": {
           "$ref": "#/$defs/id"
         },
-        "to": {
+        "action": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*){1,3}$"
+        }
+      }
+    },
+    "action_submit_settings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "do",
+        "to",
+        "form"
+      ],
+      "properties": {
+        "do": {
+          "const": "submit"
+        },
+        "label": {
+          "$ref": "#/$defs/label"
+        },
+        "variant": {
           "enum": [
-            "invoke",
-            "settings.write",
-            "record.create",
-            "record.update"
+            "primary",
+            "secondary",
+            "ghost",
+            "danger"
           ]
+        },
+        "icon": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "confirm": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "$ref": "#/$defs/label"
+            },
+            "body": {
+              "$ref": "#/$defs/text"
+            },
+            "tone": {
+              "$ref": "#/$defs/tone"
+            },
+            "require_text": {
+              "type": "string",
+              "maxLength": 60
+            }
+          }
+        },
+        "when": {
+          "$ref": "#/$defs/predicate"
+        },
+        "to": {
+          "const": "settings.write"
+        },
+        "form": {
+          "$ref": "#/$defs/id"
+        }
+      }
+    },
+    "action_submit_create": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "do",
+        "to",
+        "form",
+        "model"
+      ],
+      "properties": {
+        "do": {
+          "const": "submit"
+        },
+        "label": {
+          "$ref": "#/$defs/label"
+        },
+        "variant": {
+          "enum": [
+            "primary",
+            "secondary",
+            "ghost",
+            "danger"
+          ]
+        },
+        "icon": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "confirm": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "$ref": "#/$defs/label"
+            },
+            "body": {
+              "$ref": "#/$defs/text"
+            },
+            "tone": {
+              "$ref": "#/$defs/tone"
+            },
+            "require_text": {
+              "type": "string",
+              "maxLength": 60
+            }
+          }
+        },
+        "when": {
+          "$ref": "#/$defs/predicate"
+        },
+        "to": {
+          "const": "record.create"
+        },
+        "form": {
+          "$ref": "#/$defs/id"
+        },
+        "model": {
+          "$ref": "#/$defs/key"
+        }
+      }
+    },
+    "action_submit_update": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "do",
+        "to",
+        "form",
+        "model",
+        "record"
+      ],
+      "properties": {
+        "do": {
+          "const": "submit"
+        },
+        "label": {
+          "$ref": "#/$defs/label"
+        },
+        "variant": {
+          "enum": [
+            "primary",
+            "secondary",
+            "ghost",
+            "danger"
+          ]
+        },
+        "icon": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "confirm": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "$ref": "#/$defs/label"
+            },
+            "body": {
+              "$ref": "#/$defs/text"
+            },
+            "tone": {
+              "$ref": "#/$defs/tone"
+            },
+            "require_text": {
+              "type": "string",
+              "maxLength": 60
+            }
+          }
+        },
+        "when": {
+          "$ref": "#/$defs/predicate"
+        },
+        "to": {
+          "const": "record.update"
+        },
+        "form": {
+          "$ref": "#/$defs/id"
         },
         "model": {
           "$ref": "#/$defs/key"
         },
+        "record": {
+          "$ref": "#/$defs/value"
+        }
+      }
+    },
+    "action_open": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "do",
+        "overlay"
+      ],
+      "properties": {
+        "do": {
+          "const": "open"
+        },
+        "label": {
+          "$ref": "#/$defs/label"
+        },
+        "variant": {
+          "enum": [
+            "primary",
+            "secondary",
+            "ghost",
+            "danger"
+          ]
+        },
+        "icon": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "confirm": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "$ref": "#/$defs/label"
+            },
+            "body": {
+              "$ref": "#/$defs/text"
+            },
+            "tone": {
+              "$ref": "#/$defs/tone"
+            },
+            "require_text": {
+              "type": "string",
+              "maxLength": 60
+            }
+          }
+        },
+        "when": {
+          "$ref": "#/$defs/predicate"
+        },
         "overlay": {
           "$ref": "#/$defs/id"
+        }
+      }
+    },
+    "action_close": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "do"
+      ],
+      "properties": {
+        "do": {
+          "const": "close"
+        },
+        "label": {
+          "$ref": "#/$defs/label"
+        },
+        "variant": {
+          "enum": [
+            "primary",
+            "secondary",
+            "ghost",
+            "danger"
+          ]
+        },
+        "icon": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "confirm": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "$ref": "#/$defs/label"
+            },
+            "body": {
+              "$ref": "#/$defs/text"
+            },
+            "tone": {
+              "$ref": "#/$defs/tone"
+            },
+            "require_text": {
+              "type": "string",
+              "maxLength": 60
+            }
+          }
+        },
+        "when": {
+          "$ref": "#/$defs/predicate"
+        },
+        "overlay": {
+          "$ref": "#/$defs/id"
+        }
+      }
+    },
+    "action_set": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "do",
+        "path",
+        "value"
+      ],
+      "properties": {
+        "do": {
+          "const": "set"
+        },
+        "label": {
+          "$ref": "#/$defs/label"
+        },
+        "variant": {
+          "enum": [
+            "primary",
+            "secondary",
+            "ghost",
+            "danger"
+          ]
+        },
+        "icon": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "confirm": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "$ref": "#/$defs/label"
+            },
+            "body": {
+              "$ref": "#/$defs/text"
+            },
+            "tone": {
+              "$ref": "#/$defs/tone"
+            },
+            "require_text": {
+              "type": "string",
+              "maxLength": 60
+            }
+          }
+        },
+        "when": {
+          "$ref": "#/$defs/predicate"
         },
         "path": {
           "type": "string",
@@ -525,17 +1061,122 @@ export const GENUI_V2_SCHEMA = {
         },
         "value": {
           "$ref": "#/$defs/scalar"
+        }
+      }
+    },
+    "action_refresh": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "do",
+        "source"
+      ],
+      "properties": {
+        "do": {
+          "const": "refresh"
+        },
+        "label": {
+          "$ref": "#/$defs/label"
+        },
+        "variant": {
+          "enum": [
+            "primary",
+            "secondary",
+            "ghost",
+            "danger"
+          ]
+        },
+        "icon": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "confirm": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "$ref": "#/$defs/label"
+            },
+            "body": {
+              "$ref": "#/$defs/text"
+            },
+            "tone": {
+              "$ref": "#/$defs/tone"
+            },
+            "require_text": {
+              "type": "string",
+              "maxLength": 60
+            }
+          }
+        },
+        "when": {
+          "$ref": "#/$defs/predicate"
         },
         "source": {
-          "$ref": "#/$defs/id"
+          "$ref": "#/$defs/name"
+        }
+      }
+    },
+    "action_emit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "do",
+        "id"
+      ],
+      "properties": {
+        "do": {
+          "const": "emit"
+        },
+        "label": {
+          "$ref": "#/$defs/label"
+        },
+        "variant": {
+          "enum": [
+            "primary",
+            "secondary",
+            "ghost",
+            "danger"
+          ]
+        },
+        "icon": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+        },
+        "confirm": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "title": {
+              "$ref": "#/$defs/label"
+            },
+            "body": {
+              "$ref": "#/$defs/text"
+            },
+            "tone": {
+              "$ref": "#/$defs/tone"
+            },
+            "require_text": {
+              "type": "string",
+              "maxLength": 60
+            }
+          }
+        },
+        "when": {
+          "$ref": "#/$defs/predicate"
         },
         "id": {
           "type": "string",
           "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){1,3}$"
+        },
+        "params": {
+          "type": "object",
+          "maxProperties": 8,
+          "additionalProperties": {
+            "$ref": "#/$defs/scalar"
+          }
         }
-      },
-      "additionalProperties": false,
-      "description": "Acción declarativa {do, ...}; las reglas por verbo se validan en código."
+      }
     },
     "actions": {
       "type": "array",
@@ -695,12 +1336,8 @@ export const GENUI_V2_SCHEMA = {
       "description": "Fuente declarada de solo lectura: q | plan(+args) | widget | inline."
     },
     "source": {
-      "oneOf": [
-        {
-          "type": "string",
-          "pattern": "^data\\.[A-Za-z_][A-Za-z0-9_]{0,63}$"
-        }
-      ],
+      "type": "string",
+      "pattern": "^data\\.[A-Za-z_][A-Za-z0-9_]{0,63}$",
       "description": "Referencia a data.<nombre>."
     },
     "overlay": {
@@ -1997,6 +2634,7 @@ export const GENUI_V2_SCHEMA = {
         },
         "src": {
           "type": "string",
+          "maxLength": 2048,
           "pattern": "^(asset:[A-Za-z0-9_-]{1,64}|/[^/\\\\\\s][^\\\\\\s]*)$"
         },
         "alt": {

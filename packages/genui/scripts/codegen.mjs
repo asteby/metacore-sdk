@@ -7,11 +7,17 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { compile } from 'json-schema-to-typescript'
+import { findUnsupported } from './schema-keywords.mjs'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const schemaPath = resolve(root, 'schema/genui-v2.schema.json')
 const outDir = resolve(root, 'src/generated')
 const schema = JSON.parse(readFileSync(schemaPath, 'utf8'))
+const unsupported = findUnsupported(schema)
+if (unsupported.length) {
+  console.error('genui codegen: keywords de JSON Schema no soportados por el validador:\n' + unsupported.map(([p, k]) => `  ${p}: ${k}`).join('\n'))
+  process.exit(1)
+}
 mkdirSync(outDir, { recursive: true })
 
 const banner = '/* eslint-disable */\n// GENERADO por packages/genui/scripts/codegen.mjs desde schema/genui-v2.schema.json. No editar a mano: corre `pnpm --filter @asteby/metacore-genui codegen`.\n'

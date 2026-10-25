@@ -4,7 +4,7 @@ export * from './generative-ui'
 export * from './agent-result'
 // genui/v2: contrato, validador y compatibilidad (ADR 0001 del SDK). Sin renderizadores todavía.
 export { GENUI_ERROR_CODES, GenUIError, type GenUIErrorCode } from './errors'
-export { GENUI_V2_LIMITS, GENUI_V2_VERSION, parseUISpecV2, type ParseV2Options, type ParseV2Result, type UISpecV2 } from './validate-v2'
+export { FORBIDDEN_KEYS, GENUI_V2_LIMITS, GENUI_V2_VERSION, parseUISpecV2, type ParseV2Options, type ParseV2Result, type UISpecV2 } from './validate-v2'
 export { GENUI_V1_BLOCK_TYPES, downgrade, parseGenUI, upgradeV1, type DowngradeReport, type DowngradeResult, type GenUICaps, type ParseGenUIResult } from './compat'
 export { GENUI_V2_BLOCKS, GENUI_V2_SCHEMA } from './generated/genui-v2-schema'
 export type * as GenUIV2Types from './generated/genui-v2'

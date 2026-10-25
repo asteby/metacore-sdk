@@ -4,12 +4,12 @@
     "version": "genui/v1",
     "blocks": [
       {
-        "type": "form"
+        "type": "script"
       }
     ]
   },
   "expect": {
     "ok": false,
-    "code": "genui.invalid_document"
+    "code": "genui.unknown_block"
   }
 }

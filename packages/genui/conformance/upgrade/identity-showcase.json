@@ -1,5 +1,8 @@
 {
-  "description": "Los 8 bloques de v1 suben sin pérdida: solo cambia version.",
+  "description": "Los 8 bloques de v1 suben sin pérdida: solo cambia version (el v1 trae un enlace externo, así que el host lo permite).",
+  "options": {
+    "allowExternalLinks": true
+  },
   "input": {
     "version": "genui/v1",
     "title": "Resumen",

@@ -13,7 +13,7 @@ export type Label = string | Tref | Ref
  */
 export type BindingPath = string
 /**
- * Escalar; las cadenas no deben pasar de 2 000 caracteres (se valida en código).
+ * Escalar; las cadenas, de hasta 2 000 puntos de código.
  *
  * This interface was referenced by `GenuiV2`'s JSON-Schema
  * via the `definition` "scalar".
@@ -26,6 +26,23 @@ export type Scalar = string | number | boolean | null
  * via the `definition` "value".
  */
 export type Value = Scalar | Ref
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "stateValue".
+ */
+export type StateValue =
+  | Scalar
+  | StateList
+  | {
+      [k: string]: Scalar | StateList
+    }
+/**
+ * @maxItems 50
+ *
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "stateList".
+ */
+export type StateList = Scalar[]
 /**
  * Despachado por `type`; ver block_<type>.
  *
@@ -99,7 +116,35 @@ export type Actions =
   | [Action, Action, Action, Action, Action]
   | [Action, Action, Action, Action, Action, Action]
 /**
- * Ruta relativa de la app o http(s) literal; nunca $ref (se valida en código).
+ * Acción declarativa {do, ...}; un esquema por verbo.
+ *
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "action".
+ */
+export type Action =
+  ActionNavigate | ActionInvoke | ActionSubmit | ActionOpen | ActionClose | ActionSet | ActionRefresh | ActionEmit
+/**
+ * Ruta de la app (nunca http).
+ *
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "appPath".
+ */
+export type AppPath = string
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "action_submit".
+ */
+export type ActionSubmit = {
+  do?: 'submit'
+} & ActionSubmit1
+export type ActionSubmit1 = ActionSubmitInvoke | ActionSubmitSettings | ActionSubmitCreate | ActionSubmitUpdate
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "name".
+ */
+export type Name = string
+/**
+ * Ruta relativa de la app o http(s) literal; nunca $ref. Los externos solo con allowExternalLinks.
  *
  * This interface was referenced by `GenuiV2`'s JSON-Schema
  * via the `definition` "link".
@@ -158,9 +203,11 @@ export interface GenuiV2 {
     [k: string]: DataSource
   }
   /**
-   * Estado local: solo escalares, listas de escalares y objetos de escalares (se valida en código).
+   * Estado local: escalares, listas de escalares y objetos de escalares o listas de escalares.
    */
-  state?: {}
+  state?: {
+    [k: string]: StateValue
+  }
   overlays?: {
     [k: string]: Overlay
   }
@@ -710,13 +757,11 @@ export interface BlockEmpty {
   actions?: Actions
 }
 /**
- * Acción declarativa {do, ...}; las reglas por verbo se validan en código.
- *
  * This interface was referenced by `GenuiV2`'s JSON-Schema
- * via the `definition` "action".
+ * via the `definition` "action_navigate".
  */
-export interface Action {
-  do: 'navigate' | 'invoke' | 'submit' | 'open' | 'close' | 'set' | 'refresh' | 'emit'
+export interface ActionNavigate {
+  do: 'navigate'
   label?: Label
   variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
   icon?: string
@@ -727,20 +772,44 @@ export interface Action {
     require_text?: string
   }
   when?: Predicate
-  route?: {
-    name?: 'record' | 'list' | 'page'
-    model?: Key
-    id?: Value
-    filters?: {
-      [k: string]: Scalar
-    }
-    key?: Key
-    path?: Link
+  route: Route
+}
+/**
+ * path o name; los requeridos por name se validan en código.
+ *
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "route".
+ */
+export interface Route {
+  name?: 'record' | 'list' | 'page'
+  model?: Key
+  id?: Value
+  filters?: {
+    [k: string]: Scalar
   }
+  key?: Key
+  path?: AppPath
+}
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "action_invoke".
+ */
+export interface ActionInvoke {
+  do: 'invoke'
+  label?: Label
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+  icon?: string
+  confirm?: {
+    title?: Label
+    body?: Text
+    tone?: Tone
+    require_text?: string
+  }
+  when?: Predicate
   /**
-   * Acción del manifest <addon>.<Model>.<key> (invoke).
+   * Acción del manifest <addon>.<Model>.<key>.
    */
-  action?: string
+  action: string
   record?: Value
   params?: {
     [k: string]: Value
@@ -748,14 +817,180 @@ export interface Action {
   values?: {
     [k: string]: Value
   }
-  form?: Id
-  to?: 'invoke' | 'settings.write' | 'record.create' | 'record.update'
-  model?: Key
+}
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "action_submit_invoke".
+ */
+export interface ActionSubmitInvoke {
+  do: 'submit'
+  label?: Label
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+  icon?: string
+  confirm?: {
+    title?: Label
+    body?: Text
+    tone?: Tone
+    require_text?: string
+  }
+  when?: Predicate
+  to: 'invoke'
+  form: Id
+  action: string
+}
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "action_submit_settings".
+ */
+export interface ActionSubmitSettings {
+  do: 'submit'
+  label?: Label
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+  icon?: string
+  confirm?: {
+    title?: Label
+    body?: Text
+    tone?: Tone
+    require_text?: string
+  }
+  when?: Predicate
+  to: 'settings.write'
+  form: Id
+}
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "action_submit_create".
+ */
+export interface ActionSubmitCreate {
+  do: 'submit'
+  label?: Label
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+  icon?: string
+  confirm?: {
+    title?: Label
+    body?: Text
+    tone?: Tone
+    require_text?: string
+  }
+  when?: Predicate
+  to: 'record.create'
+  form: Id
+  model: Key
+}
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "action_submit_update".
+ */
+export interface ActionSubmitUpdate {
+  do: 'submit'
+  label?: Label
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+  icon?: string
+  confirm?: {
+    title?: Label
+    body?: Text
+    tone?: Tone
+    require_text?: string
+  }
+  when?: Predicate
+  to: 'record.update'
+  form: Id
+  model: Key
+  record: Value
+}
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "action_open".
+ */
+export interface ActionOpen {
+  do: 'open'
+  label?: Label
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+  icon?: string
+  confirm?: {
+    title?: Label
+    body?: Text
+    tone?: Tone
+    require_text?: string
+  }
+  when?: Predicate
+  overlay: Id
+}
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "action_close".
+ */
+export interface ActionClose {
+  do: 'close'
+  label?: Label
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+  icon?: string
+  confirm?: {
+    title?: Label
+    body?: Text
+    tone?: Tone
+    require_text?: string
+  }
+  when?: Predicate
   overlay?: Id
-  path?: string
-  value?: Scalar
-  source?: Id
-  id?: string
+}
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "action_set".
+ */
+export interface ActionSet {
+  do: 'set'
+  label?: Label
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+  icon?: string
+  confirm?: {
+    title?: Label
+    body?: Text
+    tone?: Tone
+    require_text?: string
+  }
+  when?: Predicate
+  path: string
+  value: Scalar
+}
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "action_refresh".
+ */
+export interface ActionRefresh {
+  do: 'refresh'
+  label?: Label
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+  icon?: string
+  confirm?: {
+    title?: Label
+    body?: Text
+    tone?: Tone
+    require_text?: string
+  }
+  when?: Predicate
+  source: Name
+}
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "action_emit".
+ */
+export interface ActionEmit {
+  do: 'emit'
+  label?: Label
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger'
+  icon?: string
+  confirm?: {
+    title?: Label
+    body?: Text
+    tone?: Tone
+    require_text?: string
+  }
+  when?: Predicate
+  id: string
+  params?: {
+    [k: string]: Scalar
+  }
 }
 /**
  * This interface was referenced by `GenuiV2`'s JSON-Schema

@@ -16,6 +16,6 @@
   },
   "expect": {
     "ok": false,
-    "code": "genui.invalid_action"
+    "code": "genui.required"
   }
 }

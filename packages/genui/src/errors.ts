@@ -21,6 +21,7 @@ export const GENUI_ERROR_CODES = [
   'genui.unknown_target',
   'genui.invalid_action',
   'genui.invalid_block',
+  'genui.forbidden_key',
   'genui.limit.bytes',
   'genui.limit.depth',
   'genui.limit.blocks',
