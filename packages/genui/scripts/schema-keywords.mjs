@@ -32,7 +32,7 @@ export function findUnsupported(schema, path = '#') {
     else if (k === 'items' && (v === null || typeof v !== 'object' || Array.isArray(v))) out.push([path, 'items(no-objeto)'])
     // El intérprete solo aplica `pattern` a los nombres de propiedad.
     else if (k === 'propertyNames') {
-      for (const pk of Object.keys(v ?? {})) if (pk !== 'pattern') out.push([path, `propertyNames.${pk}`])
+      for (const pk of Object.keys(v ?? {})) if (pk !== 'pattern' && pk !== 'x-no-proto') out.push([path, `propertyNames.${pk}`])
     }
     else if (MAP_KEYWORDS.has(k)) for (const [n, sub] of Object.entries(v)) out.push(...findUnsupported(sub, `${path}/${k}/${n}`))
     else if (SCHEMA_KEYWORDS.has(k) && k !== 'propertyNames' && typeof v === 'object' && !Array.isArray(v)) out.push(...findUnsupported(v, `${path}/${k}`))

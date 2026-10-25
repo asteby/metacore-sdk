@@ -57,6 +57,32 @@ profunda de JSON). `downgrade` sin `caps` asume `{"versions":["genui/v1"]}`.
   (`genui.forbidden_key`, antes de comprobar el patrón). El esquema lo repite
   con un lookahead negativo y la marca `x-no-proto`; el kernel Go (RE2, sin
   lookahead) debe hacer la comprobación por segmentos en código.
+- **`x-no-proto` por segmentos**: la marca `x-no-proto` (en un valor string o en
+  `propertyNames`) y su lookahead `(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))`
+  parten el texto con `[.:@]` (punto, dos puntos y arroba) y rechazan
+  cualquier segmento igual a una clave de prototipo con `genui.forbidden_key`,
+  ANTES de comprobar el patrón. Cubre `key` y claves de fila
+  (`table.rows[]`, `data.*.inline[]`; `propertyNames`), `bindingPath`, `set.path`,
+  `$t` (`a.__proto__.b`, `ns:__proto__`), `formField.depends_on` (vía `key`) y los
+  identificadores que el renderer usará como clave de registro: `id` de bloque,
+  `name`, `formField.widget`, `dataSource.widget`, `icon`, `block_settings.addon`,
+  `invoke.action`, `emit.id`, `confirm.actions[].id`, `slot.name` y `ext`
+  (`a.constructor@1`). `media.src` con `asset:<id>` lleva el lookahead solo en el
+  `<id>` (da `genui.pattern`; las rutas `/…` no se parten). Go/RE2 (sin
+  lookahead) debe repetir esta comprobación por segmentos en código con los
+  mismos separadores y el mismo orden (antes del patrón).
+- **`key` sin segmentos vacíos**: `[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*`,
+  1 a 64 caracteres; `a..b` y `a.` dan `genui.pattern`. Las claves de fila usan
+  el mismo patrón.
+- **`depends_on`** es una `key` y debe ser la clave de un campo del mismo
+  `form`/`wizard` (`genui.unknown_target`, igual que los pasos).
+- **Registros del renderer**: lo que el esquema deja pasar sigue pudiendo
+  coincidir con nombres heredados no listados (`toString`, `hasOwnProperty`,
+  `valueOf`). Todo registro del renderer (bloques, widgets, iconos, addons,
+  acciones, slots, extensiones, overlays, fuentes) debe ser un `Map` o buscar con
+  `Object.hasOwn`, nunca `registry[name]`; y el resolvedor de vinculaciones
+  (`state.toString`, `data.x.hasOwnProperty`) debe usar `Object.hasOwn` en cada
+  segmento, no solo en el primero.
 - **Mapas abiertos**: en un objeto con `additionalProperties` (params, values,
   filters, args, props…) una clave que empiece por `$` es `genui.ref_not_allowed`:
   `{"$ref": …}` solo es un valor donde el esquema lo declara.
@@ -106,7 +132,8 @@ y el SDK trae los vectores fijados a la versión del kernel; el formato no cambi
 | `table`/`chart`: `rows` xor `source`; `stats`/`timeline`: `items` xor `source`; mínimo uno | `invalid/table-rows-and-source`, `chart-rows-and-source`, `stats-*` |
 | Tabla en línea 12 columnas x 200 filas; con `source`, 24 columnas | `valid/table-inline-12x200`, `table-source-24-columns`, `invalid/table-*` |
 | Pasos de `wizard`/`form` refieren campos existentes; `wizard` sin contenido | `invalid/wizard-*`, `form-steps-without-steps` |
-| Claves de prototipo prohibidas (también por segmento de ruta/clave); anidamiento JSON 64; números finitos | `invalid/proto-key*`, `set-path-*`, `ref-*-proto*`, `field-key-*`, `json-depth-*`, `number-out-of-range` |
+| Claves de prototipo prohibidas (también por segmento de ruta/clave/i18n/identificador); anidamiento JSON 64; números finitos | `invalid/proto-key*`, `set-path-*`, `ref-*-proto*`, `field-key-*`, `i18n-key-proto-*`, `table-row-key-*`, `inline-row-key-proto`, `*-constructor`, `json-depth-*`, `number-out-of-range` |
+| `formField.depends_on` apunta a un campo del mismo form | `invalid/depends-on-*`, `valid/depends-on-valid` |
 
 Todo lo demás (campos permitidos por bloque y por verbo, requeridos, enums,
 patrones, rangos, longitudes, `maxItems`, forma de `state`, `submit` por destino)

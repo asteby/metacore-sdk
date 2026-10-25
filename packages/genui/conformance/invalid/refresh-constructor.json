@@ -22,6 +22,6 @@
   },
   "expect": {
     "ok": false,
-    "code": "genui.unknown_target"
+    "code": "genui.forbidden_key"
   }
 }

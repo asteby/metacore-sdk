@@ -28,6 +28,6 @@
   },
   "expect": {
     "ok": false,
-    "code": "genui.unknown_overlay"
+    "code": "genui.forbidden_key"
   }
 }

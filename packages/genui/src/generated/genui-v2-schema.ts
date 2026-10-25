@@ -129,14 +129,15 @@ export const GENUI_V2_SCHEMA = {
     },
     "id": {
       "type": "string",
-      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$",
-      "description": "Identificador único dentro del documento."
+      "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[A-Za-z][A-Za-z0-9_-]{0,63}$",
+      "description": "Identificador único dentro del documento.",
+      "x-no-proto": true
     },
     "key": {
       "type": "string",
-      "pattern": "^(?!(?:.*\\.)?(?:__proto__|constructor|prototype)(?:\\.|$))[A-Za-z_][A-Za-z0-9_.]{0,63}$",
+      "pattern": "^(?=.{1,64}$)(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$",
       "x-no-proto": true,
-      "description": "Clave de campo, columna o entrada; ningún segmento separado por punto puede ser __proto__, constructor ni prototype."
+      "description": "Clave de campo, columna o entrada: segmentos no vacíos [A-Za-z_][A-Za-z0-9_]* separados por punto (sin \"a..b\" ni \"a.\"); ningún segmento puede ser __proto__, constructor ni prototype."
     },
     "bindingPath": {
       "type": "string",
@@ -166,7 +167,8 @@ export const GENUI_V2_SCHEMA = {
       "properties": {
         "$t": {
           "type": "string",
-          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[A-Za-z0-9_.:-]{1,128}$",
+          "x-no-proto": true
         },
         "args": {
           "type": "object",
@@ -246,7 +248,8 @@ export const GENUI_V2_SCHEMA = {
     },
     "name": {
       "type": "string",
-      "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,63}$"
+      "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[A-Za-z_][A-Za-z0-9_]{0,63}$",
+      "x-no-proto": true
     },
     "predicate": {
       "type": "object",
@@ -390,7 +393,8 @@ export const GENUI_V2_SCHEMA = {
       "type": "object",
       "maxProperties": 24,
       "propertyNames": {
-        "pattern": "^[A-Za-z_][A-Za-z0-9_.]{0,63}$"
+        "pattern": "^(?=.{1,64}$)(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)*$",
+        "x-no-proto": true
       },
       "additionalProperties": {
         "$ref": "#/$defs/value"
@@ -536,7 +540,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "icon": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9-]{0,63}$",
+          "x-no-proto": true
         },
         "confirm": {
           "type": "object",
@@ -589,7 +594,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "icon": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9-]{0,63}$",
+          "x-no-proto": true
         },
         "confirm": {
           "type": "object",
@@ -615,8 +621,9 @@ export const GENUI_V2_SCHEMA = {
         },
         "action": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*){1,3}$",
-          "description": "Acción del manifest <addon>.<Model>.<key>."
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*){1,3}$",
+          "description": "Acción del manifest <addon>.<Model>.<key>.",
+          "x-no-proto": true
         },
         "record": {
           "$ref": "#/$defs/value"
@@ -685,7 +692,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "icon": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9-]{0,63}$",
+          "x-no-proto": true
         },
         "confirm": {
           "type": "object",
@@ -717,7 +725,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "action": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*){1,3}$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*){1,3}$",
+          "x-no-proto": true
         }
       }
     },
@@ -746,7 +755,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "icon": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9-]{0,63}$",
+          "x-no-proto": true
         },
         "confirm": {
           "type": "object",
@@ -804,7 +814,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "icon": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9-]{0,63}$",
+          "x-no-proto": true
         },
         "confirm": {
           "type": "object",
@@ -866,7 +877,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "icon": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9-]{0,63}$",
+          "x-no-proto": true
         },
         "confirm": {
           "type": "object",
@@ -928,7 +940,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "icon": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9-]{0,63}$",
+          "x-no-proto": true
         },
         "confirm": {
           "type": "object",
@@ -980,7 +993,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "icon": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9-]{0,63}$",
+          "x-no-proto": true
         },
         "confirm": {
           "type": "object",
@@ -1034,7 +1048,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "icon": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9-]{0,63}$",
+          "x-no-proto": true
         },
         "confirm": {
           "type": "object",
@@ -1092,7 +1107,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "icon": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9-]{0,63}$",
+          "x-no-proto": true
         },
         "confirm": {
           "type": "object",
@@ -1145,7 +1161,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "icon": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9-]{0,63}$",
+          "x-no-proto": true
         },
         "confirm": {
           "type": "object",
@@ -1171,7 +1188,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "id": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){1,3}$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){1,3}$",
+          "x-no-proto": true
         },
         "params": {
           "type": "object",
@@ -1229,8 +1247,8 @@ export const GENUI_V2_SCHEMA = {
           "maxLength": 160
         },
         "depends_on": {
-          "type": "string",
-          "maxLength": 64
+          "$ref": "#/$defs/key",
+          "description": "Clave de otro campo del mismo formulario."
         },
         "visible_when": {
           "type": "object",
@@ -1289,7 +1307,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "widget": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9_]{0,31}$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9_]{0,31}$",
+          "x-no-proto": true
         },
         "section": {
           "type": "string",
@@ -1327,7 +1346,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "widget": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9_]*\\.dashboard\\.[a-z][a-z0-9_]*$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9_]*\\.dashboard\\.[a-z][a-z0-9_]*$",
+          "x-no-proto": true
         },
         "inline": {
           "type": "array",
@@ -1745,7 +1765,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "icon": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9-]{0,63}$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9-]{0,63}$",
+          "x-no-proto": true
         },
         "actions": {
           "$ref": "#/$defs/actions"
@@ -2528,7 +2549,8 @@ export const GENUI_V2_SCHEMA = {
             "properties": {
               "id": {
                 "type": "string",
-                "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){1,3}$"
+                "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){1,3}$",
+                "x-no-proto": true
               },
               "label": {
                 "type": "string",
@@ -2591,7 +2613,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "addon": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9_]{0,63}$",
+          "x-no-proto": true
         },
         "keys": {
           "type": "array",
@@ -2639,7 +2662,7 @@ export const GENUI_V2_SCHEMA = {
         "src": {
           "type": "string",
           "maxLength": 2048,
-          "pattern": "^(asset:[A-Za-z0-9_-]{1,64}|/[^/\\\\\\s][^\\\\\\s]*)$"
+          "pattern": "^(asset:(?!(?:__proto__|constructor|prototype)$)[A-Za-z0-9_-]{1,64}|/[^/\\\\\\s][^\\\\\\s]*)$"
         },
         "alt": {
           "type": "string",
@@ -2683,7 +2706,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "name": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){1,3}$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){1,3}$",
+          "x-no-proto": true
         },
         "record": {
           "$ref": "#/$defs/value"
@@ -2713,7 +2737,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "ext": {
           "type": "string",
-          "pattern": "^[a-z][a-z0-9_]{0,63}\\.[a-z][a-z0-9_]{0,63}@[0-9]{1,3}$"
+          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9_]{0,63}\\.[a-z][a-z0-9_]{0,63}@[0-9]{1,3}$",
+          "x-no-proto": true
         },
         "props": {
           "type": "object",

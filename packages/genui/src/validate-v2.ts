@@ -58,6 +58,8 @@ const defs = root.$defs as Schema
 /** Claves que jamás se aceptan en ningún objeto del documento. */
 export const FORBIDDEN_KEYS: readonly string[] = ['__proto__', 'constructor', 'prototype']
 const FORBIDDEN = new Set(FORBIDDEN_KEYS)
+/** Separadores de segmento de `x-no-proto`: `.` (rutas y claves), `:` (claves i18n, `asset:`) y `@` (versión de `ext`). Igual que `[.:@]` del lookahead del esquema. */
+const NO_PROTO_SEPARATORS = /[.:@]/
 
 /** Asigna una clave propia sin tocar el prototipo (nunca `out[k] = v` con claves del documento). */
 export function setOwn(o: Obj, k: string, v: unknown): void {
@@ -221,7 +223,7 @@ function check(value: unknown, schema: Schema, path: string, ctx: Ctx, depth: nu
     throw new GenUIError('genui.type', `${path}: se esperaba ${([] as string[]).concat(s.type).join('|')}, llegó ${kindOf(value)}`, path)
   }
   if (typeof value === 'string') {
-    if (s['x-no-proto'] && value.split('.').some((seg) => FORBIDDEN.has(seg))) {
+    if (s['x-no-proto'] && value.split(NO_PROTO_SEPARATORS).some((seg) => FORBIDDEN.has(seg))) {
       throw new GenUIError('genui.forbidden_key', `${path}: segmento prohibido (${FORBIDDEN_KEYS.join(', ')})`, path)
     }
     if (s.maxLength !== undefined && !withinCodePoints(value, s.maxLength)) {
@@ -248,6 +250,9 @@ function check(value: unknown, schema: Schema, path: string, ctx: Ctx, depth: nu
       // Un mapa abierto no puede llevar claves `$…` que el esquema no declara: `{"$ref": …}` no es un valor en esa posición.
       if (k.startsWith('$') && !(s.properties && has(s.properties, k)) && isObj(s.additionalProperties)) {
         throw new GenUIError('genui.ref_not_allowed', `${sub}: clave $ no permitida en esta posición`, sub)
+      }
+      if (s.propertyNames?.['x-no-proto'] && k.split(NO_PROTO_SEPARATORS).some((seg) => FORBIDDEN.has(seg))) {
+        throw new GenUIError('genui.forbidden_key', `${sub}: segmento prohibido (${FORBIDDEN_KEYS.join(', ')})`, sub)
       }
       if (s.propertyNames?.pattern && !new RegExp(s.propertyNames.pattern, 'u').test(k)) throw new GenUIError('genui.pattern', `${sub}: nombre inválido`, sub)
       if (s.properties && has(s.properties, k)) check(value[k], s.properties[k], sub, ctx, depth)
@@ -336,6 +341,9 @@ function blockRules(b: Obj, type: string, path: string) {
     }
     const steps = (type === 'wizard' ? b.steps : (b.layout as Obj | undefined)?.steps) as Obj[] | undefined
     for (const st of steps ?? []) for (const k of st.fields as string[]) if (!keys.has(k)) throw new GenUIError('genui.unknown_target', `${path}: el paso usa un campo inexistente ${k}`, path)
+    for (const f of (b.fields as Obj[] | undefined) ?? []) {
+      if (typeof f.depends_on === 'string' && !keys.has(f.depends_on)) throw new GenUIError('genui.unknown_target', `${path}: depends_on apunta a un campo inexistente ${f.depends_on}`, path)
+    }
     const hasFields = ((b.fields as unknown[] | undefined) ?? []).length > 0
     if (type === 'form' && (b.layout as Obj | undefined)?.mode === 'steps' && !steps?.length) throw new GenUIError('genui.required', `${path}: layout.mode steps requiere steps`, path)
     if (type === 'form' && !hasFields) throw new GenUIError('genui.required', `${path}: form requiere fields`, path)

@@ -83,7 +83,7 @@ export type Block =
  */
 export type Id = string
 /**
- * Clave de campo, columna o entrada; ningún segmento separado por punto puede ser __proto__, constructor ni prototype.
+ * Clave de campo, columna o entrada: segmentos no vacíos [A-Za-z_][A-Za-z0-9_]* separados por punto (sin "a..b" ni "a."); ningún segmento puede ser __proto__, constructor ni prototype.
  *
  * This interface was referenced by `GenuiV2`'s JSON-Schema
  * via the `definition` "key".
@@ -1734,6 +1734,9 @@ export interface FormField {
   value?: Value
   help?: string
   placeholder?: string
+  /**
+   * Clave de campo, columna o entrada: segmentos no vacíos [A-Za-z_][A-Za-z0-9_]* separados por punto (sin "a..b" ni "a."); ningún segmento puede ser __proto__, constructor ni prototype.
+   */
   depends_on?: string
   visible_when?: {
     field?: Key
