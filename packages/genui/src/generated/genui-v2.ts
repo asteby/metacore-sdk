@@ -6,7 +6,7 @@
  */
 export type Label = string | Tref | Ref
 /**
- * Ruta de vinculación; raíces cerradas data|state|record|ctx.
+ * Ruta de vinculación; raíces cerradas data|state|record|ctx. Ningún segmento puede ser __proto__, constructor ni prototype.
  *
  * This interface was referenced by `GenuiV2`'s JSON-Schema
  * via the `definition` "bindingPath".
@@ -83,6 +83,8 @@ export type Block =
  */
 export type Id = string
 /**
+ * Clave de campo, columna o entrada; ningún segmento separado por punto puede ser __proto__, constructor ni prototype.
+ *
  * This interface was referenced by `GenuiV2`'s JSON-Schema
  * via the `definition` "key".
  */

@@ -18,6 +18,6 @@
   },
   "expect": {
     "ok": false,
-    "code": "genui.bad_ref"
+    "code": "genui.forbidden_key"
   }
 }

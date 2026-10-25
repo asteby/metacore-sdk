@@ -74,7 +74,7 @@ function withinCodePoints(s: string, max: number): boolean {
 
 const utf8Bytes = (s: string) => new TextEncoder().encode(s).length
 
-const LIMIT_BY_KEY: Record<string, GenUIErrorCode> = {
+const LIMIT_BY_KEY: ReadonlyMap<string, GenUIErrorCode> = new Map(Object.entries({
   blocks: 'genui.limit.children',
   tabs: 'genui.limit.tabs',
   steps: 'genui.limit.steps',
@@ -90,7 +90,10 @@ const LIMIT_BY_KEY: Record<string, GenUIErrorCode> = {
   actions: 'genui.limit.actions',
   row_actions: 'genui.limit.actions',
   bulk_actions: 'genui.limit.actions',
-}
+} as Record<string, GenUIErrorCode>))
+
+/** Código de límite por el nombre de la última clave de la ruta (Map: nunca hereda de Object.prototype). */
+const limitFor = (path: string, fallback: GenUIErrorCode): GenUIErrorCode => LIMIT_BY_KEY.get(lastKey(path)) ?? fallback
 
 function resolve(s: Schema): Schema {
   let cur = s
@@ -123,8 +126,26 @@ interface Ctx {
 
 const lastKey = (path: string) => /([A-Za-z_]+)(\[\d+\])?$/.exec(path)?.[1] ?? ''
 
+/**
+ * Orden por bytes UTF-8 (= por puntos de código), el mismo de `sort.Strings` de Go.
+ * El `sort()` por defecto compara unidades UTF-16 y difiere para los caracteres
+ * fuera del plano básico frente a U+E000..U+FFFF.
+ */
+export function compareUtf8(a: string, b: string): number {
+  let i = 0
+  let j = 0
+  while (i < a.length && j < b.length) {
+    const x = a.codePointAt(i)!
+    const y = b.codePointAt(j)!
+    if (x !== y) return x < y ? -1 : 1
+    i += x > 0xffff ? 2 : 1
+    j += y > 0xffff ? 2 : 1
+  }
+  return i < a.length ? 1 : j < b.length ? -1 : 0
+}
+
 function sortedKeys(o: Obj, path: string): string[] {
-  const keys = Object.keys(o).sort()
+  const keys = Object.keys(o).sort(compareUtf8)
   // Los bloques se validan al final de la raíz: data/state/overlays ya están comprobados cuando un bloque los referencia.
   if (path === '$' && keys.includes('blocks')) return [...keys.filter((k) => k !== 'blocks'), 'blocks']
   return keys
@@ -164,7 +185,7 @@ function check(value: unknown, schema: Schema, path: string, ctx: Ctx, depth: nu
     const errors: (GenUIError | null)[] = []
     let ok = 0
     for (const alt of alts) {
-      const snap = { bindings: ctx.bindings, actions: ctx.actions, cur: ctx.cur, submits: ctx.submits.length }
+      const snap = { bindings: ctx.bindings, actions: ctx.actions, cur: ctx.cur, submits: ctx.submits.length, blockCount: ctx.blockCount, blockIds: ctx.blockIds.size }
       try {
         check(value, alt, path, ctx, depth)
         ok++
@@ -177,6 +198,9 @@ function check(value: unknown, schema: Schema, path: string, ctx: Ctx, depth: nu
         ctx.actions = snap.actions
         ctx.cur = snap.cur
         ctx.submits.length = snap.submits
+        ctx.blockCount = snap.blockCount
+        // Los ids se insertan en orden: se quitan los añadidos por la alternativa fallida.
+        if (ctx.blockIds.size > snap.blockIds) for (const id of [...ctx.blockIds.keys()].slice(snap.blockIds)) ctx.blockIds.delete(id)
         errors.push(e)
       }
     }
@@ -197,6 +221,9 @@ function check(value: unknown, schema: Schema, path: string, ctx: Ctx, depth: nu
     throw new GenUIError('genui.type', `${path}: se esperaba ${([] as string[]).concat(s.type).join('|')}, llegó ${kindOf(value)}`, path)
   }
   if (typeof value === 'string') {
+    if (s['x-no-proto'] && value.split('.').some((seg) => FORBIDDEN.has(seg))) {
+      throw new GenUIError('genui.forbidden_key', `${path}: segmento prohibido (${FORBIDDEN_KEYS.join(', ')})`, path)
+    }
     if (s.maxLength !== undefined && !withinCodePoints(value, s.maxLength)) {
       throw new GenUIError(s['x-error'] ?? (lastKey(path) === 'markdown' ? 'genui.limit.markdown' : 'genui.limit.length'), `${path}: excede ${s.maxLength} caracteres`, path)
     }
@@ -206,18 +233,22 @@ function check(value: unknown, schema: Schema, path: string, ctx: Ctx, depth: nu
       throw new GenUIError('genui.type', `${path}: fuera de rango ${s.minimum ?? ''}..${s.maximum ?? ''}`, path)
     }
   } else if (Array.isArray(value)) {
-    if (s.maxItems !== undefined && value.length > s.maxItems) throw new GenUIError(LIMIT_BY_KEY[lastKey(path)] ?? 'genui.limit.items', `${path}: máximo ${s.maxItems} elementos`, path)
+    if (s.maxItems !== undefined && value.length > s.maxItems) throw new GenUIError(limitFor(path, 'genui.limit.items'), `${path}: máximo ${s.maxItems} elementos`, path)
     if (s.minItems !== undefined && value.length < s.minItems) throw new GenUIError('genui.required', `${path}: mínimo ${s.minItems} elementos`, path)
     if (s.items) value.forEach((v, i) => check(v, s.items, `${path}[${i}]`, ctx, depth))
   } else if (isObj(value)) {
     const keys = sortedKeys(value, path)
     if (s.maxProperties !== undefined && keys.length > s.maxProperties) {
-      throw new GenUIError(LIMIT_BY_KEY[lastKey(path)] ?? 'genui.limit.properties', `${path}: demasiadas propiedades (máx. ${s.maxProperties})`, path)
+      throw new GenUIError(limitFor(path, 'genui.limit.properties'), `${path}: demasiadas propiedades (máx. ${s.maxProperties})`, path)
     }
     if (s.minProperties !== undefined && keys.length < s.minProperties) throw new GenUIError('genui.required', `${path}: faltan propiedades`, path)
     for (const r of s.required ?? []) if (!has(value, r)) throw new GenUIError('genui.required', `${path}: falta ${r}`, path)
     for (const k of keys) {
       const sub = `${path}.${k}`
+      // Un mapa abierto no puede llevar claves `$…` que el esquema no declara: `{"$ref": …}` no es un valor en esa posición.
+      if (k.startsWith('$') && !(s.properties && has(s.properties, k)) && isObj(s.additionalProperties)) {
+        throw new GenUIError('genui.ref_not_allowed', `${sub}: clave $ no permitida en esta posición`, sub)
+      }
       if (s.propertyNames?.pattern && !new RegExp(s.propertyNames.pattern, 'u').test(k)) throw new GenUIError('genui.pattern', `${sub}: nombre inválido`, sub)
       if (s.properties && has(s.properties, k)) check(value[k], s.properties[k], sub, ctx, depth)
       else if (s.additionalProperties === false) throw new GenUIError('genui.field_not_allowed', `${sub}: campo no permitido`, sub)
@@ -420,6 +451,10 @@ export function prepareUntrusted(value: unknown): Obj {
       throw new GenUIError('genui.invalid_document', 'el documento no es serializable')
     }
     if (text === undefined || utf8Bytes(text) > GENUI_V2_LIMITS.bytes) throw new GenUIError('genui.limit.bytes', `documento mayor a ${GENUI_V2_LIMITS.bytes} bytes`)
+    // Se valida y se devuelve la COPIA del texto, no el objeto del llamador: neutraliza getters
+    // (que podrían devolver otra cosa en la segunda lectura), prototipos ajenos, toJSON e instancias de clase.
+    v = JSON.parse(text)
+    scan(v)
   }
   if (!isObj(v)) throw new GenUIError('genui.invalid_document', 'el documento debe ser un objeto')
   return v

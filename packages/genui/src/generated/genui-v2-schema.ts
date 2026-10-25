@@ -134,12 +134,15 @@ export const GENUI_V2_SCHEMA = {
     },
     "key": {
       "type": "string",
-      "pattern": "^[A-Za-z_][A-Za-z0-9_.]{0,63}$"
+      "pattern": "^(?!(?:.*\\.)?(?:__proto__|constructor|prototype)(?:\\.|$))[A-Za-z_][A-Za-z0-9_.]{0,63}$",
+      "x-no-proto": true,
+      "description": "Clave de campo, columna o entrada; ningún segmento separado por punto puede ser __proto__, constructor ni prototype."
     },
     "bindingPath": {
       "type": "string",
-      "pattern": "^(data|state|record|ctx)(\\.[A-Za-z_][A-Za-z0-9_]{0,63}|\\.[0-9]{1,3}){1,6}$",
-      "description": "Ruta de vinculación; raíces cerradas data|state|record|ctx."
+      "pattern": "^(?!(?:.*\\.)?(?:__proto__|constructor|prototype)(?:\\.|$))(data|state|record|ctx)(\\.[A-Za-z_][A-Za-z0-9_]{0,63}|\\.[0-9]{1,3}){1,6}$",
+      "x-no-proto": true,
+      "description": "Ruta de vinculación; raíces cerradas data|state|record|ctx. Ningún segmento puede ser __proto__, constructor ni prototype."
     },
     "ref": {
       "type": "object",
@@ -1057,7 +1060,8 @@ export const GENUI_V2_SCHEMA = {
         },
         "path": {
           "type": "string",
-          "pattern": "^state(\\.[A-Za-z_][A-Za-z0-9_]{0,63}){1,6}$"
+          "pattern": "^(?!(?:.*\\.)?(?:__proto__|constructor|prototype)(?:\\.|$))state(\\.[A-Za-z_][A-Za-z0-9_]{0,63}){1,6}$",
+          "x-no-proto": true
         },
         "value": {
           "$ref": "#/$defs/scalar"

@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { GENUI_ERROR_CODES } from './errors'
 import { downgrade, parseGenUI, upgradeV1 } from './compat'
 import { parseUISpec } from './validate'
-import { parseUISpecV2, type ParseV2Options } from './validate-v2'
+import { compareUtf8, parseUISpecV2, type ParseV2Options } from './validate-v2'
 import { GENUI_V2_SCHEMA } from './generated/genui-v2-schema'
 // @ts-expect-error módulo .mjs sin tipos
 import { findUnsupported } from '../scripts/schema-keywords.mjs'
@@ -115,5 +115,64 @@ describe('genui: claves de prototipo', () => {
     const r = parseGenUI(evil)
     expect(r.ok).toBe(false)
     if (!r.ok) expect(r.code).toBe('genui.forbidden_key')
+  })
+})
+
+describe('genui: endurecimiento del validador', () => {
+  it('un objeto con getter o prototipo ajeno se valida y se devuelve como COPIA', () => {
+    let m = 0
+    const g = { version: 'genui/v2', blocks: [{ type: 'card', title: 'x', get link() { return m++ < 3 ? '/ok' : 'javascript:alert(1)' } }] }
+    const r2 = parseUISpecV2(g)
+    expect(r2.ok, r2.ok ? '' : r2.error).toBe(true)
+    if (r2.ok) {
+      expect(r2.spec).not.toBe(g)
+      expect(JSON.stringify(r2.spec)).not.toContain('javascript:')
+      expect((r2.spec.blocks[0] as { link?: string }).link).toBe('/ok')
+    }
+    const inherited = { version: 'genui/v2', blocks: [Object.assign(Object.create({ link: 'javascript:alert(1)' }), { type: 'card', title: 'x' })] }
+    const r3 = parseUISpecV2(inherited)
+    expect(r3.ok).toBe(true)
+    if (r3.ok) {
+      expect(JSON.stringify(r3.spec)).not.toContain('javascript:')
+      expect((r3.spec.blocks[0] as { link?: string }).link).toBeUndefined()
+    }
+    const doc = { version: 'genui/v2', blocks: [{ type: 'text', text: 'x' }] }
+    const r4 = parseUISpecV2(doc)
+    expect(r4.ok && r4.spec !== (doc as unknown)).toBe(true)
+  })
+
+  it('los límites por clave no heredan de Object.prototype (el código es siempre una cadena)', () => {
+    const big = (n: number) => Array.from({ length: n }, (_, i) => i)
+    const a = parseUISpecV2({ version: 'genui/v2', state: { toString: big(51) }, blocks: [{ type: 'text', text: 'x' }] })
+    const props = Object.fromEntries(Array.from({ length: 17 }, (_, i) => [`k${i}`, 1]))
+    const b = parseUISpecV2({ version: 'genui/v2', state: { valueOf: props }, blocks: [{ type: 'text', text: 'x' }] })
+    for (const r of [a, b]) {
+      expect(r.ok).toBe(false)
+      if (!r.ok) {
+        expect(typeof r.code).toBe('string')
+        expect(GENUI_ERROR_CODES).toContain(r.code)
+      }
+    }
+  })
+
+  it('la copia validada no conserva claves de prototipo que añada toJSON', () => {
+    const r = parseUISpecV2({ version: 'genui/v2', blocks: [{ type: 'text', text: 'x' }], toJSON: () => JSON.parse('{"version":"genui/v2","blocks":[],"__proto__":{"x":1}}') })
+    expect(r.ok).toBe(false)
+  })
+
+  it('compareUtf8 ordena por bytes UTF-8, no por unidades UTF-16', () => {
+    expect(['\u{10000}', ''].sort(compareUtf8)).toEqual(['', '\u{10000}'])
+    expect(['b', 'a', 'ab'].sort(compareUtf8)).toEqual(['a', 'ab', 'b'])
+    expect(compareUtf8('a', 'a')).toBe(0)
+  })
+
+  it('findUnsupported falla cerrado con los huecos de la lista blanca', () => {
+    const kinds = (s: unknown) => (findUnsupported(s) as [string, string][]).map(([, k]) => k)
+    expect(kinds({ items: [{ type: 'string' }] })).toEqual(['items(no-objeto)'])
+    expect(kinds({ items: { type: 'string' } })).toEqual([])
+    expect(kinds({ propertyNames: { pattern: '^a$', maxLength: 3, enum: ['a'] } })).toEqual(['propertyNames.maxLength', 'propertyNames.enum'])
+    expect(kinds({ propertyNames: { pattern: '^a$' } })).toEqual([])
+    expect(kinds({ $ref: '#/$defs/a', maxLength: 3, description: 'ok' })).toEqual(['$ref+maxLength'])
+    expect(kinds({ $ref: '#/$defs/a', description: 'ok', title: 't', default: 1 })).toEqual([])
   })
 })
