@@ -4,6 +4,7 @@
 // their app in <ApiProvider value={axiosInstance}> once at the root.
 import React, { createContext, useContext, useEffect, useMemo } from 'react'
 import { batchGet, invalidateQueryBatchData } from './query-batch'
+import { syncCacheScope } from './cache-scope'
 import { invalidateOptionsCache } from './use-options-resolver'
 import {
     epochFromAxiosHeaders,
@@ -38,6 +39,19 @@ export interface ApiProviderProps {
 }
 
 export function ApiProvider({ client, batch = true, children }: ApiProviderProps) {
+    // Login, logout or an org/user/language switch (also from another tab)
+    // empties the scoped caches (metadata store, query batch).
+    useEffect(() => {
+        syncCacheScope()
+        if (typeof window === 'undefined') return
+        const onChange = () => syncCacheScope()
+        window.addEventListener('storage', onChange)
+        window.addEventListener('focus', onChange)
+        return () => {
+            window.removeEventListener('storage', onChange)
+            window.removeEventListener('focus', onChange)
+        }
+    }, [])
     // Hosts also write through their own client (native dialogs, settings
     // screens) without going through useApi(). When the client is axios,
     // every non-GET response drops what the runtime remembered as well.

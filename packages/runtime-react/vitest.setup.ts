@@ -34,3 +34,19 @@ installMemoryStorage('sessionStorage')
 import { configure } from '@testing-library/react'
 
 configure({ asyncUtilTimeout: 5000 })
+
+// Scoped caches (metadata store, query batch) fail closed without an
+// org:user:lang identity. Give every test one by default; the cache-scope
+// suites remove or change it explicitly.
+import { beforeEach } from 'vitest'
+
+beforeEach(() => {
+    try {
+        if (!localStorage.getItem('auth_user')) {
+            localStorage.setItem('auth_user', JSON.stringify({ id: 'u-test', organization_id: 'o-test' }))
+        }
+        if (!localStorage.getItem('i18nextLng')) localStorage.setItem('i18nextLng', 'en')
+    } catch {
+        /* storage unavailable */
+    }
+})

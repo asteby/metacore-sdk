@@ -6,6 +6,7 @@
  * success, data and etag. A failed part does not reject the others.
  */
 import type { ApiClient } from './api-context'
+import { cacheScope, onCacheScopeChange } from './cache-scope'
 
 export interface QueryPart {
     success: boolean
@@ -14,6 +15,11 @@ export interface QueryPart {
     message?: string
     etag?: string
     not_modified?: boolean
+    /**
+     * HTTP-like status of this part. Servers that do not send it leave it
+     * undefined and the message heuristics apply (v2 adds it).
+     */
+    status?: number
 }
 
 const WINDOW_MS = 8
@@ -28,6 +34,8 @@ type Waiter = {
     cachedRows?: Record<string, unknown>[]
     missingIds?: string[]
     field?: string
+    /** Scope the read was asked under; null = uncached. */
+    scope: string | null
 }
 
 type CachedPart = { part: QueryPart; at: number }
@@ -120,6 +128,8 @@ export function narrowInToken(token: string, now = Date.now()): NarrowedIn | nul
     const parsed = splitInToken(token)
     if (!parsed) return null
     const scope = cacheScope()
+    // Unknown org/user/lang: never serve rows from memory.
+    if (!scope) return null
     const rows: Record<string, unknown>[] = []
     const missingIds: string[] = []
     for (const id of parsed.ids) {
@@ -154,6 +164,7 @@ export function rememberInRows(
     const parsed = splitInToken(token)
     if (!parsed) return
     const scope = cacheScope()
+    if (!scope) return
     const field = rowField(parsed.field)
     const byId = new Map<string, Record<string, unknown>[]>()
     for (const id of ids) byId.set(id, [])
@@ -183,12 +194,26 @@ function errorStatus(err: unknown): number | undefined {
 
 export function resetQueryBatchCache(): void {
     unsupportedClients = new WeakSet<object>()
+    clearQueryBatchCaches()
+}
+
+/**
+ * Drops everything the batch remembers (parts, entities) and rejects reads
+ * still waiting for the window, so nothing asked under the previous identity
+ * resolves after it ended. Hosts call it on logout; it also runs by itself
+ * when the org/user/lang scope changes.
+ */
+export function clearQueryBatchCaches(): void {
     partCache.clear()
     entityCache.clear()
+    const pending = waiters
     waiters = []
     if (timer != null) clearTimeout(timer)
     timer = null
+    for (const waiter of pending) waiter.reject(new Error('batch cache cleared'))
 }
+
+onCacheScopeChange(() => clearQueryBatchCaches())
 
 /**
  * Forgets every row, record and option read. useApi calls it after each
@@ -220,17 +245,6 @@ function mergeCachedRows(cached: Record<string, unknown>[] | undefined, part: Qu
     if (!cached?.length) return part
     const fresh = Array.isArray(part.data) ? part.data : []
     return { ...part, data: [...cached, ...fresh] }
-}
-
-function cacheScope(): string {
-    if (typeof localStorage === 'undefined') return ''
-    try {
-        const raw = localStorage.getItem('auth_user')
-        if (!raw) return ''
-        return String((JSON.parse(raw) as { organization_id?: string }).organization_id ?? '')
-    } catch {
-        return ''
-    }
 }
 
 export function optionsModelFromUrl(url: string): string | null {
@@ -271,7 +285,8 @@ export function nameBatchTokens(tokens: string[]): { name: string; token: string
 }
 
 export function loadQueryPart(api: ApiClient, token: string): Promise<QueryPart> {
-    const cached = partCache.get(`${cacheScope()}\n${token}`)
+    const scope = cacheScope()
+    const cached = scope ? partCache.get(`${scope}\n${token}`) : undefined
     if (cached && servedFromMemory(token) && Date.now() - cached.at < PART_TTL_MS && cached.part.success) {
         return Promise.resolve(cached.part)
     }
@@ -289,6 +304,7 @@ export function loadQueryPart(api: ApiClient, token: string): Promise<QueryPart>
             cachedRows: narrowed?.rows,
             missingIds: narrowed?.missingIds,
             field: narrowed?.field,
+            scope,
         })
         if (timer == null) timer = setTimeout(() => void flushQueryBatch(), WINDOW_MS)
     })
@@ -296,16 +312,21 @@ export function loadQueryPart(api: ApiClient, token: string): Promise<QueryPart>
 
 async function flushQueryBatch() {
     timer = null
-    const batch = waiters
+    const all = waiters
     waiters = []
+    const scope = cacheScope()
+    // Reads asked under another identity never travel with this one.
+    const batch = all.filter((waiter) => waiter.scope === scope)
+    for (const waiter of all) {
+        if (waiter.scope !== scope) waiter.reject(new Error('batch scope changed'))
+    }
     const api = transport
     if (!api || batch.length === 0) return
     const named = nameBatchTokens(batch.map((waiter) => waiter.wire))
     const byToken = new Map(named.map((part) => [part.token, part.name]))
     const inm: Record<string, string> = {}
-    const scope = cacheScope()
     for (const part of named) {
-        const cached = partCache.get(`${scope}\n${part.token}`)
+        const cached = scope ? partCache.get(`${scope}\n${part.token}`) : undefined
         const etag = cached?.part.etag
         if (etag && (servedFromMemory(part.token) || contentEtag(etag))) inm[part.name] = etag
     }
@@ -323,7 +344,7 @@ async function flushQueryBatch() {
                 continue
             }
             if (part.not_modified) {
-                const cached = partCache.get(`${scope}\n${waiter.token}`)
+                const cached = scope ? partCache.get(`${scope}\n${waiter.token}`) : undefined
                 if (cached) {
                     cached.at = Date.now()
                     waiter.resolve(cached.part)
@@ -335,10 +356,16 @@ async function flushQueryBatch() {
                 continue
             }
             const merged = mergeCachedRows(waiter.cachedRows, part)
-            if (waiter.missingIds && waiter.field) {
+            // The identity changed while the request was in flight: do not
+            // store (or hand out) an answer for the previous one.
+            if (cacheScope() !== scope) {
+                waiter.reject(new Error('batch scope changed'))
+                continue
+            }
+            if (scope && waiter.missingIds && waiter.field) {
                 rememberInRows(waiter.token, waiter.missingIds, part.data)
             }
-            if (part.success) {
+            if (scope && part.success) {
                 partCache.set(`${scope}\n${waiter.token}`, { part: merged, at: Date.now() })
             }
             waiter.resolve(merged)
@@ -400,8 +427,26 @@ export function tokenForGet(url: string, params?: Record<string, unknown>): stri
     )
 }
 
-function batchForbidden(message?: string): boolean {
-    return /forbidden|permiso/i.test(message || '')
+/**
+ * Reads a failed part. The per-part `status` (when the server sends it) wins:
+ * 403 forbidden, 424 dependency failed (rejects, no retry), 5xx/413 a failure
+ * that gets ONE direct GET. Without `status` the message heuristic applies.
+ */
+function failureKind(part: QueryPart): 'forbidden' | 'dependency' | 'retry' | 'plain' {
+    const status = part.status
+    if (typeof status === 'number') {
+        if (status === 403) return 'forbidden'
+        if (status === 424) return 'dependency'
+        if (status === 413 || status >= 500) return 'retry'
+    }
+    return /forbidden|permiso/i.test(part.message || '') ? 'forbidden' : 'plain'
+}
+
+function statusError(message: string, status: number): Error {
+    const err = new Error(message) as Error & { status: number; response: { status: number } }
+    err.status = status
+    err.response = { status }
+    return err
 }
 
 /**
@@ -417,22 +462,17 @@ export async function batchGet(api: ApiClient, url: string, config?: { params?: 
     try {
         const part = await loadQueryPart(api, token)
         if (!part.success) {
-            if (batchForbidden(part.message)) {
-                const err = new Error(part.message || 'forbidden') as Error & {
-                    status: number
-                    response: { status: number }
-                }
-                err.status = 403
-                err.response = { status: 403 }
-                throw err
-            }
+            const kind = failureKind(part)
+            if (kind === 'forbidden') throw statusError(part.message || 'forbidden', 403)
+            if (kind === 'dependency') throw statusError(part.message || 'dependency failed', 424)
+            // 'retry' and 'plain': one direct GET, whose own error propagates.
             return plainGet()
         }
         return { data: { success: true, data: part.data, meta: part.meta } }
     } catch (err) {
         const status = (err as { status?: number; response?: { status?: number } })?.status
             ?? (err as { response?: { status?: number } })?.response?.status
-        if (status === 403) throw err
+        if (status === 403 || status === 424) throw err
         return plainGet()
     }
 }
