@@ -9,6 +9,14 @@
 // source: api_routes_validate.go
 
 /**
+ * API route audiences. An empty Audience means APIAudienceStore.
+ */
+export const APIAudienceStore = "store";
+/**
+ * API route audiences. An empty Audience means APIAudienceStore.
+ */
+export const APIAudienceTooling = "tooling";
+/**
  * apiRouteMaxPathLn bounds an APIRoute path pattern.
  */
 /**
@@ -36,6 +44,132 @@ export interface APIPathSegment {
   Kind: APIPathSegmentKind;
   Value: string;
 }
+
+//////////
+// source: branding.go
+
+/**
+ * Branding is the typed brand kit a preset ships in preset.defaults.branding
+ * (inline or via branding_file). Every field is optional; the host applies the
+ * non-empty ones to the organization. Asset fields (the *_url ones) hold
+ * either an absolute http(s) URL or a bundle-relative "./assets/..." path that
+ * the host materializes from the preset bundle and rewrites to a URL
+ * (WithAssetURLs).
+ */
+export interface Branding {
+  platform_name?: string;
+  /**
+   * LogoURL is the main (light background) logo.
+   */
+  logo_url?: string;
+  /**
+   * LogoDarkURL is the logo for dark backgrounds. Empty = LogoURL.
+   */
+  logo_dark_url?: string;
+  /**
+   * LogoMarkURL is the square icon (collapsed sidebar, PWA icon, avatar).
+   */
+  logo_mark_url?: string;
+  favicon_url?: string;
+  login_background_url?: string;
+  /**
+   * PrimaryColor and AccentColor are hex colors: #RGB, #RRGGBB or #RRGGBBAA.
+   */
+  primary_color?: string;
+  accent_color?: string;
+  support_email?: string;
+  support_url?: string;
+  mascot_name?: string;
+  mascot_skin?: string;
+  /**
+   * ThemeKey, Font and Density mirror preset.defaults.ui_theme; a host
+   * reading both lets branding win.
+   */
+  theme_key?: string;
+  font?: string;
+  density?: string;
+  /**
+   * Fonts are extra font families (Google Fonts names, e.g. "Barlow") the
+   * host loads for the organization's own surfaces (kiosk, customer
+   * display, documents) besides the UI Font token.
+   */
+  fonts?: string[];
+  /**
+   * PWAName and PWAShortName feed the web app manifest. Empty = PlatformName.
+   */
+  pwa_name?: string;
+  pwa_short_name?: string;
+  /**
+   * EmailFromName is the display name of outgoing mail. Empty = PlatformName.
+   */
+  email_from_name?: string;
+  /**
+   * Login is the optional copy/hero of the sign-in page (RFC-07). Nil = the
+   * host's generic login. null in an overlay removes the base's block.
+   */
+  login?: LoginCopy;
+}
+/**
+ * LoginCopy is the plain-text copy of the sign-in page's brand panel. Every
+ * field is optional; empty falls back to the next layer of the cascade
+ * (organization -> instance -> preset -> generic). Text is plain: no HTML and
+ * no URLs are interpreted, the host renders it as text.
+ */
+export interface LoginCopy {
+  eyebrow?: string;
+  title?: string;
+  title_accent?: string;
+  subtitle?: string;
+  /**
+   * Highlights replace the generic module tiles (at most 8).
+   */
+  highlights?: LoginHighlight[];
+  /**
+   * Stats are at most 3 figures; empty or absent = NO figures are shown (the
+   * host never invents numbers).
+   */
+  stats?: LoginStat[];
+  /**
+   * Signup false hides the «create account» link. Nil = the host's behavior.
+   */
+  signup?: boolean;
+  /**
+   * I18n carries per-locale overrides ("es", "en", "es-MX"), same text keys.
+   */
+  i18n?: { [key: string]: LoginCopyLocale};
+}
+/**
+ * LoginHighlight is one tile of the login panel.
+ */
+export interface LoginHighlight {
+  /**
+   * Icon is a Lucide PascalCase name (same rule as Role.icon).
+   */
+  icon?: string;
+  label: string;
+}
+/**
+ * LoginStat is one figure of the login panel.
+ */
+export interface LoginStat {
+  label: string;
+  value: string;
+}
+/**
+ * LoginCopyLocale is the translatable subset of LoginCopy.
+ */
+export interface LoginCopyLocale {
+  eyebrow?: string;
+  title?: string;
+  title_accent?: string;
+  subtitle?: string;
+  highlights?: LoginHighlight[];
+  stats?: LoginStat[];
+}
+/**
+ * BrandingAssetPrefix is the bundle directory branding assets live in.
+ */
+export const BrandingAssetPrefix = "./assets/";
 
 //////////
 // source: compat.go
@@ -67,6 +201,171 @@ export const RuleRequiresStateInStages = "requires_state_in_stages";
  * everywhere one minor release after it ships.
  */
 export const RuleAuditColumnType = "audit_column_type";
+
+//////////
+// source: connector_blocks.go
+
+/**
+ * FormBlockWebhookURL shows the public URL of one of the addon's inbound
+ * webhooks (webhooks[].key) for the current organization, read-only with
+ * a copy button. The host computes it; the manifest never hardcodes it.
+ */
+export const FormBlockWebhookURL = "webhook_url";
+/**
+ * FormBlockInstructions is help text with optional https links (e.g. to
+ * the provider's developer panel). Nothing to compute or run.
+ */
+export const FormBlockInstructions = "instructions";
+/**
+ * FormBlockAction is a verification button bound to a wasm export of the
+ * addon. The host runs it with the org's STORED connector credentials and
+ * the SDK shows the structured result (see FormBlockResult) with retry.
+ */
+export const FormBlockAction = "action";
+/**
+ * Block limits keep a step renderable on a phone.
+ */
+export const MaxFormBlocksPerSection = 8;
+/**
+ * Block limits keep a step renderable on a phone.
+ */
+export const MaxFormBlockLinks = 4;
+/**
+ * FormBlock is one non-input element of a connector setup step.
+ */
+export interface FormBlock {
+  /**
+   * Key identifies the block, unique across the connector's form_layout.
+   * The host addresses an action block by it
+   * (POST /integrations/<connector>/blocks/<key>/run).
+   */
+  key: string;
+  /**
+   * Kind is webhook_url | instructions | action.
+   */
+  kind: string;
+  /**
+   * Title / Description: literal text or i18n keys.
+   */
+  title?: string;
+  description?: string;
+  /**
+   * Webhook (kind=webhook_url) is the webhooks[].key whose URL is shown.
+   */
+  webhook?: string;
+  /**
+   * Links (kind=instructions or webhook_url) point to external panels. Only
+   * https URLs are accepted.
+   */
+  links?: FormBlockLink[];
+  /**
+   * Export (kind=action) is the wasm export the host invokes. It joins the
+   * addon's export whitelist (backend.exports) like a test_export.
+   */
+  export?: string;
+  /**
+   * Label (kind=action) is the button text (literal or i18n key).
+   */
+  label?: string;
+}
+/**
+ * FormBlockLink is a labelled https link of a block.
+ */
+export interface FormBlockLink {
+  label: string;
+  url: string;
+}
+/**
+ * FormBlockResult documents what an action block's export answers inside the
+ * kernel envelope {success, data}. data:
+ * 	{"ok": true, "status": "ok", "message": "Orden de prueba creada",
+ * 	 "details": [{"key":"id","label":"ID","value":"123-abc","kind":"id"},
+ * 	             {"key":"link","label":"Pagar en sandbox","value":"https://…","kind":"url"}]}
+ * status uses the setup vocabulary (ok | warn | error | pending); when absent
+ * it is derived from ok. kind is text | id | url (ids get a copy button, urls
+ * a link). The host passes the envelope through; it never invents success.
+ */
+export interface FormBlockResult {
+  ok: boolean;
+  status?: string;
+  message?: string;
+  details?: FormBlockResultRow[];
+}
+/**
+ * FormBlockResultRow is one labelled value of an action result.
+ */
+export interface FormBlockResultRow {
+  key?: string;
+  label?: string;
+  value: string;
+  kind?: string;
+}
+
+//////////
+// source: hub_primitives_validate.go
+
+/**
+ * RuleWebhookActionSigning: a contributions.actions[] webhook handler must
+ * declare an https destination (url / url_ref / url_setting) AND `signing`.
+ * Before RFC-01 a webhook action was an unsigned POST that OPS never even
+ * dispatched, so no published manifest depends on it; the rule still ships
+ * as a warning for one minor. Promote to a hard error one minor after
+ * v0.230.0.
+ */
+export const RuleWebhookActionSigning = "webhook_action_signing";
+/**
+ * RuleRBACPermissionResolves: a key in rbac.roles[].permissions prefixed with
+ * this addon's own key (<addon>.<resource>.<verb>) must be declared in
+ * rbac.permissions or resolve to one of the addon's models (verb in
+ * read|write|create|update|delete|index|show|export|import or an action key).
+ * A key that resolves to nothing grants nothing and nobody notices (fails
+ * closed, silently), so staff end up using admin for everything. Keys with
+ * another addon's prefix cannot be judged from one manifest and are skipped.
+ * Promote to a hard error one minor after v0.230.0.
+ */
+export const RuleRBACPermissionResolves = "rbac_permission_resolves";
+/**
+ * SetValueKind classifies a Handler.set value.
+ */
+export type SetValueKind = string;
+/**
+ * Kinds of SetValue.
+ */
+export const SetLiteral: SetValueKind = "literal"; // scalar literal (string, number, bool)
+/**
+ * Kinds of SetValue.
+ */
+export const SetNull: SetValueKind = "null";
+/**
+ * Kinds of SetValue.
+ */
+export const SetNow: SetValueKind = "now"; // $now
+/**
+ * Kinds of SetValue.
+ */
+export const SetActorID: SetValueKind = "actor_id"; // $actor.id
+/**
+ * Kinds of SetValue.
+ */
+export const SetPayload: SetValueKind = "payload"; // $payload.<field>
+/**
+ * Kinds of SetValue.
+ */
+export const SetRecord: SetValueKind = "record"; // $record.<column>
+/**
+ * SetValue is a parsed Handler.set value.
+ */
+export interface SetValue {
+  Kind: SetValueKind;
+  /**
+   * Name is the payload field or record column for SetPayload / SetRecord.
+   */
+  Name: string;
+  /**
+   * Literal is the scalar for SetLiteral (a "$$x" string is unescaped to "$x").
+   */
+  Literal: any;
+}
 
 //////////
 // source: option_display.go
@@ -301,6 +600,15 @@ export interface OptionMetricThrough {
 }
 
 //////////
+// source: preset_validate.go
+
+/**
+ * OverlayMinKernel is the kernel contract version (manifest.APIVersion) that
+ * understands preset.extends and metadata.visibility.
+ */
+export const OverlayMinKernel = "3.1.0";
+
+//////////
 // source: recordexpr.go
 
 /**
@@ -364,6 +672,306 @@ export interface OptionalRequirement {
   Version: string;
   Reason: string;
   Enables: string[];
+}
+
+//////////
+// source: setup.go
+
+/**
+ * SetupTriggerOnInstall opens the flow automatically when the addon is
+ * installed (and shows a "continue configuration" banner until complete).
+ */
+export const SetupTriggerOnInstall = "on_install";
+/**
+ * SetupTriggerManual makes the flow available but never auto-opened.
+ */
+export const SetupTriggerManual = "manual";
+/**
+ * SetupScopeOrg keeps one progress record per organization (default).
+ */
+export const SetupScopeOrg = "org";
+/**
+ * SetupScopeInstance keeps one progress record per host instance, for
+ * flows that configure something machine-wide (a native sidecar's host
+ * settings). Only instance administrators may run it.
+ */
+export const SetupScopeInstance = "instance";
+/**
+ * Setup trigger / scope / step-kind vocabulary.
+ */
+export const SetupKindCheck = "check";
+/**
+ * Setup trigger / scope / step-kind vocabulary.
+ */
+export const SetupKindForm = "form";
+/**
+ * Setup trigger / scope / step-kind vocabulary.
+ */
+export const SetupKindAction = "action";
+/**
+ * Setup trigger / scope / step-kind vocabulary.
+ */
+export const SetupKindRecords = "records";
+/**
+ * Setup trigger / scope / step-kind vocabulary.
+ */
+export const SetupKindCustom = "custom";
+/**
+ * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
+ */
+export const MaxSetupFlows = 8;
+/**
+ * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
+ */
+export const MaxSetupSteps = 40;
+/**
+ * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
+ */
+export const MaxSetupDependsOn = 16;
+/**
+ * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
+ */
+export const MaxSetupFormSettings = 64;
+/**
+ * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
+ */
+export const MinSetupPollEvery = any /* time.Second */;
+/**
+ * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
+ */
+export const MaxSetupPollEvery = 24 * any /* time.Hour */;
+/**
+ * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
+ */
+export const MaxSetupTimeout = 5 * any /* time.Minute */;
+/**
+ * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
+ */
+export const MaxSetupGiveUpAfter = 30 * 24 * any /* time.Hour */;
+/**
+ * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
+ */
+export const MinHealthEvery = 10 * any /* time.Second */;
+/**
+ * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
+ */
+export const MaxHealthEvery = 24 * any /* time.Hour */;
+/**
+ * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
+ */
+export const MaxSetupPollFactor = 10.0;
+/**
+ * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
+ */
+export const DefaultSetupPollFact = 2.0;
+/**
+ * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
+ */
+export const DefaultSetupTimeout = 30 * any /* time.Second */;
+/**
+ * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
+ */
+export const DefaultHealthEvery = 5 * any /* time.Minute */;
+/**
+ * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
+ */
+export const DefaultSetupGiveUpAft = 24 * any /* time.Hour */;
+/**
+ * SetupFlow is one guided configuration flow of an addon.
+ */
+export interface SetupFlow {
+  /**
+   * Key identifies the flow within the addon ("main"); the host serves it
+   * at /setup/<addon>[/<key>].
+   */
+  key: string;
+  /**
+   * Title is an i18n key (or literal) shown as the page heading.
+   */
+  title: string;
+  description?: string;
+  /**
+   * Trigger is "on_install" or "manual" (default). At most one flow of an
+   * addon may be on_install: that is the page opened right after install.
+   */
+  trigger?: string;
+  /**
+   * Permission is the RBAC permission required to open/run the flow. A key
+   * under this addon's prefix must be declared in rbac.permissions.
+   */
+  permission?: string;
+  /**
+   * Scope is "org" (default) or "instance".
+   */
+  scope?: string;
+  steps: SetupStep[];
+}
+/**
+ * SetupStep is one step of a SetupFlow. Kind selects exactly one body:
+ * 	check    run a handler and show its status      -> Check
+ * 	form     collect settings or connector creds    -> Form
+ * 	action   a button bound to contributions.actions -> Action
+ * 	records  a table of rows a handler returns       -> Records
+ * 	custom   an addon-provided federated component   -> Custom
+ */
+export interface SetupStep {
+  key: string;
+  title: string;
+  description?: string;
+  /**
+   * Optional steps never block the flow's completion nor the steps that
+   * depend on them.
+   */
+  optional?: boolean;
+  /**
+   * DependsOn lists step keys of the same flow that must be done (or
+   * skipped, or optional-and-unfinished) before this step is offered.
+   */
+  depends_on?: string[];
+  kind: string;
+  check?: SetupCheck;
+  form?: SetupForm;
+  action?: SetupAction;
+  records?: SetupRecords;
+  custom?: SetupCustom;
+  /**
+   * SkipWhen marks the step skipped (and satisfied) while a setting of the
+   * addon has a given value, e.g. "no Cloudflare step when dns_mode=manual".
+   */
+  skip_when?: SetupSkipWhen;
+}
+/**
+ * SetupHandler references a handler of this addon: a wasm export or a native
+ * operation. It is the same dispatch the addon's actions use.
+ */
+export interface SetupHandler {
+  /**
+   * Type is "wasm" or "native".
+   */
+  type: string;
+  /**
+   * Function is the wasm export (type=wasm). It joins the addon's declared
+   * export surface, so the hub scanner verifies the module exports it.
+   */
+  function?: string;
+  /**
+   * Operation is the metacore.native/v1 operation (type=native).
+   */
+  operation?: string;
+}
+/**
+ * SetupCheck runs Handler and renders its CheckResult. Poll, when set, makes
+ * the host re-run it with backoff while the result is pending/running.
+ */
+export interface SetupCheck {
+  handler: SetupHandler;
+  poll?: SetupPoll;
+  /**
+   * Timeout is the Go duration one execution may take (default 30s, max 5m).
+   */
+  timeout?: string;
+}
+/**
+ * SetupPoll is the re-run schedule of a check: first re-run after Every, each
+ * next delay multiplied by Factor up to MaxEvery (30s -> 1m -> 2m ... 1h), until
+ * the result settles or GiveUpAfter elapses.
+ */
+export interface SetupPoll {
+  every: string;
+  max_every?: string;
+  factor?: number /* float64 */;
+  give_up_after?: string;
+}
+/**
+ * SetupForm collects values. Exactly one of Settings (keys of this addon's
+ * settings[]) or Connector (key of one of its connectors[]; its credentials
+ * are the fields).
+ */
+export interface SetupForm {
+  settings?: string[];
+  connector?: string;
+}
+/**
+ * SetupAction binds the step to one of the addon's contributions.actions[].
+ */
+export interface SetupAction {
+  action: string;
+}
+/**
+ * SetupRecords renders a table whose rows come from Handler (the handler
+ * returns the kernel envelope {success,data:{rows:[...]},meta}).
+ */
+export interface SetupRecords {
+  handler: SetupHandler;
+}
+/**
+ * SetupCustom renders a component the addon contributes to Slot
+ * (contributions.slots[].slot_kind).
+ */
+export interface SetupCustom {
+  slot: string;
+}
+/**
+ * SetupSkipWhen skips a step while settings[Setting] equals Equals or is one
+ * of In.
+ */
+export interface SetupSkipWhen {
+  setting: string;
+  equals?: string;
+  in?: string[];
+}
+/**
+ * HealthProbe declares the addon's periodic health handler. The host runs it
+ * every Every (default 5m) for each installation and shows the result on the
+ * installed-addons card; the handler returns a setupflow.HealthResult.
+ */
+export interface HealthProbe {
+  handler: SetupHandler;
+  /**
+   * Every is a Go duration, 10s..24h (default 5m).
+   */
+  every?: string;
+  /**
+   * Permission is the RBAC permission required to read the detailed result.
+   */
+  permission?: string;
+}
+/**
+ * SetupRefs is everything ValidateSetup cross-checks a flow against. Both the
+ * v3 validator and the legacy manifest.Manifest validator build one, so the
+ * two planes reject exactly the same manifests ("dual validation").
+ */
+export interface SetupRefs {
+  /**
+   * AddonKey is the addon's own key (permission prefix check).
+   */
+  AddonKey: string;
+  /**
+   * Permissions are the keys declared in rbac.permissions. nil = not
+   * checkable by this validator (the legacy projection carries no RBAC), so
+   * the own-prefix declaration check is skipped.
+   */
+  Permissions: { [key: string]: {
+  }};
+  /**
+   * Settings, Connectors, Actions and Slots are the keys the steps may
+   * reference (settings[].key, connectors[].key, contributions.actions[].key,
+   * contributions.slots[].slot_kind). Slots nil = not checkable (the legacy
+   * projection carries no slots), so custom.slot existence is skipped.
+   */
+  Settings: { [key: string]: {
+  }};
+  /**
+   * HasNativeService is true when runtime.native_service is declared.
+   */
+  HasNativeService: boolean;
+  /**
+   * Exports is the declared wasm export surface. When non-empty every wasm
+   * handler function must be in it (legacy manifests with an explicit
+   * backend.exports); empty means the handlers ARE the surface.
+   */
+  Exports: { [key: string]: {
+  }};
 }
 
 //////////
@@ -806,7 +1414,9 @@ export interface InboundWebhook {
   /**
    * Verify is the signature scheme: "" (none) | "hmac-sha256" | "bearer"
    * (a static token in Authorization: Bearer|Token <secret>) | "addon" (the
-   * handler verifies from raw_body_b64/query/headers; no kernel secret).
+   * handler verifies from raw_body_b64/query/headers; no kernel secret) |
+   * "metacore-hmac-v1" (HMAC over ts + method + path + nonce + sha256(body),
+   * 5 min window, nonce required: replay-safe; works for any route).
    */
   verify?: string;
   /**
@@ -816,7 +1426,10 @@ export interface InboundWebhook {
    */
   secret_ref?: string;
   /**
-   * Do is the handler reference the verified body is routed to.
+   * Do is the handler reference the verified body is routed to:
+   * wasm:<export> | webhook:<key> | compiled:<fn> | upsert:<Model> — the last
+   * feeds a batch into the Model's ingest sink (RFC-04); <Model> must be an
+   * own model with an `ingest` block and Verify must be set and not "addon".
    */
   do: string;
   /**
@@ -825,6 +1438,44 @@ export interface InboundWebhook {
    * "*" matches a prefix (e.g. "x-acme-*"). Optional.
    */
   headers?: string[];
+}
+/**
+ * IngestSpec configures the upsert sink of a model (Model.ingest, RFC-04).
+ */
+export interface IngestSpec {
+  /**
+   * Key lists the natural-key columns (1..4). A UNIQUE index covering
+   * organization_id + exactly these columns must exist (a partial
+   * `deleted_at IS NULL` one is fine).
+   */
+  key: string[];
+  /**
+   * Cursor is an optional monotonic column (bigint or timestamp[tz]): an entry
+   * whose cursor is <= the stored one is skipped as stale. Without it the last
+   * write wins.
+   */
+  cursor?: string;
+  /**
+   * Fields lists the columns the sink may write besides the key. Default: every
+   * non-managed column. Never id, organization_id, created_*, updated_*,
+   * deleted_*, generated or sequence columns.
+   */
+  fields?: string[];
+  /**
+   * Exclusive turns Fields into server-side protected columns for the generic
+   * write path (UI, data API, import): only the sink and declared actions
+   * listing the column write them. Default false.
+   */
+  exclusive?: boolean;
+  /**
+   * OnDelete is "soft" (default: deleted_at + deleted_by_id = system actor) or
+   * "ignore". Never a physical delete.
+   */
+  on_delete?: string;
+  /**
+   * MaxBatch is the maximum items per request, 1..1000 (default 500).
+   */
+  max_batch?: number /* int */;
 }
 /**
  * EdgeDevice describes one class of local hardware (a cash recycler, a card
@@ -1087,7 +1738,30 @@ export interface Metadata {
    * when the catalog is browsed in that locale, falling back to the default.
    */
   i18n?: { [key: string]: MetadataLocale};
+  /**
+   * Visibility is the author's assertion of who may see and install the
+   * bundle: "public" (default when empty) or "private". The marketplace
+   * enforces it at publish time — a bundle declared private is never listed
+   * publicly. WHO is granted access to a private bundle is NOT part of the
+   * signed manifest (it changes without republishing); the marketplace owns
+   * that allowlist.
+   */
+  visibility?: string;
+  /**
+   * Owner is the informative slug of the account that owns a private bundle
+   * (e.g. the company a private preset belongs to). The marketplace remains
+   * the authority on ownership.
+   */
+  owner?: string;
 }
+/**
+ * Metadata visibility values.
+ */
+export const VisibilityPublic = "public";
+/**
+ * Metadata visibility values.
+ */
+export const VisibilityPrivate = "private";
 /**
  * MetadataLocale is one locale's catalog copy. Every field is optional so an
  * author can localize just the description, and the renderer falls back to the
@@ -1253,6 +1927,16 @@ export interface Model {
    */
   sequences?: Sequence[];
   /**
+   * Snapshots declare columns the kernel fills on CREATE by copying values from
+   * a related row (the product's cost and floor price at the moment of sale,
+   * the parent order's branch and seller on each line). Every target column is
+   * system-owned: it MUST be declared `protected`, and the kernel overwrites
+   * whatever any write path supplied (generic /data, wasm data_mutate and
+   * data_batch, actions), so the value cannot be forged and survives later
+   * edits of the source. Optional. See Snapshot.
+   */
+  snapshots?: Snapshot[];
+  /**
    * FormLayout declares declarative grouping for the model's native create/edit
    * form — collapsible sections on one scroll (mode "sections") or a step
    * wizard (mode "steps"). Columns bind to a section/step via Column.Section.
@@ -1308,6 +1992,13 @@ export interface Model {
    * no reason needed (the legacy behaviour). See ReasonRequired.
    */
   reason_required?: ReasonRequired;
+  /**
+   * Ingest declares the model as the TARGET of a signed idempotent upsert sink
+   * (RFC-04): an external replicator posts batches to a webhooks[] route whose
+   * `do` is "upsert:<ThisModel>" and the kernel creates/updates rows by their
+   * natural key with a monotonic cursor. Nil = no sink. See IngestSpec.
+   */
+  ingest?: IngestSpec;
   /**
    * AppendOnly marks the model as an append-only ledger: rows may be created
    * but never modified or removed. The kernel refuses every UPDATE and DELETE
@@ -1374,6 +2065,14 @@ export interface Model {
    * host capability "ui.detail_panels". Nil = the default detail page.
    */
   detail?: ModelDetail;
+  /**
+   * TitleField / SubtitleField name the columns whose values head a record:
+   * the detail page title and subtitle and the mobile card title/subtitle.
+   * Each must be a declared column of this model. Empty = the SDK guesses.
+   * Pure UI metadata.
+   */
+  title_field?: string;
+  subtitle_field?: string;
 }
 /**
  * Stage is one lifecycle stage of a model's StageField column. The kernel
@@ -1731,6 +2430,12 @@ export interface Column {
    */
   constraints?: Constraint[];
   /**
+   * Grant redeems a supervisor authorization carried by THIS column (an id the
+   * POS obtained with a PIN) on create, and records the result in a protected
+   * flag column the model's formulas / guards read. See GrantBinding.
+   */
+  grant?: GrantBinding;
+  /**
    * Sequence binds this column to one of the owning Model.Sequences by key: on
    * create, when the column is empty, the kernel stamps the next formatted
    * folio value automatically. The column is treated as system-generated (like
@@ -1794,6 +2499,24 @@ export interface Column {
    */
   visibility?: string;
   /**
+   * DisplayFor declares that this column is the denormalized display text of
+   * the relation column it names (e.g. customer_name with display_for
+   * "customer_id"). It must name another column of the same model that
+   * carries a Ref. The SDK does not render it as a separate field in the
+   * record detail when the relation column is visible (it would duplicate the
+   * resolved relation label) and may use it as the relation's label in
+   * tables. Pure UI metadata: the value is still stored, read and written.
+   * Optional.
+   */
+  display_for?: string;
+  /**
+   * CardRole assigns this column a role in the mobile record card: "title",
+   * "subtitle", "metric" (up to three inline figures), "status" (badge) or
+   * "hidden" (left out of the card). Empty = the SDK decides heuristically.
+   * Pure UI metadata. Optional.
+   */
+  card_role?: string;
+  /**
    * Readonly marks a SYSTEM-GENERATED column: a value the addon/host populates
    * (e.g. an id or number a remote API returns after a write), NOT something a
    * user types. It is pure UI-plane metadata that the host projects onto
@@ -1826,6 +2549,20 @@ export interface Column {
    * the value. Optional; defaults false (fully backward compatible).
    */
   protected?: boolean;
+  /**
+   * ReadPermission makes the column readable only by callers holding this
+   * permission (e.g. "inventory.product.view_cost"). Without it the server
+   * REMOVES the column from every read surface — list, get, export,
+   * options/search projections, related-model expansions, AI data tools and
+   * the payloads the host forwards to clients — and rejects a filter, sort,
+   * group or aggregate over it with 403 (code "column_read_denied"). Use it
+   * to hide costs or margins from a kiosk, a POS cashier or a BI role that
+   * may still read the rest of the record. Writes are unaffected. The value
+   * is a dotted permission key (the rbac.permissions[].key shape); a key
+   * under this addon's own prefix must be declared in rbac.permissions.
+   * Empty = readable by whoever may read the record (backward compatible).
+   */
+  read_permission?: string;
   /**
    * RejectDeletedRef, on a column with a Ref, makes a CREATE fail when the
    * referenced row exists but is soft-deleted (deleted_at set): a NEW sale
@@ -1944,6 +2681,13 @@ export interface FormSection {
    * and the SDK the panel. Nil = a plain section.
    */
   assist?: FormAssist;
+  /**
+   * Blocks are non-input elements of a CONNECTOR setup step: the per-org
+   * webhook URL to paste in the provider's panel, instructions with links,
+   * and verification actions with a visible result. Only valid inside
+   * connectors[].form_layout; see FormBlock (connector_blocks.go).
+   */
+  blocks?: FormBlock[];
 }
 /**
  * FormAssist is the declaration of an AI-assisted form step (see
@@ -2016,6 +2760,56 @@ export interface Sequence {
    * → "A-000042"). Any other text is emitted verbatim.
    */
   format: string;
+}
+/**
+ * Snapshot copies columns from a related row onto the new row at CREATE time.
+ * 	{"from": "product_id", "fields": {"min_price": "min_price_at_sale", "cost_price": "unit_cost"}}
+ * From names a column of the same model that carries a `ref` (the related
+ * table); Fields maps a source column of that table to the target column on
+ * this model. The lookup is scoped to the writer's organization when the source
+ * table is tenant-scoped. A missing source row or an empty ref leaves the
+ * targets unset (the write is not refused). Targets must be declared
+ * `protected`. Snapshots run before the model's formulas, so a formula or guard
+ * can read the copied values (price_shortfall = f(min_price_at_sale, ...)).
+ */
+export interface Snapshot {
+  /**
+   * From is the ref column on this model identifying the source row.
+   */
+  from: string;
+  /**
+   * Fields maps source column -> target column on this model.
+   */
+  fields: { [key: string]: string};
+}
+/**
+ * GrantBinding turns the column it sits on into a supervisor-authorization slot.
+ * When the column holds an approval id on create, the kernel redeems that PIN
+ * grant (single use; same org, kind=pin of Policy, requested by the writer, still
+ * fresh) — but only when the authorization is actually needed, i.e. some
+ * ContextGte expression is positive. On success the numeric flag column Sets is
+ * stamped 1; on failure the write is refused (approval_invalid). When no
+ * authorization is needed the id is ignored and Sets stays 0.
+ */
+export interface GrantBinding {
+  /**
+   * Policy is the PIN policy the grant must have been issued for.
+   */
+  policy: string;
+  /**
+   * Sets is the protected numeric column stamped 1 on a redeemed grant.
+   */
+  sets: string;
+  /**
+   * ContextEq maps a key of the grant's recorded context to a column of this
+   * row whose value must equal it (anchors the grant to a product, ...).
+   */
+  context_eq?: { [key: string]: string};
+  /**
+   * ContextGte maps a context key to an arithmetic expression over this row:
+   * the amount the grant must cover (e.g. the per-unit shortfall).
+   */
+  context_gte?: { [key: string]: string};
 }
 /**
  * Constraint is one declarative GUARD predicate on a column: a boolean
@@ -2209,6 +3003,13 @@ export interface Contributions {
    * Optional. See AgentCapability.
    */
   agent_capabilities?: AgentCapability[];
+  /**
+   * Guides declares in-app help for the host's help center: short guides and
+   * guided tours whose steps point at UI elements, aimed at one or more
+   * roles and optionally auto-started the first time a user reaches a
+   * route. Optional. See HelpGuide.
+   */
+  guides?: HelpGuide[];
   subscriptions?: Subscription[];
   /**
    * Notifications declares in-app bell notifications the host should emit
@@ -2272,6 +3073,19 @@ export interface Contributions {
    * an addon with nothing to configure omits it and hosts show nothing.
    */
   config?: ConfigEntry;
+  /**
+   * Setup declares the addon's guided, resumable setup flows (the
+   * /setup/<addon> page): ordered steps with dependencies, each a check, a
+   * form, an action, a records table or a custom component. Optional — an
+   * addon without it behaves as before. See SetupFlow.
+   */
+  setup?: SetupFlow[];
+  /**
+   * Health declares the addon's periodic health handler, surfaced on the
+   * installed-addons card and the global setup banner. Optional. See
+   * HealthProbe.
+   */
+  health?: HealthProbe;
   /**
    * Rules contributes declarative anomaly/business rules evaluated by the
    * host against canonical CRUD events (contributions.rules[]). Each rule
@@ -2530,6 +3344,15 @@ export interface APIRoute {
    * Required.
    */
   do: string;
+  /**
+   * Audience says who the route is for: "store" (default when empty — the
+   * public storefront surface a store credential may use) or "tooling"
+   * (back-office/automation routes that a store profile must not be granted,
+   * e.g. content writes). Hosts derive the scopes of a profile from the
+   * routes of its audience. Optional and additive; it does not change
+   * authorization by itself.
+   */
+  audience?: string;
 }
 /**
  * APICache is the HTTP caching policy of a GET APIRoute. With Private the
@@ -2711,6 +3534,11 @@ export interface DashboardWidget {
    */
   compare?: WidgetCompare;
   /**
+   * Link makes the widget clickable: it navigates to a list view, pinning
+   * filters in the URL. Optional.
+   */
+  link?: WidgetLink;
+  /**
    * Slot is the federation slot the host mounts a kind:"custom" widget into.
    * Default "dashboard.widgets". Ignored for declarative kinds.
    */
@@ -2751,6 +3579,9 @@ export interface WidgetQuery {
    * Where is a filter map: equality by default, or {op: value} where op is
    * eq|neq|gt|gte|lt|lte|contains — the same operators the list builder uses.
    * Values are raw JSON so booleans/numbers/strings round-trip faithfully.
+   * With gt|gte|lt|lte over a timestamp/date column the value may be the token
+   * "$now" or "$now-<dur>" (<dur> = \d+(m|h|d), at most 400d), substituted by
+   * the database clock at query time.
    */
   where?: { [key: string]: unknown};
   /**
@@ -2771,8 +3602,8 @@ export interface WidgetQuery {
    */
   interval?: string;
   /**
-   * Range is the time window: last_7_days|last_30_days|last_12_months|
-   * this_month|this_year|this_day|all.
+   * Range is the time window: last_hour|last_24_hours|last_7_days|
+   * last_30_days|last_12_months|this_month|this_year|this_day|all.
    */
   range?: string;
   /**
@@ -2783,6 +3614,25 @@ export interface WidgetQuery {
    * Limit caps the number of buckets (host clamps to 1..24).
    */
   limit?: number /* int */;
+}
+/**
+ * WidgetLink is where a dashboard widget navigates on click. Exactly one of
+ * Model (an own model, optionally with Filter) or URL (a relative internal
+ * route, never absolute) is set.
+ */
+export interface WidgetLink {
+  /**
+   * Model is a model key of THIS addon; the SDK opens its list.
+   */
+  model?: string;
+  /**
+   * Filter maps column -> value, written to the URL as f_<column>=<value>.
+   */
+  filter?: { [key: string]: any};
+  /**
+   * URL is an internal route such as "/m/instances?f_environment=production".
+   */
+  url?: string;
 }
 /**
  * WidgetCompare requests a delta computation against an earlier window.
@@ -2963,12 +3813,24 @@ export interface Action {
    *   "secondary" — share / print / email / send-to-chat style actions: the
    *                 host moves them to the document's secondary bar (footer)
    *                 and to a discreet «Más…» group in the row menu.
+   *   "overflow"  — rarely used / maintenance actions: the host always tucks
+   *                 them behind the «⋯» menu, never as a visible button (on a
+   *                 narrow screen the toolbar shows primary and, if there is
+   *                 room, secondary; overflow never).
    *   ""          — auto: the host classifies by convention (share, print,
    *                 email, chat, download keys → secondary; the rest stay in
    *                 the main menu).
    * Hosts that don't understand it ignore it (no layout change).
    */
   priority?: string;
+  /**
+   * Destructive marks an action that deletes, voids or releases something
+   * irreversibly (cancel an order, release stock). Pure UI: the SDK paints it
+   * with the destructive variant, separates it from the other actions and
+   * asks for a destructive confirmation. It complements Tone ("danger"),
+   * which keeps working; neither implies the other. Default false (omitted).
+   */
+  destructive?: boolean;
   /**
    * Fields declares a declarative form the host renders in the action modal
    * before dispatching the handler. Optional — an action with no fields and
@@ -3000,6 +3862,18 @@ export interface Action {
    * ConfirmMessage is the body shown in that confirmation step.
    */
   confirm_message?: string;
+  /**
+   * ConfirmTyped asks the user to TYPE the current value of a column of the
+   * acted-on row before the action runs («escribe el nombre de la instancia»).
+   * The server verifies it (payload.confirm_text) for ANY handler type, so a
+   * script with a token must also name the resource. Implies Confirm.
+   */
+  confirm_typed?: ConfirmTyped;
+  /**
+   * Tone is pure UI: "default" (omitted) or "danger" — the SDK groups
+   * destructive actions at the end of the menu with a destructive variant.
+   */
+  tone?: string;
   /**
    * RequiresState gates the action on the target record's lifecycle column
    * (`status`, or `state` when status is empty): the action is only valid
@@ -3056,6 +3930,16 @@ export interface Action {
    * is installed). Nil = always served. See Condition.
    */
   condition?: Condition;
+}
+/**
+ * ConfirmTyped names the column whose current value the user must type to
+ * confirm an action (Action.ConfirmTyped).
+ */
+export interface ConfirmTyped {
+  /**
+   * Field is a column of the action's target model.
+   */
+  field: string;
 }
 /**
  * ActionIdempotency declares the payload field that carries an action's
@@ -3459,6 +4343,29 @@ export interface AgentGuideAdvance {
   event: string; // click|change|input
 }
 /**
+ * HelpGuide is one in-app help entry (contributions.guides[]): a short guide
+ * or guided tour for the host's help center. Steps reuse AgentGuideStep (a
+ * step targets a UI element, or is a "concept" step without spotlight), so the
+ * same runner that drives copilot walkthroughs drives these. Roles scopes the
+ * guide to the role keys of the org (empty = every user); Trigger "first_visit"
+ * makes the host start the guide automatically the first time a user opens
+ * Route, while "manual" (default) only lists it in the help center. Title,
+ * Description and step copy are i18n keys or literal text, translated by the
+ * host like the rest of the manifest.
+ */
+export interface HelpGuide {
+  key: string;
+  title: string;
+  description?: string;
+  icon?: string;
+  roles?: string[];
+  permission?: string;
+  trigger?: string; // manual (default) | first_visit
+  route?: string; // required when trigger=first_visit
+  order?: number /* int */;
+  steps: AgentGuideStep[];
+}
+/**
  * Subscription is an event handler. Must be backed by an event:subscribe capability.
  */
 export interface Subscription {
@@ -3507,7 +4414,7 @@ export interface NotificationEntered {
  * Handler is the polymorphic invocation target for actions/tools/subscriptions.
  */
 export interface Handler {
-  type: string; // "wasm" | "webhook" | "compiled" | "connector" | "native"
+  type: string; // "wasm" | "webhook" | "compiled" | "connector" | "native" | "capability" | "set_fields"
   function?: string;
   url?: string;
   /**
@@ -3532,6 +4439,81 @@ export interface Handler {
    */
   capability?: string;
   input?: { [key: string]: string};
+  /**
+   * URLRef reads the destination BASE URL from a connector credential of the
+   * org, "<connector>.<credential>". Requires an http:fetch capability
+   * "connector:<same ref>". Exclusive with URL and URLSetting.
+   */
+  url_ref?: string;
+  /**
+   * URLSetting reads the base URL from a string setting of the addon
+   * (settings[].key). The resolved host must ALSO be covered by a fixed-host
+   * http:fetch capability. Exclusive with URL and URLRef.
+   */
+  url_setting?: string;
+  /**
+   * Path is appended to the URLRef/URLSetting base. It may embed
+   * {record.<column>} and {payload.<field>} placeholders (path-escaped).
+   */
+  path?: string;
+  /**
+   * Method is POST (default) | PUT | PATCH | DELETE.
+   */
+  method?: string;
+  /**
+   * Signing selects how the outgoing request is authenticated.
+   */
+  signing?: HandlerSigning;
+  /**
+   * SendRecord lists the record columns that travel in the body (default: only
+   * the id), so a third party never receives the whole row.
+   */
+  send_record?: string[];
+  /**
+   * TimeoutMS is the TOTAL budget including retries, 1000..30000 (default 10000).
+   */
+  timeout_ms?: number /* int */;
+  /**
+   * Retries is the number of retries on network error / 429 / 5xx, 0..3
+   * (default 2 when omitted; a pointer so an explicit 0 survives).
+   */
+  retries?: number /* int */;
+  /**
+   * OnSuccess runs when the destination answers 2xx.
+   */
+  on_success?: HandlerOnSuccess;
+  /**
+   * Set maps column -> value for a declarative field change on the acted-on
+   * row. A value is a scalar literal, null or a token: $now, $actor.id,
+   * $payload.<field>, $record.<column>. A literal starting with "$" is written
+   * "$$...". Valid only on contributions.actions[] with placement row.
+   */
+  set?: { [key: string]: any};
+}
+/**
+ * HandlerSigning is the request-signing block of a webhook action handler.
+ */
+export interface HandlerSigning {
+  /**
+   * Scheme is "metacore-hmac-v1" (shared secret per destination) or
+   * "instance-ed25519-v1" (the instance's Ed25519 key, bound to host + path).
+   */
+  scheme: string;
+  /**
+   * SecretRef is "<connector>.<credential>" (a type "secret" credential).
+   * Required with metacore-hmac-v1, forbidden with instance-ed25519-v1. Never a
+   * setting: settings do not get the secret treatment of connector credentials.
+   */
+  secret_ref?: string;
+}
+/**
+ * HandlerOnSuccess is applied only on a 2xx answer of a webhook action.
+ */
+export interface HandlerOnSuccess {
+  /**
+   * Set has the same contract as Handler.Set (set_fields).
+   */
+  set?: { [key: string]: any};
 }
 /**
  * ExtensionPoints is what this addon publishes for others to extend.
@@ -3687,6 +4669,21 @@ export interface Setting {
    * one store and a permissive one in another (POS-1).
    */
   scope?: string;
+  /**
+   * VisibleWhen shows this setting only while a SIBLING setting (same
+   * settings[] list, or the same connector's credentials) has a given value
+   * (field + equals | in; class is not supported here). Pure UI metadata the
+   * SDK evaluates; a hidden setting keeps its stored value and still counts
+   * for required checks only while visible.
+   */
+  visible_when?: VisibleWhen;
+  /**
+   * WriteOnly marks a value the host accepts but NEVER serves back (API
+   * tokens, passwords): reads return only whether it is set. Implied for
+   * type "secret"; use it for string/json settings that hold credentials.
+   * A write_only setting cannot declare a default.
+   */
+  write_only?: boolean;
 }
 /**
  * SettingOption is a value/label pair for select-typed settings.
@@ -3713,8 +4710,32 @@ export interface MeteredEvent {
  * Preset block for kind: "Preset" manifests.
  */
 export interface Preset {
+  /**
+   * Extends names the preset this one builds on (e.g. a company's private
+   * preset over a public vertical). The host resolves the base, then
+   * flattens this manifest on top of it (preset.Flatten): Addons are added or
+   * patched by key, RemoveAddons drops base entries and Defaults are merged
+   * per key strategy. Nil = a standalone preset.
+   */
+  extends?: PresetExtends;
+  /**
+   * Addons may be empty when Extends is set (an overlay that only changes
+   * defaults); a standalone preset must list at least one.
+   */
   addons: PresetAddon[];
+  /**
+   * RemoveAddons drops addons the base preset lists. Only valid with Extends.
+   */
+  remove_addons?: string[];
   defaults?: { [key: string]: any};
+}
+/**
+ * PresetExtends references the base preset by key and semver range. The host
+ * picks the highest published version that satisfies Version.
+ */
+export interface PresetExtends {
+  key: string;
+  version: string;
 }
 /**
  * PresetAddon is one entry in a preset's bundle list.

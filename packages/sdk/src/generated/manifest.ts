@@ -181,8 +181,11 @@ export interface CompatibilityResult {
  * the kernel now satisfies v3 addons' `kernel: ">=3.0.0 <4.0.0"` requirement.
  * Legacy v2 addons declare no range (checkKernelRange skips them) so they are
  * unaffected.
+ * 3.1.0 adds kind:Preset overlays (preset.extends) and metadata.visibility. A
+ * manifest using them must require kernel >=3.1.0 (v3.OverlayMinKernel), so a
+ * 3.0.x host rejects it at compatibility time instead of installing half of it.
  */
-export const APIVersion = "3.0.0";
+export const APIVersion = "3.1.0";
 /**
  * Manifest describes everything an addon provides: metadata, extension points,
  * data model, navigation, permissions and distribution info.
@@ -446,6 +449,17 @@ export interface Manifest {
    * Empty = the addon exposes no API.
    */
   api_routes?: any /* v3.APIRoute */[];
+  /**
+   * Setup is the host projection of v3 contributions.setup[]: the addon's
+   * guided, resumable setup flows. Projected verbatim (same JSON tags); the
+   * host persists progress and the SDK renders it. Empty = no setup surface.
+   */
+  setup?: any /* v3.SetupFlow */[];
+  /**
+   * Health is the host projection of v3 contributions.health: the periodic
+   * health handler. Nil = the addon reports no health.
+   */
+  health?: any /* v3.HealthProbe */;
 }
 /**
  * DocumentDef is the host/runtime projection of a v3 DocumentDef: a printable
@@ -529,6 +543,11 @@ export interface CredentialDef {
    * Section binds the credential to a ConnectorDef.FormLayout section/step.
    */
   section?: string;
+  /**
+   * VisibleWhen / WriteOnly project v3 Setting.visible_when / write_only.
+   */
+  visible_when?: any /* v3.VisibleWhen */;
+  write_only?: boolean;
 }
 /**
  * ScheduleDef is the host/runtime projection of a v3 Schedule: a cron job the
@@ -907,6 +926,13 @@ export interface SettingDef {
    * the org value. See ResolveSetting.
    */
   scope?: string;
+  /**
+   * VisibleWhen / WriteOnly project v3 Setting.visible_when / write_only:
+   * conditional visibility among sibling settings, and a value the host
+   * never serves back. A "secret" is always write-only.
+   */
+  visible_when?: any /* v3.VisibleWhen */;
+  write_only?: boolean;
 }
 /**
  * ReasonRequiredDef is the legacy projection of v3 ReasonRequired.
@@ -1026,6 +1052,15 @@ export interface ActionDef {
   supervisorPolicy?: string;
   confirm?: boolean;
   confirmMessage?: string;
+  /**
+   * ConfirmTyped is the projection of v3 Action.confirm_typed: the user types
+   * the current value of Field to confirm; the server verifies payload.confirm_text.
+   */
+  confirmTyped?: any /* v3.ConfirmTyped */;
+  /**
+   * Tone is the projection of v3 Action.tone ("default" | "danger"); pure UI.
+   */
+  tone?: string;
   modal?: string; // slot name for a custom modal
   /**
    * Steps is the host/runtime projection of a v3 Action.steps wizard: one
@@ -1034,8 +1069,14 @@ export interface ActionDef {
    */
   steps?: ActionStepDef[];
   placement?: string; // "row" (default), "table", or "create" — see v3.Action.Placement
-  priority?: string; // "primary", "secondary" or "" (auto) — see v3.Action.Priority
+  priority?: string; // "primary", "secondary", "overflow" or "" (auto) — see v3.Action.Priority
   modalWidth?: string; // explicit modal width (CSS length / px); SDK reads action.modalWidth
+  /**
+   * Destructive is the projection of v3 Action.destructive: the action undoes
+   * or releases something irreversibly; pure UI (destructive variant,
+   * separated placement, destructive confirmation).
+   */
+  destructive?: boolean;
   /**
    * Trigger declares how the action dispatches when invoked. Optional —
    * when nil the legacy behaviour applies (the host resolves the action via
@@ -1110,7 +1151,7 @@ export interface IdempotencyDef {
  * the linked log entry atomically" without leaking partially-applied state.
  */
 export interface ActionTrigger {
-  type: string; // "wasm" | "webhook" | "noop" | "connector" | "native"
+  type: string; // "wasm" | "webhook" | "noop" | "connector" | "native" | "capability" | "set_fields"
   export?: string; // wasm export name; required when Type=wasm or connector
   run_in_tx?: boolean;
   /**
@@ -1133,6 +1174,42 @@ export interface ActionTrigger {
    */
   capability?: string;
   input?: { [key: string]: string};
+  /**
+   * URL is the literal https destination; URLRef ("<connector>.<credential>")
+   * and URLSetting (a settings[] key) read the base URL from the org config.
+   */
+  url?: string;
+  url_ref?: string;
+  url_setting?: string;
+  /**
+   * Path is appended to the URLRef/URLSetting base; {record.<col>} and
+   * {payload.<field>} placeholders are path-escaped at dispatch.
+   */
+  path?: string;
+  method?: string; // POST (default) | PUT | PATCH | DELETE
+  /**
+   * Signing: metacore-hmac-v1 (secret_ref) or instance-ed25519-v1.
+   */
+  signing?: any /* v3.HandlerSigning */;
+  /**
+   * SendRecord lists the record columns that travel in the body (default: id).
+   */
+  send_record?: string[];
+  /**
+   * TimeoutMS is the total budget incl. retries (1000..30000, default 10000);
+   * Retries is 0..3 (nil = default 2).
+   */
+  timeout_ms?: number /* int */;
+  retries?: number /* int */;
+  /**
+   * OnSuccess.Set is applied only on a 2xx answer (same contract as Set).
+   */
+  on_success?: any /* v3.HandlerOnSuccess */;
+  /**
+   * Set (Type=="set_fields", RFC-02) maps column -> scalar | null | token
+   * ($now, $actor.id, $payload.<f>, $record.<col>). Dispatch config, not served.
+   */
+  set?: { [key: string]: any};
 }
 /**
  * CapabilityProviderDef is the host projection of one v3
@@ -1458,6 +1535,11 @@ export interface ModelDefinition {
    */
   sequences?: SequenceDef[];
   /**
+   * Snapshots carries the v3 Model.snapshots (columns copied from a related row
+   * at create) through the v3 → host conversion. See manifest/v3.Snapshot.
+   */
+  snapshots?: SnapshotDef[];
+  /**
    * Locking is the host/runtime projection of a v3 Model.locking. "row" makes
    * dynamic.Service.Update take a SELECT … FOR UPDATE lock on the target row
    * inside a transaction before evaluating column Constraints, so a concurrent
@@ -1471,6 +1553,12 @@ export interface ModelDefinition {
    * the request carries a reason (dynamic.ReasonPolicyResolver). Nil = none.
    */
   reason_required?: ReasonRequiredDef;
+  /**
+   * Ingest is the projection of v3 Model.ingest (RFC-04): the model is the
+   * target of a signed idempotent upsert sink (webhooks[].do "upsert:<Model>").
+   * Nil = no sink.
+   */
+  ingest?: any /* v3.IngestSpec */;
   /**
    * AppendOnly is the host/runtime projection of v3 Model.append_only: the
    * model is an append-only ledger and every UPDATE/DELETE on it is refused
@@ -1518,6 +1606,12 @@ export interface ModelDefinition {
    * model's table metadata. Pure UI metadata. Nil = the default detail page.
    */
   detail?: any /* v3.ModelDetail */;
+  /**
+   * TitleField / SubtitleField carry v3 Model.title_field / subtitle_field
+   * (pure UI): the columns that head a record in detail and card views.
+   */
+  title_field?: string;
+  subtitle_field?: string;
   /**
    * OptionMetrics are the option_metrics[] of this addon that AGGREGATE this
    * model (Metric.Model == ModelKey), copied here so a host persisting only
@@ -1705,6 +1799,22 @@ export interface Formula {
    * Handler is the Tier-3 backend, "wasm:<export>". Set only when Tier is 3.
    */
   handler?: string;
+}
+/**
+ * SnapshotDef is the host/runtime projection of a v3 Model.Snapshot.
+ */
+export interface SnapshotDef {
+  from: string;
+  fields: { [key: string]: string};
+}
+/**
+ * GrantDef is the host/runtime projection of a v3 Column.Grant.
+ */
+export interface GrantDef {
+  policy: string;
+  sets: string;
+  contextEq?: { [key: string]: string};
+  contextGte?: { [key: string]: string};
 }
 /**
  * SequenceDef is the host/runtime projection of a v3 Model.Sequence: an atomic
@@ -1988,6 +2098,13 @@ export interface ColumnDef {
    */
   protected?: boolean;
   /**
+   * ReadPermission carries the v3 Column.read_permission through the v3 →
+   * host conversion onto modelbase.ColumnDef.ReadPermission: a caller
+   * without this permission never receives the column and cannot filter,
+   * sort or aggregate by it (dynamic.ReadMask). Empty = no column gate.
+   */
+  read_permission?: string;
+  /**
    * RejectDeletedRef carries the v3 Column.reject_deleted_ref opt-in: a
    * create whose Ref points at a soft-deleted row is rejected. See
    * manifest/v3.Column.RejectDeletedRef.
@@ -2000,6 +2117,10 @@ export interface ColumnDef {
    * and dynamic constraint evaluation. Empty = no guards on this column.
    */
   constraints?: ConstraintDef[];
+  /**
+   * Grant carries the v3 Column.grant (supervisor-authorization slot).
+   */
+  grant?: GrantDef;
   /**
    * Sequence carries the v3 Column.sequence binding (the sequence key whose
    * next formatted value is auto-stamped on create) through the v3 → host
@@ -2027,6 +2148,13 @@ export interface ColumnDef {
    * Unknown values are rejected by Validate.
    */
   visibility?: string;
+  /**
+   * DisplayFor / CardRole are the projection of v3 Column.display_for and
+   * Column.card_role (pure UI): the column is the display text of the
+   * relation column it names, and its role in the mobile record card.
+   */
+  display_for?: string;
+  card_role?: string;
   /**
    * Searchable opts the column into the model's full-text/contains search
    * index. It is intentionally separate from Index (which is a DDL btree

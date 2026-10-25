@@ -3,7 +3,7 @@ module github.com/asteby/metacore-sdk
 go 1.26.0
 
 require (
-	github.com/asteby/metacore-kernel v0.210.0
+	github.com/asteby/metacore-kernel v0.237.0
 	github.com/gofiber/fiber/v3 v3.6.1
 	github.com/google/uuid v1.6.0
 	github.com/stripe/stripe-go/v86 v86.4.2
@@ -14,7 +14,7 @@ require (
 require (
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect
 	github.com/fatih/structtag v1.2.0 // indirect
-	github.com/gofiber/schema v1.8.8 // indirect
+	github.com/gofiber/schema v1.9.0 // indirect
 	github.com/gofiber/utils/v2 v2.6.2 // indirect
 	github.com/gzuidhof/tygo v0.2.21 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
@@ -29,7 +29,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.52 // indirect
 	github.com/molecule-man/go-brrr v1.3.0 // indirect
 	github.com/pgvector/pgvector-go v0.4.1 // indirect
-	github.com/philhofer/fwd v1.2.0 // indirect
+	github.com/philhofer/fwd v1.2.1 // indirect
 	github.com/richardlehane/mscfb v1.0.7 // indirect
 	github.com/richardlehane/msoleps v1.0.6 // indirect
 	github.com/rogpeppe/go-internal v1.16.0 // indirect
@@ -39,7 +39,7 @@ require (
 	github.com/tiendc/go-deepcopy v1.7.2 // indirect
 	github.com/tinylib/msgp v1.6.5 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
-	github.com/valyala/fasthttp v1.75.0 // indirect
+	github.com/valyala/fasthttp v1.76.0 // indirect
 	github.com/xuri/efp v0.0.1 // indirect
 	github.com/xuri/excelize/v2 v2.11.0 // indirect
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect

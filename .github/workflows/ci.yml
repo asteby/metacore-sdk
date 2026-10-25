@@ -24,6 +24,27 @@ jobs:
       # pipeline; extending the intent to CI keeps unrelated PRs green.
       - run: pnpm turbo run build typecheck test --filter=...[origin/main] --filter=!@asteby/metacore-starter-vite --filter=!@asteby/metacore-fullstack-example
 
+  # Gate de codegen (MD0.6): los tipos TS de packages/sdk/src/generated salen de
+  # los structs Go del kernel fijado en go.mod via tygo. Si alguien sube el
+  # kernel (o cambia tygo.yaml) sin regenerar, este job falla con el diff.
+  codegen:
+    runs-on: ubuntu-latest
+    env:
+      GOWORK: 'off'
+      CGO_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Regenerar tipos TS desde el kernel
+        run: go run github.com/gzuidhof/tygo@v0.2.17 generate
+      - name: Fallar si hay diff (corre `pnpm codegen` y commitea)
+        run: |
+          git status --short packages/sdk/src/generated
+          git diff --exit-code -- packages/sdk/src/generated
+
   # The fullstack starter is excluded from the node job above, so nothing else
   # notices when the kernel API moves under it: it sat on kernel v0.5.0 and
   # Fiber v2 long after the kernel went to Fiber v3. Building it here keeps the
