@@ -1,12 +1,15 @@
 // Pure model of GET /api/capabilities + GET /api/markets, kept free of
 // runtime imports so it is unit-testable without the app's api client.
 //
-// The screen groups the technical capability contracts
-// (commerce.payments.session/confirm/status/refund…) by business DOMAIN
-// ("Pagos") and lets the admin choose ONE provider per domain and market; the
-// choice is applied to every contract of the bundle the provider offers. The
-// resolution below mirrors the kernel's capability.Select so what the screen
-// says is what the checkout will do.
+// A host screen groups the technical capability contracts
+// (e.g. commerce.<domain>.<operation>) by business DOMAIN and lets the admin
+// choose ONE provider per domain and market; the choice is applied to every
+// contract of the bundle the provider offers. The resolution below mirrors the
+// kernel's capability.Select v1 (market selection, org default, only eligible
+// provider). It does NOT model Select v2 (per-market priority and provider
+// state), which is pending the kernel's F2 release: until then the order
+// produced by ProviderSortableList is a display/intent order this model does
+// not consume, so a host must not present it as what dispatch will do.
 
 export type I18nText = Record<string, string>
 
@@ -124,8 +127,10 @@ export type Resolution = {
 
 /**
  * Which provider answers capability `c` in market `m` (null = organization
- * level). Mirrors kernel capability.Select: market selection, then org
- * default among eligible, then the only eligible provider.
+ * level). Mirrors kernel capability.Select v1 (today's rule): market
+ * selection, then org default among eligible, then the only eligible
+ * provider. Select v2 (priority and provider state) is pending kernel F2 and
+ * is not modeled here.
  */
 export function resolveCapability(c: CapabilityView, m: Market | null): Resolution {
   const installed = c.providers.filter((p) => p.installed)
@@ -149,7 +154,7 @@ export function resolveCapability(c: CapabilityView, m: Market | null): Resoluti
 
 export type CellStatus =
   | 'ok' // one provider for the whole bundle
-  | 'mixed' // several providers split the bundle (chosen in "Avanzado")
+  | 'mixed' // several providers split the bundle (chosen at contract level)
   | 'needs_choice' // several candidates and nobody chosen
   | 'no_provider' // nobody installed serves this market
   | 'fanout' // every compatible provider answers
@@ -296,7 +301,7 @@ export function bundleSelections(group: DomainGroup, addon: string, m: Market | 
 
 /**
  * What is stored today for these keys in market m ("" = nothing chosen), so
- * "Deshacer" can send it back as is.
+ * the host can send it back as is (undo).
  */
 export function storedSelections(group: DomainGroup, keys: string[], m: Market | null): Record<string, string> {
   const out: Record<string, string> = {}
@@ -385,7 +390,7 @@ export function usableCapabilities(data: CapabilityView[]): UsableCapability[] {
 }
 
 /**
- * Is there anything to decide on «Proveedores por capacidad»? Only when the
+ * Is there anything to decide on the provider-choice screen? Only when the
  * organization sells in more than one market, or some function can be served
  * by more than one installed provider. With a single market and one provider
  * per function the screen would only repeat what is already installed
@@ -404,9 +409,9 @@ export function needsProviderChoice(
 
 /**
  * Installed addons that compete with another installed addon for the same
- * function (a non-fan-out capability with 2+ installed providers: Mercado
- * Pago and Pagos manuales both charge). Their card in «Addons instalados»
- * links to «Proveedores por capacidad», where the choice is made.
+ * function (a non-fan-out capability with 2+ installed providers). The host
+ * links their card in the installed-addons list to the provider-choice
+ * screen, where the choice is made.
  */
 export function competingProviderAddons(
   capabilities: readonly CapabilityView[] | undefined,
@@ -422,21 +427,38 @@ export function competingProviderAddons(
 
 // ─── Status of a provider for a market (feeds ProviderSortableList) ─────────
 
-export type ProviderStatus = 'ready' | 'missing_credentials' | 'sandbox' | 'unavailable'
+/**
+ * Badge of a provider for a market. `missing_credentials` is the kernel's
+ * `not_configured`; `disabled` is the row's own `enabled = false`;
+ * `unhealthy` is a connected provider whose health check is failing;
+ * `unavailable` does not serve the market (or is not installed).
+ */
+export type ProviderStatus =
+  | 'ready'
+  | 'missing_credentials'
+  | 'sandbox'
+  | 'unhealthy'
+  | 'unavailable'
+  | 'disabled'
 
 /**
- * The badge a provider deserves in market `m`: `unavailable` when it does not
- * serve the market ("No atiende"), `missing_credentials` when it still needs
- * to be connected, `sandbox` when it runs against a test environment, else
- * `ready`. Providers that need no connection are ready.
+ * The badge a provider deserves in market `m`, first match wins:
+ * `unavailable` when it is not installed or does not serve the market,
+ * `disabled` when `opts.enabled === false`, `missing_credentials` when it
+ * still needs to be connected, `unhealthy` when `opts.healthy === false`,
+ * `sandbox` when it runs against a test environment, else `ready`.
+ * Providers that need no connection are ready.
  */
 export function providerStatus(
   provider: CapabilityProvider,
   info: ProviderInfo | undefined,
   m: Market | null,
+  opts?: { enabled?: boolean; healthy?: boolean },
 ): ProviderStatus {
-  if (!servesMarket(provider, m)) return 'unavailable'
+  if (!provider.installed || !servesMarket(provider, m)) return 'unavailable'
+  if (opts?.enabled === false) return 'disabled'
   if (info?.connection?.state === 'missing_credentials') return 'missing_credentials'
+  if (opts?.healthy === false) return 'unhealthy'
   if (info?.connection?.state === 'connected' && info.connection.environment === 'sandbox') return 'sandbox'
   return 'ready'
 }

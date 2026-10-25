@@ -16,7 +16,7 @@
  * los menús de acciones. Los getters de esta clase siguen sirviendo a quien
  * los use (sdk/react `<Slot>`, rutas), pero la fuente de verdad es el store.
  */
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { type RecordPrefillContribution } from "./record-prefill-registry.js";
 import { type RecordActionContribution } from "./action-registry.js";
 export interface RouteContribution {
@@ -42,9 +42,31 @@ export interface SlotContribution {
     /** Sort weight; higher renders first. Default 0. See docs/slot-priority.md. */
     priority?: number;
 }
+/**
+ * A footer action the HOST adds to an addon's modal (e.g. «Ver historial» when
+ * the modal was opened from a notification deep link). Structurally
+ * compatible with `ResponsiveDialogAction` / `ActionItem` of
+ * `@asteby/metacore-ui`, so a modal built on `ResponsiveDialog` passes it
+ * straight to `footer.extra`.
+ */
+export interface ModalFooterAction {
+    key: string;
+    label: string;
+    /** Icon element (the host resolves icon names before passing it). */
+    icon?: ReactNode;
+    run: () => void | Promise<unknown>;
+    disabled?: boolean;
+    disabledReason?: string;
+}
 export interface ModalProps {
     payload: Record<string, unknown>;
     close: (result?: unknown) => void;
+    /**
+     * Optional host actions for the modal footer. Render them in the footer's
+     * `extra` slot (`ResponsiveDialog footer={{ extra: footerExtra }}`). Older
+     * modals ignore it; hosts must not rely on it being rendered.
+     */
+    footerExtra?: ModalFooterAction[];
 }
 export interface ActionProps {
     recordId: string;
