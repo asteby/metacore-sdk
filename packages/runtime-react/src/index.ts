@@ -820,6 +820,8 @@ export {
     type AccentClasses,
     type WidgetFormatCtx,
 } from './widgets/widget-format'
+// Dependency-free SVG sparkline from @asteby/metacore-charts (no recharts).
+export { Sparkline, type SparklineProps } from '@asteby/metacore-charts'
 export { AssistInterview, AssistCardView } from './assist-interview'
 export type { AssistSession, AssistTurn, AssistQuestion, AssistCard, AssistProgressStep } from './assist-interview'
 export {

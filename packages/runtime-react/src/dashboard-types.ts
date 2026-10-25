@@ -20,17 +20,8 @@ export type WidgetKind =
 /** Grid footprint in a 4-column grid: sm=1, md=2, lg=3, full=4. */
 export type WidgetSize = 'sm' | 'md' | 'lg' | 'full'
 
-/** Value format applied to the scalar value and to series values. */
-export type WidgetFormat = 'number' | 'currency' | 'percent' | 'compact'
-
-/** Accent color token (theme CSS vars). */
-export type WidgetAccent =
-    | 'emerald'
-    | 'sky'
-    | 'violet'
-    | 'amber'
-    | 'rose'
-    | 'slate'
+import type { WidgetAccent, WidgetFormat } from '@asteby/metacore-charts'
+export type { WidgetAccent, WidgetFormat }
 
 /** Aggregation kinds for declarative queries. */
 export type WidgetAggregate = 'count' | 'sum' | 'avg' | 'min' | 'max'

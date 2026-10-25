@@ -10,3 +10,7 @@ export * from "./slot-store.js";
 export * from "./wasm-client.js";
 export * from "./brand.js";
 export * from "./realtime.js";
+export * from "./host.js";
+export * from "./page.js";
+export * from "./integrity.js";
+export * from "./cache-epoch.js";
