@@ -16,6 +16,8 @@ import {
 } from '@asteby/storefront'
 import type { MountedPaymentForm, PaymentFormAdapter, PaymentTransport } from './adapter.js'
 import { mercadoPagoBricksAdapter } from './mercadopago.js'
+import { mountQueued } from './mount-queue.js'
+import { isResolvedAttempt } from './resilient-transport.js'
 import { readPaymentScheme, readPaymentTheme } from './theme.js'
 
 export type EmbeddedPaymentStatus =
@@ -45,7 +47,11 @@ export type PaymentEvent =
 export type UseEmbeddedPaymentOptions = {
   /** Provider data from `paymentMethods[].client`. `null`/absent: nothing to mount (status `idle`). */
   client: PaymentClient | null | undefined
-  /** The total computed by the server. The Brick is remounted when it changes. Never calculate it in the shop. */
+  /**
+   * The total computed by the server. When it changes the form on screen is UPDATED in place (`MountedPaymentForm.update`)
+   * or, if the provider cannot, mounted again through the queue; never while a charge is in flight (applied after the
+   * answer). Never calculate it in the shop.
+   */
   amount: Money
   transport: PaymentTransport
   /** Mount only while the card option is selected. Default true. */
@@ -64,6 +70,12 @@ export type UseEmbeddedPaymentOptions = {
   autoRetries?: number
   /** Base delay for the backoff between automatic retries. Default 600. */
   retryDelayMs?: number
+  /** Longest wait for the provider's `create` before the form is declared failed. Default `sdkTimeoutMs`. */
+  createTimeoutMs?: number
+  /** After an UNKNOWN outcome ("verifying"), how long the hook keeps reading `refresh`, with growing waits. Default 120000. */
+  verifyTimeoutMs?: number
+  /** First wait of that check (doubles up to 15 s). Default 2000. */
+  verifyIntervalMs?: number
   /** Poll interval/timeout for a pending 3DS challenge or review when `transport.refresh` exists. */
   pollIntervalMs?: number
   pollTimeoutMs?: number
@@ -98,6 +110,8 @@ export type EmbeddedPaymentState = {
   attemptId: string | null
   /** `true` while loading, mounting or processing. */
   busy: boolean
+  /** `true` while the hook reads the payment state in the background after an unknown outcome. The attempt stays the same. */
+  verifying: boolean
   /** Attach to the element the provider renders into. */
   containerRef: (el: HTMLElement | null) => void
   containerId: string
@@ -148,6 +162,8 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     retryDelayMs = 600,
     pollIntervalMs = 2000,
     pollTimeoutMs = 60_000,
+    verifyTimeoutMs = 120_000,
+    verifyIntervalMs = 2000,
     scope = 'default',
   } = options
   const msgs = useMemo(() => paymentMessages(locale, options.messages), [locale, options.messages])
@@ -162,6 +178,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   const [attemptId, setAttemptId] = useState<string | null>(null)
   const [container, setContainer] = useState<HTMLElement | null>(null)
   const [mountKey, setMountKey] = useState(0)
+  const [verifying, setVerifying] = useState(false)
 
   // Latest props without re-triggering effects.
   const live = useRef({ ...options, msgs })
@@ -173,6 +190,13 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   const generation = useRef(0)
   const statusRef = useRef<EmbeddedPaymentStatus>('idle')
   statusRef.current = status
+  // Total the form on screen was created / last updated with, and the update in flight.
+  const amountKey = `${amount.amount}|${amount.currency_code}`
+  const amountKeyRef = useRef(amountKey)
+  amountKeyRef.current = amountKey
+  const appliedAmount = useRef<string | null>(null)
+  const updating = useRef<Promise<void> | null>(null)
+  const remountRequested = useRef(false)
 
   useEffect(() => {
     alive.current = true
@@ -220,8 +244,36 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     [emit],
   )
 
-  // Mount / remount the provider form. Re-runs when the server total, client or mount key changes.
-  const amountKey = `${amount.amount}|${amount.currency_code}`
+  // Applies a new server total to the form that is on screen: `update` in place; if the provider cannot, ONE queued
+  // remount. Never while a charge is in flight (`submit` runs it afterwards) and never two at once.
+  const syncAmount = useCallback((): void => {
+    const m = form.current
+    if (!m || inFlight.current || updating.current || remountRequested.current) return
+    if (appliedAmount.current === amountKeyRef.current) return
+    const run = (async () => {
+      while (form.current === m && alive.current && appliedAmount.current !== amountKeyRef.current) {
+        const key = amountKeyRef.current
+        try {
+          if (!m.update) throw new Error('payment form: update not supported')
+          await m.update({ amount: live.current.amount })
+          appliedAmount.current = key
+        } catch {
+          if (form.current === m && alive.current) {
+            remountRequested.current = true
+            setMountKey((k) => k + 1)
+          }
+          return
+        }
+      }
+    })().finally(() => {
+      updating.current = null
+      if (alive.current) syncAmount()
+    })
+    updating.current = run
+  }, [])
+
+  // Mount the provider form ONCE per life of the form (client, container, mount key). A total change does not run this
+  // effect: it goes through `syncAmount`. Mounts are queued per container (one at a time, `await unmount` first).
   const kind = client?.kind
   const publicKey = client?.public_key
   useEffect(() => {
@@ -235,8 +287,10 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
       return
     }
     if (!container) return
+    remountRequested.current = false
     const my = ++generation.current
     const started = Date.now()
+    const abort = new AbortController()
     let mounted: MountedPaymentForm | null = null
     setStatus('loading')
     const stale = () => my !== generation.current || !alive.current
@@ -244,10 +298,12 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     const fail = (reason: PaymentFallbackReason) => {
       if (stale()) return
       generation.current++
+      abort.abort()
       clearTimeout(timer)
       const m = mounted ?? form.current
       mounted = null
       form.current = null
+      appliedAmount.current = null
       if (m) void Promise.resolve(m.unmount())
       fallback(reason)
     }
@@ -262,31 +318,40 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
         if (stale()) return
         const theme = live.current.theme ?? readPaymentTheme(container)
         const colorScheme = live.current.colorScheme ?? readPaymentScheme(container)
-        const m = await adapter.mount({
-          container,
-          client,
-          amount: live.current.amount,
-          ...(live.current.email ? { email: live.current.email } : {}),
-          ...(live.current.locale ? { locale: live.current.locale } : {}),
-          theme,
-          ...(colorScheme ? { colorScheme } : {}),
-          onReady: () => {
-            if (stale()) return
-            clearTimeout(timer)
-            setStatus((s) => (s === 'loading' ? 'ready' : s))
-            emit({ type: 'form_ready', ms: Date.now() - started })
+        const createdWith = amountKeyRef.current
+        const m = await mountQueued(
+          adapter,
+          {
+            container,
+            client,
+            amount: live.current.amount,
+            ...(live.current.email ? { email: live.current.email } : {}),
+            ...(live.current.locale ? { locale: live.current.locale } : {}),
+            theme,
+            ...(colorScheme ? { colorScheme } : {}),
+            signal: abort.signal,
+            onReady: () => {
+              if (stale()) return
+              clearTimeout(timer)
+              setStatus((s) => (s === 'loading' ? 'ready' : s))
+              emit({ type: 'form_ready', ms: Date.now() - started })
+            },
+            onError: (e) => {
+              if (stale()) return
+              if (e.critical) fail('form_error')
+            },
           },
-          onError: (e) => {
-            if (stale()) return
-            if (e.critical) fail('form_error')
-          },
-        })
+          { createTimeoutMs: live.current.createTimeoutMs ?? sdkTimeoutMs },
+        )
         if (stale()) {
           void Promise.resolve(m.unmount())
           return
         }
         mounted = m
         form.current = m
+        appliedAmount.current = createdWith
+        // The total may have changed while the provider was creating the form.
+        syncAmount()
       } catch (err) {
         fail(err instanceof Error && /timeout/i.test(err.message) ? 'sdk_timeout' : 'sdk_error')
       }
@@ -295,13 +360,20 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     return () => {
       clearTimeout(timer)
       generation.current++
+      abort.abort()
       const m = mounted ?? form.current
       mounted = null
       form.current = null
+      appliedAmount.current = null
       if (m) void Promise.resolve(m.unmount())
     }
     // `client` identity changes with every loader run; its identity-defining fields are listed instead.
-  }, [enabled, container, kind, publicKey, amountKey, mountKey, sdkTimeoutMs, containerId])
+  }, [enabled, container, kind, publicKey, mountKey, sdkTimeoutMs, containerId])
+
+  // A new server total: update the form in place (or remount once, queued).
+  useEffect(() => {
+    syncAmount()
+  }, [amountKey, syncAmount])
 
   const finish = useCallback(
     (result: PaymentAttemptResult) => {
@@ -386,6 +458,8 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     const m = form.current
     if (!m || (statusRef.current !== 'ready' && statusRef.current !== 'network_error')) return Promise.resolve()
     const run = (async () => {
+      // A total update in flight finishes first, so the token is made for the form the buyer sees.
+      if (updating.current) await updating.current.catch(() => {})
       setStatus('processing')
       setError(null)
       setOutcome(null)
@@ -404,10 +478,12 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
       await send(data, attempt)
     })().finally(() => {
       inFlight.current = null
+      // A total change that arrived during the charge is applied now, after the answer.
+      syncAmount()
     })
     inFlight.current = run
     return run
-  }, [emit, readAttempt, send])
+  }, [emit, readAttempt, send, syncAmount])
 
   const retry = useCallback((): Promise<void> => {
     if (inFlight.current) return inFlight.current
@@ -422,10 +498,11 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
       await send(data, attempt)
     })().finally(() => {
       inFlight.current = null
+      syncAmount()
     })
     inFlight.current = run
     return run
-  }, [emit, readAttempt, send, submit])
+  }, [emit, readAttempt, send, submit, syncAmount])
 
   // Poll a pending 3DS challenge / review until it resolves or the window closes.
   useEffect(() => {
@@ -440,6 +517,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
         try {
           const r = await transport.refresh!({ signal: ctl.signal })
           if (stop || !alive.current) return
+          if (r.payment.status === 'none') continue
           const o = paymentOutcome(r, live.current.locale, live.current.messages)
           if (o.kind !== status) {
             finish(r)
@@ -455,6 +533,46 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
       ctl.abort()
     }
   }, [status, transport, pollIntervalMs, pollTimeoutMs, finish])
+
+  // Unknown outcome ("verifying"): the answer was lost or the payment is still in progress. Keep reading the payment state
+  // with growing waits for about two minutes. Only a RESOLVED answer ends it (paid, rejected, voucher, challenge...);
+  // `pending` and `none` do not. The attempt (idempotency key) never changes while this runs.
+  const unknownOutcome = status === 'network_error' || (status === 'blocked' && error?.kind === 'payment_in_progress')
+  useEffect(() => {
+    if (!unknownOutcome || !transport.refresh) {
+      setVerifying(false)
+      return
+    }
+    let stop = false
+    const ctl = new AbortController()
+    const until = Date.now() + verifyTimeoutMs
+    setVerifying(true)
+    ;(async () => {
+      let wait = verifyIntervalMs
+      while (!stop && Date.now() < until) {
+        await sleep(wait)
+        wait = Math.min(wait * 2, 15_000)
+        if (stop || !alive.current) return
+        try {
+          const r = await transport.refresh!({ signal: ctl.signal })
+          if (stop || !alive.current) return
+          if (isResolvedAttempt(r)) {
+            setVerifying(false)
+            finish(r)
+            return
+          }
+        } catch {
+          /* still unknown: keep checking until the window closes */
+        }
+      }
+      if (!stop && alive.current) setVerifying(false)
+    })()
+    return () => {
+      stop = true
+      ctl.abort()
+      setVerifying(false)
+    }
+  }, [unknownOutcome, transport, verifyTimeoutMs, verifyIntervalMs, finish])
 
   const dismiss = useCallback(() => {
     setError(null)
@@ -478,6 +596,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     attemptsLeft,
     attemptId,
     busy: status === 'loading' || status === 'processing',
+    verifying,
     containerRef: setContainer,
     containerId,
     submit,

@@ -5,7 +5,7 @@ import { renderToString } from 'react-dom/server'
 import axe from 'axe-core'
 import { useRef } from 'react'
 import type { CartCost, CartLine } from '@asteby/storefront'
-import { AddressFields, ContactFields, ErrorSummary, OrderSummary, OrderSummaryDisclosure, useFieldErrors, type PostalCodeInfo } from './index.js'
+import { AddressFields, ContactFields, ErrorSummary, isAddressFillEvent, OrderSummary, OrderSummaryDisclosure, useFieldErrors, type PostalCodeInfo } from './index.js'
 
 afterEach(cleanup)
 
@@ -232,5 +232,88 @@ describe('OrderSummary', () => {
       </OrderSummaryDisclosure>,
     )
     expect((await axe.run(container, AXE)).violations.map((v) => v.id)).toEqual([])
+  })
+})
+
+describe('AddressFields: a single careful writer', () => {
+  const zipInput = (c: HTMLElement) => c.querySelector('[name="zip"]') as HTMLInputElement
+  const type = (c: HTMLElement, zip: string) => {
+    fireEvent.input(zipInput(c), { target: { value: zip } })
+  }
+  const ctl = (c: HTMLElement, name: string) => c.querySelector(`[name="${name}"]`) as HTMLInputElement
+
+  it('fills the colonia only when the code has exactly one', async () => {
+    const one = render(<Form lookup={async () => ({ province: 'Jalisco', city: 'Guadalajara', neighborhoods: ['Centro'] })} />)
+    type(one.container, '44100')
+    await waitFor(() => expect(ctl(one.container, 'neighborhood').value).toBe('Centro'))
+    cleanup()
+    const many = render(<Form lookup={async () => ({ province: 'Jalisco', city: 'Guadalajara', neighborhoods: ['Centro', 'Americana'] })} />)
+    type(many.container, '44100')
+    await waitFor(() => expect(ctl(many.container, 'city').value).toBe('Guadalajara'))
+    expect(ctl(many.container, 'neighborhood').value).toBe('')
+  })
+
+  it('does not write into the field that has focus', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((r) => (release = r))
+    const { container } = render(
+      <Form
+        lookup={async () => {
+          await gate
+          return { province: 'Jalisco', city: 'Guadalajara', neighborhoods: [] }
+        }}
+      />,
+    )
+    type(container, '44100')
+    ctl(container, 'city').focus()
+    release()
+    await waitFor(() => expect(ctl(container, 'province').value).toBe('Jalisco'))
+    expect(ctl(container, 'city').value).toBe('')
+  })
+
+  it('does not write over a field the buyer edited (a real, trusted input)', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((r) => (release = r))
+    const { container } = render(
+      <Form
+        lookup={async () => {
+          await gate
+          return { province: 'Jalisco', city: 'Guadalajara', neighborhoods: [] }
+        }}
+      />,
+    )
+    type(container, '44100')
+    const city = ctl(container, 'city')
+    // The buyer types and clears the city: it is theirs now, even though it is empty again.
+    city.value = ''
+    const trusted = new Event('input', { bubbles: true })
+    Object.defineProperty(trusted, 'isTrusted', { value: true })
+    city.dispatchEvent(trusted)
+    release()
+    await waitFor(() => expect(ctl(container, 'province').value).toBe('Jalisco'))
+    expect(city.value).toBe('')
+  })
+
+  it('marks the input events it dispatches so the shop can ignore them', async () => {
+    const seen: boolean[] = []
+    const { container } = render(<Form lookup={async () => ({ province: 'Jalisco', city: 'Guadalajara', neighborhoods: [] })} />)
+    container.querySelector('form')!.addEventListener('input', (e) => seen.push(isAddressFillEvent(e)))
+    type(container, '44100') // the buyer's own event (not marked)
+    await waitFor(() => expect(ctl(container, 'city').value).toBe('Guadalajara'))
+    expect(seen[0]).toBe(false)
+    expect(seen.filter(Boolean).length).toBeGreaterThanOrEqual(2) // province + city
+    expect(seen.slice(1).every(Boolean)).toBe(true)
+  })
+
+  it('applies two quick lookups one after the other: the last postal code wins', async () => {
+    const answers: Record<string, PostalCodeInfo> = {
+      '44100': { province: 'Jalisco', city: 'Guadalajara', neighborhoods: [] },
+      '64000': { province: 'Nuevo León', city: 'Monterrey', neighborhoods: [] },
+    }
+    const { container } = render(<Form lookup={async (zip) => answers[zip] ?? null} />)
+    type(container, '44100')
+    type(container, '64000')
+    await waitFor(() => expect(ctl(container, 'city').value).toBe('Monterrey'))
+    expect(ctl(container, 'province').value).toBe('Nuevo León')
   })
 })

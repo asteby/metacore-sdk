@@ -10,7 +10,7 @@
  *   the shop route and OPS lives in `@asteby/storefront` (`checkouts.pay`); the shop route is free to
  *   shape its own JSON as long as it answers with a `PaymentAttemptResult`.
  */
-import type { Money, PaymentAttemptResult, PaymentClient } from '@asteby/storefront'
+import type { Money, PaymentAttemptResult, PaymentClient, PaymentErrorClassKind } from '@asteby/storefront'
 
 export type PaymentFormError = {
   /** `true`: the form cannot be used (SDK blocked, iframe failed). The hook falls back to a redirect. */
@@ -33,6 +33,8 @@ export type PaymentFormMountOptions = {
   colorScheme?: 'light' | 'dark'
   onReady: () => void
   onError: (error: PaymentFormError) => void
+  /** Aborted when this mount is no longer wanted (the form unmounted or was replaced). Adapters must not create after it. */
+  signal?: AbortSignal
 }
 
 /** What a mounted form hands back at submit time. */
@@ -46,6 +48,11 @@ export type PaymentFormData = {
 export interface MountedPaymentForm {
   /** Tokenises the card inside the provider iframes. Rejects when the form is invalid (the provider shows the field errors). */
   collect(): Promise<PaymentFormData>
+  /**
+   * Applies a new server total to the form that is already on screen, without remounting it. Rejects when the provider
+   * cannot (the hook then remounts, queued). Absent: the hook remounts on every total change.
+   */
+  update?(next: { amount: Money }): Promise<void>
   unmount(): void | Promise<void>
 }
 
@@ -84,9 +91,17 @@ export class PaymentHttpError extends Error {
     message?: string,
     /** Raw `error.details` (e.g. the new `cost` of a `price_mismatch`); untrusted shape. */
     readonly details?: unknown,
+    /** Optional classification from the shop's JSON body (`retryable`, `kind`). */
+    extra?: { retryable?: boolean | undefined; kind?: PaymentErrorClassKind | undefined },
   ) {
     super(message ?? code)
+    this.retryable = extra?.retryable
+    this.kind = extra?.kind
   }
+  /** `error.retryable` of the shop body: `true` repeat with the SAME key; `false` it is an answer. `undefined`: not said. */
+  readonly retryable: boolean | undefined
+  /** `error.kind` of the shop body (`classifyPaymentError`). */
+  readonly kind: PaymentErrorClassKind | undefined
 }
 
 export type FetchTransportOptions = {
@@ -119,10 +134,13 @@ export function createFetchTransport(url: string, options: FetchTransportOptions
   const doFetch = (u: string, init: RequestInit) => (options.fetch ?? globalThis.fetch.bind(globalThis))(u, init)
   async function call(u: string, init: RequestInit): Promise<PaymentAttemptResult> {
     const res = await doFetch(u, { credentials: options.credentials ?? 'same-origin', ...init })
-    const body = (await parse(res)) as { error?: { code?: string; message?: string; details?: unknown } } | PaymentAttemptResult | null
+    const body = (await parse(res)) as { error?: { code?: string; message?: string; details?: unknown; retryable?: boolean; kind?: PaymentErrorClassKind } } | PaymentAttemptResult | null
     if (!res.ok) {
-      const e = (body as { error?: { code?: string; message?: string; details?: unknown } } | null)?.error
-      throw new PaymentHttpError(res.status, e?.code ?? 'server_error', e?.message, e?.details)
+      const e = (body as { error?: { code?: string; message?: string; details?: unknown; retryable?: boolean; kind?: PaymentErrorClassKind } } | null)?.error
+      throw new PaymentHttpError(res.status, e?.code ?? 'server_error', e?.message, e?.details, {
+        retryable: typeof e?.retryable === 'boolean' ? e.retryable : undefined,
+        kind: typeof e?.kind === 'string' ? e.kind : undefined,
+      })
     }
     const result = body as PaymentAttemptResult | null
     if (!result || typeof result !== 'object' || !result.payment || typeof result.payment.status !== 'string') {

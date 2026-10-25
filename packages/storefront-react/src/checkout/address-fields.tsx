@@ -173,6 +173,17 @@ function lockField(el: HTMLInputElement | HTMLSelectElement) {
   }
 }
 
+/** Name of the property set to `true` on every event the lookup dispatches when it fills a field. */
+export const ADDRESS_FILL_EVENT_FLAG = 'sfSynthetic'
+
+/**
+ * Was this `input` event dispatched by `AddressFields` itself (a postal-code fill) and not typed by the buyer? The shop's
+ * own listeners (validation, autosave, delivery re-quote...) can ignore these. Real typing has `isTrusted: true`.
+ */
+export function isAddressFillEvent(event: Event): boolean {
+  return (event as unknown as Record<string, unknown>)[ADDRESS_FILL_EVENT_FLAG] === true
+}
+
 export function AddressFields(props: AddressFieldsProps) {
   const { defaults, names = {}, errors = {}, countryCode, provinces, postalCode, lookupPostalCode, lockProvinceOnFill, locale, messages, fieldMessages: fm, classNames: cx = {}, children } = props
   const showNeighborhood = props.neighborhood ?? true
@@ -187,6 +198,32 @@ export function AddressFields(props: AddressFieldsProps) {
   const zipRef = useRef<HTMLDivElement>(null)
   const lookupRef = useRef(lookupPostalCode)
   lookupRef.current = lookupPostalCode
+  // ONE writer: lookup results are applied one after another, never interleaved (two lookups answering close together
+  // would otherwise write the same fields and fire their events at the same time).
+  const writer = useRef<Promise<void>>(Promise.resolve())
+  const enqueue = (task: () => void) => {
+    writer.current = writer.current.then(task).catch(() => {})
+  }
+
+  // A field the buyer edited is theirs: only REAL input (`isTrusted`) marks it, not the events this component dispatches.
+  useEffect(() => {
+    const form = zipRef.current?.closest('form')
+    if (!form) return
+    const mark = (e: Event) => {
+      if (!e.isTrusted) return
+      const el = e.target as HTMLElement | null
+      if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement) {
+        el.dataset.sfUserEdited = '1'
+        delete el.dataset.sfAutofilled
+      }
+    }
+    form.addEventListener('input', mark, true)
+    form.addEventListener('change', mark, true)
+    return () => {
+      form.removeEventListener('input', mark, true)
+      form.removeEventListener('change', mark, true)
+    }
+  }, [])
 
   const runLookup = (zip: string) => {
     const lookup = lookupRef.current
@@ -196,25 +233,35 @@ export function AddressFields(props: AddressFieldsProps) {
     const form = zipRef.current?.closest('form')
     void lookup(zip).then(
       (info) => {
-        if (!info || lastZip.current !== zip) return
-        const fill = (name: string, value: string | null | undefined, lock?: boolean) => {
-          const el = form?.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | null
-          if (!el || !value || ('length' in el && !(el instanceof HTMLSelectElement))) return false
-          // Already locked from a previous lookup: leave it (the buyer corrects the postal code instead).
-          if (el.dataset.sfLocked === '1') return false
-          // Only an empty field, or one this lookup filled before: never what the buyer typed.
-          if (el.value && el.dataset.sfAutofilled !== '1') return false
-          if (el instanceof HTMLSelectElement && ![...el.options].some((o) => o.value === value)) return false
-          el.value = value
-          el.dataset.sfAutofilled = '1'
-          el.dispatchEvent(new Event('input', { bubbles: true }))
-          if (lock) lockField(el)
-          return true
-        }
-        const a = fill(n('province'), info.province, lockProvinceOnFill)
-        const b = fill(n('city'), info.city)
-        setColonias(info.neighborhoods ?? [])
-        setFilled(a || b)
+        if (!info) return
+        enqueue(() => {
+          if (lastZip.current !== zip) return
+          const fill = (name: string, value: string | null | undefined, lock?: boolean) => {
+            const el = form?.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | null
+            if (!el || !value || ('length' in el && !(el instanceof HTMLSelectElement))) return false
+            // Already locked from a previous lookup: leave it (the buyer corrects the postal code instead).
+            if (el.dataset.sfLocked === '1') return false
+            // Never write where the buyer is typing, nor over what they edited.
+            if (el.dataset.sfUserEdited === '1' || el.ownerDocument.activeElement === el) return false
+            // Only an empty field, or one this lookup filled before: never what the buyer typed.
+            if (el.value && el.dataset.sfAutofilled !== '1') return false
+            if (el instanceof HTMLSelectElement && ![...el.options].some((o) => o.value === value)) return false
+            el.value = value
+            el.dataset.sfAutofilled = '1'
+            const event = new Event('input', { bubbles: true })
+            Object.defineProperty(event, ADDRESS_FILL_EVENT_FLAG, { value: true })
+            el.dispatchEvent(event)
+            if (lock) lockField(el)
+            return true
+          }
+          const a = fill(n('province'), info.province, lockProvinceOnFill)
+          const b = fill(n('city'), info.city)
+          // Colonia only when the code has exactly ONE: with several the buyer chooses (the list is offered, not applied).
+          const only = info.neighborhoods?.length === 1 ? info.neighborhoods[0] : null
+          const c = showNeighborhood ? fill(n('neighborhood'), only) : false
+          setColonias(info.neighborhoods ?? [])
+          setFilled(a || b || c)
+        })
       },
       () => {
         /* no lookup: the buyer types state and city */

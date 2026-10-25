@@ -13,6 +13,9 @@ export type {
 export { StorefrontError, isStorefrontError } from './errors.js'
 export type { StorefrontErrorInit } from './errors.js'
 
+export { classifyPaymentError, opsSaysNotRetryable, PAYMENT_CHOICE_REFUSED_FIELD } from './payment-errors.js'
+export type { PaymentErrorClass, PaymentErrorClassKind, PaymentErrorLike } from './payment-errors.js'
+
 export { diagnose, maskToken, repairPath } from './diagnose.js'
 export type { DiagnoseOptions } from './diagnose.js'
 

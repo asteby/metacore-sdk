@@ -273,6 +273,19 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
   const syncFailed = wantSync && settled && !sync!.ok && !requote
   const brickReady = cardActive && deliveryReady && synced && !syncFailed
 
+  // The card form is mounted ONCE per life of the section: after its first sync it stays on screen while the total is
+  // refreshed (delivery change, new quote). Those moments show the "updating the total" layer and block the button; they
+  // never unmount the form (the provider's `create`/`unmount` are asynchronous and racing them leaves an empty form).
+  const [formLatched, setFormLatched] = useState(false)
+  useEffect(() => {
+    if (brickReady) setFormLatched(true)
+  }, [brickReady])
+  useEffect(() => {
+    if (!cardActive) setFormLatched(false)
+  }, [cardActive])
+  const showBrick = cardActive && !syncFailed && (formLatched || brickReady)
+  const totalUpdating = showBrick && !brickReady
+
   const transport = useMemo(
     () =>
       props.transport ??
@@ -297,7 +310,8 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
   }
 
   // The buyer's e-mail from the page form: the provider form then skips its own e-mail block. Read on mount and on
-  // every committed change of that field; a form mounted before the e-mail was typed is mounted again once with it.
+  // every committed change of that field. It is only used when the form is CREATED: typing the e-mail afterwards does
+  // not remount the form (the provider then keeps asking for it inside its own form).
   const [payerEmail, setPayerEmail] = useState<string | undefined>(undefined)
   useEffect(() => {
     const form = formRef.current
@@ -423,7 +437,7 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
             <ChoicePanel choice={choice} m={m} invalid={invalid} cx={cx} tid={tid} hidden={hydrated && !checked} marks={brandMarks} visible={cashPointsVisible} openMore={storedPoint} onPointChange={onPointChange} />
             {/* The card form opens right under its own row (not after every row), so it reads as part of that choice. */}
             {choice.mode === 'card' && checked && cardChosen && hydrated && choices.cardClient ? (
-              <div className={cx.brickWrap} data-sf-pay-card {...tid('card')}>
+              <div className={cx.brickWrap} data-sf-pay-card {...(totalUpdating ? { 'data-sf-pay-updating': '' } : {})} aria-busy={totalUpdating || undefined} {...tid('card')}>
                 {fallback
                   ? null
                   : !deliveryReady
@@ -435,9 +449,8 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
                         : !synced
                         ? cardNotice('syncing', m.updatingTotal)
                         : null}
-                {brickReady || fallback ? (
+                {showBrick || fallback ? (
                   <PaymentBrick
-                    key={payerEmail || brickProps?.email ? 'with-email' : 'without-email'}
                     {...brickProps}
                     ref={brick}
                     client={choices.cardClient}
@@ -447,7 +460,7 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
                     locale={locale}
                     {...(scope ? { scope } : {})}
                     {...(payerEmail && !brickProps?.email ? { email: payerEmail } : {})}
-                    enabled={brickReady}
+                    enabled={showBrick}
                     {...(cx.brick ? { className: cx.brick } : {})}
                     onEvent={handleEvent}
                     onFallback={() => setFallback(true)}
@@ -482,7 +495,7 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
           onClick={onPayClick}
           className={cx.submit}
           disabled={busy || blocked}
-          aria-disabled={blocked || (brickReady && (!ready || processing)) || undefined}
+          aria-disabled={blocked || (cardActive && !syncFailed && deliveryReady && (!brickReady || !ready || processing)) || undefined}
           aria-busy={processing || undefined}
           data-sf-pay-method-submit
           {...tid('submit')}

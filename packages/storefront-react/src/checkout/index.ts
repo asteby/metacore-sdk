@@ -1,4 +1,4 @@
-export { AddressFields, ContactFields, addressFieldsMessages } from './address-fields.js'
+export { ADDRESS_FILL_EVENT_FLAG, AddressFields, ContactFields, addressFieldsMessages, isAddressFillEvent } from './address-fields.js'
 export type { AddressFieldKey, AddressFieldsMessages, AddressFieldsProps, ContactFieldKey, ContactFieldsProps, FieldLayoutClassNames, PostalCodeInfo } from './address-fields.js'
 export { CheckoutField, ErrorSummary, fieldMessages, useFieldErrors, validationMessage } from './fields.js'
 export type { CheckoutFieldClassNames, CheckoutFieldProps, CheckoutSelectProps, ErrorSummaryItem, ErrorSummaryProps, FieldErrors, FieldErrorsState, FieldMessages, UseFieldErrorsOptions } from './fields.js'

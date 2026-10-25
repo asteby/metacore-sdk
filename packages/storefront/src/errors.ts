@@ -12,6 +12,16 @@ export type StorefrontErrorInit = {
   cause?: unknown
   /** Scopes named by the gateway on a `403 insufficient_scope`. */
   requiredScopes?: string[]
+  /** `error.retryable` as OPS declared it (payment failures). `undefined` = OPS did not say. */
+  retryable?: boolean
+  /** `error.retry_after` in seconds. */
+  retryAfter?: number
+  /** `error.checkout_id`: the checkout a refused cart write can resume. */
+  checkoutId?: string
+  /** `error.cost` of a `price_mismatch` (the cart's current cost; untrusted shape). */
+  cost?: unknown
+  /** `error.message_en`. */
+  messageEn?: string
 }
 
 /**
@@ -27,6 +37,16 @@ export class StorefrontError extends Error {
   readonly url: string | undefined
   /** Scopes a `403 insufficient_scope` says the route needs (empty for any other error). */
   readonly requiredScopes: string[]
+  /** `true`: repeating the request (same idempotency key) can succeed. `false`: not until someone fixes something. `undefined`: OPS did not say. */
+  readonly retryable: boolean | undefined
+  /** Seconds OPS asks to wait before retrying. */
+  readonly retryAfter: number | undefined
+  /** Checkout that a refused cart write can resume. */
+  readonly checkoutId: string | undefined
+  /** Current cart cost sent with a `price_mismatch` (untrusted shape). */
+  readonly cost: unknown
+  /** English version of `message`, when OPS sent one. */
+  readonly messageEn: string | undefined
 
   constructor(init: StorefrontErrorInit) {
     super(init.message, init.cause === undefined ? undefined : { cause: init.cause })
@@ -36,6 +56,11 @@ export class StorefrontError extends Error {
     this.details = init.details
     this.url = init.url
     this.requiredScopes = init.requiredScopes ?? []
+    this.retryable = init.retryable
+    this.retryAfter = init.retryAfter
+    this.checkoutId = init.checkoutId
+    this.cost = init.cost
+    this.messageEn = init.messageEn
   }
 
   /**
@@ -57,6 +82,9 @@ export class StorefrontError extends Error {
       message: this.message,
       field: this.field,
       ...(this.requiredScopes.length ? { requiredScopes: this.requiredScopes } : {}),
+      ...(this.retryable !== undefined ? { retryable: this.retryable } : {}),
+      ...(this.retryAfter !== undefined ? { retryAfter: this.retryAfter } : {}),
+      ...(this.checkoutId ? { checkoutId: this.checkoutId } : {}),
     }
   }
 }

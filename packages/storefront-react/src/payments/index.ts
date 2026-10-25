@@ -22,6 +22,20 @@ export type {
   PaymentTransport,
 } from './adapter.js'
 
+export { PaymentMountCancelled, PaymentMountTimeout, mountQueued, withMountQueue } from './mount-queue.js'
+export type { MountQueueOptions } from './mount-queue.js'
+
+export { createResilientTransport, isResolvedAttempt } from './resilient-transport.js'
+export type { PaymentIssue, ResilientTransportOptions } from './resilient-transport.js'
+
+export { PaymentRecovery, alternativeChoices, pickChoice, usePaymentRecovery } from './recovery.js'
+export type { PaymentNotice, PaymentRecoveryClassNames, PaymentRecoveryProps, PaymentRecoveryState, UsePaymentRecoveryOptions } from './recovery.js'
+export { paymentRecoveryMessages } from './recovery-messages.js'
+export type { PaymentNoticeKind, PaymentRecoveryMessageKey, PaymentRecoveryMessages } from './recovery-messages.js'
+
+export { checkoutShouldRevalidate } from './revalidate.js'
+export type { CheckoutRevalidateOptions, RevalidateArgs } from './revalidate.js'
+
 export { MERCADOPAGO_BRICKS_KIND, mercadoPagoBricksAdapter, sanitizeMercadoPagoFormData } from './mercadopago.js'
 export type { MercadoPagoAdapterOptions, MercadoPagoCtor } from './mercadopago.js'
 
@@ -36,7 +50,7 @@ export type { PaymentMethodClassNames, PaymentMethodSectionProps, PaymentMethodT
 export { paymentMethodMessages } from './payment-method.messages.js'
 export type { PaymentMethodMessages } from './payment-method.messages.js'
 
-export { buildPayChoices, cashProviderData, checkoutToAttempt, choiceValue, parseChoice, payErrorResponse, voucherRows } from './choices.js'
-export type { BuildPayChoicesOptions, PayChoice, PayChoices, PayErrorBody, VoucherRowLabels } from './choices.js'
+export { buildPayChoices, cashProviderData, checkoutToAttempt, choiceValue, parseChoice, payErrorResponse, safeHttpStatus, voucherRows } from './choices.js'
+export type { BuildPayChoicesOptions, PayChoice, PayChoices, PayErrorBody, PayErrorOptions, VoucherRowLabels } from './choices.js'
 
 export { PAYMENT_THEME_TOKENS, readPaymentScheme, readPaymentTheme } from './theme.js'

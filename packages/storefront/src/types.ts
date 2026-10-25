@@ -646,7 +646,23 @@ export type InsufficientStockLine = {
 export type InsufficientStockDetails = { lines: InsufficientStockLine[] }
 
 export type StorefrontErrorBody = {
-  error: { code: StorefrontErrorCode; message: string; field?: string; details?: unknown; required_scopes?: string[] }
+  error: {
+    code: StorefrontErrorCode
+    message: string
+    field?: string
+    details?: unknown
+    required_scopes?: string[]
+    /** Payment failures only: `true` = repeating the request can succeed; `false` = not until someone fixes something. */
+    retryable?: boolean
+    /** Seconds to wait before retrying (`too_many_attempts`, `payment_in_progress`). */
+    retry_after?: number
+    /** A cart write refused because the cart already became a checkout that can still be paid. */
+    checkout_id?: string
+    /** The cart's current cost, sent with `price_mismatch`. */
+    cost?: unknown
+    /** The same message in English, when the server provides it. */
+    message_en?: string
+  }
 }
 
 export type RestockSubscriptionInput = {
@@ -752,7 +768,15 @@ export type PaymentAction = {
   redirect_url?: string | null
 }
 
-export type PaymentAttemptStatus = 'paid' | 'pending' | 'requires_action' | 'failed' | 'expired' | 'cancelled'
+export type PaymentAttemptStatus =
+  | 'paid'
+  | 'pending'
+  | 'requires_action'
+  | 'failed'
+  | 'expired'
+  | 'cancelled'
+  /** Only from the shop's status route: there is no payment session in this browser (cookie gone). It is NOT a result. */
+  | 'none'
 
 /** What the buyer should do next after a rejection (stable enum from the cart). */
 export type PaymentNextStep = 'retry' | 'fix_card_data' | 'use_other_card' | 'pay_cash' | 'contact_issuer' | 'check_email' | 'rebuild_cart'
@@ -785,6 +809,8 @@ export type PaymentAttemptResult = {
   order?: { id?: string; number?: string | null }
   attempt?: { n: number }
   attempts_left?: number
+  /** Only with `payment.status: 'none'`: the shop still has the buyer's cart, so repeating the SAME attempt can proceed. */
+  recoverable?: boolean
 }
 
 /** `GET /storefront/checkouts/:id/payment-config`: what to mount for an embedded checkout. */

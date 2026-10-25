@@ -9,15 +9,18 @@
  * - Without `client`, or with the card flagged `redirect: true`, the server does not offer `embedded`: the shop falls
  *   back to the usual redirect flow.
  */
+import { classifyPaymentError } from '@asteby/storefront'
 import type {
   CheckoutResult,
   PaymentAttemptResult,
   PaymentClient,
+  PaymentErrorClassKind,
   PaymentMethod,
   PaymentOption,
   PaymentOptionKey,
   PaymentPoint,
 } from '@asteby/storefront'
+import { paymentRecoveryMessages, type PaymentRecoveryMessages } from './recovery-messages.js'
 
 /** One row of "Payment method". `value` is what travels in the form (`payment_choice`). */
 export type PayChoice = {
@@ -138,22 +141,74 @@ export function checkoutToAttempt(result: CheckoutResult): PaymentAttemptResult 
   return { ...base, payment: { provider: payment.provider, status: 'pending', outcome: 'pending', action: action ?? { type: 'none' } } }
 }
 
-/** Body `{ error: { code, message, details } }` that `createFetchTransport` understands. */
-export type PayErrorBody = { error: { code: string; message: string; details?: unknown } }
+/**
+ * Body `{ error: { code, message, retryable, kind, ... } }` that `createFetchTransport` and `createResilientTransport`
+ * understand. `retryable` and `kind` come from `classifyPaymentError`: the browser never guesses them from the status.
+ */
+export type PayErrorBody = {
+  error: { code: string; message: string; retryable: boolean; kind: PaymentErrorClassKind; field?: string; retry_after?: number; details?: unknown }
+}
 
-type ErrorLike = { status?: number; code?: string; field?: string; message?: string; details?: unknown }
+type ErrorLike = {
+  status?: number
+  code?: string
+  field?: string
+  message?: string
+  details?: unknown
+  /** `StorefrontError.retryable`: what OPS declared. */
+  retryable?: boolean | undefined
+  checkoutId?: string | undefined
+  retryAfter?: number | undefined
+}
+
+export type PayErrorOptions = {
+  locale?: string
+  /** Replaces the default texts (`error.<kind>`). */
+  messages?: Partial<PaymentRecoveryMessages>
+  /** Forces the classification (for refusals the shop itself makes). */
+  kind?: PaymentErrorClassKind
+}
+
+/**
+ * 502-504 never leave the shop's pay routes: the proxy (Traefik's `errors` middleware, a CDN) replaces them with an HTML
+ * page, and the browser loses the JSON and the `Set-Cookie` of the payment session. They are answered as 500; the
+ * body (`retryable`, `kind`) is what decides.
+ */
+export function safeHttpStatus(status: number): number {
+  return status === 502 || status === 503 || status === 504 ? 500 : status
+}
 
 /**
  * Server error becomes a JSON response for the browser. Keeps the codes the SDK knows how to read (`price_mismatch`,
  * `payment_in_progress`, `expired`, `too_many_attempts`); the mock sends "in progress" in `field`, so that is checked too.
+ * Always JSON, never 502-504 (see `safeHttpStatus`), always with `retryable` and `kind`.
  */
-export function payErrorResponse(err: ErrorLike): { status: number; body: PayErrorBody } {
+export function payErrorResponse(err: ErrorLike, options: PayErrorOptions = {}): { status: number; body: PayErrorBody } {
   const status = typeof err.status === 'number' && err.status >= 400 ? err.status : 503
-  let code = err.code ?? 'server_error'
+  const { kind: classified, retryable } = classifyPaymentError({ ...err, status, checkoutId: err.checkoutId ?? null })
+  const kind = options.kind ?? classified
+  let code = err.code ?? (kind === 'transient' ? 'unavailable' : 'server_error')
   if (status === 409 && err.field === 'payment_in_progress') code = 'payment_in_progress'
   if (status === 429) code = 'too_many_attempts'
   if (status === 422 && err.field === 'expected_total') code = 'price_mismatch'
-  return { status, body: { error: { code, message: err.message ?? '', ...(err.details !== undefined ? { details: err.details } : {}) } } }
+  // Texts the shop wrote itself (missing fields, expired cart, a row it does not offer) are kept; OPS' own message,
+  // often technical or in English, is replaced by the catalog text for the kind.
+  const own = (kind === 'validation' || kind === 'expired' || kind === 'price_mismatch' || (kind === 'other' && status < 500)) && err.message
+  const message = own || paymentRecoveryMessages(options.locale, options.messages)[`error.${kind}`]
+  return {
+    status: safeHttpStatus(status),
+    body: {
+      error: {
+        code,
+        message,
+        retryable: options.kind ? options.kind === 'transient' || options.kind === 'in_progress' || options.kind === 'rate_limited' : retryable,
+        kind,
+        ...(err.field ? { field: err.field } : {}),
+        ...(err.retryAfter ? { retry_after: err.retryAfter } : {}),
+        ...(err.details !== undefined ? { details: err.details } : {}),
+      },
+    },
+  }
 }
 
 export type VoucherRowLabels = { point: string; reference: string; clabe: string; barcode: string; expires: string }

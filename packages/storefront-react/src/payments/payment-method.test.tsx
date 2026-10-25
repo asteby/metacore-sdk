@@ -254,7 +254,7 @@ describe('PaymentMethodSection', () => {
     setup({ syncDelivery: async () => true, payerEmailField: null, brickProps: { adapter, storage: null } })
     await waitFor(() => expect(emails).toEqual([undefined]))
   })
-  it('a card form mounted before the e-mail was typed is mounted again once with it', async () => {
+  it('typing the e-mail after the card form mounted does NOT remount it', async () => {
     const emails: Array<string | undefined> = []
     const adapter: PaymentFormAdapter = {
       kind: 'fake',
@@ -276,11 +276,54 @@ describe('PaymentMethodSection', () => {
     await waitFor(() => expect(emails).toEqual([undefined]))
     const field = screen.getByLabelText('Correo') as HTMLInputElement
     fireEvent.change(field, { target: { value: 'ana@correo.mx' } })
-    await waitFor(() => expect(emails).toEqual([undefined, 'ana@correo.mx']))
-    // Further edits do not remount it (the server uses the cart e-mail).
     fireEvent.change(field, { target: { value: 'otra@correo.mx' } })
-    await new Promise((r) => setTimeout(r, 30))
-    expect(emails).toHaveLength(2)
+    await new Promise((r) => setTimeout(r, 60))
+    expect(emails).toEqual([undefined])
+  })
+  it('a delivery change keeps the card form mounted: the "updating the total" layer blocks the button, nothing remounts', async () => {
+    let unmounts = 0
+    const mounts: string[] = []
+    const adapter: PaymentFormAdapter = {
+      kind: 'fake',
+      async load() {},
+      async mount(o) {
+        mounts.push(o.amount.amount)
+        queueMicrotask(() => o.onReady())
+        return { collect: async () => ({ provider_data: { token: 't' } }), unmount: () => void unmounts++, update: async () => {} }
+      },
+    }
+    let finish!: () => void
+    let first = true
+    const syncDelivery = vi.fn(() =>
+      first
+        ? ((first = false), Promise.resolve(true))
+        : new Promise<boolean>((r) => {
+            finish = () => r(true)
+          }),
+    )
+    const formRef = createRef<HTMLFormElement>()
+    const ui = (delivery: string, amount = total) => (
+      <form ref={formRef}>
+        <input name="email" aria-label="Correo" defaultValue="a@b.co" />
+        <PaymentMethodSection choices={buildPayChoices([method])} amount={amount} scope="cart_5" formRef={formRef} payUrl="/p" delivery={delivery} syncDelivery={syncDelivery} onDone={() => {}} brickProps={{ adapter, storage: null }} />
+      </form>
+    )
+    const view = render(ui('rate:1'))
+    await waitFor(() => expect(mounts).toHaveLength(1))
+    const button = () => view.container.querySelector('[data-sf-pay-method-submit]') as HTMLButtonElement
+    await waitFor(() => expect(button().getAttribute('aria-disabled')).toBeNull())
+    view.rerender(ui('rate:2'))
+    await waitFor(() => expect(view.container.querySelector('[data-sf-pay-notice="syncing"]')).toBeTruthy())
+    // Still mounted, container still in the page, button blocked while the total is stale.
+    expect(unmounts).toBe(0)
+    expect(view.container.querySelector('[data-sf-pay-container]')).toBeTruthy()
+    expect(view.container.querySelector('[data-sf-pay-card]')?.hasAttribute('data-sf-pay-updating')).toBe(true)
+    expect(button().getAttribute('aria-disabled')).toBe('true')
+    finish()
+    await waitFor(() => expect(view.container.querySelector('[data-sf-pay-card]')?.hasAttribute('data-sf-pay-updating')).toBe(false))
+    expect(button().getAttribute('aria-disabled')).toBeNull()
+    expect(mounts).toHaveLength(1)
+    expect(unmounts).toBe(0)
   })
   it('remembers the chosen row and cash point for the cart: a reload does not ask again', async () => {
     const first = setup()

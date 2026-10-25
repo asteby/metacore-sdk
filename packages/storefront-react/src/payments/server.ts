@@ -12,6 +12,7 @@
  * arrives through `EmbeddedPayConfig` callbacks.
  */
 import {
+  PAYMENT_CHOICE_REFUSED_FIELD,
   isStorefrontError,
   paymentIdempotencyKey,
   paymentOutcome,
@@ -20,9 +21,11 @@ import {
   type CheckoutResult,
   type Money,
   type PaymentAttemptResult,
+  type PaymentErrorClassKind,
   type StorefrontClient,
 } from '@asteby/storefront'
-import { buildPayChoices, cashProviderData, checkoutToAttempt, parseChoice, payErrorResponse, type PayChoice } from './choices.js'
+import { buildPayChoices, cashProviderData, checkoutToAttempt, parseChoice, payErrorResponse, safeHttpStatus, type PayChoice, type PayErrorOptions } from './choices.js'
+import type { PaymentRecoveryMessages } from './recovery-messages.js'
 
 export * from './choices.js'
 export { paymentCsp, paymentCspHeaderName, paymentCspHeaders, paymentCspMode, paymentNonce, paymentNonceFromHeaders } from './csp.js'
@@ -77,6 +80,71 @@ export function deviceSessionId(v: unknown): string | undefined {
   if (typeof v !== 'string') return undefined
   const id = v.trim()
   return id.length > 0 && id.length <= DEVICE_SESSION_ID_MAX && /^[\w.:-]+$/.test(id) ? id : undefined
+}
+
+const JSON_HEADERS = { 'Content-Type': 'application/json' }
+
+export type JsonPayRouteOptions = PayErrorOptions & {
+  /** Cache header of the response. Default `private, no-store`. */
+  cacheControl?: string
+  /** Diagnostic line for an exception inside the route. Default: one JSON line with `console.warn`. */
+  log?: (entry: { level: 'warn'; msg: string; where: string; error: string }) => void
+}
+
+function copyHeaders(from: Headers): Headers {
+  const out = new Headers()
+  from.forEach((value, key) => {
+    const k = key.toLowerCase()
+    if (k === 'content-length' || k === 'content-type' || k === 'set-cookie' || k === 'refresh') return
+    out.set(key, value)
+  })
+  for (const cookie of from.getSetCookie?.() ?? []) out.append('Set-Cookie', cookie)
+  return out
+}
+
+/**
+ * Runs a payment route and guarantees a JSON answer: `{ error: { code, message, retryable, kind } }` with a status the
+ * proxy leaves alone (never 502-504, which Traefik/CDNs replace with an HTML page, dropping the JSON and the
+ * `Set-Cookie` of the payment session). An exception becomes a transient, retryable error (same idempotency key).
+ * `createEmbeddedPayHandlers` already applies it; use it for routes of your own.
+ */
+export async function jsonPayRoute(run: () => Promise<Response>, where: string, options: JsonPayRouteOptions | string = {}): Promise<Response> {
+  const opts: JsonPayRouteOptions = typeof options === 'string' ? { cacheControl: options } : options
+  const cache = opts.cacheControl ?? 'private, no-store'
+  const errorOptions: PayErrorOptions = { ...(opts.locale ? { locale: opts.locale } : {}), ...(opts.messages ? { messages: opts.messages } : {}) }
+  let res: Response
+  try {
+    res = await run()
+  } catch (err) {
+    const entry = { level: 'warn' as const, msg: 'excepción en la ruta de pago', where, error: String((err as Error)?.message ?? err).slice(0, 300) }
+    if (opts.log) opts.log(entry)
+    else console.warn(JSON.stringify(entry))
+    const { status, body } = payErrorResponse({ status: 500, code: 'server_error' }, errorOptions)
+    return new Response(JSON.stringify(body), { status, headers: { ...JSON_HEADERS, 'Cache-Control': cache } })
+  }
+  const type = res.headers.get('content-type') ?? ''
+  if (res.ok && type.includes('json')) return res
+
+  let parsed: { error?: { code?: string; message?: string; retryable?: boolean; kind?: string; field?: string; details?: unknown } } | null = null
+  if (type.includes('json')) parsed = await res.clone().json().catch(() => null)
+  const e = parsed?.error
+  // Already normalised by the shop (has `kind`) and with a status the proxy keeps: leave it as it is.
+  if (!res.ok && e && typeof e.kind === 'string' && safeHttpStatus(res.status) === res.status) return res
+  const { status, body } = payErrorResponse(
+    {
+      status: res.ok ? 500 : res.status,
+      ...(e?.code ? { code: e.code } : {}),
+      ...(e?.message ? { message: e.message } : {}),
+      ...(e?.field ? { field: e.field } : {}),
+      ...(e?.details !== undefined ? { details: e.details } : {}),
+      ...(typeof e?.retryable === 'boolean' ? { retryable: e.retryable } : {}),
+    },
+    errorOptions,
+  )
+  const headers = copyHeaders(res.headers)
+  headers.set('Content-Type', 'application/json')
+  headers.set('Cache-Control', cache)
+  return new Response(JSON.stringify(body), { status, headers })
 }
 
 const ATTEMPT = /^[A-Za-z0-9_-]{8,100}$/
@@ -137,6 +205,8 @@ export type EmbeddedPayConfig<TDraft extends { checkout_id?: string }> = {
   /** Method keys the shop never offers (the server also checks them: a forged `payment_choice` is refused). */
   hide?: Iterable<string>
   messages?: Partial<EmbeddedPayMessages>
+  /** Replaces the default texts of the error bodies (`error.<kind>`), e.g. to speak in the shop's voice. */
+  errorMessages?: Partial<PaymentRecoveryMessages>
   /** Per-IP limit on charges. Default 10 per 10 minutes; `false` disables (OPS still caps attempts per checkout). */
   rateLimit?: RateLimiter | { limit?: number; windowMs?: number } | false
   /** Trust `cf-connecting-ip` / `x-forwarded-for` for the limiter key. */
@@ -181,11 +251,16 @@ export function createEmbeddedPayHandlers<TDraft extends { checkout_id?: string 
     headers.set('Content-Type', 'application/json')
     return new Response(JSON.stringify(body), { status: init.status ?? 200, headers })
   }
-  const fail = (status: number, code: string, message: string, extra: Headers | Record<string, string> = {}) => json({ error: { code, message } }, { status, headers: extra })
+  const errorOptions: PayErrorOptions = { locale, ...(config.errorMessages ? { messages: config.errorMessages } : {}) }
+  /** The shop's own refusal, in the same body shape (`retryable`, `kind`) as an OPS failure. */
+  const fail = (status: number, code: string, message: string, extra: Headers | Record<string, string> = {}, more: { field?: string; kind?: PaymentErrorClassKind } = {}) => {
+    const r = payErrorResponse({ status, code, message, ...(more.field ? { field: more.field } : {}) }, { ...errorOptions, ...(more.kind ? { kind: more.kind } : {}) })
+    return json(r.body, { status: r.status, headers: extra })
+  }
 
   async function pay(request: Request): Promise<Response> {
     const site = config.site(request)
-    if (!sameOrigin(request, site)) return fail(403, 'forbidden', 'origin')
+    if (!sameOrigin(request, site)) return fail(403, 'forbidden', 'origin', {}, { kind: 'other' })
     if (limiter) {
       const gate = limiter.hit(clientKey(request, config.trustProxy))
       if (!gate.allowed) return fail(429, 'too_many_attempts', msg.tooManyRequests, { 'Retry-After': String(gate.retryAfterSec) })
@@ -219,7 +294,7 @@ export function createEmbeddedPayHandlers<TDraft extends { checkout_id?: string 
       // The server decides what can be paid in the page: the browser only picks among what OPS published.
       const methods = await sf.carts.paymentMethods(cartId)
       const card = buildPayChoices(methods.methods, config.hide ? { hide: config.hide } : {}).choices.find((c) => c.mode === 'card' && c.value === fields.payment_choice)
-      if (!choice || !card) return fail(422, 'invalid_state', msg.methodUnavailable)
+      if (!choice || !card) return fail(422, 'invalid_state', msg.methodUnavailable, {}, { field: PAYMENT_CHOICE_REFUSED_FIELD })
 
       // A retry (the first charge failed or the network dropped) reuses the checkout already created: the cart is an
       // order by now and cannot be edited again. Only the attempt (the payment key) changes.
@@ -254,7 +329,7 @@ export function createEmbeddedPayHandlers<TDraft extends { checkout_id?: string 
       return json(result, { headers })
     } catch (err) {
       if (isStorefrontError(err)) {
-        const { status, body: errBody } = payErrorResponse(err)
+        const { status, body: errBody } = payErrorResponse(err, errorOptions)
         log({ level: 'warn', msg: 'cobro rechazado por OPS', status: err.status, code: err.code ?? null, field: err.field ?? null, message: String(err.message).slice(0, 300) })
         // 5xx, network or timeout: the charge may have happened; the browser retries with the SAME key.
         // The checkout exists even when the charge fails: kept so the retry reuses it.
@@ -267,21 +342,25 @@ export function createEmbeddedPayHandlers<TDraft extends { checkout_id?: string 
   }
 
   async function status(request: Request): Promise<Response> {
-    if (!sameOrigin(request, config.site(request))) return fail(403, 'forbidden', 'origin')
+    if (!sameOrigin(request, config.site(request))) return fail(403, 'forbidden', 'origin', {}, { kind: 'other' })
     const session = await config.readSession(request)
     const id = session?.draft.checkout_id
-    if (!session || !id) return fail(404, 'not_found', msg.expiredCart)
+    // No payment session in this browser (cookie lost or never set). It is NOT an error and NOT a result: `none` tells the
+    // transport there is nothing to read, so an unknown outcome stays unknown and is repeated with the SAME key.
+    // `recoverable`: the shop still has the buyer's cart, so that same-key retry can proceed.
+    const none = async (): Promise<Response> => json({ payment: { provider: '', status: 'none' }, recoverable: Boolean(await config.readCartId(request)) })
+    if (!session || !id) return none()
     try {
       const sf = await config.client(request)
       const found = await sf.checkouts.get(id)
-      if (!found) return fail(404, 'not_found', msg.expiredCart)
+      if (!found) return none()
       const attempt = checkoutToAttempt(found)
       const headers = new Headers()
       await config.settle({ draft: session.draft, result: attempt, headers })
       return json(attempt, { headers })
     } catch (err) {
       if (isStorefrontError(err)) {
-        const { status: code, body } = payErrorResponse(err)
+        const { status: code, body } = payErrorResponse(err, errorOptions)
         return json(body, { status: code })
       }
       throw err
@@ -306,5 +385,10 @@ export function createEmbeddedPayHandlers<TDraft extends { checkout_id?: string 
     return { kind: 'error', status: safeHttpsUrl(outcome.redirect_url) ? 409 : 422, message: outcome.message, fields: [] }
   }
 
-  return { pay, status, cash }
+  const routeOptions: JsonPayRouteOptions = { cacheControl: cache, ...errorOptions }
+  return {
+    pay: (request) => jsonPayRoute(() => pay(request), 'pay', routeOptions),
+    status: (request) => jsonPayRoute(() => status(request), 'status', routeOptions),
+    cash,
+  }
 }

@@ -4,7 +4,12 @@ import type { MountedPaymentForm, PaymentFormAdapter, PaymentFormData, PaymentFo
 /** The `PaymentClient.kind` the addon `mercadopago` declares. */
 export const MERCADOPAGO_BRICKS_KIND = 'mercadopago_bricks'
 
-type MpController = { getFormData(): Promise<Record<string, unknown> | undefined | null>; unmount(): void | Promise<void> }
+type MpController = {
+  getFormData(): Promise<Record<string, unknown> | undefined | null>
+  unmount(): void | Promise<void>
+  /** Card Payment Brick: changes the amount without recreating the form. Absent in old SDK builds. */
+  update?(settings: { amount: number }): void | Promise<void>
+}
 type MpBricks = { create(brick: string, containerId: string, settings: Record<string, unknown>): Promise<MpController> }
 export type MercadoPagoCtor = new (publicKey: string, options?: { locale?: string }) => { bricks(): MpBricks }
 
@@ -102,6 +107,13 @@ export function mercadoPagoBricksAdapter(options: MercadoPagoAdapterOptions = {}
           if (!provider_data.token) throw new Error('payment form incomplete')
           const device = getDevice()
           return { provider_data, ...(typeof device === 'string' && device ? { device_session_id: device } : {}) }
+        },
+        async update(next) {
+          if (gone) throw new Error('payment form is unmounted')
+          if (typeof controller.update !== 'function') throw new Error('payment form: update not supported')
+          const value = Number.parseFloat(next.amount.amount)
+          if (!Number.isFinite(value) || value <= 0) throw new Error('payment form: invalid amount')
+          await controller.update({ amount: value })
         },
         async unmount() {
           gone = true

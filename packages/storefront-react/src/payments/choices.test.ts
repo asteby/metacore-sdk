@@ -100,8 +100,23 @@ describe('payErrorResponse', () => {
     expect(payErrorResponse({ status: 422, field: 'expected_total', message: 'm' })).toMatchObject({ status: 422, body: { error: { code: 'price_mismatch' } } })
     expect(payErrorResponse({ status: 409, field: 'payment_in_progress' }).body.error.code).toBe('payment_in_progress')
     expect(payErrorResponse({ status: 429, code: 'x' }).body.error.code).toBe('too_many_attempts')
-    expect(payErrorResponse({ status: 500, code: 'boom', details: { a: 1 } }).body.error).toEqual({ code: 'boom', message: '', details: { a: 1 } })
-    expect(payErrorResponse({}).status).toBe(503)
+    expect(payErrorResponse({ status: 500, code: 'boom', details: { a: 1 } }).body.error).toMatchObject({ code: 'boom', retryable: true, kind: 'transient', details: { a: 1 } })
+  })
+  it('never answers 502-504 (the proxy swaps them for an HTML page) and always says retryable and kind', () => {
+    for (const status of [502, 503, 504]) expect(payErrorResponse({ status, code: 'unavailable', retryable: true }).status).toBe(500)
+    expect(payErrorResponse({}).status).toBe(500)
+    expect(payErrorResponse({ status: 502, code: 'payment_provider_rejected', retryable: false })).toMatchObject({
+      status: 500,
+      body: { error: { code: 'payment_provider_rejected', retryable: false, kind: 'provider_declined' } },
+    })
+    expect(payErrorResponse({ status: 502, code: 'payment_provider_misconfigured', retryable: false }).body.error.kind).toBe('merchant_config')
+    expect(payErrorResponse({ status: 422, code: 'invalid_state', checkoutId: 'chk_1' }).body.error).toMatchObject({ kind: 'stale_checkout', retryable: false })
+  })
+  it('uses the shop catalog (overridable) instead of the technical OPS message, but keeps the shop own texts', () => {
+    expect(payErrorResponse({ status: 502, code: 'unavailable', message: 'upstream connect error' }).body.error.message).toMatch(/verificando/)
+    expect(payErrorResponse({ status: 502, code: 'unavailable' }, { messages: { 'error.transient': 'Verificando…' } }).body.error.message).toBe('Verificando…')
+    expect(payErrorResponse({ status: 400, code: 'validation', message: 'Falta el correo' }).body.error.message).toBe('Falta el correo')
+    expect(payErrorResponse({ status: 502, code: 'unavailable' }, { locale: 'en-US' }).body.error.message).toMatch(/verifying/i)
   })
 })
 

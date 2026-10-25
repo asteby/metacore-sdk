@@ -68,3 +68,22 @@
     display: none !important;
   }
 }
+
+/* "Updating the total": the card form stays mounted; this layer only dims it and blocks input meanwhile. */
+[data-sf-pay-card][data-sf-pay-updating] [data-sf-pay-container] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+/* Notice of a payment that did not end well (<PaymentRecovery>). Neutral spacing only; colors come from `classNames`. */
+[data-sf-pay-recovery] {
+  display: grid;
+  gap: 0.75rem;
+}
+[data-sf-pay-recovery] > p {
+  margin: 0;
+}
+[data-sf-pay-recovery] > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}

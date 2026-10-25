@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { StorefrontError, type StorefrontClient } from '@asteby/storefront'
-import { createEmbeddedPayHandlers, deviceSessionId, paymentCsp, paymentCspHeaders, paymentCspMode, paymentNonce, paymentNonceFromHeaders, sameOrigin, createRateLimiter, type EmbeddedPayConfig, type PaySession } from './server.js'
+import { createEmbeddedPayHandlers, jsonPayRoute, deviceSessionId, paymentCsp, paymentCspHeaders, paymentCspMode, paymentNonce, paymentNonceFromHeaders, sameOrigin, createRateLimiter, type EmbeddedPayConfig, type PaySession } from './server.js'
 
 type Draft = { checkout_id?: string; number?: string | null }
 const total = { amount: '500.00', currency_code: 'MXN' }
@@ -136,9 +136,13 @@ describe('status', () => {
     expect(settle).toHaveBeenCalledOnce()
     expect(res.headers.get('Set-Cookie')).toBe('receipt=1')
   })
-  it('404 without a session', async () => {
+  it('without a payment session answers 200 `none` (not 404) and says whether the cart is still there', async () => {
     const { h } = setup()
-    expect((await h.status(new Request('https://shop.test/s', { method: 'POST' }))).status).toBe(404)
+    const res = await h.status(new Request('https://shop.test/s', { method: 'POST' }))
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ payment: { provider: '', status: 'none' }, recoverable: true })
+    const gone = setup(undefined, { readCartId: async () => null })
+    expect(await (await gone.h.status(new Request('https://shop.test/s', { method: 'POST' }))).json()).toMatchObject({ payment: { status: 'none' }, recoverable: false })
   })
 })
 
@@ -192,5 +196,59 @@ describe('helpers', () => {
     expect(value).toContain("img-src 'self' data: https:")
     expect(paymentNonceFromHeaders(new Headers(h))).toBe(nonce)
     expect(paymentCsp([client])).not.toContain('https: ')
+  })
+})
+
+describe('always JSON, never 502-504, with retryable and kind', () => {
+  const ops = (status: number, code: string, retryable?: boolean, extra: Record<string, unknown> = {}) =>
+    new StorefrontError({ status, code, message: 'technical english', ...(retryable === undefined ? {} : { retryable }), ...extra })
+  const post = (h: ReturnType<typeof setup>['h']) => h.pay(req(body()))
+
+  it('502 unavailable retryable:true -> 500 JSON transient, and the payment session cookie survives', async () => {
+    const { h } = setup({ pay: async () => { throw ops(502, 'unavailable', true) } })
+    const res = await post(h)
+    expect(res.status).toBe(500)
+    expect(res.headers.get('content-type')).toContain('json')
+    expect(res.headers.get('Set-Cookie')).toBe('pay=chk1')
+    expect(await res.json()).toMatchObject({ error: { code: 'unavailable', retryable: true, kind: 'transient' } })
+  })
+  it('502 payment_provider_rejected retryable:false -> definitive provider_declined', async () => {
+    const { h } = setup({ pay: async () => { throw ops(502, 'payment_provider_rejected', false) } })
+    const res = await post(h)
+    expect(res.status).toBe(500)
+    expect(await res.json()).toMatchObject({ error: { retryable: false, kind: 'provider_declined' } })
+  })
+  it('502 payment_provider_misconfigured -> merchant_config; 422 invalid_state with checkout_id -> stale_checkout', async () => {
+    expect(await (await post(setup({ pay: async () => { throw ops(502, 'payment_provider_misconfigured', false) } }).h)).json()).toMatchObject({ error: { kind: 'merchant_config' } })
+    const stale = await post(setup({ pay: async () => { throw ops(422, 'invalid_state', undefined, { checkoutId: 'chk1' }) } }).h)
+    expect(stale.status).toBe(422)
+    expect(await stale.json()).toMatchObject({ error: { kind: 'stale_checkout', retryable: false } })
+  })
+  it('a thrown exception becomes a retryable JSON 500', async () => {
+    const { h } = setup({ pay: async () => { throw new Error('boom') } }, { log: () => {} })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const res = await post(h)
+    warn.mockRestore()
+    expect(res.status).toBe(500)
+    expect(await res.json()).toMatchObject({ error: { retryable: true, kind: 'transient' } })
+  })
+  it('the shop own refusals carry kind too (method not offered is not a stale checkout)', async () => {
+    const { h } = setup()
+    const res = await h.pay(req(body({ fields: { email: 'a@b.co', payment_choice: 'prov|wallet' } })))
+    expect(res.status).toBe(422)
+    expect(await res.json()).toMatchObject({ error: { code: 'invalid_state', kind: 'other', retryable: false, field: 'payment_choice' } })
+  })
+  it('jsonPayRoute turns an HTML 503 into JSON 500 and keeps cookies', async () => {
+    const headers = new Headers({ 'Content-Type': 'text/html' })
+    headers.append('Set-Cookie', 'pay=chk1')
+    const res = await jsonPayRoute(async () => new Response('<html>Actualizando</html>', { status: 503, headers }), 'pay')
+    expect(res.status).toBe(500)
+    expect(res.headers.get('content-type')).toBe('application/json')
+    expect(res.headers.get('Set-Cookie')).toBe('pay=chk1')
+    expect(await res.json()).toMatchObject({ error: { retryable: true, kind: 'transient' } })
+  })
+  it('jsonPayRoute leaves a successful JSON answer untouched', async () => {
+    const ok = new Response('{"payment":{"status":"paid"}}', { status: 200, headers: { 'Content-Type': 'application/json' } })
+    expect(await jsonPayRoute(async () => ok, 'pay')).toBe(ok)
   })
 })

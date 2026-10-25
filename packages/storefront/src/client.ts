@@ -263,6 +263,11 @@ async function readError(res: Response, url: string): Promise<StorefrontError> {
     message: e?.message ?? `Storefront API responded ${res.status}${res.statusText ? ' ' + res.statusText : ''}`,
     ...(e?.field ? { field: e.field } : {}),
     ...(e?.details !== undefined ? { details: e.details } : {}),
+    ...(typeof e?.retryable === 'boolean' ? { retryable: e.retryable } : {}),
+    ...(typeof e?.retry_after === 'number' && e.retry_after > 0 ? { retryAfter: e.retry_after } : {}),
+    ...(typeof e?.checkout_id === 'string' && e.checkout_id ? { checkoutId: e.checkout_id } : {}),
+    ...(e?.cost !== undefined ? { cost: e.cost } : {}),
+    ...(typeof e?.message_en === 'string' && e.message_en ? { messageEn: e.message_en } : {}),
     url,
   })
 }

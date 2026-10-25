@@ -263,6 +263,9 @@ const result = await sf.checkouts.pay(checkout.checkout.id, { method: 'card', pr
   { idempotencyKey: paymentIdempotencyKey(checkout.checkout.id, attemptId) })   // idempotencyKey is REQUIRED (throws before calling)
 const outcome = paymentOutcome(result, 'es-MX')                   // approved | in_review | voucher | challenge | redirect | rejected | expired | cancelled
 paymentErrorView(error)                                           // network (retry same attempt) | price_mismatch | payment_in_progress | expired | too_many_attempts
+classifyPaymentError(error)                                       // { kind, retryable } WITHOUT texts; same rules in the server and the browser
+// kinds: transient | in_progress | rate_limited | merchant_config | provider_declined | stale_checkout | expired | price_mismatch | store_closed | validation | other
+// honours OPS `retryable:false` and the stable codes payment_provider_rejected / payment_provider_misconfigured / unavailable / invalid_state
 ```
 
 - `declineMessage(code, locale)` / `paymentMessages(locale, overrides)`: actionable es/en texts; unknown codes become `declined`.
@@ -442,6 +445,8 @@ connectStore().keepFresh()                // heartbeat; rotates (POST /api/conne
 `token` also accepts any `() => string`, called on every request. `diagnose` logs, at most once, which scopes are
 missing and where to repair them (`OPS → Conexiones y API → <conexión> → Reparar permisos`), showing `sk_…a91f` and never
 the key. Repairing permissions does not change the key.
+
+`StorefrontError` also keeps what OPS sends in `error.*`: `retryable`, `retryAfter`, `checkoutId`, `cost` (of a `price_mismatch`) and `messageEn`.
 
 Errors: a `403 insufficient_scope` is a `StorefrontError` with `code: 'insufficient_scope'`, `status: 403` and
 `requiredScopes: ['customer:write']`. `customer.capabilities()` reports `password: false`, `unavailable_reason:
