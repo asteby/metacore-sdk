@@ -156,6 +156,7 @@ import { useFlipAnimation } from './use-flip-animation'
 import { PortalDragOverlay } from './portal-drag-overlay'
 import { objectLabel } from './dynamic-relation-helpers'
 import { useMetadataCache } from './metadata-cache'
+import { cacheScope } from './cache-scope'
 import { useRecordMutationTick } from './use-record-mutation-tick'
 import { useOptionsResolver } from './use-options-resolver'
 import { ActivityValueRenderer } from './activity-value-renderer'
@@ -1123,6 +1124,7 @@ function DynamicKanbanBoard({
         } else {
             setLoading(true)
         }
+        const askedScope = cacheScope()
         api
             .get(`/metadata/table/${model}`)
             .then((res) => {
@@ -1130,7 +1132,7 @@ function DynamicKanbanBoard({
                 const body = res.data as ApiResponse<TableMetadata>
                 if (body.success) {
                     setMetadata(body.data)
-                    cacheMetadata(model, body.data)
+                    cacheMetadata(model, body.data, { scope: askedScope })
                 }
             })
             .catch((err) => {
@@ -1931,11 +1933,12 @@ function DynamicKanbanBoard({
         setLaneOrderOverride(null)
         try {
             await stageLayout.reset()
+            const askedScope = cacheScope()
             const res = await api.get(`/metadata/table/${model}`)
             const body = res.data as ApiResponse<TableMetadata>
             if (body.success) {
                 setMetadata(body.data)
-                cacheMetadata(model, body.data)
+                cacheMetadata(model, body.data, { scope: askedScope })
             }
         } catch {
             setLaneOrderOverride(prev)
@@ -2460,11 +2463,12 @@ function DynamicKanbanBoard({
                     // The override changes the served label/color/filters — refetch
                     // metadata so the board repaints, and reload the cards.
                     try {
+                        const askedScope = cacheScope()
                         const res = await api.get(`/metadata/table/${model}`)
                         const body = res.data as ApiResponse<TableMetadata>
                         if (body.success) {
                             setMetadata(body.data)
-                            cacheMetadata(model, body.data)
+                            cacheMetadata(model, body.data, { scope: askedScope })
                         }
                     } catch {
                         /* keep the current metadata on a refetch miss */
@@ -2474,11 +2478,12 @@ function DynamicKanbanBoard({
                 onResetOverride={async (stageKey) => {
                     await stageOverrides.reset(stageKey)
                     try {
+                        const askedScope = cacheScope()
                         const res = await api.get(`/metadata/table/${model}`)
                         const body = res.data as ApiResponse<TableMetadata>
                         if (body.success) {
                             setMetadata(body.data)
-                            cacheMetadata(model, body.data)
+                            cacheMetadata(model, body.data, { scope: askedScope })
                         }
                     } catch {
                         /* keep the current metadata on a refetch miss */

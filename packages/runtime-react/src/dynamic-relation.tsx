@@ -43,6 +43,7 @@ import {
 import { Plus, Trash2, Pencil, Search } from 'lucide-react'
 import { useApi } from './api-context'
 import { useMetadataCache } from './metadata-cache'
+import { cacheScope } from './cache-scope'
 import { OptionsContext } from './options-context'
 import { DynamicForm } from './dynamic-form'
 import { useImageUrl } from './image-url-context'
@@ -338,6 +339,7 @@ function OneToManyRelation({
                 per_page: REL_PAGE_SIZE,
             }
             if (debouncedSearch) params.search = debouncedSearch
+            const askedScope = cacheScope()
             const [metaRes, dataRes] = await Promise.all([
                 metadataRef.current ? Promise.resolve(null) : api.get(`/metadata/table/${model}`),
                 api.get(dataEndpoint, { params }),
@@ -345,7 +347,7 @@ function OneToManyRelation({
             if (metaRes && (metaRes as any).data?.success) {
                 const fresh = (metaRes as { data: ApiResponse<TableMetadata> }).data.data
                 setMetadata(fresh)
-                cacheMetadata(model, fresh)
+                cacheMetadata(model, fresh, { scope: askedScope })
             }
             const list = (dataRes as { data: ApiResponse<any[]> }).data
             setFetchErrorStatus(null)
@@ -742,6 +744,7 @@ function ManyToManyRelation({
         setLoading(true)
         try {
             const params = buildRelationFilterParams(foreignKey, parentId, filters)
+            const askedScope = cacheScope()
             const tasks: Promise<unknown>[] = [
                 api.get(pivotPath, { params }),
             ]
@@ -759,7 +762,7 @@ function ManyToManyRelation({
                 const metaRes = results[cursor++] as { data: ApiResponse<TableMetadata> }
                 if (metaRes.data?.success) {
                     setTargetMeta(metaRes.data.data)
-                    cacheMetadata(references, metaRes.data.data)
+                    cacheMetadata(references, metaRes.data.data, { scope: askedScope })
                 }
             }
             if (!useResolver) {

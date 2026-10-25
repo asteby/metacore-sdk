@@ -146,7 +146,9 @@ export function useResolveOptionIds(args: UseResolveOptionIdsArgs): UseResolveOp
             queries: (active ? list : []).map((id) => ({
                 queryKey: [QUERY_ROOT, scope, url, effectiveField, id],
                 queryFn: () => enqueue(api, scope, url, effectiveField, id),
-                staleTime: OPTION_IDS_TTL_MS,
+                // Unknown identity: nothing may be reused from a previous account.
+                staleTime: scope ? OPTION_IDS_TTL_MS : 0,
+                ...(scope ? {} : { gcTime: 0 }),
                 retry: false,
                 refetchOnWindowFocus: false,
             })),

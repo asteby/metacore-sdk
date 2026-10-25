@@ -474,6 +474,8 @@ export {
     syncCacheScope,
     onCacheScopeChange,
     setCacheScopeLanguageProvider,
+    setCacheScopeProvider,
+    type CacheScopeParts,
 } from './cache-scope'
 export {
     RealtimeProvider,

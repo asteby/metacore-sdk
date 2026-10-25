@@ -54,6 +54,19 @@ export function defaultAddonKeyMatcher(cacheKey: string, addonKey: string): bool
     )
 }
 
+export interface SetMetadataOptions {
+    /** Scope captured when the request was made (null = it was unknown: discard). */
+    scope?: string | null
+}
+
+/** Scope to write under, or null when the answer must be dropped. */
+function writeScope(opts?: SetMetadataOptions): string | null {
+    const now = cacheScope()
+    if (!now) return null
+    if (opts && opts.scope !== undefined && opts.scope !== now) return null
+    return now
+}
+
 interface MetadataCacheState {
     cache: Record<string, TableMetadata>
     modalCache: Record<string, TableMetadata>
@@ -63,8 +76,14 @@ interface MetadataCacheState {
     scope: string
     getMetadata: (key: string) => TableMetadata | undefined
     getModalMetadata: (key: string) => TableMetadata | undefined
-    setMetadata: (key: string, metadata: TableMetadata) => void
-    setModalMetadata: (key: string, metadata: TableMetadata) => void
+    /**
+     * `opts.scope` is the `cacheScope()` captured when the request was ASKED.
+     * If the identity moved while it travelled, the answer is dropped instead
+     * of being stored under the new account. Without it the scope is read at
+     * write time (only safe for synchronous writes).
+     */
+    setMetadata: (key: string, metadata: TableMetadata, opts?: SetMetadataOptions) => void
+    setModalMetadata: (key: string, metadata: TableMetadata, opts?: SetMetadataOptions) => void
     hasMetadata: (key: string) => boolean
     hasModalMetadata: (key: string) => boolean
     prefetchAll: (api: MetadataApiClient) => Promise<void>
@@ -102,8 +121,8 @@ export const useMetadataCache = create<MetadataCacheState>()(
             getMetadata: (key: string) => (inScope(get()) ? get().cache[key] : undefined),
             getModalMetadata: (key: string) => (inScope(get()) ? get().modalCache[key] : undefined),
 
-            setMetadata: (key: string, metadata: TableMetadata) => {
-                const scope = cacheScope()
+            setMetadata: (key: string, metadata: TableMetadata, opts?: SetMetadataOptions) => {
+                const scope = writeScope(opts)
                 if (!scope) return
                 set((state) => ({
                     ...(state.scope === scope ? {} : emptyFor(scope)),
@@ -111,8 +130,8 @@ export const useMetadataCache = create<MetadataCacheState>()(
                 }))
             },
 
-            setModalMetadata: (key: string, metadata: TableMetadata) => {
-                const scope = cacheScope()
+            setModalMetadata: (key: string, metadata: TableMetadata, opts?: SetMetadataOptions) => {
+                const scope = writeScope(opts)
                 if (!scope) return
                 set((state) => ({
                     ...(state.scope === scope ? {} : emptyFor(scope)),

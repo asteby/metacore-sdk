@@ -66,6 +66,7 @@ import { Inbox, Download, Upload, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Progress } from './dialogs/_primitives'
 import { useMetadataCache } from './metadata-cache'
+import { cacheScope, onCacheScopeChange } from './cache-scope'
 import { useRecordMutationTick } from './use-record-mutation-tick'
 import { useApi, useCurrentBranch } from './api-context'
 import { useReasonPrompt } from './reason-prompt'
@@ -114,20 +115,41 @@ import {
 const TBL_DATA_CACHE_PREFIX = 'mc:tbl:data:v1'
 interface TableDataCacheEntry { rows: any[]; rowCount: number; ts: number }
 
+// The key carries the org:user:lang scope, and the whole prefix is wiped when the
+// scope changes (logout+login in the same tab). Unknown scope = no cache.
 function tableDataCacheKey(
     model: string | undefined,
     endpoint: string | undefined,
     branchId: string | number | null | undefined,
     search: string,
 ): string {
+    const scope = cacheScope()
+    if (!scope) return ''
     const p = new URLSearchParams(search)
     const parts: string[] = []
     p.forEach((v, k) => parts.push(`${k}=${v}`))
     parts.sort()
-    return `${TBL_DATA_CACHE_PREFIX}|${model || ''}|${endpoint || ''}|${branchId || ''}|${parts.join('&')}`
+    return `${TBL_DATA_CACHE_PREFIX}|${scope}|${model || ''}|${endpoint || ''}|${branchId || ''}|${parts.join('&')}`
 }
 
+/** Drops every persisted first-page row set (all scopes). */
+export function clearTableDataCache(): void {
+    try {
+        const doomed: string[] = []
+        for (let i = 0; i < sessionStorage.length; i++) {
+            const k = sessionStorage.key(i)
+            if (k && k.startsWith(TBL_DATA_CACHE_PREFIX)) doomed.push(k)
+        }
+        for (const k of doomed) sessionStorage.removeItem(k)
+    } catch {
+        /* storage unavailable */
+    }
+}
+
+onCacheScopeChange(() => clearTableDataCache())
+
 function readTableDataCache(key: string): TableDataCacheEntry | null {
+    if (!key) return null
     try {
         const raw = sessionStorage.getItem(key)
         if (!raw) return null
@@ -139,6 +161,7 @@ function readTableDataCache(key: string): TableDataCacheEntry | null {
 }
 
 function writeTableDataCache(key: string, rows: any[], rowCount: number): void {
+    if (!key) return
     try {
         sessionStorage.setItem(
             key,
@@ -818,13 +841,14 @@ export function DynamicTable({
                 setLoading(true)
             }
             let meta: TableMetadata | null = cached || null
+            const askedScope = cacheScope()
             try {
                 const res = await api.get(`/metadata/table/${model}`) as { data: ApiResponse<TableMetadata> }
                 if (res.data.success) {
                     const fresh = res.data.data
                     meta = fresh
                     setMetadata(fresh)
-                    cacheMetadata(model, fresh)
+                    cacheMetadata(model, fresh, { scope: askedScope })
                     defaultPerPage.current = fresh.defaultPerPage || 10
                     if (!urlHadPerPage.current && storedPageSizeRef.current == null) setPagination((prev: PaginationState) => ({ ...prev, pageSize: fresh.defaultPerPage || 10 }))
                 }
@@ -1017,6 +1041,7 @@ export function DynamicTable({
                 ...buildFilterParams(),
             }
             if (relationInclude) params.include = relationInclude
+            const askedScope = cacheScope()
             const res = await api.get(endpoint || `/data/${model}`, { params }) as { data: ApiResponse<any[]> }
             setForbidden(false)
             setLoadError(!res.data.success)
@@ -1026,7 +1051,7 @@ export function DynamicTable({
                 if (res.data.meta) setRowCount(res.data.meta.total)
                 // Cache the first page for an instant reload paint (see the cache
                 // helpers). Keyed off the live URL so it matches the next mount.
-                if (enableUrlSync && pagination.pageIndex === 0) {
+                if (enableUrlSync && pagination.pageIndex === 0 && cacheScope() === askedScope) {
                     writeTableDataCache(
                         tableDataCacheKey(model, endpoint, currentBranch?.id, window.location.search),
                         rows,
@@ -1089,6 +1114,7 @@ export function DynamicTable({
                     ...buildFilterParams(),
                 }
                 if (relationInclude) params.include = relationInclude
+                const askedScope = cacheScope()
                 const res = (await api.get(endpoint || `/data/${model}`, {
                     params,
                 })) as { data: ApiResponse<any[]> }
@@ -1099,7 +1125,7 @@ export function DynamicTable({
                     setData((prev) => (append ? dedupeById(prev, rows) : rows))
                     if (res.data.meta) setRowCount(res.data.meta.total)
                     // Cache the first (replace) page for an instant reload paint.
-                    if (!append && enableUrlSync) {
+                    if (!append && enableUrlSync && cacheScope() === askedScope) {
                         writeTableDataCache(
                             tableDataCacheKey(model, endpoint, currentBranch?.id, window.location.search),
                             rows,

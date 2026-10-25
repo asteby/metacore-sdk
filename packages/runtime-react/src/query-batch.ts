@@ -337,6 +337,13 @@ async function flushQueryBatch() {
             throw new Error('batch unavailable')
         }
         for (const waiter of batch) {
+            // First of all: the identity may have changed while the request
+            // travelled. Neither the answer (rows or not_modified) nor the
+            // caches of the previous identity may reach this reader.
+            if (cacheScope() !== scope) {
+                waiter.reject(new Error('batch scope changed'))
+                continue
+            }
             const name = byToken.get(waiter.wire)
             const part = name ? (body.parts[name] as QueryPart | undefined) : undefined
             if (!part) {
@@ -356,12 +363,6 @@ async function flushQueryBatch() {
                 continue
             }
             const merged = mergeCachedRows(waiter.cachedRows, part)
-            // The identity changed while the request was in flight: do not
-            // store (or hand out) an answer for the previous one.
-            if (cacheScope() !== scope) {
-                waiter.reject(new Error('batch scope changed'))
-                continue
-            }
             if (scope && waiter.missingIds && waiter.field) {
                 rememberInRows(waiter.token, waiter.missingIds, part.data)
             }

@@ -72,6 +72,7 @@ import { UploadField } from './upload-field'
 import { isLineItemsField, resolveWidget, resolveDependsValue, getDependsOn, getFieldRef, applyOptionWhen } from './dynamic-form-schema'
 import { FieldGrid, FieldCell, FieldLabel } from './field-grid'
 import { useMetadataCache } from './metadata-cache'
+import { cacheScope } from './cache-scope'
 import {
     ViewValue,
     objectLabel,
@@ -800,6 +801,7 @@ function RecordPreview({ model, record }: { model: string; record: any }) {
     useEffect(() => {
         if (cached || !model) return
         let cancelled = false
+        const askedScope = cacheScope()
         api
             .get(`/metadata/table/${model}`)
             .then((res) => {
@@ -807,7 +809,7 @@ function RecordPreview({ model, record }: { model: string; record: any }) {
                 const meta = (res.data?.data ?? res.data) as TableMetadata
                 if (meta && Array.isArray(meta.columns)) {
                     setFetched(meta)
-                    setMetadata(model, meta)
+                    setMetadata(model, meta, { scope: askedScope })
                 }
             })
             .catch(() => {

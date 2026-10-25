@@ -12,6 +12,7 @@
 // free; legacy callers that still ship `searchEndpoint` keep working.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from './api-context'
+import { cacheScope, onCacheScopeChange } from './cache-scope'
 import { applyOptionFilter, type OptionFilterRule } from './option-filter'
 import { loadQueryPart, optionsBatchToken, optionsModelFromUrl } from './query-batch'
 import type { OptionDisplayData } from './option-display'
@@ -157,6 +158,9 @@ export function invalidateOptionsCache(): void {
 
 const invalidationListeners = new Set<() => void>()
 
+// Options are shaped by who asks (permissions, org): drop them with the scope.
+onCacheScopeChange(() => invalidateOptionsCache())
+
 /** Runs `fn` on every invalidateOptionsCache (id-label lookups drop with it). */
 export function onOptionsCacheInvalidated(fn: () => void): () => void {
     invalidationListeners.add(fn)
@@ -200,18 +204,20 @@ function contextKey(context: Record<string, string> | undefined): string {
         .join('&')
 }
 
-/** Org + branch of the host session: part of every options cache key. */
+/**
+ * `org:user:lang` scope + branch of the host session: part of every options
+ * cache key. Empty when the identity is unknown (callers then skip the cache).
+ */
 export function optionsScope(): string {
-    if (typeof localStorage === 'undefined') return ''
-    let org = ''
+    const scope = cacheScope()
+    if (!scope) return ''
+    let branch = ''
     try {
-        const raw = localStorage.getItem('auth_user')
-        if (raw) org = String((JSON.parse(raw) as { organization_id?: string }).organization_id ?? '')
+        branch = typeof localStorage === 'undefined' ? '' : (localStorage.getItem('active_branch_id') ?? '')
     } catch {
-        org = ''
+        branch = ''
     }
-    const branch = localStorage.getItem('active_branch_id') ?? ''
-    return `${org}|${branch}`
+    return `${scope}|${branch}`
 }
 
 function readOptionsEnvelope(body: any): OptionsPayload {
@@ -285,8 +291,11 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
             return
         }
 
+        const askedScope = optionsScope()
+        // Unknown identity: no cache, no shared in-flight request.
+        const scoped = askedScope !== ''
         const key = optionsRequestKey(
-            optionsScope(),
+            askedScope,
             url,
             effectiveField,
             query ?? '',
@@ -302,7 +311,7 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
         }
         const epoch = optionsEpoch.get(key) ?? 0
         const generation = optionsGeneration
-        const cached = optionsCache.get(key)
+        const cached = scoped ? optionsCache.get(key) : undefined
         if (cached && Date.now() - cached.at < OPTIONS_TTL_MS) {
             setOptions(cached.payload.options)
             setMeta(cached.payload.meta)
@@ -314,7 +323,7 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
         setLoading(true)
         setError(null)
 
-        let pending = optionsInflight.get(key)
+        let pending = scoped ? optionsInflight.get(key) : undefined
         if (!pending) {
             const params: Record<string, string | number> = { field: effectiveField }
             if (query) params.q = query
@@ -337,13 +346,17 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
                             data: part.data,
                             meta: part.meta,
                         })
-                        if ((optionsEpoch.get(key) ?? 0) === epoch && optionsGeneration === generation) {
+                        if (scoped && optionsScope() === askedScope && (optionsEpoch.get(key) ?? 0) === epoch && optionsGeneration === generation) {
                             optionsCache.set(key, { payload, at: Date.now() })
                         }
                         return payload
                     } catch (err) {
                         const msg = err instanceof Error ? err.message : ''
-                        const batchMiss = msg === 'batch unavailable' || msg === 'batch part missing'
+                        const batchMiss =
+                            msg === 'batch unavailable' ||
+                            msg === 'batch part missing' ||
+                            msg === 'batch scope changed' ||
+                            msg === 'batch cache cleared'
                         if (!batchMiss) throw err
                     }
                 }
@@ -353,14 +366,14 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
                     throw new Error(body?.message || 'options resolver: unsuccessful response')
                 }
                 const payload = readOptionsEnvelope(body)
-                if ((optionsEpoch.get(key) ?? 0) === epoch && optionsGeneration === generation) {
+                if (scoped && optionsScope() === askedScope && (optionsEpoch.get(key) ?? 0) === epoch && optionsGeneration === generation) {
                     optionsCache.set(key, { payload, at: Date.now() })
                 }
                 return payload
             })().finally(() => {
                 if (optionsInflight.get(key) === pending) optionsInflight.delete(key)
             })
-            optionsInflight.set(key, pending)
+            if (scoped) optionsInflight.set(key, pending)
         }
 
         let cancelled = false

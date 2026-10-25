@@ -16,6 +16,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useApi } from './api-context'
 import { useMetadataCache } from './metadata-cache'
+import { cacheScope } from './cache-scope'
 import { DynamicTable, type DynamicTableProps } from './dynamic-table'
 import { DynamicKanban, type DynamicKanbanProps } from './dynamic-kanban'
 import type { TableMetadata, ApiResponse } from './types'
@@ -132,6 +133,7 @@ export function DynamicView({
             setMetaState(c)
             setResolved(true)
         }
+        const askedScope = cacheScope()
         api
             .get(`/metadata/table/${model}`)
             .then((res) => {
@@ -141,7 +143,7 @@ export function DynamicView({
                 if (meta) {
                     setViewType(meta.view_type)
                     setMetaState(meta)
-                    setMeta(model, meta)
+                    setMeta(model, meta, { scope: askedScope })
                 }
             })
             .catch(() => {
