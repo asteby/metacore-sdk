@@ -120,3 +120,14 @@ jsdom/happy-dom have no WebGL. In your own tests pass a stub through the loader:
 ```ts
 configureMaps({ loadMaplibre: async () => myStub, supportsWebGL: () => true })
 ```
+
+## ChoroplethLayer
+
+```tsx
+<MapView points={[]}>
+  <ChoroplethLayer loader={() => import('./estados.topo.json')} values={{ JAL: 120, CMX: 340 }} keyProperty="code" labelProperty="name" onRegions={setState} />
+</MapView>
+<ChoroplethList regions={state.regions} label="Ventas por estado" noData="Sin datos" />
+```
+
+The geometry (GeoJSON or TopoJSON) comes from the host/region through `loader`, which is called once, when the layer mounts. The SDK ships no shapes. `ChoroplethList` is the accessible equivalent (every region with its value).

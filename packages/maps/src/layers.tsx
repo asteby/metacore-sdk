@@ -6,6 +6,7 @@ import { removeLayers, useMap } from './context'
 import { ensureStyles, popupNode, readableOn } from './dom'
 import { boundsOf, lineToGeoJSON, pointsToGeoJSON, zonePoints, zonesToGeoJSON } from './geometry'
 import { colorFor, DEFAULT_COLOR, safeColor } from './palette'
+import { buildChoropleth, toRegionCollection, type ChoroplethLoader, type ChoroplethRegion, type ChoroplethStep, type RegionCollection } from './choropleth'
 import type { GeoPoint, MapPointItem, ZoneItem } from './types'
 
 /** Auto-cluster above this many points (DOM markers stay focusable below it). */
@@ -316,4 +317,131 @@ export function Geofence({ zones, fit, opacity = 0.18, onSelect, id = 'mcm-zones
     }, [map, id, zones, styleVersion])
     useFitBounds(React.useMemo(() => (fit ? zonePoints(zones) : []), [fit, zones]), !!fit)
     return null
+}
+
+// --- Choropleth -----------------------------------------------------------
+
+export interface ChoroplethOptions {
+    /** Lazy geometry (GeoJSON or TopoJSON), supplied by the host or region: the SDK ships none. Called once, on mount. */
+    loader: ChoroplethLoader
+    /** Value per region key. */
+    values: Record<string, number>
+    /** Feature property (or `id`) that matches the `values` keys. Default `key`. */
+    keyProperty?: string
+    /** Feature property with the display name. Default `name`. */
+    labelProperty?: string
+    /** TopoJSON object to draw (default: the first). */
+    object?: string
+    /** Number of colour classes (2–9). Default 5. */
+    steps?: number
+    /** Hex base colour of the ramp (default: the palette blue). */
+    color?: string
+}
+
+export interface ChoroplethState {
+    status: 'loading' | 'ready' | 'error'
+    regions: ChoroplethRegion[]
+    steps: ChoroplethStep[]
+    collection: RegionCollection | null
+}
+
+/**
+ * Loads the geometry once (on mount) and joins it with `values`. Usable
+ * outside a map too: it feeds `<ChoroplethList>`, the accessible equivalent.
+ */
+export function useChoropleth({ loader, values, keyProperty, labelProperty, object, steps, color }: ChoroplethOptions): ChoroplethState {
+    const [geo, setGeo] = React.useState<RegionCollection | null>(null)
+    const [failed, setFailed] = React.useState(false)
+    const loaderRef = React.useRef(loader)
+    loaderRef.current = loader
+    React.useEffect(() => {
+        let alive = true
+        loaderRef
+            .current()
+            .then((g) => alive && setGeo(toRegionCollection(g, object)))
+            .catch(() => alive && setFailed(true))
+        return () => {
+            alive = false
+        }
+    }, [object])
+    return React.useMemo(() => {
+        if (!geo) return { status: failed ? 'error' : 'loading', regions: [], steps: [], collection: null }
+        return { status: 'ready', ...buildChoropleth(geo, values, { keyProperty, labelProperty, steps, color }) }
+    }, [geo, failed, values, keyProperty, labelProperty, steps, color])
+}
+
+export interface ChoroplethLayerProps extends ChoroplethOptions {
+    opacity?: number
+    /** Receives the joined regions (label + value) to feed <ChoroplethList>. */
+    onRegions?: (state: ChoroplethState) => void
+    onSelect?: (region: ChoroplethRegion) => void
+    id?: string
+}
+
+/** Regions shaded by value. The geometry is fetched when this mounts, never before. */
+export function ChoroplethLayer({ opacity = 0.75, onRegions, onSelect, id = 'mcm-choropleth', ...opts }: ChoroplethLayerProps): null {
+    const { map, ml, styleVersion } = useMap()
+    const state = useChoropleth(opts)
+    const latest = React.useRef({ state, onSelect, onRegions })
+    latest.current = { state, onSelect, onRegions }
+    React.useEffect(() => {
+        latest.current.onRegions?.(state)
+    }, [state])
+    const data = state.collection
+    React.useEffect(() => {
+        if (!data) return
+        map.addSource(id, { type: 'geojson', data: latest.current.state.collection as never })
+        map.addLayer({ id: `${id}-fill`, type: 'fill', source: id, paint: { 'fill-color': ['get', 'color'], 'fill-opacity': opacity } })
+        map.addLayer({ id: `${id}-line`, type: 'line', source: id, paint: { 'line-color': '#FFFFFF', 'line-width': 1 } })
+        const onClick = (e: ML.MapLayerMouseEvent) => {
+            const key = e.features?.[0]?.properties?.key
+            const r = latest.current.state.regions.find((x) => x.key === key)
+            if (!r) return
+            new ml.Popup().setLngLat(e.lngLat).setDOMContent(popupNode(r.value === undefined ? r.label : `${r.label}: ${r.value}`)).addTo(map)
+            latest.current.onSelect?.(r)
+        }
+        map.on('click', `${id}-fill`, onClick)
+        return () => {
+            map.off('click', `${id}-fill`, onClick)
+            removeLayers(map, [`${id}-fill`, `${id}-line`], id)
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [map, ml, id, opacity, styleVersion, !!data])
+    React.useEffect(() => {
+        if (data) (map.getSource(id) as ML.GeoJSONSource | undefined)?.setData(data as never)
+    }, [map, id, data, styleVersion])
+    return null
+}
+
+export interface ChoroplethListProps {
+    regions: ChoroplethRegion[]
+    /** Accessible name of the list, e.g. "Ventas por estado". */
+    label: string
+    /** Text for regions without a value. */
+    noData: string
+    formatValue?: (v: number) => string
+    /** Sort by value, highest first (default: the geometry order). */
+    sortByValue?: boolean
+    id?: string
+}
+
+/** Accessible equivalent of the choropleth: every region with its value written out (colour is never the only channel). */
+export function ChoroplethList({ regions, label, noData, formatValue = String, sortByValue, id }: ChoroplethListProps): React.ReactElement {
+    const rows = sortByValue ? [...regions].sort((a, b) => (b.value ?? -Infinity) - (a.value ?? -Infinity)) : regions
+    return (
+        <table id={id} data-testid="choropleth-list" style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <caption style={{ textAlign: 'left', fontWeight: 600, padding: '4px 0' }}>{label}</caption>
+            <tbody>
+                {rows.map((r) => (
+                    <tr key={r.key} style={{ borderBottom: '1px solid rgba(128,128,128,.25)' }}>
+                        <th scope="row" style={{ textAlign: 'left', fontWeight: 400, padding: '6px 0' }}>
+                            <span aria-hidden style={{ display: 'inline-block', width: 10, height: 10, marginRight: 8, background: r.color, border: '1px solid rgba(128,128,128,.5)' }} />
+                            {r.label}
+                        </th>
+                        <td style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{r.value === undefined ? noData : formatValue(r.value)}</td>
+                    </tr>
+                ))}
+            </tbody>
+        </table>
+    )
 }
