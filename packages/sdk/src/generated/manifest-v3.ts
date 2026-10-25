@@ -735,27 +735,27 @@ export const MaxSetupFormSettings = 64;
 /**
  * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
  */
-export const MinSetupPollEvery = any /* time.Second */;
+export const MinSetupPollEvery = 1000 /* time.Second en ms */;
 /**
  * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
  */
-export const MaxSetupPollEvery = 24 * any /* time.Hour */;
+export const MaxSetupPollEvery = 24 * 3600000 /* time.Hour en ms */;
 /**
  * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
  */
-export const MaxSetupTimeout = 5 * any /* time.Minute */;
+export const MaxSetupTimeout = 5 * 60000 /* time.Minute en ms */;
 /**
  * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
  */
-export const MaxSetupGiveUpAfter = 30 * 24 * any /* time.Hour */;
+export const MaxSetupGiveUpAfter = 30 * 24 * 3600000 /* time.Hour en ms */;
 /**
  * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
  */
-export const MinHealthEvery = 10 * any /* time.Second */;
+export const MinHealthEvery = 10 * 1000 /* time.Second en ms */;
 /**
  * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
  */
-export const MaxHealthEvery = 24 * any /* time.Hour */;
+export const MaxHealthEvery = 24 * 3600000 /* time.Hour en ms */;
 /**
  * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
  */
@@ -767,15 +767,15 @@ export const DefaultSetupPollFact = 2.0;
 /**
  * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
  */
-export const DefaultSetupTimeout = 30 * any /* time.Second */;
+export const DefaultSetupTimeout = 30 * 1000 /* time.Second en ms */;
 /**
  * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
  */
-export const DefaultHealthEvery = 5 * any /* time.Minute */;
+export const DefaultHealthEvery = 5 * 60000 /* time.Minute en ms */;
 /**
  * SetupLimits bound a flow so a manifest cannot build an unrenderable wizard.
  */
-export const DefaultSetupGiveUpAft = 24 * any /* time.Hour */;
+export const DefaultSetupGiveUpAft = 24 * 3600000 /* time.Hour en ms */;
 /**
  * SetupFlow is one guided configuration flow of an addon.
  */

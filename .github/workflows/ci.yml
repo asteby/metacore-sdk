@@ -39,7 +39,9 @@ jobs:
           go-version-file: go.mod
           cache: true
       - name: Regenerar tipos TS desde el kernel
-        run: go run github.com/gzuidhof/tygo@v0.2.17 generate
+        run: |
+          go run github.com/gzuidhof/tygo@v0.2.17 generate
+          node scripts/codegen-post.mjs
       - name: Fallar si hay diff (corre `pnpm codegen` y commitea)
         run: |
           git status --short packages/sdk/src/generated
