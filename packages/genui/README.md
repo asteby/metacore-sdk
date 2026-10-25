@@ -20,3 +20,25 @@ registerAgentResultRenderer('ui', createGenerativeUIResult({
   },
 }))
 ```
+
+## Roadmap: `genui/v2`, the single declarative UI layer
+
+See [ADR 0001](../../docs/adr/0001-genui-ui-declarativa-universal.md)
+(Spanish). Summary:
+
+- genui becomes the only runtime declarative UI contract. Its blocks are
+  facades over existing components (`DynamicForm`, `DynamicTable`/`DynamicView`,
+  `DetailPanels`, `@asteby/metacore-charts`, `metacore-ui` dialogs), never
+  re-implementations. Data-bound renderers are registered by
+  `@asteby/metacore-runtime-react` through a `GenUIProvider`; this package
+  keeps the contract, the validator and presentational blocks only.
+- `genui/v2` adds layout (`stack`, `grid`, `tabs`, `section`), `markdown`
+  (safe subset, no HTML), `alert`, `empty`, `list`, `stats`, `form`, `wizard`,
+  `settings`, `view`, `model_view`, `media`, `slot` and addon `ext` blocks;
+  `$ref` bindings to declared read-only query-batch sources (no eval),
+  closed action verbs (`navigate`, `invoke`, `submit`, `open`, `close`, `set`,
+  `refresh`, `emit`) with server-side authorization and confirmation that can
+  only be hardened.
+- `genui/v1` stays valid (`Upgrade` v1 → v2); capabilities are negotiated via
+  `q:caps`. The JSON Schema in the kernel is the single source; Go and TS types
+  are generated and both validators run a shared conformance suite.
