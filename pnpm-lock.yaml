@@ -992,6 +992,9 @@ importers:
 
   packages/runtime-react:
     dependencies:
+      '@asteby/metacore-lib':
+        specifier: workspace:^
+        version: link:../lib
       '@dnd-kit/core':
         specifier: ^6.3.0
         version: 6.3.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -1177,6 +1180,9 @@ importers:
 
   packages/starter-core:
     dependencies:
+      '@asteby/metacore-lib':
+        specifier: workspace:^
+        version: link:../lib
       framer-motion:
         specifier: ^12.38.0
         version: 12.40.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)

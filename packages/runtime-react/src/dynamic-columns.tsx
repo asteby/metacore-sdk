@@ -58,6 +58,7 @@ import { CollectionCell } from './collection-cell'
 import { isNilUuid, normalizeNilUuid } from './nil-uuid'
 import { useOptionsResolver } from './use-options-resolver'
 import { RowActionsMenu } from './row-actions-menu'
+import { currencySpec } from '@asteby/metacore-lib/money'
 import type { TableMetadata, ColumnDefinition } from './types'
 import { isColumnVisibleInTable } from './column-visibility'
 import type {
@@ -138,6 +139,15 @@ export const aggregateOf = (col: ColumnDefinition): string | undefined => {
     return typeof v === 'string' && v !== '' ? v : undefined
 }
 
+/** Minor units of an ISO 4217 code (JPY 0, KWD 3); 2 when the code is not a currency. */
+const minorUnitsOf = (code: string): number => {
+    try {
+        return currencySpec(code).minorUnits
+    } catch {
+        return 2
+    }
+}
+
 /**
  * Formats a footer aggregate total with the SAME rules the body cells use:
  * currency columns render as the org currency (resolveCurrency), number
@@ -155,12 +165,13 @@ export const formatAggregateTotal = (
     if (value === null || value === undefined || isNaN(num)) return '—'
     const renderAs = col.cellStyle ?? col.type
     if (renderAs === 'currency') {
-        const decimals = styleCfg(col, 'decimals') ?? 2
+        const code = resolveCurrency(col, currency)
+        const decimals = styleCfg(col, 'decimals') ?? minorUnitsOf(code)
         return formatNumber(
             num,
             {
                 style: 'currency',
-                currency: resolveCurrency(col, currency),
+                currency: code,
                 minimumFractionDigits: decimals,
                 maximumFractionDigits: decimals,
             },
@@ -1398,7 +1409,6 @@ export function makeDefaultGetDynamicColumns(
                                         <EmptyCell />
                                     </div>
                                 )
-                            const decimals = styleCfg(col, 'decimals') ?? 2
                             // Per-row currency: `display_config.currency_field`
                             // names a sibling column carrying the ISO code of
                             // THIS row's amount (multi-currency tables: a Bs
@@ -1413,6 +1423,10 @@ export function makeDefaultGetDynamicColumns(
                                       ).trim()
                                     : ''
                             const activeCode = rowCode || resolveCurrency(col, currency)
+                            // Decimals come from the currency (JPY 0, KWD 3) unless
+                            // the column pins `styleConfig.decimals`.
+                            const decimals =
+                                styleCfg(col, 'decimals') ?? minorUnitsOf(activeCode)
                             let formatted: string
                             try {
                                 formatted = formatNumber(

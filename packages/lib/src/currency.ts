@@ -3,6 +3,8 @@
  * Pure: no React, no DOM.
  */
 
+import { formatMoney, moneyFromNumber } from './money'
+
 export interface CurrencyInfo {
   code: string
   name: string
@@ -46,10 +48,9 @@ export function formatCurrency(
 ): string {
   if (!Number.isFinite(amount)) return ''
   try {
-    return new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: currencyCode,
-    }).format(amount)
+    // Thin wrapper over the exact-money module: the decimals come from the
+    // currency (JPY 0, KWD 3), never from a hardcoded 2.
+    return formatMoney(moneyFromNumber(amount, currencyCode), { locale })
   } catch {
     return `${currencyCode} ${amount}`
   }

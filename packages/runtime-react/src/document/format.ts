@@ -1,3 +1,4 @@
+import { formatMoney, moneyFromNumber, MoneyValue } from '@asteby/metacore-lib/money'
 import type { DocumentFieldDef } from './types'
 
 export interface FieldFormatOptions {
@@ -24,11 +25,17 @@ export function formatFieldValue(
         case 'money': {
             const n = typeof value === 'number' ? value : parseFloat(String(value))
             if (!Number.isFinite(n)) return '—'
+            const currency = opts.currency || 'USD'
             try {
-                return new Intl.NumberFormat(locale, {
-                    style: 'currency',
-                    currency: opts.currency || 'USD',
-                }).format(n)
+                // Una cadena decimal exacta entra sin pasar por number; los
+                // decimales salen de la moneda (JPY 0, KWD 3).
+                let m: MoneyValue
+                try {
+                    m = MoneyValue.parseRound(String(value).trim(), currency)
+                } catch {
+                    m = moneyFromNumber(n, currency)
+                }
+                return formatMoney(m, { locale })
             } catch {
                 return n.toFixed(2)
             }

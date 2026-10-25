@@ -21,6 +21,8 @@ export type { CurrencyInfo } from './currency'
 export {
   MoneyValue,
   formatMoney,
+  moneyFromNumber,
+  numberToDecimal,
   currencySpec,
   isoCurrencySpec,
   isoCurrencyCodes,
