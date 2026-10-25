@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-genui",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Metacore generative UI - validates and renders the agent's declarative genui/v1 specs (cards, KPIs, tables, links, timelines, charts, confirmation forms) from a closed whitelist, with no HTML or scripts.",
   "license": "Apache-2.0",
   "repository": {
