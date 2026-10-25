@@ -28,6 +28,7 @@ import {
 } from '../ui/dropdown-menu'
 import { api } from '@/lib/api'
 import { useMetadataCache } from '@/stores/metadata-cache'
+import { cacheScope } from '@asteby/metacore-runtime-react'
 
 // Track which models have already had prefetch requests fired
 const prefetchedModels = new Set<string>()
@@ -56,8 +57,10 @@ function prefetchModel(url: string) {
 
   // Prefetch metadata if not already in cache
   if (!hasMetadata(model)) {
+    // Scope captured when asking: if the account changes in flight the answer is dropped.
+    const scope = cacheScope()
     api.get(`/metadata/table/${model}`).then((res) => {
-      setMetadata(model, res.data)
+      setMetadata(model, res.data, { scope })
     }).catch(() => {})
   }
 

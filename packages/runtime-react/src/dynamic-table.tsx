@@ -66,7 +66,7 @@ import { Inbox, Download, Upload, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Progress } from './dialogs/_primitives'
 import { useMetadataCache } from './metadata-cache'
-import { cacheScope, onCacheScopeChange } from './cache-scope'
+import { cacheScope, onCacheScopeChange, peekCacheScope } from './cache-scope'
 import { useRecordMutationTick } from './use-record-mutation-tick'
 import { useApi, useCurrentBranch } from './api-context'
 import { useReasonPrompt } from './reason-prompt'
@@ -122,8 +122,10 @@ function tableDataCacheKey(
     endpoint: string | undefined,
     branchId: string | number | null | undefined,
     search: string,
+    // Render passes `peekCacheScope()` (no listeners fired mid-render); effects
+    // and handlers use the default, which also notices a scope change.
+    scope: string | null = cacheScope(),
 ): string {
-    const scope = cacheScope()
     if (!scope) return ''
     const p = new URLSearchParams(search)
     const parts: string[] = []
@@ -453,14 +455,17 @@ export function DynamicTable({
     const [metadata, setMetadata] = useState<TableMetadata | null>(cachedMeta || null)
     // Read the row-data cache ONCE at mount (before the fetch effects run) so the
     // first paint uses the previous rows for this exact view instead of skeletons.
-    const bootDataKey = tableDataCacheKey(
-        model,
-        endpoint,
-        currentBranch?.id,
-        typeof window !== 'undefined' ? window.location.search : '',
-    )
     const bootDataRef = useRef<TableDataCacheEntry | null | undefined>(undefined)
     if (bootDataRef.current === undefined) {
+        // peekCacheScope: cacheScope() would notify its listeners (zustand `set`)
+        // in the middle of a render ("Cannot update a component while rendering").
+        const bootDataKey = tableDataCacheKey(
+            model,
+            endpoint,
+            currentBranch?.id,
+            typeof window !== 'undefined' ? window.location.search : '',
+            peekCacheScope(),
+        )
         bootDataRef.current = enableUrlSync ? readTableDataCache(bootDataKey) : null
     }
     const bootData = bootDataRef.current

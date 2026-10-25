@@ -38,12 +38,28 @@ export function setCacheScopeLanguageProvider(fn: (() => string | null | undefin
  * missing `lang` falls back to the language sources above. Returning `null`
  * (no session) makes the scope unknown, so nothing is cached. Pass `null` to
  * go back to reading `localStorage`.
+ *
+ * The provider MUST change with every user AND every organization (a switch of
+ * either has to yield different `org`/`user`). A scope that stays the same
+ * across accounts defeats the protection: caches would be served to the next
+ * account as if nothing changed.
  */
 export function setCacheScopeProvider(fn: (() => CacheScopeParts | null | undefined) | null): void {
     scopeProvider = fn
 }
 
+// One-entry memo: peekCacheScope runs on every render (inScope) and the token
+// rarely changes, so decode it once per distinct text.
+let lastDecoded: { token: string; claims: Record<string, unknown> | null } | null = null
+
 function decodeJwtClaims(token: string): Record<string, unknown> | null {
+    if (lastDecoded && lastDecoded.token === token) return lastDecoded.claims
+    const claims = decodeJwtClaimsUncached(token)
+    lastDecoded = { token, claims }
+    return claims
+}
+
+function decodeJwtClaimsUncached(token: string): Record<string, unknown> | null {
     const parts = token.split('.')
     if (parts.length !== 3 || !parts[1]) return null
     try {

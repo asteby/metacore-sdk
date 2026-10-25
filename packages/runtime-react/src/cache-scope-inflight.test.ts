@@ -298,3 +298,71 @@ describe('row cache of the table (sessionStorage)', () => {
         sessionStorage.removeItem('unrelated')
     })
 })
+
+describe('JWT decoding memo', () => {
+    it('decodes the stored token once per distinct text, not on every peek', () => {
+        localStorage.setItem('auth_token', jwt({ sub: 'u1', org: 'o1', n: 'memo-a' }))
+        const atob = vi.spyOn(globalThis, 'atob')
+        try {
+            expect(peekCacheScope()).toBe('o1:u1:es')
+            const first = atob.mock.calls.length
+            expect(first).toBeGreaterThan(0)
+            for (let i = 0; i < 5; i++) peekCacheScope()
+            expect(atob.mock.calls.length).toBe(first)
+            // A different token is decoded again (and still checked against auth_user).
+            localStorage.setItem('auth_token', jwt({ sub: 'u2', org: 'o1', n: 'memo-b' }))
+            expect(peekCacheScope()).toBeNull()
+            expect(atob.mock.calls.length).toBeGreaterThan(first)
+        } finally {
+            atob.mockRestore()
+        }
+    })
+})
+
+describe('useOptionsResolver without identity (scope null)', () => {
+    it('neither reads the cache, shares the in-flight request nor writes', async () => {
+        const mk = () => ({
+            get: vi.fn(async () => ({
+                data: { success: true, data: [{ value: 'a', label: 'A' }], meta: { type: 'dynamic', count: 1 } },
+            })),
+            post: vi.fn(async () => {
+                throw new Error('batch unavailable')
+            }),
+            put: vi.fn(),
+            delete: vi.fn(),
+        })
+        const wrap = (api: ReturnType<typeof mk>) => ({ children }: { children: ReactNode }) =>
+            createElement(ApiProvider, { client: api as never, batch: false, children })
+        const args = { modelKey: 'Customer', fieldKey: 'id', query: 'zz-noident' }
+
+        // 1) With identity, warm the cache for this exact lookup.
+        const warm = mk()
+        const h0 = renderHook(() => useOptionsResolver(args), { wrapper: wrap(warm) })
+        await waitFor(() => expect(h0.result.current.options).toHaveLength(1))
+        h0.unmount()
+        expect(warm.get).toHaveBeenCalledTimes(1)
+
+        // 2) Identity lost: the warm entry must not be served.
+        localStorage.removeItem('auth_user')
+        expect(cacheScope()).toBeNull()
+        const api = mk()
+        const h1 = renderHook(() => useOptionsResolver(args), { wrapper: wrap(api) })
+        const h2 = renderHook(() => useOptionsResolver(args), { wrapper: wrap(api) })
+        await waitFor(() => expect(h1.result.current.options).toHaveLength(1))
+        await waitFor(() => expect(h2.result.current.options).toHaveLength(1))
+        // no cache read + no shared in-flight: each hook asked on its own
+        expect(api.get).toHaveBeenCalledTimes(2)
+        h1.unmount()
+        h2.unmount()
+
+        // 3) Nothing was written: once logged in again, the lookup goes to the network.
+        login('u1', 'o1')
+        cacheScope()
+        const after = mk()
+        const h3 = renderHook(() => useOptionsResolver({ ...args, query: 'zz-noident' }), { wrapper: wrap(after) })
+        await waitFor(() => expect(h3.result.current.options).toHaveLength(1))
+        // the warm entry was dropped by the scope change, and the no-identity runs wrote nothing
+        expect(after.get).toHaveBeenCalledTimes(1)
+        h3.unmount()
+    })
+})
