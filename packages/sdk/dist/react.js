@@ -20,7 +20,6 @@ import { jsx as _jsx, Fragment as _Fragment } from "react/jsx-runtime";
  *   <Slot name="invoice.header.right" payload={{ invoiceId }} />
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, } from "react";
-import { onCacheEpochChange, wireCacheEpochPush } from "./cache-epoch.js";
 // The installed-addon catalog (manifests + navigation) drives the host's addon
 // modules (sidebar module items, dynamic routes). It's fetched into state, so a
 // full page reload starts empty and the addon modules pop in only once the two
@@ -157,17 +156,9 @@ export function MetacoreProvider({ client, registry, children, cacheScope }) {
             document.addEventListener("visibilitychange", onFocus);
         }
         const interval = setInterval(revalidate, 5 * 60 * 1000);
-        // The cache epoch moved (an addon was installed / upgraded / enabled /
-        // disabled / uninstalled, possibly by another user, or the server
-        // restarted): the manifests and navigation this window holds are from the
-        // previous world. Revalidate now instead of waiting for the 5-minute tick.
-        const offEpoch = onCacheEpochChange(() => {
-            void revalidate();
-        });
         return () => {
             cancelled = true;
             clearInterval(interval);
-            offEpoch();
             if (typeof document !== "undefined") {
                 document.removeEventListener("visibilitychange", onFocus);
             }
@@ -183,18 +174,6 @@ export function MetacoreProvider({ client, registry, children, cacheScope }) {
         acknowledgeRunningVersion,
     }), [client, registry, manifests, navigation, loading, updatedAddons, acknowledgeRunningVersion]);
     return _jsx(MetacoreCtx.Provider, { value: value, children: children });
-}
-/**
- * Feed the cache epoch from the host's WebSocket client (`CACHE_EPOCH_CHANGED`
- * frame). Mount it once next to <MetacoreProvider>; the provider (and any other
- * `onCacheEpochChange` subscriber) then revalidates the moment the backend
- * flushes its caches, with no request needed.
- *
- *   const ws = useWebSocket()
- *   useCacheEpochPush(ws)
- */
-export function useCacheEpochPush(client) {
-    useEffect(() => wireCacheEpochPush(client), [client]);
 }
 export function useMetacore() {
     const v = useContext(MetacoreCtx);

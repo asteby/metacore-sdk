@@ -1,5 +1,4 @@
 import { type ComponentType } from 'react';
-import type { ModalFooterAction } from './registry.js';
 export interface ActionFieldDef {
     key: string;
     label: string;
@@ -87,11 +86,6 @@ export interface ActionModalProps {
     record: any;
     endpoint?: string;
     onSuccess: () => void;
-    /**
-     * Optional host actions for the modal footer (see `ModalFooterAction`).
-     * Render them in `ResponsiveDialog`'s `footer.extra`; older modals ignore it.
-     */
-    footerExtra?: ModalFooterAction[];
 }
 type ActionComponentEntry = ComponentType<ActionModalProps>;
 /**
