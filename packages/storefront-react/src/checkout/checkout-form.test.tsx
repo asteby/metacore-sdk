@@ -16,11 +16,13 @@ function Form({
   serverFields,
   provinces,
   lockProvinceOnFill,
+  neighborhoodList,
 }: {
   lookup?: (zip: string) => Promise<PostalCodeInfo | null>
   serverFields?: string[]
   provinces?: { name: string }[]
   lockProvinceOnFill?: boolean
+  neighborhoodList?: 'datalist' | 'select'
 }) {
   const ref = useRef<HTMLFormElement>(null)
   const v = useFieldErrors(ref, { serverFields: serverFields ?? null })
@@ -40,6 +42,7 @@ function Form({
           {...(lookup ? { lookupPostalCode: lookup } : {})}
           {...(provinces ? { provinces } : {})}
           {...(lockProvinceOnFill ? { lockProvinceOnFill } : {})}
+          {...(neighborhoodList ? { neighborhoodList } : {})}
         />
       </fieldset>
       <button type="submit">Continuar</button>
@@ -90,6 +93,20 @@ describe('ContactFields + AddressFields', () => {
     expect([...container.querySelectorAll('datalist option')].map((o) => o.getAttribute('value'))).toEqual(['Roma Norte', 'Roma Sur'])
     expect(screen.getByLabelText(/Colonia/).getAttribute('list')).toBeTruthy()
     expect(screen.getByRole('status').textContent).toMatch(/Completamos estado y ciudad/)
+  })
+
+  it("neighborhoodList='select' turns the colonia into a real list when the code has several, and keeps a text field for one", async () => {
+    const many = render(<Form neighborhoodList="select" lookup={async () => ({ province: 'Ciudad de México', city: 'Cuauhtémoc', neighborhoods: ['Roma Norte', 'Roma Sur'] })} />)
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '06700' } })
+    await waitFor(() => expect(many.container.querySelector('select[name="neighborhood"]')).not.toBeNull())
+    const sel = many.container.querySelector('select[name="neighborhood"]') as HTMLSelectElement
+    expect([...sel.options].map((o) => o.value)).toEqual(['', 'Roma Norte', 'Roma Sur'])
+    expect(many.container.querySelector('datalist')).toBeNull()
+    many.unmount()
+    const one = render(<Form neighborhoodList="select" lookup={async () => ({ province: 'Jalisco', city: 'Guadalajara', neighborhoods: ['Centro'] })} />)
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '44100' } })
+    await waitFor(() => expect((one.container.querySelector('[name="neighborhood"]') as HTMLInputElement).value).toBe('Centro'))
+    expect(one.container.querySelector('select[name="neighborhood"]')).toBeNull()
   })
 
   it('lockProvinceOnFill locks a plain state field once the lookup fills it, but never one the buyer typed', async () => {

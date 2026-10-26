@@ -16,6 +16,7 @@ export type ContactFieldKey = 'email' | 'phone' | 'first_name' | 'last_name'
 
 export type AddressFieldsMessages = Record<AddressFieldKey | ContactFieldKey, string> & {
   provincePlaceholder: string
+  neighborhoodPlaceholder: string
   address1Hint: string
   referenceHint: string
   emailHint: string
@@ -36,6 +37,7 @@ const ES: AddressFieldsMessages = {
   address2: 'Número interior o departamento',
   reference: 'Referencias para la entrega',
   provincePlaceholder: 'Elige tu estado',
+  neighborhoodPlaceholder: 'Elige tu colonia',
   address1Hint: 'Por ejemplo: Av. Insurgentes Sur 1234',
   referenceHint: 'Entre qué calles, color de la fachada…',
   emailHint: 'Te enviamos aquí la confirmación y el seguimiento.',
@@ -56,6 +58,7 @@ const EN: AddressFieldsMessages = {
   address2: 'Apartment, suite',
   reference: 'Delivery notes',
   provincePlaceholder: 'Choose your state',
+  neighborhoodPlaceholder: 'Choose your neighborhood',
   address1Hint: 'For example: 1234 Main St',
   referenceHint: 'Cross streets, building color…',
   emailHint: 'We send the confirmation and tracking here.',
@@ -131,6 +134,12 @@ export type AddressFieldsProps = Common & {
    * Never overwrites what the buyer typed.
    */
   lookupPostalCode?: (zip: string) => Promise<PostalCodeInfo | null>
+  /**
+   * How to offer the colonias when the postal code has SEVERAL: `'datalist'` (default, suggestions on a text field) or
+   * `'select'` (a real list; the field becomes a `<select>` of those colonias, unless the buyer already typed one that
+   * is not in the list, which is kept as text). With exactly one colonia it is filled in either mode.
+   */
+  neighborhoodList?: 'datalist' | 'select'
   /** Show the colonia field: `true` (default, optional), `'required'`, or `false`. */
   neighborhood?: boolean | 'required'
   /** Show the delivery references field (default true, optional). */
@@ -194,6 +203,7 @@ export function AddressFields(props: AddressFieldsProps) {
   const listId = useId()
   const [colonias, setColonias] = useState<readonly string[]>([])
   const [filled, setFilled] = useState(false)
+  const [coloniaSelect, setColoniaSelect] = useState(false)
   const lastZip = useRef<string | null>(null)
   const zipRef = useRef<HTMLDivElement>(null)
   const lookupRef = useRef(lookupPostalCode)
@@ -261,6 +271,10 @@ export function AddressFields(props: AddressFieldsProps) {
           const only = info.neighborhoods?.length === 1 ? info.neighborhoods[0] : null
           const c = showNeighborhood ? fill(n('neighborhood'), only) : false
           setColonias(info.neighborhoods ?? [])
+          const list = info.neighborhoods ?? []
+          const nameEl = form?.elements.namedItem(n('neighborhood')) as HTMLInputElement | HTMLSelectElement | null
+          const typed = nameEl && !('length' in nameEl && !(nameEl instanceof HTMLSelectElement)) ? nameEl.value : ''
+          setColoniaSelect(props.neighborhoodList === 'select' && showNeighborhood !== false && list.length > 1 && (!typed || list.includes(typed)))
           setFilled(a || b || c)
         })
       },
@@ -315,7 +329,28 @@ export function AddressFields(props: AddressFieldsProps) {
         <CheckoutField {...common} name={n('province')} label={m.province} autoComplete="address-level1" defaultValue={defaults?.province ?? ''} error={errors[n('province')] ?? null} classNames={field(cx, 'half')} />
       )}
       <CheckoutField {...common} name={n('city')} label={m.city} autoComplete="address-level2" defaultValue={defaults?.city ?? ''} error={errors[n('city')] ?? null} classNames={field(cx, 'half')} />
-      {showNeighborhood ? (
+      {showNeighborhood && coloniaSelect ? (
+        <CheckoutField
+          {...common}
+          as="select"
+          name={n('neighborhood')}
+          label={m.neighborhood}
+          autoComplete="address-level3"
+          optional={showNeighborhood !== 'required'}
+          defaultValue={colonias.includes(defaults?.neighborhood ?? '') ? (defaults?.neighborhood ?? '') : ''}
+          error={errors[n('neighborhood')] ?? null}
+          classNames={field(cx, 'half')}
+        >
+          <option value="" disabled={showNeighborhood === 'required'}>
+            {m.neighborhoodPlaceholder}
+          </option>
+          {colonias.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </CheckoutField>
+      ) : showNeighborhood ? (
         <CheckoutField
           {...common}
           name={n('neighborhood')}
@@ -325,10 +360,10 @@ export function AddressFields(props: AddressFieldsProps) {
           defaultValue={defaults?.neighborhood ?? ''}
           error={errors[n('neighborhood')] ?? null}
           classNames={field(cx, 'half')}
-          {...(colonias.length ? { list: listId } : {})}
+          {...(colonias.length && !coloniaSelect ? { list: listId } : {})}
         />
       ) : null}
-      {colonias.length ? (
+      {colonias.length && !coloniaSelect ? (
         <datalist id={listId}>
           {colonias.map((c) => (
             <option key={c} value={c} />
