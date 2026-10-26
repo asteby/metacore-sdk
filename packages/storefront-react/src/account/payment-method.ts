@@ -42,6 +42,11 @@ const BRANDS: Record<string, string> = { visa: 'Visa', mastercard: 'Mastercard',
 /** A label that is a provider key or a bare English word, not a sentence a person wrote ("Tarjeta Visa terminada en 4242"). */
 const RAW = /^[A-Za-z0-9_.:-]+(?: [A-Za-z0-9_.:-]+)?$/
 
+/** The method family of a payment (`card`, `oxxo`, `spei`...), for the store's own icon or styling; `null` when unknown. */
+export function paymentMethodKey(p: PaymentInfo): PaymentMethodKey | null {
+  return keyOf(p)
+}
+
 function keyOf(p: PaymentInfo): PaymentMethodKey | null {
   const fam = typeof p.family === 'string' ? p.family.toLowerCase() : ''
   const byLabel = (): PaymentMethodKey | null => {

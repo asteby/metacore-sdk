@@ -65,6 +65,12 @@ export function ShipmentCard({ shipment, testMode = 'hide', eventsPreview = 3, r
       <header className={cx.header} data-sf-shipment-header>
         {renderCarrierMark && !test ? <span data-sf-shipment-mark>{renderCarrierMark(shipment)}</span> : null}
         <Heading id={titleId} className={cx.carrier} data-sf-shipment-title>
+          {carrier && !test ? (
+            <span data-sf-shipment-eyebrow>
+              {m['shipment.carrier']}
+              <Hidden>: </Hidden>
+            </span>
+          ) : null}
           {isReturn ? m['shipment.return'] : (carrier ?? m['shipment.title'])}
           {isReturn && carrier ? <> · {carrier}</> : null}
         </Heading>

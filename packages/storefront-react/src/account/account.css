@@ -258,3 +258,11 @@
 [data-sf-order-line] + [data-sf-order-line] {
   border-top: 1px solid var(--sf-account-line, color-mix(in srgb, currentColor 14%, transparent));
 }
+
+/* Paquetería sobre el nombre del envío (el texto lo escribe `shipment.carrier`). */
+[data-sf-shipment-eyebrow] {
+  display: block;
+  font-size: 0.75em;
+  font-weight: 500;
+  color: var(--sf-account-muted, color-mix(in srgb, currentColor 72%, transparent));
+}
