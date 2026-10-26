@@ -9,6 +9,8 @@ export type IdentityDocumentErrorCode =
   | 'no_text'
   /** Encrypted: it needs a password the buyer has not given. */
   | 'password'
+  /** `decodeImageQr`: the file is not an image (or a type the browser cannot decode). */
+  | 'not_image'
 
 /** Why a document could not be read. `code` is stable; `message` is for logs (English) and never holds document text. */
 export class IdentityDocumentError extends Error {

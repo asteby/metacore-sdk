@@ -10,9 +10,9 @@ export type DecodePdfQrOptions = ReadPdfOptions & {
   decode?: (image: ImageData) => string | null | Promise<string | null>
 }
 
-type CanvasLike = { width: number; height: number; getContext(kind: '2d'): unknown }
+export type CanvasLike = { width: number; height: number; getContext(kind: '2d'): unknown }
 
-function makeCanvas(width: number, height: number): CanvasLike | null {
+export function makeCanvas(width: number, height: number): CanvasLike | null {
   const g = globalThis as { OffscreenCanvas?: new (w: number, h: number) => CanvasLike; document?: { createElement(tag: 'canvas'): CanvasLike } }
   if (g.OffscreenCanvas) return new g.OffscreenCanvas(width, height)
   if (g.document) {
@@ -24,23 +24,33 @@ function makeCanvas(width: number, height: number): CanvasLike | null {
   return null
 }
 
-async function decodeImage(image: ImageData, canvas: CanvasLike, custom?: DecodePdfQrOptions['decode']): Promise<string | null> {
-  if (custom) return (await custom(image)) ?? null
-  const Detector = (globalThis as { BarcodeDetector?: new (o: { formats: string[] }) => { detect(i: unknown): Promise<{ rawValue: string }[]> } }).BarcodeDetector
-  if (Detector) {
-    try {
-      const found = await new Detector({ formats: ['qr_code'] }).detect(canvas)
-      if (found[0]?.rawValue) return found[0].rawValue
-    } catch {
-      /* fall through to jsQR */
-    }
+type DetectorCtor = new (o: { formats: string[] }) => { detect(i: unknown): Promise<{ rawValue: string }[]> }
+
+/** The platform's QR detector on an image source (canvas, bitmap, video frame, `ImageData`). `null` when unavailable or nothing found. */
+export async function detectQrNative(source: unknown): Promise<string | null> {
+  const Detector = (globalThis as { BarcodeDetector?: DetectorCtor }).BarcodeDetector
+  if (!Detector) return null
+  try {
+    const found = await new Detector({ formats: ['qr_code'] }).detect(source)
+    return found[0]?.rawValue || null
+  } catch {
+    return null
   }
+}
+
+/** The optional `jsqr` package on raw pixels, loaded on demand. `null` when it is not installed or finds nothing. */
+export async function decodeQrPixels(image: ImageData): Promise<string | null> {
   try {
     const mod = (await import('jsqr')) as unknown as { default: (d: Uint8ClampedArray, w: number, h: number) => { data: string } | null }
     return mod.default(image.data, image.width, image.height)?.data ?? null
   } catch {
     return null
   }
+}
+
+async function decodeImage(image: ImageData, canvas: CanvasLike, custom?: DecodePdfQrOptions['decode']): Promise<string | null> {
+  if (custom) return (await custom(image)) ?? null
+  return (await detectQrNative(canvas)) ?? (await decodeQrPixels(image))
 }
 
 async function scan(page: PdfPageLike, scale: number, custom?: DecodePdfQrOptions['decode']): Promise<string | null> {

@@ -404,6 +404,8 @@ export type InvoiceRequest = {
   invoice_use?: string
   /** Also save the data to the buyer's account (needs a session). */
   save?: boolean
+  /** Saved fiscal profile the data comes from (contract 1.9; needs a session; `404` when it is not the buyer's). */
+  profile_id?: string
   [key: string]: unknown
 }
 
@@ -502,6 +504,8 @@ export type CustomerCapabilities = {
   unavailable_reason?: 'missing_scope' | (string & {})
   /** Scopes the token lacks (e.g. `customer:write`) when `unavailable_reason` is `missing_scope`. */
   missing_scopes?: string[]
+  /** Saved fiscal profiles (contract 1.9). Absent on older servers: the section does not exist. */
+  fiscal_profiles?: { max: number }
 }
 
 /** `GET {gateway}/_token`: what the token in use is and what it can do. Needs no scope. */
@@ -1241,6 +1245,11 @@ export type RegionFiscalEntry = {
   allowed_regimes?: string[]
   /** Folded phrases that identify the entry in a document (`catalog_phrases`); without them the label is used. */
   match_phrases?: string[]
+  /**
+   * Invoice uses only (contract 1.9): the regimes this use is SUGGESTED for. Region data, never a rule: the buyer can
+   * change it and `allowed_regimes` still validates.
+   */
+  suggested_for_regimes?: string[]
 }
 
 /**
@@ -1258,6 +1267,12 @@ export type IdentityDocumentSpec = {
   obtain_url?: string
   /** MIME types the document comes in (the SDK reads PDFs). */
   accept: string[]
+  /**
+   * What can be read from a PHOTO of the document (contract 1.9): `qr_only` (the QR: tax id and document id) or
+   * `full`. Absent or `none`: files only.
+   */
+  image_mode?: 'none' | 'qr_only' | 'full'
+
   max_bytes: number
   max_pages?: number
   /** `rules@1` runs the generic engine on `rules`; `plugin:<id>` runs an extractor from `registerIdentityExtractor`. */
@@ -1285,6 +1300,15 @@ export type RegionFiscalId = {
   invoice_uses: RegionFiscalEntry[]
   /** Documents the buyer can upload; absent on older servers. */
   documents?: IdentityDocumentSpec[]
+  /**
+   * Person type -> pattern its tax ids follow (contract 1.9), so the SDK tells the type from DATA instead of a function
+   * each store injects. Absent: not derived. See `personTypeFromPatterns` (`@asteby/storefront-react/fiscal`).
+   */
+  person_patterns?: Record<string, string>
+  /** Name of the pack's optional check algorithm (a warning at most, never a block). */
+  checksum?: string | null
+  /** The invoice use the organization prefers by default; it wins over `suggested_for_regimes`. */
+  default_invoice_use?: string | null
 }
 
 export type RegionPaymentMethod = {
@@ -1358,6 +1382,25 @@ export type FiscalIdentity = {
 }
 
 export type FiscalIdentityInput = Omit<FiscalIdentity, 'verification' | 'country_code'> & { country_code?: string }
+
+/**
+ * A saved fiscal profile of the buyer (contract 1.9; up to `capabilities.fiscal_profiles.max`, one is the default).
+ * Personal data: show the tax id masked in lists (`maskTaxId`), never log it.
+ */
+export type FiscalProfile = FiscalIdentity & {
+  id: string
+  /** Name the buyer gave it ("Personal", "My company"). */
+  label: string
+  /** Derived by the server from the region's data; `null` when the region defines none. */
+  person_type?: string | null
+  is_default: boolean
+  last_used_at?: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Create or edit a profile. The server derives `person_type` and sets `verification`; the client cannot. */
+export type FiscalProfileInput = Partial<FiscalIdentityInput> & { label?: string; is_default?: boolean }
 
 /** `PATCH /customer`. `fiscal: null` deletes the saved fiscal data (ARCO). */
 export type CustomerUpdateInput = {

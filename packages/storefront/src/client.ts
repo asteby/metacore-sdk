@@ -43,6 +43,8 @@ import type {
   DeliveryInput,
   DeliveryOptions,
   PaymentMethods,
+  FiscalProfile,
+  FiscalProfileInput,
   InvoiceFile,
   InvoiceFileKind,
   InvoiceRequest,
@@ -648,6 +650,22 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
           throw new StorefrontError({ status: 502, code: 'invalid_response', message: 'The invoice file answer is not a file' })
         }
         return { filename: file.filename, content_type: file.content_type, content_base64: file.content_base64 }
+      },
+      /**
+       * Saved fiscal profiles of the buyer (contract 1.9, `capabilities().fiscal_profiles`). Personal data: private,
+       * never cached, never logged. `422` with `field: 'fiscal.<field>'` when the region rejects a value; `409` for a
+       * repeated tax id or past the limit; `404` for a profile that is not the buyer's.
+       */
+      fiscalProfiles: {
+        list: async (options?: RequestOptions): Promise<FiscalProfile[]> =>
+          (await get<{ nodes: FiscalProfile[] }>('/storefront/customer/fiscal-profiles', undefined, { ...options, cache: 'no-store' })).nodes,
+        create: (profile: FiscalProfileInput, options?: WriteOptions) =>
+          write<FiscalProfile>('POST', '/storefront/customer/fiscal-profiles', profile, options),
+        update: (id: string, profile: FiscalProfileInput, options?: WriteOptions) =>
+          write<FiscalProfile>('PATCH', `/storefront/customer/fiscal-profiles/${enc(id)}`, profile, options),
+        /** Physical delete (a profile leaves nothing behind). A saved default passes to another profile. */
+        delete: (id: string, options?: WriteOptions) =>
+          write<void>('DELETE', `/storefront/customer/fiscal-profiles/${enc(id)}`, undefined, options),
       },
       addresses: {
         list: (options?: RequestOptions) => get<{ nodes: Address[] }>('/storefront/customer/addresses', undefined, options),

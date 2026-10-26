@@ -1,0 +1,5 @@
+---
+'@asteby/storefront': minor
+---
+
+Panel de cuenta (contrato Storefront API 1.9, aditivo). Tipos `FiscalProfile` y `FiscalProfileInput`; `RegionFiscalId.person_patterns`, `checksum` y `default_invoice_use`; `RegionFiscalEntry.suggested_for_regimes` (uso de CFDI sugerido, dato del paquete de región); `IdentityDocumentSpec.image_mode` (`none | qr_only | full`); `InvoiceRequest.profile_id`; `CustomerCapabilities.fiscal_profiles`. Cliente: `customer.fiscalProfiles.{list,create,update,delete}` (privado, sin caché). `@asteby/storefront/fiscal-document` suma `decodeImageQr(source)`: lee el QR de una foto, de un fotograma de cámara, de un `ImageBitmap`/canvas o de píxeles, en el dispositivo y en memoria (la imagen no sale, no se guarda y no se lee su EXIF), con límites (`maxBytes` de la región, lado mayor reescalado a 1600 px), `BarcodeDetector` primero y `jsqr` opcional de respaldo, ambos perezosos; error nuevo `not_image`. Con `extractIdentityDocument('', spec, { qr })` el QR llena RFC e id del documento. El mock sirve los perfiles (máx. 10, uno predeterminado, borrado físico, `Customer.fiscal` espejo) y los datos nuevos de región de México.

@@ -17,6 +17,9 @@ export const MOCK_FISCAL_ID_MX: RegionFiscalId = {
   regimes: SEED_MX_REGIMES,
   invoice_uses: SEED_MX_INVOICE_USES,
   documents: [SEED_MX_CSF],
+  // The pack's person-type patterns and check algorithm (region_settings.fiscal_id_person_patterns / _checksum).
+  person_patterns: { individual: '^[A-ZÑ&]{4}[0-9]{6}[A-Z0-9]{3}$', company: '^[A-ZÑ&]{3}[0-9]{6}[A-Z0-9]{3}$' },
+  checksum: 'mx_rfc',
 }
 
 export const MOCK_REGION_MX: Region = {

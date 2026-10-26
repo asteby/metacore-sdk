@@ -18,6 +18,8 @@ import type {
   CustomerCapabilities,
   CustomerSession,
   FiscalIdentity,
+  FiscalProfile,
+  FiscalProfileInput,
   InvoiceRequest,
   InvoiceDoc,
   InvoiceFile,
@@ -155,6 +157,8 @@ export type MockState = {
   carts: Map<string, CartRecord>
   customers: Customer[]
   addresses: Map<string, Address[]>
+  /** Saved fiscal profiles by customer id (contract 1.9). */
+  fiscalProfiles: Map<string, FiscalProfile[]>
   orders: (Order & { customer_id: string | null })[]
   otps: Map<string, string>
   /** Email → password (plain text: it is a mock). The seed customer starts without one. */
@@ -254,6 +258,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       identity_documents: ['MX:csf'],
       online_verify: false,
     },
+    fiscal_profiles: { max: 10 },
     ...options.customerCapabilities,
   }
   const missingScopes = options.missingScopes ?? []
@@ -285,6 +290,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       carts: new Map(),
       customers: buildCustomers(),
       addresses: new Map(),
+      fiscalProfiles: new Map(),
       orders: [
         {
           id: 'ord_seed_1',
@@ -1352,6 +1358,102 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       content_base64: btoa(text),
     }
     return { body: file, headers: { 'Cache-Control': 'no-store' } }
+  })
+  // Saved fiscal profiles (contract 1.9): up to MAX_FISCAL_PROFILES per buyer, one default, physical delete.
+  const MAX_FISCAL_PROFILES = 10
+  const profilesOf = (c: Customer) => state.fiscalProfiles.get(c.id) ?? []
+  /** What the API serves: the evidence keeps no file hash. */
+  const publicProfile = (p: FiscalProfile): FiscalProfile => {
+    if (!p.document) return p
+    const { sha256: _sha, ...document } = p.document
+    return { ...p, document }
+  }
+  const personTypeOf = (taxId: string): string | null => {
+    for (const [type, pattern] of Object.entries(region?.fiscal_id?.person_patterns ?? {})) if (new RegExp(pattern).test(taxId)) return type
+    return null
+  }
+  /** `Customer.fiscal` mirrors the default profile, as the real server does. */
+  const mirrorDefaultProfile = (c: Customer) => {
+    const d = profilesOf(c).find((p) => p.is_default)
+    c.fiscal = d
+      ? { country_code: d.country_code, tax_id: d.tax_id, legal_name: d.legal_name, tax_regime: d.tax_regime, postal_code: d.postal_code, invoice_use: d.invoice_use ?? null, document: d.document ?? null, verification: d.verification ?? null }
+      : null
+  }
+  const profileFields = (body: Record<string, unknown>, base?: FiscalProfile): FiscalIdentity => {
+    const merged: Record<string, unknown> = {
+      ...(base ? { tax_id: base.tax_id, legal_name: base.legal_name, tax_regime: base.tax_regime, postal_code: base.postal_code, country_code: base.country_code, ...(base.invoice_use ? { use: base.invoice_use } : {}) } : {}),
+      ...body,
+      requested: true,
+    }
+    delete merged.label
+    delete merged.is_default
+    delete merged.verification
+    const fiscal = parseInvoice(merged, 'fiscal') as InvoiceRequest
+    return {
+      country_code: String(fiscal.country_code ?? region?.country_code ?? ''),
+      tax_id: String(fiscal.tax_id ?? fiscal.rfc).toUpperCase(),
+      legal_name: String(fiscal.legal_name ?? fiscal.razon_social),
+      tax_regime: String(fiscal.tax_regime ?? fiscal.regimen),
+      postal_code: String(fiscal.postal_code ?? fiscal.cp),
+      invoice_use: String(fiscal.use ?? fiscal.uso_cfdi ?? fiscal.invoice_use ?? '') || null,
+      document: fiscal.document ?? base?.document ?? null,
+    }
+  }
+  const ownProfile = (c: Customer, id: string | undefined) => {
+    const p = profilesOf(c).find((x) => x.id === id)
+    if (!p) throw new HttpError(404, 'not_found', 'Fiscal profile not found', 'id')
+    return p
+  }
+  const makeDefault = (c: Customer, id: string) => state.fiscalProfiles.set(c.id, profilesOf(c).map((p) => ({ ...p, is_default: p.id === id })))
+  route('GET', '/customer/fiscal-profiles', 'customer:read', ({ headers }) => {
+    const c = requireCustomer(headers)
+    const nodes = [...profilesOf(c)].sort((a, b) => Number(b.is_default) - Number(a.is_default) || (b.last_used_at ?? '').localeCompare(a.last_used_at ?? ''))
+    return { body: { nodes: nodes.map(publicProfile) }, cache: 'private' }
+  })
+  route('POST', '/customer/fiscal-profiles', 'customer:write', ({ headers, body }) => {
+    const c = requireCustomer(headers)
+    const list = profilesOf(c)
+    const fid = profileFields(body)
+    if (list.length >= MAX_FISCAL_PROFILES) throw new HttpError(409, 'conflict', 'Fiscal profile limit reached; delete one first')
+    if (list.some((p) => p.country_code === fid.country_code && p.tax_id === fid.tax_id)) throw new HttpError(409, 'conflict', 'A profile with this tax id already exists', 'tax_id')
+    const at = now()
+    const label = typeof body.label === 'string' && body.label.trim() ? body.label.trim().slice(0, 40) : fid.legal_name.slice(0, 40)
+    const profile: FiscalProfile = { ...fid, id: nextId('fisc'), label, person_type: personTypeOf(fid.tax_id), is_default: false, last_used_at: null, created_at: at, updated_at: at, verification: { status: 'unverified', checked_at: null } }
+    state.fiscalProfiles.set(c.id, [...list, profile])
+    if (list.length === 0 || body.is_default === true) makeDefault(c, profile.id)
+    mirrorDefaultProfile(c)
+    return { status: 201, body: publicProfile(profilesOf(c).find((p) => p.id === profile.id)!), cache: 'private' }
+  })
+  route('PATCH', '/customer/fiscal-profiles/:id', 'customer:write', ({ headers, params, body }) => {
+    const c = requireCustomer(headers)
+    const cur = ownProfile(c, params[0])
+    if ('verification' in body) throw new HttpError(400, 'validation', 'verification is set by the server', 'verification')
+    if (body.is_default === false && cur.is_default) throw new HttpError(400, 'validation', 'Make another profile the default instead', 'is_default')
+    const fid = profileFields(body as FiscalProfileInput as Record<string, unknown>, cur)
+    if (profilesOf(c).some((p) => p.id !== cur.id && p.country_code === fid.country_code && p.tax_id === fid.tax_id)) throw new HttpError(409, 'conflict', 'A profile with this tax id already exists', 'tax_id')
+    const identityChanged = fid.tax_id !== cur.tax_id || fid.country_code !== cur.country_code
+    const updated: FiscalProfile = {
+      ...cur,
+      ...fid,
+      document: 'document' in body ? fid.document : identityChanged ? null : cur.document,
+      label: typeof body.label === 'string' && body.label.trim() ? body.label.trim().slice(0, 40) : cur.label,
+      person_type: personTypeOf(fid.tax_id),
+      verification: identityChanged ? { status: 'unverified', checked_at: null } : cur.verification,
+      updated_at: now(),
+    }
+    state.fiscalProfiles.set(c.id, profilesOf(c).map((p) => (p.id === cur.id ? updated : p)))
+    if (body.is_default === true) makeDefault(c, cur.id)
+    mirrorDefaultProfile(c)
+    return { body: publicProfile(profilesOf(c).find((p) => p.id === cur.id)!), cache: 'private' }
+  })
+  route('DELETE', '/customer/fiscal-profiles/:id', 'customer:write', ({ headers, params }) => {
+    const c = requireCustomer(headers)
+    const cur = ownProfile(c, params[0])
+    const rest = profilesOf(c).filter((p) => p.id !== cur.id)
+    state.fiscalProfiles.set(c.id, rest)
+    if (cur.is_default && rest[0]) makeDefault(c, rest[0].id)
+    mirrorDefaultProfile(c)
+    return { status: 204 }
   })
   route('GET', '/customer/addresses', 'customer:read', ({ headers }) => {
     const c = requireCustomer(headers)

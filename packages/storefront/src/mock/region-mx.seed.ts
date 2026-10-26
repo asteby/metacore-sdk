@@ -192,6 +192,7 @@ export const SEED_MX_CSF: IdentityDocumentSpec = {
   },
   "verify_kind": "qr_validator",
   "freshness_days": 90,
+  "image_mode": "qr_only",
   "discard_fields": [
     "curp",
     "street",
@@ -431,6 +432,16 @@ export const SEED_MX_INVOICE_USES: RegionFiscalEntry[] = [
       "606",
       "612",
       "620",
+      "621",
+      "622",
+      "623",
+      "624",
+      "625",
+      "626"
+    ],
+    "suggested_for_regimes": [
+      "601",
+      "612",
       "621",
       "622",
       "623",
@@ -814,6 +825,19 @@ export const SEED_MX_INVOICE_USES: RegionFiscalEntry[] = [
       "624",
       "625",
       "626"
+    ],
+    "suggested_for_regimes": [
+      "603",
+      "605",
+      "606",
+      "607",
+      "608",
+      "610",
+      "611",
+      "614",
+      "615",
+      "616",
+      "620"
     ]
   }
 ]
