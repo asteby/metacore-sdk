@@ -22,6 +22,8 @@ export type FiscalMessages = {
     useChoose: string
     /** `{document}` = the document's name. */
     fromDocument: string
+    /** Mark on an invoice use the region suggested (an editable preselection). */
+    suggested: string
     errors: {
       required: string
       taxIdFormat: string
@@ -51,7 +53,26 @@ export type FiscalMessages = {
     changeFile: string
     saveToAccount: string
     saveConsent: string
-    warnings: { qrMismatch: string; stale: string; regimeMissing: string; fieldsMissing: string }
+    warnings: { qrMismatch: string; stale: string; regimeMissing: string; fieldsMissing: string; qrPartial: string }
+    /** Reading a photo or the camera (the region's `image_mode`). `{document}` where noted. */
+    scan: {
+      title: string
+      photo: string
+      photoHint: string
+      camera: string
+      cameraTitle: string
+      cameraGuide: string
+      cameraStarting: string
+      cameraRead: string
+      cameraDenied: string
+      cameraUnavailable: string
+      closeCamera: string
+      choosePhoto: string
+      /** Button that opens the sheet; `{document}` is the document's label. */
+      open: string
+      manual: string
+      close: string
+    }
     errors: Record<FiscalReadError, string>
     summaryTitleOne: string
     summaryTitleMany: string
@@ -120,6 +141,7 @@ const ES: FiscalMessages = {
     useHint: 'Solo mostramos los usos que admite tu régimen.',
     useChoose: 'Elige el uso',
     fromDocument: 'De tu {document}',
+    suggested: 'Sugerido',
     errors: {
       required: 'Completa este campo.',
       taxIdFormat: 'Revisa el formato: {kind} no válido.',
@@ -153,6 +175,24 @@ const ES: FiscalMessages = {
       stale: 'Tu documento tiene {days} días de emitido. Si algo cambió en tu registro, descarga uno nuevo.',
       regimeMissing: 'No pudimos detectar tu régimen. Elígelo de la lista.',
       fieldsMissing: 'No encontramos algunos datos en el documento. Complétalos para continuar.',
+      qrPartial: 'Del código QR solo leímos tu identificador fiscal. Completa los demás datos o sube el PDF.',
+    },
+    scan: {
+      title: 'Escanea tu {document}',
+      photo: 'Tomar foto del QR',
+      photoHint: 'Enfoca el código QR de tu documento.',
+      camera: 'Escanear con la cámara',
+      cameraTitle: 'Apunta al código QR',
+      cameraGuide: 'Centra el código QR dentro del marco.',
+      cameraStarting: 'Abriendo la cámara…',
+      cameraRead: 'Código leído',
+      cameraDenied: 'No pudimos usar la cámara. Elige una foto o sube el PDF.',
+      cameraUnavailable: 'Este dispositivo no permite usar la cámara aquí. Elige una foto o sube el PDF.',
+      closeCamera: 'Cerrar la cámara',
+      choosePhoto: 'Elegir una foto',
+      open: 'Escanear {document}',
+      manual: 'Capturar a mano',
+      close: 'Cerrar',
     },
     errors: {
       not_pdf: 'Ese archivo no es un PDF. Sube el PDF que descargaste o captura tus datos a mano.',
@@ -160,6 +200,8 @@ const ES: FiscalMessages = {
       no_text: 'Este PDF parece una imagen escaneada y no podemos leerlo. Captura tus datos a mano.',
       password: 'Este PDF tiene contraseña y no podemos abrirlo. Descárgalo de nuevo sin contraseña o captura tus datos a mano.',
       unreadable: 'No pudimos leer este archivo. Inténtalo con otro o captura tus datos a mano.',
+      no_qr: 'No encontramos el código QR en la foto. Acércate, evita reflejos o sube el PDF.',
+      not_image: 'Ese archivo no es una foto que podamos leer. Toma otra foto o sube el PDF.',
     },
     summaryTitleOne: 'Revisa 1 campo para continuar',
     summaryTitleMany: 'Revisa {n} campos para continuar',
@@ -240,6 +282,7 @@ const EN: FiscalMessages = {
     useHint: 'We only list the uses your regime admits.',
     useChoose: 'Choose the use',
     fromDocument: 'From your {document}',
+    suggested: 'Suggested',
     errors: {
       required: 'Fill in this field.',
       taxIdFormat: 'Check the format: not a valid {kind}.',
@@ -273,6 +316,24 @@ const EN: FiscalMessages = {
       stale: 'Your document was issued {days} days ago. If something changed in your registration, download a new one.',
       regimeMissing: 'We could not detect your regime. Choose it from the list.',
       fieldsMissing: 'We did not find some details in the document. Fill them in to continue.',
+      qrPartial: 'The QR code only gave us your tax ID. Fill in the rest or upload the PDF.',
+    },
+    scan: {
+      title: 'Scan your {document}',
+      photo: 'Take a photo of the QR',
+      photoHint: 'Point at the QR code of your document.',
+      camera: 'Scan with the camera',
+      cameraTitle: 'Point at the QR code',
+      cameraGuide: 'Center the QR code inside the frame.',
+      cameraStarting: 'Opening the camera…',
+      cameraRead: 'Code read',
+      cameraDenied: 'We could not use the camera. Choose a photo or upload the PDF.',
+      cameraUnavailable: 'This device does not allow the camera here. Choose a photo or upload the PDF.',
+      closeCamera: 'Close the camera',
+      choosePhoto: 'Choose a photo',
+      open: 'Scan {document}',
+      manual: 'Enter by hand',
+      close: 'Close',
     },
     errors: {
       not_pdf: 'That file is not a PDF. Upload the PDF you downloaded or enter your details by hand.',
@@ -280,6 +341,8 @@ const EN: FiscalMessages = {
       no_text: 'This PDF looks like a scanned image and we cannot read it. Enter your details by hand.',
       password: 'This PDF is password protected and we cannot open it. Download it again without a password or enter your details by hand.',
       unreadable: 'We could not read this file. Try another one or enter your details by hand.',
+      no_qr: 'We could not find the QR code in the photo. Move closer, avoid glare or upload the PDF.',
+      not_image: 'That file is not a photo we can read. Take another photo or upload the PDF.',
     },
     summaryTitleOne: 'Check 1 field to continue',
     summaryTitleMany: 'Check {n} fields to continue',

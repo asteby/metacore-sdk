@@ -7,6 +7,10 @@
  * Without JavaScript the same control posts the file to the shop's action (`createInvoiceAction`, intent
  * `extract-document`), which reads it in memory, discards it and sends back `data` to review.
  *
+ * When the region lets a PHOTO of the document be read (`image_mode`: `qr_only` | `full`) the buyer can also take a
+ * picture of its QR or scan it live with the camera. A QR carries only the tax id and the id of the document: the
+ * rest is asked for (or the PDF is uploaded). The image and the camera frames never leave the device.
+ *
  * Everything country-specific is the region's `IdentityDocumentSpec`: label, where to get it, accepted types, size,
  * rules, freshness. The component only knows "a document with fiscal data".
  */
@@ -15,9 +19,10 @@ import type { FiscalDocumentEvidence, IdentityDocumentSpec } from '@asteby/store
 import { ErrorSummary, type ErrorSummaryItem, type FieldErrors } from '../checkout/fields.js'
 import { useResolvedLocale } from '../locale.js'
 import { summarizeExtraction } from './extraction.js'
-import { validateFiscalValues, type FiscalRegion } from './format.js'
+import { personTypeResolver, suggestInvoiceUse, validateFiscalValues, type FiscalRegion } from './format.js'
 import { FiscalIdentityFields, type FiscalIdentityFieldsClassNames } from './identity-fields.js'
 import { fill, fiscalMessages, type DeepPartial, type FiscalMessages } from './messages.js'
+import { cameraSupported, useCameraQr } from './use-camera-qr.js'
 import type { FiscalActionData, FiscalExtractionSummary, FiscalFieldName, FiscalFieldValues, FiscalReadError } from './types.js'
 
 export type FiscalReaderResult = {
@@ -68,6 +73,7 @@ export type IdentityDocumentReaderProps = {
 type Phase =
   | { kind: 'idle' }
   | { kind: 'reading'; fileName: string }
+  | { kind: 'camera' }
   | { kind: 'review'; extraction: FiscalExtractionSummary | null; revision: number }
   | { kind: 'error'; code: FiscalReadError; sizeLimit?: number }
 
@@ -75,6 +81,8 @@ const isPdf = (f: File, accept: string[]) => {
   const okType = f.type ? accept.some((a) => a === f.type) || f.type === 'application/pdf' : false
   return okType || /\.pdf$/i.test(f.name)
 }
+
+const isImage = (f: File) => f.type.startsWith('image/') || /\.(jpe?g|png|webp|heic|heif)$/i.test(f.name)
 
 const mib = (bytes: number) => `${Math.round((bytes / (1024 * 1024)) * 10) / 10} MB`
 
@@ -111,15 +119,32 @@ export function IdentityDocumentReader(props: IdentityDocumentReaderProps) {
   // A new answer from the server (the buyer posted a file without JS and the page came back).
   useEffect(() => {
     if (!fromServer) return
-    setValues((cur) => ({ ...cur, ...fromServer.values }))
+    setValues((cur) => {
+      const next = { ...cur, ...fromServer.values }
+      const suggestion = next.tax_regime && !next.use ? suggestInvoiceUse(region.fiscal_id, next.tax_regime) : null
+      if (suggestion) {
+        next.use = suggestion
+        setSuggestedUse(suggestion)
+      }
+      return next
+    })
     setPhase({ kind: 'review', extraction: fromServer, revision: 1 })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fromServer])
   useEffect(() => {
     if (phase.kind === 'error') errorRef.current?.focus()
     if (phase.kind === 'review' && phase.revision > 0) reviewRef.current?.focus()
   }, [phase])
 
-  const accept = useMemo(() => (spec?.accept?.length ? spec.accept.join(',') : 'application/pdf'), [spec])
+  // The file picker takes the document's files (PDF); photos have their own control (`image_mode`).
+  const accept = useMemo(() => {
+    const files = (spec?.accept ?? []).filter((a) => !a.startsWith('image/'))
+    return files.length ? files.join(',') : 'application/pdf'
+  }, [spec])
+  const imageMode = spec?.image_mode && spec.image_mode !== 'none' ? spec.image_mode : null
+  const photoInput = useRef<HTMLInputElement>(null)
+  const [suggestedUse, setSuggestedUse] = useState<string | null>(null)
+  const cameraActive = phase.kind === 'camera' 
   const fieldErrors: FieldErrors = useMemo(() => {
     const out: FieldErrors = {}
     for (const [k, v] of Object.entries(data?.fieldErrors ?? {})) out[k] = all.server.errors[v] ?? v
@@ -139,9 +164,79 @@ export function IdentityDocumentReader(props: IdentityDocumentReaderProps) {
     setLive('')
   }, [onManual])
 
+  /** Puts what the engine read (a PDF, or only a QR) in the form, with the region's suggested use when it has one. */
+  const showExtraction = useCallback(
+    (sum: FiscalExtractionSummary) => {
+      const base = { tax_id: '', legal_name: '', postal_code: '', tax_regime: '', use: '', ...sum.values }
+      const suggestion = base.tax_regime ? suggestInvoiceUse(region.fiscal_id, base.tax_regime) : null
+      if (suggestion && !base.use) base.use = suggestion
+      setSuggestedUse(suggestion && base.use === suggestion ? suggestion : null)
+      setValues(base)
+      setSummary(null)
+      setPhase({ kind: 'review', extraction: sum, revision: 1 })
+      setLive(m.done)
+    },
+    [region.fiscal_id, m.done],
+  )
+
+  /** The text of a QR (a photo, or a live frame) -> the fields it carries. Never blocks: no tax id means "no QR of this document". */
+  const readQr = useCallback(
+    async (text: string | null) => {
+      if (!spec) return
+      if (!text) return setPhase({ kind: 'error', code: 'no_qr' })
+      const eng = await import('@asteby/storefront/fiscal-document')
+      const x = eng.extractIdentityDocument('', spec, {
+        catalogs: region.fiscal_id ? eng.catalogsFromRegion(region.fiscal_id) : {},
+        qr: text,
+        ...(now ? { now: now() } : {}),
+      })
+      if (!x.fields.tax_id) return setPhase({ kind: 'error', code: 'no_qr' })
+      const evidence = eng.buildDocumentEvidence(x, { sha256: null, source: 'qr' })
+      showExtraction(summarizeExtraction(x, evidence, region.fiscal_id?.regimes.map((r) => r.code)))
+    },
+    [spec, region, now, showExtraction],
+  )
+
+  const readImage = useCallback(
+    async (file: File) => {
+      if (!spec) return
+      if (file.size > spec.max_bytes) return setPhase({ kind: 'error', code: 'too_large', sizeLimit: spec.max_bytes })
+      const ctl = new AbortController()
+      abort.current = ctl
+      setPhase({ kind: 'reading', fileName: file.name })
+      setLive(fill(m.reading, { document: documentName }))
+      try {
+        const eng = await import('@asteby/storefront/fiscal-document')
+        const text = await eng.decodeImageQr(file, { maxBytes: spec.max_bytes, signal: ctl.signal })
+        if (ctl.signal.aborted) return
+        await readQr(text)
+      } catch (err) {
+        if (ctl.signal.aborted) return
+        const code = (err as { code?: string } | null)?.code
+        setLive('')
+        setPhase({ kind: 'error', code: code === 'too_large' ? 'too_large' : code === 'not_image' ? 'not_image' : 'unreadable', sizeLimit: spec.max_bytes })
+      } finally {
+        if (abort.current === ctl) abort.current = null
+        if (photoInput.current) photoInput.current.value = ''
+      }
+    },
+    [spec, documentName, m.reading, readQr],
+  )
+
+  const camera = useCameraQr({
+    active: cameraActive,
+    onCode: (text) => {
+      // "Code read. Review your details": one announcement for the camera path (the review has its own focus).
+      void readQr(text)
+        .then(() => setLive(`${m.scan.cameraRead}. ${m.done}`))
+        .catch(() => setPhase({ kind: 'error', code: 'unreadable' }))
+    },
+  })
+
   const read = useCallback(
     async (file: File) => {
       if (!spec) return
+      if (imageMode && isImage(file)) return readImage(file)
       if (!isPdf(file, spec.accept ?? [])) return setPhase({ kind: 'error', code: 'not_pdf' })
       if (file.size > spec.max_bytes) return setPhase({ kind: 'error', code: 'too_large', sizeLimit: spec.max_bytes })
       const ctl = new AbortController()
@@ -168,10 +263,7 @@ export function IdentityDocumentReader(props: IdentityDocumentReaderProps) {
         })
         const evidence = eng.buildDocumentEvidence(x, { sha256, source: 'pdf_client' })
         const sum = summarizeExtraction(x, evidence, region.fiscal_id?.regimes.map((r) => r.code))
-        setValues({ tax_id: '', legal_name: '', postal_code: '', tax_regime: '', use: '', ...sum.values })
-        setSummary(null)
-        setPhase({ kind: 'review', extraction: sum, revision: 1 })
-        setLive(m.done)
+        showExtraction(sum)
       } catch (err) {
         if (ctl.signal.aborted) return
         const code = (err as { code?: string } | null)?.code
@@ -186,7 +278,7 @@ export function IdentityDocumentReader(props: IdentityDocumentReaderProps) {
         if (fileInput.current) fileInput.current.value = ''
       }
     },
-    [spec, workerSrc, region, now, documentName, m.reading, m.done],
+    [spec, workerSrc, region, now, documentName, m.reading, imageMode, readImage, showExtraction],
   )
 
   if (!spec) return null
@@ -199,7 +291,7 @@ export function IdentityDocumentReader(props: IdentityDocumentReaderProps) {
   }
 
   const confirm = () => {
-    const problems = validateFiscalValues(region, values, personTypeOf)
+    const problems = validateFiscalValues(region, values, personTypeResolver(region.fiscal_id, personTypeOf))
     const keys = Object.keys(problems) as FiscalFieldName[]
     if (keys.length) {
       const labels: Record<FiscalFieldName, string> = {
@@ -276,6 +368,32 @@ export function IdentityDocumentReader(props: IdentityDocumentReaderProps) {
           }}
         />
       </label>
+      {imageMode ? (
+        <div className={cx.actions} data-sf-reader-scan>
+          <input
+            ref={photoInput}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            hidden
+            tabIndex={-1}
+            aria-label={m.scan.photo}
+            data-sf-reader-photo-input
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) void readImage(f)
+            }}
+          />
+          <button type="button" className={cx.secondary} onClick={() => photoInput.current?.click()} data-sf-reader-photo>
+            {m.scan.photo}
+          </button>
+          {hydrated && cameraSupported() ? (
+            <button type="button" className={cx.secondary} onClick={() => setPhase({ kind: 'camera' })} data-sf-reader-camera>
+              {m.scan.camera}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <p id={helpId} className={cx.privacy} data-sf-reader-privacy>
         {privacy}
       </p>
@@ -308,6 +426,59 @@ export function IdentityDocumentReader(props: IdentityDocumentReaderProps) {
       <button type="button" className={cx.secondary} onClick={cancel} data-sf-reader-cancel>
         {m.cancel}
       </button>
+    </div>
+  )
+
+  const cameraView = phase.kind === 'camera' && (
+    <div className={cx.root} data-sf-reader data-state="camera">
+      <h3 data-sf-reader-title>{m.scan.cameraTitle}</h3>
+      <div data-sf-reader-viewfinder>
+        {/* The stream is shown, never recorded; it stops when this view closes. */}
+        <video ref={camera.videoRef} playsInline muted aria-label={m.scan.cameraGuide} data-sf-reader-video />
+        <span aria-hidden="true" data-sf-reader-frame />
+      </div>
+      <p className={cx.status} data-sf-reader-camera-status={camera.status}>
+        {camera.status === 'denied'
+          ? m.scan.cameraDenied
+          : camera.status === 'unsupported'
+            ? m.scan.cameraUnavailable
+            : camera.status === 'starting'
+              ? m.scan.cameraStarting
+              : m.scan.cameraGuide}
+      </p>
+      <p className={cx.privacy} data-sf-reader-privacy>
+        {privacy}
+      </p>
+      <div className={cx.actions} data-sf-reader-actions>
+        <button type="button" className={cx.secondary} onClick={() => photoInput.current?.click()} data-sf-reader-photo>
+          {m.scan.choosePhoto}
+        </button>
+        <button
+          type="button"
+          className={cx.primary}
+          onClick={() => {
+            camera.stop()
+            setPhase({ kind: 'idle' })
+          }}
+          data-sf-reader-camera-close
+        >
+          {m.scan.closeCamera}
+        </button>
+      </div>
+      <input
+        ref={photoInput}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        hidden
+        tabIndex={-1}
+        aria-label={m.scan.choosePhoto}
+        data-sf-reader-photo-input
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) void readImage(f)
+        }}
+      />
     </div>
   )
 
@@ -350,6 +521,7 @@ export function IdentityDocumentReader(props: IdentityDocumentReaderProps) {
         fromDocument={phase.extraction?.from_document ?? []}
         documentName={documentName}
         regimeCandidates={phase.extraction && phase.extraction.regime_candidates.length > 1 ? phase.extraction.regime_candidates : undefined}
+        suggestedUse={suggestedUse}
         {...(personTypeOf ? { personTypeOf } : {})}
         locale={locale}
         {...(messages ? { messages } : {})}
@@ -385,6 +557,7 @@ export function IdentityDocumentReader(props: IdentityDocumentReaderProps) {
       </div>
       {phase.kind === 'idle' ? idle : null}
       {reading || null}
+      {cameraView || null}
       {errored || null}
       {review || null}
     </div>
@@ -397,7 +570,8 @@ function Warnings({ x, m, cx }: { x: FiscalExtractionSummary; m: FiscalMessages[
   const items: string[] = []
   if (x.qr_match === false) items.push(m.warnings.qrMismatch)
   if (x.stale === true && x.age_days !== null) items.push(fill(m.warnings.stale, { days: x.age_days }))
-  if (x.regime_candidates.length === 0 && !x.values.tax_regime) items.push(m.warnings.regimeMissing)
+  if (x.evidence.source === 'qr') items.push(m.warnings.qrPartial)
+  else if (x.regime_candidates.length === 0 && !x.values.tax_regime) items.push(m.warnings.regimeMissing)
   else if (x.missing.some((k) => k !== 'tax_regime' && k !== 'document_id' && k !== 'issued_on')) items.push(m.warnings.fieldsMissing)
   if (!items.length) return null
   return (

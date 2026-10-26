@@ -56,6 +56,39 @@ export function personTypeByLength(lengths: Record<string, number>): (taxId: str
   }
 }
 
+/**
+ * Tells a person type from a tax id with the region's own patterns (`fiscal_id.person_patterns`, DATA of the region
+ * pack). `null` when the region publishes none or none matches. A pattern that does not compile is ignored.
+ */
+export function personTypeFromPatterns(fid: RegionFiscalId | undefined, taxId: string): string | null {
+  const patterns = fid?.person_patterns
+  if (!patterns) return null
+  const v = normalizeTaxId(taxId)
+  for (const type of Object.keys(patterns).sort()) {
+    const re = compile(patterns[type])
+    if (re?.test(v)) return type
+  }
+  return null
+}
+
+/** The function to use for the person type: the store's override, else the region's patterns. */
+export function personTypeResolver(fid: RegionFiscalId | undefined, override?: (taxId: string) => string | null): (taxId: string) => string | null {
+  return override ?? ((taxId) => personTypeFromPatterns(fid, taxId))
+}
+
+/**
+ * The invoice use to suggest for a regime, from region data only: the organization's `default_invoice_use` when the
+ * regime admits it, else the first use whose `suggested_for_regimes` lists the regime (and whose `allowed_regimes`
+ * admits it). `null` when the region suggests nothing: then nothing is preselected. A suggestion, never a rule.
+ */
+export function suggestInvoiceUse(fid: RegionFiscalId | undefined, regime: string | null | undefined): string | null {
+  if (!fid || !regime) return null
+  const allowed = usesFor(fid, regime)
+  const preferred = fid.default_invoice_use
+  if (preferred && allowed.some((u) => u.code === preferred)) return preferred
+  return allowed.find((u) => u.suggested_for_regimes?.includes(regime))?.code ?? null
+}
+
 /** Regimes that fit a person type (all when the type is unknown). */
 export function regimesFor(fid: RegionFiscalId | undefined, personType: string | null): RegionFiscalEntry[] {
   const all = fid?.regimes ?? []
@@ -76,9 +109,10 @@ export type FiscalProblem = 'required' | 'format' | 'unknown' | 'person_type' | 
 export function validateFiscalValues(
   region: FiscalRegion,
   v: Partial<FiscalFieldValues>,
-  personTypeOf?: (taxId: string) => string | null,
+  personTypeOverride?: (taxId: string) => string | null,
 ): Partial<Record<FiscalFieldName, FiscalProblem>> {
   const fid = region.fiscal_id
+  const personTypeOf = personTypeResolver(fid, personTypeOverride)
   const out: Partial<Record<FiscalFieldName, FiscalProblem>> = {}
   const tax = taxIdProblem(fid, v.tax_id ?? '')
   if (tax) out.tax_id = tax

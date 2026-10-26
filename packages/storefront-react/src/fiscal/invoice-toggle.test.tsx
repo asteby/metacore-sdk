@@ -91,10 +91,12 @@ describe('<InvoiceToggle />', () => {
     set('use', 'G03')
     expect(last()).toMatchObject({ ready: true, source: 'manual', invoice: { tax_id: 'PEPJ800101AB3', tax_regime: '612' } })
     expect(last().invoice).not.toHaveProperty('document')
-    // Choosing another regime drops a use it does not admit (G03 is not for sueldos y salarios).
+    // Choosing another regime drops a use it does not admit (G03 is not for sueldos y salarios) and the region's
+    // suggestion for the new regime takes its place (S01), marked as suggested.
     const admits605 = MOCK_REGION_MX.fiscal_id!.invoice_uses.find((u) => u.code === 'G03')!.allowed_regimes!.includes('605')
     set('tax_regime', '605')
-    expect((container.querySelector('select[name="invoice.use"]') as HTMLSelectElement).value).toBe(admits605 ? 'G03' : '')
+    expect((container.querySelector('select[name="invoice.use"]') as HTMLSelectElement).value).toBe(admits605 ? 'G03' : 'S01')
+    expect(container.querySelector('[data-sf-suggested]')?.textContent ?? '').toBe(admits605 ? '' : 'Sugerido')
   })
 
   it('manual: changing to a regime that does not admit the use clears it, and the use list follows', () => {

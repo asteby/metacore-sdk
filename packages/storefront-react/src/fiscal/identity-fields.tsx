@@ -9,7 +9,7 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { CheckoutField, type CheckoutFieldClassNames, type FieldErrors } from '../checkout/fields.js'
 import { useResolvedLocale } from '../locale.js'
-import { entryLabel, normalizeTaxId, regimesFor, usesFor, validateFiscalValues, type FiscalProblem, type FiscalRegion } from './format.js'
+import { entryLabel, normalizeTaxId, personTypeResolver, regimesFor, suggestInvoiceUse, usesFor, validateFiscalValues, type FiscalProblem, type FiscalRegion } from './format.js'
 import { fill, fiscalMessages, type DeepPartial, type FiscalMessages } from './messages.js'
 import type { FiscalFieldName, FiscalFieldValues } from './types.js'
 
@@ -31,8 +31,13 @@ export type FiscalIdentityFieldsProps = {
   namePrefix?: string
   /** Prefix of the control ids (default: generated). */
   idPrefix?: string
-  /** Tells a person type from a tax id, to narrow the regimes (`personTypeByLength`). */
+  /**
+   * Overrides how a person type is told from a tax id (to narrow the regimes). Default: the region's own patterns
+   * (`fiscal_id.person_patterns`); with neither, the regimes are not narrowed (the server still checks).
+   */
   personTypeOf?: (taxId: string) => string | null
+  /** The invoice use in `values` came from the region's suggestion (a document was read): it gets the "Suggested" mark. */
+  suggestedUse?: string | null
   disabled?: boolean
   locale?: string
   messages?: DeepPartial<FiscalMessages>
@@ -72,7 +77,8 @@ export function FiscalIdentityFields({
   errors = {},
   namePrefix = 'invoice',
   idPrefix,
-  personTypeOf,
+  personTypeOf: personTypeOverride,
+  suggestedUse,
   disabled,
   locale: localeProp,
   messages,
@@ -87,6 +93,9 @@ export function FiscalIdentityFields({
   const base = idPrefix ?? `sf-fiscal-${reactId.replace(/:/g, '')}`
   const [v, setV] = useState<FiscalFieldValues>({ ...EMPTY, ...values })
   const [shown, setShown] = useState<ReadonlySet<FiscalFieldName>>(new Set())
+  // The use the region suggested when the regime was chosen here (cleared as soon as the buyer picks one).
+  const [autoUse, setAutoUse] = useState<string | null>(null)
+  const personTypeOf = useMemo(() => personTypeResolver(region.fiscal_id, personTypeOverride), [region.fiscal_id, personTypeOverride])
   const root = useRef<HTMLFieldSetElement>(null)
   const valuesKey = JSON.stringify(values ?? null)
   const first = useRef(true)
@@ -106,11 +115,19 @@ export function FiscalIdentityFields({
     const next = { ...v, ...patch }
     // A use the new regime does not admit is dropped, not silently kept.
     if (patch.tax_regime !== undefined && next.use && !usesFor(fid, next.tax_regime).some((u) => u.code === next.use)) next.use = ''
+    // A regime was chosen and no use yet: the region's suggestion (if it has one) is preselected, marked and editable.
+    if (patch.tax_regime !== undefined && !next.use) {
+      const suggestion = suggestInvoiceUse(fid, next.tax_regime)
+      if (suggestion) {
+        next.use = suggestion
+        setAutoUse(suggestion)
+      } else setAutoUse(null)
+    } else if (patch.use !== undefined) setAutoUse(null)
     setV(next)
     onChange?.(next)
   }
 
-  const person = personTypeOf?.(v.tax_id) ?? null
+  const person = personTypeOf(v.tax_id)
   const taxIdOk = !validateFiscalValues(region, { tax_id: v.tax_id }, personTypeOf).tax_id
   const problems = useMemo(() => validateFiscalValues(region, v, personTypeOf), [region, v, personTypeOf])
   const candidates = regimeCandidates?.length ? regimeCandidates : null
@@ -277,7 +294,18 @@ export function FiscalIdentityFields({
         name={name('use')}
         id={`${base}-use`}
         label={m.use}
-        hint={m.useHint}
+        hint={
+          v.use && (v.use === autoUse || v.use === suggestedUse) ? (
+            <>
+              <span className={cx.mark} data-sf-suggested>
+                {m.suggested}
+              </span>{' '}
+              · {m.useHint}
+            </>
+          ) : (
+            m.useHint
+          )
+        }
         value={v.use}
         onChange={(e) => set({ use: e.target.value })}
         onBlur={() => touch('use')}

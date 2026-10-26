@@ -197,6 +197,8 @@ describe('<IdentityDocumentReader /> reading and review', () => {
     const { container, upload, onConfirm } = setup()
     upload(pdf())
     await screen.findByRole('heading', { name: 'Revisa tus datos' })
+    // The region suggests a use for the regime; clearing it leaves the field the buyer must fill.
+    fireEvent.change(container.querySelector('select[name="invoice.use"]')!, { target: { value: '' } })
     fireEvent.click(screen.getByRole('button', { name: 'Usar estos datos' }))
     expect(onConfirm).not.toHaveBeenCalled()
     const summary = container.querySelector<HTMLElement>('[data-sf-error-summary]')!
@@ -246,7 +248,7 @@ describe('<IdentityDocumentReader /> errors', () => {
   const alertText = (c: HTMLElement) => c.querySelector('[role=alert]')!.textContent
   it('rejects a file that is not a PDF before reading it', async () => {
     const { container, upload } = setup()
-    upload(pdf('foto.png', 'image/png'))
+    upload(pdf('datos.txt', 'text/plain'))
     await waitFor(() => expect(alertText(container)).toContain('no es un PDF'))
     expect(read).not.toHaveBeenCalled()
     expect(document.activeElement).toBe(container.querySelector('[role=alert]'))

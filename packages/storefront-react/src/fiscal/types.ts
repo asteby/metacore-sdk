@@ -32,7 +32,7 @@ export type FiscalExtractionSummary = {
 }
 
 /** Why a document could not be used. `server` is only for the no-JS upload. */
-export type FiscalReadError = 'not_pdf' | 'too_large' | 'no_text' | 'password' | 'unreadable'
+export type FiscalReadError = 'not_pdf' | 'too_large' | 'no_text' | 'password' | 'unreadable' | 'no_qr' | 'not_image'
 
 export type FiscalIntent = 'set-invoice' | 'save-profile' | 'request-invoice' | 'clear-profile' | 'extract-document'
 
