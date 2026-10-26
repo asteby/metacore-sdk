@@ -115,6 +115,22 @@ describe('settings action: sessions', () => {
     expect(await post({ intent: 'session-revoke', session_id: 'ses_not_mine' })).toEqual({ ok: true, intent: 'session-revoke' })
   })
 
+  it('refuses a form submitted from another site (CSRF) and changes nothing', async () => {
+    const { here, list } = await setup()
+    const before = (await list())!.length
+    const sf2 = createStorefrontClient({ baseUrl: 'https://mock.local/api/gw', token: 'sk_mock', fetch: async () => { throw new Error('must not be called') } })
+    const action = createAccountSettingsAction({ storefront: sf2, customerCookie: cookie })
+    const res = await action({
+      request: new Request('https://shop.test/cuenta/ajustes', {
+        method: 'POST',
+        headers: { Cookie: `sf_customer=${here}`, 'Sec-Fetch-Site': 'cross-site' },
+        body: new URLSearchParams({ intent: 'session-revoke-others' }),
+      }),
+    })
+    expect(res).toMatchObject({ ok: false, error: { code: 'validation' } })
+    expect((await list())!.length).toBe(before)
+  })
+
   it('loadAccountSessions never throws: an older server or a dead token is null', async () => {
     const { sf } = await setup()
     expect(await loadAccountSessions(sf.withCustomerToken('ct_dead'))).toBeNull()

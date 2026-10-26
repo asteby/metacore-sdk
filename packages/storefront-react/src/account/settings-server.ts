@@ -129,6 +129,10 @@ export function createAccountSettingsAction(options: CreateAccountSettingsAction
   const afterDelete = safeNextPath(options.afterDelete, '/')
 
   return async function settingsAction({ request }: AccountSettingsActionArgs): Promise<Response | AccountSettingsActionData> {
+    // Every intent changes the account (or spends a sign-in code), and the buyer's cookie rides along: a form that
+    // another site submits is refused before anything is read. `Sec-Fetch-Site` is set by the browser and cannot be
+    // forged by a page; an older browser that omits it falls back to the cookie's SameSite.
+    if (request.headers.get('Sec-Fetch-Site')?.toLowerCase() === 'cross-site') return fail(undefined, 'validation')
     const form = await request.formData().catch(() => null)
     if (!form) return fail(undefined, 'validation')
     const text = (name: string) => {
