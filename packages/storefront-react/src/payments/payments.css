@@ -103,6 +103,8 @@ dialog[data-sf-challenge] {
   border-radius: 0.75rem;
   background: #ffffff;
   color: #0b1220;
+  /* Claro aunque la página esté en oscuro: barras de desplazamiento y controles del navegador sobre fondo blanco. */
+  color-scheme: light;
   padding: 1.25rem;
 }
 dialog[data-sf-challenge]::backdrop {
