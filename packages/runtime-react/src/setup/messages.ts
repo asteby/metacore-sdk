@@ -157,6 +157,10 @@ export const SETUP_MESSAGES_ES: Dict = {
     'common.cancel': 'Cancelar',
     'common.save': 'Guardar',
     'common.close': 'Cerrar',
+    'form.status_clean': 'Sin cambios',
+    'form.status_dirty': 'Cambios sin guardar',
+    'form.status_saved': 'Guardado',
+    'form.status_saving': 'Guardando…',
 }
 
 export const SETUP_MESSAGES_EN: Dict = {
@@ -307,6 +311,10 @@ export const SETUP_MESSAGES_EN: Dict = {
     'common.cancel': 'Cancel',
     'common.save': 'Save',
     'common.close': 'Close',
+    'form.status_clean': 'No changes',
+    'form.status_dirty': 'Unsaved changes',
+    'form.status_saved': 'Saved',
+    'form.status_saving': 'Saving…',
 }
 
 export type TFn = (key: string, vars?: Record<string, unknown>) => string

@@ -210,6 +210,8 @@ interface ConnectorFormState {
   client?: ApiClient
   /** Host-injected: credential key -> expected option `tipo`. */
   expectedOptionKinds: Record<string, string>
+  /** Bumped after a save: dependent selects re-list their options in place. */
+  reloadNonce?: number
 }
 const ConnectorFormStateContext = createContext<ConnectorFormState>({
   fields: [],
@@ -513,6 +515,14 @@ function DynamicConnectorSelect({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected])
 
+  // After a save the stored connection changed (series, environment, issuer…):
+  // re-list in place so the options are current without leaving the dialog.
+  const reloadNonce = form.reloadNonce ?? 0
+  useEffect(() => {
+    if (reloadNonce > 0) void load(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadNonce])
+
   // Scope the options to the kind (`tipo`) the host expects for this field,
   // when the source reports one. The mapping is injected by the host
   // (`expectedOptionKinds`); empty by default, so the SDK stays domain-agnostic.
@@ -637,6 +647,9 @@ export function AddonConfigSurface({
   // credentials not saved yet (an action tests what is STORED: it saves first).
   const [blockResults, setBlockResults] = useState<Record<string, BlockResult | undefined>>({})
   const [credDirty, setCredDirty] = useState(false)
+  // Bumped after a save (selects re-list) and the «Guardado» footer state.
+  const [reloadNonce, setReloadNonce] = useState(0)
+  const [justSaved, setJustSaved] = useState(false)
   // Credential keys the backend already holds (non-secret values + secrets_set).
   const [storedKeys, setStoredKeys] = useState<Set<string>>(new Set())
   // Credentials that differ between sandbox and production (served by /values) and
@@ -831,6 +844,46 @@ export function AddonConfigSurface({
     return f.label ? textOrFallback(t(f.label, { defaultValue: fallback }), f.label, fallback) : fallback
   }
 
+  // Re-reads what the backend now holds after «Guardar» WITHOUT resetting the
+  // step, the scroll or the focus: stored credentials (secrets blank again, the
+  // fields marked as stored), settings, and the dependent selects.
+  const refreshInPlace = async () => {
+    try {
+      if (canManageIssuer && connector?.provider && credFields.length > 0) {
+        const envQuery = envField && envValue ? `?environment=${encodeURIComponent(envValue)}` : ''
+        const res = await api.get(`/integrations/${connector.provider}/values${envQuery}`)
+        const stored = (res.data?.data?.values ?? {}) as Record<string, string>
+        const secretsSet = (res.data?.data?.secrets_set ?? []) as string[]
+        envScoped.current = new Set((res.data?.data?.env_scoped ?? []) as string[])
+        if (envField) loadedEnv.current = envValue || (stored[envField.key] ?? '')
+        setStoredKeys(new Set([...Object.keys(stored).filter((k) => stored[k] !== ''), ...secretsSet]))
+        setCredValues((prev) => {
+          const next = { ...prev }
+          for (const f of credFields) {
+            if (isSecretCredential(f)) next[f.key] = ''
+            else if (stored[f.key] != null && stored[f.key] !== '') next[f.key] = stored[f.key]
+          }
+          return next
+        })
+      }
+    } catch {
+      /* keep what is on screen */
+    }
+    try {
+      const branchQuery =
+        target === 'branch' && activeBranch ? `?branch_id=${encodeURIComponent(activeBranchId)}` : ''
+      const res = await api.get(`/addons/${addon.addon_key}/settings${branchQuery}`)
+      setSettingsValues(res.data?.data || {})
+      setOverrides(res.data?.overrides || {})
+    } catch {
+      /* keep what is on screen */
+    }
+    setCredDirty(false)
+    setTouched(new Set())
+    setCleared(new Set())
+    setReloadNonce((n) => n + 1)
+  }
+
   const saveMutation = useMutation({
     mutationFn: async () => {
       if (connector && canManageIssuer) {
@@ -869,9 +922,10 @@ export function AddonConfigSurface({
     onSuccess: () => {
       setFormError(null)
       setFieldErrors({})
-      setCredDirty(false)
       notify.success(st('installed_addons.config_saved'))
-      onOpenChange(false)
+      // Stay open: reload what was saved in place (no scroll/focus loss) so the
+      // operator sees the stored state and the dependent selects are current.
+      void refreshInPlace().finally(() => setJustSaved(true))
       onSaved?.()
     },
     onError: (err: unknown) => {
@@ -960,6 +1014,7 @@ export function AddonConfigSurface({
     }
     await api.post(`/integrations/${connector.provider}`, payload)
     setCredDirty(false)
+    setReloadNonce((n) => n + 1)
     onSaved?.()
     return null
   }
@@ -1324,6 +1379,21 @@ export function AddonConfigSurface({
     goToStep(stepIdx + 1)
   }
 
+  const dirty = credDirty || touched.size > 0 || cleared.size > 0
+  useEffect(() => {
+    if (dirty) setJustSaved(false)
+  }, [dirty])
+  useEffect(() => {
+    if (open) setJustSaved(false)
+  }, [open])
+  const saveStatus: 'saving' | 'dirty' | 'saved' | 'clean' = saveMutation.isPending
+    ? 'saving'
+    : dirty
+      ? 'dirty'
+      : justSaved
+        ? 'saved'
+        : 'clean'
+
   const hasAnyBlocks = layoutSections.some((s) => (s.blocks?.length ?? 0) > 0) || extraBlocks.length > 0
   const nothingToConfigure = !hasCredentials && !hasSettings && !isOAuth && !hasAnyBlocks
   const nothingToSave = !hasCredentials && !hasSettings
@@ -1332,7 +1402,7 @@ export function AddonConfigSurface({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className='flex max-h-[85vh] flex-col max-sm:max-h-[calc(100dvh-1rem)] max-sm:gap-3 max-sm:p-4'>
        <ConnectorFormStateContext.Provider
-        value={{ fields: credFields, errors: fieldErrors, idPrefix, client: api, expectedOptionKinds }}
+        value={{ fields: credFields, errors: fieldErrors, idPrefix, client: api, expectedOptionKinds, reloadNonce }}
       >
         <DialogHeader className='shrink-0 pe-8 text-start'>
           <DialogTitle className='leading-snug'>
@@ -1576,40 +1646,66 @@ export function AddonConfigSurface({
           </div>
         ) : null}
 
-        {/* Footer: always visible (outside the scroll). ONE primary action
-            (Siguiente / Guardar) full width on phones, Atrás + Cancelar
-            sharing the row below; a single right-aligned row from sm up.
-            Verifications live inside the steps, not here. */}
+        {/* Footer: ALWAYS visible (outside the scroll) and Guardar is ALWAYS in
+            it, on every step and at any scroll position. Left: the save state
+            (aria-live). Right: Cancelar/Cerrar, Atrás, Siguiente (steps) and the
+            primary Guardar. Verifications live inside the steps, not here. */}
         <DialogFooter
           data-wizard-footer=''
-          className='grid shrink-0 grid-cols-2 gap-2 border-t pt-3 sm:flex sm:flex-row sm:justify-end sm:border-t-0 sm:pt-0'
+          className='flex shrink-0 flex-col gap-2 border-t pt-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:space-x-0'
         >
           {nothingToSave ? (
-            <Button className='col-span-2 h-11 sm:h-9' onClick={() => onOpenChange(false)}>
+            <Button className='h-11 w-full sm:ml-auto sm:h-9 sm:w-auto' onClick={() => onOpenChange(false)}>
               {st('common.close')}
             </Button>
           ) : (
             <>
-              <Button
-                className='order-first col-span-2 h-11 sm:order-last sm:h-9'
-                onClick={useStepper && !isLastStep ? handleNext : handleSave}
-                disabled={!(useStepper && !isLastStep) && (saveMutation.isPending || loading)}
+              <p
+                role='status'
+                aria-live='polite'
+                data-save-status={saveStatus}
+                className={cn(
+                  'flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs',
+                  saveStatus === 'dirty' ? 'font-medium text-amber-600 dark:text-amber-400' : 'text-muted-foreground',
+                  saveStatus === 'saved' && 'text-emerald-600 dark:text-emerald-400',
+                )}
               >
-                {saveMutation.isPending && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
-                {useStepper && !isLastStep ? st('common.next') : st('common.save')}
-              </Button>
-              {useStepper && stepIdx > 0 && (
-                <Button variant='outline' className='h-11 sm:h-9' onClick={() => goToStep(Math.max(0, stepIdx - 1))}>
-                  {st('common.back')}
+                {saveStatus === 'saving' ? (
+                  <Loader2 className='h-3.5 w-3.5 animate-spin' />
+                ) : saveStatus === 'saved' ? (
+                  <Check className='h-3.5 w-3.5' />
+                ) : (
+                  <span
+                    aria-hidden
+                    className={cn('h-2 w-2 rounded-full', saveStatus === 'dirty' ? 'bg-amber-500' : 'bg-muted-foreground/40')}
+                  />
+                )}
+                {st(`form.status_${saveStatus}`)}
+              </p>
+              <div className='flex flex-wrap items-center gap-2 sm:ml-auto sm:flex-nowrap sm:justify-end'>
+                <Button variant='ghost' className='h-11 px-3 sm:h-9' onClick={() => onOpenChange(false)}>
+                  {dirty ? st('common.cancel') : st('common.close')}
                 </Button>
-              )}
-              <Button
-                variant='ghost'
-                className={cn('h-11 sm:order-first sm:h-9', !(useStepper && stepIdx > 0) && 'col-span-2')}
-                onClick={() => onOpenChange(false)}
-              >
-                {st('common.cancel')}
-              </Button>
+                {useStepper && stepIdx > 0 && (
+                  <Button variant='outline' className='h-11 sm:h-9' onClick={() => goToStep(Math.max(0, stepIdx - 1))}>
+                    {st('common.back')}
+                  </Button>
+                )}
+                {useStepper && !isLastStep && (
+                  <Button variant='outline' className='h-11 sm:h-9' onClick={handleNext}>
+                    {st('common.next')}
+                  </Button>
+                )}
+                <Button
+                  className='h-11 flex-1 sm:h-9 sm:flex-none'
+                  onClick={handleSave}
+                  disabled={saveMutation.isPending || loading}
+                  data-testid='config-save'
+                >
+                  {saveMutation.isPending && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
+                  {st('common.save')}
+                </Button>
+              </div>
             </>
           )}
         </DialogFooter>
