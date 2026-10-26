@@ -20,3 +20,5 @@ export {
 } from './swatch-colors'
 export { ThemeToggle, THEME_INIT_SCRIPT } from './theme-toggle'
 export { InstallApp, useServiceWorker } from './pwa'
+export { ProductThumb, ProductPreview, ProductThumbStack, productInitials } from './product-preview'
+export type { ProductThumbProps, ProductThumbClassNames, ProductThumbImage, ProductPreviewProps, ProductPreviewClassNames, ProductThumbStackProps } from './product-preview'

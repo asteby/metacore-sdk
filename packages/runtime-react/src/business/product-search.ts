@@ -62,6 +62,8 @@ export interface ProductVariant {
     /** Costo de catálogo (compras). Opcional; el precio de lista sigue en `price`. */
     cost?: number
     stock?: StockByWarehouse[]
+    /** Foto de la variante (URL ya resuelta). Manda sobre la del producto. */
+    image?: string | null
 }
 
 export interface ProductResult {
@@ -83,6 +85,8 @@ export interface ProductResult {
     bundle_items?: Array<{ product_id: string; name: string; quantity: number }>
     /** Unidad de venta del catálogo (pza, juego, kg…). */
     unit?: string
+    /** Foto del producto (URL ya resuelta, p. ej. `getStorageUrl`): el buscador y el renglón la muestran. */
+    image?: string | null
     /** Campos de extensión del producto (fiscal_data.*) que se copian al renglón. */
     extensions?: Record<string, string>
     /**

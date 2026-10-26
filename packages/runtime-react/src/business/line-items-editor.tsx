@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Heading, Minus, Pencil, Plus, StickyNote, Trash2 } from 'lucide-react'
-import { Button, Input } from '@asteby/metacore-ui'
+import { Button, Input, ProductThumb } from '@asteby/metacore-ui'
 import { useCan } from '../permissions-context'
 import { useFormatter } from './format'
 import {
@@ -363,31 +363,34 @@ export function DocumentLinesGrid({
                                                 entityLabel={entity}
                                             />
                                         ) : (
-                                            <div className="relative" data-slot="line-description">
-                                                <Input
-                                                    value={l.description}
-                                                    disabled={locked}
-                                                    className={INPUT + (editProduct && l.product_id && !locked ? ' pr-9' : '')}
-                                                    data-cell="description"
-                                                    aria-label={t('lineItems.description', { defaultValue: 'Descripción' })}
-                                                    aria-invalid={!!cell(i, 'description')}
-                                                    onChange={(e) => patch(i, { description: e.target.value })}
-                                                    onKeyDown={(e) => descKeys(e, i, l)}
-                                                />
-                                                {editProduct && l.product_id && !locked && (
-                                                    <Button
-                                                        type="button"
-                                                        size="icon"
-                                                        variant="ghost"
-                                                        className={EDIT}
-                                                        data-slot="line-edit-product"
-                                                        aria-label={t('lineItems.editProduct', { defaultValue: 'Editar {{entity}}', entity })}
-                                                        title={t('lineItems.editProduct', { defaultValue: 'Editar {{entity}}', entity })}
-                                                        onClick={() => void editProduct(l)}
-                                                    >
-                                                        <Pencil className="size-3.5" />
-                                                    </Button>
-                                                )}
+                                            <div className="flex items-start gap-2">
+                                                {l.product_id ? <ProductThumb src={l.image} name={l.description} size="sm" decorative /> : null}
+                                                <div className="relative min-w-0 flex-1" data-slot="line-description">
+                                                    <Input
+                                                        value={l.description}
+                                                        disabled={locked}
+                                                        className={INPUT + (editProduct && l.product_id && !locked ? ' pr-9' : '')}
+                                                        data-cell="description"
+                                                        aria-label={t('lineItems.description', { defaultValue: 'Descripción' })}
+                                                        aria-invalid={!!cell(i, 'description')}
+                                                        onChange={(e) => patch(i, { description: e.target.value })}
+                                                        onKeyDown={(e) => descKeys(e, i, l)}
+                                                    />
+                                                    {editProduct && l.product_id && !locked && (
+                                                        <Button
+                                                            type="button"
+                                                            size="icon"
+                                                            variant="ghost"
+                                                            className={EDIT}
+                                                            data-slot="line-edit-product"
+                                                            aria-label={t('lineItems.editProduct', { defaultValue: 'Editar {{entity}}', entity })}
+                                                            title={t('lineItems.editProduct', { defaultValue: 'Editar {{entity}}', entity })}
+                                                            onClick={() => void editProduct(l)}
+                                                        >
+                                                            <Pencil className="size-3.5" />
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </div>
                                         )}
                                         {(l.sku || unitText(l.unit)) && (

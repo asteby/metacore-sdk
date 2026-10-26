@@ -7,6 +7,10 @@ export type { PostPurchaseAccountPromptClassNames, PostPurchaseAccountPromptMess
 // Order screens (contract 1.8): headless, `data-sf-*` hooks, `classNames`, es/en texts.
 export { OrderList, OrderCard } from './order-list.js'
 export type { OrderCardClassNames, OrderCardProps, OrderListClassNames, OrderListProps } from './order-list.js'
+export { OrderLines, OrderProductsStack, lineImage } from './order-lines.js'
+export type { OrderLinesClassNames, OrderLinesProps } from './order-lines.js'
+export { ProductPreview, ProductThumb, ProductThumbStack, productInitials } from '../ui/product-preview.js'
+export type { ProductPreviewProps, ProductThumbProps, ProductThumbStackProps } from '../ui/product-preview.js'
 export { OrderProgress, OrderStatusBadge, NextActionBar, stageTone } from './progress.js'
 export type { NextActionBarClassNames, NextActionBarProps, OrderProgressClassNames, OrderProgressProps, OrderStatusBadgeProps, OrderTone } from './progress.js'
 export { ShipmentCard } from './shipment.js'

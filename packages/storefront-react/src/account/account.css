@@ -241,3 +241,20 @@
     animation: none;
   }
 }
+
+/* products of an order card (`OrderProductsStack`); the line list is `OrderLines` (`ProductPreview` rows) */
+[data-sf-order-products] {
+  margin-block: 0.5rem 0.25rem;
+}
+[data-sf-order-lines-list] {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+[data-sf-order-line] {
+  padding-block: 0.75rem;
+}
+[data-sf-order-line] + [data-sf-order-line] {
+  border-top: 1px solid var(--sf-account-line, color-mix(in srgb, currentColor 14%, transparent));
+}

@@ -6,6 +6,7 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@asteby/metacore-ui/primitives'
+import { ProductThumb } from '@asteby/metacore-ui/shared'
 import { useLatestSearch, useRecordSearch } from '../record-picker'
 import { useFormatter } from './format'
 import { OptionDisplayRow } from '../option-display'
@@ -116,7 +117,8 @@ export function ProductHitRow({ hit, warehouseId, currency, compact }: { hit: Pr
     const meta = productHitMeta(hit)
     return (
         <span className="flex w-full min-w-0 items-center justify-between gap-3">
-            <span className="min-w-0">
+            <ProductThumb src={hit.variant?.image ?? hit.product.image} name={hit.product.name} size={compact ? 'xs' : 'sm'} decorative />
+            <span className="min-w-0 flex-1">
                 <span className="line-clamp-2 break-words font-medium" title={productHitLabel(hit)}>{productHitLabel(hit)}</span>
                 {meta && <span className="block truncate text-xs text-muted-foreground">{meta}</span>}
             </span>

@@ -39,6 +39,7 @@ export function applyProductToLine(
         ...rest,
         kind: 'item',
         product_id: variant?.id ?? product.id,
+        image: variant?.image ?? product.image ?? undefined,
         ...values,
         quantity: qty !== 0 ? qty : 1,
         catalog_price: catalog,

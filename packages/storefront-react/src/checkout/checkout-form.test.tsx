@@ -234,15 +234,31 @@ const cost = (over: Partial<CartCost> = {}): CartCost => ({ subtotal: mxn('749.0
 
 describe('OrderSummary', () => {
   it('prints the server totals as they come: shipping pending, then the chosen one, taxes included as a note', () => {
-    const { rerender, container } = render(<OrderSummary lines={[line('a', 'BALATAS CERÁMICAS', 1, '749.00')]} cost={cost()} locale="es-MX" />)
+    const { rerender, container } = render(<OrderSummary lines={[line('a', 'BALATAS CERÁMICAS', 1, '749.00')]} cost={cost()} locale="es-MX" media={false} />)
     expect(screen.getByRole('heading', { name: 'Tu pedido' })).toBeTruthy()
     expect(container.querySelector('[data-sf-summary-row="shipping"]')!.textContent).toBe('EnvíoAl elegir la entrega')
-    rerender(<OrderSummary lines={[line('a', 'BALATAS CERÁMICAS', 2, '1498.00')]} cost={cost({ subtotal: mxn('1498.00'), shipping: mxn('108.82'), total: mxn('1606.82'), tax: mxn('221.63') })} locale="es-MX" />)
+    rerender(<OrderSummary lines={[line('a', 'BALATAS CERÁMICAS', 2, '1498.00')]} cost={cost({ subtotal: mxn('1498.00'), shipping: mxn('108.82'), total: mxn('1606.82'), tax: mxn('221.63') })} locale="es-MX" media={false} />)
     expect(container.querySelector('[data-sf-summary-row="shipping"]')!.textContent).toContain('108.82')
     expect(container.querySelector('[data-sf-summary-row="total"]')!.textContent).toContain('1,606.82')
     expect(container.querySelector('[data-sf-summary-row="tax"]')).toBeNull()
     expect(container.querySelector('[data-sf-summary-tax-note]')!.textContent).toMatch(/Incluye .*221.63 de impuestos/)
     expect(screen.getByText(/2 × BALATAS/)).toBeTruthy()
+  })
+
+  it('pictures each line by default: its image, else the fallback initial; `media={false}` keeps the text list', () => {
+    // happy-dom says every <img> is already complete; a browser says false while the file is in flight.
+    const complete = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, 'complete')
+    Object.defineProperty(HTMLImageElement.prototype, 'complete', { configurable: true, get: () => false })
+    const withImg = line('a', 'BALATAS', 2, '1498.00')
+    withImg.merchandise.image = { url: 'https://cdn.test/b.jpg', alt: null }
+    const { container, rerender } = render(<OrderSummary lines={[withImg, line('b', 'FILTRO', 1, '100.00')]} cost={cost()} locale="es-MX" />)
+    const media = container.querySelectorAll('[data-sf-summary-media] [data-sf-thumb]')
+    expect(media).toHaveLength(2)
+    expect(media[0]!.querySelector('img')!.getAttribute('src')).toBe('https://cdn.test/b.jpg')
+    expect(media[1]!.querySelector('[data-sf-thumb-initial]')!.textContent).toBe('F')
+    rerender(<OrderSummary lines={[withImg]} cost={cost()} locale="es-MX" media={false} />)
+    expect(container.querySelector('[data-sf-thumb]')).toBeNull()
+    if (complete) Object.defineProperty(HTMLImageElement.prototype, 'complete', complete)
   })
 
   it('discounts by line, free shipping and updating state', () => {

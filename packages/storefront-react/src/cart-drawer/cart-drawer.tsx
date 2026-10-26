@@ -2,6 +2,7 @@ import { useEffect, useId, type ElementType, type ReactNode } from 'react'
 import { formatMoney, type Cart, type CartLine, type Money } from '@asteby/storefront'
 import { useModalDialog } from '../dialog.js'
 import { useResolvedLocale } from '../locale.js'
+import { ProductThumb } from '../ui/product-preview.js'
 import { closeCartDrawer, isQuietOpen, useCartDrawer } from './store.js'
 import { cartOptimistic, useOptimisticCart, type OptimisticNotice, type OptimisticRow } from './optimistic.js'
 
@@ -305,9 +306,7 @@ function DrawerLine({
   const title = merch.product.title
   const href = paths.product?.(merch.product.handle, merch.id)
   const img = merch.image ?? merch.product.featured_image
-  const image = props.renderImage ? props.renderImage(line) : img ? (
-    <img src={img.url} alt={img.alt ?? ''} width={80} height={80} loading="lazy" decoding="async" />
-  ) : null
+  const image = props.renderImage ? props.renderImage(line) : <ProductThumb image={img ?? null} name={title} size={80} decorative />
 
   const imageNode = <span className={cx.image} data-sf-cart-image="">{image}</span>
   const price = <span className={cx.price} data-sf-cart-price="">{money(line.cost.total)}</span>
@@ -359,7 +358,7 @@ function PendingLine({ row, props, money, label }: { row: OptimisticRow; props: 
   return (
     <li className={cx.line} data-sf-cart-line="" data-sf-cart-line-pending="" aria-busy="true">
       <span className={cx.image} data-sf-cart-image="">
-        {row.image ? <img src={row.image.url} alt={row.image.alt ?? ''} width={80} height={80} decoding="async" /> : null}
+        <ProductThumb image={row.image ?? null} name={row.title} size={80} decorative />
       </span>
       <div className={cx.lineMain} data-sf-cart-line-main="">
         <div className={cx.lineHead} data-sf-cart-line-head="">

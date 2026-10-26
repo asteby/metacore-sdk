@@ -14,6 +14,8 @@ export interface LineItem {
     /** Id del producto/variante en el catálogo (kind=item). */
     product_id?: string
     sku?: string
+    /** Foto del producto/variante elegido (solo UI: no se serializa). */
+    image?: string | null
     description: string
     quantity: number
     unit_price: number

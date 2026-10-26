@@ -1,0 +1,141 @@
+/*
+ * <ProductThumb>, <ProductPreview>, <ProductThumbStack>: la foto del producto y la línea de producto de la tienda.
+ * CSS plano sobre los tokens de la tienda (--foreground, --background, --border, --muted-foreground, --radius); en tema
+ * oscuro la superficie y el brillo salen de color-mix, sin colores escritos aquí. Va incluido en cart.css, checkout.css,
+ * account.css y ui.css (misma regla, un solo origen: src/ui/product-preview.css).
+ */
+[data-sf-thumb] {
+  --_surface: color-mix(in srgb, var(--foreground, #111) 5%, var(--background, #fff));
+  position: relative;
+  display: inline-block;
+  flex: none;
+  box-sizing: border-box;
+  width: var(--sf-preview-size, 3.5rem);
+  aspect-ratio: var(--sf-preview-ratio, 1 / 1);
+  overflow: hidden;
+  border-radius: calc(var(--radius, 0.5rem) * 1.25);
+  background: var(--_surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--foreground, #111) 9%, transparent);
+  vertical-align: middle;
+}
+:root[data-theme="dark"] [data-sf-thumb] { --_surface: color-mix(in srgb, var(--foreground, #fff) 9%, var(--background, #111)); }
+[data-sf-thumb] > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  object-fit: contain;
+  padding: 6%;
+  transition: transform 220ms cubic-bezier(0.2, 0.7, 0.2, 1), opacity 180ms;
+}
+[data-sf-thumb][data-fit="cover"] > img { object-fit: cover; padding: 0; }
+/* Fotos sobre fondo blanco: se funden con la superficie en tema claro (no hay caja blanca dentro del marco). */
+[data-sf-thumb][data-fit="contain"] > img { mix-blend-mode: multiply; }
+:root[data-theme="dark"] [data-sf-thumb] > img { mix-blend-mode: normal; }
+[data-sf-thumb][data-state="loading"]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 20%, color-mix(in srgb, var(--foreground, #111) 8%, transparent) 50%, transparent 80%);
+  background-size: 200% 100%;
+  animation: sf-thumb-shimmer 1.4s linear infinite;
+  pointer-events: none;
+}
+@keyframes sf-thumb-shimmer { from { background-position: 150% 0; } to { background-position: -50% 0; } }
+[data-sf-thumb][data-zoom]:hover > img { transform: scale(1.07); }
+@media (prefers-reduced-motion: reduce) {
+  [data-sf-thumb][data-state="loading"]::before { animation: none; }
+  [data-sf-thumb] > img { transition: none; }
+  [data-sf-thumb][data-zoom]:hover > img { transform: none; }
+}
+
+[data-sf-thumb-fallback] {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: color-mix(in srgb, var(--foreground, #111) 42%, transparent);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--foreground, #111) 3%, transparent), color-mix(in srgb, var(--foreground, #111) 9%, transparent));
+}
+[data-sf-thumb-initial] {
+  font-size: calc(var(--sf-preview-size, 3.5rem) * 0.36);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+[data-sf-thumb-qty] {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.2rem;
+  min-width: 1.25rem;
+  height: 1.25rem;
+  padding: 0 0.3rem;
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  background: var(--sf-summary-qty-bg, color-mix(in srgb, var(--foreground, #111) 78%, transparent));
+  color: var(--sf-summary-qty-fg, var(--background, #fff));
+}
+
+/* Línea de producto: foto | texto | importe. */
+[data-sf-preview] {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  min-width: 0;
+}
+[data-sf-preview][data-missing] [data-sf-preview-name] { font-style: italic; color: var(--muted-foreground, color-mix(in srgb, currentColor 60%, transparent)); }
+[data-sf-preview-media] { flex: none; display: inline-flex; }
+[data-sf-preview-body] { display: grid; flex: 1 1 auto; gap: 0.125rem; min-width: 0; }
+[data-sf-preview-name] {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+[data-sf-preview-name] a { color: inherit; text-decoration: none; }
+[data-sf-preview-name] a:hover { text-decoration: underline; }
+[data-sf-preview-variant],
+[data-sf-preview-sku],
+[data-sf-preview-meta] {
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: var(--muted-foreground, color-mix(in srgb, currentColor 66%, transparent));
+}
+[data-sf-preview-sku] { font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+[data-sf-preview-total] {
+  flex: none;
+  align-self: flex-start;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Fotos apiladas (tarjeta de pedido). */
+[data-sf-thumb-stack] { display: inline-flex; align-items: center; }
+[data-sf-thumb-stack] > * { box-shadow: 0 0 0 2px var(--card, var(--background, #fff)), inset 0 0 0 1px color-mix(in srgb, var(--foreground, #111) 9%, transparent); }
+[data-sf-thumb-stack] > * + * { margin-inline-start: -0.625rem; }
+[data-sf-thumb-more] {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  box-sizing: border-box;
+  width: var(--sf-preview-size, 2.75rem);
+  aspect-ratio: 1 / 1;
+  border-radius: calc(var(--radius, 0.5rem) * 1.25);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground, color-mix(in srgb, currentColor 66%, transparent));
+  background: color-mix(in srgb, var(--foreground, #111) 7%, var(--background, #fff));
+}

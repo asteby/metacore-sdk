@@ -8,10 +8,11 @@ import type { NextAction, Order } from '@asteby/storefront'
 import { nextAction as deriveNextAction, orderProgress as deriveProgress, isTestShipment } from '@asteby/storefront'
 import type { ReactNode } from 'react'
 import { enumText, fill } from './orders-messages.js'
+import { OrderProductsStack } from './order-lines.js'
 import { Hidden, Time, moneyText, plural, str, useAccountText, type AccountTextProps } from './orders-ui.js'
 import { NextActionBar, OrderProgress, OrderStatusBadge, type NextActionBarClassNames, type OrderProgressClassNames } from './progress.js'
 
-export type OrderCardClassNames = Partial<Record<'root' | 'header' | 'number' | 'link' | 'meta' | 'badge' | 'summary' | 'shipment' | 'footer' | 'total' | 'actions', string>> & {
+export type OrderCardClassNames = Partial<Record<'root' | 'header' | 'products' | 'number' | 'link' | 'meta' | 'badge' | 'summary' | 'shipment' | 'footer' | 'total' | 'actions', string>> & {
   progress?: OrderProgressClassNames
   action?: NextActionBarClassNames
 }
@@ -53,6 +54,11 @@ export function OrderCard({ order, orderHref, actionHref, onAction, headingLevel
         <Time value={order.created_at} text={date(order.created_at) ? fill(m['order.placed'], { date: date(order.created_at)! }) : null} />
         {items > 0 ? <> · {plural(m, 'order.items', items)}</> : null}
       </p>
+      {Array.isArray(order.lines) && order.lines.length > 0 ? (
+        <div className={cx.products} data-sf-order-products>
+          <OrderProductsStack order={order} {...text} />
+        </div>
+      ) : null}
       <div className={cx.summary} data-sf-order-summary>
         <OrderProgress progress={progress} variant="compact" {...text} {...(cx.progress ? { classNames: cx.progress } : {})} />
         {showShipment ? (

@@ -10,7 +10,7 @@ import {
     taxBreakdown,
     validateLineItems,
 } from './line-items'
-import { addProductLine, lineGridKeyCommand, priceFromProduct } from './document-lines'
+import { addProductLine, applyProductToLine, lineGridKeyCommand, priceFromProduct } from './document-lines'
 import { newTender, serializePayment, summarizePayment, validatePayment, type PaymentMethodOption } from './payment'
 import { singleDestination, validateRefund } from './refund'
 import { parseProductQuery, parseTireSize, productToLine } from './product-search'
@@ -249,5 +249,17 @@ describe('rma states', () => {
         expect(canTransitionRma('authorized', 'rejected').ok).toBe(false)
         expect(canTransitionRma('authorized', 'rejected', 'no aplica').ok).toBe(true)
         expect(canTransitionRma('closed', 'draft').ok).toBe(false)
+    })
+})
+
+describe('foto del producto en el renglón', () => {
+    it('el renglón toma la foto de la variante, si no la del producto, y no viaja al backend', () => {
+        const product = { id: 'p1', name: 'Balata', price: 100, image: '/storage/p1.jpg', variants: [{ id: 'v1', label: 'Delantera', image: '/storage/v1.jpg' }] }
+        const withVariant = applyProductToLine(makeLine(), product, product.variants[0])
+        expect(withVariant.image).toBe('/storage/v1.jpg')
+        const base = applyProductToLine(makeLine(), product)
+        expect(base.image).toBe('/storage/p1.jpg')
+        expect(applyProductToLine(base, { id: 'p2', name: 'Sin foto', price: 1 }).image).toBeUndefined()
+        expect(JSON.stringify(serializeLineItems([base]))).not.toContain('p1.jpg')
     })
 })

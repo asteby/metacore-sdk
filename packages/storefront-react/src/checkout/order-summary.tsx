@@ -6,6 +6,7 @@
 import type { ReactNode } from 'react'
 import { formatMoney, type CartCost, type CartLine, type Money } from '@asteby/storefront'
 import { useResolvedLocale } from '../locale.js'
+import { ProductThumb } from '../ui/product-preview.js'
 
 export type OrderSummaryMessages = {
   title: string
@@ -74,8 +75,10 @@ export type OrderSummaryProps = {
   cost: CartCost
   /** The delivery is being saved and the cart re-read: shipping and total say so (`aria-busy`). */
   updating?: boolean
-  /** Picture of a line (e.g. `<ProductImage>`), 48-64 px. The quantity badge sits on it. */
+  /** Picture of a line (e.g. `<ProductImage>`), 48-64 px. The quantity badge sits on it. Default: `<ProductThumb>` of the line's image (fallback initial when it has none). */
   renderLineMedia?: (line: CartLine) => ReactNode
+  /** Show the default picture of each line. Default true; `false` gives the text-only "2 × Name" list. */
+  media?: boolean
   renderAmount?: (amount: Money) => ReactNode
   /** Heading. `false` hides it (the disclosure already names the block). */
   title?: ReactNode | false
@@ -88,15 +91,22 @@ export type OrderSummaryProps = {
   children?: ReactNode
 }
 
+/** The line's own picture, else the product's; `decorative` because the name is right beside it. */
+function defaultLineMedia(l: CartLine): ReactNode {
+  const img = l.merchandise.image ?? l.merchandise.product.featured_image ?? null
+  return <ProductThumb image={img} name={l.merchandise.product.title} size={56} decorative zoom={false} />
+}
+
 const isZero = (m: Money | null | undefined) => !!m && Number(m.amount) === 0
 const positive = (m: Money | null | undefined): m is Money => !!m && Number(m.amount) > 0
 
 /** Lines and totals of the order. The total row is `aria-live`, so a new total after choosing delivery is announced. */
 export function OrderSummary(props: OrderSummaryProps) {
-  const { lines, cost, updating = false, renderLineMedia, renderAmount, title, headingLevel = 2, classNames: cx = {}, children } = props
+  const { lines, cost, updating = false, media = true, renderAmount, title, headingLevel = 2, classNames: cx = {}, children } = props
   const locale = useResolvedLocale(props.locale)
   const m = orderSummaryMessages(locale, props.messages)
   const money = (v: Money) => (renderAmount ? renderAmount(v) : formatMoney(v, locale))
+  const renderLineMedia = props.renderLineMedia ?? (media ? defaultLineMedia : undefined)
   const H = headingLevel === 3 ? 'h3' : 'h2'
   const discounts = cost.discounts?.filter((d) => positive(d.amount)) ?? []
   return (

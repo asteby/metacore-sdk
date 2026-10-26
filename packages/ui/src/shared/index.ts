@@ -32,3 +32,11 @@ export {
   type SourceBadgeProps,
   type MediaGridProps,
 } from './link-preview'
+export {
+  ProductThumb,
+  ProductPreview,
+  productInitials,
+  type ProductThumbProps,
+  type ProductThumbSize,
+  type ProductPreviewProps,
+} from './product-preview'
