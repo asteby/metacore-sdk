@@ -22,6 +22,10 @@ export type AddressFieldsMessages = Record<AddressFieldKey | ContactFieldKey, st
   emailHint: string
   phoneHint: string
   lookupFilled: string
+  /** Tooltip and note of a state the postal code defined (locked). */
+  provinceLocked: string
+  /** Discreet action that releases the locked state so the buyer can fix the postal code. */
+  changePostalCode: string
 }
 
 const ES: AddressFieldsMessages = {
@@ -43,6 +47,8 @@ const ES: AddressFieldsMessages = {
   emailHint: 'Te enviamos aquí la confirmación y el seguimiento.',
   phoneHint: 'Solo para la paquetería, por si necesita contactarte.',
   lookupFilled: 'Completamos estado y ciudad con tu código postal.',
+  provinceLocked: 'Definido por tu código postal',
+  changePostalCode: 'Cambiar código postal',
 }
 
 const EN: AddressFieldsMessages = {
@@ -64,6 +70,8 @@ const EN: AddressFieldsMessages = {
   emailHint: 'We send the confirmation and tracking here.',
   phoneHint: 'Only for the carrier, in case they need to reach you.',
   lookupFilled: 'We filled in state and city from your postal code.',
+  provinceLocked: 'Set by your postal code',
+  changePostalCode: 'Change postal code',
 }
 
 export function addressFieldsMessages(locale?: string | null, overrides?: Partial<AddressFieldsMessages> | null): AddressFieldsMessages {
@@ -147,8 +155,11 @@ export type AddressFieldsProps = Common & {
   /**
    * Once `lookupPostalCode` fills the state field (never over what the buyer already typed), lock it: a plain
    * `<input>` turns read-only; a `<select>` (from `provinces`) turns disabled with a hidden field that keeps
-   * submitting its value. The buyer corrects the state by correcting the postal code. Default false: the filled
-   * state stays as editable as any other field. Marked with `data-sf-locked="1"` for the shop's own styling.
+   * submitting its value. The state is the postal code's: the field shows a lock, the tooltip `provinceLocked` and a
+   * discreet `changePostalCode` action; editing the postal code releases the lock and clears what the lookup filled
+   * (also when the new code resolves nothing), so a stale state is never left behind. Default TRUE (the server
+   * validates the pair again; set `false` to keep the filled state as editable as any field). Marked with
+   * `data-sf-locked="1"` for the shop's own styling.
    */
   lockProvinceOnFill?: boolean
   /** Rendered after the fields (e.g. "save this address"). */
@@ -169,8 +180,10 @@ function lockField(el: HTMLInputElement | HTMLSelectElement) {
     // A disabled `<select>` would stop submitting its value: a hidden sibling keeps it in the form.
     const name = el.getAttribute('name')
     if (name) {
+      el.dataset.sfName = name
       const hidden = document.createElement('input')
       hidden.type = 'hidden'
+      hidden.dataset.sfLockMirror = '1'
       hidden.name = name
       hidden.value = el.value
       el.insertAdjacentElement('afterend', hidden)
@@ -179,6 +192,23 @@ function lockField(el: HTMLInputElement | HTMLSelectElement) {
     el.disabled = true
   } else {
     el.readOnly = true
+  }
+}
+
+/** Undoes `lockField`: the field is editable again and, when the lookup filled it, empty (its value belonged to the old postal code). */
+function unlockField(el: HTMLInputElement | HTMLSelectElement) {
+  if (el.dataset.sfLocked !== '1') return
+  delete el.dataset.sfLocked
+  el.removeAttribute('aria-readonly')
+  el.removeAttribute('title')
+  if (el instanceof HTMLSelectElement) {
+    const mirror = el.nextElementSibling
+    if (mirror instanceof HTMLInputElement && mirror.dataset.sfLockMirror === '1') mirror.remove()
+    if (el.dataset.sfName) el.setAttribute('name', el.dataset.sfName)
+    delete el.dataset.sfName
+    el.disabled = false
+  } else {
+    el.readOnly = false
   }
 }
 
@@ -194,7 +224,7 @@ export function isAddressFillEvent(event: Event): boolean {
 }
 
 export function AddressFields(props: AddressFieldsProps) {
-  const { defaults, names = {}, errors = {}, countryCode, provinces, postalCode, lookupPostalCode, lockProvinceOnFill, locale, messages, fieldMessages: fm, classNames: cx = {}, children } = props
+  const { defaults, names = {}, errors = {}, countryCode, provinces, postalCode, lookupPostalCode, lockProvinceOnFill = true, locale, messages, fieldMessages: fm, classNames: cx = {}, children } = props
   const showNeighborhood = props.neighborhood ?? true
   const showReference = props.reference ?? true
   const m = addressFieldsMessages(locale, messages)
@@ -203,6 +233,7 @@ export function AddressFields(props: AddressFieldsProps) {
   const listId = useId()
   const [colonias, setColonias] = useState<readonly string[]>([])
   const [filled, setFilled] = useState(false)
+  const [provinceLocked, setProvinceLocked] = useState(false)
   const [coloniaSelect, setColoniaSelect] = useState(false)
   const coloniaSelectRef = useRef(false)
   // Switching the colonia between text and list remounts the field: what it should hold is carried to the new element.
@@ -238,6 +269,33 @@ export function AddressFields(props: AddressFieldsProps) {
     }
   }, [])
 
+  // The state was the old postal code's: free it and drop what the lookup filled (state, city, colonia) so nothing stale stays.
+  const releaseLookup = () => {
+    const form = zipRef.current?.closest('form')
+    if (!form) return
+    const locked = form.querySelector<HTMLInputElement | HTMLSelectElement>('[data-sf-locked="1"]')
+    const touched: Array<HTMLInputElement | HTMLSelectElement> = []
+    if (locked) {
+      unlockField(locked)
+      touched.push(locked)
+    }
+    for (const key of ['province', 'city', 'neighborhood'] as const) {
+      const el = form.elements.namedItem(n(key)) as HTMLInputElement | HTMLSelectElement | null
+      if (el && !('length' in el && !(el instanceof HTMLSelectElement)) && !touched.includes(el)) touched.push(el)
+    }
+    for (const el of touched) {
+      if (el.dataset.sfAutofilled !== '1') continue
+      el.value = ''
+      delete el.dataset.sfAutofilled
+      const event = new Event('input', { bubbles: true })
+      Object.defineProperty(event, ADDRESS_FILL_EVENT_FLAG, { value: true })
+      el.dispatchEvent(event)
+    }
+    lastZip.current = null
+    setProvinceLocked(false)
+    setFilled(false)
+  }
+
   const runLookup = (zip: string) => {
     const lookup = lookupRef.current
     if (!lookup || !zip || zip === lastZip.current) return
@@ -265,7 +323,11 @@ export function AddressFields(props: AddressFieldsProps) {
             const event = new Event('input', { bubbles: true })
             Object.defineProperty(event, ADDRESS_FILL_EVENT_FLAG, { value: true })
             el.dispatchEvent(event)
-            if (lock) lockField(el)
+            if (lock) {
+              lockField(el)
+              el.title = m.provinceLocked
+              setProvinceLocked(true)
+            }
             return true
           }
           const a = fill(n('province'), info.province, lockProvinceOnFill)
@@ -322,6 +384,26 @@ export function AddressFields(props: AddressFieldsProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const hasLock = (root: HTMLElement | null) => !!root?.closest('form')?.querySelector('[data-sf-locked="1"]')
+  const changeZip = () => {
+    releaseLookup()
+    const zipEl = zipRef.current?.querySelector('input')
+    zipEl?.focus()
+    zipEl?.select()
+  }
+  const provinceHint = provinceLocked ? (
+    <span data-sf-province-locked="" title={m.provinceLocked}>
+      <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: '-1px', marginRight: 4 }}>
+        <rect x="4" y="11" width="16" height="10" rx="2" />
+        <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+      </svg>
+      {m.provinceLocked}
+      {' · '}
+      <button type="button" data-sf-change-zip="" onClick={changeZip} style={{ background: 'none', border: 0, padding: 0, font: 'inherit', color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>
+        {m.changePostalCode}
+      </button>
+    </span>
+  ) : undefined
   const numericZip = postalCode?.inputMode === 'numeric'
   return (
     <>
@@ -341,13 +423,15 @@ export function AddressFields(props: AddressFieldsProps) {
           classNames={{ ...cx, root: cx.root }}
           onInput={(e) => {
             const v = e.currentTarget.value.trim()
+            // Editing the code that defined the state frees it (and what the lookup filled) before anything else.
+            if (v !== lastZip.current && hasLock(zipRef.current)) releaseLookup()
             if (postalCode?.maxLength && v.length === postalCode.maxLength) runLookup(v)
           }}
           onBlur={(e) => runLookup(e.currentTarget.value.trim())}
         />
       </div>
       {provinces && provinces.length ? (
-        <CheckoutField {...common} as="select" name={n('province')} label={m.province} autoComplete="address-level1" defaultValue={defaults?.province ?? ''} error={errors[n('province')] ?? null} classNames={field(cx, 'half')}>
+        <CheckoutField {...common} as="select" name={n('province')} label={m.province} autoComplete="address-level1" defaultValue={defaults?.province ?? ''} error={errors[n('province')] ?? null} classNames={field(cx, 'half')} hint={provinceHint}>
           <option value="" disabled>
             {m.provincePlaceholder}
           </option>
@@ -358,7 +442,7 @@ export function AddressFields(props: AddressFieldsProps) {
           ))}
         </CheckoutField>
       ) : (
-        <CheckoutField {...common} name={n('province')} label={m.province} autoComplete="address-level1" defaultValue={defaults?.province ?? ''} error={errors[n('province')] ?? null} classNames={field(cx, 'half')} />
+        <CheckoutField {...common} name={n('province')} label={m.province} autoComplete="address-level1" defaultValue={defaults?.province ?? ''} error={errors[n('province')] ?? null} classNames={field(cx, 'half')} hint={provinceHint} />
       )}
       <CheckoutField {...common} name={n('city')} label={m.city} autoComplete="address-level2" defaultValue={defaults?.city ?? ''} error={errors[n('city')] ?? null} classNames={field(cx, 'half')} />
       {showNeighborhood && coloniaSelect ? (

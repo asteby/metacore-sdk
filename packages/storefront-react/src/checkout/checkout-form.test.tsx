@@ -41,7 +41,7 @@ function Form({
           postalCode={{ pattern: '[0-9]{5}', maxLength: 5, inputMode: 'numeric', title: 'Escribe los 5 dígitos.' }}
           {...(lookup ? { lookupPostalCode: lookup } : {})}
           {...(provinces ? { provinces } : {})}
-          {...(lockProvinceOnFill ? { lockProvinceOnFill } : {})}
+          {...(lockProvinceOnFill !== undefined ? { lockProvinceOnFill } : {})}
           {...(neighborhoodList ? { neighborhoodList } : {})}
         />
       </fieldset>
@@ -162,6 +162,114 @@ describe('ContactFields + AddressFields', () => {
     expect(province.hasAttribute('name')).toBe(false)
     const hidden = container.querySelector('input[type="hidden"][name="province"]') as HTMLInputElement
     expect(hidden.value).toBe('Jalisco')
+  })
+})
+
+describe('state locked by the postal code', () => {
+  const jalisco = async () => ({ province: 'Jalisco', city: 'Guadalajara', neighborhoods: [] })
+
+  it('locks by default once the lookup fills the state: lock note, tooltip and a discreet "Cambiar código postal"', async () => {
+    const { container } = render(<Form lookup={jalisco} />)
+    const province = screen.getByLabelText('Estado') as HTMLInputElement
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '44100' } })
+    await waitFor(() => expect(province.readOnly).toBe(true))
+    expect(province.title).toBe('Definido por tu código postal')
+    const note = container.querySelector('[data-sf-province-locked]')!
+    expect(note.textContent).toContain('Definido por tu código postal')
+    expect(container.querySelector('[data-sf-change-zip]')?.textContent).toBe('Cambiar código postal')
+    // The note is the field's description, so a screen reader hears why it cannot be edited.
+    expect(province.getAttribute('aria-describedby')).toContain('province-hint')
+  })
+
+  it('lockProvinceOnFill={false} keeps the filled state editable and shows no lock', async () => {
+    const { container } = render(<Form lookup={jalisco} lockProvinceOnFill={false} />)
+    const province = screen.getByLabelText('Estado') as HTMLInputElement
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '44100' } })
+    await waitFor(() => expect(province.value).toBe('Jalisco'))
+    expect(province.readOnly).toBe(false)
+    expect(container.querySelector('[data-sf-province-locked]')).toBeNull()
+  })
+
+  it('editing the postal code releases the lock and clears what the lookup filled; a new code fills and locks again', async () => {
+    const lookup = vi.fn(async (zip: string) => (zip === '44100' ? { province: 'Jalisco', city: 'Guadalajara', neighborhoods: [] } : { province: 'Nayarit', city: 'Tepic', neighborhoods: [] }))
+    const { container } = render(<Form lookup={lookup} />)
+    const province = screen.getByLabelText('Estado') as HTMLInputElement
+    const city = screen.getByLabelText('Ciudad o municipio') as HTMLInputElement
+    const zip = screen.getByLabelText('Código postal')
+    fireEvent.input(zip, { target: { value: '44100' } })
+    await waitFor(() => expect(province.readOnly).toBe(true))
+    fireEvent.input(zip, { target: { value: '6300' } })
+    expect(province.readOnly).toBe(false)
+    expect(province.value).toBe('')
+    expect(city.value).toBe('')
+    expect(province.hasAttribute('data-sf-locked')).toBe(false)
+    expect(container.querySelector('[data-sf-province-locked]')).toBeNull()
+    fireEvent.input(zip, { target: { value: '63000' } })
+    await waitFor(() => expect(province.value).toBe('Nayarit'))
+    expect(province.readOnly).toBe(true)
+    expect(city.value).toBe('Tepic')
+  })
+
+  it('a new postal code that resolves nothing leaves the state empty and editable (never the old state)', async () => {
+    const lookup = vi.fn(async (zip: string) => (zip === '44100' ? { province: 'Jalisco', city: 'Guadalajara', neighborhoods: [] } : null))
+    render(<Form lookup={lookup} />)
+    const province = screen.getByLabelText('Estado') as HTMLInputElement
+    const zip = screen.getByLabelText('Código postal')
+    fireEvent.input(zip, { target: { value: '44100' } })
+    await waitFor(() => expect(province.readOnly).toBe(true))
+    fireEvent.input(zip, { target: { value: '99999' } })
+    await waitFor(() => expect(lookup).toHaveBeenCalledWith('99999'))
+    expect(province.value).toBe('')
+    expect(province.readOnly).toBe(false)
+    fireEvent.input(province, { target: { value: 'Yucatán' } })
+    expect(province.value).toBe('Yucatán')
+  })
+
+  it('"Cambiar código postal" frees the state and puts the cursor in the postal code', async () => {
+    const { container } = render(<Form lookup={jalisco} />)
+    const province = screen.getByLabelText('Estado') as HTMLInputElement
+    const zip = screen.getByLabelText('Código postal') as HTMLInputElement
+    fireEvent.input(zip, { target: { value: '44100' } })
+    await waitFor(() => expect(province.readOnly).toBe(true))
+    fireEvent.click(container.querySelector('[data-sf-change-zip]')!)
+    expect(province.readOnly).toBe(false)
+    expect(province.value).toBe('')
+    expect(document.activeElement).toBe(zip)
+    // The same code typed again looks up again and locks again.
+    fireEvent.input(zip, { target: { value: '44100' } })
+    await waitFor(() => expect(province.value).toBe('Jalisco'))
+    expect(province.readOnly).toBe(true)
+  })
+
+  it('a state <select> gets its name back (and loses the hidden mirror) when released', async () => {
+    const { container } = render(<Form lookup={jalisco} provinces={[{ name: 'Jalisco' }, { name: 'Nayarit' }]} />)
+    const province = screen.getByLabelText('Estado') as HTMLSelectElement
+    const zip = screen.getByLabelText('Código postal')
+    fireEvent.input(zip, { target: { value: '44100' } })
+    await waitFor(() => expect(province.disabled).toBe(true))
+    expect(container.querySelectorAll('input[type="hidden"][name="province"]')).toHaveLength(1)
+    fireEvent.input(zip, { target: { value: '4410' } })
+    expect(province.disabled).toBe(false)
+    expect(province.getAttribute('name')).toBe('province')
+    expect(container.querySelector('input[type="hidden"][name="province"]')).toBeNull()
+    expect(province.value).toBe('')
+  })
+
+  it('never clears a state the buyer chose themselves when the postal code changes', async () => {
+    render(<Form lookup={jalisco} />)
+    const province = screen.getByLabelText('Estado') as HTMLInputElement
+    fireEvent.input(province, { target: { value: 'Nayarit' } })
+    const zip = screen.getByLabelText('Código postal')
+    fireEvent.input(zip, { target: { value: '44100' } })
+    fireEvent.input(zip, { target: { value: '4410' } })
+    expect(province.value).toBe('Nayarit')
+  })
+
+  it('has no axe violations while locked', async () => {
+    const { container } = render(<Form lookup={jalisco} />)
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '44100' } })
+    await waitFor(() => expect(container.querySelector('[data-sf-province-locked]')).not.toBeNull())
+    expect((await axe.run(container, AXE)).violations).toEqual([])
   })
 })
 

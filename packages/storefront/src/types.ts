@@ -1303,6 +1303,12 @@ export type RegionPaymentMethod = {
   fiscal_payment_form?: string
 }
 
+/**
+ * `GET /storefront/region/postal-code?zip=`: where a postal code is, in the region pack's own names (the same ones the
+ * server validates the address state against). Shaped for `AddressFields.lookupPostalCode`.
+ */
+export type RegionPostalCode = { province: string; city: string; neighborhoods: string[] }
+
 /** `GET /storefront/region`: how the market formats, taxes, addresses and invoices. */
 export type Region = {
   country_code: string

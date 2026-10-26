@@ -357,6 +357,14 @@ describe('region and fiscal identity routes', () => {
     await expect(none.region()).resolves.toBeNull()
   })
 
+  it('postalCode() reads GET /storefront/region/postal-code?zip= and is null when the code is unknown', async () => {
+    const { calls, fetch } = recorder((call) => (call.url.includes('zip=00000') ? Response.json({ error: { code: 'not_found', message: 'x' } }, { status: 404 }) : Response.json({ province: 'Jalisco', city: 'Guadalajara', neighborhoods: [] })))
+    const sf = createStorefrontClient({ ...base, fetch })
+    await expect(sf.postalCode(' 44100 ')).resolves.toEqual({ province: 'Jalisco', city: 'Guadalajara', neighborhoods: [] })
+    expect(calls[0]!.url).toBe('https://ops.example.com/api/gw/storefront/region/postal-code?zip=44100')
+    await expect(sf.postalCode('00000')).resolves.toBeNull()
+  })
+
   it('carts.setInvoice PUTs the request, and {requested:false} withdraws it', async () => {
     const { calls, fetch } = recorder(() => Response.json({ id: 'c1' }))
     const sf = createStorefrontClient({ ...base, fetch })

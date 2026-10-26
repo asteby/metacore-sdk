@@ -57,6 +57,7 @@ import type {
   Product,
   ProductConnection,
   Region,
+  RegionPostalCode,
   ReturnRequest,
   ReturnRequestInput,
   Shop,
@@ -441,6 +442,13 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
      * has no region configured.
      */
     region: (options?: RequestOptions) => getOrNull<Region>('/storefront/region', undefined, options),
+
+    /**
+     * State and municipality of a postal code from the region pack (`null` when the code is not in its catalog, or the
+     * organization has no region pack). The source of `AddressFields.lookupPostalCode`: the state it fills is the one
+     * the server checks the address against.
+     */
+    postalCode: (zip: string, options?: RequestOptions) => getOrNull<RegionPostalCode>('/storefront/region/postal-code', { zip: zip.trim() }, options),
 
     products: {
       list: (params?: ProductListParams, options?: RequestOptions) =>
