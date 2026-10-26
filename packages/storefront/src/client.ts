@@ -175,6 +175,11 @@ type RequestSpec = {
   options?: WriteOptions
   /** Resolve `null` instead of throwing on 404. */
   nullOn404?: boolean
+  /**
+   * Never follow a redirect (`redirect: 'error'`, and a redirected answer is refused): for answers that carry the
+   * buyer's documents, so neither the customer token nor the request ever travels to another host.
+   */
+  noRedirect?: boolean
 }
 
 const OWN_OPTION_KEYS = new Set(['headers', 'timeoutMs', 'customerToken', 'clientIp', 'idempotencyKey', 'preview', 'signal'])
@@ -218,6 +223,9 @@ function joinUrl(baseUrl: string, path: string): string {
 }
 
 function enc(segment: string): string {
+  // `.` and `..` (also as `%2e`) are dot segments: the URL parser would resolve them and the request would land on
+  // another route with the same credentials.
+  if (typeof segment !== 'string' || /^(?:\.|%2e){1,2}$/i.test(segment)) throw new TypeError(`Invalid path segment: ${String(segment)}`)
   return encodeURIComponent(segment)
 }
 
@@ -329,6 +337,7 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
 
     const init: RequestInit & { headers: Headers } = {
       ...passthrough,
+      ...(spec.noRedirect ? { redirect: 'error' as const } : {}),
       method: spec.method,
       headers,
       ...(spec.body !== undefined ? { body: JSON.stringify(spec.body) } : {}),
@@ -356,6 +365,11 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
     }
 
     if (config.onResponse) await config.onResponse({ ...ctx, response: res, durationMs: Date.now() - started })
+
+    if (spec.noRedirect && res.redirected) {
+      await res.text().catch(() => undefined)
+      throw new StorefrontError({ status: 502, code: 'invalid_response', message: 'The answer was redirected; it is refused', url })
+    }
 
     if (res.status === 404 && spec.nullOn404) {
       // Drain the body so the connection can be reused.
@@ -607,8 +621,13 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
        * Checkouts waiting for their payment (cash voucher: OXXO, SPEI). They are not orders yet; once the payment
        * confirms they leave this list and show up in `orders`.
        */
-      pendingPayments: (params?: PaginationParams, options?: RequestOptions) =>
-        get<Connection<PendingPayment>>('/storefront/customer/pending-payments', params as QueryParams, options),
+      pendingPayments: async (params?: PaginationParams, options?: RequestOptions): Promise<Connection<PendingPayment>> =>
+        // An OPS older than the route answers 404: it has no pending payments to list (a 401 still throws).
+        (await getOrNull<Connection<PendingPayment>>('/storefront/customer/pending-payments', params as QueryParams, options)) ?? {
+          nodes: [],
+          page_info: { has_next_page: false, end_cursor: null },
+          total_count: 0,
+        },
       /**
        * Reads one file (`pdf` | `xml`) of an invoice or credit note of the buyer's order, through the authenticated
        * route (`order_invoice_file`): the answer is the file itself (base64), never a URL, so neither the buyer token
@@ -617,7 +636,13 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
        */
       invoiceFile: async (orderId: string, invoiceId: string, kind: InvoiceFileKind, options?: RequestOptions): Promise<InvoiceFile | null> => {
         if (kind !== 'pdf' && kind !== 'xml') throw new TypeError("invoiceFile: kind must be 'pdf' or 'xml'")
-        const file = await getOrNull<InvoiceFile>(`/storefront/customer/orders/${enc(orderId)}/invoices/${enc(invoiceId)}/${kind}`, undefined, { ...options, cache: 'no-store' })
+        const file = await request<InvoiceFile>({
+          method: 'GET',
+          path: `/storefront/customer/orders/${enc(orderId)}/invoices/${enc(invoiceId)}/${kind}`,
+          options: { ...options, cache: 'no-store' },
+          nullOn404: true,
+          noRedirect: true,
+        })
         if (file === null) return null
         if (!file || typeof file.content_base64 !== 'string' || typeof file.filename !== 'string' || typeof file.content_type !== 'string') {
           throw new StorefrontError({ status: 502, code: 'invalid_response', message: 'The invoice file answer is not a file' })

@@ -727,7 +727,7 @@ export type Order = {
   lines: OrderLine[]
   /** Invoice state; absent on older servers. */
   invoice?: InvoiceSummary
-  delivery_method?: 'shipping' | 'pickup' | null
+  delivery_method?: 'shipping' | 'pickup' | null | (string & {})
   pickup?: OrderPickup | null
   payment_status?: string | null
   subtotal?: Money
