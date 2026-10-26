@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 53.8.2
+
+### Patch Changes
+
+- d140779: AddonConfigSurface: las etiquetas de los ajustes y de sus opciones (`select`) se resuelven con el bundle de idiomas del addon en vez de pintar la clave i18n cruda (`warehouse.settings.fulfillment_mode`). Una clave sin traducción muestra su último segmento legible.
+
 ## 53.8.1
 
 ### Patch Changes

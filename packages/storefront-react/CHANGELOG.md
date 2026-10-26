@@ -1,5 +1,17 @@
 # @asteby/storefront-react
 
+## 0.19.0
+
+### Minor Changes
+
+- 3366ba7: Nuevo `<PostPurchaseAccountPrompt>` (`@asteby/storefront-react/account`): invitación a crear cuenta en la página de gracias, sin estilos propios (`data-sf-ppa-*`, `classNames`, `locale` es/en, `messages`). Recibe el correo del comprobante de la sesión (campo oculto, no editable), pide solo la contraseña (o el código por correo si la tienda no tiene contraseñas) y reutiliza `createAuthAction` (`register` / `otp-request` → `verify` / `otp-login`), así que la verificación, la cookie de sesión y la no-enumeración de cuentas son las de `<AccountAuth>`. Con verificación de correo, el pedido de invitado con ese correo aparece en «Mis pedidos» al confirmar el buzón.
+
+### Patch Changes
+
+- cac503c: fix(payments): el primer clic en PAGAR ya no muestra «Revisa los datos de tu tarjeta.» cuando el Brick de Mercado Pago falla la primera lectura (`getFormData`) aunque `card_tokens` respondió 201. El adaptador relee el formulario UNA vez antes de rendirse; todavía no se ha enviado nada al servidor de la tienda, así que no cambia la llave de idempotencia ni repite cobros (reglas de #1252 intactas).
+
+  Si el formulario se retira mientras tokeniza o durante la espera de la relectura (error crítico → `fallback`, pago deshabilitado, remontaje, salida de la página), el token resultante ya no se envía al servidor y el estado puesto por quien lo retiró se conserva (antes un error de lectura pisaba el `fallback` con `ready`).
+
 ## 0.18.0
 
 ### Minor Changes
