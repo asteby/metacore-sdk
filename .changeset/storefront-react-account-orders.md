@@ -1,0 +1,5 @@
+---
+'@asteby/storefront-react': minor
+---
+
+Pantallas de pedidos de la cuenta del comprador (`@asteby/storefront-react/account`, contrato Storefront API 1.8), headless y estilables (`data-sf-*`, `classNames`, variables CSS, textos es/en, sin estilos de marca): `OrderList`/`OrderCard`, `OrderStatusBadge`, `OrderProgress` (línea de tiempo unificada), `NextActionBar`, `ShipmentCard` (rastreo `https`, eventos, `test_mode` oculto o «de prueba», hueco `renderMap` para el mapa), `InvoiceList` (facturas y notas de crédito, descarga solo por la ruta autenticada de la tienda), `PendingPaymentCard`/`PendingPaymentList` (ficha de efectivo con código de barras Code 128, copiar, imprimir; portado de ProtekAuto), `RefundList`, `PaymentSummary` y los hooks `useCustomerOrders`, `useCustomerOrder` y `usePendingPayments`. En `/account/server`: `invoiceFileResponse` y `pendingVoucherResponse` (rutas recurso en una línea; archivo con `no-store`, `nosniff` y CSP cerrada). Enums abiertos con salida segura, estados de carga/error/vacío, axe sin violaciones y presupuesto de tamaño en pruebas.

@@ -816,6 +816,47 @@ export default function Login() {
 - Sin correo válido o sin forma de registrarse no pinta nada. Con verificación de correo la respuesta es la misma exista o no la cuenta (no enumera).
 - El pedido de invitado hecho con ese correo (y su pago pendiente por ficha) aparece en «Mis pedidos» cuando el buzón queda verificado: `storefront_customers` filtra por `customer_id` o por correo VERIFICADO. En una tienda sin verificación de correo la cuenta nace sin verificar y no ve pedidos de invitado; el texto entonces no lo promete.
 
+### Pantallas de pedidos (contrato 1.8)
+
+Componentes **headless** de `@asteby/storefront-react/account` (+ `account.css` opcional y neutro, + `/account/server`). Sin estilos de marca: `data-sf-*`, `classNames`, variables CSS (`--sf-account-*`, `--sf-tone-*`), textos es/en con `locale` y `messages`, fechas con `timeZone` (pasa la zona de la tienda para que servidor y navegador impriman lo mismo). Todos los enums del servidor son abiertos: un valor desconocido se escribe con palabras genéricas, nunca como código.
+
+| Componente | Qué pinta | Hooks de estilo |
+|---|---|---|
+| `OrderList` / `OrderCard` | Lista con estados `loading` (esqueletos de alto fijo), `error` (reintento), vacío útil y `ready`; cada tarjeta: número, fecha, estado, mini-progreso, envío, total y UNA acción | `data-sf-order`, `data-sf-order-status` |
+| `OrderStatusBadge` | Estado en palabras + tono (`done/current/problem/muted`) | `data-sf-tone` |
+| `OrderProgress` | Línea de tiempo pagado → preparación → enviado → en camino → entregado (variante recoger, incidencia escrita, `compact`) como `<ol>` con `aria-current="step"` | `data-sf-step`, `data-sf-step-state` |
+| `NextActionBar` | «Rastrear envío», «Descargar factura», «Pagar ahora»… `href` solo `https` (rastreo) o el que dé la tienda (`hrefFor`) | `data-sf-action` |
+| `ShipmentCard` | Paquetería (marca por `renderCarrierMark`), número con copiar, enlace de rastreo `https`, fecha prometida, eventos (últimos 3 + «Ver todo»). `test_mode` → `testMode="hide"` (omisión) o `"mark"` («De prueba», sin número ni enlace). La guía solo en devoluciones. Hueco del mapa: `renderMap({ shipment, map })` | `data-sf-shipment-*` |
+| `InvoiceList` | Facturas y notas de crédito (bajo su factura); estados `issued/pending/cancelled/error`; descarga solo por `fileHref` (tu ruta autenticada) o `onDownload`; sandbox marcado «de prueba, sin validez» o `testMode="hide"`; sin documentos, `renderSummary` (p. ej. `InvoiceStatusCard`) | `data-sf-invoice-*` |
+| `PendingPaymentCard` / `PendingPaymentList` | Ficha de efectivo: referencia/CLABE, copiar, código de barras Code 128 (SVG), vencimiento, imprimir y descargar (por `voucherHref` de tu servidor o armada en el navegador, con su código en un chunk aparte) | `data-sf-voucher-*` |
+| `RefundList`, `PaymentSummary` | Reembolsos y pagos | `data-sf-refund`, `data-sf-payment` |
+| `useCustomerOrders`, `useCustomerOrder(id, { poll })`, `usePendingPayments` | Carga con `status` (`loading/ready/error/not_found`), `reload`, `loadMore`; `initial` desde el loader (SSR) | — |
+
+`degraded` (secciones que el servidor no pudo leer) se pasa a la sección: error recuperable con «Reintentar» y el resto del pedido se ve.
+
+```tsx
+// Detalle de pedido (loader: sf.customer.order(id))
+<h1>Pedido {order.number}</h1>
+<OrderStatusBadge order={order} />
+<NextActionBar order={order} hrefFor={(a) => (a.kind === 'download_invoice' ? `/cuenta/pedidos/${order.id}/facturas/${a.ref}.pdf` : null)} />
+<OrderProgress order={order} />
+{order.shipments?.map((s) => <ShipmentCard key={s.id} shipment={s} headingLevel={2} renderCarrierMark={(x) => <BrandMark brand={x.carrier_logo_key} />} />)}
+<InvoiceList invoices={order.invoices} summary={order.invoice} degraded={order.degraded?.includes('invoices')} onRetry={revalidate}
+  fileHref={(d, kind) => `/cuenta/pedidos/${order.id}/facturas/${d.id}.${kind}`} renderSummary={(s) => <InvoiceStatusCard invoice={s} requestHref="/cuenta/factura" />} />
+<PaymentSummary payments={order.payments} /> <RefundList refunds={order.refunds} />
+```
+
+Rutas recurso de la tienda (`@asteby/storefront-react/account/server`), cada una en una línea; el navegador nunca ve el token del comprador ni una URL del PAC:
+
+```ts
+// account.order.$id.invoice.$doc.$kind.ts
+export const loader = async ({ request, params }) => invoiceFileResponse({ storefront: await sfFor(request), orderId: params.id, invoiceId: params.doc, kind: params.kind })
+// account.pending.$id.ficha.ts
+export const loader = async ({ request, params }) => pendingVoucherResponse({ storefront: await sfFor(request), id: params.id, download: new URL(request.url).searchParams.get('descargar') === '1', shopName: 'Mi tienda' })
+```
+
+`invoiceFileResponse` sirve `attachment` con `Cache-Control: private, no-store`, `nosniff` y CSP `sandbox`; el tipo sale de `kind`, no de lo que diga la API. `pendingVoucherResponse` solo entrega una ficha que está en la lista del comprador (si no, 404) con CSP cerrada y nonce por respuesta. Accesibilidad: WCAG 2.2 AA verificada con axe en las pruebas (contraste lo decide cada tienda con sus tokens), objetivos ≥ 44 px en el CSS opcional, `prefers-reduced-motion`. Presupuesto: todas las pantallas ≈ 12 KB gzip (prueba `size-budget`).
+
 ## Facturación y constancia fiscal (`/fiscal`)
 
 Subruta `@asteby/storefront-react/fiscal` (+ `/fiscal/server`, + `fiscal.css` opcional). Todo sale de `Region.fiscal_id` (etiquetas, formato, regímenes, usos, documentos); el núcleo no sabe de ningún país. Textos es-MX por omisión, `locale="en"` o `messages` para otros.

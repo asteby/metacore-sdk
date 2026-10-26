@@ -38,3 +38,205 @@
   cursor: pointer;
   font: inherit;
 }
+
+/*
+ * Order screens (<OrderList>, <OrderProgress>, <NextActionBar>, <ShipmentCard>, <InvoiceList>, <PendingPaymentCard>,
+ * <RefundList>). Optional and neutral: no brand colors, everything reads currentColor. Variables:
+ *   --sf-account-muted   secondary text            --sf-account-line   hairlines and card borders
+ *   --sf-account-gap     spacing between blocks    --sf-account-radius card radius
+ *   --sf-tone-done / --sf-tone-current / --sf-tone-problem / --sf-tone-muted   semantic tones (default: currentColor)
+ *   --sf-skeleton-height  height of a loading card (fixed: no layout shift)
+ * Contrast of the tones is the store's responsibility: they are applied to TEXT, so pick colors with 4.5:1 or better.
+ */
+[data-sf-orders-list],
+[data-sf-pending] ul,
+[data-sf-invoice-list] {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--sf-account-gap, 1rem);
+}
+[data-sf-order],
+[data-sf-shipment],
+[data-sf-voucher],
+[data-sf-invoice-doc],
+[data-sf-refund],
+[data-sf-payment] {
+  border: 1px solid var(--sf-account-line, color-mix(in srgb, currentColor 22%, transparent));
+  border-radius: var(--sf-account-radius, 0.5rem);
+  padding: var(--sf-account-gap, 1rem);
+}
+[data-sf-order] > header,
+[data-sf-shipment-header],
+[data-sf-voucher] > header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+}
+[data-sf-order] h2,
+[data-sf-order] h3,
+[data-sf-order] h4 {
+  margin: 0;
+}
+[data-sf-order-meta],
+[data-sf-shipment-dates],
+[data-sf-invoice-note],
+[data-sf-voucher-expiry] {
+  color: var(--sf-account-muted, color-mix(in srgb, currentColor 72%, transparent));
+}
+[data-sf-tone='done'] {
+  color: var(--sf-tone-done, inherit);
+}
+[data-sf-tone='current'] {
+  color: var(--sf-tone-current, inherit);
+}
+[data-sf-tone='problem'] {
+  color: var(--sf-tone-problem, #b42318);
+  font-weight: 600;
+}
+[data-sf-tone='muted'] {
+  color: var(--sf-tone-muted, var(--sf-account-muted, inherit));
+}
+[data-sf-order-badge],
+[data-sf-shipment-state],
+[data-sf-voucher-badge] {
+  font-weight: 600;
+}
+
+/* progress: a vertical list on phones, a row from 40rem */
+[data-sf-progress-list] {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+[data-sf-step] {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr;
+  align-items: baseline;
+  column-gap: 0.5rem;
+}
+[data-sf-step] time {
+  grid-column: 2;
+  color: var(--sf-account-muted, color-mix(in srgb, currentColor 72%, transparent));
+  font-size: 0.875em;
+}
+[data-sf-step-state='pending'] {
+  color: var(--sf-account-muted, color-mix(in srgb, currentColor 72%, transparent));
+}
+[data-sf-step-state='current'] [data-sf-step-label],
+[data-sf-step-state='problem'] [data-sf-step-label] {
+  font-weight: 700;
+}
+[data-sf-step-state='problem'] {
+  color: var(--sf-tone-problem, #b42318);
+}
+@media (min-width: 40rem) {
+  [data-sf-progress-list] {
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+  }
+  [data-sf-step] {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+  [data-sf-step] time {
+    grid-column: 1;
+  }
+}
+
+/* actions: every target at least 44x44 (WCAG 2.5.5 AAA; 2.5.8 AA asks 24x24) */
+[data-sf-action-bar] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+}
+[data-sf-action],
+[data-sf-copy],
+[data-sf-retry],
+[data-sf-shipment-toggle],
+[data-sf-shipment-track],
+[data-sf-shipment-label],
+[data-sf-invoice-download],
+[data-sf-voucher-print],
+[data-sf-voucher-download],
+[data-sf-orders-more] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 44px;
+  padding-inline: 0.75rem;
+}
+[data-sf-action]:focus-visible,
+[data-sf-copy]:focus-visible,
+[data-sf-retry]:focus-visible,
+[data-sf-order-link]:focus-visible,
+[data-sf-shipment-toggle]:focus-visible,
+[data-sf-shipment-track]:focus-visible,
+[data-sf-invoice-download]:focus-visible,
+[data-sf-voucher-print]:focus-visible,
+[data-sf-voucher-download]:focus-visible,
+[data-sf-orders-more]:focus-visible {
+  outline: 3px solid currentColor;
+  outline-offset: 2px;
+}
+
+/* shipment events */
+[data-sf-shipment-events] {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+[data-sf-event-description],
+[data-sf-event-location] {
+  color: var(--sf-account-muted, color-mix(in srgb, currentColor 72%, transparent));
+}
+
+/* voucher */
+[data-sf-voucher-value] {
+  font: 700 1.25rem/1.3 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+[data-sf-voucher-barcode] {
+  overflow-x: auto;
+  background: #fff;
+  padding: 0.5rem;
+}
+[data-sf-voucher-barcode] svg {
+  display: block;
+  margin-inline: auto;
+  max-width: 100%;
+  height: auto;
+}
+[data-sf-voucher-actions] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+}
+
+/* loading: fixed height so nothing jumps when the real cards arrive */
+[data-sf-skeleton] {
+  min-height: var(--sf-skeleton-height, 11rem);
+  border-radius: var(--sf-account-radius, 0.5rem);
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  animation: sf-account-pulse 1.4s ease-in-out infinite;
+}
+@keyframes sf-account-pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-sf-skeleton] {
+    animation: none;
+  }
+}
