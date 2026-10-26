@@ -1,5 +1,16 @@
 # @asteby/storefront-react
 
+## 0.25.0
+
+### Minor Changes
+
+- 5de7348: `PaymentSummary`: cada pago lleva `data-sf-payment-method-key` (`card`, `oxxo`, `spei`, `wallet`…, o `unknown`) para que la tienda ponga su ícono por método, y `paymentMethodKey(payment)` se exporta. `ShipmentCard`: el título dice la paquetería con una etiqueta «Paquetería» (`data-sf-shipment-eyebrow`) cuando se conoce; sin paquetería sigue «Envío».
+
+### Patch Changes
+
+- Updated dependencies [72d9dbf]
+  - @asteby/storefront@0.17.0
+
 ## 0.24.0
 
 ### Minor Changes
