@@ -61,13 +61,23 @@ describe('loadFiscalContext', () => {
     const off = setup({ customerCapabilities: { invoicing: { available: false, countries: [], checkout: 'off', post_purchase: false, identity_documents: [], online_verify: false } } })
     const c = await loadFiscalContext(off.sf)
     expect(c.available).toBe(false)
+    expect(c.reason).toBe('off')
     expect(c.invoicing).toBeNull()
   })
 
   it('an older server without invoicing in capabilities means no invoicing', async () => {
     const { sf } = setup()
     vi.spyOn(sf.customer, 'capabilities').mockResolvedValue({ password: true, email_verification: false, otp_channels: [] })
-    expect((await loadFiscalContext(sf)).available).toBe(false)
+    const c = await loadFiscalContext(sf)
+    expect(c.available).toBe(false)
+    // Nothing is known about the store: the page must not say that it does not invoice.
+    expect(c.reason).toBe('unknown')
+  })
+
+  it('says unreachable when the server cannot be asked', async () => {
+    const { sf } = setup()
+    vi.spyOn(sf.customer, 'capabilities').mockRejectedValue(new Error('boom'))
+    expect((await loadFiscalContext(sf)).reason).toBe('unreachable')
   })
 
   it('retries soon after a failure', async () => {

@@ -6,6 +6,7 @@
  */
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import type { InvoiceSummary } from '@asteby/storefront'
+import type { FiscalReason } from './types.js'
 import { useResolvedLocale } from '../locale.js'
 import { fill, fiscalMessages, type DeepPartial, type FiscalMessages } from './messages.js'
 
@@ -18,11 +19,13 @@ export type InvoiceCardState =
   | 'needs_review'
   | 'window_closed'
   | 'unavailable'
+  | 'not_enabled'
+  | 'unknown'
+  | 'unreachable'
   | 'cancelled'
 
-/** Which of the card's states an invoice is in. `available: false` (the store does not invoice) wins over everything. */
-export function invoiceCardState(invoice: InvoiceSummary | null | undefined, available = true): InvoiceCardState {
-  if (!available) return 'unavailable'
+/** The state the order's own `invoice` summary describes (the server decides what is possible for THIS order). */
+function orderState(invoice: InvoiceSummary | null | undefined): InvoiceCardState {
   if (!invoice) return 'not_requested'
   const stage = invoice.stage ?? ''
   const blocked = invoice.blocked_reason ?? ''
@@ -38,12 +41,35 @@ export function invoiceCardState(invoice: InvoiceSummary | null | undefined, ava
   return 'not_requested'
 }
 
+/**
+ * Which of the card's states an invoice is in.
+ *
+ * `available` / `reason` come from `loadFiscalContext`. Only a server that SAYS the store does not invoice
+ * (`reason` `off` / `no_region`) wins over the order: `not_enabled`. When the server says nothing (`unknown`, an older
+ * server), could not be asked (`unreachable`) or the caller gave no `reason`, the order's own summary still decides
+ * (an order that `can_request`, is being issued or already has its invoice is shown as such) and, with nothing to show,
+ * the card is neutral: it never claims that the store does not issue invoices.
+ */
+export function invoiceCardState(invoice: InvoiceSummary | null | undefined, available = true, reason?: FiscalReason): InvoiceCardState {
+  if (available) return orderState(invoice)
+  if (reason === 'off' || reason === 'no_region') return 'not_enabled'
+  const own = orderState(invoice)
+  if (invoice && (own !== 'not_requested' || invoice.can_request === true || invoice.action === 'request')) return own
+  return reason === 'unreachable' ? 'unreachable' : 'unknown'
+}
+
 export type InvoiceStatusCardClassNames = Partial<Record<'root' | 'title' | 'body' | 'actions' | 'primary' | 'secondary' | 'link' | 'meta', string>>
 
 export type InvoiceStatusCardProps = {
   invoice?: InvoiceSummary | null
-  /** `capabilities.invoicing.available`. `false`: "Invoice not available". */
+  /** `loadFiscalContext(...).available`. `false` alone is read as "unknown": see `availability`. */
   available?: boolean
+  /** `loadFiscalContext(...).reason`: why it is (not) available. Lets the card say the true thing (not active / unknown / could not check). */
+  availability?: FiscalReason
+  /** Invoicing is in test mode (sandbox): shows a badge saying invoices have no fiscal validity. */
+  testMode?: boolean
+  /** `capabilities.invoicing.window_days`: shown next to the request button. */
+  windowDays?: number
   /** The buyer taps "Request invoice". Shown when `invoice.can_request !== false`. Without it, `requestHref` is a link. */
   onRequest?: () => void
   requestHref?: string
@@ -64,10 +90,10 @@ export type InvoiceStatusCardProps = {
 }
 
 export function InvoiceStatusCard(props: InvoiceStatusCardProps) {
-  const { invoice, available = true, onRequest, requestHref, onCorrect, correctHref, onRefresh, refreshMs = 10_000, refreshForMs = 60_000, contact, messages, classNames: cx = {}, headingLevel = 3 } = props
+  const { invoice, available = true, availability, testMode, windowDays, onRequest, requestHref, onCorrect, correctHref, onRefresh, refreshMs = 10_000, refreshForMs = 60_000, contact, messages, classNames: cx = {}, headingLevel = 3 } = props
   const locale = useResolvedLocale(props.locale)
   const m = fiscalMessages(locale, messages).status
-  const state = invoiceCardState(invoice, available)
+  const state = invoiceCardState(invoice, available, availability)
   const titleId = `sf-invoice-card-${useId().replace(/:/g, '')}`
   const [tired, setTired] = useState(false)
   const refresh = useRef(onRefresh)
@@ -106,7 +132,16 @@ export function InvoiceStatusCard(props: InvoiceStatusCardProps) {
   switch (state) {
     case 'not_requested': {
       title = m.title
-      body = <p className={cx.body}>{m.requestHelp}</p>
+      body = (
+        <>
+          <p className={cx.body}>{m.requestHelp}</p>
+          {windowDays && windowDays > 0 ? (
+            <p className={cx.meta} data-sf-invoice-window>
+              {fill(m.windowNote, { days: windowDays })}
+            </p>
+          ) : null}
+        </>
+      )
       const can = invoice?.can_request !== false
       if (can && (onRequest || requestHref)) {
         actions = onRequest ? (
@@ -209,6 +244,28 @@ export function InvoiceStatusCard(props: InvoiceStatusCardProps) {
       title = m.cancelledTitle
       body = <p className={cx.body}>{m.cancelledBody}</p>
       break
+    case 'not_enabled':
+    case 'unknown':
+    case 'unreachable': {
+      title = state === 'not_enabled' ? m.notEnabledTitle : m.unknownTitle
+      body = <p className={cx.body}>{state === 'not_enabled' ? m.notEnabledBody : state === 'unreachable' ? m.unreachableBody : m.unknownBody}</p>
+      const mail = contact?.url ?? (contact?.email ? `mailto:${contact.email}` : null)
+      actions = (
+        <>
+          {state === 'unreachable' && onRefresh ? (
+            <button type="button" className={cx.secondary} onClick={manualRefresh} data-sf-invoice-refresh>
+              {m.refresh}
+            </button>
+          ) : null}
+          {mail ? (
+            <a href={mail} className={cx.secondary} data-sf-invoice-contact>
+              {m.contact}
+            </a>
+          ) : null}
+        </>
+      )
+      break
+    }
     default:
       title = m.unavailableTitle
       body = <p className={cx.body}>{m.unavailableBody}</p>
@@ -226,6 +283,11 @@ export function InvoiceStatusCard(props: InvoiceStatusCardProps) {
       <div aria-live={live || state === 'issued' ? 'polite' : undefined} data-sf-invoice-live>
         {body}
       </div>
+      {testMode ? (
+        <p className={cx.meta} data-sf-invoice-sandbox>
+          {m.sandbox}
+        </p>
+      ) : null}
       {actions ? (
         <div className={cx.actions} data-sf-invoice-actions>
           {actions}
@@ -245,5 +307,8 @@ const ICON: Record<InvoiceCardState, string> = {
   needs_review: '◐',
   window_closed: '–',
   unavailable: '–',
+  not_enabled: '–',
+  unknown: '?',
+  unreachable: '?',
   cancelled: '×',
 }

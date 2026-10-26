@@ -95,6 +95,17 @@ export type FiscalMessages = {
     windowBody: string
     unavailableTitle: string
     unavailableBody: string
+    /** The server says the store has no invoicing active (`capabilities.invoicing.available: false`). */
+    notEnabledTitle: string
+    notEnabledBody: string
+    /** The server does not say (older server) or could not be asked: never claims the store does not invoice. */
+    unknownTitle: string
+    unknownBody: string
+    unreachableBody: string
+    /** Invoicing in test mode (sandbox): invoices have no fiscal validity. */
+    sandbox: string
+    /** `{days}`: how long after the purchase an invoice can be requested. */
+    windowNote: string
     cancelledTitle: string
     cancelledBody: string
     /** `reason_code` -> cause for the buyer. `default` when unknown. */
@@ -202,7 +213,14 @@ const ES: FiscalMessages = {
     windowTitle: 'Ya pasó el plazo para facturar',
     windowBody: 'Este pedido está fuera del plazo para pedir factura. Si necesitas ayuda, contacta a la tienda.',
     unavailableTitle: 'Factura no disponible',
-    unavailableBody: 'Esta tienda no emite factura de este pedido. Si la necesitas, contáctala.',
+    unavailableBody: 'Este pedido no se puede facturar por ahora. Si la necesitas, contacta a la tienda.',
+    notEnabledTitle: 'Facturación aún no activa',
+    notEnabledBody: 'La tienda todavía no tiene la facturación en línea activa. Si necesitas factura, contáctala.',
+    unknownTitle: 'Factura',
+    unknownBody: 'Por ahora no podemos mostrar el estado de la facturación de este pedido. Si necesitas factura, contacta a la tienda.',
+    unreachableBody: 'No pudimos verificar la facturación en este momento. Inténtalo de nuevo en unos minutos o contacta a la tienda.',
+    sandbox: 'Facturación en pruebas (sandbox): las facturas no tienen validez fiscal.',
+    windowNote: 'Puedes pedirla hasta {days} días después de la compra.',
     cancelledTitle: 'Factura cancelada',
     cancelledBody: 'Esta factura fue cancelada. Si necesitas una nueva, contacta a la tienda.',
     reasons: {
@@ -322,7 +340,14 @@ const EN: FiscalMessages = {
     windowTitle: 'The invoicing period has ended',
     windowBody: 'This order is outside the period to request an invoice. If you need help, contact the store.',
     unavailableTitle: 'Invoice not available',
-    unavailableBody: 'This store does not issue an invoice for this order. If you need one, contact them.',
+    unavailableBody: 'This order cannot be invoiced right now. If you need one, contact the store.',
+    notEnabledTitle: 'Invoicing not active yet',
+    notEnabledBody: 'The store has not turned on online invoicing yet. If you need an invoice, contact them.',
+    unknownTitle: 'Invoice',
+    unknownBody: 'We cannot show the invoicing status of this order right now. If you need an invoice, contact the store.',
+    unreachableBody: 'We could not check invoicing right now. Try again in a few minutes or contact the store.',
+    sandbox: 'Invoicing in test mode (sandbox): invoices have no fiscal validity.',
+    windowNote: 'You can request it up to {days} days after the purchase.',
     cancelledTitle: 'Invoice cancelled',
     cancelledBody: 'This invoice was cancelled. If you need a new one, contact the store.',
     reasons: {

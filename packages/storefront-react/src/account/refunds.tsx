@@ -2,6 +2,7 @@
 import type { PaymentInfo, Refund } from '@asteby/storefront'
 import { useId } from 'react'
 import { enumText, fill } from './orders-messages.js'
+import { paymentLabel, type PaymentLabelOptions } from './payment-method.js'
 import { Hidden, Time, moneyText, str, useAccountText, type AccountTextProps } from './orders-ui.js'
 
 export type RefundListClassNames = Partial<Record<'root' | 'title' | 'list' | 'item' | 'amount' | 'status' | 'meta' | 'empty' | 'error' | 'retry', string>>
@@ -53,7 +54,7 @@ export function RefundList({ refunds, showEmpty = false, degraded, onRetry, head
                 {enumText(m, 'refund.status', r.status)}
               </span>
               <span className={cx.meta}>
-                {str(r.method_label) ? <> · {str(r.method_label)}</> : null}
+                {str(r.method_label) ? <> · {paymentLabel({ method_label: r.method_label ?? '', status: 'paid', amount: r.amount }, m)}</> : null}
                 {r.completed_at ? (
                   <>
                     {' · '}
@@ -77,11 +78,13 @@ export function RefundList({ refunds, showEmpty = false, degraded, onRetry, head
 export type PaymentSummaryProps = AccountTextProps & {
   payments?: readonly PaymentInfo[] | null
   headingLevel?: 2 | 3 | 4
+  /** The store's own name for a payment (by organization, provider...); `null` falls through to the SDK's es/en text. */
+  methodLabel?: PaymentLabelOptions['override']
   classNames?: Partial<Record<'root' | 'title' | 'list' | 'item' | 'status' | 'meta', string>>
 }
 
 /** What the buyer paid with (card, voucher...) and its status. Renders nothing when the order has no payments. */
-export function PaymentSummary({ payments, headingLevel = 3, classNames: cx = {}, ...text }: PaymentSummaryProps) {
+export function PaymentSummary({ payments, headingLevel = 3, methodLabel, classNames: cx = {}, ...text }: PaymentSummaryProps) {
   const { m, locale, date } = useAccountText(text)
   const titleId = `sf-payments-${useId().replace(/:/g, '')}`
   const items = (Array.isArray(payments) ? payments : []).filter((p): p is PaymentInfo => !!p && typeof p === 'object' && typeof p.method_label === 'string')
@@ -95,7 +98,7 @@ export function PaymentSummary({ payments, headingLevel = 3, classNames: cx = {}
       <ul className={cx.list}>
         {items.map((p, i) => (
           <li key={`${p.method_label}-${i}`} className={cx.item} data-sf-payment data-sf-payment-status={typeof p.status === 'string' ? p.status : 'unknown'}>
-            <span>{p.method_label}</span>
+            <span data-sf-payment-method>{paymentLabel(p, m, methodLabel ? { override: methodLabel } : {})}</span>
             {moneyText(p.amount, locale) ? <> · <span>{moneyText(p.amount, locale)}</span></> : null} ·{' '}
             <span className={cx.status} data-sf-tone={p.status === 'failed' ? 'problem' : p.status === 'paid' ? 'done' : 'current'}>
               {enumText(m, 'payment.status', p.status)}

@@ -692,6 +692,10 @@ export type PaymentInfo = {
   status: 'paid' | 'pending' | 'failed' | 'refunded' | 'partially_refunded' | (string & {})
   amount: Money
   paid_at?: string | null
+  /** Card brand (`visa`, `mastercard`...) when the server knows it. */
+  brand?: string | null
+  /** Last four digits of the card when the server knows them. */
+  last4?: string | null
 }
 
 export type Refund = {
@@ -1228,6 +1232,8 @@ export type InvoicingCapabilities = {
   identity_documents: string[]
   /** The store can check the data against the tax authority online (informative, never blocks). */
   online_verify: boolean
+  /** Invoicing runs against a test (sandbox) provider: invoices have no fiscal validity. Absent = production. */
+  test_mode?: boolean
 }
 
 /** One regime or invoice use of the region's fiscal catalog. */

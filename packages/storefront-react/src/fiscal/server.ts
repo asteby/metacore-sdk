@@ -18,9 +18,9 @@ import {
 } from '@asteby/storefront'
 import { normalizeTaxId } from './format.js'
 import { extractUploadedDocument, UPLOAD_LIMITS, type UploadLimits } from './server-extract.js'
-import type { FiscalActionData, FiscalErrorCode, FiscalIntent } from './types.js'
+import type { FiscalActionData, FiscalErrorCode, FiscalIntent, FiscalReason } from './types.js'
 
-export type { FiscalActionData, FiscalErrorCode, FiscalIntent } from './types.js'
+export type { FiscalActionData, FiscalErrorCode, FiscalIntent, FiscalReason } from './types.js'
 export { UPLOAD_LIMITS, extractUploadedDocument } from './server-extract.js'
 export type { UploadLimits } from './server-extract.js'
 
@@ -29,12 +29,14 @@ export type { UploadLimits } from './server-extract.js'
 export type FiscalContext = {
   /** The store can invoice: it has a region with a fiscal catalog and `capabilities.invoicing.available`. */
   available: boolean
+  /** Why `available` is what it is. Absent on contexts built by older code: read it as `unknown`. */
+  reason?: FiscalReason
   region: Region | null
   invoicing: InvoicingCapabilities | null
 }
 
-/** What is assumed when the store cannot be asked: no invoicing, nothing breaks. */
-export const NO_FISCAL_CONTEXT: Readonly<FiscalContext> = Object.freeze({ available: false, region: null, invoicing: null })
+/** What is assumed when the store cannot be asked: nothing is known (`unreachable`), nothing breaks. */
+export const NO_FISCAL_CONTEXT: Readonly<FiscalContext> = Object.freeze({ available: false, reason: 'unreachable' as const, region: null, invoicing: null })
 
 const FAILURE_TTL_MS = 5_000
 const cache = new WeakMap<object, { at: number; ok: boolean; value: FiscalContext }>()
@@ -49,7 +51,8 @@ export type LoadFiscalContextOptions = {
 /**
  * Asks the store for its region and what invoicing it offers, with a short cache per client. It NEVER throws: when OPS
  * does not answer (older server, outage, token without scope) it returns `NO_FISCAL_CONTEXT` and retries after a few
- * seconds, so a checkout without invoicing keeps working. Use it as the loader: `loader = () => loadFiscalContext(sf)`.
+ * seconds, so a checkout without invoicing keeps working. `reason` says which of the cases it is. Use it as the loader:
+ * `loader = () => loadFiscalContext(sf)`.
  */
 export async function loadFiscalContext(sf: StorefrontClient, options: LoadFiscalContextOptions = {}): Promise<FiscalContext> {
   const now = options.now ?? Date.now
@@ -59,15 +62,24 @@ export async function loadFiscalContext(sf: StorefrontClient, options: LoadFisca
   const opt = options.signal ? { signal: options.signal } : undefined
   const [region, caps] = await Promise.allSettled([sf.region(opt), sf.customer.capabilities(opt)])
   const reg = region.status === 'fulfilled' ? region.value : null
+  const noRegion = region.status === 'rejected' && isStorefrontError(region.reason) && region.reason.status === 404
   const invoicing = caps.status === 'fulfilled' ? (caps.value?.invoicing ?? null) : null
-  const ok = region.status === 'fulfilled' && caps.status === 'fulfilled'
-  const value: FiscalContext = {
-    available: !!reg?.fiscal_id && !!invoicing?.available,
-    region: reg,
-    invoicing: invoicing?.available ? invoicing : null,
-  }
-  cache.set(sf, { at: now(), ok, value: ok ? value : value.available ? value : NO_FISCAL_CONTEXT })
-  return ok || value.available ? value : NO_FISCAL_CONTEXT
+  const ok = (region.status === 'fulfilled' || noRegion) && caps.status === 'fulfilled'
+  const available = !!reg?.fiscal_id && !!invoicing?.available
+  const reason: FiscalReason = available
+    ? 'available'
+    : !ok
+      ? 'unreachable'
+      : noRegion || !reg?.fiscal_id
+        ? invoicing && !invoicing.available
+          ? 'off'
+          : 'no_region'
+        : !invoicing
+          ? 'unknown'
+          : 'off'
+  const value: FiscalContext = { available, reason, region: reg, invoicing: invoicing?.available ? invoicing : null }
+  cache.set(sf, { at: now(), ok, value: ok || available ? value : NO_FISCAL_CONTEXT })
+  return ok || available ? value : NO_FISCAL_CONTEXT
 }
 
 // ---- action ----------------------------------------------------------------------------------------------------------

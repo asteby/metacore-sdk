@@ -72,3 +72,15 @@ export type FiscalActionData = {
 }
 
 export type { InvoiceRequest }
+
+/**
+ * Why invoicing is or is not offered, so a page can say the true thing instead of one generic "not available":
+ * - `available`: region with a fiscal catalog and `capabilities.invoicing.available`.
+ * - `off`: the server answered and says the store does not invoice (`invoicing.available: false`): no invoicing addon active.
+ * - `no_region`: the organization has no region, or its region has no fiscal catalog.
+ * - `unknown`: the server answered but does not publish `capabilities.invoicing` (older server, or one that does not
+ *   report it): nothing is known about the store, so never claim it does not invoice. The order's own `invoice` summary
+ *   (`can_request`, `action`) still says what is possible for that order.
+ * - `unreachable`: region or capabilities could not be read (outage, token without scope).
+ */
+export type FiscalReason = 'available' | 'off' | 'no_region' | 'unknown' | 'unreachable'

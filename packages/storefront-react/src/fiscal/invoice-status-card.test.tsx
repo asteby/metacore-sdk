@@ -19,7 +19,8 @@ const CASES: Array<[InvoiceCardState, InvoiceSummary | null, boolean | undefined
   ['needs_data', { status: 'requested', stage: 'needs_data', reason_code: 'invoice.tax_regime', action: 'correct_data' }, undefined, 'Faltan datos para tu factura'],
   ['needs_review', { status: 'requested', stage: 'needs_review', action: 'contact_store' }, undefined, 'La tienda está revisando tu factura'],
   ['window_closed', { status: 'none', stage: 'window_closed', can_request: false, blocked_reason: 'window_closed' }, undefined, 'Ya pasó el plazo para facturar'],
-  ['unavailable', null, false, 'Factura no disponible'],
+  ['unknown', null, false, 'Por ahora no podemos mostrar el estado de la facturación'],
+  ['unavailable', { status: 'none', can_request: false, blocked_reason: 'not_invoiceable' }, undefined, 'Este pedido no se puede facturar por ahora'],
 ]
 
 describe('invoiceCardState', () => {
@@ -30,6 +31,34 @@ describe('invoiceCardState', () => {
     expect(invoiceCardState({ status: 'none', can_request: false, blocked_reason: 'not_invoiceable' })).toBe('unavailable')
     expect(invoiceCardState({ status: 'cancelled', stage: 'cancelled' })).toBe('cancelled')
     expect(invoiceCardState({ status: 'x', stage: 'something_new' })).toBe('not_requested')
+  })
+})
+
+describe('availability: never claims the store does not invoice unless the server says so', () => {
+  const askable: InvoiceSummary = { status: 'none', stage: 'not_requested', action: 'request', can_request: true }
+  it('the server says it is off -> not_enabled, over the order', () => {
+    expect(invoiceCardState(askable, false, 'off')).toBe('not_enabled')
+    expect(invoiceCardState(null, false, 'no_region')).toBe('not_enabled')
+  })
+  it('no capability published / unreachable: the order decides, else neutral', () => {
+    expect(invoiceCardState(askable, false, 'unknown')).toBe('not_requested')
+    expect(invoiceCardState({ status: 'issued', stage: 'issued' }, false, 'unreachable')).toBe('issued')
+    expect(invoiceCardState(null, false, 'unknown')).toBe('unknown')
+    expect(invoiceCardState({ status: 'none', can_request: false }, false, 'unreachable')).toBe('unreachable')
+  })
+  it('renders the true reason, the window and the sandbox badge', () => {
+    const a = render(<InvoiceStatusCard invoice={null} available={false} availability="off" contact={{ email: 'a@t.test' }} />)
+    expect(a.container.textContent).toContain('todavía no tiene la facturación en línea activa')
+    expect(a.container.textContent).not.toContain('no emite')
+    a.unmount()
+    const b = render(<InvoiceStatusCard invoice={askable} available={false} availability="unknown" requestHref="/f" windowDays={30} testMode />)
+    expect(b.container.querySelector('[data-sf-invoice-request]')!.getAttribute('href')).toBe('/f')
+    expect(b.container.querySelector('[data-sf-invoice-window]')!.textContent).toContain('30 días')
+    expect(b.container.querySelector('[data-sf-invoice-sandbox]')!.textContent).toContain('sandbox')
+    b.unmount()
+    const c = render(<InvoiceStatusCard invoice={null} available={false} availability="unreachable" onRefresh={() => {}} locale="en" />)
+    expect(c.container.textContent).toContain('could not check invoicing')
+    expect(c.container.querySelector('[data-sf-invoice-refresh]')).not.toBeNull()
   })
 })
 
