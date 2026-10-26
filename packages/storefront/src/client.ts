@@ -67,6 +67,10 @@ import type {
   RestockSubscriptionResult,
   StockLevel,
   StorefrontErrorBody,
+  Subject,
+  SubjectInput,
+  SubjectKind,
+  SubjectPatch,
   Theme,
   TokenIntrospection,
 } from './types.js'
@@ -675,6 +679,21 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
         delete: (id: string, options?: WriteOptions) =>
           write<void>('DELETE', `/storefront/customer/fiscal-profiles/${enc(id)}`, undefined, options),
       },
+      /**
+       * Saved items of the buyer («My items», «My garage»; contract 1.9, `capabilities().subjects`). Personal data:
+       * private, never cached, never logged. `422` with `field: 'attributes.<field>'` when the kind refuses a value
+       * (it never echoes it); `409` for an item already saved or past the limit; `429` for too many saves; `404` for
+       * an item that is not the buyer's. The server builds `label` and `fit_key`; private fields come back masked.
+       */
+      subjects: {
+        list: async (params?: { kind?: string }, options?: RequestOptions): Promise<Subject[]> =>
+          (await get<{ nodes: Subject[] }>('/storefront/customer/subjects', params as QueryParams | undefined, { ...options, cache: 'no-store' })).nodes,
+        create: (input: SubjectInput, options?: WriteOptions) => write<Subject>('POST', '/storefront/customer/subjects', input, options),
+        update: (id: string, patch: SubjectPatch, options?: WriteOptions) =>
+          write<Subject>('PATCH', `/storefront/customer/subjects/${enc(id)}`, patch, options),
+        /** Physical delete (the item leaves nothing behind). The default of its kind passes to another item. */
+        delete: (id: string, options?: WriteOptions) => write<void>('DELETE', `/storefront/customer/subjects/${enc(id)}`, undefined, options),
+      },
       addresses: {
         list: (options?: RequestOptions) => get<{ nodes: Address[] }>('/storefront/customer/addresses', undefined, options),
         create: (address: AddressInput, options?: WriteOptions) =>
@@ -687,6 +706,12 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
     },
 
     content: {
+      /**
+       * The kinds of buyer item the organization declares («My garage») and their catalogs (contract 1.9; public,
+       * cacheable). `[]` when it declares none or the server predates the route: the store has no such section.
+       */
+      subjectKinds: async (options?: RequestOptions): Promise<SubjectKind[]> =>
+        (await getOrNull<{ nodes: SubjectKind[] }>('/storefront/subject-kinds', undefined, options))?.nodes ?? [],
       theme: (options?: RequestOptions) => get<Theme>('/storefront/content/theme', undefined, options),
       /** `null` when the page does not exist. */
       page: (handle: string, options?: PreviewOptions) =>

@@ -408,6 +408,29 @@ a rule that produces a `discard_fields` field. `qr_canonical` (top level) is a t
 (`fiscal_regime`, `invoice_use`). A text that does not match yields `missing` (required fields); only a spec that cannot
 run throws `IdentityRulesError`.
 
+## Buyer items: «My items» / «My garage» (Storefront API 1.9)
+
+A **subject** is something the buyer shops for: a vehicle, a printer, a phone, a pet, a size. WHICH kinds a store has is data the organization publishes (`content.subjectKinds()`); the SDK names none. A store that declares none (`customer.capabilities().subjects` absent, `subjectKinds()` empty) has no such section: show nothing.
+
+```ts
+const kinds = await sf.content.subjectKinds()                         // [] when the store declares none (or the server is older)
+const me = sf.withCustomerToken(token)
+const item = await me.customer.subjects.create({ kind: 'vehicle', attributes: { make: 'nissan', model: 'np300', year: 2012, engine: '2.5', plate: 'ABC-123' } })
+item.label    // 'Nissan NP300 Frontier 2012 2.5 L'  (built by the server from the catalog and the PUBLIC values)
+item.fit_key  // 'nissan/np300/2012/2.5'             (the `fit:<key>` tag of the products; '' if it does not resolve completely)
+item.attributes.plate // '••23'                       (a `private` field is returned masked, always)
+
+// Only the parts that fit: its own tag plus the universal one.
+await sf.products.list({ tags_any: fitTagsAny(item.fit_key) })        // ?tags_any=fit:nissan/np300/2012/2.5,fit:universal
+```
+
+- `customer.subjects.list({ kind? })`, `create`, `update(id, patch)` (attributes merge; `null` clears a field; a private value sent back as its mask is kept), `delete(id)`. Errors: `422` with `field: 'attributes.<field>'` (never the value), `409` repeated or past the limit, `429` too many saves, `404` for an item that is not the buyer's.
+- **Privacy**: a `private` field (a licence plate) is stored for the buyer and never enters the label, the key, a filter, a cache key, a cookie or an order. Never prefill it from the server (it only comes masked, `isMasked`), never log it, never put it in a URL.
+- Pure helpers (`@asteby/storefront`), no UI: `subjectOptions(kind, field, values)` (the cascade), `reconcileSubjectValues`, `resolveSubject(kind, values)` (the same validation as the server, so the form answers without a round trip; the server stays the authority), `fitTagsAny`, `fitTag`, `isMasked`.
+- Catalog: the levels of the tree follow the kind's `catalog` fields that are not years; an option may declare `from`/`to`/`ranges` (model years) and a `year` field must satisfy every option on the chosen path. A year chosen before an engine narrows the engines; an engine never narrows the year.
+- `products.list({ tags_any })`: at most 5 tags of 120 characters, comma-separated on the wire (a tag with a comma is refused by the client); a hard filter, so facets count inside it.
+- Mock: `createMockStorefront({ subjectKinds: MOCK_SUBJECT_KINDS })` serves the kinds and the whole CRUD with the same rules (default: none, like a store that declares nothing).
+
 ## Buyer account: orders, shipments, invoices (Storefront API 1.8)
 
 `customer.order(id)` carries `progress` (unified timeline), `next_action`, `shipments[]` (events, carrier, `https`

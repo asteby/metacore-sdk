@@ -41,6 +41,8 @@ import type {
   ShippingRate,
   Shop,
   StorefrontErrorCode,
+  Subject,
+  SubjectKind,
   Theme,
 } from '../types.js'
 import { nextAction, orderProgress, orderShipments, shipmentsStatus, sortTrackingEvents, isTestShipment } from '../order-progress.js'
@@ -48,6 +50,7 @@ import { isValidPoint, rankByDistance } from '../geo.js'
 import { resolveAvailability } from '../availability.js'
 import { buildAccountOrders, buildPendingPayments } from './account-seed.js'
 import { MOCK_REGION_MX, maskTaxId, validateInvoiceRequest } from './region.js'
+import { isMasked, PRIVATE_MASK, resolveSubject, type SubjectValues } from '../subjects.js'
 import {
   MOCK_CURRENCY,
   MOCK_IMAGE_URL,
@@ -65,6 +68,7 @@ import {
 } from './seed.js'
 
 export { MOCK_CURRENCY, MOCK_CUSTOMER_EMAIL, MOCK_IMAGE_URL, MOCK_POSTAL_CENTROIDS } from './seed.js'
+export { MOCK_SUBJECT_KINDS } from './subjects.js'
 export { MOCK_CSF_RULES, MOCK_FISCAL_ID_MX, MOCK_IDENTITY_DOCUMENT_MX_CSF, MOCK_REGION_MX } from './region.js'
 export type { MockImageUrl } from './seed.js'
 
@@ -129,6 +133,11 @@ export type MockStorefrontOptions = {
    * organization has no region, the route answers `404` and invoice requests are not validated against a region.
    */
   region?: Region | null
+  /**
+   * The kinds of buyer item («My items») the store declares, served by `GET /subject-kinds` and enforced by
+   * `customer.subjects`. Default none: no such section, as in a store that declares nothing (`MOCK_SUBJECT_KINDS` has two).
+   */
+  subjectKinds?: SubjectKind[]
 }
 
 type CartRecord = {
@@ -159,6 +168,8 @@ export type MockState = {
   addresses: Map<string, Address[]>
   /** Saved fiscal profiles by customer id (contract 1.9). */
   fiscalProfiles: Map<string, FiscalProfile[]>
+  /** Saved items by customer id (contract 1.9); `private` holds the values the API only returns masked. */
+  subjects: Map<string, (Subject & { private: Record<string, string> })[]>
   orders: (Order & { customer_id: string | null })[]
   otps: Map<string, string>
   /** Email → password (plain text: it is a mock). The seed customer starts without one. */
@@ -259,6 +270,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       online_verify: false,
     },
     fiscal_profiles: { max: 10 },
+    ...((options.subjectKinds?.length ?? 0) > 0 ? { subjects: { kinds: options.subjectKinds!.map((k) => k.key), share_with_workshop: false } } : {}),
     ...options.customerCapabilities,
   }
   const missingScopes = options.missingScopes ?? []
@@ -291,6 +303,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       customers: buildCustomers(),
       addresses: new Map(),
       fiscalProfiles: new Map(),
+      subjects: new Map(),
       orders: [
         {
           id: 'ord_seed_1',
@@ -407,6 +420,11 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       if (list.length > 100) throw new HttpError(400, 'validation', 'At most 100 handles', 'handles')
       items = items.filter((p) => list.includes(p.handle))
     }
+
+    // `tags_any` (contract 1.9) is a hard filter of the base set: facets count inside it, nothing relaxes it.
+    const tagsAny = (search.get('tags_any') ?? '').split(',').map((t) => t.trim().toLowerCase()).filter(Boolean)
+    if (tagsAny.length > 5 || tagsAny.some((t) => t.length > 120)) throw new HttpError(400, 'validation', 'tags_any takes at most 5 tags of 120 characters', 'tags_any')
+    if (tagsAny.length > 0) items = items.filter((p) => p.tags.some((t) => tagsAny.includes(t.toLowerCase())))
 
     // Facets are computed over the base set (text/collection/handles), before refinement.
     const base = items
@@ -1453,6 +1471,93 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     state.fiscalProfiles.set(c.id, rest)
     if (cur.is_default && rest[0]) makeDefault(c, rest[0].id)
     mirrorDefaultProfile(c)
+    return { status: 204 }
+  })
+  // Buyer items, «My items» (contract 1.9): kinds are data the store declares; the server validates against them,
+  // builds `label` / `fit_key` and keeps private fields apart (returned only masked). Physical delete.
+  const MAX_SUBJECTS = 50
+  const subjectsOf = (c: Customer) => state.subjects.get(c.id) ?? []
+  const kinds = () => options.subjectKinds ?? []
+  const publicSubject = (s: Subject & { private: Record<string, string> }): Subject => {
+    const { private: priv, ...rest } = s
+    return { ...rest, attributes: { ...s.attributes, ...Object.fromEntries(Object.keys(priv).map((k) => [k, PRIVATE_MASK + (priv[k]!.length > 3 ? priv[k]!.slice(-2) : '')])) } }
+  }
+  const ownSubject = (c: Customer, id: string | undefined) => {
+    const s = subjectsOf(c).find((x) => x.id === id)
+    if (!s) throw new HttpError(404, 'not_found', 'Item not found', 'id')
+    return s
+  }
+  const setDefaultSubject = (c: Customer, id: string) => {
+    const kind = ownSubject(c, id).kind
+    state.subjects.set(c.id, subjectsOf(c).map((s) => (s.kind !== kind ? s : s.id === id ? { ...s, is_default: true, last_used_at: now() } : { ...s, is_default: false })))
+  }
+  const resolveOrThrow = (kind: SubjectKind, values: SubjectValues) => {
+    const r = resolveSubject(kind, values)
+    if (!r.ok) {
+      const [field, code] = Object.entries(r.problems)[0]!
+      throw new HttpError(422, 'validation', `${field}: ${code}`, field === '_' ? 'attributes' : `attributes.${field}`)
+    }
+    return r.subject
+  }
+  const cleanNickname = (v: unknown): string | null => {
+    if (v === undefined || v === null || v === '') return null
+    if (typeof v !== 'string' || [...v.trim()].length > 40) throw new HttpError(422, 'validation', 'nickname is too long (max 40)', 'nickname')
+    return v.trim().split(/\s+/).join(' ')
+  }
+  route('GET', '/subject-kinds', 'content:read', () => ({ body: { nodes: kinds() }, cache: 'public' }))
+  route('GET', '/customer/subjects', 'customer:read', ({ headers, search }) => {
+    const c = requireCustomer(headers)
+    const kind = search.get('kind')
+    const nodes = subjectsOf(c)
+      .filter((s) => !kind || s.kind === kind)
+      .sort((a, b) => a.kind.localeCompare(b.kind) || Number(b.is_default) - Number(a.is_default) || (b.last_used_at ?? '').localeCompare(a.last_used_at ?? ''))
+    return { body: { nodes: nodes.map(publicSubject) }, cache: 'private' }
+  })
+  route('POST', '/customer/subjects', 'customer:write', ({ headers, body }) => {
+    const c = requireCustomer(headers)
+    const kind = kinds().find((k) => k.key === body.kind)
+    if (!kind) throw new HttpError(422, 'validation', 'This store has no such kind', 'kind')
+    const attrs = body.attributes
+    if (!attrs || typeof attrs !== 'object' || Array.isArray(attrs)) throw new HttpError(422, 'validation', 'attributes must be an object', 'attributes')
+    const r = resolveOrThrow(kind, attrs as SubjectValues)
+    const list = subjectsOf(c)
+    if (list.length >= MAX_SUBJECTS || list.filter((s) => s.kind === kind.key).length >= kind.max_per_account) throw new HttpError(409, 'conflict', 'Limit reached; delete one first', 'kind')
+    if (r.fit_key && list.some((s) => s.kind === kind.key && s.fit_key === r.fit_key)) throw new HttpError(409, 'conflict', 'You already saved this item', 'attributes')
+    const subject = { id: nextId('subj'), kind: kind.key, label: r.label, nickname: cleanNickname(body.nickname), fit_key: r.fit_key, attributes: r.attributes, private: r.private, is_default: false, last_used_at: null, created_at: now() }
+    state.subjects.set(c.id, [...list, subject])
+    if (!list.some((s) => s.kind === kind.key) || body.is_default === true) setDefaultSubject(c, subject.id)
+    return { status: 201, body: publicSubject(ownSubject(c, subject.id)), cache: 'private' }
+  })
+  route('PATCH', '/customer/subjects/:id', 'customer:write', ({ headers, params, body }) => {
+    const c = requireCustomer(headers)
+    const cur = ownSubject(c, params[0])
+    if (body.is_default === false && cur.is_default) throw new HttpError(422, 'validation', 'Make another item the default instead', 'is_default')
+    let next = { ...cur }
+    if ('nickname' in body) next.nickname = cleanNickname(body.nickname)
+    if ('attributes' in body) {
+      const kind = kinds().find((k) => k.key === cur.kind)
+      if (!kind) throw new HttpError(422, 'validation', 'This store no longer offers this kind', 'kind')
+      const sent = (body.attributes ?? {}) as Record<string, unknown>
+      const merged: Record<string, unknown> = { ...cur.attributes, ...cur.private }
+      for (const [k, v] of Object.entries(sent)) {
+        if (k in cur.private && isMasked(v)) continue // the mask the client was shown: keep the stored value
+        if (v === null) delete merged[k]
+        else merged[k] = v
+      }
+      const r = resolveOrThrow(kind, merged as SubjectValues)
+      if (r.fit_key && subjectsOf(c).some((s) => s.id !== cur.id && s.kind === cur.kind && s.fit_key === r.fit_key)) throw new HttpError(409, 'conflict', 'You already saved this item', 'attributes')
+      next = { ...next, label: r.label, fit_key: r.fit_key, attributes: r.attributes, private: r.private }
+    }
+    state.subjects.set(c.id, subjectsOf(c).map((s) => (s.id === cur.id ? next : s)))
+    if (body.is_default === true && !cur.is_default) setDefaultSubject(c, cur.id)
+    return { body: publicSubject(ownSubject(c, cur.id)), cache: 'private' }
+  })
+  route('DELETE', '/customer/subjects/:id', 'customer:write', ({ headers, params }) => {
+    const c = requireCustomer(headers)
+    const cur = ownSubject(c, params[0])
+    state.subjects.set(c.id, subjectsOf(c).filter((s) => s.id !== cur.id))
+    const heir = subjectsOf(c).filter((s) => s.kind === cur.kind).sort((a, b) => (b.last_used_at ?? '').localeCompare(a.last_used_at ?? ''))[0]
+    if (cur.is_default && heir) setDefaultSubject(c, heir.id)
     return { status: 204 }
   })
   route('GET', '/customer/addresses', 'customer:read', ({ headers }) => {

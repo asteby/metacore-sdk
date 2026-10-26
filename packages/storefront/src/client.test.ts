@@ -391,3 +391,37 @@ describe('region and fiscal identity routes', () => {
     expect(JSON.parse(calls[0]!.init.body as string)).toEqual({ fiscal: null })
   })
 })
+
+describe('buyer items («My items», contract 1.9)', () => {
+  it('lists and writes through the private routes, never caching the list', async () => {
+    const { calls, fetch } = recorder((c) => (c.init.method === 'DELETE' ? new Response(null, { status: 204 }) : Response.json({ nodes: [], id: 's1' })))
+    const sf = createStorefrontClient({ ...base, fetch }).withCustomerToken('tok')
+    await sf.customer.subjects.list({ kind: 'vehicle' })
+    await sf.customer.subjects.create({ kind: 'vehicle', attributes: { make: 'a' } })
+    await sf.customer.subjects.update('a/b', { nickname: 'x' })
+    await sf.customer.subjects.delete('s1')
+    expect(calls.map((c) => `${c.init.method ?? 'GET'} ${c.url.replace(base.baseUrl, '/')}`)).toEqual([
+      'GET /storefront/customer/subjects?kind=vehicle',
+      'POST /storefront/customer/subjects',
+      'PATCH /storefront/customer/subjects/a%2Fb',
+      'DELETE /storefront/customer/subjects/s1',
+    ])
+    expect(calls[0]!.init.cache).toBe('no-store')
+    expect(calls[0]!.init.headers.get('x-customer-token')).toBe('tok')
+    expect(JSON.parse(String(calls[1]!.init.body))).toEqual({ kind: 'vehicle', attributes: { make: 'a' } })
+  })
+
+  it('subjectKinds degrades to none on a server that predates the route', async () => {
+    const { fetch } = recorder(() => Response.json({ error: { code: 'not_found', message: 'no route' } }, { status: 404 }))
+    expect(await createStorefrontClient({ ...base, fetch }).content.subjectKinds()).toEqual([])
+    const ok = recorder(() => Response.json({ nodes: [{ key: 'vehicle' }] }))
+    expect((await createStorefrontClient({ ...base, fetch: ok.fetch }).content.subjectKinds()).map((k) => k.key)).toEqual(['vehicle'])
+    expect(ok.calls[0]!.url).toBe('https://ops.example.com/api/gw/storefront/subject-kinds')
+  })
+
+  it('sends tags_any comma-separated on the product list', async () => {
+    const { calls, fetch } = recorder(() => Response.json({ nodes: [], page_info: { has_next_page: false, end_cursor: null }, total_count: 0 }))
+    await createStorefrontClient({ ...base, fetch }).products.list({ tags_any: ['fit:a/b', 'fit:universal'] })
+    expect(new URL(calls[0]!.url).searchParams.get('tags_any')).toBe('fit:a/b,fit:universal')
+  })
+})

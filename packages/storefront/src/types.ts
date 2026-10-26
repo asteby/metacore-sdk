@@ -506,6 +506,11 @@ export type CustomerCapabilities = {
   missing_scopes?: string[]
   /** Saved fiscal profiles (contract 1.9). Absent on older servers: the section does not exist. */
   fiscal_profiles?: { max: number }
+  /**
+   * The kinds of saved item the store declares («My items»; contract 1.9). Absent when the store declares none (or on
+   * older servers): there is no such section, show nothing.
+   */
+  subjects?: { kinds: string[]; share_with_workshop?: boolean }
 }
 
 /** `GET {gateway}/_token`: what the token in use is and what it can do. Needs no scope. */
@@ -1413,6 +1418,99 @@ export type FiscalProfile = FiscalIdentity & {
 
 /** Create or edit a profile. The server derives `person_type` and sets `verification`; the client cannot. */
 export type FiscalProfileInput = Partial<FiscalIdentityInput> & { label?: string; is_default?: boolean }
+
+// --- Buyer subjects: «My items» (contract 1.9) ------------------------------------------------------------------
+
+/**
+ * A subject is something the buyer shops for: a vehicle, a printer, a phone, a pet, a size. WHICH kinds exist is
+ * data the organization publishes (`content.subjectKinds()`); nothing in the SDK or the contract names one. A store
+ * with no kinds has no such section.
+ */
+export type SubjectFieldType = 'text' | 'year' | 'select'
+
+export type SubjectField = {
+  key: string
+  label: string
+  type: SubjectFieldType
+  /** `catalog`: the value is an option of the kind's catalog (a `year` is checked against the options' years). Default `free`. */
+  source?: 'catalog' | 'free'
+  /** The field whose choice narrows this one (the cascade order). */
+  depends_on?: string | null
+  required?: boolean
+  /**
+   * Stored for the buyer and NEVER part of the label, the compatibility key, a filter, a cache key, a cookie or an
+   * order (a licence plate). The server returns it only masked (`••34`): never prefill it, never log it.
+   */
+  private?: boolean
+  max?: number
+}
+
+/**
+ * One option of a catalog level (make, model, engine…). `from`/`to`/`ranges` bound the model years it covers: a
+ * `year` field must satisfy every option on the chosen path that declares them.
+ */
+export type SubjectCatalogNode = {
+  label: string
+  from?: number
+  to?: number
+  ranges?: [number, number][]
+  children?: Record<string, SubjectCatalogNode>
+}
+
+/** The cascade of options of a kind: levels follow the kind's `catalog` fields that are not years. */
+export type SubjectCatalog = {
+  version?: string | null
+  tree: Record<string, SubjectCatalogNode>
+}
+
+export type SubjectKind = {
+  key: string
+  /** Singular («Vehicle»). */
+  label: string
+  /** The section's name («My garage»). */
+  label_plural: string
+  max_per_account: number
+  fields: SubjectField[]
+  /** Template of the compatibility key with the fields in braces (public ones only). */
+  fit_key_template: string
+  /** The checkout may ask «which one is this order for?». */
+  attach_to_order?: boolean
+  /** `null` for kinds with free fields only. */
+  catalog?: SubjectCatalog | null
+}
+
+/** A saved item. `attributes` holds the public values; private ones come masked (`••34`). */
+export type Subject = {
+  id: string
+  kind: string
+  /** Public label built by the server from the catalog and the public values. */
+  label: string
+  nickname?: string | null
+  /** Compatibility key (the `fit:<key>` tag of the products); `''` when the item does not resolve completely. */
+  fit_key: string
+  attributes: Record<string, unknown>
+  /** The active item of its kind. */
+  is_default: boolean
+  last_used_at?: string | null
+  created_at: string
+}
+
+export type SubjectInput = {
+  kind: string
+  attributes: Record<string, unknown>
+  nickname?: string | null
+  is_default?: boolean
+}
+
+/** Merged over the stored item: `null` clears a field; a private value sent back as its mask is kept. */
+export type SubjectPatch = {
+  attributes?: Record<string, unknown>
+  nickname?: string | null
+  is_default?: boolean
+}
+
+/** The item an order is for (kinds with `attach_to_order`). */
+export type SubjectRef = { kind: string; id: string }
 
 /** `PATCH /customer`. `fiscal: null` deletes the saved fiscal data (ARCO). */
 export type CustomerUpdateInput = {

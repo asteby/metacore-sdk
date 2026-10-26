@@ -1,0 +1,5 @@
+---
+"@asteby/storefront": minor
+---
+
+feat(storefront): «Mis artículos» del comprador (Storefront API 1.9, aditivo; en ProtekAuto «Mi garage»). Tipos `Subject*`, `customer.subjects.{list,create,update,delete}` (privado, sin caché; 422 por campo sin eco del valor), `content.subjectKinds()` (`[]` si la organización no declara tipos o el servidor es anterior) y `CustomerCapabilities.subjects`. `products.list({ tags_any })` (OR, máx. 5 etiquetas de 120 caracteres, separadas por coma en la URL; el cliente rechaza una etiqueta con coma). Helpers puros sin UI ni tipo conocido: `subjectOptions` / `reconcileSubjectValues` (cascada guiada por el catálogo de datos, con años por rangos), `resolveSubject` (misma validación que el servidor: etiqueta y clave de compatibilidad solo con valores públicos), `fitTagsAny`, `fitTag`, `isMasked`. Un campo `private` (placas) nunca entra a la etiqueta ni a la clave y el servidor lo devuelve enmascarado. Mock: `subjectKinds` / `MOCK_SUBJECT_KINDS`, el CRUD completo con las mismas reglas y el filtro `tags_any`.

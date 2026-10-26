@@ -28,6 +28,11 @@ export type ProductListParams = PaginationParams & {
   filters?: Record<string, QueryValue | QueryValue[]>
   /** Restrict to these handles (max 100). Serialized comma-separated. */
   handles?: string[]
+  /**
+   * Only products carrying at least one of these tags (OR, at most 5 of 120 characters; contract 1.9). Serialized
+   * comma-separated. A parts store passes `fitTagsAny(fitKey)` (`fit:<key>`, `fit:universal`); any tag works.
+   */
+  tags_any?: string[]
 }
 
 export type CollectionListParams = PaginationParams
@@ -54,9 +59,15 @@ export function appendParams(search: URLSearchParams, params: QueryParams | unde
 
 /** Serializes product list params per the contract (`filter.<attr>` repeated, `handles` comma-separated). */
 export function productListQuery(params: ProductListParams = {}): URLSearchParams {
-  const { filters, handles, ...rest } = params
+  const { filters, handles, tags_any, ...rest } = params
   const search = appendParams(new URLSearchParams(), rest as QueryParams)
   if (handles && handles.length > 0) search.set('handles', handles.join(','))
+  if (tags_any && tags_any.length > 0) {
+    if (tags_any.length > 5) throw new RangeError('tags_any takes at most 5 tags')
+    // The API splits on commas: a tag that holds one would become two.
+    if (tags_any.some((t) => t.includes(',') || t.length > 120)) throw new TypeError('tags_any: a tag has at most 120 characters and no comma')
+    search.set('tags_any', tags_any.join(','))
+  }
   if (filters) {
     for (const [key, raw] of Object.entries(filters)) {
       const name = key.startsWith('filter.') ? key : `filter.${key}`
