@@ -138,7 +138,8 @@ export function renderVoucherDocument(v: VoucherView, opts: VoucherDocumentOptio
   const locale = opts.locale ?? 'es-MX'
   const t = locale.toLowerCase().startsWith('en') ? EN : ES
   const shop = opts.shopName || ''
-  const method = v.method ? (t.methods[v.method.toLowerCase()] ?? v.method) : t.cash
+  // Own keys only: a gateway method named `constructor` or `__proto__` must print as itself, not as Object internals.
+  const method = v.method ? (Object.prototype.hasOwnProperty.call(t.methods, v.method.toLowerCase()) ? t.methods[v.method.toLowerCase()]! : v.method) : t.cash
   const isSpei = !!v.clabe && !v.reference
   const code = barcodeValue(v)
   const svg = code ? barcodeSvg(code, t.barcode) : null

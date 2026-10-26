@@ -177,6 +177,7 @@
 [data-sf-retry]:focus-visible,
 [data-sf-order-link]:focus-visible,
 [data-sf-shipment-toggle]:focus-visible,
+[data-sf-shipment-label]:focus-visible,
 [data-sf-shipment-track]:focus-visible,
 [data-sf-invoice-download]:focus-visible,
 [data-sf-voucher-print]:focus-visible,

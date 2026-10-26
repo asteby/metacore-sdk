@@ -9,10 +9,9 @@
  * account to go back to). The document generator is a separate chunk, fetched only when the buyer taps.
  */
 import type { PendingPayment } from '@asteby/storefront'
-import { formatMoney } from '@asteby/storefront'
 import { useId, useMemo, type ReactNode } from 'react'
 import { enumText, fill } from './orders-messages.js'
-import { CopyButton, Hidden, Time, useAccountText, type AccountTextProps } from './orders-ui.js'
+import { CopyButton, Hidden, Time, moneyText, useAccountText, type AccountTextProps } from './orders-ui.js'
 import { barcodeGeometry, barcodeValue, voucherOf } from './voucher.js'
 
 export type BarcodeProps = { value: string; label: string; height?: number; className?: string }
@@ -75,7 +74,7 @@ export function PendingPaymentCard({ payment, voucherHref, shopName, headingLeve
   const Heading = `h${headingLevel}` as 'h3'
   const code = barcodeValue(v)
   const methodLabel = enumText(m, 'pending.method', v.method?.toLowerCase())
-  const total = payment.total ?? v.amount
+  const total = moneyText(payment.total, locale) ?? moneyText(v.amount, locale)
   const copyValue = v.reference ?? v.clabe
   const expires = date(v.expires_at ?? payment.expires_at, 'datetime')
 
@@ -118,7 +117,7 @@ export function PendingPaymentCard({ payment, voucherHref, shopName, headingLeve
       {total ? (
         <p className={cx.total} data-sf-voucher-total>
           <span>{m['pending.total']}: </span>
-          <strong>{formatMoney(total, locale)}</strong>
+          <strong>{total}</strong>
         </p>
       ) : null}
       {expired ? (

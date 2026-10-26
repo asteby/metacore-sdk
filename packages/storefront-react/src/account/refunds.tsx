@@ -1,9 +1,8 @@
 /** Refunds and payments of an order. Headless (`data-sf-refund-*`, `data-sf-payment-*`, `classNames`). */
 import type { PaymentInfo, Refund } from '@asteby/storefront'
-import { formatMoney } from '@asteby/storefront'
 import { useId } from 'react'
 import { enumText, fill } from './orders-messages.js'
-import { Hidden, Time, useAccountText, type AccountTextProps } from './orders-ui.js'
+import { Hidden, Time, moneyText, str, useAccountText, type AccountTextProps } from './orders-ui.js'
 
 export type RefundListClassNames = Partial<Record<'root' | 'title' | 'list' | 'item' | 'amount' | 'status' | 'meta' | 'empty' | 'error' | 'retry', string>>
 
@@ -48,13 +47,13 @@ export function RefundList({ refunds, showEmpty = false, degraded, onRetry, head
           {items.map((r) => (
             <li key={r.id} className={cx.item} data-sf-refund data-sf-refund-status={typeof r.status === 'string' ? r.status : 'unknown'}>
               <span className={cx.amount} data-sf-refund-amount>
-                {formatMoney(r.amount, locale)}
+                {moneyText(r.amount, locale) ?? ''}
               </span>{' '}
               <span className={cx.status} data-sf-tone={tone(r.status)}>
                 {enumText(m, 'refund.status', r.status)}
               </span>
               <span className={cx.meta}>
-                {r.method_label ? <> · {r.method_label}</> : null}
+                {str(r.method_label) ? <> · {str(r.method_label)}</> : null}
                 {r.completed_at ? (
                   <>
                     {' · '}
@@ -96,7 +95,8 @@ export function PaymentSummary({ payments, headingLevel = 3, classNames: cx = {}
       <ul className={cx.list}>
         {items.map((p, i) => (
           <li key={`${p.method_label}-${i}`} className={cx.item} data-sf-payment data-sf-payment-status={typeof p.status === 'string' ? p.status : 'unknown'}>
-            <span>{p.method_label}</span> · <span>{formatMoney(p.amount, locale)}</span> ·{' '}
+            <span>{p.method_label}</span>
+            {moneyText(p.amount, locale) ? <> · <span>{moneyText(p.amount, locale)}</span></> : null} ·{' '}
             <span className={cx.status} data-sf-tone={p.status === 'failed' ? 'problem' : p.status === 'paid' ? 'done' : 'current'}>
               {enumText(m, 'payment.status', p.status)}
             </span>

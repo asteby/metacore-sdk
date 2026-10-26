@@ -260,15 +260,28 @@ export type AuthAction = ReturnType<typeof createAuthAction>
 // Resource routes of the order screens: the invoice file and the printable voucher
 // ---------------------------------------------------------------------------
 
-const TEXT_HEADERS = { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' } as const
+/** Headers every answer of a buyer route carries, error or not: never cached, never sniffed, never rendered as a page. */
+const LOCKED_HEADERS = {
+  'Cache-Control': 'private, no-store',
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+  'X-Robots-Tag': 'noindex',
+} as const
+const TEXT_HEADERS = { ...LOCKED_HEADERS, 'Content-Type': 'text/plain; charset=utf-8', 'Content-Security-Policy': "default-src 'none'; sandbox" } as const
 const textResponse = (status: number, body: string, extra: Record<string, string> = {}) => new Response(body, { status, headers: { ...TEXT_HEADERS, ...extra } })
+
+/** Largest invoice file served (a CFDI PDF is well under 1 MB): anything bigger is refused before it is decoded. */
+export const MAX_INVOICE_FILE_BYTES = 10 * 1024 * 1024
 
 /** Statuses a buyer-facing route answers with; anything unexpected is a plain 502 (never the upstream message). */
 function failureResponse(err: unknown): Response {
   if (isStorefrontError(err)) {
     if (err.status === 401) return textResponse(401, 'Sesion vencida')
     if (err.status === 404) return textResponse(404, 'No encontrado')
-    if (err.status === 429) return textResponse(429, 'Demasiados intentos', err.retryAfter ? { 'Retry-After': String(Math.ceil(err.retryAfter)) } : {})
+    if (err.status === 429) {
+      const wait = typeof err.retryAfter === 'number' && Number.isFinite(err.retryAfter) && err.retryAfter > 0 ? Math.min(3600, Math.ceil(err.retryAfter)) : null
+      return textResponse(429, 'Demasiados intentos', wait ? { 'Retry-After': String(wait) } : {})
+    }
   }
   return textResponse(502, 'No pudimos obtener el archivo')
 }
@@ -283,6 +296,8 @@ export type InvoiceFileResponseOptions = {
   /** From the URL (`pdf` | `xml`); anything else is a 404. */
   kind: string | undefined
   signal?: AbortSignal
+  /** Largest file served, in bytes (default `MAX_INVOICE_FILE_BYTES`, 10 MB); a bigger one is a generic 502. */
+  maxBytes?: number
 }
 
 /**
@@ -293,13 +308,16 @@ export type InvoiceFileResponseOptions = {
  * from what the API says, so a file cannot make the browser render HTML under your origin. 401/404/429 pass through;
  * anything else is a generic 502 with no upstream detail.
  */
-export async function invoiceFileResponse({ storefront, orderId, invoiceId, kind, signal }: InvoiceFileResponseOptions): Promise<Response> {
+export async function invoiceFileResponse({ storefront, orderId, invoiceId, kind, signal, maxBytes = MAX_INVOICE_FILE_BYTES }: InvoiceFileResponseOptions): Promise<Response> {
   if (kind !== 'pdf' && kind !== 'xml') return textResponse(404, 'No encontrado')
   if (!orderId || !invoiceId) return textResponse(404, 'No encontrado')
   try {
     const file = await storefront.customer.invoiceFile(orderId, invoiceId, kind, signal ? { signal } : undefined)
     if (!file) return textResponse(404, 'No encontrado')
+    // Checked on the encoded text (4 chars per 3 bytes, whitespace aside) so a huge answer is never decoded.
+    if (file.content_base64.length > Math.ceil(maxBytes / 3) * 4 * 1.1 + 64) return textResponse(502, 'No pudimos obtener el archivo')
     const bytes = invoiceFileBytes(file)
+    if (bytes.byteLength > maxBytes) return textResponse(502, 'No pudimos obtener el archivo')
     const name = safeInvoiceFilename(file.filename, kind === 'pdf' ? 'factura.pdf' : 'factura.xml')
     const filename = name.toLowerCase().endsWith(`.${kind}`) ? name : `${name}.${kind}`
     return new Response(bytes as BodyInit, {
@@ -308,11 +326,8 @@ export async function invoiceFileResponse({ storefront, orderId, invoiceId, kind
         'Content-Type': FILE_TYPES[kind]!,
         'Content-Length': String(bytes.byteLength),
         'Content-Disposition': `attachment; filename="${filename}"`,
-        'Cache-Control': 'private, no-store',
-        'X-Content-Type-Options': 'nosniff',
+        ...LOCKED_HEADERS,
         'Content-Security-Policy': "default-src 'none'; sandbox",
-        'Referrer-Policy': 'no-referrer',
-        'X-Robots-Tag': 'noindex',
       },
     })
   } catch (err) {
@@ -352,11 +367,9 @@ export async function pendingVoucherResponse({ storefront, id, download = false,
       status: 200,
       headers: {
         'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'private, no-store',
-        'X-Robots-Tag': 'noindex',
-        'Referrer-Policy': 'no-referrer',
-        'X-Content-Type-Options': 'nosniff',
-        'Content-Security-Policy': `default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src 'nonce-${nonce}'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'`,
+        ...LOCKED_HEADERS,
+        // The download carries no script, so its policy allows none.
+        'Content-Security-Policy': `default-src 'none'; style-src 'unsafe-inline'; img-src data:; script-src ${download ? "'none'" : `'nonce-${nonce}'`}; base-uri 'none'; form-action 'none'; frame-ancestors 'self'`,
         ...(download ? { 'Content-Disposition': `attachment; filename="ficha-de-pago-${safeId}.html"` } : {}),
       },
     })

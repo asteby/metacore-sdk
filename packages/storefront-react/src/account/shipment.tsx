@@ -11,7 +11,7 @@ import type { Shipment, ShipmentMap } from '@asteby/storefront'
 import { isTestShipment, safeTrackingUrl, sortTrackingEvents } from '@asteby/storefront'
 import { useId, useState, type ReactNode } from 'react'
 import { enumText } from './orders-messages.js'
-import { CopyButton, Hidden, Time, useAccountText, type AccountTextProps } from './orders-ui.js'
+import { CopyButton, Hidden, Time, str, useAccountText, type AccountTextProps } from './orders-ui.js'
 
 export type ShipmentCardClassNames = Partial<
   Record<'root' | 'header' | 'carrier' | 'status' | 'meta' | 'number' | 'actions' | 'link' | 'copy' | 'events' | 'event' | 'toggle' | 'empty' | 'test' | 'map', string>
@@ -46,8 +46,9 @@ export function ShipmentCard({ shipment, testMode = 'hide', eventsPreview = 3, r
   const isReturn = shipment.kind === 'return'
   const Heading = `h${headingLevel}` as 'h3'
   const SubHeading = `h${headingLevel + 1}` as 'h4'
-  const carrier = typeof shipment.carrier === 'string' && shipment.carrier.trim() ? shipment.carrier.trim() : null
-  const number = !test && typeof shipment.tracking_number === 'string' && shipment.tracking_number.trim() ? shipment.tracking_number.trim() : null
+  const carrier = str(shipment.carrier)
+  const service = test ? null : str(shipment.service)
+  const number = test ? null : str(shipment.tracking_number)
   const trackUrl = test ? null : safeTrackingUrl(shipment.tracking_url)
   const labelUrl = isReturn && !test ? safeTrackingUrl(shipment.label_url) : null
   const events = test ? [] : sortTrackingEvents(shipment.events)
@@ -81,9 +82,9 @@ export function ShipmentCard({ shipment, testMode = 'hide', eventsPreview = 3, r
           {m['shipment.testNote']}
         </p>
       ) : null}
-      {shipment.service && !test ? (
+      {service ? (
         <p className={cx.meta} data-sf-shipment-service>
-          {m['shipment.service']}: {shipment.service}
+          {m['shipment.service']}: {service}
         </p>
       ) : null}
       {number ? (
@@ -136,14 +137,18 @@ export function ShipmentCard({ shipment, testMode = 'hide', eventsPreview = 3, r
               {m['shipment.events']}
             </SubHeading>
             <ol className={cx.events} id={eventsId} data-sf-shipment-events>
-              {shown.map((e) => (
-                <li key={e.id} className={cx.event} data-sf-event-status={typeof e.status === 'string' ? e.status : 'unknown'}>
+              {shown.map((e, i) => {
+                const description = str(e.description)
+                const location = str(e.location)
+                return (
+                <li key={`${str(e.id) ?? ''}-${i}`} className={cx.event} data-sf-event-status={typeof e.status === 'string' ? e.status : 'unknown'}>
                   <span data-sf-event-state>{enumText(m, 'shipment.status', e.status)}</span>
-                  {e.description ? <span data-sf-event-description> · {e.description}</span> : null}
-                  {e.location ? <span data-sf-event-location> · {e.location}</span> : null}{' '}
+                  {description ? <span data-sf-event-description> · {description}</span> : null}
+                  {location ? <span data-sf-event-location> · {location}</span> : null}{' '}
                   <Time value={e.occurred_at} text={date(e.occurred_at, 'datetime')} />
                 </li>
-              ))}
+                )
+              })}
             </ol>
             {events.length > Math.max(1, eventsPreview) ? (
               <button type="button" className={cx.toggle} aria-expanded={open} aria-controls={eventsId} onClick={() => setOpen((v) => !v)} data-sf-shipment-toggle>

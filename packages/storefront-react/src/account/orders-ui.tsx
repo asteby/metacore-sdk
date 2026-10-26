@@ -1,4 +1,5 @@
 /** Small shared pieces of the order screens: date formatting, hidden text, copy button, text resolution. */
+import { formatMoney } from '@asteby/storefront'
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { useResolvedLocale } from '../locale.js'
 import { accountMessages, fill, type AccountMessages } from './orders-messages.js'
@@ -13,6 +14,27 @@ const SR_ONLY: CSSProperties = {
   clip: 'rect(0 0 0 0)',
   whiteSpace: 'nowrap',
   border: 0,
+}
+
+/**
+ * Text the server (or the carrier through it) sent, ready to render: a trimmed non-empty string, a finite number as
+ * text, else `null`. Every free-text field passes here, so an object or a number where a string was expected never
+ * reaches React as a child (which throws) and never prints as `[object Object]`.
+ */
+export function str(v: unknown): string | null {
+  if (typeof v === 'number') return Number.isFinite(v) ? String(v) : null
+  if (typeof v !== 'string') return null
+  const s = v.trim()
+  return s ? s : null
+}
+
+/** A `Money` formatted, or `null` when it is missing or malformed (never a made-up `$0.00`). */
+export function moneyText(v: unknown, locale: string): string | null {
+  if (!v || typeof v !== 'object') return null
+  const { amount, currency_code } = v as Record<string, unknown>
+  const a = typeof amount === 'number' ? String(amount) : amount
+  if (typeof a !== 'string' || !a.trim() || !Number.isFinite(Number(a)) || typeof currency_code !== 'string' || !/^[A-Za-z]{3}$/.test(currency_code)) return null
+  return formatMoney({ amount: a.trim(), currency_code: currency_code.toUpperCase() }, locale)
 }
 
 /** Visually hidden text for screen readers. */

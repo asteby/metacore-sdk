@@ -9,11 +9,11 @@
  * `renderSummary`; the usual one is `(s) => <InvoiceStatusCard invoice={s} ... />` from `@asteby/storefront-react/fiscal`
  * (a slot, so this bundle does not carry the fiscal texts for stores that never request invoices from here).
  */
-import type { InvoiceDoc, InvoiceFileKind, InvoiceSummary, Money as MoneyData } from '@asteby/storefront'
-import { formatMoney, groupInvoiceDocs, isTestInvoice } from '@asteby/storefront'
+import type { InvoiceDoc, InvoiceFileKind, InvoiceSummary } from '@asteby/storefront'
+import { groupInvoiceDocs, isTestInvoice } from '@asteby/storefront'
 import { useId, type ReactNode } from 'react'
 import { enumText, fill } from './orders-messages.js'
-import { Hidden, Time, useAccountText, type AccountTextProps } from './orders-ui.js'
+import { Hidden, Time, moneyText, str, useAccountText, type AccountTextProps } from './orders-ui.js'
 
 export type InvoiceListClassNames = Partial<
   Record<'root' | 'title' | 'group' | 'doc' | 'status' | 'meta' | 'note' | 'actions' | 'download' | 'creditNotes' | 'test' | 'error' | 'retry' | 'empty', string>
@@ -55,12 +55,14 @@ export function InvoiceList({ invoices, summary, renderSummary, fileHref, onDown
     const test = isTestInvoice(doc)
     const status = known(doc.status) ? doc.status : 'unknown'
     const kindLabel = doc.kind === 'credit_note' ? m['invoice.creditNote'] : m['invoice.invoice']
-    const name = [doc.series, doc.folio_number].filter((x): x is string => typeof x === 'string' && !!x).join('-')
+    const docName = (d: InvoiceDoc) => [str(d.series), str(d.folio_number)].filter(Boolean).join('-')
+    const name = docName(doc)
+    const folio = str(doc.folio)
     const canDownload = status === 'issued' && !test
-    const total = doc.total && typeof doc.total === 'object' ? formatMoney(doc.total as MoneyData, locale) : null
+    const total = moneyText(doc.total, locale)
     const link = (kind: InvoiceFileKind) => {
       const label = kind === 'pdf' ? m['invoice.pdf'] : m['invoice.xml']
-      const aria = fill(m['invoice.downloadOf'], { action: label, kind: kindLabel.toLowerCase(), name: name || doc.folio || '' }).replace(/\s+,/g, ',').replace(/,\s*$/, '').trim()
+      const aria = fill(m['invoice.downloadOf'], { action: label, kind: kindLabel.toLowerCase(), name: name || folio || '' }).replace(/\s+,/g, ',').replace(/,\s*$/, '').trim()
       const href = fileHref?.(doc, kind)
       if (href) {
         return (
@@ -94,12 +96,12 @@ export function InvoiceList({ invoices, summary, renderSummary, fileHref, onDown
         </p>
         {parent ? (
           <p className={cx.meta} data-sf-invoice-parent>
-            {fill(m['invoice.creditNoteOf'], { folio: [parent.series, parent.folio_number].filter(Boolean).join('-') || parent.folio || '' }).trim()}
+            {fill(m['invoice.creditNoteOf'], { folio: docName(parent) || str(parent.folio) || '' }).trim()}
           </p>
         ) : null}
-        {doc.folio && !test ? (
+        {folio && !test ? (
           <p className={cx.meta} data-sf-invoice-folio>
-            {m['invoice.folio']}: <code>{doc.folio}</code>
+            {m['invoice.folio']}: <code>{folio}</code>
           </p>
         ) : null}
         <p className={cx.meta}>

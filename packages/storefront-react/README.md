@@ -830,7 +830,7 @@ Componentes **headless** de `@asteby/storefront-react/account` (+ `account.css` 
 | `InvoiceList` | Facturas y notas de crédito (bajo su factura); estados `issued/pending/cancelled/error`; descarga solo por `fileHref` (tu ruta autenticada) o `onDownload`; sandbox marcado «de prueba, sin validez» o `testMode="hide"`; sin documentos, `renderSummary` (p. ej. `InvoiceStatusCard`) | `data-sf-invoice-*` |
 | `PendingPaymentCard` / `PendingPaymentList` | Ficha de efectivo: referencia/CLABE, copiar, código de barras Code 128 (SVG), vencimiento, imprimir y descargar (por `voucherHref` de tu servidor o armada en el navegador, con su código en un chunk aparte) | `data-sf-voucher-*` |
 | `RefundList`, `PaymentSummary` | Reembolsos y pagos | `data-sf-refund`, `data-sf-payment` |
-| `useCustomerOrders`, `useCustomerOrder(id, { poll })`, `usePendingPayments` | Carga con `status` (`loading/ready/error/not_found`), `reload`, `loadMore`; `initial` desde el loader (SSR) | — |
+| `useCustomerOrders`, `useCustomerOrder(id, { poll })`, `usePendingPayments` | Carga con `status` (`loading/ready/error/not_found`), `reload`, `loadMore`; `initial` desde el loader (SSR). Los datos son del cliente (sesión) y del id que los pidieron: al cambiar de comprador, cerrar sesión o cambiar de pedido no se muestra nada del anterior; pasa un cliente estable (`useMemo`), uno nuevo por render recarga cada vez | — |
 
 `degraded` (secciones que el servidor no pudo leer) se pasa a la sección: error recuperable con «Reintentar» y el resto del pedido se ve.
 
@@ -855,7 +855,7 @@ export const loader = async ({ request, params }) => invoiceFileResponse({ store
 export const loader = async ({ request, params }) => pendingVoucherResponse({ storefront: await sfFor(request), id: params.id, download: new URL(request.url).searchParams.get('descargar') === '1', shopName: 'Mi tienda' })
 ```
 
-`invoiceFileResponse` sirve `attachment` con `Cache-Control: private, no-store`, `nosniff` y CSP `sandbox`; el tipo sale de `kind`, no de lo que diga la API. `pendingVoucherResponse` solo entrega una ficha que está en la lista del comprador (si no, 404) con CSP cerrada y nonce por respuesta. Accesibilidad: WCAG 2.2 AA verificada con axe en las pruebas (contraste lo decide cada tienda con sus tokens), objetivos ≥ 44 px en el CSS opcional, `prefers-reduced-motion`. Presupuesto: todas las pantallas ≈ 12 KB gzip (prueba `size-budget`).
+`invoiceFileResponse` sirve `attachment` con `Cache-Control: private, no-store`, `nosniff` y CSP `sandbox` (también en cada respuesta de error); el tipo sale de `kind`, no de lo que diga la API, y un archivo de más de `maxBytes` (10 MB por defecto) es un 502 genérico sin decodificarlo. `pendingVoucherResponse` solo entrega una ficha que está en la lista del comprador (si no, 404) con CSP cerrada y nonce por respuesta. Accesibilidad: WCAG 2.2 AA verificada con axe en las pruebas (contraste lo decide cada tienda con sus tokens), objetivos ≥ 44 px en el CSS opcional, `prefers-reduced-motion`. Presupuesto: todas las pantallas ≈ 13 KB gzip (prueba `size-budget`).
 
 ## Facturación y constancia fiscal (`/fiscal`)
 

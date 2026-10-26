@@ -19,6 +19,16 @@ function useClient(client?: StorefrontClient | null): StorefrontClient | null {
 
 const asError = (e: unknown): Error => (e instanceof Error ? e : new Error('Request failed'))
 
+// A stable id per client object (one per buyer session with `withCustomerToken`), to tell whose data a hook holds.
+const ids = new WeakMap<object, string>()
+let seq = 0
+function clientKey(c: StorefrontClient | null): string {
+  if (!c) return 'none'
+  let k = ids.get(c)
+  if (!k) ids.set(c, (k = `c${++seq}`))
+  return k
+}
+
 // ---------------------------------------------------------------------------
 // Lists (orders, pending payments)
 // ---------------------------------------------------------------------------
@@ -36,56 +46,75 @@ export type UseConnectionResult<T> = {
   loadMore: () => void
 }
 
+type ConnectionState<T> = { status: UseConnectionResult<T>['status']; nodes: T[]; error: Error | null; cursor: string | null; hasMore: boolean; total: number | null; owner: string }
+
 function useConnection<T>(fetchPage: (c: StorefrontClient, after: string | null, signal: AbortSignal) => Promise<Connection<T>>, client: StorefrontClient | null, initial: Connection<T> | null | undefined, key: string): UseConnectionResult<T> {
-  const [state, setState] = useState<{ status: UseConnectionResult<T>['status']; nodes: T[]; error: Error | null; cursor: string | null; hasMore: boolean; total: number | null }>(() => ({
-    status: initial ? 'ready' : 'loading',
-    nodes: initial?.nodes ?? [],
-    error: null,
-    cursor: initial?.page_info?.end_cursor ?? null,
-    hasMore: !!initial?.page_info?.has_next_page,
-    total: initial?.total_count ?? null,
-  }))
+  // What the list belongs to: this client (a buyer's session) and this query. Data of another owner is never returned,
+  // so the next buyer on a shared device never sees the previous one's orders, not even while his own load.
+  const owner = `${clientKey(client)}|${key}`
+  const empty = (status: ConnectionState<T>['status']): ConnectionState<T> => ({ status, nodes: [], error: null, cursor: null, hasMore: false, total: null, owner })
+  const [state, setState] = useState<ConnectionState<T>>(() =>
+    initial
+      ? { status: 'ready', nodes: initial.nodes ?? [], error: null, cursor: initial.page_info?.end_cursor ?? null, hasMore: !!initial.page_info?.has_next_page, total: initial.total_count ?? null, owner }
+      : empty('loading'),
+  )
   const [loadingMore, setLoadingMore] = useState(false)
   const alive = useRef<AbortController | null>(null)
+  const more = useRef<AbortController | null>(null)
   const fetchRef = useRef(fetchPage)
   fetchRef.current = fetchPage
 
   const first = useCallback(() => {
-    if (!client) return
     alive.current?.abort()
+    more.current?.abort()
+    setLoadingMore(false)
+    if (!client) {
+      // No session (yet, or signed out): nothing is fetched and nothing of a previous session is kept.
+      setState(empty('loading'))
+      return
+    }
     const ctl = new AbortController()
     alive.current = ctl
-    setState((s) => (s.nodes.length ? { ...s, error: null } : { ...s, status: 'loading', error: null }))
+    setState((s) => (s.owner === owner && s.nodes.length ? { ...s, error: null } : empty('loading')))
     fetchRef.current(client, null, ctl.signal).then(
-      (page) => !ctl.signal.aborted && setState({ status: 'ready', nodes: page.nodes ?? [], error: null, cursor: page.page_info?.end_cursor ?? null, hasMore: !!page.page_info?.has_next_page, total: page.total_count ?? null }),
-      (e: unknown) => !ctl.signal.aborted && setState((s) => ({ ...s, status: 'error', error: asError(e) })),
+      (page) => !ctl.signal.aborted && setState({ status: 'ready', nodes: page.nodes ?? [], error: null, cursor: page.page_info?.end_cursor ?? null, hasMore: !!page.page_info?.has_next_page, total: page.total_count ?? null, owner }),
+      (e: unknown) => !ctl.signal.aborted && setState((s) => (s.owner === owner ? { ...s, status: 'error', error: asError(e) } : { ...empty('error'), error: asError(e) })),
     )
-  }, [client])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client, owner])
 
   useEffect(() => {
-    if (!initial) first()
-    return () => alive.current?.abort()
-    // `key` restarts the load when the caller changes what it asks for (page size, filter).
+    if (!(initial && state.owner === owner)) first()
+    return () => {
+      alive.current?.abort()
+      more.current?.abort()
+    }
+    // `owner` restarts the load when the session or what is asked for changes (page size, filter).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [first, key])
+  }, [first, owner])
 
   const loadMore = useCallback(() => {
-    if (!client || !state.hasMore || loadingMore) return
+    if (!client || state.owner !== owner || !state.hasMore || loadingMore) return
     const ctl = new AbortController()
+    more.current = ctl
     setLoadingMore(true)
     fetchRef.current(client, state.cursor, ctl.signal).then(
       (page) => {
+        // A reload or another session since this page was asked: it belongs to a list that no longer exists.
+        if (ctl.signal.aborted) return
         setLoadingMore(false)
-        setState((s) => ({ ...s, nodes: [...s.nodes, ...(page.nodes ?? [])], cursor: page.page_info?.end_cursor ?? null, hasMore: !!page.page_info?.has_next_page, total: page.total_count ?? s.total, error: null }))
+        setState((s) => (s.owner !== owner ? s : { ...s, nodes: [...s.nodes, ...(page.nodes ?? [])], cursor: page.page_info?.end_cursor ?? null, hasMore: !!page.page_info?.has_next_page, total: page.total_count ?? s.total, error: null }))
       },
       (e: unknown) => {
+        if (ctl.signal.aborted) return
         setLoadingMore(false)
-        setState((s) => ({ ...s, error: asError(e) }))
+        setState((s) => (s.owner !== owner ? s : { ...s, error: asError(e) }))
       },
     )
-  }, [client, state.hasMore, state.cursor, loadingMore])
+  }, [client, owner, state.owner, state.hasMore, state.cursor, loadingMore])
 
-  return { status: state.status, nodes: state.nodes, error: state.error, hasMore: state.hasMore, loadingMore, totalCount: state.total, reload: first, loadMore }
+  const view = state.owner === owner ? state : empty('loading')
+  return { status: view.status, nodes: view.nodes, error: view.error, hasMore: view.hasMore, loadingMore: state.owner === owner && loadingMore, totalCount: view.total, reload: first, loadMore }
 }
 
 export type UseCustomerOrdersOptions = {
@@ -137,42 +166,51 @@ export type UseCustomerOrderResult = {
 export function useCustomerOrder(id: string | null | undefined, { client, initial, poll }: UseCustomerOrderOptions = {}): UseCustomerOrderResult {
   const c = useClient(client)
   const given = initial !== undefined
-  const [state, setState] = useState<{ status: AccountStatus; order: Order | null; error: Error | null }>(() => (given ? { status: initial ? 'ready' : 'not_found', order: initial, error: null } : { status: 'loading', order: null, error: null }))
+  // Whose order this is: the session and the id. A change of either never shows the previous order meanwhile.
+  const owner = `${clientKey(c)}|${id ?? ''}`
+  const [state, setState] = useState<{ status: AccountStatus; order: Order | null; error: Error | null; owner: string }>(() => (given ? { status: initial ? 'ready' : 'not_found', order: initial, error: null, owner } : { status: 'loading', order: null, error: null, owner }))
   const [refreshing, setRefreshing] = useState(false)
   const ctlRef = useRef<AbortController | null>(null)
+  const initialOwner = useRef(given ? owner : null)
 
   const load = useCallback(
     (silent: boolean) => {
-      if (!c || !id) return
       ctlRef.current?.abort()
+      setRefreshing(false)
+      if (!c || !id) {
+        setState({ status: 'loading', order: null, error: null, owner })
+        return
+      }
       const ctl = new AbortController()
       ctlRef.current = ctl
       if (silent) setRefreshing(true)
-      else setState((s) => (s.order ? { ...s, error: null } : { status: 'loading', order: null, error: null }))
+      else setState((s) => (s.owner === owner && s.order ? { ...s, error: null } : { status: 'loading', order: null, error: null, owner }))
       c.customer.order(id, { signal: ctl.signal }).then(
         (o) => {
           if (ctl.signal.aborted) return
           setRefreshing(false)
-          setState(o ? { status: 'ready', order: o, error: null } : { status: 'not_found', order: null, error: null })
+          setState(o ? { status: 'ready', order: o, error: null, owner } : { status: 'not_found', order: null, error: null, owner })
         },
         (e: unknown) => {
           if (ctl.signal.aborted) return
           setRefreshing(false)
           // A failed silent read keeps the order on screen; only a first load turns into an error.
-          setState((s) => (s.order ? { ...s, error: asError(e) } : { status: 'error', order: null, error: asError(e) }))
+          setState((s) => (s.owner === owner && s.order ? { ...s, error: asError(e) } : { status: 'error', order: null, error: asError(e), owner }))
         },
       )
     },
-    [c, id],
+    [c, id, owner],
   )
 
   useEffect(() => {
-    if (!given) load(false)
+    if (initialOwner.current !== owner) load(false)
+    initialOwner.current = null
     return () => ctlRef.current?.abort()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [load, id])
+  }, [load, owner])
 
-  const order = state.order
+  const mine = state.owner === owner
+  const order = mine ? state.order : null
   const keepPolling = !!poll && !!order && poll.while(order)
   const everyMs = poll?.everyMs ?? 10_000
   const forMs = poll?.forMs ?? 60_000
@@ -186,5 +224,7 @@ export function useCustomerOrder(id: string | null | undefined, { client, initia
     return () => clearInterval(timer)
   }, [keepPolling, everyMs, forMs, load])
 
-  return { status: state.status, order, error: state.error, refreshing, reload: useCallback(() => load(state.order !== null), [load, state.order]) }
+  const hasOrder = order !== null
+  const reload = useCallback(() => load(hasOrder), [load, hasOrder])
+  return { status: mine ? state.status : 'loading', order, error: mine ? state.error : null, refreshing: mine && refreshing, reload }
 }

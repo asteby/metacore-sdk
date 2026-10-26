@@ -5,10 +5,10 @@
  * `empty` (useful text and your own call to action) and `ready`.
  */
 import type { NextAction, Order } from '@asteby/storefront'
-import { formatMoney, nextAction as deriveNextAction, orderProgress as deriveProgress, isTestShipment } from '@asteby/storefront'
+import { nextAction as deriveNextAction, orderProgress as deriveProgress, isTestShipment } from '@asteby/storefront'
 import type { ReactNode } from 'react'
 import { enumText, fill } from './orders-messages.js'
-import { Hidden, Time, plural, useAccountText, type AccountTextProps } from './orders-ui.js'
+import { Hidden, Time, moneyText, plural, str, useAccountText, type AccountTextProps } from './orders-ui.js'
 import { NextActionBar, OrderProgress, OrderStatusBadge, type NextActionBarClassNames, type OrderProgressClassNames } from './progress.js'
 
 export type OrderCardClassNames = Partial<Record<'root' | 'header' | 'number' | 'link' | 'meta' | 'badge' | 'summary' | 'shipment' | 'footer' | 'total' | 'actions', string>> & {
@@ -33,15 +33,18 @@ export function OrderCard({ order, orderHref, actionHref, onAction, headingLevel
   const Heading = `h${headingLevel}` as 'h3'
   const progress = deriveProgress(order)
   const items = (Array.isArray(order.lines) ? order.lines : []).reduce((n, l) => n + (Number.isFinite(l?.quantity) ? l.quantity : 0), 0)
-  const summary = order.shipments_summary
-  const showShipment = !!summary && summary.count > 0 && !((order.shipments?.length ?? 0) > 0 && order.shipments!.every(isTestShipment)) && !['pending_payment', 'cancelled', 'refunded'].includes(progress.stage)
+  const summary = order.shipments_summary && typeof order.shipments_summary === 'object' ? order.shipments_summary : null
+  const shipments = Array.isArray(order.shipments) ? order.shipments : []
+  const showShipment = !!summary && typeof summary.count === 'number' && summary.count > 0 && !(shipments.length > 0 && shipments.every(isTestShipment)) && !['pending_payment', 'cancelled', 'refunded'].includes(progress.stage)
   const action = deriveNextAction(order)
+  const total = moneyText(order.total, locale)
+  const carrier = summary ? str(summary.carrier) : null
   return (
     <article className={cx.root} data-sf-order data-sf-order-status={progress.stage} data-sf-order-id={order.id}>
       <header className={cx.header}>
         <Heading className={cx.number} data-sf-order-number>
           <a href={orderHref(order)} className={cx.link} data-sf-order-link>
-            {fill(m['order.number'], { number: order.number || order.id.slice(0, 8) })}
+            {fill(m['order.number'], { number: str(order.number) ?? (str(order.id) ?? '').slice(0, 8) })}
           </a>
         </Heading>
         <OrderStatusBadge progress={progress} {...text} {...(cx.badge ? { className: cx.badge } : {})} />
@@ -54,16 +57,18 @@ export function OrderCard({ order, orderHref, actionHref, onAction, headingLevel
         <OrderProgress progress={progress} variant="compact" {...text} {...(cx.progress ? { classNames: cx.progress } : {})} />
         {showShipment ? (
           <p className={cx.shipment} data-sf-order-shipment>
-            {summary!.carrier ? <>{summary!.carrier} · </> : null}
+            {carrier ? <>{carrier} · </> : null}
             {enumText(m, 'shipment.status', summary!.status)}
           </p>
         ) : null}
       </div>
       <div className={cx.footer}>
-        <p className={cx.total} data-sf-order-total>
-          <span>{m['order.total']}: </span>
-          <strong>{formatMoney(order.total, locale)}</strong>
-        </p>
+        {total ? (
+          <p className={cx.total} data-sf-order-total>
+            <span>{m['order.total']}: </span>
+            <strong>{total}</strong>
+          </p>
+        ) : null}
         <NextActionBar
           action={action}
           {...text}
