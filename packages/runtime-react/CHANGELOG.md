@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 53.9.0
+
+### Minor Changes
+
+- 83720b0: Foto del producto en el editor de renglones y en el buscador: `ProductResult.image` / `ProductVariant.image` (URL ya resuelta), `LineItem.image` (solo UI, no se serializa; la variante manda sobre el producto), miniatura `ProductThumb` junto al producto de cada renglón vinculado y en las filas del buscador `ProductHitRow` que no traen `option_display`.
+
 ## 53.8.2
 
 ### Patch Changes
