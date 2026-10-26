@@ -50,6 +50,8 @@ export type PaymentMessageKey =
   | 'voucher.email'
   | 'form.label'
   | 'challenge.title'
+  | 'challenge.escape'
+  | 'challenge.escape_hint'
 
 export type PaymentMessages = Record<PaymentMessageKey, string>
 
@@ -96,6 +98,8 @@ const ES: PaymentMessages = {
   'voucher.email': 'También te la enviamos a tu correo.',
   'form.label': 'Datos de tu tarjeta',
   'challenge.title': 'Verificación de tu banco',
+  'challenge.escape': 'Cancelar y volver al pago',
+  'challenge.escape_hint': '¿Tarda demasiado? Puedes cancelar la verificación y volver al pago; no se hará ningún cargo.',
 }
 
 const EN: PaymentMessages = {
@@ -141,6 +145,8 @@ const EN: PaymentMessages = {
   'voucher.email': 'We also emailed it to you.',
   'form.label': 'Your card details',
   'challenge.title': 'Your bank verification',
+  'challenge.escape': 'Cancel and go back to payment',
+  'challenge.escape_hint': 'Taking too long? You can cancel the verification and go back to payment; you will not be charged.',
 }
 
 const CATALOG: Record<PaymentLocale, PaymentMessages> = { es: ES, en: EN }

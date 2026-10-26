@@ -121,6 +121,8 @@ export type EmbeddedPaymentState = {
   retry: () => Promise<void>
   /** After a rejection: clears the message (the form is remounted by the hook). */
   dismiss: () => void
+  /** Leaves a pending 3DS challenge (the buyer's emergency exit): new attempt, fresh form. The bank's session is abandoned, not charged. */
+  cancelChallenge: () => void
 }
 
 const DEFAULT_ADAPTERS: Record<string, PaymentFormAdapter> = {}
@@ -161,7 +163,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     autoRetries = 2,
     retryDelayMs = 600,
     pollIntervalMs = 2000,
-    pollTimeoutMs = 60_000,
+    pollTimeoutMs = 300_000,
     verifyTimeoutMs = 120_000,
     verifyIntervalMs = 2000,
     scope = 'default',
@@ -610,6 +612,15 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     setOutcome((o) => (o?.kind === 'rejected' ? null : o))
   }, [])
 
+  const cancelChallenge = useCallback(() => {
+    if (statusRef.current !== 'challenge') return
+    rotateAttempt()
+    setOutcome(null)
+    setError(null)
+    setStatus('idle')
+    setMountKey((k) => k + 1)
+  }, [rotateAttempt])
+
   // After a rejection the hook remounts the form; the rejection text stays visible via `outcome` until the next submit.
   const message =
     status === 'processing'
@@ -633,6 +644,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     submit,
     retry,
     dismiss,
+    cancelChallenge,
   }
 }
 
