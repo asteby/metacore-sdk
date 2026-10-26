@@ -19,12 +19,15 @@ import type {
   CustomerSession,
   FiscalIdentity,
   InvoiceRequest,
+  InvoiceDoc,
+  InvoiceFile,
   InvoiceStage,
   InvoiceSummary,
   Facet,
   Location,
   Menu,
   Order,
+  PendingPayment,
   Page,
   PaymentAttemptResult,
   PaymentConfig,
@@ -38,8 +41,10 @@ import type {
   StorefrontErrorCode,
   Theme,
 } from '../types.js'
+import { nextAction, orderProgress, orderShipments, shipmentsStatus, sortTrackingEvents, isTestShipment } from '../order-progress.js'
 import { isValidPoint, rankByDistance } from '../geo.js'
 import { resolveAvailability } from '../availability.js'
+import { buildAccountOrders, buildPendingPayments } from './account-seed.js'
 import { MOCK_REGION_MX, maskTaxId, validateInvoiceRequest } from './region.js'
 import {
   MOCK_CURRENCY,
@@ -165,6 +170,8 @@ export type MockState = {
   payments: Map<string, { attempts: number; last: PaymentAttemptResult | null }>
   /** `contact|sku` of accepted "notify me" subscriptions. */
   restock: Set<string>
+  /** Cash vouchers waiting for payment (`GET /customer/pending-payments`); `cus_1` only. */
+  pendingPayments: PendingPayment[]
   /** Invoice requested per order id. */
   invoices: Map<string, { stage: InvoiceStage; request: InvoiceRequest }>
   seq: number
@@ -290,7 +297,9 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
             { title: 'Playera básica', variant_title: 'M / Blanco', sku: null, quantity: 1, unit: fromCents(24900, currency), total: fromCents(24900, currency), image: null },
           ],
         },
+        ...buildAccountOrders(currency),
       ],
+      pendingPayments: buildPendingPayments(currency, Date.now()),
       otps: new Map(),
       passwords: new Map(),
       pendingRegistrations: new Map(),
@@ -632,6 +641,12 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
   }
 
   const orderInvoice = (order: MockState['orders'][number]): InvoiceSummary => {
+    const doc = order.invoices?.find((d) => d.kind === 'invoice')
+    if (doc) {
+      // Seeded document: the summary says what the document says, with no link (the file comes from `invoiceFile`).
+      const { id: _id, kind: _k, total: _t, issued_at: _i, cancelled_at: _c, series: _s, folio_number: _f, related_to: _r, links_expire_at: _l, test_mode: _tm, environment: _e, ...summary } = doc
+      return { ...summary, url: null, xml_url: null }
+    }
     const entry = state.invoices.get(order.id)
     const paid = order.status !== 'pending_payment'
     if (entry) {
@@ -983,7 +998,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     syncAvailability(state.products)
 
     const orderId = nextId('ord')
-    const number = String(1001 + state.orders.length - 1)
+    const number = String(Math.max(1000, ...state.orders.map((o) => Number(o.number) || 0)) + 1)
     const customerId = cart.buyer.customer_id ?? state.customers.find((c) => c.email && c.email === cart.buyer.email)?.id ?? null
     state.orders.push({
       id: orderId,
@@ -1272,17 +1287,38 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     }
     return { body: publicCustomer(c), cache: 'private' }
   })
-  const stripOrder = ({ customer_id: _c, ...o }: MockState['orders'][number]): Order => ({ ...o, invoice: orderInvoice(o as MockState['orders'][number]) })
+  /**
+   * The order as the API serves it. The list is a summary (`shipments_summary`); the detail carries the shipments, invoices,
+   * payments, refunds and the address. A sandbox shipment loses its guide, as the real server does in production.
+   */
+  const orderView = ({ customer_id: _c, ...o }: MockState['orders'][number], detail: boolean): Order => {
+    const order: Order = { ...o, invoice: orderInvoice(o as MockState['orders'][number]) }
+    if (order.shipments) order.shipments = order.shipments.map((s) => (isTestShipment(s) ? { ...s, tracking_number: null, tracking_url: null } : { ...s, events: sortTrackingEvents(s.events) }))
+    order.progress = orderProgress(order)
+    order.next_action = nextAction(order)
+    const live = orderShipments(order).filter((s) => !isTestShipment(s))
+    if (order.shipments?.length) {
+      order.shipments_summary = { count: order.shipments.length, status: shipmentsStatus(order) ?? 'pending', carrier: live[0]?.carrier ?? null, ...(live[0]?.tracking_url ? { tracking_url: live[0].tracking_url } : {}) }
+    }
+    if (!detail) {
+      delete order.shipments
+      delete order.invoices
+      delete order.payments
+      delete order.refunds
+      delete order.shipping_address
+    }
+    return order
+  }
   route('GET', '/customer/orders', 'orders:read', ({ headers, search }) => {
     const c = requireCustomer(headers)
-    const orders = state.orders.filter((o) => o.customer_id === c.id).sort((a, b) => b.created_at.localeCompare(a.created_at)).map(stripOrder)
+    const orders = state.orders.filter((o) => o.customer_id === c.id).sort((a, b) => b.created_at.localeCompare(a.created_at)).map((o) => orderView(o, false))
     return { body: paginate(orders, search, 20), cache: 'private' }
   })
   const findOrder = (headers: Headers, id: string) => {
     const c = requireCustomer(headers)
     return requireNode(state.orders.find((o) => o.id === id && o.customer_id === c.id), `Order ${id}`, 'id')
   }
-  route('GET', '/customer/orders/:id', 'orders:read', ({ headers, params }) => ({ body: stripOrder(findOrder(headers, params[0]!)), cache: 'private' }))
+  route('GET', '/customer/orders/:id', 'orders:read', ({ headers, params }) => ({ body: orderView(findOrder(headers, params[0]!), true), cache: 'private' }))
   route('POST', '/customer/orders/:id/returns', 'customer:write', ({ headers, params, body }) => {
     const order = findOrder(headers, params[0]!)
     if (!Array.isArray(body.lines) || body.lines.length === 0) throw new HttpError(400, 'validation', 'lines are required', 'lines')
@@ -1298,6 +1334,24 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     if (order.status === 'pending_payment') throw new HttpError(409, 'awaiting_payment', 'The order is not paid yet')
     state.invoices.set(order.id, { stage: 'queued', request })
     return { status: 202, body: { status: 'requested', url: null, stage: 'queued', invoice: orderInvoice(order) }, cache: 'private' }
+  })
+  route('GET', '/customer/pending-payments', 'orders:read', ({ headers, search }) => {
+    const c = requireCustomer(headers)
+    const nodes = c.id === 'cus_1' ? state.pendingPayments : []
+    return { body: paginate(nodes, search, 20), cache: 'private' }
+  })
+  route('GET', '/customer/orders/:id/invoices/:invoice_id/:kind', 'orders:read', ({ headers, params }) => {
+    const order = findOrder(headers, params[0]!)
+    const doc = order.invoices?.find((d: InvoiceDoc) => d.id === params[1])
+    if (!doc || (params[2] !== 'pdf' && params[2] !== 'xml')) throw new HttpError(404, 'not_found', 'Invoice file not found', 'invoice_id')
+    const pdf = params[2] === 'pdf'
+    const text = pdf ? `%PDF-1.4\n% mock invoice ${doc.id}\n%%EOF\n` : `<?xml version="1.0"?><cfdi:Comprobante mock="true" id="${doc.id}"/>`
+    const file: InvoiceFile = {
+      filename: `${doc.kind === 'credit_note' ? 'nota-de-credito' : 'factura'}-${doc.id}.${params[2]}`,
+      content_type: pdf ? 'application/pdf' : 'application/xml',
+      content_base64: btoa(text),
+    }
+    return { body: file, headers: { 'Cache-Control': 'no-store' } }
   })
   route('GET', '/customer/addresses', 'customer:read', ({ headers }) => {
     const c = requireCustomer(headers)

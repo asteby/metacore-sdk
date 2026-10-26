@@ -546,16 +546,258 @@ export type OrderLine = {
   image: Image | null
 }
 
+/**
+ * Enums the server may grow (contract 1.8): every union here keeps `(string & {})`, so a value this SDK does not know
+ * type-checks and the UI shows a safe fallback instead of breaking.
+ */
+export type OrderStage =
+  | 'pending_payment'
+  | 'paid'
+  | 'preparing'
+  | 'ready_for_pickup'
+  | 'shipped'
+  | 'in_transit'
+  | 'out_for_delivery'
+  | 'delivered'
+  | 'cancelled'
+  | 'refunded'
+  | (string & {})
+
+export type OrderStepKey = 'paid' | 'preparing' | 'ready_for_pickup' | 'shipped' | 'in_transit' | 'delivered' | (string & {})
+
+export type OrderStepState = 'done' | 'current' | 'pending' | 'problem' | (string & {})
+
+export type OrderProgressStep = { key: OrderStepKey; state: OrderStepState; at?: string | null }
+
+/** What stops the order. `code` is open: `delivery_exception`, `returned`, `lost`, `payment_failed`, ... */
+export type OrderProblem = { code: string; at?: string | null }
+
+/** Unified timeline of the order (payment, preparation, shipping, delivery). */
+export type OrderProgress = {
+  stage: OrderStage
+  problem?: OrderProblem | null
+  steps: OrderProgressStep[]
+}
+
+export type NextActionKind =
+  | 'pay'
+  | 'track'
+  | 'pickup'
+  | 'download_invoice'
+  | 'request_invoice'
+  | 'correct_invoice_data'
+  | 'contact_store'
+  | 'none'
+  | (string & {})
+
+/** The one thing the store should offer the buyer on this order. `href` is `https` only (tracking or voucher). */
+export type NextAction = {
+  kind: NextActionKind
+  href?: string | null
+  /** Id of the shipment or invoice the action points at. */
+  ref?: string | null
+}
+
+export type ShipmentStatus =
+  | 'pending'
+  | 'label_created'
+  | 'in_transit'
+  | 'out_for_delivery'
+  | 'delivered'
+  | 'exception'
+  | 'returned'
+  | 'lost'
+  | 'cancelled'
+  | (string & {})
+
+export type ShipmentKind = 'outbound' | 'return' | 'pickup' | 'local' | (string & {})
+
+export type ShipmentEvent = {
+  id: string
+  status: ShipmentStatus
+  description?: string | null
+  /** City / state text; never an address. */
+  location?: string | null
+  occurred_at: string
+  source?: 'carrier' | 'store' | null | (string & {})
+}
+
+/** Approximate point (city or state), rounded by the server. Never an address. */
+export type GeoHint = { label: string; lat: number; lng: number; precision: 'city' | 'state' | (string & {}) }
+
+export type ShipmentMap = {
+  origin?: GeoHint | null
+  destination?: GeoHint | null
+  path?: GeoHint[]
+}
+
+/**
+ * A shipment as the buyer sees it. A `test_mode` shipment (sandbox) is never shown as real: hide it or mark it
+ * "test". `label_url` exists only on `kind: 'return'`.
+ */
+export type Shipment = {
+  id: string
+  number?: string | null
+  kind: ShipmentKind
+  status: ShipmentStatus
+  environment?: 'production' | 'sandbox' | (string & {})
+  test_mode?: boolean
+  carrier?: string | null
+  /** Key of the carrier logo in the SDK brand set (`dhl`, `estafeta`...). */
+  carrier_logo_key?: string | null
+  service?: string | null
+  tracking_number?: string | null
+  /** `https` only. */
+  tracking_url?: string | null
+  shipped_at?: string | null
+  delivered_at?: string | null
+  /** `YYYY-MM-DD`. */
+  promised_by?: string | null
+  label_url?: string | null
+  /** At most 50, newest first. */
+  events: ShipmentEvent[]
+  map?: ShipmentMap | null
+}
+
+/** List-view summary of the shipments of an order. */
+export type ShipmentsSummary = {
+  count: number
+  status: ShipmentStatus
+  carrier?: string | null
+  tracking_url?: string | null
+}
+
+/** An invoice or credit note of an order (extends `InvoiceSummary`). Links, when present, are short-lived and never the PAC's. */
+export type InvoiceDoc = InvoiceSummary & {
+  id: string
+  /** `issued | pending | cancelled | error` (open). */
+  status: 'issued' | 'pending' | 'cancelled' | 'error' | (string & {})
+  kind: 'invoice' | 'credit_note' | (string & {})
+  total?: Money | null
+  issued_at?: string | null
+  cancelled_at?: string | null
+  series?: string | null
+  folio_number?: string | null
+  /** Id of the invoice a credit note corrects. */
+  related_to?: string | null
+  links_expire_at?: string | null
+  /** Invoice from a sandbox PAC: hide it or mark it "test, no fiscal validity". */
+  test_mode?: boolean
+  environment?: 'production' | 'sandbox' | (string & {})
+}
+
+export type PaymentInfo = {
+  method_label: string
+  family?: 'card' | 'cash_voucher' | 'transfer' | 'wallet' | 'other' | null | (string & {})
+  status: 'paid' | 'pending' | 'failed' | 'refunded' | 'partially_refunded' | (string & {})
+  amount: Money
+  paid_at?: string | null
+}
+
+export type Refund = {
+  id: string
+  amount: Money
+  status: 'requested' | 'processing' | 'completed' | 'failed' | (string & {})
+  method_label?: string | null
+  created_at: string
+  completed_at?: string | null
+  return_id?: string | null
+}
+
+/** A section of the order the server could not read; the rest of the order is still valid. */
+export type OrderSection = 'shipments' | 'invoices' | 'payments' | 'refunds' | (string & {})
+
+export type OrderPickup = {
+  location_id?: string | null
+  name?: string | null
+  address?: string | null
+  city?: string | null
+  phone?: string | null
+  ready_at?: string | null
+  delivered_at?: string | null
+}
+
 export type Order = {
   id: string
   number: string
+  /** Open: `placed`, `paid`, `shipped`, `fulfilled`... Prefer `progress`. */
   status: string
   created_at: string
   total: Money
   lines: OrderLine[]
   /** Invoice state; absent on older servers. */
   invoice?: InvoiceSummary
+  delivery_method?: 'shipping' | 'pickup' | null
+  pickup?: OrderPickup | null
+  payment_status?: string | null
+  subtotal?: Money
+  tax?: Money
+  shipping?: Money
+  discount?: Money
+  tax_included?: boolean
+  shipping_method?: string | null
+  /** Detail only: the address as the checkout captured it (the buyer's own). */
+  shipping_address?: Record<string, unknown> | null
+  /** @deprecated Use `shipments[0].tracking_number`: it does not say if it is a sandbox guide. */
+  tracking?: string | null
+  /** @deprecated Use `shipments`. */
+  fulfillments?: { status: string; tracking?: string | null; shipped_at?: string | null }[]
+  returns?: { id: string; status: string; created_at?: string | null }[]
+  /** Servers older than contract 1.8 omit it: use `orderProgress(order)`. */
+  progress?: OrderProgress
+  /** Servers older than contract 1.8 omit it: use `nextAction(order)`. */
+  next_action?: NextAction | null
+  /** Detail only. */
+  shipments?: Shipment[]
+  /** List only (the detail carries `shipments`). */
+  shipments_summary?: ShipmentsSummary
+  /** Detail only: invoices and credit notes. */
+  invoices?: InvoiceDoc[]
+  /** Detail only. */
+  payments?: PaymentInfo[]
+  /** Detail only. */
+  refunds?: Refund[]
+  /** Sections that could not be read (`shipments`, `invoices`...): show a retry there, the rest is fine. */
+  degraded?: OrderSection[]
 }
+
+/** Cash voucher of a payment still waiting (OXXO, SPEI...). */
+export type PendingPaymentVoucher = {
+  provider?: string | null
+  method?: string | null
+  reference: string | null
+  barcode: string | null
+  clabe: string | null
+  /** `https` only. */
+  voucher_url?: string | null
+  instructions?: string | null
+  expires_at: string | null
+  amount: Money
+}
+
+/** A checkout waiting for its payment: there is no order yet (the order exists once the payment confirms). */
+export type PendingPayment = {
+  /** Checkout id. */
+  id: string
+  number: null
+  status: 'pending_payment' | 'expired' | (string & {})
+  created_at: string
+  total: Money
+  expires_at: string | null
+  payment: PendingPaymentVoucher
+}
+
+/**
+ * A file of an invoice (`pdf` or `xml`), already read on the server so the browser never sees the buyer token nor a URL
+ * of the PAC. Serve it from your own route: `invoiceFileBytes(file)` gives the bytes.
+ */
+export type InvoiceFile = {
+  filename: string
+  content_type: string
+  content_base64: string
+}
+
+export type InvoiceFileKind = 'pdf' | 'xml'
 
 export type ReturnRequestInput = {
   lines: { sku: string; quantity: number }[]

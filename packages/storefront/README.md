@@ -408,6 +408,32 @@ a rule that produces a `discard_fields` field. `qr_canonical` (top level) is a t
 (`fiscal_regime`, `invoice_use`). A text that does not match yields `missing` (required fields); only a spec that cannot
 run throws `IdentityRulesError`.
 
+## Buyer account: orders, shipments, invoices (Storefront API 1.8)
+
+`customer.order(id)` carries `progress` (unified timeline), `next_action`, `shipments[]` (events, carrier, `https`
+tracking link), `invoices[]` (invoices and credit notes), `payments[]`, `refunds[]` and `degraded[]` (sections the
+server could not read: show a retry there, the rest is valid). `customer.orders()` returns the summary
+(`shipments_summary`, no detail sections). Every enum is open: an unknown stage, status or kind type-checks and must
+fall back safely in the UI.
+
+```ts
+import { orderProgress, nextAction, sortTrackingEvents, isTestShipment, groupInvoiceDocs, invoiceFileBytes } from '@asteby/storefront'
+
+const order = await sf.customer.order(id)        // null when it is not the buyer's
+const progress = orderProgress(order!)           // the server's, or derived for an older OPS
+const action = nextAction(order!)                // { kind: 'track' | 'pay' | ..., href: https-only | null }
+const pending = await sf.customer.pendingPayments() // cash vouchers (OXXO, SPEI) not paid yet: no order exists yet
+
+// Invoice download: authenticated route, the answer is the FILE (base64), never a URL of the PAC.
+const file = await sf.customer.invoiceFile(order.id, doc.id, 'pdf')   // null when not found / not the buyer's
+if (file) return new Response(invoiceFileBytes(file), { headers: { 'Content-Type': file.content_type, 'Cache-Control': 'no-store' } })
+```
+
+Sandbox rules: a shipment or invoice with `test_mode: true` (`isTestShipment` / `isTestInvoice`) is never shown as real:
+hide it or label it "test". `label_url` exists only on return shipments. The mock (`@asteby/storefront/mock`) serves
+demo orders for every state (shipped with events, invoice + credit note + refund, sandbox shipment, pickup with a
+degraded section) and two pending vouchers for the demo buyer.
+
 ## Connecting the store to OPS (`connect`, `diagnose`, token files)
 
 A server-side store (`sk_`) is connected to OPS with a one-time code, never by copying a secret around.
@@ -475,7 +501,7 @@ Errors: a `403 insufficient_scope` is a `StorefrontError` with `code: 'insuffici
 Resources: `shop.get`, `region`, `products.list/get/recommendations`,
 `collections.list/get`, `stock.get`,
 `carts.create/get/addLines/updateLines/removeLines/setDiscountCodes/setBuyer/setShippingAddress/deliveryOptions/setDelivery/setInvoice/checkout`,
-`customer.requestOtp/createSession/capabilities/register/verifyRegistration/loginWithPassword/setPassword/resetPassword/get/update/orders/order/requestReturn/requestInvoice/addresses.{list,create,update,delete}`,
+`customer.requestOtp/createSession/capabilities/register/verifyRegistration/loginWithPassword/setPassword/resetPassword/get/update/orders/order/requestReturn/requestInvoice/pendingPayments/invoiceFile/addresses.{list,create,update,delete}`,
 `content.theme/page/menu/articles/article`. Every method takes a last
 `options` argument: `{ cache, signal, next, headers, timeoutMs, customerToken, clientIp }`
 (plus `idempotencyKey` on writes and `preview` on pages/articles); unknown keys

@@ -43,6 +43,8 @@ import type {
   DeliveryInput,
   DeliveryOptions,
   PaymentMethods,
+  InvoiceFile,
+  InvoiceFileKind,
   InvoiceRequest,
   Location,
   LocationListParams,
@@ -51,6 +53,7 @@ import type {
   Menu,
   Order,
   Page,
+  PendingPayment,
   Product,
   ProductConnection,
   Region,
@@ -600,6 +603,27 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
         write<ReturnRequest>('POST', `/storefront/customer/orders/${enc(orderId)}/returns`, input, options),
       requestInvoice: (orderId: string, input: InvoiceRequest, options?: WriteOptions) =>
         write<InvoiceResult>('POST', `/storefront/customer/orders/${enc(orderId)}/invoice`, input, options),
+      /**
+       * Checkouts waiting for their payment (cash voucher: OXXO, SPEI). They are not orders yet; once the payment
+       * confirms they leave this list and show up in `orders`.
+       */
+      pendingPayments: (params?: PaginationParams, options?: RequestOptions) =>
+        get<Connection<PendingPayment>>('/storefront/customer/pending-payments', params as QueryParams, options),
+      /**
+       * Reads one file (`pdf` | `xml`) of an invoice or credit note of the buyer's order, through the authenticated
+       * route (`order_invoice_file`): the answer is the file itself (base64), never a URL, so neither the buyer token
+       * nor a link of the PAC reaches the browser. Call it from YOUR server and stream the bytes
+       * (`invoiceFileBytes`). `null` when the order, the document or the file does not exist or is not the buyer's.
+       */
+      invoiceFile: async (orderId: string, invoiceId: string, kind: InvoiceFileKind, options?: RequestOptions): Promise<InvoiceFile | null> => {
+        if (kind !== 'pdf' && kind !== 'xml') throw new TypeError("invoiceFile: kind must be 'pdf' or 'xml'")
+        const file = await getOrNull<InvoiceFile>(`/storefront/customer/orders/${enc(orderId)}/invoices/${enc(invoiceId)}/${kind}`, undefined, { ...options, cache: 'no-store' })
+        if (file === null) return null
+        if (!file || typeof file.content_base64 !== 'string' || typeof file.filename !== 'string' || typeof file.content_type !== 'string') {
+          throw new StorefrontError({ status: 502, code: 'invalid_response', message: 'The invoice file answer is not a file' })
+        }
+        return { filename: file.filename, content_type: file.content_type, content_base64: file.content_base64 }
+      },
       addresses: {
         list: (options?: RequestOptions) => get<{ nodes: Address[] }>('/storefront/customer/addresses', undefined, options),
         create: (address: AddressInput, options?: WriteOptions) =>
