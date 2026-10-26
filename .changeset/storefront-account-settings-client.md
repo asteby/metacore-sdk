@@ -1,0 +1,5 @@
+---
+"@asteby/storefront": minor
+---
+
+feat(storefront): cliente y mock de la Configuración de la cuenta del comprador (contrato Storefront API 1.9.0). `customer.sessions.list|revoke|revokeOthers` (dispositivos; sin IP ni token), `customer.reauth({ password } | { otp_code })` (confirmación reciente de 5 min solo para esa sesión), `customer.exportData()` (archivo JSON en memoria; exige reauth; 3 al día), `customer.deleteAccount({ confirm })` (exige reauth; idempotente) y `locale` / `preferences.notifications` en `customer.update` y en `Customer`. Capacidades nuevas en `customer.capabilities()`: `notifications.channels`, `data_export`, `account_delete` (ausentes en servidores viejos: la sección no existe). Helpers puros `isReauthRequired` (403 `reauth_required`), `isAccountDeleteBlocked` (409 por `orders` o `pending_payments`), `dataExportBytes` y `safeExportFilename`. El mock sigue las mismas reglas (reauth con ventana, 429 tras cinco intentos, límite de exportaciones, borrado que deja los pedidos y empieza de cero al volver a registrarse) y ahora lee el cuerpo de las peticiones `DELETE`. Aditivo: nada existente cambia.
