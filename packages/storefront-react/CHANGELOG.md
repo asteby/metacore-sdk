@@ -1,5 +1,19 @@
 # @asteby/storefront-react
 
+## 0.20.0
+
+### Minor Changes
+
+- e802ec5: Pantallas de pedidos de la cuenta del comprador (`@asteby/storefront-react/account`, contrato Storefront API 1.8), headless y estilables (`data-sf-*`, `classNames`, variables CSS, textos es/en, sin estilos de marca): `OrderList`/`OrderCard`, `OrderStatusBadge`, `OrderProgress` (línea de tiempo unificada), `NextActionBar`, `ShipmentCard` (rastreo `https`, eventos, `test_mode` oculto o «de prueba», hueco `renderMap` para el mapa), `InvoiceList` (facturas y notas de crédito, descarga solo por la ruta autenticada de la tienda), `PendingPaymentCard`/`PendingPaymentList` (ficha de efectivo con código de barras Code 128, copiar, imprimir; portado de ProtekAuto), `RefundList`, `PaymentSummary` y los hooks `useCustomerOrders`, `useCustomerOrder` y `usePendingPayments`. En `/account/server`: `invoiceFileResponse` y `pendingVoucherResponse` (rutas recurso en una línea; archivo con `no-store`, `nosniff` y CSP cerrada). Enums abiertos con salida segura, estados de carga/error/vacío, axe sin violaciones y presupuesto de tamaño en pruebas.
+
+  Endurecido en revisión: los hooks nunca devuelven pedidos de otra sesión ni de otro id (cambio de comprador, cierre de sesión, cambio de pedido) y una página pedida antes de un `reload` ya no se agrega a la lista nueva; las rutas de servidor llevan `no-store`, `nosniff`, CSP y `no-referrer` también en los errores, rechazan archivos de más de 10 MB (`maxBytes`) sin decodificarlos, acotan `Retry-After` y la descarga de la ficha no permite scripts; los componentes toleran cualquier forma de dato del servidor (texto, dinero e ids malformados no rompen el render ni muestran `$0.00` inventado) y la ficha imprimible no falla con un método llamado `constructor`/`__proto__`.
+
+### Patch Changes
+
+- dc79172: El modal del reto 3DS (`<PaymentChallenge>`) ahora es cuadrado y centrado: ancho `min(36rem, 100% - 2rem)`, alto máximo `min(90dvh, 40rem)`, centrado vertical y horizontal, overlay oscuro y scroll interno solo en el cuerpo (iframe); en móvil (<480px) ocupa casi toda la pantalla con 1rem de margen. Sin cambios en la lógica de cierre.
+- Updated dependencies [358a1f4]
+  - @asteby/storefront@0.14.0
+
 ## 0.19.0
 
 ### Minor Changes

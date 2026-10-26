@@ -1,7 +1,0 @@
----
-'@asteby/storefront': minor
----
-
-Cuenta del comprador (contrato Storefront API 1.8): tipos de `Order` con `progress`, `next_action`, `shipments[]`, `shipments_summary`, `invoices[]` (facturas y notas de crédito), `payments[]`, `refunds[]` y `degraded[]`; `Shipment`, `GeoHint`, `InvoiceDoc`, `PendingPayment`, `InvoiceFile` (enums abiertos: un valor desconocido no rompe). Cliente: `customer.pendingPayments()` y `customer.invoiceFile()` (ruta autenticada `order_invoice_file`: devuelve el archivo en base64, nunca una URL del PAC). Helpers puros `orderProgress`, `nextAction`, `sortTrackingEvents`, `isTestShipment`, `isTestInvoice`, `safeTrackingUrl`, `groupInvoiceDocs`, `invoiceFileBytes`. El mock sirve pedidos de demostración en todos los estados y fichas de pago pendientes.
-
-Endurecido: `invoiceFile` nunca sigue redirecciones (`redirect: 'error'` y rechaza una respuesta redirigida) y ningún id de ruta acepta segmentos `.`/`..`; `pendingPayments` contra un OPS sin la ruta (404) devuelve una lista vacía. `orderProgress` entiende el estado `ready` del servidor real (recogida lista / preparando), avanza al ritmo del envío MENOS avanzado (una entrega parcial no es «entregado»), no presenta como enviado un `shipped` respaldado solo por envíos de prueba, toma la fecha de pago de `payments[]` y depura un `progress` mal formado. `nextAction` respeta `next_action: null` y la `action` de la factura del servidor, y nunca ofrece primero una factura de sandbox.
