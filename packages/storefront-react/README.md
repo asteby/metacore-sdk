@@ -797,6 +797,25 @@ export default function Login() {
 - `<AccountAuth>`: `classNames` por pieza, atributos `data-sf-account-*`, `locale` (`es` por omisión, `en`), `messages` para cambiar cualquier texto, `form` para el `Form` del router. Con el mock (`createMockStorefront`) funciona entera: código `000000`.
 - Sin JavaScript funciona el inicio de sesión con contraseña y los pasos que devuelve la action; el cambio entre pantallas (enlaces) necesita JavaScript.
 
+### Invitación posterior a la compra (`/pagar/gracias`)
+
+`<PostPurchaseAccountPrompt>` (`@asteby/storefront-react/account`) invita al invitado a crear cuenta justo después de pagar. Sin estilos propios: `data-sf-ppa-*`, `classNames`, `locale`, `messages`, `form`, `headingLevel`. La tienda lo compone con su diseño y apunta su `action` a la ruta que monta `createAuthAction`.
+
+```tsx
+<PostPurchaseAccountPrompt
+  email={receipt.email}            // del comprobante de la sesión, leído en el servidor
+  capabilities={capabilities}      // loadAuthCapabilities
+  data={actionData}                // resultado de createAuthAction
+  next="/cuenta/pedidos"
+  action="/cuenta/entrar"
+  form={Form}
+/>
+```
+
+- El correo viaja como campo oculto y no se edita; solo se pide contraseña (o el código por correo si la tienda no tiene contraseñas). No pide dirección ni teléfono.
+- Sin correo válido o sin forma de registrarse no pinta nada. Con verificación de correo la respuesta es la misma exista o no la cuenta (no enumera).
+- El pedido de invitado hecho con ese correo (y su pago pendiente por ficha) aparece en «Mis pedidos» cuando el buzón queda verificado: `storefront_customers` filtra por `customer_id` o por correo VERIFICADO. En una tienda sin verificación de correo la cuenta nace sin verificar y no ve pedidos de invitado; el texto entonces no lo promete.
+
 ## Facturación y constancia fiscal (`/fiscal`)
 
 Subruta `@asteby/storefront-react/fiscal` (+ `/fiscal/server`, + `fiscal.css` opcional). Todo sale de `Region.fiscal_id` (etiquetas, formato, regímenes, usos, documentos); el núcleo no sabe de ningún país. Textos es-MX por omisión, `locale="en"` o `messages` para otros.

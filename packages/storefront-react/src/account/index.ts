@@ -1,3 +1,5 @@
 export { AccountAuth, accountAuthMessages } from './account-auth.js'
 export type { AccountAuthClassNames, AccountFormProps, AccountAuthMessages, AccountAuthProps, AccountAuthView } from './account-auth.js'
 export type { AuthActionData, AuthErrorCode, AuthIntent, AuthStep } from './types.js'
+export { PostPurchaseAccountPrompt, postPurchaseAccountPromptMessages } from './post-purchase-prompt.js'
+export type { PostPurchaseAccountPromptClassNames, PostPurchaseAccountPromptMessages, PostPurchaseAccountPromptProps } from './post-purchase-prompt.js'
