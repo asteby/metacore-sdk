@@ -349,3 +349,45 @@
   margin: 0;
   color: var(--sf-field-error, #b42318);
 }
+
+/* Privacy (<DataExport>, <DeleteAccount>, <ReauthFields>). */
+[data-sf-export] form,
+[data-sf-delete] form,
+[data-sf-reauth] {
+  display: grid;
+  gap: var(--sf-account-gap, 1rem);
+}
+[data-sf-reauth-password],
+[data-sf-reauth-code],
+[data-sf-delete-confirm] {
+  min-height: 44px;
+  width: 100%;
+  max-width: 24rem;
+}
+[data-sf-reauth-send-code],
+[data-sf-export-submit],
+[data-sf-delete-submit] {
+  min-height: 44px;
+  justify-self: start;
+}
+[data-sf-destructive] {
+  color: var(--sf-destructive-fg, #fff);
+  background: var(--sf-destructive-bg, #b42318);
+  border: 0;
+  border-radius: var(--sf-account-radius, 0.75rem);
+  padding-inline: 1rem;
+}
+[data-sf-export-error],
+[data-sf-delete-error],
+[data-sf-reauth-code-error] {
+  margin: 0;
+  color: var(--sf-field-error, #b42318);
+}
+[data-sf-reauth-code-sent] {
+  margin: 0;
+  color: var(--sf-account-muted, color-mix(in srgb, currentColor 72%, transparent));
+}
+[data-sf-settings] {
+  display: grid;
+  gap: calc(var(--sf-account-gap, 1rem) * 2);
+}

@@ -6,8 +6,8 @@
  * (passed in), builds a client with it (`withCustomerToken`) and calls the contract. Answers carry codes
  * (`SettingsErrorCode`), never a server message, a value of the buyer or a credential; nothing is logged here.
  */
-import { isStorefrontError, type Customer, type CustomerCapabilities, type CustomerSessionInfo, type StorefrontClient, type StorefrontError } from '@asteby/storefront'
-import type { AuthCookie } from './server.js'
+import { dataExportBytes, isStorefrontError, safeExportFilename, type Customer, type CustomerCapabilities, type CustomerSessionInfo, type StorefrontClient, type StorefrontError } from '@asteby/storefront'
+import { safeNextPath, type AuthCookie } from './server.js'
 import type { AccountSettingsActionData, SettingsErrorCode, SettingsIntent } from './settings-types.js'
 
 export type { AccountSettingsActionData, SettingsErrorCode, SettingsIntent } from './settings-types.js'
@@ -51,6 +51,9 @@ export async function loadAccountSettings(customer: StorefrontClient, options: {
   return { customer: profile, capabilities, sessions }
 }
 
+/** Largest export served (a person's own data is far below this): anything bigger is refused before it is decoded further. */
+export const MAX_EXPORT_BYTES = 20 * 1024 * 1024
+
 export type CreateAccountSettingsActionOptions = {
   /** The store's own client (`sk_` token, no buyer). */
   storefront: StorefrontClient
@@ -58,6 +61,16 @@ export type CreateAccountSettingsActionOptions = {
   customerCookie: SettingsCookie
   /** Shopper IP for the per-shopper rate limit (see `clientIp` of the client). */
   clientIp?: (request: Request) => string | null | undefined
+  /**
+   * Where to go after the account is deleted (default `/`). A path inside the site; anything else is `/`.
+   * The buyer's cookie is cleared in the same answer.
+   */
+  afterDelete?: string
+  /**
+   * What the buyer must type to confirm a deletion, compared without case or surrounding spaces. Default: the words
+   * of the built-in texts (`ELIMINAR`, `DELETE`). If you change `messages['delete.confirmWord']`, list it here.
+   */
+  confirmWords?: ReadonlyArray<string>
 }
 
 export type AccountSettingsActionArgs = { request: Request }
@@ -103,12 +116,17 @@ export function toSettingsFailure(err: unknown, intent: SettingsIntent | undefin
  * | `session-revoke-others` | -            | closes every session but this one        |
  * | `locale`                | locale       | saves the language (`''` = the store's)   |
  * | `notifications`         | pref, pref_shown | saves the checked / unchecked boxes   |
+ * | `reauth-code-request`   | for          | emails / texts a sign-in code to confirm identity |
+ * | `export`                | password or otp_code | the data as a JSON download (`Response`) |
+ * | `delete`                | confirm, password or otp_code | deletes the account -> 303 to `afterDelete`, cookie cleared |
  *
  * It answers `AccountSettingsActionData` to render with the section that sent it. A buyer without a session is
  * `session_expired` (the store redirects to sign-in).
  */
 export function createAccountSettingsAction(options: CreateAccountSettingsActionOptions) {
   const { storefront: sf, customerCookie } = options
+  const confirmWords = (options.confirmWords ?? ['ELIMINAR', 'DELETE']).map((w) => w.trim().toLowerCase()).filter(Boolean)
+  const afterDelete = safeNextPath(options.afterDelete, '/')
 
   return async function settingsAction({ request }: AccountSettingsActionArgs): Promise<Response | AccountSettingsActionData> {
     const form = await request.formData().catch(() => null)
@@ -124,6 +142,20 @@ export function createAccountSettingsAction(options: CreateAccountSettingsAction
     const ip = options.clientIp?.(request)
     const w = ip ? { clientIp: ip } : undefined
     const customer = sf.withCustomerToken(token)
+
+    // Confirms the buyer's identity when the form carries a password or a code (the two credentials of `reauth`).
+    // A wrong one is always the same answer; with neither, the server decides (a recent reauth may still stand).
+    async function confirmIdentity(): Promise<AccountSettingsActionData | null> {
+      const password = text('password')
+      const otp = text('otp_code').replace(/\s+/g, '')
+      if (!password && !otp) return null
+      try {
+        await customer.customer.reauth(password ? { password } : { otp_code: otp }, w)
+        return null
+      } catch (err) {
+        return toSettingsFailure(err, intent, 'credential')
+      }
+    }
 
     try {
       switch (intent) {
@@ -157,6 +189,51 @@ export function createAccountSettingsAction(options: CreateAccountSettingsAction
           }
           await customer.customer.update({ preferences: { notifications } }, w)
           return { ok: true, intent, saved: true }
+        }
+        case 'reauth-code-request': {
+          const purpose = text('for') === 'delete' ? 'delete' : 'export'
+          const me = await customer.customer.get(w)
+          const target = me.email ? { email: me.email } : me.phone ? { phone: me.phone } : null
+          if (!target) return { ...fail(intent, 'unsupported'), for: purpose }
+          try {
+            await customer.customer.requestOtp(target, w)
+          } catch (err) {
+            // Only throttling is told; anything else looks like success, as the sign-in code request does.
+            if (isStorefrontError(err) && err.status === 429) return { ...toSettingsFailure(err, intent), for: purpose }
+          }
+          return { ok: true, intent, codeSent: true, for: purpose }
+        }
+        case 'export': {
+          const refused = await confirmIdentity()
+          if (refused) return refused
+          const file = await customer.customer.exportData(w)
+          const bytes = dataExportBytes(file)
+          if (bytes.byteLength > MAX_EXPORT_BYTES) return fail(intent, 'unavailable')
+          const name = safeExportFilename(file.filename)
+          // The type is ours, never what the API says: a file cannot make the browser render HTML under your origin.
+          return new Response(bytes as BodyInit, {
+            status: 200,
+            headers: {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Content-Length': String(bytes.byteLength),
+              'Content-Disposition': `attachment; filename="${name.toLowerCase().endsWith('.json') ? name : `${name}.json`}"`,
+              'Cache-Control': 'private, no-store',
+              'X-Content-Type-Options': 'nosniff',
+              'Referrer-Policy': 'no-referrer',
+              'X-Robots-Tag': 'noindex',
+              'Content-Security-Policy': "default-src 'none'; sandbox",
+            },
+          })
+        }
+        case 'delete': {
+          const typed = text('confirm').trim().toLowerCase()
+          if (!typed || !confirmWords.includes(typed)) return fail(intent, 'validation', { field: 'confirm' })
+          const refused = await confirmIdentity()
+          if (refused) return refused
+          await customer.customer.deleteAccount({ confirm: text('confirm').trim() }, w)
+          // The token is dead now: clear the store's cookie in the same answer.
+          const clear = await customerCookie.serialize('', { maxAge: 0, expires: new Date(0) })
+          return new Response(null, { status: 303, headers: { Location: afterDelete, 'Set-Cookie': clear, 'Cache-Control': 'private, no-store' } })
         }
         default:
           return fail(undefined, 'validation')
