@@ -379,6 +379,6 @@ export async function pendingVoucherResponse({ storefront, id, download = false,
 }
 
 // Account settings (sessions, preferences, export, deletion): see ./settings-server.ts
-export { createAccountSettingsAction, loadAccountSessions, toSettingsFailure } from './settings-server.js'
-export type { AccountSettingsAction, AccountSettingsActionArgs, CreateAccountSettingsActionOptions, SettingsCookie } from './settings-server.js'
+export { createAccountSettingsAction, loadAccountSessions, loadAccountSettings, toSettingsFailure } from './settings-server.js'
+export type { AccountSettingsAction, AccountSettingsData, AccountSettingsActionArgs, CreateAccountSettingsActionOptions, SettingsCookie } from './settings-server.js'
 export type { AccountSettingsActionData, SettingsErrorCode, SettingsIntent } from './settings-types.js'

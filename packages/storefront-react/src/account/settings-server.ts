@@ -6,7 +6,7 @@
  * (passed in), builds a client with it (`withCustomerToken`) and calls the contract. Answers carry codes
  * (`SettingsErrorCode`), never a server message, a value of the buyer or a credential; nothing is logged here.
  */
-import { isStorefrontError, type CustomerSessionInfo, type StorefrontClient, type StorefrontError } from '@asteby/storefront'
+import { isStorefrontError, type Customer, type CustomerCapabilities, type CustomerSessionInfo, type StorefrontClient, type StorefrontError } from '@asteby/storefront'
 import type { AuthCookie } from './server.js'
 import type { AccountSettingsActionData, SettingsErrorCode, SettingsIntent } from './settings-types.js'
 
@@ -27,6 +27,28 @@ export async function loadAccountSessions(customer: StorefrontClient, options: {
   } catch {
     return null
   }
+}
+
+/** Everything the settings page reads, each part on its own: a part that cannot be read is `null` and its section degrades. */
+export type AccountSettingsData = {
+  customer: Customer | null
+  capabilities: CustomerCapabilities | null
+  sessions: CustomerSessionInfo[] | null
+}
+
+/**
+ * The loader of the whole settings page. NEVER throws and never fails as a whole: the three reads run together and a
+ * failed one (older server, outage, expired session) is `null` for that part only. `customer` is `null` also when the
+ * buyer's session is dead: the page should then send them to sign in.
+ */
+export async function loadAccountSettings(customer: StorefrontClient, options: { signal?: AbortSignal } = {}): Promise<AccountSettingsData> {
+  const o = options.signal ? { signal: options.signal } : undefined
+  const [profile, capabilities, sessions] = await Promise.all([
+    customer.customer.get(o).catch(() => null),
+    customer.customer.capabilities(o).catch(() => null),
+    loadAccountSessions(customer, options),
+  ])
+  return { customer: profile, capabilities, sessions }
 }
 
 export type CreateAccountSettingsActionOptions = {
@@ -79,6 +101,8 @@ export function toSettingsFailure(err: unknown, intent: SettingsIntent | undefin
  * | ----------------------- | ------------ | ---------------------------------------- |
  * | `session-revoke`        | session_id   | closes that session (idempotent)         |
  * | `session-revoke-others` | -            | closes every session but this one        |
+ * | `locale`                | locale       | saves the language (`''` = the store's)   |
+ * | `notifications`         | pref, pref_shown | saves the checked / unchecked boxes   |
  *
  * It answers `AccountSettingsActionData` to render with the section that sent it. A buyer without a session is
  * `session_expired` (the store redirects to sign-in).
@@ -114,6 +138,25 @@ export function createAccountSettingsAction(options: CreateAccountSettingsAction
         case 'session-revoke-others': {
           await customer.customer.sessions.revokeOthers(w)
           return { ok: true, intent }
+        }
+        case 'locale': {
+          const locale = text('locale').trim()
+          if (locale.length > 35) return fail(intent, 'validation', { field: 'locale' })
+          await customer.customer.update({ locale: locale || null }, w)
+          return { ok: true, intent, saved: true }
+        }
+        case 'notifications': {
+          const shown = form.getAll('pref_shown').filter((v): v is string => typeof v === 'string')
+          const checked = new Set(form.getAll('pref').filter((v): v is string => typeof v === 'string'))
+          if (shown.length === 0 || shown.length > 30) return fail(intent, 'validation', { field: 'preferences' })
+          const notifications: Record<string, Record<string, boolean>> = {}
+          for (const pair of shown) {
+            const m = /^([a-z][a-z0-9_]{0,31}):([a-z][a-z0-9_]{0,31})$/.exec(pair)
+            if (!m) return fail(intent, 'validation', { field: 'preferences' })
+            ;(notifications[m[1]!] ??= {})[m[2]!] = checked.has(pair)
+          }
+          await customer.customer.update({ preferences: { notifications } }, w)
+          return { ok: true, intent, saved: true }
         }
         default:
           return fail(undefined, 'validation')

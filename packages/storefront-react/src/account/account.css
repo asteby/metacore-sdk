@@ -308,3 +308,44 @@
     transition: border-color 0.15s ease;
   }
 }
+
+/* Language and notification preferences (<LanguagePreference>, <NotificationPreferences>). */
+[data-sf-lang] form,
+[data-sf-notif] form {
+  display: grid;
+  gap: var(--sf-account-gap, 1rem);
+}
+[data-sf-lang-select] {
+  min-height: 44px;
+}
+[data-sf-notif-table] {
+  width: 100%;
+  border-collapse: collapse;
+}
+[data-sf-notif-table] th,
+[data-sf-notif-table] td {
+  padding: 0.5rem 0.25rem;
+  text-align: center;
+}
+[data-sf-notif-table] tbody th {
+  text-align: start;
+  font-weight: 500;
+}
+[data-sf-notif-table] input[type='checkbox'] {
+  width: 1.5rem;
+  height: 1.5rem;
+}
+[data-sf-notif-required] {
+  margin: 0;
+  color: var(--sf-account-muted, color-mix(in srgb, currentColor 72%, transparent));
+}
+[data-sf-lang-submit],
+[data-sf-notif-submit] {
+  min-height: 44px;
+  justify-self: start;
+}
+[data-sf-lang-error],
+[data-sf-notif-error] {
+  margin: 0;
+  color: var(--sf-field-error, #b42318);
+}

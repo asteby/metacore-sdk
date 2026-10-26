@@ -34,6 +34,8 @@ export type { PaymentLabelOptions, PaymentMethodKey } from './payment-method.js'
 // Account settings (contract 1.9): headless, `data-sf-*` hooks, `classNames`, es/en texts. The action is in `./server`.
 export { SessionsList } from './sessions.js'
 export type { SessionsListClassNames, SessionsListProps } from './sessions.js'
+export { LanguagePreference, NotificationPreferences, NOTIFICATION_EVENTS } from './preferences.js'
+export type { LanguagePreferenceClassNames, LanguagePreferenceProps, NotificationPreferencesClassNames, NotificationPreferencesProps } from './preferences.js'
 export { settingsMessages, settingsEnumText } from './settings-messages.js'
 export type { SettingsMessageKey, SettingsMessages } from './settings-messages.js'
 export type { SettingsTextProps } from './settings-ui.js'
