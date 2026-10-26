@@ -1,0 +1,166 @@
+/*
+ * Default sheet for the «My items» components (`@asteby/storefront-react/subjects.css`): <SubjectGarage>, <SubjectPicker>,
+ * <SubjectFilter> and <SubjectFitBadge>. Optional and neutral. Colors come from `currentColor` and these variables:
+ *   --sf-subject-border   hairlines and cards          (default currentColor at 25%)
+ *   --sf-subject-muted    secondary text               (default currentColor at 72%)
+ *   --sf-subject-accent   focus ring, primary action   (default #1d4ed8)
+ *   --sf-subject-accent-contrast  text on the accent    (default #fff)
+ *   --sf-subject-danger   delete                        (default #b91c1c)
+ *   --sf-subject-ok       «fits» badge                  (default #166534)
+ * Targets are at least 44px; state carries a word, never color alone; motion stops with prefers-reduced-motion.
+ */
+[data-sf-subject-garage],
+[data-sf-subject-picker],
+[data-sf-subject-filter],
+[data-sf-subject-fit] {
+  --_border: var(--sf-subject-border, color-mix(in srgb, currentColor 25%, transparent));
+  --_muted: var(--sf-subject-muted, color-mix(in srgb, currentColor 72%, transparent));
+  --_accent: var(--sf-subject-accent, #1d4ed8);
+}
+[data-sf-subject-garage] {
+  display: grid;
+  gap: 1rem;
+}
+[data-sf-subject-list] {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+}
+[data-sf-subject] {
+  display: grid;
+  gap: 0.5rem;
+  align-content: start;
+  padding: 1rem;
+  border: 1px solid var(--_border);
+  border-radius: 0.75rem;
+}
+[data-sf-subject][data-sf-subject-active] {
+  border-color: var(--_accent);
+  box-shadow: 0 0 0 1px var(--_accent);
+}
+[data-sf-subject-label] {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+[data-sf-subject-badge] {
+  margin-inline-start: 0.5rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: var(--_accent);
+  color: var(--sf-subject-accent-contrast, #fff);
+}
+[data-sf-subject-private-value],
+[data-sf-subject-private-note] {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--_muted);
+}
+[data-sf-subject] details,
+[data-sf-subject-add] {
+  display: block;
+}
+[data-sf-subject] summary,
+[data-sf-subject-add] > summary,
+[data-sf-subject-garage] button,
+[data-sf-subject-garage] a[data-sf-subject-parts],
+[data-sf-subject-picker] button {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-inline: 0.75rem;
+  cursor: pointer;
+}
+[data-sf-subject-add] > summary {
+  border: 1px dashed var(--_border);
+  border-radius: 0.75rem;
+}
+[data-sf-subject-remove] button {
+  color: var(--sf-subject-danger, #b91c1c);
+}
+[data-sf-subject-picker] {
+  display: grid;
+  gap: 0.75rem;
+  padding-block: 0.75rem;
+}
+[data-sf-subject-field] {
+  display: grid;
+  gap: 0.25rem;
+}
+[data-sf-subject-field] label {
+  font-weight: 600;
+}
+[data-sf-subject-field] select,
+[data-sf-subject-field] input[type='text'],
+[data-sf-subject-field] input[type='number'] {
+  min-height: 44px;
+  padding-inline: 0.75rem;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid var(--_border);
+  border-radius: 0.5rem;
+}
+[data-sf-subject-clear],
+[data-sf-subject-default] {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 44px;
+}
+[data-sf-subject-error] {
+  margin: 0;
+  color: var(--sf-subject-danger, #b91c1c);
+  font-size: 0.875rem;
+}
+[data-sf-subject-degraded],
+[data-sf-subject-notice],
+[data-sf-subject-limit],
+[data-sf-subject-empty] {
+  margin: 0;
+  color: var(--_muted);
+}
+[data-sf-subject-filter] {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--_border);
+  border-radius: 0.75rem;
+}
+[data-sf-subject-filter] a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--_accent);
+}
+[data-sf-subject-fit] {
+  display: inline-block;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+[data-sf-subject-fit='fits'],
+[data-sf-subject-fit='universal'] {
+  color: var(--sf-subject-ok, #166534);
+}
+[data-sf-subject-fit='no'] {
+  color: var(--sf-subject-danger, #b91c1c);
+}
+[data-sf-subject-garage] :focus-visible,
+[data-sf-subject-picker] :focus-visible,
+[data-sf-subject-filter] :focus-visible {
+  outline: 2px solid var(--_accent);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-sf-subject-garage] * {
+    transition: none !important;
+    animation: none !important;
+  }
+}

@@ -111,6 +111,27 @@
       }
     },
     "./fiscal.css": "./dist/fiscal.css",
+    "./subjects": {
+      "import": {
+        "types": "./dist/subjects.d.ts",
+        "default": "./dist/subjects.js"
+      },
+      "require": {
+        "types": "./dist/subjects.d.cts",
+        "default": "./dist/subjects.cjs"
+      }
+    },
+    "./subjects/server": {
+      "import": {
+        "types": "./dist/subjects-server.d.ts",
+        "default": "./dist/subjects-server.js"
+      },
+      "require": {
+        "types": "./dist/subjects-server.d.cts",
+        "default": "./dist/subjects-server.cjs"
+      }
+    },
+    "./subjects.css": "./dist/subjects.css",
     "./payments": {
       "import": {
         "types": "./dist/payments.d.ts",

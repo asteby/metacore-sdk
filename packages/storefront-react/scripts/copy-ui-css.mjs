@@ -23,3 +23,6 @@ writeFileSync(new URL('../dist/account.css', import.meta.url), withPreview(readF
 
 // Hoja por omisión de la facturación (subpath /fiscal).
 writeFileSync(new URL('../dist/fiscal.css', import.meta.url), readFileSync(new URL('../src/fiscal/fiscal.css', import.meta.url), 'utf8'))
+
+// Hoja por omisión de «Mis artículos» (subpath /subjects).
+writeFileSync(new URL('../dist/subjects.css', import.meta.url), readFileSync(new URL('../src/subjects/subjects.css', import.meta.url), 'utf8'))

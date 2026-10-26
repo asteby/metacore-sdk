@@ -12,6 +12,8 @@ export default defineConfig({
     account: 'src/account/index.ts',
     'account-server': 'src/account/server.ts',
     fiscal: 'src/fiscal/index.ts',
+    subjects: 'src/subjects/index.ts',
+    'subjects-server': 'src/subjects/server.ts',
     'fiscal-server': 'src/fiscal/server.ts',
     promotions: 'src/promos/index.ts',
     ui: 'src/ui/index.ts',

@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { resolveSubject, type SubjectKind } from '@asteby/storefront'
 import {
   compatRows, DEFAULT_FITMENT_CONFIG, draftFromVehicle, engineOptions, fitFilterTags, fitState, fitStatus, fitmentConfig, makeOptions,
   modelOptions, parseCatalog, popularVehicles, reconcileDraft, resolveVehicle, rowCoversYear, safeRedirect, splitModelValue,
-  vehicleFromDraft, vehicleKey, vehicleLongName, vehicleName, withFit, withoutQueryParam, yearOptions, EMPTY_DRAFT,
+  vehicleCatalogToTree, vehicleFromDraft, vehicleKey, vehicleLongName, vehicleName, withFit, withoutQueryParam, yearOptions, EMPTY_DRAFT,
 } from './fitment.js'
 
 const catalog = parseCatalog({
@@ -141,5 +142,67 @@ describe('helpers', () => {
   it('withoutQueryParam removes only the given param', () => {
     expect(withoutQueryParam('/c?vehicle=invalid&page=2', 'vehicle')).toBe('/c?page=2')
     expect(withoutQueryParam('/c?vehicle=invalid', 'vehicle')).toBe('/c')
+  })
+})
+
+describe('engines with stretches of years (a parts catalog with real gaps)', () => {
+  const gapped = parseCatalog({
+    makes: [
+      { id: 'nissan', label: 'Nissan', models: [
+        // compact tuple: id, from, to, engines; an engine as ["id", from, to, from, to…]
+        ['np300', 2007, 2022, [['2-4', 2007, 2017, 2020, 2022], '2-5']],
+        { id: 'versa', from: 2012, to: 2024, engines: [{ id: '1-6', ranges: [[2012, 2014], [2018, 2024]] }] },
+      ] },
+    ],
+  })
+  const np300 = gapped.makes[0]!.models[0]!
+
+  it('parses the tuple form of an engine into ranges', () => {
+    expect(np300.engines[0]).toMatchObject({ id: '2-4', label: '2 4', from: 2007, to: 2022, ranges: [[2007, 2017], [2020, 2022]] })
+    expect(np300.engines[1]).toEqual({ id: '2-5', label: '2 5' })
+    expect(gapped.makes[0]!.models[1]!.engines[0]).toMatchObject({ id: '1-6', ranges: [[2012, 2014], [2018, 2024]] })
+  })
+
+  it('a stretch gap is a real gap: the vehicle does not resolve there', () => {
+    expect(resolveVehicle(gapped, 'nissan/np300/2018/2-4')).toBeNull() // 2018-2019 has no part for this engine
+    expect(resolveVehicle(gapped, 'nissan/np300/2018/2-5')).not.toBeNull() // the other engine follows the whole model
+    expect(resolveVehicle(gapped, 'nissan/np300/2021/2-4')).not.toBeNull()
+    expect(resolveVehicle(gapped, 'nissan/versa/2016/1-6')).toBeNull()
+  })
+
+  it('a model covers a year only when one of its engines does; years skip the phantom ones', () => {
+    const versaOnly = yearOptions(gapped, { make: 'nissan', model: 'versa' }).map((o) => Number(o.value))
+    expect(versaOnly).not.toContain(2016)
+    expect(versaOnly).toContain(2018)
+    expect(modelOptions(gapped, { make: 'nissan', year: '2016' }).map((o) => o.value)).toEqual(['np300']) // versa has nothing in 2016
+    expect(engineOptions(gapped, { make: 'nissan', year: '2018', model: 'np300' }).map((o) => o.value)).toEqual(['2-5'])
+  })
+
+  it('the tree published for the buyer\'s items accepts exactly the vehicles the selector accepts', () => {
+    const tree = vehicleCatalogToTree(gapped)
+    const kind: SubjectKind = {
+      key: 'vehicle', label: 'Vehicle', label_plural: 'Garage', max_per_account: 3, fit_key_template: '{make}/{model}/{year}/{engine}',
+      fields: [
+        { key: 'make', label: 'Make', type: 'select', source: 'catalog', required: true },
+        { key: 'model', label: 'Model', type: 'select', source: 'catalog', required: true },
+        { key: 'year', label: 'Year', type: 'year', source: 'catalog', required: true },
+        { key: 'engine', label: 'Engine', type: 'select', source: 'catalog', required: true },
+      ],
+      catalog: { tree },
+    }
+    let checked = 0
+    for (const model of ['np300', 'versa'])
+      for (const engine of ['2-4', '2-5', '1-6', 'nope'])
+        for (let year = 2005; year <= 2026; year++) {
+          const key = `nissan/${model}/${year}/${engine}`
+          const server = resolveSubject(kind, { make: 'nissan', model, year, engine })
+          expect(server.ok, key).toBe(resolveVehicle(gapped, key) !== null)
+          if (server.ok) expect(server.subject.fit_key).toBe(key)
+          checked++
+        }
+    expect(checked).toBe(2 * 4 * 22)
+    // Makes without models are left out; the labels survive.
+    expect(vehicleCatalogToTree(catalog)).not.toHaveProperty('pending')
+    expect(tree.nissan!.label).toBe('Nissan')
   })
 })

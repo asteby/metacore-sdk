@@ -4,7 +4,13 @@
 // `FitmentConfig`, so any store that sells parts can use it. Nothing here decides on its own
 // whether a part fits a vehicle: it only compares what the backend (OPS) published.
 
-export type VehicleEngine = { id: string; label: string; from?: number; to?: number }
+import type { SubjectCatalog, SubjectCatalogNode } from '@asteby/storefront'
+
+/**
+ * `ranges` are the stretches of model years in which the engine has parts ([from, to] pairs; a gap is a real gap).
+ * Without them the engine covers `from`–`to`, or the whole range of its model.
+ */
+export type VehicleEngine = { id: string; label: string; from?: number; to?: number; ranges?: [number, number][] }
 export type VehicleModel = { id: string; label: string; from: number; to: number; engines: VehicleEngine[] }
 export type MakePriority = 'high' | 'medium' | 'low'
 /**
@@ -105,6 +111,37 @@ function labelFromId(id: string): string {
 }
 
 /**
+ * One engine of the catalog: `"2.4"` (the whole range of its model), `["2.4", 2007, 2017, 2020, 2022]` (an id and pairs of
+ * years: stretches with parts) or `{ id, label?, from?, to?, ranges? }`.
+ */
+function parseEngine(e: unknown): VehicleEngine | null {
+  if (typeof e === 'string') return isText(e) ? { id: e, label: labelFromId(e) } : null
+  if (Array.isArray(e)) {
+    const [id, ...years] = e as unknown[]
+    if (!isText(id)) return null
+    const ranges: [number, number][] = []
+    for (let i = 0; i + 1 < years.length; i += 2) {
+      const a = years[i]
+      const b = years[i + 1]
+      if (isNum(a) && isNum(b)) ranges.push([a, b])
+    }
+    const first = ranges[0]
+    const last = ranges[ranges.length - 1]
+    return first && last ? { id, label: labelFromId(id), from: first[0], to: last[1], ranges } : { id, label: labelFromId(id) }
+  }
+  const o = e as Partial<VehicleEngine> | null
+  if (!o || !isText(o.id)) return null
+  const ranges = (Array.isArray(o.ranges) ? o.ranges : []).filter((r): r is [number, number] => Array.isArray(r) && isNum(r[0]) && isNum(r[1]))
+  return {
+    id: o.id,
+    label: isText(o.label) ? o.label : labelFromId(o.id),
+    ...(isNum(o.from) ? { from: o.from } : {}),
+    ...(isNum(o.to) ? { to: o.to } : {}),
+    ...(ranges.length ? { ranges } : {}),
+  }
+}
+
+/**
  * Reads the vehicle catalog from the props of a content section; drops whatever has the wrong shape.
  * Accepts the compact format (a real catalog weighs tens of KB and OPS caps each write): a model may
  * be a tuple `[id, from, to, engines]`, omit `label` (derived from the id) and list engines as ids.
@@ -127,15 +164,7 @@ export function parseCatalog(raw: unknown, opts: ParseCatalogOptions = {}): Vehi
     for (const entry of m.models) {
       const mo = Array.isArray(entry) ? { id: entry[0], from: entry[1], to: entry[2], engines: entry[3] } : entry
       if (!mo || !isText(mo.id) || !isNum(mo.from) || !isNum(mo.to) || !Array.isArray(mo.engines)) continue
-      const engines: VehicleEngine[] = mo.engines
-        .map((e: unknown) => (typeof e === 'string' ? { id: e, label: labelFromId(e) } : e))
-        .filter((e: VehicleEngine) => e && isText(e.id))
-        .map((e: VehicleEngine) => ({
-          id: e.id,
-          label: isText(e.label) ? e.label : labelFromId(e.id),
-          ...(isNum(e.from) ? { from: e.from } : {}),
-          ...(isNum(e.to) ? { to: e.to } : {}),
-        }))
+      const engines: VehicleEngine[] = mo.engines.map(parseEngine).filter((e: VehicleEngine | null): e is VehicleEngine => e !== null)
       if (engines.length) models.push({ id: mo.id, label: isText(mo.label) ? mo.label : labelFromId(mo.id), from: mo.from, to: mo.to, engines })
     }
     // A make declared without models (waiting for the import) is kept; one with only invalid models is dropped.
@@ -154,9 +183,10 @@ export function fitTag(key: string, config: FitmentConfig = DEFAULT_FITMENT_CONF
 }
 
 const engineCovers = (e: VehicleEngine, model: VehicleModel, year: number) =>
-  year >= (e.from ?? model.from) && year <= (e.to ?? model.to)
+  e.ranges ? e.ranges.some(([a, b]) => year >= a && year <= b) : year >= (e.from ?? model.from) && year <= (e.to ?? model.to)
 
-const modelCovers = (m: VehicleModel, year: number | null) => year == null || (year >= m.from && year <= m.to)
+// A model covers a year only when one of its engines does: no phantom years inside `from`–`to` that no engine has parts for.
+const modelCovers = (m: VehicleModel, year: number | null) => year == null || m.engines.some((e) => engineCovers(e, m, year))
 
 function num(v: string): number | null {
   const n = Number(v)
@@ -216,7 +246,8 @@ export function yearOptions(catalog: VehicleCatalog, draft: Pick<VehicleDraft, '
   const from = Math.min(...models.map((m) => m.from))
   const to = Math.max(...models.map((m) => m.to))
   const years: Option[] = []
-  for (let y = to; y >= from; y--) years.push({ value: String(y), label: String(y) })
+  // Only years in which some chosen model has an engine with parts.
+  for (let y = to; y >= from; y--) if (models.some((m) => modelCovers(m, y))) years.push({ value: String(y), label: String(y) })
   return years
 }
 
@@ -317,7 +348,10 @@ export function fitStatus(product: WithTags, vehicle: { key: string } | null, co
   return fits.includes(fitTag(vehicle.key, config)) ? 'fits' : 'no'
 }
 
-/** Values for a `filter.tag` query that lists only what fits (the API takes them as "any of"). */
+/**
+ * Values for `products.list({ tags_any })` that list only what fits (own tag plus the universal one; the API takes them
+ * as "any of"). It replaces searching the tag with `q`. Same as `fitTagsAny` of `@asteby/storefront` for a catalog-driven kind.
+ */
 export function fitFilterTags(vehicle: { key: string }, config: FitmentConfig = DEFAULT_FITMENT_CONFIG): string[] {
   return [fitTag(vehicle.key, config), config.universalTag]
 }
@@ -371,4 +405,37 @@ export function withoutQueryParam(path: string, param: string): string {
   const url = new URL(path, 'http://local.invalid')
   url.searchParams.delete(param)
   return `${url.pathname}${url.search}`
+}
+
+// --- Bridge to the buyer's «My items» (contract 1.9) -------------------------------------------------------------
+
+/**
+ * The same make → model → engine catalog as the tree the organization publishes for a kind (`subject_catalog` page,
+ * `SubjectKind.catalog`): a parts store that already keeps its catalog in this shape converts it once, with a script,
+ * and the server validates the buyer's saved vehicles against it (years by `from`/`to`/`ranges`). A model covers the
+ * hull of its engines' years, so the tree accepts exactly the years `resolveVehicle` accepts. Makes without models are
+ * left out (they do not show in the selector either).
+ */
+export function vehicleCatalogToTree(catalog: VehicleCatalog): SubjectCatalog['tree'] {
+  const tree: SubjectCatalog['tree'] = {}
+  for (const make of catalog.makes) {
+    if (make.models.length === 0) continue
+    const models: Record<string, SubjectCatalogNode> = {}
+    for (const model of make.models) {
+      const engines: Record<string, SubjectCatalogNode> = {}
+      let from = Infinity
+      let to = -Infinity
+      for (const e of model.engines) {
+        const spans = e.ranges?.length ? e.ranges : ([[e.from ?? model.from, e.to ?? model.to]] as [number, number][])
+        for (const [a, b] of spans) {
+          from = Math.min(from, a)
+          to = Math.max(to, b)
+        }
+        engines[e.id] = e.ranges?.length ? { label: e.label, ranges: e.ranges } : { label: e.label, from: e.from ?? model.from, to: e.to ?? model.to }
+      }
+      models[model.id] = { label: model.label, from: Number.isFinite(from) ? from : model.from, to: Number.isFinite(to) ? to : model.to, children: engines }
+    }
+    tree[make.id] = { label: make.label, children: models }
+  }
+  return tree
 }

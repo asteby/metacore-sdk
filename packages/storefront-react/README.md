@@ -727,11 +727,44 @@ import { parseCatalog, resolveVehicle, fitmentConfig, fitFilterTags, withFit, sa
 const config = fitmentConfig({ compatAttribute: 'compatibilidad' })        // por defecto: tags `fit:*`, atributo `compatibility`
 const catalog = parseCatalog(section.props, { priorityAliases: { alta: 'high' } })
 const vehicle = resolveVehicle(catalog, cookieKey)                         // null si la clave ya no existe
-const tags = vehicle ? fitFilterTags(vehicle, config) : []                 // filter.tag = alguno de
+const tags = vehicle ? fitFilterTags(vehicle, config) : []                 // products.list({ tags_any: tags }), no `q` ni `filter.tag`
 const product = withFit(rawProduct, vehicle, config)                       // cientos de tags fit:* → UNA etiqueta de estado
 ```
 
-La cookie, el formulario y el redirect son de la tienda; `safeRedirect` valida el destino. Un componente de selector sobre estas funciones llega en una versión posterior.
+El catálogo acepta motores con tramos de años reales (`["2.4", 2007, 2017, 2020, 2022]` o `{ id, ranges }`): un hueco es un hueco, un modelo cubre un año solo si algún motor lo cubre y el selector no ofrece años fantasma. `vehicleCatalogToTree(catalog)` lo convierte al árbol que la organización publica para «Mis artículos» (abajo). La cookie, el formulario y el redirect son de la tienda; `safeRedirect` valida el destino. Para guardar varios vehículos en la cuenta, con selector y filtro listos, usa `/subjects`.
+
+## Mis artículos / Mi garage (`@asteby/storefront-react/subjects`, contrato 1.9)
+
+Algo del comprador para lo que compra (un vehículo, una impresora, un celular, una mascota, una talla), de un **tipo que la organización declara como dato**: el SDK no nombra ninguno y los textos salen de los datos (`kind.label`, `kind.label_plural`). Una tienda que no declara tipos (God's Nutrition, Local) **no tiene sección**: `loadSubjectsContext` devuelve `kinds: []` y no se pinta nada.
+
+| Pieza | Para qué |
+| --- | --- |
+| `SubjectGarage` | «Mi garage» de un tipo: tarjetas con etiqueta, apodo, insignia «Activo», valores privados enmascarados, «Ver piezas compatibles», hacer activo, editar, eliminar (confirmación en línea) y agregar. Estados vacío, límite y «No pudimos cargar esto · Reintentar» |
+| `SubjectPicker` | El formulario de un artículo, guiado por los campos del tipo: cascada que se angosta (marca → modelo → año → motor), años por rangos, campos libres y el campo privado. Sin JavaScript es un `<form method="post">` que avanza el nivel al enviar (`subject-refine`) |
+| `SubjectFilter` / `SubjectFitBadge` | La barra «Para: Nissan NP300 2012 · Cambiar · Ver todo» de un catálogo y la insignia «Compatible con tu vehículo» de un producto. Enlaces, no botones |
+| `useSubjects(client?)` | Hook para tiendas que pintan en el cliente (`ready` / `error` / `unavailable`) |
+| `/subjects/server` | `loadSubjectsContext` (nunca lanza), `createSubjectAction`, cookie del invitado `sf_subject_<tipo>`, `subjectCacheHeaders` |
+| `/subjects.css` | Hoja neutra opcional (`--sf-subject-*`) |
+
+```tsx
+// loader (/garage y los catálogos)
+const subjects = await loadSubjectsContext(sf, { customer: customerClient, cookieHeader: request.headers.get('cookie') })
+//   subjects.kinds        → [] si la tienda no declara tipos: no renderices la sección
+//   subjects.active.vehicle → { label, fit_key, source: 'account' | 'cookie' }
+
+// catálogo: solo lo compatible, con el filtro del servidor
+const products = await sf.products.list({ tags_any: fitTagsAny(subjects.active.vehicle?.fit_key) })
+headers = subjectCacheHeaders(cookieHeader, 'public, max-age=60', { signedIn })   // con artículo activo la página es privada
+
+// acción (POST /garage)
+export const action = createSubjectAction({ storefront: sf, readCustomerToken })
+// página
+<SubjectGarage kind={kind} subjects={subjects.subjects} data={actionData} partsHref={(s) => `/piezas?para=${s.fit_key}`} status={subjects.degraded.subjects ? 'error' : 'ready'} />
+```
+
+**Privacidad.** Un campo `private` (placas) nunca entra a la etiqueta, la clave de compatibilidad, el filtro, la caché, la cookie ni el pedido. El servidor lo devuelve solo enmascarado (`••23`): el formulario no lo rellena, un campo vacío al editar conserva el guardado y `.clear` lo quita. La cookie del invitado guarda **solo** la `fit_key`, y `serializeSubjectCookie` se niega (`TypeError`) a escribir cualquier valor que no resuelva contra el catálogo del tipo. La acción no registra nada, no devuelve valores privados en `values` y los errores nombran el campo, nunca el valor.
+
+**Adoptar en ProtekAuto** (la tienda no se toca en este paquete): (1) subir el SDK y usar `fitment` en lugar de `app/lib/vehicle.ts` (`fitmentConfig({ tagPrefix: 'fit:', stateTagPrefix: 'ajuste:', compatAttribute: 'compatibilidad' })`, `parseCatalog(props, { priorityAliases: { alta: 'high', media: 'medium', baja: 'low' } })`); (2) publicar los datos: registrar las secciones `subject_kinds` y `subject_catalog` (`PUT /storefront/content/section-types`, ver `shared/subjectspec/README.md` de addons), la página `subject-kinds` con el tipo `vehicle` (`label_plural: «Mi garage»`, plantilla `{make}/{model}/{year}/{engine}`, campo `plate` con `private: true`) y la página de catálogo con `vehicleCatalogToTree(parseCatalog(...))`; (3) en el loader, `loadSubjectsContext` y `products.list({ tags_any })` en vez de buscar la etiqueta con `q` (`vehicle.server.ts` deja de filtrar a mano); (4) cookie `sf_subject_vehicle` en lugar de `pa_vehiculo` (leer la vieja una vez y reescribirla); (5) `/garage` con `SubjectGarage` + `createSubjectAction`; (6) `subjectCacheHeaders` en lugar de `vehicleCacheHeaders`. Pendiente fuera del SDK: ligar el artículo al pedido (`CheckoutRequest.subject`, `storefront_cart` + `customers`).
 
 ## API
 
