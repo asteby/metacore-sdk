@@ -20,6 +20,8 @@ export type MercadoPagoAdapterOptions = {
   getSdk?: () => MercadoPagoCtor | undefined
   /** Reads the anti-fraud device id. Default: `window.MP_DEVICE_SESSION_ID`. */
   getDeviceSessionId?: () => string | undefined
+  /** Wait before the single internal re-read of the form data (see `collect`). Default 400. */
+  collectRetryDelayMs?: number
 }
 
 /**
@@ -53,12 +55,14 @@ export function sanitizeMercadoPagoFormData(data: Record<string, unknown> | null
 
 /**
  * Card Payment Brick adapter. The payment button is hidden: the shop's own button calls `collect()` (MP's
- * `getFormData()`), which tokenises inside MP's iframes. Card data never touches this code.
+ * `getFormData()`), which tokenises inside MP's iframes. Card data never touches this code. `collect()` re-reads the
+ * form once if the first read fails, before anything is sent to the shop's server.
  */
 export function mercadoPagoBricksAdapter(options: MercadoPagoAdapterOptions = {}): PaymentFormAdapter {
   const allowed = options.allowedSdkOrigins ?? ['https://sdk.mercadopago.com']
   const getSdk =
     options.getSdk ?? (() => (typeof window !== 'undefined' ? (window as unknown as { MercadoPago?: MercadoPagoCtor }).MercadoPago : undefined))
+  const retryDelay = options.collectRetryDelayMs ?? 400
   const getDevice =
     options.getDeviceSessionId ?? (() => (typeof window !== 'undefined' ? (window as unknown as { MP_DEVICE_SESSION_ID?: string }).MP_DEVICE_SESSION_ID : undefined))
 
@@ -102,9 +106,26 @@ export function mercadoPagoBricksAdapter(options: MercadoPagoAdapterOptions = {}
       return {
         async collect(): Promise<PaymentFormData> {
           if (gone) throw new Error('payment form is unmounted')
-          const raw = await controller.getFormData()
-          const provider_data = sanitizeMercadoPagoFormData(raw)
-          if (!provider_data.token) throw new Error('payment form incomplete')
+          // The Brick can fail the FIRST `getFormData()` after the fields were just filled even though its own
+          // `POST /v1/card_tokens` answered 201 (`secure_fields_card_token_creation_failed`: its internal validation of
+          // the secure fields / installments was still settling); the second call works. Nothing has reached the shop's
+          // server yet (the token only travels afterwards, in `transport.submit`), so reading the form ONCE more is safe:
+          // it never repeats a charge and never touches the idempotency key. The discarded token was never sent anywhere.
+          const read = async (): Promise<Record<string, unknown>> => {
+            const raw = await controller.getFormData()
+            const data = sanitizeMercadoPagoFormData(raw)
+            if (!data.token) throw new Error('payment form incomplete')
+            return data
+          }
+          let provider_data: Record<string, unknown>
+          try {
+            provider_data = await read()
+          } catch (first) {
+            if (gone) throw first
+            await new Promise<void>((r) => setTimeout(r, retryDelay))
+            if (gone) throw first
+            provider_data = await read()
+          }
           const device = getDevice()
           return { provider_data, ...(typeof device === 'string' && device ? { device_session_id: device } : {}) }
         },
