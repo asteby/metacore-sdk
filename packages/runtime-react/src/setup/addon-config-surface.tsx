@@ -1058,6 +1058,16 @@ export function AddonConfigSurface({
   )
 
   // One setting control, shared by the flat layout and the wizard's last step.
+  // Manifest setting labels are i18n keys ("warehouse.settings.fulfillment_mode"),
+  // resolved from the addon's locale bundle. A literal sentence/word (no dots) is
+  // shown as written; an unresolved dotted key shows the humanized last segment,
+  // never the raw key.
+  const settingText = (text: string | undefined, fallback: string) => {
+    if (!text) return fallback
+    if (i18n.exists(text)) return t(text)
+    return /^[\w-]+(\.[\w-]+)+$/.test(text) ? fallback : text
+  }
+
   const renderSetting = (def: AddonSettingDef) => {
     const id = `${idPrefix}-setting-${def.key}`
     const value = settingsValues[def.key] ?? def.default_value
@@ -1066,7 +1076,7 @@ export function AddonConfigSurface({
     return (
       <div key={def.key} className='flex flex-col gap-2'>
         <div className='flex items-center gap-2'>
-          <Label htmlFor={id}>{def.label || def.key}</Label>
+          <Label htmlFor={id}>{settingText(def.label, humanizeKey(def.key))}</Label>
           {def.scope === 'branch' && !branchMode && (
             <Badge variant='outline' className='text-[10px]'>
               {st('installed_addons.per_branch')}
@@ -1107,7 +1117,7 @@ export function AddonConfigSurface({
             <SelectContent>
               {def.options!.map((o) => (
                 <SelectItem key={String(o.value)} value={String(o.value)}>
-                  {o.label}
+                  {settingText(o.label, humanizeKey(String(o.value)))}
                 </SelectItem>
               ))}
             </SelectContent>

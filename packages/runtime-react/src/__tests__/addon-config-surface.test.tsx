@@ -4,9 +4,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 vi.mock('react-i18next', () => {
-    const dict: Record<string, string> = { 'pay.public_key': 'Llave pública', 'pay.token': 'Token', 'pay.serie_a': 'Serie A', 'pay.serie_b': 'Serie B' }
+    const dict: Record<string, string> = { 'pay.public_key': 'Llave pública', 'pay.token': 'Token', 'pay.serie_a': 'Serie A', 'pay.serie_b': 'Serie B', 'pay.settings.policy': 'Política de guía', 'pay.settings.policy_manual': 'A mano' }
     const t = (k: string, o?: { defaultValue?: string }) => dict[k] ?? o?.defaultValue ?? k
-    return { useTranslation: () => ({ t, i18n: { language: 'es', exists: () => true } }) }
+    return { useTranslation: () => ({ t, i18n: { language: 'es', exists: (k: string) => k in dict } }) }
 })
 
 import { ApiProvider } from '../api-context'
@@ -242,6 +242,18 @@ describe('AddonConfigSurface', () => {
         const put = calls.find((c) => c.m === 'PUT')!
         expect('token' in put.body).toBe(false)
         expect(put.body.mode).toBe('a')
+    })
+
+    it('settings: label and option labels resolve from the addon bundle, never the raw key', async () => {
+        const defs = [
+            { key: 'policy', label: 'pay.settings.policy', type: 'select', options: [{ value: 'manual', label: 'pay.settings.policy_manual' }, { value: 'on_paid', label: 'pay.settings.policy_on_paid' }] },
+            { key: 'ghost_limit', label: 'pay.settings.ghost_limit', type: 'text' },
+        ]
+        setup({ connector: null }, { 'GET /addons/pay/settings': { data: { policy: 'manual' }, definitions: defs } })
+        await screen.findByText('Política de guía')
+        expect(screen.getByText('A mano')).toBeTruthy()
+        expect(screen.getByText('Ghost Limit')).toBeTruthy()
+        expect(screen.queryByText('pay.settings.ghost_limit')).toBeNull()
     })
 
     it('per-branch mode only sends what was touched', async () => {
