@@ -89,35 +89,75 @@ export function PaymentChallenge({ outcome, locale, messages, render, onCancel, 
   // Esc and backdrop routed to a no-op: the dialog closes only by unmounting.
   const { ref } = useModalDialog({ open: true, onClose: () => {} })
   const [canEscape, setCanEscape] = useState(false)
+  // The browser may still close it (a second Esc without user activation, the Android back gesture: close watchers).
+  // The page then shows a way back to the bank page instead of leaving the buyer with an invisible challenge.
+  const [closed, setClosed] = useState(false)
+  const cancelRef = useRef(onCancel)
+  cancelRef.current = onCancel
+  const hasCancel = !!onCancel
   useEffect(() => {
-    if (!onCancel) return
+    if (!hasCancel) return
     const t = setTimeout(() => setCanEscape(true), escapeAfterMs)
     return () => clearTimeout(t)
-  }, [onCancel, escapeAfterMs])
+  }, [hasCancel, escapeAfterMs])
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const onClosed = () => setClosed(true)
+    el.addEventListener('close', onClosed)
+    return () => el.removeEventListener('close', onClosed)
+  }, [ref])
+  const reopen = () => {
+    const el = ref.current
+    if (!el) return
+    try {
+      if (typeof el.showModal === 'function') el.showModal()
+      else el.setAttribute('open', '')
+    } catch {
+      el.setAttribute('open', '')
+    }
+    setClosed(false)
+    el.querySelector<HTMLElement>('[data-sf-autofocus]')?.focus({ preventScroll: true })
+  }
   const url = outcome.challenge?.url
   return (
-    <dialog ref={ref} aria-labelledby="sf-challenge-title" data-sf-challenge>
-      <div data-sf-challenge-body>
-        <h2 id="sf-challenge-title" data-sf-autofocus tabIndex={-1}>
-          {m['challenge.title']}
-        </h2>
-        {render ? (
-          render(outcome)
-        ) : url ? (
-          <iframe src={url} title={m['challenge.title']} data-sf-challenge-frame style={{ width: '100%', minHeight: 420, border: 0 }} />
-        ) : (
-          <p>{m['state.challenge']}</p>
-        )}
-        {onCancel && canEscape && (
-          <div data-sf-challenge-escape>
-            <p>{m['challenge.escape_hint']}</p>
-            <button type="button" onClick={onCancel} style={{ minWidth: 44, minHeight: 44 }}>
-              {m['challenge.escape']}
-            </button>
-          </div>
-        )}
-      </div>
-    </dialog>
+    <>
+      {closed && (
+        <p role="status" data-sf-challenge-closed>
+          {m['state.challenge']}{' '}
+          <button type="button" onClick={reopen} data-sf-challenge-reopen style={{ minWidth: 44, minHeight: 44 }}>
+            {m['challenge.title']}
+          </button>
+        </p>
+      )}
+      <dialog ref={ref} aria-labelledby="sf-challenge-title" data-sf-challenge>
+        <div data-sf-challenge-body>
+          <h2 id="sf-challenge-title" data-sf-autofocus tabIndex={-1}>
+            {m['challenge.title']}
+          </h2>
+          {render ? (
+            render(outcome)
+          ) : url ? (
+            <iframe src={url} title={m['challenge.title']} data-sf-challenge-frame style={{ width: '100%', minHeight: 420, border: 0 }} />
+          ) : (
+            <p>{m['state.challenge']}</p>
+          )}
+          {/* Live region present from the start so the exit is announced when it appears. */}
+          {hasCancel && (
+            <div data-sf-challenge-escape aria-live="polite">
+              {canEscape && (
+                <>
+                  <p>{m['challenge.escape_hint']}</p>
+                  <button type="button" onClick={() => cancelRef.current?.()} style={{ minWidth: 44, minHeight: 44 }}>
+                    {m['challenge.escape']}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </dialog>
+    </>
   )
 }
 

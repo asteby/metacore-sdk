@@ -22,7 +22,7 @@ describe('PaymentChallenge lock', () => {
     fireEvent.click(dlg)
     expect(dlg.open).toBe(true)
     expect(onCancel).not.toHaveBeenCalled()
-    expect(container.querySelector('[data-sf-challenge-escape]')).toBeNull()
+    expect(container.querySelector('[data-sf-challenge-escape] button')).toBeNull()
     act(() => {
       vi.advanceTimersByTime(120_001)
     })

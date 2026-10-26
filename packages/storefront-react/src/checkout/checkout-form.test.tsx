@@ -109,6 +109,26 @@ describe('ContactFields + AddressFields', () => {
     expect(one.container.querySelector('select[name="neighborhood"]')).toBeNull()
   })
 
+  it("neighborhoodList='select': going from a code with several colonias to one with a single colonia still fills it", async () => {
+    const lookup = vi.fn(async (zip: string) =>
+      zip === '06700' ? { province: 'Ciudad de México', city: 'Cuauhtémoc', neighborhoods: ['Roma Norte', 'Roma Sur'] } : { province: 'Jalisco', city: 'Guadalajara', neighborhoods: ['Centro'] },
+    )
+    const { container } = render(<Form neighborhoodList="select" lookup={lookup} />)
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '06700' } })
+    await waitFor(() => expect(container.querySelector('select[name="neighborhood"]')).not.toBeNull())
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '44100' } })
+    await waitFor(() => expect(container.querySelector('select[name="neighborhood"]')).toBeNull())
+    await waitFor(() => expect((container.querySelector('[name="neighborhood"]') as HTMLInputElement).value).toBe('Centro'))
+  })
+
+  it("neighborhoodList='select' keeps a colonia the buyer already typed when it is in the list", async () => {
+    const { container } = render(<Form neighborhoodList="select" lookup={async () => ({ province: 'Ciudad de México', city: 'Cuauhtémoc', neighborhoods: ['Roma Norte', 'Roma Sur'] })} />)
+    fireEvent.input(container.querySelector('[name="neighborhood"]')!, { target: { value: 'Roma Sur' } })
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '06700' } })
+    await waitFor(() => expect(container.querySelector('select[name="neighborhood"]')).not.toBeNull())
+    expect((container.querySelector('select[name="neighborhood"]') as HTMLSelectElement).value).toBe('Roma Sur')
+  })
+
   it('lockProvinceOnFill locks a plain state field once the lookup fills it, but never one the buyer typed', async () => {
     const lookup = vi.fn(async () => ({ province: 'Jalisco', city: 'Guadalajara', neighborhoods: [] }))
     render(<Form lookup={lookup} lockProvinceOnFill />)

@@ -121,7 +121,13 @@ export type EmbeddedPaymentState = {
   retry: () => Promise<void>
   /** After a rejection: clears the message (the form is remounted by the hook). */
   dismiss: () => void
-  /** Leaves a pending 3DS challenge (the buyer's emergency exit): new attempt, fresh form. The bank's session is abandoned, not charged. */
+  /**
+   * Leaves a pending 3DS challenge (the buyer's emergency exit). The outcome is UNKNOWN (the bank may still approve the
+   * attempt the buyer just verified), so the attempt key is kept and no new payment can start: the hook verifies the
+   * payment state through `transport.refresh` (status `blocked`, `error.kind = 'payment_in_progress'`, `verifying`).
+   * Only a definitive answer settles it: approved, or rejected / expired / cancelled, which gives a new attempt and a
+   * fresh form. A still-pending challenge does not reopen the dialog.
+   */
   cancelChallenge: () => void
 }
 
@@ -198,6 +204,8 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   const alive = useRef(true)
   const generation = useRef(0)
   const statusRef = useRef<EmbeddedPaymentStatus>('idle')
+  // The buyer left a pending challenge: a refresh that still says "challenge" must not reopen it.
+  const leftChallenge = useRef(false)
   statusRef.current = status
   errorRef.current = error
   // Total the form on screen was created / last updated with, and the update in flight.
@@ -403,6 +411,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     (result: PaymentAttemptResult) => {
       const o = paymentOutcome(result, live.current.locale, live.current.messages)
       pendingData.current = null
+      leftChallenge.current = false
       setOutcome(o)
       setError(null)
       setAttemptsLeft(o.attempts_left)
@@ -578,7 +587,8 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     }
     let stop = false
     const ctl = new AbortController()
-    const until = Date.now() + verifyTimeoutMs
+    // After leaving a challenge the bank may take as long as the challenge window itself.
+    const until = Date.now() + (leftChallenge.current ? Math.max(verifyTimeoutMs, pollTimeoutMs) : verifyTimeoutMs)
     setVerifying(true)
     ;(async () => {
       let wait = verifyIntervalMs
@@ -590,6 +600,9 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
           const r = await transport.refresh!({ signal: ctl.signal })
           if (stop || !alive.current) return
           if (isResolvedAttempt(r)) {
+            // The buyer left the bank page: a still-open challenge is not an answer; keep waiting for the bank's.
+            const settled = r.payment.status === 'paid' || r.payment.status === 'failed' || r.payment.status === 'expired' || r.payment.status === 'cancelled'
+            if (leftChallenge.current && !settled && r.payment.action?.type === 'challenge') continue
             setVerifying(false)
             finish(r)
             return
@@ -605,21 +618,21 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
       ctl.abort()
       setVerifying(false)
     }
-  }, [unknownOutcome, transport, verifyTimeoutMs, verifyIntervalMs, finish])
+  }, [unknownOutcome, transport, verifyTimeoutMs, verifyIntervalMs, pollTimeoutMs, finish])
 
   const dismiss = useCallback(() => {
     setError(null)
     setOutcome((o) => (o?.kind === 'rejected' ? null : o))
   }, [])
 
+  // Never rotates the attempt: leaving the bank page does not mean the bank did not approve (see the type doc).
   const cancelChallenge = useCallback(() => {
     if (statusRef.current !== 'challenge') return
-    rotateAttempt()
+    leftChallenge.current = true
     setOutcome(null)
-    setError(null)
-    setStatus('idle')
-    setMountKey((k) => k + 1)
-  }, [rotateAttempt])
+    setError({ kind: 'payment_in_progress', message: live.current.msgs['challenge.left'], retrySameAttempt: false, canRetry: false })
+    setStatus('blocked')
+  }, [])
 
   // After a rejection the hook remounts the form; the rejection text stays visible via `outcome` until the next submit.
   const message =

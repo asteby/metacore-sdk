@@ -204,6 +204,9 @@ export function AddressFields(props: AddressFieldsProps) {
   const [colonias, setColonias] = useState<readonly string[]>([])
   const [filled, setFilled] = useState(false)
   const [coloniaSelect, setColoniaSelect] = useState(false)
+  const coloniaSelectRef = useRef(false)
+  // Switching the colonia between text and list remounts the field: what it should hold is carried to the new element.
+  const coloniaCarry = useRef<{ value: string; autofilled: boolean; userEdited: boolean } | null>(null)
   const lastZip = useRef<string | null>(null)
   const zipRef = useRef<HTMLDivElement>(null)
   const lookupRef = useRef(lookupPostalCode)
@@ -273,9 +276,20 @@ export function AddressFields(props: AddressFieldsProps) {
           setColonias(info.neighborhoods ?? [])
           const list = info.neighborhoods ?? []
           const nameEl = form?.elements.namedItem(n('neighborhood')) as HTMLInputElement | HTMLSelectElement | null
-          const typed = nameEl && !('length' in nameEl && !(nameEl instanceof HTMLSelectElement)) ? nameEl.value : ''
-          setColoniaSelect(props.neighborhoodList === 'select' && showNeighborhood !== false && list.length > 1 && (!typed || list.includes(typed)))
-          setFilled(a || b || c)
+          const el = nameEl && !('length' in nameEl && !(nameEl instanceof HTMLSelectElement)) ? nameEl : null
+          const typed = el ? el.value : ''
+          const wantSelect = props.neighborhoodList === 'select' && showNeighborhood !== false && list.length > 1 && (!typed || list.includes(typed))
+          let carried = false
+          if (showNeighborhood && wantSelect !== coloniaSelectRef.current) {
+            const userEdited = el?.dataset.sfUserEdited === '1'
+            // The single colonia of the new code wins over a previous autofill, never over what the buyer chose.
+            const value = only && !userEdited ? only : wantSelect ? (list.includes(typed) ? typed : '') : typed
+            coloniaCarry.current = { value, autofilled: !userEdited && (!!only || el?.dataset.sfAutofilled === '1'), userEdited }
+            carried = !!only && !userEdited
+          }
+          coloniaSelectRef.current = wantSelect
+          setColoniaSelect(wantSelect)
+          setFilled(a || b || c || carried)
         })
       },
       () => {
@@ -283,6 +297,24 @@ export function AddressFields(props: AddressFieldsProps) {
       },
     )
   }
+
+  // Applies the carried colonia to the field that replaced the old one (text <-> list), like any fill.
+  useEffect(() => {
+    const carry = coloniaCarry.current
+    coloniaCarry.current = null
+    if (!carry || !carry.value) return
+    const form = zipRef.current?.closest('form')
+    const el = form?.elements.namedItem(n('neighborhood')) as HTMLInputElement | HTMLSelectElement | null
+    if (!el || ('length' in el && !(el instanceof HTMLSelectElement))) return
+    if (el instanceof HTMLSelectElement && ![...el.options].some((o) => o.value === carry.value)) return
+    el.value = carry.value
+    if (carry.userEdited) el.dataset.sfUserEdited = '1'
+    else if (carry.autofilled) el.dataset.sfAutofilled = '1'
+    const event = new Event('input', { bubbles: true })
+    Object.defineProperty(event, ADDRESS_FILL_EVENT_FLAG, { value: true })
+    el.dispatchEvent(event)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coloniaSelect])
 
   useEffect(() => {
     const zip = defaults?.zip
