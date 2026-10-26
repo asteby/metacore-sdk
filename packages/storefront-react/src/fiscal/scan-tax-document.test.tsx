@@ -245,3 +245,16 @@ describe('<ScanTaxDocument />', () => {
     expect((await axe.run(container, AXE)).violations).toEqual([])
   })
 })
+
+// pdf.js, jsqr and the camera engine must not be in the bundle of a page that never opens the reader: the engine is
+// only imported with `import()` (on a chosen file, a photo or the camera), never statically.
+describe('import graph', () => {
+  it('no fiscal component imports the document engine statically', async () => {
+    const { readFileSync, readdirSync } = await import('node:fs')
+    const dir = `${process.cwd()}/src/fiscal`
+    const offenders = readdirSync(dir)
+      .filter((f) => /\.(tsx?|ts)$/.test(f) && !/\.test\./.test(f) && !/^server/.test(f)) // server entries run in Node and may import it
+      .filter((f) => /^\s*import\s+(?!type\b)[^;]*from\s+['"]@asteby\/storefront\/fiscal-document['"]/m.test(readFileSync(`${dir}/${f}`, 'utf8')))
+    expect(offenders).toEqual([])
+  })
+})
