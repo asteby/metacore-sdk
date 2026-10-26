@@ -501,15 +501,24 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
       setError(null)
       setOutcome(null)
       emit({ type: 'submit' })
+      // The form was taken down while it tokenised (critical error -> fallback, payment disabled, remount, page left):
+      // whatever it produced is never sent, and the status set by whoever removed it stays (no "ready" over a fallback).
+      // Nothing reached the server, so this is not an indeterminate outcome: no key, no charge.
+      const withdrawn = () => !alive.current || form.current !== m
+      const settle = () => {
+        if (alive.current) setStatus((s) => (s === 'processing' ? 'idle' : s))
+      }
       let data
       try {
         data = await m.collect()
       } catch {
+        if (withdrawn()) return settle()
         emit({ type: 'tokenize_error' })
         setError({ kind: 'generic', message: live.current.msgs['error.card_data'], retrySameAttempt: false, canRetry: true })
         setStatus('ready')
         return
       }
+      if (withdrawn()) return settle()
       const attempt = readAttempt()
       setAttemptId(attempt)
       await send(data, attempt, total)
