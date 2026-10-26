@@ -258,3 +258,53 @@
 [data-sf-order-line] + [data-sf-order-line] {
   border-top: 1px solid var(--sf-account-line, color-mix(in srgb, currentColor 14%, transparent));
 }
+
+/*
+ * Account settings (<SessionsList> and the other sections of the settings page). Optional and neutral.
+ * Variables: --sf-account-gap, --sf-account-muted, --sf-account-line, --sf-account-radius (same as the order screens).
+ */
+[data-sf-sessions] {
+  display: grid;
+  gap: var(--sf-account-gap, 1rem);
+}
+[data-sf-sessions-list] {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+[data-sf-session] {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--sf-account-line, color-mix(in srgb, currentColor 16%, transparent));
+  border-radius: var(--sf-account-radius, 0.75rem);
+}
+[data-sf-session-device],
+[data-sf-session-meta] {
+  margin: 0;
+}
+[data-sf-session-meta] {
+  color: var(--sf-account-muted, color-mix(in srgb, currentColor 72%, transparent));
+}
+[data-sf-session-current] {
+  font-weight: 600;
+}
+[data-sf-session-revoke],
+[data-sf-session-revoke-others] {
+  min-height: 44px;
+  justify-self: start;
+}
+[data-sf-sessions-error],
+[data-sf-sessions-degraded] {
+  margin: 0;
+}
+[data-sf-sessions-error] {
+  color: var(--sf-field-error, #b42318);
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-sf-session] {
+    transition: border-color 0.15s ease;
+  }
+}

@@ -30,3 +30,11 @@ export { voucherOf, barcodeValue, barcodeGeometry, code128Modules } from './vouc
 export type { BarcodeGeometry, VoucherView } from './voucher.js'
 export { paymentLabel } from './payment-method.js'
 export type { PaymentLabelOptions, PaymentMethodKey } from './payment-method.js'
+
+// Account settings (contract 1.9): headless, `data-sf-*` hooks, `classNames`, es/en texts. The action is in `./server`.
+export { SessionsList } from './sessions.js'
+export type { SessionsListClassNames, SessionsListProps } from './sessions.js'
+export { settingsMessages, settingsEnumText } from './settings-messages.js'
+export type { SettingsMessageKey, SettingsMessages } from './settings-messages.js'
+export type { SettingsTextProps } from './settings-ui.js'
+export type { AccountSettingsActionData, SettingsErrorCode, SettingsIntent } from './settings-types.js'
