@@ -30,6 +30,7 @@ export type DeliveryOptionsClassNames = Partial<
     | 'badge'
     | 'price'
     | 'free'
+    | 'freeBanner'
     | 'note'
     | 'partial'
     | 'skeleton'
@@ -63,6 +64,14 @@ export type DeliveryOptionsProps = {
   requoted?: boolean
   /** Rates are being quoted again: skeleton rows (no rates yet) or the current rows dimmed, `aria-busy`. */
   loading?: boolean
+  /**
+   * The order reaches the free-shipping minimum (`DeliveryOptions.free`, configured by the organization): no carrier
+   * selector, just "Free shipping" and the rate is submitted by itself so the buyer goes straight to payment.
+   * With pickup branches the plain rows stay (delivery or pickup is still a real choice).
+   */
+  free?: boolean
+  /** Rates just arrived by themselves (auto quote): a polite screen-reader status says how many. */
+  announceReady?: boolean
   /** Quote deadline note: `always` (default), only when it is `soon`, or `never`. */
   quoteNote?: 'always' | 'soon' | 'never'
   /** Time zone of the note. Default: the buyer's browser. */
@@ -150,6 +159,7 @@ export function DeliveryOptions(props: DeliveryOptionsProps) {
     layout = 'list',
     error,
     onRetry,
+    free = false,
   } = props
   const locale = useResolvedLocale(props.locale)
   const m = useMemo(() => deliveryMessages(locale, props.messages), [locale, props.messages])
@@ -255,6 +265,8 @@ export function DeliveryOptions(props: DeliveryOptionsProps) {
   }
 
   const errorText = error ? (typeof error === 'string' ? error : m.error) : null
+  // Free shipping: the only thing left to say. The cheapest non-pickup rate travels as a hidden value.
+  const freeRate = free && !loading && pickup.length === 0 ? (rates.find((r) => !r.pickup) ?? null) : null
 
   return (
     <div className={cx.root} data-sf-delivery data-layout={layout} aria-busy={loading || undefined}>
@@ -273,6 +285,11 @@ export function DeliveryOptions(props: DeliveryOptionsProps) {
           {m.loading}
         </span>
       ) : null}
+      {props.announceReady && !loading && rates.length > 0 ? (
+        <span style={SR_ONLY} role="status" data-sf-delivery-ready>
+          {freeRate ? m.freeShipping : m.ratesReady.replace('{n}', String(rates.length))}
+        </span>
+      ) : null}
       {errorText && rates.length === 0 && !loading ? (
         <div role="alert" className={cx.error} data-sf-delivery-error>
           <p>{errorText}</p>
@@ -283,11 +300,20 @@ export function DeliveryOptions(props: DeliveryOptionsProps) {
           ) : null}
         </div>
       ) : null}
+      {freeRate ? (
+        <div className={cx.freeBanner} role="status" data-sf-delivery-free-banner>
+          <input type="hidden" name={name} value={rateValue(freeRate)} {...(testId ? { 'data-testid': testId } : {})} />
+          <p className={cx.free} data-sf-delivery-free-title>
+            <strong>{m.freeShipping}</strong>
+          </p>
+          <p className={cx.note}>{m.freeShippingNote}</p>
+        </div>
+      ) : null}
       {children}
       {loading && rates.length === 0
         ? [0, 1, 2].map((i) => <div key={i} className={cx.skeleton} data-sf-delivery-skeleton aria-hidden="true" />)
         : null}
-      {flat
+      {freeRate ? null : flat
         ? flat.map(({ rate, tags }) => rateRow(rate, { tags: showBadges ? tags : [] }))
         : plan
         ? plan.recommended.map(({ rate, tags }) => rateRow(rate, { tags: showBadges ? tags : [] }))
