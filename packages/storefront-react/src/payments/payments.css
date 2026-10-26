@@ -89,16 +89,20 @@
 }
 
 /*
- * 3DS challenge (`<PaymentChallenge>`): a near full-screen modal. Colors are fixed on purpose: the bank page inside
+ * 3DS challenge (`<PaymentChallenge>`): a square-ish centered modal (36rem wide, max min(90dvh, 40rem) tall). Colors are fixed on purpose: the bank page inside
  * the iframe is always white, and the dialog often lives in a themed (dark) panel. Override with a more specific rule.
  */
 dialog[data-sf-challenge] {
   margin: auto;
   box-sizing: border-box;
-  width: min(60rem, calc(100% - 2rem));
+  inset: 0;
+  width: min(36rem, 100% - 2rem);
   max-width: none;
-  max-height: 94dvh;
-  overflow: auto;
+  max-height: min(90dvh, 40rem);
+  display: flex;
+  flex-direction: column;
+  /* Solo el cuerpo (el iframe) scrollea; el diálogo no. */
+  overflow: hidden;
   border: 1px solid #c9d2ee;
   border-radius: 0.75rem;
   background: #ffffff;
@@ -120,7 +124,10 @@ dialog[data-sf-challenge] h2:focus {
 }
 dialog[data-sf-challenge] [data-sf-challenge-frame] {
   display: block;
-  height: min(70dvh, 40rem);
+  flex: 1 1 auto;
+  min-height: 16rem;
+  width: 100%;
+  overflow: auto;
   background: #ffffff;
 }
 dialog[data-sf-challenge] [data-sf-challenge-escape] {
@@ -139,16 +146,10 @@ dialog[data-sf-challenge] [data-sf-challenge-escape] button {
   border-radius: 0.5rem;
   font-weight: 600;
 }
-@media (max-width: 40rem) {
+@media (max-width: 30rem) {
   dialog[data-sf-challenge] {
-    width: 100%;
-    height: 100dvh;
-    max-height: 100dvh;
-    border-radius: 0;
-    border: 0;
+    width: calc(100% - 2rem);
+    max-height: calc(100dvh - 2rem);
     padding: 1rem;
-  }
-  dialog[data-sf-challenge] [data-sf-challenge-frame] {
-    height: calc(100dvh - 8rem);
   }
 }
