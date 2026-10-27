@@ -54,6 +54,8 @@ import {
 import {
   isSecretCredential,
   missingRequired,
+  applicableFields,
+  visibleSections,
   parseSaveError,
   shapeMismatch,
   textOrFallback,
@@ -96,10 +98,16 @@ export interface ConnectorCredentialField {
   options?: { value: string; label: string }[]
   options_source?: string // dynamic_select: export the host runs to list options
   section?: string // binds to a form_layout section
+  /** Shown only while a sibling credential has this value (kernel Setting.visible_when). */
+  visible_when?: VisibleWhen
+  visibleWhen?: VisibleWhen
 }
 
 export interface ConnectorFormLayoutSection {
   key: string
+  /** Hides the whole section (and its fields) while false. */
+  visible_when?: VisibleWhen
+  visibleWhen?: VisibleWhen
   title?: string // i18n key
   description?: string // i18n key
   /** Setup blocks (webhook_url / instructions / action), host-filled. */
@@ -622,8 +630,6 @@ export function AddonConfigSurface({
   }, [open])
 
   const credFields = connector?.credentials ?? []
-  const requiredFields = credFields.filter((f) => f.required)
-  const advancedFields = credFields.filter((f) => !f.required)
   // A connector with a form_layout groups its credentials into titled sections
   // (a light wizard). Fall back to the required/advanced split when absent.
   const layoutSections = connector?.form_layout?.sections ?? []
@@ -660,6 +666,16 @@ export function AddonConfigSurface({
     (f) => f.type === 'select' && ['environment', 'mode', 'env'].includes(f.key),
   )
   const envValue = envField ? (credValues[envField.key] ?? '') : ''
+  // What the form SHOWS for the live values: a credential whose own visible_when
+  // (or whose section's) is false is not applicable — never required, never
+  // validated, never counted in a step's error, never sent (connector_email:
+  // choosing Resend must not demand the SendGrid key).
+  const credDefaults: Record<string, string> = {}
+  for (const f of credFields) if (f.default != null && f.default !== '') credDefaults[f.key] = String(f.default)
+  const activeSections = visibleSections(layoutSections, credValues, credDefaults)
+  const activeFields = applicableFields(credFields, layoutSections, credValues, credDefaults)
+  // Only what applies is sent: a hidden provider's field is left out.
+  const isSendable = (key: string) => !credFields.some((f) => f.key === key) || activeFields.some((f) => f.key === key)
   const stepHeadingRef = useRef<HTMLHeadingElement>(null)
   const stepMoved = useRef(false)
   const setCred = (key: string, val: string) => {
@@ -891,7 +907,7 @@ export function AddonConfigSurface({
         // secret leaves it untouched (server merges).
         const payload: Record<string, string> = {}
         for (const [k, v] of Object.entries(credValues)) {
-          if (v != null && v !== '') payload[k] = v
+          if (v != null && v !== '' && isSendable(k)) payload[k] = v
         }
         await api.post(`/integrations/${connector.provider}`, payload)
       }
@@ -973,7 +989,7 @@ export function AddonConfigSurface({
   const handleSave = () => {
     setFormError(null)
     if (connector && canManageIssuer) {
-      const miss = missingRequired(credFields, credValues, !!connector.connected)
+      const miss = missingRequired(activeFields, credValues, !!connector.connected)
       if (miss.length > 0) {
         const errs: Record<string, string> = {}
         for (const k of miss) {
@@ -999,7 +1015,7 @@ export function AddonConfigSurface({
   // screen requires persisting it first. Returns an error message, or null.
   const persistCredsIfDirty = async (): Promise<string | null> => {
     if (!credDirty || !connector || !canManageIssuer) return null
-    const miss = missingRequired(credFields, credValues, !!connector.connected)
+    const miss = missingRequired(activeFields, credValues, !!connector.connected)
     if (miss.length > 0) {
       const errs: Record<string, string> = {}
       for (const k of miss) errs[k] = st('installed_addons.field_required')
@@ -1010,7 +1026,7 @@ export function AddonConfigSurface({
     }
     const payload: Record<string, string> = {}
     for (const [k, v] of Object.entries(credValues)) {
-      if (v != null && v !== '') payload[k] = v
+      if (v != null && v !== '' && isSendable(k)) payload[k] = v
     }
     await api.post(`/integrations/${connector.provider}`, payload)
     setCredDirty(false)
@@ -1282,8 +1298,8 @@ export function AddonConfigSurface({
   // "Ajustes" step when the addon also ships settings.
   const wizardSteps = stepMode
     ? buildWizardSteps(
-        layoutSections,
-        credFields.map((f) => f.section),
+        activeSections,
+        activeFields.map((f) => f.section),
         hasSettings,
       )
     : []
@@ -1339,7 +1355,7 @@ export function AddonConfigSurface({
     return stepStatus({
       index: i,
       current: stepIdx,
-      fieldKeys: s.kind === 'creds' ? credFields.filter((f) => f.section === s.key).map((f) => f.key) : [],
+      fieldKeys: s.kind === 'creds' ? activeFields.filter((f) => f.section === s.key).map((f) => f.key) : [],
       fieldErrors,
       blockKeys: blocksFor(s.key, s.blocks).map((b) => b.key),
       results: blockResults,
@@ -1360,7 +1376,7 @@ export function AddonConfigSurface({
   // operator learns what is missing where it is, not at the end.
   const handleNext = () => {
     if (activeStep?.kind === 'creds' && connector && canManageIssuer) {
-      const stepFields = credFields.filter((f) => f.section === activeStep.key)
+      const stepFields = activeFields.filter((f) => f.section === activeStep.key)
       const miss = missingRequired(stepFields, credValues, !!connector.connected)
       if (miss.length > 0) {
         const errs: Record<string, string> = {}
@@ -1512,7 +1528,7 @@ export function AddonConfigSurface({
                 ) : (
                   <>
                     {renderBlocks(leadBlocks(blocksFor(activeStep?.key ?? '', activeStep?.blocks)))}
-                    {credFields.filter((f) => f.section === activeStep?.key).map(renderCred)}
+                    {activeFields.filter((f) => f.section === activeStep?.key).map(renderCred)}
                     {renderBlocks(trailBlocks(blocksFor(activeStep?.key ?? '', activeStep?.blocks)))}
                   </>
                 )}
@@ -1534,8 +1550,8 @@ export function AddonConfigSurface({
                     issuerAdminNote
                   ) : useLayout ? (
                     // form_layout: one titled group per section, in declared order.
-                    layoutSections.map((sec) => {
-                      const fields = credFields.filter((f) => f.section === sec.key)
+                    activeSections.map((sec) => {
+                      const fields = activeFields.filter((f) => f.section === sec.key)
                       if (fields.length === 0 && (sec.blocks?.length ?? 0) === 0) return null
                       return (
                         <div
@@ -1570,7 +1586,7 @@ export function AddonConfigSurface({
                     })
                   ) : (
                     <>
-                      {requiredFields.map((f) => (
+                      {activeFields.filter((f) => f.required).map((f) => (
                         <ConnectorCredentialFieldControl
                           key={f.key}
                           field={f}
@@ -1581,16 +1597,16 @@ export function AddonConfigSurface({
                           onChange={(val) => setCred(f.key, val)}
                         />
                       ))}
-                      {advancedFields.length > 0 && (
+                      {activeFields.some((f) => !f.required) && (
                         <details
                           className='rounded-md border border-border/60 px-3 py-2'
-                          open={advancedFields.some((f) => !!fieldErrors[f.key]) || undefined}
+                          open={activeFields.filter((f) => !f.required).some((f) => !!fieldErrors[f.key]) || undefined}
                         >
                           <summary className='flex min-h-11 cursor-pointer items-center text-sm font-medium text-muted-foreground select-none sm:min-h-8'>
                             {st('installed_addons.advanced')}
                           </summary>
                           <div className='flex flex-col gap-3 pt-3'>
-                            {advancedFields.map((f) => (
+                            {activeFields.filter((f) => !f.required).map((f) => (
                               <ConnectorCredentialFieldControl
                                 key={f.key}
                                 field={f}

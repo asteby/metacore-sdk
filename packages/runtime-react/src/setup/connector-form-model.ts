@@ -113,3 +113,72 @@ export function bundleSignature(labels: Record<string, unknown>): string {
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0
   return `${Object.keys(labels).length}:${(h >>> 0).toString(36)}`
 }
+
+// ─── Conditional fields (visible_when) ──────────────────────────────────────
+// Kernel contract (Setting.visible_when / FormSection.visible_when): a hidden
+// credential counts for required checks only while visible. A connector with
+// conditional providers (email: Resend / SendGrid / Mailgun, each with its own
+// key in its own section) must never demand the keys of the providers that were
+// not chosen. These pure helpers decide what is APPLICABLE for the live values.
+
+export interface VisibilityPredicate {
+  field?: string
+  equals?: unknown
+  in?: unknown[]
+  class?: string
+}
+
+interface ConditionalField {
+  key: string
+  section?: string
+  visible_when?: VisibilityPredicate
+  visibleWhen?: VisibilityPredicate
+}
+interface ConditionalSection {
+  key: string
+  visible_when?: VisibilityPredicate
+  visibleWhen?: VisibilityPredicate
+}
+
+/** Same semantics as `evaluateVisibleWhen` (no field / no comparison => visible). */
+export function predicateHolds(
+  cond: VisibilityPredicate | undefined,
+  values: Record<string, string>,
+  defaults: Record<string, string> = {},
+): boolean {
+  if (!cond || typeof cond.field !== 'string' || cond.field.trim() === '') return true
+  const key = cond.field.trim()
+  const raw = values[key]
+  const current = raw == null || raw === '' ? (defaults[key] ?? '') : String(raw)
+  if (Array.isArray(cond.in) && cond.in.length > 0) return cond.in.some((v) => String(v) === current)
+  if (cond.equals != null) return String(cond.equals) === current
+  return true
+}
+
+/** Sections the form shows for these values. */
+export function visibleSections<S extends ConditionalSection>(
+  sections: S[],
+  values: Record<string, string>,
+  defaults: Record<string, string> = {},
+): S[] {
+  return sections.filter((s) => predicateHolds(s.visible_when ?? s.visibleWhen, values, defaults))
+}
+
+/**
+ * Fields the form shows for these values: the field's own `visible_when` holds
+ * AND its section's does. Hidden fields are not validated, not counted in a
+ * step's error state and not sent.
+ */
+export function applicableFields<F extends ConditionalField>(
+  fields: F[],
+  sections: ConditionalSection[],
+  values: Record<string, string>,
+  defaults: Record<string, string> = {},
+): F[] {
+  const hidden = new Set(
+    sections.filter((s) => !predicateHolds(s.visible_when ?? s.visibleWhen, values, defaults)).map((s) => s.key),
+  )
+  return fields.filter(
+    (f) => predicateHolds(f.visible_when ?? f.visibleWhen, values, defaults) && !(f.section && hidden.has(f.section)),
+  )
+}
