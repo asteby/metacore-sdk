@@ -24,6 +24,8 @@ export type AddressFieldsMessages = Record<AddressFieldKey | ContactFieldKey, st
   lookupFilled: string
   /** Tooltip and note of a state the postal code defined (locked). */
   provinceLocked: string
+  /** Tooltip and note of a city/municipality the postal code defined (locked). */
+  cityLocked: string
   /** Discreet action that releases the locked state so the buyer can fix the postal code. */
   changePostalCode: string
   /** Visually hidden prefix of the one-line place summary (what a screen reader hears before "Miguel Hidalgo, Ciudad de México"). */
@@ -50,6 +52,7 @@ const ES: AddressFieldsMessages = {
   phoneHint: 'Solo para la paquetería, por si necesita contactarte.',
   lookupFilled: 'Completamos estado y ciudad con tu código postal.',
   provinceLocked: 'Definido por tu código postal',
+  cityLocked: 'Definido por tu código postal',
   changePostalCode: 'Cambiar código postal',
   resolvedPlace: 'Entrega en',
 }
@@ -74,6 +77,7 @@ const EN: AddressFieldsMessages = {
   phoneHint: 'Only for the carrier, in case they need to reach you.',
   lookupFilled: 'We filled in state and city from your postal code.',
   provinceLocked: 'Set by your postal code',
+  cityLocked: 'Set by your postal code',
   changePostalCode: 'Change postal code',
   resolvedPlace: 'Delivering to',
 }
@@ -181,6 +185,15 @@ export type AddressFieldsProps = Common & {
    */
   lockProvinceOnFill?: boolean
   /**
+   * Same as `lockProvinceOnFill` for the city/municipality: once the lookup fills it (never over what the buyer typed) the
+   * `<input>` is read-only (`readOnly` + `aria-readonly`, still submitted: never `disabled`), with the same note, tooltip
+   * (`cityLocked`) and `changePostalCode` action. Only when the lookup answered a city, and it is not ambiguous
+   * (`PostalCodeInfo.cities` with several): then the buyer chooses and the field stays editable. If the code resolves
+   * nothing or the lookup fails the field stays editable, so a purchase is never blocked. Editing the postal code
+   * re-resolves and refreshes the locked values. Default: follows `lockProvinceOnFill` (true); `false` keeps the filled city editable.
+   */
+  lockCityOnFill?: boolean
+  /**
    * When the postal-code lookup resolves BOTH state and city/municipality (and the catalog does not return several
    * municipalities), they are not shown as inputs: one read-only line under the postal code ("Miguel Hidalgo, Ciudad de
    * México" plus a discreet `changePostalCode` link) and the values travel in hidden fields with the usual names
@@ -257,7 +270,7 @@ const sameText = (a: string, b: string) => fold(a) === fold(b)
 const fold = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
 
 export function AddressFields(props: AddressFieldsProps) {
-  const { defaults, names = {}, errors = {}, countryCode, provinces, postalCode, lookupPostalCode, lockProvinceOnFill = true, hideResolvedFields = true, locale, messages, fieldMessages: fm, classNames: cx = {}, children } = props
+  const { defaults, names = {}, errors = {}, countryCode, provinces, postalCode, lookupPostalCode, lockProvinceOnFill = true, lockCityOnFill = lockProvinceOnFill, hideResolvedFields = true, locale, messages, fieldMessages: fm, classNames: cx = {}, children } = props
   const showNeighborhood = props.neighborhood ?? true
   const showReference = props.reference ?? true
   const m = addressFieldsMessages(locale, messages)
@@ -267,6 +280,7 @@ export function AddressFields(props: AddressFieldsProps) {
   const [colonias, setColonias] = useState<readonly string[]>([])
   const [filled, setFilled] = useState(false)
   const [provinceLocked, setProvinceLocked] = useState(false)
+  const [cityLocked, setCityLocked] = useState(false)
   const [coloniaSelect, setColoniaSelect] = useState(false)
   // State and city the postal code defined, shown as one line (not as inputs) while it holds.
   const [resolved, setResolved] = useState<{ province: string; provinceCode: string | null; city: string; place: string } | null>(null)
@@ -311,10 +325,9 @@ export function AddressFields(props: AddressFieldsProps) {
   const releaseLookup = () => {
     const form = zipRef.current?.closest('form')
     if (!form) return
-    const locked = form.querySelector<HTMLInputElement | HTMLSelectElement>('[data-sf-locked="1"]')
     const touched: Array<HTMLInputElement | HTMLSelectElement> = []
     if (resolvedRef.current) setDefaultsStale(true)
-    if (locked) {
+    for (const locked of form.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[data-sf-locked="1"]')) {
       unlockField(locked)
       touched.push(locked)
     }
@@ -334,6 +347,7 @@ export function AddressFields(props: AddressFieldsProps) {
     resolvedRef.current = false
     setResolved(null)
     setProvinceLocked(false)
+    setCityLocked(false)
     setFilled(false)
   }
 
@@ -373,7 +387,7 @@ export function AddressFields(props: AddressFieldsProps) {
         if (!info) return
         enqueue(() => {
           if (lastZip.current !== zip) return
-          const fill = (name: string, value: string | null | undefined, lock?: boolean) => {
+          const fill = (name: string, value: string | null | undefined, lock?: 'province' | 'city') => {
             const el = form?.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | null
             if (!el || !value || ('length' in el && !(el instanceof HTMLSelectElement))) return false
             // Already locked from a previous lookup: leave it (the buyer corrects the postal code instead).
@@ -391,8 +405,9 @@ export function AddressFields(props: AddressFieldsProps) {
             el.dispatchEvent(event)
             if (lock) {
               lockField(el)
-              el.title = m.provinceLocked
-              setProvinceLocked(true)
+              el.title = lock === 'city' ? m.cityLocked : m.provinceLocked
+              if (lock === 'city') setCityLocked(true)
+              else setProvinceLocked(true)
             }
             return true
           }
@@ -402,8 +417,8 @@ export function AddressFields(props: AddressFieldsProps) {
             setDefaultsStale(true)
             setResolved(resolution)
           }
-          const a = resolution ? false : fill(n('province'), info.province, lockProvinceOnFill)
-          const b = resolution ? false : fill(n('city'), info.city)
+          const a = resolution ? false : fill(n('province'), info.province, lockProvinceOnFill ? 'province' : undefined)
+          const b = resolution ? false : fill(n('city'), info.city, lockCityOnFill && (info.cities?.length ?? 0) <= 1 ? 'city' : undefined)
           // Colonia only when the code has exactly ONE: with several the buyer chooses (the list is offered, not applied).
           const only = info.neighborhoods?.length === 1 ? info.neighborhoods[0] : null
           const c = showNeighborhood ? fill(n('neighborhood'), only) : false
@@ -478,19 +493,21 @@ export function AddressFields(props: AddressFieldsProps) {
     zipEl?.focus()
     zipEl?.select()
   }
-  const provinceHint = provinceLocked ? (
-    <span data-sf-province-locked="" title={m.provinceLocked}>
+  const lockHint = (text: string) => (
+    <span data-sf-province-locked="" title={text}>
       <svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: 'inline-block', verticalAlign: '-1px', marginRight: 4 }}>
         <rect x="4" y="11" width="16" height="10" rx="2" />
         <path d="M8 11V7a4 4 0 0 1 8 0v4" />
       </svg>
-      {m.provinceLocked}
+      {text}
       {' · '}
       <button type="button" data-sf-change-zip="" onClick={changeZip} style={{ background: 'none', border: 0, padding: 0, font: 'inherit', color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}>
         {m.changePostalCode}
       </button>
     </span>
-  ) : undefined
+  )
+  const provinceHint = provinceLocked ? lockHint(m.provinceLocked) : undefined
+  const cityHint = cityLocked ? lockHint(m.cityLocked) : undefined
   const numericZip = postalCode?.inputMode === 'numeric'
   // A server error on state/city must be seen next to a field the buyer can fix: inputs come back (with what was resolved).
   const showResolved = !!resolved && !errors[n('province')] && !errors[n('city')]
@@ -566,7 +583,7 @@ export function AddressFields(props: AddressFieldsProps) {
       ) : (
         <CheckoutField {...common} name={n('province')} label={m.province} autoComplete="address-level1" defaultValue={startOf('province')} error={errors[n('province')] ?? null} classNames={field(cx, 'half')} hint={provinceHint} />
       )}
-      {showResolved ? null : <CheckoutField {...common} name={n('city')} label={m.city} autoComplete="address-level2" defaultValue={startOf('city')} error={errors[n('city')] ?? null} classNames={field(cx, 'half')} />}
+      {showResolved ? null : <CheckoutField {...common} name={n('city')} label={m.city} autoComplete="address-level2" defaultValue={startOf('city')} error={errors[n('city')] ?? null} classNames={field(cx, 'half')} hint={cityHint} />}
       {showNeighborhood && coloniaSelect ? (
         <CheckoutField
           {...common}

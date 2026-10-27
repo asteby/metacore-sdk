@@ -16,6 +16,8 @@ function Form({
   serverFields,
   provinces,
   lockProvinceOnFill,
+  lockCityOnFill,
+  locale,
   neighborhoodList,
   hideResolvedFields = false,
   defaults,
@@ -24,6 +26,8 @@ function Form({
   serverFields?: string[]
   provinces?: { name: string }[]
   lockProvinceOnFill?: boolean
+  lockCityOnFill?: boolean
+  locale?: string
   neighborhoodList?: 'datalist' | 'select'
   /** The legacy tests exercise the inputs; the new behavior is opted in by the tests of `hideResolvedFields`. */
   hideResolvedFields?: boolean
@@ -49,6 +53,8 @@ function Form({
           {...(lookup ? { lookupPostalCode: lookup } : {})}
           {...(provinces ? { provinces } : {})}
           {...(lockProvinceOnFill !== undefined ? { lockProvinceOnFill } : {})}
+          {...(lockCityOnFill !== undefined ? { lockCityOnFill } : {})}
+          {...(locale ? { locale } : {})}
           {...(neighborhoodList ? { neighborhoodList } : {})}
         />
       </fieldset>
@@ -277,6 +283,122 @@ describe('state locked by the postal code', () => {
     fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '44100' } })
     await waitFor(() => expect(container.querySelector('[data-sf-province-locked]')).not.toBeNull())
     expect((await axe.run(container, AXE)).violations).toEqual([])
+  })
+})
+
+describe('city locked by the postal code', () => {
+  const lookup = vi.fn(async (zip: string) => {
+    if (zip === '44100') return { province: 'Jalisco', city: 'Guadalajara', neighborhoods: ['Centro', 'Americana'] }
+    if (zip === '63000') return { province: 'Nayarit', city: 'Tepic', neighborhoods: [] }
+    return null
+  })
+  const zipOf = () => screen.getByLabelText('Código postal') as HTMLInputElement
+  const cityOf = () => screen.getByLabelText('Ciudad o municipio') as HTMLInputElement
+  const provinceOf = () => screen.getByLabelText('Estado') as HTMLInputElement
+
+  it('resolved: state and city are read-only (never disabled) with the same note, and colonia stays editable', async () => {
+    const { container } = render(<Form lookup={lookup} />)
+    fireEvent.input(zipOf(), { target: { value: '44100' } })
+    await waitFor(() => expect(cityOf().readOnly).toBe(true))
+    expect(provinceOf().readOnly).toBe(true)
+    expect(cityOf().value).toBe('Guadalajara')
+    expect(provinceOf().value).toBe('Jalisco')
+    expect(cityOf().disabled).toBe(false)
+    expect(cityOf().getAttribute('aria-readonly')).toBe('true')
+    expect(cityOf().title).toBe('Definido por tu código postal')
+    expect(cityOf().getAttribute('aria-describedby')).toContain('city-hint')
+    expect(container.querySelectorAll('[data-sf-province-locked]')).toHaveLength(2)
+    const colonia = screen.getByLabelText(/Colonia/) as HTMLInputElement
+    expect(colonia.readOnly).toBe(false)
+    expect(colonia.disabled).toBe(false)
+  })
+
+  it('the locked values travel in the submitted form data', async () => {
+    const { container } = render(<Form lookup={lookup} />)
+    fireEvent.input(zipOf(), { target: { value: '44100' } })
+    await waitFor(() => expect(cityOf().readOnly).toBe(true))
+    const data = new FormData(container.querySelector('form')!)
+    expect(data.get('city')).toBe('Guadalajara')
+    expect(data.get('province')).toBe('Jalisco')
+  })
+
+  it('not resolved (unknown code or no connection): city stays editable', async () => {
+    const failing = vi.fn(async () => {
+      throw new Error('offline')
+    })
+    render(<Form lookup={failing} />)
+    fireEvent.input(zipOf(), { target: { value: '99999' } })
+    await waitFor(() => expect(failing).toHaveBeenCalled())
+    expect(cityOf().readOnly).toBe(false)
+    fireEvent.input(cityOf(), { target: { value: 'Mérida' } })
+    expect(cityOf().value).toBe('Mérida')
+    cleanup()
+    render(<Form lookup={lookup} />)
+    fireEvent.input(zipOf(), { target: { value: '99999' } })
+    await waitFor(() => expect(lookup).toHaveBeenCalledWith('99999'))
+    expect(cityOf().readOnly).toBe(false)
+    expect(provinceOf().readOnly).toBe(false)
+  })
+
+  it('changing the postal code re-resolves: values refresh, and a code that resolves nothing frees the city', async () => {
+    render(<Form lookup={lookup} />)
+    fireEvent.input(zipOf(), { target: { value: '44100' } })
+    await waitFor(() => expect(cityOf().readOnly).toBe(true))
+    fireEvent.input(zipOf(), { target: { value: '6300' } })
+    expect(cityOf().readOnly).toBe(false)
+    expect(cityOf().value).toBe('')
+    fireEvent.input(zipOf(), { target: { value: '63000' } })
+    await waitFor(() => expect(cityOf().value).toBe('Tepic'))
+    expect(cityOf().readOnly).toBe(true)
+    expect(provinceOf().value).toBe('Nayarit')
+    fireEvent.input(zipOf(), { target: { value: '9999' } })
+    fireEvent.input(zipOf(), { target: { value: '99999' } })
+    await waitFor(() => expect(lookup).toHaveBeenCalledWith('99999'))
+    expect(cityOf().readOnly).toBe(false)
+    expect(cityOf().value).toBe('')
+  })
+
+  it('"Cambiar código postal" frees both fields', async () => {
+    const { container } = render(<Form lookup={lookup} />)
+    fireEvent.input(zipOf(), { target: { value: '44100' } })
+    await waitFor(() => expect(cityOf().readOnly).toBe(true))
+    fireEvent.click(container.querySelector('[data-sf-change-zip]')!)
+    expect(cityOf().readOnly).toBe(false)
+    expect(provinceOf().readOnly).toBe(false)
+    expect(document.activeElement).toBe(zipOf())
+  })
+
+  it('never locks a city the buyer typed, an ambiguous code, or when lockCityOnFill={false}', async () => {
+    render(<Form lookup={lookup} />)
+    fireEvent.input(cityOf(), { target: { value: 'Zapopan' } })
+    fireEvent.input(zipOf(), { target: { value: '44100' } })
+    await waitFor(() => expect(provinceOf().readOnly).toBe(true))
+    expect(cityOf().value).toBe('Zapopan')
+    expect(cityOf().readOnly).toBe(false)
+    cleanup()
+    const ambiguous = vi.fn(async () => ({ province: 'Jalisco', city: 'Guadalajara', cities: ['Guadalajara', 'Zapopan'], neighborhoods: [] }))
+    render(<Form lookup={ambiguous} />)
+    fireEvent.input(zipOf(), { target: { value: '44100' } })
+    await waitFor(() => expect(provinceOf().readOnly).toBe(true))
+    expect(cityOf().readOnly).toBe(false)
+    cleanup()
+    render(<Form lookup={lookup} lockCityOnFill={false} />)
+    fireEvent.input(zipOf(), { target: { value: '44100' } })
+    await waitFor(() => expect(provinceOf().readOnly).toBe(true))
+    expect(cityOf().value).toBe('Guadalajara')
+    expect(cityOf().readOnly).toBe(false)
+  })
+
+  it('English note and no axe violations while locked', async () => {
+    const { container } = render(<Form lookup={lookup} />)
+    fireEvent.input(zipOf(), { target: { value: '44100' } })
+    await waitFor(() => expect(cityOf().readOnly).toBe(true))
+    expect((await axe.run(container, AXE)).violations).toEqual([])
+    cleanup()
+    const en = render(<Form lookup={lookup} locale="en-US" />)
+    fireEvent.input(en.getByLabelText('Postal code'), { target: { value: '44100' } })
+    await waitFor(() => expect((en.getByLabelText('City') as HTMLInputElement).readOnly).toBe(true))
+    expect((en.getByLabelText('City') as HTMLInputElement).title).toBe('Set by your postal code')
   })
 })
 
