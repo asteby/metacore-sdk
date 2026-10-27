@@ -1,5 +1,16 @@
 # @asteby/storefront-react
 
+## 0.27.0
+
+### Minor Changes
+
+- 62941d5: `AddressFields`: `hideResolvedFields` (por omisión activa). Cuando la consulta por código postal resuelve estado Y ciudad o municipio, ya no se muestran como campos: una sola línea de texto de solo lectura bajo el código postal («Miguel Hidalgo, Ciudad de México», anunciada con `aria-live`, con el enlace discreto «Cambiar código postal») y los valores viajan en campos ocultos con los `name` de siempre (`province`, `province_code` cuando la lista `provinces` trae el código, `city`) para que el servidor siga validando la coherencia estado ↔ código postal. Si el código no resuelve, la consulta falla, el municipio es ambiguo (`PostalCodeInfo.cities` con varios), el estado no está en `provinces`, el comprador ya escribió otro valor o el servidor reporta error en estado/ciudad, los campos vuelven editables. Sin JavaScript el formulario sigue siendo el de campos normales. `useAutoQuote` cotiza con los campos ocultos igual que con los visibles (el cambio avisa con el evento de autollenado, `isAddressFillEvent`). `hideResolvedFields={false}` conserva el comportamiento anterior (campos llenos y estado bloqueado). Nuevo mensaje `resolvedPlace`.
+- 929604a: feat(account): la ficha de pago es POR MÉTODO y se descarga en PDF real. OXXO/efectivo: referencia + código de barras (Code 128 o Code 39, SVG sin dependencias) solo cuando el servidor manda `payment.barcode { format, value }` (una cadena suelta sigue siendo Code 128); sin `barcode` ya NO se inventan barras a partir de la referencia, se muestra solo la referencia. SPEI/transferencia: beneficiario, banco, CLABE y referencia (si la referencia es igual a la CLABE se imprime una sola vez) con instrucciones de transferencia; ningún texto de OXXO aparece fuera de una ficha OXXO. Las instrucciones salen de `payment.instructions_key` (o el método, o el tipo `payment.kind`: efectivo / transferencia / genérico) en es/en, con fallback genérico. Nuevos campos opcionales leídos de `payment`: `barcode {format,value}`, `beneficiary`, `bank`, `instructions_key`, `kind`.
+
+  PDF: `pendingVoucherResponse({ format: 'pdf' })` (y `pendingVoucherPdfResponse`) sirve `application/pdf` `ficha-de-pago.pdf`, `attachment`, `private, no-store`, solo para el dueño del pago (misma comprobación de siempre, 404 idéntico si no es suyo). El PDF 1.4 lo genera un escritor mínimo en TS (Helvetica/Courier estándar, A4 o carta, barras como rectángulos, cadenas escapadas en octal, máx. 256 KB), sin navegador ni dependencias, así que corre en Node/SSR y en el navegador. La ficha HTML imprimible trae «Descargar PDF» (enlace simple, funciona sin JS; `pdfHref`, por omisión `?formato=pdf`) e «Imprimir» (aparece con JS; sin JS hay una nota) y CSS `@media print`.
+
+  `PendingPaymentCard`: el botón de descarga ahora entrega el PDF; `voucherHref` recibe `{ download, format: 'html' | 'pdf' }` (una ruta de tienda que ignore `format` sigue sirviendo el HTML como antes). Nuevos exports: `code39Modules`, `barcodeModules`, tipos `BarcodeFormat` y `VoucherKind`; `VoucherView` suma `barcode_format`, `beneficiary`, `bank`, `kind`, `instructions_key`; `barcodeValue` ya no cae a la referencia. Presupuesto del bundle de pantallas de pedidos sube a 17 KB gzip (los generadores HTML/PDF siguen siendo chunks perezosos).
+
 ## 0.26.1
 
 ### Patch Changes
