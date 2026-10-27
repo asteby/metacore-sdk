@@ -18,7 +18,14 @@ export type Image = { url: string; alt: string | null; width?: number; height?: 
 
 export type SEO = { title: string | null; description: string | null }
 
-export type PageInfo = { has_next_page: boolean; end_cursor: string | null }
+export type PageInfo = {
+  has_next_page: boolean
+  end_cursor: string | null
+  /** Contract 1.19, account lists: there is a page before this one (use `before` with `start_cursor`). */
+  has_previous_page?: boolean
+  /** Contract 1.19, account lists: the cursor of the first node, for `before`. */
+  start_cursor?: string | null
+}
 
 export type Connection<T> = { nodes: T[]; page_info: PageInfo; total_count?: number }
 
@@ -1721,3 +1728,19 @@ export type IdentityRulesV1 = {
   qr_canonical?: string
   fields: IdentityFieldRule[]
 }
+
+// ---------------------------------------------------------------------------
+// Account lists (contract 1.19): orders, invoices, shipments, cursor-paged
+// ---------------------------------------------------------------------------
+
+/** The order a listed invoice or shipment belongs to. */
+export type OrderRef = { id: string; number: string; created_at: string }
+
+/** One order with its invoices and credit notes (the same `InvoiceDoc` as the order detail, nothing else). */
+export type InvoiceListNode = { order: OrderRef; invoices: InvoiceDoc[] }
+
+/** One delivered order with the service the buyer chose and its parcels (no tracking events, no map: those are in the detail). */
+export type ShipmentListNode = { order: OrderRef; stage: string; service: OrderShippingService | null; shipments: Shipment[] }
+
+export type InvoiceConnection = Connection<InvoiceListNode>
+export type ShipmentConnection = Connection<ShipmentListNode>

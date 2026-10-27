@@ -903,6 +903,8 @@ Componentes **headless** de `@asteby/storefront-react/account` (+ `account.css` 
 | Componente | Qué pinta | Hooks de estilo |
 |---|---|---|
 | `OrderList` / `OrderCard` | Lista con estados `loading` (esqueletos de alto fijo), `error` (reintento), vacío útil y `ready`; cada tarjeta: número, fecha, estado, mini-progreso, envío, total y UNA acción | `data-sf-order`, `data-sf-order-status` |
+| `Pager` | Anterior / Siguiente (o «Cargar más») de una lista paginada por cursor: enlaces reales a la misma página con otro cursor (`renderLink` para el router), «Mostrando 11–20 de 300» en región `aria-live`, `aria-busy` al navegar, error con reintento | `data-sf-pager`, `data-sf-pager-link`, `data-sf-pager-status` |
+| `ListFilters` / `useListFocus` | Filtros (estado, entrega, factura, fechas, número de pedido) como formulario GET con los valores en la URL; `useListFocus(key)` lleva el foco al inicio de la lista al cambiar de página | `data-sf-list-filters`, `data-sf-list-focus` |
 | `OrderStatusBadge` | Estado en palabras + tono (`done/current/problem/muted`) | `data-sf-tone` |
 | `OrderProgress` | Línea de tiempo pagado → preparación → enviado → en camino → entregado (variante recoger, incidencia escrita, `compact`) como `<ol>` con `aria-current="step"` | `data-sf-step`, `data-sf-step-state` |
 | `NextActionBar` | «Rastrear envío», «Descargar factura», «Pagar ahora»… `href` solo `https` (rastreo) o el que dé la tienda (`hrefFor`) | `data-sf-action` |

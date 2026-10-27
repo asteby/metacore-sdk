@@ -432,6 +432,24 @@ await sf.products.list({ tags_any: fitTagsAny(item.fit_key) })        // ?tags_a
 - `products.list({ tags_any })`: at most 5 tags of 120 characters, comma-separated on the wire (a tag with a comma is refused by the client); a hard filter, so facets count inside it.
 - Mock: `createMockStorefront({ subjectKinds: MOCK_SUBJECT_KINDS })` serves the kinds and the whole CRUD with the same rules (default: none, like a store that declares nothing).
 
+## Long histories: cursor-paged account lists (Storefront API 1.19)
+
+`customer.orders.list`, `customer.invoices.list` and `customer.shipments.list` page by **cursor** (a keyset on the
+order's date and id, stable while new orders arrive), `first` 1–50 (10 by default), `after` for older, `before` for
+newer. Orders also take `status`, `delivery_method`, `has_invoice`, `from`, `to` and `q` (an exact order number); a
+derived filter may answer a short page with `has_next_page: true` (keep following `end_cursor`). `total_count` is there
+when it is cheap. Invoices and shipments come as one node per order (`{ order, invoices }`, `{ order, stage, service,
+shipments }`): no lines, payments, events or map, and no per-order detail call.
+
+```ts
+import { listApiParams, nextPageQuery, readListQuery, listHref } from '@asteby/storefront'
+
+const query = readListQuery(new URL(request.url).searchParams) // ?despues=…&estado=…: validated, never throws
+const page = await me.customer.orders.list(listApiParams(query, 10))
+const next = nextPageQuery({ query, pageInfo: page.page_info, count: page.nodes.length, first: 10 })
+next && listHref('/cuenta/pedidos', next) // a real link: shareable, back/forward, no JavaScript
+```
+
 ## Buyer account: orders, shipments, invoices (Storefront API 1.8)
 
 `customer.order(id)` carries `progress` (unified timeline), `next_action`, `shipments[]` (events, carrier, `https`

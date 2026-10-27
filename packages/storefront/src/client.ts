@@ -3,15 +3,24 @@ import { StorefrontError, defaultCodeForStatus } from './errors.js'
 import { isValidPoint, type GeoPoint } from './geo.js'
 import { isTokenPublishable } from './money.js'
 import {
+  accountListQuery,
   appendParams,
   productListQuery,
   type ArticleListParams,
   type CollectionListParams,
+  type InvoiceListParams,
+  type OrderListParams,
   type PaginationParams,
+  type ShipmentListParams,
   type ProductListParams,
   type QueryParams,
 } from './query.js'
 import type {
+  InvoiceConnection,
+  InvoiceListNode,
+  OrderRef,
+  ShipmentConnection,
+  ShipmentListNode,
   Address,
   AddressInput,
   Article,
@@ -731,8 +740,54 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
        */
       deleteAccount: (input: AccountDeleteInput, options?: WriteOptions) =>
         write<void>('DELETE', '/storefront/customer', input, options),
-      orders: (params?: PaginationParams, options?: RequestOptions) =>
-        get<Connection<Order>>('/storefront/customer/orders', params as QueryParams, options),
+      /**
+       * The buyer's orders, newest first. Callable as before (`orders({ first })`) and, since contract 1.19, with
+       * `orders.list({ first, after, before, status, delivery_method, has_invoice, from, to, q })`: cursor paging
+       * (keyset, stable while new orders arrive), `page_info.start_cursor` / `has_previous_page` to go back, and
+       * `total_count` when it is cheap to know. An OPS older than 1.19 ignores the new parameters.
+       */
+      orders: Object.assign(
+        (params?: PaginationParams, options?: RequestOptions) => get<Connection<Order>>('/storefront/customer/orders', params as QueryParams, options),
+        {
+          list: (params?: OrderListParams, options?: RequestOptions) =>
+            get<Connection<Order>>('/storefront/customer/orders', accountListQuery(params), { ...options, cache: 'no-store' }),
+        },
+      ),
+      /**
+       * The buyer's invoices, one node per order that has them (`{ order, invoices }`), cursor-paged like `orders.list`.
+       * It replaces opening the detail of every order. An OPS older than 1.19 (no such route) is served from one page of
+       * orders and their details, so the account keeps working until the addon is updated.
+       */
+      invoices: {
+        list: async (params?: InvoiceListParams, options?: RequestOptions): Promise<InvoiceConnection> => {
+          const page = await getOrNull<InvoiceConnection>('/storefront/customer/invoices', accountListQuery(params), { ...options, cache: 'no-store' })
+          return page ?? legacyAccountList<InvoiceListNode>(client, params, options, (o) => (o.invoice ? !['not_requested', 'awaiting_payment', 'window_closed'].includes(o.invoice.stage ?? 'not_requested') : true), (o) => ((o.invoices ?? []).length ? { order: orderRef(o), invoices: o.invoices ?? [] } : null))
+        },
+      },
+      /**
+       * The buyer's shipments, one node per delivered order with its service and parcels (`{ order, stage, service,
+       * shipments }`), cursor-paged like `orders.list`, without tracking events or map (those come with `order(id)`).
+       * An OPS older than 1.19 is served from one page of orders and their details.
+       */
+      shipments: {
+        list: async (params?: ShipmentListParams, options?: RequestOptions): Promise<ShipmentConnection> => {
+          const page = await getOrNull<ShipmentConnection>('/storefront/customer/shipments', accountListQuery(params), { ...options, cache: 'no-store' })
+          return (
+            page ??
+            legacyAccountList<ShipmentListNode>(
+              client,
+              params,
+              options,
+              (o) => o.delivery_method !== 'pickup' && !['cancelled', 'refunded', 'pending_payment'].includes(o.status),
+              (o) => {
+                const service = o.shipping_service ?? null
+                const shipments = o.shipments ?? []
+                return service || shipments.length ? { order: orderRef(o), stage: o.progress?.stage ?? o.status, service, shipments } : null
+              },
+            )
+          )
+        },
+      },
       /** `null` when the order does not exist or belongs to someone else. */
       order: (id: string, options?: RequestOptions) =>
         getOrNull<Order>(`/storefront/customer/orders/${enc(id)}`, undefined, options),
@@ -836,6 +891,33 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
     },
   }
   return client
+}
+
+const orderRef = (o: Order): OrderRef => ({ id: o.id, number: o.number, created_at: o.created_at })
+
+/**
+ * The invoices / shipments lists on an OPS that has no such route (older than contract 1.19): ONE page of orders,
+ * the detail of those that can have the data, folded into the same nodes. A 401 still throws; an order that fails
+ * to open is skipped.
+ */
+async function legacyAccountList<N>(
+  client: ReturnType<typeof createStorefrontClient>,
+  params: (InvoiceListParams | ShipmentListParams) | undefined,
+  options: RequestOptions | undefined,
+  keep: (summary: Order) => boolean,
+  toNode: (detail: Order) => N | null,
+): Promise<Connection<N>> {
+  const page = await client.customer.orders.list({ ...(params?.first ? { first: params.first } : {}), ...(params?.after ? { after: params.after } : {}), ...(params?.from ? { from: params.from } : {}), ...(params?.to ? { to: params.to } : {}), ...(params?.q ? { q: params.q } : {}) }, options)
+  const details = await Promise.all(
+    page.nodes.filter(keep).map((o) =>
+      client.customer.order(o.id, options).catch((err: unknown) => {
+        if (err instanceof StorefrontError && err.status === 401) throw err
+        return null
+      }),
+    ),
+  )
+  const nodes = details.map((d) => (d ? toNode(d) : null)).filter((n): n is N => n !== null)
+  return { nodes, page_info: { has_next_page: page.page_info.has_next_page, end_cursor: page.page_info.end_cursor } }
 }
 
 export type StorefrontClient = ReturnType<typeof createStorefrontClient>

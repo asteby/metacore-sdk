@@ -220,3 +220,79 @@ export function buildPendingPayments(currency: string, nowMs: number): PendingPa
     },
   ]
 }
+
+/**
+ * `count` more orders of the demo buyer, to rehearse a long history (paging, filters, a B2B buyer with hundreds of
+ * orders): numbers `S0001`…, one an hour back from 2026-08-01, with a mix of states, delivery methods, parcels and invoices.
+ * Deterministic: the same count always gives the same orders.
+ */
+export function buildSyntheticOrders(count: number, currency: string): Seeded[] {
+  const out: Seeded[] = []
+  const base = Date.parse('2026-08-01T12:00:00.000Z')
+  for (let i = 1; i <= count; i++) {
+    const kind = i % 6
+    const status = kind === 0 ? 'cancelled' : kind === 1 ? 'pending_payment' : kind === 2 ? 'fulfilling' : kind === 3 ? 'shipped' : 'delivered'
+    const pickup = i % 5 === 0
+    const number = `S${String(i).padStart(4, '0')}`
+    const total = 10000 + ((i * 7919) % 90000)
+    const o: Seeded = {
+      id: `ord_syn_${i}`,
+      number,
+      status,
+      created_at: new Date(base - i * 3600_000).toISOString(),
+      total: money(total, currency),
+      customer_id: 'cus_1',
+      lines: [line(`Producto ${i}`, null, 1 + (i % 3), Math.round(total / (1 + (i % 3))), currency)],
+      delivery_method: pickup ? 'pickup' : 'shipping',
+      payment_status: status === 'pending_payment' ? 'pending' : status === 'cancelled' ? 'cancelled' : 'paid',
+      shipping_address: address,
+    }
+    if (!pickup && (status === 'shipped' || status === 'delivered')) {
+      o.shipments = [
+        {
+          id: `shp_syn_${i}`,
+          number: `ENV-S${i}`,
+          kind: 'outbound',
+          status: status === 'delivered' ? 'delivered' : 'in_transit',
+          environment: 'production',
+          test_mode: false,
+          carrier: i % 2 ? 'Estafeta' : 'DHL',
+          carrier_logo_key: i % 2 ? 'estafeta' : 'dhl',
+          service: 'Terrestre',
+          tracking_number: `SYN${String(i).padStart(8, '0')}`,
+          tracking_url: `https://rastreo.example.com/syn/${i}`,
+          shipped_at: new Date(base - i * 3600_000 + 7200_000).toISOString(),
+          delivered_at: status === 'delivered' ? new Date(base - i * 3600_000 + 86400_000).toISOString() : null,
+          promised_by: null,
+          label_url: null,
+          events: [],
+          map: null,
+        },
+      ]
+    } else if (!pickup && status === 'fulfilling') {
+      o.shipping_service = { title: 'Envío Estafeta', carrier: 'estafeta', carrier_logo_key: 'estafeta', eta_days_min: 1, eta_days_max: 3 }
+      o.shipments = []
+    }
+    if (status === 'delivered' && i % 3 === 1) {
+      o.invoices = [
+        {
+          id: `inv_syn_${i}`,
+          status: 'issued',
+          kind: 'invoice',
+          stage: 'issued',
+          action: 'download',
+          can_request: false,
+          folio: `SYN-${String(i).padStart(8, '0')}`,
+          series: 'A',
+          folio_number: String(2000 + i),
+          total: money(total, currency),
+          issued_at: new Date(base - i * 3600_000 + 3600_000).toISOString(),
+          test_mode: false,
+          environment: 'production',
+        },
+      ]
+    }
+    out.push(o)
+  }
+  return out
+}

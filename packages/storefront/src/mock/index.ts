@@ -49,7 +49,7 @@ import type {
 import { nextAction, orderProgress, orderShipments, shipmentsStatus, sortTrackingEvents, isTestShipment } from '../order-progress.js'
 import { isValidPoint, rankByDistance } from '../geo.js'
 import { resolveAvailability } from '../availability.js'
-import { buildAccountOrders, buildPendingPayments } from './account-seed.js'
+import { buildAccountOrders, buildPendingPayments, buildSyntheticOrders } from './account-seed.js'
 import { MOCK_REGION_MX, maskTaxId, validateInvoiceRequest } from './region.js'
 import { isMasked, PRIVATE_MASK, resolveSubject, type SubjectValues } from '../subjects.js'
 import {
@@ -93,6 +93,11 @@ export type MockStorefrontOptions = {
    * when `customer:write` is among them. Implies scope enforcement.
    */
   missingScopes?: string[]
+  /**
+   * How many MORE orders the demo buyer (`cus_1`) has, numbered `S0001`…, to rehearse a long history (paging, filters,
+   * a B2B buyer with hundreds of orders). Default 0.
+   */
+  syntheticOrders?: number
   /** Failed password logins per email before `429 rate_limited` (default 5; a success or a reset clears the count). */
   maxLoginAttempts?: number
   /** Discount codes → percentage off the subtotal (default `{ BIENVENIDA10: 10 }`). */
@@ -341,6 +346,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
           ],
         },
         ...buildAccountOrders(currency),
+        ...buildSyntheticOrders(options.syntheticOrders ?? 0, currency),
       ],
       pendingPayments: buildPendingPayments(currency, Date.now()),
       otps: new Map(),
@@ -1591,10 +1597,130 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     }
     return order
   }
-  route('GET', '/customer/orders', 'orders:read', ({ headers, search }) => {
+  /**
+   * The account lists (contract 1.19): keyset cursor on (created_at, id), newest first, `first` 1–50 (10 by default),
+   * `after` / `before`, filters. The cursor is opaque and stable while orders are added.
+   */
+  const accountPage = <S, N>(rows: { order: S; key: { t: string; id: string } }[], search: URLSearchParams, node: (o: S) => N | null, total: ((n: number) => number) | null) => {
+    const first = search.has('first') ? Number(search.get('first')) : 10
+    if (!Number.isInteger(first) || first < 1 || first > 50) throw new HttpError(400, 'validation', '`first` must be an integer between 1 and 50', 'first')
+    const after = search.get('after')
+    const before = search.get('before')
+    if (after && before) throw new HttpError(400, 'validation', 'use after or before, not both', 'before')
+    const parse = (raw: string, field: string) => {
+      let parts: string[] = []
+      try {
+        parts = atob(raw.replace(/-/g, '+').replace(/_/g, '/')).split('|')
+      } catch {
+        /* falls through */
+      }
+      if (parts.length !== 3 || parts[0] !== 'k1' || !parts[1] || !parts[2]) throw new HttpError(400, 'validation', `${field} is not a valid cursor`, field)
+      return { t: parts[1], id: parts[2] }
+    }
+    const enc = (k: { t: string; id: string }) => btoa(`k1|${k.t}|${k.id}`).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+    const newer = (a: { t: string; id: string }, b: { t: string; id: string }) => (a.t === b.t ? a.id > b.id : a.t > b.t)
+    const sorted = rows.slice().sort((a, b) => (newer(a.key, b.key) ? -1 : newer(b.key, a.key) ? 1 : 0))
+    const kept = sorted.map((r) => ({ r, n: node(r.order) })).filter((x) => x.n !== null)
+    let slice: typeof kept
+    let more: boolean
+    if (before) {
+      const c = parse(before, 'before')
+      const prior = kept.filter((x) => newer(x.r.key, c))
+      slice = prior.slice(Math.max(0, prior.length - first))
+      more = prior.length > first
+    } else {
+      const c = after ? parse(after, 'after') : null
+      const rest = c ? kept.filter((x) => newer(c, x.r.key)) : kept
+      slice = rest.slice(0, first)
+      more = rest.length > first
+    }
+    const nodes = slice.map((x) => x.n as N)
+    const startKey = slice[0]?.r.key
+    const endKey = slice[slice.length - 1]?.r.key
+    const page_info = before
+      ? { has_next_page: true, has_previous_page: more, start_cursor: startKey ? enc(startKey) : null, end_cursor: endKey ? enc(endKey) : null }
+      : { has_next_page: more, has_previous_page: !!after, start_cursor: startKey ? enc(startKey) : null, end_cursor: endKey ? enc(endKey) : null }
+    return { nodes, page_info, ...(total ? { total_count: total(kept.length) } : {}) }
+  }
+  const dayBounds = (search: URLSearchParams) => {
+    const bound = (k: string, end: boolean) => {
+      const v = search.get(k)
+      if (!v) return null
+      const day = /^\d{4}-\d{2}-\d{2}$/.test(v)
+      const t = Date.parse(day ? `${v}T00:00:00.000Z` : v)
+      if (Number.isNaN(t)) throw new HttpError(400, 'validation', `${k} must be a date (YYYY-MM-DD) or an RFC 3339 time`, k)
+      return day && end ? t + 86400_000 : t
+    }
+    return { from: bound('from', false), to: bound('to', true) }
+  }
+  type MockOrder = MockState['orders'][number]
+  const ownRows = (headers: Headers, search: URLSearchParams) => {
     const c = requireCustomer(headers)
-    const orders = state.orders.filter((o) => o.customer_id === c.id).sort((a, b) => b.created_at.localeCompare(a.created_at)).map((o) => orderView(o, false))
-    return { body: paginate(orders, search, 20), cache: 'private' }
+    const { from, to } = dayBounds(search)
+    const q = (search.get('q') ?? '').trim().replace(/^#/, '').toLowerCase()
+    return state.orders
+      .filter((o) => o.customer_id === c.id)
+      .filter((o) => (from === null || Date.parse(o.created_at) >= from) && (to === null || Date.parse(o.created_at) < to))
+      .filter((o) => !q || o.number.toLowerCase() === q)
+      .map((o) => ({ order: o as MockOrder, key: { t: o.created_at, id: o.id } }))
+  }
+  const hasInvoice = (o: MockOrder) => (o.invoices ?? []).length > 0 || ['issuing', 'queued', 'requested', 'issued', 'needs_data', 'needs_review'].includes(orderInvoice(o).stage ?? '')
+  route('GET', '/customer/orders', 'orders:read', ({ headers, search }) => {
+    const status = search.get('status')
+    const delivery = search.get('delivery_method')
+    const wantInvoice = search.get('has_invoice')
+    if (delivery && delivery !== 'shipping' && delivery !== 'pickup') throw new HttpError(400, 'validation', 'delivery_method must be pickup or shipping', 'delivery_method')
+    if (wantInvoice && wantInvoice !== 'true' && wantInvoice !== 'false') throw new HttpError(400, 'validation', 'has_invoice must be true or false', 'has_invoice')
+    const rows = ownRows(headers, search)
+    const filtered = !!(status || delivery || wantInvoice || search.get('q'))
+    const body = accountPage(
+      rows,
+      search,
+      (o) => {
+        const view = orderView(o, false)
+        if (status && view.status !== status && view.progress?.stage !== status) return null
+        if (delivery && o.delivery_method !== delivery) return null
+        if (wantInvoice && hasInvoice(o) !== (wantInvoice === 'true')) return null
+        return view
+      },
+      filtered ? null : (n) => n,
+    )
+    return { body, cache: 'private' }
+  })
+  route('GET', '/customer/invoices', 'orders:read', ({ headers, search }) => {
+    const status = search.get('status')
+    return {
+      body: accountPage(
+        ownRows(headers, search),
+        search,
+        (o) => {
+          const invoices = (o.invoices ?? []).filter((d) => !status || d.status === status)
+          return invoices.length ? { order: { id: o.id, number: o.number, created_at: o.created_at }, invoices } : null
+        },
+        null,
+      ),
+      cache: 'private',
+    }
+  })
+  route('GET', '/customer/shipments', 'orders:read', ({ headers, search }) => {
+    const status = search.get('status')
+    return {
+      body: accountPage(
+        ownRows(headers, search),
+        search,
+        (o) => {
+          if (o.delivery_method === 'pickup' || ['cancelled', 'refunded', 'pending_payment'].includes(o.status)) return null
+          const view = orderView(o, true)
+          const shipments = (view.shipments ?? []).map((s) => ({ ...s, events: [], map: null }))
+          const service = view.shipping_service ?? null
+          if (!service && shipments.length === 0) return null
+          if (status && !shipments.some((s) => s.status === status)) return null
+          return { order: { id: o.id, number: o.number, created_at: o.created_at }, stage: view.progress?.stage ?? o.status, service, shipments }
+        },
+        null,
+      ),
+      cache: 'private',
+    }
   })
   const findOrder = (headers: Headers, id: string) => {
     const c = requireCustomer(headers)

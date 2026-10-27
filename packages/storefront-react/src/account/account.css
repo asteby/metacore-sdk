@@ -409,3 +409,69 @@
 [data-sf-email-error] {
   color: var(--sf-field-error, #b42318);
 }
+
+/* Paged account lists: <Pager /> and <ListFilters /> (optional, neutral; a store restyles with `classNames`). */
+[data-sf-pager] {
+  display: grid;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+[data-sf-pager-status] {
+  margin: 0;
+  min-height: 1.5em; /* the line keeps its height while the text changes: nothing jumps */
+  color: var(--sf-account-muted, color-mix(in srgb, currentColor 72%, transparent));
+}
+[data-sf-pager-note],
+[data-sf-pager-error] {
+  margin: 0;
+}
+[data-sf-pager-error] {
+  color: var(--sf-field-error, #b42318);
+}
+[data-sf-pager-links] {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+[data-sf-pager-links] > a,
+[data-sf-pager-disabled] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding-inline: 1rem;
+  border: 1px solid currentColor;
+  border-radius: 0.5rem;
+  text-decoration: none;
+}
+[data-sf-pager-disabled] {
+  opacity: 0.45;
+}
+[data-sf-pager][aria-busy='true'] [data-sf-pager-links] {
+  opacity: 0.6;
+  pointer-events: none;
+}
+[data-sf-list-focus]:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+}
+[data-sf-list-filters] {
+  display: grid;
+  gap: 0.75rem;
+}
+[data-sf-list-filters] > div {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.75rem;
+}
+[data-sf-filter] {
+  display: grid;
+  gap: 0.25rem;
+}
+[data-sf-filter] input,
+[data-sf-filter] select {
+  min-height: 44px;
+  max-width: 100%;
+}
