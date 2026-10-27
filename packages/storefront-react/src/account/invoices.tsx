@@ -12,11 +12,12 @@
 import type { InvoiceDoc, InvoiceFileKind, InvoiceSummary } from '@asteby/storefront'
 import { groupInvoiceDocs, isTestInvoice } from '@asteby/storefront'
 import { useId, type ReactNode } from 'react'
+import { InvoiceFileLinks } from './invoice-files.js'
 import { enumText, fill } from './orders-messages.js'
 import { Hidden, Time, moneyText, str, useAccountText, type AccountTextProps } from './orders-ui.js'
 
 export type InvoiceListClassNames = Partial<
-  Record<'root' | 'title' | 'group' | 'doc' | 'status' | 'meta' | 'note' | 'actions' | 'download' | 'creditNotes' | 'test' | 'error' | 'retry' | 'empty', string>
+  Record<'root' | 'title' | 'group' | 'doc' | 'status' | 'meta' | 'note' | 'actions' | 'download' | 'detail' | 'creditNotes' | 'test' | 'error' | 'retry' | 'empty', string>
 >
 
 export type InvoiceListProps = AccountTextProps & {
@@ -27,6 +28,10 @@ export type InvoiceListProps = AccountTextProps & {
   renderSummary?: (summary: InvoiceSummary) => ReactNode
   /** Your authenticated download route for a file of a document, e.g. `/cuenta/pedidos/${order}/facturas/${doc.id}.${kind}`. */
   fileHref?: (doc: InvoiceDoc, kind: InvoiceFileKind) => string | null | undefined
+  /** Link to the page of ONE invoice (`<InvoiceDetail />`), e.g. `/cuenta/pedidos/${order}/factura`: adds a "View invoice" link to each issued, pending or cancelled document. */
+  detailHref?: (doc: InvoiceDoc) => string | null | undefined
+  /** Offer the downloads of a sandbox invoice too (it stays labelled "test, not valid"; its files carry the test mark). Default: no download for a test invoice. */
+  testDownloads?: boolean
   /** Alternative to `fileHref`: a handler (opens your own download flow). */
   onDownload?: (doc: InvoiceDoc, kind: InvoiceFileKind) => void
   /** The server could not read the invoices (`order.degraded` has `invoices`): shows a recoverable error. */
@@ -43,7 +48,7 @@ export type InvoiceListProps = AccountTextProps & {
 
 const known = (s: unknown): s is 'issued' | 'pending' | 'cancelled' | 'error' => s === 'issued' || s === 'pending' || s === 'cancelled' || s === 'error'
 
-export function InvoiceList({ invoices, summary, renderSummary, fileHref, onDownload, degraded, onRetry, testMode = 'mark', headingLevel = 3, children, classNames: cx = {}, ...text }: InvoiceListProps) {
+export function InvoiceList({ invoices, summary, renderSummary, fileHref, onDownload, detailHref, testDownloads = false, degraded, onRetry, testMode = 'mark', headingLevel = 3, children, classNames: cx = {}, ...text }: InvoiceListProps) {
   const { m, t, date, locale } = useAccountText(text)
   const Heading = `h${headingLevel}` as 'h3'
   const titleId = `sf-invoices-${useId().replace(/:/g, '')}`
@@ -58,31 +63,9 @@ export function InvoiceList({ invoices, summary, renderSummary, fileHref, onDown
     const docName = (d: InvoiceDoc) => [str(d.series), str(d.folio_number)].filter(Boolean).join('-')
     const name = docName(doc)
     const folio = str(doc.folio)
-    const canDownload = status === 'issued' && !test
+    const canDownload = status === 'issued' && (!test || testDownloads)
     const total = moneyText(doc.total, locale)
-    // The server says which files exist NOW (`available_files`); a kind it lacks is "in process", not a dead button.
-    const has = (kind: InvoiceFileKind) => doc.available_files == null || doc.available_files.includes(kind)
-    const link = (kind: InvoiceFileKind) => {
-      if (!has(kind)) return null
-      const label = kind === 'pdf' ? m['invoice.pdf'] : m['invoice.xml']
-      const aria = fill(m['invoice.downloadOf'], { action: label, kind: kindLabel.toLowerCase(), name: name || folio || '' }).replace(/\s+,/g, ',').replace(/,\s*$/, '').trim()
-      const href = fileHref?.(doc, kind)
-      if (href) {
-        return (
-          <a key={kind} href={href} download className={cx.download} aria-label={aria} data-sf-invoice-download={kind}>
-            {label}
-          </a>
-        )
-      }
-      if (onDownload) {
-        return (
-          <button key={kind} type="button" className={cx.download} aria-label={aria} onClick={() => onDownload(doc, kind)} data-sf-invoice-download={kind}>
-            {label}
-          </button>
-        )
-      }
-      return null
-    }
+    const detail = detailHref && status !== 'error' ? detailHref(doc) : null
     return (
       <li key={doc.id} className={cx.doc} data-sf-invoice-doc data-sf-invoice-kind={doc.kind === 'credit_note' ? 'credit_note' : 'invoice'} data-sf-invoice-status={status}>
         <p className={cx.status} data-sf-invoice-heading>
@@ -116,15 +99,12 @@ export function InvoiceList({ invoices, summary, renderSummary, fileHref, onDown
             {m[`invoice.statusNote.${status}`]}
           </p>
         ) : null}
-        {canDownload && (fileHref || onDownload) ? (
-          <p className={cx.actions} data-sf-invoice-actions>
-            {link('pdf')}
-            {link('xml')}
-          </p>
-        ) : null}
-        {canDownload && (fileHref || onDownload) && (!has('pdf') || !has('xml')) ? (
-          <p className={cx.note} data-sf-invoice-file-pending={has('pdf') ? 'xml' : 'pdf'}>
-            {has('pdf') ? m['invoice.xmlPending'] : m['invoice.pdfPending']}
+        {canDownload ? <InvoiceFileLinks doc={doc} m={m} name={name || folio || ''} fileHref={fileHref} onDownload={onDownload} classNames={{ actions: cx.actions, download: cx.download, note: cx.note }} /> : null}
+        {detail ? (
+          <p className={cx.actions} data-sf-invoice-detail-link>
+            <a href={detail} className={cx.detail} aria-label={fill(m['invoice.viewOf'], { kind: kindLabel.toLowerCase(), name: name || folio || '' }).replace(/\s+/g, ' ').trim()}>
+              {m['invoice.view']}
+            </a>
           </p>
         ) : null}
       </li>

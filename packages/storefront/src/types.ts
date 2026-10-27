@@ -702,6 +702,20 @@ export type ShipmentsSummary = {
   tracking_url?: string | null
 }
 
+/** Receiver of an issued invoice (contract 1.14): the fiscal data the buyer themselves gave. Never the issuer's. */
+export type InvoiceReceiver = {
+  /** Tax id of the receiver (MX: RFC). */
+  rfc?: string | null
+  /** Legal name. */
+  name?: string | null
+  /** Tax regime (MX: SAT code). */
+  tax_regime?: string | null
+  /** Use of the invoice (MX: UsoCFDI). */
+  cfdi_use?: string | null
+  /** Postal code of the fiscal address. */
+  postal_code?: string | null
+}
+
 /** An invoice or credit note of an order (extends `InvoiceSummary`). Links, when present, are short-lived and never the PAC's. */
 export type InvoiceDoc = InvoiceSummary & {
   id: string
@@ -716,6 +730,12 @@ export type InvoiceDoc = InvoiceSummary & {
   /** Id of the invoice a credit note corrects. */
   related_to?: string | null
   links_expire_at?: string | null
+  /** Contract 1.14, issued invoices: payment method (MX: `PUE` | `PPD`). Absent = the server does not say. */
+  payment_method?: string | null
+  /** Contract 1.14: payment form (MX: SAT code such as `04`). */
+  payment_form?: string | null
+  /** Contract 1.14: who the invoice was issued to. */
+  receiver?: InvoiceReceiver | null
   /** Invoice from a sandbox PAC: hide it or mark it "test, no fiscal validity". */
   test_mode?: boolean
   environment?: 'production' | 'sandbox' | (string & {})

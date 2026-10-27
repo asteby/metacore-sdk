@@ -62,6 +62,9 @@ export function buildAccountOrders(currency: string): Seeded[] {
     folio_number: '1042',
     total: money(129900, currency),
     issued_at: '2026-08-13T10:00:00.000Z',
+    payment_method: 'PUE',
+    payment_form: '04',
+    receiver: { rfc: 'XAXX010101000', name: 'Público en general', tax_regime: '616', cfdi_use: 'S01', postal_code: '76000' },
     test_mode: false,
     environment: 'production',
   }

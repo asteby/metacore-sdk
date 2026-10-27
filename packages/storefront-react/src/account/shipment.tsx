@@ -14,7 +14,7 @@ import { enumText } from './orders-messages.js'
 import { CopyButton, Hidden, Time, str, useAccountText, type AccountTextProps } from './orders-ui.js'
 
 export type ShipmentCardClassNames = Partial<
-  Record<'root' | 'header' | 'carrier' | 'status' | 'meta' | 'number' | 'actions' | 'link' | 'copy' | 'events' | 'event' | 'toggle' | 'empty' | 'test' | 'map', string>
+  Record<'root' | 'header' | 'carrier' | 'status' | 'meta' | 'number' | 'actions' | 'link' | 'copy' | 'events' | 'event' | 'toggle' | 'empty' | 'test' | 'map' | 'detail', string>
 >
 
 /** What `renderMap` receives. */
@@ -30,14 +30,22 @@ export type ShipmentCardProps = AccountTextProps & {
   renderCarrierMark?: (shipment: Shipment) => ReactNode
   /** Slot for the map (F7). Called only when the shipment has a `map`. */
   renderMap?: (props: ShipmentMapSlotProps) => ReactNode
+  /**
+   * Makes the card openable: the carrier, status, guide and dates stay visible and the map and the carrier's events
+   * (the detail) open with «Ver detalle del envío». Default off: everything shows, as before.
+   */
+  collapsible?: boolean
+  /** Start open when `collapsible` (default closed). */
+  defaultOpen?: boolean
   /** Heading level of the title (default 3). */
   headingLevel?: 2 | 3 | 4 | 5
   classNames?: ShipmentCardClassNames
 }
 
-export function ShipmentCard({ shipment, testMode = 'hide', eventsPreview = 3, renderCarrierMark, renderMap, headingLevel = 3, classNames: cx = {}, ...text }: ShipmentCardProps) {
+export function ShipmentCard({ shipment, testMode = 'hide', eventsPreview = 3, renderCarrierMark, renderMap, collapsible = false, defaultOpen = false, headingLevel = 3, classNames: cx = {}, ...text }: ShipmentCardProps) {
   const { m, t, date } = useAccountText(text)
   const [open, setOpen] = useState(false)
+  const [detailOpen, setDetailOpen] = useState(defaultOpen)
   const id = useId().replace(/:/g, '')
   if (!shipment || typeof shipment !== 'object') return null
   const test = isTestShipment(shipment)
@@ -59,6 +67,7 @@ export function ShipmentCard({ shipment, testMode = 'hide', eventsPreview = 3, r
   const shipped = !test && !delivered ? date(shipment.shipped_at) : null
   const titleId = `sf-shp-${id}`
   const eventsId = `sf-shp-ev-${id}`
+  const detailId = `sf-shp-detail-${id}`
 
   return (
     <article className={cx.root} aria-labelledby={titleId} data-sf-shipment data-sf-shipment-status={test ? 'test' : typeof shipment.status === 'string' ? shipment.status : 'unknown'} data-sf-shipment-kind={isReturn ? 'return' : 'outbound'} {...(test ? { 'data-sf-test': '' } : {})}>
@@ -127,43 +136,50 @@ export function ShipmentCard({ shipment, testMode = 'hide', eventsPreview = 3, r
           ) : null}
         </p>
       ) : null}
+      {collapsible && !test && (shipment.map || events.length > 0) ? (
+        <button type="button" className={cx.toggle} aria-expanded={detailOpen} aria-controls={detailId} onClick={() => setDetailOpen((v) => !v)} data-sf-shipment-detail-toggle>
+          {detailOpen ? m['shippingService.hide'] : m['shippingService.view']}
+        </button>
+      ) : null}
+      <div id={detailId} className={cx.detail} {...(collapsible && !test && !detailOpen ? { hidden: true } : {})} data-sf-shipment-detail>
       {renderMap && !test && shipment.map ? (
-        <div className={cx.map} data-sf-shipment-map-slot>
-          {renderMap({ shipment, map: shipment.map })}
-        </div>
-      ) : null}
-      {!test ? (
-        events.length === 0 ? (
-          <p className={cx.empty} data-sf-shipment-empty>
-            {m['shipment.noEvents']}
-          </p>
-        ) : (
-          <div data-sf-shipment-events-wrap>
-            <SubHeading className={cx.meta} data-sf-shipment-events-title>
-              {m['shipment.events']}
-            </SubHeading>
-            <ol className={cx.events} id={eventsId} data-sf-shipment-events>
-              {shown.map((e, i) => {
-                const description = str(e.description)
-                const location = str(e.location)
-                return (
-                <li key={`${str(e.id) ?? ''}-${i}`} className={cx.event} data-sf-event-status={typeof e.status === 'string' ? e.status : 'unknown'}>
-                  <span data-sf-event-state>{enumText(m, 'shipment.status', e.status)}</span>
-                  {description ? <span data-sf-event-description> · {description}</span> : null}
-                  {location ? <span data-sf-event-location> · {location}</span> : null}{' '}
-                  <Time value={e.occurred_at} text={date(e.occurred_at, 'datetime')} />
-                </li>
-                )
-              })}
-            </ol>
-            {events.length > Math.max(1, eventsPreview) ? (
-              <button type="button" className={cx.toggle} aria-expanded={open} aria-controls={eventsId} onClick={() => setOpen((v) => !v)} data-sf-shipment-toggle>
-                {open ? m['shipment.showLess'] : t('shipment.showAll', { count: events.length })}
-              </button>
-            ) : null}
+          <div className={cx.map} data-sf-shipment-map-slot>
+            {renderMap({ shipment, map: shipment.map })}
           </div>
-        )
-      ) : null}
+        ) : null}
+        {!test ? (
+          events.length === 0 ? (
+            <p className={cx.empty} data-sf-shipment-empty>
+              {m['shipment.noEvents']}
+            </p>
+          ) : (
+            <div data-sf-shipment-events-wrap>
+              <SubHeading className={cx.meta} data-sf-shipment-events-title>
+                {m['shipment.events']}
+              </SubHeading>
+              <ol className={cx.events} id={eventsId} data-sf-shipment-events>
+                {shown.map((e, i) => {
+                  const description = str(e.description)
+                  const location = str(e.location)
+                  return (
+                  <li key={`${str(e.id) ?? ''}-${i}`} className={cx.event} data-sf-event-status={typeof e.status === 'string' ? e.status : 'unknown'}>
+                    <span data-sf-event-state>{enumText(m, 'shipment.status', e.status)}</span>
+                    {description ? <span data-sf-event-description> · {description}</span> : null}
+                    {location ? <span data-sf-event-location> · {location}</span> : null}{' '}
+                    <Time value={e.occurred_at} text={date(e.occurred_at, 'datetime')} />
+                  </li>
+                  )
+                })}
+              </ol>
+              {events.length > Math.max(1, eventsPreview) ? (
+                <button type="button" className={cx.toggle} aria-expanded={open} aria-controls={eventsId} onClick={() => setOpen((v) => !v)} data-sf-shipment-toggle>
+                  {open ? m['shipment.showLess'] : t('shipment.showAll', { count: events.length })}
+                </button>
+              ) : null}
+            </div>
+          )
+        ) : null}
+      </div>
     </article>
   )
 }

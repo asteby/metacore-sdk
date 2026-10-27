@@ -129,3 +129,23 @@ export function CopyButton({ value, label, copiedLabel, failedLabel, className, 
     </>
   )
 }
+
+/**
+ * The buyer's own delivery address (`order.shipping_address`, as the checkout captured it) as printable lines, or `[]`
+ * when there is none. Reads the cart `Address` keys; anything that is not text is ignored, so a malformed object never
+ * reaches React as a child. Never includes the phone: the page needs where it goes, not how to reach the buyer.
+ */
+export function addressLines(address: unknown): string[] {
+  if (!address || typeof address !== 'object' || Array.isArray(address)) return []
+  const a = address as Record<string, unknown>
+  const pick = (...keys: string[]) => {
+    for (const k of keys) {
+      const v = str(a[k])
+      if (v) return v
+    }
+    return null
+  }
+  const who = [pick('first_name'), pick('last_name')].filter(Boolean).join(' ') || pick('name', 'recipient')
+  const place = [[pick('zip', 'postal_code'), pick('city')].filter(Boolean).join(' '), pick('province', 'state')].filter(Boolean).join(', ')
+  return [who, pick('company'), pick('address1', 'address'), pick('address2'), pick('neighborhood'), place, pick('country_code', 'country'), pick('reference')].filter((v): v is string => !!v)
+}
