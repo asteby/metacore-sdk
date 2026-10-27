@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createStorefrontClient, type StorefrontClient } from '@asteby/storefront'
 import { MOCK_CUSTOMER_EMAIL, MOCK_REGION_MX, createMockStorefront, type MockStorefrontOptions } from '@asteby/storefront/mock'
-import { NO_FISCAL_CONTEXT, createInvoiceAction, extractUploadedDocument, invoiceFromForm, loadFiscalContext, parseEvidence, type FiscalActionData } from './server.js'
+import { NO_FISCAL_CONTEXT, createInvoiceAction, formField, orderInvoiceBody, extractUploadedDocument, invoiceFromForm, loadFiscalContext, parseEvidence, type FiscalActionData } from './server.js'
 import { CSF_FISICA_LINES, CSF_MORAL_LINES, CURP_FISICA, LOCKED_PDF_BASE64, RFC_FISICA, RFC_MORAL } from './__fixtures__/csf.js'
 import { makeTextPdf } from './__fixtures__/pdf.js'
 
@@ -179,6 +179,19 @@ describe('createInvoiceAction request-invoice', () => {
     const { Cookie } = await signIn()
     expect((await post({ intent: 'request-invoice', order_id: 'ord_nope', ...MORAL }, { Cookie })).error?.code).toBe('not_found')
     expect((await post({ intent: 'request-invoice', ...MORAL }, { Cookie })).error?.code).toBe('validation')
+  })
+})
+
+describe('request-invoice body and field marking', () => {
+  it('sends no `requested` flag and names the use `invoice_use`', () => {
+    const body = orderInvoiceBody({ requested: true, tax_id: 'URE180429TM6', legal_name: 'X', tax_regime: '601', use: 'G03', postal_code: '86991', document: { kind: 'k', source: 'manual' } as never, save: true })
+    expect(body).toEqual({ tax_id: 'URE180429TM6', legal_name: 'X', tax_regime: '601', postal_code: '86991', invoice_use: 'G03', save: true })
+  })
+  it('marks a control only when the server field maps to one', () => {
+    expect(formField('fiscal.invoice_use', 'invoice')).toBe('invoice.use')
+    expect(formField('invoice.razon_social', 'invoice')).toBe('invoice.legal_name')
+    expect(formField('fiscal.requested', 'invoice')).toBeUndefined()
+    expect(formField(undefined, 'invoice')).toBeUndefined()
   })
 })
 

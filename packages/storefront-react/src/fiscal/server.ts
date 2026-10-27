@@ -172,8 +172,45 @@ function logMisconfigured(scopes: readonly string[]): void {
   )
 }
 
+/**
+ * The form control a server field belongs to. The server names a field by what it validated (`fiscal.invoice_use`,
+ * `invoice.requested`, an alias like `razon_social`), the form names the control (`invoice.use`): a field that maps to no
+ * control returns `undefined` so it is NOT reported as a marked field (the buyer would see "check the marked fields" with
+ * nothing marked).
+ */
+const CONTROL_OF: Record<string, string> = {
+  tax_id: 'tax_id',
+  rfc: 'tax_id',
+  legal_name: 'legal_name',
+  razon_social: 'legal_name',
+  postal_code: 'postal_code',
+  zip: 'postal_code',
+  cp: 'postal_code',
+  tax_regime: 'tax_regime',
+  regimen: 'tax_regime',
+  use: 'use',
+  invoice_use: 'use',
+  cfdi_use: 'use',
+  uso_cfdi: 'use',
+}
+
 /** `fiscal.tax_regime` (profile) and `invoice.tax_regime` (cart, order) both name the same form control. */
-const formField = (field: string | undefined, prefix: string) => (field ? field.replace(/^(fiscal|invoice)\./, `${prefix}.`) : undefined)
+export const formField = (field: string | undefined, prefix: string) => {
+  if (!field) return undefined
+  const control = CONTROL_OF[field.replace(/^(fiscal|invoice)\./, '')]
+  return control ? `${prefix}.${control}` : undefined
+}
+
+/**
+ * The body of `request-invoice`: only the fiscal values, with the names every server version accepts (`invoice_use`, not
+ * `use`; no `requested` flag, an order that is being invoiced is requested by definition; no evidence object, the order
+ * keeps the data it was validated with). An OPS that predates contract 1.9 answered 400 `requested: unknown field` to the
+ * full `InvoiceRequest` the checkout sends.
+ */
+export function orderInvoiceBody(invoice: InvoiceRequest): InvoiceRequest {
+  const { requested: _requested, document: _document, use, ...rest } = invoice
+  return { ...rest, ...(use ? { invoice_use: use } : {}) }
+}
 
 function toFailure(err: unknown, intent: FiscalIntent, prefix: string, values?: Partial<FiscalActionData['values']>): FiscalActionData {
   const carry: Partial<FiscalActionData> = values ? { values } : {}
@@ -302,7 +339,7 @@ export function createInvoiceAction(options: CreateInvoiceActionOptions) {
           if (!token) return fail(intent, 'unauthorized', { values: echo })
           const orderId = text('order_id')
           if (!orderId) return fail(intent, 'validation')
-          const result = await sf.customer.requestInvoice(orderId, invoice, w)
+          const result = await sf.customer.requestInvoice(orderId, orderInvoiceBody(invoice), w)
           return { ok: true, intent, step: result.status === 'issued' ? 'issued' : 'pending', result, ...(result.invoice ? { invoice: result.invoice } : {}) }
         }
         case 'extract-document': {
