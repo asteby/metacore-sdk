@@ -49,8 +49,8 @@ const HIDDEN = { position: 'absolute', width: 1, height: 1, margin: -1, padding:
  * A button (or a link, with `href`) for work that costs: pay, download, process, send. Headless: no colors, no brand,
  * you dress it with `className` / `classNames` or the `data-sf-pending` attribute.
  *
- * While `pending`: `disabled` + `aria-disabled` + `aria-busy`, a `Spinner`, the working text, the SAME width it had (so
- * the layout does not jump), a polite `role="status"` announcement, and a click is ignored. When it ends it announces
+ * While `pending`: `disabled` + `aria-disabled` + `aria-busy`, a `Spinner`, the working text, the EXACT width it had (fixed
+ * while it works, the text is cut with an ellipsis if it does not fit, so the layout never jumps), a polite `role="status"` announcement, and a click is ignored. When it ends it announces
  * the result, hands the focus back, and keeps ignoring clicks for `cooldownMs` (600 ms) against a double click. It never
  * sets `disabled` inside the click itself (that would cancel the submit of a form); the lock follows `pending`.
  * It renders a normal `<button type="submit">` (or `<a href>`), so a form still works without JavaScript.
@@ -135,13 +135,13 @@ export const PendingButton = forwardRef<HTMLElement, PendingButtonProps | Pendin
     }
   }
 
-  const style = { ...((rest as { style?: object }).style ?? {}), ...(width && locked ? { minWidth: width } : {}) }
+  const style = { ...((rest as { style?: object }).style ?? {}), ...(width && locked ? { width, boxSizing: 'border-box' as const } : {}) }
   const inner = (
     <>
       {busy ? (
-        <span data-sf-pending-content="" className={cx.label} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.5em' }}>
+        <span data-sf-pending-content="" className={cx.label} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '0.4em', maxWidth: '100%', minWidth: 0 }}>
           <Spinner className={cx.spinner ?? ''} />
-          <span>{label}</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>{label}</span>
         </span>
       ) : (
         children
