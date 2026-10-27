@@ -8,6 +8,7 @@
  */
 import { isStorefrontError, type Customer, type CustomerCapabilities, type CustomerSessionInfo, type StorefrontClient, type StorefrontError } from '@asteby/storefront'
 import type { AuthCookie } from './server.js'
+import { EMAIL_INTENTS, handleEmailIntent } from './settings-email-server.js'
 import type { AccountSettingsActionData, SettingsErrorCode, SettingsIntent } from './settings-types.js'
 
 export type { AccountSettingsActionData, SettingsErrorCode, SettingsIntent } from './settings-types.js'
@@ -103,6 +104,7 @@ export function toSettingsFailure(err: unknown, intent: SettingsIntent | undefin
  * | `session-revoke-others` | -            | closes every session but this one        |
  * | `locale`                | locale       | saves the language (`''` = the store's)   |
  * | `notifications`         | pref, pref_shown | saves the checked / unchecked boxes   |
+ * | `email-*`               | email, code, password, otp_code | verify / change the e-mail (see `EmailSettings`) |
  *
  * It answers `AccountSettingsActionData` to render with the section that sent it. A buyer without a session is
  * `session_expired` (the store redirects to sign-in).
@@ -163,6 +165,7 @@ export function createAccountSettingsAction(options: CreateAccountSettingsAction
           return { ok: true, intent, saved: true }
         }
         default:
+          if (EMAIL_INTENTS.has(intent)) return handleEmailIntent({ intent, text, customer, write: w, fail, toFailure: toSettingsFailure })
           return fail(undefined, 'validation')
       }
     } catch (err) {

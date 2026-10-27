@@ -9,12 +9,19 @@ export type SettingsIntent =
   | 'reauth-code-request'
   | 'export'
   | 'delete'
+  | 'email-verify-request'
+  | 'email-verify-confirm'
+  | 'email-reauth-code'
+  | 'email-change-request'
+  | 'email-change-confirm'
 
 export type SettingsErrorCode =
   /** The buyer's session is gone (expired or closed elsewhere): ask them to sign in again. */
   | 'session_expired'
   /** The password or the code given to confirm identity is wrong. The same answer for any reason. */
   | 'invalid_credential'
+  /** The e-mail code is wrong or expired. The same answer for any reason. */
+  | 'invalid_code'
   /** The action needs the buyer to confirm their password or a code first. */
   | 'reauth_required'
   /** Too many tries: wait (`retryAfter` seconds) and try again. */
@@ -39,5 +46,7 @@ export type AccountSettingsActionData = {
   saved?: boolean
   /** A sign-in code was sent to confirm identity (`reauth-code-request`). */
   codeSent?: boolean
+  /** The e-mail the buyer typed to change to (`email-change-request`, and a failed `email-change-confirm`), so the code step can be drawn. Never a credential. */
+  email?: string
   error?: { code: SettingsErrorCode; field?: string; retryAfter?: number }
 }

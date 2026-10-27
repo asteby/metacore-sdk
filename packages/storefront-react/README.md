@@ -975,3 +975,12 @@ export default function Checkout() {
 ```
 
 CSP: el lector necesita `worker-src 'self'` (o el origen que sirva el worker). Sin `workerSrc` el navegador no puede leer el PDF y el comprador pasa a captura manual.
+
+## Correo de la cuenta (`<EmailSettings>`, contrato 1.15)
+
+```tsx
+const { customer, capabilities } = await loadAccountSettings(sf.withCustomerToken(token))
+<EmailSettings customer={customer} capabilities={capabilities} data={actionData} pending={busy} form={Form} />
+```
+
+Muestra el correo con su estado (`Customer.email_verified`), un botón para pedir un código si no está verificado y, si `capabilities.email_change`, «Cambiar mi correo»: correo nuevo + contraseña (o un código de acceso enviado al correo actual con `email-reauth-code`) y después el código que llega al correo nuevo. La acción `createAccountSettingsAction` ya atiende los intents `email-*`. Sin la capacidad (OPS anterior a 1.15 o sin conector de correo) solo muestra el correo. Los textos no afirman que el correo se envió: la respuesta es la misma tenga o no cuenta la dirección nueva.

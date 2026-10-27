@@ -40,6 +40,10 @@ import type {
   CustomerSession,
   CustomerSessionInput,
   CustomerSetPasswordInput,
+  CustomerEmailChangeConfirmInput,
+  CustomerEmailChangeInput,
+  CustomerEmailChangeRequested,
+  CustomerEmailCodeInput,
   CustomerVerifyRegistrationInput,
   DeliveryInput,
   DeliveryOptions,
@@ -644,6 +648,34 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
        */
       reauth: (input: ReauthInput, options?: WriteOptions) =>
         write<ReauthResult>('POST', '/storefront/customer/reauth', input, options),
+      /**
+       * The buyer's e-mail from their account (contract 1.15, `capabilities().email_change`). All four calls need the
+       * buyer's session; a wrong or expired code is always the same `400` on `code`, too many tries is `429`.
+       */
+      email: {
+        /**
+         * Mails a code to the account's CURRENT e-mail so it can be verified. `422` when it is already verified, the
+         * account has no e-mail or the store cannot send mail; `429` while a code was just sent.
+         */
+        requestVerification: (options?: WriteOptions) => write<void>('POST', '/storefront/customer/email/verification', undefined, options),
+        /** Verifies the current e-mail with the code; answers the buyer with `email_verified: true`. */
+        confirmVerification: (input: CustomerEmailCodeInput, options?: WriteOptions) =>
+          write<Customer>('POST', '/storefront/customer/email/verification/confirm', input, options),
+        /**
+         * Asks to change the e-mail. Needs a recent `reauth` (`403 reauth_required`, see `isReauthRequired`). A code is
+         * sent to the NEW address and nothing changes until `confirmChange`. The answer is the same whether or not the
+         * new address already has an account (then nothing is sent and the code can never work): word your screen as
+         * «if the address can be used, we sent a code». `400` on `email` for an invalid or unchanged address.
+         */
+        requestChange: (input: CustomerEmailChangeInput, options?: WriteOptions) =>
+          write<CustomerEmailChangeRequested>('POST', '/storefront/customer/email/change', input, options),
+        /**
+         * Confirms the change with the code that arrived at the new address. The other sessions of the account are
+         * closed (the one making the call stays) and the answer is the buyer with the new, verified e-mail.
+         */
+        confirmChange: (input: CustomerEmailChangeConfirmInput, options?: WriteOptions) =>
+          write<Customer>('POST', '/storefront/customer/email/change/confirm', input, options),
+      },
       /**
        * The buyer's data as a JSON file (contract 1.9, `capabilities().data_export`). Needs a recent `reauth`. It is
        * built on request and is neither stored nor emailed: call it from YOUR server, stream the bytes

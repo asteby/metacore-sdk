@@ -286,6 +286,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     notifications: { channels: ['email'] },
     data_export: true,
     account_delete: true,
+    email_change: true,
     ...((options.subjectKinds?.length ?? 0) > 0 ? { subjects: { kinds: options.subjectKinds!.map((k) => k.key), share_with_workshop: false } } : {}),
     ...options.customerCapabilities,
   }
@@ -754,6 +755,8 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
         last_name: extra.last_name ?? null,
         default_address_id: null,
         created_at: now(),
+        // Registered with no mail connector: the e-mail is only a login name until a code proves it.
+        email_verified: capabilities.email_verification,
       }
       state.customers.push(customer)
     }
@@ -1231,6 +1234,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
         last_name: null,
         default_address_id: null,
         created_at: now(),
+        email_verified: kind === 'email',
       }
       state.customers.push(customer)
     }
@@ -1449,6 +1453,50 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     state.reauthFailures.delete(c.id)
     info.reauth_at = Date.now()
     return { body: { reauth_at: new Date(info.reauth_at).toISOString(), valid_for_seconds: REAUTH_WINDOW_MS / 1000 }, cache: 'private' }
+  })
+  // E-mail of the account (contract 1.15). The mock's code is `otpCode`, like the sign-in one.
+  const emailCodeKey = (kind: 'verify' | 'change', customerId: string, email: string) => `${kind}_email:${customerId}:${email}`
+  route('POST', '/customer/email/verification', 'customer:write', ({ headers }) => {
+    const { c } = sessionOf(headers)
+    if (!c.email) throw new HttpError(422, 'invalid_state', 'The account has no email', 'email')
+    if (c.email_verified !== false) throw new HttpError(422, 'invalid_state', 'The email is already verified', 'email')
+    state.otps.set(emailCodeKey('verify', c.id, c.email), otpCode)
+    return { status: 204 }
+  })
+  route('POST', '/customer/email/verification/confirm', 'customer:write', ({ headers, body }) => {
+    const { c } = sessionOf(headers)
+    if (!c.email) throw new HttpError(422, 'invalid_state', 'The account has no email', 'email')
+    if (c.email_verified !== false) throw new HttpError(422, 'invalid_state', 'The email is already verified', 'email')
+    const key = emailCodeKey('verify', c.id, c.email)
+    if (typeof body.code !== 'string' || state.otps.get(key) !== body.code) throw new HttpError(400, 'validation', 'The code is invalid or expired; request a new one', 'code')
+    state.otps.delete(key)
+    c.email_verified = true
+    return { body: c, cache: 'private' }
+  })
+  route('POST', '/customer/email/change', 'customer:write', ({ headers, body }) => {
+    const { c, info } = sessionOf(headers)
+    requireRecentReauth(info)
+    const email = emailOf(body)
+    if (email === c.email) throw new HttpError(400, 'validation', 'This is already the email of the account', 'email')
+    // Same answer whether or not the address has an account; if it has, no code exists for it.
+    const taken = state.customers.some((x) => x.email === email) || state.passwords.has(email)
+    if (!taken) state.otps.set(emailCodeKey('change', c.id, email), otpCode)
+    return { status: 202, body: { status: 'verification_required' }, cache: 'private' }
+  })
+  route('POST', '/customer/email/change/confirm', 'customer:write', ({ headers, body }) => {
+    const { c, token } = sessionOf(headers)
+    const email = emailOf(body)
+    const key = emailCodeKey('change', c.id, email)
+    if (typeof body.code !== 'string' || state.otps.get(key) !== body.code) throw new HttpError(400, 'validation', 'The code is invalid or expired; request a new one', 'code')
+    state.otps.delete(key)
+    if (c.email && state.passwords.has(c.email)) {
+      state.passwords.set(email, state.passwords.get(c.email)!)
+      state.passwords.delete(c.email)
+    }
+    c.email = email
+    c.email_verified = true
+    for (const [t, id] of [...state.sessions.entries()]) if (id === c.id && t !== token) state.sessions.delete(t)
+    return { body: c, cache: 'private' }
   })
   route('POST', '/customer/data-export', 'customer:write', ({ headers }) => {
     const { c, info } = sessionOf(headers)

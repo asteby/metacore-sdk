@@ -495,6 +495,11 @@ export type Customer = {
   /** Saved fiscal data; `null`/absent when none. */
   fiscal?: FiscalIdentity | null
   created_at: string
+  /**
+   * The buyer proved they control `email` with a code (contract 1.15). `false` for an account registered without
+   * verification (the store had no mail connector) and when there is no e-mail. Absent on older servers: say nothing.
+   */
+  email_verified?: boolean
   /** Preferred language, one of the store's (contract 1.9). Absent on older servers. */
   locale?: string | null
   /** Notification preferences (contract 1.9). Absent on older servers. */
@@ -537,6 +542,11 @@ export type CustomerCapabilities = {
   data_export?: boolean
   /** The buyer can delete their account (`customer.deleteAccount`). Absent on older servers. */
   account_delete?: boolean
+  /**
+   * The buyer can verify and change their e-mail from the account (`customer.email`; contract 1.15). It needs mail
+   * delivery, because the code goes to the NEW address. Absent on older servers: there is no such section.
+   */
+  email_change?: boolean
 }
 
 /** `GET {gateway}/_token`: what the token in use is and what it can do. Needs no scope. */
@@ -568,6 +578,15 @@ export type CustomerPasswordLoginInput = { email: string; password: string }
 
 /** `current_password` is required by the server when the account already has a password. */
 export type CustomerSetPasswordInput = { password: string; current_password?: string }
+
+/** `customer.email.confirmVerification`: the 6-digit code mailed to the current address. */
+export type CustomerEmailCodeInput = { code: string }
+/** `customer.email.requestChange`: the new address. */
+export type CustomerEmailChangeInput = { email: string }
+/** `customer.email.confirmChange`: the same new address and the code that arrived there. */
+export type CustomerEmailChangeConfirmInput = { email: string; code: string }
+/** The answer to asking for a change: always this, whether or not the new address has an account. */
+export type CustomerEmailChangeRequested = { status: 'verification_required' }
 
 export type CustomerResetPasswordInput = { email: string; code: string; password: string }
 

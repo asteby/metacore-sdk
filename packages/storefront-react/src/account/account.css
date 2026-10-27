@@ -357,3 +357,55 @@
   font-weight: 500;
   color: var(--sf-account-muted, color-mix(in srgb, currentColor 72%, transparent));
 }
+
+/* E-mail of the account (<EmailSettings>): state, verify, change. */
+[data-sf-email],
+[data-sf-email-verify],
+[data-sf-email-change] {
+  display: grid;
+  gap: var(--sf-account-gap, 1rem);
+}
+[data-sf-email] form {
+  display: grid;
+  gap: 0.75rem;
+}
+[data-sf-email-current] {
+  margin: 0;
+}
+[data-sf-email-value] {
+  overflow-wrap: anywhere;
+}
+[data-sf-email-badge] {
+  font-weight: 600;
+}
+[data-sf-email-badge='unverified'] {
+  color: var(--sf-field-error, #b42318);
+}
+[data-sf-email-change] > summary {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+[data-sf-email] input:not([type='hidden']) {
+  min-height: 44px;
+  width: 100%;
+  max-width: 28rem;
+  box-sizing: border-box;
+}
+[data-sf-email-verify-send],
+[data-sf-email-verify-confirm],
+[data-sf-email-reauth-code],
+[data-sf-email-change-send],
+[data-sf-email-change-confirm],
+[data-sf-email-change-reset] {
+  min-height: 44px;
+  justify-self: start;
+}
+[data-sf-email-notice],
+[data-sf-email-error] {
+  margin: 0;
+}
+[data-sf-email-error] {
+  color: var(--sf-field-error, #b42318);
+}
