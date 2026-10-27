@@ -201,7 +201,10 @@ export function parseSubjectForm(form: FormData, privateKeys: readonly string[] 
     }
   }
   for (const key of privateKeys) if (form.get(`${head}${key}.clear`)) attributes[key] = null
-  const intent = text(form.get('intent'))
+  // The picker posts a hidden `intent=subject-save` AND, without JavaScript, the «Continue» button's own
+  // `intent=subject-refine` (the submitter's entry comes after it): refine wins, so «Continue» never saves.
+  const intents = form.getAll('intent').map(text)
+  const intent = intents.includes('subject-refine') ? 'subject-refine' : (intents[0] ?? '')
   const nick = form.has('nickname') ? text(form.get('nickname')) : undefined
   return {
     intent: intent === 'subject-save' || intent === 'subject-delete' || intent === 'subject-default' || intent === 'subject-refine' ? intent : null,

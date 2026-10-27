@@ -200,6 +200,23 @@ describe('createSubjectAction', () => {
     expect(await sf.withCustomerToken(token).customer.subjects.list()).toEqual([])
   })
 
+  it('the no-JS «Continue» refines even though the form also carries the hidden save intent', async () => {
+    const { sf, token, action } = await setup()
+    // What the browser sends for SubjectPicker: hidden intent first, then the submitter's.
+    const body = new URLSearchParams([
+      ['intent', 'subject-save'],
+      ['kind', 'vehicle'],
+      ['subject.make', 'nissan'],
+      ['subject.model', 'np300'],
+      ['subject.year', '2012'],
+      ['subject.engine', '2.5'],
+      ['intent', 'subject-refine'],
+    ])
+    const request = new Request('https://shop.example/garage', { method: 'POST', body, headers: { 'content-type': 'application/x-www-form-urlencoded' } })
+    expect(await action({ request })).toMatchObject({ ok: false, intent: 'subject-refine' })
+    expect(await sf.withCustomerToken(token).customer.subjects.list()).toEqual([])
+  })
+
   it('never logs: not on success, not on failure', async () => {
     const spies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((m) => vi.spyOn(console, m).mockImplementation(() => {}))
     const { action } = await setup()
