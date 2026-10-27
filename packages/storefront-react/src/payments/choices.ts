@@ -136,6 +136,25 @@ export function checkoutToAttempt(result: CheckoutResult): PaymentAttemptResult 
     const decline = (payment as { decline_code?: PaymentAttemptResult['payment']['decline_code'] }).decline_code ?? 'declined'
     return { ...base, payment: { provider: payment.provider, status: 'failed', outcome: 'rejected', decline_code: decline, retryable: true } }
   }
+  // The latest attempt was rejected (e.g. the bank failed the 3DS challenge) but the checkout is still open for another
+  // try: OPS reports `payment.outcome: 'rejected'` with the checkout `pending`. It is a rejection, never "under review".
+  if (payment.outcome === 'rejected') {
+    const decline = payment.decline_code ?? 'declined'
+    return {
+      ...base,
+      payment: {
+        provider: payment.provider,
+        status: 'failed',
+        outcome: 'rejected',
+        decline_code: decline,
+        retryable: payment.retryable !== false,
+        ...(payment.next_step ? { next_step: payment.next_step } : {}),
+        ...(payment.message ? { message: payment.message } : {}),
+        ...(payment.message_en ? { message_en: payment.message_en } : {}),
+      },
+      ...(typeof payment.attempts_left === 'number' ? { attempts_left: payment.attempts_left } : {}),
+    }
+  }
   // Still pending: same as the last attempt left it (challenge or review), so the screen does not change.
   if (action?.type === 'challenge') return { ...base, payment: { provider: payment.provider, status: 'requires_action', outcome: 'challenge', action } }
   return { ...base, payment: { provider: payment.provider, status: 'pending', outcome: 'pending', action: action ?? { type: 'none' } } }

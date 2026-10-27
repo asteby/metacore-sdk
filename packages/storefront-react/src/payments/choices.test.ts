@@ -89,6 +89,15 @@ describe('checkoutToAttempt', () => {
     expect(checkoutToAttempt(result('pending')).payment).toMatchObject({ status: 'pending', outcome: 'pending' })
     expect(checkoutToAttempt(result('weird')).payment.outcome).toBe('pending')
   })
+  it('a pending checkout whose latest attempt was rejected is a rejection, not a review', () => {
+    const p = checkoutToAttempt(
+      result('pending', { outcome: 'rejected', decline_code: 'authentication_failed', next_step: 'retry', retryable: true, message: 'm', message_en: 'e', attempts_left: 3 }),
+    )
+    expect(p.payment).toMatchObject({ status: 'failed', outcome: 'rejected', decline_code: 'authentication_failed', next_step: 'retry', retryable: true, message: 'm', message_en: 'e' })
+    expect(p.attempts_left).toBe(3)
+    expect(checkoutToAttempt(result('pending', { outcome: 'rejected' })).payment).toMatchObject({ status: 'failed', decline_code: 'declined', retryable: true })
+    expect(checkoutToAttempt(result('paid', { outcome: 'rejected' })).payment.status).toBe('paid')
+  })
   it('keeps a pending challenge as a challenge', () => {
     const action = { type: 'challenge', url: 'https://bank.example.com/3ds' }
     expect(checkoutToAttempt(result('pending', { action })).payment).toMatchObject({ status: 'requires_action', outcome: 'challenge' })

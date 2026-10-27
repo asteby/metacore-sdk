@@ -448,6 +448,17 @@ export type CheckoutPayment = {
   client?: PaymentClient
   /** Pending action of the last attempt (voucher, 3DS challenge). */
   action?: PaymentAction | null
+  /**
+   * Only on `GET checkouts/:id` when the LATEST attempt was rejected (e.g. the bank failed the 3DS challenge): the checkout
+   * stays `pending` (a new attempt is allowed) but `outcome` is `rejected`, with the typed reason and next step.
+   */
+  outcome?: string | null
+  decline_code?: DeclineCode | null
+  next_step?: PaymentNextStep | null
+  retryable?: boolean | null
+  message?: string | null
+  message_en?: string | null
+  attempts_left?: number | null
 }
 
 export type CheckoutInfo = {
