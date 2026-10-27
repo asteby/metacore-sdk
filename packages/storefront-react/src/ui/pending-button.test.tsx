@@ -152,6 +152,22 @@ describe('PendingButton + useActionLock', () => {
   })
 })
 
+describe('PendingButton width', () => {
+  it('keeps the exact idle width while working (no jump when the label grows)', () => {
+    const spy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ width: 149, height: 44, x: 0, y: 0, top: 0, left: 0, right: 149, bottom: 44, toJSON: () => ({}) } as DOMRect)
+    const { rerender } = render(<PendingButton kind="download">Descargar PDF</PendingButton>)
+    rerender(
+      <PendingButton kind="download" pending>
+        Descargar PDF
+      </PendingButton>,
+    )
+    const btn = screen.getByRole('button', { name: /Descargando/ })
+    expect(btn.style.width).toBe('149px')
+    expect(btn.style.boxSizing).toBe('border-box')
+    spy.mockRestore()
+  })
+})
+
 describe('useSubmitOnce', () => {
   it('refuses a second submit before the router reports the first, and for the cooldown after it', async () => {
     vi.useFakeTimers()

@@ -2,6 +2,7 @@ import {
   forwardRef,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type AnchorHTMLAttributes,
@@ -75,16 +76,15 @@ export const PendingButton = forwardRef<HTMLElement, PendingButtonProps | Pendin
   const armed = useRef(false)
   const hadFocus = useRef(false)
   const [cool, setCool] = useState(false)
-  const [width, setWidth] = useState<number | null>(null)
+  // Width of the control while it is idle, kept at every commit: the first locked render reads it BEFORE the busy content
+  // (spinner + working text) is laid out, so the width never jumps.
+  const idleWidth = useRef<number | null>(null)
   const prev = useRef(false)
 
   useEffect(() => {
     if (pending && !prev.current) {
       const el = ref.current
-      if (el) {
-        setWidth(Math.round(el.getBoundingClientRect().width) || null)
-        hadFocus.current = typeof document !== 'undefined' && document.activeElement === el
-      }
+      if (el) hadFocus.current = typeof document !== 'undefined' && document.activeElement === el
     }
     if (!pending && prev.current) {
       if (cooldownMs > 0) {
@@ -99,10 +99,12 @@ export const PendingButton = forwardRef<HTMLElement, PendingButtonProps | Pendin
   }, [pending, cooldownMs])
 
   const locked = pending || cool
+  useLayoutEffect(() => {
+    if (!locked && ref.current) idleWidth.current = Math.round(ref.current.getBoundingClientRect().width) || null
+  })
   useEffect(() => {
     if (locked) return
     mine.current = false
-    setWidth(null)
     const el = ref.current
     if (restoreFocus && hadFocus.current && el && typeof document !== 'undefined' && (document.activeElement === document.body || document.activeElement === null)) {
       el.focus({ preventScroll: true })
@@ -135,7 +137,7 @@ export const PendingButton = forwardRef<HTMLElement, PendingButtonProps | Pendin
     }
   }
 
-  const style = { ...((rest as { style?: object }).style ?? {}), ...(width && locked ? { width, boxSizing: 'border-box' as const } : {}) }
+  const style = { ...((rest as { style?: object }).style ?? {}), ...(idleWidth.current && locked ? { width: idleWidth.current, boxSizing: 'border-box' as const } : {}) }
   const inner = (
     <>
       {busy ? (
