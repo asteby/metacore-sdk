@@ -1,5 +1,19 @@
 # @asteby/storefront-react
 
+## 0.35.0
+
+### Minor Changes
+
+- 418f618: feat(storefront-react): `AddressFields` sugiere calle y número (`suggestAddress`, combobox ARIA accesible). Por omisión consulta al proveedor del mercado por la Storefront API del `<StorefrontProvider>` (`client.addressSuggest`); `suggestAddress={fn}` usa otra fuente y `false` la apaga. Desde 3 caracteres, debounce de 250 ms, corte de 800 ms, descarta respuestas viejas y descansa 30 s tras dos fallos; sin proveedor, lento o caído el campo es el input de siempre y el pago no se toca. Elegir una opción rellena calle y número, el CP si estaba vacío y la colonia solo si es del catálogo (o este no tiene colonias); nunca estado ni ciudad ni pisa lo escrito. Teclado (flechas, Enter solo con opción resaltada, Escape, Tab), región `aria-live`, ES/EN, atribución «© OpenStreetMap contributors» (`suggestAttribution`), `onSuggestionChosen` y `classNames` (`suggestions`, `suggestion`, `suggestionActive`, `attribution`). Mensajes nuevos en `AddressFieldsMessages`: `suggestionsLabel`, `suggestionsCount`, `suggestionChosen`, `attribution`.
+- 16f2b72: feat(storefront-react/ui): `NavigationProgress` (barra fina de progreso arriba, agnóstica del router: `active` + retraso de 120 ms, `role="status"`, `aria-busy` en `main`, `prefers-reduced-motion`, color por token `--navigation-progress`), `useDelayedFlag`, `Skeleton` y `Spinner`. Estilos en `ui.css`.
+
+### Patch Changes
+
+- 1142c3a: fix(storefront-react): `<AccountAuth>` ya no vuelve al paso del código al cambiar de pestaña. Con un formulario que se remonta (p. ej. las pestañas «Inicia sesión» / «Crea tu cuenta» del pago) el último resultado de la acción (`useActionData()`, mismo objeto hasta el siguiente envío) volvía a imponer `step: 'verify'`. Ahora «Usar otro correo», «Volver a entrar con contraseña» o cualquier cambio de vista descarta ese resultado y limpia todo el estado pendiente: paso, error, aviso, cuenta regresiva y la contraseña guardada en memoria para reenviar.
+- 1b377c1: fix(storefront-react/ui): los estilos de `NavigationProgress`, `Skeleton` y `Spinner` salen en su propia hoja, `@asteby/storefront-react/progress.css` (antes iban dentro de `ui.css`, que trae también `Select` y `Swatch`). Quien no use esas piezas no carga CSS de más.
+- Updated dependencies [418f618]
+  - @asteby/storefront@0.23.0
+
 ## 0.34.0
 
 ### Minor Changes
