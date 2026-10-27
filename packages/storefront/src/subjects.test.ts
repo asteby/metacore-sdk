@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { MOCK_SUBJECT_KINDS } from './mock/subjects.js'
-import { coversYear, fitTag, fitTagsAny, isMasked, reconcileSubjectValues, resolveSubject, subjectLevels, subjectOptions } from './subjects.js'
+import { coversYear, fitTag, fitTagsAny, isMasked, reconcileSubjectValues, resolveSubject, subjectLevels, splitSubjectTree, subjectOptions } from './subjects.js'
 import { productListQuery } from './query.js'
 
 const garage = MOCK_SUBJECT_KINDS[0]!
@@ -130,5 +130,21 @@ describe('fit tags', () => {
     expect(coversYear({ from: 2010, to: 2015 }, 2016)).toBe(false)
     expect(coversYear({ from: 2010 }, 2099)).toBe(true)
     expect(coversYear({}, 1999)).toBe(true)
+  })
+})
+
+describe('splitSubjectTree (a catalog over several pages)', () => {
+  const tree = Object.fromEntries(
+    Array.from({ length: 40 }, (_, i) => [`make-${i}`, { label: `Make ${i} «ñ»`, children: { m: { label: 'M', from: 2000, to: 2020 } } }]),
+  )
+  it('keeps every first-level option once, in order, each part within the budget as escaped text', () => {
+    const parts = splitSubjectTree(tree, 1024)
+    expect(parts.length).toBeGreaterThan(1)
+    expect(parts.flatMap((p) => Object.keys(p))).toEqual(Object.keys(tree))
+    for (const p of parts) expect(new TextEncoder().encode(JSON.stringify(JSON.stringify(p))).length).toBeLessThanOrEqual(1024)
+  })
+  it('a small tree is one part; an option larger than a page on its own is refused', () => {
+    expect(splitSubjectTree(tree)).toHaveLength(1)
+    expect(() => splitSubjectTree(tree, 40)).toThrow(RangeError)
   })
 })

@@ -85,12 +85,14 @@ export function hasActiveSubject(cookieHeader: string | null | undefined): boole
 }
 
 /**
- * Cache headers of a page that changes with the buyer's item: with one remembered it is the buyer's (`private`, varying on
- * the cookie); without, the store's public policy applies. Pass the store's own `Cache-Control` for the public case.
+ * Cache headers of a page that changes with the buyer's item: with one remembered it is the buyer's (`private, no-store`);
+ * without, the store's public policy applies. Pass the store's own `Cache-Control` for the public case. Both answers carry
+ * `Vary: Cookie`: the public copy is only right for a request WITHOUT the cookie, and a shared cache (CDN) that stored it
+ * must not hand it to a guest who has one (their «only what fits my vehicle» listing would come back unfiltered).
  */
 export function subjectCacheHeaders(cookieHeader: string | null | undefined, publicCacheControl: string, opts: { signedIn?: boolean } = {}): Record<string, string> {
   if (opts.signedIn || hasActiveSubject(cookieHeader)) return { 'Cache-Control': 'private, no-store', Vary: 'Cookie' }
-  return { 'Cache-Control': publicCacheControl }
+  return { 'Cache-Control': publicCacheControl, Vary: 'Cookie' }
 }
 
 // ---- loader -------------------------------------------------------------------------------------------------------------

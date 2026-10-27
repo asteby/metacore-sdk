@@ -14,3 +14,5 @@ export { deliveryMessages, isQuoteChange, matchRate, quoteDeadline, quoteNote, r
 export type { DeliveryMessages, QuoteNote, RateBadge } from './delivery.js'
 export { dedupeRates, flatRates, recommendRates } from './recommend.js'
 export type { FlatRatesOptions, RateGroup, RateTag, RecommendRatesOptions, RecommendedRate, RecommendedRates } from './recommend.js'
+export { DEFAULT_QUOTE_NAMES, QUOTE_KEYS, defaultRate, quoteFingerprint, readQuoteAddress, useAutoQuote } from './auto-quote.js'
+export type { AutoQuoteStatus, QuoteAddress, UseAutoQuoteOptions, UseAutoQuoteResult } from './auto-quote.js'

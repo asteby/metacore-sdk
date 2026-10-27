@@ -69,6 +69,10 @@ export interface ModelActionToolbarProps {
 
 const DEFAULT_PLACEMENTS: ActionPlacement[] = ['table', 'create']
 
+/** Table/create actions act on no record: one stable empty object, not a new
+ *  `{}` per render (the dialog keys its form on the opening, not on identity). */
+const NO_RECORD: Record<string, any> = {}
+
 /**
  * Last-resort label when `t(key)` has no translation yet: never flash the full
  * dotted key in a primary CTA. Prefers the action/field segment over a trailing
@@ -225,7 +229,7 @@ export function ModelActionToolbar({
                     }}
                     action={active}
                     model={model}
-                    record={{}}
+                    record={NO_RECORD}
                     endpoint={dataEndpoint}
                     onSuccess={() => {
                         setActive(null)

@@ -382,3 +382,23 @@ describe('mock: carrier rates and payment methods', () => {
     expect(pm.methods[0]!.key).toBe('mercadopago')
   })
 })
+
+describe('mock: shipping_quote_mode fixed_when_free', () => {
+  it('past the free-shipping minimum serves only the free rate, flagged free and fixed', async () => {
+    const sf = createStorefrontClient({ baseUrl: 'https://mock.local/api/gw', token: 'sk_mock', fetch: createMockStorefront({ shippingQuoteMode: 'fixed_when_free' }).fetch })
+    const priciest = (await sf.products.list({ first: 50 })).nodes.flatMap((p) => p.variants).sort((a, b) => Number(b.price.amount) - Number(a.price.amount))[0]!
+    const cart = await sf.carts.create({ lines: [{ variant_id: priciest.id, quantity: Math.ceil(1000 / Number(priciest.price.amount)) }] })
+    const opts = await sf.carts.deliveryOptions(cart.id)
+    expect(opts.free).toBe(true)
+    expect(opts.fixed).toBe(true)
+    expect(opts.rates.map((r) => [r.id, r.cost.amount])).toEqual([['flat', '0.00']])
+  })
+
+  it('below the minimum it keeps the paid rates and is not free', async () => {
+    const sf = createStorefrontClient({ baseUrl: 'https://mock.local/api/gw', token: 'sk_mock', fetch: createMockStorefront({ shippingQuoteMode: 'fixed_when_free' }).fetch })
+    const cart = await sf.carts.create({ lines: [] })
+    const opts = await sf.carts.deliveryOptions(cart.id)
+    expect(opts.free).toBe(false)
+    expect(opts.rates.length).toBeGreaterThan(1)
+  })
+})

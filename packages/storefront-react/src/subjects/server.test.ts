@@ -64,7 +64,8 @@ describe('cache', () => {
     expect(hasActiveSubject(`sf_subject_vehicle=${encodeURIComponent(KEY)}`)).toBe(true)
     expect(hasActiveSubject('sf_subject_vehicle=')).toBe(false)
     expect(hasActiveSubject('sf_cart=abc')).toBe(false)
-    expect(subjectCacheHeaders('sf_cart=abc', 'public, max-age=60')).toEqual({ 'Cache-Control': 'public, max-age=60' })
+    // The public copy also varies on the cookie: a CDN must not serve it to a guest who remembered an item.
+    expect(subjectCacheHeaders('sf_cart=abc', 'public, max-age=60')).toEqual({ 'Cache-Control': 'public, max-age=60', Vary: 'Cookie' })
     expect(subjectCacheHeaders(`sf_subject_vehicle=${encodeURIComponent(KEY)}`, 'public, max-age=60')).toEqual({ 'Cache-Control': 'private, no-store', Vary: 'Cookie' })
     expect(subjectCacheHeaders(null, 'public, max-age=60', { signedIn: true })['Cache-Control']).toBe('private, no-store')
   })
