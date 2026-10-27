@@ -655,7 +655,7 @@ const live = useLiveDelivery({
 <OrderSummary quoting={live.quoting} cost={cart.cost} lines={cart.lines} />
 ```
 
-La ruta `quoteUrl` es de la tienda (POST JSON con `zip`, `province`, `city`, `neighborhood`, `address1`…): guarda el destino
+La ruta `quoteUrl` la monta la tienda con `createQuoteHandler` de `@asteby/storefront-react/checkout/server` (`export const action = ({ request }) => createQuoteHandler({ storefront, readCartId })(request)`) (POST JSON con `zip`, `province`, `city`, `neighborhood`, `address1`…): guarda el destino
 en el carrito (`PUT /carts/:id/shipping-address`) y responde `GET /carts/:id/delivery-options` tal cual. OPS exige calle para
 guardar el domicilio; mientras falta se manda un marcador y el domicilio completo se vuelve a guardar al pagar. Nada se
 calcula en el navegador: tarifas, envío gratis (`free`), precio fijo, recogida (`pickup`) y total son lo que devuelve OPS.

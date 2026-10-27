@@ -48,6 +48,16 @@
         "default": "./dist/checkout.cjs"
       }
     },
+    "./checkout/server": {
+      "import": {
+        "types": "./dist/checkout-server.d.ts",
+        "default": "./dist/checkout-server.js"
+      },
+      "require": {
+        "types": "./dist/checkout-server.d.cts",
+        "default": "./dist/checkout-server.cjs"
+      }
+    },
     "./checkout.css": "./dist/checkout.css",
     "./postal": {
       "import": {
