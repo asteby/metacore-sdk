@@ -1,5 +1,13 @@
 # @asteby/storefront-react
 
+## 0.39.1
+
+### Patch Changes
+
+- 79ea7fe: Checkout en vivo: el marcador «Por confirmar» nunca es una calle. `useLiveDelivery` mantiene el pago bloqueado («Escribe tu calle y número») hasta que `address1` tenga una calle real (`streetOk`, `streetName`) y `DeliveryStatus` lo explica en línea (`street`); nuevos `PENDING_STREET`, `isPendingStreet` y `withoutPendingStreet` (en `checkout` y `checkout/server`) para vaciar el valor guardado en el formulario y rechazarlo en el servidor aunque llegue manipulado.
+- 471d6a5: `useLiveDelivery`: `deliveryReady` ya no espera la calle (la tienda guarda la entrega y el resumen muestra el envío en cuanto se cotiza); pagar espera la calle con `payReady` y `holdLabel` («Escribe tu calle y número»).
+- e5b7b73: fix(ui): `PendingButton` fija el ancho que tenía en reposo ANTES de pintar el spinner y el texto de estado (se medía después: «Descargando…» lo ensanchaba 149 -> 173 px en la prueba en vivo). El texto se recorta con puntos suspensivos si no cabe.
+
 ## 0.39.0
 
 ### Minor Changes
