@@ -354,6 +354,10 @@ export type DeliveryOptions = {
   /** `true` when some provider failed: `rates` holds only what arrived. */
   partial?: boolean
   unavailable?: UnavailableRateProvider[]
+  /** The shop's own fixed price: no carrier was asked (addon setting `shipping_quote_mode`). */
+  fixed?: boolean
+  /** Every shipping rate costs 0 (free-shipping minimum reached): nothing to choose, show "Free shipping" and go on. */
+  free?: boolean
 }
 
 /** One way to pay (`GET /storefront/carts/:id/payment-methods`). `key` is sent as `payment_method` at checkout. */
