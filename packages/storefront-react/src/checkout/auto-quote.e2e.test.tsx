@@ -31,12 +31,12 @@ async function setup(mode: 'carriers' | 'fixed_when_free', qty: 'one' | 'many') 
   return { sf, cart, quote }
 }
 
-function Checkout({ quote }: { quote: (a: QuoteAddress, s: AbortSignal) => ReturnType<typeof Promise.resolve<never>> | Promise<any> }) {
+function Checkout({ quote, lookup }: { lookup?: (zip: string) => Promise<import('./index.js').PostalCodeInfo | null>; quote: (a: QuoteAddress, s: AbortSignal) => ReturnType<typeof Promise.resolve<never>> | Promise<any> }) {
   const ref = useRef<HTMLFormElement>(null)
   const q = useAutoQuote({ formRef: ref, quote })
   return (
     <form ref={ref} onSubmit={(e) => e.preventDefault()}>
-      <AddressFields countryCode="MX" />
+      <AddressFields countryCode="MX" {...(lookup ? { lookupPostalCode: lookup } : {})} />
       <fieldset>
         <legend>Entrega</legend>
         <DeliveryOptions rates={q.delivery?.rates ?? []} pickup={[]} defaultValue={q.defaultValue} loading={q.status === 'loading'} error={q.status === 'error'} onRetry={q.retry} free={q.delivery?.free ?? false} announceReady required />
@@ -95,5 +95,26 @@ describe('checkout in one step (mock server)', () => {
       await vi.advanceTimersByTimeAsync(2000)
     })
     expect(quote).toHaveBeenCalledTimes(1)
+  })
+
+  it('with the state and city hidden by the postal code, the quote still carries them and payment is ready', async () => {
+    const { quote } = await setup('fixed_when_free', 'one')
+    const lookup = async () => ({ province: 'Jalisco', city: 'Guadalajara', neighborhoods: [] })
+    render(<Checkout quote={quote} lookup={lookup} />)
+    type(/c[oó]digo postal/i, '44100')
+    fireEvent.blur(screen.getByLabelText(/c[oó]digo postal/i))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    expect(document.querySelector('[data-sf-resolved-place]')?.textContent).toBe('Guadalajara, Jalisco')
+    expect(screen.queryByLabelText(/estado/i)).toBeNull()
+    type(/colonia/i, 'Centro')
+    type(/calle|direcci[oó]n/i, 'Av. Vallarta 100')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(700)
+    })
+    expect(quote).toHaveBeenCalledTimes(1)
+    expect(quote.mock.calls[0]![0]).toMatchObject({ zip: '44100', province: 'Jalisco', city: 'Guadalajara' })
+    expect((screen.getByTestId('pay') as HTMLButtonElement).disabled).toBe(false)
   })
 })

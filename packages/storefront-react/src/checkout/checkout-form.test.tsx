@@ -17,12 +17,17 @@ function Form({
   provinces,
   lockProvinceOnFill,
   neighborhoodList,
+  hideResolvedFields = false,
+  defaults,
 }: {
   lookup?: (zip: string) => Promise<PostalCodeInfo | null>
   serverFields?: string[]
   provinces?: { name: string }[]
   lockProvinceOnFill?: boolean
   neighborhoodList?: 'datalist' | 'select'
+  /** The legacy tests exercise the inputs; the new behavior is opted in by the tests of `hideResolvedFields`. */
+  hideResolvedFields?: boolean
+  defaults?: { zip?: string; province?: string; city?: string }
 }) {
   const ref = useRef<HTMLFormElement>(null)
   const v = useFieldErrors(ref, { serverFields: serverFields ?? null })
@@ -38,6 +43,8 @@ function Form({
         <AddressFields
           errors={v.errors}
           countryCode="MX"
+          hideResolvedFields={hideResolvedFields}
+          {...(defaults ? { defaults } : {})}
           postalCode={{ pattern: '[0-9]{5}', maxLength: 5, inputMode: 'numeric', title: 'Escribe los 5 dígitos.' }}
           {...(lookup ? { lookupPostalCode: lookup } : {})}
           {...(provinces ? { provinces } : {})}
@@ -477,5 +484,125 @@ describe('AddressFields: a single careful writer', () => {
     type(container, '64000')
     await waitFor(() => expect(ctl(container, 'city').value).toBe('Monterrey'))
     expect(ctl(container, 'province').value).toBe('Nuevo León')
+  })
+})
+
+
+describe('hideResolvedFields: state and city out of the form when the postal code defines them', () => {
+  const cdmx = async () => ({ province: 'Ciudad de México', city: 'Miguel Hidalgo', neighborhoods: ['Granada', 'Anáhuac'] })
+  const hiddenValues = (c: HTMLElement) => Object.fromEntries([...c.querySelectorAll<HTMLInputElement>('input[type="hidden"]')].map((i) => [i.name, i.value]))
+
+  it('shows one read-only line with a change link and sends state/city in hidden fields', async () => {
+    const { container } = render(<Form lookup={cdmx} hideResolvedFields provinces={[{ name: 'Ciudad de México', code: 'CMX' } as { name: string }]} />)
+    expect(screen.getByLabelText('Estado')).toBeTruthy() // before the lookup, and without JS: plain inputs
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '11510' } })
+    await waitFor(() => expect(container.querySelector('[data-sf-resolved-place]')).not.toBeNull())
+    expect(container.querySelector('[data-sf-resolved-place]')!.textContent).toBe('Miguel Hidalgo, Ciudad de México')
+    expect(screen.queryByLabelText('Estado')).toBeNull()
+    expect(screen.queryByLabelText('Ciudad o municipio')).toBeNull()
+    expect(hiddenValues(container)).toMatchObject({ province: 'Ciudad de México', province_code: 'CMX', city: 'Miguel Hidalgo', country_code: 'MX' })
+    const data = new FormData(container.querySelector('form')!)
+    expect(data.get('province')).toBe('Ciudad de México')
+    expect(data.get('city')).toBe('Miguel Hidalgo')
+    expect(container.querySelector('[data-sf-change-zip]')?.textContent).toBe('Cambiar código postal')
+    // The colonia is still the buyer's to choose.
+    expect(screen.getByLabelText(/Colonia/)).toBeTruthy()
+  })
+
+  it('announces the summary in a live region that already existed (and has no axe violations)', async () => {
+    const { container } = render(<Form lookup={cdmx} hideResolvedFields />)
+    const status = screen.getByRole('status')
+    expect(status.getAttribute('aria-live')).toBe('polite')
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '11510' } })
+    await waitFor(() => expect(status.textContent).toContain('Miguel Hidalgo, Ciudad de México'))
+    expect(screen.getByRole('status')).toBe(status) // same node: announced, not re-inserted
+    expect((await axe.run(container, AXE)).violations).toEqual([])
+  })
+
+  it('"Cambiar código postal" brings the inputs back empty and focuses the postal code; the same code resolves again', async () => {
+    const { container } = render(<Form lookup={cdmx} hideResolvedFields />)
+    const zip = screen.getByLabelText('Código postal') as HTMLInputElement
+    fireEvent.input(zip, { target: { value: '11510' } })
+    await waitFor(() => expect(container.querySelector('[data-sf-resolved-place]')).not.toBeNull())
+    fireEvent.click(container.querySelector('[data-sf-change-zip]')!)
+    expect(container.querySelector('[data-sf-resolved-place]')).toBeNull()
+    expect((screen.getByLabelText('Estado') as HTMLInputElement).value).toBe('')
+    expect(container.querySelector('input[type="hidden"][name="city"]')).toBeNull()
+    expect(document.activeElement).toBe(zip)
+    fireEvent.input(zip, { target: { value: '11510' } })
+    await waitFor(() => expect(container.querySelector('[data-sf-resolved-place]')).not.toBeNull())
+  })
+
+  it('editing the postal code drops the resolved values at once (never a stale state for a new code)', async () => {
+    const lookup = vi.fn(async (zip: string) => (zip === '11510' ? await cdmx() : { province: 'Jalisco', city: 'Guadalajara' }))
+    const { container } = render(<Form lookup={lookup} hideResolvedFields />)
+    const zip = screen.getByLabelText('Código postal')
+    fireEvent.input(zip, { target: { value: '11510' } })
+    await waitFor(() => expect(container.querySelector('[data-sf-resolved-place]')).not.toBeNull())
+    fireEvent.input(zip, { target: { value: '4410' } })
+    expect(container.querySelector('input[type="hidden"][name="city"]')).toBeNull()
+    expect((screen.getByLabelText('Ciudad o municipio') as HTMLInputElement).value).toBe('')
+    fireEvent.input(zip, { target: { value: '44100' } })
+    await waitFor(() => expect(container.querySelector('[data-sf-resolved-place]')?.textContent).toBe('Guadalajara, Jalisco'))
+  })
+
+  it.each([
+    ['unknown code', async () => null],
+    ['lookup down', async () => {
+      throw new Error('down')
+    }],
+    ['no city', async () => ({ province: 'Jalisco', city: null })],
+    ['ambiguous municipality', async () => ({ province: 'Jalisco', city: 'Zapopan', cities: ['Zapopan', 'Tlajomulco'] })],
+  ])('degrades to editable inputs: %s', async (_name, lookup) => {
+    const { container } = render(<Form lookup={lookup as never} hideResolvedFields />)
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '99999' } })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    expect(container.querySelector('[data-sf-resolved-place]')).toBeNull()
+    const city = screen.getByLabelText('Ciudad o municipio') as HTMLInputElement
+    fireEvent.input(city, { target: { value: 'Mi ciudad' } })
+    expect(city.value).toBe('Mi ciudad')
+  })
+
+  it('degrades when the state is not in the shop list, or when the buyer already typed a different value', async () => {
+    const a = render(<Form lookup={cdmx} hideResolvedFields provinces={[{ name: 'Jalisco' }]} />)
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '11510' } })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    expect(a.container.querySelector('[data-sf-resolved-place]')).toBeNull()
+    cleanup()
+    const b = render(<Form lookup={cdmx} hideResolvedFields />)
+    fireEvent.input(screen.getByLabelText('Ciudad o municipio'), { target: { value: 'CDMX' } })
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '11510' } })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    expect(b.container.querySelector('[data-sf-resolved-place]')).toBeNull()
+    expect((screen.getByLabelText('Ciudad o municipio') as HTMLInputElement).value).toBe('CDMX')
+  })
+
+  it('a saved address that matches the code resolves on mount; a server error on the state brings the inputs back', async () => {
+    const { container } = render(<Form lookup={cdmx} hideResolvedFields defaults={{ zip: '11510', province: 'Ciudad de México', city: 'Miguel Hidalgo' }} />)
+    await waitFor(() => expect(container.querySelector('[data-sf-resolved-place]')).not.toBeNull())
+    cleanup()
+    const err = render(<Form lookup={cdmx} hideResolvedFields defaults={{ zip: '11510' }} serverFields={['province']} />)
+    expect(err.container.querySelector('[data-sf-resolved-place]')).toBeNull()
+  })
+
+  it('hideResolvedFields={false} keeps the previous behavior (inputs filled and the state locked)', async () => {
+    const { container } = render(<Form lookup={cdmx} hideResolvedFields={false} />)
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '11510' } })
+    await waitFor(() => expect((screen.getByLabelText('Estado') as HTMLInputElement).value).toBe('Ciudad de México'))
+    expect((screen.getByLabelText('Ciudad o municipio') as HTMLInputElement).value).toBe('Miguel Hidalgo')
+    expect(container.querySelector('[data-sf-resolved-place]')).toBeNull()
+  })
+
+  it('server HTML is the plain inputs (works without JavaScript)', () => {
+    const html = renderToString(<Form lookup={cdmx} hideResolvedFields />)
+    expect(html).toContain('name="province"')
+    expect(html).toContain('name="city"')
+    expect(html).not.toContain('data-sf-resolved-place')
   })
 })
