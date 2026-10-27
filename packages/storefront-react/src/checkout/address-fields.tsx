@@ -515,8 +515,8 @@ export function AddressFields(props: AddressFieldsProps) {
           onBlur={(e) => runLookup(e.currentTarget.value.trim())}
         />
         {/* The lookup result, announced once (not on every keystroke): the one-line place, or the fill note. */}
-        <div data-sf-resolved={showResolved ? '' : undefined}>
-          <p role="status" aria-live="polite" data-sf-zip-status style={showResolved || filled ? (showResolved ? { display: 'inline', margin: 0 } : undefined) : SR_ONLY} className={showResolved || filled ? join(cx.hint) : undefined}>
+        <div data-sf-resolved={showResolved ? '' : undefined} className={showResolved || filled ? join(cx.hint) : undefined}>
+          <p role="status" aria-live="polite" data-sf-zip-status style={showResolved || filled ? (showResolved ? { display: 'inline', margin: 0 } : undefined) : SR_ONLY}>
             {showResolved && resolved ? (
               <>
                 <span style={SR_ONLY}>{m.resolvedPlace} </span>
