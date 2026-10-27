@@ -2,7 +2,7 @@
 import type { PaymentInfo, Refund } from '@asteby/storefront'
 import { useId } from 'react'
 import { enumText, fill } from './orders-messages.js'
-import { paymentLabel, type PaymentLabelOptions } from './payment-method.js'
+import { paymentLabel, paymentMethodKey, type PaymentLabelOptions } from './payment-method.js'
 import { Hidden, Time, moneyText, str, useAccountText, type AccountTextProps } from './orders-ui.js'
 
 export type RefundListClassNames = Partial<Record<'root' | 'title' | 'list' | 'item' | 'amount' | 'status' | 'meta' | 'empty' | 'error' | 'retry', string>>
@@ -97,7 +97,7 @@ export function PaymentSummary({ payments, headingLevel = 3, methodLabel, classN
       </Heading>
       <ul className={cx.list}>
         {items.map((p, i) => (
-          <li key={`${p.method_label}-${i}`} className={cx.item} data-sf-payment data-sf-payment-status={typeof p.status === 'string' ? p.status : 'unknown'}>
+          <li key={`${p.method_label}-${i}`} className={cx.item} data-sf-payment data-sf-payment-method-key={paymentMethodKey(p) ?? 'unknown'} data-sf-payment-status={typeof p.status === 'string' ? p.status : 'unknown'}>
             <span data-sf-payment-method>{paymentLabel(p, m, methodLabel ? { override: methodLabel } : {})}</span>
             {moneyText(p.amount, locale) ? <> · <span>{moneyText(p.amount, locale)}</span></> : null} ·{' '}
             <span className={cx.status} data-sf-tone={p.status === 'failed' ? 'problem' : p.status === 'paid' ? 'done' : 'current'}>
