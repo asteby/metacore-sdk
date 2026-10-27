@@ -31,6 +31,7 @@ function Shop({ fetchImpl, page = opts([]), saved, street = 'Av. Vallarta 100' }
         <DeliveryOptions {...live.optionsProps} />
       </fieldset>
       <output data-testid="ready">{String(live.deliveryReady)}</output>
+      <output data-testid="pay">{String(live.payReady)}</output>
       <output data-testid="hold">{live.holdLabel ?? ''}</output>
       <output data-testid="value">{live.deliveryValue}</output>
     </form>
@@ -100,18 +101,20 @@ describe('the street gate', () => {
   it('quoted but empty street: the button holds with a friendly label and the status says so; a real street releases it', async () => {
     render(<Shop fetchImpl={vi.fn(ok) as never} street="" />)
     zip('44100'); await flush(450)
-    expect(t('ready')).toBe('false')
+    // The price is known (the shop saves the delivery and shows the shipping), but paying waits for the street.
+    expect(t('ready')).toBe('true')
+    expect(t('pay')).toBe('false')
     expect(t('hold')).toBe('Escribe tu calle y número')
     expect(document.querySelector('[data-sf-delivery-status="street"]')).not.toBeNull()
     fireEvent.change(screen.getByLabelText('street'), { target: { value: 'Av. Vallarta 100' } })
     await flush(10)
-    expect(t('ready')).toBe('true')
+    expect(t('pay')).toBe('true')
     expect(t('hold')).toBe('')
   })
   it('the saved placeholder never counts as a street, whatever its case', async () => {
     render(<Shop fetchImpl={vi.fn(ok) as never} street="por CONFIRMAR" />)
     zip('44100'); await flush(450)
-    expect(t('ready')).toBe('false')
+    expect(t('pay')).toBe('false')
     expect(t('hold')).toBe('Escribe tu calle y número')
   })
 })

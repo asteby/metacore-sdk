@@ -68,8 +68,10 @@ export type UseLiveDeliveryResult = {
   streetOk: boolean
   /** The shipping is quoted (or a pickup is chosen): the price is known. */
   shippingQuoted: boolean
-  /** A delivery is chosen AND its price is known: pass to `PaymentMethodSection`. */
+  /** A delivery is chosen AND its price is known: pass to `PaymentMethodSection` (it saves the delivery and updates the total). */
   deliveryReady: boolean
+  /** `deliveryReady` AND a real street: the button may pay. (`holdLabel` blocks it meanwhile.) */
+  payReady: boolean
   /** Pass to `PaymentMethodSection.holdLabel`: text while the button must wait, else `undefined`. */
   holdLabel: string | undefined
   quoting: boolean
@@ -160,7 +162,10 @@ export function useLiveDelivery(options: UseLiveDeliveryOptions): UseLiveDeliver
   const state: DeliveryStatusState = quote.noCoverage ? 'no_coverage' : quote.status === 'error' ? 'error' : quote.quoting ? 'quoting' : quote.status === 'ready' ? 'ready' : 'idle'
   const shippingQuoted = !enabled || pickupChosen || state === 'ready'
   const streetOk = !enabled || pickupChosen || street === null || (street.trim() !== '' && !isPendingStreet(street))
-  const deliveryReady = deliveryValue !== '' && !deliveryValue.startsWith('ship:') && shippingQuoted && streetOk
+  // The price is known (so the shop can save the delivery and show the shipping in the summary) even before the street is typed;
+  // PAYING also waits for a real street (`payReady`, and `holdLabel` blocks the button meanwhile).
+  const deliveryReady = deliveryValue !== '' && !deliveryValue.startsWith('ship:') && shippingQuoted
+  const payReady = deliveryReady && streetOk
   const needsStreet = enabled && !pickupChosen && state === 'ready' && !streetOk
   const holdLabel = !enabled || pickupChosen ? undefined : state === 'quoting' ? m.quoting : state === 'no_coverage' ? m.noCoverage : state === 'error' ? m.error : needsStreet ? m.street : undefined
 
@@ -176,5 +181,5 @@ export function useLiveDelivery(options: UseLiveDeliveryOptions): UseLiveDeliver
     loading: enabled && quote.quoting && live.rates.length > 0,
     defaultValue: quote.defaultValue ?? savedValue ?? undefined,
   }
-  return { quote, live, deliveryValue, onFormChange, state: shownState, streetOk, shippingQuoted, deliveryReady, holdLabel, quoting: enabled && quote.quoting, change: quote.change, statusProps, optionsProps, requote }
+  return { quote, live, deliveryValue, onFormChange, state: shownState, streetOk, shippingQuoted, deliveryReady, payReady, holdLabel, quoting: enabled && quote.quoting, change: quote.change, statusProps, optionsProps, requote }
 }
