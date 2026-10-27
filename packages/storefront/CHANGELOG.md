@@ -1,5 +1,11 @@
 # @asteby/storefront
 
+## 0.22.1
+
+### Patch Changes
+
+- e6af0c4: `AddressFields` consulta por defecto el catálogo del paquete de región (`client.postalCode`, Storefront API) del `<StorefrontProvider>`; la prop `lookupPostalCode` sigue sobreescribiéndolo. `RegionPostalCode.cities` (opcional, solo si el CP cubre varios municipios). Nuevo `createStorefrontPostalProvider(client)` en `/postal`; `createOsmProvider` queda obsoleto para tiendas (OSM solo sugiere, nunca bloquea campos).
+
 ## 0.22.0
 
 ### Minor Changes

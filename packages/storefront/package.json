@@ -1,6 +1,6 @@
 {
   "name": "@asteby/storefront",
-  "version": "0.22.0",
+  "version": "0.22.1",
   "description": "Typed client for the Storefront API v1 (catalog, cart, checkout, customer, content) using only global fetch — Node 20+, edge runtimes and browsers — plus an in-memory mock of the whole contract and, in `@asteby/storefront/fiscal-document`, a country-agnostic engine that reads a buyer's fiscal document (PDF) in the browser or Node.",
   "license": "Apache-2.0",
   "repository": {
