@@ -35,7 +35,10 @@ export type OrderListParams = AccountListParams & {
   has_invoice?: boolean
 }
 
-export type InvoiceListParams = AccountListParams & { status?: 'issued' | 'pending' | 'cancelled' | 'error' }
+export type InvoiceListParams = AccountListParams & {
+  /** `issued`, `pending`, `cancelled` or `error`. */
+  status?: string
+}
 
 export type ShipmentListParams = AccountListParams & {
   /** A parcel status: `pending`, `label_created`, `in_transit`, `out_for_delivery`, `delivered`, `exception`, `returned`, `lost`, `cancelled`. */

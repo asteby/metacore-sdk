@@ -1601,7 +1601,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
    * The account lists (contract 1.19): keyset cursor on (created_at, id), newest first, `first` 1–50 (10 by default),
    * `after` / `before`, filters. The cursor is opaque and stable while orders are added.
    */
-  const accountPage = <S, N>(rows: { order: S; key: { t: string; id: string } }[], search: URLSearchParams, node: (o: S) => N | null, total: ((n: number) => number) | null) => {
+  const accountPage = <S, N>(rows: { order: S; key: { t: string; id: string } }[], search: URLSearchParams, view: (o: S) => N, keep: ((o: S) => boolean) | null, total: ((n: number) => number) | null) => {
     const first = search.has('first') ? Number(search.get('first')) : 10
     if (!Number.isInteger(first) || first < 1 || first > 50) throw new HttpError(400, 'validation', '`first` must be an integer between 1 and 50', 'first')
     const after = search.get('after')
@@ -1620,7 +1620,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     const enc = (k: { t: string; id: string }) => btoa(`k1|${k.t}|${k.id}`).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
     const newer = (a: { t: string; id: string }, b: { t: string; id: string }) => (a.t === b.t ? a.id > b.id : a.t > b.t)
     const sorted = rows.slice().sort((a, b) => (newer(a.key, b.key) ? -1 : newer(b.key, a.key) ? 1 : 0))
-    const kept = sorted.map((r) => ({ r, n: node(r.order) })).filter((x) => x.n !== null)
+    const kept = keep ? sorted.filter((r) => keep(r.order)).map((r) => ({ r })) : sorted.map((r) => ({ r }))
     let slice: typeof kept
     let more: boolean
     if (before) {
@@ -1634,7 +1634,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       slice = rest.slice(0, first)
       more = rest.length > first
     }
-    const nodes = slice.map((x) => x.n as N)
+    const nodes = slice.map((x) => view(x.r.order))
     const startKey = slice[0]?.r.key
     const endKey = slice[slice.length - 1]?.r.key
     const page_info = before
@@ -1676,13 +1676,16 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     const body = accountPage(
       rows,
       search,
-      (o) => {
-        const view = orderView(o, false)
-        if (status && view.status !== status && view.progress?.stage !== status) return null
-        if (delivery && o.delivery_method !== delivery) return null
-        if (wantInvoice && hasInvoice(o) !== (wantInvoice === 'true')) return null
-        return view
-      },
+      (o) => orderView(o, false),
+      filtered
+        ? (o) => {
+            const view = orderView(o, false)
+            if (status && view.status !== status && view.progress?.stage !== status) return false
+            if (delivery && o.delivery_method !== delivery) return false
+            if (wantInvoice && hasInvoice(o) !== (wantInvoice === 'true')) return false
+            return true
+          }
+        : null,
       filtered ? null : (n) => n,
     )
     return { body, cache: 'private' }
@@ -1693,10 +1696,8 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       body: accountPage(
         ownRows(headers, search),
         search,
-        (o) => {
-          const invoices = (o.invoices ?? []).filter((d) => !status || d.status === status)
-          return invoices.length ? { order: { id: o.id, number: o.number, created_at: o.created_at }, invoices } : null
-        },
+        (o) => ({ order: { id: o.id, number: o.number, created_at: o.created_at }, invoices: (o.invoices ?? []).filter((d) => !status || d.status === status) }),
+        (o) => (o.invoices ?? []).some((d) => !status || d.status === status),
         null,
       ),
       cache: 'private',
@@ -1709,13 +1710,16 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
         ownRows(headers, search),
         search,
         (o) => {
-          if (o.delivery_method === 'pickup' || ['cancelled', 'refunded', 'pending_payment'].includes(o.status)) return null
-          const view = orderView(o, true)
-          const shipments = (view.shipments ?? []).map((s) => ({ ...s, events: [], map: null }))
-          const service = view.shipping_service ?? null
-          if (!service && shipments.length === 0) return null
-          if (status && !shipments.some((s) => s.status === status)) return null
-          return { order: { id: o.id, number: o.number, created_at: o.created_at }, stage: view.progress?.stage ?? o.status, service, shipments }
+          const v = orderView(o, true)
+          const shipments = (v.shipments ?? []).map((s) => ({ ...s, events: [], map: null }))
+          return { order: { id: o.id, number: o.number, created_at: o.created_at }, stage: v.progress?.stage ?? o.status, service: v.shipping_service ?? null, shipments }
+        },
+        (o) => {
+          if (o.delivery_method === 'pickup' || ['cancelled', 'refunded', 'pending_payment'].includes(o.status)) return false
+          const v = orderView(o, true)
+          const shipments = v.shipments ?? []
+          if (!v.shipping_service && shipments.length === 0) return false
+          return !status || shipments.some((s) => s.status === status)
         },
         null,
       ),
