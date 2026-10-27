@@ -28,7 +28,7 @@ export type { AccountMessageKey, AccountMessages } from './orders-messages.js'
 export type { AccountTextProps } from './orders-ui.js'
 export { voucherOf, barcodeValue, barcodeGeometry, code128Modules } from './voucher.js'
 export type { BarcodeGeometry, VoucherView } from './voucher.js'
-export { paymentLabel } from './payment-method.js'
+export { paymentLabel, paymentMethodKey } from './payment-method.js'
 export type { PaymentLabelOptions, PaymentMethodKey } from './payment-method.js'
 
 // Account settings (contract 1.9): headless, `data-sf-*` hooks, `classNames`, es/en texts. The action is in `./server`.
