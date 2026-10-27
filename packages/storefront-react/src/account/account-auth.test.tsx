@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { useState } from 'react'
 import { renderToString } from 'react-dom/server'
 import axe from 'axe-core'
 import type { CustomerCapabilities } from '@asteby/storefront'
@@ -207,5 +208,78 @@ describe('<AccountAuth />', () => {
         vi.useRealTimers()
       }
     })
+  })
+})
+
+/** The store's checkout panel: «Inicia sesión» / «Crea tu cuenta» tabs that remount the form while `data` (the last action result) stays the same object. */
+function Tabs({ data }: { data: Parameters<typeof AccountAuth>[0]['data'] }) {
+  const [mode, setMode] = useState<'login' | 'register'>('register')
+  const [attempt, setAttempt] = useState(0)
+  const pick = (m: 'login' | 'register') => {
+    setMode(m)
+    setAttempt((n) => n + 1)
+  }
+  return (
+    <div>
+      <button type="button" onClick={() => pick('login')}>
+        Inicia sesión
+      </button>
+      <button type="button" onClick={() => pick('register')}>
+        Crea tu cuenta
+      </button>
+      <AccountAuth key={`${mode}-${attempt}`} capabilities={full} data={data} initialView={mode} />
+    </div>
+  )
+}
+
+describe('<AccountAuth /> leaving the pending verification', () => {
+  // A fresh object per use: each action result is a new object (the component remembers the ones the buyer left).
+  const sent = () => ({ ok: true, email: 'dup@b.co', step: 'verify' as const })
+  const view = (c: HTMLElement) => c.querySelector('[data-sf-account-view]')!.getAttribute('data-sf-account-view')
+
+  for (const [name, leave] of [
+    ['Usar otro correo', 'register'],
+    ['Volver a entrar con contraseña', 'login'],
+  ] as const) {
+    it(`"${name}" then the «Inicia sesión» tab shows the sign-in form, not the code step`, () => {
+      const { container, rerender } = render(<Tabs data={null} />)
+      rerender(<Tabs data={sent()} />)
+      expect(view(container)).toBe('verify')
+      fireEvent.click(container.querySelector(`[data-sf-account-link=${leave}]`)!)
+      expect(view(container)).toBe(leave)
+      fireEvent.click(screen.getByRole('button', { name: 'Inicia sesión' }))
+      expect(view(container)).toBe('login')
+      expect(container.querySelector('[name=code]')).toBeNull()
+      expect(container.querySelector('[name=password]')).toBeTruthy()
+      expect((container.querySelector('[data-sf-account-submit]') as HTMLButtonElement).value).toBe('login')
+      // And back to «Crea tu cuenta»: the registration form, still not the code step.
+      fireEvent.click(screen.getByRole('button', { name: 'Crea tu cuenta' }))
+      expect(view(container)).toBe('register')
+    })
+  }
+
+  it('drops the password held for the resend as soon as the code step is left', () => {
+    const { container, rerender } = render(<AccountAuth capabilities={full} initialView="register" />)
+    const form = container.querySelector('[data-sf-account-form]') as HTMLFormElement
+    fireEvent.change(container.querySelector('[name=email]')!, { target: { value: 'dup@b.co' } })
+    fireEvent.change(container.querySelector('[name=password]')!, { target: { value: 'secret-password-1' } })
+    fireEvent.submit(form)
+    rerender(<AccountAuth capabilities={full} initialView="register" data={sent()} />)
+    expect(container.querySelector('[data-sf-account-resend-form] [name=password]')).toBeTruthy()
+    fireEvent.click(container.querySelector('[data-sf-account-link=register]')!)
+    expect(container.querySelector('[data-sf-account-resend-form]')).toBeNull()
+    expect(container.innerHTML).not.toContain('secret-password-1')
+    fireEvent.click(container.querySelector('[data-sf-account-link=login]')!)
+    expect(view(container)).toBe('login')
+    expect(container.querySelector('[data-sf-account-resend-form]')).toBeNull()
+    expect(container.innerHTML).not.toContain('secret-password-1')
+  })
+
+  it('does not show the error of a dismissed result on the next screen', () => {
+    const { container, rerender } = render(<AccountAuth capabilities={full} initialView="login" />)
+    rerender(<AccountAuth capabilities={full} initialView="login" data={{ ok: false, email: 'a@b.co', error: { code: 'invalid_credentials' } }} />)
+    expect(container.querySelector('[data-sf-account-error]')).toBeTruthy()
+    fireEvent.click(container.querySelector('[data-sf-account-link=register]')!)
+    expect(container.querySelector('[data-sf-account-error]')).toBeNull()
   })
 })

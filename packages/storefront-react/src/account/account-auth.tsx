@@ -7,7 +7,7 @@
  * Styling: `data-sf-account-*` attributes and `classNames` slots, fields reuse `CheckoutField` (and `checkout.css`);
  * `account.css` is an optional neutral sheet. Texts are Spanish by default, English with `locale="en"`, any with `messages`.
  */
-import { useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useReducer, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from 'react'
 import type { CustomerCapabilities } from '@asteby/storefront'
 import { CheckoutField, ErrorSummary, useFieldErrors, type CheckoutFieldClassNames } from '../checkout/fields.js'
 import { RESEND_COOLDOWN_SECONDS, useCooldown } from './cooldown.js'
@@ -197,6 +197,13 @@ export type AccountAuthProps = {
   header?: ReactNode
 }
 
+/**
+ * Action results the buyer already walked away from («Usar otro correo», a tab, «Volver a entrar con contraseña»).
+ * `useActionData()` keeps returning the same object until the next submit, so a remounted form (a tab that re-keys it)
+ * would read the old `step: 'verify'` and jump back to the code screen. Keyed by the object: a new submit brings a new one.
+ */
+const dismissed = new WeakSet<object>()
+
 const initialOf = (caps: CustomerCapabilities, initialView?: AccountAuthView): AccountAuthView =>
   initialView ?? (caps.password ? 'login' : caps.otp_channels.includes('email') ? 'otp-email' : 'login')
 
@@ -204,10 +211,12 @@ const initialOf = (caps: CustomerCapabilities, initialView?: AccountAuthView): A
  * The whole account screen. Headless enough to restyle, complete enough to drop in:
  * `export default function Account() { return <AccountAuth capabilities={useLoaderData()} data={useActionData()} form={Form} /> }`.
  */
-export function AccountAuth({ capabilities, data, next, pending = false, initialView, form: FormTag = 'form', action, locale, messages, classNames: cx = {}, header }: AccountAuthProps) {
+export function AccountAuth({ capabilities, data: received, next, pending = false, initialView, form: FormTag = 'form', action, locale, messages, classNames: cx = {}, header }: AccountAuthProps) {
   const m = accountAuthMessages(locale, messages)
   const passwordOn = capabilities.password
   const otpOn = capabilities.otp_channels.includes('email')
+  const [, refresh] = useReducer((n: number) => n + 1, 0)
+  const data = received && !dismissed.has(received) ? received : null
   const [view, setView] = useState<AccountAuthView>(() => data?.step ?? initialOf(capabilities, initialView))
   const [email, setEmail] = useState(data?.email ?? '')
   // The password typed in the registration, kept in memory only so "resend the code" can repeat the registration (the
@@ -222,6 +231,8 @@ export function AccountAuth({ capabilities, data, next, pending = false, initial
   // The action decides the next screen; the email it carries survives it.
   useEffect(() => {
     if (data?.step) setView(data.step)
+    // Only the code step needs the password held for the resend.
+    if (data?.step && data.step !== 'verify') setHeld(null)
     if (data?.email) setEmail(data.email)
     // A code was just sent: the next one can be asked for in a minute. A refusal says how long to wait.
     if (data?.ok && data.step) cooldown.start(RESEND_COOLDOWN_SECONDS)
@@ -229,10 +240,14 @@ export function AccountAuth({ capabilities, data, next, pending = false, initial
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `cooldown.start` is stable
   }, [data])
 
+  // Any move by the buyer ends the pending verification: step, error, notice, countdown and the password in memory.
   const go = (to: AccountAuthView) => {
     v.clear()
-    if (to === 'register' || to === 'login') setHeld(null)
+    if (received) dismissed.add(received)
+    setHeld(null)
+    cooldown.start(0)
     setView(to)
+    refresh()
   }
   // Remember the password of the registration being sent (see `held`); the resend form carries it.
   const remember = (e: FormEvent<HTMLElement>) => {
