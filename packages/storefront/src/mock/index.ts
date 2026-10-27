@@ -122,6 +122,11 @@ export type MockStorefrontOptions = {
    * carriers, ETAs and quote deadlines). `expires_at` missing: 24 h from the request. Free shipping still applies.
    */
   shippingRates?: ShippingRate[]
+  /**
+   * `fixed_when_free`: past `policies.free_shipping_min` `delivery-options` serves ONLY the shop's free rate and flags
+   * `free` / `fixed` (what the `storefront_cart` addon does with the setting of the same name). Default: the usual list.
+   */
+  shippingQuoteMode?: 'carriers' | 'fixed_when_free'
   /** Methods served by `payment-methods` (default one builtin `mock`). */
   paymentMethods?: PaymentMethod[]
   /**
@@ -572,6 +577,9 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       const expires = new Date(Date.now() + 24 * 3_600_000).toISOString()
       return options.shippingRates.map((r) => ({ ...r, expires_at: r.expires_at ?? expires, cost: free ? fromCents(0, r.cost.currency_code) : r.cost }))
     }
+    // Like the server with `shipping_quote_mode: fixed_when_free`: past the free-shipping minimum the shop's own price is
+    // the only rate (no carrier is asked, there is nothing to choose).
+    if (free && options.shippingQuoteMode === 'fixed_when_free') return [{ id: 'flat', title: 'Envío gratis', cost: fromCents(0, currency), eta: '2 a 5 días hábiles' }]
     return [
       { id: 'flat', title: free ? 'Envío estándar (gratis)' : 'Envío estándar', cost: fromCents(free ? 0 : flatShippingCents, currency), eta: '2 a 5 días hábiles' },
       { id: 'express', title: 'Envío exprés', cost: fromCents(flatShippingCents + 10000, currency), eta: '1 a 2 días hábiles' },
@@ -923,8 +931,10 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
   route('GET', '/carts/:id/delivery-options', 'cart:write', ({ params }) => {
     const cart = renderCart(getCartRecord(params[0]!))
     const net = toCents(cart.cost.subtotal.amount) - toCents(cart.cost.discount.amount)
+    const rates = shippingRates(net)
+    const free = options.shippingQuoteMode === 'fixed_when_free' && rates.length > 0 && rates.every((r) => toCents(r.cost.amount) === 0)
     return {
-      body: { rates: shippingRates(net), pickup: state.shop.branches.filter((b) => b.pickup?.enabled !== false).map((b) => ({ branch_id: b.id, name: b.name, address: b.address, city: b.city })), partial: false, unavailable: [] },
+      body: { rates, free, fixed: free, pickup: state.shop.branches.filter((b) => b.pickup?.enabled !== false).map((b) => ({ branch_id: b.id, name: b.name, address: b.address, city: b.city })), partial: false, unavailable: [] },
       cache: 'private',
     }
   })

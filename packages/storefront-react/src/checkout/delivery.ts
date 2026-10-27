@@ -37,6 +37,11 @@ export type DeliveryMessages = {
   /** The rates could not be quoted (`error`). */
   error: string
   retry: string
+  /** The order reaches the free-shipping minimum: nothing to choose. */
+  freeShipping: string
+  freeShippingNote: string
+  /** Screen-reader status when the rates are ready (`{n}` = how many). */
+  ratesReady: string
 }
 
 const ES: DeliveryMessages = {
@@ -61,6 +66,9 @@ const ES: DeliveryMessages = {
   otherCarriers: 'Otras opciones',
   error: 'No pudimos consultar las opciones de envío en este momento.',
   retry: 'Intentar de nuevo',
+  freeShipping: 'Envío gratis',
+  freeShippingNote: 'Tu pedido ya incluye el envío: no tienes que elegir paquetería.',
+  ratesReady: 'Opciones de envío listas ({n}).',
 }
 
 const EN: DeliveryMessages = {
@@ -85,6 +93,9 @@ const EN: DeliveryMessages = {
   otherCarriers: 'Other options',
   error: "We couldn't get delivery options right now.",
   retry: 'Try again',
+  freeShipping: 'Free shipping',
+  freeShippingNote: 'Shipping is included in your order: there is no carrier to choose.',
+  ratesReady: 'Delivery options ready ({n}).',
 }
 
 /** Messages for a locale (`es*` default, `en*`), with optional overrides. */
