@@ -137,6 +137,14 @@ export function PendingPaymentCard({ payment, voucherHref, shopName, headingLeve
           </p>
         </div>
       ) : null}
+      {v.barcode_text && !expired ? (
+        <div className={cx.field} data-sf-voucher-code>
+          <p className={cx.label}>{m['pending.code']}</p>
+          <p className={cx.value} data-sf-voucher-value>
+            {v.barcode_text}
+          </p>
+        </div>
+      ) : null}
       {code && !expired ? (
         <div className={cx.barcode} data-sf-voucher-barcode>
           <Barcode value={code} format={v.barcode_format ?? 'code128'} label={fill(m['pending.barcode'], { code })} />
@@ -179,6 +187,12 @@ export function PendingPaymentCard({ payment, voucherHref, shopName, headingLeve
               </button>
             </>
           )}
+          {v.ticket_url ? (
+            <a href={v.ticket_url} target="_blank" rel="noopener noreferrer" className={cx.secondary} data-sf-voucher-ticket>
+              {m['pending.ticket']}
+              <Hidden> {m['action.newTab']}</Hidden>
+            </a>
+          ) : null}
           {copyValue ? (
             <CopyButton value={copyValue} label={v.reference ? m['pending.copyReference'] : m['pending.copyClabe']} copiedLabel={m['pending.copied']} failedLabel={m['pending.copyFailed']} className={cx.secondary} data-sf-copy="voucher" />
           ) : null}

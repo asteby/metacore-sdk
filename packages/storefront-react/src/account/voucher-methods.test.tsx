@@ -155,6 +155,41 @@ describe('<PendingPaymentCard /> per method', () => {
     expect(c.querySelector('[data-sf-voucher-barcode]')).toBeNull()
     expect(c.querySelector('[data-sf-voucher-reference]')!.textContent).toContain('9300123456789012')
   })
+  it('server 1.10 OXXO: barcode_data code128 is drawn; ticket link shown; SPEI has no bars', () => {
+    const oxxo = { method: 'oxxo', kind: 'oxxo', reference: '10099302140321', barcode: '0100000389000000000000000000000000000000', barcode_data: { format: 'code128', value: '0100000389000000000000000000000000000000' }, ticket_url: 'https://www.mercadopago.com.mx/t', instructions_key: 'payment.voucher.instructions.oxxo' }
+    const c = render(<PendingPaymentCard payment={pay(oxxo)} />).container
+    expect(c.querySelector('[data-sf-voucher-barcode] svg')).not.toBeNull()
+    expect(c.querySelector('[data-sf-voucher-ticket]')!.getAttribute('href')).toBe('https://www.mercadopago.com.mx/t')
+    cleanup()
+    const s = render(<PendingPaymentCard payment={pay({ ...SPEI, kind: 'spei', barcode: null, barcode_data: null, instructions_key: 'payment.voucher.instructions.spei' })} />).container
+    expect(s.querySelector('[data-sf-voucher-barcode]')).toBeNull()
+    expect(s.querySelector('[data-sf-voucher-code]')).toBeNull()
+    expect(renderVoucherDocument(view({ ...SPEI, kind: 'spei', instructions_key: 'payment.voucher.instructions.spei' }), opts)).toContain('transferencia SPEI a la CLABE')
+  })
+  it('code39 from barcode_data is drawn; an unknown format shows the value as text, in the card and the document', () => {
+    const c39 = render(<PendingPaymentCard payment={pay({ ...OXXO, barcode: 'OXXO-123', barcode_data: { format: 'code39', value: 'OXXO-123' } })} />).container
+    expect(c39.querySelector('[data-sf-voucher-barcode] svg')).not.toBeNull()
+    cleanup()
+    const p = { ...OXXO, barcode: '55501234', barcode_data: { format: 'datamatrix', value: '55501234' } }
+    const c = render(<PendingPaymentCard payment={pay(p)} />).container
+    expect(c.querySelector('[data-sf-voucher-barcode]')).toBeNull()
+    expect(c.querySelector('[data-sf-voucher-code]')!.textContent).toContain('55501234')
+    const html = renderVoucherDocument(view(p), opts)
+    expect(html).not.toContain('<svg')
+    expect(readable(html)).toMatchSnapshot()
+    expect(html).toContain('data-field="code"')
+    expect(html).toContain('55501234')
+  })
+  it('old server (no barcode_data, string barcode, voucher_url): Code 128 and the old link', () => {
+    const c = render(<PendingPaymentCard payment={pay({ method: 'oxxo', reference: '1', barcode: '12345678', voucher_url: 'https://x.mx/v' })} />).container
+    expect(c.querySelector('[data-sf-voucher-barcode] svg')).not.toBeNull()
+    expect(c.querySelector('[data-sf-voucher-ticket]')!.getAttribute('href')).toBe('https://x.mx/v')
+  })
+  it('the card with ticket link and text code has no accessibility violations', async () => {
+    const r = render(<main><PendingPaymentCard payment={pay({ ...OXXO, barcode_data: null, barcode: '777', ticket_url: 'https://x.mx/t' })} voucherHref={() => '/x'} /></main>)
+    expect((await axe.run(r.container, AXE)).violations).toEqual([])
+    r.unmount()
+  })
   it('asks the store route for the HTML to print and the PDF to download', () => {
     const calls: string[] = []
     const { container } = render(<PendingPaymentCard payment={pay(OXXO)} voucherHref={(p, o) => (calls.push(`${o.format}:${o.download}`), `/f/${p.id}?formato=${o.format}`)} />)

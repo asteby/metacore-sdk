@@ -1,5 +1,24 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`<PendingPaymentCard /> per method > code39 from barcode_data is drawn; an unknown format shows the value as text, in the card and the document 1`] = `
+"Ficha de pago - ProtekAuto
+Ficha de pago
+ProtekAuto · OXXO · Pedido PA-1
+Total a pagar
+$1,512.50
+Referencia
+9300123456789012
+Código
+55501234
+Vence: 27 de octubre de 2026 a las 12:00 p.m. Pasada esa fecha la ficha deja de ser válida.
+Cómo pagar
+Acude a cualquier tienda OXXO y di que vas a hacer un pago de servicio en efectivo.
+Dicta la referencia en caja y paga el monto exacto.
+Conserva tu comprobante: confirmaremos tu pago automáticamente.
+Tu pedido se genera cuando se confirma el pago. Esta ficha es de un solo uso; no la compartas.
+Descargar PDFImprimirPara imprimir usa la opción Imprimir de tu navegador (Ctrl+P) o descarga el PDF."
+`;
+
 exports[`printable document per method > English 1`] = `
 "Payment voucher - ProtekAuto
 Payment voucher

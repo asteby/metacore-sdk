@@ -21,6 +21,7 @@ export type DocText = {
   expiresNote: string
   order: string
   barcode: string
+  code: string
   print: string
   downloadPdf: string
   noScript: string
@@ -45,6 +46,7 @@ const ES: DocText = {
   expiresNote: 'Pasada esa fecha la ficha deja de ser válida.',
   order: 'Pedido',
   barcode: 'Código de barras',
+  code: 'Código',
   print: 'Imprimir',
   downloadPdf: 'Descargar PDF',
   noScript: 'Para imprimir usa la opción Imprimir de tu navegador (Ctrl+P) o descarga el PDF.',
@@ -101,6 +103,7 @@ const EN: DocText = {
   expiresNote: 'After that date the voucher is no longer valid.',
   order: 'Order',
   barcode: 'Barcode',
+  code: 'Code',
   print: 'Print',
   downloadPdf: 'Download PDF',
   noScript: 'To print, use your browser\'s Print option (Ctrl+P) or download the PDF.',
@@ -167,14 +170,14 @@ export function voucherSteps(v: VoucherView, t: DocText): string[] {
   return fn!(v)
 }
 
-export type VoucherField = { key: 'beneficiary' | 'bank' | 'clabe' | 'reference'; label: string; value: string }
+export type VoucherField = { key: 'beneficiary' | 'bank' | 'clabe' | 'reference' | 'code'; label: string; value: string }
 
 /** Fields to print, in the order the method needs them: transfers lead with who/where/CLABE, cash with the reference. */
 export function voucherFields(v: VoucherView, t: DocText): VoucherField[] {
   const f = (key: VoucherField['key'], label: string, value: string | null): VoucherField[] => (value ? [{ key, label, value }] : [])
   return v.kind === 'transfer'
-    ? [...f('beneficiary', t.beneficiary, v.beneficiary), ...f('bank', t.bank, v.bank), ...f('clabe', t.clabe, v.clabe), ...f('reference', t.reference, v.reference)]
-    : [...f('reference', t.reference, v.reference), ...f('clabe', t.clabe, v.clabe), ...f('beneficiary', t.beneficiary, v.beneficiary), ...f('bank', t.bank, v.bank)]
+    ? [...f('beneficiary', t.beneficiary, v.beneficiary), ...f('bank', t.bank, v.bank), ...f('clabe', t.clabe, v.clabe), ...f('reference', t.reference, v.reference), ...f('code', t.code, v.barcode_text)]
+    : [...f('reference', t.reference, v.reference), ...f('clabe', t.clabe, v.clabe), ...f('beneficiary', t.beneficiary, v.beneficiary), ...f('bank', t.bank, v.bank), ...f('code', t.code, v.barcode_text)]
 }
 
 export function formatMoney(m: Money | null, locale: string): string {

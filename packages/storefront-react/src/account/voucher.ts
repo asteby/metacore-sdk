@@ -9,10 +9,15 @@ export type VoucherView = {
   /** `oxxo`, `spei`, ... as the gateway publishes it. */
   method: string | null
   reference: string | null
-  /** Value the barcode encodes, exactly as the server sent it. `null` when the server sent none (never inferred). */
+  /** Value the barcode encodes, exactly as the server sent it. `null` when the server sent none or it cannot be drawn. */
   barcode: string | null
   /** Symbology of `barcode`; `null` when there is no barcode or its format is not one we can draw. */
   barcode_format: BarcodeFormat | null
+  /**
+   * Code the server sent but that is NOT drawn (`barcode_data` is null or names a symbology we cannot draw): shown as
+   * plain text. `null` when there is nothing to show (also when it is the same as `reference`).
+   */
+  barcode_text: string | null
   clabe: string | null
   /** SPEI / transfer: who receives the money and in which bank. */
   beneficiary: string | null
@@ -21,6 +26,8 @@ export type VoucherView = {
   kind: VoucherKind
   /** Server-chosen key of the instructions (`oxxo`, `spei`...); unknown keys fall back to the kind. */
   instructions_key: string | null
+  /** `https` link to the provider's own receipt: `ticket_url`, else the older `voucher_url`. */
+  ticket_url: string | null
   expires_at: string | null
   amount: Money | null
   instructions: string | null
@@ -28,37 +35,65 @@ export type VoucherView = {
 
 const MAX = 256
 
-export type BarcodeFormat = 'code128' | 'code39'
+export type BarcodeFormat = 'code128' | 'code39' | 'itf' | 'ean13'
 export type VoucherKind = 'cash' | 'transfer' | 'generic'
 
-const CASH_METHODS = new Set(['oxxo', 'cash', 'store', 'convenience_store', 'efectivo', 'bank_deposit', 'deposit', 'paynet', '7eleven', 'seven_eleven', 'farmacias_guadalajara', 'circle_k'])
+const CASH_METHODS = new Set(['oxxo', 'cash', 'store', 'convenience_store', 'efectivo', 'bank_deposit', 'deposit', 'paynet', 'paycash', 'bancomer', '7eleven', 'seven_eleven', 'farmacias_guadalajara', 'circle_k'])
 const TRANSFER_METHODS = new Set(['spei', 'bank_transfer', 'transfer', 'wire', 'clabe'])
 
 function formatOf(v: unknown): BarcodeFormat | null {
   const f = typeof v === 'string' ? v.toLowerCase().replace(/[^a-z0-9]/g, '') : ''
   if (f === 'code128' || f === 'c128' || f === 'code128b' || f === 'code128c') return 'code128'
   if (f === 'code39' || f === 'c39') return 'code39'
+  if (f === 'itf' || f === 'itf14' || f === 'i25' || f === 'interleaved2of5') return 'itf'
+  if (f === 'ean13') return 'ean13'
   return null
 }
 
-/** The barcode the server declared: `{ format, value }` (contract) or a bare string (older servers: Code 128). */
-function barcodeOf(raw: unknown): { value: string; format: BarcodeFormat } | null {
+/**
+ * The barcode the server declared. `barcode_data` (contract 1.10) is authoritative when the key is present, object or
+ * `null`: `value` is what to draw, `text` what to show when it cannot be drawn. Without the key (older servers) the
+ * plain `barcode` string is Code 128.
+ */
+function barcodeOf(ext: Record<string, unknown>, raw: unknown): { draw: { value: string; format: BarcodeFormat } | null; text: string | null } {
+  if ('barcode_data' in ext) {
+    const d = ext.barcode_data
+    if (d && typeof d === 'object') {
+      const o = d as Record<string, unknown>
+      const value = text(o.value)
+      const format = formatOf(o.format)
+      if (value && format && barcodeModules(value, format)) return { draw: { value, format }, text: null }
+      return { draw: null, text: value ?? text(raw) }
+    }
+    return { draw: null, text: text(raw) }
+  }
   if (raw && typeof raw === 'object') {
     const o = raw as Record<string, unknown>
     const value = text(o.value)
     const format = formatOf(o.format ?? 'code128')
-    return value && format ? { value, format } : null
+    return { draw: value && format ? { value, format } : null, text: null }
   }
   const value = text(raw)
-  return value ? { value, format: 'code128' } : null
+  return { draw: value ? { value, format: 'code128' } : null, text: null }
+}
+
+/** `payment.voucher.instructions.oxxo` -> `oxxo`; `other` -> `generic`. */
+function instructionsKeyOf(raw: string | null): string | null {
+  const k = raw?.replace(/^payment\.voucher\.instructions\./, '').toLowerCase() ?? ''
+  return !k ? null : k === 'other' ? 'generic' : k
+}
+
+function httpsUrl(v: unknown): string | null {
+  const s = typeof v === 'string' ? v.trim() : ''
+  return /^https:\/\//i.test(s) && s.length <= 2048 ? s : null
 }
 
 function kindOf(kind: string | null, method: string | null, key: string | null): VoucherKind {
   for (const c of [kind, method, key]) {
     const k = c?.toLowerCase()
-    if (!k) continue
-    if (k === 'cash' || CASH_METHODS.has(k)) return 'cash'
-    if (k === 'transfer' || TRANSFER_METHODS.has(k)) return 'transfer'
+    if (!k || k === 'other' || k === 'generic') continue
+    if (k === 'oxxo' || k === 'cash' || CASH_METHODS.has(k)) return 'cash'
+    if (k === 'spei' || k === 'transfer' || TRANSFER_METHODS.has(k)) return 'transfer'
   }
   return 'generic'
 }
@@ -87,8 +122,8 @@ export function voucherOf(p: Pick<PendingPayment, 'payment' | 'total' | 'expires
   // Fields the contract adds later are read defensively: an older SDK type does not declare them yet.
   const ext = pay as Record<string, unknown>
   const method = text(pay.method ?? pay.provider)
-  const key = text(ext.instructions_key)
-  const bc = barcodeOf(pay.barcode)
+  const key = instructionsKeyOf(text(ext.instructions_key))
+  const bc = barcodeOf(ext, pay.barcode)
   const clabe = text(pay.clabe)
   let reference = text(pay.reference)
   // Some gateways publish the CLABE as the "reference" too: printing both reads as two different numbers.
@@ -96,18 +131,20 @@ export function voucherOf(p: Pick<PendingPayment, 'payment' | 'total' | 'expires
   const v: VoucherView = {
     method,
     reference,
-    barcode: bc?.value ?? null,
-    barcode_format: bc?.format ?? null,
+    barcode: bc.draw?.value ?? null,
+    barcode_format: bc.draw?.format ?? null,
+    barcode_text: bc.text && bc.text !== reference ? bc.text : null,
     clabe,
     beneficiary: text(ext.beneficiary),
     bank: text(ext.bank),
     kind: kindOf(text(ext.kind), method, key),
     instructions_key: key,
+    ticket_url: httpsUrl(ext.ticket_url) ?? httpsUrl(ext.voucher_url),
     expires_at: text(pay.expires_at) ?? text(p?.expires_at),
     amount: moneyOf(pay.amount) ?? moneyOf(p?.total),
     instructions: text(pay.instructions),
   }
-  return v.reference || v.barcode || v.clabe ? v : null
+  return v.reference || v.barcode || v.barcode_text || v.clabe ? v : null
 }
 
 /**
@@ -180,9 +217,44 @@ export function code39Modules(value: string): string | null {
   return out.slice(0, -1)
 }
 
+// Interleaved 2 of 5: digits in pairs, the first of each pair in the bars, the second in the spaces. Per digit the
+// 5 elements as `n`/`w` (wide = 3 modules). Start: bar-space-bar-space narrow; stop: wide bar, narrow space, narrow bar.
+const ITF_DIGITS = ['nnwwn', 'wnnnw', 'nwnnw', 'wwnnn', 'nnwnw', 'wnwnn', 'nwwnn', 'nnnww', 'wnnwn', 'nwnwn']
+
+/** Modules of the ITF (Interleaved 2 of 5) of `value`: digits only, even count. `null` otherwise. */
+export function itfModules(value: string): string | null {
+  if (!value || value.length > 80 || value.length % 2 !== 0 || !/^\d+$/.test(value)) return null
+  let out = '1010'
+  for (let i = 0; i < value.length; i += 2) {
+    const bars = ITF_DIGITS[Number(value[i])]!
+    const spaces = ITF_DIGITS[Number(value[i + 1])]!
+    for (let e = 0; e < 5; e++) out += '1'.repeat(bars[e] === 'w' ? 3 : 1) + '0'.repeat(spaces[e] === 'w' ? 3 : 1)
+  }
+  return out + '11101'
+}
+
+const EAN_L = ['0001101', '0011001', '0010011', '0111101', '0100011', '0110001', '0101111', '0111011', '0110111', '0001011']
+const EAN_R = EAN_L.map((c) => [...c].map((b) => (b === '1' ? '0' : '1')).join(''))
+const EAN_G = EAN_R.map((c) => [...c].reverse().join(''))
+const EAN_PARITY = ['LLLLLL', 'LLGLGG', 'LLGGLG', 'LLGGGL', 'LGLLGG', 'LGGLLG', 'LGGGLL', 'LGLGLG', 'LGLGGL', 'LGGLGL']
+
+/** Modules (95) of the EAN-13 of `value`: exactly 13 digits whose last one is the correct check digit. `null` otherwise. */
+export function ean13Modules(value: string): string | null {
+  if (!/^\d{13}$/.test(value)) return null
+  const d = [...value].map(Number)
+  const sum = d.slice(0, 12).reduce((a, n, i) => a + n * (i % 2 === 0 ? 1 : 3), 0)
+  if ((10 - (sum % 10)) % 10 !== d[12]) return null
+  const parity = EAN_PARITY[d[0]!]!
+  let out = '101'
+  for (let i = 0; i < 6; i++) out += (parity[i] === 'L' ? EAN_L : EAN_G)[d[i + 1]!]
+  out += '01010'
+  for (let i = 7; i < 13; i++) out += EAN_R[d[i]!]
+  return out + '101'
+}
+
 /** Modules of `value` in the given symbology. */
 export function barcodeModules(value: string, format: BarcodeFormat = 'code128'): string | null {
-  return format === 'code39' ? code39Modules(value) : code128Modules(value)
+  return format === 'code39' ? code39Modules(value) : format === 'itf' ? itfModules(value) : format === 'ean13' ? ean13Modules(value) : code128Modules(value)
 }
 
 export type BarcodeGeometry = { width: number; height: number; rects: { x: number; w: number }[] }

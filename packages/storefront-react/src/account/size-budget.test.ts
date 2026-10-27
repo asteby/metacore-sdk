@@ -11,7 +11,8 @@ import { describe, expect, it } from 'vitest'
 // printable voucher generator must stay a chunk of its own (loaded when the buyer taps print), not part of that load.
 // 16 KB: the shared product picture (ProductThumb/ProductPreview: shimmer, fallback, srcset) now serves the order card and the lines.
 // 17 KB: the voucher card now knows per-method kinds, Code 39 next to Code 128, beneficiary / bank fields and the client-side PDF download (the PDF generator itself stays lazy).
-const BUDGET_GZ = 17 * 1024
+// 18 KB: the card reads the server's `barcode_data` (contract 1.10): ITF and EAN-13 next to Code 128 / 39, the text code and the provider receipt link.
+const BUDGET_GZ = 18 * 1024
 const here = fileURLToPath(new URL('.', import.meta.url))
 
 describe('order screens bundle size', () => {
