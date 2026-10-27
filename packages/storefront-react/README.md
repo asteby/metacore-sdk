@@ -648,6 +648,31 @@ Llena **y bloquea** Estado y Ciudad con los mismos nombres con que el servidor v
 y nunca deben bloquear campos; no lo cablees en una tienda. Si lo usas en una herramienta propia, respeta la política de
 Nominatim (User-Agent identificable, 1 petición por segundo, caché) y atribuye «© OpenStreetMap contributors» (ODbL).
 
+## Calle y número con sugerencias (`AddressFields.suggestAddress`)
+
+«Calle y número» sugiere direcciones mientras el comprador teclea. La fuente es el **proveedor de geocodificación del
+mercado** detrás de la Storefront API (`GET /storefront/address/suggest`, `client.addressSuggest`; en OPS, el addon
+`geo_photon` sobre un Photon autoalojado u otro que provea `geo.address.suggest`). El navegador nunca llama a un tercero y
+la tienda no cablea proveedores: se elige por organización y mercado en OPS.
+
+- **Por defecto** se activa solo si `<StorefrontProvider>` tiene un cliente de navegador; `suggestAddress={fn}` usa otra fuente
+  (`(query, { signal, zip, country, locale }) => { suggestions, available?, degraded? }`) y `suggestAddress={false}` la apaga.
+- **Solo sugiere.** El estado, la ciudad y la colonia son del catálogo del código postal: elegir una opción rellena calle y
+  número, el CP si estaba vacío (y entonces corre la consulta normal) y la colonia **solo si es una del catálogo** (con su
+  ortografía) o si el catálogo no tiene colonias para ese código. Nunca toma estado ni ciudad de la sugerencia, no pisa lo
+  que el comprador escribió ni bloquea ningún campo. `onSuggestionChosen(s)` entrega la opción completa (`lat`, `lng`,
+  `precision`, `source`) por si la tienda quiere guardarla; el contrato de dirección aún no tiene coordenadas.
+- **Cuándo pregunta.** Desde 3 caracteres, tras 250 ms sin teclear, nunca espera más de 800 ms, descarta respuestas viejas, y
+  tras dos fallos seguidos descansa 30 s. Sin proveedor (`available: false`), con uno lento o caído, el campo es el input de
+  siempre: no hay error, no se bloquea nada, el pago no se toca.
+- **Accesible.** Combobox ARIA (`role="combobox"`, `aria-expanded`, `aria-activedescendant`, listbox con opciones): flechas
+  arriba/abajo, Enter acepta solo una opción resaltada (si no, Enter envía el formulario), Escape cierra, Tab sale, clic o toque
+  elige sin quitar el foco; una región `aria-live` dice cuántas hay y qué se eligió. ES/EN (`messages`).
+- **Atribución.** Junto a las opciones aparece «© OpenStreetMap contributors» (ODbL) enlazada a su página de copyright;
+  `suggestAttribution={<span>…</span>}` la reemplaza y `false` la oculta (solo para un proveedor cuyos datos no la exijan).
+- **Estilo.** Sin CSS propio usa colores del sistema; `classNames.suggestions|suggestion|suggestionActive|attribution` para el tuyo.
+- En desarrollo, `createMockStorefront({ addressSuggestions: [...] })` sirve la ruta; sin ellas responde `available: false`.
+
 ## Promociones y venta cruzada (`@asteby/storefront-react/promotions`)
 
 Mecanismos sin contenido: los textos y montos llegan como datos de OPS (`Cart.promotions`, `GET /storefront/promotions`, `carts.recommendations`).

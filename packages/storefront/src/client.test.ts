@@ -365,6 +365,24 @@ describe('region and fiscal identity routes', () => {
     await expect(sf.postalCode('00000')).resolves.toBeNull()
   })
 
+  it('addressSuggest() reads GET /storefront/address/suggest, normalizes q, and rejects short text without a request', async () => {
+    const { calls, fetch } = recorder(() => Response.json({ suggestions: [{ label: 'Av. Insurgentes Sur 123' }], available: true }))
+    const sf = createStorefrontClient({ ...base, fetch })
+    await expect(sf.addressSuggest({ q: '  Insurgentes   Sur 1 ', country: 'mx', zip: ' 03100 ', limit: 5, lat: 19.4, lng: -99.1, locale: 'es' })).resolves.toEqual({
+      suggestions: [{ label: 'Av. Insurgentes Sur 123' }],
+      available: true,
+    })
+    const u = new URL(calls[0]!.url)
+    expect(u.pathname).toBe('/api/gw/storefront/address/suggest')
+    expect(Object.fromEntries(u.searchParams)).toEqual({ q: 'Insurgentes Sur 1', country: 'MX', zip: '03100', limit: '5', lat: '19.4', lng: '-99.1', locale: 'es' })
+    await expect(sf.addressSuggest({ q: ' ab ' })).rejects.toBeInstanceOf(RangeError)
+    await expect(sf.addressSuggest({ q: '   ' })).rejects.toBeInstanceOf(RangeError)
+    expect(calls).toHaveLength(1)
+    // Optional parameters that are absent are not sent.
+    await sf.addressSuggest({ q: 'abc' })
+    expect(new URL(calls[1]!.url).search).toBe('?q=abc')
+  })
+
   it('carts.setInvoice PUTs the request, and {requested:false} withdraws it', async () => {
     const { calls, fetch } = recorder(() => Response.json({ id: 'c1' }))
     const sf = createStorefrontClient({ ...base, fetch })

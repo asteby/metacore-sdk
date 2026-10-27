@@ -10,12 +10,13 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import type { Address } from '@asteby/storefront'
 import { useOptionalStorefront } from '../context.js'
+import { AddressLineField, type AddressSuggestMessages, type SuggestAddress } from './address-suggest.js'
 import { CheckoutField, type CheckoutFieldClassNames, type FieldErrors, type FieldMessages } from './fields.js'
 
 export type AddressFieldKey = 'zip' | 'province' | 'city' | 'neighborhood' | 'address1' | 'address2' | 'reference'
 export type ContactFieldKey = 'email' | 'phone' | 'first_name' | 'last_name'
 
-export type AddressFieldsMessages = Record<AddressFieldKey | ContactFieldKey, string> & {
+export type AddressFieldsMessages = Record<AddressFieldKey | ContactFieldKey, string> & AddressSuggestMessages & {
   provincePlaceholder: string
   neighborhoodPlaceholder: string
   address1Hint: string
@@ -59,6 +60,10 @@ const ES: AddressFieldsMessages = {
   cityLocked: 'Definido por tu código postal',
   changePostalCode: 'Cambiar código postal',
   resolvedPlace: 'Entrega en',
+  suggestionsLabel: 'Sugerencias de dirección',
+  suggestionsCount: '{n} sugerencias. Usa las flechas arriba y abajo para elegir y Enter para aceptar.',
+  suggestionChosen: 'Dirección elegida: {label}',
+  attribution: '© OpenStreetMap contributors',
 }
 
 const EN: AddressFieldsMessages = {
@@ -85,6 +90,10 @@ const EN: AddressFieldsMessages = {
   cityLocked: 'Set by your postal code',
   changePostalCode: 'Change postal code',
   resolvedPlace: 'Delivering to',
+  suggestionsLabel: 'Address suggestions',
+  suggestionsCount: '{n} suggestions. Use the up and down arrows to choose and Enter to accept.',
+  suggestionChosen: 'Address chosen: {label}',
+  attribution: '© OpenStreetMap contributors',
 }
 
 export function addressFieldsMessages(locale?: string | null, overrides?: Partial<AddressFieldsMessages> | null): AddressFieldsMessages {
@@ -97,6 +106,11 @@ export type FieldLayoutClassNames = CheckoutFieldClassNames & {
   wide?: string
   /** Extra class of a field that fits half a row. */
   half?: string
+  /** The street suggestions panel, one option, the highlighted option and the attribution line (default: inline styles that follow the system colors). */
+  suggestions?: string
+  suggestion?: string
+  suggestionActive?: string
+  attribution?: string
 }
 
 type Common = {
@@ -212,6 +226,23 @@ export type AddressFieldsProps = Common & {
    * inputs. Default TRUE; `false` keeps the previous behavior (inputs filled, state locked per `lockProvinceOnFill`).
    */
   hideResolvedFields?: boolean
+  /**
+   * Street-and-number suggestions for "Street and number" (an ARIA combobox: arrows, Enter, Escape, live region). Default:
+   * the market's provider through the Storefront API (`client.addressSuggest`) of the surrounding `<StorefrontProvider>`
+   * when it has a browser client; pass a function to use another source, or `false` to turn it off. Asked only from 3
+   * characters, after 250 ms without typing, and never waited for past 800 ms; with no provider, a slow or a failing one
+   * the field stays a plain input and nothing else changes: it never blocks a field or the payment.
+   *
+   * Accepting an option fills the street and number (what was typed is replaced), the postal code when it was empty
+   * (which then runs the usual lookup) and the colonia only when it is one of the postal code's catalog (or the catalog
+   * has none): state and city are NEVER taken from a suggestion, the postal-code catalog is the authority. It does not
+   * overwrite a colonia the buyer chose or typed.
+   */
+  suggestAddress?: SuggestAddress | false
+  /** Called after an option is accepted and applied (coordinates, `source`...): the shop may keep what it needs. */
+  onSuggestionChosen?: (suggestion: import('@asteby/storefront').AddressSuggestion) => void
+  /** The attribution line shown with the options. Default "© OpenStreetMap contributors" linking to the OSM copyright page; `false` hides it (only for a provider whose data needs none). */
+  suggestAttribution?: ReactNode | false
   /** Rendered after the fields (e.g. "save this address"). */
   children?: ReactNode
 }
@@ -273,12 +304,15 @@ export function isAddressFillEvent(event: Event): boolean {
   return (event as unknown as Record<string, unknown>)[ADDRESS_FILL_EVENT_FLAG] === true
 }
 
+// Clients whose market answered "no suggestion provider": no field of the page asks again.
+const unavailableClients = new WeakSet<object>()
+
 const SR_ONLY = { position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' } as const
 const sameText = (a: string, b: string) => fold(a) === fold(b)
 const fold = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase()
 
 export function AddressFields(props: AddressFieldsProps) {
-  const { defaults, names = {}, errors = {}, countryCode, provinces, postalCode, lookupPostalCode, lockProvinceOnFill = true, lockCityOnFill = lockProvinceOnFill, hideResolvedFields = true, locale, messages, fieldMessages: fm, classNames: cx = {}, children } = props
+  const { defaults, names = {}, errors = {}, countryCode, provinces, postalCode, lookupPostalCode, suggestAddress, onSuggestionChosen, suggestAttribution, lockProvinceOnFill = true, lockCityOnFill = lockProvinceOnFill, hideResolvedFields = true, locale, messages, fieldMessages: fm, classNames: cx = {}, children } = props
   const showNeighborhood = props.neighborhood ?? true
   const showReference = props.reference ?? true
   const m = addressFieldsMessages(locale, messages)
@@ -309,6 +343,18 @@ export function AddressFields(props: AddressFieldsProps) {
   const lookupDefault = providerClient ? (zip: string): Promise<PostalCodeInfo | null> => providerClient.postalCode(zip) : undefined
   const lookupRef = useRef(lookupPostalCode ?? lookupDefault)
   lookupRef.current = lookupPostalCode ?? lookupDefault
+  // Street suggestions: the market's provider through the same client, unless the shop passes its own source or turns it off.
+  const suggestDefault: SuggestAddress | undefined =
+    providerClient && typeof providerClient.addressSuggest === 'function'
+      ? async (q, ctx) => {
+          if (unavailableClients.has(providerClient)) return { suggestions: [], available: false }
+          const params = { q, country: ctx.country, ...(ctx.zip ? { zip: ctx.zip } : {}), ...(ctx.locale ? { locale: ctx.locale.slice(0, 2) } : {}) }
+          return providerClient.addressSuggest(params, { signal: ctx.signal })
+        }
+      : undefined
+  const suggest = suggestAddress === false ? undefined : (suggestAddress ?? suggestDefault)
+  // The lookup of the code currently in flight (its colonias are not known yet).
+  const lookupPending = useRef<string | null>(null)
   // ONE writer: lookup results are applied one after another, never interleaved (two lookups answering close together
   // would otherwise write the same fields and fire their events at the same time).
   const writer = useRef<Promise<void>>(Promise.resolve())
@@ -396,10 +442,12 @@ export function AddressFields(props: AddressFieldsProps) {
     if (!lookup || !zip || zip === lastZip.current) return
     if (postalCode?.pattern && !new RegExp(`^(?:${postalCode.pattern})$`).test(zip)) return
     lastZip.current = zip
+    lookupPending.current = zip
     setNotFound(false)
     const form = zipRef.current?.closest('form')
     void lookup(zip).then(
       (info) => {
+        if (lookupPending.current === zip) lookupPending.current = null
         if (!info) {
           if (lastZip.current === zip) setNotFound(true)
           return
@@ -462,9 +510,49 @@ export function AddressFields(props: AddressFieldsProps) {
       },
       () => {
         /* lookup failed: the buyer types state and city */
+        if (lookupPending.current === zip) lookupPending.current = null
         if (lastZip.current === zip) setNotFound(true)
       },
     )
+  }
+
+  // An accepted street suggestion. Street and number are the point; the postal code only when empty; the colonia only from
+  // the postal code's catalog (or when the catalog has none); never state or city (the catalog is the authority).
+  const chooseSuggestion = (sg: import('@asteby/storefront').AddressSuggestion) => {
+    const form = zipRef.current?.closest('form')
+    if (!form) return
+    const el = (name: string) => {
+      const e = form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | null
+      return e && !('length' in e && !(e instanceof HTMLSelectElement)) ? e : null
+    }
+    const write = (target: HTMLInputElement | HTMLSelectElement, value: string, autofilled: boolean) => {
+      target.value = value
+      if (autofilled) target.dataset.sfAutofilled = '1'
+      const event = new Event('input', { bubbles: true })
+      Object.defineProperty(event, ADDRESS_FILL_EVENT_FLAG, { value: true })
+      target.dispatchEvent(event)
+    }
+    const zipEl = el(n('zip')) as HTMLInputElement | null
+    const zipNow = zipEl?.value.trim() ?? ''
+    // A candidate of another postal code than the one in the form is not for this address (the server drops them; so do we).
+    if (sg.zip && zipNow && sg.zip.replace(/\s/g, '').toLowerCase() !== zipNow.replace(/\s/g, '').toLowerCase()) return
+    const street = sg.street?.trim()
+    const line = street ? [street, sg.house_number?.trim()].filter(Boolean).join(' ') : ''
+    const lineEl = el(n('address1'))
+    if (line && lineEl) write(lineEl, line, false)
+    if (!zipNow && sg.zip && zipEl && (!postalCode?.pattern || new RegExp(`^(?:${postalCode.pattern})$`).test(sg.zip.trim()))) {
+      write(zipEl, sg.zip.trim(), true)
+      runLookup(sg.zip.trim())
+    }
+    const hood = sg.neighborhood?.trim()
+    const hoodEl = showNeighborhood ? el(n('neighborhood')) : null
+    if (hood && hoodEl && lookupPending.current === null && !(hoodEl.dataset.sfUserEdited === '1' || (hoodEl.value && hoodEl.dataset.sfAutofilled !== '1'))) {
+      const official = colonias.find((c) => sameText(c, hood))
+      // The catalog's spelling when it knows the colonia; the suggestion's only when the catalog has no colonias for this code.
+      const value = official ?? (colonias.length === 0 && zipEl?.value.trim() ? hood : null)
+      if (value && !(hoodEl instanceof HTMLSelectElement && ![...hoodEl.options].some((o) => o.value === value))) write(hoodEl, value, true)
+    }
+    onSuggestionChosen?.(sg)
   }
 
   // Applies the carried colonia to the field that replaced the old one (text <-> list), like any fill.
@@ -649,7 +737,31 @@ export function AddressFields(props: AddressFieldsProps) {
           ))}
         </datalist>
       ) : null}
-      <CheckoutField {...common} name={n('address1')} label={m.address1} autoComplete="address-line1" defaultValue={defaults?.address1 ?? ''} error={errors[n('address1')] ?? null} hint={m.address1Hint} classNames={field(cx, 'wide')} />
+      {suggest ? (
+        <AddressLineField
+          common={common}
+          name={n('address1')}
+          label={m.address1}
+          defaultValue={defaults?.address1 ?? ''}
+          error={errors[n('address1')] ?? null}
+          hint={m.address1Hint}
+          className={join(cx.wide)}
+          classNames={{ ...cx, root: cx.root }}
+          suggest={suggest}
+          getContext={() => {
+            const zipEl = zipRef.current?.closest('form')?.elements.namedItem(n('zip')) as HTMLInputElement | null
+            return { zip: zipEl && 'value' in zipEl ? zipEl.value.trim() : '', country: countryCode, ...(locale ? { locale } : {}) }
+          }}
+          onChoose={chooseSuggestion}
+          onUnavailable={() => {
+            if (providerClient) unavailableClients.add(providerClient)
+          }}
+          messages={m}
+          {...(suggestAttribution !== undefined ? { attribution: suggestAttribution } : {})}
+        />
+      ) : (
+        <CheckoutField {...common} name={n('address1')} label={m.address1} autoComplete="address-line1" defaultValue={defaults?.address1 ?? ''} error={errors[n('address1')] ?? null} hint={m.address1Hint} classNames={field(cx, 'wide')} />
+      )}
       <CheckoutField {...common} name={n('address2')} label={m.address2} autoComplete="address-line2" optional defaultValue={defaults?.address2 ?? ''} error={errors[n('address2')] ?? null} classNames={field(cx, 'half')} />
       {showReference ? (
         <CheckoutField {...common} name={n('reference')} label={m.reference} optional defaultValue={defaults?.reference ?? ''} error={errors[n('reference')] ?? null} hint={m.referenceHint} classNames={field(cx, 'wide')} maxLength={200} />

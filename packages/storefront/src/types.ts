@@ -1438,6 +1438,38 @@ export type RegionPostalCode = {
   cities?: string[]
 }
 
+/**
+ * One candidate of `GET /storefront/address/suggest`. A SUGGESTION: only the postal-code catalog of the region pack is
+ * authoritative for state, city and colonia, so a form uses `street` / `house_number` and treats the rest as hints.
+ */
+export type AddressSuggestion = {
+  /** Opaque id of the candidate at its provider. */
+  id?: string
+  /** The address as shown in the list. */
+  label: string
+  street?: string
+  house_number?: string
+  neighborhood?: string
+  city?: string
+  province?: string
+  zip?: string
+  country?: string
+  lat?: number
+  lng?: number
+  precision?: 'rooftop' | 'street' | 'neighborhood' | 'postal_centroid' | 'locality' | 'region' | 'country'
+  /** Key of the provider addon (`geo_photon`, ...). */
+  source?: string
+}
+
+/** `GET /storefront/address/suggest`. Never an error because the provider is missing or down. */
+export type AddressSuggestions = {
+  suggestions: AddressSuggestion[]
+  /** `false`: the market has no suggestion provider; a form stops asking and stays manual. */
+  available: boolean
+  /** `true`: there is a provider but it did not answer this time (timeout, outage). */
+  degraded?: boolean
+}
+
 /** `GET /storefront/region`: how the market formats, taxes, addresses and invoices. */
 export type Region = {
   country_code: string

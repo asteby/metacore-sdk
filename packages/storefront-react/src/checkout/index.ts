@@ -1,5 +1,7 @@
 export { ADDRESS_FILL_EVENT_FLAG, AddressFields, ContactFields, addressFieldsMessages, isAddressFillEvent } from './address-fields.js'
 export type { AddressFieldKey, AddressFieldsMessages, AddressFieldsProps, ContactFieldKey, ContactFieldsProps, FieldLayoutClassNames, PostalCodeInfo } from './address-fields.js'
+export { ADDRESS_SUGGEST_COOLDOWN_MS, ADDRESS_SUGGEST_DEBOUNCE_MS, ADDRESS_SUGGEST_MIN_CHARS, ADDRESS_SUGGEST_TIMEOUT_MS } from './address-suggest.js'
+export type { AddressSuggestContext, AddressSuggestMessages, AddressSuggestResult, AddressSuggestion, SuggestAddress } from './address-suggest.js'
 export { CheckoutField, ErrorSummary, fieldMessages, useFieldErrors, validationMessage } from './fields.js'
 export type { CheckoutFieldClassNames, CheckoutFieldProps, CheckoutSelectProps, ErrorSummaryItem, ErrorSummaryProps, FieldErrors, FieldErrorsState, FieldMessages, UseFieldErrorsOptions } from './fields.js'
 export { OrderSummary, OrderSummaryDisclosure, orderSummaryMessages } from './order-summary.js'

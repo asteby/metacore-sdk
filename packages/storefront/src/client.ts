@@ -65,6 +65,7 @@ import type {
   ProductConnection,
   Region,
   RegionPostalCode,
+  AddressSuggestions,
   ReturnRequest,
   ReturnRequestInput,
   Shop,
@@ -152,6 +153,23 @@ export type StorefrontClientOptions = {
 }
 
 /** Per-call options. Unknown keys (e.g. Next.js `next`) are forwarded to `fetch` as-is. */
+/** Query of `client.addressSuggest`. */
+export type AddressSuggestParams = {
+  /** What the shopper typed so far (at least 3 characters). */
+  q: string
+  /** ISO 3166-1 alpha-2 of the address: candidates of another country are dropped. */
+  country?: string
+  /** Postal code already chosen: candidates of another code or state are dropped. */
+  zip?: string
+  /** 1 to 8 (server default 5). */
+  limit?: number
+  /** Bias point (with `lng`): ranks nearby first, never filters. */
+  lat?: number
+  lng?: number
+  /** Language of the labels (`es`, `en`). Default: `Accept-Language`. */
+  locale?: string
+}
+
 export type RequestOptions = {
   cache?: RequestCache
   signal?: AbortSignal
@@ -460,6 +478,23 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
      * the server checks the address against.
      */
     postalCode: (zip: string, options?: RequestOptions) => getOrNull<RegionPostalCode>('/storefront/region/postal-code', { zip: zip.trim() }, options),
+
+    /**
+     * Street and number suggestions for the address form (`GET /storefront/address/suggest`), from the geocoding
+     * provider the market is assigned (a self-hosted Photon, ...). The server drops candidates of another country, postal
+     * code or state than the catalog's, and answers `{ suggestions: [], available: false }` when there is no provider:
+     * it never fails because of one. `q` needs at least 3 characters (the call rejects shorter ones without a request).
+     * Browser forms call it through `AddressFields.suggestAddress`; do not call it per keystroke without a debounce.
+     */
+    addressSuggest: (params: AddressSuggestParams, options?: RequestOptions) => {
+      const q = params.q.trim().replace(/\s+/g, ' ')
+      if ([...q].length < 3) return Promise.reject(new RangeError('addressSuggest: q needs at least 3 characters'))
+      return get<AddressSuggestions>(
+        '/storefront/address/suggest',
+        { q, country: params.country?.toUpperCase(), zip: params.zip?.trim(), limit: params.limit, lat: params.lat, lng: params.lng, locale: params.locale },
+        options,
+      )
+    },
 
     products: {
       list: (params?: ProductListParams, options?: RequestOptions) =>

@@ -411,3 +411,20 @@ describe('mock: shipping_quote_mode fixed_when_free', () => {
     expect(opts.rates.length).toBeGreaterThan(1)
   })
 })
+
+describe('mock address suggestions', () => {
+  it('answers like a market with no provider unless the dev store brings suggestions', async () => {
+    await expect(sf.addressSuggest({ q: 'Insurgentes' })).resolves.toEqual({ suggestions: [], available: false })
+    const m = createMockStorefront({
+      addressSuggestions: [
+        { label: 'Av. Insurgentes Sur 123, Del Valle', street: 'Avenida Insurgentes Sur', house_number: '123', zip: '03100', country: 'MX' },
+        { label: 'Calle Insurgentes 5, Madrid', country: 'ES' },
+        { label: 'Insurgentes Norte 9', zip: '06000', country: 'MX' },
+      ],
+    })
+    const c = createStorefrontClient({ baseUrl: 'https://mock.local/api/gw', token: 'pk_mock', fetch: m.fetch })
+    const out = await c.addressSuggest({ q: 'insurgentes', country: 'mx', zip: '03100' })
+    expect(out.available).toBe(true)
+    expect(out.suggestions.map((s) => s.label)).toEqual(['Av. Insurgentes Sur 123, Del Valle'])
+  })
+})

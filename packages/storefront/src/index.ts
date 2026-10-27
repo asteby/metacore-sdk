@@ -2,6 +2,7 @@ export { createStorefrontClient, generateIdempotencyKey, normalizeClientIp, stor
 export type {
   FetchLike,
   PreviewOptions,
+  AddressSuggestParams,
   RequestOptions,
   StorefrontClient,
   StorefrontClientOptions,

@@ -38,6 +38,7 @@ import type {
   ProductVariant,
   PromotionAnnouncement,
   Region,
+  AddressSuggestion,
   ShippingRate,
   Shop,
   StorefrontErrorCode,
@@ -138,6 +139,12 @@ export type MockStorefrontOptions = {
    * organization has no region, the route answers `404` and invoice requests are not validated against a region.
    */
   region?: Region | null
+  /**
+   * What `GET /storefront/address/suggest` can answer (matched by `label` containing the typed text). Default: none, so
+   * the route answers `{ suggestions: [], available: false }` like a market without a suggestion provider and address
+   * forms stay manual.
+   */
+  addressSuggestions?: AddressSuggestion[]
   /**
    * The kinds of buyer item («My items») the store declares, served by `GET /subject-kinds` and enforced by
    * `customer.subjects`. Default none: no such section, as in a store that declares nothing (`MOCK_SUBJECT_KINDS` has two).
@@ -818,6 +825,18 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
   route('GET', '/region', 'catalog:read', () => {
     if (!region) throw new HttpError(404, 'not_found', 'No region configured')
     return { body: region, cache: 'public' }
+  })
+  route('GET', '/address/suggest', 'catalog:read', ({ search }) => {
+    const q = (search.get('q') ?? '').trim().replace(/\s+/g, ' ')
+    if ([...q].length < 3) throw new HttpError(400, 'validation', 'q needs at least 3 characters', 'q')
+    const pool = options.addressSuggestions
+    if (!pool) return { body: { suggestions: [], available: false }, cache: 'private' }
+    const fold = (v: string) => v.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    const country = search.get('country')?.toUpperCase()
+    const zip = search.get('zip')?.trim()
+    const limit = Math.min(Math.max(Number(search.get('limit')) || 5, 1), 8)
+    const hits = pool.filter((p) => fold(p.label).includes(fold(q)) && (!country || p.country === country) && (!zip || !p.zip || p.zip === zip))
+    return { body: { suggestions: hits.slice(0, limit), available: true }, cache: 'private' }
   })
   route('GET', '/products', 'catalog:read', ({ search }) => ({ body: listProducts(search), cache: 'public' }))
   route('GET', '/products/:handle', 'catalog:read', ({ params }) => ({
