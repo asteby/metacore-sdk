@@ -12,6 +12,8 @@
  */
 import type { InvoiceDoc, InvoiceFileKind } from '@asteby/storefront'
 import { useState, type MouseEvent } from 'react'
+import { PendingButton } from '../ui/pending-button.js'
+import { useActionLock } from '../ui/use-action-lock.js'
 import { fill, type AccountMessages } from './orders-messages.js'
 import { fetchInvoiceFile, inlineHref, saveBlob, type InvoiceFileErrorKind } from './invoice-fetch.js'
 import type { InvoicePreviewClassNames } from './invoice-preview.js'
@@ -48,8 +50,12 @@ const narrow = () => {
 
 export function InvoiceFileLinks({ doc, m, name, fileHref, onDownload, preview = true, classNames: cx = {} }: InvoiceFileLinksProps) {
   const [notice, setNotice] = useState<{ kind: InvoiceFileKind; code: InvoiceFileErrorKind } | null>(null)
+  // One lock for the whole document: a PDF, an XML and the preview never run side by side (the PDF is the costly one).
+  const lock = useActionLock()
   const [busy, setBusy] = useState<InvoiceFileKind | 'preview' | null>(null)
+  const [dialogBusy, setDialogBusy] = useState(false)
   const [open, setOpen] = useState(false)
+  const working = lock.pending || dialogBusy
   if (!fileHref && !onDownload) return null
   const kindLabel = doc.kind === 'credit_note' ? m['invoice.creditNote'] : m['invoice.invoice']
   const label = name || str(doc.folio) || ''
@@ -60,12 +66,17 @@ export function InvoiceFileLinks({ doc, m, name, fileHref, onDownload, preview =
   const save = async (e: MouseEvent, kind: InvoiceFileKind, href: string) => {
     if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || typeof fetch !== 'function') return
     e.preventDefault()
+    if (working) return
     setNotice(null)
     setBusy(kind)
-    const r = await fetchInvoiceFile(href)
+    await lock.run(async (signal) => {
+      const r = await fetchInvoiceFile(href, { signal })
+      if (signal.aborted) return r
+      if (r.ok) saveBlob(r.blob, r.filename ?? fallbackName(doc, kind))
+      else setNotice({ kind, code: r.code })
+      return r
+    })
     setBusy(null)
-    if (r.ok) saveBlob(r.blob, r.filename ?? fallbackName(doc, kind))
-    else setNotice({ kind, code: r.code })
   }
 
   const link = (kind: InvoiceFileKind) => {
@@ -75,16 +86,16 @@ export function InvoiceFileLinks({ doc, m, name, fileHref, onDownload, preview =
     const href = hrefOf(kind)
     if (href) {
       return (
-        <a key={kind} href={href} download={fallbackName(doc, kind)} className={cx.download} aria-label={aria} aria-busy={busy === kind || undefined} onClick={(e) => void save(e, kind, href)} data-sf-invoice-download={kind}>
+        <PendingButton key={kind} href={href} download={fallbackName(doc, kind)} className={cx.download} aria-label={aria} pending={working} busy={lock.pending && busy === kind} kind="download" pendingLabel={m['invoice.downloading']} result={busy === kind && lock.result === 'done' ? 'done' : 'idle'} doneLabel={m['invoice.downloaded']} onClick={(e) => void save(e, kind, href)} data-sf-invoice-download={kind}>
           {text}
-        </a>
+        </PendingButton>
       )
     }
     if (onDownload) {
       return (
-        <button key={kind} type="button" className={cx.download} aria-label={aria} onClick={() => onDownload(doc, kind)} data-sf-invoice-download={kind}>
+        <PendingButton key={kind} className={cx.download} aria-label={aria} pending={working} busy={false} onClick={() => onDownload(doc, kind)} data-sf-invoice-download={kind}>
           {text}
-        </button>
+        </PendingButton>
       )
     }
     return null
@@ -97,17 +108,18 @@ export function InvoiceFileLinks({ doc, m, name, fileHref, onDownload, preview =
     setNotice(null)
     // A phone has no useful embedded PDF viewer: open the PDF in a tab (checked first, so an error is a notice, not a blank tab).
     if (narrow() && pdfHref && typeof window !== 'undefined') {
+      if (working) return
       const tab = window.open('', '_blank')
       setBusy('preview')
-      const r = await fetchInvoiceFile(inlineHref(pdfHref))
+      const r = await lock.run((signal) => fetchInvoiceFile(inlineHref(pdfHref), { signal }))
       setBusy(null)
-      if (r.ok && tab) {
+      if (r?.ok && tab) {
         tab.opener = null
         tab.location.href = URL.createObjectURL(new Blob([r.blob], { type: 'application/pdf' }))
         return
       }
       tab?.close()
-      if (!r.ok) setNotice({ kind: 'pdf', code: r.code })
+      if (r && !r.ok) setNotice({ kind: 'pdf', code: r.code })
       return
     }
     setOpen(true)
@@ -120,14 +132,16 @@ export function InvoiceFileLinks({ doc, m, name, fileHref, onDownload, preview =
       ? fill(m['invoice.fileNotReady'], { file: noun })
       : notice.code === 'unauthorized'
         ? m['invoice.fileSession']
-        : m['invoice.fileUnavailable']
+        : notice.code === 'rate_limited'
+          ? m['invoice.fileRateLimited']
+          : m['invoice.fileUnavailable']
   return (
     <>
       <p className={cx.actions} data-sf-invoice-actions>
         {canPreview ? (
-          <button type="button" className={cx.preview ?? cx.download} aria-haspopup="dialog" aria-busy={busy === 'preview' || undefined} aria-label={fill(m['invoice.previewOf'], { kind: kindLabel.toLowerCase(), name: label }).replace(/\s+/g, ' ').trim()} onClick={() => void openPreview()} data-sf-invoice-preview>
+          <PendingButton className={cx.preview ?? cx.download} aria-haspopup="dialog" aria-label={fill(m['invoice.previewOf'], { kind: kindLabel.toLowerCase(), name: label }).replace(/\s+/g, ' ').trim()} pending={working && !open} busy={lock.pending && busy === 'preview'} kind="load" pendingLabel={m['invoice.previewLoading']} onClick={() => void openPreview()} data-sf-invoice-preview>
             {m['invoice.preview']}
-          </button>
+          </PendingButton>
         ) : null}
         {link('pdf')}
         {link('xml')}
@@ -135,7 +149,7 @@ export function InvoiceFileLinks({ doc, m, name, fileHref, onDownload, preview =
       {notice ? (
         <p className={cx.note} role={notice.code === 'not_ready' ? 'status' : 'alert'} data-sf-invoice-file-notice={notice.code}>
           {noticeText}{' '}
-          {notice.code === 'not_ready' || notice.code === 'unavailable' ? (
+          {notice.code === 'not_ready' || notice.code === 'unavailable' || notice.code === 'rate_limited' ? (
             <button
               type="button"
               className={cx.download}
@@ -158,7 +172,11 @@ export function InvoiceFileLinks({ doc, m, name, fileHref, onDownload, preview =
       {canPreview && open ? (
         <InvoicePreviewDialog
           open
-          onClose={() => setOpen(false)}
+          onClose={() => {
+            setOpen(false)
+            setDialogBusy(false)
+          }}
+          onBusyChange={setDialogBusy}
           title={title}
           pdfHref={pdfHref}
           xmlHref={xmlHref}

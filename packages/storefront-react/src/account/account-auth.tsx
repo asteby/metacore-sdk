@@ -7,6 +7,7 @@
  * Styling: `data-sf-account-*` attributes and `classNames` slots, fields reuse `CheckoutField` (and `checkout.css`);
  * `account.css` is an optional neutral sheet. Texts are Spanish by default, English with `locale="en"`, any with `messages`.
  */
+import { PendingButton } from '../ui/pending-button.js'
 import { useEffect, useReducer, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from 'react'
 import type { CustomerCapabilities } from '@asteby/storefront'
 import { CheckoutField, ErrorSummary, useFieldErrors, type CheckoutFieldClassNames } from '../checkout/fields.js'
@@ -314,9 +315,9 @@ export function AccountAuth({ capabilities, data: received, next, pending = fals
       links = (
         <>
           {view === 'otp' ? (
-            <button type="submit" name="intent" value="otp-request" formNoValidate disabled={pending || cooldown.remaining > 0} className={cx.link} data-sf-account-link="resend">
+            <PendingButton type="submit" name="intent" value="otp-request" formNoValidate  className={cx.link} data-sf-account-link="resend" pending={pending} shared disabled={cooldown.remaining > 0}>
               {cooldown.remaining > 0 ? m.resendIn.replace('{s}', String(cooldown.remaining)) : m.resend}
-            </button>
+            </PendingButton>
           ) : (
             link('register', m.changeEmail)
           )}
@@ -388,9 +389,9 @@ export function AccountAuth({ capabilities, data: received, next, pending = fals
         {next ? <input type="hidden" name="next" value={next} /> : null}
         {body}
         <div className={cx.actions}>
-          <button type="submit" name="intent" value={intent} disabled={pending} className={cx.submit} data-sf-account-submit>
+          <PendingButton type="submit" name="intent" value={intent}  className={cx.submit} data-sf-account-submit pending={pending} shared>
             {m.submit[view]}
-          </button>
+          </PendingButton>
         </div>
         <div className={cx.links} data-sf-account-links>
           {links}
@@ -407,9 +408,9 @@ export function AccountAuth({ capabilities, data: received, next, pending = fals
           {held.last_name ? <input type="hidden" name="last_name" value={held.last_name} /> : null}
           {next ? <input type="hidden" name="next" value={next} /> : null}
           <div className={cx.links}>
-            <button type="submit" name="intent" value="resend" disabled={pending || cooldown.remaining > 0} className={cx.link} data-sf-account-link="resend">
+            <PendingButton type="submit" name="intent" value="resend"  className={cx.link} data-sf-account-link="resend" pending={pending} shared disabled={cooldown.remaining > 0}>
               {cooldown.remaining > 0 ? m.resendIn.replace('{s}', String(cooldown.remaining)) : m.resend}
-            </button>
+            </PendingButton>
           </div>
         </FormTag>
       ) : null}

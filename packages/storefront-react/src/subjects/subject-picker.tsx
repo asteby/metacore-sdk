@@ -9,6 +9,7 @@
  * A `private` field (a licence plate) is a plain text box labelled «only you see it». It is NEVER prefilled (the server
  * only returns it masked) and an empty one keeps the stored value on edit (`<name>.clear` removes it).
  */
+import { PendingButton } from '../ui/pending-button.js'
 import { resolveSubject, reconcileSubjectValues, subjectOptions, type Subject, type SubjectField, type SubjectInput, type SubjectKind, type SubjectProblems, type SubjectValues } from '@asteby/storefront'
 import { useId, useMemo, useState, type FormEvent } from 'react'
 import { useResolvedLocale } from '../locale.js'
@@ -220,9 +221,9 @@ export function SubjectPicker(props: SubjectPickerProps) {
         </label>
       ) : null}
       <div className={cx.actions}>
-        <button type="submit" className={cx.submit} disabled={pending} data-sf-subject-submit>
+        <PendingButton type="submit" className={cx.submit}  data-sf-subject-submit pending={pending} shared>
           {pending ? m.saving : m.save}
-        </button>
+        </PendingButton>
         {/* Without JavaScript the cascade advances by posting: «Continue» shows the next level. */}
         <noscript>
           <button type="submit" name="intent" value="subject-refine" formNoValidate data-sf-subject-refine>

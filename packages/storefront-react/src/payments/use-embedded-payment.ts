@@ -659,7 +659,8 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     fallbackReason,
     attemptsLeft,
     attemptId,
-    busy: status === 'loading' || status === 'processing',
+    // A pending 3DS challenge / review counts as busy too: no second attempt while one is in the bank's hands.
+    busy: status === 'loading' || status === 'processing' || status === 'challenge' || status === 'in_review',
     verifying,
     containerRef: setContainer,
     containerId,

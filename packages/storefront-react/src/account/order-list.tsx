@@ -4,6 +4,7 @@
  * component: `loading` (fixed-height skeletons, no layout shift), `error` (recoverable, says purchases are safe),
  * `empty` (useful text and your own call to action) and `ready`.
  */
+import { PendingButton } from '../ui/pending-button.js'
 import type { NextAction, Order } from '@asteby/storefront'
 import { nextAction as deriveNextAction, orderProgress as deriveProgress, isTestShipment } from '@asteby/storefront'
 import type { ReactNode } from 'react'
@@ -190,9 +191,9 @@ export function OrderList({ orders, status = 'ready', skeletons = 3, onRetry, ha
         </div>
       ) : null}
       {hasMore && onLoadMore ? (
-        <button type="button" className={cx.more} onClick={onLoadMore} disabled={loadingMore} aria-disabled={loadingMore || undefined} data-sf-orders-more>
-          {loadingMore ? m['order.loadingMore'] : m['order.loadMore']}
-        </button>
+        <PendingButton className={cx.more} onClick={onLoadMore} pending={loadingMore} kind="load" pendingLabel={m['order.loadingMore']} data-sf-orders-more>
+          {m['order.loadMore']}
+        </PendingButton>
       ) : null}
     </div>
   )

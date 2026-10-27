@@ -13,6 +13,7 @@
  *
  * Texts are Spanish by default, English with `locale="en"`, any with `messages`.
  */
+import { PendingButton } from '../ui/pending-button.js'
 import { useEffect, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from 'react'
 import type { CustomerCapabilities } from '@asteby/storefront'
 import { CheckoutField, ErrorSummary, useFieldErrors, type CheckoutFieldClassNames } from '../checkout/fields.js'
@@ -236,13 +237,13 @@ export function PostPurchaseAccountPrompt({
           <CheckoutField {...fieldProps} name="password" type="password" label={m.password} autoComplete="new-password" minLength={10} maxLength={128} hint={m.passwordHint} error={v.errors.password ?? null} />
         ) : null}
         <div className={cx.actions}>
-          <button type="submit" name="intent" value={intent} disabled={pending} className={cx.submit} data-sf-ppa-submit>
+          <PendingButton type="submit" name="intent" value={intent}  className={cx.submit} data-sf-ppa-submit pending={pending} shared>
             {label}
-          </button>
+          </PendingButton>
           {view === 'otp' ? (
-            <button type="submit" name="intent" value="otp-request" formNoValidate disabled={pending || wait > 0} className={cx.link} data-sf-ppa-resend>
+            <PendingButton type="submit" name="intent" value="otp-request" formNoValidate  className={cx.link} data-sf-ppa-resend pending={pending} shared disabled={wait > 0}>
               {resendLabel}
-            </button>
+            </PendingButton>
           ) : null}
         </div>
       </FormTag>
@@ -254,9 +255,9 @@ export function PostPurchaseAccountPrompt({
           <input type="hidden" name="password" value={held} />
           {next ? <input type="hidden" name="next" value={next} /> : null}
           <div className={cx.actions}>
-            <button type="submit" name="intent" value="resend" disabled={pending || wait > 0} className={cx.link} data-sf-ppa-resend>
+            <PendingButton type="submit" name="intent" value="resend"  className={cx.link} data-sf-ppa-resend pending={pending} shared disabled={wait > 0}>
               {resendLabel}
-            </button>
+            </PendingButton>
           </div>
         </FormTag>
       ) : null}

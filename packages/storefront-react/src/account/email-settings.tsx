@@ -16,6 +16,7 @@
  * to the action; they are never put back in the page. Degradation: `capabilities.email_change` absent or false (an
  * older OPS, or a store without mail) shows the e-mail and its state and offers nothing to do.
  */
+import { PendingButton } from '../ui/pending-button.js'
 import type { Customer, CustomerCapabilities } from '@asteby/storefront'
 import { useId, type ComponentType, type ReactNode } from 'react'
 import type { AccountFormProps } from './account-auth.js'
@@ -146,9 +147,9 @@ export function EmailSettings({ customer, capabilities, data, pending = false, f
         <div data-sf-email-verify>
           <p className={cx.help}>{m['email.unverifiedHelp']}</p>
           <FormTag {...formProps} className={cx.form} data-sf-account-form="">
-            <button type="submit" name="intent" value="email-verify-request" disabled={pending} className={cx.secondary} data-sf-email-verify-send>
+            <PendingButton type="submit" name="intent" value="email-verify-request"  className={cx.secondary} data-sf-email-verify-send pending={pending} shared>
               {showVerifyCode ? m['email.verifyResend'] : m['email.verifySend']}
-            </button>
+            </PendingButton>
           </FormTag>
           {showVerifyCode ? (
             <FormTag {...formProps} className={cx.form} data-sf-account-form="">
@@ -158,9 +159,9 @@ export function EmailSettings({ customer, capabilities, data, pending = false, f
                 </label>
                 <input id={`${ids}-vcode`} name="code" type="text" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} minLength={6} autoComplete="one-time-code" required className={cx.input} {...fieldFor('code')} data-sf-email-code />
               </div>
-              <button type="submit" name="intent" value="email-verify-confirm" disabled={pending} className={cx.submit} data-sf-email-verify-confirm>
+              <PendingButton type="submit" name="intent" value="email-verify-confirm"  className={cx.submit} data-sf-email-verify-confirm pending={pending} shared>
                 {m['email.verifyConfirm']}
-              </button>
+              </PendingButton>
             </FormTag>
           ) : null}
         </div>
@@ -179,9 +180,9 @@ export function EmailSettings({ customer, capabilities, data, pending = false, f
                 </label>
                 <input id={`${ids}-ccode`} name="code" type="text" inputMode="numeric" pattern="[0-9]{6}" maxLength={6} minLength={6} autoComplete="one-time-code" required className={cx.input} {...fieldFor('code')} data-sf-email-code />
               </div>
-              <button type="submit" name="intent" value="email-change-confirm" disabled={pending} className={cx.submit} data-sf-email-change-confirm>
+              <PendingButton type="submit" name="intent" value="email-change-confirm"  className={cx.submit} data-sf-email-change-confirm pending={pending} shared>
                 {m['email.changeConfirm']}
-              </button>
+              </PendingButton>
               {/* A plain link to the same page: it drops the pending step without JavaScript. */}
               <a href={action ?? '?'} className={cx.link} data-sf-email-change-reset>
                 {m['email.otherAddress']}
@@ -193,9 +194,9 @@ export function EmailSettings({ customer, capabilities, data, pending = false, f
               {email ? (
                 <FormTag {...formProps} className={cx.form} data-sf-account-form="" data-sf-email-reauth-code-form>
                   <p className={cx.help}>{m['email.reauthCodeHelp']}</p>
-                  <button type="submit" name="intent" value="email-reauth-code" disabled={pending} className={cx.secondary} data-sf-email-reauth-code>
+                  <PendingButton type="submit" name="intent" value="email-reauth-code"  className={cx.secondary} data-sf-email-reauth-code pending={pending} shared>
                     {m['email.reauthCodeSend']}
-                  </button>
+                  </PendingButton>
                 </FormTag>
               ) : null}
               <FormTag {...formProps} className={cx.form} data-sf-account-form="" data-sf-email-change-step="request">
@@ -221,9 +222,9 @@ export function EmailSettings({ customer, capabilities, data, pending = false, f
                     </div>
                   </>
                 ) : null}
-                <button type="submit" name="intent" value="email-change-request" disabled={pending} className={cx.submit} data-sf-email-change-send>
+                <PendingButton type="submit" name="intent" value="email-change-request"  className={cx.submit} data-sf-email-change-send pending={pending} shared>
                   {m['email.changeSend']}
-                </button>
+                </PendingButton>
               </FormTag>
             </>
           )}

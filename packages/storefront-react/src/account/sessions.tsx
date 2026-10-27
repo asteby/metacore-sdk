@@ -8,6 +8,7 @@
  * calm notice instead of an error page, and the rest of the settings keeps working. The server sends no address and
  * no token, so there is nothing sensitive to leak here; the device label is plain text (never HTML).
  */
+import { PendingButton } from '../ui/pending-button.js'
 import type { CustomerSessionInfo } from '@asteby/storefront'
 import { useId, type ComponentType, type ReactNode } from 'react'
 import type { AccountFormProps } from './account-auth.js'
@@ -93,9 +94,9 @@ export function SessionsList({ sessions, data, pending = false, form: FormTag = 
                   {s.current ? null : (
                     <FormTag {...formProps} data-sf-account-form="">
                       <input type="hidden" name="session_id" value={s.id} />
-                      <button type="submit" name="intent" value="session-revoke" disabled={pending} className={cx.revoke} aria-label={t('sessions.revokeLabel', { device })} data-sf-session-revoke>
+                      <PendingButton type="submit" name="intent" value="session-revoke"  className={cx.revoke} aria-label={t('sessions.revokeLabel', { device })} data-sf-session-revoke pending={pending} shared>
                         {m['sessions.revoke']}
-                      </button>
+                      </PendingButton>
                     </FormTag>
                   )}
                 </li>
@@ -108,9 +109,9 @@ export function SessionsList({ sessions, data, pending = false, form: FormTag = 
             </p>
           ) : (
             <FormTag {...formProps} data-sf-account-form="">
-              <button type="submit" name="intent" value="session-revoke-others" disabled={pending} className={cx.revokeOthers} data-sf-session-revoke-others>
+              <PendingButton type="submit" name="intent" value="session-revoke-others"  className={cx.revokeOthers} data-sf-session-revoke-others pending={pending} shared>
                 {m['sessions.revokeOthers']}
-              </button>
+              </PendingButton>
             </FormTag>
           )}
         </>
