@@ -128,6 +128,25 @@ describe('pendingVoucherResponse against hostile data', () => {
     expect(await dl.text()).not.toContain('<script')
   })
 
+  it('the PDF of hostile data is still a well-formed file with the locked headers', async () => {
+    const sf = pendingUpstream([node({ method: HOSTILE, reference: HOSTILE, barcode: { format: 'code128', value: HOSTILE }, clabe: HOSTILE, beneficiary: HOSTILE, bank: HOSTILE, instructions: HOSTILE.repeat(50) })])
+    const res = await pendingVoucherResponse({ storefront: sf, id: 'chk_1', format: 'pdf', shopName: HOSTILE })
+    expect(res.status).toBe(200)
+    expectLocked(res)
+    const text = new TextDecoder('latin1').decode(await res.arrayBuffer())
+    expect(text.startsWith('%PDF-1.4')).toBe(true)
+    expect(text.endsWith('%%EOF\n')).toBe(true)
+  })
+
+  it('a PDF request for an id that is not the buyer\'s reads like a missing one', async () => {
+    const sf = pendingUpstream([node({ reference: '1' }, 'chk_mine')])
+    const other = await pendingVoucherResponse({ storefront: sf, id: 'chk_someone_else', format: 'pdf' })
+    const none = await pendingVoucherResponse({ storefront: pendingUpstream([]), id: 'chk_mine', format: 'pdf' })
+    expect([other.status, none.status]).toEqual([404, 404])
+    expect(await other.text()).toBe(await none.text())
+    expectLocked(other)
+  })
+
   it('an id outside the buyer\'s list reads exactly like a missing one, with the locked headers', async () => {
     const sf = pendingUpstream([node({ reference: '1' }, 'chk_mine')])
     const other = await pendingVoucherResponse({ storefront: sf, id: 'chk_someone_else' })

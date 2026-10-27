@@ -342,6 +342,15 @@ export type PendingVoucherResponseOptions = {
   id: string
   /** `?descargar=1`: deliver it as a file instead of showing it. */
   download?: boolean
+  /**
+   * `html` (default): the printable page. `pdf`: a real `application/pdf` (`ficha-de-pago.pdf`, always an attachment),
+   * generated here without a browser. Same ownership check for both.
+   */
+  format?: 'html' | 'pdf'
+  /** Paper of the PDF (default A4). */
+  paper?: 'a4' | 'letter'
+  /** Where the page's "Descargar PDF" link points (default `?formato=pdf` on the same route). */
+  pdfHref?: string
   shopName?: string
   locale?: string
   timeZone?: string
@@ -353,16 +362,30 @@ export type PendingVoucherResponseOptions = {
  * is scoped by buyer in OPS): any other id is a 404. The document is self-contained, so its CSP allows nothing
  * external, only its own print script (with a per-response nonce) and inline styles.
  */
-export async function pendingVoucherResponse({ storefront, id, download = false, shopName, locale, timeZone, signal }: PendingVoucherResponseOptions): Promise<Response> {
+export async function pendingVoucherResponse({ storefront, id, download = false, format = 'html', paper, pdfHref = '?formato=pdf', shopName, locale, timeZone, signal }: PendingVoucherResponseOptions): Promise<Response> {
   try {
     const page = await storefront.customer.pendingPayments({ first: 100 }, signal ? { signal } : undefined)
     const item = page.nodes.find((p) => p.id === id)
     const voucher = item ? voucherOf(item) : null
     if (!item || !voucher) return textResponse(404, 'Ficha no encontrada')
+    const safeId = id.replace(/[^A-Za-z0-9-]/g, '').slice(0, 8) || 'ficha'
+    if (format === 'pdf') {
+      const { renderVoucherPdf } = await import('./voucher-pdf.js')
+      const bytes = renderVoucherPdf(voucher, { ...(shopName ? { shopName } : {}), ...(locale ? { locale } : {}), ...(timeZone ? { timeZone } : {}), ...(paper ? { paper } : {}) })
+      return new Response(bytes as BodyInit, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Length': String(bytes.byteLength),
+          'Content-Disposition': 'attachment; filename="ficha-de-pago.pdf"',
+          ...LOCKED_HEADERS,
+          'Content-Security-Policy': "default-src 'none'; sandbox",
+        },
+      })
+    }
     const nonce = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))))
     const { renderVoucherDocument } = await import('./voucher-document.js')
-    const html = renderVoucherDocument(voucher, { ...(shopName ? { shopName } : {}), ...(locale ? { locale } : {}), ...(timeZone ? { timeZone } : {}), printButton: !download, nonce })
-    const safeId = id.replace(/[^A-Za-z0-9-]/g, '').slice(0, 8) || 'ficha'
+    const html = renderVoucherDocument(voucher, { ...(shopName ? { shopName } : {}), ...(locale ? { locale } : {}), ...(timeZone ? { timeZone } : {}), printButton: !download, ...(download ? {} : { pdfHref }), nonce })
     return new Response(html, {
       status: 200,
       headers: {
@@ -376,6 +399,11 @@ export async function pendingVoucherResponse({ storefront, id, download = false,
   } catch (err) {
     return failureResponse(err)
   }
+}
+
+/** The PDF of a pending payment's voucher: `pendingVoucherResponse` with `format: 'pdf'`. */
+export function pendingVoucherPdfResponse(options: Omit<PendingVoucherResponseOptions, 'format' | 'download' | 'pdfHref'>): Promise<Response> {
+  return pendingVoucherResponse({ ...options, format: 'pdf' })
 }
 
 // Account settings (sessions, preferences, export, deletion): see ./settings-server.ts

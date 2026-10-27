@@ -1,0 +1,61 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`printable document per method > English 1`] = `
+"Payment voucher - ProtekAuto
+Payment voucher
+ProtekAuto · OXXO · Order PA-1
+Amount to pay
+MX$1,512.50
+Reference
+9300123456789012
+[barcode]93001234567890123456
+Expires: October 27, 2026 at 12:00 PM. After that date the voucher is no longer valid.
+How to pay
+Go to any OXXO store and say you want to make a cash service payment.
+Show the barcode at the register or read out the reference, and pay the exact amount.
+Keep your receipt: we will confirm your payment automatically.
+Your order is created when the payment is confirmed. This voucher is single-use; do not share it.
+Download PDFPrintTo print, use your browser&#39;s Print option (Ctrl+P) or download the PDF."
+`;
+
+exports[`printable document per method > OXXO: reference, barcode (when the server sent one), store steps 1`] = `
+"Ficha de pago - ProtekAuto
+Ficha de pago
+ProtekAuto · OXXO · Pedido PA-1
+Total a pagar
+$1,512.50
+Referencia
+9300123456789012
+[barcode]93001234567890123456
+Vence: 27 de octubre de 2026 a las 12:00 p.m. Pasada esa fecha la ficha deja de ser válida.
+Cómo pagar
+Acude a cualquier tienda OXXO y di que vas a hacer un pago de servicio en efectivo.
+Muestra el código de barras en caja o dicta la referencia, y paga el monto exacto.
+Conserva tu comprobante: confirmaremos tu pago automáticamente.
+Tu pedido se genera cuando se confirma el pago. Esta ficha es de un solo uso; no la compartas.
+Descargar PDFImprimirPara imprimir usa la opción Imprimir de tu navegador (Ctrl+P) o descarga el PDF."
+`;
+
+exports[`printable document per method > SPEI: beneficiary, bank, CLABE, a reference different from the CLABE, transfer steps, no store anywhere 1`] = `
+"Ficha de pago - ProtekAuto
+Ficha de pago
+ProtekAuto · Transferencia SPEI · Pedido PA-1
+Total a pagar
+$1,512.50
+Beneficiario
+ProtekAuto SA de CV
+Banco
+STP
+CLABE
+646010349362032012
+Referencia
+PA-4412
+Vence: 27 de octubre de 2026 a las 12:00 p.m. Pasada esa fecha la ficha deja de ser válida.
+Cómo pagar
+Entra a la banca en línea o a la app de tu banco.
+Haz una transferencia SPEI a la CLABE indicada, por el monto exacto.
+Escribe la referencia de esta ficha en el concepto o referencia de la transferencia.
+Conserva tu comprobante: confirmaremos tu pago automáticamente.
+Tu pedido se genera cuando se confirma el pago. Esta ficha es de un solo uso; no la compartas.
+Descargar PDFImprimirPara imprimir usa la opción Imprimir de tu navegador (Ctrl+P) o descarga el PDF."
+`;

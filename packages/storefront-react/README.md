@@ -885,8 +885,13 @@ Rutas recurso de la tienda (`@asteby/storefront-react/account/server`), cada una
 // account.order.$id.invoice.$doc.$kind.ts
 export const loader = async ({ request, params }) => invoiceFileResponse({ storefront: await sfFor(request), orderId: params.id, invoiceId: params.doc, kind: params.kind })
 // account.pending.$id.ficha.ts
-export const loader = async ({ request, params }) => pendingVoucherResponse({ storefront: await sfFor(request), id: params.id, download: new URL(request.url).searchParams.get('descargar') === '1', shopName: 'Mi tienda' })
+export const loader = async ({ request, params }) => {
+  const q = new URL(request.url).searchParams
+  return pendingVoucherResponse({ storefront: await sfFor(request), id: params.id, download: q.get('descargar') === '1', format: q.get('formato') === 'pdf' ? 'pdf' : 'html', shopName: 'Mi tienda' })
+}
 ```
+
+La ficha es por método: OXXO/efectivo imprime referencia y código de barras (solo si el servidor manda `payment.barcode { format: 'code128' | 'code39', value }`; sin él, solo la referencia), SPEI/transferencia imprime beneficiario, banco, CLABE y referencia con instrucciones de transferencia. Las instrucciones salen de `payment.instructions_key` / método / `payment.kind` (es/en, con fallback genérico). `format: 'pdf'` entrega `ficha-de-pago.pdf` (`application/pdf`, attachment, no-store, solo del dueño) generado sin navegador; la página HTML trae «Descargar PDF» (enlace, sin JS; `pdfHref` por omisión `?formato=pdf`) e «Imprimir». Para `PendingPaymentList`/`Card`, `voucherHref(payment, { download, format })` pide `html` para ver/imprimir y `pdf` para descargar.
 
 `invoiceFileResponse` sirve `attachment` con `Cache-Control: private, no-store`, `nosniff` y CSP `sandbox` (también en cada respuesta de error); el tipo sale de `kind`, no de lo que diga la API, y un archivo de más de `maxBytes` (10 MB por defecto) es un 502 genérico sin decodificarlo. `pendingVoucherResponse` solo entrega una ficha que está en la lista del comprador (si no, 404) con CSP cerrada y nonce por respuesta. Accesibilidad: WCAG 2.2 AA verificada con axe en las pruebas (contraste lo decide cada tienda con sus tokens), objetivos ≥ 44 px en el CSS opcional, `prefers-reduced-motion`. Presupuesto: todas las pantallas ≈ 13 KB gzip (prueba `size-budget`).
 

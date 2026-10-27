@@ -10,7 +10,8 @@ import { describe, expect, it } from 'vitest'
 // component and hook, bundles them minified with the peers external, and measures what a store's first load pays. The
 // printable voucher generator must stay a chunk of its own (loaded when the buyer taps print), not part of that load.
 // 16 KB: the shared product picture (ProductThumb/ProductPreview: shimmer, fallback, srcset) now serves the order card and the lines.
-const BUDGET_GZ = 16 * 1024
+// 17 KB: the voucher card now knows per-method kinds, Code 39 next to Code 128, beneficiary / bank fields and the client-side PDF download (the PDF generator itself stays lazy).
+const BUDGET_GZ = 17 * 1024
 const here = fileURLToPath(new URL('.', import.meta.url))
 
 describe('order screens bundle size', () => {
@@ -37,9 +38,17 @@ describe('order screens bundle size', () => {
       })
       const files = readdirSync(join(dir, 'out')).filter((f) => f.endsWith('.js'))
       const text = (f: string) => readFileSync(join(dir, 'out', f), 'utf8')
-      const lazy = files.filter((f) => /^voucher-document/.test(f))
-      expect(lazy, 'the voucher generator is its own chunk').toHaveLength(1)
-      const initial = files.filter((f) => !lazy.includes(f))
+      // First load = the entry and what it imports statically; the voucher generators (HTML, PDF and their shared texts) are reached only by dynamic import().
+      const initial: string[] = []
+      const walk = (f: string) => {
+        if (initial.includes(f)) return
+        initial.push(f)
+        for (const m of text(f).matchAll(/(?:from|import)\s*["']\.\/([^"']+\.js)["']/g)) if (files.includes(m[1]!)) walk(m[1]!)
+      }
+      walk('account.js')
+      const lazy = files.filter((f) => !initial.includes(f))
+      expect(lazy.some((f) => /^voucher-document/.test(f)), 'the HTML voucher is its own chunk').toBe(true)
+      expect(lazy.some((f) => /^voucher-pdf/.test(f)), 'the PDF generator is its own chunk').toBe(true)
       const gz = initial.reduce((n, f) => n + gzipSync(text(f)).length, 0)
       expect(gz, `order screens: ${gz} B gzip (budget ${BUDGET_GZ})`).toBeLessThanOrEqual(BUDGET_GZ)
       // the document template and its CSS are not in the first load

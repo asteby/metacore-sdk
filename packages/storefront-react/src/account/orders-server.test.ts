@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createStorefrontClient, StorefrontError } from '@asteby/storefront'
 import { createMockStorefront, MOCK_CUSTOMER_EMAIL } from '@asteby/storefront/mock'
-import { invoiceFileResponse, pendingVoucherResponse } from './server.js'
+import { invoiceFileResponse, pendingVoucherPdfResponse, pendingVoucherResponse } from './server.js'
 
 async function buyer() {
   const mock = createMockStorefront()
@@ -79,8 +79,37 @@ describe('pendingVoucherResponse', () => {
     expect((await pendingVoucherResponse({ storefront, id: 'chk_someone_else' })).status).toBe(404)
   })
 
+  it('serves a real PDF as an attachment, no-store, to its owner only', async () => {
+    const { storefront } = await buyer()
+    const res = await pendingVoucherResponse({ storefront, id: 'chk_seed_oxxo', format: 'pdf', shopName: 'Tienda', timeZone: 'UTC' })
+    expect(res.status).toBe(200)
+    expect(res.headers.get('content-type')).toBe('application/pdf')
+    expect(res.headers.get('content-disposition')).toBe('attachment; filename="ficha-de-pago.pdf"')
+    expect(res.headers.get('cache-control')).toBe('private, no-store')
+    expect(res.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(res.headers.get('content-security-policy')).toContain('sandbox')
+    const bytes = new Uint8Array(await res.arrayBuffer())
+    expect(res.headers.get('content-length')).toBe(String(bytes.byteLength))
+    expect(new TextDecoder('latin1').decode(bytes.slice(0, 8))).toBe('%PDF-1.4')
+    expect(new TextDecoder('latin1').decode(bytes.slice(-6))).toBe('%%EOF\n')
+    const other = await pendingVoucherResponse({ storefront, id: 'chk_someone_else', format: 'pdf' })
+    expect(other.status).toBe(404)
+    expect(other.headers.get('content-type')).toContain('text/plain')
+    const viaHelper = await pendingVoucherPdfResponse({ storefront, id: 'chk_seed_oxxo' })
+    expect(viaHelper.headers.get('content-type')).toBe('application/pdf')
+  })
+
+  it('the page links to its PDF (a plain link) and the download variant does not', async () => {
+    const { storefront } = await buyer()
+    const page = await (await pendingVoucherResponse({ storefront, id: 'chk_seed_oxxo' })).text()
+    expect(page).toContain('href="?formato=pdf"')
+    expect(await (await pendingVoucherResponse({ storefront, id: 'chk_seed_oxxo', pdfHref: '/p/x.pdf' })).text()).toContain('href="/p/x.pdf"')
+    expect(await (await pendingVoucherResponse({ storefront, id: 'chk_seed_oxxo', download: true })).text()).not.toContain('formato=pdf')
+  })
+
   it('401s without a session', async () => {
     const { anonymous } = await buyer()
     expect((await pendingVoucherResponse({ storefront: anonymous, id: 'chk_seed_oxxo' })).status).toBe(401)
+    expect((await pendingVoucherResponse({ storefront: anonymous, id: 'chk_seed_oxxo', format: 'pdf' })).status).toBe(401)
   })
 })

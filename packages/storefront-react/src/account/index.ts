@@ -26,8 +26,8 @@ export type { AccountStatus, UseConnectionResult, UseCustomerOrderOptions, UseCu
 export { accountMessages, enumText } from './orders-messages.js'
 export type { AccountMessageKey, AccountMessages } from './orders-messages.js'
 export type { AccountTextProps } from './orders-ui.js'
-export { voucherOf, barcodeValue, barcodeGeometry, code128Modules } from './voucher.js'
-export type { BarcodeGeometry, VoucherView } from './voucher.js'
+export { voucherOf, barcodeValue, barcodeGeometry, barcodeModules, code128Modules, code39Modules } from './voucher.js'
+export type { BarcodeFormat, BarcodeGeometry, VoucherKind, VoucherView } from './voucher.js'
 export { paymentLabel, paymentMethodKey } from './payment-method.js'
 export type { PaymentLabelOptions, PaymentMethodKey } from './payment-method.js'
 

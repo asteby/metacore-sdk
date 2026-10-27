@@ -12,13 +12,13 @@ import type { PendingPayment } from '@asteby/storefront'
 import { useId, useMemo, type ReactNode } from 'react'
 import { enumText, fill } from './orders-messages.js'
 import { CopyButton, Hidden, Time, moneyText, useAccountText, type AccountTextProps } from './orders-ui.js'
-import { barcodeGeometry, barcodeValue, voucherOf } from './voucher.js'
+import { barcodeGeometry, voucherOf, type BarcodeFormat } from './voucher.js'
 
-export type BarcodeProps = { value: string; label: string; height?: number; className?: string }
+export type BarcodeProps = { value: string; label: string; height?: number; className?: string; /** Symbology (default Code 128). */ format?: BarcodeFormat }
 
 /** Code 128 as an inline `<svg role="img">` (no HTML injection). `null` when the value cannot be encoded. */
-export function Barcode({ value, label, height = 56, className }: BarcodeProps) {
-  const g = useMemo(() => barcodeGeometry(value, { height }), [value, height])
+export function Barcode({ value, label, height = 56, className, format }: BarcodeProps) {
+  const g = useMemo(() => barcodeGeometry(value, { height, ...(format ? { format } : {}) }), [value, height, format])
   if (!g) return null
   return (
     <svg className={className} viewBox={`0 0 ${g.width} ${g.height}`} width={g.width} height={g.height} role="img" aria-label={label} shapeRendering="crispEdges" fill="#000" data-sf-voucher-barcode-svg>
@@ -35,13 +35,30 @@ export type PendingPaymentCardClassNames = Partial<
 
 export type PendingPaymentCardProps = AccountTextProps & {
   payment: PendingPayment
-  /** Server route that serves the printable voucher: `(payment, { download })`. Without it the browser builds it. */
-  voucherHref?: (payment: PendingPayment, opts: { download: boolean }) => string
+  /**
+   * Server route that serves the voucher: `(payment, { download, format })`. The "view and print" link asks for
+   * `{ download: false, format: 'html' }`, the download link for `{ download: true, format: 'pdf' }` (a store whose
+   * route predates `format` keeps serving the HTML attachment). Without it the browser builds the documents.
+   */
+  voucherHref?: (payment: PendingPayment, opts: { download: boolean; format: 'html' | 'pdf' }) => string
   /** Store name printed on the document built in the browser. */
   shopName?: string
   headingLevel?: 2 | 3 | 4
   classNames?: PendingPaymentCardClassNames
   children?: ReactNode
+}
+
+async function downloadPdf(payment: PendingPayment, opts: { locale: string; shopName?: string | undefined; timeZone?: string | undefined }) {
+  const v = voucherOf(payment)
+  if (!v) return
+  const { renderVoucherPdf } = await import('./voucher-pdf.js')
+  const bytes = renderVoucherPdf(v, { locale: opts.locale, ...(opts.shopName ? { shopName: opts.shopName } : {}), ...(opts.timeZone ? { timeZone: opts.timeZone } : {}) })
+  const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/pdf' }))
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'ficha-de-pago.pdf'
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(url), 60_000)
 }
 
 async function openDocument(payment: PendingPayment, mode: 'print' | 'download', opts: { locale: string; shopName?: string | undefined; timeZone?: string | undefined }) {
@@ -72,7 +89,7 @@ export function PendingPaymentCard({ payment, voucherHref, shopName, headingLeve
   if (!v) return null
   const expired = payment.status === 'expired'
   const Heading = `h${headingLevel}` as 'h3'
-  const code = barcodeValue(v)
+  const code = v.barcode
   const methodLabel = enumText(m, 'pending.method', v.method?.toLowerCase())
   const total = moneyText(payment.total, locale) ?? moneyText(v.amount, locale)
   const copyValue = v.reference ?? v.clabe
@@ -96,6 +113,22 @@ export function PendingPaymentCard({ payment, voucherHref, shopName, headingLeve
           </p>
         </div>
       ) : null}
+      {v.beneficiary ? (
+        <div className={cx.field} data-sf-voucher-beneficiary>
+          <p className={cx.label}>{m['pending.beneficiary']}</p>
+          <p className={cx.value} data-sf-voucher-value>
+            {v.beneficiary}
+          </p>
+        </div>
+      ) : null}
+      {v.bank ? (
+        <div className={cx.field} data-sf-voucher-bank>
+          <p className={cx.label}>{m['pending.bank']}</p>
+          <p className={cx.value} data-sf-voucher-value>
+            {v.bank}
+          </p>
+        </div>
+      ) : null}
       {v.clabe ? (
         <div className={cx.field} data-sf-voucher-clabe>
           <p className={cx.label}>{m['pending.clabe']}</p>
@@ -106,7 +139,7 @@ export function PendingPaymentCard({ payment, voucherHref, shopName, headingLeve
       ) : null}
       {code && !expired ? (
         <div className={cx.barcode} data-sf-voucher-barcode>
-          <Barcode value={code} label={fill(m['pending.barcode'], { code })} />
+          <Barcode value={code} format={v.barcode_format ?? 'code128'} label={fill(m['pending.barcode'], { code })} />
         </div>
       ) : null}
       {expires ? (
@@ -128,11 +161,11 @@ export function PendingPaymentCard({ payment, voucherHref, shopName, headingLeve
         <div className={cx.actions} data-sf-voucher-actions>
           {voucherHref ? (
             <>
-              <a href={voucherHref(payment, { download: false })} target="_blank" rel="noopener" className={cx.primary} data-sf-voucher-print>
+              <a href={voucherHref(payment, { download: false, format: 'html' })} target="_blank" rel="noopener" className={cx.primary} data-sf-voucher-print>
                 {m['pending.print']}
                 <Hidden> {m['action.newTab']}</Hidden>
               </a>
-              <a href={voucherHref(payment, { download: true })} download className={cx.secondary} data-sf-voucher-download>
+              <a href={voucherHref(payment, { download: true, format: 'pdf' })} download className={cx.secondary} data-sf-voucher-download>
                 {m['pending.download']}
               </a>
             </>
@@ -141,7 +174,7 @@ export function PendingPaymentCard({ payment, voucherHref, shopName, headingLeve
               <button type="button" className={cx.primary} onClick={() => void openDocument(payment, 'print', { locale, shopName, timeZone })} data-sf-voucher-print>
                 {m['pending.print']}
               </button>
-              <button type="button" className={cx.secondary} onClick={() => void openDocument(payment, 'download', { locale, shopName, timeZone })} data-sf-voucher-download>
+              <button type="button" className={cx.secondary} onClick={() => void downloadPdf(payment, { locale, shopName, timeZone })} data-sf-voucher-download>
                 {m['pending.download']}
               </button>
             </>
