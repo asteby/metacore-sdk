@@ -250,3 +250,36 @@ export function fitTagsAny(fitKey: string | null | undefined, opts: { prefix?: s
   const prefix = opts.prefix ?? DEFAULT_FIT_TAG_PREFIX
   return opts.universal === false ? [fitTag(fitKey, prefix)] : [fitTag(fitKey, prefix), `${prefix}universal`]
 }
+
+/**
+ * Budget of one catalog page, in bytes of the `tree` prop as OPS stores it (text, so every quote is escaped). Publishing
+ * a page is ONE write of at most 64 KiB that carries the draft and the published copy: ~28 KB of tree per page.
+ */
+export const SUBJECT_CATALOG_PAGE_BYTES = 28 * 1024
+
+const utf8Bytes = (s: string): number => new TextEncoder().encode(s).length
+
+/**
+ * Splits a catalog tree by its first level into parts that each fit one page (`subject_catalog` section, prop `tree`).
+ * Publish part `i` on its own page and name them all in the kind's `catalog_ref` (`["page:x-1", "page:x-2", …]`); the
+ * server joins them back. A real parts catalog (make → model → engine) does not fit in one page. Throws `RangeError`
+ * when a single first-level option is larger than the budget on its own (split that level by hand, or trim labels).
+ */
+export function splitSubjectTree(
+  tree: Record<string, SubjectCatalogNode>,
+  maxBytes: number = SUBJECT_CATALOG_PAGE_BYTES,
+): Record<string, SubjectCatalogNode>[] {
+  const size = (part: Record<string, SubjectCatalogNode>) => utf8Bytes(JSON.stringify(JSON.stringify(part)))
+  const parts: Record<string, SubjectCatalogNode>[] = []
+  let current: Record<string, SubjectCatalogNode> = {}
+  for (const [id, node] of Object.entries(tree)) {
+    if (size({ [id]: node }) > maxBytes) throw new RangeError(`splitSubjectTree: option ${id} alone exceeds ${maxBytes} bytes`)
+    const next = { ...current, [id]: node }
+    if (Object.keys(current).length > 0 && size(next) > maxBytes) {
+      parts.push(current)
+      current = { [id]: node }
+    } else current = next
+  }
+  if (Object.keys(current).length > 0) parts.push(current)
+  return parts
+}

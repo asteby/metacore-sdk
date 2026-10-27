@@ -237,19 +237,24 @@ describe('AddonConfigSurface with setup blocks', () => {
         expect(screen.queryByText(WEBHOOK)).toBeNull()
     })
 
-    it('footer: one primary, full width on phones; Atrás + Cancelar share a row', async () => {
+    // Footer since #1287 (Guardar siempre visible): save state on the left;
+    // Cerrar/Cancelar, Atrás and the ONE primary Guardar on the right, Guardar
+    // stretching to the full row on phones. Verifications live in the steps.
+    it('footer: Guardar is the one primary, always there, full width on phones; Cerrar + Atrás beside it', async () => {
         setup(mp)
         await screen.findByText('Access token')
         fireEvent.click(within(footer()).getByText('Siguiente'))
         await screen.findByText(WEBHOOK)
         const buttons = within(footer()).getAllByRole('button')
-        expect(buttons.map((b) => b.textContent)).toEqual(['Guardar', 'Atrás', 'Cancelar'])
-        expect(buttons[0].className).toContain('col-span-2')
-        expect(buttons[0].className).toContain('h-11')
-        expect(buttons[1].className).not.toContain('col-span-2')
-        expect(buttons[2].className).not.toContain('col-span-2')
+        expect(buttons.map((b) => b.textContent)).toEqual(['Cerrar', 'Atrás', 'Guardar'])
+        const save = within(footer()).getByTestId('config-save')
+        expect(save).toBe(buttons[2])
+        expect(save.className).toContain('flex-1')
+        expect(save.className).toContain('h-11')
+        expect(buttons[0].className).not.toContain('flex-1')
+        expect(buttons[1].className).not.toContain('flex-1')
+        expect(within(footer()).getByRole('status')).toBeTruthy()
         expect(within(footer()).queryByText('Probar conexión')).toBeNull()
-        expect(footer().className).toContain('grid-cols-2')
     })
 
     it('an explicit action bound to test_export replaces the implicit test', async () => {

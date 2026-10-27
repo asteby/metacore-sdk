@@ -24,7 +24,8 @@ const ship = (s: Partial<Shipment> = {}): Shipment => ({
 describe('<ShipmentCard />', () => {
   it('shows carrier, status, number, https link and promised day (a calendar day, in any zone)', () => {
     const { container } = render(<ShipmentCard shipment={ship()} timeZone="Pacific/Kiritimati" />)
-    expect(container.querySelector('h3')!.textContent).toBe('Estafeta')
+    expect(container.querySelector('h3')!.textContent).toBe('Paquetería: Estafeta')
+    expect(container.querySelector('[data-sf-shipment-eyebrow]')!.textContent).toContain('Paquetería')
     expect(container.querySelector('[data-sf-shipment-state]')!.textContent).toBe('En camino')
     expect(container.querySelector('code')!.textContent).toBe('8012345678')
     const a = container.querySelector('[data-sf-shipment-track]') as HTMLAnchorElement

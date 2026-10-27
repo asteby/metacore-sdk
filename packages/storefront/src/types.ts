@@ -5,6 +5,7 @@
  * decimal strings ("1899.00") so no precision is lost in transit.
  */
 
+import type { CustomerPreferences } from './account-settings.js'
 import type { OpeningHours } from './geo.js'
 
 // ---------------------------------------------------------------------------
@@ -353,6 +354,10 @@ export type DeliveryOptions = {
   /** `true` when some provider failed: `rates` holds only what arrived. */
   partial?: boolean
   unavailable?: UnavailableRateProvider[]
+  /** The shop's own fixed price: no carrier was asked (addon setting `shipping_quote_mode`). */
+  fixed?: boolean
+  /** Every shipping rate costs 0 (free-shipping minimum reached): nothing to choose, show "Free shipping" and go on. */
+  free?: boolean
 }
 
 /** One way to pay (`GET /storefront/carts/:id/payment-methods`). `key` is sent as `payment_method` at checkout. */
@@ -479,6 +484,10 @@ export type Customer = {
   /** Saved fiscal data; `null`/absent when none. */
   fiscal?: FiscalIdentity | null
   created_at: string
+  /** Preferred language, one of the store's (contract 1.9). Absent on older servers. */
+  locale?: string | null
+  /** Notification preferences (contract 1.9). Absent on older servers. */
+  preferences?: CustomerPreferences
 }
 
 export type CustomerIdentifier = { email: string; phone?: never } | { phone: string; email?: never }
@@ -511,6 +520,12 @@ export type CustomerCapabilities = {
    * older servers): there is no such section, show nothing.
    */
   subjects?: { kinds: string[]; share_with_workshop?: boolean }
+  /** Channels the notification preferences can use (connector installed). Absent on older servers: no preferences section. */
+  notifications?: { channels: string[] }
+  /** The buyer can download their data (`customer.exportData`). Absent on older servers. */
+  data_export?: boolean
+  /** The buyer can delete their account (`customer.deleteAccount`). Absent on older servers. */
+  account_delete?: boolean
 }
 
 /** `GET {gateway}/_token`: what the token in use is and what it can do. Needs no scope. */
@@ -1518,6 +1533,10 @@ export type CustomerUpdateInput = {
   last_name?: string | null
   phone?: string | null
   fiscal?: FiscalIdentityInput | null
+  /** One of the store's languages (`400` with `field: 'locale'` otherwise); `null` clears it. */
+  locale?: string | null
+  /** Merged by event and channel; `null` restores the defaults. `400` for an event that cannot be turned off. */
+  preferences?: CustomerPreferences | null
 }
 
 /** Post-processing: the value must match `pattern`; `group` of it replaces the value. */

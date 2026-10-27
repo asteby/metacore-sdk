@@ -1,3 +1,4 @@
+import type { AccountDeleteInput, CustomerSessionInfo, DataExportFile, ReauthInput, ReauthResult } from './account-settings.js'
 import { StorefrontError, defaultCodeForStatus } from './errors.js'
 import { isValidPoint, type GeoPoint } from './geo.js'
 import { isTokenPublishable } from './money.js'
@@ -622,6 +623,47 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
       /** Updates the profile and the saved fiscal data; `fiscal: null` deletes the latter. `422` with `field: 'fiscal.<field>'`. */
       update: (input: CustomerUpdateInput, options?: WriteOptions) =>
         write<Customer>('PATCH', '/storefront/customer', input, options),
+      /**
+       * Active sessions of the buyer («Devices»; contract 1.9). Private, never cached. The list carries no address
+       * and no token: only what the buyer needs to recognize their own devices.
+       */
+      sessions: {
+        list: async (options?: RequestOptions): Promise<CustomerSessionInfo[]> =>
+          (await get<{ nodes: CustomerSessionInfo[] }>('/storefront/customer/sessions', undefined, { ...options, cache: 'no-store' })).nodes,
+        /** Closes one session. Repeating it is fine. `404` for a session that is not the buyer's. Closing the current one is a sign-out. */
+        revoke: (id: string, options?: WriteOptions) =>
+          write<void>('DELETE', `/storefront/customer/sessions/${enc(id)}`, undefined, options),
+        /** Closes every session except the one making the call. */
+        revokeOthers: (options?: WriteOptions) => write<void>('DELETE', '/storefront/customer/sessions/others', undefined, options),
+      },
+      /**
+       * Confirms the buyer's identity again with their password or a sign-in code (`requestOtp` first). The
+       * confirmation lasts `valid_for_seconds` (a few minutes) and counts only for the session that made the call;
+       * exporting data and deleting the account need it (`403 reauth_required` otherwise, see `isReauthRequired`).
+       * A wrong credential is always the same `400`; too many tries is `429` (`StorefrontError.retryAfter`).
+       */
+      reauth: (input: ReauthInput, options?: WriteOptions) =>
+        write<ReauthResult>('POST', '/storefront/customer/reauth', input, options),
+      /**
+       * The buyer's data as a JSON file (contract 1.9, `capabilities().data_export`). Needs a recent `reauth`. It is
+       * built on request and is neither stored nor emailed: call it from YOUR server, stream the bytes
+       * (`dataExportBytes`, `safeExportFilename`) with `Cache-Control: no-store`, and keep nothing. Three a day per account.
+       */
+      exportData: async (options?: WriteOptions): Promise<DataExportFile> => {
+        const file = await write<DataExportFile>('POST', '/storefront/customer/data-export', undefined, { ...options, cache: 'no-store' })
+        if (!file || typeof file.content_base64 !== 'string' || typeof file.filename !== 'string' || typeof file.content_type !== 'string') {
+          throw new StorefrontError({ status: 502, code: 'invalid_response', message: 'The data export answer is not a file' })
+        }
+        return { filename: file.filename, content_type: file.content_type, content_base64: file.content_base64 }
+      },
+      /**
+       * Deletes the buyer's account (contract 1.9, `capabilities().account_delete`). Needs a recent `reauth` and the
+       * text the buyer typed in `confirm`. Personal data is erased; orders and invoices are kept by the store.
+       * `409` (see `isAccountDeleteBlocked`) while an order is on its way or a payment is pending. Idempotent: a
+       * repeat after success is also fine. Afterwards the token is dead: drop it.
+       */
+      deleteAccount: (input: AccountDeleteInput, options?: WriteOptions) =>
+        write<void>('DELETE', '/storefront/customer', input, options),
       orders: (params?: PaginationParams, options?: RequestOptions) =>
         get<Connection<Order>>('/storefront/customer/orders', params as QueryParams, options),
       /** `null` when the order does not exist or belongs to someone else. */

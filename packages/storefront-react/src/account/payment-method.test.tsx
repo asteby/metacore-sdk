@@ -37,5 +37,6 @@ describe('paymentLabel', () => {
   it('PaymentSummary renders it', () => {
     const { container } = render(<PaymentSummary payments={[pay({ method_label: 'Card' })]} />)
     expect(container.querySelector('[data-sf-payment-method]')!.textContent).toBe('Tarjeta')
+    expect(container.querySelector('[data-sf-payment]')!.getAttribute('data-sf-payment-method-key')).toBe('card')
   })
 })

@@ -76,6 +76,9 @@ describe('CopilotWidget with channels', () => {
     const { adapter } = makeAdapter()
     mount({ channels: adapter, defaultOpen: true })
     const nav = await screen.findByRole('navigation', { name: 'Conversaciones' })
+    // The list renders with the bot first and the channels land when
+    // listChannels resolves: wait for them, a slow runner sampled too early.
+    await within(nav).findByText('Ana Pérez')
     const names = within(nav).getAllByRole('button').map((b) => b.textContent ?? '')
     expect(names[0]).toContain('Copiloto')
     expect(names.some((n) => n.includes('Ana Pérez'))).toBe(true)

@@ -126,6 +126,11 @@ export type MockStorefrontOptions = {
    * carriers, ETAs and quote deadlines). `expires_at` missing: 24 h from the request. Free shipping still applies.
    */
   shippingRates?: ShippingRate[]
+  /**
+   * `fixed_when_free`: past `policies.free_shipping_min` `delivery-options` serves ONLY the shop's free rate and flags
+   * `free` / `fixed` (what the `storefront_cart` addon does with the setting of the same name). Default: the usual list.
+   */
+  shippingQuoteMode?: 'carriers' | 'fixed_when_free'
   /** Methods served by `payment-methods` (default one builtin `mock`). */
   paymentMethods?: PaymentMethod[]
   /**
@@ -179,6 +184,14 @@ export type MockState = {
   /** Consecutive failed password logins by email. */
   loginFailures: Map<string, number>
   sessions: Map<string, string>
+  /** What «Devices» shows for each session token (contract 1.9). */
+  sessionInfo: Map<string, { id: string; customer_id: string; created_at: string; last_used_at: string; login_method: string; reauth_at: number | null }>
+  /** Wrong re-authentications per customer (5 and the mock answers 429). */
+  reauthFailures: Map<string, number>
+  /** Data exports served per customer (3 a day). */
+  exportsServed: Map<string, number>
+  /** Tokens of accounts that were deleted: deleting again answers 204, as the server does. */
+  deletedTokens: Set<string>
   idempotency: Map<string, { status: number; body: unknown }>
   checkouts: Map<string, unknown>
   /** Payment attempts per checkout (`n`, last result). */
@@ -270,6 +283,9 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       online_verify: false,
     },
     fiscal_profiles: { max: 10 },
+    notifications: { channels: ['email'] },
+    data_export: true,
+    account_delete: true,
     ...((options.subjectKinds?.length ?? 0) > 0 ? { subjects: { kinds: options.subjectKinds!.map((k) => k.key), share_with_workshop: false } } : {}),
     ...options.customerCapabilities,
   }
@@ -324,6 +340,10 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       pendingRegistrations: new Map(),
       loginFailures: new Map(),
       sessions: new Map(),
+      sessionInfo: new Map(),
+      reauthFailures: new Map(),
+      exportsServed: new Map(),
+      deletedTokens: new Set(),
       idempotency: new Map(),
       checkouts: new Map(),
       payments: new Map(),
@@ -575,6 +595,9 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       const expires = new Date(Date.now() + 24 * 3_600_000).toISOString()
       return options.shippingRates.map((r) => ({ ...r, expires_at: r.expires_at ?? expires, cost: free ? fromCents(0, r.cost.currency_code) : r.cost }))
     }
+    // Like the server with `shipping_quote_mode: fixed_when_free`: past the free-shipping minimum the shop's own price is
+    // the only rate (no carrier is asked, there is nothing to choose).
+    if (free && options.shippingQuoteMode === 'fixed_when_free') return [{ id: 'flat', title: 'Envío gratis', cost: fromCents(0, currency), eta: '2 a 5 días hábiles' }]
     return [
       { id: 'flat', title: free ? 'Envío estándar (gratis)' : 'Envío estándar', cost: fromCents(free ? 0 : flatShippingCents, currency), eta: '2 a 5 días hábiles' },
       { id: 'express', title: 'Envío exprés', cost: fromCents(flatShippingCents + 10000, currency), eta: '1 a 2 días hábiles' },
@@ -736,7 +759,13 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     }
     const token = `ct_${customer.id}_${Math.random().toString(36).slice(2)}`
     state.sessions.set(token, customer.id)
+    trackSession(token, 'password')
     return { token, expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(), customer }
+  }
+
+  function trackSession(token: string, loginMethod: string) {
+    const at = now()
+    state.sessionInfo.set(token, { id: nextId('ses'), customer_id: state.sessions.get(token) ?? '', created_at: at, last_used_at: at, login_method: loginMethod, reauth_at: null })
   }
 
   function validateAddress(body: Record<string, unknown>, partial = false): Partial<Address> {
@@ -920,8 +949,10 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
   route('GET', '/carts/:id/delivery-options', 'cart:write', ({ params }) => {
     const cart = renderCart(getCartRecord(params[0]!))
     const net = toCents(cart.cost.subtotal.amount) - toCents(cart.cost.discount.amount)
+    const rates = shippingRates(net)
+    const free = options.shippingQuoteMode === 'fixed_when_free' && rates.length > 0 && rates.every((r) => toCents(r.cost.amount) === 0)
     return {
-      body: { rates: shippingRates(net), pickup: state.shop.branches.filter((b) => b.pickup?.enabled !== false).map((b) => ({ branch_id: b.id, name: b.name, address: b.address, city: b.city })), partial: false, unavailable: [] },
+      body: { rates, free, fixed: free, pickup: state.shop.branches.filter((b) => b.pickup?.enabled !== false).map((b) => ({ branch_id: b.id, name: b.name, address: b.address, city: b.city })), partial: false, unavailable: [] },
       cache: 'private',
     }
   })
@@ -1205,6 +1236,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     }
     const token = `ct_${customer.id}_${Math.random().toString(36).slice(2)}`
     state.sessions.set(token, customer.id)
+    trackSession(token, kind)
     return {
       status: 201,
       body: { token, expires_at: new Date(Date.now() + 30 * 86_400_000).toISOString(), customer },
@@ -1280,7 +1312,8 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     return { status: 204 }
   })
   /** The customer as the API serves it: the fiscal evidence keeps no file hash. */
-  const publicCustomer = (c: Customer): Customer => {
+  const publicCustomer = (c0: Customer): Customer => {
+    const c: Customer = { ...c0, locale: c0.locale ?? null, preferences: c0.preferences ?? { notifications: {} } }
     if (!c.fiscal?.document) return c
     const { sha256: _sha, ...document } = c.fiscal.document
     return { ...c, fiscal: { ...c.fiscal, document } }
@@ -1292,6 +1325,8 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     if ('first_name' in body) c.first_name = text(body.first_name)
     if ('last_name' in body) c.last_name = text(body.last_name)
     if ('phone' in body) c.phone = text(body.phone)
+    if ('locale' in body) c.locale = parseLocale(body.locale)
+    if ('preferences' in body) c.preferences = parsePreferences(c.preferences, body.preferences)
     if ('fiscal' in body) {
       if (body.fiscal === null) c.fiscal = null
       else {
@@ -1311,6 +1346,159 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     }
     return { body: publicCustomer(c), cache: 'private' }
   })
+  // Account settings (contract 1.9): language, notification preferences, sessions, re-authentication, export, delete.
+  const OPTIONAL_EVENTS = new Set(['order_updates', 'shipping', 'restock'])
+  const MANDATORY_EVENTS = new Set(['order_confirmation', 'payment', 'invoice', 'security'])
+  const CHANNELS = new Set(['email', 'whatsapp'])
+  const REAUTH_WINDOW_MS = 5 * 60_000
+  const supportedLocales = () => [state.shop.locale, ...state.shop.locales].filter((l, i, a) => l && a.indexOf(l) === i)
+
+  function parseLocale(raw: unknown): string | null {
+    if (raw === null || (typeof raw === 'string' && !raw.trim())) return null
+    if (typeof raw !== 'string') throw new HttpError(400, 'validation', 'locale must be a string', 'locale')
+    const tag = raw.trim().replace('_', '-')
+    const [lang = '', ...rest] = tag.split('-')
+    const canonical = [lang.toLowerCase(), ...rest.map((p) => p.toUpperCase())].join('-')
+    const supported = supportedLocales()
+    const hit = supported.find((l) => l.toLowerCase() === canonical.toLowerCase()) ?? (rest.length === 0 ? supported.find((l) => l.split('-')[0]!.toLowerCase() === canonical) : undefined)
+    if (!hit) throw new HttpError(400, 'validation', 'this store is not available in that language', 'locale')
+    return hit
+  }
+
+  function parsePreferences(current: Customer['preferences'], raw: unknown): Customer['preferences'] {
+    if (raw === null) return { notifications: {} }
+    if (typeof raw !== 'object' || Array.isArray(raw)) throw new HttpError(400, 'validation', 'preferences must be an object', 'preferences')
+    const merged: Record<string, Record<string, boolean>> = structuredClone(current?.notifications ?? {})
+    for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+      if (key !== 'notifications') throw new HttpError(400, 'validation', 'unknown preference', `preferences.${key}`)
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new HttpError(400, 'validation', 'notifications must map each event to its channels', 'preferences.notifications')
+      for (const [event, channels] of Object.entries(value as Record<string, unknown>)) {
+        const field = `preferences.notifications.${event}`
+        if (MANDATORY_EVENTS.has(event)) throw new HttpError(400, 'validation', 'this notification is required and cannot be turned off', field)
+        if (!OPTIONAL_EVENTS.has(event)) throw new HttpError(400, 'validation', 'unknown notification', field)
+        if (!channels || typeof channels !== 'object' || Array.isArray(channels)) throw new HttpError(400, 'validation', 'each event maps its channels to true or false', field)
+        for (const [channel, on] of Object.entries(channels as Record<string, unknown>)) {
+          if (!CHANNELS.has(channel)) throw new HttpError(400, 'validation', 'unknown channel', `${field}.${channel}`)
+          if (typeof on !== 'boolean') throw new HttpError(400, 'validation', 'each channel must be true or false', `${field}.${channel}`)
+          ;(merged[event] ??= {})[channel] = on
+        }
+      }
+    }
+    return { notifications: merged }
+  }
+
+  /** The session of the request (its token); the customer must have one. */
+  function sessionOf(headers: Headers) {
+    const c = requireCustomer(headers)
+    const token = headers.get('x-customer-token')!
+    if (!state.sessionInfo.has(token)) trackSession(token, 'email')
+    return { c, token, info: state.sessionInfo.get(token)! }
+  }
+  function requireRecentReauth(info: { reauth_at: number | null }) {
+    if (info.reauth_at === null || Date.now() - info.reauth_at > REAUTH_WINDOW_MS) {
+      throw new HttpError(403, 'reauth_required', 'confirm your password or a code first (customer.reauth)')
+    }
+  }
+
+  route('GET', '/customer/sessions', 'customer:read', ({ headers }) => {
+    const { c, token } = sessionOf(headers)
+    const nodes = [...state.sessions.entries()]
+      .filter(([, id]) => id === c.id)
+      .map(([t]) => ({ t, info: state.sessionInfo.get(t)! }))
+      .sort((a, b) => b.info.last_used_at.localeCompare(a.info.last_used_at))
+      .map(({ t, info }) => ({
+        id: info.id,
+        current: t === token,
+        device_label: 'Mock browser · Test',
+        login_method: info.login_method,
+        last_used_at: info.last_used_at,
+        created_at: info.created_at,
+      }))
+    return { body: { nodes }, cache: 'private' }
+  })
+  route('DELETE', '/customer/sessions/:id', 'customer:write', ({ headers, params }) => {
+    const { c, token } = sessionOf(headers)
+    const mine = [...state.sessions.entries()].filter(([, id]) => id === c.id).map(([t]) => t)
+    if (params[0] === 'others') {
+      for (const t of mine) if (t !== token) state.sessions.delete(t)
+      return { status: 204 }
+    }
+    const entry = [...state.sessionInfo.entries()].find(([, i]) => i.id === params[0])
+    // A session of someone else and one that never existed are the same 404; a closed one of mine is fine to close again.
+    if (!entry || entry[1].customer_id !== c.id) throw new HttpError(404, 'not_found', 'Session not found', 'id')
+    state.sessions.delete(entry[0])
+    return { status: 204 }
+  })
+  route('POST', '/customer/reauth', 'customer:write', ({ headers, body }) => {
+    const { c, info } = sessionOf(headers)
+    const hasPassword = typeof body.password === 'string' && body.password !== ''
+    const hasCode = typeof body.otp_code === 'string' && body.otp_code !== ''
+    if (hasPassword === hasCode) throw new HttpError(400, 'validation', 'send either password or otp_code', 'password')
+    if ((state.reauthFailures.get(c.id) ?? 0) >= 5) throw new HttpError(429, 'rate_limited', 'Too many attempts, try again later')
+    const field = hasPassword ? 'password' : 'otp_code'
+    const ok = hasPassword
+      ? c.email !== null && state.passwords.get(c.email) === body.password
+      : [c.email && `email:${c.email}`, c.phone && `phone:${c.phone}`].some((id) => !!id && state.otps.get(id) === body.otp_code)
+    if (!ok) {
+      state.reauthFailures.set(c.id, (state.reauthFailures.get(c.id) ?? 0) + 1)
+      throw new HttpError(400, 'validation', 'could not verify; check the credential and try again', field)
+    }
+    state.reauthFailures.delete(c.id)
+    info.reauth_at = Date.now()
+    return { body: { reauth_at: new Date(info.reauth_at).toISOString(), valid_for_seconds: REAUTH_WINDOW_MS / 1000 }, cache: 'private' }
+  })
+  route('POST', '/customer/data-export', 'customer:write', ({ headers }) => {
+    const { c, info } = sessionOf(headers)
+    requireRecentReauth(info)
+    if ((state.exportsServed.get(c.id) ?? 0) >= 3) throw new HttpError(429, 'rate_limited', 'Three exports a day; try again tomorrow')
+    state.exportsServed.set(c.id, (state.exportsServed.get(c.id) ?? 0) + 1)
+    const doc = {
+      format: 'storefront-customer-data/1',
+      exported_at: now(),
+      account: { id: c.id, email: c.email, phone: c.phone, first_name: c.first_name, last_name: c.last_name, locale: c.locale ?? null, created_at: c.created_at },
+      preferences: c.preferences ?? { notifications: {} },
+      addresses: state.addresses.get(c.id) ?? [],
+      fiscal_profiles: state.fiscalProfiles.get(c.id) ?? [],
+      orders: state.orders.filter((o) => o.customer_id === c.id).map((o) => ({ id: o.id, number: o.number, created_at: o.created_at, status: o.status, total: o.total })),
+    }
+    return {
+      body: {
+        filename: `account-data-${now().slice(0, 10)}.json`,
+        content_type: 'application/json',
+        content_base64: btoa(unescape(encodeURIComponent(JSON.stringify(doc, null, 2)))),
+      },
+      cache: 'private',
+    }
+  })
+  route('DELETE', '/customer', 'customer:write', ({ headers, body }) => {
+    const token = headers.get('x-customer-token')
+    if (token && state.deletedTokens.has(token)) return { status: 204 }
+    const { c, info } = sessionOf(headers)
+    requireRecentReauth(info)
+    if (typeof body.confirm !== 'string' || !body.confirm.trim() || body.confirm.length > 100) {
+      throw new HttpError(400, 'validation', 'confirm is required: the text the buyer typed', 'confirm')
+    }
+    const closed = new Set(['fulfilled', 'delivered', 'cancelled'])
+    if (state.orders.some((o) => o.customer_id === c.id && !closed.has(o.status))) {
+      throw new HttpError(409, 'conflict', 'you have an order in progress; you can delete the account once it is delivered', 'orders')
+    }
+    if (c.id === 'cus_1' && state.pendingPayments.some((p) => p.status === 'pending_payment')) {
+      throw new HttpError(409, 'conflict', 'you have a payment waiting to be completed', 'pending_payments')
+    }
+    // Personal data goes; orders stay (they keep the customer id) and a new sign-up starts from nothing.
+    for (const [t, id] of [...state.sessions.entries()]) {
+      if (id === c.id) {
+        state.sessions.delete(t)
+        state.deletedTokens.add(t)
+      }
+    }
+    if (c.email) state.passwords.delete(c.email)
+    state.addresses.delete(c.id)
+    state.fiscalProfiles.delete(c.id)
+    state.customers = state.customers.filter((x) => x.id !== c.id)
+    return { status: 204 }
+  })
+
   /**
    * The order as the API serves it. The list is a summary (`shipments_summary`); the detail carries the shipments, invoices,
    * payments, refunds and the address. A sandbox shipment loses its guide, as the real server does in production.
@@ -1669,7 +1857,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     }
 
     let body: Record<string, unknown> = {}
-    if (method !== 'GET' && method !== 'DELETE') {
+    if (method !== 'GET') {
       const text = await request.text()
       if (text) {
         try {

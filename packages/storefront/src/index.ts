@@ -100,6 +100,15 @@ export {
   SHIPPING_STEPS,
   PICKUP_STEPS,
 } from './order-progress.js'
+export { dataExportBytes, isAccountDeleteBlocked, isReauthRequired, safeExportFilename } from './account-settings.js'
+export type {
+  AccountDeleteInput,
+  CustomerPreferences,
+  CustomerSessionInfo,
+  DataExportFile,
+  ReauthInput,
+  ReauthResult,
+} from './account-settings.js'
 export { groupInvoiceDocs, invoiceFileBytes, safeInvoiceFilename } from './invoice-docs.js'
 export type { InvoiceGroup } from './invoice-docs.js'
 
@@ -114,6 +123,8 @@ export {
   PRIVATE_MASK,
   reconcileSubjectValues,
   resolveSubject,
+  splitSubjectTree,
+  SUBJECT_CATALOG_PAGE_BYTES,
   subjectFields,
   subjectLevels,
   subjectOptions,
