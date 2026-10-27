@@ -115,6 +115,8 @@ export function buildAccountOrders(currency: string): Seeded[] {
       lines: [line('Filtro de aceite', null, 3, 18300, currency)],
       delivery_method: 'shipping',
       payment_status: 'paid',
+      shipping_method: 'shipping:Envío Estafeta',
+      shipping_service: { title: 'Envío Estafeta', carrier: 'estafeta', carrier_logo_key: 'estafeta', eta_days_min: 1, eta_days_max: 3 },
       shipping_address: address,
       shipments: [],
       invoices: [],

@@ -12,7 +12,8 @@ import { describe, expect, it } from 'vitest'
 // 16 KB: the shared product picture (ProductThumb/ProductPreview: shimmer, fallback, srcset) now serves the order card and the lines.
 // 17 KB: the voucher card now knows per-method kinds, Code 39 next to Code 128, beneficiary / bank fields and the client-side PDF download (the PDF generator itself stays lazy).
 // 18 KB: the card reads the server's `barcode_data` (contract 1.10): ITF and EAN-13 next to Code 128 / 39, the text code and the provider receipt link.
-const BUDGET_GZ = 18 * 1024
+// 19 KB: the chosen delivery (ShippingServiceCard: carrier mark slot, service, business-day estimate in es/en; contract 1.11).
+const BUDGET_GZ = 19 * 1024
 const here = fileURLToPath(new URL('.', import.meta.url))
 
 describe('order screens bundle size', () => {
@@ -23,7 +24,7 @@ describe('order screens bundle size', () => {
       const entry = join(dir, 'entry.ts')
       writeFileSync(
         entry,
-        `export { OrderList, OrderCard, OrderProgress, OrderStatusBadge, NextActionBar, ShipmentCard, InvoiceList, PendingPaymentCard, PendingPaymentList, RefundList, PaymentSummary, useCustomerOrders, useCustomerOrder, usePendingPayments } from ${JSON.stringify(join(here, 'index.ts'))}\n`,
+        `export { OrderList, OrderCard, OrderProgress, OrderStatusBadge, NextActionBar, ShipmentCard, ShippingServiceCard, InvoiceList, PendingPaymentCard, PendingPaymentList, RefundList, PaymentSummary, useCustomerOrders, useCustomerOrder, usePendingPayments } from ${JSON.stringify(join(here, 'index.ts'))}\n`,
       )
       await build({
         entry: { account: entry },

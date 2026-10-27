@@ -745,6 +745,22 @@ export type OrderPickup = {
   delivered_at?: string | null
 }
 
+/**
+ * The delivery the buyer chose at checkout, as they saw it (contract 1.11). It comes from the order's frozen quote, not
+ * from a shipment: it exists before any guide or tracking does, and for a sandbox shipment too. Never a cost or a
+ * provider id. Open text: `carrier` is whatever the shipping addon stored (`paquetexpress`, `DHL Express`).
+ */
+export type OrderShippingService = {
+  /** Service name the buyer picked («Envío Paquetexpress»). */
+  title?: string | null
+  carrier?: string | null
+  /** Key of the carrier logo in the SDK brand set (`dhl`, `estafeta`...); unknown keys fall back to the name. */
+  carrier_logo_key?: string | null
+  /** Estimated business days when the buyer chose (whole numbers, `min <= max`). */
+  eta_days_min?: number | null
+  eta_days_max?: number | null
+}
+
 export type Order = {
   id: string
   number: string
@@ -764,6 +780,8 @@ export type Order = {
   discount?: Money
   tax_included?: boolean
   shipping_method?: string | null
+  /** Detail only, contract 1.11: the carrier, service and estimated days the buyer chose; absent on older servers (use `shipping_method`). */
+  shipping_service?: OrderShippingService | null
   /** Detail only: the address as the checkout captured it (the buyer's own). */
   shipping_address?: Record<string, unknown> | null
   /** @deprecated Use `shipments[0].tracking_number`: it does not say if it is a sandbox guide. */

@@ -15,6 +15,8 @@ export { OrderProgress, OrderStatusBadge, NextActionBar, stageTone } from './pro
 export type { NextActionBarClassNames, NextActionBarProps, OrderProgressClassNames, OrderProgressProps, OrderStatusBadgeProps, OrderTone } from './progress.js'
 export { ShipmentCard } from './shipment.js'
 export type { ShipmentCardClassNames, ShipmentCardProps, ShipmentMapSlotProps } from './shipment.js'
+export { ShippingServiceCard, orderShippingService, shippingServiceEta } from './shipping-service.js'
+export type { ShippingServiceCardClassNames, ShippingServiceCardProps } from './shipping-service.js'
 export { InvoiceList } from './invoices.js'
 export type { InvoiceListClassNames, InvoiceListProps } from './invoices.js'
 export { PendingPaymentCard, PendingPaymentList, Barcode } from './pending.js'
