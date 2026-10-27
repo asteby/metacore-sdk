@@ -184,6 +184,7 @@
       }
     },
     "./ui.css": "./dist/ui.css",
+    "./progress.css": "./dist/progress.css",
     "./package.json": "./package.json"
   },
   "sideEffects": false,

@@ -54,7 +54,7 @@ export interface NavigationProgressProps {
  * Agnóstica del router: se alimenta con un booleano. Color por token CSS `--navigation-progress`
  * (por omisión `--primary`), alto por `--navigation-progress-height` (3px). Es una región `role="status"`
  * con el texto solo para lectores de pantalla; con `prefers-reduced-motion` no anima el avance (barra fija y tenue).
- * Estilos en `@asteby/storefront-react/ui.css`.
+ * Estilos en `@asteby/storefront-react/progress.css`.
  */
 export function NavigationProgress({ active, delay = 120, label = 'Cargando…', busyTarget = 'main', className = '', style }: NavigationProgressProps) {
   const visible = useDelayedFlag(active, delay)

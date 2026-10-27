@@ -26,3 +26,6 @@ writeFileSync(new URL('../dist/fiscal.css', import.meta.url), readFileSync(new U
 
 // Hoja por omisión de «Mis artículos» (subpath /subjects).
 writeFileSync(new URL('../dist/subjects.css', import.meta.url), readFileSync(new URL('../src/subjects/subjects.css', import.meta.url), 'utf8'))
+
+// Hoja de NavigationProgress, Skeleton y Spinner (subpath /ui), sin el resto de ui.css.
+writeFileSync(new URL('../dist/progress.css', import.meta.url), read('progress.css'))
