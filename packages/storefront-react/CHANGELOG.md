@@ -1,5 +1,17 @@
 # @asteby/storefront-react
 
+## 0.38.0
+
+### Minor Changes
+
+- acb74cb: Checkout de un solo paso, envío que se cotiza solo: `useAutoQuote` con antirrebote de 400 ms, `initial` (tarifas ya leídas para la dirección guardada), `change` (aviso si la re-cotización cambió el precio), `noCoverage` y `quoting`; nuevo `<DeliveryStatus>` (idle / calculando con spinner discreto / error con reintento / sin cobertura / cambio de precio, con altura reservada y región `aria-live`); `PaymentMethodSection` acepta `earlyCard` (el formulario de tarjeta y su SDK cargan al entrar y el total se actualiza en sitio) y `holdLabel` (botón bloqueado con «Calculando envío…»); `OrderSummary` acepta `quoting`.
+- ed3783c: `@asteby/storefront-react/checkout/server`: `createQuoteHandler` (ruta de recurso JSON que guarda el destino en el carrito y devuelve las opciones de entrega para `useLiveDelivery({ quoteUrl })`), con `readQuoteBody`, `quotable` y `quoteDelivery`. Así ninguna tienda copia la cotización progresiva.
+- d330370: feat(ui,account,payments,fiscal): acciones con loader y sin doble envío. Nuevos en `/ui`: `PendingButton` (botón o enlace; `disabled` + `aria-disabled` + `aria-busy`, spinner, texto de estado, mismo ancho, anuncio `role="status"`, foco devuelto, 600 ms de antirrebote, sin estilos de marca), `useActionLock` (`run(fn)` una sola vez, `AbortSignal` que cancela al desmontar), `useSubmitOnce` (para `useNavigation`/`useFetcher`) y `pendingMessages` (ES/EN con override). Aplicados en: «Ver factura» (diálogo con spinner, aviso «puede tardar unos segundos» y cierre = cancelar), Descargar PDF/XML (un solo candado por documento: nunca PDF+XML+vista previa a la vez), `InvoiceStatusCard` (`pending`), formularios de `AccountAuth`/`EmailSettings`/`PostPurchasePrompt`/preferencias/sesiones/garage, botón de pago de `PaymentMethodSection` (y `busy` del hook de pago incluye el desafío 3DS y la revisión: ningún segundo intento mientras el banco decide), «Ver más pedidos» y la ficha de pago. Servidor: `invoiceFileResponse({ guard: { buyer } })` limita 6/min por comprador y documento (429 «Estamos preparando tu factura…» con `Retry-After`), comparte una llamada entre peticiones iguales y recuerda la respuesta 60 s (la respuesta HTTP sigue `private, no-store`). Un 429 del servidor se lee como «estamos preparando tu factura» con reintento.
+
+### Patch Changes
+
+- 0e226cf: docs(fiscal): README «Cómo funciona y qué sale del navegador (nada)» para «Escanear mi constancia»: lectura en el navegador, el servidor como autoridad y lo que no hace.
+
 ## 0.37.1
 
 ### Patch Changes
