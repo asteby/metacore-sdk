@@ -139,6 +139,17 @@ export type FiscalMessages = {
     cancelledBody: string
     /** `reason_code` -> cause for the buyer. `default` when unknown. */
     reasons: Record<string, string>
+    /** A refused invoice the buyer can correct (`InvoiceRejectionNotice`, `invoiceCorrection`). */
+    correction: {
+      title: string
+      /** `{n}`: attempts left today (several). */
+      retries: string
+      retriesOne: string
+      /** Error text of the refused field. */
+      fieldRefused: string
+      /** The data to retry with is the same that was refused. */
+      retryButton: string
+    }
   }
   server: { errors: Record<string, string> }
 }
@@ -285,6 +296,13 @@ const ES: FiscalMessages = {
       'invoice.postal_code': 'El código postal fiscal no es válido.',
       'invoice.use': 'El uso de la factura no es válido con tu régimen.',
       default: 'Revisa tus datos fiscales y vuelve a intentarlo.',
+    },
+    correction: {
+      title: 'No pudimos emitir tu factura',
+      retries: 'Te quedan {n} intentos hoy.',
+      retriesOne: 'Te queda 1 intento hoy.',
+      fieldRefused: 'El SAT rechazó este dato. Compáralo con tu constancia de situación fiscal.',
+      retryButton: 'Corregir y volver a intentar',
     },
   },
   server: {
@@ -438,6 +456,13 @@ const EN: FiscalMessages = {
       'invoice.postal_code': 'The tax postal code is not valid.',
       'invoice.use': 'The invoice use is not valid with your regime.',
       default: 'Check your tax details and try again.',
+    },
+    correction: {
+      title: 'We could not issue your invoice',
+      retries: 'You have {n} attempts left today.',
+      retriesOne: 'You have 1 attempt left today.',
+      fieldRefused: 'The tax authority refused this value. Compare it with your tax registration.',
+      retryButton: 'Fix and try again',
     },
   },
   server: {

@@ -143,7 +143,8 @@ export function InvoiceStatusCard(props: InvoiceStatusCardProps) {
 
   const H = `h${headingLevel}` as 'h2' | 'h3' | 'h4'
   const contactLine = contact?.email ?? contact?.phone ?? contact?.url
-  const reason = invoice?.reason_code ? (m.reasons[invoice.reason_code] ?? m.reasons.default) : m.reasons.default
+  // The server's own plain-words reason (contract 1.18) wins over the generic table.
+  const reason = invoice?.reason_message?.trim() || (invoice?.reason_code ? (m.reasons[invoice.reason_code] ?? m.reasons.default) : m.reasons.default)
 
   let title: string
   let body: ReactNode = null
@@ -260,7 +261,7 @@ export function InvoiceStatusCard(props: InvoiceStatusCardProps) {
       title = m.reviewTitle
       body = (
         <>
-          <p className={cx.body}>{m.reviewBody}</p>
+          <p className={cx.body}>{invoice?.reason_message?.trim() || m.reviewBody}</p>
           {contactLine ? <p className={cx.meta}>{fill(m.contactBy, { contact: contactLine })}</p> : null}
         </>
       )

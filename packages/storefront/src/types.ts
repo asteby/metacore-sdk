@@ -1303,6 +1303,17 @@ export type InvoiceSummary = {
    * after the XML: a missing kind is "still being prepared", not an error. Absent/null = the server does not say.
    */
   available_files?: ('pdf' | 'xml')[] | null
+  /**
+   * Plain-words reason the invoice could not be issued, ready to show (contract 1.18): "No pudimos emitir tu factura: el nombre o
+   * razón social no coincide con el SAT. Revisa tus datos y vuelve a intentarlo." Never the provider's text.
+   */
+  reason_message?: string | null
+  /** Form field the authority refused (`tax_id`, `legal_name`, `tax_regime`, `postal_code`, `invoice_use`), to mark it. */
+  reason_field?: 'tax_id' | 'legal_name' | 'tax_regime' | 'postal_code' | 'invoice_use' | (string & {}) | null
+  /** The data the buyer sent in the refused attempt, to prefill the form for the correction. */
+  submitted?: { tax_id?: string; legal_name?: string; tax_regime?: string; postal_code?: string; invoice_use?: string } | null
+  /** Attempts left today for this order (0: `needs_review` until tomorrow). */
+  retries_left?: number | null
 }
 
 /** The invoice request of a cart (`Cart.invoice`). The tax id is masked: the full value is never echoed back. */
