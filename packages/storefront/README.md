@@ -435,7 +435,7 @@ await sf.products.list({ tags_any: fitTagsAny(item.fit_key) })        // ?tags_a
 ## Long histories: cursor-paged account lists (Storefront API 1.19)
 
 `customer.orders.list`, `customer.invoices.list` and `customer.shipments.list` page by **cursor** (a keyset on the
-order's date and id, stable while new orders arrive), `first` 1–50 (10 by default), `after` for older, `before` for
+order's date and id, stable while new orders arrive), `first` (10 by default; a page has at most 50), `after` for older, `before` for
 newer. Orders also take `status`, `delivery_method`, `has_invoice`, `from`, `to` and `q` (an exact order number); a
 derived filter may answer a short page with `has_next_page: true` (keep following `end_cursor`). `total_count` is there
 when it is cheap. Invoices and shipments come as one node per order (`{ order, invoices }`, `{ order, stage, service,

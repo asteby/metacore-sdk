@@ -11,7 +11,8 @@ export type PaginationParams = {
 }
 
 /**
- * Cursor paging of the account lists (contract 1.19). `first` is 1–50 (10 by default). `after` goes to the next
+ * Cursor paging of the account lists (contract 1.19). `first` is 10 by default; a page has at most 50 (51–100 is cut to 50,
+ * more is a 400). `after` goes to the next
  * (older) page with `page_info.end_cursor`; `before` goes back with `page_info.start_cursor`; never both.
  */
 export type AccountListParams = {

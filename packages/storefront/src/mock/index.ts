@@ -1602,8 +1602,9 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
    * `after` / `before`, filters. The cursor is opaque and stable while orders are added.
    */
   const accountPage = <S, N>(rows: { order: S; key: { t: string; id: string } }[], search: URLSearchParams, view: (o: S) => N, keep: ((o: S) => boolean) | null, total: ((n: number) => number) | null) => {
-    const first = search.has('first') ? Number(search.get('first')) : 10
-    if (!Number.isInteger(first) || first < 1 || first > 50) throw new HttpError(400, 'validation', '`first` must be an integer between 1 and 50', 'first')
+    const asked = search.has('first') ? Number(search.get('first')) : 10
+    if (!Number.isInteger(asked) || asked < 1 || asked > 100) throw new HttpError(400, 'validation', '`first` must be an integer between 1 and 100 (a page has at most 50)', 'first')
+    const first = Math.min(asked, 50)
     const after = search.get('after')
     const before = search.get('before')
     if (after && before) throw new HttpError(400, 'validation', 'use after or before, not both', 'before')

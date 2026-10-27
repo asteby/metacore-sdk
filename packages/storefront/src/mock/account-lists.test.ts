@@ -58,10 +58,11 @@ describe('mock account lists (contract 1.19)', () => {
 
   it('refuses a bad limit, a bad cursor and both cursors', async () => {
     const { me } = await buyer()
-    for (const params of [{ first: 51 }, { first: 0 }, { after: 'garbage' }, { before: '!!' }, { after: 'a', before: 'b' }]) {
+    for (const params of [{ first: 101 }, { first: 0 }, { after: 'garbage' }, { before: '!!' }, { after: 'a', before: 'b' }]) {
       await expect(me.customer.orders.list(params)).rejects.toMatchObject({ status: 400 })
     }
-    await expect(me.customer.orders.list({ first: 51 })).rejects.toBeInstanceOf(StorefrontError)
+    await expect(me.customer.orders.list({ first: 101 })).rejects.toBeInstanceOf(StorefrontError)
+    expect((await me.customer.orders.list({ first: 100 })).nodes).toHaveLength(Math.min(50, (await me.customer.orders.list({ first: 100 })).total_count!))
   })
 
   it('serves invoices and shipments as light list nodes', async () => {
