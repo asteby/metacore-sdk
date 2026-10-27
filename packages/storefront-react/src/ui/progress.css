@@ -32,3 +32,8 @@
   .sf-skeleton { animation: none; background-image: none; }
   .sf-spinner { animation-duration: 2.4s; }
 }
+
+/* PendingButton: cursor and a calm locked state. Colors stay the store's (this only dims a locked control). */
+[data-sf-pending] { cursor: progress; }
+[data-sf-locked]:not([data-sf-pending]) { cursor: not-allowed; }
+a[data-sf-locked] { pointer-events: none; }

@@ -5,6 +5,7 @@
  * The browser never talks to OPS. The action signs the buyer in with the store's `sk_` client and keeps the session
  * token in the store's own cookie, which is passed in (`customerCookie`), so name, flags and signing stay the store's.
  */
+import { fileGuardKey, once, takeHit, type FileGuardOptions } from './file-guard.js'
 import { invoiceFileBytes, isStorefrontError, repairPath, safeInvoiceFilename, type CustomerCapabilities, type CustomerSession, type StorefrontClient } from '@asteby/storefront'
 import { voucherOf } from './voucher.js'
 import type { AuthActionData, AuthErrorCode, AuthIntent } from './types.js'
@@ -316,7 +317,7 @@ function invoiceFailure(err: unknown, kind?: string): Response {
       return invoiceError(409, 'not_ready', `${kind === 'xml' ? 'El XML' : 'El PDF'} todavía se está generando. Vuelve a intentarlo en unos minutos.`, { 'Retry-After': '30' })
     if (err.status === 429) {
       const wait = typeof err.retryAfter === 'number' && Number.isFinite(err.retryAfter) && err.retryAfter > 0 ? Math.min(3600, Math.ceil(err.retryAfter)) : null
-      return invoiceError(429, 'rate_limited', 'Demasiados intentos. Espera un momento.', wait ? { 'Retry-After': String(wait) } : {})
+      return invoiceError(429, 'rate_limited', 'Estamos preparando tu factura, espera unos segundos.', wait ? { 'Retry-After': String(wait) } : { 'Retry-After': '10' })
     }
   }
   return invoiceError(502, 'unavailable', 'No pudimos obtener el archivo. Inténtalo de nuevo.')
@@ -344,6 +345,12 @@ export type InvoiceFileResponseOptions = {
   disposition?: 'attachment' | 'inline'
   /** The incoming request: `?inline=1` (what `InvoicePreviewDialog` asks) turns `disposition` to `inline` for a PDF. */
   request?: Request
+  /**
+   * Flood guard of this server (see `file-guard.ts`): 6 requests a minute per buyer and document, identical requests
+   * in flight share one upstream call, and the answer is remembered 60 s. Pass `{ buyer: <the session token> }`;
+   * `false` turns it off. Default: off (it needs to know whose session it is).
+   */
+  guard?: FileGuardOptions | false
 }
 
 /**
@@ -356,7 +363,7 @@ export type InvoiceFileResponseOptions = {
  * 401/404/429 pass through, `409 not_ready` says the document is the buyer's but the file is still being generated,
  * anything else is a generic 502 with no upstream detail.
  */
-export async function invoiceFileResponse({ storefront, orderId, invoiceId, kind, signal, maxBytes = MAX_INVOICE_FILE_BYTES, disposition, request }: InvoiceFileResponseOptions): Promise<Response> {
+export async function invoiceFileResponse({ storefront, orderId, invoiceId, kind, signal, maxBytes = MAX_INVOICE_FILE_BYTES, disposition, request, guard }: InvoiceFileResponseOptions): Promise<Response> {
   if (kind !== 'pdf' && kind !== 'xml') return invoiceError(404, 'not_found', 'No encontramos este archivo.')
   if (!orderId || !invoiceId) return invoiceError(404, 'not_found', 'No encontramos este archivo.')
   let inline = disposition === 'inline'
@@ -369,7 +376,18 @@ export async function invoiceFileResponse({ storefront, orderId, invoiceId, kind
   }
   inline = inline && kind === 'pdf'
   try {
-    const file = await storefront.customer.invoiceFile(orderId, invoiceId, kind, signal ? { signal } : undefined)
+    let file
+    if (guard && guard.buyer) {
+      const now = (guard.now ?? Date.now)()
+      const key = await fileGuardKey(guard.buyer, orderId, invoiceId, kind)
+      const wait = takeHit(key, guard.limit ?? 6, guard.windowMs ?? 60_000, now)
+      if (wait !== null) return invoiceError(429, 'rate_limited', 'Estamos preparando tu factura, espera unos segundos.', { 'Retry-After': String(wait) })
+      // One upstream call for identical requests in flight, kept 60 s. The request's own signal is not forwarded: it
+      // belongs to the first caller, and cancelling it would fail the others that share the call.
+      file = await once(key, guard.cacheMs ?? 60_000, now, () => storefront.customer.invoiceFile(orderId, invoiceId, kind), (f) => (f?.content_base64?.length ?? 0) <= 1_500_000)
+    } else {
+      file = await storefront.customer.invoiceFile(orderId, invoiceId, kind, signal ? { signal } : undefined)
+    }
     if (!file) return invoiceError(404, 'not_found', 'No encontramos este archivo.')
     // Checked on the encoded text (4 chars per 3 bytes, whitespace aside) so a huge answer is never decoded.
     if (file.content_base64.length > Math.ceil(maxBytes / 3) * 4 * 1.1 + 64) return invoiceError(502, 'unavailable', 'No pudimos obtener el archivo. Inténtalo de nuevo.')

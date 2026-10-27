@@ -7,6 +7,7 @@
  * The section's name is `kind.label_plural` (data). Render it only when `kind` exists: a store that declares no kind has no
  * garage, and a read that failed shows «We could not load this · Try again» instead of the list (`status="error"`).
  */
+import { PendingButton } from '../ui/pending-button.js'
 import type { Subject, SubjectInput, SubjectKind } from '@asteby/storefront'
 import { useResolvedLocale } from '../locale.js'
 import { fill, subjectMessages, type DeepPartial, type SubjectMessages } from './messages.js'
@@ -114,9 +115,9 @@ export function SubjectGarage(props: SubjectGarageProps) {
                         <form method="post" action={action} onSubmit={onMakeDefault ? (e) => { e.preventDefault(); void onMakeDefault(s) } : undefined} data-sf-subject-default-form>
                           <input type="hidden" name="intent" value="subject-default" />
                           <input type="hidden" name="id" value={s.id} />
-                          <button type="submit" className={cx.button} disabled={pending}>
+                          <PendingButton type="submit" className={cx.button}  pending={pending} shared>
                             {m.makeActive}
-                          </button>
+                          </PendingButton>
                         </form>
                       ) : null}
                       <details className={cx.details} open={openId === s.id || undefined} data-sf-subject-edit>
@@ -139,9 +140,9 @@ export function SubjectGarage(props: SubjectGarageProps) {
                         <form method="post" action={action} onSubmit={onDelete ? (e) => { e.preventDefault(); void onDelete(s) } : undefined}>
                           <input type="hidden" name="intent" value="subject-delete" />
                           <input type="hidden" name="id" value={s.id} />
-                          <button type="submit" className={`${cx.button ?? ''} ${cx.danger ?? ''}`.trim() || undefined} disabled={pending}>
+                          <PendingButton type="submit" className={`${cx.button ?? ''} ${cx.danger ?? ''}`.trim() || undefined}  pending={pending} shared>
                             {fill(m.removeConfirm, { name: s.label })}
-                          </button>
+                          </PendingButton>
                         </form>
                       </details>
                     </div>

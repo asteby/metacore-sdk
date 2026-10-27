@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent, type ReactNode, type RefObject } from 'react'
+import { PendingButton } from '../ui/pending-button.js'
 import { formatMoney, type Money, type PaymentOptionKey } from '@asteby/storefront'
 import { useResolvedLocale } from '../locale.js'
 import { createFetchTransport, type PaymentTransport } from './adapter.js'
@@ -490,18 +491,21 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
       {noPayment || choices.choices.some((c) => c.option) ? null : <p className={cx.note}>{m.paymentNote}</p>}
 
       {hideSubmit ? null : (
-        <button
+        <PendingButton
           type="submit"
           onClick={onPayClick}
           className={cx.submit}
-          disabled={busy || blocked}
+          pending={busy}
+          busy={busy || processing}
+          kind="pay"
+          pendingLabel={m.processing}
+          disabled={blocked}
           aria-disabled={blocked || (cardActive && !syncFailed && deliveryReady && (!brickReady || !ready || processing)) || undefined}
-          aria-busy={processing || undefined}
           data-sf-pay-method-submit
           {...tid('submit')}
         >
-          {busy || processing ? m.processing : label}
-        </button>
+          {label}
+        </PendingButton>
       )}
     </fieldset>
   )

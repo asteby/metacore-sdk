@@ -10,6 +10,7 @@
  * What is NOT here on purpose: the confirmation of the order, the payments and the invoices cannot be turned off, so
  * they are not boxes to uncheck, and the page says so. Marketing is a consent (it has a legal record), not a box here.
  */
+import { PendingButton } from '../ui/pending-button.js'
 import type { CustomerPreferences } from '@asteby/storefront'
 import { useId, type ComponentType, type ReactNode } from 'react'
 import type { AccountFormProps } from './account-auth.js'
@@ -93,9 +94,9 @@ export function LanguagePreference({ locales, value, data, pending = false, form
             </option>
           ))}
         </select>
-        <button type="submit" name="intent" value="locale" disabled={pending} className={cx.submit} data-sf-lang-submit>
+        <PendingButton type="submit" name="intent" value="locale"  className={cx.submit} data-sf-lang-submit pending={pending} shared>
           {m['lang.save']}
-        </button>
+        </PendingButton>
       </FormTag>
       {children}
     </section>
@@ -182,9 +183,9 @@ export function NotificationPreferences({ channels, preferences, events = NOTIFI
         <p className={cx.required} data-sf-notif-required>
           {m['notif.required']}
         </p>
-        <button type="submit" name="intent" value="notifications" disabled={pending} className={cx.submit} data-sf-notif-submit>
+        <PendingButton type="submit" name="intent" value="notifications"  className={cx.submit} data-sf-notif-submit pending={pending} shared>
           {m['notif.save']}
-        </button>
+        </PendingButton>
       </FormTag>
       {children}
     </section>

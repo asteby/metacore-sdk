@@ -8,8 +8,10 @@
  * and the card builds the document in the browser from the data it already has (thank-you page: guests have no
  * account to go back to). The document generator is a separate chunk, fetched only when the buyer taps.
  */
+import { PendingButton } from '../ui/pending-button.js'
+import { useActionLock } from '../ui/use-action-lock.js'
 import type { PendingPayment } from '@asteby/storefront'
-import { useId, useMemo, type ReactNode } from 'react'
+import { useId, useMemo, useState, type ReactNode } from 'react'
 import { enumText, fill } from './orders-messages.js'
 import { CopyButton, Hidden, Time, moneyText, useAccountText, type AccountTextProps } from './orders-ui.js'
 import { barcodeGeometry, voucherOf, type BarcodeFormat } from './voucher.js'
@@ -85,6 +87,8 @@ async function openDocument(payment: PendingPayment, mode: 'print' | 'download',
 export function PendingPaymentCard({ payment, voucherHref, shopName, headingLevel = 3, classNames: cx = {}, children, ...text }: PendingPaymentCardProps) {
   const { m, t, date, locale, timeZone } = useAccountText(text)
   const titleId = `sf-voucher-${useId().replace(/:/g, '')}`
+  const lock = useActionLock()
+  const [which, setWhich] = useState<'print' | 'download' | null>(null)
   const v = voucherOf(payment)
   if (!v) return null
   const expired = payment.status === 'expired'
@@ -179,12 +183,12 @@ export function PendingPaymentCard({ payment, voucherHref, shopName, headingLeve
             </>
           ) : (
             <>
-              <button type="button" className={cx.primary} onClick={() => void openDocument(payment, 'print', { locale, shopName, timeZone })} data-sf-voucher-print>
+              <PendingButton className={cx.primary} pending={lock.pending} busy={lock.pending && which === 'print'} kind="load" locale={locale} onClick={() => { setWhich('print'); void lock.run(() => Promise.resolve(openDocument(payment, 'print', { locale, shopName, timeZone }))) }} data-sf-voucher-print>
                 {m['pending.print']}
-              </button>
-              <button type="button" className={cx.secondary} onClick={() => void downloadPdf(payment, { locale, shopName, timeZone })} data-sf-voucher-download>
+              </PendingButton>
+              <PendingButton className={cx.secondary} pending={lock.pending} busy={lock.pending && which === 'download'} kind="download" locale={locale} onClick={() => { setWhich('download'); void lock.run(() => Promise.resolve(downloadPdf(payment, { locale, shopName, timeZone }))) }} data-sf-voucher-download>
                 {m['pending.download']}
-              </button>
+              </PendingButton>
             </>
           )}
           {v.ticket_url ? (

@@ -843,6 +843,52 @@ y define los tokens `--background --foreground --border --tint --primary --prima
 | `ThemeToggle`, `THEME_INIT_SCRIPT` | Claro/oscuro con `html[data-theme]` y localStorage, sin parpadeo. |
 | `InstallApp`, `useServiceWorker` | Instalación PWA (Android/Chrome y pista para iOS) y registro del service worker. |
 | `.select`, `.check`, `.radio` | Controles de formulario con los tokens de la tienda. |
+| `PendingButton` | Botón (o enlace con `href`) para lo que cuesta: pagar, descargar, procesar. Mientras `pending`: `disabled` + `aria-disabled` + `aria-busy`, `Spinner`, texto de estado, mismo ancho, anuncio `role="status"`, ignora clics; al terminar anuncia el resultado, devuelve el foco y aguanta 600 ms contra el doble clic. Sin estilos de marca (`className`/`classNames`, `data-sf-pending`, `data-sf-locked`). |
+| `useActionLock` / `useSubmitOnce` | El candado: `useActionLock().run(fn)` para acciones propias (`fetch`, descargas; `AbortSignal` que se cancela al desmontar o con `abort()`) y `useSubmitOnce(pending)` para lo que posee el router (`useNavigation`/`useFetcher`). |
+| `pendingMessages(locale, overrides)` | Textos ES/EN («Descargando…», «Generando factura…», «Procesando pago…», «Enviando…»), con override por `messages`. |
+
+### Receta: acciones con loader (anti doble envío)
+
+Toda acción que tarda o cuesta (pagar, descargar, generar, enviar) se monta igual; la tienda solo la viste. Necesita `@asteby/storefront-react/progress.css` (giro del spinner).
+
+```tsx
+import { PendingButton, useActionLock, useSubmitOnce } from '@asteby/storefront-react/ui'
+
+// 1) Formulario de una ruta (React Router): el botón es un <button type="submit">, funciona sin JavaScript.
+function RequestInvoice() {
+  const nav = useNavigation()
+  const { locked, guard } = useSubmitOnce(nav.state !== 'idle')
+  return (
+    <Form method="post" onSubmit={guard}>
+      <PendingButton type="submit" pending={locked} kind="invoice" className="btn-primary">
+        Solicitar factura
+      </PendingButton>
+    </Form>
+  )
+}
+
+// 2) Acción propia (fetch, descarga): una sola ejecución, cancelable.
+function Download({ href }: { href: string }) {
+  const lock = useActionLock()
+  return (
+    <PendingButton
+      pending={lock.pending}
+      kind="download"
+      result={lock.result}
+      onClick={() => void lock.run(async (signal) => save(await fetch(href, { signal })))}
+    >
+      Descargar PDF
+    </PendingButton>
+  )
+}
+```
+
+- Varios botones de envío en un mismo formulario: `shared` en cada uno; solo el pulsado muestra el spinner, todos se bloquean.
+- Un `fetcher`: `pending={fetcher.state !== 'idle'}`.
+- Textos: `kind` elige «Descargando…», «Generando factura…», «Procesando pago…», «Enviando…», «Guardando…»; `pendingLabel` o `messages={{ 'pending.pay': 'Cobrando…' }}` los cambian.
+- Cierra un diálogo = cancela la petición: el `AbortSignal` de `run` se aborta al desmontar.
+- El cliente no es la única defensa: en el servidor, `invoiceFileResponse({ ..., guard: { buyer: sessionToken } })` limita a 6 por minuto por comprador y documento (429 con `Retry-After`), comparte una sola llamada entre peticiones iguales y recuerda la respuesta 60 s.
+- Ya lo usan, sin que la tienda haga nada: `InvoiceList`/`InvoiceDetail` (Ver factura, PDF, XML), `InvoiceStatusCard` (`pending`), `AccountAuth`, `EmailSettings`, `PostPurchasePrompt`, `PaymentMethodSection` (pagar; bloqueado también durante el 3DS) y `OrderList` (ver más).
 
 ## Cuenta del comprador: `/account`
 

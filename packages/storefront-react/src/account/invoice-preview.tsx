@@ -10,6 +10,8 @@
  */
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useModalDialog } from '../dialog.js'
+import { Spinner } from '../ui/navigation-progress.js'
+import { PendingButton } from '../ui/pending-button.js'
 import { fetchInvoiceFile, inlineHref, type FetchLike, type InvoiceFileErrorKind } from './invoice-fetch.js'
 import type { AccountMessages } from './orders-messages.js'
 
@@ -142,6 +144,8 @@ export type InvoicePreviewDialogProps = {
   classNames?: InvoicePreviewClassNames
   /** For tests / custom transports; default `fetch`. */
   fetch?: FetchLike
+  /** Told when the dialog starts / stops loading, so the buttons next to it lock while the (costly) PDF is being made. */
+  onBusyChange?: (busy: boolean) => void
 }
 
 type View =
@@ -150,12 +154,27 @@ type View =
   | { kind: 'generating'; cfdi: CfdiSummary | null }
   | { kind: 'error'; code: InvoiceFileErrorKind }
 
-export function InvoicePreviewDialog({ open, onClose, title, pdfHref, xmlHref, m, footer, classNames: cx = {}, fetch: fetchImpl }: InvoicePreviewDialogProps) {
+export function InvoicePreviewDialog({ open, onClose, title, pdfHref, xmlHref, m, footer, classNames: cx = {}, fetch: fetchImpl, onBusyChange }: InvoicePreviewDialogProps) {
   const titleId = `sf-invprev-${useId().replace(/:/g, '')}`
   const closeRef = useRef<HTMLButtonElement | null>(null)
   const { ref, onBackdropClick } = useModalDialog({ open, onClose: () => onClose(), initialFocus: closeRef })
   const [view, setView] = useState<View>({ kind: 'loading' })
   const [attempt, setAttempt] = useState(0)
+  const [slow, setSlow] = useState(false)
+  const loading = open && view.kind === 'loading'
+  const busyRef = useRef(onBusyChange)
+  busyRef.current = onBusyChange
+  useEffect(() => {
+    busyRef.current?.(loading)
+    if (!loading) {
+      setSlow(false)
+      return undefined
+    }
+    // The first PDF of a document can take several seconds: say so instead of a bare spinner.
+    const id = setTimeout(() => setSlow(true), 2500)
+    return () => clearTimeout(id)
+  }, [loading])
+  useEffect(() => () => busyRef.current?.(false), [])
 
   useEffect(() => {
     if (!open) return
@@ -214,8 +233,9 @@ export function InvoicePreviewDialog({ open, onClose, title, pdfHref, xmlHref, m
       </div>
       <div className={cx.body} data-sf-invoice-preview-body aria-busy={view.kind === 'loading'}>
         {view.kind === 'loading' ? (
-          <p role="status" className={cx.notice}>
-            {m['invoice.previewLoading']}
+          <p role="status" className={cx.notice} data-sf-invoice-preview-loading style={{ display: 'flex', alignItems: 'center', gap: '0.5em' }}>
+            <Spinner />
+            <span>{slow ? m['invoice.previewSlow'] : m['invoice.previewLoading']}</span>
           </p>
         ) : null}
         {view.kind === 'pdf' ? (
@@ -227,9 +247,9 @@ export function InvoicePreviewDialog({ open, onClose, title, pdfHref, xmlHref, m
               <strong>{m['invoice.previewGenerating']}</strong>
               {view.cfdi ? <> {m['invoice.previewGeneratingHint']}</> : null}
             </p>
-            <button type="button" className={cx.retry} onClick={retry} data-sf-invoice-preview-retry>
+            <PendingButton className={cx.retry} onClick={retry} pending={false} data-sf-invoice-preview-retry>
               {m['invoice.previewRetry']}
-            </button>
+            </PendingButton>
             {view.cfdi ? <CfdiView cfdi={view.cfdi} m={m} classNames={{ ...(cx.cfdi ? { cfdi: cx.cfdi } : {}), ...(cx.table ? { table: cx.table } : {}) }} /> : null}
           </div>
         ) : null}
@@ -238,9 +258,9 @@ export function InvoicePreviewDialog({ open, onClose, title, pdfHref, xmlHref, m
             <p role="alert" className={cx.notice}>
               {view.code === 'unauthorized' ? m['invoice.fileSession'] : m['invoice.previewFailed']}
             </p>
-            <button type="button" className={cx.retry} onClick={retry} data-sf-invoice-preview-retry>
+            <PendingButton className={cx.retry} onClick={retry} pending={false} data-sf-invoice-preview-retry>
               {m['invoice.previewRetry']}
-            </button>
+            </PendingButton>
           </div>
         ) : null}
       </div>

@@ -4,6 +4,7 @@
  * server decides what is possible. While an invoice is being generated it asks the caller to refresh (`onRefresh`)
  * every 10 s for at most a minute, then stops and says so.
  */
+import { PendingButton } from '../ui/pending-button.js'
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import type { InvoiceSummary } from '@asteby/storefront'
 import type { FiscalReason } from './types.js'
@@ -80,6 +81,8 @@ export type InvoiceStatusCardProps = {
   windowDays?: number
   /** The buyer taps "Request invoice". Shown when `invoice.can_request !== false`. Without it, `requestHref` is a link. */
   onRequest?: () => void
+  /** The request / correction is being sent (a fetcher or navigation is pending): the buttons lock and say «Generando factura…». */
+  pending?: boolean
   requestHref?: string
   /** "Fix and retry". Without it, `correctHref` is a link. */
   onCorrect?: () => void
@@ -167,9 +170,9 @@ export function InvoiceStatusCard(props: InvoiceStatusCardProps) {
       const can = invoice?.can_request !== false
       if (can && (onRequest || requestHref)) {
         actions = onRequest ? (
-          <button type="button" className={cx.primary} onClick={onRequest} data-sf-invoice-request>
+          <PendingButton className={cx.primary} onClick={onRequest} pending={props.pending === true} kind="invoice" locale={locale} data-sf-invoice-request>
             {m.request}
-          </button>
+          </PendingButton>
         ) : (
           <a href={requestHref} className={cx.primary} data-sf-invoice-request>
             {m.request}
@@ -248,9 +251,9 @@ export function InvoiceStatusCard(props: InvoiceStatusCardProps) {
         </>
       )
       actions = onCorrect ? (
-        <button type="button" className={cx.primary} onClick={onCorrect} data-sf-invoice-correct>
+        <PendingButton className={cx.primary} onClick={onCorrect} pending={props.pending === true} kind="invoice" locale={locale} data-sf-invoice-correct>
           {m.correct}
-        </button>
+        </PendingButton>
       ) : correctHref ? (
         <a href={correctHref} className={cx.primary} data-sf-invoice-correct>
           {m.correct}
