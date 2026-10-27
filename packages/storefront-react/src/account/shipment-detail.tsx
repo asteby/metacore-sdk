@@ -139,8 +139,12 @@ export function ShipmentDetail({ order, shipments, progress, renderCarrierMark, 
             <section key={s.id} className={cx.section} aria-labelledby={id} data-sf-shipment-section="package" data-sf-shipment-status={typeof s.status === 'string' ? s.status : 'unknown'}>
               <H id={id} className={cx.title}>
                 {real.length > 1 ? t('shipmentPage.package', { n: i + 1, total: real.length }) : m['shipmentPage.tracking']}
-                {' · '}
-                <span data-sf-shipment-state>{enumText(m, 'shipment.status', s.status)}</span>
+                {real.length > 1 ? (
+                  <>
+                    {' · '}
+                    <span data-sf-shipment-state>{enumText(m, 'shipment.status', s.status)}</span>
+                  </>
+                ) : null}
               </H>
               <dl className={cx.list}>
                 {row('number', m['shippingService.guide'], number ? (

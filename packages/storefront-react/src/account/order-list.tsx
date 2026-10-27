@@ -12,7 +12,7 @@ import { OrderProductsStack } from './order-lines.js'
 import { Hidden, Time, moneyText, plural, str, useAccountText, type AccountTextProps } from './orders-ui.js'
 import { NextActionBar, OrderProgress, OrderStatusBadge, type NextActionBarClassNames, type OrderProgressClassNames } from './progress.js'
 
-export type OrderCardClassNames = Partial<Record<'root' | 'header' | 'products' | 'number' | 'link' | 'meta' | 'badge' | 'summary' | 'shipment' | 'footer' | 'total' | 'actions', string>> & {
+export type OrderCardClassNames = Partial<Record<'root' | 'header' | 'products' | 'number' | 'link' | 'detail' | 'meta' | 'badge' | 'summary' | 'shipment' | 'footer' | 'total' | 'actions', string>> & {
   progress?: OrderProgressClassNames
   action?: NextActionBarClassNames
 }
@@ -84,7 +84,7 @@ export function OrderCard({ order, orderHref, actionHref, onAction, renderFooter
           </p>
         ) : null}
         {row ? (
-          <a href={orderHref(order)} className={cx.link} data-sf-order-detail-link aria-label={fill(m['order.number'], { number: str(order.number) ?? '' }) + ': ' + m['order.viewDetail']}>
+          <a href={orderHref(order)} className={cx.detail} data-sf-order-detail-link aria-label={fill(m['order.number'], { number: str(order.number) ?? '' }) + ': ' + m['order.viewDetail']}>
             {m['order.viewDetail']}
           </a>
         ) : null}

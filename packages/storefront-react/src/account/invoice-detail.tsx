@@ -25,6 +25,8 @@ export type InvoiceDetailProps = AccountTextProps & {
   cfdiUseLabel?: (code: string) => string | null | undefined
   /** Offer the downloads of a sandbox invoice (labelled; its files carry the test mark). Default true: the notice already says it. */
   testDownloads?: boolean
+  /** Print the «test, not valid» notice (default true). Pass `false` when the page already shows ONE sandbox band (`OrderSandboxNotice`). */
+  testNotice?: boolean
   headingLevel?: 2 | 3 | 4
   /** Content under the details (e.g. a link back to the order). */
   children?: ReactNode
@@ -40,7 +42,7 @@ function coded(m: AccountMessages, group: string, value: string | null): string 
   return has(m, key) ? m[key] : value
 }
 
-export function InvoiceDetail({ invoice, fileHref, onDownload, taxRegimeLabel, cfdiUseLabel, testDownloads = true, headingLevel = 2, children, classNames: cx = {}, ...text }: InvoiceDetailProps) {
+export function InvoiceDetail({ invoice, fileHref, onDownload, taxRegimeLabel, cfdiUseLabel, testDownloads = true, testNotice = true, headingLevel = 2, children, classNames: cx = {}, ...text }: InvoiceDetailProps) {
   const { m, date, locale } = useAccountText(text)
   const titleId = `sf-invdet-${useId().replace(/:/g, '')}`
   if (!invoice || typeof invoice !== 'object') return null
@@ -102,7 +104,7 @@ export function InvoiceDetail({ invoice, fileHref, onDownload, taxRegimeLabel, c
       <p className={cx.status} data-sf-invoice-state>
         {enumText(m, 'invoice.status', invoice.status)}
       </p>
-      {test ? (
+      {test && testNotice ? (
         <p role="note" className={cx.test} data-sf-invoice-test>
           <strong>{m['invoice.test']}.</strong> {m['invoice.testNote']}
         </p>

@@ -58,10 +58,12 @@ export type ShipmentSummaryCardProps = CardBase & {
   renderCarrierMark?: (service: OrderShippingService) => ReactNode
   /** The server could not read the shipments (`order.degraded`). */
   degraded?: boolean
+  /** Card title; default «Envío». In a list of orders pass the order's name («Pedido SO-00008»). */
+  title?: string
 }
 
 /** Carrier and service, the estimate and where the package is, with one link to the shipping page. Nothing for a pickup order. */
-export function ShipmentSummaryCard({ order, href, headingLevel = 2, renderCarrierMark, degraded, classNames: cx = {}, ...text }: ShipmentSummaryCardProps) {
+export function ShipmentSummaryCard({ order, href, headingLevel = 2, renderCarrierMark, degraded, title, classNames: cx = {}, ...text }: ShipmentSummaryCardProps) {
   const { m, t, date } = useAccountText(text)
   const svc = orderShippingService(order)
   const live = orderShipments({ shipments: order.shipments }).filter((s) => s.kind !== 'return')
@@ -72,9 +74,9 @@ export function ShipmentSummaryCard({ order, href, headingLevel = 2, renderCarri
   const eta = svc ? shippingServiceEta(svc, m as unknown as Record<string, string>) : null
   const last: Shipment | undefined = real[real.length - 1]
   const promised = last && last.status !== 'delivered' ? date(last.promised_by) : null
-  const status = last ? enumText(m, 'shipment.status', last.status) : live.length > 0 ? m['shipment.preparing'] : m['summary.shipment.preparing']
+  const status = last ? enumText(m, 'shipment.status', last.status) : m['step.preparing']
   return (
-    <Card kind="shipment" titleText={m['summary.shipment.title']} linkText={m['order.viewDetail']} linkLabel={m['summary.shipment.view']} href={href} level={headingLevel} cx={cx} mark={svc && renderCarrierMark && (carrier || str(svc.carrier_logo_key)) ? renderCarrierMark(svc) : null} badge={<span className={cx.badge} data-sf-summary-state>{status}</span>}>
+    <Card kind="shipment" titleText={title ?? m['summary.shipment.title']} linkText={m['order.viewDetail']} linkLabel={m['summary.shipment.view']} href={href} level={headingLevel} cx={cx} mark={svc && renderCarrierMark && (carrier || str(svc.carrier_logo_key)) ? renderCarrierMark(svc) : null} badge={<span className={cx.badge} data-sf-summary-state>{status}</span>}>
       {name ? (
         <p className={cx.primary} data-sf-summary-primary>
           {name}

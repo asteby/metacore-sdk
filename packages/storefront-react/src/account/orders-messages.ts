@@ -155,7 +155,7 @@ const ES = {
   'invoiceHistory.title': 'Mis facturas',
   'invoiceHistory.empty': 'Aún no tienes facturas. Cuando se emita la de un pedido, la descargas aquí cuando quieras.',
   'invoice.view': 'Ver detalle',
-  'invoice.viewOf': 'Ver el detalle de la {kind} {name}',
+  'invoice.viewOf': 'Ver detalle de la {kind} {name}',
   'invoice.preview': 'Ver factura',
   'invoice.previewOf': 'Ver la vista previa de la {kind} {name}',
   'invoice.previewTitle': 'Vista previa de la {kind} {name}',
@@ -271,6 +271,7 @@ const ES = {
   // order subpages (summary cards, shipment / payment pages)
   'order.viewDetail': 'Ver detalle',
   'order.backToOrder': '← Pedido {number}',
+  'order.backToOrders': '← Mis pedidos',
   'order.sandboxTitle': 'Modo de prueba.',
   'order.sandboxBody': 'Este pedido incluye envíos o facturas de prueba (sandbox): no son reales ni tienen validez.',
   'order.productsTitle': 'Productos',
@@ -593,6 +594,7 @@ const EN: AccountMessages = {
   // order subpages (summary cards, shipment / payment pages)
   'order.viewDetail': 'View details',
   'order.backToOrder': '← Order {number}',
+  'order.backToOrders': '← My orders',
   'order.sandboxTitle': 'Test mode.',
   'order.sandboxBody': 'This order includes test (sandbox) shipments or invoices: they are not real and have no validity.',
   'order.productsTitle': 'Products',

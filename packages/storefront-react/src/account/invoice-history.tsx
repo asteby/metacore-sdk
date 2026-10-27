@@ -82,9 +82,13 @@ export function InvoiceHistory({ entries, fileHref, detailHref, orderHref, compa
                   </p>
                 ) : null}
                 <p className={cx.meta}>
-                  {doc.issued_at ? <Time value={doc.issued_at} text={fill(m['invoice.issued'], { date: date(doc.issued_at) ?? '' })} /> : null}
-                  {total ? <> · {m['invoice.total']}: {total}</> : null}
-                  {str(order.number) ? <> · {fill(m['order.number'], { number: str(order.number) ?? '' })}</> : null}
+                  {[
+                    doc.issued_at ? <Time key="d" value={doc.issued_at} text={fill(m['invoice.issued'], { date: date(doc.issued_at) ?? '' })} /> : null,
+                    total ? <span key="t">{m['invoice.total']}: {total}</span> : null,
+                    str(order.number) ? <span key="o">{fill(m['order.number'], { number: str(order.number) ?? '' })}</span> : null,
+                  ]
+                    .filter(Boolean)
+                    .flatMap((n, i) => (i === 0 ? [n] : [' · ', n]))}
                 </p>
                 {issued && !compact ? <InvoiceFileLinks doc={doc} m={m} name={label} fileHref={fileHref ? (d, k) => fileHref(d, k, order) : undefined} classNames={{ actions: cx.actions, download: cx.download, note: cx.note }} /> : null}
                 {detail || orderLink ? (

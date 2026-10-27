@@ -12,7 +12,7 @@ import { paymentLabel, type PaymentLabelOptions } from './payment-method.js'
 import { RefundList } from './refunds.js'
 import { Time, moneyText, str, useAccountText, type AccountTextProps } from './orders-ui.js'
 
-export type PaymentDetailClassNames = Partial<Record<'root' | 'section' | 'title' | 'list' | 'row' | 'term' | 'value' | 'status' | 'note' | 'empty' | 'error' | 'retry' | 'totals', string>>
+export type PaymentDetailClassNames = Partial<Record<'root' | 'section' | 'title' | 'list' | 'totalsList' | 'row' | 'term' | 'value' | 'status' | 'note' | 'empty' | 'error' | 'retry' | 'totals', string>>
 
 export type PaymentDetailProps = AccountTextProps & {
   order: OrderTotalsProps['order'] & Partial<Pick<Order, 'payments' | 'refunds'>>
@@ -68,7 +68,7 @@ export function PaymentDetail({ order, methodLabel, renderPending, renderMoney, 
           const reference = last4 && !label.includes(last4.slice(-4)) ? `•••• ${last4.slice(-4)}` : null
           const paid = date(p.paid_at)
           return (
-            <section key={`${p.method_label}-${i}`} className={cx.section} aria-labelledby={id} data-sf-payment data-sf-payment-status={typeof p.status === 'string' ? p.status : 'unknown'}>
+            <section key={`${p.method_label}-${i}`} className={cx.section} aria-labelledby={id} data-sf-payment-entry data-sf-payment-status={typeof p.status === 'string' ? p.status : 'unknown'}>
               <H id={id} className={cx.title}>
                 {items.length > 1 ? `${m['paymentPage.payment']} ${i + 1}` : m['paymentPage.payment']}
               </H>
@@ -94,7 +94,7 @@ export function PaymentDetail({ order, methodLabel, renderPending, renderMoney, 
         <H id={`${uid}-totals`} className={cx.title}>
           {m['paymentPage.totals']}
         </H>
-        <OrderTotals order={order} {...(renderMoney ? { renderMoney } : {})} {...text} classNames={{ root: cx.list, row: cx.row, term: cx.term, value: cx.value }} />
+        <OrderTotals order={order} {...(renderMoney ? { renderMoney } : {})} {...text} classNames={{ root: cx.totalsList ?? cx.list, ...(cx.totalsList ? {} : { row: cx.row, term: cx.term, value: cx.value }) }} />
       </section>
     </div>
   )
