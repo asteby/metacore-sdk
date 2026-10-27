@@ -198,6 +198,8 @@ export function previousPageQuery(state: ListPageState): ListQuery | null {
   const cursor = pageInfo?.start_cursor
   if (!cursor) return query.after || query.before ? firstPageQuery(query) : null
   const here = pagePosition(state)
+  // The page before starts at the very beginning: it is the plain first page (a clean, canonical URL).
+  if (here !== undefined && here - first <= 1) return firstPageQuery(query)
   return { ...firstPageQuery(query), before: cursor, ...(here ? { pos: Math.max(1, here - first) } : {}) }
 }
 

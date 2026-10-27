@@ -28,8 +28,14 @@ describe('<Pager />', () => {
     const q = { after: 'e1', pos: 11, status: 'delivered', from: '2026-01-01' }
     const { container } = render(<Pager query={q} pageInfo={info({ has_previous_page: true, start_cursor: 's2', end_cursor: 'e2' })} count={10} total={42} first={10} hrefFor={href} />)
     expect(container.querySelector('[data-sf-pager-status]')!.textContent).toBe('Mostrando 11–20 de 42')
-    expect(container.querySelector('a[rel=prev]')!.getAttribute('href')).toBe('/cuenta/pedidos?antes=s2&estado=delivered&desde=2026-01-01')
+    // position 11: the page before is the first one, so the link is the plain first page
+    expect(container.querySelector('a[rel=prev]')!.getAttribute('href')).toBe('/cuenta/pedidos?estado=delivered&desde=2026-01-01')
     expect(container.querySelector('a[rel=next]')!.getAttribute('href')).toBe('/cuenta/pedidos?despues=e2&pos=21&estado=delivered&desde=2026-01-01')
+  })
+
+  it('goes back with the start cursor when the page before is not the first', () => {
+    const { container } = render(<Pager query={{ after: 'e2', pos: 21 }} pageInfo={info({ has_previous_page: true, start_cursor: 's3', end_cursor: 'e3' })} count={10} total={300} first={10} hrefFor={href} />)
+    expect(container.querySelector('a[rel=prev]')!.getAttribute('href')).toBe('/cuenta/pedidos?antes=s3&pos=11')
   })
 
   it('has no Next at the end, and says «Mostrando» without a total when the server gave none', () => {

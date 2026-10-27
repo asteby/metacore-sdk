@@ -92,7 +92,11 @@ describe('moving between pages', () => {
     expect(next).toEqual({ status: 'delivered', after: 'e1', pos: 11 })
     const page2 = { query: next!, pageInfo: { has_next_page: true, end_cursor: 'e2', has_previous_page: true, start_cursor: 's2' }, count: 10, first: 10 }
     expect(nextPageQuery(page2)).toEqual({ status: 'delivered', after: 'e2', pos: 21 })
-    expect(previousPageQuery(page2)).toEqual({ status: 'delivered', before: 's2', pos: 1 })
+    // page 2 starts at 11: the page before is the first one, the plain URL
+    expect(previousPageQuery(page2)).toEqual({ status: 'delivered' })
+    // from page 3 (position 21) the page before has its own cursor
+    const page3 = { query: { status: 'delivered', after: 'e2', pos: 21 }, pageInfo: { has_next_page: true, end_cursor: 'e3', has_previous_page: true, start_cursor: 's3' }, count: 10, first: 10 }
+    expect(previousPageQuery(page3)).toEqual({ status: 'delivered', before: 's3', pos: 11 })
   })
 
   it('returns to the plain first page when the server says there is nothing before', () => {
