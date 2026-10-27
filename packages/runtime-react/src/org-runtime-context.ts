@@ -94,7 +94,7 @@ export const SystemActorContext = createContext<SystemActor | undefined>(undefin
 export const useSystemActor = () => useContext(SystemActorContext)
 
 /**
- * How the app's AGENT (its assistant: Gobi in GobiernOS) is presented when a
+ * How the app's AGENT (its assistant: Gobi in Vantora) is presented when a
  * record's provenance says an agent made it or proposed it. Separate from
  * `SystemActor`: unattended platform work (seeds, imports) is not the agent.
  * `undefined` outside a provider → the provenance `actor_name`, else a
@@ -114,7 +114,7 @@ export const useAgentActor = () => useContext(AgentActorContext)
 
 /**
  * Host hook naming the ORIGIN of a record that has no stored provenance but
- * was clearly made by the system (null `created_by_id`): e.g. GobiernOS maps
+ * was clearly made by the system (null `created_by_id`): e.g. Vantora maps
  * `findings` → "Importación de investigación pública". Return `undefined` when
  * unknown — the badge then shows the system actor alone, never an invented
  * origin.

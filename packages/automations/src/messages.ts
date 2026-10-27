@@ -1,6 +1,6 @@
 import type { TranslateFn } from './types'
 
-/** Spanish defaults (GobiernOS / Mexico). Every key is overridable via `t`. */
+/** Spanish defaults (Vantora / Mexico). Every key is overridable via `t`. */
 export const AUTOMATIONS_MESSAGES_ES = {
   'automations.title': 'Automatizaciones',
   'automations.subtitle': 'Recordatorios, resúmenes y avisos que corren solos. Todo lo que propone el asistente espera tu confirmación.',
