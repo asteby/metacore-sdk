@@ -1259,6 +1259,11 @@ export type InvoiceSummary = {
   /** Signed, short-lived download links. */
   url?: string | null
   xml_url?: string | null
+  /**
+   * Files the server can deliver NOW through the authenticated invoice file route (contract 1.13). The PDF can arrive
+   * after the XML: a missing kind is "still being prepared", not an error. Absent/null = the server does not say.
+   */
+  available_files?: ('pdf' | 'xml')[] | null
 }
 
 /** The invoice request of a cart (`Cart.invoice`). The tax id is masked: the full value is never echoed back. */

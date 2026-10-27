@@ -91,6 +91,56 @@ describe('<InvoiceStatusCard /> the 8 states', () => {
     expect(container.querySelector<HTMLAnchorElement>('[data-sf-invoice-xml]')!.href).toBe('https://f.test/a.xml')
   })
 
+  describe('downloads through the store route (the server sends no signed link)', () => {
+    const issued: InvoiceSummary = { status: 'issued', stage: 'issued', action: 'none', folio: 'F-1' }
+    const href = (kind: 'pdf' | 'xml') => `/cuenta/pedidos/o1/facturas/d1/${kind}`
+
+    it('offers PDF and XML from fileHref when the server lists both', () => {
+      const { container } = render(<InvoiceStatusCard invoice={{ ...issued, available_files: ['pdf', 'xml'] }} fileHref={href} />)
+      expect(container.querySelector<HTMLAnchorElement>('[data-sf-invoice-pdf]')!.getAttribute('href')).toBe(href('pdf'))
+      expect(container.querySelector<HTMLAnchorElement>('[data-sf-invoice-xml]')!.getAttribute('href')).toBe(href('xml'))
+      expect(screen.getByText('Descargar PDF')).toBeTruthy()
+      expect(screen.getByText('Descargar XML')).toBeTruthy()
+      // no 15-minute claim: the route is signed-in, not an expiring link
+      expect(container.textContent).not.toContain('15 minutos')
+    })
+
+    it('XML only: shows the XML and says the PDF is still in process', () => {
+      const { container } = render(<InvoiceStatusCard invoice={{ ...issued, available_files: ['xml'] }} fileHref={href} />)
+      expect(container.querySelector('[data-sf-invoice-pdf]')).toBeNull()
+      expect(container.querySelector('[data-sf-invoice-xml]')).not.toBeNull()
+      expect(container.querySelector('[data-sf-invoice-file-pending="pdf"]')!.textContent).toContain('El PDF todavía está en proceso')
+    })
+
+    it('never a "ready" card without a download: waits, refreshes and says so', () => {
+      vi.useFakeTimers()
+      const onRefresh = vi.fn()
+      const { container } = render(<InvoiceStatusCard invoice={{ ...issued, available_files: [] }} fileHref={href} onRefresh={onRefresh} />)
+      expect(container.querySelector('[data-sf-invoice-pdf]')).toBeNull()
+      expect(container.querySelector('[data-sf-invoice-xml]')).toBeNull()
+      expect(container.textContent).not.toContain('Tu factura está lista')
+      expect(container.textContent).toContain('Tu factura ya fue emitida')
+      act(() => {
+        vi.advanceTimersByTime(10_000)
+      })
+      expect(onRefresh).toHaveBeenCalled()
+      expect(container.querySelector('[data-sf-invoice-refresh]')).not.toBeNull()
+    })
+
+    it('an old server that does not say which files exist: both are offered, no pending note', () => {
+      const { container } = render(<InvoiceStatusCard invoice={issued} fileHref={href} />)
+      expect(container.querySelector('[data-sf-invoice-pdf]')).not.toBeNull()
+      expect(container.querySelector('[data-sf-invoice-xml]')).not.toBeNull()
+      expect(container.querySelector('[data-sf-invoice-file-pending]')).toBeNull()
+    })
+
+    it('English', () => {
+      const { container } = render(<InvoiceStatusCard locale="en" invoice={{ ...issued, available_files: ['xml'] }} fileHref={href} />)
+      expect(screen.getByText('Download XML')).toBeTruthy()
+      expect(container.textContent).toContain('The PDF is still being prepared')
+    })
+  })
+
   it('needs data: says the cause in words and offers "Corregir y reintentar"', () => {
     const onCorrect = vi.fn()
     const { container } = render(<InvoiceStatusCard invoice={CASES[4]![1]!} onCorrect={onCorrect} />)

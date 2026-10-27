@@ -102,6 +102,14 @@ export type FiscalMessages = {
     refresh: string
     issuedTitle: string
     issuedBody: string
+    /** Downloads go through the store's own signed-in route (no expiring link). */
+    issuedBodyDirect: string
+    /** Issued, but no file is ready yet. */
+    issuedPendingTitle: string
+    issuedPendingBody: string
+    /** One of the two files is ready and the other is still being prepared. */
+    pdfPending: string
+    xmlPending: string
     folio: string
     pdf: string
     xml: string
@@ -242,6 +250,11 @@ const ES: FiscalMessages = {
     refresh: 'Actualizar',
     issuedTitle: 'Tu factura está lista',
     issuedBody: 'Descárgala cuando la necesites. Los enlaces vencen en 15 minutos; vuelve a abrir esta página para generar nuevos.',
+    issuedBodyDirect: 'Descárgala cuando la necesites.',
+    issuedPendingTitle: 'Tu factura ya fue emitida',
+    issuedPendingBody: 'Estamos preparando los archivos para descargar. Vuelve a revisar en unos minutos.',
+    pdfPending: 'El PDF todavía está en proceso; por ahora puedes descargar el XML. Vuelve a revisar en unos minutos.',
+    xmlPending: 'El XML todavía está en proceso; por ahora puedes descargar el PDF. Vuelve a revisar en unos minutos.',
     folio: 'Folio fiscal',
     pdf: 'Descargar PDF',
     xml: 'Descargar XML',
@@ -390,6 +403,11 @@ const EN: FiscalMessages = {
     refresh: 'Refresh',
     issuedTitle: 'Your invoice is ready',
     issuedBody: 'Download it whenever you need. The links expire in 15 minutes; reopen this page for new ones.',
+    issuedBodyDirect: 'Download it whenever you need.',
+    issuedPendingTitle: 'Your invoice has been issued',
+    issuedPendingBody: 'We are preparing the files for download. Check again in a few minutes.',
+    pdfPending: 'The PDF is still being prepared; you can download the XML for now. Check again in a few minutes.',
+    xmlPending: 'The XML is still being prepared; you can download the PDF for now. Check again in a few minutes.',
     folio: 'Tax folio',
     pdf: 'Download PDF',
     xml: 'Download XML',

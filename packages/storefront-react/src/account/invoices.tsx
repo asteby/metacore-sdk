@@ -60,7 +60,10 @@ export function InvoiceList({ invoices, summary, renderSummary, fileHref, onDown
     const folio = str(doc.folio)
     const canDownload = status === 'issued' && !test
     const total = moneyText(doc.total, locale)
+    // The server says which files exist NOW (`available_files`); a kind it lacks is "in process", not a dead button.
+    const has = (kind: InvoiceFileKind) => doc.available_files == null || doc.available_files.includes(kind)
     const link = (kind: InvoiceFileKind) => {
+      if (!has(kind)) return null
       const label = kind === 'pdf' ? m['invoice.pdf'] : m['invoice.xml']
       const aria = fill(m['invoice.downloadOf'], { action: label, kind: kindLabel.toLowerCase(), name: name || folio || '' }).replace(/\s+,/g, ',').replace(/,\s*$/, '').trim()
       const href = fileHref?.(doc, kind)
@@ -117,6 +120,11 @@ export function InvoiceList({ invoices, summary, renderSummary, fileHref, onDown
           <p className={cx.actions} data-sf-invoice-actions>
             {link('pdf')}
             {link('xml')}
+          </p>
+        ) : null}
+        {canDownload && (fileHref || onDownload) && (!has('pdf') || !has('xml')) ? (
+          <p className={cx.note} data-sf-invoice-file-pending={has('pdf') ? 'xml' : 'pdf'}>
+            {has('pdf') ? m['invoice.xmlPending'] : m['invoice.pdfPending']}
           </p>
         ) : null}
       </li>

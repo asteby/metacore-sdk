@@ -135,3 +135,13 @@ describe('<RefundList /> and <PaymentSummary />', () => {
     expect(container.textContent).toContain('Pagado')
   })
 })
+
+describe('InvoiceList: files that exist now', () => {
+  it('lists only the files the server says exist and tells the other is in process', () => {
+    const doc = { id: 'd1', status: 'issued', kind: 'invoice', stage: 'issued', action: 'download', folio: 'F-1', available_files: ['xml'] } as never
+    const { container } = render(<InvoiceList invoices={[doc]} fileHref={(d, k) => `/f/${d.id}/${k}`} />)
+    expect(container.querySelector('[data-sf-invoice-download="pdf"]')).toBeNull()
+    expect(container.querySelector('[data-sf-invoice-download="xml"]')).not.toBeNull()
+    expect(container.querySelector('[data-sf-invoice-file-pending="pdf"]')!.textContent).toContain('El PDF todavía está en proceso')
+  })
+})

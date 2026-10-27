@@ -60,8 +60,16 @@ export function invoiceCardState(invoice: InvoiceSummary | null | undefined, ava
 
 export type InvoiceStatusCardClassNames = Partial<Record<'root' | 'title' | 'body' | 'actions' | 'primary' | 'secondary' | 'link' | 'meta', string>>
 
+export type InvoiceFileKind = 'pdf' | 'xml'
+
 export type InvoiceStatusCardProps = {
   invoice?: InvoiceSummary | null
+  /**
+   * Your authenticated download route for a file of this order's invoice, e.g. `(kind) => paths.orderInvoiceFile(order.id, doc.id, kind)`
+   * (backed by `invoiceFileResponse` in `/account/server`). Used when the summary carries no `url` / `xml_url`. Which
+   * files are offered follows `invoice.available_files`; return `null` when you have no document to point at.
+   */
+  fileHref?: (kind: InvoiceFileKind) => string | null | undefined
   /** `loadFiscalContext(...).available`. `false` alone is read as "unknown": see `availability`. */
   available?: boolean
   /** `loadFiscalContext(...).reason`: why it is (not) available. Lets the card say the true thing (not active / unknown / could not check). */
@@ -90,10 +98,23 @@ export type InvoiceStatusCardProps = {
 }
 
 export function InvoiceStatusCard(props: InvoiceStatusCardProps) {
-  const { invoice, available = true, availability, testMode, windowDays, onRequest, requestHref, onCorrect, correctHref, onRefresh, refreshMs = 10_000, refreshForMs = 60_000, contact, messages, classNames: cx = {}, headingLevel = 3 } = props
+  const { invoice, fileHref, available = true, availability, testMode, windowDays, onRequest, requestHref, onCorrect, correctHref, onRefresh, refreshMs = 10_000, refreshForMs = 60_000, contact, messages, classNames: cx = {}, headingLevel = 3 } = props
   const locale = useResolvedLocale(props.locale)
   const m = fiscalMessages(locale, messages).status
   const state = invoiceCardState(invoice, available, availability)
+  // The downloads this card can offer NOW. A summary link wins; otherwise the store's own route, for the files the
+  // server says exist (`available_files`; absent = it does not say, so both are offered).
+  const files = invoice?.available_files
+  const hrefFor = (kind: InvoiceFileKind): string | null => {
+    const direct = kind === 'pdf' ? invoice?.url : invoice?.xml_url
+    if (direct) return direct
+    if (!fileHref || (files != null && !files.includes(kind))) return null
+    return fileHref(kind) || null
+  }
+  const pdfHref = state === 'issued' ? hrefFor('pdf') : null
+  const xmlHref = state === 'issued' ? hrefFor('xml') : null
+  // Issued, but nothing to download yet: never a "ready" card without a download.
+  const waitingFiles = state === 'issued' && !pdfHref && !xmlHref
   const titleId = `sf-invoice-card-${useId().replace(/:/g, '')}`
   const [tired, setTired] = useState(false)
   const refresh = useRef(onRefresh)
@@ -102,7 +123,7 @@ export function InvoiceStatusCard(props: InvoiceStatusCardProps) {
   // Refresh while it is processing, then give up quietly (the card says it is still going).
   useEffect(() => {
     setTired(false)
-    if (state !== 'processing' || !refresh.current) return
+    if ((state !== 'processing' && !waitingFiles) || !refresh.current) return
     const t0 = Date.now()
     const id = setInterval(() => {
       if (Date.now() - t0 >= refreshForMs) {
@@ -113,7 +134,7 @@ export function InvoiceStatusCard(props: InvoiceStatusCardProps) {
       refresh.current?.()
     }, refreshMs)
     return () => clearInterval(id)
-  }, [state, refreshMs, refreshForMs])
+  }, [state, waitingFiles, refreshMs, refreshForMs])
 
   const manualRefresh = useCallback(() => {
     setTired(false)
@@ -170,11 +191,22 @@ export function InvoiceStatusCard(props: InvoiceStatusCardProps) {
         </button>
       ) : null
       break
-    case 'issued':
-      title = m.issuedTitle
+    case 'issued': {
+      const viaRoute = !invoice?.url && !invoice?.xml_url && !!fileHref
+      title = waitingFiles ? m.issuedPendingTitle : m.issuedTitle
       body = (
         <>
-          <p className={cx.body}>{m.issuedBody}</p>
+          <p className={cx.body}>{waitingFiles ? (tired ? m.processingSlow : m.issuedPendingBody) : viaRoute ? m.issuedBodyDirect : m.issuedBody}</p>
+          {!waitingFiles && files != null && !pdfHref ? (
+            <p className={cx.meta} data-sf-invoice-file-pending="pdf">
+              {m.pdfPending}
+            </p>
+          ) : null}
+          {!waitingFiles && files != null && !xmlHref ? (
+            <p className={cx.meta} data-sf-invoice-file-pending="xml">
+              {m.xmlPending}
+            </p>
+          ) : null}
           {invoice?.folio ? (
             <p className={cx.meta} data-sf-invoice-folio>
               <span>{m.folio}: </span>
@@ -185,19 +217,25 @@ export function InvoiceStatusCard(props: InvoiceStatusCardProps) {
       )
       actions = (
         <>
-          {invoice?.url ? (
-            <a href={invoice.url} className={cx.primary} rel="noopener noreferrer" download data-sf-invoice-pdf>
+          {pdfHref ? (
+            <a href={pdfHref} className={cx.primary} rel="noopener noreferrer" download data-sf-invoice-pdf>
               {m.pdf}
             </a>
           ) : null}
-          {invoice?.xml_url ? (
-            <a href={invoice.xml_url} className={cx.secondary} rel="noopener noreferrer" download data-sf-invoice-xml>
+          {xmlHref ? (
+            <a href={xmlHref} className={cx.secondary} rel="noopener noreferrer" download data-sf-invoice-xml>
               {m.xml}
             </a>
+          ) : null}
+          {waitingFiles && onRefresh ? (
+            <button type="button" className={cx.secondary} onClick={manualRefresh} data-sf-invoice-refresh>
+              {m.refresh}
+            </button>
           ) : null}
         </>
       )
       break
+    }
     case 'needs_data':
       title = m.needsDataTitle
       body = (
