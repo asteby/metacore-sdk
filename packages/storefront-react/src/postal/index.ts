@@ -31,6 +31,15 @@ export function createCatalogProvider(opts: { name?: string; get: (zip: string) 
   return { name: opts.name ?? 'catalog', lookup: (zip) => opts.get(zip) }
 }
 
+/**
+ * Provider over the Storefront API (`GET /storefront/region/postal-code`, the region pack's full catalog): the one a
+ * shop uses. Pass the shop's client (`storefront`, server side with an `sk_` token, or the browser one with `pk_`).
+ * `null` when the code is not in the catalog; a failure throws ("could not ask").
+ */
+export function createStorefrontPostalProvider(client: { postalCode: (zip: string) => Promise<PostalInfo | null> }, name = 'region'): PostalProvider {
+  return { name, lookup: (zip) => client.postalCode(zip) }
+}
+
 const fold = (s: string) =>
   s
     .normalize('NFD')
@@ -69,7 +78,12 @@ export type OsmProviderOptions = {
 
 type NominatimHit = { address?: Record<string, string | undefined> }
 
-/** Fallback provider over OpenStreetMap (Nominatim). Data © OpenStreetMap contributors, ODbL: attribute it. */
+/**
+ * @deprecated Do not wire this in storefronts: the lookup of a shop is the region pack's catalog behind the Storefront
+ * API (`createStorefrontPostalProvider`). OpenStreetMap data is not authoritative for state and city, so it must never
+ * lock a field.
+ *
+ * Fallback provider over OpenStreetMap (Nominatim). Data © OpenStreetMap contributors, ODbL: attribute it. */
 export function createOsmProvider(opts: OsmProviderOptions): PostalProvider {
   const timeoutMs = opts.timeoutMs ?? 800
   const minInterval = opts.minIntervalMs ?? 1000

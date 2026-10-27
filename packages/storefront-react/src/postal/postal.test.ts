@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createCatalogProvider, createOsmProvider, createPostalLookup, type PostalProvider } from './index.js'
+import { createStorefrontPostalProvider, createCatalogProvider, createOsmProvider, createPostalLookup, type PostalProvider } from './index.js'
 
 const STATES = ['Ciudad de México', 'México', 'Jalisco']
 const hit = (over: Record<string, string> = {}) => ({
@@ -119,5 +119,14 @@ describe('osm provider', () => {
     expect(f).not.toHaveBeenCalled()
     expect((await lookup('44999'))?.source).toBe('osm')
     expect(f).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('storefront provider', () => {
+  it('asks the Storefront API client and stamps the source', async () => {
+    const client = { postalCode: vi.fn(async (z: string) => (z === '06700' ? { province: 'Ciudad de México', city: 'Cuauhtémoc', neighborhoods: ['Roma Norte'] } : null)) }
+    const lookup = createPostalLookup({ providers: [createStorefrontPostalProvider(client)] })
+    expect(await lookup('06700')).toMatchObject({ city: 'Cuauhtémoc', source: 'region' })
+    expect(await lookup('03999')).toBeNull()
   })
 })

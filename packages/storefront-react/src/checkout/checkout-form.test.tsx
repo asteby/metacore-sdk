@@ -4,6 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { renderToString } from 'react-dom/server'
 import axe from 'axe-core'
 import { useRef } from 'react'
+import { StorefrontProvider } from '../context.js'
 import type { CartCost, CartLine } from '@asteby/storefront'
 import { AddressFields, ContactFields, ErrorSummary, isAddressFillEvent, OrderSummary, OrderSummaryDisclosure, useFieldErrors, type PostalCodeInfo } from './index.js'
 
@@ -249,6 +250,32 @@ describe('state locked by the postal code', () => {
     expect((screen.getByLabelText('Ciudad o municipio') as HTMLInputElement).readOnly).toBe(false)
     fireEvent.input(zip, { target: { value: '0399' } })
     expect(container.querySelector('[data-sf-zip-not-found]')).toBeNull()
+  })
+
+  it('without the prop, the lookup is the region catalog of the StorefrontProvider client; the prop overrides it', async () => {
+    const postalCode = vi.fn(async (zip: string) => (zip === '44100' ? { province: 'Jalisco', city: 'Guadalajara', neighborhoods: ['Centro'] } : null))
+    const client = { postalCode } as never
+    const { unmount } = render(
+      <StorefrontProvider client={client}>
+        <Form />
+      </StorefrontProvider>,
+    )
+    const province = screen.getByLabelText('Estado') as HTMLInputElement
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '44100' } })
+    await waitFor(() => expect(province.value).toBe('Jalisco'))
+    expect(province.readOnly).toBe(true)
+    expect(postalCode).toHaveBeenCalledWith('44100')
+    unmount()
+    const own = vi.fn(async () => null)
+    render(
+      <StorefrontProvider client={client}>
+        <Form lookup={own} />
+      </StorefrontProvider>,
+    )
+    postalCode.mockClear()
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '44100' } })
+    await waitFor(() => expect(own).toHaveBeenCalledWith('44100'))
+    expect(postalCode).not.toHaveBeenCalled()
   })
 
   it('"Cambiar código postal" frees the state and puts the cursor in the postal code', async () => {

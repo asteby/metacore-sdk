@@ -9,6 +9,7 @@
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import type { Address } from '@asteby/storefront'
+import { useOptionalStorefront } from '../context.js'
 import { CheckoutField, type CheckoutFieldClassNames, type FieldErrors, type FieldMessages } from './fields.js'
 
 export type AddressFieldKey = 'zip' | 'province' | 'city' | 'neighborhood' | 'address1' | 'address2' | 'reference'
@@ -165,8 +166,9 @@ export type AddressFieldsProps = Common & {
   /** Postal-code format of the country (from the region config), e.g. `{ pattern: '[0-9]{5}', maxLength: 5, inputMode: 'numeric', title: '5 dígitos' }`. */
   postalCode?: { pattern?: string; maxLength?: number; inputMode?: 'numeric' | 'text'; title?: string }
   /**
-   * Fills state and city (and suggests colonias) from the postal code, when the shop has a source (a same-origin
-   * route over a postal-code catalog). Called once the code matches `postalCode.pattern` (or on leaving the field).
+   * Fills state and city (and suggests colonias) from the postal code. Default: the region pack's catalog through the
+   * Storefront API (`client.postalCode`) of the surrounding `<StorefrontProvider>` when it has a browser client; pass
+   * this to use another source (a same-origin route of the shop that proxies it server side). Called once the code matches `postalCode.pattern` (or on leaving the field).
    * Never overwrites what the buyer typed.
    */
   lookupPostalCode?: (zip: string) => Promise<PostalCodeInfo | null>
@@ -300,8 +302,13 @@ export function AddressFields(props: AddressFieldsProps) {
   const coloniaCarry = useRef<{ value: string; autofilled: boolean; userEdited: boolean } | null>(null)
   const lastZip = useRef<string | null>(null)
   const zipRef = useRef<HTMLDivElement>(null)
-  const lookupRef = useRef(lookupPostalCode)
-  lookupRef.current = lookupPostalCode
+  // Default lookup: the region pack's catalog through the Storefront API of the surrounding <StorefrontProvider> (browser
+  // client, `pk_` token). The prop overrides it (a same-origin route of the shop, another source).
+  const sf = useOptionalStorefront()
+  const providerClient = sf?.client ?? null
+  const lookupDefault = providerClient ? (zip: string): Promise<PostalCodeInfo | null> => providerClient.postalCode(zip) : undefined
+  const lookupRef = useRef(lookupPostalCode ?? lookupDefault)
+  lookupRef.current = lookupPostalCode ?? lookupDefault
   // ONE writer: lookup results are applied one after another, never interleaved (two lookups answering close together
   // would otherwise write the same fields and fire their events at the same time).
   const writer = useRef<Promise<void>>(Promise.resolve())
