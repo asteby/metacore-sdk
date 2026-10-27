@@ -519,9 +519,9 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
           onClick={onPayClick}
           className={cx.submit}
           pending={busy || held}
-          busy={busy || processing}
+          busy={busy || processing || held}
           kind="pay"
-          pendingLabel={m.processing}
+          pendingLabel={held ? label : m.processing}
           disabled={blocked}
           aria-disabled={blocked || held || (cardActive && !syncFailed && deliveryReady && (!brickReady || !ready || processing)) || undefined}
           data-sf-pay-method-submit
