@@ -30,8 +30,8 @@ export function quotable(b: QuoteBody): boolean {
   return /^\d{5}$/.test(b.zip ?? '') && Boolean(b.province) && Boolean(b.city)
 }
 
-/** Placeholder for the street while the buyer has not typed it (OPS requires one to save an address). The full address is saved again at checkout. */
-export const PENDING_STREET = 'Por confirmar'
+export { PENDING_STREET, isPendingStreet, withoutPendingStreet } from './pending-street.js'
+import { PENDING_STREET } from './pending-street.js'
 
 export type QuoteOptions = {
   /** Text saved as `address1` while the street is empty. Default {@link PENDING_STREET}. */

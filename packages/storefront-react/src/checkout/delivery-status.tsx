@@ -9,6 +9,8 @@ export type DeliveryStatusMessages = {
   /** Quote pending or running. */
   quoting: string
   error: string
+  /** The shipping is quoted but the street is still empty. */
+  street: string
   retry: string
   /** The destination has no shipping or pickup. */
   noCoverage: string
@@ -22,6 +24,7 @@ const ES: DeliveryStatusMessages = {
   idle: 'Escribe tu código postal y calculamos el envío.',
   quoting: 'Calculando envío…',
   error: 'No pudimos calcular el envío. Revisa tu conexión e inténtalo de nuevo.',
+  street: 'Listo el envío. Escribe tu calle y número para poder pagar.',
   retry: 'Intentar de nuevo',
   noCoverage: 'Por ahora no tenemos envío a ese código postal. Revisa que esté bien escrito.',
   changed: 'Actualizamos tu envío: ahora cuesta {to} (antes {from}).',
@@ -31,6 +34,7 @@ const EN: DeliveryStatusMessages = {
   idle: 'Enter your postal code and we will calculate shipping.',
   quoting: 'Calculating shipping…',
   error: 'We could not calculate shipping. Check your connection and try again.',
+  street: 'Shipping is ready. Enter your street and number to pay.',
   retry: 'Try again',
   noCoverage: 'We do not ship to that postal code yet. Check that it is correct.',
   changed: 'We updated your shipping: it now costs {to} (was {from}).',
@@ -42,7 +46,7 @@ export function deliveryStatusMessages(locale?: string | null, overrides?: Parti
   return overrides ? { ...base, ...overrides } : base
 }
 
-export type DeliveryStatusState = 'idle' | 'quoting' | 'ready' | 'error' | 'no_coverage'
+export type DeliveryStatusState = 'idle' | 'quoting' | 'ready' | 'error' | 'no_coverage' | 'street'
 
 export type DeliveryStatusProps = {
   state: DeliveryStatusState
@@ -77,6 +81,7 @@ export function DeliveryStatus({ state, change, onRetry, reserve = '1.5rem', ren
     <div className={cx.root} data-sf-delivery-status={state} style={{ minHeight: reserve }}>
       <p role="status" aria-live="polite" className={cx.text} data-sf-delivery-status-text>
         {state === 'idle' ? m.idle : null}
+        {state === 'street' ? m.street : null}
         {state === 'quoting' ? (
           <>
             <span className={cx.spinner} data-sf-spinner aria-hidden="true" />{m.quoting}

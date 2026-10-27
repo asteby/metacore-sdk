@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { StorefrontError } from '@asteby/storefront'
-import { PENDING_STREET, createQuoteHandler, quotable, quoteDelivery, readQuoteBody } from './server.js'
+import { PENDING_STREET, isPendingStreet, withoutPendingStreet, createQuoteHandler, quotable, quoteDelivery, readQuoteBody } from './server.js'
 
 const m = (a: string) => ({ amount: a, currency_code: 'MXN' })
 const rate = (id: string) => ({ id, title: id, cost: m('199.00') })
@@ -48,5 +48,13 @@ describe('live quote server', () => {
     const down = createQuoteHandler({ storefront: async () => sfWith({ deliveryOptions: async () => { throw new Error('boom') } }), readCartId: async () => 'c1', onError })
     expect((await down(post(body))).status).toBe(503)
     expect(onError).toHaveBeenCalled()
+  })
+  it('recognises the placeholder in any case or accent and empties it for the form', () => {
+    expect(isPendingStreet(' Por confirmar ')).toBe(true)
+    expect(isPendingStreet('POR CONFIRMAR')).toBe(true)
+    expect(isPendingStreet('Av. Vallarta 100')).toBe(false)
+    expect(isPendingStreet('')).toBe(false)
+    expect(withoutPendingStreet({ address1: PENDING_STREET, zip: '1' })).toEqual({ address1: '', zip: '1' })
+    expect(withoutPendingStreet({ address1: 'Calle 1' })).toEqual({ address1: 'Calle 1' })
   })
 })

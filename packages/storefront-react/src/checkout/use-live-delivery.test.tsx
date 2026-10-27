@@ -15,7 +15,7 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-function Shop({ fetchImpl, page = opts([]), saved }: { fetchImpl: typeof fetch; page?: Delivery; saved?: Parameters<typeof useLiveDelivery>[0]['saved'] }) {
+function Shop({ fetchImpl, page = opts([]), saved, street = 'Av. Vallarta 100' }: { street?: string; fetchImpl: typeof fetch; page?: Delivery; saved?: Parameters<typeof useLiveDelivery>[0]['saved'] }) {
   const ref = useRef<HTMLFormElement>(null)
   vi.stubGlobal('fetch', fetchImpl)
   const live = useLiveDelivery({ formRef: ref, delivery: page, enabled: true, quoteUrl: '/pagar/envio', contactNames: { first_name: 'contact_first_name' }, saved })
@@ -25,6 +25,7 @@ function Shop({ fetchImpl, page = opts([]), saved }: { fetchImpl: typeof fetch; 
       <input name="province" defaultValue="Jalisco" aria-label="province" />
       <input name="city" defaultValue="Guadalajara" aria-label="city" />
       <input name="contact_first_name" defaultValue="Ana" aria-label="first" />
+      <input name="address1" defaultValue={street} aria-label="street" />
       <fieldset>
         <DeliveryStatus {...live.statusProps} />
         <DeliveryOptions {...live.optionsProps} />
@@ -91,5 +92,26 @@ describe('useLiveDelivery', () => {
     expect(f).not.toHaveBeenCalled()
     expect(t('ready')).toBe('true')
     expect(t('value')).toBe('rate:a')
+  })
+})
+
+describe('the street gate', () => {
+  const ok = () => json(opts([rate('a', '10.00')]))
+  it('quoted but empty street: the button holds with a friendly label and the status says so; a real street releases it', async () => {
+    render(<Shop fetchImpl={vi.fn(ok) as never} street="" />)
+    zip('44100'); await flush(450)
+    expect(t('ready')).toBe('false')
+    expect(t('hold')).toBe('Escribe tu calle y número')
+    expect(document.querySelector('[data-sf-delivery-status="street"]')).not.toBeNull()
+    fireEvent.change(screen.getByLabelText('street'), { target: { value: 'Av. Vallarta 100' } })
+    await flush(10)
+    expect(t('ready')).toBe('true')
+    expect(t('hold')).toBe('')
+  })
+  it('the saved placeholder never counts as a street, whatever its case', async () => {
+    render(<Shop fetchImpl={vi.fn(ok) as never} street="por CONFIRMAR" />)
+    zip('44100'); await flush(450)
+    expect(t('ready')).toBe('false')
+    expect(t('hold')).toBe('Escribe tu calle y número')
   })
 })
