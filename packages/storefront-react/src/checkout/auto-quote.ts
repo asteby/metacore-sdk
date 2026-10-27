@@ -9,7 +9,7 @@
  * prices come from the server (`DeliveryOptions.free` / `.fixed`, configured per organization): nothing here knows an
  * amount.
  */
-import type { DeliveryOptions, ShippingRate } from '@asteby/storefront'
+import type { DeliveryOptions, Money, ShippingRate } from '@asteby/storefront'
 import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { matchRate } from './delivery.js'
 
@@ -53,7 +53,7 @@ export type UseAutoQuoteOptions = {
   validPostalCode?: (zip: string) => boolean
   /** Country used when the form has no country input. Default `MX`. */
   defaultCountry?: string
-  /** Quiet time after the last keystroke. Default 600 ms. */
+  /** Quiet time after the last keystroke. Default 400 ms. */
   debounceMs?: number
   /** Picks the preselected rate. Default: {@link defaultRate} (the cheapest). */
   pickDefault?: (delivery: DeliveryOptions) => ShippingRate | null
@@ -62,7 +62,15 @@ export type UseAutoQuoteOptions = {
   enabled?: boolean
   /** Fires with the options of every successful quote. */
   onQuoted?: (delivery: DeliveryOptions) => void
+  /**
+   * Rates the page already loaded for the address saved in the cart (a reload): the form holding that same address
+   * (country, postal code, state, city) is `ready` at once, with no second quote.
+   */
+  initial?: { delivery: DeliveryOptions; address: Pick<QuoteAddress, 'country_code' | 'zip' | 'province' | 'city'> } | null
 }
+
+/** The price of the chosen shipping changed between two quotes of the same session (the buyer edited the address). */
+export type QuoteChange = { from: Money; to: Money }
 
 export type UseAutoQuoteResult = {
   status: AutoQuoteStatus
@@ -72,6 +80,12 @@ export type UseAutoQuoteResult = {
   defaultValue: string | null
   /** The address the current `delivery` was quoted for. */
   quotedFor: QuoteAddress | null
+  /** Set when a RE-quote changed the price of the preselected rate (never on the first quote). Cleared by the next quote. */
+  change: QuoteChange | null
+  /** The quote came back with nothing to ship to or to pick up at: the destination has no coverage. */
+  noCoverage: boolean
+  /** A quote is pending or running: the pay button must wait. */
+  quoting: boolean
   /** Quote again now (retry button). */
   retry: () => void
   /** Plain-language status for a live region ("Buscando…", "Listo", …) keys, not text. */
@@ -133,9 +147,9 @@ export function readQuoteAddress(
 }
 
 export function useAutoQuote(options: UseAutoQuoteOptions): UseAutoQuoteResult {
-  const { formRef, debounceMs = 600, enabled = true } = options
+  const { formRef, debounceMs = 400, enabled = true } = options
   const [status, setStatus] = useState<AutoQuoteStatus>('idle')
-  const [delivery, setDelivery] = useState<DeliveryOptions | null>(null)
+  const [delivery, setDelivery] = useState<DeliveryOptions | null>(options.initial?.delivery ?? null)
   const [quotedFor, setQuotedFor] = useState<QuoteAddress | null>(null)
   const opts = useRef(options)
   opts.current = options
@@ -143,12 +157,21 @@ export function useAutoQuote(options: UseAutoQuoteOptions): UseAutoQuoteResult {
   const inflight = useRef<AbortController | null>(null)
   const quotedFp = useRef<string | null>(null)
   const pendingFp = useRef<string | null>(null)
+  const [change, setChange] = useState<QuoteChange | null>(null)
+  const lastCost = useRef<Money | null>(null)
+  const initialApplied = useRef(false)
+  if (!initialApplied.current && options.initial) {
+    initialApplied.current = true
+    quotedFp.current = quoteFingerprint(options.initial.address)
+    lastCost.current = (options.pickDefault ?? defaultRate)(options.initial.delivery)?.cost ?? null
+  }
 
   const run = useCallback((address: QuoteAddress, fp: string) => {
     inflight.current?.abort()
     const ctl = new AbortController()
     inflight.current = ctl
     pendingFp.current = fp
+    setChange(null)
     setStatus('loading')
     opts.current
       .quote(address, ctl.signal)
@@ -156,6 +179,10 @@ export function useAutoQuote(options: UseAutoQuoteOptions): UseAutoQuoteResult {
         if (ctl.signal.aborted) return
         quotedFp.current = fp
         pendingFp.current = null
+        const next = (opts.current.pickDefault ?? defaultRate)(d)
+        const prev = lastCost.current
+        lastCost.current = next ? next.cost : null
+        setChange(prev && next && Number(prev.amount) !== Number(next.cost.amount) ? { from: prev, to: next.cost } : null)
         setDelivery(d)
         setQuotedFor(address)
         setStatus('ready')
@@ -241,6 +268,8 @@ export function useAutoQuote(options: UseAutoQuoteOptions): UseAutoQuoteResult {
   const announce: UseAutoQuoteResult['announce'] =
     status === 'loading' || status === 'waiting' ? 'searching' : status === 'error' ? 'error' : status === 'ready' ? (delivery?.free ? 'free' : 'ready') : null
 
-  return { status, delivery, defaultValue, quotedFor, retry, announce }
+  const noCoverage = status === 'ready' && !!delivery && delivery.rates.length === 0 && delivery.pickup.length === 0
+  const quoting = status === 'waiting' || status === 'loading'
+  return { status, delivery, defaultValue, quotedFor, change, noCoverage, quoting, retry, announce }
 }
 

@@ -17,6 +17,8 @@ export type OrderSummaryMessages = {
   shippingPending: string
   /** Shipping being saved / re-read. */
   updating: string
+  /** Shipping being quoted for the address. */
+  calculating: string
   free: string
   taxes: string
   /** Taxes already inside the prices, `{amount}`. */
@@ -35,6 +37,7 @@ const ES: OrderSummaryMessages = {
   shipping: 'Envío',
   shippingPending: 'Al elegir la entrega',
   updating: 'Actualizando…',
+  calculating: 'Calculando…',
   free: 'Gratis',
   taxes: 'Impuestos',
   taxesIncluded: 'Incluye {amount} de impuestos',
@@ -51,6 +54,7 @@ const EN: OrderSummaryMessages = {
   shipping: 'Shipping',
   shippingPending: 'Calculated at delivery',
   updating: 'Updating…',
+  calculating: 'Calculating…',
   free: 'Free',
   taxes: 'Taxes',
   taxesIncluded: 'Includes {amount} in taxes',
@@ -75,6 +79,8 @@ export type OrderSummaryProps = {
   cost: CartCost
   /** The delivery is being saved and the cart re-read: shipping and total say so (`aria-busy`). */
   updating?: boolean
+  /** The shipping is being quoted for the address (live quote): the shipping row shows a small spinner and "Calculating…". */
+  quoting?: boolean
   /** Picture of a line (e.g. `<ProductImage>`), 48-64 px. The quantity badge sits on it. Default: `<ProductThumb>` of the line's image (fallback initial when it has none). */
   renderLineMedia?: (line: CartLine) => ReactNode
   /** Show the default picture of each line. Default true; `false` gives the text-only "2 × Name" list. */
@@ -102,7 +108,8 @@ const positive = (m: Money | null | undefined): m is Money => !!m && Number(m.am
 
 /** Lines and totals of the order. The total row is `aria-live`, so a new total after choosing delivery is announced. */
 export function OrderSummary(props: OrderSummaryProps) {
-  const { lines, cost, updating = false, media = true, renderAmount, title, headingLevel = 2, classNames: cx = {}, children } = props
+  const { lines, cost, updating: upd = false, quoting = false, media = true, renderAmount, title, headingLevel = 2, classNames: cx = {}, children } = props
+  const updating = upd || quoting
   const locale = useResolvedLocale(props.locale)
   const m = orderSummaryMessages(locale, props.messages)
   const money = (v: Money) => (renderAmount ? renderAmount(v) : formatMoney(v, locale))
@@ -174,7 +181,7 @@ export function OrderSummary(props: OrderSummaryProps) {
         <div className={cx.row} data-sf-summary-row="shipping">
           <dt>{m.shipping}</dt>
           <dd className={updating || !cost.shipping ? cx.muted : undefined}>
-            {updating ? m.updating : !cost.shipping ? m.shippingPending : isZero(cost.shipping) ? <span className={cx.free}>{m.free}</span> : money(cost.shipping)}
+            {updating ? (<><span data-sf-spinner aria-hidden="true" />{quoting ? m.calculating : m.updating}</>) : !cost.shipping ? m.shippingPending : isZero(cost.shipping) ? <span className={cx.free}>{m.free}</span> : money(cost.shipping)}
           </dd>
         </div>
         {positive(cost.tax) && !cost.tax_included ? (

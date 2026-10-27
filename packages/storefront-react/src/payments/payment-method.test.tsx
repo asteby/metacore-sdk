@@ -383,6 +383,46 @@ describe('PaymentMethodSection', () => {
   })
 })
 
+describe('one-step checkout: earlyCard and holdLabel', () => {
+  it('mounts the card form at once with the current total while the delivery is not known, and the button is held', async () => {
+    const { mounts } = setup({ earlyCard: true, deliveryReady: false, holdLabel: 'Calculando envío…', delivery: '' })
+    await waitFor(() => expect(mounts).toEqual(['2185.00']))
+    const btn = screen.getByRole('button', { name: 'Calculando envío…' }) as HTMLButtonElement
+    expect(btn.disabled).toBe(true)
+    expect(btn.getAttribute('aria-busy')).toBe('true')
+  })
+  it('releasing the hold with a synced delivery shows the pay button; the form was never remounted', async () => {
+    const syncDelivery = vi.fn(async () => true)
+    const base = { earlyCard: true, syncDelivery }
+    const formRef = createRef<HTMLFormElement>()
+    const fa = fakeAdapter()
+    const mk = (over: Partial<PaymentMethodSectionProps>) => (
+      <form ref={formRef} onSubmit={(e) => e.preventDefault()}>
+        <input name="email" defaultValue="a@b.co" aria-label="Correo" />
+        <PaymentMethodSection choices={buildPayChoices([method])} amount={total} scope="c1" formRef={formRef} payUrl="/p" onDone={() => {}} brickProps={{ adapter: fa.adapter, storage: null }} {...base} {...over} />
+      </form>
+    )
+    const view = render(mk({ deliveryReady: false, delivery: '', holdLabel: 'Calculando envío…' }))
+    await waitFor(() => expect(fa.mounts.length).toBe(1))
+    view.rerender(mk({ deliveryReady: true, delivery: 'rate:1' }))
+    await waitFor(() => expect(syncDelivery).toHaveBeenCalledWith('rate:1'))
+    await waitFor(() => expect(screen.getByRole('button', { name: /Realizar el pedido/ })).toBeTruthy())
+    expect(fa.mounts.length).toBe(1)
+  })
+  it('without earlyCard nothing changes: no form until the delivery is ready', async () => {
+    const { mounts } = setup({ deliveryReady: false, delivery: '' })
+    await new Promise((r) => setTimeout(r, 30))
+    expect(mounts).toEqual([])
+  })
+  it('a held button does not submit the page form', () => {
+    const { formRef } = setup({ holdLabel: 'Calculando envío…', deliveryReady: false, delivery: '' })
+    const submit = vi.fn()
+    formRef.current!.addEventListener('submit', submit)
+    fireEvent.click(screen.getByRole('button', { name: 'Calculando envío…' }))
+    expect(submit).not.toHaveBeenCalled()
+  })
+})
+
 describe('paymentMethodMessages', () => {
   it('merges overrides over the locale defaults', () => {
     const m = paymentMethodMessages('en-US', { pay: 'Buy', options: { cash: 'Cash at store' } })
