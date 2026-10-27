@@ -328,3 +328,31 @@
     zoom: 0.78;
   }
 }
+
+/* Small spinner of the live delivery quote and of the shipping row (no skeletons): motion off with reduced motion. */
+[data-sf-spinner] {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  vertical-align: -0.1em;
+  margin-inline-end: 0.4em;
+  border: 2px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-top-color: currentColor;
+  border-radius: 999px;
+  animation: sf-spin 0.8s linear infinite;
+}
+@keyframes sf-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-sf-spinner] {
+    animation: none;
+    border-top-color: color-mix(in srgb, currentColor 25%, transparent);
+    border-right-color: currentColor;
+  }
+}
+[data-sf-delivery-status] p {
+  margin: 0;
+}

@@ -67,6 +67,18 @@ export type PaymentMethodSectionProps = {
   addressFirst?: boolean
   /** The address must be saved again before paying. */
   retryAddress?: boolean
+  /**
+   * One-step checkout: mount the card form as soon as the section is on the page, with the current `amount` (the cart
+   * before shipping), so the provider's script and form load while the buyer types. When the shipping is quoted and
+   * saved the total changes and the form is UPDATED in place (never remounted). Paying stays blocked until
+   * `deliveryReady` and the delivery is synced.
+   */
+  earlyCard?: boolean
+  /**
+   * Blocks the button with this label (e.g. "Calculando envío…") while something the payment depends on is pending.
+   * The button is `disabled` and `aria-busy`; nothing is submitted.
+   */
+  holdLabel?: ReactNode
   /** Disables the button (the shop is not ready to take payment). */
   blocked?: boolean
   /** The page form is submitting. */
@@ -183,6 +195,8 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
     syncDelivery,
     addressFirst = false,
     retryAddress = false,
+    earlyCard = false,
+    holdLabel,
     blocked = false,
     busy = false,
     invalid,
@@ -283,8 +297,8 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
   useEffect(() => {
     if (!cardActive) setFormLatched(false)
   }, [cardActive])
-  const showBrick = cardActive && !syncFailed && (formLatched || brickReady)
-  const totalUpdating = showBrick && !brickReady
+  const showBrick = cardActive && !syncFailed && (earlyCard || formLatched || brickReady)
+  const totalUpdating = showBrick && !brickReady && !(earlyCard && !deliveryReady)
 
   const transport = useMemo(
     () =>
@@ -331,7 +345,10 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
 
   // While the delivery is being saved the amount is stale: the button reads without it.
   const total = wantSync && (!settled || requote) ? null : renderAmount ? renderAmount(amount) : formatMoney(amount, locale)
-  const label: ReactNode = retryAddress ? (
+  const held = holdLabel !== undefined && holdLabel !== null && holdLabel !== false
+  const label: ReactNode = held ? (
+    holdLabel
+  ) : retryAddress ? (
     m.retryAddress
   ) : addressFirst ? (
     m.continue
@@ -358,6 +375,10 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
   )
 
   function onPayClick(event: MouseEvent<HTMLButtonElement>) {
+    if (held) {
+      event.preventDefault()
+      return
+    }
     // No delivery yet: point at it (the browser or the shop's validation explains the required field) instead of paying.
     if (!addressFirst && !retryAddress && !deliveryReady && selected) {
       event.preventDefault()
@@ -441,7 +462,9 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
                 {fallback
                   ? null
                   : !deliveryReady
-                    ? cardNotice('pickDelivery', m.pickDeliveryFirst)
+                    ? earlyCard
+                      ? null
+                      : cardNotice('pickDelivery', m.pickDeliveryFirst)
                     : syncFailed
                       ? cardNotice('syncFailed', m.syncFailed)
                       : requote
@@ -494,9 +517,9 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
           type="submit"
           onClick={onPayClick}
           className={cx.submit}
-          disabled={busy || blocked}
-          aria-disabled={blocked || (cardActive && !syncFailed && deliveryReady && (!brickReady || !ready || processing)) || undefined}
-          aria-busy={processing || undefined}
+          disabled={busy || blocked || held}
+          aria-disabled={blocked || held || (cardActive && !syncFailed && deliveryReady && (!brickReady || !ready || processing)) || undefined}
+          aria-busy={processing || held || undefined}
           data-sf-pay-method-submit
           {...tid('submit')}
         >
