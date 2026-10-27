@@ -49,7 +49,7 @@ import { toastServerError, toastServerSuccess, extractFieldErrors, extractServer
 import { FormErrorBanner } from './business/feedback'
 import { CfdiStampResultDialog, extractStampResult, type CfdiStampResult } from './cfdi-stamp-panel'
 import { useBranchCreateGate } from './branch-create-gate'
-import type { Translate } from './server-error'
+import type { Translate, FieldIssue } from './server-error'
 import { validateValues, bagHasErrors } from './validator'
 import {
     clearFieldErrorTree,
@@ -858,6 +858,38 @@ function humanizeKey(k: string): string {
     return k.replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
+/**
+ * A failed action that names ONE input without an `errors` map — the error
+ * contract a handler may answer with (documented in docs/action-errors.md):
+ *   { success:false, error:{ code, message, message_key, params, field: "<field key>" } }
+ * (also `field` at the top level, as hosts that flatten the guest error send
+ * it). The field must be one of the dialog's own field keys — a human label in
+ * `params.field` never matches — and its message is the server's own (already
+ * localized by the host) message.
+ */
+function singleFieldError(
+    err: unknown,
+    fields: readonly ActionFieldDef[] | undefined,
+    t: Translate,
+): Record<string, FieldIssue[]> | undefined {
+    if (!fields?.length) return undefined
+    const data = ((err as { response?: { data?: unknown } } | undefined)?.response?.data ?? err) as
+        | Record<string, any>
+        | undefined
+    if (!data || typeof data !== 'object') return undefined
+    const inner = data.error && typeof data.error === 'object' ? (data.error as Record<string, any>) : undefined
+    const candidates = [data.field, inner?.field, data.params?.field_key, inner?.params?.field_key]
+    const keys = new Set(fields.map((f) => f.key))
+    const key = candidates.find((c): c is string => typeof c === 'string' && keys.has(c))
+    if (!key) return undefined
+    const raw =
+        (typeof data.message === 'string' && data.message.trim()) ||
+        (typeof inner?.message === 'string' && inner.message.trim()) ||
+        ''
+    const message = raw ? t(raw, { defaultValue: raw, ...(data.params ?? inner?.params ?? {}) }) : ''
+    return { [key]: [message ? { message } : { code: 'invalid' }] }
+}
+
 /** Localize a failed action submit's per-field `errors` (422 map or `{errors}`
  *  body) into `{ [fieldKey]: localizedMessage }`, using each field's label.
  *  Returns undefined when there is no usable per-field map. */
@@ -867,7 +899,7 @@ function localizeActionFieldErrors(
     t: Translate,
     language?: string,
 ): Record<string, string> | undefined {
-    const map = extractFieldErrors(err)
+    const map = extractFieldErrors(err) ?? singleFieldError(err, fields, t)
     if (!map) return undefined
     const labels: Record<string, string> = {}
     for (const f of fields ?? []) {
@@ -1017,6 +1049,43 @@ function ConfirmActionDialog({ open, onOpenChange, action, model, record, endpoi
     )
 }
 
+/**
+ * Identity of one "opening" of an action dialog: open + action + record id +
+ * model, plus a counter bumped on every closed→open transition. Re-renders that
+ * only hand a NEW OBJECT for the same record (`record={{}}`, a refetched row)
+ * keep the same key, so the form is not re-seeded under the person's hands.
+ * Empty string while closed.
+ */
+function useSeedKey(open: boolean, actionKey: string | undefined, record: Record<string, any> | undefined, model: string): string {
+    const opening = useRef(0)
+    const wasOpen = useRef(false)
+    if (open && !wasOpen.current) opening.current += 1
+    wasOpen.current = open
+    if (!open) return ''
+    const rid = record?.id == null ? '' : String(record.id)
+    return `${opening.current}|${model}|${actionKey ?? ''}|${rid}`
+}
+
+/** Focus and scroll into view the first invalid control inside `root` (DOM
+ *  order = field order): the input/select trigger flagged `aria-invalid`, else
+ *  the first focusable element of the cell holding a field error message. */
+export function focusFirstInvalid(root: HTMLElement | null): HTMLElement | null {
+    if (!root) return null
+    const msg = root.querySelector<HTMLElement>('[data-field-error]')
+    const target =
+        root.querySelector<HTMLElement>('[aria-invalid="true"]') ??
+        msg?.parentElement?.querySelector<HTMLElement>('input, textarea, button, [tabindex]') ??
+        null
+    if (!target) return null
+    try {
+        target.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+    } catch {
+        /* older engines: scrollIntoView without options */
+    }
+    target.focus?.({ preventScroll: true })
+    return target
+}
+
 function GenericActionModal({ open, onOpenChange, action, model, record, endpoint, onSuccess }: ActionModalProps) {
     const { t, i18n } = useTranslation()
     // Addon-contributed labels (action + fields) are i18n keys whose locale
@@ -1063,13 +1132,24 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
         }
     }, [open, model, recordId, api])
 
+    // Seed the form ONCE per opening (and again only when the dialog switches to
+    // another action or record). Never on a mere re-render: callers pass
+    // `record={{}}` / a refetched row / a re-derived `action` with a new identity
+    // on every render of the list, and re-seeding on identity wiped what the
+    // person typed right after a failed submit (ProtekAuto: «Configurar origen de
+    // envío» lost contact, company, phone… on the second attempt). What was
+    // typed survives a failure; it is cleared only by closing or by success.
+    const seedKey = useSeedKey(open, action.key, record, model)
+    const seedRef = useRef({ fields: action.fields, record, model, orgTimeZone })
+    seedRef.current = { fields: action.fields, record, model, orgTimeZone }
     useEffect(() => {
-        if (open && action.fields) {
-            setFormData(buildFieldDefaults(action.fields, record, model, { timeZone: orgTimeZone }))
+        const cur = seedRef.current
+        if (seedKey && cur.fields) {
+            setFormData(buildFieldDefaults(cur.fields, cur.record, cur.model, { timeZone: cur.orgTimeZone }))
             setFieldErrors({})
             setFormError(undefined)
         }
-    }, [open, action.fields, record, model, orgTimeZone])
+    }, [seedKey])
 
     // Lines the list row does not carry: load them from the declared relation
     // (see prefillRelationRequests) and seed the line-items grid.
@@ -1153,6 +1233,14 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
         setFieldErrors((prev) => clearFieldErrorTree(prev, key))
     }
 
+    // Focus + scroll to the first invalid input after a failed submit (client
+    // validation or server `errors`), so the person lands on what to fix.
+    const bodyRef = useRef<HTMLDivElement>(null)
+    const [focusTick, setFocusTick] = useState(0)
+    useEffect(() => {
+        if (focusTick > 0) focusFirstInvalid(bodyRef.current)
+    }, [focusTick])
+
     const lang = i18n.language
     const handleActionError = (err: unknown) => {
         setFormError(actionErrorBannerMessage(err, action.fields, t, lang))
@@ -1166,6 +1254,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                 if (!labels[path]) labels[path] = labelForValidationPath(path, action.fields, t)
             }
             setFieldErrors(withPathLabels)
+            setFocusTick((n) => n + 1)
             toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }), {
                 description: formatFieldErrorsDescription(withPathLabels, action.fields, t),
             })
@@ -1185,6 +1274,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                 }
                 const next = localizeFieldErrorMap(bag, t, { labels, language: lang })
                 setFieldErrors(next)
+                setFocusTick((n) => n + 1)
                 toast.error(t('validation.failed', { defaultValue: validationCatalog(lang).failed }), {
                     description: formatFieldErrorsDescription(next, action.fields, t),
                 })
@@ -1305,7 +1395,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                     grids and textareas span the full width. `min-w-0` on each cell
                     (in FieldCell) keeps a long select/input value from blowing the
                     grid past the dialog and spawning a horizontal scrollbar. */}
-                <div className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 py-4">
+                <div ref={bodyRef} className="-mx-1 min-h-0 flex-1 overflow-y-auto px-1 py-4">
                     <FormErrorBanner message={formError} className="mb-3" />
                     <FieldGrid>
                         {action.fields?.map((field) => {
@@ -1327,7 +1417,9 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                                         fieldErrors,
                                     )}
                                     {fieldErrors[field.key] && (
-                                        <p className="text-destructive text-xs mt-1">{fieldErrors[field.key]}</p>
+                                        <p id={`${field.key}-error`} className="text-destructive text-xs mt-1" data-field-error={field.key}>
+                                            {fieldErrors[field.key]}
+                                        </p>
                                     )}
                                 </FieldCell>
                             )
@@ -1455,13 +1547,19 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
 
     // Reset to the first step and seed defaults for EVERY step's fields whenever
     // the modal (re)opens, so accumulated values from a prior run don't leak.
+    // Keyed like GenericActionModal: a re-render with a new `record`/`action`
+    // identity must not wipe what was typed (only a new opening does).
+    const seedKey = useSeedKey(open, action.key, record, model)
+    const seedRef = useRef({ steps, record, model, orgTimeZone })
+    seedRef.current = { steps, record, model, orgTimeZone }
     useEffect(() => {
-        if (!open) return
-        const allFields = steps.flatMap((s) => s.fields ?? [])
-        setFormData(buildFieldDefaults(allFields, record, model, { timeZone: orgTimeZone }))
+        if (!seedKey) return
+        const cur = seedRef.current
+        const allFields = cur.steps.flatMap((s) => s.fields ?? [])
+        setFormData(buildFieldDefaults(allFields, cur.record, cur.model, { timeZone: cur.orgTimeZone }))
         setStepIndex(0)
         setFormError(undefined)
-    }, [open, action.steps, record, model, orgTimeZone])
+    }, [seedKey])
 
     const updateField = (key: string, value: any) =>
         setFormData((prev: Record<string, any>) => ({ ...prev, [key]: value }))
