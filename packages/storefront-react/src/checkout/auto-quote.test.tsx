@@ -118,6 +118,21 @@ describe('useAutoQuote', () => {
     expect(screen.getByTestId('default').textContent).toBe('rate:new')
   })
 
+  it('is not ready while the address is incomplete again, and ready at once when it is the same address', async () => {
+    const quote = vi.fn(async () => options([rate('a', '99.00')]))
+    render(<Harness quote={quote} />)
+    fillAddress()
+    await flush(700)
+    expect(status()).toBe('ready')
+    type('zip', '4410')
+    await flush(700)
+    expect(status()).toBe('idle')
+    type('zip', '44100')
+    await flush(700)
+    expect(status()).toBe('ready')
+    expect(quote).toHaveBeenCalledTimes(1)
+  })
+
   it('keeps the saved rate when the new quote still offers it', async () => {
     const quote = vi.fn(async () => options([rate('a', '99.00'), rate('b', '199.00')]))
     render(<Harness quote={quote} savedValue="rate:b" />)

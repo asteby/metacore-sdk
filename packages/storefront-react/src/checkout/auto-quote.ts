@@ -39,6 +39,10 @@ export type UseAutoQuoteOptions = {
   /**
    * Saves the address and returns the delivery options for it. Receives an `AbortSignal` that fires when a newer
    * quote replaces this one: ignore its result then (the hook already does).
+   *
+   * Only price fields re-quote, so the address saved here can lag behind the form (street, number, reference): the
+   * shop's submit must save the full address again before choosing the delivery and paying. The server validates the
+   * chosen rate against the saved address (a rate of another postal code is refused), so a stale quote never sets a price.
    */
   quote: (address: QuoteAddress, signal: AbortSignal) => Promise<DeliveryOptions>
   /** `name` of each address input. Default: `country_code`, `zip`, `province`, `city`, `neighborhood`, `address1`. */
@@ -174,7 +178,9 @@ export function useAutoQuote(options: UseAutoQuoteOptions): UseAutoQuoteResult {
         timer.current = null
         inflight.current?.abort()
         pendingFp.current = null
-        setStatus(quotedFp.current ? 'ready' : 'idle')
+        // The last quote no longer describes what the form says (e.g. the postal code is being edited): not ready to
+        // pay. Completing the same address again is `ready` at once (same fingerprint, nothing is asked).
+        setStatus('idle')
         return
       }
       const fp = quoteFingerprint(address)

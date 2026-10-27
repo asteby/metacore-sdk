@@ -301,7 +301,7 @@ export function DeliveryOptions(props: DeliveryOptionsProps) {
         </div>
       ) : null}
       {freeRate ? (
-        <div className={cx.freeBanner} role="status" data-sf-delivery-free-banner>
+        <div className={cx.freeBanner} role={props.announceReady ? undefined : 'status'} data-sf-delivery-free-banner>
           <input type="hidden" name={name} value={rateValue(freeRate)} {...(testId ? { 'data-testid': testId } : {})} />
           <p className={cx.free} data-sf-delivery-free-title>
             <strong>{m.freeShipping}</strong>
