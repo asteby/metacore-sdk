@@ -626,6 +626,43 @@ Catálogo compartido de marcas (`brandKey`, `brandName`, `findBrand`, `<BrandMar
 
 **Procedencia de los logos.** Son marcas registradas de sus titulares y se muestran sin alteración solo para identificar el servicio o método de pago que la tienda ofrece, sin sugerir patrocinio; cada tienda debe respetar las guías de marca de cada titular. Fuente, licencia, fecha y versión (color/monocroma) de cada uno, y las marcas que quedaron con insignia por no tener fuente con condiciones claras, están en `src/checkout/brands/LOGOS.md` (se regenera con `node scripts/build-logos.mjs`). Para usar un logo propio o licenciado: `<BrandMark brand="redpack" logoUrl="https://cdn.mitienda.mx/redpack.svg" title="Redpack" />`; en pagos, `PaymentPoint.logo_url`. Solo se acepta `https:`.
 
+## Receta de checkout en un paso (cualquier tienda)
+
+El envío se cotiza solo cuando el código postal se resuelve (sin «Continuar»), la tarjeta carga desde el inicio y el botón
+dice «Calculando envío…» mientras espera. Todo viene del SDK; la tienda solo monta y viste. Sin JavaScript queda el
+formulario de dos pasos (`addressFirst`).
+
+```tsx
+import { AddressFields, ContactFields, DeliveryOptions, DeliveryStatus, OrderSummary, useLiveDelivery } from '@asteby/storefront-react/checkout'
+import { PaymentMethodSection } from '@asteby/storefront-react/payments'
+
+const js = useSyncExternalStore(() => () => {}, () => true, () => false) // hidratado
+const live = useLiveDelivery({
+  formRef, delivery: loaderData.delivery, enabled: js, quoteUrl: '/pagar/envio',
+  saved: { address: cart.shipping_address, rateId: cart.delivery.rate_id, branchId: cart.delivery.branch_id },
+})
+
+<form ref={formRef} onChange={live.onFormChange}>
+  <ContactFields … /> <AddressFields … />
+  <fieldset aria-busy={live.quoting || undefined} style={{ minHeight: '9rem' }}>
+    <legend>Entrega</legend>
+    {js ? <DeliveryStatus {...live.statusProps} /> : null}
+    <DeliveryOptions {...live.optionsProps} layout="recommended" />
+  </fieldset>
+  <PaymentMethodSection earlyCard={js} deliveryReady={live.deliveryReady} holdLabel={live.holdLabel}
+    delivery={live.deliveryValue} addressFirst={addressFirstServer && !js} syncDelivery={…} amount={cart.cost.total} … />
+</form>
+<OrderSummary quoting={live.quoting} cost={cart.cost} lines={cart.lines} />
+```
+
+La ruta `quoteUrl` es de la tienda (POST JSON con `zip`, `province`, `city`, `neighborhood`, `address1`…): guarda el destino
+en el carrito (`PUT /carts/:id/shipping-address`) y responde `GET /carts/:id/delivery-options` tal cual. OPS exige calle para
+guardar el domicilio; mientras falta se manda un marcador y el domicilio completo se vuelve a guardar al pagar. Nada se
+calcula en el navegador: tarifas, envío gratis (`free`), precio fijo, recogida (`pickup`) y total son lo que devuelve OPS.
+Se re-cotiza (antirrebote 400 ms, peticiones viejas canceladas) solo si cambian país, CP, estado o ciudad; si el precio
+cambia, `DeliveryStatus` lo anuncia por `aria-live` («Actualizamos tu envío: …»). Al pagar, el servidor revalida el total
+(`expected_total`): un total distinto nunca se cobra sin que el comprador lo vea.
+
 ## Código postal (`AddressFields` + `@asteby/storefront-react/postal`)
 
 La fuente del código postal es el **catálogo del paquete de región** (p. ej. `region_mx`: ~32 mil CP con estado,

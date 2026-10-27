@@ -133,7 +133,7 @@ describe('live delivery quote', () => {
     const { container } = render(<Harness quote={quote} />)
     zip('44100'); await flush(450)
     const box = container.querySelector<HTMLElement>('[data-sf-delivery-status]')!
-    expect(box.style.minHeight).toBe('3.5rem')
+    expect(box.style.minHeight).toBe('1.5rem')
     expect(box.textContent).toMatch(/Calculando envío/)
     vi.useRealTimers()
     const res = await axe.run(container)

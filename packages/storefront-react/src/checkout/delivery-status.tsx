@@ -49,7 +49,7 @@ export type DeliveryStatusProps = {
   /** From `useAutoQuote().change`: announces a new shipping price. */
   change?: QuoteChange | null
   onRetry?: () => void
-  /** Height kept free so the block under it does not jump. Default `3.5rem`. */
+  /** Height kept free so the block under it does not jump. Default `1.5rem` (one line). */
   reserve?: string
   renderAmount?: (amount: Money) => ReactNode
   locale?: string
@@ -68,7 +68,7 @@ const fill = (tpl: string, vars: Record<string, ReactNode>): ReactNode[] =>
  * (small spinner, no skeleton), failed (with retry), no coverage, or a changed price. A fixed-height box, so nothing
  * shifts. The polite live region is always in the DOM so the change is announced.
  */
-export function DeliveryStatus({ state, change, onRetry, reserve = '3.5rem', renderAmount, classNames: cx = {}, ...props }: DeliveryStatusProps) {
+export function DeliveryStatus({ state, change, onRetry, reserve = '1.5rem', renderAmount, classNames: cx = {}, ...props }: DeliveryStatusProps) {
   const locale = useResolvedLocale(props.locale)
   const m = deliveryStatusMessages(locale, props.messages)
   const money = (v: Money) => (renderAmount ? renderAmount(v) : formatMoney(v, locale))
