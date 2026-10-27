@@ -26,10 +26,12 @@ export type OrderCardProps = AccountTextProps & {
   onAction?: (action: NextAction, order: Order) => void
   /** Heading level of the order number (default 3). */
   headingLevel?: 2 | 3 | 4
+  /** Extra content under the card's actions, e.g. links to the order's shipping and invoice: `(order) => <a href=...>`. */
+  renderFooter?: (order: Order) => ReactNode
   classNames?: OrderCardClassNames
 }
 
-export function OrderCard({ order, orderHref, actionHref, onAction, headingLevel = 3, classNames: cx = {}, ...text }: OrderCardProps) {
+export function OrderCard({ order, orderHref, actionHref, onAction, renderFooter, headingLevel = 3, classNames: cx = {}, ...text }: OrderCardProps) {
   const { m, date, locale } = useAccountText(text)
   const Heading = `h${headingLevel}` as 'h3'
   const progress = deriveProgress(order)
@@ -82,6 +84,7 @@ export function OrderCard({ order, orderHref, actionHref, onAction, headingLevel
           {...(onAction ? { onAction: (a: NextAction) => onAction(a, order) } : {})}
           classNames={{ ...(cx.actions ? { root: cx.actions } : {}), ...(cx.action ?? {}) }}
         />
+        {renderFooter ? <div data-sf-order-footer>{renderFooter(order)}</div> : null}
       </div>
     </article>
   )
@@ -92,7 +95,7 @@ export type OrderListClassNames = Partial<Record<'root' | 'list' | 'item' | 'ske
 }
 
 export type OrderListProps = AccountTextProps &
-  Pick<OrderCardProps, 'orderHref' | 'actionHref' | 'onAction' | 'headingLevel'> & {
+  Pick<OrderCardProps, 'orderHref' | 'actionHref' | 'onAction' | 'headingLevel' | 'renderFooter'> & {
     orders?: readonly Order[] | null
     status?: 'loading' | 'ready' | 'error'
     /** Skeleton cards while loading (default 3). */
@@ -108,7 +111,7 @@ export type OrderListProps = AccountTextProps &
     classNames?: OrderListClassNames
   }
 
-export function OrderList({ orders, status = 'ready', skeletons = 3, onRetry, hasMore, loadingMore, onLoadMore, emptyAction, guestHint = true, orderHref, actionHref, onAction, headingLevel = 3, classNames: cx = {}, ...text }: OrderListProps) {
+export function OrderList({ orders, status = 'ready', skeletons = 3, onRetry, hasMore, loadingMore, onLoadMore, emptyAction, guestHint = true, orderHref, actionHref, onAction, renderFooter, headingLevel = 3, classNames: cx = {}, ...text }: OrderListProps) {
   const { m } = useAccountText(text)
   const list = (Array.isArray(orders) ? orders : []).filter((o): o is Order => !!o && typeof o === 'object' && typeof o.id === 'string')
 
@@ -161,7 +164,7 @@ export function OrderList({ orders, status = 'ready', skeletons = 3, onRetry, ha
       <ul className={cx.list} aria-label={m['order.listLabel']} data-sf-orders-list>
         {list.map((o) => (
           <li key={o.id} className={cx.item}>
-            <OrderCard order={o} orderHref={orderHref} {...(actionHref ? { actionHref } : {})} {...(onAction ? { onAction } : {})} headingLevel={headingLevel} {...text} {...(cx.card ? { classNames: cx.card } : {})} />
+            <OrderCard order={o} orderHref={orderHref} {...(actionHref ? { actionHref } : {})} {...(onAction ? { onAction } : {})} {...(renderFooter ? { renderFooter } : {})} headingLevel={headingLevel} {...text} {...(cx.card ? { classNames: cx.card } : {})} />
           </li>
         ))}
       </ul>

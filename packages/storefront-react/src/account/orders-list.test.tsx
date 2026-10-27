@@ -194,3 +194,10 @@ describe('hooks', () => {
     expect(renderHook(() => useCustomerOrders()).result.current.status).toBe('loading')
   })
 })
+
+describe('<OrderList renderFooter />', () => {
+  it('renders the store footer under every card', () => {
+    const { container } = render(<OrderList orders={[{ id: 'o1', number: '1', status: 'paid', created_at: '2026-10-01T00:00:00Z', total: { amount: '10.00', currency_code: 'MXN' }, lines: [] } as never]} orderHref={() => '/o'} renderFooter={(o) => <a href={`/e/${o.id}`}>Envío</a>} />)
+    expect(container.querySelector('[data-sf-order-footer] a')!.getAttribute('href')).toBe('/e/o1')
+  })
+})
