@@ -137,6 +137,11 @@ export type PostalCodeInfo = {
    * `hideResolvedFields` keeps the city field editable instead of choosing for the buyer.
    */
   cities?: readonly string[] | null
+  /**
+   * Municipality to SHOW in the one-line summary (`hideResolvedFields`) when it differs from `city`, the value that is
+   * submitted (and may feed the delivery quote). Display only: never sent.
+   */
+  municipality?: string | null
 }
 
 export type AddressFieldsProps = Common & {
@@ -264,7 +269,7 @@ export function AddressFields(props: AddressFieldsProps) {
   const [provinceLocked, setProvinceLocked] = useState(false)
   const [coloniaSelect, setColoniaSelect] = useState(false)
   // State and city the postal code defined, shown as one line (not as inputs) while it holds.
-  const [resolved, setResolved] = useState<{ province: string; provinceCode: string | null; city: string } | null>(null)
+  const [resolved, setResolved] = useState<{ province: string; provinceCode: string | null; city: string; place: string } | null>(null)
   const resolvedRef = useRef(false)
   // Once the lookup has decided (or released) them, the saved defaults no longer describe the address.
   const [defaultsStale, setDefaultsStale] = useState(false)
@@ -354,7 +359,7 @@ export function AddressFields(props: AddressFieldsProps) {
       return !!el.value && el.dataset.sfAutofilled !== '1' && !sameText(el.value, value)
     }
     if (theirs(n('province'), province) || theirs(n('city'), city)) return null
-    return { province, provinceCode, city }
+    return { province, provinceCode, city, place: info.municipality?.trim() || city }
   }
 
   const runLookup = (zip: string) => {
@@ -521,7 +526,7 @@ export function AddressFields(props: AddressFieldsProps) {
               <>
                 <span style={SR_ONLY}>{m.resolvedPlace} </span>
                 <span data-sf-resolved-place>
-                  {resolved.city}, {resolved.province}
+                  {resolved.place}, {resolved.province}
                 </span>
               </>
             ) : filled ? (

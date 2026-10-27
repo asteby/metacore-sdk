@@ -509,6 +509,15 @@ describe('hideResolvedFields: state and city out of the form when the postal cod
     expect(screen.getByLabelText(/Colonia/)).toBeTruthy()
   })
 
+  it('shows the municipality in the line but submits the city the lookup gave', async () => {
+    const lookup = async () => ({ province: 'Ciudad de México', city: 'Ciudad de México', municipality: 'Miguel Hidalgo' })
+    const { container } = render(<Form lookup={lookup} hideResolvedFields />)
+    fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '11510' } })
+    await waitFor(() => expect(container.querySelector('[data-sf-resolved-place]')).not.toBeNull())
+    expect(container.querySelector('[data-sf-resolved-place]')!.textContent).toBe('Miguel Hidalgo, Ciudad de México')
+    expect(new FormData(container.querySelector('form')!).get('city')).toBe('Ciudad de México')
+  })
+
   it('announces the summary in a live region that already existed (and has no axe violations)', async () => {
     const { container } = render(<Form lookup={cdmx} hideResolvedFields />)
     const status = screen.getByRole('status')
