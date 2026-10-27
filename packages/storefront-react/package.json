@@ -49,6 +49,16 @@
       }
     },
     "./checkout.css": "./dist/checkout.css",
+    "./postal": {
+      "import": {
+        "types": "./dist/postal.d.ts",
+        "default": "./dist/postal.js"
+      },
+      "require": {
+        "types": "./dist/postal.d.cts",
+        "default": "./dist/postal.cjs"
+      }
+    },
     "./fitment": {
       "import": {
         "types": "./dist/fitment.d.ts",

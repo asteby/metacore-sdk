@@ -238,6 +238,19 @@ describe('state locked by the postal code', () => {
     expect(province.value).toBe('Yucatán')
   })
 
+  it('a complete postal code the lookup does not know says so and keeps state and city editable; editing the code clears the note', async () => {
+    const lookup = vi.fn(async (zip: string) => (zip === '44100' ? { province: 'Jalisco', city: 'Guadalajara', neighborhoods: [] } : null))
+    const { container } = render(<Form lookup={lookup} />)
+    const zip = screen.getByLabelText('Código postal')
+    fireEvent.input(zip, { target: { value: '03999' } })
+    await waitFor(() => expect(container.querySelector('[data-sf-zip-not-found]')).not.toBeNull())
+    expect(container.querySelector('[data-sf-zip-not-found]')!.textContent).toMatch(/No encontramos ese código postal/)
+    expect((screen.getByLabelText('Estado') as HTMLInputElement).readOnly).toBe(false)
+    expect((screen.getByLabelText('Ciudad o municipio') as HTMLInputElement).readOnly).toBe(false)
+    fireEvent.input(zip, { target: { value: '0399' } })
+    expect(container.querySelector('[data-sf-zip-not-found]')).toBeNull()
+  })
+
   it('"Cambiar código postal" frees the state and puts the cursor in the postal code', async () => {
     const { container } = render(<Form lookup={jalisco} />)
     const province = screen.getByLabelText('Estado') as HTMLInputElement

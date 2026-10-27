@@ -626,6 +626,45 @@ Catálogo compartido de marcas (`brandKey`, `brandName`, `findBrand`, `<BrandMar
 
 **Procedencia de los logos.** Son marcas registradas de sus titulares y se muestran sin alteración solo para identificar el servicio o método de pago que la tienda ofrece, sin sugerir patrocinio; cada tienda debe respetar las guías de marca de cada titular. Fuente, licencia, fecha y versión (color/monocroma) de cada uno, y las marcas que quedaron con insignia por no tener fuente con condiciones claras, están en `src/checkout/brands/LOGOS.md` (se regenera con `node scripts/build-logos.mjs`). Para usar un logo propio o licenciado: `<BrandMark brand="redpack" logoUrl="https://cdn.mitienda.mx/redpack.svg" title="Redpack" />`; en pagos, `PaymentPoint.logo_url`. Solo se acepta `https:`.
 
+## Código postal con proveedores (`@asteby/storefront-react/postal`)
+
+`AddressFields` recibe `lookupPostalCode(zip) => Promise<PostalCodeInfo | null>`. Este subpath (sin React, para la ruta
+de servidor de la tienda) arma esa función con **proveedores en orden**: gana el primero que responde y los demás no se
+llaman; cada respuesta lleva `source` (el nombre del proveedor) y se guarda en caché por código.
+
+```ts
+// app/lib/postal-lookup.server.ts
+import { createCatalogProvider, createOsmProvider, createPostalLookup } from '@asteby/storefront-react/postal'
+
+export const lookupPostal = createPostalLookup({
+  zipPattern: /^\d{5}$/,                      // el formato del país; lo demás responde null sin consultar a nadie
+  providers: [
+    createCatalogProvider({ get: (zip) => myCountryCatalog.get(zip) }), // 1) catálogo local del país (instantáneo, determinista)
+    createOsmProvider({                                                  // 2) opcional: OpenStreetMap como respaldo
+      baseUrl: process.env.POSTAL_OSM_URL!,    // Nominatim propio/autoalojado, o https://nominatim.openstreetmap.org
+      country: 'MX',
+      userAgent: 'mi-tienda/1.0 (contacto@mi-tienda.com)',
+      states: OFFICIAL_STATES,                 // el estado de OSM debe estar en esta lista; se devuelve el nombre oficial
+      stateAliases: { 'Estado de México': 'México' },
+      zipPattern: /^\d{5}$/,
+    }),
+  ],
+})
+// loader de /pagar/codigo-postal: return Response.json(await lookupPostal(zip), { headers: { 'Cache-Control': CACHE.long } })
+```
+
+- Otro país: escribe otro `createCatalogProvider` (o tu propio `PostalProvider`: `{ name, lookup(zip) }`) y cambia
+  `country`, `states` y `zipPattern`. Nada del SDK conoce un país.
+- Un proveedor devuelve `null` si **respondió** que no conoce el código; si **lanza** (timeout, caída, 5xx) cuenta como
+  «no pude preguntar»: se prueba el siguiente y el vacío se recuerda solo 30 s (un «no existe» real, 10 min).
+- `createOsmProvider` valida que el país sea el de la tienda, que el CP coincida y que el estado sea uno de los oficiales
+  antes de devolver nada; limita a 1 petición por segundo (`minIntervalMs`), con `timeoutMs` de 800 ms por defecto. Hazlo
+  solo desde el servidor de la tienda, nunca desde el navegador del comprador. La política de Nominatim público
+  prohíbe el uso intensivo y exige un `User-Agent` identificable: para volumen real apunta `baseUrl` a un Nominatim propio.
+- Atribución: los datos de OSM son © OpenStreetMap contributors (ODbL). Muéstrala donde uses el proveedor `osm`.
+- Cuando ningún proveedor resuelve, `AddressFields` deja Estado y Ciudad editables y muestra
+  `messages.postalCodeNotFound` («No encontramos ese código postal; revísalo o escribe tu estado y ciudad.»).
+
 ## Promociones y venta cruzada (`@asteby/storefront-react/promotions`)
 
 Mecanismos sin contenido: los textos y montos llegan como datos de OPS (`Cart.promotions`, `GET /storefront/promotions`, `carts.recommendations`).

@@ -22,6 +22,8 @@ export type AddressFieldsMessages = Record<AddressFieldKey | ContactFieldKey, st
   emailHint: string
   phoneHint: string
   lookupFilled: string
+  /** Note when the postal code is not in the lookup: state and city stay editable. */
+  postalCodeNotFound: string
   /** Tooltip and note of a state the postal code defined (locked). */
   provinceLocked: string
   /** Tooltip and note of a city/municipality the postal code defined (locked). */
@@ -51,6 +53,7 @@ const ES: AddressFieldsMessages = {
   emailHint: 'Te enviamos aquí la confirmación y el seguimiento.',
   phoneHint: 'Solo para la paquetería, por si necesita contactarte.',
   lookupFilled: 'Completamos estado y ciudad con tu código postal.',
+  postalCodeNotFound: 'No encontramos ese código postal; revísalo o escribe tu estado y ciudad.',
   provinceLocked: 'Definido por tu código postal',
   cityLocked: 'Definido por tu código postal',
   changePostalCode: 'Cambiar código postal',
@@ -76,6 +79,7 @@ const EN: AddressFieldsMessages = {
   emailHint: 'We send the confirmation and tracking here.',
   phoneHint: 'Only for the carrier, in case they need to reach you.',
   lookupFilled: 'We filled in state and city from your postal code.',
+  postalCodeNotFound: "We couldn't find that postal code; check it or type your state and city.",
   provinceLocked: 'Set by your postal code',
   cityLocked: 'Set by your postal code',
   changePostalCode: 'Change postal code',
@@ -146,6 +150,8 @@ export type PostalCodeInfo = {
    * submitted (and may feed the delivery quote). Display only: never sent.
    */
   municipality?: string | null
+  /** Which provider answered (`catalog`, `osm`, ...). Informative: the form ignores it. */
+  source?: string | null
 }
 
 export type AddressFieldsProps = Common & {
@@ -279,6 +285,8 @@ export function AddressFields(props: AddressFieldsProps) {
   const listId = useId()
   const [colonias, setColonias] = useState<readonly string[]>([])
   const [filled, setFilled] = useState(false)
+  // The last complete code is not in the lookup: say so (state and city stay editable).
+  const [notFound, setNotFound] = useState(false)
   const [provinceLocked, setProvinceLocked] = useState(false)
   const [cityLocked, setCityLocked] = useState(false)
   const [coloniaSelect, setColoniaSelect] = useState(false)
@@ -381,10 +389,14 @@ export function AddressFields(props: AddressFieldsProps) {
     if (!lookup || !zip || zip === lastZip.current) return
     if (postalCode?.pattern && !new RegExp(`^(?:${postalCode.pattern})$`).test(zip)) return
     lastZip.current = zip
+    setNotFound(false)
     const form = zipRef.current?.closest('form')
     void lookup(zip).then(
       (info) => {
-        if (!info) return
+        if (!info) {
+          if (lastZip.current === zip) setNotFound(true)
+          return
+        }
         enqueue(() => {
           if (lastZip.current !== zip) return
           const fill = (name: string, value: string | null | undefined, lock?: 'province' | 'city') => {
@@ -442,7 +454,8 @@ export function AddressFields(props: AddressFieldsProps) {
         })
       },
       () => {
-        /* no lookup: the buyer types state and city */
+        /* lookup failed: the buyer types state and city */
+        if (lastZip.current === zip) setNotFound(true)
       },
     )
   }
@@ -511,6 +524,7 @@ export function AddressFields(props: AddressFieldsProps) {
   const numericZip = postalCode?.inputMode === 'numeric'
   // A server error on state/city must be seen next to a field the buyer can fix: inputs come back (with what was resolved).
   const showResolved = !!resolved && !errors[n('province')] && !errors[n('city')]
+  const showNotFound = notFound && !filled && !showResolved && !errors[n('zip')]
   const startOf = (key: 'province' | 'city') => (resolved ? resolved[key] : defaultsStale ? '' : (defaults?.[key] ?? ''))
   return (
     <>
@@ -532,13 +546,14 @@ export function AddressFields(props: AddressFieldsProps) {
             const v = e.currentTarget.value.trim()
             // Editing the code that defined the state frees it (and what the lookup filled) before anything else.
             if (v !== lastZip.current && hasLock(zipRef.current)) releaseLookup()
+            if (v !== lastZip.current) setNotFound(false)
             if (postalCode?.maxLength && v.length === postalCode.maxLength) runLookup(v)
           }}
           onBlur={(e) => runLookup(e.currentTarget.value.trim())}
         />
         {/* The lookup result, announced once (not on every keystroke): the one-line place, or the fill note. */}
-        <div data-sf-resolved={showResolved ? '' : undefined} className={showResolved || filled ? join(cx.hint) : undefined}>
-          <p role="status" aria-live="polite" data-sf-zip-status style={showResolved || filled ? (showResolved ? { display: 'inline', margin: 0 } : undefined) : SR_ONLY}>
+        <div data-sf-resolved={showResolved ? '' : undefined} className={showResolved || filled || showNotFound ? join(cx.hint) : undefined}>
+          <p role="status" aria-live="polite" data-sf-zip-status style={showResolved || filled || showNotFound ? (showResolved ? { display: 'inline', margin: 0 } : undefined) : SR_ONLY}>
             {showResolved && resolved ? (
               <>
                 <span style={SR_ONLY}>{m.resolvedPlace} </span>
@@ -548,6 +563,8 @@ export function AddressFields(props: AddressFieldsProps) {
               </>
             ) : filled ? (
               m.lookupFilled
+            ) : showNotFound ? (
+              <span data-sf-zip-not-found>{m.postalCodeNotFound}</span>
             ) : (
               ''
             )}

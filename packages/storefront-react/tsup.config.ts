@@ -16,6 +16,7 @@ export default defineConfig({
     'subjects-server': 'src/subjects/server.ts',
     'fiscal-server': 'src/fiscal/server.ts',
     promotions: 'src/promos/index.ts',
+    postal: 'src/postal/index.ts',
     ui: 'src/ui/index.ts',
   },
   format: ['esm', 'cjs'],
