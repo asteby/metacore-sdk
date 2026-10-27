@@ -1,5 +1,11 @@
 # @asteby/storefront
 
+## 0.25.0
+
+### Minor Changes
+
+- c58aaaf: feat(storefront, storefront-react): listas de la cuenta paginadas por cursor (Storefront API 1.19, aditivo). `@asteby/storefront`: `customer.orders.list({ first, after, before, status, delivery_method, has_invoice, from, to, q })` (`customer.orders(...)` sigue funcionando), `customer.invoices.list(...)` y `customer.shipments.list(...)` —nodos ligeros por pedido, sin pedir el detalle de cada uno; con un OPS anterior a 1.19 se sirven desde una página de pedidos y sus detalles—, `PageInfo` con `has_previous_page` / `start_cursor`, y utilidades de URL puras y seguras con entrada hostil (`readListQuery`, `listApiParams`, `listHref`, `nextPageQuery`, `previousPageQuery`, `pageRange`, `LIST_URL_ES` / `LIST_URL_EN`) para que la página, los filtros y la posición vivan en la URL (`?despues=…&estado=…`): compartible, con atrás/adelante y con enlaces reales sin JavaScript. El mock sirve las tres listas con cursor keyset, filtros y `total_count`, y `syntheticOrders` siembra un historial largo. `@asteby/storefront-react/account`: `<Pager />` (Anterior/Siguiente o «Cargar más», región `aria-live`, `aria-busy`, estado de error con reintento, es/en, `renderLink` para el router), `<ListFilters />` (formulario GET: estado, entrega, factura, rango de fechas y número de pedido) y `useListFocus` (foco al cambiar de página, sin robarlo en la primera carga), más `invoiceEntries` y `shipmentNodeOrder` para usar los nodos con `InvoiceHistory` y `ShipmentSummaryCard`.
+
 ## 0.24.0
 
 ### Minor Changes
