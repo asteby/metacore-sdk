@@ -14,7 +14,8 @@ import { describe, expect, it } from 'vitest'
 // 18 KB: the card reads the server's `barcode_data` (contract 1.10): ITF and EAN-13 next to Code 128 / 39, the text code and the provider receipt link.
 // 19 KB: the chosen delivery (ShippingServiceCard: carrier mark slot, service, business-day estimate in es/en; contract 1.11).
 // 22 KB: the invoice page (InvoiceDetail: emission data, receiver, payment terms, SAT code names es/en), the shared file links and the openable shipping detail (address, timeline, guide).
-const BUDGET_GZ = 22 * 1024
+// 25 KB: «View invoice» / download buttons with in-page notices (ES/EN texts); the preview dialog and the CFDI reader are a lazy chunk.
+const BUDGET_GZ = 25 * 1024
 const here = fileURLToPath(new URL('.', import.meta.url))
 
 describe('order screens bundle size', () => {

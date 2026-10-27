@@ -930,7 +930,7 @@ Rutas recurso de la tienda (`@asteby/storefront-react/account/server`), cada una
 
 ```ts
 // account.order.$id.invoice.$doc.$kind.ts
-export const loader = async ({ request, params }) => invoiceFileResponse({ storefront: await sfFor(request), orderId: params.id, invoiceId: params.doc, kind: params.kind })
+export const loader = async ({ request, params }) => invoiceFileResponse({ storefront: await sfFor(request), orderId: params.id, invoiceId: params.doc, kind: params.kind, request })
 // account.pending.$id.ficha.ts
 export const loader = async ({ request, params }) => {
   const q = new URL(request.url).searchParams
@@ -940,7 +940,7 @@ export const loader = async ({ request, params }) => {
 
 La ficha es por método: OXXO/efectivo imprime referencia y código de barras (solo si el servidor manda `payment.barcode { format: 'code128' | 'code39', value }`; sin él, solo la referencia), SPEI/transferencia imprime beneficiario, banco, CLABE y referencia con instrucciones de transferencia. Las instrucciones salen de `payment.instructions_key` / método / `payment.kind` (es/en, con fallback genérico). `format: 'pdf'` entrega `ficha-de-pago.pdf` (`application/pdf`, attachment, no-store, solo del dueño) generado sin navegador; la página HTML trae «Descargar PDF» (enlace, sin JS; `pdfHref` por omisión `?formato=pdf`) e «Imprimir». Para `PendingPaymentList`/`Card`, `voucherHref(payment, { download, format })` pide `html` para ver/imprimir y `pdf` para descargar.
 
-`invoiceFileResponse` sirve `attachment` con `Cache-Control: private, no-store`, `nosniff` y CSP `sandbox` (también en cada respuesta de error); el tipo sale de `kind`, no de lo que diga la API, y un archivo de más de `maxBytes` (10 MB por defecto) es un 502 genérico sin decodificarlo. `pendingVoucherResponse` solo entrega una ficha que está en la lista del comprador (si no, 404) con CSP cerrada y nonce por respuesta. Accesibilidad: WCAG 2.2 AA verificada con axe en las pruebas (contraste lo decide cada tienda con sus tokens), objetivos ≥ 44 px en el CSS opcional, `prefers-reduced-motion`. Presupuesto: todas las pantallas ≈ 13 KB gzip (prueba `size-budget`).
+`invoiceFileResponse` sirve `attachment` (con `filename` y `filename*`; con `request` y `?inline=1` el PDF sale `inline` con `frame-ancestors 'self'` para la vista previa) con `Cache-Control: private, no-store`, `nosniff` y CSP `sandbox` ; todo lo que no es el archivo es JSON `{ error: { code, message } }` sin cabeceras de archivo (`404 not_found`, `409 not_ready` = «el PDF se está generando», `401`, `429`, `502 unavailable`) y los botones lo muestran como aviso en la página en vez de guardar un `pdf.txt`; el tipo sale de `kind`, no de lo que diga la API, y un archivo de más de `maxBytes` (10 MB por defecto) es un 502 genérico sin decodificarlo. `pendingVoucherResponse` solo entrega una ficha que está en la lista del comprador (si no, 404) con CSP cerrada y nonce por respuesta. Accesibilidad: WCAG 2.2 AA verificada con axe en las pruebas (contraste lo decide cada tienda con sus tokens), objetivos ≥ 44 px en el CSS opcional, `prefers-reduced-motion`. Presupuesto: todas las pantallas ≈ 13 KB gzip (prueba `size-budget`).
 
 ## Facturación y constancia fiscal (`/fiscal`)
 
@@ -992,3 +992,8 @@ const { customer, capabilities } = await loadAccountSettings(sf.withCustomerToke
 ```
 
 Muestra el correo con su estado (`Customer.email_verified`), un botón para pedir un código si no está verificado y, si `capabilities.email_change`, «Cambiar mi correo»: correo nuevo + contraseña (o un código de acceso enviado al correo actual con `email-reauth-code`) y después el código que llega al correo nuevo. La acción `createAccountSettingsAction` ya atiende los intents `email-*`. Sin la capacidad (OPS anterior a 1.15 o sin conector de correo) solo muestra el correo. Los textos no afirman que el correo se envió: la respuesta es la misma tenga o no cuenta la dirección nueva.
+
+
+### Vista previa y descargas de la factura
+
+`InvoiceList`, `InvoiceDetail` e `InvoiceHistory` (y por tanto «Mis facturas») muestran «Ver factura», «Descargar PDF» y «Descargar XML» cuando les pasas `fileHref`. Cada clic pide el archivo a TU ruta autenticada en ese momento (sin enlaces que venzan, tantas veces como quiera el comprador) y lo guarda con el nombre que manda el servidor (`factura-<serie>-<folio>.pdf`). «Ver factura» abre `InvoicePreviewDialog` (diálogo nativo con foco atrapado, Esc, título accesible, ES/EN; carga perezosa): el PDF incrustado, o mientras no exista, los datos del CFDI leídos del XML con «El PDF se está generando» y reintento. En móvil abre el PDF en una pestaña nueva. La ruta de la tienda solo necesita pasar `request` a `invoiceFileResponse`.

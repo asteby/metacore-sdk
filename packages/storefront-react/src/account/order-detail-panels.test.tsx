@@ -81,7 +81,7 @@ describe('<InvoiceList detailHref />', () => {
     const links = [...container.querySelectorAll<HTMLAnchorElement>('[data-sf-invoice-detail-link] a')]
     expect(links).toHaveLength(2)
     expect(links[0]!.getAttribute('href')).toBe('/cuenta/pedidos/o1/factura')
-    expect(links[0]!.textContent).toBe('Ver factura')
+    expect(links[0]!.textContent).toBe('Ver detalle')
     expect(container.querySelectorAll('a[data-sf-invoice-download]')).toHaveLength(2)
     cleanup()
     expect(render(<InvoiceList invoices={[test]} fileHref={fileHref} testDownloads />).container.querySelectorAll('a[data-sf-invoice-download]')).toHaveLength(2)

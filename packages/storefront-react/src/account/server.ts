@@ -291,7 +291,41 @@ function failureResponse(err: unknown): Response {
   return textResponse(502, 'No pudimos obtener el archivo')
 }
 
-const FILE_TYPES: Record<string, string> = { pdf: 'application/pdf', xml: 'application/xml' }
+const FILE_TYPES: Record<string, string> = { pdf: 'application/pdf', xml: 'application/xml; charset=utf-8' }
+
+/** Error code of the JSON answers of the invoice file route (the UI maps the code to its own text). */
+export type InvoiceFileErrorCode = 'not_found' | 'not_ready' | 'unauthorized' | 'rate_limited' | 'unavailable'
+
+/**
+ * The error of an invoice file is JSON (`{ error: { code, message } }`, `application/json`), never a text body: a browser
+ * that was told to download would save it as `pdf.txt`. It never carries `Content-Disposition`.
+ */
+function invoiceError(status: number, code: InvoiceFileErrorCode, message: string, extra: Record<string, string> = {}): Response {
+  return new Response(JSON.stringify({ error: { code, message } }), {
+    status,
+    headers: { ...TEXT_HEADERS, 'Content-Type': 'application/json; charset=utf-8', ...extra },
+  })
+}
+
+function invoiceFailure(err: unknown, kind?: string): Response {
+  if (isStorefrontError(err)) {
+    if (err.status === 401) return invoiceError(401, 'unauthorized', 'Tu sesión venció. Inicia sesión de nuevo.')
+    if (err.status === 404) return invoiceError(404, 'not_found', 'No encontramos este archivo.')
+    // The shop owns the document but the PAC has not handed the file over yet: retry later, it is not an error.
+    if (err.status === 409)
+      return invoiceError(409, 'not_ready', `${kind === 'xml' ? 'El XML' : 'El PDF'} todavía se está generando. Vuelve a intentarlo en unos minutos.`, { 'Retry-After': '30' })
+    if (err.status === 429) {
+      const wait = typeof err.retryAfter === 'number' && Number.isFinite(err.retryAfter) && err.retryAfter > 0 ? Math.min(3600, Math.ceil(err.retryAfter)) : null
+      return invoiceError(429, 'rate_limited', 'Demasiados intentos. Espera un momento.', wait ? { 'Retry-After': String(wait) } : {})
+    }
+  }
+  return invoiceError(502, 'unavailable', 'No pudimos obtener el archivo. Inténtalo de nuevo.')
+}
+
+/** `Content-Disposition` with an ASCII `filename` and the RFC 5987 `filename*` twin (the name is already reduced to `[A-Za-z0-9._-]`). */
+function dispositionOf(type: 'attachment' | 'inline', filename: string): string {
+  return `${type}; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`
+}
 
 export type InvoiceFileResponseOptions = {
   /** Client WITH the buyer's session (`storefront.withCustomerToken(token)`). */
@@ -303,26 +337,44 @@ export type InvoiceFileResponseOptions = {
   signal?: AbortSignal
   /** Largest file served, in bytes (default `MAX_INVOICE_FILE_BYTES`, 10 MB); a bigger one is a generic 502. */
   maxBytes?: number
+  /**
+   * `attachment` (default): the browser saves the file. `inline`: the PDF is shown in the page's own `<iframe>` /
+   * `<object>` (preview); it only embeds in the store itself (`frame-ancestors 'self'`). The XML is always an attachment.
+   */
+  disposition?: 'attachment' | 'inline'
+  /** The incoming request: `?inline=1` (what `InvoicePreviewDialog` asks) turns `disposition` to `inline` for a PDF. */
+  request?: Request
 }
 
 /**
  * Serves one file of an invoice or credit note to the signed-in buyer: the route handler of the store
- * (`account.order.$id.invoice.$doc.$kind.ts`) is `return invoiceFileResponse({ storefront, orderId, invoiceId, kind })`.
- * The buyer's token and any PAC URL stay on the server; the browser gets bytes with `Content-Disposition: attachment`,
- * `Cache-Control: private, no-store`, `nosniff` and a sandboxing CSP. The content type is taken from `kind`, never
- * from what the API says, so a file cannot make the browser render HTML under your origin. 401/404/429 pass through;
+ * (`account.order.$id.invoice.$doc.$kind.ts`) is `return invoiceFileResponse({ storefront, orderId, invoiceId, kind, request })`.
+ * The buyer's token and any PAC URL stay on the server; the browser gets bytes with `Content-Disposition: attachment`
+ * (`inline` for the PDF preview), `Cache-Control: private, no-store`, `nosniff` and a locked CSP. The content type is
+ * taken from `kind`, never from what the API says, so a file cannot make the browser render HTML under your origin.
+ * Every answer that is not the file is JSON (`{ error: { code, message } }`) and never carries file headers:
+ * 401/404/429 pass through, `409 not_ready` says the document is the buyer's but the file is still being generated,
  * anything else is a generic 502 with no upstream detail.
  */
-export async function invoiceFileResponse({ storefront, orderId, invoiceId, kind, signal, maxBytes = MAX_INVOICE_FILE_BYTES }: InvoiceFileResponseOptions): Promise<Response> {
-  if (kind !== 'pdf' && kind !== 'xml') return textResponse(404, 'No encontrado')
-  if (!orderId || !invoiceId) return textResponse(404, 'No encontrado')
+export async function invoiceFileResponse({ storefront, orderId, invoiceId, kind, signal, maxBytes = MAX_INVOICE_FILE_BYTES, disposition, request }: InvoiceFileResponseOptions): Promise<Response> {
+  if (kind !== 'pdf' && kind !== 'xml') return invoiceError(404, 'not_found', 'No encontramos este archivo.')
+  if (!orderId || !invoiceId) return invoiceError(404, 'not_found', 'No encontramos este archivo.')
+  let inline = disposition === 'inline'
+  if (disposition === undefined && request) {
+    try {
+      inline = new URL(request.url).searchParams.get('inline') === '1'
+    } catch {
+      inline = false
+    }
+  }
+  inline = inline && kind === 'pdf'
   try {
     const file = await storefront.customer.invoiceFile(orderId, invoiceId, kind, signal ? { signal } : undefined)
-    if (!file) return textResponse(404, 'No encontrado')
+    if (!file) return invoiceError(404, 'not_found', 'No encontramos este archivo.')
     // Checked on the encoded text (4 chars per 3 bytes, whitespace aside) so a huge answer is never decoded.
-    if (file.content_base64.length > Math.ceil(maxBytes / 3) * 4 * 1.1 + 64) return textResponse(502, 'No pudimos obtener el archivo')
+    if (file.content_base64.length > Math.ceil(maxBytes / 3) * 4 * 1.1 + 64) return invoiceError(502, 'unavailable', 'No pudimos obtener el archivo. Inténtalo de nuevo.')
     const bytes = invoiceFileBytes(file)
-    if (bytes.byteLength > maxBytes) return textResponse(502, 'No pudimos obtener el archivo')
+    if (bytes.byteLength > maxBytes) return invoiceError(502, 'unavailable', 'No pudimos obtener el archivo. Inténtalo de nuevo.')
     const name = safeInvoiceFilename(file.filename, kind === 'pdf' ? 'factura.pdf' : 'factura.xml')
     const filename = name.toLowerCase().endsWith(`.${kind}`) ? name : `${name}.${kind}`
     return new Response(bytes as BodyInit, {
@@ -330,13 +382,16 @@ export async function invoiceFileResponse({ storefront, orderId, invoiceId, kind
       headers: {
         'Content-Type': FILE_TYPES[kind]!,
         'Content-Length': String(bytes.byteLength),
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': dispositionOf(inline ? 'inline' : 'attachment', filename),
         ...LOCKED_HEADERS,
-        'Content-Security-Policy': "default-src 'none'; sandbox",
+        // The PDF viewer of a browser does not run inside a CSP sandbox, so the preview drops it and keeps everything else
+        // closed; it can only be framed by the store itself.
+        'Content-Security-Policy': inline ? "default-src 'none'; frame-ancestors 'self'" : "default-src 'none'; sandbox",
+        ...(inline ? { 'X-Frame-Options': 'SAMEORIGIN' } : {}),
       },
     })
   } catch (err) {
-    return failureResponse(err)
+    return invoiceFailure(err, kind)
   }
 }
 

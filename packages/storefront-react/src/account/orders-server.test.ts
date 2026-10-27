@@ -17,13 +17,13 @@ describe('invoiceFileResponse', () => {
     const res = await invoiceFileResponse({ storefront, orderId: 'ord_seed_shipped', invoiceId: 'inv_seed_1', kind: 'pdf' })
     expect(res.status).toBe(200)
     expect(res.headers.get('content-type')).toBe('application/pdf')
-    expect(res.headers.get('content-disposition')).toBe('attachment; filename="factura-inv_seed_1.pdf"')
+    expect(res.headers.get('content-disposition')).toBe(`attachment; filename="factura-inv_seed_1.pdf"; filename*=UTF-8''factura-inv_seed_1.pdf`)
     expect(res.headers.get('cache-control')).toBe('private, no-store')
     expect(res.headers.get('x-content-type-options')).toBe('nosniff')
     expect(res.headers.get('content-security-policy')).toContain("sandbox")
     expect(await res.text()).toContain('%PDF')
     const xml = await invoiceFileResponse({ storefront, orderId: 'ord_seed_shipped', invoiceId: 'inv_seed_1_nc', kind: 'xml' })
-    expect(xml.headers.get('content-type')).toBe('application/xml')
+    expect(xml.headers.get('content-type')).toBe('application/xml; charset=utf-8')
     expect(xml.headers.get('content-disposition')).toContain('nota-de-credito-inv_seed_1_nc.xml')
   })
 
@@ -34,8 +34,9 @@ describe('invoiceFileResponse', () => {
     expect(res.headers.get('content-type')).toBe('application/pdf')
     const disposition = res.headers.get('content-disposition')!
     expect(disposition).not.toMatch(/[\r\n]|\.\.|\/|\\/)
-    expect(disposition.slice('attachment; filename="'.length, -1)).not.toContain('"')
-    expect(disposition.endsWith('.pdf"')).toBe(true)
+    const ascii = /^attachment; filename="([^"]*)"; filename\*=UTF-8''([A-Za-z0-9._%-]+)$/.exec(disposition)
+    expect(ascii, disposition).not.toBeNull()
+    expect(ascii![1]!.endsWith('.pdf')).toBe(true)
   })
 
   it('404s a bad kind, a missing document and someone else\'s order; 401 without a session; generic 502 otherwise', async () => {

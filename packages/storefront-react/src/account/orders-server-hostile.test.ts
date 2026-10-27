@@ -59,7 +59,7 @@ describe('invoiceFileResponse against a hostile upstream', () => {
       const res = await ask(file({ filename }))
       expect(res.status).toBe(200)
       const cd = res.headers.get('content-disposition')!
-      expect(cd).toMatch(/^attachment; filename="[A-Za-z0-9._-]+\.pdf"$/)
+      expect(cd).toMatch(/^attachment; filename="[A-Za-z0-9._-]+\.pdf"; filename\*=UTF-8''[A-Za-z0-9._%-]+\.pdf$/)
       expect(cd).not.toMatch(/\.\.|exe"/)
       expectLocked(res)
     }
