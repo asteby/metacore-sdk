@@ -1,5 +1,18 @@
 # @asteby/storefront-react
 
+## 0.31.0
+
+### Minor Changes
+
+- 024a3a2: feat: `OrderCard` y `OrderList` aceptan `renderFooter(order)`, un espacio bajo las acciones de cada pedido para los accesos de la tienda a su envío y su factura.
+- e78bdbe: feat: el comprador puede abrir y volver a descargar su factura y ver su envío desde la cuenta. `InvoiceDoc` gana `receiver`, `payment_method` y `payment_form` (contrato 1.14, opcionales). Nuevos `InvoiceDetail` (folio fiscal, serie y folio, fecha, estado, total y moneda, método y forma de pago, receptor, aviso de factura de prueba y botones Descargar PDF/XML, «en proceso» si falta uno) e `InvoiceHistory` («Mis facturas»: todas las facturas con sus descargas y enlaces al pedido). `InvoiceList` gana `detailHref` («Ver factura») y `testDownloads`. `ShippingServiceCard` gana `detail` (se abre: paquetería y servicio, días estimados, dirección de entrega, línea de tiempo del envío, número de guía con enlace de rastreo, o «Te mostraremos aquí el número de guía cuando salga tu paquete») y `ShipmentCard` gana `collapsible`. ES/EN, sin marcas hardcodeadas.
+- 0bc5f5c: Búsqueda de código postal con proveedores enchufables: `@asteby/storefront-react/postal` (`createPostalLookup({ providers })`, `createCatalogProvider`, `createOsmProvider`) con orden, fallback, caché por CP y `source` en la respuesta; el proveedor OSM (Nominatim) valida país, CP y estado oficial, limita a 1 req/s y tiene timeout corto. `AddressFields` muestra una nota clara («No encontramos ese código postal…») cuando el CP no se resuelve y deja Estado y Ciudad editables (`messages.postalCodeNotFound`).
+
+### Patch Changes
+
+- Updated dependencies [e78bdbe]
+  - @asteby/storefront@0.21.0
+
 ## 0.30.0
 
 ### Minor Changes
