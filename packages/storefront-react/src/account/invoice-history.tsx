@@ -23,13 +23,15 @@ export type InvoiceHistoryProps = AccountTextProps & {
   detailHref?: (doc: InvoiceDoc, order: InvoiceHistoryEntry['order']) => string | null | undefined
   /** Page of the order. */
   orderHref?: (order: InvoiceHistoryEntry['order']) => string | null | undefined
+  /** `compact`: one row per invoice with folio, state, date, total and order, and ONE «Ver detalle» link; downloads and the order link live on the invoice page. */
+  compact?: boolean
   headingLevel?: 2 | 3 | 4
   /** Shown when there is none (e.g. a link to the orders). */
   empty?: ReactNode
   classNames?: InvoiceHistoryClassNames
 }
 
-export function InvoiceHistory({ entries, fileHref, detailHref, orderHref, headingLevel = 2, empty, classNames: cx = {}, ...text }: InvoiceHistoryProps) {
+export function InvoiceHistory({ entries, fileHref, detailHref, orderHref, compact = false, headingLevel = 2, empty, classNames: cx = {}, ...text }: InvoiceHistoryProps) {
   const { m, date, locale } = useAccountText(text)
   const titleId = `sf-invhist-${useId().replace(/:/g, '')}`
   const Heading = `h${headingLevel}` as 'h2'
@@ -74,7 +76,7 @@ export function InvoiceHistory({ entries, fileHref, detailHref, orderHref, headi
                     </>
                   ) : null}
                 </p>
-                {folio ? (
+                {folio && !compact ? (
                   <p className={cx.meta} data-sf-invoice-folio>
                     {m['invoice.folio']}: <code>{folio}</code>
                   </p>
@@ -84,7 +86,7 @@ export function InvoiceHistory({ entries, fileHref, detailHref, orderHref, headi
                   {total ? <> · {m['invoice.total']}: {total}</> : null}
                   {str(order.number) ? <> · {fill(m['order.number'], { number: str(order.number) ?? '' })}</> : null}
                 </p>
-                {issued ? <InvoiceFileLinks doc={doc} m={m} name={label} fileHref={fileHref ? (d, k) => fileHref(d, k, order) : undefined} classNames={{ actions: cx.actions, download: cx.download, note: cx.note }} /> : null}
+                {issued && !compact ? <InvoiceFileLinks doc={doc} m={m} name={label} fileHref={fileHref ? (d, k) => fileHref(d, k, order) : undefined} classNames={{ actions: cx.actions, download: cx.download, note: cx.note }} /> : null}
                 {detail || orderLink ? (
                   <p className={cx.actions}>
                     {detail ? (
@@ -92,7 +94,7 @@ export function InvoiceHistory({ entries, fileHref, detailHref, orderHref, headi
                         {m['invoice.view']}
                       </a>
                     ) : null}
-                    {orderLink ? (
+                    {orderLink && !compact ? (
                       <a href={orderLink} className={cx.link}>
                         {m['order.view']}
                       </a>
