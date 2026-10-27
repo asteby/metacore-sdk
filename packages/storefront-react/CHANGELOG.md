@@ -1,5 +1,29 @@
 # @asteby/storefront-react
 
+## 0.26.0
+
+### Minor Changes
+
+- 811828e: Checkout en un solo paso: las tarifas de envío cargan solas al completar la dirección.
+
+  Antes las tarifas solo existían después de pulsar «Pagar» con la entrega `ship:` (se guardaba la dirección, se recargaba la página y recién ahí aparecían las paqueterías para elegir y volver a pulsar «Pagar»: dos pasos). Ahora:
+
+  - `useAutoQuote` (`@asteby/storefront-react/checkout`): observa el formulario, y cuando hay CP válido, estado, ciudad, colonia y calle, espera 600 ms sin teclear y llama al `quote(address, signal)` de la tienda (guardar dirección + leer `delivery-options`). Solo re-cotiza cuando cambian campos que afectan el precio (país, CP, estado, ciudad); calle, número, teléfono o referencia no. Cancela respuestas viejas, expone `status` (`idle|waiting|loading|ready|error`), `retry`, y `defaultValue` (la tarifa guardada si sigue ofrecida; si no, la más barata sin recolección). Helpers: `defaultRate`, `quoteFingerprint`, `readQuoteAddress`.
+  - `<DeliveryOptions free>`: con el envío gratis (`DeliveryOptions.free`, que calcula el servidor) no hay selector de paquetería: muestra «Envío gratis» y manda la tarifa en un campo oculto para ir directo al pago. `announceReady` agrega un estado accesible («Opciones de envío listas (n)») y el error/carga ya eran `role=alert`/`role=status`.
+  - `@asteby/storefront`: `DeliveryOptions` gana `fixed` y `free` (aditivos; los llena `storefront_cart` con su ajuste `shipping_quote_mode`) y el mock acepta `shippingQuoteMode: 'fixed_when_free'`.
+
+  El umbral de envío gratis y el precio fijo son configuración de la organización (Ventas → Envíos y ajuste `shipping_quote_mode` de storefront_cart); nada se calcula ni se escribe en el SDK.
+
+- 22140e3: feat(storefront-react): idioma y avisos de la cuenta del comprador (contrato 1.9). `<LanguagePreference locales value>` (selector con los idiomas de la tienda, nombres legibles con `Intl.DisplayNames`, «el de la tienda» como opción) y `<NotificationPreferences channels preferences>` (matriz evento por canal con casillas reales; lo no configurado cuenta como activo, lo que hoy envía la tienda; avisa que la confirmación del pedido, los pagos y las facturas siempre se envían y no ofrece apagarlos). Headless, `data-sf-lang*` / `data-sf-notif*`, `classNames`, es/en, sin JavaScript. Degradan a nada: con menos de dos idiomas, o sin canales de entrega (`capabilities.notifications.channels` ausente en un servidor anterior al contrato 1.9), no se pinta nada y la tienda no necesita un `if`. La acción de Configuración suma los `intent` `locale` (vacío = el de la tienda) y `notifications` (casillas marcadas = activo, las mostradas y sin marcar = apagado; formato y tope validados antes de llamar al servidor, que rechaza los eventos obligatorios), y el loader `loadAccountSettings(client)` lee cliente, capacidades y dispositivos por separado (nunca lanza; la parte que falla es `null`). Estilos opcionales en `account.css`.
+- a2ff0a8: feat(storefront-react): «Dispositivos» de la cuenta del comprador (contrato 1.9). `<SessionsList>` (`@asteby/storefront-react/account`): lista las sesiones abiertas con su dispositivo resumido, marca la actual (sin botón) y da a cada otra un formulario real para cerrarla, más «Cerrar las demás»; headless (`data-sf-session*`, `classNames`, es/en, `messages`) y sin JavaScript. Degrada: con `sessions={null}` (servidor anterior al contrato 1.9 o caído) muestra un aviso y el resto de la Configuración sigue. El servidor (`@asteby/storefront-react/account/server`) trae `loadAccountSessions(client)` (nunca lanza) y `createAccountSettingsAction({ storefront, customerCookie })`, una acción con `intent` (`session-revoke`, `session-revoke-others`) que lee el token de la cookie propia de la tienda, nunca lo expone y responde solo códigos (`SettingsErrorCode`), sin mensajes del servidor ni valores del comprador; cerrar una sesión ya cerrada o ajena responde igual. Base de los demás formularios de Configuración (idioma, avisos, exportar y borrar). Estilos opcionales en `account.css`. Requiere `@asteby/storefront` con el cliente de cuenta (`customer.sessions`).
+- 42abb8b: feat(storefront-react): «Mis artículos» / «Mi garage» (Storefront API 1.9), subpaths `/subjects`, `/subjects/server` y `/subjects.css`. `SubjectGarage` (tarjetas por artículo, activo, enmascarado de privados, ver piezas compatibles, hacer activo, editar, eliminar con confirmación en línea, límite y estado degradado con reintento), `SubjectPicker` (cascada guiada por los campos y el catálogo del tipo; sin JavaScript avanza el nivel al enviar), `SubjectFilter` y `SubjectFitBadge`, `useSubjects`; en el servidor `loadSubjectsContext` (nunca lanza; sin tipos no hay sección), `createSubjectAction` (sin logs, sin eco de valores privados, 422 por campo), cookie genérica del invitado `sf_subject_<tipo>` que solo acepta una `fit_key` que resuelva contra el catálogo (nunca placas), y `subjectCacheHeaders`. Ningún tipo conocido: los nombres salen de los datos de la organización. `fitment`: motores con tramos de años (`["2.4", 2007, 2017, 2020, 2022]` / `ranges`), un modelo cubre un año solo si algún motor lo cubre (cambio de comportamiento: ya no hay años fantasma entre `from` y `to`) y `vehicleCatalogToTree` para publicar el catálogo que ya tiene una tienda de piezas; así ProtekAuto puede borrar su copia `vehicle.ts`. Requiere `@asteby/storefront` con `customer.subjects`. `subjectCacheHeaders` responde `Vary: Cookie` también en la copia pública, para que un CDN no sirva la página sin filtrar a quien recuerda un artículo.
+
+### Patch Changes
+
+- Updated dependencies [811828e]
+- Updated dependencies [2e223d7]
+  - @asteby/storefront@0.18.0
+
 ## 0.25.0
 
 ### Minor Changes

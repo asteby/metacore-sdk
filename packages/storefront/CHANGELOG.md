@@ -1,5 +1,21 @@
 # @asteby/storefront
 
+## 0.18.0
+
+### Minor Changes
+
+- 811828e: Checkout en un solo paso: las tarifas de envío cargan solas al completar la dirección.
+
+  Antes las tarifas solo existían después de pulsar «Pagar» con la entrega `ship:` (se guardaba la dirección, se recargaba la página y recién ahí aparecían las paqueterías para elegir y volver a pulsar «Pagar»: dos pasos). Ahora:
+
+  - `useAutoQuote` (`@asteby/storefront-react/checkout`): observa el formulario, y cuando hay CP válido, estado, ciudad, colonia y calle, espera 600 ms sin teclear y llama al `quote(address, signal)` de la tienda (guardar dirección + leer `delivery-options`). Solo re-cotiza cuando cambian campos que afectan el precio (país, CP, estado, ciudad); calle, número, teléfono o referencia no. Cancela respuestas viejas, expone `status` (`idle|waiting|loading|ready|error`), `retry`, y `defaultValue` (la tarifa guardada si sigue ofrecida; si no, la más barata sin recolección). Helpers: `defaultRate`, `quoteFingerprint`, `readQuoteAddress`.
+  - `<DeliveryOptions free>`: con el envío gratis (`DeliveryOptions.free`, que calcula el servidor) no hay selector de paquetería: muestra «Envío gratis» y manda la tarifa en un campo oculto para ir directo al pago. `announceReady` agrega un estado accesible («Opciones de envío listas (n)») y el error/carga ya eran `role=alert`/`role=status`.
+  - `@asteby/storefront`: `DeliveryOptions` gana `fixed` y `free` (aditivos; los llena `storefront_cart` con su ajuste `shipping_quote_mode`) y el mock acepta `shippingQuoteMode: 'fixed_when_free'`.
+
+  El umbral de envío gratis y el precio fijo son configuración de la organización (Ventas → Envíos y ajuste `shipping_quote_mode` de storefront_cart); nada se calcula ni se escribe en el SDK.
+
+- 2e223d7: feat(storefront): «Mis artículos» del comprador (Storefront API 1.9, aditivo; en ProtekAuto «Mi garage»). Tipos `Subject*`, `customer.subjects.{list,create,update,delete}` (privado, sin caché; 422 por campo sin eco del valor), `content.subjectKinds()` (`[]` si la organización no declara tipos o el servidor es anterior) y `CustomerCapabilities.subjects`. `products.list({ tags_any })` (OR, máx. 5 etiquetas de 120 caracteres, separadas por coma en la URL; el cliente rechaza una etiqueta con coma). Helpers puros sin UI ni tipo conocido: `subjectOptions` / `reconcileSubjectValues` (cascada guiada por el catálogo de datos, con años por rangos), `resolveSubject` (misma validación que el servidor: etiqueta y clave de compatibilidad solo con valores públicos), `fitTagsAny`, `fitTag`, `isMasked`, `splitSubjectTree` (reparte un catálogo grande en varias páginas por su primer nivel: una página publicada cabe en una escritura de 64 KB). Un campo `private` (placas) nunca entra a la etiqueta ni a la clave y el servidor lo devuelve enmascarado. Mock: `subjectKinds` / `MOCK_SUBJECT_KINDS`, el CRUD completo con las mismas reglas y el filtro `tags_any`.
+
 ## 0.17.0
 
 ### Minor Changes
