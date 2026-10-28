@@ -128,12 +128,12 @@ Not covered by this package yet (stay in ops until follow-up): voice/live mode,
 file upload, guided tours, team-chat embeds, chart/choropleth embeds, Sparks pill.
 Use the `CopilotChat` panel directly (`/agent` page) with `className="h-full"`.
 
-### gobiernos-ops
+### Otra app (marca propia)
 
 ```tsx
 <CopilotProvider
   client={createHttpChatClient(api, { basePath: '/api/v1/chat' })}
-  branding={{ name: 'Gobi', mascotSkin: 'gobi-navy' }}
+  branding={{ name: 'Asistente', mascotSkin: 'hex-navy' }}
   permissions={{ canChat: hasPermission('copilot:use') }}
   suggestions={['Resumen del tablero', 'Hallazgos pendientes de revisión']}
 >
@@ -141,7 +141,7 @@ Use the `CopilotChat` panel directly (`/agent` page) with `className="h-full"`.
 </CopilotProvider>
 ```
 
-If the gobiernos backend uses a different contract, pass a custom `ChatClient`.
+If your backend uses a different contract, pass a custom `ChatClient`.
 Use `suggestions` to avoid ERP-flavored prompts; omit it to inherit tenant branding.
 
 ## Also exported

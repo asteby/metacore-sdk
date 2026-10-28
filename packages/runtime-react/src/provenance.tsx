@@ -9,10 +9,10 @@
  * `row.provenance`); this module turns it into one of four presentations:
  *
  *   human     — a person on their own: their avatar and name.
- *   agent     — the app's agent (OrgRuntimeProvider `agentActor`, e.g. Gobi)
+ *   agent     — the app's agent (OrgRuntimeProvider `agentActor`, e.g. Asistente)
  *               with the origin; "pending proposal" when it waits for a person.
  *   system    — platform work or an integration: system icon + origin.
- *   assisted  — "Ana with Gobi": the person's avatar with the agent's
+ *   assisted  — "Ana with Asistente": the person's avatar with the agent's
  *               superimposed, and an accessible tooltip with who authorized,
  *               what the agent proposed and when.
  *
@@ -205,7 +205,7 @@ export interface ProvenancePerson {
 
 export interface ResolvedAuthorship {
     kind: AuthorshipKind
-    /** Main line ("Ana Pérez con Gobi", "Gobi", "Sistema", "gobiernos-intel"). */
+    /** Main line ("Ana Pérez con Asistente", "Asistente", "Sistema", "data-sync"). */
     label: string
     /** Secondary line (origin / channel / pending proposal). */
     subtitle?: string

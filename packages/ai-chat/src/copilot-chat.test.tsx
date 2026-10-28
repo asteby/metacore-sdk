@@ -99,12 +99,12 @@ describe('CopilotChat', () => {
     )
 
   it('widget is a labelled non-modal dialog; focus moves in on open and back to the FAB on close', () => {
-    wrap(client(), { branding: { name: 'Gobi' } }, <CopilotWidget />)
+    wrap(client(), { branding: { name: 'Asistente' } }, <CopilotWidget />)
     const fab = screen.getByLabelText('Abrir copiloto')
     fab.focus()
     fireEvent.click(fab)
     const dialog = screen.getByRole('dialog')
-    expect(dialog.getAttribute('aria-label')).toBe('Gobi')
+    expect(dialog.getAttribute('aria-label')).toBe('Asistente')
     expect(dialog.getAttribute('aria-modal')).toBe('false')
     expect(document.activeElement?.tagName).toBe('TEXTAREA')
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' })

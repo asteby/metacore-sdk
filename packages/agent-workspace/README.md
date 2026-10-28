@@ -13,8 +13,8 @@ capabilities on or off.
   realtime={useWebSocketContext()}   // single host socket
   user={user}
   navGroups={navGroups}
-  storageNamespace="gobiernos"       // localStorage prefix
-  branding={{ name: 'Gobi', skin: 'gobi-navy' }}
+  storageNamespace="mi-app"           // localStorage prefix
+  branding={{ name: 'Asistente', skin: 'hex-navy' }}
   capabilities={{ MapChart, ProviderReconnectDialog }} // omit what the product lacks
 >
   <CallProvider>
@@ -24,8 +24,8 @@ capabilities on or off.
 ```
 
 Capabilities (`usage`, `ProviderReconnectDialog`, `MapChart`) are optional; an
-absent one removes its UI cleanly. `ops` and `gobiernos-ops` consume the same
-build, so a feature added here reaches both.
+absent one removes its UI cleanly. `ops` and any other app consume the same
+build, so a feature added here reaches all of them.
 
 Protocol names shared with the backend (`ops:aby-*` events, `ops.*` tools) are
 kept as-is on purpose.

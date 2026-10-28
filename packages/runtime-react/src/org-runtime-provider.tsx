@@ -42,13 +42,13 @@ export interface OrgRuntimeProviderProps {
   numberLocales?: NumberLocales
   /**
    * Presentation of the system actor (name + avatar) wherever a record shows
-   * who created/changed it and nobody did — e.g. `{ name: 'Gobi' }`.
+   * who created/changed it and nobody did — e.g. `{ name: 'Asistente' }`.
    */
   systemActor?: SystemActor
   /**
    * Presentation of the app's agent (name + avatar) in provenance badges:
    * records an agent made, proposed, or a person made with it — e.g.
-   * `{ name: 'Gobi', avatarUrl: '/images/gobi.svg' }`.
+   * `{ name: 'Asistente', avatarUrl: '/images/assistant.svg' }`.
    */
   agentActor?: AgentActor
   /**

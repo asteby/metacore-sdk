@@ -158,7 +158,7 @@ fichas leen la configuración de la org por contexto:
   timeZone={org.timezone}            // 'America/Mexico_City' — fechas en la zona de la org
   currency={org.currency_code}       // 'MXN' — moneda por defecto
   numberLocales={{ es: 'es-MX' }}    // números y dinero como en México: 11,461.50 (no 11.461,50)
-  systemActor={{ name: 'Gobi', avatarUrl: '/brand/gobi.png' }} // quién aparece cuando "lo hizo el sistema"
+  systemActor={{ name: 'Asistente', avatarUrl: '/brand/assistant.png' }} // quién aparece cuando "lo hizo el sistema"
 >
   <App />
 </OrgRuntimeProvider>

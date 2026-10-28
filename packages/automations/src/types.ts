@@ -95,7 +95,7 @@ export interface Automation {
   created_at: string
   updated_at: string
   trigger_label: string
-  /** "Ana Pérez con Gobi" | "Ana Pérez" */
+  /** "Ana Pérez con el asistente" | "Ana Pérez" */
   authorship: string
   creator_name?: string
   authorized_by_name?: string

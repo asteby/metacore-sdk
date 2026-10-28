@@ -17,7 +17,7 @@ import {
 
 const NOW = new Date('2026-10-13T12:00:00Z')
 const DATA: LinkPreviewData = {
-  url: 'https://www.ejemplo-noticias.mx/colima/nota-1?utm=x',
+  url: 'https://www.ejemplo-noticias.mx/zona-norte/nota-1?utm=x',
   title: 'Inauguran obra hidráulica en Villa de Álvarez',
   description: 'El gobierno estatal entregó la obra con una inversión de 12 mdp.',
   imageUrl: 'https://cdn.ejemplo-noticias.mx/img/1.jpg',
@@ -64,7 +64,7 @@ describe('LinkPreviewCard', () => {
     expect(html).toContain('hace 3 horas')
     expect(html).toContain('target="_blank"')
     expect(html).toContain('rel="noopener noreferrer nofollow"')
-    expect(html).toContain('href="https://www.ejemplo-noticias.mx/colima/nota-1?utm=x"')
+    expect(html).toContain('href="https://www.ejemplo-noticias.mx/zona-norte/nota-1?utm=x"')
     expect(html).toContain('Seguridad')
     expect(html).toContain('lang="es"')
     expect(html).toMatch(/<h3[^>]*>.*Inauguran obra/)

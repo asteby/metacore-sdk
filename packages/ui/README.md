@@ -174,7 +174,7 @@ const proxy = (u: string) => `/api/media/proxy?url=${encodeURIComponent(u)}`
       data={{ url: n.url, title: n.title, description: n.summary, imageUrl: n.ogImage,
               siteName: n.siteName, faviconUrl: n.favicon, kind: 'article', publishedAt: n.publishedAt }}
       resolveImageUrl={proxy}
-      meta="Colima · Seguridad"
+      meta="Zona Norte · Seguridad"
       badges={<Badge variant="outline">+3 medios</Badge>}
       onSelect={() => openDetail(n.id)} // optional: card becomes a button, external link stays secondary
     />

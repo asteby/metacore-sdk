@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// Provenance badges: human, agent (Gobi), system/integration with origin and
+// Provenance badges: human, agent (Asistente), system/integration with origin and
 // "person with agent" with the authorizer, the proposal and the date.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, render, screen } from '@testing-library/react'
@@ -32,24 +32,24 @@ afterEach(() => {
     language = 'es'
 })
 
-const gobi = { name: 'Gobi', avatarUrl: '/images/gobi.svg' }
+const agent = { name: 'Asistente', avatarUrl: '/images/assistant.svg' }
 const wrap = (ui: ReactNode, extra: Record<string, unknown> = {}) =>
     render(
-        <OrgRuntimeProvider agentActor={gobi} timeZone="America/Mexico_City" {...extra}>
+        <OrgRuntimeProvider agentActor={agent} timeZone="America/Mexico_City" {...extra}>
             {ui}
         </OrgRuntimeProvider>,
     )
 
 const assisted: ProvenanceData = {
     actor_kind: 'agent',
-    actor_name: 'Gobi',
+    actor_name: 'Asistente',
     mode: 'assisted',
     authorized_by: 'u-1',
     authorized_by_name: 'Ana Pérez',
     authorized_at: '2026-10-12T16:30:00Z',
     via: 'chat',
     origin: 'Borrador aprobado en el chat',
-    summary: 'Propuso crear la acción «Recorrido en Tecomán»',
+    summary: 'Propuso crear la acción «Recorrido en Zona Norte»',
 }
 
 describe('provenance model', () => {
@@ -82,23 +82,23 @@ describe('provenance model', () => {
 describe('<ProvenanceBadge>', () => {
     it('person with agent: label, overlay avatar and accessible description', () => {
         const { container } = wrap(<ProvenanceBadge provenance={assisted} />)
-        expect(screen.getByText('Ana Pérez con Gobi')).toBeTruthy()
+        expect(screen.getByText('Ana Pérez con Asistente')).toBeTruthy()
         expect(screen.getByText('Borrador aprobado en el chat')).toBeTruthy()
         const trigger = container.querySelector('[data-provenance="assisted"]') as HTMLElement
         expect(trigger.tabIndex).toBe(0)
         const desc = document.getElementById(trigger.getAttribute('aria-describedby') as string)
         expect(desc?.textContent).toContain('Autorizó: Ana Pérez')
-        expect(desc?.textContent).toContain('Gobi propuso: Propuso crear la acción')
+        expect(desc?.textContent).toContain('Asistente propuso: Propuso crear la acción')
         expect(desc?.textContent).toMatch(/12 oct 2026/)
-        expect(container.querySelector('[data-provenance-overlay] img[src="/images/gobi.svg"]')).toBeTruthy()
+        expect(container.querySelector('[data-provenance-overlay] img[src="/images/assistant.svg"]')).toBeTruthy()
     })
 
     it('agent alone uses the app agent and its origin; pending proposals say so', () => {
         const { rerender } = wrap(<ProvenanceBadge provenance={{ actor_kind: 'agent', mode: 'automated', origin: 'Briefing automático' }} />)
-        expect(screen.getByText('Gobi')).toBeTruthy()
+        expect(screen.getByText('Asistente')).toBeTruthy()
         expect(screen.getByText('Briefing automático')).toBeTruthy()
         rerender(
-            <OrgRuntimeProvider agentActor={gobi}>
+            <OrgRuntimeProvider agentActor={agent}>
                 <ProvenanceBadge provenance={{ actor_kind: 'agent', mode: 'automated', proposed: true, via: 'chat' }} />
             </OrgRuntimeProvider>,
         )
@@ -109,15 +109,15 @@ describe('<ProvenanceBadge>', () => {
         const { container } = wrap(
             <>
                 <ProvenanceBadge provenance={{ actor_kind: 'system', mode: 'automated', via: 'seed' }} />
-                <ProvenanceBadge provenance={{ actor_kind: 'integration', actor_name: 'gobiernos-intel', mode: 'automated', origin: 'Plano de datos' }} />
+                <ProvenanceBadge provenance={{ actor_kind: 'integration', actor_name: 'data-sync', mode: 'automated', origin: 'Plano de datos' }} />
             </>,
         )
         expect(screen.getByText('Sistema')).toBeTruthy()
         expect(screen.getByText('Datos iniciales')).toBeTruthy()
-        expect(screen.getByText('gobiernos-intel')).toBeTruthy()
+        expect(screen.getByText('data-sync')).toBeTruthy()
         expect(screen.getByText('Plano de datos')).toBeTruthy()
         expect(container.querySelectorAll('[data-provenance="system"]').length).toBe(2)
-        expect(screen.queryByText('Gobi')).toBeNull()
+        expect(screen.queryByText('Asistente')).toBeNull()
     })
 
     it('human alone', () => {
@@ -128,7 +128,7 @@ describe('<ProvenanceBadge>', () => {
     it('English copy', () => {
         language = 'en'
         wrap(<ProvenanceBadge provenance={assisted} />)
-        expect(screen.getByText('Ana Pérez with Gobi')).toBeTruthy()
+        expect(screen.getByText('Ana Pérez with Asistente')).toBeTruthy()
     })
 
     it('without agentActor falls back to the stored agent name', () => {
@@ -147,7 +147,7 @@ describe('<AuthorshipCell>', () => {
 
     it('stored provenance wins over the legacy rule', () => {
         wrap(<AuthorshipCell row={{ created_by_id: 'u-1', created_by: { name: 'Ana Pérez', provenance: assisted } }} />)
-        expect(screen.getByText('Ana Pérez con Gobi')).toBeTruthy()
+        expect(screen.getByText('Ana Pérez con Asistente')).toBeTruthy()
     })
 
     it('a plain person renders the person', () => {
@@ -159,7 +159,7 @@ describe('<AuthorshipCell>', () => {
 describe('history and audit', () => {
     it('ProvenanceActorChip names the actor with the full sentence for screen readers', () => {
         wrap(<ProvenanceActorChip provenance={assisted} />)
-        expect(screen.getByText('Ana Pérez con Gobi')).toBeTruthy()
+        expect(screen.getByText('Ana Pérez con Asistente')).toBeTruthy()
         expect(screen.getByText(/Autorizó: Ana Pérez/)).toBeTruthy()
     })
 
@@ -171,7 +171,7 @@ describe('history and audit', () => {
                 audit={{ created_at: 'created_at', created_by: 'created_by_id' }}
             />,
         )
-        expect(screen.getByText('Creado por Ana Pérez con Gobi')).toBeTruthy()
+        expect(screen.getByText('Creado por Ana Pérez con Asistente')).toBeTruthy()
     })
 })
 
@@ -204,6 +204,6 @@ describe('dynamic table created_by column', () => {
             column: { id: 'created_by.avatar' },
         })
         wrap(<>{cell}</>)
-        expect(screen.getByText('Ana Pérez con Gobi')).toBeTruthy()
+        expect(screen.getByText('Ana Pérez con Asistente')).toBeTruthy()
     })
 })

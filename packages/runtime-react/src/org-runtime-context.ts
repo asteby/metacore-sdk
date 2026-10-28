@@ -76,7 +76,7 @@ export function useNumberLocale(language: string | undefined): string | undefine
 /**
  * How the SYSTEM actor (records created or changed by a seed, an event, an
  * agent or an automation — `created_by` empty or `SYSTEM_ACTOR_ID`) is
- * presented: e.g. `{ name: 'Gobi', avatarUrl: '/brand/gobi.png' }`. Read by
+ * presented: e.g. `{ name: 'Asistente', avatarUrl: '/brand/assistant.png' }`. Read by
  * creator/created_by table cells, AuditInfo, ActivityTimeline, RecordHistory
  * and the record dialog. `undefined` outside a provider → the localized
  * "Sistema"/"System" label and initials (legacy behaviour).
@@ -94,7 +94,7 @@ export const SystemActorContext = createContext<SystemActor | undefined>(undefin
 export const useSystemActor = () => useContext(SystemActorContext)
 
 /**
- * How the app's AGENT (its assistant: Gobi in GobiernOS) is presented when a
+ * How the app's AGENT (its assistant, e.g. `Asistente`) is presented when a
  * record's provenance says an agent made it or proposed it. Separate from
  * `SystemActor`: unattended platform work (seeds, imports) is not the agent.
  * `undefined` outside a provider → the provenance `actor_name`, else a
@@ -114,7 +114,7 @@ export const useAgentActor = () => useContext(AgentActorContext)
 
 /**
  * Host hook naming the ORIGIN of a record that has no stored provenance but
- * was clearly made by the system (null `created_by_id`): e.g. GobiernOS maps
+ * was clearly made by the system (null `created_by_id`): e.g. an app may map
  * `findings` → "Importación de investigación pública". Return `undefined` when
  * unknown — the badge then shows the system actor alone, never an invented
  * origin.

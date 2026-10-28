@@ -5,9 +5,9 @@ describe('resolveAbyDraftTarget', () => {
   const last = { id: 'ses-1', title: 'Anterior' }
 
   it('una pregunta con send abre una conversación nueva y la envía, aunque haya una anterior', () => {
-    expect(resolveAbyDraftTarget({ message: '  ¿Cómo va Colima?  ', send: true }, last)).toEqual({
+    expect(resolveAbyDraftTarget({ message: '  ¿Cómo va Zona Norte?  ', send: true }, last)).toEqual({
       kind: 'send',
-      message: '¿Cómo va Colima?',
+      message: '¿Cómo va Zona Norte?',
     })
     expect(resolveAbyDraftTarget({ message: 'hola', send: true }, null)).toEqual({ kind: 'send', message: 'hola' })
   })

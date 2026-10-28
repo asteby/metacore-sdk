@@ -49,7 +49,7 @@ describe('OrgRuntimeProvider contexts', () => {
     })
 
     it('useSystemActor reads systemActor; undefined outside a provider', () => {
-        const actor = { name: 'Gobi', avatarUrl: '/brand/gobi.png' }
+        const actor = { name: 'Asistente', avatarUrl: '/brand/assistant.png' }
         expect(renderHook(() => useSystemActor(), { wrapper: wrap({ systemActor: actor }) }).result.current).toEqual(actor)
         expect(renderHook(() => useSystemActor()).result.current).toBeUndefined()
     })
@@ -66,7 +66,7 @@ describe('isSystemActorColumn', () => {
 describe('<AuditInfo> with systemActor', () => {
     it('names the configured system actor instead of "Sistema"', () => {
         render(
-            <OrgRuntimeProvider systemActor={{ name: 'Gobi' }}>
+            <OrgRuntimeProvider systemActor={{ name: 'Asistente' }}>
                 <AuditInfo
                     record={{ created_at: '2026-01-01T10:00:00Z', created_by_id: SYSTEM_ACTOR_ID }}
                     audit={{ created_at: 'created_at', created_by: 'created_by_id' }}
@@ -75,6 +75,6 @@ describe('<AuditInfo> with systemActor', () => {
             </OrgRuntimeProvider>,
         )
         fireEvent.click(screen.getByRole('button'))
-        expect(screen.getByText('Creado por Gobi')).toBeTruthy()
+        expect(screen.getByText('Creado por Asistente')).toBeTruthy()
     })
 })

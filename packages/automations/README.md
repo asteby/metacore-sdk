@@ -6,7 +6,7 @@ and dynamic tools, created by people or proposed by the agent.
 
 - `createAutomationsApi(http)` — REST client for `automation.Handler`.
 - `<AutomationsManager api={api} />` — list with status filters, detail with
-  authorship («persona con Gobi»), confirm/discard proposals, pause/resume,
+  authorship («persona con el asistente»), confirm/discard proposals, pause/resume,
   dry-run preview, run history, and the editor.
 - `<SpecEditor />` — form generated from the `automation/v1` JSON Schema and
   the tool catalog the backend serves (plus an advanced JSON mode). It can
