@@ -1,6 +1,6 @@
 import { useEffect, type ComponentProps, type CSSProperties } from 'react'
 import { Bot } from 'lucide-react'
-import { Mascot as SdkMascot } from '@asteby/metacore-app-providers'
+import { Mascot as SdkMascot, type MascotSkin } from '@asteby/metacore-app-providers'
 import { cn } from '@asteby/metacore-ui'
 
 export type MascotState =
@@ -13,7 +13,8 @@ export type MascotState =
   | 'error'
 
 export type MascotProps = {
-  skin?: string
+  /** Skin id (aliases included) or an inline declarative skin. */
+  skin?: string | MascotSkin
   state?: MascotState | string
   size?: number
   className?: string
@@ -61,17 +62,6 @@ function useSoftMascotCss() {
       .mascot-size-soft .mascot-eye-idle {
         animation-name: mascot-blink-soft !important;
       }
-      /* Navy face: the shared blue accent disappears into the screen, and a
-         4px stroke shrinks under a pixel at avatar size. Ice + a heavier
-         line is local so it wins even if the prebundled skin is stale. */
-      [data-mascot-skin='gobi-navy'] svg g[stroke-linecap='round'],
-      [data-mascot-skin='gobi-navy'] svg path[stroke-linecap='round'] {
-        stroke: #f4f8ff;
-        stroke-width: 6.5;
-      }
-      [data-mascot-skin='gobi-navy'] svg .mascot-tread circle {
-        fill: #f4f8ff;
-      }
       /* Never disable tread / bob / antenna — spinning is the brand motion. */
     `
   }, [])
@@ -98,7 +88,7 @@ export function Mascot({ soft, className, size = 32, state, skin, ...props }: Ma
   if (SdkMascot) {
     return (
       <span
-        data-mascot-skin={skin}
+        data-mascot-skin={typeof skin === 'string' ? skin : skin?.id}
         data-mascot-state={asSdkMascotState(state) || 'idle'}
         className={cn(
           'inline-flex leading-none',

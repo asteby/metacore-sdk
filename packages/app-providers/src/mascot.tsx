@@ -18,6 +18,8 @@ export type MascotState =
   | 'error'
 
 export interface MascotSkin {
+  /** Optional stable id; used to namespace SVG ids when the skin is passed inline. */
+  id?: string
   /** Display name shown alongside the mascot (e.g. "Aby", "Llantonio"). */
   name: string
   /** Tooth shape around the body: fine dashed tire tread, 6 rounded gear teeth, or a rounded hex frame. */
@@ -33,6 +35,19 @@ export interface MascotSkin {
     glow: string
     screen: string
     screenCenter: string
+  }
+  /**
+   * Optional face overrides. A skin whose accent disappears into its screen
+   * (e.g. navy) can draw the face with a different stroke colour/weight and
+   * tint the frame nodes, with no CSS patch in the host.
+   */
+  face?: {
+    /** Stroke colour of eyes, brows and mouths (default: `colors.accent`). */
+    stroke?: string
+    /** Stroke width of eyes, brows and mouths (default 4). */
+    strokeWidth?: number
+    /** Fill of the frame nodes of `hex-frame` (default: `colors.accent`). */
+    treadDot?: string
   }
 }
 
@@ -68,12 +83,12 @@ export const MASCOT_SKINS: Record<string, MascotSkin> = {
       screenCenter: '#1f1518',
     },
   },
-  // Gov-tech vertical: navy/azul institucional + a rounded hexagon frame
-  // echoing that vertical's hex-isotype logo, instead of gear teeth or tire
-  // tread — proves toothShape isn't just "which vehicle part", any closed
-  // ring shape works the same way.
-  'gobi-navy': {
-    name: 'Gobi',
+  // Navy + a rounded hexagon frame instead of gear teeth or tire tread —
+  // proves toothShape isn't just "which vehicle part", any closed ring shape
+  // works the same way. The ice-coloured, heavier face keeps it legible
+  // against the dark screen.
+  'hex-navy': {
+    name: 'Asistente',
     toothShape: 'hex-frame',
     antenna: false,
     screenTone: 'dark',
@@ -85,7 +100,37 @@ export const MASCOT_SKINS: Record<string, MascotSkin> = {
       screen: '#041324',
       screenCenter: '#071A36',
     },
+    face: { stroke: '#f4f8ff', strokeWidth: 6.5, treadDot: '#f4f8ff' },
   },
+}
+
+/**
+ * Legacy skin ids that still resolve (orgs may have them stored in their
+ * branding). Never remove an entry without migrating the stored values.
+ */
+export const MASCOT_SKIN_ALIASES: Record<string, string> = {
+  'gobi-navy': 'hex-navy',
+}
+
+/** Registers (or replaces) a skin at runtime, e.g. one declared by a product brand. */
+export function registerMascotSkin(id: string, skin: MascotSkin): void {
+  if (!isValidSkin(skin)) return
+  MASCOT_SKINS[id] = skin
+}
+
+const TOOTH_SHAPES = ['tire-tread', 'gear-teeth', 'hex-frame']
+const COLOR_KEYS = ['tire', 'treadOrTooth', 'accent', 'glow', 'screen', 'screenCenter'] as const
+
+/** Structural check for skins arriving as data (brand manifest, org config). */
+export function isValidSkin(skin: unknown): skin is MascotSkin {
+  if (!skin || typeof skin !== 'object') return false
+  const s = skin as Partial<MascotSkin>
+  if (typeof s.name !== 'string') return false
+  if (!s.toothShape || !TOOTH_SHAPES.includes(s.toothShape)) return false
+  if (typeof s.antenna !== 'boolean') return false
+  if (s.screenTone !== 'light' && s.screenTone !== 'dark') return false
+  if (!s.colors || typeof s.colors !== 'object') return false
+  return COLOR_KEYS.every((k) => typeof s.colors![k] === 'string' && s.colors![k] !== '')
 }
 
 const STYLE_TAG_ID = 'metacore-mascot-styles'
@@ -105,13 +150,30 @@ function useMascotStyles() {
 const DEFAULT_SKIN_KEY = 'gear-lime'
 const DEFAULT_SKIN: MascotSkin = MASCOT_SKINS[DEFAULT_SKIN_KEY]!
 
-function resolveSkin(key: string | undefined): MascotSkin {
-  return (key && MASCOT_SKINS[key]) || DEFAULT_SKIN
+function resolveSkin(key: string | MascotSkin | undefined): MascotSkin {
+  if (key && typeof key === 'object') return isValidSkin(key) ? key : DEFAULT_SKIN
+  if (!key) return DEFAULT_SKIN
+  if (MASCOT_SKINS[key]) return MASCOT_SKINS[key]!
+  const alias = MASCOT_SKIN_ALIASES[key]
+  if (alias && MASCOT_SKINS[alias]) {
+    warnAliasOnce(key, alias)
+    return MASCOT_SKINS[alias]!
+  }
+  return DEFAULT_SKIN
+}
+
+const warnedAliases = new Set<string>()
+function warnAliasOnce(legacy: string, current: string) {
+  if (warnedAliases.has(legacy)) return
+  warnedAliases.add(legacy)
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env
+  if (env?.NODE_ENV === 'production') return
+  console.warn(`[metacore] mascot skin "${legacy}" is deprecated; use "${current}".`)
 }
 
 export interface MascotProps {
-  /** Key into MASCOT_SKINS (e.g. org's `mascot_skin` branding field). */
-  skin?: string
+  /** Key into MASCOT_SKINS (e.g. org's `mascot_skin` branding field), or an inline skin. */
+  skin?: string | MascotSkin
   state?: MascotState
   size?: number
   className?: string
@@ -175,21 +237,21 @@ function HexFrame({ stroke, accent }: { stroke: string; accent: string }) {
 
 /** Eyes/mouth shared by idle, happy and speaking — same geometry everywhere so
  * switching state never changes the mascot's basic proportions. */
-function CurvedEyes({ accent, glowId, className }: { accent: string; glowId: string; className?: string }) {
+function CurvedEyes({ accent, glowId, className, width = 4 }: { accent: string; glowId: string; className?: string; width?: number }) {
   return (
-    <g className={className} stroke={accent} strokeWidth="4" strokeLinecap="round" fill="none" filter={`url(#${glowId})`}>
+    <g className={className} stroke={accent} strokeWidth={width} strokeLinecap="round" fill="none" filter={`url(#${glowId})`}>
       <path d="M78 122 Q86 112 94 122" />
       <path d="M106 122 Q114 112 122 122" />
     </g>
   )
 }
 
-function SmileMouth({ accent, glowId }: { accent: string; glowId: string }) {
+function SmileMouth({ accent, glowId, width = 4 }: { accent: string; glowId: string; width?: number }) {
   return (
     <path
       d="M82 143 Q100 156 118 143"
       stroke={accent}
-      strokeWidth="4"
+      strokeWidth={width}
       strokeLinecap="round"
       fill="none"
       filter={`url(#${glowId})`}
@@ -232,10 +294,13 @@ export function Mascot({
 }: MascotProps) {
   useMascotStyles()
   const cfg = resolveSkin(skin)
-  const uid = `mascot-${skin}`
+  const skinId = typeof skin === 'string' ? skin : (skin && skin.id) || 'inline'
+  const uid = `mascot-${skinId.replace(/[^a-zA-Z0-9_-]/g, '')}`
   const glowId = `${uid}-glow`
   const gradId = `${uid}-grad`
   const { colors } = cfg
+  const faceStroke = cfg.face?.stroke ?? colors.accent
+  const faceWidth = cfg.face?.strokeWidth ?? 4
 
   // The drawn tire/gear body always spans x:24-176 / y:54-206 (152x152).
   // The antenna, when present, extends the top edge up to ~y:33. Cropping
@@ -281,7 +346,7 @@ export function Mascot({
         {cfg.toothShape === 'gear-teeth' ? (
           <GearTeeth fill={colors.treadOrTooth} />
         ) : cfg.toothShape === 'hex-frame' ? (
-          <HexFrame stroke={colors.treadOrTooth} accent={colors.accent} />
+          <HexFrame stroke={colors.treadOrTooth} accent={cfg.face?.treadDot ?? colors.accent} />
         ) : (
           <TireTread stroke={colors.treadOrTooth} />
         )}
@@ -301,15 +366,15 @@ export function Mascot({
 
         {state === 'idle' && (
           <g>
-            <CurvedEyes accent={colors.accent} glowId={glowId} className="mascot-eye-idle" />
-            <SmileMouth accent={colors.accent} glowId={glowId} />
+            <CurvedEyes accent={faceStroke} width={faceWidth} glowId={glowId} className="mascot-eye-idle" />
+            <SmileMouth accent={faceStroke} width={faceWidth} glowId={glowId} />
           </g>
         )}
 
         {state === 'happy' && (
           <g>
-            <CurvedEyes accent={colors.accent} glowId={glowId} />
-            <SmileMouth accent={colors.accent} glowId={glowId} />
+            <CurvedEyes accent={faceStroke} width={faceWidth} glowId={glowId} />
+            <SmileMouth accent={faceStroke} width={faceWidth} glowId={glowId} />
             <g className="mascot-spark" stroke={colors.glow} strokeWidth="2" strokeLinecap="round">
               <path d="M62 100 L62 92 M58 96 L66 96" />
             </g>
@@ -321,14 +386,14 @@ export function Mascot({
 
         {state === 'thinking' && (
           <g>
-            <g className="mascot-think-brow" stroke={colors.accent} strokeWidth="4" strokeLinecap="round">
+            <g className="mascot-think-brow" stroke={faceStroke} strokeWidth={faceWidth} strokeLinecap="round">
               <path d="M74 108 L94 104" />
             </g>
             <line x1="106" y1="118" x2="126" y2="118" stroke={colors.accent} strokeWidth="4" strokeLinecap="round" opacity={0.8} />
             <g className="mascot-think-pupil">
               <circle cx="84" cy="122" r="6" fill={colors.accent} filter={`url(#${glowId})`} />
             </g>
-            <path d="M84 146 Q100 141 116 146" stroke={colors.accent} strokeWidth="4" strokeLinecap="round" fill="none" opacity={0.85} />
+            <path d="M84 146 Q100 141 116 146" stroke={faceStroke} strokeWidth={faceWidth} strokeLinecap="round" fill="none" opacity={0.85} />
             <g fill={colors.accent}>
               <circle className="mascot-think-dot" cx="88" cy="164" r="3" />
               <circle className="mascot-think-dot" cx="100" cy="164" r="3" style={{ animationDelay: '.18s' }} />
@@ -371,24 +436,24 @@ export function Mascot({
               <line x1="100" y1="121" x2="100" y2="128" stroke={colors.accent} strokeWidth="3" strokeLinecap="round" />
               <line x1="92" y1="128" x2="108" y2="128" stroke={colors.accent} strokeWidth="3" strokeLinecap="round" />
             </g>
-            <path d="M82 149 Q100 162 118 149" stroke={colors.accent} strokeWidth="4" strokeLinecap="round" fill="none" />
+            <path d="M82 149 Q100 162 118 149" stroke={faceStroke} strokeWidth={faceWidth} strokeLinecap="round" fill="none" />
           </g>
         )}
 
         {state === 'speaking' && (
           <g>
-            <CurvedEyes accent={colors.accent} glowId={glowId} />
+            <CurvedEyes accent={faceStroke} width={faceWidth} glowId={glowId} />
             <EqualizerBars accent={colors.accent} className="mascot-voice-bar" />
           </g>
         )}
 
         {state === 'error' && (
           <g>
-            <g className="mascot-err-blink" stroke={colors.accent} strokeWidth="4" strokeLinecap="round" filter={`url(#${glowId})`}>
+            <g className="mascot-err-blink" stroke={faceStroke} strokeWidth={faceWidth} strokeLinecap="round" filter={`url(#${glowId})`}>
               <path d="M80 115 L92 127 M92 115 L80 127" />
               <path d="M108 115 L120 127 M120 115 L108 127" />
             </g>
-            <path d="M82 149 Q100 138 118 149" stroke={colors.accent} strokeWidth="4" strokeLinecap="round" fill="none" />
+            <path d="M82 149 Q100 138 118 149" stroke={faceStroke} strokeWidth={faceWidth} strokeLinecap="round" fill="none" />
           </g>
         )}
       </g>
@@ -400,7 +465,7 @@ export function Mascot({
  * Resolve the display name for a mascot skin, preferring an explicit org
  * override (branding.mascot_name) over the skin's own default.
  */
-export function resolveMascotName(skin: string | undefined, override: string | undefined): string {
+export function resolveMascotName(skin: string | MascotSkin | undefined, override: string | undefined): string {
   if (override && override.trim()) return override
   const cfg = resolveSkin(skin)
   return cfg.name

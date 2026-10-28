@@ -13,6 +13,7 @@ import { Button, Skeleton } from '@asteby/metacore-ui'
 import { cn } from '@asteby/metacore-ui'
 import { stripMarkdownLite } from '../lib/plain-text'
 import { Mascot } from './mascot'
+import type { MascotSkin } from '@asteby/metacore-app-providers'
 import { scrubToolDump } from '../lib/aby-tool-dump'
 import { useAgentSuggestions } from '../lib/agent-suggestions'
 import { AGENT_ENTER, AGENT_PANEL } from './agent-surfaces'
@@ -70,7 +71,7 @@ export function AgentWorkspaceChrome({
   onSuggestion,
 }: {
   mascotName: string
-  mascotSkin?: string
+  mascotSkin?: string | MascotSkin
   sidebarOpen: boolean
   onToggleSidebar: () => void
   sessions: WorkspaceSession[]

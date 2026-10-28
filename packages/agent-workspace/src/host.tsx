@@ -1,7 +1,7 @@
 import { createContext, useContext, useMemo, type ComponentType, type ReactNode } from 'react'
 import { Box, type LucideIcon } from 'lucide-react'
 import { resolveIconName } from '@asteby/metacore-ui'
-import { usePlatformConfig } from '@asteby/metacore-app-providers'
+import { usePlatformConfig, type MascotSkin } from '@asteby/metacore-app-providers'
 
 /**
  * Ports of the agent workspace.
@@ -10,7 +10,7 @@ import { usePlatformConfig } from '@asteby/metacore-app-providers'
  * floating widget, team chat, calls, voice, charts). Everything that belongs to
  * the host app — HTTP, realtime socket, current user, navigation, storage
  * namespace and optional product capabilities — is injected here, so the same
- * code runs in ops, gobiernos-ops and any other Metacore app without forks.
+ * code runs in ops and any other Metacore app without forks.
  */
 
 /** Minimal axios-shaped client: the host passes its authenticated instance. */
@@ -83,10 +83,10 @@ export interface AgentWorkspaceHostValue {
   realtime: WorkspaceRealtime
   user: WorkspaceUser | null
   navGroups: WorkspaceNavGroup[] | undefined
-  /** Prefix for localStorage keys (`ops`, `gobiernos`...). */
+  /** Prefix for localStorage keys (`ops`, `<producto>`). */
   storageNamespace: string
   /** Overrides the platform mascot name/skin (e.g. unified agent name). */
-  branding?: { name?: string; skin?: string }
+  branding?: { name?: string; skin?: string | MascotSkin }
   capabilities: WorkspaceCapabilities
 }
 
