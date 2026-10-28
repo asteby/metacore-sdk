@@ -98,9 +98,11 @@ describe('<IdentityDocumentReader /> reading and review', () => {
     expect(val('tax_id')).toBe(RFC_FISICA)
     expect(val('legal_name')).toBe('JUAN CARLOS PEREZ PEREZ')
     expect(val('postal_code')).toBe('06600')
-    // The fields that came from the document say so, with text.
-    expect(container.querySelectorAll('[data-sf-from-document]').length).toBeGreaterThanOrEqual(3)
-    expect(container.textContent).toContain('De tu constancia de situación fiscal')
+    // ONE notice says where the data came from; no per-field marks or repeated helper texts.
+    expect(container.textContent).toContain('Datos leídos de tu constancia de situación fiscal. Revisa y corrige si hace falta.')
+    expect(container.querySelectorAll('[data-sf-from-document]').length).toBe(0)
+    expect(container.textContent).not.toContain('De tu constancia')
+    expect(container.querySelectorAll('[data-sf-field-hint]').length).toBe(1) // only the ambiguous regime note
     const radios = [...container.querySelectorAll<HTMLInputElement>('input[type=radio][name="invoice.tax_regime"]')]
     expect(radios.map((r) => r.value).sort()).toEqual(['605', '612'])
     expect(radios.every((r) => !r.checked)).toBe(true)
@@ -129,10 +131,12 @@ describe('<IdentityDocumentReader /> reading and review', () => {
     const { container, upload, onConfirm } = setup()
     upload(pdf())
     await screen.findByRole('heading', { name: 'Revisa tus datos' })
-    const sel = container.querySelector<HTMLSelectElement>('select[name="invoice.tax_regime"]')!
-    expect(sel.value).toBe('601')
+    // Everything is valid: a compact card (four facts), not the whole form; the regime travels as a hidden field.
+    expect(container.querySelector('[data-sf-reader-summary]')).toBeTruthy()
+    expect(container.querySelector('select')).toBeNull()
+    expect(container.querySelector<HTMLInputElement>('[name="invoice.tax_regime"]')!.value).toBe('601')
     expect(container.querySelector<HTMLInputElement>('[name="invoice.tax_id"]')!.value).toBe(RFC_MORAL)
-    fireEvent.change(container.querySelector('select[name="invoice.use"]')!, { target: { value: 'G03' } })
+    expect(container.querySelector('[data-sf-fact="tax_id"]')!.textContent).toBe(RFC_MORAL)
     fireEvent.click(screen.getByRole('button', { name: 'Usar estos datos' }))
     expect(onConfirm).toHaveBeenCalledTimes(1)
     const r = onConfirm.mock.calls[0]![0]
@@ -207,7 +211,8 @@ describe('<IdentityDocumentReader /> reading and review', () => {
     const { container, upload, onConfirm } = setup()
     upload(pdf())
     await screen.findByRole('heading', { name: 'Revisa tus datos' })
-    // The region suggests a use for the regime; clearing it leaves the field the buyer must fill.
+    // The region suggests a use for the regime; "Corregir" opens the fields and clearing it leaves the one the buyer must fill.
+    fireEvent.click(screen.getByRole('button', { name: 'Corregir' }))
     fireEvent.change(container.querySelector('select[name="invoice.use"]')!, { target: { value: '' } })
     fireEvent.click(screen.getByRole('button', { name: 'Usar estos datos' }))
     expect(onConfirm).not.toHaveBeenCalled()
@@ -226,6 +231,7 @@ describe('<IdentityDocumentReader /> reading and review', () => {
     const { container, upload, onConfirm } = setup()
     upload(pdf())
     await screen.findByRole('heading', { name: 'Revisa tus datos' })
+    fireEvent.click(screen.getByRole('button', { name: 'Corregir' }))
     const tax = container.querySelector<HTMLInputElement>('[name="invoice.tax_id"]')!
     fireEvent.change(tax, { target: { value: 'abc 123' } })
     expect(tax.value).toBe('ABC123') // uppercase, no spaces
@@ -248,7 +254,6 @@ describe('<IdentityDocumentReader /> reading and review', () => {
     b.upload(pdf())
     await screen.findByRole('heading', { name: 'Revisa tus datos' })
     fireEvent.click(screen.getByLabelText(/Guardar en mi cuenta/))
-    fireEvent.change(b.container.querySelector('select[name="invoice.use"]')!, { target: { value: 'G03' } })
     fireEvent.click(screen.getByRole('button', { name: 'Usar estos datos' }))
     expect(b.onConfirm.mock.calls[0]![0].save).toBe(true)
   })

@@ -132,18 +132,6 @@ const useNativeForm = (): CartDrawerLineForm => ({ Form: 'form' })
 
 const defaultIsDefaultVariant = (t: string) => /^default title$/i.test(t.trim())
 
-function useBodyScrollLock(locked: boolean) {
-  useEffect(() => {
-    if (!locked || typeof document === 'undefined') return
-    const el = document.documentElement
-    const prev = el.style.overflow
-    el.style.overflow = 'hidden'
-    return () => {
-      el.style.overflow = prev
-    }
-  }, [locked])
-}
-
 /**
  * Cajón lateral del carrito ("Tu carrito (N)"). Sin textos ni marca: todo llega por props.
  * Se monta una vez (en la raíz) y se abre con `openCartDrawer()` / `useCartDrawer()`.
@@ -162,7 +150,6 @@ export function CartDrawer(props: CartDrawerProps) {
   const titleId = useId()
   const upsellId = useId()
   const { ref, onBackdropClick } = useModalDialog({ open, onClose: () => closeCartDrawer() })
-  useBodyScrollLock(open)
   useEffect(() => {
     onOpenChange?.(open)
   }, [open]) // eslint-disable-line react-hooks/exhaustive-deps

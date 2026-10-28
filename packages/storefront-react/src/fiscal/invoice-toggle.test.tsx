@@ -62,7 +62,6 @@ describe('<InvoiceToggle />', () => {
     fireEvent.click(screen.getByRole('checkbox'))
     fireEvent.change(container.querySelector('input[type=file]')!, { target: { files: [new File(['%PDF-'], 'c.pdf', { type: 'application/pdf' })] } })
     await screen.findByRole('heading', { name: 'Revisa tus datos' })
-    fireEvent.change(container.querySelector('select[name="invoice.use"]')!, { target: { value: 'G03' } })
     fireEvent.click(screen.getByRole('button', { name: 'Usar estos datos' }))
     await waitFor(() => expect(last().ready).toBe(true))
     expect(last()).toMatchObject({

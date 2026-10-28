@@ -14,7 +14,7 @@ import { IdentityDocumentReader, type FiscalReaderResult, type IdentityDocumentR
 import { fill, fiscalMessages } from './messages.js'
 
 export type ScanTaxDocumentClassNames = IdentityDocumentReaderProps['classNames'] &
-  Partial<Record<'actions' | 'trigger' | 'manual' | 'sheet' | 'sheetPanel' | 'sheetHeader' | 'sheetTitle' | 'sheetClose', string>>
+  Partial<Record<'actions' | 'trigger' | 'manual' | 'sheet' | 'sheetPanel' | 'sheetHeader' | 'sheetBody' | 'sheetTitle' | 'sheetClose', string>>
 
 export type ScanTaxDocumentProps = Omit<IdentityDocumentReaderProps, 'onConfirm' | 'onManual' | 'classNames' | 'confirmLabel'> & {
   /** The buyer confirmed the reviewed data (the sheet is already closed). */
@@ -57,6 +57,7 @@ export function ScanTaxDocument(props: ScanTaxDocumentProps) {
                 <span aria-hidden="true">✕</span>
               </button>
             </div>
+            <div className={cx.sheetBody} data-sf-scan-body>
             <IdentityDocumentReader
               {...reader}
               locale={locale}
@@ -72,6 +73,7 @@ export function ScanTaxDocument(props: ScanTaxDocumentProps) {
                 onManual()
               }}
             />
+            </div>
           </div>
         </dialog>
       ) : null}

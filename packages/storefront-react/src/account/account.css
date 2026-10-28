@@ -475,3 +475,39 @@
   min-height: 44px;
   max-width: 100%;
 }
+
+/*
+ * Invoice preview dialog (`<InvoicePreviewDialog>`): header and footer are fixed, only the body scrolls. Structure only;
+ * colors come from variables you map to your theme tokens (light and dark):
+ *   --sf-dialog-bg / --sf-dialog-fg / --sf-dialog-border / --sf-dialog-scrim
+ */
+[data-sf-invoice-preview-dialog][open] {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  max-height: min(100dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 1rem));
+  overflow: hidden;
+  padding: 0;
+  background: var(--sf-dialog-bg, Canvas);
+  color: var(--sf-dialog-fg, CanvasText);
+  border: 1px solid var(--sf-dialog-border, color-mix(in srgb, currentColor 22%, transparent));
+}
+[data-sf-invoice-preview-dialog]::backdrop {
+  background: var(--sf-dialog-scrim, color-mix(in srgb, #000 55%, transparent));
+}
+[data-sf-invoice-preview-header],
+[data-sf-invoice-preview-footer] {
+  flex: none;
+}
+[data-sf-invoice-preview-footer] {
+  padding-bottom: calc(0.875rem + env(safe-area-inset-bottom, 0px));
+}
+[data-sf-invoice-preview-body] {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+[data-sf-invoice-preview-body] iframe {
+  max-width: 100%;
+}

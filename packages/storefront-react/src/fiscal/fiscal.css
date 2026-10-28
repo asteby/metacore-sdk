@@ -83,6 +83,32 @@
   color: var(--_muted);
   font-size: 0.875rem;
 }
+/* Compact confirmation card of the review step: the four facts, not the whole form. */
+[data-sf-reader-summary] {
+  display: grid;
+  gap: 0.75rem;
+}
+[data-sf-reader-facts] {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--_border);
+  border-radius: 0.75rem;
+}
+[data-sf-reader-facts] > div {
+  display: grid;
+  gap: 0.125rem;
+}
+[data-sf-reader-facts] dt {
+  font-size: 0.75rem;
+  color: var(--_muted);
+}
+[data-sf-reader-facts] dd {
+  margin: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
 [data-sf-reader-zone] {
   position: relative;
   display: grid;
@@ -357,50 +383,75 @@
   flex-wrap: wrap;
   gap: 0.75rem;
 }
+/*
+ * The sheet is a flex column: header and footer never scroll, only `[data-sf-scan-body]` does. Colors come from variables
+ * (set them from your theme tokens, light and dark):
+ *   --sf-fiscal-sheet-bg / --sf-fiscal-sheet-fg   surface and text   (default Canvas / CanvasText)
+ *   --sf-fiscal-sheet-border                       edge and dividers  (default --sf-fiscal-border)
+ *   --sf-fiscal-scrim                              backdrop           (default black at 45%)
+ */
 [data-sf-scan-sheet] {
+  --_sheet-bg: var(--sf-fiscal-sheet-bg, Canvas);
+  --_sheet-line: var(--sf-fiscal-sheet-border, var(--sf-fiscal-border, color-mix(in srgb, currentColor 22%, transparent)));
   position: fixed;
   inset: auto 0 0 0;
   margin: 0;
   width: 100%;
   max-width: none;
-  max-height: 92dvh;
+  /* Dynamic viewport: follows the mobile browser bars and keyboard; the safe-area keeps the title off the notch. */
+  max-height: min(92dvh, calc(100dvh - env(safe-area-inset-top, 0px) - 0.5rem));
+  box-sizing: border-box;
   padding: 0;
-  border: 0;
+  border: 1px solid var(--_sheet-line);
+  border-bottom: 0;
   border-radius: 1.25rem 1.25rem 0 0;
-  overflow: auto;
-  background: var(--sf-fiscal-sheet-bg, Canvas);
+  overflow: hidden;
+  background: var(--_sheet-bg);
   color: var(--sf-fiscal-sheet-fg, CanvasText);
-  box-shadow: 0 -8px 32px color-mix(in srgb, #000 22%, transparent);
+  box-shadow: 0 -8px 32px color-mix(in srgb, var(--sf-fiscal-sheet-fg, CanvasText) 22%, transparent);
   animation: sf-scan-rise 180ms ease-out;
 }
+[data-sf-scan-sheet][open] {
+  display: flex;
+  flex-direction: column;
+}
 [data-sf-scan-sheet]::backdrop {
-  background: color-mix(in srgb, #000 45%, transparent);
+  background: var(--sf-fiscal-scrim, color-mix(in srgb, #000 45%, transparent));
 }
 @media (min-width: 40rem) {
   [data-sf-scan-sheet] {
     inset: 50% auto auto 50%;
     transform: translate(-50%, -50%);
     width: min(32rem, calc(100vw - 2rem));
+    max-height: min(90dvh, calc(100dvh - 2rem));
+    border: 1px solid var(--_sheet-line);
     border-radius: 1.25rem;
     animation: none;
   }
 }
 [data-sf-scan-panel] {
-  display: grid;
-  gap: 1rem;
-  padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 [data-sf-scan-header] {
+  flex: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
+  padding: 0.75rem 1rem 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--_sheet-line);
 }
 [data-sf-scan-title] {
   margin: 0;
   font-size: 1.125rem;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
 }
 [data-sf-scan-close] {
+  flex: none;
   min-width: 44px;
   min-height: 44px;
   border: 0;
@@ -408,6 +459,31 @@
   color: inherit;
   font: inherit;
   cursor: pointer;
+}
+[data-sf-scan-body] {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 1rem 1.25rem 0;
+}
+/* Footers pinned to the bottom of the scrolling body: the links under the drop zone and the confirm/retry actions. */
+[data-sf-scan-body] :is([data-sf-reader-links], [data-sf-reader-actions]:last-child) {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin-inline: -1.25rem;
+  padding: 0.75rem 1.25rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+  background: var(--_sheet-bg);
+  border-top: 1px solid var(--_sheet-line);
+}
+[data-sf-scan-body] [data-sf-document-reader] {
+  display: grid;
+  gap: 0.75rem;
+}
+[data-sf-scan-body] [data-sf-reader][data-state='reading'] {
+  padding-bottom: 1rem;
 }
 [data-sf-reader-viewfinder] {
   position: relative;

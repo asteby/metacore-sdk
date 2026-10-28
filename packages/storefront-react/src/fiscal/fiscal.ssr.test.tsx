@@ -64,7 +64,7 @@ describe('server rendering (what a browser without JavaScript gets)', () => {
     )
     expect(html).toContain('Revisa tus datos')
     expect(html).toContain('value="ABC010203AB1"')
-    expect(html).toContain('De tu constancia de situación fiscal')
+    expect(html).toContain('Datos leídos de tu constancia de situación fiscal')
     expect(html).toContain('name="invoice.document"')
   })
 

@@ -38,6 +38,11 @@ export type FiscalIdentityFieldsProps = {
   personTypeOf?: (taxId: string) => string | null
   /** The invoice use in `values` came from the region's suggestion (a document was read): it gets the "Suggested" mark. */
   suggestedUse?: string | null
+  /**
+   * No per-field "From your document" marks and no long helper texts (the surrounding UI already says where the data
+   * came from, and the help exists in the main form). Only the ambiguous-regime note is kept.
+   */
+  quiet?: boolean
   disabled?: boolean
   locale?: string
   messages?: DeepPartial<FiscalMessages>
@@ -84,6 +89,7 @@ export function FiscalIdentityFields({
   messages,
   classNames: cx = {},
   hideLegend,
+  quiet,
 }: FiscalIdentityFieldsProps) {
   const locale = useResolvedLocale(localeProp)
   const all = fiscalMessages(locale, messages)
@@ -162,6 +168,7 @@ export function FiscalIdentityFields({
   }
   const doc = documentName ?? ''
   const mark = (f: FiscalFieldName): ReactNode =>
+    !quiet &&
     fromDocument.includes(f) && (v[f] || (f === 'tax_regime' && candidates)) ? (
       <span className={cx.mark} data-sf-from-document>
         <span aria-hidden="true">✓ </span>
@@ -169,6 +176,7 @@ export function FiscalIdentityFields({
       </span>
     ) : null
   const hint = (f: FiscalFieldName, text: string | undefined): ReactNode => {
+    if (quiet) return undefined
     const mk = mark(f)
     if (!mk) return text
     return text ? (
@@ -243,7 +251,8 @@ export function FiscalIdentityFields({
             {m.regime}
           </legend>
           <p className={cx.hint} data-sf-field-hint>
-            {mark('tax_regime')} · {m.regimeFromDocument}
+            {quiet ? null : <>{mark('tax_regime')} · </>}
+            {m.regimeFromDocument}
           </p>
           {regimes.map((r, i) => (
             <label key={r.code} className={cx.radio} data-sf-fiscal-radio>
@@ -299,10 +308,10 @@ export function FiscalIdentityFields({
             <>
               <span className={cx.mark} data-sf-suggested>
                 {m.suggested}
-              </span>{' '}
-              · {m.useHint}
+              </span>
+              {quiet ? null : <> · {m.useHint}</>}
             </>
-          ) : (
+          ) : quiet ? undefined : (
             m.useHint
           )
         }

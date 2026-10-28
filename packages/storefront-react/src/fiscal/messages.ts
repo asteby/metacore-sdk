@@ -49,6 +49,7 @@ export type FiscalMessages = {
     done: string
     reviewTitle: string
     reviewHint: string
+    reviewEdit: string
     confirm: string
     changeFile: string
     saveToAccount: string
@@ -195,7 +196,8 @@ const ES: FiscalMessages = {
     cancel: 'Cancelar',
     done: 'Listo. Revisa tus datos.',
     reviewTitle: 'Revisa tus datos',
-    reviewHint: 'Puedes corregir cualquier campo antes de continuar.',
+    reviewHint: 'Datos leídos de tu {document}. Revisa y corrige si hace falta.',
+    reviewEdit: 'Corregir',
     confirm: 'Usar estos datos',
     changeFile: 'Subir otro archivo',
     saveToAccount: 'Guardar en mi cuenta para la próxima',
@@ -355,7 +357,8 @@ const EN: FiscalMessages = {
     cancel: 'Cancel',
     done: 'Done. Review your details.',
     reviewTitle: 'Review your details',
-    reviewHint: 'You can fix any field before continuing.',
+    reviewHint: 'Details read from your {document}. Check them and fix anything that is wrong.',
+    reviewEdit: 'Edit',
     confirm: 'Use these details',
     changeFile: 'Upload another file',
     saveToAccount: 'Save to my account for next time',

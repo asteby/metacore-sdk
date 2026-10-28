@@ -19,7 +19,7 @@ import type { FiscalDocumentEvidence, IdentityDocumentSpec } from '@asteby/store
 import { ErrorSummary, type ErrorSummaryItem, type FieldErrors } from '../checkout/fields.js'
 import { useResolvedLocale } from '../locale.js'
 import { summarizeExtraction } from './extraction.js'
-import { personTypeResolver, suggestInvoiceUse, validateFiscalValues, type FiscalRegion } from './format.js'
+import { entryLabel, personTypeResolver, suggestInvoiceUse, validateFiscalValues, type FiscalRegion } from './format.js'
 import { FiscalIdentityFields, type FiscalIdentityFieldsClassNames } from './identity-fields.js'
 import { fill, fiscalMessages, type DeepPartial, type FiscalMessages } from './messages.js'
 import { cameraSupported, useCameraQr } from './use-camera-qr.js'
@@ -109,6 +109,7 @@ export function IdentityDocumentReader(props: IdentityDocumentReaderProps) {
   const [live, setLive] = useState('')
   const [values, setValues] = useState<FiscalFieldValues>({ tax_id: '', legal_name: '', postal_code: '', tax_regime: '', use: '', ...initialValues, ...(fromServer?.values ?? {}) })
   const [save, setSave] = useState(false)
+  const [editing, setEditing] = useState(false)
   const [summary, setSummary] = useState<ErrorSummaryItem[] | null>(null)
   const [summaryKey, setSummaryKey] = useState(0)
   const [hydrated, setHydrated] = useState(false)
@@ -117,6 +118,12 @@ export function IdentityDocumentReader(props: IdentityDocumentReaderProps) {
   const errorRef = useRef<HTMLDivElement>(null)
   const reviewRef = useRef<HTMLHeadingElement>(null)
 
+  /** The compact card is enough only when the document gave everything valid; decided once per reading, never while typing. */
+  const needsFields = (vals: FiscalFieldValues, x: FiscalExtractionSummary) => {
+    const multi = x.regime_candidates.length > 1
+    const problems = validateFiscalValues(region, vals, personTypeResolver(region.fiscal_id, personTypeOf))
+    return Object.keys(problems).some((f) => !(multi && f === 'tax_regime'))
+  }
   useEffect(() => setHydrated(true), [])
   useEffect(() => () => abort.current?.abort(), [])
   // A new answer from the server (the buyer posted a file without JS and the page came back).
@@ -129,6 +136,7 @@ export function IdentityDocumentReader(props: IdentityDocumentReaderProps) {
         next.use = suggestion
         setSuggestedUse(suggestion)
       }
+      setEditing(needsFields(next, fromServer))
       return next
     })
     setPhase({ kind: 'review', extraction: fromServer, revision: 1 })
@@ -176,9 +184,11 @@ export function IdentityDocumentReader(props: IdentityDocumentReaderProps) {
       setSuggestedUse(suggestion && base.use === suggestion ? suggestion : null)
       setValues(base)
       setSummary(null)
+      setEditing(needsFields(base, sum))
       setPhase({ kind: 'review', extraction: sum, revision: 1 })
       setLive(m.done)
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [region.fiscal_id, m.done],
   )
 
@@ -504,12 +514,30 @@ export function IdentityDocumentReader(props: IdentityDocumentReaderProps) {
     </div>
   )
 
+  const candidates = phase.kind === 'review' && phase.extraction && phase.extraction.regime_candidates.length > 1 ? phase.extraction.regime_candidates : null
+  // Without JavaScript the card cannot switch to editing, so the whole form stays (it is what the server action posts).
+  const showFields = editing || phase.kind !== 'review' || !phase.extraction || !hydrated
+  const pickRegime = (code: string) =>
+    setValues((cur) => {
+      const next = { ...cur, tax_regime: code }
+      const suggestion = suggestInvoiceUse(region.fiscal_id, code)
+      if (!next.use && suggestion) {
+        next.use = suggestion
+        setSuggestedUse(suggestion)
+      }
+      return next
+    })
+  const regimeEntries = (() => {
+    const all_ = region.fiscal_id?.regimes ?? []
+    return candidates ? all_.filter((r) => candidates.includes(r.code)) : all_.filter((r) => r.code === values.tax_regime)
+  })()
+
   const review = phase.kind === 'review' && (
-    <div className={cx.root} data-sf-reader data-state="review">
+    <div className={cx.root} data-sf-reader data-state="review" data-sf-compact={showFields ? undefined : ''}>
       <h3 ref={reviewRef} tabIndex={-1} data-sf-reader-title>
         {m.reviewTitle}
       </h3>
-      <p data-sf-reader-help>{m.reviewHint}</p>
+      <p data-sf-reader-help>{fill(m.reviewHint, { document: documentName })}</p>
       <ErrorSummary
         items={summary}
         focusKey={summaryKey}
@@ -517,23 +545,78 @@ export function IdentityDocumentReader(props: IdentityDocumentReaderProps) {
         title={summary ? (summary.length === 1 ? m.summaryTitleOne : fill(m.summaryTitleMany, { n: summary.length })) : undefined}
       />
       {phase.extraction ? <Warnings x={phase.extraction} m={m} cx={cx} /> : null}
-      <FiscalIdentityFields
-        region={region}
-        values={values}
-        onChange={setValues}
-        errors={errorsByName}
-        idPrefix={`sf-reader-${reactId}`}
-        namePrefix={namePrefix}
-        fromDocument={phase.extraction?.from_document ?? []}
-        documentName={documentName}
-        regimeCandidates={phase.extraction && phase.extraction.regime_candidates.length > 1 ? phase.extraction.regime_candidates : undefined}
-        suggestedUse={suggestedUse}
-        {...(personTypeOf ? { personTypeOf } : {})}
-        locale={locale}
-        {...(messages ? { messages } : {})}
-        classNames={cx}
-        hideLegend
-      />
+      {showFields ? (
+        <FiscalIdentityFields
+          region={region}
+          values={values}
+          onChange={setValues}
+          errors={errorsByName}
+          idPrefix={`sf-reader-${reactId}`}
+          namePrefix={namePrefix}
+          fromDocument={phase.extraction?.from_document ?? []}
+          documentName={documentName}
+          regimeCandidates={candidates ?? undefined}
+          suggestedUse={suggestedUse}
+          {...(personTypeOf ? { personTypeOf } : {})}
+          locale={locale}
+          {...(messages ? { messages } : {})}
+          classNames={cx}
+          hideLegend
+          quiet
+        />
+      ) : (
+        <div data-sf-reader-summary>
+          {(['tax_id', 'legal_name', 'postal_code', 'use'] as const).map((f) => (
+            <input key={f} type="hidden" name={`${namePrefix}.${f}`} value={values[f]} />
+          ))}
+          {candidates ? null : <input type="hidden" name={`${namePrefix}.tax_regime`} value={values.tax_regime} />}
+          <dl data-sf-reader-facts>
+            <div>
+              <dt>{region.fiscal_id?.label || all.fields.taxId}</dt>
+              <dd data-sf-fact="tax_id">{values.tax_id}</dd>
+            </div>
+            <div>
+              <dt>{all.fields.legalName}</dt>
+              <dd data-sf-fact="legal_name">{values.legal_name}</dd>
+            </div>
+            <div>
+              <dt>{all.fields.postalCode}</dt>
+              <dd data-sf-fact="postal_code">{values.postal_code}</dd>
+            </div>
+            {!candidates ? (
+              <div>
+                <dt>{all.fields.regime}</dt>
+                <dd data-sf-fact="tax_regime">
+                  {regimeEntries[0] ? `${entryLabel(regimeEntries[0], locale)} (${regimeEntries[0].code})` : values.tax_regime}
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+          {candidates ? (
+            <fieldset className={cx.radios} data-sf-fiscal-regimes style={{ border: 0, padding: 0, margin: 0, minInlineSize: 0 }}>
+              <legend className={cx.label}>{all.fields.regime}</legend>
+              <p className={cx.hint} data-sf-field-hint>
+                {all.fields.regimeFromDocument}
+              </p>
+              {regimeEntries.map((r, i) => (
+                <label key={r.code} className={cx.radio} data-sf-fiscal-radio>
+                  <input
+                    type="radio"
+                    id={i === 0 ? `sf-reader-${reactId}-tax_regime` : undefined}
+                    name={`${namePrefix}.tax_regime`}
+                    value={r.code}
+                    checked={values.tax_regime === r.code}
+                    onChange={() => pickRegime(r.code)}
+                  />
+                  <span>
+                    {entryLabel(r, locale)} <span data-sf-fiscal-code>({r.code})</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+          ) : null}
+        </div>
+      )}
       {phase.extraction?.evidence ? <input type="hidden" name={`${namePrefix}.document`} value={JSON.stringify(phase.extraction.evidence)} /> : null}
       {canSave ? (
         <label data-sf-reader-save>
@@ -548,9 +631,15 @@ export function IdentityDocumentReader(props: IdentityDocumentReaderProps) {
         <button type="button" className={cx.primary} onClick={confirm} data-sf-reader-confirm>
           {confirmLabel ?? m.confirm}
         </button>
-        <button type="button" className={cx.secondary} onClick={() => setPhase({ kind: 'idle' })} data-sf-reader-retry>
-          {m.changeFile}
-        </button>
+        {showFields ? (
+          <button type="button" className={cx.secondary} onClick={() => setPhase({ kind: 'idle' })} data-sf-reader-retry>
+            {m.changeFile}
+          </button>
+        ) : (
+          <button type="button" className={cx.secondary} onClick={() => setEditing(true)} data-sf-reader-edit>
+            {m.reviewEdit}
+          </button>
+        )}
       </div>
     </div>
   )

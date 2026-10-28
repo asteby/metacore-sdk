@@ -232,6 +232,20 @@ describe('<ScanTaxDocument />', () => {
     expect(container.querySelector('dialog')).toBeNull()
   })
 
+  it('keeps the header outside the scrolling body and locks the page scroll while open', () => {
+    const { container } = render(<ScanTaxDocument region={MOCK_REGION_MX} onConfirm={vi.fn()} onManual={vi.fn()} />)
+    fireEvent.click(screen.getByRole('button', { name: /Escanear/ }))
+    const sheet = container.querySelector('dialog')!
+    const header = sheet.querySelector('[data-sf-scan-header]')!
+    const body = sheet.querySelector('[data-sf-scan-body]')!
+    expect(body.contains(header)).toBe(false)
+    expect(header.querySelector('[data-sf-scan-close]')).toBeTruthy()
+    expect(body.querySelector('[data-sf-reader-links]')).toBeTruthy()
+    expect(document.documentElement.style.overflow).toBe('hidden')
+    fireEvent.click(sheet.querySelector('[data-sf-scan-close]')!)
+    expect(document.documentElement.style.overflow).toBe('')
+  })
+
   it('renders nothing when the region publishes no document (the caller shows the plain form)', () => {
     const none: Region = { ...MOCK_REGION_MX, fiscal_id: { ...MOCK_REGION_MX.fiscal_id!, documents: [] } }
     const { container } = render(<ScanTaxDocument region={none} onConfirm={vi.fn()} onManual={vi.fn()} />)

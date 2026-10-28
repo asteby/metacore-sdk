@@ -10,8 +10,36 @@ type UseModalDialogOptions = {
   initialFocus?: RefObject<HTMLElement | null>
 }
 
+let scrollLocks = 0
+let savedOverflow = ''
+let savedGutter = ''
+
 /**
- * Native `<dialog>` wiring: `showModal()` (focus trap and inert background come from the browser),
+ * Blocks the page scroll behind an open modal (reference-counted so stacked dialogs release it only when the last
+ * one closes). `overflow: hidden` on the root keeps the scrollbar gutter so the page does not jump sideways.
+ */
+export function lockBodyScroll(): () => void {
+  if (typeof document === 'undefined') return () => {}
+  const root = document.documentElement
+  if (scrollLocks++ === 0) {
+    savedOverflow = root.style.overflow
+    savedGutter = root.style.scrollbarGutter
+    root.style.overflow = 'hidden'
+    root.style.scrollbarGutter = 'stable'
+  }
+  let released = false
+  return () => {
+    if (released) return
+    released = true
+    if (--scrollLocks === 0) {
+      root.style.overflow = savedOverflow
+      root.style.scrollbarGutter = savedGutter
+    }
+  }
+}
+
+/**
+ * Native `<dialog>` wiring: `showModal()` (focus trap and inert background come from the browser), page scroll locked while open,
  * Esc and backdrop clicks routed to `onClose`, and focus restored to the opener on close.
  * Falls back to the `open` attribute where `showModal` does not exist (old browsers, some test DOMs)
  * with an Esc key handler.
@@ -36,6 +64,7 @@ export function useModalDialog({ open, onClose, initialFocus }: UseModalDialogOp
         }
       } else el.setAttribute('open', '')
     }
+    const unlock = lockBodyScroll()
     const target = initialFocus?.current ?? el.querySelector<HTMLElement>('[data-sf-autofocus]') ?? el
     if (!target.hasAttribute('tabindex') && target === el) el.setAttribute('tabindex', '-1')
     target.focus({ preventScroll: true })
@@ -53,6 +82,7 @@ export function useModalDialog({ open, onClose, initialFocus }: UseModalDialogOp
     el.addEventListener('cancel', onCancel)
     if (!hasModal) el.addEventListener('keydown', onKey)
     return () => {
+      unlock()
       el.removeEventListener('cancel', onCancel)
       el.removeEventListener('keydown', onKey)
       if (el.open) {
