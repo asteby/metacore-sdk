@@ -31,6 +31,7 @@
   "peerDependencies": {
     "@asteby/metacore-app-providers": "workspace:^",
     "@asteby/metacore-runtime-react": "workspace:^",
+    "@asteby/metacore-sdk": ">=3.18.0",
     "@asteby/metacore-ui": "workspace:^",
     "@tanstack/react-query": ">=5",
     "@tanstack/react-router": ">=1",
@@ -55,6 +56,7 @@
   "devDependencies": {
     "@asteby/metacore-app-providers": "workspace:*",
     "@asteby/metacore-runtime-react": "workspace:*",
+    "@asteby/metacore-sdk": "workspace:*",
     "@asteby/metacore-ui": "workspace:*",
     "@tanstack/react-query": "^5.95.0",
     "@tanstack/react-router": "^1.168.0",

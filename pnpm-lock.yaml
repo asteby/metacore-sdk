@@ -267,6 +267,9 @@ importers:
       '@asteby/metacore-runtime-react':
         specifier: workspace:*
         version: link:../runtime-react
+      '@asteby/metacore-sdk':
+        specifier: workspace:*
+        version: link:../sdk
       '@asteby/metacore-starter-core':
         specifier: workspace:*
         version: link:../starter-core

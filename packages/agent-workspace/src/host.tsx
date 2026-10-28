@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, type ComponentType, type ReactNode 
 import { Box, type LucideIcon } from 'lucide-react'
 import { resolveIconName } from '@asteby/metacore-ui'
 import { usePlatformConfig, type MascotSkin } from '@asteby/metacore-app-providers'
+import { useBrand } from '@asteby/metacore-app-providers/brand'
 
 /**
  * Ports of the agent workspace.
@@ -94,16 +95,29 @@ const HostContext = createContext<AgentWorkspaceHostValue | null>(null)
 
 let current: AgentWorkspaceHostValue | null = null
 
-export interface AgentWorkspaceProviderProps extends Omit<AgentWorkspaceHostValue, 'capabilities'> {
+export interface AgentWorkspaceProviderProps
+  extends Omit<AgentWorkspaceHostValue, 'capabilities' | 'storageNamespace'> {
+  /**
+   * Prefix for localStorage keys. Optional: defaults to the product brand's
+   * `storage_namespace` (`/api/brand`, see `ProductBrandProvider`), then `ops`.
+   */
+  storageNamespace?: string
   capabilities?: WorkspaceCapabilities
   children: ReactNode
 }
 
-export function AgentWorkspaceProvider({ children, capabilities, ...rest }: AgentWorkspaceProviderProps) {
+export function AgentWorkspaceProvider({
+  children,
+  capabilities,
+  storageNamespace,
+  ...rest
+}: AgentWorkspaceProviderProps) {
+  const brandNamespace = useBrand().storageNamespace
+  const namespace = storageNamespace ?? brandNamespace ?? 'ops'
   const value = useMemo<AgentWorkspaceHostValue>(
-    () => ({ ...rest, capabilities: capabilities ?? {} }),
+    () => ({ ...rest, storageNamespace: namespace, capabilities: capabilities ?? {} }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rest.http, rest.realtime, rest.user, rest.navGroups, rest.storageNamespace, rest.branding, capabilities],
+    [rest.http, rest.realtime, rest.user, rest.navGroups, namespace, rest.branding, capabilities],
   )
   // Non-React modules (helpers, stores) read the same host synchronously.
   current = value
@@ -150,11 +164,16 @@ export function useNavigation(): { data: WorkspaceNavGroup[] | undefined } {
 /** Platform config with the host's unified agent branding applied on top. */
 export function useWorkspacePlatformConfig() {
   const cfg = usePlatformConfig()
+  const brand = useBrand()
   const { branding } = useWorkspaceHost()
+  // Precedence: host override > org > product brand (`/api/brand` assistant).
+  // Without a product brand this is exactly `branding ?? cfg`.
+  const skin: string | MascotSkin =
+    branding?.skin ?? cfg.mascot ?? (cfg.mascot_skin || brand.assistant.mascot || cfg.mascot_skin)
   return {
     ...cfg,
-    mascot_name: branding?.name ?? cfg.mascot_name,
-    mascot_skin: branding?.skin ?? cfg.mascot_skin,
+    mascot_name: branding?.name ?? (cfg.mascot_name || brand.assistant.name || cfg.mascot_name),
+    mascot_skin: skin,
   }
 }
 

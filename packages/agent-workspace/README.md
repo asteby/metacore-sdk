@@ -13,7 +13,7 @@ capabilities on or off.
   realtime={useWebSocketContext()}   // single host socket
   user={user}
   navGroups={navGroups}
-  storageNamespace="mi-app"           // localStorage prefix
+  storageNamespace="mi-app"           // localStorage prefix (optional, see below)
   branding={{ name: 'Asistente', skin: 'hex-navy' }}
   capabilities={{ MapChart, ProviderReconnectDialog }} // omit what the product lacks
 >
@@ -22,6 +22,12 @@ capabilities on or off.
   </CallProvider>
 </AgentWorkspaceProvider>
 ```
+
+`storageNamespace` is optional: when omitted it comes from the product brand
+(`storage_namespace` of `/api/brand`, via `ProductBrandProvider` from
+`@asteby/metacore-app-providers/brand`) and finally falls back to `ops`. Set it
+explicitly when changing a product's brand key must not orphan the users' local
+drafts. The assistant name and mascot also default to the product brand.
 
 Capabilities (`usage`, `ProviderReconnectDialog`, `MapChart`) are optional; an
 absent one removes its UI cleanly. `ops` and any other app consume the same
