@@ -39,5 +39,7 @@ export type AccountSettingsActionData = {
   saved?: boolean
   /** A sign-in code was sent to confirm identity (`reauth-code-request`). */
   codeSent?: boolean
+  /** For `reauth-code-request`: the form that asked for the code (`export` | `delete`), so only it says «code sent». */
+  for?: 'export' | 'delete'
   error?: { code: SettingsErrorCode; field?: string; retryAfter?: number }
 }
