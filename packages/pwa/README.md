@@ -37,6 +37,19 @@ export default defineConfig({
 })
 ```
 
+### Manifest from the product brand
+
+Instead of repeating name, colours and icons, pass the brand your host serves at
+`/api/brand` (an object, or a path to a JSON file with that shape):
+
+```ts
+metacorePWA({ brand: './brand/brand.json' }) // name, short_name, description, theme/background colour, icons (any / maskable / monochrome)
+```
+
+Explicit `manifest` fields still win. Without `brand` or `manifest.name` the
+legacy defaults ("Metacore App", lime theme) are kept for now and a one-time
+build warning announces that they will become neutral.
+
 ## 2. Copy the service worker template
 
 `metacorePWA()` uses `strategies: 'injectManifest'`, which requires a source SW file. Copy the template:
