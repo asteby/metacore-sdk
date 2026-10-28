@@ -15,6 +15,7 @@ export {
   PlatformConfigProvider,
   usePlatformConfig,
   applyBranding,
+  type ProductTheme,
   applyCachedBranding,
   persistBranding,
   readWindowBranding,

@@ -118,3 +118,30 @@ describe('applyCachedBranding: __BRAND__ over stored', () => {
     expect(readWindowBranding()).toBeUndefined()
   })
 })
+
+describe('applyBranding with a product theme', () => {
+  it('exposes the gradient and foreground; absent theme changes nothing', async () => {
+    const { applyBranding } = await import('../src/platform-config-provider')
+    applyBranding({ primary_color: '#0033f0', accent_color: '#00fcff' })
+    expect(dom.styleProps.has('--brand-gradient')).toBe(false)
+    const plain = dom.styleProps.get('--primary')
+
+    applyBranding(
+      { primary_color: '#0033f0', accent_color: '#00fcff' },
+      undefined,
+      { gradient: ['#00fcff', '#0033f0'], foreground: '#020846' },
+    )
+    expect(dom.styleProps.get('--brand-gradient')).toBe('linear-gradient(135deg, #00fcff, #0033f0)')
+    expect(dom.styleProps.get('--brand-foreground')).toBe('#020846')
+    expect(dom.styleProps.get('--primary')).toBe(plain)
+  })
+
+  it('uses theme.dark.primary as the dark-mode seed instead of deriving it', async () => {
+    const { applyBranding } = await import('../src/platform-config-provider')
+    dom.classes.add('dark')
+    applyBranding({ primary_color: '#0033f0', accent_color: '#00fcff' })
+    const derived = dom.styleProps.get('--primary')
+    applyBranding({ primary_color: '#0033f0', accent_color: '#00fcff' }, undefined, { dark: { primary: '#00fcff' } })
+    expect(dom.styleProps.get('--primary')).not.toBe(derived)
+  })
+})

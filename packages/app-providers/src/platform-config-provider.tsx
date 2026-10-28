@@ -14,6 +14,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { isValidSkin, type MascotSkin } from './mascot'
 
 export interface PlatformBranding {
   platform_name: string
@@ -33,6 +34,14 @@ export interface PlatformBranding {
   // modules and cached). Absent/empty means "none configured": consumers use
   // `useAgentSuggestions()`, which falls back to a neutral default set.
   agent_suggestions?: string[]
+  // Optional org artwork/naming overrides (all absent = use the product brand
+  // from `/api/brand`, see `@asteby/metacore-app-providers/brand`).
+  logo_dark?: string
+  logo_mark?: string
+  pwa_name?: string
+  pwa_short_name?: string
+  // Declarative mascot skin for this org (wins over `mascot_skin` when valid).
+  mascot?: MascotSkin
   // Optional key identifying a named preset to apply on top of the base
   // branding. Absent/unknown keys are a no-op — never required for
   // existing consumers.
@@ -459,12 +468,30 @@ function clean(v: string | undefined): string | undefined {
   return t ? t : undefined
 }
 
+/**
+ * Optional product theme (from `/api/brand` `theme`). Purely additive: with no
+ * theme, `applyBranding` behaves exactly as before.
+ */
+export interface ProductTheme {
+  /** Used for the dark-mode derivation instead of brightening `primary`. */
+  dark?: { primary?: string }
+  /** 2-4 `#rrggbb` stops → `--brand-gradient`. */
+  gradient?: string[]
+  foreground?: string
+  background?: string
+}
+
 export function applyBranding(
   data: Partial<PlatformBranding>,
   defaults: PlatformBranding = FALLBACK_BRANDING,
+  theme?: ProductTheme,
 ) {
-  const primaryHex = safeHex(data.primary_color) ?? safeHex(defaults.primary_color)
+  let primaryHex = safeHex(data.primary_color) ?? safeHex(defaults.primary_color)
   const accentHex = safeHex(data.accent_color) ?? safeHex(defaults.accent_color)
+  const darkPrimary = safeHex(theme?.dark?.primary)
+  if (darkPrimary && document.documentElement.classList.contains('dark')) {
+    primaryHex = darkPrimary
+  }
 
   if (primaryHex || accentHex) {
     const vars = generateThemeVars(
@@ -482,6 +509,17 @@ export function applyBranding(
   const root = document.documentElement
   if (primaryHex) setVar(root, '--brand-primary', primaryHex)
   if (accentHex) setVar(root, '--brand-accent', accentHex)
+
+  if (theme) {
+    const stops = (theme.gradient ?? []).map(safeHex).filter((c): c is string => !!c)
+    if (stops.length >= 2 && stops.length <= 4) {
+      setVar(root, '--brand-gradient', `linear-gradient(135deg, ${stops.join(', ')})`)
+    }
+    const fg = safeHex(theme.foreground)
+    if (fg) setVar(root, '--brand-foreground', fg)
+    const bg = safeHex(theme.background)
+    if (bg) setVar(root, '--brand-background', bg)
+  }
 }
 
 const STORAGE_KEY = 'platform-branding'
@@ -509,6 +547,8 @@ export function sanitizeBranding(raw: unknown): Partial<PlatformBranding> | unde
     if ((COLOR_KEYS as readonly string[]).includes(k)) {
       const hex = safeHex(v)
       if (hex) out[k] = hex
+    } else if (k === 'mascot') {
+      if (isValidSkin(v)) out[k] = v
     } else if (k === 'agent_suggestions') {
       if (Array.isArray(v)) out[k] = v.filter((x) => typeof x === 'string')
     } else if (typeof v === 'string') {
@@ -607,6 +647,8 @@ export interface PlatformConfigProviderProps {
   staleTime?: number
   /** localStorage key for the persisted branding cache. */
   storageKey?: string
+  /** Product theme (from `/api/brand`): dark primary, gradient, foreground. */
+  theme?: ProductTheme
 }
 
 export function PlatformConfigProvider({
@@ -615,6 +657,7 @@ export function PlatformConfigProvider({
   defaults = FALLBACK_BRANDING,
   staleTime = 5 * 60 * 1000,
   storageKey = STORAGE_KEY,
+  theme,
 }: PlatformConfigProviderProps) {
   const queryClient = useQueryClient()
 
@@ -636,12 +679,12 @@ export function PlatformConfigProvider({
 
   useEffect(() => {
     if (branding) {
-      applyBranding(branding, defaults)
+      applyBranding(branding, defaults, theme)
       // Only a real `/org/branding` response is persisted, and it REPLACES
       // the stored fields; the placeholder is what was already stored.
       if (!isPlaceholderData) persistBranding(branding, storageKey)
     }
-  }, [branding, isPlaceholderData, defaults, storageKey])
+  }, [branding, isPlaceholderData, defaults, storageKey, theme])
 
   // The tokens depend on light/dark only; other class changes on <html>
   // (fonts, boot markers) must not repaint them.
@@ -652,14 +695,14 @@ export function PlatformConfigProvider({
       const next = root.classList.contains('dark')
       if (next === dark) return
       dark = next
-      if (current.primary_color) applyBranding(current, defaults)
+      if (current.primary_color) applyBranding(current, defaults, theme)
     })
     observer.observe(root, {
       attributes: true,
       attributeFilter: ['class'],
     })
     return () => observer.disconnect()
-  }, [current, defaults])
+  }, [current, defaults, theme])
 
   const refetch = () => {
     queryClient.invalidateQueries({ queryKey: ['platform-branding', storageKey] })

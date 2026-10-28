@@ -56,7 +56,7 @@ export interface BrandMascotSkin {
   antenna: boolean;
   screen_tone: string;
   colors: Record<string, string>;
-  face?: { stroke?: string; stroke_width?: number };
+  face?: { stroke?: string; stroke_width?: number; tread_dot?: string };
 }
 
 export interface BrandAssistant {

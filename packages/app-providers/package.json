@@ -27,6 +27,10 @@
     "./mascot": {
       "types": "./dist/mascot.d.ts",
       "import": "./dist/mascot.js"
+    },
+    "./brand": {
+      "types": "./dist/brand/index.d.ts",
+      "import": "./dist/brand/index.js"
     }
   },
   "scripts": {
@@ -42,11 +46,15 @@
     "react": ">=18",
     "react-dom": ">=18",
     "@asteby/metacore-pwa": ">=0.9.3",
+    "@asteby/metacore-sdk": ">=3.18.0",
     "@asteby/metacore-runtime-react": ">=53.0.0",
     "@asteby/metacore-ui": ">=2.28.0",
     "sonner": ">=1.7"
   },
   "peerDependenciesMeta": {
+    "@asteby/metacore-sdk": {
+      "optional": true
+    },
     "@asteby/metacore-pwa": {
       "optional": true
     },
@@ -60,6 +68,7 @@
   "devDependencies": {
     "@asteby/metacore-pwa": "workspace:*",
     "@asteby/metacore-runtime-react": "workspace:*",
+    "@asteby/metacore-sdk": "workspace:*",
     "@asteby/metacore-theme": "workspace:*",
     "@asteby/metacore-ui": "workspace:*",
     "@radix-ui/react-direction": "^1.1.1",
