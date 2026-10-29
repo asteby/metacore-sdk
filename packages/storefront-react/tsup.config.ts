@@ -18,6 +18,7 @@ export default defineConfig({
     'fiscal-server': 'src/fiscal/server.ts',
     promotions: 'src/promos/index.ts',
     postal: 'src/postal/index.ts',
+    tracking: 'src/tracking/index.ts',
     ui: 'src/ui/index.ts',
   },
   format: ['esm', 'cjs'],

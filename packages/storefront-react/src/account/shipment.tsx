@@ -11,6 +11,7 @@ import type { Shipment, ShipmentMap } from '@asteby/storefront'
 import { isTestShipment, safeTrackingUrl, sortTrackingEvents } from '@asteby/storefront'
 import { useId, useState, type ReactNode } from 'react'
 import { enumText } from './orders-messages.js'
+import { TrackingEventList } from '../tracking/timeline.js'
 import { CopyButton, Hidden, Time, str, useAccountText, type AccountTextProps } from './orders-ui.js'
 
 export type ShipmentCardClassNames = Partial<
@@ -157,20 +158,7 @@ export function ShipmentCard({ shipment, testMode = 'hide', eventsPreview = 3, r
               <SubHeading className={cx.meta} data-sf-shipment-events-title>
                 {m['shipment.events']}
               </SubHeading>
-              <ol className={cx.events} id={eventsId} data-sf-shipment-events>
-                {shown.map((e, i) => {
-                  const description = str(e.description)
-                  const location = str(e.location)
-                  return (
-                  <li key={`${str(e.id) ?? ''}-${i}`} className={cx.event} data-sf-event-status={typeof e.status === 'string' ? e.status : 'unknown'}>
-                    <span data-sf-event-state>{enumText(m, 'shipment.status', e.status)}</span>
-                    {description ? <span data-sf-event-description> · {description}</span> : null}
-                    {location ? <span data-sf-event-location> · {location}</span> : null}{' '}
-                    <Time value={e.occurred_at} text={date(e.occurred_at, 'datetime')} />
-                  </li>
-                  )
-                })}
-              </ol>
+              <TrackingEventList events={shown} m={m} date={date} id={eventsId} className={cx.events} itemClassName={cx.event} />
               {events.length > Math.max(1, eventsPreview) ? (
                 <button type="button" className={cx.toggle} aria-expanded={open} aria-controls={eventsId} onClick={() => setOpen((v) => !v)} data-sf-shipment-toggle>
                   {open ? m['shipment.showLess'] : t('shipment.showAll', { count: events.length })}

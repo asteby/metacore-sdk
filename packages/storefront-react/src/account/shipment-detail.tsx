@@ -12,6 +12,7 @@ import { enumText } from './orders-messages.js'
 import { OrderProgress } from './progress.js'
 import type { ShipmentMapSlotProps } from './shipment.js'
 import { orderShippingService, shippingServiceEta } from './shipping-service.js'
+import { TrackingEventList } from '../tracking/timeline.js'
 import { CopyButton, Hidden, Time, addressLines, str, useAccountText, type AccountTextProps } from './orders-ui.js'
 
 export type ShipmentDetailClassNames = Partial<
@@ -174,19 +175,7 @@ export function ShipmentDetail({ order, shipments, progress, renderCarrierMark, 
                   {m['shipment.noEvents']}
                 </p>
               ) : (
-                <ol className={cx.events} data-sf-shipment-events>
-                  {events.map((e, k) => {
-                    const description = str(e.description)
-                    const location = str(e.location)
-                    return (
-                      <li key={`${str(e.id) ?? ''}-${k}`} className={cx.event} data-sf-event-status={typeof e.status === 'string' ? e.status : 'unknown'}>
-                        <span data-sf-event-state>{enumText(m, 'shipment.status', e.status)}</span>
-                        {description ? <span> · {description}</span> : null}
-                        {location ? <span> · {location}</span> : null} <Time value={e.occurred_at} text={date(e.occurred_at, 'datetime')} />
-                      </li>
-                    )
-                  })}
-                </ol>
+                <TrackingEventList events={events} m={m} date={date} className={cx.events} itemClassName={cx.event} />
               )}
             </section>
           )

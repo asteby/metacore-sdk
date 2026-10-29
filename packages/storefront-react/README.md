@@ -850,6 +850,38 @@ export const action = createSubjectAction({ storefront: sf, readCustomerToken })
 
 **Adoptar en ProtekAuto** (la tienda no se toca en este paquete): (1) subir el SDK y usar `fitment` en lugar de `app/lib/vehicle.ts` (`fitmentConfig({ tagPrefix: 'fit:', stateTagPrefix: 'ajuste:', compatAttribute: 'compatibilidad' })`, `parseCatalog(props, { priorityAliases: { alta: 'high', media: 'medium', baja: 'low' } })`); (2) publicar los datos: registrar las secciones `subject_kinds` y `subject_catalog` (`PUT /storefront/content/section-types`, ver `shared/subjectspec/README.md` de addons), la página `subject-kinds` con el tipo `vehicle` (`label_plural: «Mi garage»`, plantilla `{make}/{model}/{year}/{engine}`, campo `plate` con `private: true`) y el catálogo con `splitSubjectTree(vehicleCatalogToTree(parseCatalog(...)))`: el real (50 marcas, 417 modelos, 1 165 opciones, ~70 KB como texto) no cabe en una página de OPS (una escritura de 64 KB con borrador y copia pública), así que va en 3 páginas `vehiculos-1..3` y el tipo las nombra todas en `catalog_ref`; (3) en el loader, `loadSubjectsContext` y `products.list({ tags_any })` en vez de buscar la etiqueta con `q` (`vehicle.server.ts` deja de filtrar a mano); (4) cookie `sf_subject_vehicle` en lugar de `pa_vehiculo` (leer la vieja una vez y reescribirla); (5) `/garage` con `SubjectGarage` + `createSubjectAction`; (6) `subjectCacheHeaders` en lugar de `vehicleCacheHeaders`. Pendiente fuera del SDK: ligar el artículo al pedido (`CheckoutRequest.subject`, `storefront_cart` + `customers`).
 
+## Rastreo de envíos (`@asteby/storefront-react/tracking`)
+
+Dónde va el paquete, en una pieza para cualquier tienda y cualquier transportista (Skydropx, Emissary, 99minutos, Envía…): `TrackingTimeline` (los escaneos, el más nuevo primero), `ShipmentTracker` (estado, guía copiable, enlace `https` del transportista, llegada estimada, escaneos y mapa opcional) y `TrackOrderLookup` (el formulario público «Rastrea tu pedido», sin sesión). Sin `StorefrontProvider`, headless (`data-sf-tracker*`, `data-sf-tracking-*`, `classNames`), es/en, accesible y con hoja opcional `tracking.css` (tokens `--sf-tracking-*` y los `--sf-tone-*` de las pantallas de pedido, claro y oscuro). Nunca imprime un `label_url`.
+
+```tsx
+// app/routes/rastreo.tsx
+import { TrackOrderLookup, resolveTrackingLookup } from '@asteby/storefront-react/tracking'
+import '@asteby/storefront-react/tracking.css'
+
+export async function action({ request }: Route.ActionArgs) {
+  return resolveTrackingLookup(sf, await request.formData()) // { tracking } | { error, retryAfter? }, nunca lanza
+}
+
+export default function Rastreo({ actionData }: Route.ComponentProps) {
+  return (
+    <TrackOrderLookup
+      action="/rastreo"
+      result={actionData?.tracking}
+      error={actionData?.error}
+      retryAfter={actionData?.retryAfter}
+      trackerProps={{ loadMaps: () => import('@asteby/metacore-maps'), geocode }} // mapa: opcional
+    />
+  )
+}
+```
+
+- **Funciona sin JavaScript**: es un `<form method="post">`; con JavaScript pasa `onSubmit` (recibe `{ order_number, email }` o `{ tracking_number }`) para no recargar la página. El resultado se anuncia (`aria-live="polite"`) y recibe el foco.
+- **Misma respuesta ante cualquier falla** (`not_found`, `rate_limited`, `unavailable`): la página nunca distingue un pedido real de uno que no existe. `sf.tracking.lookup(input)` (`POST /storefront/customer/track`) las devuelve ya plegadas, sin lanzar; la ruta la habilita cada tienda.
+- **Mapa opcional**: `loadMaps={() => import('@asteby/metacore-maps')}` lo carga bajo demanda (MapLibre, sin llaves de API; el SDK nunca lo importa). Dibuja la ruta con `map.path` del servidor o con los escaneos que traen `lat`/`lng`; si el transportista solo da nombres de ciudad, pasa `geocode(lugar)`. Sin coordenadas, sin `loadMaps` o si el mapa falla, queda la línea de tiempo y ningún error.
+- **Estados**: `ShipmentTracker` resuelve `loading` / `empty` / `error` (con `onRetry`) / `ready`; una incidencia (`exception`, `lost`, `returned`) se anuncia como aviso (`role="status"`), no como fallo.
+- `ShipmentCard` y `ShipmentDetail` (pedidos) usan `TrackingEventList` por dentro, con el mismo DOM de siempre.
+
 ## API
 
 | Export | |
