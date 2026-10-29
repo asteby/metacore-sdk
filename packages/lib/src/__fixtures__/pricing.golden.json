@@ -1,0 +1,1251 @@
+{
+  "version": 1,
+  "contract": "pricederive 1.0.0",
+  "description": "Vectores ÚNICOS de derivación y redondeo de precios (diseño DISENO-PRECIOS-POR-MERCADO §3.5, S7). Fuente: addons shared/pricederive/testdata/golden.json; el SDK (@asteby/metacore-lib src/__fixtures__/pricing.golden.json) es copia byte a byte comparada por sha256. Importes y tasas son decimales exactos en texto; porcentajes en %; tasa = unidades de destino por 1 de origen. Errores: negative | precision | overflow | invalid.",
+  "rounding": [
+    {
+      "name": "adr-correccion: 93.995 con .99 up da 94.99 (el ADR daba 93.99 < x)",
+      "currency": "USD",
+      "x": "93.995",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "94.99",
+        "direction": "up"
+      }
+    },
+    {
+      "name": ".99 up: ya es candidato",
+      "currency": "USD",
+      "x": "93.99",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "93.99",
+        "direction": "up"
+      }
+    },
+    {
+      "name": ".99 up: golden 93.80",
+      "currency": "USD",
+      "x": "93.80",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "93.99",
+        "direction": "up"
+      }
+    },
+    {
+      "name": ".99 up: entero exacto sube al siguiente .99",
+      "currency": "USD",
+      "x": "94",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "94.99",
+        "direction": "up"
+      }
+    },
+    {
+      "name": ".99 up: centavo",
+      "currency": "USD",
+      "x": "0.01",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "0.99",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "cero se conserva",
+      "currency": "USD",
+      "x": "0",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "0.00",
+        "direction": "up"
+      }
+    },
+    {
+      "name": ".99 down",
+      "currency": "USD",
+      "x": "94.50",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "down"
+      },
+      "want": {
+        "amount": "93.99",
+        "direction": "down"
+      }
+    },
+    {
+      "name": ".99 down: ya es candidato",
+      "currency": "USD",
+      "x": "94.99",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "down"
+      },
+      "want": {
+        "amount": "94.99",
+        "direction": "down"
+      }
+    },
+    {
+      "name": ".99 down: 1.00",
+      "currency": "USD",
+      "x": "1.00",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "down"
+      },
+      "want": {
+        "amount": "0.99",
+        "direction": "down"
+      }
+    },
+    {
+      "name": ".99 down a <= 0 toma up (golden 0.50)",
+      "currency": "USD",
+      "x": "0.50",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "down"
+      },
+      "want": {
+        "amount": "0.99",
+        "direction": "up"
+      }
+    },
+    {
+      "name": ".99 nearest: empate hacia arriba",
+      "currency": "USD",
+      "x": "94.49",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "nearest"
+      },
+      "want": {
+        "amount": "94.99",
+        "direction": "nearest"
+      }
+    },
+    {
+      "name": ".99 nearest: abajo",
+      "currency": "USD",
+      "x": "94.48",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "nearest"
+      },
+      "want": {
+        "amount": "93.99",
+        "direction": "nearest"
+      }
+    },
+    {
+      "name": ".99 nearest: arriba",
+      "currency": "USD",
+      "x": "94.50",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "nearest"
+      },
+      "want": {
+        "amount": "94.99",
+        "direction": "nearest"
+      }
+    },
+    {
+      "name": ".99 nearest a <= 0 toma up",
+      "currency": "USD",
+      "x": "0.30",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "nearest"
+      },
+      "want": {
+        "amount": "0.99",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "enteros up",
+      "currency": "USD",
+      "x": "12.01",
+      "rule": {
+        "increment": "1",
+        "ending": "0",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "13.00",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "enteros up: exacto",
+      "currency": "USD",
+      "x": "12",
+      "rule": {
+        "increment": "1",
+        "ending": "0",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "12.00",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "terminación 9 en decenas: 15 -> 19",
+      "currency": "MXN",
+      "x": "15",
+      "rule": {
+        "increment": "10",
+        "ending": "9",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "19.00",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "terminación 9 en decenas: 19.5 -> 29",
+      "currency": "MXN",
+      "x": "19.5",
+      "rule": {
+        "increment": "10",
+        "ending": "9",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "29.00",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "paso 0.05 nearest: empate arriba",
+      "currency": "USD",
+      "x": "1.025",
+      "rule": {
+        "increment": "0.05",
+        "ending": "0",
+        "direction": "nearest"
+      },
+      "want": {
+        "amount": "1.05",
+        "direction": "nearest"
+      }
+    },
+    {
+      "name": "paso 0.05 nearest: abajo",
+      "currency": "USD",
+      "x": "1.024",
+      "rule": {
+        "increment": "0.05",
+        "ending": "0",
+        "direction": "nearest"
+      },
+      "want": {
+        "amount": "1.00",
+        "direction": "nearest"
+      }
+    },
+    {
+      "name": "JPY {100,80,up}: 1937 -> 1980",
+      "currency": "JPY",
+      "x": "1937",
+      "rule": {
+        "increment": "100",
+        "ending": "80",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "1980",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "JPY {100,80,up}: exacto",
+      "currency": "JPY",
+      "x": "1980",
+      "rule": {
+        "increment": "100",
+        "ending": "80",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "1980",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "JPY {100,80,up}: x con decimales",
+      "currency": "JPY",
+      "x": "1980.5",
+      "rule": {
+        "increment": "100",
+        "ending": "80",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "2080",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "JPY {100,80,down}",
+      "currency": "JPY",
+      "x": "1979",
+      "rule": {
+        "increment": "100",
+        "ending": "80",
+        "direction": "down"
+      },
+      "want": {
+        "amount": "1880",
+        "direction": "down"
+      }
+    },
+    {
+      "name": "JPY {100,80,down} a <= 0 toma up",
+      "currency": "JPY",
+      "x": "50",
+      "rule": {
+        "increment": "100",
+        "ending": "80",
+        "direction": "down"
+      },
+      "want": {
+        "amount": "80",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "JPY {100,80,nearest}: empate arriba",
+      "currency": "JPY",
+      "x": "2030",
+      "rule": {
+        "increment": "100",
+        "ending": "80",
+        "direction": "nearest"
+      },
+      "want": {
+        "amount": "2080",
+        "direction": "nearest"
+      }
+    },
+    {
+      "name": "JPY {100,80,nearest}: abajo",
+      "currency": "JPY",
+      "x": "2029",
+      "rule": {
+        "increment": "100",
+        "ending": "80",
+        "direction": "nearest"
+      },
+      "want": {
+        "amount": "1980",
+        "direction": "nearest"
+      }
+    },
+    {
+      "name": "JPY enteros: 1499.4 -> 1500",
+      "currency": "JPY",
+      "x": "1499.4",
+      "rule": {
+        "increment": "1",
+        "ending": "0",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "1500",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "JPY .99 se rechaza",
+      "currency": "JPY",
+      "x": "1937",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "up"
+      },
+      "want": {
+        "error": "precision"
+      }
+    },
+    {
+      "name": "JPY paso 0.5 se rechaza",
+      "currency": "JPY",
+      "x": "1937",
+      "rule": {
+        "increment": "0.5",
+        "ending": "0",
+        "direction": "up"
+      },
+      "want": {
+        "error": "precision"
+      }
+    },
+    {
+      "name": "KWD 3 decimales, paso 0.250",
+      "currency": "KWD",
+      "x": "1.1",
+      "rule": {
+        "increment": "0.250",
+        "ending": "0",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "1.250",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "KWD paso 0.250: 1.0001",
+      "currency": "KWD",
+      "x": "1.0001",
+      "rule": {
+        "increment": "0.250",
+        "ending": "0",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "1.250",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "KWD paso 0.250: exacto",
+      "currency": "KWD",
+      "x": "1.25",
+      "rule": {
+        "increment": "0.250",
+        "ending": "0",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "1.250",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "KWD terminación 0.990",
+      "currency": "KWD",
+      "x": "3.5",
+      "rule": {
+        "increment": "1",
+        "ending": "0.990",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "3.990",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "KWD terminación de 4 decimales se rechaza",
+      "currency": "KWD",
+      "x": "3.5",
+      "rule": {
+        "increment": "1",
+        "ending": "0.9995",
+        "direction": "up"
+      },
+      "want": {
+        "error": "precision"
+      }
+    },
+    {
+      "name": "negativo rechazado",
+      "currency": "USD",
+      "x": "-1.00",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "up"
+      },
+      "want": {
+        "error": "negative"
+      }
+    },
+    {
+      "name": "negativo de un centavo rechazado",
+      "currency": "USD",
+      "x": "-0.01",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "up"
+      },
+      "want": {
+        "error": "negative"
+      }
+    },
+    {
+      "name": "decimal con exponente",
+      "currency": "USD",
+      "x": "1e3",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "up"
+      },
+      "want": {
+        "error": "invalid"
+      }
+    },
+    {
+      "name": "decimal con separador de miles",
+      "currency": "USD",
+      "x": "1,000.00",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "up"
+      },
+      "want": {
+        "error": "invalid"
+      }
+    },
+    {
+      "name": "moneda desconocida",
+      "currency": "XXX",
+      "x": "1",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "up"
+      },
+      "want": {
+        "error": "invalid"
+      }
+    },
+    {
+      "name": "dirección desconocida",
+      "currency": "USD",
+      "x": "1",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "sideways"
+      },
+      "want": {
+        "error": "invalid"
+      }
+    },
+    {
+      "name": "dirección vacía",
+      "currency": "USD",
+      "x": "1",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": ""
+      },
+      "want": {
+        "error": "invalid"
+      }
+    },
+    {
+      "name": "incremento cero",
+      "currency": "USD",
+      "x": "1",
+      "rule": {
+        "increment": "0",
+        "ending": "0",
+        "direction": "up"
+      },
+      "want": {
+        "error": "invalid"
+      }
+    },
+    {
+      "name": "incremento negativo",
+      "currency": "USD",
+      "x": "1",
+      "rule": {
+        "increment": "-1",
+        "ending": "0",
+        "direction": "up"
+      },
+      "want": {
+        "error": "invalid"
+      }
+    },
+    {
+      "name": "terminación = incremento",
+      "currency": "USD",
+      "x": "1",
+      "rule": {
+        "increment": "1",
+        "ending": "1",
+        "direction": "up"
+      },
+      "want": {
+        "error": "invalid"
+      }
+    },
+    {
+      "name": "terminación negativa",
+      "currency": "USD",
+      "x": "1",
+      "rule": {
+        "increment": "1",
+        "ending": "-0.01",
+        "direction": "up"
+      },
+      "want": {
+        "error": "invalid"
+      }
+    },
+    {
+      "name": "terminación vacía",
+      "currency": "USD",
+      "x": "1",
+      "rule": {
+        "increment": "1",
+        "ending": "",
+        "direction": "up"
+      },
+      "want": {
+        "error": "invalid"
+      }
+    },
+    {
+      "name": "límite int64 exacto cabe",
+      "currency": "USD",
+      "x": "92233720368547758.07",
+      "rule": {
+        "increment": "0.01",
+        "ending": "0",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "92233720368547758.07",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "desborde: el candidato .99 pasa int64",
+      "currency": "USD",
+      "x": "92233720368547758.07",
+      "rule": {
+        "increment": "1",
+        "ending": "0.99",
+        "direction": "up"
+      },
+      "want": {
+        "error": "overflow"
+      }
+    },
+    {
+      "name": "desborde: x sobre int64",
+      "currency": "USD",
+      "x": "92233720368547758.08",
+      "rule": {
+        "increment": "0.01",
+        "ending": "0",
+        "direction": "up"
+      },
+      "want": {
+        "error": "overflow"
+      }
+    },
+    {
+      "name": "desborde: incremento sobre int64",
+      "currency": "USD",
+      "x": "1",
+      "rule": {
+        "increment": "100000000000000000",
+        "ending": "0",
+        "direction": "up"
+      },
+      "want": {
+        "error": "overflow"
+      }
+    },
+    {
+      "name": "JPY int64 exacto cabe",
+      "currency": "JPY",
+      "x": "9223372036854775807",
+      "rule": {
+        "increment": "1",
+        "ending": "0",
+        "direction": "up"
+      },
+      "want": {
+        "amount": "9223372036854775807",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "JPY desborde hacia arriba",
+      "currency": "JPY",
+      "x": "9223372036854775807",
+      "rule": {
+        "increment": "100",
+        "ending": "80",
+        "direction": "up"
+      },
+      "want": {
+        "error": "overflow"
+      }
+    },
+    {
+      "name": "JPY hacia abajo cabe",
+      "currency": "JPY",
+      "x": "9223372036854775807",
+      "rule": {
+        "increment": "100",
+        "ending": "80",
+        "direction": "down"
+      },
+      "want": {
+        "amount": "9223372036854775780",
+        "direction": "down"
+      }
+    }
+  ],
+  "derive": [
+    {
+      "name": "golden §3.5: MXN 1,899 IVA incl. -> USD neto 0.0573, .99 up = 93.99",
+      "input": {
+        "source": {
+          "amount": "1899.00",
+          "currency_code": "MXN"
+        },
+        "target_currency": "USD",
+        "rate": "0.0573",
+        "tax_basis": "net",
+        "tax_in_pct": "16",
+        "tax_out_pct": "0",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "amount": "93.99",
+        "currency_code": "USD",
+        "computed": "93.80",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "as_entered no toca impuesto",
+      "input": {
+        "source": {
+          "amount": "1899.00",
+          "currency_code": "MXN"
+        },
+        "target_currency": "USD",
+        "rate": "0.0573",
+        "tax_basis": "as_entered",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "amount": "108.99",
+        "currency_code": "USD",
+        "computed": "108.81",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "tax_basis vacío = as_entered",
+      "input": {
+        "source": {
+          "amount": "1899.00",
+          "currency_code": "MXN"
+        },
+        "target_currency": "USD",
+        "rate": "0.0573",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "amount": "108.99",
+        "currency_code": "USD",
+        "computed": "108.81",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "margen cambiario 3 %",
+      "input": {
+        "source": {
+          "amount": "1899.00",
+          "currency_code": "MXN"
+        },
+        "target_currency": "USD",
+        "rate": "0.0573",
+        "markup_pct": "3",
+        "tax_basis": "net",
+        "tax_in_pct": "16",
+        "tax_out_pct": "0",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "amount": "96.99",
+        "currency_code": "USD",
+        "computed": "96.62",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "impuesto incluido en destino 8.25 %",
+      "input": {
+        "source": {
+          "amount": "1899.00",
+          "currency_code": "MXN"
+        },
+        "target_currency": "USD",
+        "rate": "0.0573",
+        "tax_basis": "net",
+        "tax_in_pct": "16",
+        "tax_out_pct": "8.25",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "amount": "101.99",
+        "currency_code": "USD",
+        "computed": "101.54",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "MXN -> JPY {100,80,up}",
+      "input": {
+        "source": {
+          "amount": "100.00",
+          "currency_code": "MXN"
+        },
+        "target_currency": "JPY",
+        "rate": "8.5",
+        "rounding": {
+          "increment": "100",
+          "ending": "80",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "amount": "880",
+        "currency_code": "JPY",
+        "computed": "850",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "USD -> KWD paso 0.250 nearest",
+      "input": {
+        "source": {
+          "amount": "10.00",
+          "currency_code": "USD"
+        },
+        "target_currency": "KWD",
+        "rate": "0.3071",
+        "rounding": {
+          "increment": "0.250",
+          "ending": "0",
+          "direction": "nearest"
+        }
+      },
+      "want": {
+        "amount": "3.000",
+        "currency_code": "KWD",
+        "computed": "3.071",
+        "direction": "nearest"
+      }
+    },
+    {
+      "name": "misma moneda, tasa 1, margen -15 %, down",
+      "input": {
+        "source": {
+          "amount": "1899.00",
+          "currency_code": "MXN"
+        },
+        "target_currency": "MXN",
+        "rate": "1",
+        "markup_pct": "-15",
+        "rounding": {
+          "increment": "1",
+          "ending": "0",
+          "direction": "down"
+        }
+      },
+      "want": {
+        "amount": "1614.00",
+        "currency_code": "MXN",
+        "computed": "1614.15",
+        "direction": "down"
+      }
+    },
+    {
+      "name": "down a <= 0 toma up",
+      "input": {
+        "source": {
+          "amount": "5.00",
+          "currency_code": "MXN"
+        },
+        "target_currency": "USD",
+        "rate": "0.0573",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "down"
+        }
+      },
+      "want": {
+        "amount": "0.99",
+        "currency_code": "USD",
+        "computed": "0.29",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "origen cero",
+      "input": {
+        "source": {
+          "amount": "0.00",
+          "currency_code": "MXN"
+        },
+        "target_currency": "USD",
+        "rate": "0.0573",
+        "tax_basis": "net",
+        "tax_in_pct": "16",
+        "tax_out_pct": "0",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "amount": "0.00",
+        "currency_code": "USD",
+        "computed": "0.00",
+        "direction": "up"
+      }
+    },
+    {
+      "name": "misma moneda con tasa != 1",
+      "input": {
+        "source": {
+          "amount": "1899.00",
+          "currency_code": "MXN"
+        },
+        "target_currency": "MXN",
+        "rate": "1.1",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "error": "invalid"
+      }
+    },
+    {
+      "name": "origen negativo",
+      "input": {
+        "source": {
+          "amount": "-1.00",
+          "currency_code": "MXN"
+        },
+        "target_currency": "USD",
+        "rate": "0.0573",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "error": "negative"
+      }
+    },
+    {
+      "name": "origen con más decimales que su moneda",
+      "input": {
+        "source": {
+          "amount": "1899.001",
+          "currency_code": "MXN"
+        },
+        "target_currency": "USD",
+        "rate": "0.0573",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "error": "precision"
+      }
+    },
+    {
+      "name": "origen JPY con decimales",
+      "input": {
+        "source": {
+          "amount": "1980.5",
+          "currency_code": "JPY"
+        },
+        "target_currency": "USD",
+        "rate": "0.0067",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "error": "precision"
+      }
+    },
+    {
+      "name": "tasa cero",
+      "input": {
+        "source": {
+          "amount": "1899.00",
+          "currency_code": "MXN"
+        },
+        "target_currency": "USD",
+        "rate": "0",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "error": "invalid"
+      }
+    },
+    {
+      "name": "tasa negativa",
+      "input": {
+        "source": {
+          "amount": "1899.00",
+          "currency_code": "MXN"
+        },
+        "target_currency": "USD",
+        "rate": "-0.0573",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "error": "invalid"
+      }
+    },
+    {
+      "name": "tasa mal formada",
+      "input": {
+        "source": {
+          "amount": "1899.00",
+          "currency_code": "MXN"
+        },
+        "target_currency": "USD",
+        "rate": "abc",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "error": "invalid"
+      }
+    },
+    {
+      "name": "margen -100 %",
+      "input": {
+        "source": {
+          "amount": "1899.00",
+          "currency_code": "MXN"
+        },
+        "target_currency": "USD",
+        "rate": "0.0573",
+        "markup_pct": "-100",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "error": "invalid"
+      }
+    },
+    {
+      "name": "impuesto negativo",
+      "input": {
+        "source": {
+          "amount": "1899.00",
+          "currency_code": "MXN"
+        },
+        "target_currency": "USD",
+        "rate": "0.0573",
+        "tax_basis": "net",
+        "tax_in_pct": "-16",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "error": "invalid"
+      }
+    },
+    {
+      "name": "base de impuesto desconocida",
+      "input": {
+        "source": {
+          "amount": "1899.00",
+          "currency_code": "MXN"
+        },
+        "target_currency": "USD",
+        "rate": "0.0573",
+        "tax_basis": "gross",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "error": "invalid"
+      }
+    },
+    {
+      "name": ".99 en JPY destino se rechaza",
+      "input": {
+        "source": {
+          "amount": "100.00",
+          "currency_code": "MXN"
+        },
+        "target_currency": "JPY",
+        "rate": "8.5",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "error": "precision"
+      }
+    },
+    {
+      "name": "moneda destino desconocida",
+      "input": {
+        "source": {
+          "amount": "1.00",
+          "currency_code": "MXN"
+        },
+        "target_currency": "ZZZ",
+        "rate": "1",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "error": "invalid"
+      }
+    },
+    {
+      "name": "desborde del resultado",
+      "input": {
+        "source": {
+          "amount": "92233720368547758.07",
+          "currency_code": "USD"
+        },
+        "target_currency": "MXN",
+        "rate": "20",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "error": "overflow"
+      }
+    },
+    {
+      "name": "desborde del origen",
+      "input": {
+        "source": {
+          "amount": "92233720368547758.08",
+          "currency_code": "USD"
+        },
+        "target_currency": "MXN",
+        "rate": "20",
+        "rounding": {
+          "increment": "1",
+          "ending": "0.99",
+          "direction": "up"
+        }
+      },
+      "want": {
+        "error": "overflow"
+      }
+    }
+  ]
+}

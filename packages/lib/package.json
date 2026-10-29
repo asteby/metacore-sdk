@@ -36,6 +36,10 @@
       "types": "./dist/money.d.ts",
       "import": "./dist/money.js"
     },
+    "./pricing": {
+      "types": "./dist/pricing.d.ts",
+      "import": "./dist/pricing.js"
+    },
     "./errors": {
       "types": "./dist/errors.d.ts",
       "import": "./dist/errors.js"
