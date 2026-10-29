@@ -1,5 +1,11 @@
 # @asteby/storefront-react
 
+## 0.41.0
+
+### Minor Changes
+
+- 38012a5: `voucherRows` acepta una zona horaria IANA opcional (`timeZone`, p. ej. `America/Mexico_City`) y escribe el vencimiento de la ficha en esa zona con su desfase; sin ella o con una inválida sigue en UTC, como antes.
+
 ## 0.40.0
 
 ### Minor Changes
