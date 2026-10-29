@@ -1432,6 +1432,9 @@ importers:
         specifier: workspace:*
         version: link:../storefront
     devDependencies:
+      '@asteby/metacore-maps':
+        specifier: workspace:*
+        version: link:../maps
       '@testing-library/react':
         specifier: ^16.3.2
         version: 16.3.3(@testing-library/dom@10.4.1)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
