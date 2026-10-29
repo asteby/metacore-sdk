@@ -10,7 +10,7 @@
  * when the shop allows it and past its own threshold: there is no threshold in
  * this code.
  */
-import type { Availability, AvailabilityStatus, CartLineProblem, InsufficientStockLine, Product, ProductVariant } from './types.js'
+import type { Availability, AvailabilityStatus, CartLine, CartLineProblem, InsufficientStockLine, Product, ProductVariant } from './types.js'
 
 export type AvailabilityTone = 'success' | 'warning' | 'danger' | 'info'
 
@@ -26,6 +26,7 @@ export type AvailabilityMessageKey =
   | 'status.preorder'
   | 'sub.backorder_eta'
   | 'sub.preorder_date'
+  | 'line.ships_on'
   | 'cta.add'
   | 'cta.out_of_stock'
   | 'cta.backorder'
@@ -67,6 +68,7 @@ const ES: AvailabilityMessages = {
   'status.preorder': 'Preventa',
   'sub.backorder_eta': 'Se envía a partir del {date}',
   'sub.preorder_date': 'Sale a la venta el {date}',
+  'line.ships_on': 'Se enviará el: {date}',
   'cta.add': 'Agregar al carrito',
   'cta.out_of_stock': 'Agotado',
   'cta.backorder': 'Pedir bajo pedido',
@@ -107,6 +109,7 @@ const EN: AvailabilityMessages = {
   'status.preorder': 'Pre-order',
   'sub.backorder_eta': 'Ships from {date}',
   'sub.preorder_date': 'Available on {date}',
+  'line.ships_on': 'Ships on: {date}',
   'cta.add': 'Add to cart',
   'cta.out_of_stock': 'Sold out',
   'cta.backorder': 'Order now, ships later',
@@ -169,6 +172,29 @@ function formatDate(value: string | null | undefined, locale: string | null | un
   } catch {
     return value.slice(0, 10)
   }
+}
+
+/**
+ * Ship date of a cart line, `YYYY-MM-DD`, or `null`. Pure: it only picks what the server
+ * sent (`ships_on`, else `availability.restock_eta`, else the date part of `preorder_release_at`).
+ */
+export function lineShipDate(line: Pick<CartLine, 'ships_on' | 'availability'>): string | null {
+  const day = (v: string | null | undefined) => {
+    const d = typeof v === 'string' ? v.slice(0, 10) : ''
+    return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null
+  }
+  return day(line.ships_on) ?? day(line.availability?.restock_eta) ?? day(line.availability?.preorder_release_at)
+}
+
+/** Localized "Ships on: {date}" for a cart line, or `null` without a date. */
+export function lineShipLabel(
+  line: Pick<CartLine, 'ships_on' | 'availability'>,
+  locale: string | null | undefined,
+  overrides?: Partial<AvailabilityMessages> | null,
+): string | null {
+  const date = formatDate(lineShipDate(line), locale)
+  if (!date) return null
+  return formatAvailabilityMessage(availabilityMessages(locale, overrides)['line.ships_on'], { date })
 }
 
 export type ResolveAvailabilityOptions = {

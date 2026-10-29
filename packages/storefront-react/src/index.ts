@@ -24,6 +24,7 @@ export type {
 export {
   AvailabilityBadge,
   CartLineProblem,
+  CartLineShipDate,
   RestockNotifyForm,
   SrOnly,
   StockConflictAlert,
@@ -34,6 +35,7 @@ export type {
   AvailabilityBadgeProps,
   AvailabilityInput,
   CartLineProblemProps,
+  CartLineShipDateProps,
   RestockNotifyFormProps,
   StockConflictAlertProps,
   VariantOptionStateProps,

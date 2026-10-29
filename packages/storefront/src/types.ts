@@ -261,6 +261,10 @@ export type CartLine = {
   merchandise: CartLineMerchandise
   /** Computed when the cart is read, before checkout. `null`/absent = fine. */
   problem?: CartLineProblem | null
+  /** Ship date computed by OPS (`YYYY-MM-DD`). Absent/`null` = no date to show. */
+  ships_on?: string | null
+  /** Availability of the line's variant; only used as a fallback for the ship date. */
+  availability?: Pick<Availability, 'status' | 'restock_eta' | 'preorder_release_at'>
   cost: { total: Money; unit: Money; compare_at_unit: Money | null; discount?: Money }
 }
 

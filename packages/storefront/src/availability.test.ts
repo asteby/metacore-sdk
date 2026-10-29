@@ -3,6 +3,8 @@ import {
   availabilityMessages,
   availabilityView,
   cartLineProblemView,
+  lineShipDate,
+  lineShipLabel,
   productAvailability,
   resolveAvailability,
   schemaAvailability,
@@ -111,4 +113,22 @@ describe('schemaAvailability', () => {
     ['preorder', 'PreOrder'],
     ['nope', 'OutOfStock'],
   ])('%s', (s, name) => expect(schemaAvailability(s)).toBe(`https://schema.org/${name}`))
+})
+
+describe('lineShipDate / lineShipLabel', () => {
+  const av = (restock_eta: string | null, preorder_release_at: string | null) => ({ status: 'backorder' as const, restock_eta, preorder_release_at })
+  it('prefers ships_on, then restock_eta, then the date part of preorder_release_at', () => {
+    expect(lineShipDate({ ships_on: '2026-11-02', availability: av('2026-12-01', null) })).toBe('2026-11-02')
+    expect(lineShipDate({ availability: av('2026-12-01', '2027-01-01') })).toBe('2026-12-01')
+    expect(lineShipDate({ ships_on: null, availability: av(null, '2027-01-15T10:00:00Z') })).toBe('2027-01-15')
+  })
+  it('null without a date or with garbage', () => {
+    expect(lineShipDate({})).toBeNull()
+    expect(lineShipDate({ ships_on: 'pronto', availability: av(null, null) })).toBeNull()
+  })
+  it('localized label', () => {
+    expect(lineShipLabel({ ships_on: '2026-11-02' }, 'es-MX')).toBe('Se enviará el: 2 de noviembre de 2026')
+    expect(lineShipLabel({ ships_on: '2026-11-02' }, 'en-US')).toBe('Ships on: November 2, 2026')
+    expect(lineShipLabel({}, 'es-MX')).toBeNull()
+  })
 })
