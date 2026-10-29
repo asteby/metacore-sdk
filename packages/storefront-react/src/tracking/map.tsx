@@ -7,10 +7,17 @@
 import { Component, useEffect, useState, type ComponentType, type ReactNode } from 'react'
 import type { TrackingPoint } from './points.js'
 
-/** The two exports of `@asteby/metacore-maps` this component needs (loosely typed: the package is an optional peer). */
+/**
+ * The two exports of `@asteby/metacore-maps` this component needs. Loosely typed on purpose: the package is an optional
+ * peer this one never imports, so the props of its components are not ours to constrain. `ComponentType<any>` is what
+ * lets `loadMaps={() => import('@asteby/metacore-maps')}` compile as is (`Record<string, unknown>` rejected the real
+ * `Route`, whose `RouteProps` require `path`). See `maps-loader.typecheck.ts`.
+ */
 export type TrackingMapsModule = {
-  MapView: ComponentType<Record<string, unknown>>
-  Route: ComponentType<Record<string, unknown>>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  MapView: ComponentType<any>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  Route: ComponentType<any>
 }
 export type TrackingMapsLoader = () => Promise<TrackingMapsModule>
 
