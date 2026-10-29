@@ -1,5 +1,16 @@
 # @asteby/storefront-react
 
+## 0.40.0
+
+### Minor Changes
+
+- 5bc2f61: Fecha de envío por línea del carrito: `CartLine.ships_on` y `availability`, helpers `lineShipDate`/`lineShipLabel`, clave i18n `line.ships_on`, componente `CartLineShipDate` y `<p data-sf-cart-line-ships>` en `DrawerLine` (solo si hay fecha; clave `lineShips` en `classNames`).
+
+### Patch Changes
+
+- Updated dependencies [5bc2f61]
+  - @asteby/storefront@0.26.0
+
 ## 0.39.2
 
 ### Patch Changes

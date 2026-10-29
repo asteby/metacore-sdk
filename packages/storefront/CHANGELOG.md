@@ -1,5 +1,11 @@
 # @asteby/storefront
 
+## 0.26.0
+
+### Minor Changes
+
+- 5bc2f61: Fecha de envío por línea del carrito: `CartLine.ships_on` y `availability`, helpers `lineShipDate`/`lineShipLabel`, clave i18n `line.ships_on`, componente `CartLineShipDate` y `<p data-sf-cart-line-ships>` en `DrawerLine` (solo si hay fecha; clave `lineShips` en `classNames`).
+
 ## 0.25.0
 
 ### Minor Changes
