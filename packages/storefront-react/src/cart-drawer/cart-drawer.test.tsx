@@ -219,3 +219,15 @@ describe('store y helpers', () => {
     expect(isCartDrawerOpen()).toBe(true)
   })
 })
+
+describe('CartDrawer fecha de envío por línea', () => {
+  it('pinta la fecha solo si hay, con el locale', () => {
+    const withDate = { ...line('1', 1), ships_on: '2026-11-02' } as CartLine
+    render(<CartDrawer cart={cart([withDate, line('2', 1)])} labels={labels} paths={paths} locale="es-MX" classNames={{ lineShips: 'ships' }} />)
+    act(() => openCartDrawer())
+    const els = document.querySelectorAll('[data-sf-cart-line-ships]')
+    expect(els.length).toBe(1)
+    expect(els[0]!.textContent).toBe('Se enviará el: 2 de noviembre de 2026')
+    expect(els[0]!.className).toBe('ships')
+  })
+})

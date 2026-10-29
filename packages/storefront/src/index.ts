@@ -45,6 +45,8 @@ export {
   resolveAvailability,
   productAvailability,
   cartLineProblemView,
+  lineShipDate,
+  lineShipLabel,
   schemaAvailability,
 } from './availability.js'
 export type {

@@ -13,6 +13,7 @@ import {
   availabilityMessages,
   availabilityView,
   cartLineProblemView,
+  lineShipLabel,
   formatAvailabilityMessage,
   isStorefrontError,
   resolveAvailability,
@@ -317,6 +318,29 @@ export function CartLineProblem({ line, locale, messages, onAdjust, onRemove, ..
         </button>
       )}
     </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// CartLineShipDate
+// ---------------------------------------------------------------------------
+
+export type CartLineShipDateProps = {
+  /** The cart line; the date is `ships_on`, else the availability ETA. Renders `null` without one. */
+  line: Pick<CartLine, 'ships_on' | 'availability'>
+  locale?: string
+  messages?: Partial<AvailabilityMessages>
+} & Omit<ComponentPropsWithoutRef<'p'>, 'children'>
+
+/** "Se enviará el: {date}" for a cart line. Shows only what the server sent; nothing is computed. No date, no DOM. */
+export function CartLineShipDate({ line, locale, messages, ...rest }: CartLineShipDateProps) {
+  const loc = useLocale(locale)
+  const text = lineShipLabel(line, loc, messages ?? null)
+  if (!text) return null
+  return (
+    <p data-sf-cart-line-ships="" {...rest}>
+      {text}
+    </p>
   )
 }
 

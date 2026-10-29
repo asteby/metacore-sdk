@@ -1,5 +1,6 @@
 import { useEffect, useId, type ElementType, type ReactNode } from 'react'
 import { formatMoney, type Cart, type CartLine, type Money } from '@asteby/storefront'
+import { CartLineShipDate } from '../availability.js'
 import { useModalDialog } from '../dialog.js'
 import { useResolvedLocale } from '../locale.js'
 import { ProductThumb } from '../ui/product-preview.js'
@@ -86,7 +87,7 @@ export type CartDrawerSlot =
   | 'dialog' | 'panel' | 'header' | 'title' | 'close' | 'empty' | 'body' | 'shipping' | 'bar' | 'barFill' | 'lines' | 'line'
   | 'image' | 'lineTitle' | 'variant' | 'price' | 'qty' | 'qtyButton' | 'qtyValue' | 'remove' | 'upsell' | 'footer' | 'subtotal'
   | 'note' | 'actions' | 'checkout' | 'viewCart' | 'browse' | 'emptyTitle' | 'emptyHint' | 'shippingMessage' | 'lineMain'
-  | 'notices' | 'lineHead' | 'lineText' | 'controls' | 'upsellTitle' | 'subtotalLabel' | 'subtotalValue'
+  | 'notices' | 'lineHead' | 'lineText' | 'controls' | 'upsellTitle' | 'subtotalLabel' | 'subtotalValue' | 'lineShips'
 
 export type CartDrawerIcons = { close?: ReactNode; decrease?: ReactNode; increase?: ReactNode; shipping?: ReactNode; shippingReached?: ReactNode }
 
@@ -283,6 +284,7 @@ function DrawerLine({
   close: () => void
 }) {
   const { labels, paths, icons, classNames: cx = {} } = props
+  const locale = useResolvedLocale(props.locale)
   const f = { ...DEFAULT_FORM, ...props.form }
   const { Form, formData } = (props.useLineForm ?? useNativeForm)()
   const quantity = formData ? Number(formData.get(f.quantityField) ?? 0) : line.quantity + (pending?.quantity ?? 0)
@@ -331,6 +333,7 @@ function DrawerLine({
           </div>
           {price}
         </div>
+        <CartLineShipDate line={line} locale={locale} className={cx.lineShips} />
         {controls}
         {pending ? <p className={cx.variant} data-sf-cart-pending-label="">{pendingLabel}</p> : null}
       </div>
