@@ -724,6 +724,36 @@ export type Shipment = {
   map?: ShipmentMap | null
 }
 
+/** A scan of the public tracking view. `lat` / `lng` only when the carrier reports coordinates (city precision at most). */
+export type TrackingEventView = ShipmentEvent & { lat?: number | null; lng?: number | null }
+
+/**
+ * What the public "track my order" lookup returns: only the movement of the parcel. Never a name, an address, the lines
+ * or the totals of the order, and never a `label_url`. `events` is newest first.
+ */
+export type TrackingView = {
+  status: ShipmentStatus
+  carrier?: string | null
+  carrier_logo_key?: string | null
+  tracking_number?: string | null
+  /** `https` only. */
+  tracking_url?: string | null
+  /** `YYYY-MM-DD` or an instant. */
+  eta?: string | null
+  updated_at?: string | null
+  events: TrackingEventView[]
+  map?: ShipmentMap | null
+}
+
+/** Order number + the email of the order, or only the guide printed on the parcel. */
+export type TrackingLookupInput = { order_number: string; email: string } | { tracking_number: string }
+
+/** One shape for every failure so the answer never tells an existing order from a missing one. */
+export type TrackingLookupResult =
+  | { status: 'found'; tracking: TrackingView }
+  | { status: 'not_found' | 'unavailable' }
+  | { status: 'rate_limited'; retryAfter?: number }
+
 /** List-view summary of the shipments of an order. */
 export type ShipmentsSummary = {
   count: number

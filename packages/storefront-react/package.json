@@ -195,7 +195,18 @@
     },
     "./ui.css": "./dist/ui.css",
     "./progress.css": "./dist/progress.css",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./tracking": {
+      "import": {
+        "types": "./dist/tracking.d.ts",
+        "default": "./dist/tracking.js"
+      },
+      "require": {
+        "types": "./dist/tracking.d.cts",
+        "default": "./dist/tracking.cjs"
+      }
+    },
+    "./tracking.css": "./dist/tracking.css"
   },
   "sideEffects": false,
   "engines": {

@@ -1,0 +1,140 @@
+/*
+ * Default sheet of the tracking components (`@asteby/storefront-react/tracking.css`). Optional and neutral: it follows the
+ * page's text color, so it reads in light and dark. Variables: --sf-tracking-gap, --sf-tracking-line, --sf-tracking-muted,
+ * --sf-tracking-radius, --sf-tone-done / --sf-tone-current / --sf-tone-problem (shared with the order screens),
+ * --sf-field-error (error color, shared with the checkout fields), --sf-tracking-map-height.
+ */
+[data-sf-tracker],
+[data-sf-tracking-lookup] {
+  display: grid;
+  gap: var(--sf-tracking-gap, 1rem);
+}
+[data-sf-tracker-status] [data-sf-tracker-title] {
+  margin: 0;
+}
+[data-sf-tracker-list] {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+[data-sf-tracker-list] > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  align-items: baseline;
+}
+[data-sf-tracker-list] dt {
+  min-width: 9rem;
+  color: var(--sf-tracking-muted, color-mix(in srgb, currentColor 68%, transparent));
+}
+[data-sf-tracker-list] dd {
+  margin: 0;
+}
+[data-sf-tracker-guide] {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
+}
+[data-sf-copy] {
+  min-height: 44px;
+  min-width: 44px;
+}
+[data-sf-tracker-exception] {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--sf-tone-problem, #b34700);
+  border-radius: var(--sf-tracking-radius, 0.5rem);
+}
+[data-sf-tracker-error] {
+  color: var(--sf-field-error, #b42318);
+}
+[data-sf-tracker-link] {
+  display: inline-block;
+  min-height: 44px;
+  line-height: 44px;
+}
+[data-sf-tracking-timeline] {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+[data-sf-tracking-timeline] > li {
+  position: relative;
+  padding: 0 0 1rem 1.75rem;
+  border-inline-start: 2px solid var(--sf-tracking-line, color-mix(in srgb, currentColor 22%, transparent));
+  margin-inline-start: 0.5rem;
+}
+[data-sf-tracking-timeline] > li:last-child {
+  border-inline-start-color: transparent;
+  padding-bottom: 0;
+}
+[data-sf-tracking-marker] {
+  position: absolute;
+  inset-inline-start: -0.6rem;
+  top: 0;
+  line-height: 1.2;
+  background: var(--sf-tracking-bg, canvas);
+  color: var(--sf-tone-done, #007a5a);
+}
+[data-sf-tracking-timeline] > li[aria-current='step'] [data-sf-tracking-marker] {
+  color: var(--sf-tone-current, #0072b2);
+}
+[data-sf-tracking-timeline] > li[data-sf-event-status='exception'] [data-sf-tracking-marker],
+[data-sf-tracking-timeline] > li[data-sf-event-status='lost'] [data-sf-tracking-marker] {
+  color: var(--sf-tone-problem, #b34700);
+}
+[data-sf-tracking-timeline] > li[aria-current='step'] [data-sf-event-state] {
+  font-weight: 600;
+}
+[data-sf-tracking-timeline] time {
+  display: block;
+  color: var(--sf-tracking-muted, color-mix(in srgb, currentColor 68%, transparent));
+  font-size: 0.875em;
+}
+[data-sf-tracker-timeline] {
+  overflow-wrap: anywhere;
+}
+[data-sf-tracking-map],
+[data-sf-tracking-map-loading] {
+  min-height: var(--sf-tracking-map-height, 0);
+  border-radius: var(--sf-tracking-radius, 0.5rem);
+  overflow: hidden;
+}
+[data-sf-tracking-form] {
+  display: grid;
+  gap: var(--sf-tracking-gap, 1rem);
+  max-width: 28rem;
+}
+[data-sf-tracking-group] {
+  display: grid;
+  gap: 0.75rem;
+}
+[data-sf-tracking-or] {
+  margin: 0;
+  text-align: center;
+  color: var(--sf-tracking-muted, color-mix(in srgb, currentColor 68%, transparent));
+}
+[data-sf-tracking-form] input {
+  min-height: 44px;
+  width: 100%;
+  box-sizing: border-box;
+}
+[data-sf-tracking-submit] {
+  min-height: 44px;
+}
+[data-sf-tracking-result]:focus {
+  outline: 2px solid var(--sf-tone-current, #0072b2);
+  outline-offset: 4px;
+}
+[data-sf-tracking-error] {
+  margin: 0;
+  color: var(--sf-field-error, #b42318);
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-sf-tracking-lookup] * {
+    scroll-behavior: auto;
+    transition: none;
+    animation: none;
+  }
+}

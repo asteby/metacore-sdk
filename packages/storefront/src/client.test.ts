@@ -211,6 +211,35 @@ describe('writes', () => {
     }
   })
 
+  it('tracking.lookup posts the order+email or the guide and folds every failure into three plain answers', async () => {
+    const view = { status: 'in_transit', tracking_number: 'G1', events: [] }
+    const ok = recorder(() => Response.json(view))
+    const sf = createStorefrontClient({ ...base, fetch: ok.fetch })
+    await expect(sf.tracking.lookup({ order_number: 'SO-1', email: 'a@b.co' })).resolves.toEqual({ status: 'found', tracking: view })
+    expect(ok.calls[0]!.init.method).toBe('POST')
+    expect(ok.calls[0]!.url).toMatch(/\/storefront\/customer\/track$/)
+    expect(JSON.parse(ok.calls[0]!.init.body as string)).toEqual({ order_number: 'SO-1', email: 'a@b.co' })
+    await sf.tracking.lookup({ tracking_number: 'G1' })
+    expect(JSON.parse(ok.calls[1]!.init.body as string)).toEqual({ tracking_number: 'G1' })
+
+    const cases: Array<[number, unknown]> = [
+      [404, { status: 'not_found' }],
+      [400, { status: 'not_found' }],
+      [422, { status: 'not_found' }],
+      [429, { status: 'rate_limited', retryAfter: 30 }],
+      [500, { status: 'unavailable' }],
+      [503, { status: 'unavailable' }],
+    ]
+    for (const [status, want] of cases) {
+      const { fetch } = recorder(() => Response.json({ error: { code: 'x', message: 'm', ...(status === 429 ? { retry_after: 30 } : {}) } }, { status }))
+      await expect(createStorefrontClient({ ...base, fetch }).tracking.lookup({ tracking_number: 'G9' })).resolves.toEqual(want)
+    }
+    const net = createStorefrontClient({ ...base, fetch: (async () => { throw new TypeError('down') }) as never })
+    await expect(net.tracking.lookup({ tracking_number: 'G9' })).resolves.toEqual({ status: 'unavailable' })
+    const odd = recorder(() => Response.json({ nope: true }))
+    await expect(createStorefrontClient({ ...base, fetch: odd.fetch }).tracking.lookup({ tracking_number: 'G9' })).resolves.toEqual({ status: 'not_found' })
+  })
+
   it('withCustomerToken returns a client bound to the buyer session', async () => {
     const { calls, fetch } = recorder(() => Response.json({}))
     const sf = createStorefrontClient({ ...base, fetch }).withCustomerToken('jwt-2')

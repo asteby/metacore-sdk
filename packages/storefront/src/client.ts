@@ -20,6 +20,9 @@ import type {
   InvoiceListNode,
   OrderRef,
   ShipmentConnection,
+  TrackingLookupInput,
+  TrackingLookupResult,
+  TrackingView,
   ShipmentListNode,
   Address,
   AddressInput,
@@ -637,6 +640,26 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
         getOrNull<CheckoutResult>(`/storefront/checkouts/${enc(id)}`, undefined, options),
     },
 
+    /**
+     * Public "where is my order" lookup (`POST /storefront/customer/track`): by order number + email, or by the guide
+     * printed on the parcel. No buyer session. Every failure is one of three plain answers, so a miss never tells a
+     * real order from an unknown one: `not_found`, `rate_limited` (with `retryAfter` seconds when known) or
+     * `unavailable` (the server or the network failed). Needs the store to enable the route.
+     */
+    tracking: {
+      lookup: async (input: TrackingLookupInput, options?: WriteOptions): Promise<TrackingLookupResult> => {
+        try {
+          const tracking = await write<TrackingView>('POST', '/storefront/customer/track', input, options)
+          return tracking && Array.isArray(tracking.events) ? { status: 'found', tracking } : { status: 'not_found' }
+        } catch (err) {
+          if (err instanceof StorefrontError) {
+            if (err.status === 429) return err.retryAfter ? { status: 'rate_limited', retryAfter: err.retryAfter } : { status: 'rate_limited' }
+            if (err.status === 400 || err.status === 404 || err.status === 422) return { status: 'not_found' }
+          }
+          return { status: 'unavailable' }
+        }
+      },
+    },
     customer: {
       /** Sends a one-time code by email or SMS/WhatsApp. */
       requestOtp: (identifier: CustomerIdentifier, options?: WriteOptions) =>
