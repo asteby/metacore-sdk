@@ -234,11 +234,27 @@ export function payErrorResponse(err: ErrorLike, options: PayErrorOptions = {}):
 
 export type VoucherRowLabels = { point: string; reference: string; clabe: string; barcode: string; expires: string }
 
-/** Cookie receipt rows for a payment under review or with a voucher (shown on the thank-you page). */
+/** True when `tz` is an IANA zone this runtime can format with. */
+function validTimeZone(tz: string | undefined): tz is string {
+  if (!tz) return false
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: tz })
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Cookie receipt rows for a payment under review or with a voucher (shown on the thank-you page).
+ * The deadline is printed in UTC unless the shop passes its IANA `timeZone` (e.g. "America/Mexico_City"),
+ * in which case it is written in that zone with its offset; an invalid zone falls back to UTC.
+ */
 export function voucherRows(
   voucher: NonNullable<NonNullable<PaymentAttemptResult['payment']['action']>['voucher']> | null | undefined,
   labels: VoucherRowLabels,
   locale: string,
+  timeZone?: string,
 ): [label: string, value: string][] {
   if (!voucher) return []
   const rows: [string, string][] = []
@@ -249,7 +265,11 @@ export function voucherRows(
   if (voucher.expires_at) {
     const d = new Date(voucher.expires_at)
     if (!Number.isNaN(d.getTime())) {
-      rows.push([labels.expires, new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeStyle: 'short', timeZone: 'UTC' }).format(d) + ' UTC'])
+      if (validTimeZone(timeZone)) {
+        rows.push([labels.expires, new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric', hour: 'numeric', minute: '2-digit', timeZone, timeZoneName: 'short' }).format(d)])
+      } else {
+        rows.push([labels.expires, new Intl.DateTimeFormat(locale, { dateStyle: 'long', timeStyle: 'short', timeZone: 'UTC' }).format(d) + ' UTC'])
+      }
     }
   }
   return rows
