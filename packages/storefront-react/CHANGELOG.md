@@ -1,5 +1,16 @@
 # @asteby/storefront-react
 
+## 0.42.0
+
+### Minor Changes
+
+- 7371859: Nueva subruta `@asteby/storefront-react/tracking` (+ `tracking.css`): `TrackingTimeline`, `ShipmentTracker` (loading/empty/error/ready, guía copiable, enlace `https`, llegada estimada, incidencias como aviso), `TrackOrderLookup` (formulario público que funciona sin JavaScript, errores uniformes, foco al resultado), `resolveTrackingLookup` / `parseTrackingForm` para la acción de la ruta y mapa opcional (`loadMaps={() => import('@asteby/metacore-maps')}`, `geocode`) que no se importa estáticamente. `ShipmentCard` y `ShipmentDetail` comparten `TrackingEventList` sin cambiar su DOM ni sus props.
+
+### Patch Changes
+
+- Updated dependencies [7371859]
+  - @asteby/storefront@0.27.0
+
 ## 0.41.0
 
 ### Minor Changes
