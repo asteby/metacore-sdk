@@ -139,4 +139,11 @@ describe('voucherRows', () => {
     expect(rows[2]![1]).toContain('UTC')
     expect(voucherRows(null, labels, 'es-MX')).toEqual([])
   })
+  it('prints the deadline in the shop time zone when given, UTC when invalid', () => {
+    const v = { reference: 'R', expires_at: '2026-10-31T18:24:00Z' } as never
+    const mx = voucherRows(v, labels, 'es-MX', 'America/Mexico_City')[1]![1]
+    expect(mx).toContain('12:24')
+    expect(mx).not.toContain('UTC')
+    expect(voucherRows(v, labels, 'es-MX', 'Mars/Olympus')[1]![1]).toContain('UTC')
+  })
 })
