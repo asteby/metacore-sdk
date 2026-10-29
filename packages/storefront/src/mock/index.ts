@@ -41,6 +41,7 @@ import type {
   AddressSuggestion,
   ShippingRate,
   Shop,
+  ShopMarket,
   StorefrontErrorCode,
   Subject,
   SubjectKind,
@@ -74,8 +75,17 @@ export { MOCK_CSF_RULES, MOCK_FISCAL_ID_MX, MOCK_IDENTITY_DOCUMENT_MX_CSF, MOCK_
 export type { MockImageUrl } from './seed.js'
 
 export type MockStorefrontOptions = {
-  /** Currency for all prices (default `MXN`). */
+  /** Currency for all prices (default `MXN`, or `market.currency_code` when `market` is set). */
   currency?: string
+  /**
+   * Market the mock serves (contract 1.22.0), to rehearse a store in another market/currency (e.g.
+   * `{ code: 'us', currency_code: 'USD', locale: 'en-US', prices_include_tax: false, pricing: 'strict' }`). Sets
+   * `shop.market`, `shop.currency_code` / `shop.locale` and the default `currency`; carts record `market` and paying a
+   * cart whose market is no longer `state.shop.market` answers `409 cart_market_mismatch`. Cacheable catalog responses
+   * carry `X-Storefront-Market` and `Vary: X-Storefront-Domain`. Default: no market (`shop.market` and `cart.market`
+   * absent, as with a server older than 1.22).
+   */
+  market?: ShopMarket
   /** Image URL builder for seed data (default: picsum.photos placeholders). */
   imageUrl?: MockImageUrl
   /** OTP code accepted by `/customer/session` (default `000000`). */
@@ -167,6 +177,8 @@ type CartRecord = {
   note: string | null
   /** Invoice asked for (`PUT /carts/:id/invoice`). */
   invoice: InvoiceRequest | null
+  /** Market code the cart was created in (only with the `market` option). */
+  market?: string
   checkedOut: boolean
   updated_at: string
 }
@@ -278,7 +290,8 @@ function paginate<T>(items: T[], search: URLSearchParams, defaultFirst = 24, max
 const now = () => new Date().toISOString()
 
 export function createMockStorefront(options: MockStorefrontOptions = {}) {
-  const currency = options.currency ?? MOCK_CURRENCY
+  const market = options.market
+  const currency = options.currency ?? market?.currency_code ?? MOCK_CURRENCY
   const imageUrl = options.imageUrl ?? MOCK_IMAGE_URL
   const otpCode = options.otpCode ?? '000000'
   const capabilities: CustomerCapabilities = {
@@ -320,7 +333,11 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
 
   function seed(): MockState {
     return {
-      shop: { ...buildShop(currency, imageUrl), ...options.shop },
+      shop: {
+        ...buildShop(currency, imageUrl),
+        ...(market ? { currency_code: market.currency_code, locale: market.locale, market: { ...market } } : {}),
+        ...options.shop,
+      },
       products: structuredClone(options.products ?? buildProducts(currency, imageUrl)),
       collections: structuredClone(options.collections ?? buildCollections(imageUrl)),
       memberships: structuredClone(options.memberships ?? buildMemberships()),
@@ -658,6 +675,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     const tax = Math.round(total - total / 1.16)
     return {
       id: cart.id,
+      ...(cart.market !== undefined ? { market: cart.market } : {}),
       lines,
       total_quantity: quantity,
       discount_codes: codes,
@@ -907,6 +925,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       delivery: { method: null, rate_id: null, branch_id: null },
       note: null,
       invoice: null,
+      ...(state.shop.market ? { market: state.shop.market.code } : {}),
       checkedOut: false,
       updated_at: now(),
     }
@@ -986,7 +1005,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
   })
   route('GET', '/carts/:id/payment-methods', 'cart:write', ({ params }) => {
     getCartRecord(params[0]!)
-    return { body: { methods: options.paymentMethods ?? [{ key: 'mock', kind: 'builtin', default: true }], market: null }, cache: 'private' }
+    return { body: { methods: options.paymentMethods ?? [{ key: 'mock', kind: 'builtin', default: true }], market: state.shop.market?.code ?? null }, cache: 'private' }
   })
   route('PUT', '/carts/:id/delivery', 'cart:write', ({ params, body }) => {
     const cart = getCartRecord(params[0]!)
@@ -1058,6 +1077,9 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       if (prev) return { status: prev.status, body: prev.body, cache: 'private' }
     }
     const record = getCartRecord(params[0]!)
+    if (record.market !== undefined && record.market !== (state.shop.market?.code ?? undefined)) {
+      throw new HttpError(409, 'cart_market_mismatch', `Cart belongs to market ${record.market}; create a new cart`)
+    }
     const cart = renderCart(record)
     if (cart.lines.length === 0) throw new HttpError(422, 'invalid_state', 'Cart is empty', 'lines')
     if (!cart.buyer.email && !cart.buyer.phone) throw new HttpError(422, 'invalid_state', 'Buyer email or phone is required', 'buyer')
@@ -2078,6 +2100,10 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       const headers: Record<string, string> = { ...result.headers }
       if (result.cache === 'public') headers['Cache-Control'] = PUBLIC_CACHE
       if (result.cache === 'private') headers['Cache-Control'] = PRIVATE_CACHE
+      if (method === 'GET' && result.cache === 'public' && r.scope === 'catalog:read' && state.shop.market) {
+        headers.Vary = 'X-Storefront-Domain'
+        headers['X-Storefront-Market'] = state.shop.market.code
+      }
       if (method === 'GET' && result.cache === 'public' && status === 200) {
         const etag = `W/"${fnv1a(JSON.stringify(result.body))}"`
         headers.ETag = etag

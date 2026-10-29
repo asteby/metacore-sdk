@@ -152,6 +152,12 @@ Mock behaviour:
   `401` for wrong credentials/codes, `429` after `maxLoginAttempts` (5) failed
   logins, `403` when `password` is disabled. The seed customer has no password
   until `setPassword` (or `resetPassword` with the OTP code).
+- Market (contract 1.22.0): `createMockStorefront({ market: { code: 'us',
+  currency_code: 'USD', locale: 'en-US', prices_include_tax: false, pricing:
+  'strict' } })` serves `shop.market`, prices and carts in that currency,
+  `cart.market`, and `X-Storefront-Market` / `Vary: X-Storefront-Domain` on
+  catalog responses; paying a cart after `mock.state.shop.market` changed
+  answers `409 cart_market_mismatch`. Without it there is no market (as today).
 - Content: theme tokens, `home` page (hero, product_grid, collection_list,
   rich_text, faq), `main` and `footer` menus, legal pages (`terminos`,
   `privacidad`, `devoluciones`) and two articles. `?preview=` returns a draft.

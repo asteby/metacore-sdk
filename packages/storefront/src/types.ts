@@ -203,6 +203,29 @@ export type LocationListParams = {
 
 export type ShopPolicies = { free_shipping_min: Money | null; returns_days: number | null }
 
+/**
+ * How a market prices its catalog (contract 1.22.0). `legacy`: as before markets had price lists; `same`: the market's
+ * list in the base currency; `strict`: the market's own list in its currency — a product without a price in it is not
+ * sold in that market (hidden from the catalog, `422 not_available_in_market` when added).
+ */
+export type MarketPricingMode = 'legacy' | 'same' | 'strict'
+
+/**
+ * Market the server resolved for the request (`X-Storefront-Domain: host#market`; contract 1.22.0). Format amounts
+ * with `locale` + `currency_code`; all prices, the cart and `policies.free_shipping_min` already come in that currency.
+ */
+export type ShopMarket = {
+  /** Market code (`mx`, `us`): the part after `#` in `X-Storefront-Domain`. */
+  code: string
+  /** ISO 4217 the market quotes and charges in; equals `Shop.currency_code`. */
+  currency_code: string
+  /** BCP 47 locale of the market (`es-MX`, `en-US`). */
+  locale: string
+  /** Whether the market's prices already include taxes; `null` when its region does not say. */
+  prices_include_tax: boolean | null
+  pricing: MarketPricingMode
+}
+
 export type Shop = {
   name: string
   description: string | null
@@ -215,6 +238,11 @@ export type Shop = {
   contact: ShopContact
   branches: ShopBranch[]
   policies: ShopPolicies
+  /**
+   * Market of this request (contract 1.22.0); `null` in an organization without markets, absent from older servers —
+   * then keep using `currency_code` / `locale`.
+   */
+  market?: ShopMarket | null
 }
 
 // ---------------------------------------------------------------------------
@@ -308,6 +336,11 @@ export type Cart = {
   /** `active` while it can be edited; anything else is a cart already turned into an order. */
   status?: string
   currency_code?: string
+  /**
+   * Code of the market the cart was created in (contract 1.22.0); `null`/absent without markets or from older servers.
+   * Paying a cart of another market answers `409 cart_market_mismatch`: create a new cart.
+   */
+  market?: string | null
   lines: CartLine[]
   total_quantity: number
   discount_codes: CartDiscountCode[]
@@ -1011,6 +1044,12 @@ export type StorefrontErrorCode =
   | 'invalid_response'
   /** `403`: the token lacks a scope the route needs. `StorefrontError.requiredScopes` lists them. */
   | 'insufficient_scope'
+  /** `422` (contract 1.22.0): the variant has no price in the cart's market (`strict` pricing). */
+  | 'not_available_in_market'
+  /** `409` (contract 1.22.0): the cart belongs to another market or currency; create a new cart. */
+  | 'cart_market_mismatch'
+  /** `422` (contract 1.22.0): the shipping address is outside the market's countries (`strict` pricing). */
+  | 'address_outside_market'
   | (string & {})
 
 /** One affected line of a `409 insufficient_stock`. `line_id` is `null` when the line did not exist yet (add). */
