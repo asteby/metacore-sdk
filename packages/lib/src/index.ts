@@ -42,6 +42,23 @@ export type {
   FormatMoneyOptions,
 } from './money'
 
+export {
+  roundPrice,
+  derivePrice,
+  validateRoundingRule,
+  pricingErrorCode,
+  NegativeAmountError,
+} from './pricing'
+export type {
+  RoundingRule,
+  RoundingDirection,
+  RoundedPrice,
+  TaxBasis,
+  DeriveInput,
+  DerivedPrice,
+  PricingErrorCode,
+} from './pricing'
+
 export { handleServerError } from './errors'
 export type { ErrorLabels, ToastLike, LoggerLike } from './errors'
 
