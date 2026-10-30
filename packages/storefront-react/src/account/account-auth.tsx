@@ -9,7 +9,7 @@
  */
 import { PendingButton } from '../ui/pending-button.js'
 import { useEffect, useReducer, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from 'react'
-import type { CustomerCapabilities, CustomerType } from '@asteby/storefront'
+import { customerTypeOptions, type CustomerCapabilities, type CustomerType, type CustomerTypeChoices } from '@asteby/storefront'
 import { CheckoutField, ErrorSummary, useFieldErrors, type CheckoutFieldClassNames } from '../checkout/fields.js'
 import { RESEND_COOLDOWN_SECONDS, useCooldown } from './cooldown.js'
 import type { AuthActionData, AuthErrorCode, AuthStep } from './types.js'
@@ -24,8 +24,10 @@ export type AccountAuthMessages = {
   passwordHint: string
   firstName: string
   lastName: string
-  /** Label of the customer-type select of the registration (shown only when `customerTypes` is given). */
+  /** Label of the customer-type select of the registration (shown only when the store offers types). */
   customerType: string
+  /** Under the select when any offered type is validated by the store before it gets anything special. */
+  customerTypeReview: string
   code: string
   codeSentTo: string
   /** After asking for a new code. `{email}` is replaced. */
@@ -64,6 +66,7 @@ const ES: AccountAuthMessages = {
   firstName: 'Nombre',
   lastName: 'Apellido',
   customerType: 'Tipo de cliente',
+  customerTypeReview: 'Validaremos tu tipo antes de aplicar precios especiales.',
   code: 'Código',
   codeSentTo: 'Enviamos un código a {email}. Puede tardar un minuto.',
   codeResent: 'Te enviamos un código nuevo a {email}. El anterior ya no sirve.',
@@ -115,6 +118,7 @@ const EN: AccountAuthMessages = {
   firstName: 'First name',
   lastName: 'Last name',
   customerType: 'Customer type',
+  customerTypeReview: 'We will verify your type before applying special prices.',
   code: 'Code',
   codeSentTo: 'We sent a code to {email}. It can take a minute.',
   codeResent: 'We sent a new code to {email}. The previous one no longer works.',
@@ -199,8 +203,10 @@ export type AccountAuthProps = {
   messages?: DeepPartial<AccountAuthMessages>
   /**
    * The types a new buyer can say they are, in the store's own vocabulary (`value` is a short slug, `label` is the text).
-   * When given, the registration shows a «Customer type» select (the first one is selected) and sends `customer_type`. Omitted: no
-   * select. It classifies the buyer for marketing; it does not change prices.
+   * When given it WINS over the organization's own list; omitted, the registration takes it from
+   * `capabilities.customer_types` (the organization defines it, not the store). With a list, the registration shows a
+   * «Customer type» select (the organization's `default` is selected, else the first) and sends `customer_type`. No
+   * list: no select. Declaring a type is a request: it never changes prices by itself.
    */
   customerTypes?: ReadonlyArray<{ value: CustomerType; label: string }>
   classNames?: AccountAuthClassNames
@@ -224,6 +230,9 @@ const initialOf = (caps: CustomerCapabilities, initialView?: AccountAuthView): A
  */
 export function AccountAuth({ capabilities, data: received, next, pending = false, initialView, form: FormTag = 'form', action, locale, messages, customerTypes, classNames: cx = {}, header }: AccountAuthProps) {
   const m = accountAuthMessages(locale, messages)
+  const typeChoices: CustomerTypeChoices | null = customerTypes?.length
+    ? { options: customerTypes, defaultValue: customerTypes[0]!.value, hasReview: false }
+    : customerTypeOptions(capabilities)
   const passwordOn = capabilities.password
   const otpOn = capabilities.otp_channels.includes('email')
   const [, refresh] = useReducer((n: number) => n + 1, 0)
@@ -300,9 +309,9 @@ export function AccountAuth({ capabilities, data: received, next, pending = fals
         <>
           <CheckoutField {...fieldProps} name="first_name" label={m.firstName} autoComplete="given-name" optional />
           <CheckoutField {...fieldProps} name="last_name" label={m.lastName} autoComplete="family-name" optional />
-          {customerTypes?.length ? (
-            <CheckoutField {...fieldProps} as="select" name="customer_type" label={m.customerType} defaultValue={customerTypes[0]!.value} error={v.errors.customer_type ?? null}>
-              {customerTypes.map((t) => (
+          {typeChoices ? (
+            <CheckoutField {...fieldProps} as="select" name="customer_type" label={m.customerType} defaultValue={typeChoices.defaultValue} error={v.errors.customer_type ?? null} hint={typeChoices.hasReview ? m.customerTypeReview : undefined}>
+              {typeChoices.options.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}
                 </option>

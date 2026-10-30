@@ -6,7 +6,7 @@
  */
 
 import type { CustomerPreferences } from './account-settings.js'
-import type { CustomerType } from './customer-type.js'
+import type { CustomerType, CustomerTypes } from './customer-type.js'
 import type { OpeningHours } from './geo.js'
 
 // ---------------------------------------------------------------------------
@@ -530,7 +530,7 @@ export type CheckoutResult = {
 // Customer
 // ---------------------------------------------------------------------------
 
-export type { CustomerType } from './customer-type.js'
+export type { CustomerType, CustomerTypeOption, CustomerTypes, CustomerTypeChoices } from './customer-type.js'
 
 export type Customer = {
   id: string
@@ -602,6 +602,11 @@ export type CustomerCapabilities = {
    * delivery, because the code goes to the NEW address. Absent on older servers: there is no such section.
    */
   email_change?: boolean
+  /**
+   * The types of customer the organization lets a buyer pick when registering or buying as a guest (its own list,
+   * `customerTypeOptions(caps)` cleans it). Absent when it offers none (or on older servers): show no select.
+   */
+  customer_types?: CustomerTypes
 }
 
 /** `GET {gateway}/_token`: what the token in use is and what it can do. Needs no scope. */

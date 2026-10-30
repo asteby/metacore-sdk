@@ -17,6 +17,8 @@ export type AddressFieldKey = 'zip' | 'province' | 'city' | 'neighborhood' | 'ad
 export type ContactFieldKey = 'email' | 'phone' | 'first_name' | 'last_name' | 'customer_type'
 
 export type AddressFieldsMessages = Record<AddressFieldKey | ContactFieldKey, string> & AddressSuggestMessages & {
+  /** Under the customer-type select when the store validates any offered type (`customerTypeReview`). */
+  customerTypeReview: string
   provincePlaceholder: string
   neighborhoodPlaceholder: string
   address1Hint: string
@@ -43,6 +45,7 @@ export type AddressFieldsMessages = Record<AddressFieldKey | ContactFieldKey, st
 const ES: AddressFieldsMessages = {
   email: 'Correo',
   customer_type: 'Tipo de cliente',
+  customerTypeReview: 'Validaremos tu tipo antes de aplicar precios especiales.',
   phone: 'Teléfono',
   first_name: 'Nombre',
   last_name: 'Apellidos',
@@ -76,6 +79,7 @@ const ES: AddressFieldsMessages = {
 const EN: AddressFieldsMessages = {
   email: 'Email',
   customer_type: 'Customer type',
+  customerTypeReview: 'We will verify your type before applying special prices.',
   phone: 'Phone',
   first_name: 'First name',
   last_name: 'Last name',
@@ -144,15 +148,20 @@ export type ContactFieldsProps = Common & {
   /** Explain why e-mail and phone are needed (default true). */
   hints?: boolean
   /**
-   * The types a buyer can say they are, in the store's own vocabulary (`value` a short slug). When given, a «Customer type»
-   * select is added (the first one is selected unless `defaults.customer_type` says otherwise; name `customer_type` unless `names.customer_type`). It classifies the buyer for marketing and
-   * does not change prices. Omitted: no select.
+   * The types a buyer can say they are (`value` a short slug), normally the organization's own list from
+   * `customerTypeOptions(capabilities)`. When given, a «Customer type» select is added: `defaults.customer_type` is
+   * selected when it is one of them, else `customerTypeDefault`, else the first (name `customer_type` unless
+   * `names.customer_type`). Declaring a type is a request: it never changes prices by itself. Omitted: no select.
    */
   customerTypes?: ReadonlyArray<{ value: CustomerType; label: string }>
+  /** The option to preselect (the organization's `default`, `customerTypeOptions(caps).defaultValue`). */
+  customerTypeDefault?: CustomerType
+  /** Some offered type is validated by the store before it gets anything special: say so under the select. */
+  customerTypeReview?: boolean
 }
 
 /** E-mail, phone, given and family name with their autofill tokens and the right mobile keyboards. */
-export function ContactFields({ defaults = {}, names = {}, errors = {}, phone, hints = true, customerTypes, locale, messages, fieldMessages: fm, classNames: cx = {} }: ContactFieldsProps) {
+export function ContactFields({ defaults = {}, names = {}, errors = {}, phone, hints = true, customerTypes, customerTypeDefault, customerTypeReview, locale, messages, fieldMessages: fm, classNames: cx = {} }: ContactFieldsProps) {
   const m = addressFieldsMessages(locale, messages)
   const n = (k: ContactFieldKey) => names[k] ?? k
   const common = { ...(locale ? { locale } : {}), ...(fm ? { messages: fm } : {}) }
@@ -168,8 +177,15 @@ export function ContactFields({ defaults = {}, names = {}, errors = {}, phone, h
           as="select"
           name={n('customer_type')}
           label={m.customer_type}
-          defaultValue={customerTypes.some((t) => t.value === defaults.customer_type) ? defaults.customer_type! : customerTypes[0]!.value}
+          defaultValue={
+            customerTypes.some((t) => t.value === defaults.customer_type)
+              ? defaults.customer_type!
+              : customerTypes.some((t) => t.value === customerTypeDefault)
+                ? customerTypeDefault!
+                : customerTypes[0]!.value
+          }
           error={errors[n('customer_type')] ?? null}
+          hint={customerTypeReview ? m.customerTypeReview : undefined}
           classNames={field(cx, 'wide')}
         >
           {customerTypes.map((t) => (

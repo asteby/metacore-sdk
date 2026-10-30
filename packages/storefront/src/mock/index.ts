@@ -73,6 +73,7 @@ import {
 
 export { MOCK_CURRENCY, MOCK_CUSTOMER_EMAIL, MOCK_IMAGE_URL, MOCK_POSTAL_CENTROIDS } from './seed.js'
 export { MOCK_SUBJECT_KINDS } from './subjects.js'
+export { MOCK_CUSTOMER_TYPES } from './customer-types.js'
 export { MOCK_CSF_RULES, MOCK_FISCAL_ID_MX, MOCK_IDENTITY_DOCUMENT_MX_CSF, MOCK_REGION_MX } from './region.js'
 export type { MockImageUrl } from './seed.js'
 
@@ -773,10 +774,15 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     return value
   }
 
-  /** `customer_type` of a body: `null` when not sent or empty, a 400 on a value outside the closed list. */
+  /**
+   * `customer_type` of a body: `null` when not sent or empty. When the store offers a list (`customer_types` in the
+   * capabilities) a code outside it is IGNORED without an error, like the real server; with no list, an invalid slug is a 400.
+   */
   function customerTypeOf(body: Record<string, unknown>): CustomerType | null {
     const raw = typeof body.customer_type === 'string' ? body.customer_type.trim().toLowerCase() : ''
     if (!raw) return null
+    const offered = capabilities.customer_types?.options
+    if (offered) return offered.some((o) => o.value === raw) ? raw : null
     if (!isCustomerType(raw)) throw new HttpError(400, 'validation', 'Invalid customer type', 'customer_type')
     return raw
   }
