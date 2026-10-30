@@ -6,6 +6,7 @@ import {
   paymentMessages,
   paymentOutcome,
   type Money,
+  type PaymentAction,
   type PaymentAttemptResult,
   type PaymentClient,
   type PaymentErrorKind,
@@ -18,6 +19,7 @@ import type { MountedPaymentForm, PaymentFormAdapter, PaymentTransport } from '.
 import { mercadoPagoBricksAdapter } from './mercadopago.js'
 import { mountQueued } from './mount-queue.js'
 import { isResolvedAttempt } from './resilient-transport.js'
+import { STRIPE_ELEMENTS_KIND, stripeElementsAdapter } from './stripe.js'
 import { readPaymentScheme, readPaymentTheme } from './theme.js'
 
 export type EmbeddedPaymentStatus =
@@ -43,6 +45,8 @@ export type PaymentEvent =
   | { type: 'result'; status: PaymentOutcomeKind; decline_code: string | null }
   | { type: 'error'; kind: PaymentErrorKind }
   | { type: 'retry' }
+  /** A challenge the provider SDK runs itself (Stripe 3DS): `completed` / `failed` is the SDK's word, never the payment's. */
+  | { type: 'provider_action'; result: 'completed' | 'failed' | 'unsupported' }
 
 export type UseEmbeddedPaymentOptions = {
   /** Provider data from `paymentMethods[].client`. `null`/absent: nothing to mount (status `idle`). */
@@ -60,7 +64,7 @@ export type UseEmbeddedPaymentOptions = {
   locale?: string
   /** Replaces the adapter chosen from `client.kind`. */
   adapter?: PaymentFormAdapter
-  /** Extra adapters by `kind`. Mercado Pago is built in. */
+  /** Extra adapters by `kind`. Mercado Pago (`mercadopago_bricks`) and Stripe (`stripe_elements`) are built in. */
   adapters?: Record<string, PaymentFormAdapter>
   /** CSP nonce for the inserted script. */
   nonce?: string
@@ -135,7 +139,20 @@ const DEFAULT_ADAPTERS: Record<string, PaymentFormAdapter> = {}
 
 function defaultAdapterFor(kind: string): PaymentFormAdapter | undefined {
   if (kind === 'mercadopago_bricks') return (DEFAULT_ADAPTERS[kind] ??= mercadoPagoBricksAdapter())
+  if (kind === STRIPE_ELEMENTS_KIND) return (DEFAULT_ADAPTERS[kind] ??= stripeElementsAdapter())
   return undefined
+}
+
+/**
+ * A pending challenge the provider SDK must run itself (`challenge.kind` set and not `iframe`, e.g. `stripe_next_action`),
+ * as opposed to a bank page `url` shown in the page's own dialog (Mercado Pago 3DS: no `kind`).
+ */
+function providerAction(result: PaymentAttemptResult): PaymentAction | null {
+  const p = result.payment
+  if (p.status !== 'requires_action' && p.status !== 'pending') return null
+  const a = p.action
+  const k = a?.type === 'challenge' ? a.challenge?.kind : undefined
+  return typeof k === 'string' && k !== '' && k !== 'iframe' ? a! : null
 }
 
 function safeStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null {
@@ -215,6 +232,9 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   const appliedAmount = useRef<string | null>(null)
   const updating = useRef<Promise<void> | null>(null)
   const remountRequested = useRef(false)
+  // A provider-run challenge (Stripe 3DS modal) is in progress: no submit, no total update, no second run.
+  const actionRunning = useRef(false)
+  const runActionRef = useRef<(action: PaymentAction) => Promise<void>>(() => Promise.resolve())
 
   useEffect(() => {
     alive.current = true
@@ -278,7 +298,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   // remount. Never while a charge is in flight (`submit` runs it afterwards) and never two at once.
   const syncAmount = useCallback((): void => {
     const m = form.current
-    if (!m || inFlight.current || updating.current || remountRequested.current) return
+    if (!m || inFlight.current || updating.current || remountRequested.current || actionRunning.current) return
     // The outcome of a charge is unknown: the form (and its single-use token) stays as it is until it is resolved.
     if (statusRef.current === 'network_error' || (statusRef.current === 'blocked' && errorRef.current?.kind === 'payment_in_progress')) return
     if (appliedAmount.current === amountKeyRef.current) return
@@ -409,6 +429,12 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
 
   const finish = useCallback(
     (result: PaymentAttemptResult) => {
+      // The provider SDK runs this challenge (Stripe `handleNextAction`), not the page's iframe dialog.
+      const action = providerAction(result)
+      if (action) {
+        void runActionRef.current(action)
+        return
+      }
       const o = paymentOutcome(result, live.current.locale, live.current.messages)
       pendingData.current = null
       leftChallenge.current = false
@@ -432,6 +458,63 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     [emit, rotateAttempt],
   )
 
+  // Runs a provider-driven challenge (Stripe 3DS) and then asks the SERVER what happened. The SDK's answer is never taken
+  // as the outcome: a "completed" 3DS can still be declined, a "failed" one may still be settling. The attempt key is kept.
+  // The action (with its client secret) only goes to the adapter: it is not kept in state nor handed to `onResult`.
+  const runAction = useCallback(
+    async (action: PaymentAction): Promise<void> => {
+      if (actionRunning.current) return
+      actionRunning.current = true
+      const m = form.current
+      pendingData.current = null
+      leftChallenge.current = false
+      setOutcome(null)
+      setError(null)
+      setStatus('processing')
+      let result: 'completed' | 'failed' | 'unsupported' = 'unsupported'
+      try {
+        if (m?.handleAction) {
+          await m.handleAction(action)
+          result = 'completed'
+        }
+      } catch {
+        result = 'failed'
+      }
+      emit({ type: 'provider_action', result })
+      try {
+        if (!alive.current) return
+        const refresh = transport.refresh
+        if (refresh) {
+          try {
+            const r = await refresh({ signal: new AbortController().signal })
+            if (!alive.current) return
+            if (isResolvedAttempt(r) && !providerAction(r)) {
+              actionRunning.current = false
+              finish(r)
+              return
+            }
+          } catch {
+            /* unknown: verified in the background below */
+          }
+        }
+        // Still unknown: the same "verifying" state as leaving a challenge. No new payment can start; the hook keeps
+        // reading `refresh` and only a definitive answer (paid / rejected / expired / cancelled) settles it.
+        leftChallenge.current = true
+        setError({
+          kind: 'payment_in_progress',
+          message: live.current.msgs[result === 'completed' ? 'challenge.verifying' : 'challenge.left'],
+          retrySameAttempt: false,
+          canRetry: false,
+        })
+        setStatus('blocked')
+      } finally {
+        actionRunning.current = false
+      }
+    },
+    [emit, finish, transport],
+  )
+  runActionRef.current = runAction
+
   const send = useCallback(
     async (data: PayData, attempt: string, total: Money) => {
       const ctl = new AbortController()
@@ -450,7 +533,10 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
             { signal: ctl.signal },
           )
           if (!alive.current) return
-          finish(result)
+          const action = providerAction(result)
+          // Awaited inside the submit: the buyer cannot pay again while the provider's 3DS modal is open.
+          if (action) await runActionRef.current(action)
+          else finish(result)
           return
         } catch (err) {
           if (!alive.current) return

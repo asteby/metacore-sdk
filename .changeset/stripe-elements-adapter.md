@@ -1,0 +1,6 @@
+---
+"@asteby/storefront": minor
+"@asteby/storefront-react": minor
+---
+
+Pago integrado con Stripe (Payment Element, flujo ConfirmationToken). En `@asteby/storefront-react/payments`: `stripeElementsAdapter` (`kind: "stripe_elements"`, incluido por defecto en `useEmbeddedPayment`/`PaymentBrick`) monta el Payment Element con el total de OPS en unidades menores (`moneyToMinorUnits`, aritmética exacta sin flotantes) y `collect()` devuelve solo `provider_data: { confirmation_token }` (nunca importes ni datos de tarjeta; nunca `confirmPayment`). Carga solo de `https://js.stripe.com` con nonce y sin SRI; script bloqueado, `loaderror` o clave que no sea `pk_` del modo correcto caen a redirección. Nuevo gancho opcional `MountedPaymentForm.handleAction(action)`: con `challenge.kind === "stripe_next_action"` el hook corre `stripe.handleNextAction` y luego lee el estado del servidor (`refresh`); sin confirmación del servidor queda en «verificando» con el mismo intento. El reto 3DS de Mercado Pago (`challenge: { url, creq }`) no cambia. Nuevo evento `provider_action`. En `@asteby/storefront`: `PaymentAction.challenge` gana `kind` (`PaymentChallengeKind`) y `client_secret`, y el catálogo de mensajes agrega `challenge.verifying` (es/en).

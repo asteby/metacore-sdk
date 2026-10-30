@@ -1230,9 +1230,27 @@ export type PaymentVoucher = {
   expires_at?: string | null
 }
 
+/**
+ * Who runs a challenge. Absent (or `iframe`): the bank page `url` (+ `creq`) shown in the page's own dialog (Mercado Pago).
+ * `stripe_next_action`: the provider SDK runs it (`stripe.handleNextAction({ clientSecret })`, Stripe's own 3DS modal).
+ */
+export type PaymentChallengeKind = 'iframe' | 'stripe_next_action'
+
+export type PaymentChallengeAction = {
+  /** See `PaymentChallengeKind`. Unknown values must be treated as unsupported (never as paid). */
+  kind?: PaymentChallengeKind | (string & {})
+  url?: string
+  creq?: string
+  /**
+   * Only with `kind: 'stripe_next_action'`: the PaymentIntent client secret (`pi_…_secret_…`) Stripe.js needs to run the
+   * next action. It can only finish authentication, not charge or change the amount; still, never log or store it.
+   */
+  client_secret?: string
+}
+
 export type PaymentAction = {
   type: 'none' | 'challenge' | 'voucher' | 'redirect'
-  challenge?: { url?: string; creq?: string } | null
+  challenge?: PaymentChallengeAction | null
   voucher?: PaymentVoucher | null
   redirect_url?: string | null
 }

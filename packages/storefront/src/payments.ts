@@ -53,6 +53,7 @@ export type PaymentMessageKey =
   | 'challenge.escape'
   | 'challenge.escape_hint'
   | 'challenge.left'
+  | 'challenge.verifying'
 
 export type PaymentMessages = Record<PaymentMessageKey, string>
 
@@ -102,6 +103,7 @@ const ES: PaymentMessages = {
   'challenge.escape': 'Cancelar y volver al pago',
   'challenge.escape_hint': '¿Tarda demasiado? Puedes cerrar la verificación. Si ya la aprobaste en tu banco, el pago aún puede completarse: te confirmamos aquí antes de dejarte pagar de nuevo.',
   'challenge.left': 'Cerraste la verificación. Estamos confirmando con tu banco si el pago se completó; no vuelvas a pagar todavía.',
+  'challenge.verifying': 'Verificación terminada. Estamos confirmando el pago con tu banco; no vuelvas a pagar todavía.',
 }
 
 const EN: PaymentMessages = {
@@ -150,6 +152,7 @@ const EN: PaymentMessages = {
   'challenge.escape': 'Cancel and go back to payment',
   'challenge.escape_hint': 'Taking too long? You can close the verification. If you already approved it with your bank the payment may still go through: we confirm here before letting you pay again.',
   'challenge.left': 'You closed the verification. We are checking with your bank whether the payment went through; do not pay again yet.',
+  'challenge.verifying': 'Verification finished. We are confirming the payment with your bank; do not pay again yet.',
 }
 
 const CATALOG: Record<PaymentLocale, PaymentMessages> = { es: ES, en: EN }

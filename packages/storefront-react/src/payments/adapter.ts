@@ -10,7 +10,7 @@
  *   the shop route and OPS lives in `@asteby/storefront` (`checkouts.pay`); the shop route is free to
  *   shape its own JSON as long as it answers with a `PaymentAttemptResult`.
  */
-import type { Money, PaymentAttemptResult, PaymentClient, PaymentErrorClassKind } from '@asteby/storefront'
+import type { Money, PaymentAction, PaymentAttemptResult, PaymentClient, PaymentErrorClassKind } from '@asteby/storefront'
 
 export type PaymentFormError = {
   /** `true`: the form cannot be used (SDK blocked, iframe failed). The hook falls back to a redirect. */
@@ -53,6 +53,13 @@ export interface MountedPaymentForm {
    * cannot (the hook then remounts, queued). Absent: the hook remounts on every total change.
    */
   update?(next: { amount: Money }): Promise<void>
+  /**
+   * Optional: runs a pending action the provider SDK itself must drive (Stripe: `challenge.kind === 'stripe_next_action'`
+   * -> `stripe.handleNextAction`, 3DS in the provider's own modal). Resolves when the SDK says the buyer finished it; rejects
+   * when it failed, was cancelled or the action is not this adapter's. Neither is proof of payment: the hook always reads
+   * the payment state from the server afterwards. Actions with a bank `url` (Mercado Pago 3DS) never come here.
+   */
+  handleAction?(action: PaymentAction): Promise<void>
   unmount(): void | Promise<void>
 }
 

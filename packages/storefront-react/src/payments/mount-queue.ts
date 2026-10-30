@@ -10,6 +10,7 @@
  *   late is torn down instead of kept.
  * - `create` has a time limit: a provider call that never resolves cannot freeze the chain.
  */
+import type { PaymentAction } from '@asteby/storefront'
 import type { MountedPaymentForm, PaymentFormAdapter, PaymentFormMountOptions } from './adapter.js'
 
 export class PaymentMountCancelled extends Error {
@@ -121,6 +122,7 @@ export async function mountQueued(base: PaymentFormAdapter, opts: PaymentFormMou
     return {
       collect: () => handle.collect(),
       ...(handle.update ? { update: (next: { amount: PaymentFormMountOptions['amount'] }) => handle.update!(next) } : {}),
+      ...(handle.handleAction ? { handleAction: (action: PaymentAction) => handle.handleAction!(action) } : {}),
       unmount: teardown,
     }
   } catch (err) {
