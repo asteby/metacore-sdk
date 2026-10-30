@@ -1,5 +1,16 @@
 # @asteby/storefront-react
 
+## 0.47.0
+
+### Minor Changes
+
+- dafd2d9: Pago integrado con Stripe (Payment Element, flujo ConfirmationToken). En `@asteby/storefront-react/payments`: `stripeElementsAdapter` (`kind: "stripe_elements"`, incluido por defecto en `useEmbeddedPayment`/`PaymentBrick`) monta el Payment Element con el total de OPS en unidades menores (`moneyToMinorUnits`, aritmética exacta sin flotantes) y `collect()` devuelve solo `provider_data: { confirmation_token }` (nunca importes ni datos de tarjeta; nunca `confirmPayment`). Carga solo de `https://js.stripe.com` con nonce y sin SRI; script bloqueado, `loaderror` o clave que no sea `pk_` del modo correcto caen a redirección. Exige `client.test_mode` explícito para validar la `pk_`. Nuevo gancho opcional `MountedPaymentForm.handleAction(action)`: con `action.next_action = { kind: "stripe_next_action", client_secret }` (contrato 1.25 de storefront_cart; se lee también la forma vieja `challenge.x_kind`/`x_client_secret`) el hook corre `stripe.handleNextAction` y luego lee el estado del servidor (`refresh`); sin confirmación del servidor queda en «verificando» con el mismo intento. Nueva opción `initialAction` para retomar un reto pendiente al recargar /pagar (sin formulario, sin `client` o con proveedor desconocido: «verificando», nunca redirección). Un reto sin `url` https nunca abre el diálogo vacío. Un remontaje o cambio de total durante el 3DS/verificación ya no reactiva «Pagar». `checkoutToAttempt` e `isResolvedAttempt` reconocen `next_action`. El reto 3DS de Mercado Pago (`challenge: { url, creq }`) no cambia. Nuevo evento `provider_action`. En `@asteby/storefront`: `PaymentAction.next_action` (`PaymentNextAction`, `PaymentNextActionKind`) y helper `paymentNextAction`; `paymentOutcome` clasifica una acción `next_action` o un reto sin `url` https como `challenge` con `url: null` (el pedido sigue abierto; nunca `in_review`, que lo cerraría); el mock responde a `confirmation_token: "ctoken_3DS"` con un `next_action` de Stripe; y el catálogo de mensajes agrega `challenge.verifying` (es/en).
+
+### Patch Changes
+
+- Updated dependencies [dafd2d9]
+  - @asteby/storefront@0.31.0
+
 ## 0.46.0
 
 ### Minor Changes
