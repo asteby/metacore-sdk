@@ -206,7 +206,18 @@
         "default": "./dist/tracking.cjs"
       }
     },
-    "./tracking.css": "./dist/tracking.css"
+    "./tracking.css": "./dist/tracking.css",
+    "./contact": {
+      "import": {
+        "types": "./dist/contact.d.ts",
+        "default": "./dist/contact.js"
+      },
+      "require": {
+        "types": "./dist/contact.d.cts",
+        "default": "./dist/contact.cjs"
+      }
+    },
+    "./contact.css": "./dist/contact.css"
   },
   "sideEffects": false,
   "engines": {

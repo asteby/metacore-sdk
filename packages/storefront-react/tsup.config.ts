@@ -19,6 +19,7 @@ export default defineConfig({
     promotions: 'src/promos/index.ts',
     postal: 'src/postal/index.ts',
     tracking: 'src/tracking/index.ts',
+    contact: 'src/contact/index.ts',
     ui: 'src/ui/index.ts',
   },
   format: ['esm', 'cjs'],

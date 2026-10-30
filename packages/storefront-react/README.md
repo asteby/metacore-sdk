@@ -882,6 +882,28 @@ export default function Rastreo({ actionData }: Route.ComponentProps) {
 - **Estados**: `ShipmentTracker` resuelve `loading` / `empty` / `error` (con `onRetry`) / `ready`; una incidencia (`exception`, `lost`, `returned`) se anuncia como aviso (`role="status"`), no como fallo.
 - `ShipmentCard` y `ShipmentDetail` (pedidos) usan `TrackingEventList` por dentro, con el mismo DOM de siempre.
 
+## Contacto: teléfono y burbuja de WhatsApp (`@asteby/storefront-react/contact`)
+
+Un solo lugar para el teléfono y el WhatsApp de cualquier tienda y cualquier giro. Sin número configurado **no se pinta nada**, así que una tienda que no lo use no cambia.
+
+```tsx
+import { PhoneLink, WhatsAppBubble, whatsappUrl } from '@asteby/storefront-react/contact'
+import '@asteby/storefront-react/contact.css'
+
+// En el layout raíz: `shop.contact` viene de la Storefront API (nada de números escritos en el código).
+<WhatsAppBubble phone={shop.contact.whatsapp} pathname={location.pathname} hideOn={['/pagar']} />
+
+// En el pie:
+<PhoneLink phone={shop.contact.phone} />          // «+52 55 5104 6865» → tel:+525551046865
+const href = whatsappUrl(shop.contact.whatsapp, 'Hola, necesito ayuda con mi pedido 123')  // enlace wa.me o null
+```
+
+- **`WhatsAppBubble`**: un `<a>` puro (funciona sin JavaScript) que abre el chat en pestaña nueva con `rel="noopener noreferrer"`. Solo icono: el nombre accesible sale de `label` (por omisión «Escríbenos por WhatsApp» / «Chat with us on WhatsApp»). `message` es el texto precargado (`''` para ninguno). `position` (`bottom-right` | `bottom-left`) y `offset` (px o longitud CSS) para librar una barra fija de la página. `hideOn` (cadenas que ocultan la ruta y todo lo que cuelga de ella, o RegExp) junto con `pathname`: el SDK no tiene router, la tienda le pasa la ruta actual.
+- **`PhoneLink`**: enlace `tel:` que conserva el `+` y se lee «Llámanos al …».
+- **`whatsappUrl(phone, text?)`**, `telHref`, `phoneDigits`, `isUsablePhone`, `isHiddenPath`: helpers puros. Un número con menos de 8 dígitos no es usable (devuelven `null`). El número debe llevar el código de país (`+52…`): wa.me no lo adivina.
+- **Estilo** (`contact.css`, opcional): variables `--sf-whatsapp-bg` / `-fg` (verde `#0f7b6c`: el glifo blanco queda sobre 3:1, el mínimo para un gráfico), `-size`, `-inset`, `-offset`, `-z`, `-ring`. Va fijo con las áreas seguras del dispositivo y **sin cálculos con el ancho del viewport**: una barra de scroll visible nunca la mueve ni la recorta. Respeta `prefers-reduced-motion` y se oculta al imprimir.
+- Textos es/en con `locale` y `messages` para cambiarlos.
+
 ## API
 
 | Export | |
