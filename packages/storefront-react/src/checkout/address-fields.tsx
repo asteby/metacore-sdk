@@ -8,7 +8,7 @@
  * shop (region config, a same-origin route). Without them the fields are plain text and nothing is invented.
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import { DEFAULT_CUSTOMER_TYPE, type Address, type CustomerType } from '@asteby/storefront'
+import type { Address, CustomerType } from '@asteby/storefront'
 import { useOptionalStorefront } from '../context.js'
 import { AddressLineField, type AddressSuggestMessages, type SuggestAddress } from './address-suggest.js'
 import { CheckoutField, type CheckoutFieldClassNames, type FieldErrors, type FieldMessages } from './fields.js'
@@ -144,8 +144,8 @@ export type ContactFieldsProps = Common & {
   /** Explain why e-mail and phone are needed (default true). */
   hints?: boolean
   /**
-   * The types a buyer can say they are, with the store's own words. When given, a «Customer type» select is added
-   * (default `final`; name `customer_type` unless `names.customer_type`). It classifies the buyer for marketing and
+   * The types a buyer can say they are, in the store's own vocabulary (`value` a short slug). When given, a «Customer type»
+   * select is added (the first one is selected unless `defaults.customer_type` says otherwise; name `customer_type` unless `names.customer_type`). It classifies the buyer for marketing and
    * does not change prices. Omitted: no select.
    */
   customerTypes?: ReadonlyArray<{ value: CustomerType; label: string }>
@@ -168,7 +168,7 @@ export function ContactFields({ defaults = {}, names = {}, errors = {}, phone, h
           as="select"
           name={n('customer_type')}
           label={m.customer_type}
-          defaultValue={customerTypes.some((t) => t.value === (defaults.customer_type ?? DEFAULT_CUSTOMER_TYPE)) ? (defaults.customer_type ?? DEFAULT_CUSTOMER_TYPE) : customerTypes[0]!.value}
+          defaultValue={customerTypes.some((t) => t.value === defaults.customer_type) ? defaults.customer_type! : customerTypes[0]!.value}
           error={errors[n('customer_type')] ?? null}
           classNames={field(cx, 'wide')}
         >

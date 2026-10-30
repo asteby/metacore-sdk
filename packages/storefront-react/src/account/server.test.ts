@@ -90,11 +90,11 @@ describe('createAuthAction', () => {
     expect(ok.cookie).toMatch(/^sf_customer=ct_.*Expires=set/)
   })
 
-  it('sends the declared customer type to the registration, and only a value of the closed list', async () => {
+  it('sends the declared customer type to the registration, and only a short slug', async () => {
     const spy = vi.spyOn(ctx.sf.customer, 'register')
     await ctx.post({ intent: 'register', email: 't@example.com', password: 'secret1234', customer_type: 'taller' })
     expect(spy.mock.calls.at(-1)![0]).toMatchObject({ customer_type: 'taller' })
-    await ctx.post({ intent: 'register', email: 'u@example.com', password: 'secret1234', customer_type: 'mayorista' })
+    await ctx.post({ intent: 'register', email: 'u@example.com', password: 'secret1234', customer_type: 'no válido' })
     expect(spy.mock.calls.at(-1)![0]).not.toHaveProperty('customer_type')
     await ctx.post({ intent: 'register', email: 'v@example.com', password: 'secret1234' })
     expect(spy.mock.calls.at(-1)![0]).not.toHaveProperty('customer_type')

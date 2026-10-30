@@ -539,7 +539,7 @@ export type Customer = {
   first_name: string | null
   last_name: string | null
   default_address_id: string | null
-  /** What the buyer declared (contract 1.22+); absent on older servers, which means `final`. */
+  /** What the buyer declared (a short slug the store defines); absent when none. */
   customer_type?: CustomerType
   /** Saved fiscal data; `null`/absent when none. */
   fiscal?: FiscalIdentity | null
@@ -620,7 +620,7 @@ export type CustomerRegisterInput = {
   password: string
   first_name?: string
   last_name?: string
-  /** What the buyer says they are (optional). `400` with `field: 'customer_type'` for an unknown value. */
+  /** What the buyer says they are (optional, the store's own vocabulary). `400` with `field: 'customer_type'` if it is not a short slug. */
   customer_type?: CustomerType
 }
 

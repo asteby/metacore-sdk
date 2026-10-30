@@ -1,11 +1,13 @@
 /**
- * What a buyer declares they are, for the store's marketing and (later) price lists. A manual classification:
- * choosing a type does not change prices. Empty or absent on the server reads as `final`.
+ * What a buyer declares they are (e.g. `taller`, `mayorista`): a short slug whose VOCABULARY belongs to each store, not
+ * to the platform. It classifies the buyer for marketing and, later, price lists; choosing one never changes a price.
+ * A store that does not use it sends nothing and nothing changes for it.
  */
-export const CUSTOMER_TYPES = ['final', 'refaccionario', 'taller', 'flotillas'] as const
-export type CustomerType = (typeof CUSTOMER_TYPES)[number]
-export const DEFAULT_CUSTOMER_TYPE: CustomerType = 'final'
+export type CustomerType = string
 
+const SLUG = /^[a-z0-9][a-z0-9_-]{0,31}$/
+
+/** Whether `value` is a valid type slug (lowercase letters, digits, `-` or `_`, up to 32): what OPS accepts. */
 export function isCustomerType(value: unknown): value is CustomerType {
-  return typeof value === 'string' && (CUSTOMER_TYPES as readonly string[]).includes(value)
+  return typeof value === 'string' && SLUG.test(value)
 }

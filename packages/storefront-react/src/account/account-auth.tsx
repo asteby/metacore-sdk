@@ -10,7 +10,6 @@
 import { PendingButton } from '../ui/pending-button.js'
 import { useEffect, useReducer, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from 'react'
 import type { CustomerCapabilities, CustomerType } from '@asteby/storefront'
-import { DEFAULT_CUSTOMER_TYPE } from '@asteby/storefront'
 import { CheckoutField, ErrorSummary, useFieldErrors, type CheckoutFieldClassNames } from '../checkout/fields.js'
 import { RESEND_COOLDOWN_SECONDS, useCooldown } from './cooldown.js'
 import type { AuthActionData, AuthErrorCode, AuthStep } from './types.js'
@@ -199,8 +198,8 @@ export type AccountAuthProps = {
   locale?: string
   messages?: DeepPartial<AccountAuthMessages>
   /**
-   * The types a new buyer can say they are, with the store's own words (`value` is the contract's, `label` is yours). When
-   * given, the registration shows a «Customer type» select (default `final`) and sends `customer_type`. Omitted: no
+   * The types a new buyer can say they are, in the store's own vocabulary (`value` is a short slug, `label` is the text).
+   * When given, the registration shows a «Customer type» select (the first one is selected) and sends `customer_type`. Omitted: no
    * select. It classifies the buyer for marketing; it does not change prices.
    */
   customerTypes?: ReadonlyArray<{ value: CustomerType; label: string }>
@@ -302,7 +301,7 @@ export function AccountAuth({ capabilities, data: received, next, pending = fals
           <CheckoutField {...fieldProps} name="first_name" label={m.firstName} autoComplete="given-name" optional />
           <CheckoutField {...fieldProps} name="last_name" label={m.lastName} autoComplete="family-name" optional />
           {customerTypes?.length ? (
-            <CheckoutField {...fieldProps} as="select" name="customer_type" label={m.customerType} defaultValue={customerTypes.some((t) => t.value === DEFAULT_CUSTOMER_TYPE) ? DEFAULT_CUSTOMER_TYPE : customerTypes[0]!.value} error={v.errors.customer_type ?? null}>
+            <CheckoutField {...fieldProps} as="select" name="customer_type" label={m.customerType} defaultValue={customerTypes[0]!.value} error={v.errors.customer_type ?? null}>
               {customerTypes.map((t) => (
                 <option key={t.value} value={t.value}>
                   {t.label}

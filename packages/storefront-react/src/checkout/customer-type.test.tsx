@@ -21,7 +21,7 @@ describe('customer type select', () => {
     expect(container.querySelector('[name=customer_type]')).toBeNull()
   })
 
-  it('ContactFields renders the store words, final selected, under the right name', () => {
+  it('ContactFields renders the store words, the first one selected, under the right name', () => {
     const { container } = render(<ContactFields customerTypes={types} names={{ customer_type: 'contact_customer_type' }} />)
     const select = container.querySelector('select[name=contact_customer_type]') as HTMLSelectElement
     expect(select).toBeTruthy()
