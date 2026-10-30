@@ -6,7 +6,7 @@
  * token in the store's own cookie, which is passed in (`customerCookie`), so name, flags and signing stay the store's.
  */
 import { fileGuardKey, once, takeHit, type FileGuardOptions } from './file-guard.js'
-import { invoiceFileBytes, isStorefrontError, repairPath, safeInvoiceFilename, isCustomerType, type CustomerCapabilities, type CustomerType, type CustomerSession, type StorefrontClient } from '@asteby/storefront'
+import { customerTypeOptions, invoiceFileBytes, isStorefrontError, repairPath, safeInvoiceFilename, isCustomerType, type CustomerCapabilities, type CustomerType, type CustomerSession, type StorefrontClient } from '@asteby/storefront'
 import { voucherOf } from './voucher.js'
 import type { AuthActionData, AuthErrorCode, AuthIntent } from './types.js'
 
@@ -56,11 +56,14 @@ export async function loadAuthCapabilities(sf: StorefrontClient, options: LoadAu
   try {
     const got = await sf.customer.capabilities(options.signal ? { signal: options.signal } : undefined)
     const missing = Array.isArray(got?.missing_scopes) ? got.missing_scopes.filter((x): x is string => typeof x === 'string') : []
+    // The organization's own customer types (cleaned: valid codes, labels, no repeats, the default that exists). Absent when it offers none.
+    const types = customerTypeOptions(got)
     const value: CustomerCapabilities = {
       // `password: false` (including for a missing scope) is respected: the form never offers what the token cannot do.
       password: got?.password !== false,
       email_verification: got?.email_verification === true,
       otp_channels: Array.isArray(got?.otp_channels) ? got.otp_channels : [],
+      ...(types ? { customer_types: { options: types.options.map((o) => ({ ...o })), default: types.defaultValue } } : {}),
       ...(typeof got?.unavailable_reason === 'string' ? { unavailable_reason: got.unavailable_reason } : {}),
       ...(missing.length ? { missing_scopes: missing } : {}),
     }
