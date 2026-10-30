@@ -1,5 +1,12 @@
 # @asteby/storefront
 
+## 0.28.0
+
+### Minor Changes
+
+- 8f47538: Tipo de cliente (`customer_type`), un campo opcional para clasificar al comprador (marketing y, más adelante, listas de precios; no cambia precios). Es un texto corto (minúsculas, números, `-`, `_`, hasta 32) cuyo vocabulario define cada tienda: la plataforma no fija una lista, y una tienda que no lo usa no ve ningún cambio. `@asteby/storefront`: tipo `CustomerType`, `isCustomerType`, campo en `Customer`, `customer.register`, `createSession` y `carts.setBuyer`; el mock lo acepta y rechaza un valor mal formado (400, `customer_type`). `@asteby/storefront-react`: `AccountAuth` y `ContactFields` aceptan `customerTypes` (valor y texto de la tienda) y pintan un select con la primera opción elegida; `createAuthAction` lo manda al registro. Sin `customerTypes` todo queda como antes.
+- ee1701a: Precios por mercado (contrato Storefront API 1.22.0), solo aditivo: `Shop.market?: ShopMarket | null` (`code`, `currency_code`, `locale`, `prices_include_tax`, `pricing` `legacy`|`same`|`strict`), `Cart.market?: string | null` y los códigos de error `not_available_in_market` (422), `cart_market_mismatch` (409: el carrito es de otro mercado, crea otro) y `address_outside_market` (422) en `StorefrontErrorCode`. El mock acepta `createMockStorefront({ market })` para simular un mercado en otra moneda (tienda, precios, carrito, cabeceras `X-Storefront-Market`/`Vary` y `409 cart_market_mismatch`); sin la opción responde igual que antes. `toMoney` y el formato no cambian.
+
 ## 0.27.0
 
 ### Minor Changes
