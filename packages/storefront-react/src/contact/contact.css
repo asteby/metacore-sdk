@@ -1,0 +1,64 @@
+/*
+ * Default sheet of the contact components (`@asteby/storefront-react/contact.css`). Optional. Variables:
+ * --sf-whatsapp-bg / --sf-whatsapp-fg (the button; the default green keeps the white glyph above 3:1, the minimum for a
+ * graphic), --sf-whatsapp-size, --sf-whatsapp-inset (distance to the side/bottom edge), --sf-whatsapp-offset (extra distance
+ * above the bottom edge, e.g. to clear a fixed bar), --sf-whatsapp-z, --sf-whatsapp-ring (focus ring).
+ * Positioned with the device safe areas and NO viewport-width math: a visible scrollbar never moves or clips it.
+ */
+[data-sf-whatsapp-bubble] {
+  position: fixed;
+  z-index: var(--sf-whatsapp-z, 40);
+  bottom: calc(max(var(--sf-whatsapp-inset, 16px), env(safe-area-inset-bottom)) + var(--sf-whatsapp-offset, 0px));
+  inline-size: var(--sf-whatsapp-size, 56px);
+  block-size: var(--sf-whatsapp-size, 56px);
+  display: grid;
+  place-items: center;
+  border-radius: 9999px;
+  background: var(--sf-whatsapp-bg, #0f7b6c);
+  color: var(--sf-whatsapp-fg, #fff);
+  text-decoration: none;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 28%), 0 0 0 1px rgb(255 255 255 / 12%);
+  animation: sf-whatsapp-in 0.35s ease-out both;
+}
+[data-sf-whatsapp-bubble][data-position='bottom-right'] {
+  right: max(var(--sf-whatsapp-inset, 16px), env(safe-area-inset-right));
+}
+[data-sf-whatsapp-bubble][data-position='bottom-left'] {
+  left: max(var(--sf-whatsapp-inset, 16px), env(safe-area-inset-left));
+}
+[data-sf-whatsapp-bubble]:hover {
+  filter: brightness(1.08);
+}
+[data-sf-whatsapp-bubble]:focus-visible {
+  outline: 3px solid var(--sf-whatsapp-ring, #fff);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 5px var(--sf-whatsapp-bg, #0f7b6c), 0 6px 18px rgb(0 0 0 / 28%);
+}
+[data-sf-whatsapp-bubble] > svg {
+  inline-size: 55%;
+  block-size: 55%;
+}
+@keyframes sf-whatsapp-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.92);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-sf-whatsapp-bubble] {
+    animation: none;
+  }
+  [data-sf-whatsapp-bubble]:hover {
+    filter: none;
+  }
+}
+@media print {
+  [data-sf-whatsapp-bubble] {
+    display: none;
+  }
+}
+[data-sf-phone-link] {
+  min-block-size: 44px;
+  display: inline-flex;
+  align-items: center;
+}

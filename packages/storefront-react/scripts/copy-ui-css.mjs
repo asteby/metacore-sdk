@@ -27,6 +27,9 @@ writeFileSync(new URL('../dist/fiscal.css', import.meta.url), readFileSync(new U
 // Hoja por omisión del rastreo de envíos (subpath /tracking).
 writeFileSync(new URL('../dist/tracking.css', import.meta.url), readFileSync(new URL('../src/tracking/tracking.css', import.meta.url), 'utf8'))
 
+// Hoja por omisión de los componentes de contacto (subpath /contact).
+writeFileSync(new URL('../dist/contact.css', import.meta.url), readFileSync(new URL('../src/contact/contact.css', import.meta.url), 'utf8'))
+
 // Hoja por omisión de «Mis artículos» (subpath /subjects).
 writeFileSync(new URL('../dist/subjects.css', import.meta.url), readFileSync(new URL('../src/subjects/subjects.css', import.meta.url), 'utf8'))
 
