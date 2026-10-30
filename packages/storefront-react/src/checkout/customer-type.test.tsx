@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
-import type { CustomerCapabilities } from '@asteby/storefront'
+import { customerTypeOptions, type CustomerCapabilities } from '@asteby/storefront'
+import { MOCK_CUSTOMER_TYPES } from '@asteby/storefront/mock'
 import { ContactFields } from './index.js'
 import { AccountAuth } from '../account/index.js'
 
@@ -49,5 +50,46 @@ describe('customer type select', () => {
   it('AccountAuth without types keeps the registration as it was', () => {
     const { container } = render(<AccountAuth capabilities={caps} initialView="register" />)
     expect(container.querySelector('[name=customer_type]')).toBeNull()
+  })
+})
+
+describe('customer types from the organization (capabilities)', () => {
+  const withTypes: CustomerCapabilities = { ...caps, customer_types: { ...MOCK_CUSTOMER_TYPES, default: 'taller' } }
+
+  it('AccountAuth takes the list from the capabilities, preselects the organization default and says it is reviewed', () => {
+    const { container } = render(<AccountAuth capabilities={withTypes} initialView="register" />)
+    const select = container.querySelector('select[name=customer_type]') as HTMLSelectElement
+    expect([...select.options].map((o) => o.value)).toEqual(['final', 'refaccionario', 'taller', 'flotillas'])
+    expect(select.value).toBe('taller')
+    expect(container.textContent).toContain('Validaremos tu tipo antes de aplicar precios especiales')
+  })
+
+  it('AccountAuth in English says it in English', () => {
+    const { container } = render(<AccountAuth capabilities={withTypes} initialView="register" locale="en" />)
+    expect(container.textContent).toContain('We will verify your type before applying special prices')
+  })
+
+  it('the prop of the store still wins over the capabilities (nobody who used it breaks)', () => {
+    const { container } = render(<AccountAuth capabilities={withTypes} customerTypes={[{ value: 'solo', label: 'Solo' }]} initialView="register" />)
+    const select = container.querySelector('select[name=customer_type]') as HTMLSelectElement
+    expect([...select.options].map((o) => o.value)).toEqual(['solo'])
+    expect(container.textContent).not.toContain('Validaremos tu tipo')
+  })
+
+  it('a store whose organization offers none shows no select at all', () => {
+    const none: CustomerCapabilities = { ...caps, customer_types: { options: [] } }
+    const { container } = render(<AccountAuth capabilities={none} initialView="register" />)
+    expect(container.querySelector('[name=customer_type]')).toBeNull()
+  })
+
+  it('ContactFields preselects customerTypeDefault, keeps a valid default of the form, and shows the review note', () => {
+    const c = customerTypeOptions({ customer_types: MOCK_CUSTOMER_TYPES })!
+    const a = render(<ContactFields customerTypes={c.options} customerTypeDefault="flotillas" customerTypeReview={c.hasReview} />)
+    expect((a.container.querySelector('select[name=customer_type]') as HTMLSelectElement).value).toBe('flotillas')
+    expect(a.container.textContent).toContain('Validaremos tu tipo antes de aplicar precios especiales')
+    a.unmount()
+    const b = render(<ContactFields customerTypes={c.options} customerTypeDefault="flotillas" defaults={{ customer_type: 'taller' }} />)
+    expect((b.container.querySelector('select[name=customer_type]') as HTMLSelectElement).value).toBe('taller')
+    expect(b.container.textContent).not.toContain('Validaremos tu tipo')
   })
 })
