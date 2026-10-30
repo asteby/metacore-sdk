@@ -396,7 +396,8 @@ describe('PaymentBrick: fallback', () => {
   it('unknown provider kind falls back; missing client stays idle', async () => {
     const onFallback = vi.fn()
     const transport = { submit: async () => paid }
-    render(<PaymentBrick client={{ ...client, kind: 'stripe_elements' }} amount={total} transport={transport} onFallback={onFallback} />)
+    // `stripe_elements` is built in since 0.47: an unknown kind must still fall back.
+    render(<PaymentBrick client={{ ...client, kind: 'acme_pay' }} amount={total} transport={transport} onFallback={onFallback} />)
     await waitFor(() => expect(onFallback).toHaveBeenCalledWith('unsupported_provider'))
     cleanup()
     const { container } = render(<PaymentBrick client={null} amount={total} transport={transport} />)

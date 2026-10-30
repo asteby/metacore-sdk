@@ -39,6 +39,9 @@ export type { CheckoutRevalidateOptions, RevalidateArgs } from './revalidate.js'
 export { MERCADOPAGO_BRICKS_KIND, mercadoPagoBricksAdapter, sanitizeMercadoPagoFormData } from './mercadopago.js'
 export type { MercadoPagoAdapterOptions, MercadoPagoCtor } from './mercadopago.js'
 
+export { STRIPE_ELEMENTS_KIND, STRIPE_NEXT_ACTION, moneyToMinorUnits, stripeAppearance, stripeCurrencyExponent, stripeElementsAdapter } from './stripe.js'
+export type { StripeAdapterOptions, StripeFactory } from './stripe.js'
+
 export { loadPaymentSdk, resetPaymentSdkCache } from './sdk-loader.js'
 export type { LoadScriptOptions } from './sdk-loader.js'
 

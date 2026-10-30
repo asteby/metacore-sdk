@@ -53,6 +53,7 @@ export type PaymentMessageKey =
   | 'challenge.escape'
   | 'challenge.escape_hint'
   | 'challenge.left'
+  | 'challenge.verifying'
 
 export type PaymentMessages = Record<PaymentMessageKey, string>
 
@@ -102,6 +103,7 @@ const ES: PaymentMessages = {
   'challenge.escape': 'Cancelar y volver al pago',
   'challenge.escape_hint': '¿Tarda demasiado? Puedes cerrar la verificación. Si ya la aprobaste en tu banco, el pago aún puede completarse: te confirmamos aquí antes de dejarte pagar de nuevo.',
   'challenge.left': 'Cerraste la verificación. Estamos confirmando con tu banco si el pago se completó; no vuelvas a pagar todavía.',
+  'challenge.verifying': 'Verificación terminada. Estamos confirmando el pago con tu banco; no vuelvas a pagar todavía.',
 }
 
 const EN: PaymentMessages = {
@@ -150,6 +152,7 @@ const EN: PaymentMessages = {
   'challenge.escape': 'Cancel and go back to payment',
   'challenge.escape_hint': 'Taking too long? You can close the verification. If you already approved it with your bank the payment may still go through: we confirm here before letting you pay again.',
   'challenge.left': 'You closed the verification. We are checking with your bank whether the payment went through; do not pay again yet.',
+  'challenge.verifying': 'Verification finished. We are confirming the payment with your bank; do not pay again yet.',
 }
 
 const CATALOG: Record<PaymentLocale, PaymentMessages> = { es: ES, en: EN }
@@ -196,6 +199,25 @@ export function safeHttpsUrl(value: unknown): string | null {
   } catch {
     return null
   }
+}
+
+/**
+ * The provider-run next action of an action (`action.next_action`, contract 1.25), e.g. Stripe's `stripe_next_action` with
+ * its `client_secret`. Also reads the legacy `challenge.x_kind` / `x_client_secret` form. `null` for a plain bank-page
+ * challenge (Mercado Pago `url` + `creq`) or no action.
+ */
+export function paymentNextAction(action: PaymentAction | null | undefined): { kind: string; client_secret: string | null } | null {
+  if (!action || typeof action !== 'object') return null
+  const str = (v: unknown) => (typeof v === 'string' && v ? v : null)
+  const n = action.next_action
+  if (n && typeof n === 'object') {
+    const kind = str(n.kind)
+    if (kind) return { kind, client_secret: str(n.client_secret) }
+  }
+  const c = action.type === 'challenge' ? action.challenge : null
+  const legacy = c ? str(c.x_kind) : null
+  if (c && legacy && legacy !== 'iframe') return { kind: legacy, client_secret: str(c.x_client_secret) }
+  return null
 }
 
 /** What the UI should do with an attempt result. */
@@ -289,6 +311,10 @@ export function paymentOutcome(result: PaymentAttemptResult, locale?: string | n
     if (url) return out('redirect', m['state.redirect'], { redirect_url: url })
   }
   if (p.status === 'requires_action' || p.status === 'pending') {
+    // Run by the provider SDK (Stripe `handleNextAction`): still a challenge (the order stays OPEN: `in_review` would close
+    // it in the shop's `settle`), but with no page for the dialog (`url: null`). The hook runs it through
+    // `MountedPaymentForm.handleAction`; `PaymentBrick` never draws a dialog without a url.
+    if (paymentNextAction(action)) return out('challenge', m['state.challenge'], { challenge: { url: null, creq: null } })
     if (action?.type === 'voucher' && action.voucher) {
       const { amount: _a, currency: _c, voucher_url, ...rest } = action.voucher
       return out('voucher', m['state.voucher'], {
@@ -297,8 +323,10 @@ export function paymentOutcome(result: PaymentAttemptResult, locale?: string | n
       })
     }
     if (action?.type === 'challenge' && action.challenge) {
+      // Without an https page `url` is null: still a challenge (order open); the hook verifies instead of a dialog.
+      const url = safeHttpsUrl(action.challenge.url)
       return out('challenge', m['state.challenge'], {
-        challenge: { url: safeHttpsUrl(action.challenge.url), creq: typeof action.challenge.creq === 'string' ? action.challenge.creq : null },
+        challenge: { url, creq: typeof action.challenge.creq === 'string' ? action.challenge.creq : null },
       })
     }
   }

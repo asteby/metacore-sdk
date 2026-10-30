@@ -248,7 +248,8 @@ export const PaymentBrick = forwardRef<PaymentBrickHandle, PaymentBrickProps>(fu
       )}
 
       {outcome?.kind === 'voucher' && (renderVoucher ? renderVoucher(outcome) : <VoucherCard outcome={outcome} locale={locale} {...(props.messages ? { messages: props.messages } : {})} />)}
-      {outcome?.kind === 'challenge' && (
+      {/* Only with a bank page to show: a challenge without one is "verifying", never an empty dialog. */}
+      {outcome?.kind === 'challenge' && !!outcome.challenge?.url && (
         <PaymentChallenge outcome={outcome} locale={locale} onCancel={state.cancelChallenge} {...(props.messages ? { messages: props.messages } : {})} {...(renderChallenge ? { render: renderChallenge } : {})} />
       )}
 

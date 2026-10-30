@@ -1230,9 +1230,38 @@ export type PaymentVoucher = {
   expires_at?: string | null
 }
 
+/** What a provider-run next action is: `stripe_next_action` = `stripe.handleNextAction({ clientSecret })` (Stripe 3DS modal). */
+export type PaymentNextActionKind = 'stripe_next_action'
+
+/**
+ * `action.next_action` (contract 1.25, additive): a pending step the provider SDK in the browser runs itself, instead of a
+ * bank page shown in the page's own dialog. When it is present there is no `challenge`.
+ */
+export type PaymentNextAction = {
+  /** Unknown values are treated as unsupported ("verifying"), never as paid. */
+  kind: PaymentNextActionKind | (string & {})
+  /**
+   * With `stripe_next_action`: the PaymentIntent client secret (`pi_…_secret_…`) Stripe.js needs to run the next action.
+   * It can only finish authentication, not charge or change the amount; still, never log or store it.
+   */
+  client_secret?: string
+}
+
+/** A bank page challenge (Mercado Pago 3DS): `url` https is required, `creq` optional. */
+export type PaymentChallengeAction = {
+  url?: string
+  creq?: string
+  /** Tolerated legacy form of `next_action.kind` (provider `x_` extras); prefer `PaymentAction.next_action`. */
+  x_kind?: string
+  /** Tolerated legacy form of `next_action.client_secret`. */
+  x_client_secret?: string
+}
+
 export type PaymentAction = {
   type: 'none' | 'challenge' | 'voucher' | 'redirect'
-  challenge?: { url?: string; creq?: string } | null
+  challenge?: PaymentChallengeAction | null
+  /** A step the provider SDK runs itself (Stripe 3DS). Present instead of `challenge`. See `PaymentNextAction`. */
+  next_action?: PaymentNextAction | null
   voucher?: PaymentVoucher | null
   redirect_url?: string | null
 }

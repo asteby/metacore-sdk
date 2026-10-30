@@ -1238,7 +1238,9 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     }
     if (st.attempts >= maxPaymentAttempts) throw new HttpError(429, 'rate_limited', 'too_many_attempts')
     st.attempts += 1
-    const token = typeof (data as Record<string, unknown>).token === 'string' ? ((data as Record<string, unknown>).token as string) : ''
+    // Mercado Pago sends `token`; Stripe sends `confirmation_token` (`ctoken_3DS` asks for Stripe's 3DS next action).
+    const d = data as Record<string, unknown>
+    const token = typeof d.token === 'string' ? d.token : typeof d.confirmation_token === 'string' ? d.confirmation_token : ''
     const attemptsLeft = maxPaymentAttempts - st.attempts
     let payment: PaymentAttemptResult['payment']
     if (method !== 'card') {
@@ -1264,6 +1266,9 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       payment = { provider: 'mock', status: 'pending', action: { type: 'none' } }
     } else if (token === 'tok_3DS') {
       payment = { provider: 'mock', status: 'requires_action', action: { type: 'challenge', challenge: { url: 'https://mock.local/3ds', creq: 'creq' } } }
+    } else if (token === 'ctoken_3DS') {
+      // Stripe 3DS (contract 1.25): a provider-run next action, no `challenge`. Fake client secret, never a real one.
+      payment = { provider: 'mock', status: 'requires_action', action: { type: 'challenge', next_action: { kind: 'stripe_next_action', client_secret: `pi_mock${id.slice(-6).replace(/[^A-Za-z0-9]/g, '')}_secret_mock` } } }
     } else {
       payment = { provider: 'mock', status: 'paid' }
       found.checkout.status = 'paid'
@@ -1271,7 +1276,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       if (order) order.status = 'paid'
     }
     payment.outcome =
-      payment.status === 'paid' ? 'approved' : payment.status === 'failed' ? 'rejected' : payment.action?.type === 'challenge' ? 'challenge' : 'pending'
+      payment.status === 'paid' ? 'approved' : payment.status === 'failed' ? 'rejected' : payment.action?.type === 'challenge' || payment.action?.next_action ? 'challenge' : 'pending'
     const result: PaymentAttemptResult = { attempt: { n: st.attempts }, payment, checkout: found.checkout as PaymentAttemptResult['checkout'], attempts_left: attemptsLeft }
     st.last = result
     state.payments.set(id, st)

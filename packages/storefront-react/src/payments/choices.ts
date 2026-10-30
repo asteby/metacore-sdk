@@ -9,7 +9,7 @@
  * - Without `client`, or with the card flagged `redirect: true`, the server does not offer `embedded`: the shop falls
  *   back to the usual redirect flow.
  */
-import { classifyPaymentError } from '@asteby/storefront'
+import { classifyPaymentError, paymentNextAction } from '@asteby/storefront'
 import type {
   CheckoutResult,
   PaymentAttemptResult,
@@ -156,7 +156,7 @@ export function checkoutToAttempt(result: CheckoutResult): PaymentAttemptResult 
     }
   }
   // Still pending: same as the last attempt left it (challenge or review), so the screen does not change.
-  if (action?.type === 'challenge') return { ...base, payment: { provider: payment.provider, status: 'requires_action', outcome: 'challenge', action } }
+  if (action?.type === 'challenge' || paymentNextAction(action) !== null) return { ...base, payment: { provider: payment.provider, status: 'requires_action', outcome: 'challenge', action } }
   return { ...base, payment: { provider: payment.provider, status: 'pending', outcome: 'pending', action: action ?? { type: 'none' } } }
 }
 
