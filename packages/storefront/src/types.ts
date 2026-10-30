@@ -6,6 +6,7 @@
  */
 
 import type { CustomerPreferences } from './account-settings.js'
+import type { CustomerType } from './customer-type.js'
 import type { OpeningHours } from './geo.js'
 
 // ---------------------------------------------------------------------------
@@ -360,7 +361,7 @@ export type CartLineInput = { variant_id: string; quantity: number }
 
 export type CartLineUpdateInput = { id: string; quantity: number }
 
-export type CartBuyerInput = { email?: string | null; phone?: string | null }
+export type CartBuyerInput = { email?: string | null; phone?: string | null; customer_type?: CustomerType | null }
 
 /**
  * A delivery rate. `id`, `title`, `cost` and `eta` are always present. The rest only
@@ -529,6 +530,8 @@ export type CheckoutResult = {
 // Customer
 // ---------------------------------------------------------------------------
 
+export type { CustomerType } from './customer-type.js'
+
 export type Customer = {
   id: string
   email: string | null
@@ -536,6 +539,8 @@ export type Customer = {
   first_name: string | null
   last_name: string | null
   default_address_id: string | null
+  /** What the buyer declared (a short slug the store defines); absent when none. */
+  customer_type?: CustomerType
   /** Saved fiscal data; `null`/absent when none. */
   fiscal?: FiscalIdentity | null
   created_at: string
@@ -552,7 +557,13 @@ export type Customer = {
 
 export type CustomerIdentifier = { email: string; phone?: never } | { phone: string; email?: never }
 
-export type CustomerSessionInput = CustomerIdentifier & { code: string }
+export type CustomerSessionInput = CustomerIdentifier & {
+  code: string
+  first_name?: string
+  last_name?: string
+  /** Only recorded when the account has no type yet; a later sign-in never overwrites it. */
+  customer_type?: CustomerType
+}
 
 export type CustomerSession = { token: string; expires_at: string; customer: Customer }
 
@@ -609,6 +620,8 @@ export type CustomerRegisterInput = {
   password: string
   first_name?: string
   last_name?: string
+  /** What the buyer says they are (optional, the store's own vocabulary). `400` with `field: 'customer_type'` if it is not a short slug. */
+  customer_type?: CustomerType
 }
 
 /** `verification_required`: a code was emailed, finish with `customer.verifyRegistration`. `created`: the account is ready and signed in. */

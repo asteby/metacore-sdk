@@ -140,6 +140,7 @@ export type { ResolvedSubject, SubjectOption, SubjectProblemCode, SubjectProblem
 
 export type { GeoPoint, OpeningHours, OpenStatus } from './geo.js'
 export type * from './types.js'
+export { isCustomerType } from './customer-type.js'
 
 export { parseDelivery, deliveryInput, deliveryNotices, MISSING_WEIGHT } from './delivery.js'
 export type { DeliveryChoice, DeliveryChoiceKind, DeliveryNotices } from './delivery.js'

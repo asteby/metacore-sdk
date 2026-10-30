@@ -17,6 +17,7 @@ import type {
   Customer,
   CustomerCapabilities,
   CustomerSession,
+  CustomerType,
   FiscalIdentity,
   FiscalProfile,
   FiscalProfileInput,
@@ -47,6 +48,7 @@ import type {
   SubjectKind,
   Theme,
 } from '../types.js'
+import { isCustomerType } from '../customer-type.js'
 import { nextAction, orderProgress, orderShipments, shipmentsStatus, sortTrackingEvents, isTestShipment } from '../order-progress.js'
 import { isValidPoint, rankByDistance } from '../geo.js'
 import { resolveAvailability } from '../availability.js'
@@ -204,7 +206,7 @@ export type MockState = {
   /** Email → password (plain text: it is a mock). The seed customer starts without one. */
   passwords: Map<string, string>
   /** Registrations waiting for their code, by email. */
-  pendingRegistrations: Map<string, { password: string; first_name: string | null; last_name: string | null }>
+  pendingRegistrations: Map<string, { password: string; first_name: string | null; last_name: string | null; customer_type: CustomerType | null }>
   /** Consecutive failed password logins by email. */
   loginFailures: Map<string, number>
   sessions: Map<string, string>
@@ -771,11 +773,19 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     return value
   }
 
+  /** `customer_type` of a body: `null` when not sent or empty, a 400 on a value outside the closed list. */
+  function customerTypeOf(body: Record<string, unknown>): CustomerType | null {
+    const raw = typeof body.customer_type === 'string' ? body.customer_type.trim().toLowerCase() : ''
+    if (!raw) return null
+    if (!isCustomerType(raw)) throw new HttpError(400, 'validation', 'Invalid customer type', 'customer_type')
+    return raw
+  }
+
   function requirePasswordEnabled() {
     if (!capabilities.password) throw new HttpError(403, 'forbidden', 'Password accounts are disabled for this store')
   }
 
-  function sessionFor(email: string, extra: { first_name?: string | null; last_name?: string | null } = {}): CustomerSession {
+  function sessionFor(email: string, extra: { first_name?: string | null; last_name?: string | null; customer_type?: CustomerType | null } = {}): CustomerSession {
     let customer = state.customers.find((c) => c.email === email)
     if (!customer) {
       customer = {
@@ -786,6 +796,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
         last_name: extra.last_name ?? null,
         default_address_id: null,
         created_at: now(),
+        ...(extra.customer_type ? { customer_type: extra.customer_type } : {}),
         // Registered with no mail connector: the e-mail is only a login name until a code proves it.
         email_verified: capabilities.email_verification,
       }
@@ -981,6 +992,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     const email = typeof body.email === 'string' ? body.email.trim() : null
     const phone = typeof body.phone === 'string' ? body.phone.trim() : null
     if (email && !/^[^@\s]+@[^@\s]+$/.test(email)) throw new HttpError(400, 'validation', 'Invalid email', 'email')
+    customerTypeOf(body) // an unknown type is a 400; the mock keeps nothing else about it
     const token = headers.get('x-customer-token')
     const customerId = token ? (state.sessions.get(token) ?? null) : null
     cart.buyer = { email: email || null, phone: phone || null, customer_id: customerId }
@@ -1281,6 +1293,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
         last_name: null,
         default_address_id: null,
         created_at: now(),
+        ...(customerTypeOf(body) ? { customer_type: customerTypeOf(body)! } : {}),
         email_verified: kind === 'email',
       }
       state.customers.push(customer)
@@ -1302,17 +1315,18 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     const text = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null)
     const first_name = text(body.first_name)
     const last_name = text(body.last_name)
+    const customer_type = customerTypeOf(body)
     if (capabilities.email_verification) {
       // Like OPS: with verification the answer is the same whether or not the email already has an account (no
       // enumeration). Proving the mailbox then sets this password on the existing account.
-      state.pendingRegistrations.set(email, { password, first_name, last_name })
+      state.pendingRegistrations.set(email, { password, first_name, last_name, customer_type })
       state.otps.set(`email:${email}`, otpCode)
       return { status: 202, body: { status: 'verification_required' }, cache: 'private' }
     }
     // Without verification the only way to avoid handing out someone else's session is a 409 (the one residual oracle).
     if (state.passwords.has(email)) throw new HttpError(409, 'conflict', 'An account with this email already exists', 'email')
     state.passwords.set(email, password)
-    return { status: 201, body: sessionFor(email, { first_name, last_name }), cache: 'private' }
+    return { status: 201, body: sessionFor(email, { first_name, last_name, customer_type }), cache: 'private' }
   })
   route('POST', '/customer/register/verify', 'customer:write', ({ body }) => {
     requirePasswordEnabled()

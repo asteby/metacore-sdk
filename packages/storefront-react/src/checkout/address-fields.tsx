@@ -8,13 +8,13 @@
  * shop (region config, a same-origin route). Without them the fields are plain text and nothing is invented.
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
-import type { Address } from '@asteby/storefront'
+import type { Address, CustomerType } from '@asteby/storefront'
 import { useOptionalStorefront } from '../context.js'
 import { AddressLineField, type AddressSuggestMessages, type SuggestAddress } from './address-suggest.js'
 import { CheckoutField, type CheckoutFieldClassNames, type FieldErrors, type FieldMessages } from './fields.js'
 
 export type AddressFieldKey = 'zip' | 'province' | 'city' | 'neighborhood' | 'address1' | 'address2' | 'reference'
-export type ContactFieldKey = 'email' | 'phone' | 'first_name' | 'last_name'
+export type ContactFieldKey = 'email' | 'phone' | 'first_name' | 'last_name' | 'customer_type'
 
 export type AddressFieldsMessages = Record<AddressFieldKey | ContactFieldKey, string> & AddressSuggestMessages & {
   provincePlaceholder: string
@@ -42,6 +42,7 @@ export type AddressFieldsMessages = Record<AddressFieldKey | ContactFieldKey, st
 
 const ES: AddressFieldsMessages = {
   email: 'Correo',
+  customer_type: 'Tipo de cliente',
   phone: 'Teléfono',
   first_name: 'Nombre',
   last_name: 'Apellidos',
@@ -74,6 +75,7 @@ const ES: AddressFieldsMessages = {
 
 const EN: AddressFieldsMessages = {
   email: 'Email',
+  customer_type: 'Customer type',
   phone: 'Phone',
   first_name: 'First name',
   last_name: 'Last name',
@@ -141,10 +143,16 @@ export type ContactFieldsProps = Common & {
   phone?: { pattern?: string; title?: string; minLength?: number }
   /** Explain why e-mail and phone are needed (default true). */
   hints?: boolean
+  /**
+   * The types a buyer can say they are, in the store's own vocabulary (`value` a short slug). When given, a «Customer type»
+   * select is added (the first one is selected unless `defaults.customer_type` says otherwise; name `customer_type` unless `names.customer_type`). It classifies the buyer for marketing and
+   * does not change prices. Omitted: no select.
+   */
+  customerTypes?: ReadonlyArray<{ value: CustomerType; label: string }>
 }
 
 /** E-mail, phone, given and family name with their autofill tokens and the right mobile keyboards. */
-export function ContactFields({ defaults = {}, names = {}, errors = {}, phone, hints = true, locale, messages, fieldMessages: fm, classNames: cx = {} }: ContactFieldsProps) {
+export function ContactFields({ defaults = {}, names = {}, errors = {}, phone, hints = true, customerTypes, locale, messages, fieldMessages: fm, classNames: cx = {} }: ContactFieldsProps) {
   const m = addressFieldsMessages(locale, messages)
   const n = (k: ContactFieldKey) => names[k] ?? k
   const common = { ...(locale ? { locale } : {}), ...(fm ? { messages: fm } : {}) }
@@ -154,6 +162,23 @@ export function ContactFields({ defaults = {}, names = {}, errors = {}, phone, h
       <CheckoutField {...common} name={n('phone')} label={m.phone} type="tel" autoComplete="tel" inputMode="tel" defaultValue={defaults.phone ?? ''} error={errors[n('phone')] ?? null} hint={hints ? m.phoneHint : undefined} classNames={field(cx, 'wide')} {...(phone?.pattern ? { pattern: phone.pattern } : {})} {...(phone?.title ? { title: phone.title } : {})} {...(phone?.minLength ? { minLength: phone.minLength } : {})} />
       <CheckoutField {...common} name={n('first_name')} label={m.first_name} autoComplete="given-name" defaultValue={defaults.first_name ?? ''} error={errors[n('first_name')] ?? null} classNames={field(cx, 'half')} />
       <CheckoutField {...common} name={n('last_name')} label={m.last_name} autoComplete="family-name" defaultValue={defaults.last_name ?? ''} error={errors[n('last_name')] ?? null} classNames={field(cx, 'half')} />
+      {customerTypes?.length ? (
+        <CheckoutField
+          {...common}
+          as="select"
+          name={n('customer_type')}
+          label={m.customer_type}
+          defaultValue={customerTypes.some((t) => t.value === defaults.customer_type) ? defaults.customer_type! : customerTypes[0]!.value}
+          error={errors[n('customer_type')] ?? null}
+          classNames={field(cx, 'wide')}
+        >
+          {customerTypes.map((t) => (
+            <option key={t.value} value={t.value}>
+              {t.label}
+            </option>
+          ))}
+        </CheckoutField>
+      ) : null}
     </>
   )
 }

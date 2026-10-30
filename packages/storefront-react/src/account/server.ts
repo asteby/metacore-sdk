@@ -6,7 +6,7 @@
  * token in the store's own cookie, which is passed in (`customerCookie`), so name, flags and signing stay the store's.
  */
 import { fileGuardKey, once, takeHit, type FileGuardOptions } from './file-guard.js'
-import { invoiceFileBytes, isStorefrontError, repairPath, safeInvoiceFilename, type CustomerCapabilities, type CustomerSession, type StorefrontClient } from '@asteby/storefront'
+import { invoiceFileBytes, isStorefrontError, repairPath, safeInvoiceFilename, isCustomerType, type CustomerCapabilities, type CustomerType, type CustomerSession, type StorefrontClient } from '@asteby/storefront'
 import { voucherOf } from './voucher.js'
 import type { AuthActionData, AuthErrorCode, AuthIntent } from './types.js'
 
@@ -154,8 +154,8 @@ function toFailure(err: unknown, ctx: 'credentials' | 'code' | 'other', extra: P
  * | intent        | fields                                   | result                                                   |
  * | ------------- | ---------------------------------------- | -------------------------------------------------------- |
  * | `login`       | email, password                          | signs in -> redirect                                     |
- * | `register`    | email, password, first_name?, last_name? | `step: 'verify'` or, without verification, redirect      |
- * | `resend`      | email, password, first_name?, last_name? | `step: 'verify'` + `resent` (new code; the server holds it back during its cooldown) |
+ * | `register`    | email, password, first_name?, last_name?, customer_type? | `step: 'verify'` or, without verification, redirect      |
+ * | `resend`      | email, password, first_name?, last_name?, customer_type? | `step: 'verify'` + `resent` (new code; the server holds it back during its cooldown) |
  * | `verify`      | email, code                              | account ready -> redirect                                |
  * | `otp-request` | email                                    | `step: 'otp'` (code sent)                                |
  * | `otp-login`   | email, code                              | signs in -> redirect                                     |
@@ -212,7 +212,14 @@ export function createAuthAction(options: CreateAuthActionOptions) {
           if (!passwordOn) return off()
           if (!password) return fail('validation', intent === 'resend' ? { ...carry, step: 'verify' } : carry, 'password')
           const res = await sf.customer.register(
-            { email, password, ...(text('first_name').trim() ? { first_name: text('first_name').trim() } : {}), ...(text('last_name').trim() ? { last_name: text('last_name').trim() } : {}) },
+            {
+              email,
+              password,
+              ...(text('first_name').trim() ? { first_name: text('first_name').trim() } : {}),
+              ...(text('last_name').trim() ? { last_name: text('last_name').trim() } : {}),
+              // Only a value of the closed list: anything else is dropped, never sent.
+              ...(isCustomerType(text('customer_type').trim()) ? { customer_type: text('customer_type').trim() as CustomerType } : {}),
+            },
             w,
           )
           if (res.status === 'created') return await signedIn(res.session, next)
