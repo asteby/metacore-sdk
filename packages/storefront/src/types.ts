@@ -138,6 +138,39 @@ export type ProductSort = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 
 
 export type ProductConnection = Connection<Product> & { facets: Facet[] }
 
+/**
+ * One option of a hierarchical tag level (`GET /storefront/tag-facets`, contract 1.24): the next segment and the
+ * number of VISIBLE products with a tag through it.
+ */
+export type TagFacetOption = { id: string; count: number }
+
+/**
+ * The next level of the hierarchical tags `<prefix><seg1>/<seg2>/…` of the visible catalog (contract 1.24): with a
+ * `fit:` prefix and no path the makes, with `path: ['ford']` its models, and so on. Options only exist with at least
+ * one product; `<prefix>universal` is never counted. `years` repeats the options as runs of consecutive years when
+ * every option is a four-digit year.
+ */
+export type TagFacets = {
+  prefix: string
+  /** The segments asked for. */
+  path: string[]
+  /** Depth of the options (the number of segments of `path`). */
+  level: number
+  /** Visible products with a tag through `path`. With a whole key it validates it: `0` = no part. */
+  count: number
+  /** Sorted by id (by year when they all are years); at most 500. */
+  options: TagFacetOption[]
+  years?: [number, number][]
+  /** There were more than 500 options: the ones of most products are kept. */
+  truncated?: boolean
+}
+
+/**
+ * `catalog.tagFacets` query: `prefix` (default the shop's first enabled one, `fit:`) and `path` (the segments already
+ * chosen, as an array or `a/b`), or a whole `key` (`fit:ford/f-150/2020`), which cannot be combined with them.
+ */
+export type TagFacetsParams = { prefix?: string; path?: string | readonly string[]; key?: string }
+
 /** `quantity_available` is `null` when the variant's stock is not tracked (always sellable). */
 export type StockLevel = { sku: string; quantity_available: number | null; availability?: Availability }
 

@@ -105,8 +105,8 @@ function makeMeta(m: Record<string, unknown>, aliases: Record<string, MakePriori
   return out
 }
 
-/** "np300-frontier" → "NP300 FRONTIER"; "1.9-tdi" → "1.9 TDI". */
-function labelFromId(id: string): string {
+/** Default label of a catalog id: "np300-frontier" → "NP300 FRONTIER"; "1.9-tdi" → "1.9 TDI". */
+export function labelFromId(id: string): string {
   return id.split('-').filter(Boolean).join(' ').toUpperCase()
 }
 

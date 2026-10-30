@@ -84,6 +84,8 @@ import type {
   RestockSubscriptionInput,
   RestockSubscriptionResult,
   StockLevel,
+  TagFacets,
+  TagFacetsParams,
   StorefrontErrorBody,
   Subject,
   SubjectInput,
@@ -516,6 +518,23 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
         getOrNull<Product>(`/storefront/products/${enc(handle)}`, undefined, options),
       recommendations: (handle: string, options?: RequestOptions) =>
         get<{ nodes: Product[] }>(`/storefront/products/${enc(handle)}/recommendations`, undefined, options),
+    },
+
+    catalog: {
+      /**
+       * The next level of the hierarchical tags of the visible catalog (`GET /storefront/tag-facets`, contract 1.24):
+       * `tagFacets()` the first level of the shop's default prefix (`fit:` makes), `tagFacets({ path: ['ford'] })` the
+       * level below, `tagFacets({ key: 'fit:ford/f-150/2020' })` validates a whole key (`count: 0` = no part). The
+       * options come from the products themselves, so a filter (the vehicle selector) cannot drift from the catalog.
+       * Servers before storefront_api 0.10.0 answer 404. Throws `TypeError` when `key` is combined with `prefix`/`path`.
+       */
+      tagFacets: (params: TagFacetsParams = {}, options?: RequestOptions) => {
+        const path = typeof params.path === 'string' ? params.path : (params.path ?? []).join('/')
+        if (params.key && (params.prefix || path)) {
+          return Promise.reject(new TypeError('catalog.tagFacets: key cannot be combined with prefix or path'))
+        }
+        return get<TagFacets>('/storefront/tag-facets', params.key ? { key: params.key } : { prefix: params.prefix || undefined, path: path || undefined }, options)
+      },
     },
 
     collections: {
