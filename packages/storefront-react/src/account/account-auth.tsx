@@ -9,7 +9,8 @@
  */
 import { PendingButton } from '../ui/pending-button.js'
 import { useEffect, useReducer, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from 'react'
-import type { CustomerCapabilities } from '@asteby/storefront'
+import type { CustomerCapabilities, CustomerType } from '@asteby/storefront'
+import { DEFAULT_CUSTOMER_TYPE } from '@asteby/storefront'
 import { CheckoutField, ErrorSummary, useFieldErrors, type CheckoutFieldClassNames } from '../checkout/fields.js'
 import { RESEND_COOLDOWN_SECONDS, useCooldown } from './cooldown.js'
 import type { AuthActionData, AuthErrorCode, AuthStep } from './types.js'
@@ -24,6 +25,8 @@ export type AccountAuthMessages = {
   passwordHint: string
   firstName: string
   lastName: string
+  /** Label of the customer-type select of the registration (shown only when `customerTypes` is given). */
+  customerType: string
   code: string
   codeSentTo: string
   /** After asking for a new code. `{email}` is replaced. */
@@ -61,6 +64,7 @@ const ES: AccountAuthMessages = {
   passwordHint: 'Entre 10 y 128 caracteres.',
   firstName: 'Nombre',
   lastName: 'Apellido',
+  customerType: 'Tipo de cliente',
   code: 'Código',
   codeSentTo: 'Enviamos un código a {email}. Puede tardar un minuto.',
   codeResent: 'Te enviamos un código nuevo a {email}. El anterior ya no sirve.',
@@ -111,6 +115,7 @@ const EN: AccountAuthMessages = {
   passwordHint: 'Between 10 and 128 characters.',
   firstName: 'First name',
   lastName: 'Last name',
+  customerType: 'Customer type',
   code: 'Code',
   codeSentTo: 'We sent a code to {email}. It can take a minute.',
   codeResent: 'We sent a new code to {email}. The previous one no longer works.',
@@ -193,6 +198,12 @@ export type AccountAuthProps = {
   action?: string
   locale?: string
   messages?: DeepPartial<AccountAuthMessages>
+  /**
+   * The types a new buyer can say they are, with the store's own words (`value` is the contract's, `label` is yours). When
+   * given, the registration shows a «Customer type» select (default `final`) and sends `customer_type`. Omitted: no
+   * select. It classifies the buyer for marketing; it does not change prices.
+   */
+  customerTypes?: ReadonlyArray<{ value: CustomerType; label: string }>
   classNames?: AccountAuthClassNames
   /** Shown above the form (a logo, a welcome text). */
   header?: ReactNode
@@ -212,7 +223,7 @@ const initialOf = (caps: CustomerCapabilities, initialView?: AccountAuthView): A
  * The whole account screen. Headless enough to restyle, complete enough to drop in:
  * `export default function Account() { return <AccountAuth capabilities={useLoaderData()} data={useActionData()} form={Form} /> }`.
  */
-export function AccountAuth({ capabilities, data: received, next, pending = false, initialView, form: FormTag = 'form', action, locale, messages, classNames: cx = {}, header }: AccountAuthProps) {
+export function AccountAuth({ capabilities, data: received, next, pending = false, initialView, form: FormTag = 'form', action, locale, messages, customerTypes, classNames: cx = {}, header }: AccountAuthProps) {
   const m = accountAuthMessages(locale, messages)
   const passwordOn = capabilities.password
   const otpOn = capabilities.otp_channels.includes('email')
@@ -222,7 +233,7 @@ export function AccountAuth({ capabilities, data: received, next, pending = fals
   const [email, setEmail] = useState(data?.email ?? '')
   // The password typed in the registration, kept in memory only so "resend the code" can repeat the registration (the
   // server keeps just its hash and the form never gets it back). Lost on reload: then only "use another email" is left.
-  const [held, setHeld] = useState<{ password: string; first_name: string; last_name: string } | null>(null)
+  const [held, setHeld] = useState<{ password: string; first_name: string; last_name: string; customer_type: string } | null>(null)
   const cooldown = useCooldown(data?.ok && (data.step === 'verify' || data.step === 'otp') ? RESEND_COOLDOWN_SECONDS : 0)
   const ref = useRef<HTMLFormElement>(null)
   const serverFields = data?.error?.field ? [data.error.field] : null
@@ -256,7 +267,7 @@ export function AccountAuth({ capabilities, data: received, next, pending = fals
     if (view !== 'register' || typeof f?.elements === 'undefined') return
     const fd = new FormData(f)
     const text = (k: string) => (typeof fd.get(k) === 'string' ? (fd.get(k) as string) : '')
-    if (text('password')) setHeld({ password: text('password'), first_name: text('first_name'), last_name: text('last_name') })
+    if (text('password')) setHeld({ password: text('password'), first_name: text('first_name'), last_name: text('last_name'), customer_type: text('customer_type') })
   }
   const fieldProps = { classNames: cx.field, ...(locale ? { locale } : {}) }
   const emailField = (
@@ -290,6 +301,15 @@ export function AccountAuth({ capabilities, data: received, next, pending = fals
         <>
           <CheckoutField {...fieldProps} name="first_name" label={m.firstName} autoComplete="given-name" optional />
           <CheckoutField {...fieldProps} name="last_name" label={m.lastName} autoComplete="family-name" optional />
+          {customerTypes?.length ? (
+            <CheckoutField {...fieldProps} as="select" name="customer_type" label={m.customerType} defaultValue={customerTypes.some((t) => t.value === DEFAULT_CUSTOMER_TYPE) ? DEFAULT_CUSTOMER_TYPE : customerTypes[0]!.value} error={v.errors.customer_type ?? null}>
+              {customerTypes.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </CheckoutField>
+          ) : null}
           {emailField}
           {passwordField(m.password, 'new-password', true)}
         </>
@@ -406,6 +426,7 @@ export function AccountAuth({ capabilities, data: received, next, pending = fals
           <input type="hidden" name="password" value={held.password} />
           {held.first_name ? <input type="hidden" name="first_name" value={held.first_name} /> : null}
           {held.last_name ? <input type="hidden" name="last_name" value={held.last_name} /> : null}
+          {held.customer_type ? <input type="hidden" name="customer_type" value={held.customer_type} /> : null}
           {next ? <input type="hidden" name="next" value={next} /> : null}
           <div className={cx.links}>
             <PendingButton type="submit" name="intent" value="resend"  className={cx.link} data-sf-account-link="resend" pending={pending} shared disabled={cooldown.remaining > 0}>
