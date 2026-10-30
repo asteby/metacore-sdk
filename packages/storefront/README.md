@@ -546,7 +546,7 @@ Errors: a `403 insufficient_scope` is a `StorefrontError` with `code: 'insuffici
 | `onRequest?(ctx)` | Runs before each request; return a `Response` to short-circuit (SSR cache hit) |
 | `onResponse?(ctx)` | Runs after each response (cache store, logging, metrics) |
 
-Resources: `shop.get`, `region`, `products.list/get/recommendations`,
+Resources: `shop.get`, `region`, `products.list/get/recommendations`, `catalog.tagFacets` (hierarchical tags of the visible catalog, one level per call: `{ path: ['ford'] }`, or `{ key: 'fit:ford/f-150/2020' }` to validate a key; contract 1.24, storefront_api ≥ 0.10.0),
 `collections.list/get`, `stock.get`,
 `carts.create/get/addLines/updateLines/removeLines/setDiscountCodes/setBuyer/setShippingAddress/deliveryOptions/setDelivery/setInvoice/checkout`,
 `customer.requestOtp/createSession/capabilities/register/verifyRegistration/loginWithPassword/setPassword/resetPassword/get/update/orders/order/requestReturn/requestInvoice/pendingPayments/invoiceFile/addresses.{list,create,update,delete}`,

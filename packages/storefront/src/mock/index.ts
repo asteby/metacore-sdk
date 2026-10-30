@@ -54,6 +54,7 @@ import { isValidPoint, rankByDistance } from '../geo.js'
 import { resolveAvailability } from '../availability.js'
 import { buildAccountOrders, buildPendingPayments, buildSyntheticOrders } from './account-seed.js'
 import { MOCK_REGION_MX, maskTaxId, validateInvoiceRequest } from './region.js'
+import { parseTagFacetsQuery, TagFacetsError, tagFacetsFromTags } from './tag-facets.js'
 import { isMasked, PRIVATE_MASK, resolveSubject, type SubjectValues } from '../subjects.js'
 import {
   MOCK_CURRENCY,
@@ -163,6 +164,11 @@ export type MockStorefrontOptions = {
    * forms stay manual.
    */
   addressSuggestions?: AddressSuggestion[]
+  /**
+   * Prefixes `GET /tag-facets` may be asked for (the shop's `facet_prefixes`; the first is the default). Default
+   * `['fit:']`, like the real server; any other prefix answers 400.
+   */
+  facetPrefixes?: string[]
   /**
    * The kinds of buyer item («My items») the store declares, served by `GET /subject-kinds` and enforced by
    * `customer.subjects`. Default none: no such section, as in a store that declares nothing (`MOCK_SUBJECT_KINDS` has two).
@@ -880,6 +886,15 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     return { body: { suggestions: hits.slice(0, limit), available: true }, cache: 'private' }
   })
   route('GET', '/products', 'catalog:read', ({ search }) => ({ body: listProducts(search), cache: 'public' }))
+  route('GET', '/tag-facets', 'catalog:read', ({ search }) => {
+    try {
+      const query = parseTagFacetsQuery(search, options.facetPrefixes)
+      return { body: tagFacetsFromTags(state.products.map((p) => p.tags), query), cache: 'public' }
+    } catch (err) {
+      if (err instanceof TagFacetsError) throw new HttpError(400, 'validation', err.message, err.field)
+      throw err
+    }
+  })
   route('GET', '/products/:handle', 'catalog:read', ({ params }) => ({
     body: requireNode(state.products.find((p) => p.handle === params[0]), `Product ${params[0]}`),
     cache: 'public',

@@ -817,6 +817,12 @@ const product = withFit(rawProduct, vehicle, config)                       // ci
 
 El catálogo acepta motores con tramos de años reales (`["2.4", 2007, 2017, 2020, 2022]` o `{ id, ranges }`): un hueco es un hueco, un modelo cubre un año solo si algún motor lo cubre y el selector no ofrece años fantasma. `vehicleCatalogToTree(catalog)` lo convierte al árbol que la organización publica para «Mis artículos» (abajo). La cookie, el formulario y el redirect son de la tienda; `safeRedirect` valida el destino. Para guardar varios vehículos en la cuenta, con selector y filtro listos, usa `/subjects`.
 
+**Catálogo desde las etiquetas (contrato 1.24, storefront_api ≥ 0.10.0).** `catalogFromFacets(sf, { aliases, labels, locale })` arma el mismo `VehicleCatalog` a partir de `GET /storefront/tag-facets` (las etiquetas `fit:<marca>/<modelo>/<año>/<motor>` del catálogo visible), en vez de una página escrita a mano que se queda atrás: marcas y modelos en orden alfabético (por etiqueta), motores con sus tramos de años reales; `aliases: { gm: 'chevrolet' }` funde una marca en otra (la clave elegida es siempre la canónica; el listado debe aceptar también las etiquetas con el alias). El endpoint responde **un nivel por llamada**, así que el árbol entero cuesta `1 + marcas + modelos + modelo-años` peticiones (miles en un catálogo real): constrúyelo en segundo plano, guárdalo minutos y cae a tu catálogo anterior si falla (un servidor anterior responde 404). `concurrency` (4) y `maxRequests` (10 000, `FacetCatalogLimitError`) lo acotan.
+
+```ts
+const catalog = await catalogFromFacets(sf, { aliases: { gm: 'chevrolet' }, labels: { make: (id) => pageLabels[id] } })
+```
+
 ## Mis artículos / Mi garage (`@asteby/storefront-react/subjects`, contrato 1.9)
 
 Algo del comprador para lo que compra (un vehículo, una impresora, un celular, una mascota, una talla), de un **tipo que la organización declara como dato**: el SDK no nombra ninguno y los textos salen de los datos (`kind.label`, `kind.label_plural`). Una tienda que no declara tipos (God's Nutrition, Local) **no tiene sección**: `loadSubjectsContext` devuelve `kinds: []` y no se pinta nada.
