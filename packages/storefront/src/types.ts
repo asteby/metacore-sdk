@@ -1236,15 +1236,27 @@ export type PaymentVoucher = {
  */
 export type PaymentChallengeKind = 'iframe' | 'stripe_next_action'
 
+/**
+ * `action.challenge`. The kernel schema only allows `url`, `creq` and `x_`-prefixed extras, so provider fields travel as
+ * `x_*` (canonical: `x_kind`, `x_client_secret`). `kind` / `client_secret` without prefix are read too, as a tolerance.
+ */
 export type PaymentChallengeAction = {
-  /** See `PaymentChallengeKind`. Unknown values must be treated as unsupported (never as paid). */
-  kind?: PaymentChallengeKind | (string & {})
   url?: string
   creq?: string
+  /** See `PaymentChallengeKind`. Unknown values are treated as unsupported ("verifying"), never as paid. */
+  x_kind?: PaymentChallengeKind | (string & {})
   /**
-   * Only with `kind: 'stripe_next_action'`: the PaymentIntent client secret (`pi_…_secret_…`) Stripe.js needs to run the
-   * next action. It can only finish authentication, not charge or change the amount; still, never log or store it.
+   * With `x_kind: 'stripe_next_action'`: the PaymentIntent client secret (`pi_…_secret_…`) Stripe.js needs to run the next
+   * action. It can only finish authentication, not charge or change the amount; still, never log or store it.
    */
+  x_client_secret?: string
+  /** Stripe `next_action.type` (`use_stripe_sdk`, `redirect_to_url`...). Informative. */
+  x_next_action?: string
+  /** PaymentIntent id. Informative. */
+  x_payment_intent?: string
+  /** Tolerated alias of `x_kind`. */
+  kind?: PaymentChallengeKind | (string & {})
+  /** Tolerated alias of `x_client_secret`. */
   client_secret?: string
 }
 

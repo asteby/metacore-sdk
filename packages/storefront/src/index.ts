@@ -66,6 +66,8 @@ export {
   declineMessage,
   safeHttpsUrl,
   paymentOutcome,
+  paymentChallengeKind,
+  paymentChallengeSecret,
   paymentErrorView,
   formatVoucherExpiry,
   paymentIdempotencyKey,

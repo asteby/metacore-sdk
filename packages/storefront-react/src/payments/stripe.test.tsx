@@ -1,10 +1,12 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { PaymentAction, PaymentAttemptResult, PaymentClient } from '@asteby/storefront'
+import type { Money, PaymentAction, PaymentAttemptResult, PaymentClient } from '@asteby/storefront'
+import { createRef } from 'react'
 import {
   PaymentBrick,
   moneyToMinorUnits,
+  type PaymentBrickHandle,
   resetPaymentSdkCache,
   stripeAppearance,
   stripeElementsAdapter,
@@ -26,21 +28,30 @@ const client: PaymentClient = {
 }
 const total = { amount: '2185.00', currency_code: 'USD' }
 const SECRET = 'pi_3Abc_secret_Xyz'
-const stripeAction: PaymentAction = { type: 'challenge', challenge: { kind: 'stripe_next_action', client_secret: SECRET } }
+// The addon's canonical contract (kernel schema: url / creq / x_ extras): x_kind + x_client_secret, no url.
+const stripeAction: PaymentAction = {
+  type: 'challenge',
+  challenge: { x_kind: 'stripe_next_action', x_client_secret: SECRET, x_next_action: 'use_stripe_sdk', x_payment_intent: 'pi_3Abc' },
+}
 
 type FakeOpts = {
   submitError?: boolean
   tokenError?: boolean
   tokenId?: unknown
   nextActionError?: boolean
+  /** handleNextAction waits for `resolveNextAction()`. */
+  nextActionDeferred?: boolean
   noReady?: boolean
+  mountThrows?: boolean
 }
 
 /** Simulated Stripe.js: records every call; the fields never exist here (they live in Stripe's iframes). */
 function fakeStripe(o: FakeOpts = {}) {
   const handlers: Record<string, ((e?: { error?: Record<string, string> }) => void)[]> = {}
+  let resolveNextAction: () => void = () => {}
   const element = {
     mount: vi.fn((_target: HTMLElement) => {
+      if (o.mountThrows) throw new Error('IntegrationError: mount')
       if (!o.noReady) queueMicrotask(() => handlers.ready?.forEach((h) => h()))
     }),
     on: vi.fn((ev: string, h: (e?: { error?: Record<string, string> }) => void) => void (handlers[ev] ??= []).push(h)),
@@ -56,16 +67,17 @@ function fakeStripe(o: FakeOpts = {}) {
     createConfirmationToken: vi.fn(async (_a: { elements: unknown }) =>
       o.tokenError ? { error: { type: 'card_error', code: 'card_declined' } } : { confirmationToken: { id: o.tokenId ?? 'ctoken_1AbC', payment_method_preview: { card: { last4: '4242' } } } },
     ),
-    handleNextAction: vi.fn(async (_a: { clientSecret: string }) =>
-      o.nextActionError ? { error: { type: 'card_error', code: 'payment_intent_authentication_failure' } } : { paymentIntent: { status: 'succeeded' } },
-    ),
+    handleNextAction: vi.fn(async (_a: { clientSecret: string }) => {
+      if (o.nextActionDeferred) await new Promise<void>((r) => (resolveNextAction = r))
+      return o.nextActionError ? { error: { type: 'card_error', code: 'payment_intent_authentication_failure' } } : { paymentIntent: { status: 'succeeded' } }
+    }),
     // Must NEVER be called: the server confirms the PaymentIntent.
     confirmPayment: vi.fn(),
     confirmCardPayment: vi.fn(),
   }
   const factory = vi.fn((_pk: string, _opts?: { locale?: string }) => stripe) as unknown as StripeFactory & ReturnType<typeof vi.fn>
   const fire = (ev: string, e?: { error?: Record<string, string> }) => handlers[ev]?.forEach((h) => h(e))
-  return { factory, stripe, elements, element, fire }
+  return { factory, stripe, elements, element, fire, resolveNextAction: () => resolveNextAction() }
 }
 
 function mountOpts(over: Partial<PaymentFormMountOptions> = {}): PaymentFormMountOptions {
@@ -93,12 +105,22 @@ describe('moneyToMinorUnits (exact, no floats)', () => {
     [{ amount: '1500.00', currency_code: 'JPY' }, 1500],
     [{ amount: '1.234', currency_code: 'KWD' }, 1234],
     [{ amount: '007.05', currency_code: 'USD' }, 705],
+    [{ amount: '15000', currency_code: 'KRW' }, 15000], // zero-decimal
+    [{ amount: '15000.00', currency_code: 'krw' }, 15000],
+    [{ amount: '1.234', currency_code: 'BHD' }, 1234], // three-decimal
+    [{ amount: '1.230', currency_code: 'BHD' }, 1230],
+    [{ amount: '100', currency_code: 'ISK' }, 10000], // Stripe: two-decimal representation
+    [{ amount: '100', currency_code: 'UGX' }, 10000],
+    [{ amount: '100.50', currency_code: 'HUF' }, 10050],
+    [{ amount: '30.00', currency_code: 'TWD' }, 3000],
   ])('%j -> %i', (money, minor) => {
     expect(moneyToMinorUnits(money)).toBe(minor)
   })
   it.each([
     [{ amount: '10.505', currency_code: 'MXN' }], // would need rounding
     [{ amount: '1500.5', currency_code: 'JPY' }],
+    [{ amount: '15000.5', currency_code: 'KRW' }],
+    [{ amount: '1.2345', currency_code: 'BHD' }],
     [{ amount: '0.00', currency_code: 'USD' }],
     [{ amount: '-5.00', currency_code: 'USD' }],
     [{ amount: '1e3', currency_code: 'USD' }],
@@ -194,10 +216,13 @@ describe('stripeElementsAdapter.mount / collect / update / handleAction / unmoun
     ['whsec_x', true],
     ['pk_live_x', true], // live key in test mode
     ['pk_test_x', false], // test key in live mode
-    ['', undefined],
+    ['pk_test_x', undefined], // mode not stated: refused even if the prefix looks fine
+    ['pk_live_x', undefined],
+    ['', true],
   ])('refuses public key %s (test_mode %s) before creating anything', async (key, testMode) => {
     const f = fakeStripe()
-    const c = { ...client, public_key: key, ...(testMode === undefined ? {} : { test_mode: testMode }) }
+    const { test_mode: _drop, ...base } = client
+    const c = { ...base, public_key: key, ...(testMode === undefined ? {} : { test_mode: testMode }) }
     await expect(stripeElementsAdapter({ getSdk: () => f.factory }).mount(mountOpts({ client: c }))).rejects.toThrow(/key/)
     expect(f.factory).not.toHaveBeenCalled()
   })
@@ -260,16 +285,31 @@ describe('stripeElementsAdapter.mount / collect / update / handleAction / unmoun
     await expect(m2.handleAction!(stripeAction)).rejects.toThrow('payment action failed: card_error/payment_intent_authentication_failure')
   })
 
+  it('handleAction tolerates the unprefixed kind / client_secret', async () => {
+    const f = fakeStripe()
+    const m = await stripeElementsAdapter({ getSdk: () => f.factory }).mount(mountOpts())
+    await m.handleAction!({ type: 'challenge', challenge: { kind: 'stripe_next_action', client_secret: SECRET } })
+    expect(f.stripe.handleNextAction).toHaveBeenCalledWith({ clientSecret: SECRET })
+  })
+
   it.each([
     [{ type: 'challenge', challenge: { url: 'https://acs.test/c', creq: 'x' } }],
-    [{ type: 'challenge', challenge: { kind: 'stripe_next_action', client_secret: 'sk_test_x' } }],
-    [{ type: 'challenge', challenge: { kind: 'stripe_next_action' } }],
+    [{ type: 'challenge', challenge: { x_kind: 'stripe_next_action', x_client_secret: 'sk_test_x' } }],
+    [{ type: 'challenge', challenge: { x_kind: 'stripe_next_action' } }],
+    [{ type: 'challenge', challenge: { x_kind: 'other_sdk', x_client_secret: SECRET } }],
     [{ type: 'redirect', redirect_url: 'https://x.test' }],
   ] as PaymentAction[][])('handleAction refuses %j without calling Stripe', async (action) => {
     const f = fakeStripe()
     const m = await stripeElementsAdapter({ getSdk: () => f.factory }).mount(mountOpts())
     await expect(m.handleAction!(action)).rejects.toThrow()
     expect(f.stripe.handleNextAction).not.toHaveBeenCalled()
+  })
+
+  it('destroys the element when mounting it throws after it was created', async () => {
+    const f = fakeStripe({ mountThrows: true })
+    await expect(stripeElementsAdapter({ getSdk: () => f.factory }).mount(mountOpts())).rejects.toThrow(/IntegrationError/)
+    expect(f.elements.create).toHaveBeenCalledTimes(1)
+    expect(f.element.destroy).toHaveBeenCalledTimes(1)
   })
 
   it('unmount destroys once, detaches from the signal, and the form refuses work afterwards', async () => {
@@ -327,6 +367,8 @@ function setupBrick(o: {
   refresh?: PaymentTransport['refresh']
   onFallback?: (r: string) => void
   onEvent?: (e: unknown) => void
+  initialAction?: PaymentAction
+  verifyTimeoutMs?: number
 }) {
   const fake = o.fake ?? fakeStripe()
   const calls: PaymentSubmitRequest[] = []
@@ -334,27 +376,36 @@ function setupBrick(o: {
     submit: async (req, c) => (calls.push(req), (o.submit ?? (async () => paid))(req, c)),
     ...(o.refresh ? { refresh: o.refresh } : {}),
   }
-  const utils = render(
+  const storage = memStorage()
+  const ref = createRef<PaymentBrickHandle>()
+  const adapter = o.adapter ?? stripeElementsAdapter({ getSdk: () => fake.factory })
+  const ui = (amount: Money) => (
     <PaymentBrick
+      ref={ref}
       client={client}
-      amount={total}
+      amount={amount}
       transport={transport}
-      adapter={o.adapter ?? stripeElementsAdapter({ getSdk: () => fake.factory })}
+      adapter={adapter}
       locale="es-MX"
-      storage={memStorage()}
+      storage={storage}
       scope="chk1"
       retryDelayMs={0}
       verifyIntervalMs={5}
-      verifyTimeoutMs={200}
-      pollTimeoutMs={200}
+      pollIntervalMs={5}
+      verifyTimeoutMs={o.verifyTimeoutMs ?? 200}
+      pollTimeoutMs={o.verifyTimeoutMs ?? 200}
       submitLabel="Pagar"
       {...(o.onFallback ? { onFallback: o.onFallback } : {})}
       {...(o.onEvent ? { onEvent: o.onEvent } : {})}
-    />,
+      {...(o.initialAction ? { initialAction: o.initialAction } : {})}
+    />
   )
-  return { ...utils, fake, calls }
+  const utils = render(ui(total))
+  const setAmount = (amount: Money) => act(() => void utils.rerender(ui(amount)))
+  return { ...utils, fake, calls, storage, ref, setAmount }
 }
 
+const payButton = () => screen.getByRole('button', { name: /Pagar|Procesando/ })
 const ready = () => waitFor(() => expect(screen.getByRole('button', { name: /Pagar/ }).getAttribute('aria-disabled')).toBe('false'))
 const pay = async () => {
   await act(async () => {
@@ -477,5 +528,201 @@ describe('useEmbeddedPayment with Stripe', () => {
     await pay()
     await waitFor(() => expect(container.querySelector('dialog[data-sf-challenge]')).not.toBeNull())
     expect(handleAction).not.toHaveBeenCalled()
+  })
+})
+
+describe('useEmbeddedPayment with Stripe: contract, reload and unknown outcomes', () => {
+  it('a challenge with no bank url and no known provider -> verifying, never the empty dialog; then the server decides', async () => {
+    let n = 0
+    const blind: PaymentAttemptResult = { payment: { provider: 'x', status: 'requires_action', action: { type: 'challenge', challenge: { creq: 'abc' } } } }
+    const refresh = vi.fn(async () => (++n < 3 ? blind : paid))
+    const { container, fake } = setupBrick({ submit: async () => blind, refresh })
+    await ready()
+    await pay()
+    expect(await screen.findByText(/Verificación terminada/)).toBeTruthy()
+    expect(container.querySelector('dialog[data-sf-challenge]')).toBeNull()
+    expect(payButton().getAttribute('aria-disabled')).toBe('true')
+    await waitFor(() => expect(screen.getByText('¡Pago aprobado!')).toBeTruthy())
+    expect(container.querySelector('dialog[data-sf-challenge]')).toBeNull()
+    expect(fake.stripe.handleNextAction).not.toHaveBeenCalled()
+  })
+
+  it('adapter without handleAction: event "unsupported", verifying with the SAME attempt (not rotated, no new charge)', async () => {
+    const events: unknown[] = []
+    const adapter: PaymentFormAdapter = {
+      kind: 'stripe_elements',
+      async load() {},
+      async mount(o) {
+        queueMicrotask(() => o.onReady())
+        return { collect: async () => ({ provider_data: { confirmation_token: 'ctoken_x' } }), unmount: () => {} }
+      },
+    }
+    const refresh = vi.fn(async () => needs3ds)
+    const { storage, calls, ref } = setupBrick({ adapter, submit: async () => needs3ds, refresh, onEvent: (e) => events.push(e) })
+    await ready()
+    await pay()
+    expect(await screen.findByText(/Cerraste la verificación/)).toBeTruthy()
+    expect(events).toContainEqual({ type: 'provider_action', result: 'unsupported' })
+    const key = calls[0]!.attempt
+    expect(storage.m.get('sf:pay:attempt:chk1')).toBe(key)
+    expect(ref.current!.attemptId).toBe(key)
+    await act(async () => void (await ref.current!.submit()))
+    expect(calls).toHaveLength(1)
+  })
+
+  it('Stripe.js 3DS fails and the server cannot answer: the attempt is NOT rotated; it rotates only on the server\'s answer', async () => {
+    let answer: PaymentAttemptResult | null = null
+    const refresh = vi.fn(async () => {
+      if (!answer) throw new TypeError('network')
+      return answer
+    })
+    const { storage, calls, ref } = setupBrick({ fake: fakeStripe({ nextActionError: true }), submit: async () => needs3ds, refresh, verifyTimeoutMs: 5000 })
+    await ready()
+    await pay()
+    expect(await screen.findByText(/Cerraste la verificación/)).toBeTruthy()
+    const key = calls[0]!.attempt
+    expect(storage.m.get('sf:pay:attempt:chk1')).toBe(key)
+    expect(ref.current!.attemptId).toBe(key)
+    expect(ref.current!.status).toBe('blocked')
+    answer = failed3ds
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('no pudo verificar'))
+    expect(storage.m.has('sf:pay:attempt:chk1')).toBe(false)
+  })
+
+  it('send awaits the provider action: submit() stays pending (and single) while Stripe\'s 3DS modal is open', async () => {
+    const fake = fakeStripe({ nextActionDeferred: true })
+    const refresh = vi.fn(async () => paid)
+    const { ref, calls } = setupBrick({ fake, submit: async () => needs3ds, refresh })
+    await ready()
+    let settled = false
+    let p!: Promise<void>
+    await act(async () => {
+      p = ref.current!.submit().then(() => void (settled = true))
+    })
+    await waitFor(() => expect(fake.stripe.handleNextAction).toHaveBeenCalledTimes(1))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    expect(settled).toBe(false)
+    expect(ref.current!.status).toBe('processing')
+    expect(ref.current!.busy).toBe(true)
+    // A second press while the modal is open is the same in-flight promise: no second token, no second charge.
+    await act(async () => void ref.current!.submit())
+    expect(fake.stripe.createConfirmationToken).toHaveBeenCalledTimes(1)
+    expect(refresh).not.toHaveBeenCalled()
+    await act(async () => {
+      fake.resolveNextAction()
+      await p
+    })
+    expect(settled).toBe(true)
+    expect(calls).toHaveLength(1)
+    await waitFor(() => expect(screen.getByText('¡Pago aprobado!')).toBeTruthy())
+    expect(fake.stripe.handleNextAction).toHaveBeenCalledTimes(1)
+  })
+
+  it('a total/currency change during the 3DS never remounts the form nor re-enables PAY while verifying; polling goes on', async () => {
+    const fake = fakeStripe({ nextActionDeferred: true })
+    let n = 0
+    const refresh = vi.fn(async () => (++n < 6 ? needs3ds : paid))
+    const { setAmount } = setupBrick({ fake, submit: async () => needs3ds, refresh, verifyTimeoutMs: 5000 })
+    await ready()
+    await pay()
+    await waitFor(() => expect(fake.stripe.handleNextAction).toHaveBeenCalledTimes(1))
+    setAmount({ amount: '2300.00', currency_code: 'MXN' }) // currency change: update would reject -> remount
+    await act(async () => {
+      fake.resolveNextAction()
+      await new Promise((r) => setTimeout(r, 0))
+    })
+    expect(await screen.findByText(/Verificación terminada/)).toBeTruthy()
+    expect(payButton().getAttribute('aria-disabled')).toBe('true')
+    expect(fake.element.mount).toHaveBeenCalledTimes(1)
+    expect(fake.elements.update).not.toHaveBeenCalled()
+    await waitFor(() => expect(refresh.mock.calls.length).toBeGreaterThanOrEqual(3))
+    expect(fake.element.mount).toHaveBeenCalledTimes(1)
+    await waitFor(() => expect(screen.getByText('¡Pago aprobado!')).toBeTruthy())
+  })
+
+  it('a total change while a provider action runs outside a submit (reload) is not applied until it ends', async () => {
+    const fake = fakeStripe({ nextActionDeferred: true })
+    const refresh = vi.fn(async () => paid)
+    const { setAmount } = setupBrick({ fake, refresh, initialAction: stripeAction })
+    await waitFor(() => expect(fake.stripe.handleNextAction).toHaveBeenCalledTimes(1))
+    setAmount({ amount: '2300.00', currency_code: 'USD' })
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    expect(fake.elements.update).not.toHaveBeenCalled()
+    expect(fake.element.mount).toHaveBeenCalledTimes(1)
+    await act(async () => fake.resolveNextAction())
+    await waitFor(() => expect(screen.getByText('¡Pago aprobado!')).toBeTruthy())
+  })
+
+  it('reload with a pending stripe_next_action (initialAction): PAY never enabled, the 3DS is run once, the server decides', async () => {
+    const refresh = vi.fn(async () => paid)
+    const events: unknown[] = []
+    let enabled = false
+    const watch = new MutationObserver(() => {
+      if (document.querySelector('[data-sf-pay-submit]')?.getAttribute('aria-disabled') === 'false') enabled = true
+    })
+    watch.observe(document.body, { subtree: true, attributes: true, childList: true })
+    const { fake, calls, container } = setupBrick({ refresh, initialAction: stripeAction, onEvent: (e) => events.push(e) })
+    await waitFor(() => expect(fake.stripe.handleNextAction).toHaveBeenCalledWith({ clientSecret: SECRET }))
+    await waitFor(() => expect(screen.getByText('¡Pago aprobado!')).toBeTruthy())
+    expect(fake.stripe.handleNextAction).toHaveBeenCalledTimes(1)
+    expect(fake.stripe.createConfirmationToken).not.toHaveBeenCalled()
+    expect(calls).toHaveLength(0)
+    watch.disconnect()
+    expect(enabled).toBe(false)
+    expect(events).toContainEqual({ type: 'provider_action', result: 'completed' })
+    expect(container.querySelector('dialog[data-sf-challenge]')).toBeNull()
+  })
+
+  it('reload with a pending challenge while Stripe.js is blocked: verifying instead of the redirect fallback', async () => {
+    const onFallback = vi.fn()
+    let n = 0
+    const refresh = vi.fn(async () => (++n < 2 ? needs3ds : paid))
+    const doc = { createElement: () => ({ dataset: {}, remove() {} }) as any, head: { appendChild: (s: any) => queueMicrotask(() => s.onerror()) } } as unknown as Document
+    setupBrick({ adapter: stripeElementsAdapter({ getSdk: () => undefined, document: doc }), refresh, initialAction: stripeAction, onFallback })
+    expect(await screen.findByText(/Cerraste la verificación/)).toBeTruthy()
+    expect(onFallback).not.toHaveBeenCalled()
+    await waitFor(() => expect(screen.getByText('¡Pago aprobado!')).toBeTruthy())
+  })
+
+  it('reload with a pending Mercado Pago challenge (url) reopens the bank dialog', async () => {
+    const mp: PaymentAction = { type: 'challenge', challenge: { url: 'https://acs.test/c', creq: 'abc' } }
+    const { container, fake } = setupBrick({ initialAction: mp })
+    await waitFor(() => expect(container.querySelector('dialog[data-sf-challenge]')).not.toBeNull())
+    expect(fake.stripe.handleNextAction).not.toHaveBeenCalled()
+  })
+
+  it('in review (form hidden), then the server asks for the Stripe 3DS: verifying; the re-shown form never re-enables PAY', async () => {
+    let settle = false
+    const events: unknown[] = []
+    const refresh = vi.fn(async () => (settle ? paid : needs3ds))
+    const { fake, ref } = setupBrick({
+      submit: async () => ({ payment: { provider: 'stripe', status: 'pending', action: { type: 'none' } } }),
+      refresh,
+      onEvent: (e) => events.push(e),
+      verifyTimeoutMs: 5000,
+    })
+    await ready()
+    await pay()
+    expect(await screen.findByText(/está en revisión/)).toBeTruthy()
+    // The form is not on screen in review: there is no Stripe instance to run it, so the hook verifies with the server.
+    await waitFor(() => expect(events).toContainEqual({ type: 'provider_action', result: 'unsupported' }))
+    expect(await screen.findByText(/Cerraste la verificación/)).toBeTruthy()
+    // "verifying" shows the form container again: it remounts, and that must not turn the state into loading -> ready.
+    await waitFor(() => expect(fake.element.mount).toHaveBeenCalledTimes(2))
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30))
+    })
+    expect(ref.current!.status).toBe('blocked')
+    expect(ref.current!.error?.kind).toBe('payment_in_progress')
+    expect(payButton().getAttribute('aria-disabled')).toBe('true')
+    const before = refresh.mock.calls.length
+    await waitFor(() => expect(refresh.mock.calls.length).toBeGreaterThan(before)) // still verifying
+    settle = true
+    await waitFor(() => expect(screen.getByText('¡Pago aprobado!')).toBeTruthy())
+    expect(fake.stripe.handleNextAction).not.toHaveBeenCalled()
   })
 })

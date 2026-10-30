@@ -2,9 +2,11 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   generateIdempotencyKey,
   paymentErrorView,
+  paymentChallengeKind,
   paymentIdempotencyKey,
   paymentMessages,
   paymentOutcome,
+  safeHttpsUrl,
   type Money,
   type PaymentAction,
   type PaymentAttemptResult,
@@ -98,6 +100,14 @@ export type UseEmbeddedPaymentOptions = {
   theme?: Record<string, string>
   /** Overrides the light / dark scheme read from the page (`--sf-pay-scheme` or `color-scheme`). */
   colorScheme?: 'light' | 'dark'
+  /**
+   * The pending action of an earlier attempt, to take up after a reload of the pay page (`PaymentConfig.action`). Read once,
+   * on the first render; only `type: 'challenge'` is used. A provider challenge (Stripe `x_kind: 'stripe_next_action'`) runs
+   * again through `MountedPaymentForm.handleAction` once the form is mounted (or, if the form cannot mount, the hook goes
+   * straight to "verifying" instead of the redirect fallback); a bank-page challenge (`url`) reopens the dialog; a challenge
+   * without a page goes to "verifying". In every case no new payment can start until the server answers.
+   */
+  initialAction?: PaymentAction | null
   /** Test hooks. */
   newAttemptId?: () => string
 }
@@ -144,15 +154,21 @@ function defaultAdapterFor(kind: string): PaymentFormAdapter | undefined {
 }
 
 /**
- * A pending challenge the provider SDK must run itself (`challenge.kind` set and not `iframe`, e.g. `stripe_next_action`),
- * as opposed to a bank page `url` shown in the page's own dialog (Mercado Pago 3DS: no `kind`).
+ * A pending challenge the provider SDK must run itself (`challenge.x_kind` set and not `iframe`, e.g. `stripe_next_action`;
+ * the unprefixed `kind` is tolerated), as opposed to a bank page `url` shown in the page's own dialog (Mercado Pago 3DS).
  */
 function providerAction(result: PaymentAttemptResult): PaymentAction | null {
   const p = result.payment
   if (p.status !== 'requires_action' && p.status !== 'pending') return null
+  return paymentChallengeKind(p.action) !== null ? p.action! : null
+}
+
+/** A challenge with no https bank page to show (and no provider to run it): nothing for the dialog, so "verifying". */
+function blindChallenge(result: PaymentAttemptResult): boolean {
+  const p = result.payment
+  if (p.status !== 'requires_action' && p.status !== 'pending') return false
   const a = p.action
-  const k = a?.type === 'challenge' ? a.challenge?.kind : undefined
-  return typeof k === 'string' && k !== '' && k !== 'iframe' ? a! : null
+  return a?.type === 'challenge' && !!a.challenge && paymentChallengeKind(a) === null && safeHttpsUrl(a.challenge.url) === null
 }
 
 function safeStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null {
@@ -195,9 +211,9 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   const rawId = useId()
   const containerId = useMemo(() => `sf-pay-${rawId.replace(/[^a-zA-Z0-9_-]/g, '')}`, [rawId])
 
-  const [status, setStatus] = useState<EmbeddedPaymentStatus>('idle')
+  const [status, setStatusState] = useState<EmbeddedPaymentStatus>('idle')
   const [outcome, setOutcome] = useState<PaymentOutcome | null>(null)
-  const [error, setError] = useState<PaymentErrorView | null>(null)
+  const [error, setErrorState] = useState<PaymentErrorView | null>(null)
   const [fallbackReason, setFallbackReason] = useState<PaymentFallbackReason | null>(null)
   const [attemptsLeft, setAttemptsLeft] = useState<number | null>(null)
   const [attemptId, setAttemptId] = useState<string | null>(null)
@@ -225,6 +241,22 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   const leftChallenge = useRef(false)
   statusRef.current = status
   errorRef.current = error
+  // Status and error are mirrored into their refs AT ONCE (not on the next render): guards that run right after a state
+  // change in the same task (`syncAmount` in a `finally`, `submit`) must see the real state, not the last rendered one.
+  const setStatus = useCallback((next: EmbeddedPaymentStatus | ((s: EmbeddedPaymentStatus) => EmbeddedPaymentStatus)) => {
+    const v = typeof next === 'function' ? next(statusRef.current) : next
+    statusRef.current = v
+    setStatusState(v)
+  }, [])
+  const setError = useCallback((next: PaymentErrorView | null) => {
+    errorRef.current = next
+    setErrorState(next)
+  }, [])
+  // A charge is in flight, a challenge open, or the outcome unknown ("verifying").
+  const outcomePending = (st: EmbeddedPaymentStatus) =>
+    st === 'processing' || st === 'challenge' || st === 'network_error' || (st === 'blocked' && errorRef.current?.kind === 'payment_in_progress')
+  // `initialAction` (a challenge left pending before a reload) not yet taken up.
+  const initialPending = useRef<PaymentAction | null>(options.initialAction?.type === 'challenge' ? options.initialAction : null)
   // Total the form on screen was created / last updated with, and the update in flight.
   const amountKey = `${amount.amount}|${amount.currency_code}`
   const amountKeyRef = useRef(amountKey)
@@ -232,6 +264,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   const appliedAmount = useRef<string | null>(null)
   const updating = useRef<Promise<void> | null>(null)
   const remountRequested = useRef(false)
+  const takeInitialRef = useRef<() => void>(() => {})
   // A provider-run challenge (Stripe 3DS modal) is in progress: no submit, no total update, no second run.
   const actionRunning = useRef(false)
   const runActionRef = useRef<(action: PaymentAction) => Promise<void>>(() => Promise.resolve())
@@ -299,8 +332,10 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   const syncAmount = useCallback((): void => {
     const m = form.current
     if (!m || inFlight.current || updating.current || remountRequested.current || actionRunning.current) return
-    // The outcome of a charge is unknown: the form (and its single-use token) stays as it is until it is resolved.
-    if (statusRef.current === 'network_error' || (statusRef.current === 'blocked' && errorRef.current?.kind === 'payment_in_progress')) return
+    // A charge or a challenge is in progress, or its outcome is unknown: the form (and its single-use token) stays as it
+    // is until it is resolved. Remounting here would re-enable PAY while the page says "do not pay again".
+    if (outcomePending(statusRef.current)) return
+    if (initialPending.current) return
     if (appliedAmount.current === amountKeyRef.current) return
     const run = (async () => {
       while (form.current === m && alive.current && appliedAmount.current !== amountKeyRef.current) {
@@ -344,7 +379,9 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     const started = Date.now()
     const abort = new AbortController()
     let mounted: MountedPaymentForm | null = null
-    setStatus('loading')
+    // A (re)mount never hides a charge in progress or an unknown outcome behind "loading" -> "ready" (that would re-enable
+    // PAY while the page says "do not pay again" and stop the verification).
+    setStatus((s) => (outcomePending(s) ? s : 'loading'))
     const stale = () => my !== generation.current || !alive.current
     // Fails this mount once: later callbacks of the same mount are ignored.
     const fail = (reason: PaymentFallbackReason) => {
@@ -357,10 +394,16 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
       form.current = null
       appliedAmount.current = null
       if (m) void Promise.resolve(m.unmount())
-      fallback(reason)
+      // A challenge from before the reload is still pending: never offer the redirect (a second payment) over it.
+      if (initialPending.current) takeInitialRef.current()
+      // Same once something reached the server and its outcome is unknown (a challenge open or run by the provider,
+      // "verifying"): the verification goes on; no redirect offered. A failure while only tokenising still falls back.
+      else if (actionRunning.current || (statusRef.current !== 'processing' && outcomePending(statusRef.current))) {
+        /* keep the pending state */
+      } else fallback(reason)
     }
     const timer = setTimeout(() => {
-      if (statusRef.current !== 'ready') fail('sdk_timeout')
+      if (statusRef.current === 'loading') fail('sdk_timeout')
     }, sdkTimeoutMs)
 
     container.id = containerId
@@ -385,7 +428,8 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
             onReady: () => {
               if (stale()) return
               clearTimeout(timer)
-              setStatus((s) => (s === 'loading' ? 'ready' : s))
+              // With a pending challenge from before a reload, PAY stays disabled: the challenge is taken up first.
+              setStatus((s) => (s === 'loading' && !initialPending.current ? 'ready' : s))
               emit({ type: 'form_ready', ms: Date.now() - started })
             },
             onError: (e) => {
@@ -402,6 +446,8 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
         mounted = m
         form.current = m
         appliedAmount.current = createdWith
+        // A challenge left pending before a reload is taken up now that the form (and its provider SDK) exists.
+        if (initialPending.current) takeInitialRef.current()
         // The total may have changed while the provider was creating the form.
         syncAmount()
       } catch (err) {
@@ -427,12 +473,30 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     syncAmount()
   }, [amountKey, syncAmount])
 
+  // Unknown outcome of a challenge: no new payment can start (same attempt), the hook keeps reading `refresh` and only a
+  // definitive answer (paid / rejected / expired / cancelled) settles it; a still-open challenge does not reopen anything.
+  const verifyPending = useCallback(
+    (key: 'challenge.verifying' | 'challenge.left') => {
+      pendingData.current = null
+      leftChallenge.current = true
+      setOutcome(null)
+      setError({ kind: 'payment_in_progress', message: live.current.msgs[key], retrySameAttempt: false, canRetry: false })
+      setStatus('blocked')
+    },
+    [setError, setStatus],
+  )
+
   const finish = useCallback(
     (result: PaymentAttemptResult) => {
       // The provider SDK runs this challenge (Stripe `handleNextAction`), not the page's iframe dialog.
       const action = providerAction(result)
       if (action) {
         void runActionRef.current(action)
+        return
+      }
+      // A challenge with no bank page to show: never an empty dialog; verify with the server instead.
+      if (blindChallenge(result)) {
+        verifyPending('challenge.verifying')
         return
       }
       const o = paymentOutcome(result, live.current.locale, live.current.messages)
@@ -455,7 +519,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
         else if (typeof window !== 'undefined') window.location.assign(o.redirect_url)
       }
     },
-    [emit, rotateAttempt],
+    [emit, rotateAttempt, setError, setStatus, verifyPending],
   )
 
   // Runs a provider-driven challenge (Stripe 3DS) and then asks the SERVER what happened. The SDK's answer is never taken
@@ -497,23 +561,22 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
             /* unknown: verified in the background below */
           }
         }
-        // Still unknown: the same "verifying" state as leaving a challenge. No new payment can start; the hook keeps
-        // reading `refresh` and only a definitive answer (paid / rejected / expired / cancelled) settles it.
-        leftChallenge.current = true
-        setError({
-          kind: 'payment_in_progress',
-          message: live.current.msgs[result === 'completed' ? 'challenge.verifying' : 'challenge.left'],
-          retrySameAttempt: false,
-          canRetry: false,
-        })
-        setStatus('blocked')
+        // Still unknown: the same "verifying" state as leaving a challenge.
+        verifyPending(result === 'completed' ? 'challenge.verifying' : 'challenge.left')
       } finally {
         actionRunning.current = false
       }
     },
-    [emit, finish, transport],
+    [emit, finish, transport, verifyPending, setError, setStatus],
   )
   runActionRef.current = runAction
+
+  takeInitialRef.current = () => {
+    const action = initialPending.current
+    if (!action) return
+    initialPending.current = null
+    finish({ payment: { provider: client?.kind ?? 'unknown', status: 'requires_action', outcome: 'challenge', action } })
+  }
 
   const send = useCallback(
     async (data: PayData, attempt: string, total: Money) => {
@@ -574,6 +637,8 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
 
   const submit = useCallback((): Promise<void> => {
     if (inFlight.current) return inFlight.current
+    // A challenge from before a reload has not been taken up yet: it goes first.
+    if (initialPending.current || actionRunning.current) return Promise.resolve()
     const m = form.current
     if (!m || (statusRef.current !== 'ready' && statusRef.current !== 'network_error')) return Promise.resolve()
     // Unknown outcome: pressing PAY again must NOT tokenize anew (a new token with the same key is a 409): same data, same key.
@@ -652,7 +717,8 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
           if (stop || !alive.current) return
           if (r.payment.status === 'none') continue
           const o = paymentOutcome(r, live.current.locale, live.current.messages)
-          if (o.kind !== status) {
+          // A provider-run or page-less challenge reads as `in_review` but needs the hook (Stripe 3DS / verifying).
+          if (o.kind !== status || providerAction(r) || blindChallenge(r)) {
             finish(r)
             return
           }

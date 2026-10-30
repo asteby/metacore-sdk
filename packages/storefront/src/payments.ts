@@ -201,6 +201,25 @@ export function safeHttpsUrl(value: unknown): string | null {
   }
 }
 
+/**
+ * The provider that must run a pending challenge itself (`challenge.x_kind`, or the tolerated `kind`), e.g.
+ * `stripe_next_action`. `null` for a plain bank-page challenge (`url` + `creq`, Mercado Pago) or no challenge.
+ */
+export function paymentChallengeKind(action: PaymentAction | null | undefined): string | null {
+  const c = action?.type === 'challenge' ? action.challenge : null
+  if (!c) return null
+  const k = typeof c.x_kind === 'string' && c.x_kind ? c.x_kind : typeof c.kind === 'string' && c.kind ? c.kind : null
+  return k && k !== 'iframe' ? k : null
+}
+
+/** The client secret of a provider-run challenge (`x_client_secret`, or the tolerated `client_secret`). */
+export function paymentChallengeSecret(action: PaymentAction | null | undefined): string | null {
+  const c = action?.type === 'challenge' ? action.challenge : null
+  if (!c) return null
+  if (typeof c.x_client_secret === 'string' && c.x_client_secret) return c.x_client_secret
+  return typeof c.client_secret === 'string' && c.client_secret ? c.client_secret : null
+}
+
 /** What the UI should do with an attempt result. */
 export type PaymentOutcomeKind =
   | 'approved' // paid: go to the thanks page
@@ -300,8 +319,13 @@ export function paymentOutcome(result: PaymentAttemptResult, locale?: string | n
       })
     }
     if (action?.type === 'challenge' && action.challenge) {
+      const url = safeHttpsUrl(action.challenge.url)
+      // Run by the provider SDK (Stripe `handleNextAction`) or without a bank page to show: there is nothing for the
+      // page's own dialog. "Verifying" (no new charge), never an empty challenge dialog. The hook runs provider challenges
+      // through `MountedPaymentForm.handleAction` before ever getting here.
+      if (!url || paymentChallengeKind(action) !== null) return out('in_review', m['challenge.verifying'])
       return out('challenge', m['state.challenge'], {
-        challenge: { url: safeHttpsUrl(action.challenge.url), creq: typeof action.challenge.creq === 'string' ? action.challenge.creq : null },
+        challenge: { url, creq: typeof action.challenge.creq === 'string' ? action.challenge.creq : null },
       })
     }
   }

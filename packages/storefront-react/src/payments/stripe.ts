@@ -1,4 +1,4 @@
-import type { Money, PaymentAction } from '@asteby/storefront'
+import { paymentChallengeKind, paymentChallengeSecret, type Money, type PaymentAction } from '@asteby/storefront'
 import { PaymentMountCancelled } from './mount-queue.js'
 import { loadPaymentSdk } from './sdk-loader.js'
 import type { MountedPaymentForm, PaymentFormAdapter, PaymentFormData, PaymentFormMountOptions } from './adapter.js'
@@ -108,11 +108,14 @@ export function stripeAppearance(theme: Record<string, string> | undefined, colo
   return { theme: colorScheme === 'dark' ? 'night' : 'stripe', ...(Object.keys(variables).length ? { variables } : {}) }
 }
 
-/** Only a publishable key may reach the browser. A secret / restricted key, or a key of the wrong mode, is refused. */
-function checkPublishableKey(key: unknown, testMode: boolean | undefined): string {
+/**
+ * Only a publishable key may reach the browser. A secret / restricted key, a key of the wrong mode, or a client that does
+ * not say its mode (`test_mode` must be an explicit boolean) is refused: the hook falls back to the redirect.
+ */
+function checkPublishableKey(key: unknown, testMode: unknown): string {
   if (typeof key !== 'string' || !/^pk_(test|live)_[A-Za-z0-9_]+$/.test(key)) throw new Error('payment form: invalid publishable key')
-  if (testMode === true && !key.startsWith('pk_test_')) throw new Error('payment form: key mode mismatch')
-  if (testMode === false && !key.startsWith('pk_live_')) throw new Error('payment form: key mode mismatch')
+  if (typeof testMode !== 'boolean') throw new Error('payment form: key mode unknown (test_mode missing)')
+  if (key.startsWith(testMode ? 'pk_live_' : 'pk_test_')) throw new Error('payment form: key mode mismatch')
   return key
 }
 
@@ -242,9 +245,9 @@ export function stripeElementsAdapter(options: StripeAdapterOptions = {}): Payme
         },
         async handleAction(action: PaymentAction) {
           if (gone) throw new Error('payment form is unmounted')
-          const challenge = action?.challenge
-          if (action?.type !== 'challenge' || challenge?.kind !== STRIPE_NEXT_ACTION) throw new Error('payment form: unsupported action')
-          const clientSecret = challenge.client_secret
+          // Canonical contract: `challenge.x_kind` / `challenge.x_client_secret` (unprefixed names tolerated).
+          if (paymentChallengeKind(action) !== STRIPE_NEXT_ACTION) throw new Error('payment form: unsupported action')
+          const clientSecret = paymentChallengeSecret(action)
           if (typeof clientSecret !== 'string' || !CLIENT_SECRET.test(clientSecret)) throw new Error('payment form: invalid action')
           const res = await stripe.handleNextAction({ clientSecret })
           if (res?.error) throw new Error(errText('payment action failed', res.error))
