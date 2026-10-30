@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createStorefrontClient } from '@asteby/storefront'
-import { MOCK_CUSTOMER_EMAIL, createMockStorefront, type MockStorefrontOptions } from '@asteby/storefront/mock'
+import { MOCK_CUSTOMER_EMAIL, MOCK_CUSTOMER_TYPES, createMockStorefront, type MockStorefrontOptions } from '@asteby/storefront/mock'
 import { SAFE_AUTH_CAPABILITIES, createAuthAction, loadAuthCapabilities, safeNextPath } from './server.js'
 
 const cookie = { serialize: (value: string, o?: { expires?: Date }) => `sf_customer=${value}; Path=/${o?.expires ? '; Expires=set' : ''}` }
@@ -20,6 +20,19 @@ const redirectOf = (res: unknown) => {
   expect(r.status).toBe(303)
   return { location: r.headers.get('Location'), cookie: r.headers.get('Set-Cookie') }
 }
+
+describe('loadAuthCapabilities and the customer types of the organization', () => {
+  it('keeps the organization list (cleaned) so the registration can draw its select', async () => {
+    const { sf } = setup({ customerCapabilities: { customer_types: { options: [...MOCK_CUSTOMER_TYPES.options, { value: 'Roto', label: 'código inválido' }], default: 'taller' } } })
+    const caps = await loadAuthCapabilities(sf)
+    expect(caps.customer_types?.options.map((o) => o.value)).toEqual(['final', 'refaccionario', 'taller', 'flotillas'])
+    expect(caps.customer_types?.default).toBe('taller')
+  })
+  it('an organization that offers none leaves the field out (the form shows no select)', async () => {
+    const { sf } = setup()
+    expect(await loadAuthCapabilities(sf)).not.toHaveProperty('customer_types')
+  })
+})
 
 describe('loadAuthCapabilities', () => {
   it('reads the store capabilities and caches them briefly per client', async () => {
