@@ -1,4 +1,4 @@
-import { paymentChallengeKind, paymentChallengeSecret, type Money, type PaymentAction } from '@asteby/storefront'
+import { paymentNextAction, type Money, type PaymentAction } from '@asteby/storefront'
 import { PaymentMountCancelled } from './mount-queue.js'
 import { loadPaymentSdk } from './sdk-loader.js'
 import type { MountedPaymentForm, PaymentFormAdapter, PaymentFormData, PaymentFormMountOptions } from './adapter.js'
@@ -245,9 +245,10 @@ export function stripeElementsAdapter(options: StripeAdapterOptions = {}): Payme
         },
         async handleAction(action: PaymentAction) {
           if (gone) throw new Error('payment form is unmounted')
-          // Canonical contract: `challenge.x_kind` / `challenge.x_client_secret` (unprefixed names tolerated).
-          if (paymentChallengeKind(action) !== STRIPE_NEXT_ACTION) throw new Error('payment form: unsupported action')
-          const clientSecret = paymentChallengeSecret(action)
+          // Contract 1.25: `action.next_action = { kind: 'stripe_next_action', client_secret }` (legacy `challenge.x_*` read too).
+          const next = paymentNextAction(action)
+          if (next?.kind !== STRIPE_NEXT_ACTION) throw new Error('payment form: unsupported action')
+          const clientSecret = next.client_secret
           if (typeof clientSecret !== 'string' || !CLIENT_SECRET.test(clientSecret)) throw new Error('payment form: invalid action')
           const res = await stripe.handleNextAction({ clientSecret })
           if (res?.error) throw new Error(errText('payment action failed', res.error))

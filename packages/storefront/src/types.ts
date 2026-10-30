@@ -1230,39 +1230,38 @@ export type PaymentVoucher = {
   expires_at?: string | null
 }
 
-/**
- * Who runs a challenge. Absent (or `iframe`): the bank page `url` (+ `creq`) shown in the page's own dialog (Mercado Pago).
- * `stripe_next_action`: the provider SDK runs it (`stripe.handleNextAction({ clientSecret })`, Stripe's own 3DS modal).
- */
-export type PaymentChallengeKind = 'iframe' | 'stripe_next_action'
+/** What a provider-run next action is: `stripe_next_action` = `stripe.handleNextAction({ clientSecret })` (Stripe 3DS modal). */
+export type PaymentNextActionKind = 'stripe_next_action'
 
 /**
- * `action.challenge`. The kernel schema only allows `url`, `creq` and `x_`-prefixed extras, so provider fields travel as
- * `x_*` (canonical: `x_kind`, `x_client_secret`). `kind` / `client_secret` without prefix are read too, as a tolerance.
+ * `action.next_action` (contract 1.25, additive): a pending step the provider SDK in the browser runs itself, instead of a
+ * bank page shown in the page's own dialog. When it is present there is no `challenge`.
  */
+export type PaymentNextAction = {
+  /** Unknown values are treated as unsupported ("verifying"), never as paid. */
+  kind: PaymentNextActionKind | (string & {})
+  /**
+   * With `stripe_next_action`: the PaymentIntent client secret (`pi_…_secret_…`) Stripe.js needs to run the next action.
+   * It can only finish authentication, not charge or change the amount; still, never log or store it.
+   */
+  client_secret?: string
+}
+
+/** A bank page challenge (Mercado Pago 3DS): `url` https is required, `creq` optional. */
 export type PaymentChallengeAction = {
   url?: string
   creq?: string
-  /** See `PaymentChallengeKind`. Unknown values are treated as unsupported ("verifying"), never as paid. */
-  x_kind?: PaymentChallengeKind | (string & {})
-  /**
-   * With `x_kind: 'stripe_next_action'`: the PaymentIntent client secret (`pi_…_secret_…`) Stripe.js needs to run the next
-   * action. It can only finish authentication, not charge or change the amount; still, never log or store it.
-   */
+  /** Tolerated legacy form of `next_action.kind` (provider `x_` extras); prefer `PaymentAction.next_action`. */
+  x_kind?: string
+  /** Tolerated legacy form of `next_action.client_secret`. */
   x_client_secret?: string
-  /** Stripe `next_action.type` (`use_stripe_sdk`, `redirect_to_url`...). Informative. */
-  x_next_action?: string
-  /** PaymentIntent id. Informative. */
-  x_payment_intent?: string
-  /** Tolerated alias of `x_kind`. */
-  kind?: PaymentChallengeKind | (string & {})
-  /** Tolerated alias of `x_client_secret`. */
-  client_secret?: string
 }
 
 export type PaymentAction = {
   type: 'none' | 'challenge' | 'voucher' | 'redirect'
   challenge?: PaymentChallengeAction | null
+  /** A step the provider SDK runs itself (Stripe 3DS). Present instead of `challenge`. See `PaymentNextAction`. */
+  next_action?: PaymentNextAction | null
   voucher?: PaymentVoucher | null
   redirect_url?: string | null
 }

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import {
   generateIdempotencyKey,
   paymentErrorView,
-  paymentChallengeKind,
+  paymentNextAction,
   paymentIdempotencyKey,
   paymentMessages,
   paymentOutcome,
@@ -102,7 +102,8 @@ export type UseEmbeddedPaymentOptions = {
   colorScheme?: 'light' | 'dark'
   /**
    * The pending action of an earlier attempt, to take up after a reload of the pay page (`PaymentConfig.action`). Read once,
-   * on the first render; only `type: 'challenge'` is used. A provider challenge (Stripe `x_kind: 'stripe_next_action'`) runs
+   * on the first render; only a challenge or a `next_action` is used. A provider next action (Stripe `next_action.kind:
+   * 'stripe_next_action'`) runs
    * again through `MountedPaymentForm.handleAction` once the form is mounted (or, if the form cannot mount, the hook goes
    * straight to "verifying" instead of the redirect fallback); a bank-page challenge (`url`) reopens the dialog; a challenge
    * without a page goes to "verifying". In every case no new payment can start until the server answers.
@@ -147,6 +148,9 @@ export type EmbeddedPaymentState = {
 
 const DEFAULT_ADAPTERS: Record<string, PaymentFormAdapter> = {}
 
+/** Outcomes that end the payment on this page: never followed by a fallback to a redirect. */
+const SETTLED: ReadonlySet<EmbeddedPaymentStatus> = new Set(['approved', 'voucher', 'in_review', 'redirect', 'expired'])
+
 function defaultAdapterFor(kind: string): PaymentFormAdapter | undefined {
   if (kind === 'mercadopago_bricks') return (DEFAULT_ADAPTERS[kind] ??= mercadoPagoBricksAdapter())
   if (kind === STRIPE_ELEMENTS_KIND) return (DEFAULT_ADAPTERS[kind] ??= stripeElementsAdapter())
@@ -154,13 +158,18 @@ function defaultAdapterFor(kind: string): PaymentFormAdapter | undefined {
 }
 
 /**
- * A pending challenge the provider SDK must run itself (`challenge.x_kind` set and not `iframe`, e.g. `stripe_next_action`;
- * the unprefixed `kind` is tolerated), as opposed to a bank page `url` shown in the page's own dialog (Mercado Pago 3DS).
+ * A pending step the provider SDK must run itself (`action.next_action`, e.g. Stripe `stripe_next_action`; the legacy
+ * `challenge.x_kind` is read too), as opposed to a bank page `url` shown in the page's own dialog (Mercado Pago 3DS).
  */
 function providerAction(result: PaymentAttemptResult): PaymentAction | null {
   const p = result.payment
   if (p.status !== 'requires_action' && p.status !== 'pending') return null
-  return paymentChallengeKind(p.action) !== null ? p.action! : null
+  return paymentNextAction(p.action) !== null ? p.action! : null
+}
+
+/** An action that is (or may be) waiting for the buyer at the bank / provider: a challenge or a provider next action. */
+function pendingChallenge(action: PaymentAction | null | undefined): boolean {
+  return action?.type === 'challenge' || paymentNextAction(action) !== null
 }
 
 /** A challenge with no https bank page to show (and no provider to run it): nothing for the dialog, so "verifying". */
@@ -168,7 +177,7 @@ function blindChallenge(result: PaymentAttemptResult): boolean {
   const p = result.payment
   if (p.status !== 'requires_action' && p.status !== 'pending') return false
   const a = p.action
-  return a?.type === 'challenge' && !!a.challenge && paymentChallengeKind(a) === null && safeHttpsUrl(a.challenge.url) === null
+  return a?.type === 'challenge' && paymentNextAction(a) === null && safeHttpsUrl(a.challenge?.url) === null
 }
 
 function safeStorage(): Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null {
@@ -256,7 +265,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   const outcomePending = (st: EmbeddedPaymentStatus) =>
     st === 'processing' || st === 'challenge' || st === 'network_error' || (st === 'blocked' && errorRef.current?.kind === 'payment_in_progress')
   // `initialAction` (a challenge left pending before a reload) not yet taken up.
-  const initialPending = useRef<PaymentAction | null>(options.initialAction?.type === 'challenge' ? options.initialAction : null)
+  const initialPending = useRef<PaymentAction | null>(pendingChallenge(options.initialAction) ? options.initialAction! : null)
   // Total the form on screen was created / last updated with, and the update in flight.
   const amountKey = `${amount.amount}|${amount.currency_code}`
   const amountKeyRef = useRef(amountKey)
@@ -366,11 +375,17 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   useEffect(() => {
     if (!enabled || !client) {
       setStatus((s) => (s === 'loading' || s === 'ready' ? 'idle' : s))
+      // A challenge left pending before a reload is never silently dropped: without a form it is verified with the server
+      // ("verifying", PAY disabled) instead of waiting for a form that may never come.
+      if (initialPending.current) takeInitialRef.current()
       return
     }
     const adapter = live.current.adapter ?? live.current.adapters?.[client.kind] ?? defaultAdapterFor(client.kind)
     if (!adapter) {
-      fallback('unsupported_provider')
+      // Never offer the redirect (a second payment) over a challenge still pending from before the reload.
+      if (initialPending.current) takeInitialRef.current()
+      // Nor once the payment is in progress, unknown or settled (the form container comes and goes with the state).
+      else if (!outcomePending(statusRef.current) && !SETTLED.has(statusRef.current)) fallback('unsupported_provider')
       return
     }
     if (!container) return
@@ -763,7 +778,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
           if (isResolvedAttempt(r)) {
             // The buyer left the bank page: a still-open challenge is not an answer; keep waiting for the bank's.
             const settled = r.payment.status === 'paid' || r.payment.status === 'failed' || r.payment.status === 'expired' || r.payment.status === 'cancelled'
-            if (leftChallenge.current && !settled && r.payment.action?.type === 'challenge') continue
+            if (leftChallenge.current && !settled && pendingChallenge(r.payment.action)) continue
             setVerifying(false)
             finish(r)
             return

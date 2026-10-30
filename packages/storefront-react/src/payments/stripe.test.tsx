@@ -28,11 +28,8 @@ const client: PaymentClient = {
 }
 const total = { amount: '2185.00', currency_code: 'USD' }
 const SECRET = 'pi_3Abc_secret_Xyz'
-// The addon's canonical contract (kernel schema: url / creq / x_ extras): x_kind + x_client_secret, no url.
-const stripeAction: PaymentAction = {
-  type: 'challenge',
-  challenge: { x_kind: 'stripe_next_action', x_client_secret: SECRET, x_next_action: 'use_stripe_sdk', x_payment_intent: 'pi_3Abc' },
-}
+// Contract 1.25 (storefront_cart): an additive sibling `action.next_action`, and NO `challenge` in that case.
+const stripeAction: PaymentAction = { type: 'challenge', next_action: { kind: 'stripe_next_action', client_secret: SECRET } }
 
 type FakeOpts = {
   submitError?: boolean
@@ -285,18 +282,19 @@ describe('stripeElementsAdapter.mount / collect / update / handleAction / unmoun
     await expect(m2.handleAction!(stripeAction)).rejects.toThrow('payment action failed: card_error/payment_intent_authentication_failure')
   })
 
-  it('handleAction tolerates the unprefixed kind / client_secret', async () => {
+  it('handleAction tolerates the legacy challenge.x_kind / x_client_secret form', async () => {
     const f = fakeStripe()
     const m = await stripeElementsAdapter({ getSdk: () => f.factory }).mount(mountOpts())
-    await m.handleAction!({ type: 'challenge', challenge: { kind: 'stripe_next_action', client_secret: SECRET } })
+    await m.handleAction!({ type: 'challenge', challenge: { x_kind: 'stripe_next_action', x_client_secret: SECRET } })
     expect(f.stripe.handleNextAction).toHaveBeenCalledWith({ clientSecret: SECRET })
   })
 
   it.each([
     [{ type: 'challenge', challenge: { url: 'https://acs.test/c', creq: 'x' } }],
-    [{ type: 'challenge', challenge: { x_kind: 'stripe_next_action', x_client_secret: 'sk_test_x' } }],
-    [{ type: 'challenge', challenge: { x_kind: 'stripe_next_action' } }],
-    [{ type: 'challenge', challenge: { x_kind: 'other_sdk', x_client_secret: SECRET } }],
+    [{ type: 'challenge', next_action: { kind: 'stripe_next_action', client_secret: 'sk_test_x' } }],
+    [{ type: 'challenge', next_action: { kind: 'stripe_next_action' } }],
+    [{ type: 'challenge', next_action: { kind: 'other_sdk', client_secret: SECRET } }],
+    [{ type: 'challenge', challenge: { x_kind: 'stripe_next_action', x_client_secret: 'pi_1_secret_<x>' } }],
     [{ type: 'redirect', redirect_url: 'https://x.test' }],
   ] as PaymentAction[][])('handleAction refuses %j without calling Stripe', async (action) => {
     const f = fakeStripe()
@@ -724,5 +722,84 @@ describe('useEmbeddedPayment with Stripe: contract, reload and unknown outcomes'
     settle = true
     await waitFor(() => expect(screen.getByText('¡Pago aprobado!')).toBeTruthy())
     expect(fake.stripe.handleNextAction).not.toHaveBeenCalled()
+  })
+})
+
+describe('useEmbeddedPayment with Stripe: initialAction edge cases', () => {
+  function render2(props: Partial<Parameters<typeof PaymentBrick>[0]>, refresh?: PaymentTransport['refresh']) {
+    const transport: PaymentTransport = { submit: vi.fn(async () => paid), ...(refresh ? { refresh } : {}) }
+    const ref = createRef<PaymentBrickHandle>()
+    const onFallback = vi.fn()
+    const utils = render(
+      <PaymentBrick
+        ref={ref}
+        client={client}
+        amount={total}
+        transport={transport}
+        locale="es-MX"
+        storage={memStorage()}
+        scope="chk1"
+        verifyIntervalMs={5}
+        verifyTimeoutMs={5000}
+        submitLabel="Pagar"
+        onFallback={onFallback}
+        initialAction={stripeAction}
+        {...props}
+      />,
+    )
+    return { ...utils, ref, transport, onFallback }
+  }
+
+  it.each([
+    ['enabled=false', { enabled: false }],
+    ['client=null', { client: null }],
+  ])('%s: the pending challenge is not dropped: verifying with the server, a message, never PAY', async (_n, props) => {
+    let settle = false
+    const refresh = vi.fn(async () => (settle ? paid : needs3ds))
+    const { ref, transport } = render2(props as never, refresh)
+    expect(await screen.findByText(/Cerraste la verificación/)).toBeTruthy()
+    expect(ref.current!.status).toBe('blocked')
+    expect(ref.current!.error?.kind).toBe('payment_in_progress')
+    await act(async () => void (await ref.current!.submit()))
+    expect(transport.submit).not.toHaveBeenCalled()
+    settle = true
+    await waitFor(() => expect(ref.current!.status).toBe('approved'))
+  })
+
+  it('unknown provider kind with a pending challenge: verifying, never the redirect fallback', async () => {
+    const refresh = vi.fn(async () => paid)
+    const { onFallback, ref } = render2({ client: { ...client, kind: 'acme_pay' } }, refresh)
+    await waitFor(() => expect(ref.current!.status).toBe('approved'))
+    expect(onFallback).not.toHaveBeenCalled()
+  })
+
+  it('an adapter that calls onReady before mount() resolves: PAY stays disabled and submit is a no-op until the challenge is taken up', async () => {
+    let finishMount: () => void = () => {}
+    const collect = vi.fn(async () => ({ provider_data: { confirmation_token: 'ctoken_x' } }))
+    const handleAction = vi.fn(async () => {})
+    const adapter: PaymentFormAdapter = {
+      kind: 'stripe_elements',
+      async load() {},
+      async mount(o) {
+        o.onReady() // early: before the form handle exists
+        await new Promise<void>((r) => (finishMount = r))
+        return { collect, handleAction, unmount: () => {} }
+      },
+    }
+    const refresh = vi.fn(async () => paid)
+    const { ref, transport, container } = render2({ adapter }, refresh)
+    await waitFor(() => expect(container.querySelector('[data-sf-pay-submit]')).not.toBeNull())
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 20))
+    })
+    expect(ref.current!.status).not.toBe('ready')
+    expect(container.querySelector('[data-sf-pay-submit]')!.getAttribute('aria-disabled')).toBe('true')
+    await act(async () => void (await ref.current!.submit()))
+    expect(collect).not.toHaveBeenCalled()
+    expect(transport.submit).not.toHaveBeenCalled()
+    await act(async () => finishMount())
+    await waitFor(() => expect(handleAction).toHaveBeenCalledWith(stripeAction))
+    await waitFor(() => expect(ref.current!.status).toBe('approved'))
+    expect(collect).not.toHaveBeenCalled()
   })
 })

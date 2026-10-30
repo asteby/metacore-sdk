@@ -202,22 +202,22 @@ export function safeHttpsUrl(value: unknown): string | null {
 }
 
 /**
- * The provider that must run a pending challenge itself (`challenge.x_kind`, or the tolerated `kind`), e.g.
- * `stripe_next_action`. `null` for a plain bank-page challenge (`url` + `creq`, Mercado Pago) or no challenge.
+ * The provider-run next action of an action (`action.next_action`, contract 1.25), e.g. Stripe's `stripe_next_action` with
+ * its `client_secret`. Also reads the legacy `challenge.x_kind` / `x_client_secret` form. `null` for a plain bank-page
+ * challenge (Mercado Pago `url` + `creq`) or no action.
  */
-export function paymentChallengeKind(action: PaymentAction | null | undefined): string | null {
-  const c = action?.type === 'challenge' ? action.challenge : null
-  if (!c) return null
-  const k = typeof c.x_kind === 'string' && c.x_kind ? c.x_kind : typeof c.kind === 'string' && c.kind ? c.kind : null
-  return k && k !== 'iframe' ? k : null
-}
-
-/** The client secret of a provider-run challenge (`x_client_secret`, or the tolerated `client_secret`). */
-export function paymentChallengeSecret(action: PaymentAction | null | undefined): string | null {
-  const c = action?.type === 'challenge' ? action.challenge : null
-  if (!c) return null
-  if (typeof c.x_client_secret === 'string' && c.x_client_secret) return c.x_client_secret
-  return typeof c.client_secret === 'string' && c.client_secret ? c.client_secret : null
+export function paymentNextAction(action: PaymentAction | null | undefined): { kind: string; client_secret: string | null } | null {
+  if (!action || typeof action !== 'object') return null
+  const str = (v: unknown) => (typeof v === 'string' && v ? v : null)
+  const n = action.next_action
+  if (n && typeof n === 'object') {
+    const kind = str(n.kind)
+    if (kind) return { kind, client_secret: str(n.client_secret) }
+  }
+  const c = action.type === 'challenge' ? action.challenge : null
+  const legacy = c ? str(c.x_kind) : null
+  if (c && legacy && legacy !== 'iframe') return { kind: legacy, client_secret: str(c.x_client_secret) }
+  return null
 }
 
 /** What the UI should do with an attempt result. */
@@ -311,6 +311,10 @@ export function paymentOutcome(result: PaymentAttemptResult, locale?: string | n
     if (url) return out('redirect', m['state.redirect'], { redirect_url: url })
   }
   if (p.status === 'requires_action' || p.status === 'pending') {
+    // Run by the provider SDK (Stripe `handleNextAction`): still a challenge (the order stays OPEN: `in_review` would close
+    // it in the shop's `settle`), but with no page for the dialog (`url: null`). The hook runs it through
+    // `MountedPaymentForm.handleAction`; `PaymentBrick` never draws a dialog without a url.
+    if (paymentNextAction(action)) return out('challenge', m['state.challenge'], { challenge: { url: null, creq: null } })
     if (action?.type === 'voucher' && action.voucher) {
       const { amount: _a, currency: _c, voucher_url, ...rest } = action.voucher
       return out('voucher', m['state.voucher'], {
@@ -319,11 +323,8 @@ export function paymentOutcome(result: PaymentAttemptResult, locale?: string | n
       })
     }
     if (action?.type === 'challenge' && action.challenge) {
+      // Without an https page `url` is null: still a challenge (order open); the hook verifies instead of a dialog.
       const url = safeHttpsUrl(action.challenge.url)
-      // Run by the provider SDK (Stripe `handleNextAction`) or without a bank page to show: there is nothing for the
-      // page's own dialog. "Verifying" (no new charge), never an empty challenge dialog. The hook runs provider challenges
-      // through `MountedPaymentForm.handleAction` before ever getting here.
-      if (!url || paymentChallengeKind(action) !== null) return out('in_review', m['challenge.verifying'])
       return out('challenge', m['state.challenge'], {
         challenge: { url, creq: typeof action.challenge.creq === 'string' ? action.challenge.creq : null },
       })

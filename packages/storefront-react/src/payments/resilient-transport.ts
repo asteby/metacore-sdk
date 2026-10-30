@@ -11,7 +11,7 @@
  * - A body that is not JSON is treated as transient, never as a definitive error.
  */
 import type { PaymentAttemptResult, PaymentErrorClassKind } from '@asteby/storefront'
-import { classifyPaymentError } from '@asteby/storefront'
+import { classifyPaymentError, paymentNextAction } from '@asteby/storefront'
 import { PaymentHttpError, type PaymentSubmitRequest, type PaymentTransport } from './adapter.js'
 import { paymentRecoveryMessages, type PaymentRecoveryMessages } from './recovery-messages.js'
 
@@ -53,7 +53,7 @@ export function isResolvedAttempt(result: PaymentAttemptResult): boolean {
   const p = result.payment
   if (p.status === 'paid' || p.status === 'failed' || p.status === 'expired' || p.status === 'cancelled') return true
   const type = p.action?.type
-  return type === 'voucher' || type === 'challenge' || type === 'redirect'
+  return type === 'voucher' || type === 'challenge' || type === 'redirect' || paymentNextAction(p.action) !== null
 }
 
 type Failure = { kind: PaymentErrorClassKind; status: number; code: string; message: string; retryable: boolean; details?: unknown }

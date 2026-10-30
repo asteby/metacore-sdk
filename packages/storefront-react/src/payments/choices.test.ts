@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { CheckoutResult, PaymentClient, PaymentMethod } from '@asteby/storefront'
 import { buildPayChoices, cashProviderData, checkoutToAttempt, parseChoice, payErrorResponse, voucherRows } from './choices.js'
+import { isResolvedAttempt } from './resilient-transport.js'
 
 const client: PaymentClient = { kind: 'fake', sdk_url: 'https://sdk.example.com/js', public_key: 'pk' }
 const points = [
@@ -145,5 +146,21 @@ describe('voucherRows', () => {
     expect(mx).toContain('12:24')
     expect(mx).not.toContain('UTC')
     expect(voucherRows(v, labels, 'es-MX', 'Mars/Olympus')[1]![1]).toContain('UTC')
+  })
+})
+
+describe('Stripe next_action (contract 1.25) on the read paths', () => {
+  const nextAction = { type: 'challenge' as const, next_action: { kind: 'stripe_next_action', client_secret: 'pi_1_secret_2' } }
+  it('checkoutToAttempt keeps a pending next_action as requires_action (never in review), with the action intact', () => {
+    const r = checkoutToAttempt({
+      checkout: { id: 'c', status: 'pending' },
+      payment: { provider: 'stripe', status: 'pending', action: { ...nextAction, type: 'none' } },
+    } as never)
+    expect(r.payment.status).toBe('requires_action')
+    expect(r.payment.action?.next_action?.kind).toBe('stripe_next_action')
+  })
+  it('isResolvedAttempt: a next_action is an answer (even with type none)', () => {
+    expect(isResolvedAttempt({ payment: { provider: 'stripe', status: 'requires_action', action: { ...nextAction, type: 'none' } } })).toBe(true)
+    expect(isResolvedAttempt({ payment: { provider: 'stripe', status: 'pending', action: { type: 'none' } } })).toBe(false)
   })
 })

@@ -101,24 +101,32 @@ describe('paymentOutcome', () => {
       check: (o) => expect(o.challenge).toEqual({ url: 'https://acs.test/c', creq: 'abc' }),
     },
     {
-      name: 'challenge without a bank url: verifying, never an empty dialog',
+      // NOT in_review: that closes the order in the shop's settle (cart and pay cookies cleared) before the 3DS runs.
+      name: 'challenge without a bank url: still a challenge (order open), url null',
       result: res({ provider: 'x', status: 'requires_action', action: { type: 'challenge', challenge: { creq: 'abc' } } }),
-      kind: 'in_review',
+      kind: 'challenge',
+      check: (o) => expect(o.challenge).toEqual({ url: null, creq: 'abc' }),
+    },
+    {
+      name: 'challenge with an http url: challenge with url null',
+      result: res({ provider: 'x', status: 'requires_action', action: { type: 'challenge', challenge: { url: 'http://acs.test/c' } } }),
+      kind: 'challenge',
+      check: (o) => expect(o.challenge?.url).toBeNull(),
+    },
+    {
+      name: 'stripe next_action: a challenge for the provider SDK (order open), no url, secret never in the outcome',
+      result: res({ provider: 'stripe', status: 'requires_action', action: { type: 'challenge', next_action: { kind: 'stripe_next_action', client_secret: 'pi_1_secret_2' } } }),
+      kind: 'challenge',
       check: (o) => {
-        expect(o.challenge).toBeNull()
-        expect(o.message).toContain('Verificación terminada')
+        expect(o.challenge).toEqual({ url: null, creq: null })
+        expect(JSON.stringify(o)).not.toContain('pi_1_secret_2')
       },
     },
     {
-      name: 'challenge with an http url: verifying',
-      result: res({ provider: 'x', status: 'requires_action', action: { type: 'challenge', challenge: { url: 'http://acs.test/c' } } }),
-      kind: 'in_review',
-    },
-    {
-      name: 'stripe_next_action (x_kind) is the provider SDK\'s, not a dialog, even with a url',
-      result: res({ provider: 'stripe', status: 'requires_action', action: { type: 'challenge', challenge: { x_kind: 'stripe_next_action', x_client_secret: 'pi_1_secret_2', url: 'https://hooks.stripe.com/x' } } }),
-      kind: 'in_review',
-      check: (o) => expect(JSON.stringify(o)).not.toContain('pi_1_secret_2'),
+      name: 'next_action wins over a stray challenge url (never the iframe dialog for Stripe)',
+      result: res({ provider: 'stripe', status: 'requires_action', action: { type: 'challenge', challenge: { url: 'https://hooks.stripe.com/x' }, next_action: { kind: 'stripe_next_action', client_secret: 'pi_1_secret_2' } } }),
+      kind: 'challenge',
+      check: (o) => expect(o.challenge?.url).toBeNull(),
     },
     { name: 'redirect https', result: res({ provider: 'mp', status: 'pending', action: { type: 'redirect', redirect_url: 'https://mp.test/pay' } }), kind: 'redirect', check: (o) => expect(o.redirect_url).toBe('https://mp.test/pay') },
     { name: 'redirect http is ignored', result: res({ provider: 'mp', status: 'pending', action: { type: 'redirect', redirect_url: 'http://mp.test/pay' } }), kind: 'in_review' },
@@ -226,6 +234,19 @@ describe('client.checkouts.pay against the mock', () => {
     expect(r.payment.decline_code ?? undefined).toBe(decline)
   })
 
+  it('Stripe confirmation_token ctoken_3DS -> requires_action with action.next_action (no challenge); the order stays open', async () => {
+    const { sf, chk } = await setup()
+    const r = await sf.checkouts.pay(chk.checkout.id, { method: 'card', provider_data: { confirmation_token: 'ctoken_3DS' } }, { idempotencyKey: 'k1' })
+    expect(r.payment.status).toBe('requires_action')
+    expect(r.payment.action?.challenge).toBeUndefined()
+    expect(r.payment.action?.next_action?.kind).toBe('stripe_next_action')
+    expect(r.payment.action?.next_action?.client_secret).toMatch(/^pi_[A-Za-z0-9]+_secret_[A-Za-z0-9]+$/)
+    expect(paymentOutcome(r).kind).toBe('challenge')
+    const ok = await sf.checkouts.pay(chk.checkout.id, { method: 'card', provider_data: { confirmation_token: 'ctoken_ok' } }, { idempotencyKey: 'k2' }).catch((e) => e)
+    expect(ok).toBeInstanceOf(StorefrontError)
+    expect(ok.status).toBe(409) // one attempt in the bank's hands blocks another
+  })
+
   it('same key replays the same answer; a failed attempt can be followed by a new key', async () => {
     const { sf, chk } = await setup()
     const a = await sf.checkouts.pay(chk.checkout.id, card('tok_FUND'), { idempotencyKey: paymentIdempotencyKey(chk.checkout.id, '1') })
@@ -265,17 +286,16 @@ describe('client.checkouts.pay against the mock', () => {
   })
 })
 
-describe('paymentChallengeKind / paymentChallengeSecret', () => {
-  it('reads the canonical x_ fields, tolerates the unprefixed ones, ignores iframe / bank challenges', async () => {
-    const { paymentChallengeKind, paymentChallengeSecret } = await import('./payments.js')
-    expect(paymentChallengeKind({ type: 'challenge', challenge: { x_kind: 'stripe_next_action', x_client_secret: 'pi_a_secret_b' } })).toBe('stripe_next_action')
-    expect(paymentChallengeSecret({ type: 'challenge', challenge: { x_kind: 'stripe_next_action', x_client_secret: 'pi_a_secret_b' } })).toBe('pi_a_secret_b')
-    expect(paymentChallengeKind({ type: 'challenge', challenge: { kind: 'stripe_next_action', client_secret: 'pi_c_secret_d' } })).toBe('stripe_next_action')
-    expect(paymentChallengeSecret({ type: 'challenge', challenge: { client_secret: 'pi_c_secret_d' } })).toBe('pi_c_secret_d')
-    expect(paymentChallengeKind({ type: 'challenge', challenge: { x_kind: 'iframe', url: 'https://a.test' } })).toBeNull()
-    expect(paymentChallengeKind({ type: 'challenge', challenge: { url: 'https://a.test', creq: 'x' } })).toBeNull()
-    expect(paymentChallengeKind({ type: 'voucher', challenge: { x_kind: 'stripe_next_action' } })).toBeNull()
-    expect(paymentChallengeKind(null)).toBeNull()
-    expect(paymentChallengeSecret({ type: 'challenge', challenge: { x_kind: 'stripe_next_action' } })).toBeNull()
+describe('paymentNextAction', () => {
+  it('reads action.next_action (canonical), tolerates the legacy challenge.x_kind, ignores bank challenges', async () => {
+    const { paymentNextAction } = await import('./payments.js')
+    expect(paymentNextAction({ type: 'challenge', next_action: { kind: 'stripe_next_action', client_secret: 'pi_a_secret_b' } })).toEqual({ kind: 'stripe_next_action', client_secret: 'pi_a_secret_b' })
+    expect(paymentNextAction({ type: 'none', next_action: { kind: 'stripe_next_action' } })).toEqual({ kind: 'stripe_next_action', client_secret: null })
+    expect(paymentNextAction({ type: 'challenge', challenge: { x_kind: 'stripe_next_action', x_client_secret: 'pi_c_secret_d' } })).toEqual({ kind: 'stripe_next_action', client_secret: 'pi_c_secret_d' })
+    expect(paymentNextAction({ type: 'challenge', challenge: { x_kind: 'iframe', url: 'https://a.test' } })).toBeNull()
+    expect(paymentNextAction({ type: 'challenge', challenge: { url: 'https://a.test', creq: 'x' } })).toBeNull()
+    expect(paymentNextAction({ type: 'challenge', next_action: { kind: '' } as never })).toBeNull()
+    expect(paymentNextAction({ type: 'challenge', next_action: null })).toBeNull()
+    expect(paymentNextAction(null)).toBeNull()
   })
 })

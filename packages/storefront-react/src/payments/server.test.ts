@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { StorefrontError, type StorefrontClient } from '@asteby/storefront'
+import { StorefrontError, paymentOutcome, type PaymentAttemptResult, type StorefrontClient } from '@asteby/storefront'
 import { createEmbeddedPayHandlers, jsonPayRoute, deviceSessionId, paymentCsp, paymentCspHeaders, paymentCspMode, paymentNonce, paymentNonceFromHeaders, sameOrigin, createRateLimiter, type EmbeddedPayConfig, type PaySession } from './server.js'
 
 type Draft = { checkout_id?: string; number?: string | null }
@@ -250,5 +250,58 @@ describe('always JSON, never 502-504, with retryable and kind', () => {
   it('jsonPayRoute leaves a successful JSON answer untouched', async () => {
     const ok = new Response('{"payment":{"status":"paid"}}', { status: 200, headers: { 'Content-Type': 'application/json' } })
     expect(await jsonPayRoute(async () => ok, 'pay')).toBe(ok)
+  })
+})
+
+// The shop's `settle` closes the order on the outcomes that end it (store-gods-nutrition `receiptFor`: approved, voucher,
+// in_review) and then clears the cart and pay cookies. A challenge (Stripe next action or a challenge without a usable
+// url) must NOT end it: the buyer has not authenticated yet, and a failed 3DS must find the cart and checkout intact.
+describe('a pending 3DS never closes the order (settle / receiptFor / jsonPayRoute)', () => {
+  const closing = new Set(['approved', 'voucher', 'in_review'])
+  const shopSettle = vi.fn(async ({ headers, result }: { headers: Headers; result: PaymentAttemptResult }) => {
+    if (!closing.has(paymentOutcome(result, 'es-MX').kind)) return false
+    headers.append('Set-Cookie', 'receipt=1')
+    headers.append('Set-Cookie', 'cart=; Max-Age=0')
+    headers.append('Set-Cookie', 'pay=; Max-Age=0')
+    return true
+  })
+  const stripe3ds: PaymentAttemptResult = {
+    payment: { provider: 'stripe', status: 'requires_action', outcome: 'challenge', action: { type: 'challenge', next_action: { kind: 'stripe_next_action', client_secret: 'pi_1_secret_2' } } },
+  }
+  const blind: PaymentAttemptResult = { payment: { provider: 'x', status: 'requires_action', outcome: 'challenge', action: { type: 'challenge', challenge: { creq: 'c' } } } }
+  const httpUrl: PaymentAttemptResult = { payment: { provider: 'mp', status: 'requires_action', outcome: 'challenge', action: { type: 'challenge', challenge: { url: 'http://acs.test/c' } } } }
+
+  it.each([
+    ['stripe next_action', stripe3ds],
+    ['challenge without url', blind],
+    ['challenge with http url', httpUrl],
+  ])('pay: %s keeps the session cookie and the cart; the browser gets the action', async (_n, result) => {
+    shopSettle.mockClear()
+    const { h } = setup({ pay: async () => result }, { settle: shopSettle as never })
+    const res = await h.pay(req(body({ provider_data: { confirmation_token: 'ctoken_1' } })))
+    expect(res.status).toBe(200)
+    expect(await shopSettle.mock.results[0]!.value).toBe(false)
+    expect(res.headers.get('Set-Cookie')).toBe('pay=chk1')
+    expect((await res.json()).payment.status).toBe('requires_action')
+  })
+
+  it('status during the Stripe 3DS: the checkout is still pending with next_action -> requires_action, order open', async () => {
+    shopSettle.mockClear()
+    const pendingCheckout = { ...created, payment: { provider: 'stripe', status: 'pending', action: stripe3ds.payment.action } }
+    const { h } = setup({ get: async () => pendingCheckout }, { settle: shopSettle as never }, { cart_id: 'cart1', draft: { checkout_id: 'chk1' } })
+    const res = await h.status(new Request('https://shop.test/s', { method: 'POST' }))
+    const out = await res.json()
+    expect(out.payment.status).toBe('requires_action')
+    expect(out.payment.action.next_action.kind).toBe('stripe_next_action')
+    expect(await shopSettle.mock.results[0]!.value).toBe(false)
+    expect(res.headers.get('Set-Cookie')).toBeNull()
+  })
+
+  it('the same settle still closes on approved and in review (control)', async () => {
+    const r1 = setup(undefined, { settle: shopSettle as never })
+    expect((await r1.h.pay(req(body()))).headers.get('Set-Cookie')).toContain('receipt=1')
+    const review = { payment: { provider: 'p', status: 'pending', action: { type: 'none' as const } } }
+    const r2 = setup({ pay: async () => review }, { settle: shopSettle as never })
+    expect((await r2.h.pay(req(body()))).headers.get('Set-Cookie')).toContain('receipt=1')
   })
 })
