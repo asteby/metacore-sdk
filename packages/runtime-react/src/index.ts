@@ -892,7 +892,6 @@ export {
 export * from './capability-providers'
 export {
     BulkImageImportButton,
-    BulkImageDialog,
     type BulkImageImportButtonProps,
 } from './bulk-image-dialog'
 export {

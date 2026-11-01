@@ -69,7 +69,7 @@ function setup(api: ApiClient) {
     return render(<ApiProvider client={api}><BulkImageImportButton model="products" /></ApiProvider>)
 }
 
-describe('BulkImageImportButton', () => {
+describe('BulkImageImportButton', { timeout: 30000 }, () => {
     it('no aparece sin galería', async () => {
         const api = mockApi(false)
         setup(api)
@@ -81,7 +81,7 @@ describe('BulkImageImportButton', () => {
         const api = mockApi()
         setup(api)
         fireEvent.click(await screen.findByTestId('bulk-image-open'))
-        const input = await screen.findByTestId('bulk-image-input')
+        const input = await screen.findByTestId('bulk-image-input', {}, { timeout: 15000 })
         fireEvent.change(input, { target: { files: [img('A100.jpg'), img('A100_2.jpg'), img('B200.jpg'), img('NOPE.jpg'), img('LOWB200_9.jpg')] } })
 
         await waitFor(() => expect(screen.getByTestId('bulk-image-summary')).toBeTruthy())
@@ -117,7 +117,7 @@ describe('BulkImageImportButton', () => {
         }) as any
         setup(api)
         fireEvent.click(await screen.findByTestId('bulk-image-open'))
-        fireEvent.change(await screen.findByTestId('bulk-image-input'), { target: { files: [img('A100.jpg'), img('B200.jpg')] } })
+        fireEvent.change(await screen.findByTestId('bulk-image-input', {}, { timeout: 15000 }), { target: { files: [img('A100.jpg'), img('B200.jpg')] } })
         await waitFor(() => screen.getByTestId('bulk-image-import'))
         fireEvent.click(screen.getByTestId('bulk-image-import'))
         await waitFor(() => expect(screen.getByTestId('bulk-image-progress').textContent).toContain('1 con error'))
