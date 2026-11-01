@@ -49,9 +49,11 @@ export interface RelationGalleryProps {
     maxSize?: number
     canCreate?: boolean
     canEdit?: boolean
+    /** Reorder / «Hacer principal» (needs a position column). Default = canEdit. */
+    canReorder?: boolean
     canDelete?: boolean
     /** Uploads one file and creates its row at gallery index `offset` past the end. */
-    onUpload: (file: File, offset: number, onProgress: GalleryUploadProgress) => Promise<void>
+    onUpload: (file: File, offset: number, onProgress: GalleryUploadProgress, reuseUrl?: string) => Promise<void>
     /** All uploads of one batch finished (refresh the list). */
     onUploadsSettled?: () => void
     /** New order of the rows (persist positions). */
@@ -71,6 +73,8 @@ interface UploadItem {
     status: 'uploading' | 'error' | 'done'
     error?: string
     offset: number
+    /** Stored file of a failed row create — a retry reuses it. */
+    uploadedUrl?: string
 }
 
 let uploadSeq = 0
@@ -85,6 +89,7 @@ export function RelationGallery({
     maxSize,
     canCreate = true,
     canEdit = true,
+    canReorder,
     canDelete = true,
     onUpload,
     onUploadsSettled,
@@ -97,6 +102,13 @@ export function RelationGallery({
     const inputRef = useRef<HTMLInputElement>(null)
     const [dragOver, setDragOver] = useState(false)
     const [uploads, setUploads] = useState<UploadItem[]>([])
+    const reorderable = canReorder ?? canEdit
+    // Every local preview is released when its item goes away or on unmount.
+    const uploadsRef = useRef<UploadItem[]>([])
+    uploadsRef.current = uploads
+    const releasePreview = (u: UploadItem) => {
+        if (u.preview) URL.revokeObjectURL?.(u.preview)
+    }
 
     const keyed = useMemo(
         () =>
@@ -107,8 +119,7 @@ export function RelationGallery({
     )
     const ids = useMemo(() => keyed.map((k) => k.key), [keyed])
 
-    // Object URLs of the local previews are released when the item goes away.
-    useEffect(() => () => uploads.forEach((u) => URL.revokeObjectURL?.(u.preview)), []) // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => () => uploadsRef.current.forEach(releasePreview), [])
 
     const sensors = useSensors(
         useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -135,8 +146,12 @@ export function RelationGallery({
         async (item: UploadItem) => {
             setUploads((list) => list.map((u) => (u.id === item.id ? { ...u, status: 'uploading', progress: 0, error: undefined } : u)))
             try {
-                await onUpload(item.file, item.offset, (fraction) =>
-                    setUploads((list) => list.map((u) => (u.id === item.id ? { ...u, progress: Math.max(0, Math.min(1, fraction)) } : u))),
+                await onUpload(
+                    item.file,
+                    item.offset,
+                    (fraction) =>
+                        setUploads((list) => list.map((u) => (u.id === item.id ? { ...u, progress: Math.max(0, Math.min(1, fraction)) } : u))),
+                    item.uploadedUrl,
                 )
                 setUploads((list) => list.map((u) => (u.id === item.id ? { ...u, status: 'done', progress: 1 } : u)))
                 return true
@@ -145,7 +160,8 @@ export function RelationGallery({
                     err?.response?.data?.message ||
                     err?.message ||
                     t('dynamic.gallery.upload_failed', { defaultValue: 'No se pudo subir la foto.' })
-                setUploads((list) => list.map((u) => (u.id === item.id ? { ...u, status: 'error', error: String(msg) } : u)))
+                const stored = typeof err?.uploadedUrl === 'string' ? err.uploadedUrl : item.uploadedUrl
+                setUploads((list) => list.map((u) => (u.id === item.id ? { ...u, status: 'error', error: String(msg), uploadedUrl: stored } : u)))
                 return false
             }
         },
@@ -177,7 +193,10 @@ export function RelationGallery({
                     accepted.push(item)
                 }
             }
-            setUploads((list) => [...list.filter((u) => u.status !== 'done'), ...accepted, ...rejected])
+            setUploads((list) => {
+                list.filter((u) => u.status === 'done').forEach(releasePreview)
+                return [...list.filter((u) => u.status !== 'done'), ...accepted, ...rejected]
+            })
             // Sequential: keeps positions in pick order and spares the server.
             let any = false
             for (const item of accepted) {
@@ -198,12 +217,16 @@ export function RelationGallery({
     const dismiss = useCallback((id: string) => {
         setUploads((list) => {
             const gone = list.find((u) => u.id === id)
-            if (gone?.preview) URL.revokeObjectURL?.(gone.preview)
+            if (gone) releasePreview(gone)
             return list.filter((u) => u.id !== id)
         })
     }, [])
 
     const pending = uploads.filter((u) => u.status !== 'done')
+    // A retry numbers its photo past the rows already refreshed; while a batch
+    // is still uploading that list is stale, so retry waits for it.
+    const busy = uploads.some((u) => u.status === 'uploading')
+    const hintId = useMemo(() => `gallery-hint-${++uploadSeq}`, [])
     const mainLabel = t('dynamic.gallery.main', { defaultValue: 'Principal' })
 
     return (
@@ -213,6 +236,7 @@ export function RelationGallery({
                     role="button"
                     tabIndex={0}
                     aria-label={t('dynamic.gallery.add', { defaultValue: 'Agregar fotos' })}
+                    aria-describedby={hintId}
                     onClick={() => inputRef.current?.click()}
                     onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
@@ -240,7 +264,7 @@ export function RelationGallery({
                     <span className="font-medium text-foreground">
                         {t('dynamic.gallery.add', { defaultValue: 'Agregar fotos' })}
                     </span>
-                    <span className="text-xs">
+                    <span className="text-xs" id={hintId}>
                         {maxSize
                             ? t('dynamic.gallery.hint_size', {
                                   mb: (maxSize / (1024 * 1024)).toFixed(0),
@@ -293,18 +317,24 @@ export function RelationGallery({
                             </div>
                             {u.status === 'uploading' && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" aria-hidden />}
                             {u.status === 'error' && !validateUploadFile(u.file, { accept, maxSize }) && (
-                                <Button size="sm" variant="ghost" onClick={() => void retry(u)} aria-label={t('dynamic.gallery.retry', { defaultValue: 'Reintentar' })}>
+                                <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void retry(u)} aria-label={t('dynamic.gallery.retry', { defaultValue: 'Reintentar' })}>
                                     <RotateCcw className="h-4 w-4" />
                                 </Button>
                             )}
                             {u.status === 'error' && (
-                                <Button size="sm" variant="ghost" onClick={() => dismiss(u.id)} aria-label={t('dynamic.gallery.dismiss', { defaultValue: 'Quitar' })}>
+                                <Button type="button" size="sm" variant="ghost" onClick={() => dismiss(u.id)} aria-label={t('dynamic.gallery.dismiss', { defaultValue: 'Quitar' })}>
                                     <X className="h-4 w-4" />
                                 </Button>
                             )}
                         </li>
                     ))}
                 </ul>
+            )}
+
+            {keyed.length === 0 && !canCreate && pending.length === 0 && (
+                <div className="rounded-md border bg-muted/30 py-8 text-center text-sm text-muted-foreground">
+                    {t('dynamic.gallery.empty', { defaultValue: 'Sin fotos.' })}
+                </div>
             )}
 
             {keyed.length > 0 && (
@@ -322,6 +352,7 @@ export function RelationGallery({
                                     isMain={index === 0}
                                     mainLabel={mainLabel}
                                     canEdit={canEdit}
+                                    canReorder={reorderable}
                                     canDelete={canDelete}
                                     onMove={(to) => move(index, to)}
                                     onEdit={onEdit ? () => onEdit(row) : undefined}
@@ -345,6 +376,7 @@ function GalleryTile({
     isMain,
     mainLabel,
     canEdit,
+    canReorder,
     canDelete,
     onMove,
     onEdit,
@@ -358,13 +390,14 @@ function GalleryTile({
     isMain: boolean
     mainLabel: string
     canEdit: boolean
+    canReorder: boolean
     canDelete: boolean
     onMove: (to: number) => void
     onEdit?: () => void
     onDelete?: () => void
 }) {
     const { t } = useTranslation()
-    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !canEdit })
+    const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id, disabled: !canReorder })
     const label = caption || t('dynamic.gallery.photo', { n: index + 1, defaultValue: `Foto ${index + 1}` })
     return (
         <li
@@ -397,7 +430,7 @@ function GalleryTile({
             )}
             <div className="flex items-center justify-between gap-1 border-t bg-card px-1 py-1">
                 <div className="flex items-center">
-                    {canEdit && (
+                    {canReorder && (
                         <>
                             <Button
                                 type="button"

@@ -70,6 +70,7 @@ import {
     relationGalleryColumn,
     relationInitialValues,
     relationPositionKey,
+    relationPositionSortable,
     relationRowKey,
     sortRelationRows,
     type DynamicRelationKind,
@@ -144,6 +145,7 @@ const DEFAULT_STRINGS: DynamicRelationStrings = {
 // Tamaño de página de la sub-tabla 1:N. Antes la lista pedía el hijo COMPLETO
 // (sin page/per_page), así que abrir un almacén traía todas sus existencias y
 // traspasos. Se pagina de a 25 y el resto entra por scroll infinito.
+const GALLERY_PAGE_SIZE = 200
 const REL_PAGE_SIZE = 25
 
 interface CommonProps {
@@ -369,11 +371,15 @@ function OneToManyRelation({
             }
             // A child model with an ordering column (`position`) lists in that
             // order — the gallery's first image is the main one.
-            const posKey = relationPositionKey(metadataRef.current)
-            if (posKey) {
-                params.sortBy = posKey
+            // Only when the column is declared sortable: a backend that cannot
+            // sort by it must not fail the whole list.
+            if (relationPositionSortable(metadataRef.current)) {
+                params.sortBy = 'position'
                 params.order = 'asc'
             }
+            // A gallery shows every photo at once (no infinite scroll in the
+            // grid) and numbers new ones past the highest loaded position.
+            if (relationGalleryColumn(metadataRef.current)) params.per_page = GALLERY_PAGE_SIZE
             if (debouncedSearch) params.search = debouncedSearch
             const askedScope = cacheScope()
             const [metaRes, dataRes] = await Promise.all([
@@ -425,7 +431,8 @@ function OneToManyRelation({
     // El buscador solo aparece cuando hay algo que buscar: una sub-tabla de 3
     // líneas no necesita chrome extra. Se queda visible mientras haya término
     // activo para no dejar al usuario sin forma de limpiarlo.
-    const showSearch = debouncedSearch !== '' || search !== '' || total > REL_PAGE_SIZE
+    const isGallery = !!relationGalleryColumn(metadata)
+    const showSearch = !isGallery && (debouncedSearch !== '' || search !== '' || total > REL_PAGE_SIZE)
 
     const formFields = useMemo(
         () => deriveRelationFormFields(metadata, foreignKey),
@@ -514,7 +521,7 @@ function OneToManyRelation({
                         <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => { setEditingRow(row.original); setFormOpen(true) }}
+                            onClick={() => { setEditingRow(row.original); uploadedImageRef.current = null; setFormOpen(true) }}
                             aria-label={labels.editLabel}
                         >
                             <Pencil className="h-4 w-4" />
@@ -581,26 +588,29 @@ function OneToManyRelation({
     // Same contracts as the table: POST /upload (multipart) for the file, then
     // POST /data/<model> for the row. Positions are assigned in pick order.
     const galleryUpload = useCallback(
-        async (file: File, offset: number, onProgress: (f: number) => void) => {
+        async (file: File, offset: number, onProgress: (f: number) => void, reuseUrl?: string) => {
             if (!galleryColumn) return
             const size = await readImageSize(file)
-            const form = new FormData()
-            form.append('file', file)
-            const folder = (galleryColumn.styleConfig as any)?.storage_path ?? (galleryColumn.styleConfig as any)?.storagePath
-            if (folder) {
-                form.append('folder', folder)
-                form.append('storage_path', folder)
+            let url = reuseUrl
+            if (!url) {
+                const form = new FormData()
+                form.append('file', file)
+                const folder = (galleryColumn.styleConfig as any)?.storage_path ?? (galleryColumn.styleConfig as any)?.storagePath
+                if (folder) {
+                    form.append('folder', folder)
+                    form.append('storage_path', folder)
+                }
+                const up = await api.post('/upload', form, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                    onUploadProgress: (e: { loaded: number; total?: number }) => {
+                        if (e.total) onProgress((e.loaded / e.total) * 0.9)
+                    },
+                } as any)
+                const body = (up as { data?: any })?.data
+                if (body && body.success === false) throw new Error(body.message || 'upload failed')
+                url = extractUploadedValue(body)
+                if (!url) throw new Error('upload failed')
             }
-            const up = await api.post('/upload', form, {
-                headers: { 'Content-Type': 'multipart/form-data' },
-                onUploadProgress: (e: { loaded: number; total?: number }) => {
-                    if (e.total) onProgress((e.loaded / e.total) * 0.9)
-                },
-            } as any)
-            const body = (up as { data?: any })?.data
-            if (body && body.success === false) throw new Error(body.message || 'upload failed')
-            const url = extractUploadedValue(body)
-            if (!url) throw new Error('upload failed')
             const derived = relationDerivedValues(metadata, { isCreate: true, rows, image: size })
             if (positionKey && typeof derived[positionKey] === 'number') derived[positionKey] += offset
             const payload = {
@@ -611,8 +621,14 @@ function OneToManyRelation({
                     [galleryColumn.key]: url,
                 }),
             }
-            const res = await api.post(dataEndpoint, payload)
-            if (!(res as any).data?.success) throw new Error((res as any).data?.message || 'create failed')
+            try {
+                const res = await api.post(dataEndpoint, payload)
+                if (!(res as any).data?.success) throw new Error((res as any).data?.message || 'create failed')
+            } catch (err: any) {
+                // The file is already stored: a retry reuses it instead of
+                // uploading (and orphaning) a second copy.
+                throw Object.assign(err instanceof Error ? err : new Error(String(err)), { uploadedUrl: url })
+            }
             onProgress(1)
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -626,9 +642,11 @@ function OneToManyRelation({
             setRows(ordered.map((r, i) => ({ ...r, [positionKey]: i })))
             try {
                 await Promise.all(
-                    ordered.map((r, i) =>
-                        Number(r[positionKey]) === i ? null : api.put(`${dataEndpoint}/${r.id}`, { [positionKey]: i }),
-                    ),
+                    ordered.map((r, i) => {
+                        const raw = r[positionKey]
+                        const same = raw !== null && raw !== undefined && raw !== '' && Number(raw) === i
+                        return same ? null : api.put(`${dataEndpoint}/${r.id}`, { [positionKey]: i })
+                    }),
                 )
                 onChange?.()
             } catch (err) {
@@ -755,7 +773,8 @@ function OneToManyRelation({
                         return Number.isFinite(n) && n > 0 ? n : undefined
                     })()}
                     canCreate={canCreate}
-                    canEdit={canEdit && !!positionKey}
+                    canEdit={canEdit}
+                    canReorder={canEdit && !!positionKey}
                     canDelete={canDelete}
                     hiddenKeys={pendingDelete}
                     onUpload={galleryUpload}
@@ -837,7 +856,7 @@ function OneToManyRelation({
                 </div>
             )}
 
-            <Dialog open={formOpen} onOpenChange={(open: boolean) => { setFormOpen(open); if (!open) setEditingRow(null) }}>
+            <Dialog open={formOpen} onOpenChange={(open: boolean) => { setFormOpen(open); if (!open) { setEditingRow(null); uploadedImageRef.current = null } }}>
                 {/* Alto acotado al viewport: el cuerpo del form hace scroll y el
                     footer (Guardar) queda fijo, para que un renglón con muchos
                     campos no deje el botón fuera de pantalla. */}
@@ -852,7 +871,7 @@ function OneToManyRelation({
                         initialValues={editingRow || (Object.keys(createInitialValues).length ? createInitialValues : undefined)}
                         onFieldMeta={(_key, meta) => { uploadedImageRef.current = meta }}
                         onSubmit={handleSubmit}
-                        onCancel={() => { setFormOpen(false); setEditingRow(null) }}
+                        onCancel={() => { setFormOpen(false); setEditingRow(null); uploadedImageRef.current = null }}
                         submitLabel={labels.saveLabel}
                         cancelLabel={labels.cancelLabel}
                         disabled={submitting}

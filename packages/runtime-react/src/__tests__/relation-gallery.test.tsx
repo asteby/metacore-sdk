@@ -6,7 +6,7 @@
 // orden, tamaño medido, alt sugerido con el nombre del padre) y reordena
 // persistiendo solo las posiciones que cambiaron. Sin display_config la
 // relación sigue siendo la tabla de siempre.
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { DynamicRelation } from '../dynamic-relation'
 import { ApiProvider, type ApiClient } from '../api-context'
@@ -17,6 +17,9 @@ vi.mock('../upload-field', async (orig) => {
 })
 
 afterEach(cleanup)
+beforeEach(() => {
+    ROWS = BASE_ROWS.map((r) => ({ ...r }))
+})
 
 const col = (c: Record<string, unknown>) => ({ label: c.key, type: 'text', sortable: false, filterable: false, ...c })
 
@@ -30,7 +33,7 @@ function meta(gallery: boolean) {
             col({ key: 'alt', label: 'Texto alternativo', ...(gallery ? { styleConfig: { default_from_parent: 'name' } } : {}) }),
             col({ key: 'width', type: 'number', ...(gallery ? { styleConfig: { derive: 'image_width' } } : {}) }),
             col({ key: 'height', type: 'number', ...(gallery ? { styleConfig: { derive: 'image_height' } } : {}) }),
-            col({ key: 'position', type: 'number', ...(gallery ? { styleConfig: { derive: 'next_position' } } : {}) }),
+            col({ key: 'position', type: 'number', sortable: true, ...(gallery ? { styleConfig: { derive: 'next_position' } } : {}) }),
         ],
         actions: [],
         hasActions: false,
@@ -38,7 +41,8 @@ function meta(gallery: boolean) {
     }
 }
 
-const ROWS = [
+let ROWS: Record<string, unknown>[] = []
+const BASE_ROWS = [
     { id: 'img_b', product_id: 'p1', url: '/storage/b.png', alt: 'Trasera', position: 1 },
     { id: 'img_a', product_id: 'p1', url: '/storage/a.png', alt: 'Frente', position: 0 },
 ]
@@ -118,6 +122,20 @@ describe('DynamicRelation — galería', () => {
         expect(api.put).toHaveBeenCalledWith('/data/product_images/img_a', { position: 1 })
     })
 
+    it('una foto sin posición que pasa a principal sí se guarda (null no es 0)', async () => {
+        ROWS = [
+            { id: 'img_a', product_id: 'p1', url: '/storage/a.png', alt: 'Frente', position: 0 },
+            { id: 'img_n', product_id: 'p1', url: '/storage/n.png', alt: 'Vieja', position: null },
+        ]
+        const api = mockApi(true)
+        renderPanel(api)
+        await waitFor(() => expect(screen.getAllByTestId('gallery-tile')).toHaveLength(2))
+        fireEvent.click(screen.getByLabelText('Hacer principal'))
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(2))
+        expect(api.put).toHaveBeenCalledWith('/data/product_images/img_n', { position: 0 })
+        expect(api.put).toHaveBeenCalledWith('/data/product_images/img_a', { position: 1 })
+    })
+
     it('lista ordenada por position en el servidor una vez conocida la metadata', async () => {
         const api = mockApi(true)
         renderPanel(api)
@@ -126,7 +144,7 @@ describe('DynamicRelation — galería', () => {
         await waitFor(() => {
             const lists = api.get.mock.calls.filter((c: any[]) => c[0] === '/data/product_images')
             expect(lists.length).toBeGreaterThan(1)
-            expect(lists[lists.length - 1][1].params).toMatchObject({ sortBy: 'position', order: 'asc' })
+            expect(lists[lists.length - 1][1].params).toMatchObject({ sortBy: 'position', order: 'asc', per_page: 200 })
         })
     })
 

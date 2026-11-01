@@ -161,6 +161,13 @@ export function relationPositionKey(
     return metadata?.columns?.some((c) => c.key === 'position') ? 'position' : undefined
 }
 
+/** True when the list endpoint can sort by the position column (declared sortable). */
+export function relationPositionSortable(
+    metadata: Pick<TableMetadata, 'columns'> | null | undefined,
+): boolean {
+    return metadata?.columns?.some((c) => c.key === 'position' && c.sortable === true) ?? false
+}
+
 /** Rows sorted ascending by their position column; rows without one go last, stable. */
 export function sortRelationRows<T extends Record<string, any>>(rows: T[], positionKey?: string): T[] {
     if (!positionKey) return rows

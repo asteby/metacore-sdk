@@ -9,6 +9,7 @@ import {
     relationInitialValues,
     relationMediaKind,
     relationPositionKey,
+    relationPositionSortable,
     sortRelationRows,
 } from '../dynamic-relation-helpers'
 import { resolveWidget } from '../dynamic-form-schema'
@@ -112,6 +113,8 @@ describe('orden y modo galería', () => {
         expect(sortRelationRows(rows, 'position').map((r) => r.id)).toEqual(['c', 'a', 'd', 'b'])
         expect(sortRelationRows(rows, undefined)).toBe(rows)
         expect(relationPositionKey(productImagesToday)).toBe('position')
+        expect(relationPositionSortable(productImagesToday)).toBe(false)
+        expect(relationPositionSortable({ columns: [col({ key: 'position', sortable: true })] })).toBe(true)
     })
 
     it('la galería es opt-in por display_config.gallery', () => {
