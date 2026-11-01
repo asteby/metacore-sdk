@@ -360,7 +360,7 @@ export function loadBatchLogs(storage: Pick<Storage, 'getItem'> | undefined = sa
         const parsed = raw ? JSON.parse(raw) : []
         if (!Array.isArray(parsed)) return []
         // Con `scope`, solo los lotes de esa organización/usuario.
-        return scope === undefined ? parsed : parsed.filter((l: BatchLog) => (l.scope ?? '') === scope)
+        return scope === undefined ? parsed : parsed.filter((l: BatchLog) => !!l.scope && l.scope === scope)
     } catch {
         return []
     }

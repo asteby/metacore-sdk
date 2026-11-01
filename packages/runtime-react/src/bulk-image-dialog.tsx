@@ -77,6 +77,16 @@ const LOOKUP_CHUNK = 40
 const CONCURRENCY = 3
 const PAGE_SIZE = 200
 
+/**
+ * Alcance del registro de lotes: organización + usuario (sin el idioma de
+ * cacheScope, para que cambiar de idioma no esconda lotes). null = desconocido:
+ * no se ofrecen lotes anteriores.
+ */
+function batchScope(): string | null {
+    const s = cacheScope()
+    return s ? s.split(':').slice(0, 2).join(':') : null
+}
+
 /** map con concurrencia acotada (decodificar cientos de bitmaps a la vez tumba la pestaña). */
 async function mapPool<T, R>(items: T[], limit: number, fn: (x: T) => Promise<R>): Promise<R[]> {
     const out = new Array<R>(items.length)
@@ -200,7 +210,7 @@ export function BulkImageDialog({ open, onOpenChange, model, target, skuKey, dat
     const [items, setItems] = useState<Record<string, ItemState>>({})
     const [log, setLog] = useState<BatchLog | null>(null)
     const [undoing, setUndoing] = useState<{ done: number; total: number } | null>(null)
-    const [previousLogs, setPreviousLogs] = useState<BatchLog[]>(() => loadBatchLogs(undefined, cacheScope() ?? '').filter((l) => l.childModel === target.childModel && pendingUndo(l).length > 0))
+    const [previousLogs, setPreviousLogs] = useState<BatchLog[]>(() => { const sc = batchScope(); return sc === null ? [] : loadBatchLogs(undefined, sc).filter((l) => l.childModel === target.childModel && pendingUndo(l).length > 0) })
     const filesRef = useRef<Map<string, File>>(new Map())
     const urlsRef = useRef<Map<string, string>>(new Map())
     const cancelRef = useRef(false)
@@ -307,7 +317,7 @@ export function BulkImageDialog({ open, onOpenChange, model, target, skuKey, dat
         cancelRef.current = false
         setStep('importing')
         setError(null)
-        const batch: BatchLog = { batchId: newBatchId(), createdAt: new Date().toISOString(), childModel: target.childModel, scope: cacheScope() ?? '', items: [] }
+        const batch: BatchLog = { batchId: newBatchId(), createdAt: new Date().toISOString(), childModel: target.childModel, scope: batchScope() ?? undefined, items: [] }
         setLog(batch)
         setItems(Object.fromEntries(queue.map((r) => [r.key, { status: 'pending', progress: 0 } as ItemState])))
         const patch = (key: string, s: Partial<ItemState>) =>
