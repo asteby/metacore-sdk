@@ -108,6 +108,8 @@ export {
   SHIPPING_STEPS,
   PICKUP_STEPS,
 } from './order-progress.js'
+export { checkoutNotice } from './checkout-notice.js'
+export type { CheckoutNotice } from './checkout-notice.js'
 export { normalizeTrackingView, visibleTrackingShipments } from './tracking.js'
 export { dataExportBytes, isAccountDeleteBlocked, isReauthRequired, safeExportFilename } from './account-settings.js'
 export type {
