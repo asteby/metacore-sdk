@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { renderToString } from 'react-dom/server'
-import type { TrackingView } from '@asteby/storefront'
+import type { LegacyTrackingView, TrackingView } from '@asteby/storefront'
 import { ShipmentTracker, TrackOrderLookup, TrackingTimeline } from './index.js'
 
-const t: TrackingView = {
+const t: LegacyTrackingView = {
   status: 'delivered',
   carrier: 'dhl',
   tracking_number: 'D1',
@@ -28,6 +28,15 @@ describe('tracking without JavaScript (server render)', () => {
       expect(() => renderToString(<ShipmentTracker state={state} tracking={t} />)).not.toThrow()
     }
     expect(renderToString(<TrackingTimeline events={t.events} timeZone="America/Mexico_City" />)).toContain('Entregado')
+  })
+
+  it('renders the contract shape (pending and with shipments) as plain HTML', () => {
+    const pending: TrackingView = { order_number: 'SO-00016', status: 'pending', shipments: [] }
+    expect(renderToString(<TrackOrderLookup action="/rastreo" result={pending} />)).toContain('aún no tiene guía')
+    const shipped: TrackingView = { order_number: 'SO-1', status: 'delivered', shipments: [{ id: 's', kind: 'outbound', status: 'delivered', tracking_number: 'D1', events: t.events }] }
+    const html = renderToString(<TrackOrderLookup action="/rastreo" result={shipped} />)
+    expect(html).toContain('D1')
+    expect(html).toContain('aria-current="step"')
   })
 
   it('never renders a map on the server', () => {

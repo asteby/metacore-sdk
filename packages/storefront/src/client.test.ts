@@ -212,7 +212,7 @@ describe('writes', () => {
   })
 
   it('tracking.lookup posts the order+email or the guide and folds every failure into three plain answers', async () => {
-    const view = { status: 'in_transit', tracking_number: 'G1', events: [] }
+    const view = { order_number: 'SO-1', status: 'in_transit', shipments: [{ id: 's1', kind: 'outbound', status: 'in_transit', tracking_number: 'G1', events: [] }] }
     const ok = recorder(() => Response.json(view))
     const sf = createStorefrontClient({ ...base, fetch: ok.fetch })
     await expect(sf.tracking.lookup({ order_number: 'SO-1', email: 'a@b.co' })).resolves.toEqual({ status: 'found', tracking: view })
@@ -238,6 +238,25 @@ describe('writes', () => {
     await expect(net.tracking.lookup({ tracking_number: 'G9' })).resolves.toEqual({ status: 'unavailable' })
     const odd = recorder(() => Response.json({ nope: true }))
     await expect(createStorefrontClient({ ...base, fetch: odd.fetch }).tracking.lookup({ tracking_number: 'G9' })).resolves.toEqual({ status: 'not_found' })
+  })
+
+  it('tracking.lookup: an order confirmed without a guide yet (shipments: []) is found, not a miss', async () => {
+    // What storefront_customers 0.25 answers for a real order + its email before the parcel leaves.
+    const pending = { order_number: 'SO-00016', status: 'pending', shipments: [] }
+    const { fetch } = recorder(() => Response.json(pending))
+    await expect(createStorefrontClient({ ...base, fetch }).tracking.lookup({ order_number: 'SO-00016', email: 'a@b.co' })).resolves.toEqual({ status: 'found', tracking: pending })
+  })
+
+  it('tracking.lookup folds the deprecated flat shape into one shipment', async () => {
+    const flat = { status: 'in_transit', carrier: 'dhl', tracking_number: 'D1', eta: '2026-11-03', events: [{ id: 'e1', status: 'in_transit', occurred_at: '2026-11-01T10:00:00Z', lat: 19.4, lng: -99.1 }] }
+    const { fetch } = recorder(() => Response.json(flat))
+    const res = await createStorefrontClient({ ...base, fetch }).tracking.lookup({ tracking_number: 'D1' })
+    expect(res.status).toBe('found')
+    if (res.status !== 'found') return
+    expect(res.tracking.order_number).toBeNull()
+    expect(res.tracking.status).toBe('in_transit')
+    expect(res.tracking.shipments).toHaveLength(1)
+    expect(res.tracking.shipments[0]).toMatchObject({ id: 'D1', kind: 'outbound', status: 'in_transit', carrier: 'dhl', tracking_number: 'D1', label_url: null, events: flat.events })
   })
 
   it('withCustomerToken returns a client bound to the buyer session', async () => {

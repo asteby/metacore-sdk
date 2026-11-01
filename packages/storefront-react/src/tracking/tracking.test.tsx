@@ -2,14 +2,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import axe from 'axe-core'
-import type { TrackingView } from '@asteby/storefront'
-import { ShipmentTracker, TrackOrderLookup, TrackingTimeline, parseTrackingForm, resolveTrackingLookup, trackingPlaces, trackingPoints } from './index.js'
+import type { LegacyTrackingView, Shipment, TrackingView } from '@asteby/storefront'
+import { ShipmentTracker, TrackOrderLookup, TrackingResult, TrackingTimeline, parseTrackingForm, resolveTrackingLookup, trackingPlaces, trackingPoints } from './index.js'
 
 afterEach(cleanup)
 const AXE = { rules: { 'color-contrast': { enabled: false } } }
 const tz = 'America/Mexico_City'
 
-const view = (extra: Partial<TrackingView> = {}): TrackingView => ({
+// The deprecated flat shape: still rendered as one shipment (stores and fixtures built before 0.48).
+const view = (extra: Partial<LegacyTrackingView> = {}): LegacyTrackingView => ({
   status: 'in_transit',
   carrier: 'paquetexpress',
   tracking_number: 'PX123456',
@@ -67,7 +68,7 @@ describe('<ShipmentTracker />', () => {
   })
 
   it('drops a non-https tracking link and never prints a label_url', () => {
-    const t = { ...view({ tracking_url: 'javascript:alert(1)' }), label_url: 'https://labels.example.com/SECRET.pdf' } as TrackingView
+    const t = { ...view({ tracking_url: 'javascript:alert(1)' }), label_url: 'https://labels.example.com/SECRET.pdf' } as LegacyTrackingView
     const { container } = render(<ShipmentTracker tracking={t} />)
     expect(container.querySelector('a[data-sf-tracker-link]')).toBeNull()
     expect(container.innerHTML).not.toContain('SECRET')
@@ -201,5 +202,134 @@ describe('<TrackOrderLookup />', () => {
     fireEvent.change(container.querySelector('input[name="tracking_number"]')!, { target: { value: 'PX1' } })
     fireEvent.submit(container.querySelector('form')!)
     expect(onSubmit).toHaveBeenCalledWith({ tracking_number: 'PX1' })
+  })
+})
+
+// The contract shape storefront_customers answers (`TrackingView`).
+const shipment = (extra: Partial<Shipment> = {}): Shipment => ({
+  id: 'shp_1',
+  kind: 'outbound',
+  status: 'in_transit',
+  environment: 'production',
+  test_mode: false,
+  carrier: 'Estafeta',
+  tracking_number: '8012345678',
+  tracking_url: 'https://rastreo.example.com/8012345678',
+  promised_by: '2026-11-04',
+  label_url: null,
+  events: [
+    { id: 'e2', status: 'in_transit', description: 'En tránsito', location: 'Querétaro, Qro.', occurred_at: '2026-11-01T15:00:00Z' },
+    { id: 'e1', status: 'label_created', description: 'Guía generada', location: null, occurred_at: '2026-10-31T15:00:00Z' },
+  ],
+  map: { path: [{ label: 'CDMX', lat: 19.43, lng: -99.13, precision: 'city' }, { label: 'Querétaro', lat: 20.59, lng: -100.39, precision: 'city' }] },
+  ...extra,
+})
+const order = (extra: Partial<TrackingView> = {}): TrackingView => ({ order_number: 'SO-00016', status: 'in_transit', shipments: [shipment()], ...extra })
+
+describe('<TrackingResult /> (contract shape)', () => {
+  it('order confirmed without a guide: a clear pending status, never the not-found alert, and passes axe', async () => {
+    const { container } = render(<TrackingResult tracking={{ order_number: 'SO-00016', status: 'pending', shipments: [] }} />)
+    const root = container.querySelector('[data-sf-tracking-order]')!
+    expect(root.getAttribute('data-sf-tracking-order-state')).toBe('pending')
+    expect(container.querySelector('[data-sf-tracking-order-title]')!.textContent).toBe('Pedido SO-00016')
+    const note = container.querySelector('[data-sf-tracking-pending]')!
+    expect(note.getAttribute('role')).toBe('status')
+    expect(note.textContent).toBe('Tu pedido está confirmado; aún no tiene guía. Te avisaremos por correo cuando salga.')
+    expect(container.textContent).not.toContain('No encontramos')
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+    expect((await axe.run(container, AXE)).violations).toEqual([])
+  })
+
+  it('a cancelled order without parcels says so', () => {
+    const { container } = render(<TrackingResult tracking={{ order_number: 'SO-2', status: 'cancelled', shipments: [] }} />)
+    expect(container.querySelector('[data-sf-tracking-pending]')!.getAttribute('data-sf-tracking-pending')).toBe('cancelled')
+    expect(container.textContent).toContain('cancelado')
+  })
+
+  it('one shipment: its tracker with guide, link and timeline, one level below the order title', () => {
+    const { container } = render(<TrackingResult tracking={order()} headingLevel={2} timeZone={tz} />)
+    expect(container.querySelector('h2')!.textContent).toBe('Pedido SO-00016')
+    expect(container.querySelector('h3[data-sf-tracker-title]')!.textContent).toBe('En camino')
+    expect(container.querySelector('[data-sf-tracker-guide]')!.textContent).toBe('8012345678')
+    expect(container.querySelector('[data-sf-tracker-eta]')!.textContent).toContain('4')
+    expect(container.querySelectorAll('[data-sf-tracking-timeline] > li')).toHaveLength(2)
+  })
+
+  it('several shipments: each with its own label, status and timeline; a test shipment is never shown', async () => {
+    const tracking = order({
+      shipments: [
+        shipment(),
+        shipment({ id: 'shp_2', status: 'delivered', tracking_number: 'D2', events: [{ id: 'x', status: 'delivered', occurred_at: '2026-11-01T18:00:00Z' }] }),
+        shipment({ id: 'shp_test', test_mode: true, environment: 'sandbox', tracking_number: 'SANDBOX-1' }),
+      ],
+    })
+    const { container } = render(<TrackingResult tracking={tracking} />)
+    expect(container.querySelector('[data-sf-tracking-order]')!.getAttribute('data-sf-tracking-shipments')).toBe('2')
+    expect(container.querySelector('[data-sf-tracking-count]')!.textContent).toContain('2 envíos')
+    const items = container.querySelectorAll('[data-sf-tracking-item]')
+    expect(items).toHaveLength(2)
+    expect(items[0]!.querySelector('[data-sf-tracker-title]')!.textContent).toBe('Envío 1 de 2: En camino')
+    expect(items[1]!.querySelector('[data-sf-tracker-title]')!.textContent).toBe('Envío 2 de 2: Entregado')
+    expect(items[0]!.querySelectorAll('[data-sf-tracking-timeline] > li')).toHaveLength(2)
+    expect(items[1]!.querySelectorAll('[data-sf-tracking-timeline] > li')).toHaveLength(1)
+    expect(container.innerHTML).not.toContain('SANDBOX-1')
+    expect((await axe.run(container, AXE)).violations).toEqual([])
+  })
+
+  it('only test shipments: reads as pending', () => {
+    const { container } = render(<TrackingResult tracking={order({ status: 'label_created', shipments: [shipment({ test_mode: true })] })} />)
+    expect(container.querySelector('[data-sf-tracking-pending]')).not.toBeNull()
+    expect(container.querySelector('[data-sf-tracker]')).toBeNull()
+  })
+
+  it('draws each shipment\'s map from the server path when a maps loader is given', async () => {
+    const MapView = ({ points }: { points: unknown[] }) => <div data-testid="map" data-n={points.length} />
+    const { findAllByTestId } = render(
+      <TrackingResult tracking={order({ shipments: [shipment(), shipment({ id: 'shp_2' })] })} trackerProps={{ loadMaps: async () => ({ MapView: MapView as never, Route: (() => null) as never }) }} />,
+    )
+    const maps = await findAllByTestId('map')
+    expect(maps).toHaveLength(2)
+    expect(maps[0]!.getAttribute('data-n')).toBe('2')
+  })
+
+  it('ShipmentTracker given the whole lookup result renders the order view; the flat shape still works', () => {
+    const { container } = render(<ShipmentTracker tracking={{ order_number: 'SO-1', status: 'pending', shipments: [] }} />)
+    expect(container.querySelector('[data-sf-tracking-pending]')).not.toBeNull()
+    cleanup()
+    const flat = render(<TrackingResult tracking={view()} />)
+    expect(flat.container.querySelector('[data-sf-tracker-guide]')!.textContent).toBe('PX123456')
+    expect(flat.container.querySelector('[data-sf-tracking-order-title]')).toBeNull()
+  })
+
+  it('speaks English', () => {
+    const { container } = render(<TrackingResult tracking={{ order_number: 'SO-1', status: 'pending', shipments: [] }} locale="en-US" />)
+    expect(container.textContent).toContain('Order SO-1')
+    expect(container.textContent).toContain('no tracking number yet')
+  })
+})
+
+describe('<TrackOrderLookup /> with the contract shape', () => {
+  it('a found order without a guide shows the pending status in the result region, not an error', () => {
+    const { container } = render(<TrackOrderLookup action="/rastreo" result={{ order_number: 'SO-00016', status: 'pending', shipments: [] }} headingLevel={1} />)
+    const region = container.querySelector('[data-sf-tracking-result]')!
+    expect(region.querySelector('[data-sf-tracking-pending]')!.textContent).toContain('aún no tiene guía')
+    expect(region.querySelector('h2')!.textContent).toBe('Pedido SO-00016')
+    expect(container.querySelector('[role="alert"]')).toBeNull()
+  })
+
+  it('renderTracker receives the normalised contract shape (also from a flat result)', () => {
+    const renderTracker = vi.fn(() => <p>custom</p>)
+    render(<TrackOrderLookup action="/rastreo" result={view()} renderTracker={renderTracker} />)
+    const arg = (renderTracker.mock.calls[0] as unknown as [TrackingView])[0]
+    expect(arg.shipments).toHaveLength(1)
+    expect(arg.shipments[0]!.tracking_number).toBe('PX123456')
+  })
+
+  it('end to end with the client: the pending answer of the server renders the pending state', async () => {
+    const pending = { order_number: 'SO-00016', status: 'pending', shipments: [] }
+    const sf = { tracking: { lookup: async () => ({ status: 'found' as const, tracking: pending as TrackingView }) } }
+    const data = await resolveTrackingLookup(sf, { order_number: 'SO-00016', email: 'a@b.co' })
+    const { container } = render(<TrackOrderLookup action="/rastreo" result={data.tracking ?? null} error={data.error ?? null} />)
+    expect(container.querySelector('[data-sf-tracking-pending]')).not.toBeNull()
   })
 })

@@ -5,10 +5,11 @@
  * does not reload. The result is announced politely and takes the focus. Every failure reads the same ("not found"),
  * so the page never tells a real order from an unknown one. Headless (`data-sf-tracking-lookup*`, `classNames`).
  */
-import type { TrackingLookupInput, TrackingView } from '@asteby/storefront'
+import type { LegacyTrackingView, TrackingLookupInput, TrackingView } from '@asteby/storefront'
+import { normalizeTrackingView } from '@asteby/storefront'
 import { useEffect, useId, useRef, type FormEvent, type ReactNode } from 'react'
 import { parseTrackingForm, type TrackingFormError } from './form.js'
-import { ShipmentTracker, type ShipmentTrackerProps } from './tracker.js'
+import { TrackingResult, type ShipmentTrackerProps, type TrackingResultClassNames } from './tracker.js'
 import { useTrackingText, type TrackingTextProps } from './text.js'
 
 export type TrackOrderLookupClassNames = Partial<
@@ -20,8 +21,8 @@ export type TrackOrderLookupProps = TrackingTextProps & {
   action: string
   /** `both` (default) shows the two ways, `order_email` or `tracking` only one. */
   mode?: 'both' | 'order_email' | 'tracking'
-  /** What the last post answered. */
-  result?: TrackingView | null
+  /** What the last post answered (`{ order_number, status, shipments[] }`; the deprecated flat shape still renders). */
+  result?: TrackingView | LegacyTrackingView | null
   error?: TrackingFormError | null
   retryAfter?: number
   /** A lookup is in flight (disables the button). */
@@ -29,15 +30,17 @@ export type TrackOrderLookupProps = TrackingTextProps & {
   /** Enhancement: receives the parsed input and prevents the native post. Omit to rely on the plain form. */
   onSubmit?: (input: TrackingLookupInput) => void | Promise<void>
   defaultValues?: Partial<Record<'order_number' | 'email' | 'tracking_number', string>>
-  /** Replaces the default `ShipmentTracker` of the result. */
+  /** Replaces the default `TrackingResult` (receives the contract shape, already normalised). */
   renderTracker?: (tracking: TrackingView) => ReactNode
-  /** Props of the default tracker (map loader, geocoder, carrier mark, classNames…). */
-  trackerProps?: Omit<ShipmentTrackerProps, 'tracking' | 'locale' | 'messages' | 'timeZone'>
+  /** Props of each shipment's tracker (map loader, geocoder, carrier mark, classNames…). */
+  trackerProps?: Omit<ShipmentTrackerProps, 'tracking' | 'locale' | 'messages' | 'timeZone' | 'headingLevel' | 'label'>
+  /** classNames of the result block (order title, the "no guide yet" status, the list of shipments). */
+  resultClassNames?: TrackingResultClassNames
   headingLevel?: 1 | 2 | 3
   classNames?: TrackOrderLookupClassNames
 }
 
-export function TrackOrderLookup({ action, mode = 'both', result, error, retryAfter, pending, onSubmit, defaultValues, renderTracker, trackerProps, headingLevel = 2, classNames: cx = {}, ...text }: TrackOrderLookupProps) {
+export function TrackOrderLookup({ action, mode = 'both', result, error, retryAfter, pending, onSubmit, defaultValues, renderTracker, trackerProps, resultClassNames, headingLevel = 2, classNames: cx = {}, ...text }: TrackOrderLookupProps) {
   const { tm, tt, locale } = useTrackingText(text)
   const uid = useId().replace(/:/g, '')
   const H = `h${headingLevel}` as 'h2'
@@ -61,6 +64,7 @@ export function TrackOrderLookup({ action, mode = 'both', result, error, retryAf
     const input = parseTrackingForm(new FormData(e.currentTarget))
     if (input) void onSubmit(input)
   }
+  const view = result ? normalizeTrackingView(result) : null
   const errorText = error ? (error === 'rate_limited' && retryAfter ? tt('lookup.error.rate_limited_in', { seconds: retryAfter }) : tm[`lookup.error.${error}` as 'lookup.error.not_found']) : null
 
   return (
@@ -110,11 +114,11 @@ export function TrackOrderLookup({ action, mode = 'both', result, error, retryAf
           <p className={cx.error} role="alert" data-sf-tracking-error={error}>
             {errorText}
           </p>
-        ) : result ? (
+        ) : view ? (
           renderTracker ? (
-            renderTracker(result)
+            renderTracker(view)
           ) : (
-            <ShipmentTracker tracking={result} locale={locale} {...(text.timeZone ? { timeZone: text.timeZone } : {})} {...(text.messages ? { messages: text.messages } : {})} {...trackerProps} headingLevel={(headingLevel + 1) as 2 | 3 | 4} />
+            <TrackingResult tracking={view} locale={locale} {...(text.timeZone ? { timeZone: text.timeZone } : {})} {...(text.messages ? { messages: text.messages } : {})} {...(trackerProps ? { trackerProps } : {})} {...(resultClassNames ? { classNames: resultClassNames } : {})} headingLevel={(headingLevel + 1) as 2 | 3 | 4} />
           )
         ) : null}
       </div>

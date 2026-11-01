@@ -812,10 +812,30 @@ export type Shipment = {
 export type TrackingEventView = ShipmentEvent & { lat?: number | null; lng?: number | null }
 
 /**
- * What the public "track my order" lookup returns: only the movement of the parcel. Never a name, an address, the lines
- * or the totals of the order, and never a `label_url`. `events` is newest first.
+ * What the public "track my order" lookup returns (`POST /storefront/customer/track`, contract `TrackingView`): the
+ * order's overall shipping status and its shipments, each with its own scans (newest first) and map. Never a name, an
+ * address, the lines or the totals of the order, and never an outbound `label_url`.
+ *
+ * - Order + email that match but no parcel yet: `status: 'pending'` (or `'cancelled'`) and `shipments: []`. That is a
+ *   real answer ("confirmed, no guide yet"), not a miss.
+ * - `order_number` only comes back when the lookup was by order + email (`null` by guide).
+ * - The server already drops sandbox shipments in production; a `test_mode` one must still never be shown as real.
+ *
+ * Until `@asteby/storefront` 0.32 this type was the flat single-parcel shape, now {@link LegacyTrackingView}; the
+ * client folds a server that still answers that way into this shape (see `normalizeTrackingView`).
  */
 export type TrackingView = {
+  order_number?: string | null
+  /** Overall status of the order's shipping; `null` when the server cannot summarise it. */
+  status: ShipmentStatus | null
+  shipments: Shipment[]
+}
+
+/**
+ * @deprecated The flat single-parcel shape `TrackingView` had until `@asteby/storefront` 0.32. The server never answered
+ * with it; it is only accepted (and folded into one shipment) for stores and fixtures that still build it by hand.
+ */
+export type LegacyTrackingView = {
   status: ShipmentStatus
   carrier?: string | null
   carrier_logo_key?: string | null

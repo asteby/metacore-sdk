@@ -32,6 +32,11 @@ const es = {
   'lookup.error.rate_limited_in': 'Hiciste muchos intentos. Inténtalo de nuevo en {seconds} s.',
   'lookup.error.unavailable': 'No pudimos consultar el rastreo ahora. Inténtalo en unos minutos.',
   'lookup.error.incomplete': 'Escribe el número de pedido y el correo, o el número de guía.',
+  'result.order': 'Pedido {number}',
+  'result.pending': 'Tu pedido está confirmado; aún no tiene guía. Te avisaremos por correo cuando salga.',
+  'result.cancelled': 'Este pedido fue cancelado, así que no tiene envíos.',
+  'result.count': 'Tu pedido viaja en {count} envíos.',
+  'result.shipment': 'Envío {index} de {count}',
 }
 
 const en: typeof es = {
@@ -67,6 +72,11 @@ const en: typeof es = {
   'lookup.error.rate_limited_in': 'Too many attempts. Try again in {seconds} s.',
   'lookup.error.unavailable': 'We could not check the tracking right now. Try again in a few minutes.',
   'lookup.error.incomplete': 'Enter the order number and email, or the tracking number.',
+  'result.order': 'Order {number}',
+  'result.pending': 'Your order is confirmed; it has no tracking number yet. We will email you when it ships.',
+  'result.cancelled': 'This order was cancelled, so it has no shipments.',
+  'result.count': 'Your order travels in {count} shipments.',
+  'result.shipment': 'Shipment {index} of {count}',
 }
 
 export type TrackingMessages = typeof es
