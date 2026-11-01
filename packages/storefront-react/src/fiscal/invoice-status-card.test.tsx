@@ -201,3 +201,10 @@ describe('<InvoiceStatusCard /> processing refresh', () => {
     expect(onRefresh).not.toHaveBeenCalled()
   })
 })
+
+describe('InvoiceStatusCard with invoicing switched off by the organization', () => {
+  it('renders nothing at all (not even the «not enabled» notice)', () => {
+    const { container } = render(<InvoiceStatusCard invoice={{ status: 'none', stage: 'not_requested', can_request: false }} availability="disabled" />)
+    expect(container.innerHTML).toBe('')
+  })
+})

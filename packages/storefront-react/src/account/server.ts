@@ -6,7 +6,7 @@
  * token in the store's own cookie, which is passed in (`customerCookie`), so name, flags and signing stay the store's.
  */
 import { fileGuardKey, once, takeHit, type FileGuardOptions } from './file-guard.js'
-import { customerTypeOptions, invoiceFileBytes, isStorefrontError, repairPath, safeInvoiceFilename, isCustomerType, type CustomerCapabilities, type CustomerType, type CustomerSession, type StorefrontClient } from '@asteby/storefront'
+import { customerTypeOptions, invoicingDisabled, invoiceFileBytes, isStorefrontError, repairPath, safeInvoiceFilename, isCustomerType, type CustomerCapabilities, type CustomerType, type CustomerSession, type StorefrontClient } from '@asteby/storefront'
 import { voucherOf } from './voucher.js'
 import type { AuthActionData, AuthErrorCode, AuthIntent } from './types.js'
 
@@ -65,6 +65,8 @@ export async function loadAuthCapabilities(sf: StorefrontClient, options: LoadAu
       otp_channels: Array.isArray(got?.otp_channels) ? got.otp_channels : [],
       ...(types ? { customer_types: { options: types.options.map((o) => ({ ...o })), default: types.defaultValue } } : {}),
       ...(typeof got?.unavailable_reason === 'string' ? { unavailable_reason: got.unavailable_reason } : {}),
+      // Only the switched-off answer travels: `invoicingDisabled(caps)` is how a store hides every invoice surface.
+      ...(invoicingDisabled(got) && got?.invoicing ? { invoicing: got.invoicing } : {}),
       ...(missing.length ? { missing_scopes: missing } : {}),
     }
     if (value.unavailable_reason === 'missing_scope') logMisconfigured(missing)

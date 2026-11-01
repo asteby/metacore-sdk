@@ -102,6 +102,13 @@ export type MockStorefrontOptions = {
    */
   customerCapabilities?: Partial<CustomerCapabilities>
   /**
+   * The organization turned invoicing off (server setting `invoicing_enabled: false`, contract 1.29): capabilities
+   * report `invoicing {available: false, unavailable_reason: 'disabled'}` and no `fiscal_profiles`; every invoice and
+   * fiscal-profile route answers `404 not_found`; orders carry no invoice documents and the quiet invoice summary.
+   * Default false.
+   */
+  invoicingDisabled?: boolean
+  /**
    * Scopes the mock's `sk_`/`pk_` tokens do NOT have (e.g. `['customer:write']`), to rehearse an under-provisioned
    * store. Routes needing one answer `403 insufficient_scope` with `required_scopes`; `GET /_token` lists them in
    * `missing_scopes`; and `customer/capabilities` reports `password: false`, `unavailable_reason: 'missing_scope'`
@@ -324,6 +331,19 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     email_change: true,
     ...((options.subjectKinds?.length ?? 0) > 0 ? { subjects: { kinds: options.subjectKinds!.map((k) => k.key), share_with_workshop: false } } : {}),
     ...options.customerCapabilities,
+  }
+  const invoicingOff = options.invoicingDisabled === true
+  if (invoicingOff) {
+    capabilities.invoicing = {
+      available: false,
+      unavailable_reason: 'disabled',
+      countries: [],
+      checkout: 'off',
+      post_purchase: false,
+      identity_documents: [],
+      online_verify: false,
+    }
+    delete capabilities.fiscal_profiles
   }
   const missingScopes = options.missingScopes ?? []
   if (missingScopes.includes('customer:write')) {
@@ -858,7 +878,15 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
   type Route = { method: string; pattern: RegExp; scope: string; handler: (ctx: Ctx) => Result | Promise<Result> }
 
   const routes: Route[] = []
+  const invoicingPaths = /^\/(customer\/(invoices$|orders\/:id\/invoices?\b|fiscal-profiles\b)|carts\/:id\/invoice$)/
   const route = (method: string, path: string, scope: string, handler: Route['handler']) => {
+    if (invoicingOff && invoicingPaths.test(path)) {
+      const inner = handler
+      handler = () => {
+        void inner
+        throw new HttpError(404, 'not_found', 'Resource not found')
+      }
+    }
     const pattern = new RegExp('^' + path.replace(/:[a-z_]+/g, '([^/]+)') + '$')
     routes.push({ method, pattern, scope, handler })
   }
@@ -1663,6 +1691,10 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
    */
   const orderView = ({ customer_id: _c, ...o }: MockState['orders'][number], detail: boolean): Order => {
     const order: Order = { ...o, invoice: orderInvoice(o as MockState['orders'][number]) }
+    if (invoicingOff) {
+      order.invoice = { status: 'none', stage: 'not_requested', action: 'none', can_request: false, folio: null, url: null, xml_url: null, reason_code: null, blocked_reason: null } as unknown as Order['invoice']
+      delete order.invoices
+    }
     if (order.shipments) order.shipments = order.shipments.map((s) => (isTestShipment(s) ? { ...s, tracking_number: null, tracking_url: null } : { ...s, events: sortTrackingEvents(s.events) }))
     order.progress = orderProgress(order)
     order.next_action = nextAction(order)
