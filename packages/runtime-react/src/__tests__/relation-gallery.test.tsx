@@ -23,13 +23,13 @@ beforeEach(() => {
 
 const col = (c: Record<string, unknown>) => ({ label: c.key, type: 'text', sortable: false, filterable: false, ...c })
 
-function meta(gallery: boolean) {
+function meta(gallery: boolean, mainFromParent = false) {
     return {
         name: 'product_images',
         columns: [
             col({ key: 'id', hidden: true }),
             col({ key: 'product_id', ref: 'products' }),
-            col({ key: 'url', label: 'Imagen', cellStyle: 'image_stack', ...(gallery ? { styleConfig: { gallery: true, max_size: 1024 } } : {}) }),
+            col({ key: 'url', label: 'Imagen', cellStyle: 'image_stack', ...(gallery ? { styleConfig: { gallery: true, max_size: 1024, ...(mainFromParent ? { main_from_parent: 'image' } : {}) } } : {}) }),
             col({ key: 'alt', label: 'Texto alternativo', ...(gallery ? { styleConfig: { default_from_parent: 'name' } } : {}) }),
             col({ key: 'width', type: 'number', ...(gallery ? { styleConfig: { derive: 'image_width' } } : {}) }),
             col({ key: 'height', type: 'number', ...(gallery ? { styleConfig: { derive: 'image_height' } } : {}) }),
@@ -47,11 +47,11 @@ const BASE_ROWS = [
     { id: 'img_a', product_id: 'p1', url: '/storage/a.png', alt: 'Frente', position: 0 },
 ]
 
-function mockApi(gallery: boolean) {
+function mockApi(gallery: boolean, mainFromParent = false) {
     let n = 0
     const api = {
         get: vi.fn((url: string) =>
-            Promise.resolve({ data: url.startsWith('/metadata/table/') ? { success: true, data: meta(gallery) } : { success: true, data: ROWS } }),
+            Promise.resolve({ data: url.startsWith('/metadata/table/') ? { success: true, data: meta(gallery, mainFromParent) } : { success: true, data: ROWS } }),
         ),
         post: vi.fn((url: string, _body?: any, cfg?: any) => {
             if (url === '/upload') {
@@ -66,7 +66,7 @@ function mockApi(gallery: boolean) {
     return api as unknown as ApiClient & typeof api
 }
 
-function renderPanel(api: ApiClient, model = 'product_images') {
+function renderPanel(api: ApiClient, model = 'product_images', parentRecord: Record<string, unknown> = { id: 'p1', name: 'BALATA DISCO' }) {
     return render(
         <ApiProvider client={api}>
             <DynamicRelation
@@ -74,7 +74,7 @@ function renderPanel(api: ApiClient, model = 'product_images') {
                 model={model}
                 foreignKey="product_id"
                 parentId="p1"
-                parentRecord={{ id: 'p1', name: 'BALATA DISCO' }}
+                parentRecord={parentRecord}
             />
         </ApiProvider>,
     )
@@ -92,6 +92,32 @@ describe('DynamicRelation — galería', () => {
         expect(tiles[1].getAttribute('data-main')).toBeNull()
         expect(screen.getByText('Principal')).toBeTruthy()
         expect(screen.queryByRole('table')).toBeNull()
+    })
+
+    it('imagen original del producto: tarjeta «Principal» de solo lectura mientras la galería no la contiene', async () => {
+        renderPanel(mockApi(true, true), 'product_images_lead', { id: 'p1', name: 'BALATA', image: '/storage/original.jpg' })
+        const lead = await screen.findByTestId('gallery-lead')
+        expect(lead.getAttribute('data-main')).toBe('true')
+        expect(lead.querySelector('img')?.getAttribute('src')).toContain('original.jpg')
+        expect(within(lead).getByText('Principal')).toBeTruthy()
+        expect(within(lead).queryByRole('button')).toBeNull()
+        await waitFor(() => expect(screen.getAllByTestId('gallery-tile')).toHaveLength(2))
+        // las filas de la galería son adicionales: ninguna es la principal ni ofrece «Hacer principal»
+        expect(screen.getAllByTestId('gallery-tile').every((t) => t.getAttribute('data-main') === null)).toBe(true)
+        expect(screen.queryByLabelText('Hacer principal')).toBeNull()
+    })
+
+    it('si la galería ya contiene la imagen original no hay tarjeta extra y la primera es la principal', async () => {
+        renderPanel(mockApi(true, true), 'product_images_lead2', { id: 'p1', name: 'BALATA', image: '/storage/a.png' })
+        await waitFor(() => expect(screen.getAllByTestId('gallery-tile')).toHaveLength(2))
+        expect(screen.queryByTestId('gallery-lead')).toBeNull()
+        expect(screen.getAllByTestId('gallery-tile')[0].getAttribute('data-main')).toBe('true')
+    })
+
+    it('sin el hint main_from_parent no hay tarjeta de imagen original', async () => {
+        renderPanel(mockApi(true), 'product_images', { id: 'p1', name: 'BALATA', image: '/storage/original.jpg' })
+        await waitFor(() => expect(screen.getAllByTestId('gallery-tile')).toHaveLength(2))
+        expect(screen.queryByTestId('gallery-lead')).toBeNull()
     })
 
     it('sube varias fotos: una fila por foto con posición siguiente, tamaño y alt sugerido; rechaza la pesada', async () => {

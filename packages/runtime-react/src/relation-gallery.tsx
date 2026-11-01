@@ -63,6 +63,12 @@ export interface RelationGalleryProps {
     onDelete?: (row: Record<string, any>) => void
     /** Keys of rows pending deletion (hidden while «Deshacer» is offered). */
     hiddenKeys?: Set<string>
+    /**
+     * The parent's own image, shown as a read-only first tile marked «Principal»
+     * while no gallery row holds it. Gallery rows are then additional photos:
+     * none of them is the main one, so «Hacer principal» is not offered.
+     */
+    lead?: { src: string }
 }
 
 interface UploadItem {
@@ -97,6 +103,7 @@ export function RelationGallery({
     onEdit,
     onDelete,
     hiddenKeys,
+    lead,
 }: RelationGalleryProps) {
     const { t } = useTranslation()
     const inputRef = useRef<HTMLInputElement>(null)
@@ -337,10 +344,28 @@ export function RelationGallery({
                 </div>
             )}
 
-            {keyed.length > 0 && (
+            {(keyed.length > 0 || lead) && (
                 <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
                     <SortableContext items={ids} strategy={rectSortingStrategy}>
                         <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4" data-testid="gallery-grid">
+                            {lead && (
+                                <li
+                                    className="relative min-w-0 overflow-hidden rounded-lg border bg-card ring-2 ring-primary"
+                                    data-testid="gallery-lead"
+                                    data-main="true"
+                                >
+                                    <div className="aspect-square w-full bg-muted" aria-label={`${t('dynamic.gallery.original', { defaultValue: 'Imagen original del producto' })} · ${mainLabel}`}>
+                                        <img src={lead.src} alt="" className="h-full w-full min-h-24 object-cover" draggable={false} />
+                                    </div>
+                                    <span className="absolute start-2 top-2 inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground">
+                                        <Star className="h-3 w-3" aria-hidden />
+                                        {mainLabel}
+                                    </span>
+                                    <div className="border-t bg-card px-2 py-1 text-xs text-muted-foreground">
+                                        {t('dynamic.gallery.original', { defaultValue: 'Imagen original del producto' })}
+                                    </div>
+                                </li>
+                            )}
                             {keyed.map(({ row, key }, index) => (
                                 <GalleryTile
                                     key={key}
@@ -349,7 +374,8 @@ export function RelationGallery({
                                     caption={captionKey ? String(row[captionKey] ?? '') : ''}
                                     index={index}
                                     total={keyed.length}
-                                    isMain={index === 0}
+                                    isMain={!lead && index === 0}
+                                    canMakeMain={!lead}
                                     mainLabel={mainLabel}
                                     canEdit={canEdit}
                                     canReorder={reorderable}
@@ -374,6 +400,7 @@ function GalleryTile({
     index,
     total,
     isMain,
+    canMakeMain,
     mainLabel,
     canEdit,
     canReorder,
@@ -388,6 +415,7 @@ function GalleryTile({
     index: number
     total: number
     isMain: boolean
+    canMakeMain: boolean
     mainLabel: string
     canEdit: boolean
     canReorder: boolean
@@ -455,7 +483,7 @@ function GalleryTile({
                             >
                                 <ArrowRight className="h-4 w-4 rtl:rotate-180" />
                             </Button>
-                            {!isMain && (
+                            {!isMain && canMakeMain && (
                                 <Button
                                     type="button"
                                     size="sm"
