@@ -204,6 +204,7 @@ export function DynamicRelations({
                         canEdit={canEdit}
                         readonly={relReadonly}
                         strings={panelStrings}
+                        parentRecord={record}
                         onChange={onChange ? () => onChange(rel) : undefined}
                     />
                 )

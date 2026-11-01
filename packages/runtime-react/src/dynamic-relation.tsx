@@ -52,6 +52,9 @@ import { makeDefaultGetDynamicColumns } from './dynamic-columns'
 import { isColumnVisibleInLineSubtable } from './column-visibility'
 import { useOptionsResolver } from './use-options-resolver'
 import { dedupeById, useInfiniteScrollSentinel } from './use-infinite-scroll'
+import { toast } from 'sonner'
+import { RelationGallery } from './relation-gallery'
+import { extractUploadedValue, readImageSize } from './upload-field'
 import type { ApiResponse, ColumnDefinition, TableMetadata } from './types'
 import {
     buildCreatePayload,
@@ -62,8 +65,16 @@ import {
     diffSelection,
     extractSelectedTargetIds,
     pickOptionLabel,
+    relationColumnUi,
+    relationDerivedValues,
+    relationGalleryColumn,
+    relationInitialValues,
+    relationPositionKey,
+    relationPositionSortable,
     relationRowKey,
+    sortRelationRows,
     type DynamicRelationKind,
+    type ImageMeta,
 } from './dynamic-relation-helpers'
 
 export type { DynamicRelationKind } from './dynamic-relation-helpers'
@@ -102,6 +113,16 @@ export interface DynamicRelationStrings {
     searchPlaceholder: string
     /** Pie de la sub-tabla: "{{loaded}} de {{total}}". */
     countLabel: string
+    /** Galería: toast tras eliminar una foto. Default "Foto eliminada". */
+    deletedToast?: string
+    /** Galería: acción del toast. Default "Deshacer". */
+    undoLabel?: string
+    /** Galería: falla al guardar el orden. */
+    reorderError?: string
+    /** Galería: falla al eliminar. */
+    deleteError?: string
+    /** Galería: confirmación al eliminar una foto. Default "Esta foto deja de verse en la tienda. Puedes deshacerlo unos segundos." */
+    confirmRemovePhotoDescription?: string
 }
 
 const DEFAULT_STRINGS: DynamicRelationStrings = {
@@ -124,6 +145,7 @@ const DEFAULT_STRINGS: DynamicRelationStrings = {
 // Tamaño de página de la sub-tabla 1:N. Antes la lista pedía el hijo COMPLETO
 // (sin page/per_page), así que abrir un almacén traía todas sus existencias y
 // traspasos. Se pagina de a 25 y el resto entra por scroll infinito.
+const GALLERY_PAGE_SIZE = 200
 const REL_PAGE_SIZE = 25
 
 interface CommonProps {
@@ -180,6 +202,12 @@ export interface DynamicRelationOneToManyProps extends CommonProps {
     foreignKey: string
     /** Endpoint override; default `/data/${model}`. */
     endpoint?: string
+    /**
+     * El registro padre. Solo lo leen los campos que declaran
+     * `display_config.default_from_parent` (p. ej. el nombre del producto como
+     * texto alternativo sugerido de una foto). Opcional.
+     */
+    parentRecord?: Record<string, unknown> | null
 }
 
 export interface DynamicRelationManyToManyProps extends CommonProps {
@@ -231,6 +259,7 @@ function OneToManyRelation({
     strings,
     className,
     onChange,
+    parentRecord,
 }: DynamicRelationOneToManyProps) {
     // Read-only relation always wins over host-passed perms (AND). Tolerates the
     // camelCase alias the same way lock_rows/lockRows does.
@@ -284,6 +313,7 @@ function OneToManyRelation({
     // resolverla dispararía un segundo fetch de datos por cada montaje.
     const metadataRef = useRef<TableMetadata | null>(metadata)
     metadataRef.current = metadata
+    const fetchPageRef = useRef<((p: number, append: boolean, silent?: boolean) => Promise<void>) | null>(null)
 
     // Debounce del buscador: cada tecla no puede pegarle al servidor.
     useEffect(() => {
@@ -329,25 +359,43 @@ function OneToManyRelation({
 
     // fetchPage REEMPLAZA (página 1) o ANEXA (scroll infinito). Antes esta lista
     // pedía el modelo hijo entero sin page/per_page.
-    const fetchPage = useCallback(async (nextPage: number, append: boolean) => {
+    // silent: refresh page 1 without the skeleton (the gallery keeps its
+    // per-file upload list mounted while the new rows arrive).
+    const fetchPage = useCallback(async (nextPage: number, append: boolean, silent = false) => {
         if (append) setLoadingMore(true)
-        else setLoading(true)
+        else if (!silent) setLoading(true)
         try {
             const params: Record<string, any> = {
                 ...buildRelationFilterParams(foreignKey, parentId, filters),
                 page: nextPage,
                 per_page: REL_PAGE_SIZE,
             }
+            // A child model with an ordering column (`position`) lists in that
+            // order — the gallery's first image is the main one.
+            // Only when the column is declared sortable: a backend that cannot
+            // sort by it must not fail the whole list.
+            if (relationPositionSortable(metadataRef.current)) {
+                params.sortBy = 'position'
+                params.order = 'asc'
+            }
+            // A gallery shows every photo at once (no infinite scroll in the
+            // grid) and numbers new ones past the highest loaded position.
+            if (relationGalleryColumn(metadataRef.current)) params.per_page = GALLERY_PAGE_SIZE
             if (debouncedSearch) params.search = debouncedSearch
             const askedScope = cacheScope()
             const [metaRes, dataRes] = await Promise.all([
                 metadataRef.current ? Promise.resolve(null) : api.get(`/metadata/table/${model}`),
                 api.get(dataEndpoint, { params }),
             ])
+            let refetchOrdered = false
             if (metaRes && (metaRes as any).data?.success) {
                 const fresh = (metaRes as { data: ApiResponse<TableMetadata> }).data.data
                 setMetadata(fresh)
+                metadataRef.current = fresh
                 cacheMetadata(model, fresh, { scope: askedScope })
+                // Cold cache: this page went out before we knew the child has a
+                // gallery / sortable position — ask again in that order and size.
+                refetchOrdered = !append && (!!relationGalleryColumn(fresh) || relationPositionSortable(fresh))
             }
             const list = (dataRes as { data: ApiResponse<any[]> }).data
             setFetchErrorStatus(null)
@@ -359,19 +407,27 @@ function OneToManyRelation({
                 else if (!append) setTotal(fetched.length)
                 setExhausted(fetched.length < REL_PAGE_SIZE)
             }
+            if (refetchOrdered) {
+                void fetchPageRef.current?.(1, false, true)
+            }
         } catch (err) {
             console.error('DynamicRelation fetch error', err)
             setFetchErrorStatus((err as { response?: { status?: number } })?.response?.status ?? 0)
         } finally {
             if (append) setLoadingMore(false)
-            else setLoading(false)
+            else if (!silent) setLoading(false)
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [api, dataEndpoint, foreignKey, parentId, filtersKey, model, cacheMetadata, debouncedSearch])
 
+    fetchPageRef.current = fetchPage
+
     // Recarga desde la primera página. Es lo que corren create/edit/delete.
     const fetchAll = useCallback(async () => {
         await fetchPage(1, false)
+    }, [fetchPage])
+    const refreshSilently = useCallback(async () => {
+        await fetchPage(1, false, true)
     }, [fetchPage])
 
     // Un cambio de padre/scope/búsqueda vuelve a la página 1.
@@ -386,12 +442,31 @@ function OneToManyRelation({
     // El buscador solo aparece cuando hay algo que buscar: una sub-tabla de 3
     // líneas no necesita chrome extra. Se queda visible mientras haya término
     // activo para no dejar al usuario sin forma de limpiarlo.
-    const showSearch = debouncedSearch !== '' || search !== '' || total > REL_PAGE_SIZE
+    const isGallery = !!relationGalleryColumn(metadata)
+    const showSearch = !isGallery && (debouncedSearch !== '' || search !== '' || total > REL_PAGE_SIZE)
 
     const formFields = useMemo(
         () => deriveRelationFormFields(metadata, foreignKey),
         [metadata, foreignKey],
     )
+
+    // Ordered view of the loaded rows (also covers the first page, fetched
+    // before the metadata told us there is a position column).
+    const positionKey = useMemo(() => relationPositionKey(metadata), [metadata])
+    const orderedRows = useMemo(() => sortRelationRows(rows, positionKey), [rows, positionKey])
+    const galleryColumn = useMemo(() => relationGalleryColumn(metadata), [metadata])
+    const captionKey = useMemo(
+        () => metadata?.columns?.find((c) => relationColumnUi(c).defaultFromParent)?.key,
+        [metadata],
+    )
+    const createInitialValues = useMemo(
+        () => relationInitialValues(metadata, parentRecord),
+        [metadata, parentRecord],
+    )
+    // Size of the image uploaded in the open form (fills derived width/height).
+    const uploadedImageRef = useRef<ImageMeta | null>(null)
+    // Rows deleted from the gallery but still undoable.
+    const [pendingDelete, setPendingDelete] = useState<Set<string>>(new Set())
 
     const visibleColumns = useMemo(() => {
         if (!metadata?.columns) return []
@@ -457,7 +532,7 @@ function OneToManyRelation({
                         <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => { setEditingRow(row.original); setFormOpen(true) }}
+                            onClick={() => { setEditingRow(row.original); uploadedImageRef.current = null; setFormOpen(true) }}
                             aria-label={labels.editLabel}
                         >
                             <Pencil className="h-4 w-4" />
@@ -480,13 +555,21 @@ function OneToManyRelation({
     }, [metadata, visibleColumns, buildColumns, i18n?.language, timeZone, currency, showActions, canEdit, canDelete, labels.editLabel, labels.removeLabel])
 
     const table = useReactTable({
-        data: rows,
+        data: orderedRows,
         columns,
         getCoreRowModel: getCoreRowModel(),
     })
 
     const handleSubmit = useCallback(async (values: Record<string, any>) => {
         setSubmitting(true)
+        // Derived columns (image size, next position) travel with the row even
+        // though they are not form inputs.
+        const derived = relationDerivedValues(metadata, {
+            isCreate: !editingRow,
+            rows,
+            image: uploadedImageRef.current,
+        })
+        values = { ...values, ...derived }
         try {
             if (editingRow) {
                 const res = await api.put(`${dataEndpoint}/${editingRow.id}`, values)
@@ -501,6 +584,7 @@ function OneToManyRelation({
             }
             setFormOpen(false)
             setEditingRow(null)
+            uploadedImageRef.current = null
             await fetchAll()
             onChange?.()
         } catch (err) {
@@ -509,7 +593,129 @@ function OneToManyRelation({
             setSubmitting(false)
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [api, dataEndpoint, editingRow, fetchAll, foreignKey, filtersKey, onChange, parentId])
+    }, [api, dataEndpoint, editingRow, fetchAll, foreignKey, filtersKey, onChange, parentId, metadata, rows])
+
+    // ── Gallery (opt-in: image column with display_config.gallery) ─────────
+    // Same contracts as the table: POST /upload (multipart) for the file, then
+    // POST /data/<model> for the row. Positions are assigned in pick order.
+    const galleryUpload = useCallback(
+        async (file: File, offset: number, onProgress: (f: number) => void, reuseUrl?: string) => {
+            if (!galleryColumn) return
+            const size = await readImageSize(file)
+            let url = reuseUrl
+            if (!url) {
+                const form = new FormData()
+                form.append('file', file)
+                const folder = (galleryColumn.styleConfig as any)?.storage_path ?? (galleryColumn.styleConfig as any)?.storagePath
+                if (folder) {
+                    form.append('folder', folder)
+                    form.append('storage_path', folder)
+                }
+                const up = await api.post('/upload', form, {
+                    headers: { 'Content-Type': 'multipart/form-data' },
+                    onUploadProgress: (e: { loaded: number; total?: number }) => {
+                        if (e.total) onProgress((e.loaded / e.total) * 0.9)
+                    },
+                } as any)
+                const body = (up as { data?: any })?.data
+                if (body && body.success === false) throw new Error(body.message || 'upload failed')
+                url = extractUploadedValue(body)
+                if (!url) throw new Error('upload failed')
+            }
+            const derived = relationDerivedValues(metadata, { isCreate: true, rows, image: size })
+            if (positionKey && typeof derived[positionKey] === 'number') derived[positionKey] += offset
+            const payload = {
+                ...(filters || {}),
+                ...buildCreatePayload(foreignKey, parentId, {
+                    ...createInitialValues,
+                    ...derived,
+                    [galleryColumn.key]: url,
+                }),
+            }
+            try {
+                const res = await api.post(dataEndpoint, payload)
+                if (!(res as any).data?.success) throw new Error((res as any).data?.message || 'create failed')
+            } catch (err: any) {
+                // The file is already stored: a retry reuses it instead of
+                // uploading (and orphaning) a second copy.
+                throw Object.assign(err instanceof Error ? err : new Error(String(err)), { uploadedUrl: url })
+            }
+            onProgress(1)
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [api, galleryColumn, metadata, rows, positionKey, filtersKey, foreignKey, parentId, createInitialValues, dataEndpoint],
+    )
+
+    const galleryReorder = useCallback(
+        async (ordered: Record<string, any>[]) => {
+            if (!positionKey) return
+            // Optimistic: show the new order now, persist only what changed.
+            setRows(ordered.map((r, i) => ({ ...r, [positionKey]: i })))
+            try {
+                await Promise.all(
+                    ordered.map((r, i) => {
+                        const raw = r[positionKey]
+                        const same = raw !== null && raw !== undefined && raw !== '' && Number(raw) === i
+                        return same ? null : api.put(`${dataEndpoint}/${r.id}`, { [positionKey]: i })
+                    }),
+                )
+                onChange?.()
+            } catch (err) {
+                console.error('DynamicRelation reorder error', err)
+                toast.error(labels.reorderError ?? 'No se pudo guardar el nuevo orden.')
+            } finally {
+                await refreshSilently()
+            }
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [api, dataEndpoint, positionKey, refreshSilently, onChange],
+    )
+
+    // Confirmed delete → hidden at once, «Deshacer» for a few seconds, then the
+    // real DELETE. Closing the panel before the toast ends still deletes.
+    const deleteWithUndo = useCallback(
+        (row: any) => {
+            const key = String(row.id)
+            setPendingDelete((s) => new Set(s).add(key))
+            let undone = false
+            const commit = async () => {
+                if (undone) return
+                try {
+                    const res = await api.delete(`${dataEndpoint}/${row.id}`)
+                    if (!(res as any).data?.success) throw new Error('delete failed')
+                    onChange?.()
+                } catch (err) {
+                    console.error('DynamicRelation delete error', err)
+                    toast.error(labels.deleteError ?? 'No se pudo eliminar.')
+                } finally {
+                    setPendingDelete((s) => {
+                        const n = new Set(s)
+                        n.delete(key)
+                        return n
+                    })
+                    await refreshSilently()
+                }
+            }
+            const timer = setTimeout(() => void commit(), 6000)
+            toast(labels.deletedToast ?? 'Foto eliminada', {
+                duration: 6000,
+                action: {
+                    label: labels.undoLabel ?? 'Deshacer',
+                    onClick: () => {
+                        undone = true
+                        clearTimeout(timer)
+                        setPendingDelete((s) => {
+                            const n = new Set(s)
+                            n.delete(key)
+                            return n
+                        })
+                    },
+                },
+            })
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [api, dataEndpoint, refreshSilently, onChange],
+    )
 
     const handleDelete = useCallback(async () => {
         if (!rowToDelete) return
@@ -544,11 +750,11 @@ function OneToManyRelation({
                                 />
                             </div>
                         )}
-                        {canCreate && (
+                        {canCreate && !galleryColumn && (
                             <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => { setEditingRow(null); setFormOpen(true) }}
+                                onClick={() => { setEditingRow(null); uploadedImageRef.current = null; setFormOpen(true) }}
                             >
                                 <Plus className="h-4 w-4 mr-1" />
                                 {labels.addLabel}
@@ -564,6 +770,30 @@ function OneToManyRelation({
                         <Skeleton key={`rel-skeleton-${i}`} className="h-10 w-full" />
                     ))}
                 </div>
+            ) : galleryColumn && fetchErrorStatus === null ? (
+                <RelationGallery
+                    rows={orderedRows}
+                    rowKey={(row, i) => relationRowKey(row, i, foreignKey)}
+                    imageKey={galleryColumn.key}
+                    captionKey={captionKey}
+                    getImageUrl={(p) => getImageUrl(p)}
+                    accept={(galleryColumn as any).accept || 'image/*'}
+                    maxSize={(() => {
+                        const sc = (galleryColumn.styleConfig ?? {}) as any
+                        const n = Number(sc.max_size ?? sc.maxSize)
+                        return Number.isFinite(n) && n > 0 ? n : undefined
+                    })()}
+                    canCreate={canCreate}
+                    canEdit={canEdit}
+                    canReorder={canEdit && !!positionKey}
+                    canDelete={canDelete}
+                    hiddenKeys={pendingDelete}
+                    onUpload={galleryUpload}
+                    onUploadsSettled={() => { void refreshSilently(); onChange?.() }}
+                    onReorder={galleryReorder}
+                    onEdit={canEdit ? (row) => { setEditingRow(row); uploadedImageRef.current = null; setFormOpen(true) } : undefined}
+                    onDelete={canDelete ? (row) => setRowToDelete(row) : undefined}
+                />
             ) : rows.length === 0 ? (
                 <div className="text-center text-sm text-muted-foreground py-8 border rounded-md bg-muted/30">
                     {fetchErrorStatus === 403
@@ -637,7 +867,7 @@ function OneToManyRelation({
                 </div>
             )}
 
-            <Dialog open={formOpen} onOpenChange={(open: boolean) => { setFormOpen(open); if (!open) setEditingRow(null) }}>
+            <Dialog open={formOpen} onOpenChange={(open: boolean) => { setFormOpen(open); if (!open) { setEditingRow(null); uploadedImageRef.current = null } }}>
                 {/* Alto acotado al viewport: el cuerpo del form hace scroll y el
                     footer (Guardar) queda fijo, para que un renglón con muchos
                     campos no deje el botón fuera de pantalla. */}
@@ -649,9 +879,10 @@ function OneToManyRelation({
                         key={editingRow ? `edit-${editingRow.id ?? ''}` : 'new'}
                         scrollableBody
                         fields={formFields}
-                        initialValues={editingRow || undefined}
+                        initialValues={editingRow || (Object.keys(createInitialValues).length ? createInitialValues : undefined)}
+                        onFieldMeta={(_key, meta) => { uploadedImageRef.current = meta }}
                         onSubmit={handleSubmit}
-                        onCancel={() => { setFormOpen(false); setEditingRow(null) }}
+                        onCancel={() => { setFormOpen(false); setEditingRow(null); uploadedImageRef.current = null }}
                         submitLabel={labels.saveLabel}
                         cancelLabel={labels.cancelLabel}
                         disabled={submitting}
@@ -663,12 +894,24 @@ function OneToManyRelation({
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>{labels.confirmRemoveTitle}</AlertDialogTitle>
-                        <AlertDialogDescription>{labels.confirmRemoveDescription}</AlertDialogDescription>
+                        <AlertDialogDescription>
+                            {galleryColumn
+                                ? (labels.confirmRemovePhotoDescription ?? 'Esta foto deja de verse en la tienda. Puedes deshacerlo unos segundos.')
+                                : labels.confirmRemoveDescription}
+                        </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel disabled={submitting}>{labels.cancelLabel}</AlertDialogCancel>
                         <AlertDialogAction
-                            onClick={(e: React.MouseEvent) => { e.preventDefault(); handleDelete() }}
+                            onClick={(e: React.MouseEvent) => {
+                                e.preventDefault()
+                                if (galleryColumn && rowToDelete) {
+                                    deleteWithUndo(rowToDelete)
+                                    setRowToDelete(null)
+                                    return
+                                }
+                                handleDelete()
+                            }}
                             className="bg-red-600 hover:bg-red-700"
                             disabled={submitting}
                         >
