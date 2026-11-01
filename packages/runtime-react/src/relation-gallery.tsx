@@ -404,7 +404,7 @@ function GalleryTile({
             ref={setNodeRef}
             style={{ transform: CSS.Transform.toString(transform), transition }}
             className={cn(
-                'group relative overflow-hidden rounded-lg border bg-card',
+                'group relative min-w-0 overflow-hidden rounded-lg border bg-card',
                 isMain && 'ring-2 ring-primary',
                 isDragging && 'z-10 opacity-80 shadow-lg',
             )}
@@ -428,8 +428,9 @@ function GalleryTile({
                     {mainLabel}
                 </span>
             )}
-            <div className="flex items-center justify-between gap-1 border-t bg-card px-1 py-1">
-                <div className="flex items-center">
+            {/* Wraps instead of clipping: a 140 px tile (or a phone) holds up to five icons. */}
+            <div className="flex flex-wrap items-center justify-between gap-x-1 border-t bg-card px-1 py-0.5" data-testid="gallery-tile-actions">
+                <div className="flex flex-wrap items-center">
                     {canReorder && (
                         <>
                             <Button
@@ -470,7 +471,7 @@ function GalleryTile({
                         </>
                     )}
                 </div>
-                <div className="flex items-center">
+                <div className="flex flex-wrap items-center">
                     {canEdit && onEdit && (
                         <Button type="button" size="sm" variant="ghost" className="h-8 w-8 p-0" onClick={onEdit} aria-label={t('dynamic.gallery.edit', { defaultValue: 'Editar foto' })}>
                             <Pencil className="h-4 w-4" />

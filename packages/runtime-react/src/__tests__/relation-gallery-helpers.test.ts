@@ -123,3 +123,32 @@ describe('orden y modo galería', () => {
         expect(relationColumnUi(col({ key: 'x', styleConfig: { derive: 'otra' } }))).toEqual({})
     })
 })
+
+import { contiguousPositionUpdates } from '../dynamic-relation-helpers'
+
+describe('contiguousPositionUpdates', () => {
+    it('caso U390556L: 0, 0, 1 pasa a 0, 1, 2 con la original (más vieja) primero', () => {
+        const rows = [
+            { id: 'n2', position: 1, created_at: '2026-11-01T12:00:00Z' },
+            { id: 'n1', position: 0, created_at: '2026-11-01T11:00:00Z' },
+            { id: 'orig', position: 0, created_at: '2026-10-22T10:00:00Z' },
+        ]
+        const { ordered, updates } = contiguousPositionUpdates(rows)
+        expect(ordered.map((r) => r.id)).toEqual(['orig', 'n1', 'n2'])
+        expect(updates).toEqual([{ id: 'n1', position: 1 }, { id: 'n2', position: 2 }])
+    })
+    it('cierra huecos y manda las sin posición al final', () => {
+        const { ordered, updates } = contiguousPositionUpdates([
+            { id: 'a', position: 3 }, { id: 'b', position: null }, { id: 'c', position: 7 },
+        ])
+        expect(ordered.map((r) => r.id)).toEqual(['a', 'c', 'b'])
+        expect(updates).toEqual([{ id: 'a', position: 0 }, { id: 'c', position: 1 }, { id: 'b', position: 2 }])
+    })
+    it('empate sin created_at se decide por id (estable entre pestañas)', () => {
+        const { ordered } = contiguousPositionUpdates([{ id: 'z', position: 0 }, { id: 'a', position: 0 }])
+        expect(ordered.map((r) => r.id)).toEqual(['a', 'z'])
+    })
+    it('ya contiguo = sin cambios', () => {
+        expect(contiguousPositionUpdates([{ id: 'a', position: 0 }, { id: 'b', position: 1 }]).updates).toEqual([])
+    })
+})
