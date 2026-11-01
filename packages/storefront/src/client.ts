@@ -38,6 +38,8 @@ import type {
   PromotionsList,
   RecommendationPlacement,
   CheckoutInput,
+  CheckoutCancelReason,
+  CheckoutCancelResult,
   CheckoutResult,
   Collection,
   Connection,
@@ -657,6 +659,15 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
        */
       get: (id: string, options?: RequestOptions) =>
         getOrNull<CheckoutResult>(`/storefront/checkouts/${enc(id)}`, undefined, options),
+      /**
+       * Cancels a checkout whose payment is NOT approved (the buyer cancels, changes their details or wants another way to
+       * pay). OPS first reads the real payment state from the provider: if it was approved meanwhile the answer is
+       * `409 already_paid` (the order exists). Open attempts are voided with the provider when it allows it; one it will
+       * not void is watched and, if approved late, flagged for staff instead of creating a second order. Idempotent.
+       * Needs a server token (`checkout:write`) and storefront_cart with the route (older servers answer 404).
+       */
+      cancel: (id: string, input: { reason?: CheckoutCancelReason } = {}, options?: WriteOptions) =>
+        write<CheckoutCancelResult>('POST', `/storefront/checkouts/${enc(id)}/cancel`, input, options),
     },
 
     /**

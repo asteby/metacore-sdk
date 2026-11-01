@@ -558,6 +558,17 @@ export type CheckoutResult = {
   checkout: CheckoutInfo
 }
 
+/** Why the buyer cancels a checkout whose payment is not approved (`checkouts.cancel`). */
+export type CheckoutCancelReason = 'buyer_cancel' | 'change_details' | 'retry_other_method'
+
+/**
+ * Answer of `checkouts.cancel` (storefront_cart `POST /storefront/checkouts/:id/cancel`): the checkout, now closed, plus
+ * what happened to its open payment. `orphaned`: the provider would not void it (e.g. a Mercado Pago 3DS order in
+ * `pending_challenge`): OPS keeps checking it and, if it is approved late, flags it for staff (refund) instead of creating
+ * the order. Absent on servers without the field.
+ */
+export type CheckoutCancelResult = CheckoutResult & { cancel?: { provider_cancelled: boolean; orphaned: boolean } }
+
 
 // ---------------------------------------------------------------------------
 // Customer

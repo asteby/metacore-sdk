@@ -108,6 +108,12 @@ export type PaymentMethodSectionProps = {
   renderLink?: (props: { href: string; className?: string; children: ReactNode; testId?: string }) => ReactNode
   /** Called once the order is closed in the page (approved, under review or voucher). Navigate to the thank-you page. */
   onDone: (outcome: PaymentOutcome) => void
+  /**
+   * An answer that is NOT an approved payment but is no rejection either (`in_review`: pending at the provider, e.g. a
+   * Mercado Pago order still in `pending_challenge`). When set, `in_review` comes here INSTEAD of `onDone`: re-read the
+   * checkout and show "we are confirming your payment" (never a success page). Unset: `onDone` as before (compatible).
+   */
+  onPending?: (outcome: PaymentOutcome) => void
   /** The server total changed under the buyer: re-read the cart (the card form remounts with the new amount). */
   onAmountChanged?: () => void
   onEvent?: (event: PaymentEvent) => void
@@ -210,6 +216,7 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
     rebuildHref,
     renderLink,
     onDone,
+    onPending,
     onAmountChanged,
     onEvent,
     classNames: cx = {},
@@ -489,8 +496,10 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
                     onEvent={handleEvent}
                     onFallback={() => setFallback(true)}
                     onResult={(o) => {
-                      // Approved, under review or voucher: the order is already closed and the receipt is in the cookie.
-                      if (o.kind === 'approved' || o.kind === 'in_review' || o.kind === 'voucher') onDone(o)
+                      // Approved or voucher: the order is closed and the receipt is in the cookie. Under review: `onPending`
+                      // when the shop handles it (a payment not approved yet is never a success), else `onDone` as before.
+                      if (o.kind === 'in_review' && onPending) onPending(o)
+                      else if (o.kind === 'approved' || o.kind === 'in_review' || o.kind === 'voucher') onDone(o)
                     }}
                   />
                 ) : null}

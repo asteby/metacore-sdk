@@ -11,6 +11,7 @@ import type {
   InsufficientStockLine,
   Article,
   Cart,
+  CheckoutResult,
   CartLine,
   CartRecommendation,
   Collection,
@@ -1282,6 +1283,25 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     state.payments.set(id, st)
     state.idempotency.set(`pay:${id}:${key}`, { status: 200, body: result })
     return { body: result, cache: 'private' }
+  })
+
+  // Cancel a checkout whose payment is not approved (storefront_cart contract: `POST /checkouts/:id/cancel`). A paid one is
+  // `409 already_paid`; a pending card challenge cannot be voided by the mock "provider" (like Mercado Pago's
+  // `pending_challenge`): it is closed anyway and reported `orphaned`. Idempotent.
+  route('POST', '/checkouts/:id/cancel', 'checkout:write', ({ params }) => {
+    const id = params[0]!
+    const found = state.checkouts.get(id) as (CheckoutResult & { cancel?: unknown }) | undefined
+    if (!found) throw new HttpError(404, 'not_found', 'Checkout not found')
+    if (found.checkout.status === 'paid') throw new HttpError(409, 'already_paid', 'The checkout is already paid')
+    const st = state.payments.get(id)
+    const open = st?.last && (st.last.payment.status === 'pending' || st.last.payment.status === 'requires_action')
+    const orphaned = Boolean(open && st!.last!.payment.action?.type === 'challenge')
+    if (found.checkout.status === 'pending') {
+      found.checkout.status = 'cancelled'
+      if (st?.last && open && !orphaned) st.last = { ...st.last, payment: { ...st.last.payment, status: 'cancelled' } }
+      found.cancel = { provider_cancelled: Boolean(open && !orphaned), orphaned }
+    }
+    return { body: found, cache: 'private' }
   })
 
   // Restock subscriptions ("notify me when it is back")

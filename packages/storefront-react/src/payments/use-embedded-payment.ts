@@ -49,6 +49,12 @@ export type PaymentEvent =
   | { type: 'retry' }
   /** A challenge the provider SDK runs itself (Stripe 3DS): `completed` / `failed` is the SDK's word, never the payment's. */
   | { type: 'provider_action'; result: 'completed' | 'failed' | 'unsupported' }
+  /**
+   * The background check of an UNKNOWN outcome ("verifying") ran out of time and the payment is still unresolved: the
+   * page should offer a way out (re-read the order, `recheck()`, contact) instead of an endless spinner. Nothing about
+   * the payment changed: the attempt key is kept and no new payment can start from this form.
+   */
+  | { type: 'verify_timeout' }
 
 export type UseEmbeddedPaymentOptions = {
   /** Provider data from `paymentMethods[].client`. `null`/absent: nothing to mount (status `idle`). */
@@ -127,6 +133,13 @@ export type EmbeddedPaymentState = {
   busy: boolean
   /** `true` while the hook reads the payment state in the background after an unknown outcome. The attempt stays the same. */
   verifying: boolean
+  /**
+   * `true` once that background check ran out of time with the outcome still unknown (also announced with the
+   * `verify_timeout` event). The form stays locked (same attempt); `recheck()` starts another check.
+   */
+  verifyTimedOut: boolean
+  /** Starts another background check of an unknown outcome (same attempt, nothing is charged). No-op otherwise. */
+  recheck: () => void
   /** Attach to the element the provider renders into. */
   containerRef: (el: HTMLElement | null) => void
   containerId: string
@@ -229,6 +242,9 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   const [container, setContainer] = useState<HTMLElement | null>(null)
   const [mountKey, setMountKey] = useState(0)
   const [verifying, setVerifying] = useState(false)
+  const [verifyTimedOut, setVerifyTimedOut] = useState(false)
+  // Bumped by `recheck()`: a new background check window over the same unknown outcome.
+  const [verifyRound, setVerifyRound] = useState(0)
 
   // Latest props without re-triggering effects.
   const live = useRef({ ...options, msgs })
@@ -757,6 +773,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     if (!unknownOutcome) syncAmount()
   }, [unknownOutcome, syncAmount])
   useEffect(() => {
+    setVerifyTimedOut(false)
     if (!unknownOutcome || !transport.refresh) {
       setVerifying(false)
       return
@@ -787,14 +804,24 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
           /* still unknown: keep checking until the window closes */
         }
       }
-      if (!stop && alive.current) setVerifying(false)
+      if (!stop && alive.current) {
+        setVerifying(false)
+        // Still unknown when the window closed: say so (the page offers a way out), never a silent endless wait.
+        setVerifyTimedOut(true)
+        emit({ type: 'verify_timeout' })
+      }
     })()
     return () => {
       stop = true
       ctl.abort()
       setVerifying(false)
     }
-  }, [unknownOutcome, transport, verifyTimeoutMs, verifyIntervalMs, pollTimeoutMs, finish])
+  }, [unknownOutcome, transport, verifyTimeoutMs, verifyIntervalMs, pollTimeoutMs, finish, verifyRound, emit])
+
+  const recheck = useCallback(() => {
+    if (!(statusRef.current === 'network_error' || (statusRef.current === 'blocked' && errorRef.current?.kind === 'payment_in_progress'))) return
+    setVerifyRound((n) => n + 1)
+  }, [])
 
   const dismiss = useCallback(() => {
     setError(null)
@@ -829,6 +856,8 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     // A pending 3DS challenge / review counts as busy too: no second attempt while one is in the bank's hands.
     busy: status === 'loading' || status === 'processing' || status === 'challenge' || status === 'in_review',
     verifying,
+    verifyTimedOut,
+    recheck,
     containerRef: setContainer,
     containerId,
     submit,
