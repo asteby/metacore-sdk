@@ -30,6 +30,9 @@ writeFileSync(new URL('../dist/tracking.css', import.meta.url), readFileSync(new
 // Hoja por omisión de los componentes de contacto (subpath /contact).
 writeFileSync(new URL('../dist/contact.css', import.meta.url), readFileSync(new URL('../src/contact/contact.css', import.meta.url), 'utf8'))
 
+// Hoja por omisión de la galería de producto (subpath /product).
+writeFileSync(new URL('../dist/product.css', import.meta.url), readFileSync(new URL('../src/product/product.css', import.meta.url), 'utf8'))
+
 // Hoja por omisión de «Mis artículos» (subpath /subjects).
 writeFileSync(new URL('../dist/subjects.css', import.meta.url), readFileSync(new URL('../src/subjects/subjects.css', import.meta.url), 'utf8'))
 

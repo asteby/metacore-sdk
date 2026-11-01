@@ -18,6 +18,17 @@ describe('mock catalog', () => {
     expect(cols.nodes.map((c) => c.handle)).toEqual(['ropa', 'hogar', 'accesorios', 'llantas'])
   })
 
+  it('has a product with a 5-image gallery (one small photo) and the rest with 2', async () => {
+    const pan = (await sf.products.list({ first: 100 })).nodes.find((p) => p.handle === 'set-sartenes')!
+    expect(pan.images).toHaveLength(5)
+    expect(pan.featured_image).toEqual(pan.images[0])
+    expect(new Set(pan.images.map((i) => i.url)).size).toBe(5)
+    expect(pan.images.map((i) => i.width)).toEqual([800, 800, 800, 100, 800])
+    expect(pan.images[3]!.url).toContain('/100/100')
+    const others = (await sf.products.list({ first: 100 })).nodes.filter((p) => p.handle !== 'set-sartenes')
+    expect(others.every((p) => p.images.length === 2)).toBe(true)
+  })
+
   it('paginates with cursors without overlap', async () => {
     const seen: string[] = []
     let after: string | null = null

@@ -1,0 +1,6 @@
+export { ProductGallery } from './gallery.js'
+export type { GallerySource, ProductGalleryClassNames, ProductGalleryProps } from './gallery.js'
+export { clampIndex, galleryImages, isLowResImage, LOW_RES_MAX, variantImageIndex } from './gallery-model.js'
+export type { GalleryImage, GalleryProduct, GalleryVariant } from './gallery-model.js'
+export { productMessages } from './messages.js'
+export type { ProductMessageKey, ProductMessages } from './messages.js'

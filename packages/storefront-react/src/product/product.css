@@ -1,0 +1,217 @@
+/*
+ * Default sheet of the product gallery (`@asteby/storefront-react/product.css`). Optional. Variables:
+ * --sf-gallery-ratio (box of the main image, 1 / 1), --sf-gallery-bg (behind the photos), --sf-gallery-radius,
+ * --sf-gallery-border, --sf-gallery-pad (space around a photo), --sf-gallery-gap, --sf-gallery-thumb (thumbnail size),
+ * --sf-gallery-accent (active thumbnail and focus ring), --sf-gallery-control-bg / -fg (buttons and counter).
+ * The box keeps its ratio before the images arrive (no layout shift). Small photos ([data-low-res]) are shown at their
+ * real size, centered, never stretched (`scale-down`); the rest `contain`. Nothing is ever cropped.
+ */
+[data-sf-gallery] {
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+[data-sf-gallery-viewport] {
+  position: relative;
+  aspect-ratio: var(--sf-gallery-ratio, 1 / 1);
+  overflow: hidden;
+  border-radius: var(--sf-gallery-radius, 8px);
+  border: var(--sf-gallery-border, 0);
+  background: var(--sf-gallery-bg, #f4f4f5);
+}
+[data-sf-gallery-track] {
+  display: flex;
+  block-size: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+[data-sf-gallery-track]::-webkit-scrollbar {
+  display: none;
+}
+[data-sf-gallery-track]:focus-visible {
+  outline: 3px solid var(--sf-gallery-accent, currentColor);
+  outline-offset: -3px;
+}
+[data-sf-gallery-slide] {
+  flex: 0 0 100%;
+  inline-size: 100%;
+  block-size: 100%;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+  display: grid;
+  grid-template: 100% / 100%;
+  place-items: center;
+}
+[data-sf-gallery-picture] {
+  display: contents;
+}
+[data-sf-gallery-slide] img {
+  box-sizing: border-box;
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 0;
+  padding: var(--sf-gallery-pad, 6%);
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+[data-sf-gallery] img[data-low-res] {
+  object-fit: scale-down;
+}
+[data-sf-gallery-placeholder] {
+  display: grid;
+  place-items: center;
+  inline-size: 100%;
+  block-size: 100%;
+  color: var(--sf-gallery-muted, #a1a1aa);
+}
+[data-sf-gallery][data-state='empty'] [data-sf-gallery-viewport] > * {
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+/* Previous / next: visible with a pointer that hovers, or when focused; on touch the swipe and the strip do it. */
+[data-sf-gallery-nav] {
+  position: absolute;
+  inset-block-start: 50%;
+  translate: 0 -50%;
+  display: grid;
+  place-items: center;
+  inline-size: 40px;
+  block-size: 40px;
+  border: 0;
+  border-radius: 9999px;
+  background: var(--sf-gallery-control-bg, rgb(255 255 255 / 92%));
+  color: var(--sf-gallery-control-fg, #18181b);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 18%);
+  cursor: pointer;
+  /* Hidden controls never take a tap (the swipe works over them). */
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+[data-sf-gallery-nav='previous'] {
+  inset-inline-start: 8px;
+}
+[data-sf-gallery-nav='next'] {
+  inset-inline-end: 8px;
+}
+[dir='rtl'] [data-sf-gallery-nav] > svg {
+  scale: -1 1;
+}
+[data-sf-gallery-nav]:dir(rtl) > svg {
+  scale: -1 1;
+}
+/* At the ends the button stays (focus is never lost) but dims and does nothing (aria-disabled). */
+[data-sf-gallery-nav][aria-disabled='true'] {
+  cursor: default;
+  color: color-mix(in srgb, var(--sf-gallery-control-fg, #18181b) 35%, transparent);
+}
+@media (hover: hover) {
+  [data-sf-gallery-viewport]:hover [data-sf-gallery-nav] {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+[data-sf-gallery-viewport]:focus-within [data-sf-gallery-nav],
+[data-sf-gallery-nav]:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+[data-sf-gallery-nav]:focus-visible,
+[data-sf-gallery-thumbnail]:focus-visible {
+  outline: 3px solid var(--sf-gallery-accent, currentColor);
+  outline-offset: 2px;
+}
+
+[data-sf-gallery-counter] {
+  position: absolute;
+  inset-block-end: 8px;
+  inset-inline-end: 8px;
+  margin: 0;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: var(--sf-gallery-control-bg, rgb(255 255 255 / 92%));
+  color: var(--sf-gallery-control-fg, #18181b);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  pointer-events: none;
+}
+[data-sf-gallery-sr] {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Thumbnail strip: scrolls on its own row (never wider than the column). */
+[data-sf-gallery-thumbnails] {
+  position: relative;
+  display: flex;
+  gap: var(--sf-gallery-gap, 8px);
+  margin: var(--sf-gallery-gap, 8px) 0 0;
+  padding: 0 0 4px;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+[data-sf-gallery-thumbnails]::-webkit-scrollbar {
+  display: none;
+}
+[data-sf-gallery-thumbnails] > li {
+  flex: 0 0 auto;
+}
+[data-sf-gallery-thumbnail] {
+  display: block;
+  box-sizing: border-box;
+  inline-size: var(--sf-gallery-thumb, 64px);
+  block-size: var(--sf-gallery-thumb, 64px);
+  padding: 2px;
+  border: 2px solid transparent;
+  border-radius: calc(var(--sf-gallery-radius, 8px) * 0.75);
+  background: var(--sf-gallery-bg, #f4f4f5);
+  cursor: pointer;
+  overflow: hidden;
+}
+[data-sf-gallery-thumbnail]:hover {
+  border-color: color-mix(in srgb, currentColor 35%, transparent);
+}
+[data-sf-gallery-thumbnail][aria-current='true'] {
+  border-color: var(--sf-gallery-accent, currentColor);
+}
+[data-sf-gallery-thumbnail] img {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: contain;
+}
+@media (min-width: 640px) {
+  [data-sf-gallery-thumbnail] {
+    inline-size: var(--sf-gallery-thumb, 80px);
+    block-size: var(--sf-gallery-thumb, 80px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-sf-gallery-nav] {
+    transition: none;
+  }
+}
+@media print {
+  [data-sf-gallery-nav],
+  [data-sf-gallery-counter],
+  [data-sf-gallery-thumbnails] {
+    display: none;
+  }
+}

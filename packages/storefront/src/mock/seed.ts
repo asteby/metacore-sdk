@@ -42,6 +42,10 @@ type ProductSpec = {
   stock?: number | ((index: number, opts: Record<string, string>) => number)
   /** Extra price per option value, e.g. `{ XL: 50 }`. */
   priceDelta?: Record<string, number>
+  /** Images of the gallery (default 2). */
+  gallery?: number
+  /** 1-based positions of the gallery that are small photos (100×100), shown at real size by the stores. */
+  lowRes?: number[]
   description: string
 }
 
@@ -76,7 +80,7 @@ export const PRODUCT_SPECS: ProductSpec[] = [
   { handle: 'taza-ceramica', title: 'Taza de cerámica', collection: 'hogar', type: 'Cocina', vendor: 'Barro Vivo', price: 129, options: [OPT.color(['Blanco', 'Terracota'])], tags: ['regalo'], description: 'Taza de 350 ml hecha a mano.' },
   { handle: 'lampara-mesa', title: 'Lámpara de mesa', collection: 'hogar', type: 'Iluminación', vendor: 'Luz Serena', price: 1199, description: 'Lámpara con pantalla de lino y base de madera.' },
   { handle: 'cojin-decorativo', title: 'Cojín decorativo', collection: 'hogar', type: 'Textil', vendor: 'Casa Textil', price: 349, compareAt: 399, options: [OPT.color(['Mostaza', 'Verde', 'Gris'])], description: 'Cojín de 45 × 45 cm con funda removible.' },
-  { handle: 'set-sartenes', title: 'Set de sartenes', collection: 'hogar', type: 'Cocina', vendor: 'Cocina Diaria', price: 1899, compareAt: 2299, tags: ['oferta'], description: 'Tres sartenes antiadherentes de 20, 24 y 28 cm.' },
+  { handle: 'set-sartenes', title: 'Set de sartenes', collection: 'hogar', type: 'Cocina', vendor: 'Cocina Diaria', price: 1899, compareAt: 2299, tags: ['oferta'], gallery: 5, lowRes: [4], description: 'Tres sartenes antiadherentes de 20, 24 y 28 cm.' },
   { handle: 'manta-tejida', title: 'Manta tejida', collection: 'hogar', type: 'Textil', vendor: 'Casa Textil', price: 799, description: 'Manta de punto grueso, 130 × 170 cm.' },
   { handle: 'maceta-barro', title: 'Maceta de barro', collection: 'hogar', type: 'Jardín', vendor: 'Barro Vivo', price: 189, options: [{ name: 'Tamaño', values: ['Chica', 'Mediana', 'Grande'] }], priceDelta: { Mediana: 60, Grande: 140 }, description: 'Maceta de barro natural con plato.' },
   // Accesorios
@@ -109,15 +113,25 @@ function cartesian(options: ProductOption[]): Record<string, string>[] {
 
 const BASE_DATE = Date.UTC(2026, 8, 30, 12, 0, 0)
 
-function image(url: MockImageUrl, seed: string, alt: string): Image {
-  return { url: url(seed), alt, width: 800, height: 800 }
+function image(url: MockImageUrl, seed: string, alt: string, size = 800): Image {
+  return { url: url(seed, size, size), alt, width: size, height: size }
+}
+
+/** The gallery of a product: `spec.gallery` images (2 by default), the small ones at 100×100. */
+function galleryOf(url: MockImageUrl, spec: ProductSpec): Image[] {
+  const n = Math.max(1, spec.gallery ?? 2)
+  return Array.from({ length: n }, (_, i) =>
+    i === 0
+      ? image(url, spec.handle, spec.title)
+      : image(url, `${spec.handle}-${i + 1}`, n === 2 ? `${spec.title}, detalle` : `${spec.title}, vista ${i + 1}`, spec.lowRes?.includes(i + 1) ? 100 : 800),
+  )
 }
 
 export function buildProducts(currency: string, imageUrl: MockImageUrl = MOCK_IMAGE_URL): Product[] {
   return PRODUCT_SPECS.map((spec, pi) => {
     const options = spec.options ?? []
     const combos = options.length ? cartesian(options) : [{}]
-    const images = [image(imageUrl, spec.handle, spec.title), image(imageUrl, `${spec.handle}-2`, `${spec.title}, detalle`)]
+    const images = galleryOf(imageUrl, spec)
     const variants: ProductVariant[] = combos.map((opts, vi) => {
       const delta = Object.values(opts).reduce((sum, v) => sum + (spec.priceDelta?.[v] ?? 0), 0)
       const price = spec.price + delta
