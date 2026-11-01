@@ -561,21 +561,21 @@ export function pickOptionLabel(
 }
 
 /**
- * The parent's own image (e.g. `Product.image`) when it should lead the gallery:
- * the image column declares `main_from_parent`, the parent has that image, and
- * no gallery row (hidden-for-undo ones included) already holds it.
+ * The parent's own image (e.g. `Product.image`) when it is the one the store
+ * serves first: the image column declares `main_from_parent`, the parent has
+ * that image and the gallery has NO rows at all (variant photos included). With
+ * any row, the store serves the gallery first, so the first photo is the main
+ * one and showing the parent's image as «Principal» would be wrong.
  */
 export function galleryLeadImage(
     imageColumn: ColumnDefinition | undefined,
     parent: Record<string, unknown> | null | undefined,
     rows: Array<Record<string, any>>,
 ): string | undefined {
-    if (!imageColumn || !parent) return undefined
+    if (!imageColumn || !parent || rows.length > 0) return undefined
     const field = relationColumnUi(imageColumn).mainFromParent
     if (!field) return undefined
     const raw = parent[field]
     const url = typeof raw === 'string' ? raw.trim() : ''
-    if (!url) return undefined
-    if (rows.some((r) => String(r?.[imageColumn.key] ?? '').trim() === url)) return undefined
-    return url
+    return url || undefined
 }

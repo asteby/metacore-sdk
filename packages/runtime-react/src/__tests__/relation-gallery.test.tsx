@@ -94,29 +94,28 @@ describe('DynamicRelation — galería', () => {
         expect(screen.queryByRole('table')).toBeNull()
     })
 
-    it('imagen original del producto: tarjeta «Principal» de solo lectura mientras la galería no la contiene', async () => {
+    it('galería vacía: la imagen original del producto se muestra como «Principal» de solo lectura', async () => {
+        ROWS = []
         renderPanel(mockApi(true, true), 'product_images_lead', { id: 'p1', name: 'BALATA', image: '/storage/original.jpg' })
         const lead = await screen.findByTestId('gallery-lead')
         expect(lead.getAttribute('data-main')).toBe('true')
         expect(lead.querySelector('img')?.getAttribute('src')).toContain('original.jpg')
         expect(within(lead).getByText('Principal')).toBeTruthy()
         expect(within(lead).queryByRole('button')).toBeNull()
-        await waitFor(() => expect(screen.getAllByTestId('gallery-tile')).toHaveLength(2))
-        // las filas de la galería son adicionales: ninguna es la principal ni ofrece «Hacer principal»
-        expect(screen.getAllByTestId('gallery-tile').every((t) => t.getAttribute('data-main') === null)).toBe(true)
-        expect(screen.queryByLabelText('Hacer principal')).toBeNull()
     })
 
-    it('si la galería ya contiene la imagen original no hay tarjeta extra y la primera es la principal', async () => {
-        renderPanel(mockApi(true, true), 'product_images_lead2', { id: 'p1', name: 'BALATA', image: '/storage/a.png' })
+    it('con filas en la galería no hay tarjeta extra: la primera de la galería es la principal (como en la tienda)', async () => {
+        renderPanel(mockApi(true, true), 'product_images_lead2', { id: 'p1', name: 'BALATA', image: '/storage/original-que-no-esta.jpg' })
         await waitFor(() => expect(screen.getAllByTestId('gallery-tile')).toHaveLength(2))
         expect(screen.queryByTestId('gallery-lead')).toBeNull()
         expect(screen.getAllByTestId('gallery-tile')[0].getAttribute('data-main')).toBe('true')
+        expect(screen.getByLabelText('Hacer principal')).toBeTruthy()
     })
 
     it('sin el hint main_from_parent no hay tarjeta de imagen original', async () => {
-        renderPanel(mockApi(true), 'product_images', { id: 'p1', name: 'BALATA', image: '/storage/original.jpg' })
-        await waitFor(() => expect(screen.getAllByTestId('gallery-tile')).toHaveLength(2))
+        ROWS = []
+        renderPanel(mockApi(true), 'product_images_lead3', { id: 'p1', name: 'BALATA', image: '/storage/original.jpg' })
+        await screen.findByTestId('gallery-dropzone')
         expect(screen.queryByTestId('gallery-lead')).toBeNull()
     })
 
