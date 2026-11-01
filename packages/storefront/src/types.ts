@@ -379,6 +379,11 @@ export type Cart = {
    * because the replaced checkout's attempt is still alive at the provider. Absent / `null`: nothing blocks.
    */
   pay_blocked_until?: string | null
+  /**
+   * 1.28.0, on a cart created with `replaces_checkout_id`: the purchase was paid after all (a late approval of the replaced
+   * checkout was honoured). Do not charge this cart: show that order (`checkouts.get(paid_checkout_id)`).
+   */
+  paid_checkout_id?: string | null
   currency_code?: string
   /**
    * Code of the market the cart was created in (contract 1.22.0); `null`/absent without markets or from older servers.
@@ -520,6 +525,8 @@ export type CheckoutInput = {
 export type CheckoutPayment = {
   provider: string
   status: string
+  /** storefront_cart 1.27.0: when the provider expires the open attempt (RFC 3339). Absent when none / older servers. */
+  live_until?: string | null
   redirect_url?: string | null
   client_secret?: string | null
   /** What to do next (provider addons): `redirect`, `embed`, `voucher` or `none`. */
@@ -559,6 +566,12 @@ export type CheckoutInfo = {
   total: Money
   /** RFC 3339. Stock is held until then; `null` when nothing is held. */
   stock_hold_expires_at: string | null
+  /** 1.27.0: no new payment of this purchase can start until then (an earlier attempt is still alive). */
+  pay_blocked_until?: string | null
+  /** 1.28.0: an approved payment that could not be honoured, or a second one, is refunded automatically. */
+  refund_status?: 'refund_pending' | 'refunded' | 'refund_failed' | null
+  /** 1.28.0: the checkout of this purchase that was paid (this one, or another of its `replaces_checkout_id` chain). */
+  paid_checkout_id?: string | null
 }
 
 export type CheckoutResult = {
@@ -595,6 +608,8 @@ export type CartCheckoutState = {
   pay_blocked_until?: string | null
   /** An approved payment that could not be honoured (or a second one) is refunded automatically. */
   refund_status?: 'refund_pending' | 'refunded' | 'refund_failed' | null
+  /** 1.28.0: the checkout of this purchase that was paid. */
+  paid_checkout_id?: string | null
 }
 
 /** Why the buyer cancels a checkout whose payment is not approved (`checkouts.cancel`). */
