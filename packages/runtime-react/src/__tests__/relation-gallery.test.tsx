@@ -7,7 +7,7 @@
 // persistiendo solo las posiciones que cambiaron. Sin display_config la
 // relación sigue siendo la tabla de siempre.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { DynamicRelation } from '../dynamic-relation'
 import { ApiProvider, type ApiClient } from '../api-context'
 
@@ -110,6 +110,50 @@ describe('DynamicRelation — galería', () => {
         expect(creates[1]).toMatchObject({ url: '/storage/new-2.webp', position: 3 })
         expect(api.post.mock.calls.filter((c: any[]) => c[0] === '/upload')).toHaveLength(2)
         expect(await screen.findByText(/pesa más de/)).toBeTruthy()
+    })
+
+    it('tras subir renumera 0..n-1 desde el servidor: filas con posición repetida quedan contiguas, la original primero', async () => {
+        ROWS = [
+            { id: 'n2', product_id: 'p1', url: '/storage/n2.png', alt: 'b', position: 1, created_at: '2026-11-01T12:00:00Z' },
+            { id: 'n1', product_id: 'p1', url: '/storage/n1.png', alt: 'a', position: 0, created_at: '2026-11-01T11:00:00Z' },
+            { id: 'orig', product_id: 'p1', url: '/storage/o.png', alt: 'o', position: 0, created_at: '2026-10-22T10:00:00Z' },
+        ]
+        const api = mockApi(true)
+        renderPanel(api)
+        await waitFor(() => expect(screen.getAllByTestId('gallery-tile')).toHaveLength(3))
+        fireEvent.change(screen.getByTestId('gallery-input'), { target: { files: [png('x.png')] } })
+        await waitFor(() => expect(api.put).toHaveBeenCalledTimes(2))
+        expect(api.put).toHaveBeenCalledWith('/data/product_images/n1', { position: 1 })
+        expect(api.put).toHaveBeenCalledWith('/data/product_images/n2', { position: 2 })
+        expect(api.put).not.toHaveBeenCalledWith('/data/product_images/orig', expect.anything())
+    })
+
+    it('dos subidas seguidas no repiten posición', async () => {
+        ROWS = []
+        const api = mockApi(true)
+        // El servidor guarda lo que se crea: la renumeración lee filas reales.
+        const post = api.post
+        api.post = vi.fn((url: string, body?: any, cfg?: any) => {
+            if (url === '/data/product_images') ROWS.push({ id: `r${ROWS.length}`, created_at: `2026-11-01T10:0${ROWS.length}:00Z`, ...body })
+            return post(url, body, cfg)
+        }) as any
+        renderPanel(api)
+        await screen.findByTestId('gallery-dropzone')
+        fireEvent.change(screen.getByTestId('gallery-input'), { target: { files: [png('a.png')] } })
+        await waitFor(() => expect(api.post.mock.calls.filter((c: any[]) => c[0] === '/data/product_images')).toHaveLength(1))
+        fireEvent.change(screen.getByTestId('gallery-input'), { target: { files: [png('b.png')] } })
+        await waitFor(() => expect(api.post.mock.calls.filter((c: any[]) => c[0] === '/data/product_images')).toHaveLength(2))
+        const pos = api.post.mock.calls.filter((c: any[]) => c[0] === '/data/product_images').map((c: any[]) => c[1].position)
+        expect(new Set(pos).size).toBe(2)
+    })
+
+    it('la barra de acciones de cada tarjeta envuelve en vez de recortarse', async () => {
+        renderPanel(mockApi(true))
+        await waitFor(() => expect(screen.getAllByTestId('gallery-tile')).toHaveLength(2))
+        const second = screen.getAllByTestId('gallery-tile')[1]
+        expect(second.querySelector('[data-testid="gallery-tile-actions"]')?.className).toContain('flex-wrap')
+        expect(second.className).toContain('min-w-0')
+        expect(within(second).getByLabelText('Eliminar foto')).toBeTruthy()
     })
 
     it('hacer principal persiste solo las posiciones que cambian', async () => {

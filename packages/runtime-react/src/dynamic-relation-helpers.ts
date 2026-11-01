@@ -193,6 +193,41 @@ export function nextRelationPosition(rows: Record<string, any>[], positionKey = 
     return max + 1
 }
 
+/**
+ * Renumbers a gallery contiguously (0..n-1). Order: current `position`
+ * ascending (empty/invalid last); ties — the duplicated positions an older
+ * client could leave — go oldest first (`created_at`, else list order), so a
+ * product's original photo stays ahead of the ones uploaded later.
+ * `updates` holds only the rows whose stored position differs.
+ */
+export function contiguousPositionUpdates(
+    rows: Record<string, any>[],
+    positionKey = 'position',
+): { ordered: Record<string, any>[]; updates: Array<{ id: string | number; position: number }> } {
+    const pos = (r: Record<string, any>) => {
+        const raw = r?.[positionKey]
+        const n = Number(raw)
+        return raw === null || raw === undefined || raw === '' || !Number.isFinite(n) ? Infinity : n
+    }
+    const ordered = rows
+        .map((r, i) => ({ r, i }))
+        .sort((a, b) => {
+            const pa = pos(a.r)
+            const pb = pos(b.r)
+            if (pa !== pb) return pa < pb ? -1 : 1
+            const ca = String(a.r?.created_at ?? '')
+            const cb = String(b.r?.created_at ?? '')
+            if (ca && cb && ca !== cb) return ca < cb ? -1 : 1
+            return a.i - b.i
+        })
+        .map((x) => x.r)
+    const updates: Array<{ id: string | number; position: number }> = []
+    ordered.forEach((r, i) => {
+        if (pos(r) !== i && r?.id !== undefined && r?.id !== null) updates.push({ id: r.id, position: i })
+    })
+    return { ordered, updates }
+}
+
 // Pulls a human label off a resolved relation/user object a backend serves:
 // `{ value, label }` (FK sibling), `{ name, … }` (user object such as
 // created_by) or `{ title }`. Returns undefined for plain/empty objects so the

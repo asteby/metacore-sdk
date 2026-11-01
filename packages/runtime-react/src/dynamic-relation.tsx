@@ -67,6 +67,7 @@ import {
     pickOptionLabel,
     relationColumnUi,
     relationDerivedValues,
+    contiguousPositionUpdates,
     relationGalleryColumn,
     relationInitialValues,
     relationPositionKey,
@@ -595,11 +596,42 @@ function OneToManyRelation({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [api, dataEndpoint, editingRow, fetchAll, foreignKey, filtersKey, onChange, parentId, metadata, rows])
 
+    // Highest position this panel created itself. `rows` can lag behind the
+    // rows just created (the list refreshes after the batch), so two uploads in
+    // a row must not both read the same stale maximum.
+    const createdMaxPositionRef = useRef(-1)
+
+    // Renumbers the gallery 0..n-1 from what the SERVER holds (not from state):
+    // heals duplicated positions left by older clients and closes the gap a
+    // deleted photo leaves. Sequential PUTs, only the rows that differ.
+    const normalizePositions = useCallback(async () => {
+        if (!positionKey || !relationGalleryColumn(metadataRef.current)) return
+        try {
+            const res = (await api.get(dataEndpoint, {
+                params: {
+                    ...buildRelationFilterParams(foreignKey, parentId, filters),
+                    page: 1,
+                    per_page: GALLERY_PAGE_SIZE,
+                    sortBy: positionKey,
+                    order: 'asc',
+                },
+            })) as { data?: ApiResponse<any[]> }
+            const fresh = res?.data?.success ? (res.data.data ?? []) : null
+            if (!fresh) return
+            const { updates } = contiguousPositionUpdates(fresh, positionKey)
+            for (const u of updates) await api.put(`${dataEndpoint}/${u.id}`, { [positionKey]: u.position })
+            createdMaxPositionRef.current = fresh.length - 1
+        } catch (err) {
+            console.error('DynamicRelation normalize positions error', err)
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [api, dataEndpoint, positionKey, foreignKey, parentId, filtersKey])
+
     // ── Gallery (opt-in: image column with display_config.gallery) ─────────
     // Same contracts as the table: POST /upload (multipart) for the file, then
     // POST /data/<model> for the row. Positions are assigned in pick order.
     const galleryUpload = useCallback(
-        async (file: File, offset: number, onProgress: (f: number) => void, reuseUrl?: string) => {
+        async (file: File, _offset: number, onProgress: (f: number) => void, reuseUrl?: string) => {
             if (!galleryColumn) return
             const size = await readImageSize(file)
             let url = reuseUrl
@@ -623,7 +655,10 @@ function OneToManyRelation({
                 if (!url) throw new Error('upload failed')
             }
             const derived = relationDerivedValues(metadata, { isCreate: true, rows, image: size })
-            if (positionKey && typeof derived[positionKey] === 'number') derived[positionKey] += offset
+            if (positionKey && typeof derived[positionKey] === 'number') {
+                derived[positionKey] = Math.max(derived[positionKey], createdMaxPositionRef.current + 1)
+                createdMaxPositionRef.current = derived[positionKey]
+            }
             const payload = {
                 ...(filters || {}),
                 ...buildCreatePayload(foreignKey, parentId, {
@@ -683,6 +718,7 @@ function OneToManyRelation({
                 try {
                     const res = await api.delete(`${dataEndpoint}/${row.id}`)
                     if (!(res as any).data?.success) throw new Error('delete failed')
+                    await normalizePositions()
                     onChange?.()
                 } catch (err) {
                     console.error('DynamicRelation delete error', err)
@@ -714,7 +750,7 @@ function OneToManyRelation({
             })
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [api, dataEndpoint, refreshSilently, onChange],
+        [api, dataEndpoint, refreshSilently, onChange, normalizePositions],
     )
 
     const handleDelete = useCallback(async () => {
@@ -724,6 +760,7 @@ function OneToManyRelation({
             const res = await api.delete(`${dataEndpoint}/${rowToDelete.id}`)
             if (!(res as any).data?.success) throw new Error('delete failed')
             setRowToDelete(null)
+            await normalizePositions()
             await fetchAll()
             onChange?.()
         } catch (err) {
@@ -731,7 +768,7 @@ function OneToManyRelation({
         } finally {
             setSubmitting(false)
         }
-    }, [api, dataEndpoint, fetchAll, onChange, rowToDelete])
+    }, [api, dataEndpoint, fetchAll, onChange, rowToDelete, normalizePositions])
 
     return (
         <div className={className} data-relation-kind={kind} data-relation-model={model}>
@@ -789,7 +826,7 @@ function OneToManyRelation({
                     canDelete={canDelete}
                     hiddenKeys={pendingDelete}
                     onUpload={galleryUpload}
-                    onUploadsSettled={() => { void refreshSilently(); onChange?.() }}
+                    onUploadsSettled={() => { void normalizePositions().then(() => refreshSilently()); onChange?.() }}
                     onReorder={galleryReorder}
                     onEdit={canEdit ? (row) => { setEditingRow(row); uploadedImageRef.current = null; setFormOpen(true) } : undefined}
                     onDelete={canDelete ? (row) => setRowToDelete(row) : undefined}
