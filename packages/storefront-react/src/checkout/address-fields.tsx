@@ -143,7 +143,7 @@ export type ContactFieldsProps = Common & {
   defaults?: Partial<Record<ContactFieldKey, string | null>>
   /** Form names. Default: the keys. */
   names?: Partial<Record<ContactFieldKey, string>>
-  /** Phone format from the shop or region (e.g. `{ pattern: '[0-9 +()-]{10,}', title: '10 dígitos' }`). */
+  /** Phone format from the shop or region (HTML compiles `pattern` with the `v` flag, so escape `(`, `)` and `-` inside a class; e.g. `{ pattern: '[0-9 +\\(\\)\\-]{10,}', title: '10 dígitos' }`). */
   phone?: { pattern?: string; title?: string; minLength?: number }
   /** Explain why e-mail and phone are needed (default true). */
   hints?: boolean
