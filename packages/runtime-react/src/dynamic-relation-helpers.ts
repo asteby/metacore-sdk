@@ -79,6 +79,9 @@ export type RelationDerive = 'image_width' | 'image_height' | 'next_position'
  *     ("Para todas las variantes").
  *   - `gallery: true` (on the image column) → the relation renders as a
  *     thumbnail gallery instead of a table.
+ *   - `main_from_parent: <k>` (on the image column) → the parent's `<k>` image
+ *     is the gallery's main photo; while no gallery row holds it, it shows as a
+ *     read-only first tile.
  * A column with none of them behaves exactly as before.
  */
 export interface RelationColumnUi {
@@ -87,6 +90,8 @@ export interface RelationColumnUi {
     defaultFromParent?: string
     emptyLabel?: string
     gallery?: boolean
+    /** Campo del padre cuya imagen es la principal de la galería (p. ej. `image`). */
+    mainFromParent?: string
 }
 
 const DERIVES = new Set<RelationDerive>(['image_width', 'image_height', 'next_position'])
@@ -103,6 +108,8 @@ export function relationColumnUi(col: ColumnDefinition): RelationColumnUi {
     const empty = sc.empty_label ?? sc.emptyLabel
     if (typeof empty === 'string' && empty.trim() !== '') out.emptyLabel = empty
     if (sc.gallery === true) out.gallery = true
+    const mfp = sc.main_from_parent ?? sc.mainFromParent
+    if (typeof mfp === 'string' && mfp.trim() !== '') out.mainFromParent = mfp.trim()
     return out
 }
 
@@ -551,4 +558,24 @@ export function pickOptionLabel(
     }
     if (row.id !== undefined && row.id !== null && row.id !== '') return String(row.id)
     return '—'
+}
+
+/**
+ * The parent's own image (e.g. `Product.image`) when it is the one the store
+ * serves first: the image column declares `main_from_parent`, the parent has
+ * that image and the gallery has NO rows at all (variant photos included). With
+ * any row, the store serves the gallery first, so the first photo is the main
+ * one and showing the parent's image as «Principal» would be wrong.
+ */
+export function galleryLeadImage(
+    imageColumn: ColumnDefinition | undefined,
+    parent: Record<string, unknown> | null | undefined,
+    rows: Array<Record<string, any>>,
+): string | undefined {
+    if (!imageColumn || !parent || rows.length > 0) return undefined
+    const field = relationColumnUi(imageColumn).mainFromParent
+    if (!field) return undefined
+    const raw = parent[field]
+    const url = typeof raw === 'string' ? raw.trim() : ''
+    return url || undefined
 }

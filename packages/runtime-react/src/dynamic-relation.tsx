@@ -67,6 +67,7 @@ import {
     pickOptionLabel,
     relationColumnUi,
     relationDerivedValues,
+    galleryLeadImage,
     contiguousPositionUpdates,
     relationGalleryColumn,
     relationInitialValues,
@@ -456,6 +457,10 @@ function OneToManyRelation({
     const positionKey = useMemo(() => relationPositionKey(metadata), [metadata])
     const orderedRows = useMemo(() => sortRelationRows(rows, positionKey), [rows, positionKey])
     const galleryColumn = useMemo(() => relationGalleryColumn(metadata), [metadata])
+    const galleryLead = useMemo(
+        () => galleryLeadImage(galleryColumn, parentRecord, rows),
+        [galleryColumn, parentRecord, rows],
+    )
     const captionKey = useMemo(
         () => metadata?.columns?.find((c) => relationColumnUi(c).defaultFromParent)?.key,
         [metadata],
@@ -859,6 +864,7 @@ function OneToManyRelation({
                     canReorder={canEdit && !!positionKey}
                     canDelete={canDelete}
                     hiddenKeys={pendingDelete}
+                    lead={galleryLead ? { src: getImageUrl(galleryLead) } : undefined}
                     onUpload={galleryUpload}
                     onUploadsSettled={() => { void normalizePositions().then(() => refreshSilently()); onChange?.() }}
                     onReorder={galleryReorder}
