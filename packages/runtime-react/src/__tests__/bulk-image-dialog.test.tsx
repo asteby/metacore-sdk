@@ -34,6 +34,7 @@ const parentMeta = (withRel = true) => ({
 })
 const childMeta = {
     columns: [
+        col({ key: 'product_id' }),
         col({ key: 'url', cellStyle: 'image_stack', styleConfig: { gallery: true } }),
         col({ key: 'position', styleConfig: { derive: 'next_position' } }),
         col({ key: 'width', styleConfig: { derive: 'image_width' } }),

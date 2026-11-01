@@ -63,16 +63,19 @@ export function parseImageName(path: string): ParsedImageName {
 
 export const normalizeSku = (s: string) => s.trim().toLowerCase()
 
-/** SKUs a consultar (todos los candidatos, sin repetir), para pedirlos por lotes. */
+/**
+ * SKUs a consultar (todos los candidatos, sin repetir), para pedirlos por
+ * lotes. El `IN` del servidor distingue mayúsculas, así que se piden también
+ * las variantes en MAYÚSCULAS y minúsculas; el cruce local no distingue.
+ */
 export function collectCandidateSkus(names: string[]): string[] {
-    const seen = new Map<string, string>()
+    const seen = new Set<string>()
     for (const n of names) {
         for (const c of parseImageName(n).candidates) {
-            const k = normalizeSku(c.sku)
-            if (!seen.has(k)) seen.set(k, c.sku)
+            for (const v of [c.sku, c.sku.toUpperCase(), c.sku.toLowerCase()]) seen.add(v)
         }
     }
-    return [...seen.values()]
+    return [...seen]
 }
 
 export function chunk<T>(arr: T[], size: number): T[][] {
@@ -115,6 +118,8 @@ export function deriveBulkImageTarget(
     if (relation.kind !== 'one_to_many') return null
     const img: ColumnDefinition | undefined = relationGalleryColumn(childMetadata)
     if (!img) return null
+    // Sin la FK declarada el listado ignoraría `f_<fk>=in:` en silencio y devolvería todo.
+    if (!(childMetadata?.columns ?? []).some((c) => c.key === relation.foreign_key)) return null
     const sc = (img.styleConfig ?? {}) as Record<string, unknown>
     const keyOf = (derive: string) =>
         (childMetadata?.columns ?? []).find((c) => relationColumnUi(c).derive === derive)?.key
@@ -288,7 +293,10 @@ export function summarizePreview(rows: PreviewRow[], excluded?: ReadonlySet<stri
  * huecos (la 2.ª foto de un producto cuya 1.ª se excluyó pasa a ser la 1.ª).
  */
 export function selectForImport(rows: PreviewRow[], excluded: ReadonlySet<string>): PreviewRow[] {
-    const picked = rows.filter((r) => isImportable(r) && !excluded.has(r.key))
+    const byOrder = (a: PreviewRow, b: PreviewRow) =>
+        (a.order ?? 1) - (b.order ?? 1) || a.path.localeCompare(b.path, undefined, { numeric: true })
+    // Mismo criterio que buildPreview: dentro de cada producto manda `_N`, no la ruta.
+    const picked = rows.filter((r) => isImportable(r) && !excluded.has(r.key)).sort(byOrder)
     const counter = new Map<string, number>()
     return picked.map((r) => {
         const n = (counter.get(r.parent!.id) ?? 0) + 1
@@ -334,6 +342,8 @@ export interface BatchLog {
     batchId: string
     createdAt: string
     childModel: string
+    /** Organización/usuario (cacheScope) en que se creó: otro alcance no lo ve ni lo deshace. */
+    scope?: string
     items: BatchLogItem[]
 }
 
@@ -344,11 +354,13 @@ export function newBatchId(now: Date = new Date()): string {
     return `bulk-${now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}-${Math.random().toString(36).slice(2, 6)}`
 }
 
-export function loadBatchLogs(storage: Pick<Storage, 'getItem'> | undefined = safeStorage()): BatchLog[] {
+export function loadBatchLogs(storage: Pick<Storage, 'getItem'> | undefined = safeStorage(), scope?: string): BatchLog[] {
     try {
         const raw = storage?.getItem(LOG_KEY)
         const parsed = raw ? JSON.parse(raw) : []
-        return Array.isArray(parsed) ? parsed : []
+        if (!Array.isArray(parsed)) return []
+        // Con `scope`, solo los lotes de esa organización/usuario.
+        return scope === undefined ? parsed : parsed.filter((l: BatchLog) => (l.scope ?? '') === scope)
     } catch {
         return []
     }
@@ -401,7 +413,9 @@ export async function readZipImages(zip: Blob): Promise<{ files: BulkFile[]; ski
     const files: BulkFile[] = []
     const entries = unzipSync(data, {
         filter: (f) => {
-            if (isIgnoredEntry(f.name)) {
+            if (f.name.endsWith('/')) return false
+            // Solo almacenado (0) o deflate (8): deflate64/cifrado abortarían todo el ZIP.
+            if (isIgnoredEntry(f.name) || (f.compression !== 0 && f.compression !== 8)) {
                 skipped += 1
                 return false
             }

@@ -26,6 +26,8 @@ import {
 import { AlertCircle, Check, FolderUp, ImagePlus, Loader2, Undo2, Download } from 'lucide-react'
 import { useApi } from './api-context'
 import { useMetadataCache } from './metadata-cache'
+import { cacheScope } from './cache-scope'
+import { modelCapability, useCan } from './permissions-context'
 import { Progress } from './dialogs/_primitives'
 import { extractUploadedValue, readImageSize } from './upload-field'
 import type { TableMetadata } from './types'
@@ -73,6 +75,22 @@ type ItemState = { status: 'pending' | 'uploading' | 'done' | 'error'; progress:
 
 const LOOKUP_CHUNK = 40
 const CONCURRENCY = 3
+const PAGE_SIZE = 200
+
+/** map con concurrencia acotada (decodificar cientos de bitmaps a la vez tumba la pestaña). */
+async function mapPool<T, R>(items: T[], limit: number, fn: (x: T) => Promise<R>): Promise<R[]> {
+    const out = new Array<R>(items.length)
+    let i = 0
+    await Promise.all(
+        Array.from({ length: Math.min(limit, items.length) }, async () => {
+            while (i < items.length) {
+                const idx = i++
+                out[idx] = await fn(items[idx])
+            }
+        }),
+    )
+    return out
+}
 
 function asRows(res: any): any[] {
     const d = res?.data?.data ?? res?.data
@@ -92,6 +110,7 @@ export function BulkImageImportButton({
     const api = useApi()
     const [target, setTarget] = useState<BulkImageTarget | null>(null)
     const [open, setOpen] = useState(false)
+    const can = useCan()
 
     // Descubre la galería: relación 1:N cuyo hijo tiene una columna de imagen con gallery.
     useEffect(() => {
@@ -127,7 +146,8 @@ export function BulkImageImportButton({
         }
     }, [api, model, metadata, skuKey])
 
-    if (!target) return null
+    // El flujo crea y borra filas del HIJO: exige sus permisos, no solo los del padre.
+    if (!target || !can(modelCapability(target.childModel, 'create')) || !can(modelCapability(target.childModel, 'delete'))) return null
     return (
         <>
             <button
@@ -180,7 +200,7 @@ export function BulkImageDialog({ open, onOpenChange, model, target, skuKey, dat
     const [items, setItems] = useState<Record<string, ItemState>>({})
     const [log, setLog] = useState<BatchLog | null>(null)
     const [undoing, setUndoing] = useState<{ done: number; total: number } | null>(null)
-    const [previousLogs, setPreviousLogs] = useState<BatchLog[]>(() => loadBatchLogs().filter((l) => l.childModel === target.childModel && pendingUndo(l).length > 0))
+    const [previousLogs, setPreviousLogs] = useState<BatchLog[]>(() => loadBatchLogs(undefined, cacheScope() ?? '').filter((l) => l.childModel === target.childModel && pendingUndo(l).length > 0))
     const filesRef = useRef<Map<string, File>>(new Map())
     const urlsRef = useRef<Map<string, string>>(new Map())
     const cancelRef = useRef(false)
@@ -213,14 +233,16 @@ export function BulkImageDialog({ open, onOpenChange, model, target, skuKey, dat
                 // Medir en el navegador (el servidor no mide nada).
                 releaseUrls()
                 filesRef.current = new Map()
-                const inputs = await Promise.all(
-                    files.map(async (f: BulkFile) => {
+                const inputs = await mapPool(
+                    files,
+                    4,
+                    async (f: BulkFile) => {
                         const size = await readImageSize(f.file)
                         filesRef.current.set(f.path, f.file)
                         urlsRef.current.set(f.path, URL.createObjectURL(f.file))
                         const ok = !!(size.width && size.height)
                         return { path: f.path, size: f.file.size, width: size.width, height: size.height, decodable: ok }
-                    }),
+                    },
                 )
 
                 // Resolver SKU contra la API de datos existente (por lotes).
@@ -228,7 +250,7 @@ export function BulkImageDialog({ open, onOpenChange, model, target, skuKey, dat
                 const parents = new Map<string, ParentRef>()
                 for (const part of chunk(skus, LOOKUP_CHUNK)) {
                     const res = await api.get(parentEndpoint, {
-                        params: { [`f_${skuKey}`]: `in:${part.join(',')}`, per_page: part.length + 20 },
+                        params: { [`f_${skuKey}`]: `in:${part.join(',')}`, per_page: Math.min(200, part.length + 20) },
                     })
                     for (const r of asRows(res)) {
                         const sku = String(r[skuKey] ?? '')
@@ -246,16 +268,21 @@ export function BulkImageDialog({ open, onOpenChange, model, target, skuKey, dat
                 // Fotos que ya tiene cada producto: las nuevas van a continuación.
                 if (target.positionKey) {
                     const byId = new Map([...parents.values()].map((p) => [p.id, p]))
+                    // El kernel limita per_page a 200: se pagina hasta agotar.
                     for (const part of chunk([...byId.keys()], LOOKUP_CHUNK)) {
-                        const res = await api.get(childEndpoint, {
-                            params: { [`f_${target.foreignKey}`]: `in:${part.join(',')}`, per_page: 1000 },
-                        })
-                        for (const r of asRows(res)) {
-                            const p = byId.get(String(r[target.foreignKey]))
-                            if (!p) continue
-                            p.existingCount += 1
-                            const n = Number(r[target.positionKey])
-                            if (Number.isFinite(n) && n > p.existingMaxPosition) p.existingMaxPosition = n
+                        for (let page = 1; page <= 50; page++) {
+                            const res = await api.get(childEndpoint, {
+                                params: { [`f_${target.foreignKey}`]: `in:${part.join(',')}`, per_page: PAGE_SIZE, page },
+                            })
+                            const got = asRows(res)
+                            for (const r of got) {
+                                const p = byId.get(String(r[target.foreignKey]))
+                                if (!p) continue
+                                p.existingCount += 1
+                                const n = Number(r[target.positionKey])
+                                if (Number.isFinite(n) && n > p.existingMaxPosition) p.existingMaxPosition = n
+                            }
+                            if (got.length < PAGE_SIZE) break
                         }
                     }
                 }
@@ -280,7 +307,7 @@ export function BulkImageDialog({ open, onOpenChange, model, target, skuKey, dat
         cancelRef.current = false
         setStep('importing')
         setError(null)
-        const batch: BatchLog = { batchId: newBatchId(), createdAt: new Date().toISOString(), childModel: target.childModel, items: [] }
+        const batch: BatchLog = { batchId: newBatchId(), createdAt: new Date().toISOString(), childModel: target.childModel, scope: cacheScope() ?? '', items: [] }
         setLog(batch)
         setItems(Object.fromEntries(queue.map((r) => [r.key, { status: 'pending', progress: 0 } as ItemState])))
         const patch = (key: string, s: Partial<ItemState>) =>

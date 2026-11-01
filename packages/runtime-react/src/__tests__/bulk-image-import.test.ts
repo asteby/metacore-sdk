@@ -23,7 +23,7 @@ describe('parseImageName', () => {
         expect(isIgnoredEntry('fotos/A.JPG')).toBe(false)
     })
     it('candidatos únicos', () => {
-        expect(collectCandidateSkus(['A.jpg', 'A_2.jpg', 'B.jpg'])).toEqual(['A', 'A_2', 'B'])
+        expect(collectCandidateSkus(['A.jpg', 'A_2.jpg', 'b.jpg']).sort()).toEqual(['A', 'A_2', 'B', 'a', 'a_2', 'b'].sort())
     })
 })
 
@@ -57,6 +57,21 @@ describe('buildPreview', () => {
         expect(rows[0].parent?.id).toBe('9')
         expect(rows[0].order).toBe(1)
     })
+    it('SKU.jpg y SKU_2.jpg: la principal es la primera aunque la ruta ordene al revés', () => {
+        const rows = buildPreview([inp('B200_2.jpg'), inp('B200.jpg')], map(B))
+        const sel = selectForImport(rows, new Set())
+        const pos = Object.fromEntries(sel.map((r) => [r.path, r.position]))
+        expect(pos).toEqual({ 'B200.jpg': 1, 'B200_2.jpg': 2 })
+        expect(Object.fromEntries(rows.map((r) => [r.path, r.position]))).toEqual(pos)
+    })
+    it('SKU_0 y SKU_01 cuentan como orden 1 y chocan con SKU.jpg', () => {
+        const rows = buildPreview([inp('B200.jpg'), inp('B200_01.jpg')], map(B))
+        expect(rows.filter((r) => r.status === 'duplicate')).toHaveLength(1)
+    })
+    it('el cruce no distingue mayúsculas', () => {
+        const rows = buildPreview([inp('b200.jpg')], map(B))
+        expect(rows[0].parent?.id).toBe('2')
+    })
     it('excluir a mano recompacta posiciones', () => {
         const rows = buildPreview([inp('B200.jpg'), inp('B200_2.jpg')], map(B))
         const first = rows.find((r) => r.path === 'B200.jpg')!
@@ -69,6 +84,7 @@ describe('buildPreview', () => {
 describe('buildChildPayload / deriveBulkImageTarget', () => {
     const meta: any = {
         columns: [
+            { key: 'product_id' },
             { key: 'url', type: 'image', styleConfig: { gallery: true, storage_path: 'products' } },
             { key: 'width', styleConfig: { derive: 'image_width' } },
             { key: 'height', styleConfig: { derive: 'image_height' } },
@@ -80,6 +96,9 @@ describe('buildChildPayload / deriveBulkImageTarget', () => {
         expect(t).toMatchObject({ imageKey: 'url', widthKey: 'width', heightKey: 'height', positionKey: 'position', storagePath: 'products' })
         const [row] = buildPreview([inp('A.jpg', 640, 480)], map(parent('1', 'A')))
         expect(buildChildPayload(t, row, '/f/a.jpg')).toEqual({ url: '/f/a.jpg', product_id: '1', position: 1, width: 640, height: 480 })
+    })
+    it('sin la FK declarada en el hijo = null (el filtro in: se ignoraría)', () => {
+        expect(deriveBulkImageTarget({ kind: 'one_to_many', through: 'pi', foreign_key: 'nope' }, meta)).toBeNull()
     })
     it('sin galería = null', () => {
         expect(deriveBulkImageTarget({ kind: 'one_to_many', through: 'x', foreign_key: 'p' }, { columns: [{ key: 'url' }] } as any)).toBeNull()
