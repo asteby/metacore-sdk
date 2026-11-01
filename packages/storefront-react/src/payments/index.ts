@@ -57,3 +57,9 @@ export { buildPayChoices, cashProviderData, checkoutToAttempt, choiceValue, pars
 export type { BuildPayChoicesOptions, PayChoice, PayChoices, PayErrorBody, PayErrorOptions, VoucherRowLabels } from './choices.js'
 
 export { PAYMENT_THEME_TOKENS, readPaymentScheme, readPaymentTheme } from './theme.js'
+
+export { PENDING_DELAYS_MS, PENDING_GRACE_MS, PENDING_SLOW_MS, firstSeenAt, formatCountdown, nextCheckDelay, pendingPhase, usePendingPaymentWatch, watchesAttempt } from './pending-watch.js'
+export type { PendingPhase, PendingWatch, PendingWatchOptions } from './pending-watch.js'
+
+export { purchaseResultView } from './purchase-result.js'
+export type { PurchaseResultInput, PurchaseResultKind, PurchaseResultView } from './purchase-result.js'

@@ -567,6 +567,30 @@ const transport = useMemo(
 - **Consulta de estado tras «verificando»**: `useEmbeddedPayment` sigue leyendo `transport.refresh` con espera creciente (2 s, 4 s, 8 s… hasta 15 s) durante `verifyTimeoutMs` (120 s). Solo un resultado resuelto (pagado, rechazado, ficha, reto, redirección) lo termina; `pending` y `none` no. Expone `verifying` y la clave del intento no cambia. Opciones: `verifyTimeoutMs`, `verifyIntervalMs`.
 - `checkoutShouldRevalidate({ paths: ['/pagar'] })`: `shouldRevalidate` para las rutas de ALREDEDOR (root, encabezado…): el `fetcher.submit` de la entrega a `/pagar` ya no vuelve a ejecutar todos los loaders. No lo uses en la ruta de checkout (su loader debe releer el total).
 
+**Pago por confirmar: nunca sin salida, nunca éxito falso (todas las tiendas).**
+
+- **Éxito solo con el pago aprobado.** `PaymentMethodSection` llama `onDone` con `approved`, `voucher` y, por compatibilidad, `in_review`. Un `in_review` es un pago SIN aprobar (p. ej. Mercado Pago con la orden en `action_required/pending_challenge`, que OPS puede reportar como `pending`). Pasa `onPending` y ese caso irá ahí, nunca a `onDone`. En el servidor, tu `settle` NO debe cerrar la compra con `in_review`: deja el carrito y el pago en curso para que `/pagar` muestre «pago por confirmar».
+
+  ```tsx
+  <PaymentMethodSection
+    {...props}
+    onDone={() => navigate('/pagar/gracias')}           // approved | voucher
+    onPending={() => void revalidator.revalidate()}     // in_review: relee /pagar → «Tienes un pago por confirmar»
+  />
+  // settle (servidor): solo approved / voucher cierran la compra
+  settle: async ({ draft, result, headers }) => {
+    const o = paymentOutcome(result, locale)
+    if (o.kind !== 'approved' && o.kind !== 'voucher') return false
+    /* comprobante + soltar carrito y pago en curso */
+    return true
+  }
+  ```
+  El loader de `/pagar` debe pintar «pago por confirmar» (y NO un carrito vacío) cuando `cart.checkout.attempt.status` es un intento abierto (`requires_action | processing | unconfirmed | pending | review`) en un checkout `pending`. Un checkout cerrado con `close_reason: 'buyer_cancelled'` ya no es un pago en curso: se reabre el carrito.
+- **Página de gracias:** `purchaseResultView({ order_id, number, status, action_type, instructions, embed_url, voucher })` con el estado RELEÍDO de OPS (`checkouts.get`): `success` solo con `paid`; `orderId` solo si el pedido existe (`order.number`; `order.id` se reserva antes de crear el pedido y enlazarlo daba 404); `creatingOrder` = pagado sin pedido todavía.
+- **Panel «pago por confirmar»:** `usePendingPaymentWatch({ key: checkoutId, enabled: watchesAttempt({ attempt, checkoutStatus, voucherUrl }), check: () => revalidator.revalidate(), checking })` → `{ phase: 'confirming' | 'stuck', busy, slow, nextCheckInMs, checkNow }`. Revisa el estado real con espera creciente; `stuck` a los 2.5 min (muestra salidas); `busy` nunca dura más de 20 s. La página del banco de un reto que sigue abierto se reabre con `<PaymentChallenge outcome={{ kind: 'challenge', challenge: { url, creq: null }, … }} onCancel={cerrar} escapeAfterMs={0} />` (misma URL de `paymentConfig(id).action.challenge.url`; no es un cobro nuevo).
+- **Cancelar / cambiar datos / otro método:** `sf.checkouts.cancel(checkoutId, { reason: 'buyer_cancel' | 'change_details' | 'retry_other_method' })` (servidor, `sk_`). OPS concilia antes con el proveedor: `409 already_paid` → el pedido existe, ve a gracias. Si el proveedor no deja anular el intento → `cancel.orphaned: true`: OPS lo vigila y un cobro tardío queda para reembolso, nunca otro pedido. Después reabre un carrito con los mismos artículos y datos. Con un servidor sin la ruta (storefront_cart anterior al contrato 1.26.0) el error es `isCancelUnsupported(err)`: oculta esas opciones.
+- **Formulario:** `useEmbeddedPayment` avisa con el evento `verify_timeout` (y `verifyTimedOut`, `recheck()`) cuando la revisión en segundo plano se agota sin respuesta; relee `/pagar` para mostrar el panel en vez de «verificando» eterno.
+
 **3. Formulario de tarjeta estable.** El contenedor se monta UNA vez por vida del formulario:
 
 - Un cambio de total NO remonta: el hook llama `MountedPaymentForm.update({ amount })` (en Mercado Pago, `controller.update` del Card Payment Brick). Si el proveedor no lo tiene o falla, se remonta UNA vez, en cola. Varios cambios seguidos se fusionan en el último.

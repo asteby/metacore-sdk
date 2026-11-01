@@ -1,5 +1,5 @@
 import type { AccountDeleteInput, CustomerSessionInfo, DataExportFile, ReauthInput, ReauthResult } from './account-settings.js'
-import { StorefrontError, defaultCodeForStatus } from './errors.js'
+import { CANCEL_UNSUPPORTED, StorefrontError, defaultCodeForStatus } from './errors.js'
 import { isValidPoint, type GeoPoint } from './geo.js'
 import { isTokenPublishable } from './money.js'
 import { normalizeTrackingView } from './tracking.js'
@@ -38,6 +38,8 @@ import type {
   PromotionsList,
   RecommendationPlacement,
   CheckoutInput,
+  CheckoutCancelReason,
+  CheckoutCancelResult,
   CheckoutResult,
   Collection,
   Connection,
@@ -580,7 +582,13 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
     },
 
     carts: {
-      create: (input: { lines?: CartLineInput[] } = {}, options?: WriteOptions) =>
+      /**
+       * `replaces_checkout_id` (server token only, storefront_cart contract > 1.26.0): the new cart replaces a checkout whose
+       * payment is not approved (the buyer cancelled it, changes details or wants another way to pay). While that old
+       * attempt is still alive at the provider, paying the new cart answers `409 payment_in_progress` with
+       * `paymentBlockedUntil(err)` (at most one charge per purchase). Older servers ignore the field.
+       */
+      create: (input: { lines?: CartLineInput[]; replaces_checkout_id?: string } = {}, options?: WriteOptions) =>
         write<Cart>('POST', '/storefront/carts', input, options),
       /** `null` when the cart does not exist (e.g. expired cookie). */
       get: (id: string, options?: RequestOptions) => getOrNull<Cart>(cartPath(id), undefined, options),
@@ -657,6 +665,28 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
        */
       get: (id: string, options?: RequestOptions) =>
         getOrNull<CheckoutResult>(`/storefront/checkouts/${enc(id)}`, undefined, options),
+      /**
+       * Cancels a checkout whose payment is NOT approved (the buyer cancels, changes their details or wants another way to
+       * pay). OPS first reads the real payment state from the provider: if it was approved meanwhile the answer is
+       * `409 already_paid` (the order exists). Open attempts are voided with the provider when it allows it; one it will
+       * not void is watched and, if approved late, flagged for staff instead of creating a second order. Idempotent.
+       * Needs a server token (`checkout:write`) and storefront_cart with the route (older servers answer 404).
+       */
+      cancel: async (id: string, input: { reason?: CheckoutCancelReason } = {}, options?: WriteOptions): Promise<CheckoutCancelResult> => {
+        try {
+          return await write<CheckoutCancelResult>('POST', `/storefront/checkouts/${enc(id)}/cancel`, input, options)
+        } catch (err) {
+          // A server without the route (storefront_cart < contract 1.26.0) answers 404/405 there. A 404 is also "no such
+          // checkout": the checkout is read to tell them apart. Without the route: `cancel_unsupported`
+          // (`isCancelUnsupported`), so the shop hides "cancel" instead of showing a broken button.
+          if (!(err instanceof StorefrontError) || (err.status !== 404 && err.status !== 405)) throw err
+          if (err.status === 404) {
+            const found = await getOrNull<CheckoutResult>(`/storefront/checkouts/${enc(id)}`, undefined, options).catch(() => undefined)
+            if (found === null) throw err
+          }
+          throw new StorefrontError({ status: err.status, code: CANCEL_UNSUPPORTED, message: 'checkouts.cancel: this server does not support cancelling a checkout', url: err.url })
+        }
+      },
     },
 
     /**

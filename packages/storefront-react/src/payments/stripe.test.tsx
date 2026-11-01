@@ -695,8 +695,12 @@ describe('useEmbeddedPayment with Stripe: contract, reload and unknown outcomes'
 
   it('in review (form hidden), then the server asks for the Stripe 3DS: verifying; the re-shown form never re-enables PAY', async () => {
     let settle = false
+    // The review state is held until the test has seen it: with a 5 ms poll the server's 3DS request would otherwise
+    // replace it before `findByText` looks (a timing-dependent assertion under CI load).
+    let ask3ds = false
+    const review: PaymentAttemptResult = { payment: { provider: 'stripe', status: 'pending', action: { type: 'none' } } }
     const events: unknown[] = []
-    const refresh = vi.fn(async () => (settle ? paid : needs3ds))
+    const refresh = vi.fn(async () => (settle ? paid : ask3ds ? needs3ds : review))
     const { fake, ref } = setupBrick({
       submit: async () => ({ payment: { provider: 'stripe', status: 'pending', action: { type: 'none' } } }),
       refresh,
@@ -706,6 +710,7 @@ describe('useEmbeddedPayment with Stripe: contract, reload and unknown outcomes'
     await ready()
     await pay()
     expect(await screen.findByText(/está en revisión/)).toBeTruthy()
+    ask3ds = true
     // The form is not on screen in review: there is no Stripe instance to run it, so the hook verifies with the server.
     await waitFor(() => expect(events).toContainEqual({ type: 'provider_action', result: 'unsupported' }))
     expect(await screen.findByText(/Cerraste la verificación/)).toBeTruthy()
