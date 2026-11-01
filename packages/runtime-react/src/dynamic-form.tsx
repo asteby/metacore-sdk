@@ -73,6 +73,12 @@ export interface DynamicFormProps {
      * debe ser flex-col con alto máximo (p.ej. `max-h-[90dvh]`).
      */
     scrollableBody?: boolean
+    /**
+     * Side data an upload widget learned about the file it stored (an image's
+     * natural width/height). Lets the host fill derived columns that are not
+     * form inputs. Optional; forms without it behave as before.
+     */
+    onFieldMeta?: (key: string, meta: { width?: number; height?: number }) => void
 }
 
 // Valores iniciales del formulario: el registro (edición) gana sobre el default
@@ -105,6 +111,7 @@ export function DynamicForm({
     disabled = false,
     formLayout,
     scrollableBody = false,
+    onFieldMeta,
 }: DynamicFormProps) {
     const [errors, setErrors] = useState<Record<string, string>>({})
     const [submitting, setSubmitting] = useState(false)
@@ -226,6 +233,7 @@ export function DynamicForm({
                     values={values}
                     error={errors[field.key]}
                     initialValues={initialValues}
+                    onFieldMeta={onFieldMeta}
                 />
             ))}
         </div>
@@ -343,6 +351,7 @@ interface FieldRendererProps {
      * gate its options by a sibling field's value (`applyOptionWhen`).
      */
     values?: Record<string, any>
+    onFieldMeta?: (key: string, meta: { width?: number; height?: number }) => void
 }
 
 interface FieldRowProps extends FieldRendererProps {
@@ -353,7 +362,7 @@ interface FieldRowProps extends FieldRendererProps {
 // component so a STATIC enum select whose options are all gated out by a sibling
 // value (`when`) can hide the ENTIRE row (label included) and run its reset
 // effect with valid hook ordering.
-function FieldRow({ field, value, onChange, values, error, initialValues }: FieldRowProps) {
+function FieldRow({ field, value, onChange, values, error, initialValues, onFieldMeta }: FieldRowProps) {
     const isStaticSelect =
         resolveWidget(field) === 'select' && !field.ref && Array.isArray(field.options)
     const effectiveOptions = isStaticSelect
@@ -390,6 +399,7 @@ function FieldRow({ field, value, onChange, values, error, initialValues }: Fiel
                 values={values}
                 effectiveOptions={effectiveOptions}
                 error={error}
+                onFieldMeta={onFieldMeta}
             />
             {error && <span className="text-red-500 text-sm" role="alert">{error}</span>}
         </div>
@@ -431,6 +441,7 @@ function FieldRenderer({
     values,
     effectiveOptions,
     error,
+    onFieldMeta,
 }: FieldRendererProps & { effectiveOptions?: import('./types').OptionDef[]; error?: string }) {
     // Host-registered widget (`widget: "<name>"`) wins over every built-in and
     // type-based branch. Unregistered names fall through untouched.
@@ -461,7 +472,14 @@ function FieldRenderer({
     // File upload → themed picker that POSTs to the host upload endpoint and
     // stores the returned file url/path as the field value.
     if (widget === 'upload') {
-        return <UploadField field={field} value={value} onChange={onChange} />
+        return (
+            <UploadField
+                field={field}
+                value={value}
+                onChange={onChange}
+                onFileMeta={onFieldMeta ? (meta) => onFieldMeta(field.key, meta) : undefined}
+            />
+        )
     }
     // Icon picker → lucide glyph search grid, with an "Imagen" mode that
     // delegates to the same UploadField as `upload`. Stores a plain string:

@@ -15,12 +15,56 @@ import { useTranslation } from 'react-i18next'
 import { getUploadConfig } from './dynamic-form-schema'
 import { FilePickButton } from './file-pick-button'
 import { useApi } from './api-context'
+import { useImageUrl } from './image-url-context'
 import type { ActionFieldDef } from './types'
 
 export interface UploadFieldProps {
     field: ActionFieldDef
     value: any
     onChange: (v: any) => void
+    /**
+     * Called after a successful upload of an image with its natural size,
+     * measured in the browser (no server round-trip, `/upload` contract
+     * unchanged). Lets a form fill derived width/height columns.
+     */
+    onFileMeta?: (meta: { width?: number; height?: number }) => void
+}
+
+/**
+ * Natural pixel size of an image file, measured client-side. Resolves `{}` for
+ * a non-image or when the browser cannot decode it — never throws, never
+ * guesses.
+ */
+export async function readImageSize(file: Blob): Promise<{ width?: number; height?: number }> {
+    if (!file || !String((file as File).type || '').startsWith('image/')) return {}
+    try {
+        if (typeof createImageBitmap === 'function') {
+            const bmp = await createImageBitmap(file)
+            const out = { width: bmp.width, height: bmp.height }
+            bmp.close?.()
+            if (out.width > 0 && out.height > 0) return out
+        }
+    } catch {
+        // fall through to <img>
+    }
+    if (typeof Image === 'undefined' || typeof URL === 'undefined' || !URL.createObjectURL) return {}
+    return new Promise((resolve) => {
+        const url = URL.createObjectURL(file)
+        const img = new Image()
+        img.onload = () => {
+            URL.revokeObjectURL(url)
+            resolve(img.naturalWidth > 0 ? { width: img.naturalWidth, height: img.naturalHeight } : {})
+        }
+        img.onerror = () => {
+            URL.revokeObjectURL(url)
+            resolve({})
+        }
+        img.src = url
+    })
+}
+
+function isImageField(field: ActionFieldDef, accept?: string): boolean {
+    return field.type === 'image' || (accept ?? '').toLowerCase().split(',').some((t) => t.trim().startsWith('image/'))
 }
 
 /** Default host upload endpoint. Overridable per-field via `searchEndpoint`. */
@@ -84,9 +128,10 @@ export function validateUploadFile(
     return null
 }
 
-export function UploadField({ field, value, onChange }: UploadFieldProps) {
+export function UploadField({ field, value, onChange, onFileMeta }: UploadFieldProps) {
     const { t } = useTranslation()
     const api = useApi()
+    const getImageUrl = useImageUrl()
     const [uploading, setUploading] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
@@ -154,6 +199,11 @@ export function UploadField({ field, value, onChange }: UploadFieldProps) {
                     return
                 }
                 onChange(stored)
+                if (onFileMeta && isImageField(field, accept)) {
+                    void readImageSize(file).then((meta) => {
+                        if (meta.width && meta.height) onFileMeta(meta)
+                    })
+                }
             } catch (err: any) {
                 setError(
                     err?.response?.data?.message ||
@@ -163,7 +213,7 @@ export function UploadField({ field, value, onChange }: UploadFieldProps) {
                 setUploading(false)
             }
         },
-        [api, endpoint, accept, maxSize, storagePath, onChange, t],
+        [api, endpoint, accept, maxSize, storagePath, onChange, onFileMeta, field, t],
     )
 
     return (
@@ -180,6 +230,14 @@ export function UploadField({ field, value, onChange }: UploadFieldProps) {
                 void handleFile(dropped)
             }}
         >
+            {hasValue && isImageField(field, accept) && (
+                <img
+                    src={getImageUrl(String(value))}
+                    alt=""
+                    className="h-24 w-24 rounded-md border bg-muted object-cover"
+                    data-testid="upload-preview"
+                />
+            )}
             <FilePickButton
                 id={field.key}
                 accept={accept}

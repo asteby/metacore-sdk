@@ -32,7 +32,159 @@ const MANAGED_RELATION_COLUMNS = new Set([
     'created_by_id',
     'updated_by',
     'updated_by_id',
+    'deleted_by',
+    'deleted_by_id',
+    'organization_id',
 ])
+
+// isManagedRelationColumn: an audit/server column, including the dotted
+// projections the backend serves for them (`created_by.avatar`, the creator
+// avatar column every table gets). Any dotted key is a projection of another
+// column, never an editable value of the row.
+export function isManagedRelationColumn(key: string): boolean {
+    const k = key.toLowerCase()
+    if (k.includes('.')) return true
+    return MANAGED_RELATION_COLUMNS.has(k)
+}
+
+const MEDIA_WIDGETS = new Set(['image', 'upload', 'photo', 'file', 'media'])
+const IMAGE_CELL_STYLES = new Set(['image', 'image_stack'])
+
+// relationMediaKind: 'image' / 'file' when a child column holds an uploaded
+// file path (manifest `widget: image|upload|file`, `type: image`, or a ref-less
+// column the backend renders as an image — `/metadata/table` carries the
+// manifest `display: image_stack` as `cellStyle`, not the widget). A `ref`
+// column is an FK picker (brand logo chip), never an upload.
+export function relationMediaKind(col: ColumnDefinition): 'image' | 'file' | undefined {
+    if (col.ref) return undefined
+    const widget = String((col as ColumnDefinition & { widget?: string }).widget ?? '').toLowerCase()
+    if (widget === 'file') return 'file'
+    if (MEDIA_WIDGETS.has(widget)) return 'image'
+    if (col.type === 'image') return 'image'
+    if (IMAGE_CELL_STYLES.has(String(col.cellStyle ?? '').toLowerCase())) return 'image'
+    return undefined
+}
+
+export type RelationDerive = 'image_width' | 'image_height' | 'next_position'
+
+/**
+ * Declarative form hints a child column carries in its manifest
+ * `display_config` (served as `styleConfig`, no kernel field needed):
+ *   - `form: "hidden"`            → never an input in the row form.
+ *   - `derive: <RelationDerive>`  → not an input; filled by the SDK (image
+ *     size measured in the browser on upload, next gallery position on create).
+ *   - `default_from_parent: <k>`  → create-form initial value from the parent
+ *     record's `<k>` (e.g. the product name as the image alt text), editable.
+ *   - `empty_label: <text>`       → placeholder of an optional picker
+ *     ("Para todas las variantes").
+ *   - `gallery: true` (on the image column) → the relation renders as a
+ *     thumbnail gallery instead of a table.
+ * A column with none of them behaves exactly as before.
+ */
+export interface RelationColumnUi {
+    form?: 'hidden' | 'advanced'
+    derive?: RelationDerive
+    defaultFromParent?: string
+    emptyLabel?: string
+    gallery?: boolean
+}
+
+const DERIVES = new Set<RelationDerive>(['image_width', 'image_height', 'next_position'])
+
+export function relationColumnUi(col: ColumnDefinition): RelationColumnUi {
+    const sc = (col.styleConfig ?? {}) as Record<string, unknown>
+    const out: RelationColumnUi = {}
+    const form = sc.form
+    if (form === 'hidden' || form === 'advanced') out.form = form
+    const derive = sc.derive
+    if (typeof derive === 'string' && DERIVES.has(derive as RelationDerive)) out.derive = derive as RelationDerive
+    const dfp = sc.default_from_parent ?? sc.defaultFromParent
+    if (typeof dfp === 'string' && dfp.trim() !== '') out.defaultFromParent = dfp.trim()
+    const empty = sc.empty_label ?? sc.emptyLabel
+    if (typeof empty === 'string' && empty.trim() !== '') out.emptyLabel = empty
+    if (sc.gallery === true) out.gallery = true
+    return out
+}
+
+/** The gallery image column (media + `display_config.gallery: true`), if any. */
+export function relationGalleryColumn(
+    metadata: Pick<TableMetadata, 'columns'> | null | undefined,
+): ColumnDefinition | undefined {
+    return metadata?.columns?.find((c) => relationMediaKind(c) === 'image' && relationColumnUi(c).gallery === true)
+}
+
+export interface ImageMeta {
+    width?: number
+    height?: number
+}
+
+/**
+ * Values the SDK fills for derived columns of a child row. `next_position`
+ * only on create (an edit keeps the stored order); image size only when the
+ * upload measured one. Never invents a value it does not know.
+ */
+export function relationDerivedValues(
+    metadata: Pick<TableMetadata, 'columns'> | null | undefined,
+    ctx: { isCreate: boolean; rows: Record<string, any>[]; image?: ImageMeta | null },
+): Record<string, number> {
+    const out: Record<string, number> = {}
+    for (const col of metadata?.columns ?? []) {
+        const d = relationColumnUi(col).derive
+        if (d === 'next_position' && ctx.isCreate) out[col.key] = nextRelationPosition(ctx.rows, col.key)
+        if (d === 'image_width' && ctx.image?.width) out[col.key] = Math.round(ctx.image.width)
+        if (d === 'image_height' && ctx.image?.height) out[col.key] = Math.round(ctx.image.height)
+    }
+    return out
+}
+
+/** Create-form initial values copied from the parent (`default_from_parent`). */
+export function relationInitialValues(
+    metadata: Pick<TableMetadata, 'columns'> | null | undefined,
+    parent: Record<string, unknown> | null | undefined,
+): Record<string, any> {
+    const out: Record<string, any> = {}
+    if (!parent) return out
+    for (const col of metadata?.columns ?? []) {
+        const k = relationColumnUi(col).defaultFromParent
+        if (!k) continue
+        const v = parent[k]
+        if (typeof v === 'string' && v !== '') out[col.key] = v
+        else if (typeof v === 'number') out[col.key] = String(v)
+    }
+    return out
+}
+
+/** Key of the child model's ordering column (`position`), if it declares one. */
+export function relationPositionKey(
+    metadata: Pick<TableMetadata, 'columns'> | null | undefined,
+): string | undefined {
+    return metadata?.columns?.some((c) => c.key === 'position') ? 'position' : undefined
+}
+
+/** Rows sorted ascending by their position column; rows without one go last, stable. */
+export function sortRelationRows<T extends Record<string, any>>(rows: T[], positionKey?: string): T[] {
+    if (!positionKey) return rows
+    const num = (r: T) => {
+        const n = Number(r?.[positionKey])
+        return r?.[positionKey] === null || r?.[positionKey] === undefined || r?.[positionKey] === '' || !Number.isFinite(n)
+            ? Number.POSITIVE_INFINITY
+            : n
+    }
+    return rows
+        .map((r, i) => [r, i] as const)
+        .sort((a, b) => num(a[0]) - num(b[0]) || a[1] - b[1])
+        .map(([r]) => r)
+}
+
+/** Default position for a new child row: one past the highest loaded, 0 when empty. */
+export function nextRelationPosition(rows: Record<string, any>[], positionKey = 'position'): number {
+    let max = -1
+    for (const r of rows) {
+        const n = Number(r?.[positionKey])
+        if (r?.[positionKey] !== null && r?.[positionKey] !== '' && Number.isFinite(n) && n > max) max = n
+    }
+    return max + 1
+}
 
 // Pulls a human label off a resolved relation/user object a backend serves:
 // `{ value, label }` (FK sibling), `{ name, … }` (user object such as
@@ -163,11 +315,21 @@ export function deriveRelationFormFields(
         // Managed/audit columns are server-owned and ship resolved objects
         // (`created_by = { name, avatar, … }`); making them editable inputs
         // renders `[object Object]`. Never surface them in the inline form.
-        if (MANAGED_RELATION_COLUMNS.has(col.key.toLowerCase())) continue
+        if (isManagedRelationColumn(col.key)) continue
+        // Derived / hidden columns are filled by the SDK or the server, never
+        // typed by whoever uploads a photo (width, height, position…).
+        const ui = relationColumnUi(col)
+        if (ui.form || ui.derive) continue
+        const media = relationMediaKind(col)
+        const accept = (col as ColumnDefinition & { accept?: string }).accept
         out.push({
             key: col.key,
             label: col.label,
-            type: columnTypeToFieldType(col),
+            // A file/image column gets the same upload widget (with preview) as
+            // the parent form, not a free-text path input.
+            type: media ?? columnTypeToFieldType(col),
+            ...(media === 'image' ? { accept: accept || 'image/*' } : accept ? { accept } : {}),
+            ...(ui.emptyLabel ? { placeholder: ui.emptyLabel } : {}),
             required: false,
             options: col.options?.map(o => ({ value: String(o.value), label: o.label })),
             // Carry the FK target through so a belongs_to column renders the
