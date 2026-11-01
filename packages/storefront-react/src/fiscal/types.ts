@@ -87,6 +87,8 @@ export type { InvoiceRequest }
  * - `unknown`: the server answered but does not publish `capabilities.invoicing` (older server, or one that does not
  *   report it): nothing is known about the store, so never claim it does not invoice. The order's own `invoice` summary
  *   (`can_request`, `action`) still says what is possible for that order.
+ * - `disabled`: the organization switched invoicing off on purpose (`invoicing.unavailable_reason: 'disabled'`, contract 1.29).
+ *   Unlike `off`, the store says NOTHING about invoices: `InvoiceStatusCard` renders nothing and the store hides its menu, pages and fields.
  * - `unreachable`: region or capabilities could not be read (outage, token without scope).
  */
-export type FiscalReason = 'available' | 'off' | 'no_region' | 'unknown' | 'unreachable'
+export type FiscalReason = 'available' | 'off' | 'disabled' | 'no_region' | 'unknown' | 'unreachable'

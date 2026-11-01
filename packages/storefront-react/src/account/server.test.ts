@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createStorefrontClient } from '@asteby/storefront'
+import { createStorefrontClient, invoicingDisabled } from '@asteby/storefront'
 import { MOCK_CUSTOMER_EMAIL, MOCK_CUSTOMER_TYPES, createMockStorefront, type MockStorefrontOptions } from '@asteby/storefront/mock'
 import { SAFE_AUTH_CAPABILITIES, createAuthAction, loadAuthCapabilities, safeNextPath } from './server.js'
 
@@ -31,6 +31,16 @@ describe('loadAuthCapabilities and the customer types of the organization', () =
   it('an organization that offers none leaves the field out (the form shows no select)', async () => {
     const { sf } = setup()
     expect(await loadAuthCapabilities(sf)).not.toHaveProperty('customer_types')
+  })
+})
+
+describe('loadAuthCapabilities and the invoicing switch', () => {
+  it('carries the invoicing answer only when the organization switched it off', async () => {
+    const off = await loadAuthCapabilities(setup({ invoicingDisabled: true }).sf)
+    expect(invoicingDisabled(off)).toBe(true)
+    const on = await loadAuthCapabilities(setup().sf)
+    expect(on).not.toHaveProperty('invoicing')
+    expect(invoicingDisabled(on)).toBe(false)
   })
 })
 

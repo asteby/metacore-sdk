@@ -7,6 +7,7 @@
  * uses, and discarded: no disk, no logs, no copy.
  */
 import {
+  invoicingDisabled,
   isStorefrontError,
   repairPath,
   type FiscalDocumentEvidence,
@@ -68,7 +69,9 @@ export async function loadFiscalContext(sf: StorefrontClient, options: LoadFisca
   const available = !!reg?.fiscal_id && !!invoicing?.available
   const reason: FiscalReason = available
     ? 'available'
-    : !ok
+    : invoicingDisabled({ invoicing })
+      ? 'disabled'
+      : !ok
       ? 'unreachable'
       : noRegion || !reg?.fiscal_id
         ? invoicing && !invoicing.available

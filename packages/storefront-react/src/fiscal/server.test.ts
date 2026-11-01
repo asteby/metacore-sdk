@@ -65,6 +65,15 @@ describe('loadFiscalContext', () => {
     expect(c.invoicing).toBeNull()
   })
 
+  it('invoicing switched off by the organization is its own reason, not the generic off', async () => {
+    const off = setup({ invoicingDisabled: true })
+    const c = await loadFiscalContext(off.sf)
+    expect(c).toMatchObject({ available: false, reason: 'disabled', invoicing: null })
+    // The server's other «not available» answers keep today's reason.
+    const noProvider = setup({ customerCapabilities: { invoicing: { available: false, unavailable_reason: 'no_provider', countries: [], checkout: 'off', post_purchase: false, identity_documents: [], online_verify: false } } })
+    expect((await loadFiscalContext(noProvider.sf)).reason).toBe('off')
+  })
+
   it('an older server without invoicing in capabilities means no invoicing', async () => {
     const { sf } = setup()
     vi.spyOn(sf.customer, 'capabilities').mockResolvedValue({ password: true, email_verification: false, otp_channels: [] })

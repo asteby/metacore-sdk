@@ -1598,6 +1598,12 @@ export type InvoicingCapabilities = {
   online_verify: boolean
   /** Invoicing runs against a test (sandbox) provider: invoices have no fiscal validity. Absent = production. */
   test_mode?: boolean
+  /**
+   * Only with `available: false`. `disabled`: the organization turned invoicing off on purpose (contract 1.29): show
+   * NOTHING about invoices (`invoicingDisabled(caps)`). The others (`no_provider`, `not_configured`, `no_issuer`) mean
+   * invoicing is not working yet, and the store may say so.
+   */
+  unavailable_reason?: 'no_provider' | 'not_configured' | 'no_issuer' | 'disabled' | (string & {})
 }
 
 /** One regime or invoice use of the region's fiscal catalog. */

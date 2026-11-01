@@ -120,6 +120,7 @@ export type {
   ReauthInput,
   ReauthResult,
 } from './account-settings.js'
+export { invoicingDisabled, invoicingEnabled } from './invoicing.js'
 export { groupInvoiceDocs, invoiceFileBytes, safeInvoiceFilename } from './invoice-docs.js'
 export type { InvoiceGroup } from './invoice-docs.js'
 

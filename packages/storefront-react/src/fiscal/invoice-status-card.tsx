@@ -104,6 +104,8 @@ export function InvoiceStatusCard(props: InvoiceStatusCardProps) {
   const { invoice, fileHref, available = true, availability, testMode, windowDays, onRequest, requestHref, onCorrect, correctHref, onRefresh, refreshMs = 10_000, refreshForMs = 60_000, contact, messages, classNames: cx = {}, headingLevel = 3 } = props
   const locale = useResolvedLocale(props.locale)
   const m = fiscalMessages(locale, messages).status
+  // The organization switched invoicing off: the card (and its «not enabled» copy) does not exist.
+  if (availability === 'disabled') return null
   const state = invoiceCardState(invoice, available, availability)
   // The downloads this card can offer NOW. A summary link wins; otherwise the store's own route, for the files the
   // server says exist (`available_files`; absent = it does not say, so both are offered).
