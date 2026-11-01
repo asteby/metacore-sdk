@@ -325,6 +325,15 @@ describe('<TrackOrderLookup /> with the contract shape', () => {
     expect(arg.shipments[0]!.tracking_number).toBe('PX123456')
   })
 
+  it('renderTracker never receives a test shipment; trackerProps.classNames reach every shipment', () => {
+    const renderTracker = vi.fn(() => <p>custom</p>)
+    render(<TrackOrderLookup action="/rastreo" result={order({ shipments: [shipment(), shipment({ id: 't', test_mode: true })] })} renderTracker={renderTracker} />)
+    expect((renderTracker.mock.calls[0] as unknown as [TrackingView])[0].shipments.map((s) => s.id)).toEqual(['shp_1'])
+    cleanup()
+    const { container } = render(<TrackOrderLookup action="/rastreo" result={order({ shipments: [shipment(), shipment({ id: 'shp_2' })] })} trackerProps={{ classNames: { root: 'mi-envio' } }} />)
+    expect(container.querySelectorAll('.mi-envio')).toHaveLength(2)
+  })
+
   it('end to end with the client: the pending answer of the server renders the pending state', async () => {
     const pending = { order_number: 'SO-00016', status: 'pending', shipments: [] }
     const sf = { tracking: { lookup: async () => ({ status: 'found' as const, tracking: pending as TrackingView }) } }

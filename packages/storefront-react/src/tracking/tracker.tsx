@@ -32,7 +32,10 @@ export type ShipmentTrackerProps = TrackingTextProps & {
    * deprecated flat shape (`LegacyTrackingView`) still renders as one shipment.
    */
   tracking?: TrackingView | Shipment | LegacyTrackingView | null
-  /** Forced state; derived from `tracking` when omitted (nothing → `empty`, scans or a guide → `ready`). */
+  /**
+   * Forced state; derived from `tracking` when omitted (nothing → `empty`, scans or a guide → `ready`). With a whole
+   * `TrackingView` only `loading` and `error` apply (the result decides the rest per shipment).
+   */
   state?: TrackerState
   onRetry?: () => void
   renderCarrierMark?: (tracking: Parcel) => ReactNode
@@ -86,7 +89,7 @@ export type TrackingResultProps = TrackingTextProps & {
   /** Level of the order title (`Pedido SO-1`); each shipment's title goes one level below it. */
   headingLevel?: 2 | 3 | 4 | 5 | 6
   /** Props of every shipment's `ShipmentTracker` (map loader, geocoder, carrier mark, classNames…). */
-  trackerProps?: Omit<ShipmentTrackerProps, 'tracking' | 'locale' | 'messages' | 'timeZone' | 'headingLevel' | 'label'>
+  trackerProps?: Omit<ShipmentTrackerProps, 'tracking' | 'state' | 'locale' | 'messages' | 'timeZone' | 'headingLevel' | 'label'>
   classNames?: TrackingResultClassNames
 }
 

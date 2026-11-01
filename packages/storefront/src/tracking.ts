@@ -11,7 +11,7 @@ const strOrNull = (v: unknown): string | null => (typeof v === 'string' && v.tri
 /**
  * The tracking view in the contract shape, or `null` when the body is not a tracking answer at all.
  *
- * - `{ order_number, status, shipments: [] }` (the contract) is kept as is; malformed shipments are dropped, and
+ * - `{ order_number, status, shipments: [] }` (the contract) is kept as is; entries that are not objects are dropped (a shipment without `events` gets `[]`), and
  *   `shipments: []` stays a valid answer ("confirmed, no guide yet").
  * - The deprecated flat shape (`{ status, carrier, tracking_number, events: [] }`) becomes one shipment, so a store,
  *   a fixture or a mock built before 0.32 keeps rendering.

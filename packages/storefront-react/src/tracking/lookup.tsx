@@ -6,7 +6,7 @@
  * so the page never tells a real order from an unknown one. Headless (`data-sf-tracking-lookup*`, `classNames`).
  */
 import type { LegacyTrackingView, TrackingLookupInput, TrackingView } from '@asteby/storefront'
-import { normalizeTrackingView } from '@asteby/storefront'
+import { normalizeTrackingView, visibleTrackingShipments } from '@asteby/storefront'
 import { useEffect, useId, useRef, type FormEvent, type ReactNode } from 'react'
 import { parseTrackingForm, type TrackingFormError } from './form.js'
 import { TrackingResult, type ShipmentTrackerProps, type TrackingResultClassNames } from './tracker.js'
@@ -30,10 +30,10 @@ export type TrackOrderLookupProps = TrackingTextProps & {
   /** Enhancement: receives the parsed input and prevents the native post. Omit to rely on the plain form. */
   onSubmit?: (input: TrackingLookupInput) => void | Promise<void>
   defaultValues?: Partial<Record<'order_number' | 'email' | 'tracking_number', string>>
-  /** Replaces the default `TrackingResult` (receives the contract shape, already normalised). */
+  /** Replaces the default `TrackingResult` (receives the contract shape, normalised and without test shipments). */
   renderTracker?: (tracking: TrackingView) => ReactNode
   /** Props of each shipment's tracker (map loader, geocoder, carrier mark, classNames…). */
-  trackerProps?: Omit<ShipmentTrackerProps, 'tracking' | 'locale' | 'messages' | 'timeZone' | 'headingLevel' | 'label'>
+  trackerProps?: Omit<ShipmentTrackerProps, 'tracking' | 'state' | 'locale' | 'messages' | 'timeZone' | 'headingLevel' | 'label'>
   /** classNames of the result block (order title, the "no guide yet" status, the list of shipments). */
   resultClassNames?: TrackingResultClassNames
   headingLevel?: 1 | 2 | 3
@@ -116,7 +116,7 @@ export function TrackOrderLookup({ action, mode = 'both', result, error, retryAf
           </p>
         ) : view ? (
           renderTracker ? (
-            renderTracker(view)
+            renderTracker({ ...view, shipments: visibleTrackingShipments(view) })
           ) : (
             <TrackingResult tracking={view} locale={locale} {...(text.timeZone ? { timeZone: text.timeZone } : {})} {...(text.messages ? { messages: text.messages } : {})} {...(trackerProps ? { trackerProps } : {})} {...(resultClassNames ? { classNames: resultClassNames } : {})} headingLevel={(headingLevel + 1) as 2 | 3 | 4} />
           )

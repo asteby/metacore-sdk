@@ -825,7 +825,8 @@ export type TrackingEventView = ShipmentEvent & { lat?: number | null; lng?: num
  * client folds a server that still answers that way into this shape (see `normalizeTrackingView`).
  */
 export type TrackingView = {
-  order_number?: string | null
+  /** `null` when the lookup was by guide. */
+  order_number: string | null
   /** Overall status of the order's shipping; `null` when the server cannot summarise it. */
   status: ShipmentStatus | null
   shipments: Shipment[]
