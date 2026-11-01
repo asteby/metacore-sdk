@@ -144,6 +144,10 @@ describe('contiguousPositionUpdates', () => {
         expect(ordered.map((r) => r.id)).toEqual(['a', 'c', 'b'])
         expect(updates).toEqual([{ id: 'a', position: 0 }, { id: 'c', position: 1 }, { id: 'b', position: 2 }])
     })
+    it('empate sin created_at se decide por id (estable entre pestañas)', () => {
+        const { ordered } = contiguousPositionUpdates([{ id: 'z', position: 0 }, { id: 'a', position: 0 }])
+        expect(ordered.map((r) => r.id)).toEqual(['a', 'z'])
+    })
     it('ya contiguo = sin cambios', () => {
         expect(contiguousPositionUpdates([{ id: 'a', position: 0 }, { id: 'b', position: 1 }]).updates).toEqual([])
     })

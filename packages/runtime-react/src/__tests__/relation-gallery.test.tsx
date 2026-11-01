@@ -128,6 +128,21 @@ describe('DynamicRelation — galería', () => {
         expect(api.put).not.toHaveBeenCalledWith('/data/product_images/orig', expect.anything())
     })
 
+    it('un PUT fallido al renumerar no detiene a los demás', async () => {
+        ROWS = [
+            { id: 'c', product_id: 'p1', url: '/storage/c.png', position: 5 },
+            { id: 'b', product_id: 'p1', url: '/storage/b.png', position: 3 },
+            { id: 'a', product_id: 'p1', url: '/storage/a.png', position: 0 },
+        ]
+        const api = mockApi(true)
+        api.put = vi.fn((url: string) => (url.endsWith('/b') ? Promise.reject(new Error('boom')) : Promise.resolve({ data: { success: true } }))) as any
+        renderPanel(api)
+        await waitFor(() => expect(screen.getAllByTestId('gallery-tile')).toHaveLength(3))
+        fireEvent.change(screen.getByTestId('gallery-input'), { target: { files: [png('x.png')] } })
+        await waitFor(() => expect(api.put).toHaveBeenCalledWith('/data/product_images/c', { position: 2 }))
+        expect(api.put).toHaveBeenCalledWith('/data/product_images/b', { position: 1 })
+    })
+
     it('dos subidas seguidas no repiten posición', async () => {
         ROWS = []
         const api = mockApi(true)

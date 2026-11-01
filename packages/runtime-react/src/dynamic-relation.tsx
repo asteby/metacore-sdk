@@ -598,34 +598,65 @@ function OneToManyRelation({
 
     // Highest position this panel created itself. `rows` can lag behind the
     // rows just created (the list refreshes after the batch), so two uploads in
-    // a row must not both read the same stale maximum.
+    // a row must not both read the same stale maximum. Reset per parent.
     const createdMaxPositionRef = useRef(-1)
+    useEffect(() => { createdMaxPositionRef.current = -1 }, [parentId])
 
-    // Renumbers the gallery 0..n-1 from what the SERVER holds (not from state):
-    // heals duplicated positions left by older clients and closes the gap a
-    // deleted photo leaves. Sequential PUTs, only the rows that differ.
-    const normalizePositions = useCallback(async () => {
-        if (!positionKey || !relationGalleryColumn(metadataRef.current)) return
-        try {
-            const res = (await api.get(dataEndpoint, {
-                params: {
-                    ...buildRelationFilterParams(foreignKey, parentId, filters),
-                    page: 1,
-                    per_page: GALLERY_PAGE_SIZE,
-                    sortBy: positionKey,
-                    order: 'asc',
-                },
-            })) as { data?: ApiResponse<any[]> }
-            const fresh = res?.data?.success ? (res.data.data ?? []) : null
-            if (!fresh) return
-            const { updates } = contiguousPositionUpdates(fresh, positionKey)
-            for (const u of updates) await api.put(`${dataEndpoint}/${u.id}`, { [positionKey]: u.position })
-            createdMaxPositionRef.current = fresh.length - 1
-        } catch (err) {
-            console.error('DynamicRelation normalize positions error', err)
-        }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [api, dataEndpoint, positionKey, foreignKey, parentId, filtersKey])
+    // Position writes (reorder and renumber) run one after another, never
+    // interleaved: a renumber that read the server before a drag would
+    // otherwise overwrite the order the user just chose.
+    const positionQueueRef = useRef<Promise<unknown>>(Promise.resolve())
+    const enqueuePositions = useCallback(<T,>(fn: () => Promise<T>): Promise<T> => {
+        const run = positionQueueRef.current.then(fn, fn)
+        positionQueueRef.current = run.catch(() => undefined)
+        return run
+    }, [])
+
+    // Renumbers the gallery 0..n-1 from what the SERVER holds (read when the
+    // job runs, not from state): heals duplicated positions left by older
+    // clients and closes the gap a deleted photo leaves. Reads every page;
+    // writes only the rows that differ; a failed write does not stop the rest.
+    const normalizePositions = useCallback(
+        () =>
+            enqueuePositions(async () => {
+                if (!positionKey || !relationGalleryColumn(metadataRef.current)) return
+                try {
+                    const fresh: any[] = []
+                    for (let page = 1; page <= 20; page++) {
+                        const res = (await api.get(dataEndpoint, {
+                            params: {
+                                ...buildRelationFilterParams(foreignKey, parentId, filters),
+                                page,
+                                per_page: GALLERY_PAGE_SIZE,
+                                sortBy: positionKey,
+                                order: 'asc',
+                            },
+                        })) as { data?: ApiResponse<any[]> }
+                        if (!res?.data?.success) return
+                        const got = res.data.data ?? []
+                        fresh.push(...got)
+                        if (got.length < GALLERY_PAGE_SIZE) break
+                        if (page === 20) return // too many to renumber safely
+                    }
+                    const { updates } = contiguousPositionUpdates(dedupeById([], fresh), positionKey)
+                    let failed = 0
+                    for (const u of updates) {
+                        try {
+                            const r = (await api.put(`${dataEndpoint}/${u.id}`, { [positionKey]: u.position })) as any
+                            if (r?.data?.success === false) failed++
+                        } catch {
+                            failed++
+                        }
+                    }
+                    createdMaxPositionRef.current = Math.max(createdMaxPositionRef.current, fresh.length - 1)
+                    if (failed) toast.error(labels.reorderError ?? 'No se pudo guardar el nuevo orden.')
+                } catch (err) {
+                    console.error('DynamicRelation normalize positions error', err)
+                }
+            }),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [api, dataEndpoint, positionKey, foreignKey, parentId, filtersKey, enqueuePositions],
+    )
 
     // ── Gallery (opt-in: image column with display_config.gallery) ─────────
     // Same contracts as the table: POST /upload (multipart) for the file, then
@@ -686,24 +717,26 @@ function OneToManyRelation({
             if (!positionKey) return
             // Optimistic: show the new order now, persist only what changed.
             setRows(ordered.map((r, i) => ({ ...r, [positionKey]: i })))
-            try {
-                await Promise.all(
-                    ordered.map((r, i) => {
-                        const raw = r[positionKey]
-                        const same = raw !== null && raw !== undefined && raw !== '' && Number(raw) === i
-                        return same ? null : api.put(`${dataEndpoint}/${r.id}`, { [positionKey]: i })
-                    }),
-                )
-                onChange?.()
-            } catch (err) {
-                console.error('DynamicRelation reorder error', err)
-                toast.error(labels.reorderError ?? 'No se pudo guardar el nuevo orden.')
-            } finally {
-                await refreshSilently()
-            }
+            await enqueuePositions(async () => {
+                try {
+                    await Promise.all(
+                        ordered.map((r, i) => {
+                            const raw = r[positionKey]
+                            const same = raw !== null && raw !== undefined && raw !== '' && Number(raw) === i
+                            return same ? null : api.put(`${dataEndpoint}/${r.id}`, { [positionKey]: i })
+                        }),
+                    )
+                    onChange?.()
+                } catch (err) {
+                    console.error('DynamicRelation reorder error', err)
+                    toast.error(labels.reorderError ?? 'No se pudo guardar el nuevo orden.')
+                } finally {
+                    await refreshSilently()
+                }
+            })
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [api, dataEndpoint, positionKey, refreshSilently, onChange],
+        [api, dataEndpoint, positionKey, refreshSilently, onChange, enqueuePositions],
     )
 
     // Confirmed delete → hidden at once, «Deshacer» for a few seconds, then the
@@ -740,6 +773,7 @@ function OneToManyRelation({
                     onClick: () => {
                         undone = true
                         clearTimeout(timer)
+                        void normalizePositions().then(() => refreshSilently())
                         setPendingDelete((s) => {
                             const n = new Set(s)
                             n.delete(key)
@@ -760,15 +794,15 @@ function OneToManyRelation({
             const res = await api.delete(`${dataEndpoint}/${rowToDelete.id}`)
             if (!(res as any).data?.success) throw new Error('delete failed')
             setRowToDelete(null)
-            await normalizePositions()
             await fetchAll()
+            void normalizePositions().then(() => refreshSilently())
             onChange?.()
         } catch (err) {
             console.error('DynamicRelation delete error', err)
         } finally {
             setSubmitting(false)
         }
-    }, [api, dataEndpoint, fetchAll, onChange, rowToDelete, normalizePositions])
+    }, [api, dataEndpoint, fetchAll, onChange, rowToDelete, normalizePositions, refreshSilently])
 
     return (
         <div className={className} data-relation-kind={kind} data-relation-model={model}>

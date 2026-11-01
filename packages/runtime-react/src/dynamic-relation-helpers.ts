@@ -196,7 +196,7 @@ export function nextRelationPosition(rows: Record<string, any>[], positionKey = 
 /**
  * Renumbers a gallery contiguously (0..n-1). Order: current `position`
  * ascending (empty/invalid last); ties — the duplicated positions an older
- * client could leave — go oldest first (`created_at`, else list order), so a
+ * client could leave — go oldest first (`created_at`, then `id`), so a
  * product's original photo stays ahead of the ones uploaded later.
  * `updates` holds only the rows whose stored position differs.
  */
@@ -218,6 +218,10 @@ export function contiguousPositionUpdates(
             const ca = String(a.r?.created_at ?? '')
             const cb = String(b.r?.created_at ?? '')
             if (ca && cb && ca !== cb) return ca < cb ? -1 : 1
+            // Last resort: the id, so two tabs (or two runs) agree on the order.
+            const ia = String(a.r?.id ?? '')
+            const ib = String(b.r?.id ?? '')
+            if (ia !== ib) return ia < ib ? -1 : 1
             return a.i - b.i
         })
         .map((x) => x.r)
