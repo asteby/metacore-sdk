@@ -13,7 +13,7 @@ import { useApi } from './api-context'
 import { useMetadataCache } from './metadata-cache'
 import { modelCapability, useCan } from './permissions-context'
 import type { TableMetadata } from './types'
-import { deriveBulkImageTarget, type BulkImageTarget } from './bulk-image-import'
+import { deriveBulkImageTarget, type BulkImageTarget } from './bulk-image-target'
 
 // El asistente (tabla de vista previa, progreso, deshacer) pesa bastante y solo se usa al
 // pulsar el botón: se carga bajo demanda, fuera del JS inicial del shell.
