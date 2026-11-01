@@ -2,6 +2,7 @@ import type { AccountDeleteInput, CustomerSessionInfo, DataExportFile, ReauthInp
 import { StorefrontError, defaultCodeForStatus } from './errors.js'
 import { isValidPoint, type GeoPoint } from './geo.js'
 import { isTokenPublishable } from './money.js'
+import { normalizeTrackingView } from './tracking.js'
 import {
   accountListQuery,
   appendParams,
@@ -22,7 +23,6 @@ import type {
   ShipmentConnection,
   TrackingLookupInput,
   TrackingLookupResult,
-  TrackingView,
   ShipmentListNode,
   Address,
   AddressInput,
@@ -668,8 +668,10 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
     tracking: {
       lookup: async (input: TrackingLookupInput, options?: WriteOptions): Promise<TrackingLookupResult> => {
         try {
-          const tracking = await write<TrackingView>('POST', '/storefront/customer/track', input, options)
-          return tracking && Array.isArray(tracking.events) ? { status: 'found', tracking } : { status: 'not_found' }
+          // The contract answers `{ order_number, status, shipments[] }`; `shipments: []` (order confirmed, no guide yet) is
+          // a hit. The flat `{ events[] }` shape of SDKs before 0.32 is still accepted and folded into one shipment.
+          const tracking = normalizeTrackingView(await write<unknown>('POST', '/storefront/customer/track', input, options))
+          return tracking ? { status: 'found', tracking } : { status: 'not_found' }
         } catch (err) {
           if (err instanceof StorefrontError) {
             if (err.status === 429) return err.retryAfter ? { status: 'rate_limited', retryAfter: err.retryAfter } : { status: 'rate_limited' }

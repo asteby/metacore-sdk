@@ -108,6 +108,7 @@ export {
   SHIPPING_STEPS,
   PICKUP_STEPS,
 } from './order-progress.js'
+export { normalizeTrackingView, visibleTrackingShipments } from './tracking.js'
 export { dataExportBytes, isAccountDeleteBlocked, isReauthRequired, safeExportFilename } from './account-settings.js'
 export type {
   AccountDeleteInput,

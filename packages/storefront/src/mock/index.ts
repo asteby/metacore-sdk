@@ -1789,6 +1789,35 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       cache: 'private',
     }
   })
+  /**
+   * Public "where is my order" (contract `track`): order number + the email of the order, or the guide. Same 404 for
+   * an unknown order, a wrong email, an unknown guide or a pickup order. Order + email right but no parcel yet: 200
+   * with `status: 'pending'` (or `cancelled`) and `shipments: []`. Sandbox shipments are dropped, as the real server
+   * does in production.
+   */
+  route('POST', '/customer/track', 'orders:read', ({ body }) => {
+    const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')
+    const number = text(body.order_number, 64).replace(/^#/, '').toLowerCase()
+    const email = text(body.email, 254).toLowerCase()
+    const guide = text(body.tracking_number, 64).replace(/\s+/g, '').toLowerCase()
+    const byOrder = !!number && !!email
+    if (!byOrder && !guide) throw new HttpError(400, 'validation', 'order_number and email, or tracking_number, are required', 'order_number')
+    const miss = () => new HttpError(404, 'not_found', 'No shipment matches those details')
+    const order = byOrder
+      ? state.orders.find((o) => o.number.toLowerCase() === number && !!o.customer_id && state.customers.find((c) => c.id === o.customer_id)?.email?.toLowerCase() === email)
+      : state.orders.find((o) => (o.shipments ?? []).some((s) => !isTestShipment(s) && (s.tracking_number ?? '').toLowerCase() === guide))
+    if (!order || order.delivery_method === 'pickup') throw miss()
+    const shipments = orderShipments(order)
+      .filter((s) => !isTestShipment(s))
+      .filter((s) => byOrder || (s.tracking_number ?? '').toLowerCase() === guide)
+      .map((s) => ({ ...s, label_url: s.kind === 'return' ? (s.label_url ?? null) : null, events: sortTrackingEvents(s.events) }))
+    if (shipments.length === 0) {
+      if (!byOrder) throw miss()
+      return { body: { order_number: order.number, status: ['cancelled', 'refunded'].includes(order.status) ? 'cancelled' : 'pending', shipments: [] }, cache: 'private' }
+    }
+    const status = shipmentsStatus({ ...order, shipments, shipments_summary: undefined } as Order) ?? shipments[0]!.status
+    return { body: { order_number: byOrder ? order.number : null, status, shipments }, cache: 'private' }
+  })
   const findOrder = (headers: Headers, id: string) => {
     const c = requireCustomer(headers)
     return requireNode(state.orders.find((o) => o.id === id && o.customer_id === c.id), `Order ${id}`, 'id')

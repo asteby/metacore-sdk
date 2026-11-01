@@ -1,4 +1,4 @@
-import type { TrackingView } from '@asteby/storefront'
+import type { ShipmentEvent, ShipmentMap } from '@asteby/storefront'
 import { isValidPoint } from '@asteby/storefront/geo'
 import { useEffect, useState } from 'react'
 import { str } from '../account/orders-ui.js'
@@ -11,11 +11,17 @@ export type TrackingGeocoder = (place: string) => Promise<{ lat: number; lng: nu
 
 const MAX_GEOCODED = 8
 
+/** One parcel's scans and map: a `Shipment` of the tracking view (or of an order), or the old flat tracking shape. */
+export type TrackingParcel = {
+  events?: readonly (ShipmentEvent & { lat?: number | null; lng?: number | null })[] | null
+  map?: ShipmentMap | null
+}
+
 /**
  * The route the server already knows: the `map.path` hints when it sent them, else the scans that carry `lat` / `lng`.
  * Oldest first, consecutive repeats dropped. Empty when the carrier reports no coordinates.
  */
-export function trackingPoints(tracking: Pick<TrackingView, 'events' | 'map'> | null | undefined): TrackingPoint[] {
+export function trackingPoints(tracking: TrackingParcel | null | undefined): TrackingPoint[] {
   if (!tracking) return []
   const out: TrackingPoint[] = []
   const push = (p: TrackingPoint) => {
@@ -38,7 +44,7 @@ export function trackingPoints(tracking: Pick<TrackingView, 'events' | 'map'> | 
 }
 
 /** The distinct places of the scans, oldest first (what a geocoder would be asked about). */
-export function trackingPlaces(tracking: Pick<TrackingView, 'events'> | null | undefined): string[] {
+export function trackingPlaces(tracking: Pick<TrackingParcel, 'events'> | null | undefined): string[] {
   const seen = new Set<string>()
   const places: string[] = []
   for (const e of [...(tracking?.events ?? [])].reverse()) {
@@ -52,7 +58,7 @@ export function trackingPlaces(tracking: Pick<TrackingView, 'events'> | null | u
 }
 
 /** Known points, or — with a `geocode` — the scans' places turned into points (cancelled on unmount; a failed place is skipped). */
-export function useTrackingPoints(tracking: TrackingView | null | undefined, geocode?: TrackingGeocoder): TrackingPoint[] {
+export function useTrackingPoints(tracking: TrackingParcel | null | undefined, geocode?: TrackingGeocoder): TrackingPoint[] {
   const known = trackingPoints(tracking)
   const [found, setFound] = useState<TrackingPoint[]>([])
   const places = known.length === 0 && geocode ? trackingPlaces(tracking) : []
