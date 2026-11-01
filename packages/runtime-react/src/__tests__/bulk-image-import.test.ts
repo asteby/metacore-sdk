@@ -6,7 +6,7 @@ import {
     summarizePreview, type ParentRef,
 } from '../bulk-image-import'
 
-const parent = (id: string, sku: string, max = 0, count = 0): ParentRef => ({ id, sku, label: sku, existingMaxPosition: max, existingCount: count })
+const parent = (id: string, sku: string, max = -1, count = 0): ParentRef => ({ id, sku, label: sku, existingMaxPosition: max, existingCount: count })
 const map = (...ps: ParentRef[]) => new Map(ps.map((p) => [p.sku.toLowerCase(), p]))
 const inp = (path: string, w = 800, h = 800) => ({ path, size: 1000, width: w, height: h })
 
@@ -35,7 +35,7 @@ describe('buildPreview', () => {
         const a1 = rows.find((r) => r.path === 'A100.jpg')!
         const a2 = rows.find((r) => r.path === 'A100_2.jpg')!
         expect([a1.position, a2.position]).toEqual([3, 4])
-        expect(rows.find((r) => r.path === 'B200.jpg')!.position).toBe(1)
+        expect(rows.find((r) => r.path === 'B200.jpg')!.position).toBe(0)
     })
     it('SKU no encontrado, baja resolución, duplicado e inválida', () => {
         const rows = buildPreview(
@@ -61,7 +61,7 @@ describe('buildPreview', () => {
         const rows = buildPreview([inp('B200_2.jpg'), inp('B200.jpg')], map(B))
         const sel = selectForImport(rows, new Set())
         const pos = Object.fromEntries(sel.map((r) => [r.path, r.position]))
-        expect(pos).toEqual({ 'B200.jpg': 1, 'B200_2.jpg': 2 })
+        expect(pos).toEqual({ 'B200.jpg': 0, 'B200_2.jpg': 1 })
         expect(Object.fromEntries(rows.map((r) => [r.path, r.position]))).toEqual(pos)
     })
     it('SKU_0 y SKU_01 cuentan como orden 1 y chocan con SKU.jpg', () => {
@@ -77,7 +77,7 @@ describe('buildPreview', () => {
         const first = rows.find((r) => r.path === 'B200.jpg')!
         const sel = selectForImport(rows, new Set([first.key]))
         expect(sel).toHaveLength(1)
-        expect(sel[0].position).toBe(1)
+        expect(sel[0].position).toBe(0)
     })
 })
 
@@ -95,7 +95,7 @@ describe('buildChildPayload / deriveBulkImageTarget', () => {
         const t = deriveBulkImageTarget({ kind: 'one_to_many', through: 'product_images', foreign_key: 'product_id' }, meta)!
         expect(t).toMatchObject({ imageKey: 'url', widthKey: 'width', heightKey: 'height', positionKey: 'position', storagePath: 'products' })
         const [row] = buildPreview([inp('A.jpg', 640, 480)], map(parent('1', 'A')))
-        expect(buildChildPayload(t, row, '/f/a.jpg')).toEqual({ url: '/f/a.jpg', product_id: '1', position: 1, width: 640, height: 480 })
+        expect(buildChildPayload(t, row, '/f/a.jpg')).toEqual({ url: '/f/a.jpg', product_id: '1', position: 0, width: 640, height: 480 })
     })
     it('sin la FK declarada en el hijo = null (el filtro in: se ignoraría)', () => {
         expect(deriveBulkImageTarget({ kind: 'one_to_many', through: 'pi', foreign_key: 'nope' }, meta)).toBeNull()

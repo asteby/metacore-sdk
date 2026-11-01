@@ -269,7 +269,7 @@ export function BulkImageDialog({ open, onOpenChange, model, target, skuKey, dat
                             id: String(r.id),
                             sku,
                             label: String(r.name ?? r.title ?? r.label ?? sku),
-                            existingMaxPosition: 0,
+                            existingMaxPosition: -1,
                             existingCount: 0,
                         })
                     }
@@ -540,7 +540,7 @@ export function BulkImageDialog({ open, onOpenChange, model, target, skuKey, dat
                                                 </TableCell>
                                                 <TableCell className="text-xs break-all">{r.path}<div className="text-muted-foreground">{r.width && r.height ? `${r.width}×${r.height}` : ''}</div></TableCell>
                                                 <TableCell className="text-xs">{r.parent ? <>{r.parent.label}<div className="text-muted-foreground">{r.sku}{r.parent.existingCount ? ` · ${r.parent.existingCount} ${t('bulk_images.already', { defaultValue: 'ya tiene' })}` : ''}</div></> : '—'}</TableCell>
-                                                <TableCell className="text-xs">{isImportable(r) && !skip ? r.position : '—'}</TableCell>
+                                                <TableCell className="text-xs">{isImportable(r) && !skip && typeof r.position === 'number' ? (r.position === 0 ? `1 · ${t('bulk_images.main', { defaultValue: 'Principal' })}` : r.position + 1) : '—'}</TableCell>
                                                 <TableCell className="text-xs">
                                                     {it ? (
                                                         it.status === 'done' ? <span className="text-emerald-600 inline-flex items-center gap-1"><Check className="size-3" />{t('bulk_images.uploaded', { defaultValue: 'Subida' })}</span>

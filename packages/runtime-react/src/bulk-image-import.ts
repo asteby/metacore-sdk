@@ -146,7 +146,7 @@ export interface ParentRef {
     id: string
     label: string
     sku: string
-    /** Mayor `position` ya cargada en su galería (0 si no tiene fotos). */
+    /** Mayor `position` ya cargada en su galería (-1 si no tiene fotos: la galería es de base 0). */
     existingMaxPosition: number
     existingCount: number
 }
@@ -253,7 +253,7 @@ export function buildPreview(
     for (const list of byParent.values()) {
         list.sort((a, b) => (a.order ?? 1) - (b.order ?? 1) || a.path.localeCompare(b.path, undefined, { numeric: true }))
         list.forEach((r, i) => {
-            r.position = (r.parent?.existingMaxPosition ?? 0) + i + 1
+            r.position = (r.parent?.existingMaxPosition ?? -1) + i + 1
         })
     }
     return rows
@@ -319,7 +319,7 @@ export function buildChildPayload(
         [target.imageKey]: url,
         [target.foreignKey]: row.parent!.id,
     }
-    if (target.positionKey && row.position) out[target.positionKey] = row.position
+    if (target.positionKey && typeof row.position === 'number') out[target.positionKey] = row.position
     if (target.widthKey && row.width) out[target.widthKey] = Math.round(row.width)
     if (target.heightKey && row.height) out[target.heightKey] = Math.round(row.height)
     return out
