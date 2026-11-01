@@ -313,6 +313,7 @@ function OneToManyRelation({
     // resolverla dispararía un segundo fetch de datos por cada montaje.
     const metadataRef = useRef<TableMetadata | null>(metadata)
     metadataRef.current = metadata
+    const fetchPageRef = useRef<((p: number, append: boolean, silent?: boolean) => Promise<void>) | null>(null)
 
     // Debounce del buscador: cada tecla no puede pegarle al servidor.
     useEffect(() => {
@@ -386,10 +387,15 @@ function OneToManyRelation({
                 metadataRef.current ? Promise.resolve(null) : api.get(`/metadata/table/${model}`),
                 api.get(dataEndpoint, { params }),
             ])
+            let refetchOrdered = false
             if (metaRes && (metaRes as any).data?.success) {
                 const fresh = (metaRes as { data: ApiResponse<TableMetadata> }).data.data
                 setMetadata(fresh)
+                metadataRef.current = fresh
                 cacheMetadata(model, fresh, { scope: askedScope })
+                // Cold cache: this page went out before we knew the child has a
+                // gallery / sortable position — ask again in that order and size.
+                refetchOrdered = !append && (!!relationGalleryColumn(fresh) || relationPositionSortable(fresh))
             }
             const list = (dataRes as { data: ApiResponse<any[]> }).data
             setFetchErrorStatus(null)
@@ -401,6 +407,9 @@ function OneToManyRelation({
                 else if (!append) setTotal(fetched.length)
                 setExhausted(fetched.length < REL_PAGE_SIZE)
             }
+            if (refetchOrdered) {
+                void fetchPageRef.current?.(1, false, true)
+            }
         } catch (err) {
             console.error('DynamicRelation fetch error', err)
             setFetchErrorStatus((err as { response?: { status?: number } })?.response?.status ?? 0)
@@ -410,6 +419,8 @@ function OneToManyRelation({
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [api, dataEndpoint, foreignKey, parentId, filtersKey, model, cacheMetadata, debouncedSearch])
+
+    fetchPageRef.current = fetchPage
 
     // Recarga desde la primera página. Es lo que corren create/edit/delete.
     const fetchAll = useCallback(async () => {

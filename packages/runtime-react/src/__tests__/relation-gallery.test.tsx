@@ -136,6 +136,16 @@ describe('DynamicRelation — galería', () => {
         expect(api.put).toHaveBeenCalledWith('/data/product_images/img_a', { position: 1 })
     })
 
+    it('en frío, tras conocer la metadata, vuelve a pedir ordenado y completo', async () => {
+        const api = mockApi(true)
+        renderPanel(api, 'product_images_cold')
+        await waitFor(() => {
+            const lists = api.get.mock.calls.filter((c: any[]) => c[0] === '/data/product_images_cold')
+            expect(lists.length).toBe(2)
+            expect(lists[1][1].params).toMatchObject({ sortBy: 'position', per_page: 200 })
+        })
+    })
+
     it('lista ordenada por position en el servidor una vez conocida la metadata', async () => {
         const api = mockApi(true)
         renderPanel(api)
