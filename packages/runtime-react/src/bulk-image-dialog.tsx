@@ -295,6 +295,10 @@ export function BulkImageDialog({ open, onOpenChange, model, target, skuKey, dat
                             if (got.length < PAGE_SIZE) break
                         }
                     }
+                    // Fotos existentes sin posición: las nuevas van detrás, nunca delante.
+                    for (const p of byId.values()) {
+                        if (p.existingCount > 0 && p.existingMaxPosition < p.existingCount - 1) p.existingMaxPosition = p.existingCount - 1
+                    }
                 }
 
                 setRows(buildPreview(inputs, parents, { minLongSide, maxSize: target.maxSize }))
