@@ -20,6 +20,7 @@ export default defineConfig({
     postal: 'src/postal/index.ts',
     tracking: 'src/tracking/index.ts',
     contact: 'src/contact/index.ts',
+    product: 'src/product/index.ts',
     ui: 'src/ui/index.ts',
   },
   format: ['esm', 'cjs'],

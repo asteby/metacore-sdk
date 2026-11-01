@@ -217,7 +217,18 @@
         "default": "./dist/contact.cjs"
       }
     },
-    "./contact.css": "./dist/contact.css"
+    "./contact.css": "./dist/contact.css",
+    "./product": {
+      "import": {
+        "types": "./dist/product.d.ts",
+        "default": "./dist/product.js"
+      },
+      "require": {
+        "types": "./dist/product.d.cts",
+        "default": "./dist/product.cjs"
+      }
+    },
+    "./product.css": "./dist/product.css"
   },
   "sideEffects": false,
   "engines": {

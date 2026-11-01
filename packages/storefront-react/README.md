@@ -902,6 +902,40 @@ export default function Rastreo({ actionData }: Route.ComponentProps) {
 - **Estados**: `ShipmentTracker` resuelve `loading` / `empty` / `error` (con `onRetry`) / `ready`; una incidencia (`exception`, `lost`, `returned`) se anuncia como aviso (`role="status"`), no como fallo.
 - `ShipmentCard` y `ShipmentDetail` (pedidos) usan `TrackingEventList` por dentro, con el mismo DOM de siempre.
 
+## Galería de producto (`@asteby/storefront-react/product`)
+
+Una sola galería de ficha para todas las tiendas. Detecta cuántas imágenes manda OPS y se comporta según el caso:
+
+| Imágenes | Qué pinta |
+|---|---|
+| 0 | `placeholder` (p. ej. el mockup de `ProductImage` con `image={null}`) o una caja neutra con nombre accesible («Sin imagen: …») |
+| 1 | la imagen sola: sin miniaturas, sin botones, sin contador |
+| 2 o más | carrusel con scroll-snap (se desliza con el dedo y funciona sin JavaScript), botones anterior/siguiente, contador «2 de 5» anunciado a lectores de pantalla, teclado (←/→, Inicio/Fin con el carrusel enfocado) y tira de miniaturas |
+
+```tsx
+import { ProductGallery } from '@asteby/storefront-react/product'
+import { ProductImage } from '@asteby/storefront-react/mockups'
+import '@asteby/storefront-react/product.css'
+
+const { selectedVariant } = useProductOptions(product, { searchParams })
+<ProductGallery
+  product={product}                    // images (o featured_image) y title
+  variant={selectedVariant}            // su imagen pasa a ser la activa
+  loader={imageLoader}                 // opcional: srcset de la tienda (WebP del servidor…)
+  placeholder={<ProductImage product={product} image={null} />}
+  classNames={{ root: 'mi-galeria' }}
+/>
+```
+
+- **Orden**: el de `product.images` (OPS ya las manda por `position`); `images` para pasar una lista propia (p. ej. las informativas al final). URLs vacías o repetidas se descartan.
+- **Variante**: la imagen activa es la primera con `variant_id === variant.id`; si no hay, la que tiene la URL de `variant.image`; si la lista no la trae, se agrega al principio. Al cambiar de variante se desliza a ella; con la variante en la URL arranca en ella (y esa es la imagen con `priority`).
+- **Fotos chicas**: con ancho y alto conocidos y lado largo ≤ `lowResMax` (300 px), o `low_res: true`, llevan `data-low-res` y se muestran a tamaño real, centradas y sin estirar (`object-fit: scale-down`); el `srcset` nunca pide más que su tamaño. Sin medidas no se asume nada.
+- **Sin saltos de diseño**: todas las imágenes llevan `width`/`height` y la caja tiene proporción fija (`--sf-gallery-ratio`, 1/1).
+- **Imágenes**: `loader` arma el `srcset` (el `?width=` del SDK por omisión; `null` lo apaga); `sources(image, widths)` devuelve `<source>` para un `<picture>` (AVIF/WebP). `widths`, `sizes`, `thumbnailWidths`, `thumbnailSizes`. `alt` vacío de OPS → el título del producto; las miniaturas son decorativas (el botón lleva el nombre).
+- **Estilo** (`product.css`, opcional): `--sf-gallery-ratio`, `-bg`, `-radius`, `-border`, `-pad`, `-gap`, `-thumb`, `-accent`, `-control-bg`, `-control-fg`. `classNames`: `root`, `viewport`, `track`, `slide`, `image`, `counter`, `previous`, `next`, `thumbnails`, `thumbnail`, `thumbnailImage`, `placeholder`. Respeta `prefers-reduced-motion`; los controles no se imprimen.
+- `onIndexChange(index, image)`, textos es/en con `locale` y `messages`. Helpers puros: `galleryImages`, `variantImageIndex`, `isLowResImage`.
+- Mock: `set-sartenes` trae 5 imágenes (la 4.ª de 100×100) para probar el caso «varias» y el de foto chica.
+
 ## Contacto: teléfono y burbuja de WhatsApp (`@asteby/storefront-react/contact`)
 
 Un solo lugar para el teléfono y el WhatsApp de cualquier tienda y cualquier giro. Sin número configurado **no se pinta nada**, así que una tienda que no lo use no cambia.
