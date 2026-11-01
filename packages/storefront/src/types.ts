@@ -556,6 +556,9 @@ export type CheckoutPayment = {
   attempts_left?: number | null
 }
 
+/** 1.28.0: where the automatic refund of an extra or unhonourable payment is. `refund_failed`: the store is reviewing it. */
+export type CheckoutRefundStatus = 'refund_pending' | 'refunded' | 'refund_failed'
+
 export type CheckoutInfo = {
   /** Checkout session id; use it with `payment.instructions`. */
   id: string
@@ -569,9 +572,14 @@ export type CheckoutInfo = {
   /** 1.27.0: no new payment of this purchase can start until then (an earlier attempt is still alive). */
   pay_blocked_until?: string | null
   /** 1.28.0: an approved payment that could not be honoured, or a second one, is refunded automatically. */
-  refund_status?: 'refund_pending' | 'refunded' | 'refund_failed' | null
+  refund_status?: CheckoutRefundStatus | null
   /** 1.28.0: the checkout of this purchase that was paid (this one, or another of its `replaces_checkout_id` chain). */
   paid_checkout_id?: string | null
+  /**
+   * 1.28.0: the buyer cancelled this checkout but the bank approved the payment afterwards, so the order was created anyway
+   * (status `paid`). Absent or `false` otherwise. Tell the buyer; never show it as a cancelled order.
+   */
+  honored_after_cancel?: boolean
 }
 
 export type CheckoutResult = {
@@ -607,9 +615,11 @@ export type CartCheckoutState = {
    */
   pay_blocked_until?: string | null
   /** An approved payment that could not be honoured (or a second one) is refunded automatically. */
-  refund_status?: 'refund_pending' | 'refunded' | 'refund_failed' | null
+  refund_status?: CheckoutRefundStatus | null
   /** 1.28.0: the checkout of this purchase that was paid. */
   paid_checkout_id?: string | null
+  /** 1.28.0: the payment was approved after the buyer cancelled and the order was created anyway. */
+  honored_after_cancel?: boolean
 }
 
 /** Why the buyer cancels a checkout whose payment is not approved (`checkouts.cancel`). */
