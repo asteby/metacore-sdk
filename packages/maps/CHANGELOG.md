@@ -1,5 +1,12 @@
 # @asteby/metacore-maps
 
+## 0.2.22
+
+### Patch Changes
+
+- Updated dependencies [37bcb7e]
+  - @asteby/storefront@0.34.0
+
 ## 0.2.21
 
 ### Patch Changes
