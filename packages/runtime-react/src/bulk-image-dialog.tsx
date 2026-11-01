@@ -1,7 +1,7 @@
 // BulkImageImportButton — carga masiva de imágenes a nivel catálogo.
 //
-// Botón + asistente (elegir ZIP/carpeta → vista previa → importar con
-// progreso → deshacer lote) para cualquier modelo con una galería declarada
+// Botón que abre el asistente (elegir ZIP/carpeta → vista previa → importar con
+// progreso → deshacer lote, en bulk-image-wizard.tsx, cargado bajo demanda) para cualquier modelo con una galería declarada
 // (relación 1:N cuya columna de imagen trae `display_config.gallery: true`).
 // No renderiza nada si el modelo no tiene galería. Usa solo contratos que ya
 // existen: GET /metadata/table, GET /data/<modelo> (filtro `f_<col>=in:`),
@@ -102,16 +102,16 @@ export function BulkImageImportButton({
             </button>
             {open && (
                 <Suspense fallback={null}>
-                <BulkImageDialog
-                    open={open}
-                    onOpenChange={setOpen}
-                    model={model}
-                    target={target}
-                    skuKey={skuKey}
-                    dataBase={dataBase}
-                    minLongSide={minLongSide}
-                    onChange={onChange}
-                />
+                    <BulkImageDialog
+                        open={open}
+                        onOpenChange={setOpen}
+                        model={model}
+                        target={target}
+                        skuKey={skuKey}
+                        dataBase={dataBase}
+                        minLongSide={minLongSide}
+                        onChange={onChange}
+                    />
                 </Suspense>
             )}
         </>
