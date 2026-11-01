@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createStorefrontClient, StorefrontError } from '../index.js'
+import { createStorefrontClient, isCancelUnsupported, StorefrontError } from '../index.js'
 import { createMockStorefront } from './index.js'
 
 // `checkouts.cancel`: the buyer cancels (or changes details / pays another way) while the payment is NOT approved.
@@ -32,5 +32,33 @@ describe('checkouts.cancel (mock)', () => {
     expect(err).toBeInstanceOf(StorefrontError)
     expect((err as StorefrontError).status).toBe(409)
     expect((err as StorefrontError).code).toBe('already_paid')
+  })
+})
+
+describe('checkouts.cancel on a server without the route', () => {
+  const res = (status: number, body: unknown) => new Response(body === null ? '' : JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+  const client = (handler: (url: string, init?: RequestInit) => Response) =>
+    createStorefrontClient({ baseUrl: 'https://ops.example/api/gw', token: 'sk_test', fetch: (async (u: string | URL | Request, i?: RequestInit) => handler(String(u), i)) as typeof fetch })
+
+  it('404 on the route but the checkout exists: cancel_unsupported (hide the button)', async () => {
+    const sf = client((url, init) =>
+      init?.method === 'POST'
+        ? res(404, { error: { code: 'not_found', message: 'route' } })
+        : res(200, { order: { id: 'o', number: null }, payment: { provider: 'mp', status: 'pending' }, checkout: { id: 'co1', status: 'pending' } }),
+    )
+    const err = await sf.checkouts.cancel('co1').catch((e: unknown) => e)
+    expect(isCancelUnsupported(err)).toBe(true)
+  })
+
+  it('405 (no JSON body): cancel_unsupported', async () => {
+    const sf = client(() => new Response('Method Not Allowed', { status: 405 }))
+    expect(isCancelUnsupported(await sf.checkouts.cancel('co1').catch((e: unknown) => e))).toBe(true)
+  })
+
+  it('404 and the checkout does not exist: the plain not_found', async () => {
+    const sf = client(() => res(404, { error: { code: 'not_found', message: 'checkout' } }))
+    const err = (await sf.checkouts.cancel('nope').catch((e: unknown) => e)) as StorefrontError
+    expect(isCancelUnsupported(err)).toBe(false)
+    expect(err.status).toBe(404)
   })
 })

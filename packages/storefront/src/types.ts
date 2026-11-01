@@ -369,6 +369,11 @@ export type Cart = {
   id: string
   /** `active` while it can be edited; anything else is a cart already turned into an order. */
   status?: string
+  /**
+   * The checkout of a cart already turned into an order (storefront_cart). Absent on an active cart and on older servers.
+   * `close_reason` / `attempt.orphaned` are contract 1.26.0 (absent before).
+   */
+  checkout?: CartCheckoutState | null
   currency_code?: string
   /**
    * Code of the market the cart was created in (contract 1.22.0); `null`/absent without markets or from older servers.
@@ -556,6 +561,25 @@ export type CheckoutResult = {
   order: { id: string; number: string | null }
   payment: CheckoutPayment
   checkout: CheckoutInfo
+}
+
+/** Latest payment attempt of a cart's checkout, as the cart view reports it. */
+export type CartCheckoutAttempt = {
+  number?: number
+  /** `processing | unconfirmed | requires_action | pending | review | paid | failed | expired | cancelled | superseded`... */
+  status: string
+  /** 1.26.0: the buyer cancelled the checkout but the provider would not void this attempt; OPS keeps watching it. */
+  orphaned?: boolean
+}
+
+/** `Cart.checkout`: how the order of a converted cart is doing. */
+export type CartCheckoutState = {
+  id: string
+  /** `pending`, `paid`, `failed`, `cancelled`, `expired`... */
+  status: string
+  /** 1.26.0: why it closed (`buyer_cancelled` when the buyer cancelled it with `checkouts.cancel`). */
+  close_reason?: string | null
+  attempt?: CartCheckoutAttempt | null
 }
 
 /** Why the buyer cancels a checkout whose payment is not approved (`checkouts.cancel`). */

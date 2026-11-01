@@ -106,3 +106,11 @@ const STATUS_CODES: Record<number, StorefrontErrorCode> = {
 export function defaultCodeForStatus(status: number): StorefrontErrorCode {
   return STATUS_CODES[status] ?? (status >= 500 ? 'server_error' : 'invalid_response')
 }
+
+/** `StorefrontError.code` of `checkouts.cancel` on a server without the route (storefront_cart before contract 1.26.0). */
+export const CANCEL_UNSUPPORTED = 'cancel_unsupported'
+
+/** `checkouts.cancel` is not available on this server: hide "cancel / change details / pay another way". */
+export function isCancelUnsupported(err: unknown): boolean {
+  return err instanceof StorefrontError && err.code === CANCEL_UNSUPPORTED
+}

@@ -1,5 +1,5 @@
 import type { AccountDeleteInput, CustomerSessionInfo, DataExportFile, ReauthInput, ReauthResult } from './account-settings.js'
-import { StorefrontError, defaultCodeForStatus } from './errors.js'
+import { CANCEL_UNSUPPORTED, StorefrontError, defaultCodeForStatus } from './errors.js'
 import { isValidPoint, type GeoPoint } from './geo.js'
 import { isTokenPublishable } from './money.js'
 import { normalizeTrackingView } from './tracking.js'
@@ -666,8 +666,21 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
        * not void is watched and, if approved late, flagged for staff instead of creating a second order. Idempotent.
        * Needs a server token (`checkout:write`) and storefront_cart with the route (older servers answer 404).
        */
-      cancel: (id: string, input: { reason?: CheckoutCancelReason } = {}, options?: WriteOptions) =>
-        write<CheckoutCancelResult>('POST', `/storefront/checkouts/${enc(id)}/cancel`, input, options),
+      cancel: async (id: string, input: { reason?: CheckoutCancelReason } = {}, options?: WriteOptions): Promise<CheckoutCancelResult> => {
+        try {
+          return await write<CheckoutCancelResult>('POST', `/storefront/checkouts/${enc(id)}/cancel`, input, options)
+        } catch (err) {
+          // A server without the route (storefront_cart < contract 1.26.0) answers 404/405 there. A 404 is also "no such
+          // checkout": the checkout is read to tell them apart. Without the route: `cancel_unsupported`
+          // (`isCancelUnsupported`), so the shop hides "cancel" instead of showing a broken button.
+          if (!(err instanceof StorefrontError) || (err.status !== 404 && err.status !== 405)) throw err
+          if (err.status === 404) {
+            const found = await getOrNull<CheckoutResult>(`/storefront/checkouts/${enc(id)}`, undefined, options).catch(() => undefined)
+            if (found === null) throw err
+          }
+          throw new StorefrontError({ status: err.status, code: CANCEL_UNSUPPORTED, message: 'checkouts.cancel: this server does not support cancelling a checkout', url: err.url })
+        }
+      },
     },
 
     /**
