@@ -44,6 +44,7 @@ import { ExportDialog } from './dialogs/export'
 import { ImportDialog } from './dialogs/import'
 import { getModelExtension } from './model-extension-registry'
 import { ModelActionToolbar } from './model-action-toolbar'
+import { BulkImageImportButton } from './bulk-image-dialog'
 import { resolveListPrimaryAction } from './list-primary-action'
 import { useCan, modelCapability } from './permissions-context'
 import type { DocumentFormsManifest, TableMetadata } from './types'
@@ -291,6 +292,7 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
                                 {strings.import}
                             </button>
                         )}
+                        {metadata && !scoped.hideCreate && can(modelCapability(model, 'create')) && <BulkImageImportButton model={model} metadata={metadata} onChange={handleRefresh} />}
                         {ext?.toolbarExtras && <ext.toolbarExtras model={model} onRefresh={handleRefresh} />}
                         {toolbarExtras}
                         <ModelActionToolbar
