@@ -45,6 +45,7 @@
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@tanstack/react-virtual": "^3.14.13",
+    "fflate": "0.8.3",
     "zod": "^4.3.0"
   },
   "peerDependencies": {

@@ -890,3 +890,15 @@ export {
     type SplitActions,
 } from './record-actions'
 export * from './capability-providers'
+export {
+    BulkImageImportButton,
+    BulkImageDialog,
+    type BulkImageImportButtonProps,
+} from './bulk-image-dialog'
+export {
+    buildPreview as buildBulkImagePreview,
+    parseImageName as parseBulkImageName,
+    deriveBulkImageTarget,
+    type BulkImageTarget,
+    type BatchLog as BulkImageBatchLog,
+} from './bulk-image-import'
