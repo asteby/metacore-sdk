@@ -114,3 +114,17 @@ export const CANCEL_UNSUPPORTED = 'cancel_unsupported'
 export function isCancelUnsupported(err: unknown): boolean {
   return err instanceof StorefrontError && err.code === CANCEL_UNSUPPORTED
 }
+
+/**
+ * When a new payment may start again after `409 payment_in_progress` (an earlier attempt still alive at the provider):
+ * `details.blocked_until` (RFC 3339) or now + `retry_after`. `null` when the error does not say.
+ */
+export function paymentBlockedUntil(err: unknown, now: number = Date.now()): Date | null {
+  if (!(err instanceof StorefrontError) || err.code !== 'payment_in_progress') return null
+  const raw = (err.details as { blocked_until?: unknown } | undefined)?.blocked_until
+  if (typeof raw === 'string') {
+    const t = Date.parse(raw)
+    if (Number.isFinite(t)) return new Date(t)
+  }
+  return err.retryAfter ? new Date(now + err.retryAfter * 1000) : null
+}

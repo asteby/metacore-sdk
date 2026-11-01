@@ -11,7 +11,7 @@ export type {
   WriteOptions,
 } from './client.js'
 
-export { CANCEL_UNSUPPORTED, StorefrontError, isCancelUnsupported, isStorefrontError } from './errors.js'
+export { CANCEL_UNSUPPORTED, StorefrontError, isCancelUnsupported, isStorefrontError, paymentBlockedUntil } from './errors.js'
 export type { StorefrontErrorInit } from './errors.js'
 
 export { classifyPaymentError, opsSaysNotRetryable, PAYMENT_CHOICE_REFUSED_FIELD } from './payment-errors.js'

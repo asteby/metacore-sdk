@@ -582,7 +582,13 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
     },
 
     carts: {
-      create: (input: { lines?: CartLineInput[] } = {}, options?: WriteOptions) =>
+      /**
+       * `replaces_checkout_id` (server token only, storefront_cart contract > 1.26.0): the new cart replaces a checkout whose
+       * payment is not approved (the buyer cancelled it, changes details or wants another way to pay). While that old
+       * attempt is still alive at the provider, paying the new cart answers `409 payment_in_progress` with
+       * `paymentBlockedUntil(err)` (at most one charge per purchase). Older servers ignore the field.
+       */
+      create: (input: { lines?: CartLineInput[]; replaces_checkout_id?: string } = {}, options?: WriteOptions) =>
         write<Cart>('POST', '/storefront/carts', input, options),
       /** `null` when the cart does not exist (e.g. expired cookie). */
       get: (id: string, options?: RequestOptions) => getOrNull<Cart>(cartPath(id), undefined, options),

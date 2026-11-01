@@ -374,6 +374,11 @@ export type Cart = {
    * `close_reason` / `attempt.orphaned` are contract 1.26.0 (absent before).
    */
   checkout?: CartCheckoutState | null
+  /**
+   * On a cart created with `replaces_checkout_id` (storefront_cart > 1.26.0): no payment can start until then (RFC 3339)
+   * because the replaced checkout's attempt is still alive at the provider. Absent / `null`: nothing blocks.
+   */
+  pay_blocked_until?: string | null
   currency_code?: string
   /**
    * Code of the market the cart was created in (contract 1.22.0); `null`/absent without markets or from older servers.
@@ -570,6 +575,8 @@ export type CartCheckoutAttempt = {
   status: string
   /** 1.26.0: the buyer cancelled the checkout but the provider would not void this attempt; OPS keeps watching it. */
   orphaned?: boolean
+  /** When the provider expires this attempt if nobody finishes it (RFC 3339); absent when unknown or on older servers. */
+  live_until?: string | null
 }
 
 /** `Cart.checkout`: how the order of a converted cart is doing. */
@@ -580,6 +587,14 @@ export type CartCheckoutState = {
   /** 1.26.0: why it closed (`buyer_cancelled` when the buyer cancelled it with `checkouts.cancel`). */
   close_reason?: string | null
   attempt?: CartCheckoutAttempt | null
+  /**
+   * No new payment can start for this purchase until then (RFC 3339): an earlier attempt is still alive at the provider
+   * (a 3DS verification left open). The buyer may change details or cancel, not pay again. On a cart that replaces a
+   * checkout it is the old attempt's. Absent or `null`: nothing blocks.
+   */
+  pay_blocked_until?: string | null
+  /** An approved payment that could not be honoured (or a second one) is refunded automatically. */
+  refund_status?: 'refund_pending' | 'refunded' | 'refund_failed' | null
 }
 
 /** Why the buyer cancels a checkout whose payment is not approved (`checkouts.cancel`). */
@@ -591,7 +606,7 @@ export type CheckoutCancelReason = 'buyer_cancel' | 'change_details' | 'retry_ot
  * `pending_challenge`): OPS keeps checking it and, if it is approved late, flags it for staff (refund) instead of creating
  * the order. Absent on servers without the field.
  */
-export type CheckoutCancelResult = CheckoutResult & { cancel?: { provider_cancelled: boolean; orphaned: boolean } }
+export type CheckoutCancelResult = CheckoutResult & { cancel?: { provider_cancelled: boolean; orphaned: boolean; pay_blocked_until?: string | null } }
 
 
 // ---------------------------------------------------------------------------
