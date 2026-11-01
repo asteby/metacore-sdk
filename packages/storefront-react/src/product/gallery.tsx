@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { Image, type ImageLoader } from '../components.js'
 import { useResolvedLocale } from '../locale.js'
 import { clampIndex, galleryImages, isLowResImage, LOW_RES_MAX, variantImageIndex, type GalleryImage, type GalleryProduct, type GalleryVariant } from './gallery-model.js'
@@ -56,6 +56,9 @@ export type ProductGalleryProps = {
   className?: string
   classNames?: ProductGalleryClassNames
 }
+
+// Layout effect in the browser (no flash of image 0 before jumping to the variant's), plain effect on the server.
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
 
 const MAIN_WIDTHS = [480, 720, 960, 1280] as const
 const THUMB_WIDTHS = [160] as const
@@ -153,8 +156,8 @@ export function ProductGallery({
     scrollToIndex(next, smooth)
   }
 
-  // First paint: a variant chosen by URL starts on its image (instantly). Later variant changes slide to it.
-  useEffect(() => {
+  // First paint: a variant chosen by URL starts on its image (instantly, before paint). Later variant changes slide to it.
+  useIsomorphicLayoutEffect(() => {
     if (!mounted.current) {
       mounted.current = true
       if (activeRef.current > 0) scrollToIndex(activeRef.current, false)
@@ -225,7 +228,8 @@ export function ProductGallery({
   const renderImage = (img: GalleryImage, i: number, thumb: boolean) => {
     const w = thumb ? thumbnailWidths : widths
     const lowRes = isLowResImage(img, lowResMax)
-    const lead = !thumb && priority && i === Math.max(0, target)
+    // Image 0 is what shows before hydration; the variant's is what shows after: both load first.
+    const lead = !thumb && priority && (i === 0 || i === target)
     const picture = sources?.(img, w)?.filter((s) => s.srcSet)
     const el = (
       <Image
@@ -268,7 +272,7 @@ export function ProductGallery({
           data-sf-gallery-track=""
           className={classNames?.track}
           {...(multiple
-            ? { tabIndex: 0, 'aria-label': name, onKeyDown, onScroll, onPointerDown: release, onTouchStart: release, onWheel: release }
+            ? { tabIndex: 0, role: 'group', 'aria-label': m['gallery.track'], onKeyDown, onScroll, onPointerDown: release, onTouchStart: release, onWheel: release }
             : {})}
         >
           {images.map((img, i) => (
@@ -294,8 +298,10 @@ export function ProductGallery({
               className={classNames?.previous}
               aria-label={m['gallery.previous']}
               aria-controls={trackId}
-              disabled={active === 0}
-              onClick={() => select(active - 1)}
+              aria-disabled={active === 0 ? 'true' : undefined}
+              onClick={() => {
+                if (!(active === 0)) select(active - 1)
+              }}
             >
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="m15 18-6-6 6-6" />
@@ -307,8 +313,10 @@ export function ProductGallery({
               className={classNames?.next}
               aria-label={m['gallery.next']}
               aria-controls={trackId}
-              disabled={active === count - 1}
-              onClick={() => select(active + 1)}
+              aria-disabled={active === count - 1 ? 'true' : undefined}
+              onClick={() => {
+                if (!(active === count - 1)) select(active + 1)
+              }}
             >
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="m9 18 6-6-6-6" />

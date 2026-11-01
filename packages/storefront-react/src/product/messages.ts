@@ -2,6 +2,7 @@
 const es = {
   'gallery.label': 'Imágenes de {title}',
   'gallery.roledescription': 'carrusel',
+  'gallery.track': 'Desliza o usa las flechas ← → para ver las imágenes',
   'gallery.slide': 'Imagen {index} de {count}',
   'gallery.slide.roledescription': 'diapositiva',
   'gallery.counter': '{index} de {count}',
@@ -15,6 +16,7 @@ const es = {
 const en: typeof es = {
   'gallery.label': 'Images of {title}',
   'gallery.roledescription': 'carousel',
+  'gallery.track': 'Swipe or use the ← → keys to browse the images',
   'gallery.slide': 'Image {index} of {count}',
   'gallery.slide.roledescription': 'slide',
   'gallery.counter': '{index} of {count}',

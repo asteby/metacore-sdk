@@ -42,6 +42,7 @@
   scroll-snap-align: center;
   scroll-snap-stop: always;
   display: grid;
+  grid-template: 100% / 100%;
   place-items: center;
 }
 [data-sf-gallery-picture] {
@@ -52,6 +53,8 @@
   display: block;
   inline-size: 100%;
   block-size: 100%;
+  min-inline-size: 0;
+  min-block-size: 0;
   padding: var(--sf-gallery-pad, 6%);
   object-fit: contain;
   user-select: none;
@@ -87,7 +90,9 @@
   color: var(--sf-gallery-control-fg, #18181b);
   box-shadow: 0 1px 4px rgb(0 0 0 / 18%);
   cursor: pointer;
+  /* Hidden controls never take a tap (the swipe works over them). */
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.15s ease;
 }
 [data-sf-gallery-nav='previous'] {
@@ -99,18 +104,24 @@
 [dir='rtl'] [data-sf-gallery-nav] > svg {
   scale: -1 1;
 }
-[data-sf-gallery-nav]:disabled {
+[data-sf-gallery-nav]:dir(rtl) > svg {
+  scale: -1 1;
+}
+/* At the ends the button stays (focus is never lost) but dims and does nothing (aria-disabled). */
+[data-sf-gallery-nav][aria-disabled='true'] {
   cursor: default;
-  visibility: hidden;
+  color: color-mix(in srgb, var(--sf-gallery-control-fg, #18181b) 35%, transparent);
 }
 @media (hover: hover) {
   [data-sf-gallery-viewport]:hover [data-sf-gallery-nav] {
     opacity: 1;
+    pointer-events: auto;
   }
 }
 [data-sf-gallery-viewport]:focus-within [data-sf-gallery-nav],
 [data-sf-gallery-nav]:focus-visible {
   opacity: 1;
+  pointer-events: auto;
 }
 [data-sf-gallery-nav]:focus-visible,
 [data-sf-gallery-thumbnail]:focus-visible {

@@ -89,7 +89,8 @@ describe('<ProductGallery /> detects 0, 1 or several images', () => {
     expect(main[0]!.getAttribute('alt')).toBe('Foto 1')
     expect(main[0]!.getAttribute('fetchpriority')).toBe('high')
     expect(main[1]!.getAttribute('loading')).toBe('lazy')
-    expect(getByRole('button', { name: 'Imagen anterior' }).hasAttribute('disabled')).toBe(true)
+    expect(getByRole('button', { name: 'Imagen anterior' }).getAttribute('aria-disabled')).toBe('true')
+    expect(container.querySelector('[data-sf-gallery-track]')!.getAttribute('aria-label')).toBe('Desliza o usa las flechas ← → para ver las imágenes')
     expect((await axe.run(container, AXE)).violations).toEqual([])
   })
 
@@ -123,7 +124,13 @@ describe('<ProductGallery /> navigation', () => {
     expect(counter(container)).toBe('3 de 5')
     fireEvent.keyDown(track, { key: 'End' })
     expect(counter(container)).toBe('5 de 5')
-    expect(getByRole('button', { name: 'Imagen siguiente' }).hasAttribute('disabled')).toBe(true)
+    const next = getByRole('button', { name: 'Imagen siguiente' })
+    expect(next.getAttribute('aria-disabled')).toBe('true')
+    // At the end the button stays focusable and does nothing.
+    next.focus()
+    fireEvent.click(next)
+    expect(document.activeElement).toBe(next)
+    expect(counter(container)).toBe('5 de 5')
     fireEvent.keyDown(track, { key: 'ArrowRight' })
     expect(counter(container)).toBe('5 de 5')
     fireEvent.keyDown(track, { key: 'Home' })
@@ -146,8 +153,11 @@ describe('<ProductGallery /> navigation', () => {
     const list = [img(1), img(2, { variant_id: 'rojo' }), img(3, { variant_id: 'azul' })]
     const { container, rerender } = render(<ProductGallery product={product(list)} variant={{ id: 'rojo', image: img(2) }} />)
     expect(counter(container)).toBe('2 de 3')
-    // The LCP is the image the visitor sees first.
-    expect(container.querySelectorAll('[data-sf-gallery-slide] img')[1]!.getAttribute('fetchpriority')).toBe('high')
+    // Image 0 (visible before hydration) and the variant's (visible after) both load first; the rest wait.
+    const main = container.querySelectorAll('[data-sf-gallery-slide] img')
+    expect(main[0]!.getAttribute('fetchpriority')).toBe('high')
+    expect(main[1]!.getAttribute('fetchpriority')).toBe('high')
+    expect(main[2]!.getAttribute('loading')).toBe('lazy')
     rerender(<ProductGallery product={product(list)} variant={{ id: 'azul', image: null }} />)
     expect(counter(container)).toBe('3 de 3')
     rerender(<ProductGallery product={product(list)} variant={{ id: 'otra', image: img(1) }} />)
