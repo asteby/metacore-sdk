@@ -23,7 +23,7 @@ export type { DiagnoseOptions } from './diagnose.js'
 export { formatMoney, parseMoney, toMoney, isTokenPublishable } from './money.js'
 export type { FormatMoneyOptions } from './money.js'
 
-export { appendParams, productListQuery, parseProductFilters, accountListQuery } from './query.js'
+export { appendParams, productListQuery, parseProductFilters, accountListQuery, clampProductQuery, PRODUCT_QUERY_MAX_LENGTH } from './query.js'
 export type {
   AccountListParams,
   ArticleListParams,
