@@ -54,7 +54,7 @@ export function seoMeta(input: SeoMetaInput): MetaDescriptor[] {
   if (input.siteName) out.push({ property: 'og:site_name', content: input.siteName })
   if (input.locale) out.push({ property: 'og:locale', content: input.locale.replace('-', '_') })
   if (image) {
-    out.push({ property: 'og:image', content: image.url })
+    out.push({ property: 'og:image', content: absoluteUrl(image.url, input.url) ?? image.url })
     if (image.width) out.push({ property: 'og:image:width', content: String(image.width) })
     if (image.height) out.push({ property: 'og:image:height', content: String(image.height) })
     if (image.alt) out.push({ property: 'og:image:alt', content: image.alt })
@@ -116,6 +116,17 @@ function shopUrl(shop: Pick<Shop, 'domain'>, fallback?: string): string | undefi
   return undefined
 }
 
+/** `url` resolved against the page (`base`): JSON-LD and Open Graph need absolute URLs; OPS serves photos as `/storage/…`. */
+function absoluteUrl(url: string | null | undefined, base: string | null | undefined): string | undefined {
+  if (!url) return undefined
+  if (!base) return url
+  try {
+    return new URL(url, base).toString()
+  } catch {
+    return url
+  }
+}
+
 function compact<T extends Record<string, unknown>>(obj: T): T {
   for (const k of Object.keys(obj)) {
     const v = obj[k]
@@ -136,7 +147,9 @@ function withVariant(url: string, variantId: string): string {
 
 /** schema.org `Product` with one `Offer` per variant. */
 export function productJsonLd(product: Product, shop: Pick<Shop, 'name' | 'domain'> | null, url: string, options: ResolveAvailabilityOptions = {}): JsonLdObject {
-  const images = product.images.length ? product.images.map((i) => i.url) : product.featured_image ? [product.featured_image.url] : []
+  const images = (product.images.length ? product.images.map((i) => i.url) : product.featured_image ? [product.featured_image.url] : [])
+    .map((u) => absoluteUrl(u, url))
+    .filter((u): u is string => !!u)
   const offers = product.variants.map((v) => {
     // schema.org availability comes from the server state; the quantity is never published.
     const availability = resolveAvailability(v, options)
@@ -184,7 +197,7 @@ export function organizationJsonLd(shop: Shop, url?: string): JsonLdObject {
     name: shop.name,
     description: shop.description ?? undefined,
     url: site,
-    logo: shop.logo?.url,
+    logo: absoluteUrl(shop.logo?.url, site),
     email: shop.contact.email ?? undefined,
     telephone: shop.contact.phone ?? undefined,
     contactPoint,
@@ -230,7 +243,7 @@ export function localBusinessJsonLd(shop: Shop, options: LocalBusinessOptions = 
       '@id': site ? `${site}#branch-${b.id}` : undefined,
       name: `${shop.name} - ${b.name}`,
       url: site,
-      image: shop.logo?.url,
+      image: absoluteUrl(shop.logo?.url, site),
       telephone: b.phone ?? shop.contact.phone ?? undefined,
       priceRange: options.priceRange,
       address: compact({ '@type': 'PostalAddress', streetAddress: b.address, addressLocality: b.city, addressCountry: shop.country_code }),
@@ -286,12 +299,12 @@ export function collectionJsonLd(
     name: collection.seo.title ?? collection.title,
     description: clean(collection.seo.description ?? collection.description) ?? undefined,
     url,
-    image: collection.image?.url,
+    image: absoluteUrl(collection.image?.url, url),
     mainEntity: {
       '@type': 'ItemList',
       numberOfItems: products.length,
       itemListElement: products.map((p, i) =>
-        compact({ '@type': 'ListItem', position: i + 1, url: productUrl(p.handle), name: p.title, image: p.featured_image?.url }),
+        compact({ '@type': 'ListItem', position: i + 1, url: productUrl(p.handle), name: p.title, image: absoluteUrl(p.featured_image?.url, url) }),
       ),
     },
   })
