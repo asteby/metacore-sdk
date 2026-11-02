@@ -1,5 +1,13 @@
 # @asteby/storefront-react
 
+## 0.51.1
+
+### Patch Changes
+
+- 14e3706: SEO: `productJsonLd`, `collectionJsonLd`, `organizationJsonLd`, `localBusinessJsonLd` y `og:image` de `seoMeta` resuelven las imágenes relativas de OPS (`/storage/…`, `/brand/…`) contra la URL de la página o el dominio de la tienda. Google y las redes piden URLs absolutas; antes salían relativas en el JSON-LD.
+- Updated dependencies [dc92f42]
+  - @asteby/storefront@0.35.1
+
 ## 0.51.0
 
 ### Minor Changes
