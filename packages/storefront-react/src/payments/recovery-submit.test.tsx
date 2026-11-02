@@ -52,6 +52,22 @@ describe('usePaymentRecovery: a new charge clears the notice of the previous def
     expect(ok).toBe(false)
   })
 
+  it.each(['in_review', 'challenge'] as const)('retry() refuses a new key while the payment is %s at the provider', (status) => {
+    const { result } = renderHook(() => usePaymentRecovery({ scope: 'cart_1', storage: null }))
+    act(() => result.current.onEvent({ type: 'result', status, decline_code: null }))
+    let ok = true
+    act(() => {
+      ok = result.current.retry()
+    })
+    expect(ok).toBe(false)
+    // A later definitive answer (rejected) opens the way again.
+    act(() => result.current.onEvent({ type: 'result', status: 'rejected', decline_code: 'declined' }))
+    act(() => {
+      ok = result.current.retry()
+    })
+    expect(ok).toBe(true)
+  })
+
   it('out of stock at checkout shows no "retry payment" notice (the card form points to the cart)', () => {
     const { result } = renderHook(() => usePaymentRecovery({ scope: 'cart_1', storage: null }))
     act(() => result.current.onIssue(issue('other', 'insufficient_stock', 409)))

@@ -31,6 +31,12 @@ export type PaymentMethodMessages = {
   rebuildCart: string
   /** A product ran out while paying: back to the cart to adjust it. */
   reviewCart: string
+  /** Button while a payment is under review (`in_review`) and the shop did not pass `onPending`. */
+  inReview: string
+  /** The bank's answer did not arrive in time: what to do (never "pay again"). */
+  reviewStalled: string
+  /** Reads the payment state again (same attempt, nothing is charged). */
+  checkAgain: string
   noPaymentTitle: string
   noPayment: string
   paymentNote: string
@@ -59,6 +65,9 @@ const ES: PaymentMethodMessages = {
   quoteChanged: 'Las tarifas de envío se actualizaron. Revisa tu envío para ver el total.',
   rebuildCart: 'Volver a armar mi carrito',
   reviewCart: 'Revisar mi carrito',
+  inReview: 'Pago en revisión',
+  reviewStalled: 'Todavía no tenemos la respuesta de tu banco. No vuelvas a pagar: verifica de nuevo en un momento o revisa tu correo.',
+  checkAgain: 'Verificar mi pago',
   noPaymentTitle: 'Por ahora no hay formas de pago disponibles',
   noPayment: 'Intenta de nuevo en unos minutos o escríbenos para completar tu pedido.',
   paymentNote: 'El pago se procesa de forma segura con nuestro proveedor de pagos.',
@@ -91,6 +100,9 @@ const EN: PaymentMethodMessages = {
   quoteChanged: 'Shipping rates were updated. Check your delivery to see the total.',
   rebuildCart: 'Rebuild my cart',
   reviewCart: 'Review my cart',
+  inReview: 'Payment under review',
+  reviewStalled: "We don't have your bank's answer yet. Do not pay again: check again in a moment or look at your email.",
+  checkAgain: 'Check my payment',
   noPaymentTitle: 'No payment methods are available right now',
   noPayment: 'Try again in a few minutes or contact us to complete your order.',
   paymentNote: 'Payment is processed securely by our payment provider.',

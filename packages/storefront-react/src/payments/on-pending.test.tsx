@@ -25,7 +25,7 @@ const adapter: PaymentFormAdapter = {
   },
 }
 
-function setup(withPending: boolean, refresh?: PaymentTransport['refresh']) {
+function setup(withPending: boolean, refresh?: PaymentTransport['refresh'], pollTimeoutMs = 300_000) {
   const onDone = vi.fn()
   const onPending = vi.fn()
   const transport: PaymentTransport = { submit: async () => pending, ...(refresh ? { refresh } : {}) }
@@ -43,7 +43,7 @@ function setup(withPending: boolean, refresh?: PaymentTransport['refresh']) {
         syncDelivery={async () => true}
         onDone={onDone}
         {...(withPending ? { onPending } : {})}
-        brickProps={{ adapter, storage: null, pollIntervalMs: 5 }}
+        brickProps={{ adapter, storage: null, pollIntervalMs: 5, pollTimeoutMs }}
       />
     </form>,
   )
@@ -79,5 +79,56 @@ describe('onPending', () => {
     await pay()
     await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1))
     expect(onDone.mock.calls[0]![0].kind).toBe('approved')
+  })
+  it('without onPending, the button never stays "processing": it reads "under review" and cannot charge again', async () => {
+    const submit = vi.fn(async () => pending)
+    const onDone = vi.fn()
+    const formRef = createRef<HTMLFormElement>()
+    render(
+      <form ref={formRef} onSubmit={(e) => e.preventDefault()}>
+        <PaymentMethodSection
+          choices={buildPayChoices([method])}
+          amount={total}
+          scope="c1"
+          formRef={formRef}
+          payUrl="/p"
+          transport={{ submit, refresh: async () => pending }}
+          onDone={onDone}
+          brickProps={{ adapter, storage: null, pollIntervalMs: 5 }}
+        />
+      </form>,
+    )
+    await pay()
+    const button = await screen.findByRole('button', { name: /Pago en revisión/ })
+    expect(button.getAttribute('aria-disabled')).toBe('true')
+    expect(button.getAttribute('aria-busy')).not.toBe('true')
+    fireEvent.click(button)
+    await new Promise((r) => setTimeout(r, 30))
+    expect(submit).toHaveBeenCalledTimes(1)
+    expect(onDone).not.toHaveBeenCalled()
+  })
+  it('without onPending, when the polling window closes with no answer: a way out ("check my payment") that re-reads and can reach onDone', async () => {
+    let approve = false
+    const { onDone } = setup(false, async () => (approve ? paid : pending), 40)
+    await pay()
+    const again = await screen.findByRole('button', { name: 'Verificar mi pago' })
+    expect(screen.getByText(/Todavía no tenemos la respuesta de tu banco/)).toBeTruthy()
+    expect(onDone).not.toHaveBeenCalled()
+    approve = true
+    fireEvent.click(again)
+    await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1))
+    expect(onDone.mock.calls[0]![0].kind).toBe('approved')
+  })
+  it('without onPending and without a status endpoint: the way out shows at once (never a dead button)', async () => {
+    setup(false)
+    await pay()
+    await screen.findByRole('button', { name: 'Verificar mi pago' })
+    expect(screen.getByRole('button', { name: /Pago en revisión/ }).getAttribute('aria-disabled')).toBe('true')
+  })
+  it('with onPending nothing of this shows (the shop owns the pending screen)', async () => {
+    const { onPending } = setup(true)
+    await pay()
+    await waitFor(() => expect(onPending).toHaveBeenCalledTimes(1))
+    expect(screen.queryByRole('button', { name: 'Verificar mi pago' })).toBeNull()
   })
 })

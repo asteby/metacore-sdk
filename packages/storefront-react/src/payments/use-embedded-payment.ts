@@ -134,11 +134,12 @@ export type EmbeddedPaymentState = {
   /** `true` while the hook reads the payment state in the background after an unknown outcome. The attempt stays the same. */
   verifying: boolean
   /**
-   * `true` once that background check ran out of time with the outcome still unknown (also announced with the
-   * `verify_timeout` event). The form stays locked (same attempt); `recheck()` starts another check.
+   * `true` once that background check ran out of time with the outcome still unknown, or the polling of a payment
+   * under review (`in_review`) closed with no answer (also announced with the `verify_timeout` event). The form stays
+   * locked (same attempt); `recheck()` starts another check.
    */
   verifyTimedOut: boolean
-  /** Starts another background check of an unknown outcome (same attempt, nothing is charged). No-op otherwise. */
+  /** Starts another background check of an unknown outcome or of a payment under review (same attempt, nothing is charged). No-op otherwise. */
   recheck: () => void
   /** Attach to the element the provider renders into. */
   containerRef: (el: HTMLElement | null) => void
@@ -739,6 +740,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     let stop = false
     const ctl = new AbortController()
     const until = Date.now() + pollTimeoutMs
+    if (status === 'in_review') setVerifyTimedOut(false)
     ;(async () => {
       while (!stop && Date.now() < until) {
         await sleep(pollIntervalMs)
@@ -757,12 +759,18 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
           /* keep polling until the window closes */
         }
       }
+      // A payment still under review when the window closes: say so (the page offers "check again"), never a silent
+      // stop. The attempt does not change; `recheck()` opens another window.
+      if (!stop && alive.current && status === 'in_review') {
+        setVerifyTimedOut(true)
+        emit({ type: 'verify_timeout' })
+      }
     })()
     return () => {
       stop = true
       ctl.abort()
     }
-  }, [status, transport, pollIntervalMs, pollTimeoutMs, finish])
+  }, [status, transport, pollIntervalMs, pollTimeoutMs, finish, verifyRound, emit])
 
   // Unknown outcome ("verifying"): the answer was lost or the payment is still in progress. Keep reading the payment state
   // with growing waits for about two minutes. Only a RESOLVED answer ends it (paid, rejected, voucher, challenge...);
@@ -819,7 +827,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   }, [unknownOutcome, transport, verifyTimeoutMs, verifyIntervalMs, pollTimeoutMs, finish, verifyRound, emit])
 
   const recheck = useCallback(() => {
-    if (!(statusRef.current === 'network_error' || (statusRef.current === 'blocked' && errorRef.current?.kind === 'payment_in_progress'))) return
+    if (!(statusRef.current === 'network_error' || statusRef.current === 'in_review' || (statusRef.current === 'blocked' && errorRef.current?.kind === 'payment_in_progress'))) return
     setVerifyRound((n) => n + 1)
   }, [])
 

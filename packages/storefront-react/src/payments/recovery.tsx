@@ -142,7 +142,9 @@ export function usePaymentRecovery(options: UsePaymentRecoveryOptions = {}): Pay
       // The charge may have happened (no answer / another attempt in progress) until a resolved answer arrives.
       if (e.type === 'error') unknownByEvent.current = e.kind === 'network' || e.kind === 'payment_in_progress'
       if (e.type === 'result') {
-        unknownByEvent.current = false
+        // A payment still pending at the provider (under review, or a bank challenge open) may still be charged: no new
+        // key until a later answer settles it.
+        unknownByEvent.current = e.status === 'in_review' || e.status === 'challenge'
         lastIssue.current = null
       }
       if (e.type === 'result' && e.status === 'rejected') setNotice({ kind: 'rejected' })

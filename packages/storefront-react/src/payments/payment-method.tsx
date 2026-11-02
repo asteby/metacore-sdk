@@ -267,6 +267,9 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
   const [processing, setProcessing] = useState(false)
   // The order cannot be paid as it is (reservation expired, or a product ran out while paying): a way back to the cart.
   const [cartExit, setCartExit] = useState<'expired' | 'out_of_stock' | null>(null)
+  // A payment under review kept on this page (no `onPending`): `polling` while the state is read again, `stalled` when
+  // that stopped with no answer (or there is nothing to read it with). The button never stays "processing" forever.
+  const [review, setReview] = useState<'polling' | 'stalled' | null>(null)
   const brick = useRef<PaymentBrickHandle>(null)
 
   const cardChosen = selected?.mode === 'card' && !retryAddress && !addressFirst
@@ -326,6 +329,13 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
     if (e.type === 'submit') setProcessing(true)
     if (e.type === 'tokenize_error' || e.type === 'retry') setProcessing(e.type === 'retry')
     if (e.type === 'result' && e.status === 'rejected') setProcessing(false)
+    if (e.type === 'result') {
+      if (e.status === 'in_review') {
+        setProcessing(false)
+        if (!onPending) setReview(transport.refresh ? 'polling' : 'stalled')
+      } else setReview(null)
+    }
+    if (e.type === 'verify_timeout') setReview((r) => (r ? 'stalled' : r))
     if (e.type === 'error') {
       setProcessing(false)
       if (e.kind === 'price_mismatch') onAmountChanged?.()
@@ -359,6 +369,8 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
   const held = holdLabel !== undefined && holdLabel !== null && holdLabel !== false
   const label: ReactNode = held ? (
     holdLabel
+  ) : review ? (
+    m.inReview
   ) : retryAddress ? (
     m.retryAddress
   ) : addressFirst ? (
@@ -394,6 +406,11 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
     if (!addressFirst && !retryAddress && !deliveryReady && selected) {
       event.preventDefault()
       formRef.current?.reportValidity()
+      return
+    }
+    // A payment under review: never a second charge from this button.
+    if (review) {
+      event.preventDefault()
       return
     }
     // Redirect, cash, plain method, or a card without a usable form: the page form's normal submit.
@@ -508,6 +525,27 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
                     }}
                   />
                 ) : null}
+                {review === 'stalled' ? (
+                  <div role="status" className={cx.status} data-sf-pay-notice="review-stalled">
+                    <p>{m.reviewStalled}</p>
+                    <button
+                      type="button"
+                      className={cx.rebuild}
+                      style={{ minHeight: 44 }}
+                      data-sf-pay-recheck
+                      onClick={() => {
+                        // Same attempt, nothing is charged: read the state again, or (no status endpoint) reload the page,
+                        // whose loader knows the order.
+                        if (transport.refresh) {
+                          setReview('polling')
+                          brick.current?.recheck()
+                        } else if (typeof window !== 'undefined') window.location.reload()
+                      }}
+                    >
+                      {m.checkAgain}
+                    </button>
+                  </div>
+                ) : null}
                 <p className={cx.note}>{m.secureCard}</p>
                 {cartExit && rebuildHref ? Link({ href: rebuildHref, ...(cx.rebuild ? { className: cx.rebuild } : {}), children: cartExit === 'out_of_stock' ? m.reviewCart : m.rebuildCart, ...(testIds.rebuild ? { testId: testIds.rebuild } : {}) }) : null}
               </div>
@@ -537,7 +575,7 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
           kind="pay"
           pendingLabel={held ? label : m.processing}
           disabled={blocked}
-          aria-disabled={blocked || held || (cardActive && !syncFailed && deliveryReady && (!brickReady || !ready || processing)) || undefined}
+          aria-disabled={blocked || held || review !== null || (cardActive && !syncFailed && deliveryReady && (!brickReady || !ready || processing)) || undefined}
           data-sf-pay-method-submit
           {...tid('submit')}
         >
