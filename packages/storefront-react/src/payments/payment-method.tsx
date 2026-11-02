@@ -103,15 +103,17 @@ export type PaymentMethodSectionProps = {
   cardBrands?: readonly string[]
   /** How to print the total on the button. Default `formatMoney`. */
   renderAmount?: (amount: Money) => ReactNode
-  /** Anchor to the cart for the "rebuild" action when the cart expired. Default: plain `<a href>`. */
+  /** Anchor to the cart for the "rebuild" / "review my cart" action (the cart expired, or a product ran out while paying). Default: plain `<a href>`. */
   rebuildHref?: string
   renderLink?: (props: { href: string; className?: string; children: ReactNode; testId?: string }) => ReactNode
-  /** Called once the order is closed in the page (approved, under review or voucher). Navigate to the thank-you page. */
+  /** Called once the order is closed in the page (approved or voucher). Navigate to the thank-you page. Never `in_review`. */
   onDone: (outcome: PaymentOutcome) => void
   /**
    * An answer that is NOT an approved payment but is no rejection either (`in_review`: pending at the provider, e.g. a
-   * Mercado Pago order still in `pending_challenge`). When set, `in_review` comes here INSTEAD of `onDone`: re-read the
-   * checkout and show "we are confirming your payment" (never a success page). Unset: `onDone` as before (compatible).
+   * Mercado Pago order still in `pending_challenge`). It comes here, NEVER to `onDone`: re-read the checkout and show
+   * "we are confirming your payment" (never a success page). Unset: the section stays on the page with the card form's
+   * "payment under review, do not pay again" notice and keeps polling `statusUrl`; an approval later calls `onDone`.
+   * (Before 0.52 an unset `onPending` sent `in_review` to `onDone`, so shops showed "thank you" for an unpaid order.)
    */
   onPending?: (outcome: PaymentOutcome) => void
   /** The server total changed under the buyer: re-read the cart (the card form remounts with the new amount). */
@@ -263,7 +265,11 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
   const [fallback, setFallback] = useState(false)
   const [ready, setReady] = useState(false)
   const [processing, setProcessing] = useState(false)
-  const [expired, setExpired] = useState(false)
+  // The order cannot be paid as it is (reservation expired, or a product ran out while paying): a way back to the cart.
+  const [cartExit, setCartExit] = useState<'expired' | 'out_of_stock' | null>(null)
+  // A payment under review kept on this page (no `onPending`): `polling` while the state is read again, `stalled` when
+  // that stopped with no answer (or there is nothing to read it with). The button never stays "processing" forever.
+  const [review, setReview] = useState<'polling' | 'stalled' | null>(null)
   const brick = useRef<PaymentBrickHandle>(null)
 
   const cardChosen = selected?.mode === 'card' && !retryAddress && !addressFirst
@@ -306,6 +312,12 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
     if (!cardActive) setFormLatched(false)
   }, [cardActive])
   const showBrick = cardActive && !syncFailed && (earlyCard || formLatched || brickReady)
+  // The card form polls a payment under review; if it leaves the page (another row chosen) nobody reads the state any
+  // more: offer the way out instead of a "polling" that never ends.
+  const brickMounted = showBrick || fallback
+  useEffect(() => {
+    if (!brickMounted) setReview((r) => (r === 'polling' ? 'stalled' : r))
+  }, [brickMounted])
   const totalUpdating = showBrick && !brickReady && !(earlyCard && !deliveryReady)
 
   const transport = useMemo(
@@ -323,10 +335,17 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
     if (e.type === 'submit') setProcessing(true)
     if (e.type === 'tokenize_error' || e.type === 'retry') setProcessing(e.type === 'retry')
     if (e.type === 'result' && e.status === 'rejected') setProcessing(false)
+    if (e.type === 'result') {
+      if (e.status === 'in_review') {
+        setProcessing(false)
+        if (!onPending) setReview(transport.refresh ? 'polling' : 'stalled')
+      } else setReview(null)
+    }
+    if (e.type === 'verify_timeout') setReview((r) => (r ? 'stalled' : r))
     if (e.type === 'error') {
       setProcessing(false)
       if (e.kind === 'price_mismatch') onAmountChanged?.()
-      if (e.kind === 'expired') setExpired(true)
+      if (e.kind === 'expired' || e.kind === 'out_of_stock') setCartExit(e.kind)
     }
     onEvent?.(e)
   }
@@ -356,6 +375,8 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
   const held = holdLabel !== undefined && holdLabel !== null && holdLabel !== false
   const label: ReactNode = held ? (
     holdLabel
+  ) : review ? (
+    m.inReview
   ) : retryAddress ? (
     m.retryAddress
   ) : addressFirst ? (
@@ -391,6 +412,11 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
     if (!addressFirst && !retryAddress && !deliveryReady && selected) {
       event.preventDefault()
       formRef.current?.reportValidity()
+      return
+    }
+    // A payment under review: never a second charge from this button.
+    if (review) {
+      event.preventDefault()
       return
     }
     // Redirect, cash, plain method, or a card without a usable form: the page form's normal submit.
@@ -496,20 +522,47 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
                     onEvent={handleEvent}
                     onFallback={() => setFallback(true)}
                     onResult={(o) => {
-                      // Approved or voucher: the order is closed and the receipt is in the cookie. Under review: `onPending`
-                      // when the shop handles it (a payment not approved yet is never a success), else `onDone` as before.
-                      if (o.kind === 'in_review' && onPending) onPending(o)
-                      else if (o.kind === 'approved' || o.kind === 'in_review' || o.kind === 'voucher') onDone(o)
+                      // Approved or voucher: the order is closed and the receipt is in the cookie. Under review (a payment
+                      // NOT approved yet) is never a success: `onPending` when the shop handles it; without it the section
+                      // stays on the page with the card form's "payment under review, do not pay again" state (and the pay
+                      // button, for every row, reads "under review": no second payment, card or cash), and keeps
+                      // reading the payment (`statusUrl`) until it is approved (then `onDone`) or rejected.
+                      if (o.kind === 'in_review') onPending?.(o)
+                      else if (o.kind === 'approved' || o.kind === 'voucher') onDone(o)
                     }}
                   />
                 ) : null}
                 <p className={cx.note}>{m.secureCard}</p>
-                {expired && rebuildHref ? Link({ href: rebuildHref, ...(cx.rebuild ? { className: cx.rebuild } : {}), children: m.rebuildCart, ...(testIds.rebuild ? { testId: testIds.rebuild } : {}) }) : null}
+                {cartExit && rebuildHref ? Link({ href: rebuildHref, ...(cx.rebuild ? { className: cx.rebuild } : {}), children: cartExit === 'out_of_stock' ? m.reviewCart : m.rebuildCart, ...(testIds.rebuild ? { testId: testIds.rebuild } : {}) }) : null}
               </div>
             ) : null}
           </div>
         )
       })}
+
+      {/* Outside the card block: it stays visible whatever row is chosen (switching rows unmounts the card form). */}
+      {review === 'stalled' ? (
+        <div role="status" className={cx.status} data-sf-pay-notice="review-stalled">
+          <p>{m.reviewStalled}</p>
+          <button
+            type="button"
+            className={cx.rebuild}
+            style={{ minHeight: 44 }}
+            data-sf-pay-recheck
+            onClick={() => {
+              // Same attempt, nothing is charged: the mounted card form re-reads the state; otherwise (no status endpoint,
+              // or the form was remounted after switching rows) the page is reloaded and its loader knows the order.
+              const live = brick.current
+              if (transport.refresh && live?.status === 'in_review') {
+                setReview('polling')
+                live.recheck()
+              } else if (typeof window !== 'undefined') window.location.reload()
+            }}
+          >
+            {m.checkAgain}
+          </button>
+        </div>
+      ) : null}
 
       {noPayment ? (
         <div role="alert" className={cx.alert} data-sf-pay-notice="no-payment" {...tid('noPayment')}>
@@ -532,7 +585,7 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
           kind="pay"
           pendingLabel={held ? label : m.processing}
           disabled={blocked}
-          aria-disabled={blocked || held || (cardActive && !syncFailed && deliveryReady && (!brickReady || !ready || processing)) || undefined}
+          aria-disabled={blocked || held || review !== null || (cardActive && !syncFailed && deliveryReady && (!brickReady || !ready || processing)) || undefined}
           data-sf-pay-method-submit
           {...tid('submit')}
         >

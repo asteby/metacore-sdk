@@ -68,6 +68,7 @@ export {
   paymentOutcome,
   paymentNextAction,
   paymentErrorView,
+  isOutOfStockCode,
   formatVoucherExpiry,
   paymentIdempotencyKey,
 } from './payments.js'

@@ -33,6 +33,7 @@ export type PaymentMessageKey =
   | 'error.price_mismatch'
   | 'error.payment_in_progress'
   | 'error.expired'
+  | 'error.out_of_stock'
   | 'error.too_many_attempts'
   | 'error.generic'
   | 'action.retry'
@@ -83,6 +84,7 @@ const ES: PaymentMessages = {
   'error.price_mismatch': 'El total cambió. Revisa el nuevo total y vuelve a pagar.',
   'error.payment_in_progress': 'Ya hay un pago en proceso para este pedido. No vuelvas a pagar; revisa tu correo.',
   'error.expired': 'Tu apartado venció. Vuelve a armar tu carrito.',
+  'error.out_of_stock': 'Uno o más productos de tu carrito se agotaron mientras pagabas. No se hizo ningún cobro. Revisa tu carrito para continuar.',
   'error.too_many_attempts': 'Por seguridad no podemos intentar con más tarjetas. Paga en efectivo o escríbenos.',
   'error.generic': 'No pudimos procesar tu pago. Intenta de nuevo.',
   'action.retry': 'Reintentar',
@@ -132,6 +134,7 @@ const EN: PaymentMessages = {
   'error.price_mismatch': 'The total changed. Review the new total and pay again.',
   'error.payment_in_progress': 'A payment is already in progress for this order. Do not pay again; check your email.',
   'error.expired': 'Your reservation expired. Rebuild your cart.',
+  'error.out_of_stock': 'One or more products in your cart ran out while you were paying. You were not charged. Review your cart to continue.',
   'error.too_many_attempts': 'For security we cannot try more cards. Pay in cash or contact us.',
   'error.generic': 'We could not process your payment. Please try again.',
   'action.retry': 'Retry',
@@ -339,6 +342,7 @@ export type PaymentErrorKind =
   | 'price_mismatch' // total changed: show it, remount, pay again with a NEW attempt
   | 'payment_in_progress' // 409 payment_in_progress: another attempt is paid/pending: do not retry
   | 'expired' // 409: reservation expired
+  | 'out_of_stock' // 409 insufficient_stock: a product ran out at checkout; nothing was charged: back to the cart, no retry
   | 'too_many_attempts' // 429
   | 'generic'
 
@@ -361,6 +365,11 @@ export function paymentErrorView(err: unknown, locale?: string | null, overrides
   if (status === 409 && code === 'payment_in_progress') {
     return { kind: 'payment_in_progress', message: m['error.payment_in_progress'], retrySameAttempt: false, canRetry: false }
   }
+  // 409 insufficient_stock (storefront_cart, when the checkout re-checks the stock while paying): paying again with
+  // another key cannot help; the cart must change first.
+  if (status === 409 && isOutOfStockCode(code)) {
+    return { kind: 'out_of_stock', message: m['error.out_of_stock'], retrySameAttempt: false, canRetry: false }
+  }
   // 409 conflict: that Idempotency-Key was already used with a DIFFERENT payment (e.g. a new card after a reload).
   // Not an outage and not "in progress": start a new attempt.
   if (status === 409) return { kind: 'generic', message: m['error.generic'], retrySameAttempt: false, canRetry: true }
@@ -374,6 +383,11 @@ export function paymentErrorView(err: unknown, locale?: string | null, overrides
     return { kind: 'network', message: m['error.network'], retrySameAttempt: true, canRetry: true }
   }
   return { kind: 'generic', message: m['error.generic'], retrySameAttempt: false, canRetry: true }
+}
+
+/** Codes of a product without enough stock at checkout (`insufficient_stock` from storefront_cart; `out_of_stock` too). */
+export function isOutOfStockCode(code: string | null | undefined): boolean {
+  return code === 'insufficient_stock' || code === 'out_of_stock'
 }
 
 /** `Vence el 5 de noviembre de 2026, 18:00` style text for a voucher deadline; `null` when absent or invalid. */

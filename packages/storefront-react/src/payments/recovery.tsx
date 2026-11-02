@@ -16,6 +16,7 @@ import { paymentRecoveryMessages, type PaymentNoticeKind, type PaymentRecoveryMe
 import type { PaymentIssue } from './resilient-transport.js'
 import type { PaymentEvent } from './use-embedded-payment.js'
 import { useResolvedLocale } from '../locale.js'
+import { isOutOfStockCode } from '@asteby/storefront'
 
 export type PaymentNotice = { kind: PaymentNoticeKind }
 
@@ -33,6 +34,8 @@ export function pickChoice(form: HTMLFormElement | null | undefined, value: stri
 }
 
 const INDETERMINATE = new Set(['confirming', 'verifying', 'transient', 'in_progress'])
+/** Notices of a DEFINITIVE failure of the previous attempt: a new charge makes them stale. */
+const DEFINITIVE_NOTICES: ReadonlySet<PaymentNoticeKind> = new Set<PaymentNoticeKind>(['rejected', 'provider_declined', 'other', 'form_failed'])
 
 export type UsePaymentRecoveryOptions = {
   /** Same `scope` as the payment section (usually the cart id): where the attempt key is kept. */
@@ -89,6 +92,8 @@ export function usePaymentRecovery(options: UsePaymentRecoveryOptions = {}): Pay
     if (!issue) return setNotice((n) => (n?.kind === 'confirming' ? null : n))
     if (issue.kind === 'confirming' || issue.kind === 'verifying') return setNotice({ kind: 'confirming' })
     if (issue.kind === 'merchant_config' || issue.kind === 'stale_checkout' || issue.kind === 'provider_declined') return setNotice({ kind: issue.kind })
+    // A product ran out while paying: the card form says so and points to the cart; "retry payment" cannot help.
+    if (issue.kind === 'other' && isOutOfStockCode(issue.code)) return setNotice((n) => (n?.kind === 'confirming' ? null : n))
     if (issue.kind === 'other') return setNotice({ kind: 'other' })
     // Transient (the transport keeps the same attempt), in progress, rate limit, expired, price change: the form explains it.
     setNotice((n) => (n?.kind === 'confirming' ? null : n))
@@ -126,10 +131,20 @@ export function usePaymentRecovery(options: UsePaymentRecoveryOptions = {}): Pay
           setNotice({ kind: 'form_failed' })
         }
       }
+      // A new charge started from the form (the buyer typed the card again and pressed pay without "retry payment"): the
+      // notice of the previous, definitive failure ("the charge did not go through") no longer applies and would sit next
+      // to the new attempt's "processing" / "your bank needs to verify". An unknown outcome is never forgotten here: its
+      // issue stays, so `retry()` keeps refusing a new key until it resolves.
+      if (e.type === 'submit') {
+        if (!(lastIssue.current && INDETERMINATE.has(lastIssue.current.kind))) lastIssue.current = null
+        setNotice((n) => (n && DEFINITIVE_NOTICES.has(n.kind) ? null : n))
+      }
       // The charge may have happened (no answer / another attempt in progress) until a resolved answer arrives.
       if (e.type === 'error') unknownByEvent.current = e.kind === 'network' || e.kind === 'payment_in_progress'
       if (e.type === 'result') {
-        unknownByEvent.current = false
+        // A payment still pending at the provider (under review, or a bank challenge open) may still be charged: no new
+        // key until a later answer settles it.
+        unknownByEvent.current = e.status === 'in_review' || e.status === 'challenge'
         lastIssue.current = null
       }
       if (e.type === 'result' && e.status === 'rejected') setNotice({ kind: 'rejected' })
