@@ -569,7 +569,7 @@ const transport = useMemo(
 
 **Pago por confirmar: nunca sin salida, nunca éxito falso (todas las tiendas).**
 
-- **Éxito solo con el pago aprobado.** `PaymentMethodSection` llama `onDone` con `approved`, `voucher` y, por compatibilidad, `in_review`. Un `in_review` es un pago SIN aprobar (p. ej. Mercado Pago con la orden en `action_required/pending_challenge`, que OPS puede reportar como `pending`). Pasa `onPending` y ese caso irá ahí, nunca a `onDone`. En el servidor, tu `settle` NO debe cerrar la compra con `in_review`: deja el carrito y el pago en curso para que `/pagar` muestre «pago por confirmar».
+- **Éxito solo con el pago aprobado.** `PaymentMethodSection` llama `onDone` SOLO con `approved` y `voucher`. Un `in_review` es un pago SIN aprobar (p. ej. Mercado Pago con la orden en `action_required/pending_challenge`, que OPS puede reportar como `pending`): va a `onPending`, nunca a `onDone`. Sin `onPending` la sección se queda en la página con el aviso «Tu pago está en revisión… No vuelvas a pagar» y sigue leyendo el pago (`statusUrl`); si se aprueba después, llama `onDone`. (Antes de esta versión, sin `onPending` el `in_review` iba a `onDone` y la tienda mostraba «¡Gracias!» sin pago aprobado.) Recomendado: pasa `onPending`. En el servidor, tu `settle` NO debe cerrar la compra con `in_review`: deja el carrito y el pago en curso para que `/pagar` muestre «pago por confirmar».
 
   ```tsx
   <PaymentMethodSection

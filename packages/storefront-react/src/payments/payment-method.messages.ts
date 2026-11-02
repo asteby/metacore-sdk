@@ -29,6 +29,8 @@ export type PaymentMethodMessages = {
   /** The shipping quote expired or changed: fresh rates are loading. */
   quoteChanged: string
   rebuildCart: string
+  /** A product ran out while paying: back to the cart to adjust it. */
+  reviewCart: string
   noPaymentTitle: string
   noPayment: string
   paymentNote: string
@@ -56,6 +58,7 @@ const ES: PaymentMethodMessages = {
   syncFailed: 'No pudimos actualizar el total con tu entrega. Puedes continuar al sitio del proveedor para pagar con tarjeta.',
   quoteChanged: 'Las tarifas de envío se actualizaron. Revisa tu envío para ver el total.',
   rebuildCart: 'Volver a armar mi carrito',
+  reviewCart: 'Revisar mi carrito',
   noPaymentTitle: 'Por ahora no hay formas de pago disponibles',
   noPayment: 'Intenta de nuevo en unos minutos o escríbenos para completar tu pedido.',
   paymentNote: 'El pago se procesa de forma segura con nuestro proveedor de pagos.',
@@ -87,6 +90,7 @@ const EN: PaymentMethodMessages = {
   syncFailed: "We couldn't update the total with your delivery. You can continue to the provider's site to pay by card.",
   quoteChanged: 'Shipping rates were updated. Check your delivery to see the total.',
   rebuildCart: 'Rebuild my cart',
+  reviewCart: 'Review my cart',
   noPaymentTitle: 'No payment methods are available right now',
   noPayment: 'Try again in a few minutes or contact us to complete your order.',
   paymentNote: 'Payment is processed securely by our payment provider.',

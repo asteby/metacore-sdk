@@ -161,6 +161,13 @@ describe('voucher amount shapes and next step', () => {
 
 describe('paymentErrorView', () => {
   const err = (status: number, code: string) => new StorefrontError({ status, code, message: 'x' })
+  it('out of stock at checkout: clear text (es/en), nothing charged, back to the cart, no retry', () => {
+    const es = paymentErrorView(err(409, 'insufficient_stock'), 'es')
+    expect(es.message).toMatch(/se agotaron/)
+    expect(es.message).toMatch(/No se hizo ningún cobro/)
+    expect(es.message).not.toBe(paymentMessages('es')['error.generic'])
+    expect(paymentErrorView(err(409, 'insufficient_stock'), 'en').message).toMatch(/ran out.*not charged/)
+  })
   it.each([
     [err(0, 'network'), 'network', true, true],
     [err(0, 'timeout'), 'network', true, true],
@@ -170,6 +177,8 @@ describe('paymentErrorView', () => {
     [err(409, 'payment_in_progress'), 'payment_in_progress', false, false],
     [err(409, 'conflict'), 'generic', false, true],
     [err(409, 'expired'), 'expired', false, false],
+    [err(409, 'insufficient_stock'), 'out_of_stock', false, false], // storefront_cart: a product ran out at checkout
+    [err(409, 'out_of_stock'), 'out_of_stock', false, false],
     [err(429, 'rate_limited'), 'too_many_attempts', false, false],
     [err(500, 'server_error'), 'network', true, true], // a 500 with no readable body: the charge may have happened
     [new StorefrontError({ status: 500, code: 'server_error', message: 'x', retryable: false }), 'generic', false, true],

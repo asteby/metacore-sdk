@@ -6,7 +6,8 @@ import type { PaymentAttemptResult, PaymentClient, PaymentMethod } from '@asteby
 import { PaymentMethodSection, buildPayChoices, type PaymentFormAdapter, type PaymentTransport } from './index.js'
 
 // A payment that is not approved (pending at the provider: `in_review`) must never reach a success page. With `onPending`
-// the section hands it there; without it, `onDone` keeps the old behaviour (backward compatible).
+// the section hands it there; without it, the section stays on the page ("under review, do not pay again") and only an
+// approval read later reaches `onDone`.
 
 afterEach(() => cleanup())
 
@@ -14,6 +15,7 @@ const client: PaymentClient = { kind: 'fake', sdk_url: 'https://sdk.example.com/
 const method: PaymentMethod = { key: 'prov', kind: 'provider', default: true, client, options: [{ key: 'card', redirect: false }] }
 const total = { amount: '500.00', currency_code: 'MXN' }
 const pending: PaymentAttemptResult = { payment: { provider: 'mp', status: 'pending' } }
+const paid: PaymentAttemptResult = { payment: { provider: 'mp', status: 'paid', outcome: 'approved' } }
 const adapter: PaymentFormAdapter = {
   kind: 'fake',
   async load() {},
@@ -23,10 +25,10 @@ const adapter: PaymentFormAdapter = {
   },
 }
 
-function setup(withPending: boolean) {
+function setup(withPending: boolean, refresh?: PaymentTransport['refresh']) {
   const onDone = vi.fn()
   const onPending = vi.fn()
-  const transport: PaymentTransport = { submit: async () => pending }
+  const transport: PaymentTransport = { submit: async () => pending, ...(refresh ? { refresh } : {}) }
   const formRef = createRef<HTMLFormElement>()
   render(
     <form ref={formRef} onSubmit={(e) => e.preventDefault()}>
@@ -41,7 +43,7 @@ function setup(withPending: boolean) {
         syncDelivery={async () => true}
         onDone={onDone}
         {...(withPending ? { onPending } : {})}
-        brickProps={{ adapter, storage: null }}
+        brickProps={{ adapter, storage: null, pollIntervalMs: 5 }}
       />
     </form>,
   )
@@ -62,9 +64,20 @@ describe('onPending', () => {
     expect(onPending.mock.calls[0]![0].kind).toBe('in_review')
     expect(onDone).not.toHaveBeenCalled()
   })
-  it('without onPending, onDone as before (compatible)', async () => {
+  it('without onPending, in_review never calls onDone: the page says "under review, do not pay again"', async () => {
     const { onDone } = setup(false)
     await pay()
+    await screen.findByText(/Tu pago está en revisión/)
+    expect(document.querySelector('[data-sf-pay-status="in_review"]')).not.toBeNull()
+    // Give a wrong `onDone` every chance to fire.
+    await new Promise((r) => setTimeout(r, 50))
+    expect(onDone).not.toHaveBeenCalled()
+  })
+  it('without onPending, an approval read later (status polling) reaches onDone as approved', async () => {
+    let reads = 0
+    const { onDone } = setup(false, async () => (++reads >= 2 ? paid : pending))
+    await pay()
     await waitFor(() => expect(onDone).toHaveBeenCalledTimes(1))
+    expect(onDone.mock.calls[0]![0].kind).toBe('approved')
   })
 })

@@ -103,15 +103,17 @@ export type PaymentMethodSectionProps = {
   cardBrands?: readonly string[]
   /** How to print the total on the button. Default `formatMoney`. */
   renderAmount?: (amount: Money) => ReactNode
-  /** Anchor to the cart for the "rebuild" action when the cart expired. Default: plain `<a href>`. */
+  /** Anchor to the cart for the "rebuild" / "review my cart" action (the cart expired, or a product ran out while paying). Default: plain `<a href>`. */
   rebuildHref?: string
   renderLink?: (props: { href: string; className?: string; children: ReactNode; testId?: string }) => ReactNode
-  /** Called once the order is closed in the page (approved, under review or voucher). Navigate to the thank-you page. */
+  /** Called once the order is closed in the page (approved or voucher). Navigate to the thank-you page. Never `in_review`. */
   onDone: (outcome: PaymentOutcome) => void
   /**
    * An answer that is NOT an approved payment but is no rejection either (`in_review`: pending at the provider, e.g. a
-   * Mercado Pago order still in `pending_challenge`). When set, `in_review` comes here INSTEAD of `onDone`: re-read the
-   * checkout and show "we are confirming your payment" (never a success page). Unset: `onDone` as before (compatible).
+   * Mercado Pago order still in `pending_challenge`). It comes here, NEVER to `onDone`: re-read the checkout and show
+   * "we are confirming your payment" (never a success page). Unset: the section stays on the page with the card form's
+   * "payment under review, do not pay again" notice and keeps polling `statusUrl`; an approval later calls `onDone`.
+   * (Before 0.52 an unset `onPending` sent `in_review` to `onDone`, so shops showed "thank you" for an unpaid order.)
    */
   onPending?: (outcome: PaymentOutcome) => void
   /** The server total changed under the buyer: re-read the cart (the card form remounts with the new amount). */
@@ -263,7 +265,8 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
   const [fallback, setFallback] = useState(false)
   const [ready, setReady] = useState(false)
   const [processing, setProcessing] = useState(false)
-  const [expired, setExpired] = useState(false)
+  // The order cannot be paid as it is (reservation expired, or a product ran out while paying): a way back to the cart.
+  const [cartExit, setCartExit] = useState<'expired' | 'out_of_stock' | null>(null)
   const brick = useRef<PaymentBrickHandle>(null)
 
   const cardChosen = selected?.mode === 'card' && !retryAddress && !addressFirst
@@ -326,7 +329,7 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
     if (e.type === 'error') {
       setProcessing(false)
       if (e.kind === 'price_mismatch') onAmountChanged?.()
-      if (e.kind === 'expired') setExpired(true)
+      if (e.kind === 'expired' || e.kind === 'out_of_stock') setCartExit(e.kind)
     }
     onEvent?.(e)
   }
@@ -496,15 +499,17 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
                     onEvent={handleEvent}
                     onFallback={() => setFallback(true)}
                     onResult={(o) => {
-                      // Approved or voucher: the order is closed and the receipt is in the cookie. Under review: `onPending`
-                      // when the shop handles it (a payment not approved yet is never a success), else `onDone` as before.
-                      if (o.kind === 'in_review' && onPending) onPending(o)
-                      else if (o.kind === 'approved' || o.kind === 'in_review' || o.kind === 'voucher') onDone(o)
+                      // Approved or voucher: the order is closed and the receipt is in the cookie. Under review (a payment
+                      // NOT approved yet) is never a success: `onPending` when the shop handles it; without it the section
+                      // stays on the page with the card form's "payment under review, do not pay again" state, and keeps
+                      // reading the payment (`statusUrl`) until it is approved (then `onDone`) or rejected.
+                      if (o.kind === 'in_review') onPending?.(o)
+                      else if (o.kind === 'approved' || o.kind === 'voucher') onDone(o)
                     }}
                   />
                 ) : null}
                 <p className={cx.note}>{m.secureCard}</p>
-                {expired && rebuildHref ? Link({ href: rebuildHref, ...(cx.rebuild ? { className: cx.rebuild } : {}), children: m.rebuildCart, ...(testIds.rebuild ? { testId: testIds.rebuild } : {}) }) : null}
+                {cartExit && rebuildHref ? Link({ href: rebuildHref, ...(cx.rebuild ? { className: cx.rebuild } : {}), children: cartExit === 'out_of_stock' ? m.reviewCart : m.rebuildCart, ...(testIds.rebuild ? { testId: testIds.rebuild } : {}) }) : null}
               </div>
             ) : null}
           </div>
