@@ -46,8 +46,21 @@ export type ShipmentListParams = AccountListParams & {
   status?: string
 }
 
+/** Longest `q` the product list accepts (code points, after trimming); longer answers 400 `validation`. */
+export const PRODUCT_QUERY_MAX_LENGTH = 200
+
+/**
+ * The search text as the API takes it: trimmed and cut to `PRODUCT_QUERY_MAX_LENGTH` code points (never splits an
+ * emoji), so a pasted paragraph or a crafted URL searches its beginning instead of failing the page with a 400.
+ */
+export function clampProductQuery(q: string | null | undefined): string {
+  const trimmed = (q ?? '').trim()
+  const points = [...trimmed]
+  return points.length > PRODUCT_QUERY_MAX_LENGTH ? points.slice(0, PRODUCT_QUERY_MAX_LENGTH).join('').trim() : trimmed
+}
+
 export type ProductListParams = PaginationParams & {
-  /** Free-text search. */
+  /** Free-text search (cut to `PRODUCT_QUERY_MAX_LENGTH` code points before sending). */
   q?: string
   /** Collection handle. */
   collection?: string
@@ -107,6 +120,7 @@ export function appendParams(search: URLSearchParams, params: QueryParams | unde
 /** Serializes product list params per the contract (`filter.<attr>` repeated, `handles` comma-separated). */
 export function productListQuery(params: ProductListParams = {}): URLSearchParams {
   const { filters, handles, tags_any, ...rest } = params
+  if (typeof rest.q === 'string') rest.q = clampProductQuery(rest.q)
   const search = appendParams(new URLSearchParams(), rest as QueryParams)
   if (handles && handles.length > 0) search.set('handles', handles.join(','))
   if (tags_any && tags_any.length > 0) {
