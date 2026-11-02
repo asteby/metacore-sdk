@@ -1,5 +1,22 @@
 # @asteby/storefront-react
 
+## 0.52.0
+
+### Minor Changes
+
+- 9925a86: Checkout en el navegador: sin «¡Gracias!» con pago sin aprobar, aviso de rechazo que no se queda en el nuevo intento y «sin existencias» claro.
+
+  - `@asteby/storefront-react/payments` · `PaymentMethodSection`: un resultado `in_review` (pago pendiente / 3DS sin resolver) **nunca** llama a `onDone`. Con `onPending` va ahí (igual que antes); **sin `onPending`** la sección se queda en la página con el estado del formulario «Tu pago está en revisión… No vuelvas a pagar» y sigue leyendo el pago por `statusUrl`: si se aprueba, entonces `onDone(approved)`. Antes, sin `onPending`, `in_review` iba a `onDone` y la tienda mostraba «¡Gracias por tu compra!» sin pago aprobado. Mientras tanto el botón dice «Pago en revisión» (deshabilitado, sin «Procesando…» eterno y sin segundo cobro); si el sondeo se acaba sin respuesta (`pollTimeoutMs`, evento `verify_timeout`) o no hay `statusUrl`, aparece «Todavía no tenemos la respuesta de tu banco… No vuelvas a pagar» con «Verificar mi pago» (relee el estado con el mismo intento; sin `statusUrl`, recarga la página). La salida se muestra fuera del bloque de tarjeta (visible con cualquier opción elegida), y si el comprador cambia de opción mientras se sondea (el formulario de tarjeta y su sondeo salen de la página) pasa directo a esa salida. Intencional: mientras el pago está en revisión el botón queda bloqueado en TODAS las opciones (tampoco se genera ficha de efectivo), para no abrir un segundo pago. Textos nuevos `inReview`, `reviewStalled`, `checkAgain`. `useEmbeddedPayment`: `recheck()` también reabre el sondeo de un `in_review`, y el cierre de ese sondeo sin respuesta pone `verifyTimedOut` y emite `verify_timeout`. Elegido por ser lo menos rompedor: no cambia la firma de `onDone` y una tienda que ignora el resultado ya no puede declarar éxito falso. Tiendas que dependían de `onDone` con `in_review` deben pasar `onPending` (ver README, «Pago por confirmar»).
+  - `usePaymentRecovery`: `retry()` no abre llave nueva mientras el último resultado sea `in_review` o `challenge` (el pago sigue vivo en el proveedor; riesgo de doble cobro) hasta que otro resultado lo resuelva. El evento `submit` (el comprador volvió a escribir la tarjeta y pulsó Pagar sin «Reintentar pago») limpia los avisos definitivos del intento anterior (`rejected`, `provider_declined`, `other`, `form_failed`) y resetea `lastIssue`. Un resultado DESCONOCIDO (`transient`, `in_progress`, confirmando) no se olvida: `retry()` sigue sin abrir llave nueva hasta que se resuelva. Antes quedaba «El cargo no se completó / REINTENTAR PAGO» junto a «Tu banco necesita verificar el pago… PROCESANDO…».
+  - `@asteby/storefront` · `paymentErrorView`: nuevo tipo `out_of_stock` para un `409 insufficient_stock` (lo manda storefront_cart al crear el checkout cuando un producto se agotó al pagar; también `out_of_stock`). Mensaje es/en claro («se agotaron mientras pagabas. No se hizo ningún cobro. Revisa tu carrito»), `canRetry: false` (antes salía «No pudimos procesar tu pago. Intenta de nuevo.» con reintento). Helper `isOutOfStockCode(code)`. `PaymentMethodSection` muestra el enlace al carrito (`rebuildHref`) con el texto nuevo `reviewCart` («Revisar mi carrito»), y `usePaymentRecovery` no pone el aviso «Reintentar pago» para ese caso. `PaymentErrorKind` gana el miembro `out_of_stock` (un `switch` exhaustivo de la tienda debe contemplarlo).
+
+  **Al subir a esta versión** (tiendas con `PaymentMethodSection`): pasa `onPending`. God's Nutrition (hoy `onDone={(o) => o.kind === 'in_review' ? revalidate() : navigate(gracias)}`) debe mover esa rama a `onPending={() => revalidate()}`: con esta versión `onDone` ya no recibe `in_review` y su `revalidate()` no correría (se quedaría en la página con «Pago en revisión»). ProtekAuto lo hace en asteby-hq/store-protekauto#186.
+
+### Patch Changes
+
+- Updated dependencies [9925a86]
+  - @asteby/storefront@0.36.0
+
 ## 0.51.1
 
 ### Patch Changes
