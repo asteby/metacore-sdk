@@ -312,6 +312,12 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
     if (!cardActive) setFormLatched(false)
   }, [cardActive])
   const showBrick = cardActive && !syncFailed && (earlyCard || formLatched || brickReady)
+  // The card form polls a payment under review; if it leaves the page (another row chosen) nobody reads the state any
+  // more: offer the way out instead of a "polling" that never ends.
+  const brickMounted = showBrick || fallback
+  useEffect(() => {
+    if (!brickMounted) setReview((r) => (r === 'polling' ? 'stalled' : r))
+  }, [brickMounted])
   const totalUpdating = showBrick && !brickReady && !(earlyCard && !deliveryReady)
 
   const transport = useMemo(
@@ -518,33 +524,13 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
                     onResult={(o) => {
                       // Approved or voucher: the order is closed and the receipt is in the cookie. Under review (a payment
                       // NOT approved yet) is never a success: `onPending` when the shop handles it; without it the section
-                      // stays on the page with the card form's "payment under review, do not pay again" state, and keeps
+                      // stays on the page with the card form's "payment under review, do not pay again" state (and the pay
+                      // button, for every row, reads "under review": no second payment, card or cash), and keeps
                       // reading the payment (`statusUrl`) until it is approved (then `onDone`) or rejected.
                       if (o.kind === 'in_review') onPending?.(o)
                       else if (o.kind === 'approved' || o.kind === 'voucher') onDone(o)
                     }}
                   />
-                ) : null}
-                {review === 'stalled' ? (
-                  <div role="status" className={cx.status} data-sf-pay-notice="review-stalled">
-                    <p>{m.reviewStalled}</p>
-                    <button
-                      type="button"
-                      className={cx.rebuild}
-                      style={{ minHeight: 44 }}
-                      data-sf-pay-recheck
-                      onClick={() => {
-                        // Same attempt, nothing is charged: read the state again, or (no status endpoint) reload the page,
-                        // whose loader knows the order.
-                        if (transport.refresh) {
-                          setReview('polling')
-                          brick.current?.recheck()
-                        } else if (typeof window !== 'undefined') window.location.reload()
-                      }}
-                    >
-                      {m.checkAgain}
-                    </button>
-                  </div>
                 ) : null}
                 <p className={cx.note}>{m.secureCard}</p>
                 {cartExit && rebuildHref ? Link({ href: rebuildHref, ...(cx.rebuild ? { className: cx.rebuild } : {}), children: cartExit === 'out_of_stock' ? m.reviewCart : m.rebuildCart, ...(testIds.rebuild ? { testId: testIds.rebuild } : {}) }) : null}
@@ -553,6 +539,30 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
           </div>
         )
       })}
+
+      {/* Outside the card block: it stays visible whatever row is chosen (switching rows unmounts the card form). */}
+      {review === 'stalled' ? (
+        <div role="status" className={cx.status} data-sf-pay-notice="review-stalled">
+          <p>{m.reviewStalled}</p>
+          <button
+            type="button"
+            className={cx.rebuild}
+            style={{ minHeight: 44 }}
+            data-sf-pay-recheck
+            onClick={() => {
+              // Same attempt, nothing is charged: the mounted card form re-reads the state; otherwise (no status endpoint,
+              // or the form was remounted after switching rows) the page is reloaded and its loader knows the order.
+              const live = brick.current
+              if (transport.refresh && live?.status === 'in_review') {
+                setReview('polling')
+                live.recheck()
+              } else if (typeof window !== 'undefined') window.location.reload()
+            }}
+          >
+            {m.checkAgain}
+          </button>
+        </div>
+      ) : null}
 
       {noPayment ? (
         <div role="alert" className={cx.alert} data-sf-pay-notice="no-payment" {...tid('noPayment')}>

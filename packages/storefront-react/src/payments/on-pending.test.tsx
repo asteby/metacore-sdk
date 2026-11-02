@@ -131,4 +131,45 @@ describe('onPending', () => {
     await waitFor(() => expect(onPending).toHaveBeenCalledTimes(1))
     expect(screen.queryByRole('button', { name: 'Verificar mi pago' })).toBeNull()
   })
+  it('without onPending, switching to another row while the review is polling never leaves a dead button: the way out shows on any row', async () => {
+    const twoRows: PaymentMethod = { ...method, options: [{ key: 'card', redirect: false }, { key: 'wallet', redirect: true, label: 'Mi cuenta' }] }
+    const onDone = vi.fn()
+    const formRef = createRef<HTMLFormElement>()
+    render(
+      <form ref={formRef} onSubmit={(e) => e.preventDefault()}>
+        <PaymentMethodSection
+          choices={buildPayChoices([twoRows])}
+          amount={total}
+          scope="c1"
+          formRef={formRef}
+          payUrl="/p"
+          transport={{ submit: async () => pending, refresh: async () => pending }}
+          onDone={onDone}
+          rememberChoice={false}
+          brickProps={{ adapter, storage: null, pollIntervalMs: 5 }}
+        />
+      </form>,
+    )
+    await pay()
+    await screen.findByRole('button', { name: /Pago en revisión/ })
+    expect(screen.queryByRole('button', { name: 'Verificar mi pago' })).toBeNull()
+    // The buyer picks the other row: the card form (and its polling) leaves the page.
+    fireEvent.click(screen.getByRole('radio', { name: /Mi cuenta/ }))
+    const again = await screen.findByRole('button', { name: 'Verificar mi pago' })
+    // Intentional: no second payment of any kind while the first is under review.
+    expect(screen.getByRole('button', { name: /Pago en revisión/ }).getAttribute('aria-disabled')).toBe('true')
+    // Back to the card: the exit is still there (the new form is not in review; it reloads the page).
+    fireEvent.click(screen.getByRole('radio', { name: /Tarjeta/ }))
+    expect(screen.getByRole('button', { name: 'Verificar mi pago' })).toBe(again)
+    const reload = vi.fn()
+    const original = window.location
+    Object.defineProperty(window, 'location', { configurable: true, value: { ...original, reload } })
+    try {
+      fireEvent.click(again)
+      expect(reload).toHaveBeenCalledTimes(1)
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, value: original })
+    }
+    expect(onDone).not.toHaveBeenCalled()
+  })
 })
