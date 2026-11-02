@@ -5,8 +5,6 @@
 // `SKU_2.ext`… se asigna al registro padre cuyo campo SKU coincide, y cada
 // archivo crea UNA fila hija. Nada aquí conoce productos, Protek ni el kernel:
 // la unión con el SKU se resuelve contra la API de datos existente.
-import type { ColumnDefinition, RelationMeta, TableMetadata } from './types'
-import { relationColumnUi, relationGalleryColumn } from './dynamic-relation-helpers'
 
 export const BULK_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'avif'] as const
 /** Lado largo por debajo del cual la foto se avisa como «baja resolución». */
@@ -88,55 +86,8 @@ export function chunk<T>(arr: T[], size: number): T[][] {
 // Configuración (descubierta de la metadata, sin tocar el kernel)
 // ---------------------------------------------------------------------------
 
-export interface BulkImageTarget {
-    /** Modelo hijo (galería), p. ej. `product_images`. */
-    childModel: string
-    /** FK del hijo hacia el padre. */
-    foreignKey: string
-    /** Columna de imagen (la de `gallery: true`). */
-    imageKey: string
-    /** Columnas derivadas (si el modelo las tiene). */
-    widthKey?: string
-    heightKey?: string
-    positionKey?: string
-    /** Carpeta de almacenamiento (`storage_path` de la columna). */
-    storagePath?: string
-    accept: string
-    maxSize?: number
-    /** Filtros de alcance de la relación (polimórficos): se copian a cada fila. */
-    scope?: Record<string, string>
-}
-
-/**
- * Busca la relación 1:N con galería. Necesita la metadata del hijo (para saber
- * cuál es su columna de imagen); `childMetadata` la resuelve el llamador.
- */
-export function deriveBulkImageTarget(
-    relation: Pick<RelationMeta, 'through' | 'foreign_key' | 'scope' | 'kind'>,
-    childMetadata: Pick<TableMetadata, 'columns'> | null | undefined,
-): BulkImageTarget | null {
-    if (relation.kind !== 'one_to_many') return null
-    const img: ColumnDefinition | undefined = relationGalleryColumn(childMetadata)
-    if (!img) return null
-    // Sin la FK declarada el listado ignoraría `f_<fk>=in:` en silencio y devolvería todo.
-    if (!(childMetadata?.columns ?? []).some((c) => c.key === relation.foreign_key)) return null
-    const sc = (img.styleConfig ?? {}) as Record<string, unknown>
-    const keyOf = (derive: string) =>
-        (childMetadata?.columns ?? []).find((c) => relationColumnUi(c).derive === derive)?.key
-    const storagePath = (sc.storage_path ?? sc.storagePath) as string | undefined
-    return {
-        childModel: relation.through,
-        foreignKey: relation.foreign_key,
-        imageKey: img.key,
-        widthKey: keyOf('image_width'),
-        heightKey: keyOf('image_height'),
-        positionKey: keyOf('next_position') ?? (childMetadata?.columns ?? []).find((c) => c.key === 'position')?.key,
-        storagePath: typeof storagePath === 'string' && storagePath ? storagePath : undefined,
-        accept: (img as { accept?: string }).accept || 'image/*',
-        maxSize: (img as { maxSize?: number; max_size?: number }).maxSize ?? (img as { max_size?: number }).max_size,
-        scope: relation.scope,
-    }
-}
+export * from './bulk-image-target'
+import type { BulkImageTarget } from './bulk-image-target'
 
 // ---------------------------------------------------------------------------
 // Vista previa
