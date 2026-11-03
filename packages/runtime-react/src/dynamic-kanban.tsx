@@ -24,6 +24,7 @@
 // Transitions: when the metadata carries `transitions[]`, a card may only be
 // dropped into a lane reachable from its current stage. Disallowed lanes dim
 // while dragging and reject the drop.
+import { BOOLEAN_UNSET_FILTER_VALUE } from './nullable-boolean'
 import * as React from 'react'
 import {
     useCallback,
@@ -723,8 +724,11 @@ export function cardMatchesLaneFunnel(
     filter: { field?: string; values?: string[]; text?: string } | undefined,
 ): boolean {
     if (!filter?.field) return true
-    const raw = String(card?.[filter.field] ?? '')
+    const value = card?.[filter.field]
+    const raw = String(value ?? '')
     if (filter.values && filter.values.length > 0) {
+        // «Sin definir» de un booleano (valor de filtro NULL) casa con null/undefined.
+        if (value == null && filter.values.includes(BOOLEAN_UNSET_FILTER_VALUE)) return true
         return filter.values.includes(raw)
     }
     if (filter.text?.trim()) {

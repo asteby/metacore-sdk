@@ -1410,7 +1410,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                                 resolveWidget(field) === 'richtext'
                             return (
                                 <FieldCell key={field.key} fullWidth={fullWidth}>
-                                    <FieldLabel htmlFor={field.key} required={field.required}>
+                                    <FieldLabel id={`${field.key}-label`} htmlFor={field.key} required={field.required}>
                                         {tl(field.label)}
                                     </FieldLabel>
                                     {renderField(
@@ -1714,7 +1714,7 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
                                 resolveWidget(field) === 'richtext'
                             return (
                                 <FieldCell key={field.key} fullWidth={fullWidth}>
-                                    <FieldLabel htmlFor={field.key} required={field.required}>
+                                    <FieldLabel id={`${field.key}-label`} htmlFor={field.key} required={field.required}>
                                         {tl(field.label)}
                                     </FieldLabel>
                                     {renderField(field, formData[field.key], (v: any) => updateField(field.key, v), formData, record)}
@@ -1889,7 +1889,7 @@ export function renderField(
         }
         case 'switch':
             if (usesTriState(field, record ? readRecordPath(record, field.key) : undefined)) {
-                return <TriStateBooleanField id={field.key} value={value} onChange={onChange} label={field.label} invalid={invalid} />
+                return <TriStateBooleanField id={field.key} value={value} onChange={onChange} label={field.label} labelledBy={`${field.key}-label`} invalid={invalid} />
             }
             return <Switch id={field.key} checked={!!value} onCheckedChange={onChange} />
         case 'number':

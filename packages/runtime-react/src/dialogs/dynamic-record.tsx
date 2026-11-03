@@ -1548,7 +1548,7 @@ function FieldRow({ field, record, value, mode, onChange, error, locked }: Field
 
     return (
         <div className="flex flex-col gap-1.5" data-aby-field={field.key}>
-            <Label className="text-sm font-medium text-foreground/80">
+            <Label id={`${field.key}-label`} className="text-sm font-medium text-foreground/80">
                 {localizeFieldLabel(field.label, t)}
                 {field.required && mode !== 'view' && !isEditReadonly && (
                     <span className="text-destructive ml-0.5">*</span>
@@ -2324,7 +2324,7 @@ export function EditField({ field, value, onChange, record, invalid, error }: {
     ) {
         return (
             <div className="py-1">
-                <TriStateBooleanField id={field.key} value={value} onChange={onChange} label={field.label} invalid={invalid} />
+                <TriStateBooleanField id={field.key} value={value} onChange={onChange} label={localizeFieldLabel(field.label, t)} labelledBy={`${field.key}-label`} invalid={invalid} />
             </div>
         )
     }

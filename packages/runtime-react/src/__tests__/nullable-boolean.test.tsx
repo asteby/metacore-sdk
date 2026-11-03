@@ -14,7 +14,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
-const I18N = { t: (k: string, o?: { defaultValue?: string }) => o?.defaultValue ?? k, i18n: { language: 'es' } }
+const DICT: Record<string, string> = { 'payments.field.sandbox': 'Modo de prueba' }
+const I18N = { t: (k: string, o?: { defaultValue?: string }) => DICT[k] ?? o?.defaultValue ?? k, i18n: { language: 'es' } }
 vi.mock('react-i18next', () => ({ useTranslation: () => I18N }))
 
 import { DynamicForm } from '../dynamic-form'
@@ -22,6 +23,7 @@ import { buildZodSchema } from '../dynamic-form-schema'
 import { DynamicRecordDialog, pickDeclaredFieldValues } from '../dialogs/dynamic-record'
 import { buildFieldDefaults } from '../action-modal-dispatcher'
 import { makeDefaultGetDynamicColumns } from '../dynamic-columns'
+import { cardMatchesLaneFunnel } from '../dynamic-kanban'
 import { useDynamicFilters } from '../use-dynamic-filters'
 import { ApiProvider, type ApiClient } from '../api-context'
 import {
@@ -378,5 +380,41 @@ describe('filtro booleano con NULL', () => {
         // «No» sigue siendo `= false`: excluye NULL a propósito (opción aparte).
         act(() => result.current.handleDynamicFilterChange('sandbox', ['false']))
         expect(result.current.filterParams.f_sandbox).toBe('false')
+    })
+})
+
+describe('carril del kanban con NULL', () => {
+    it('«Sin definir» (NULL) casa con null/undefined; No sigue siendo false', () => {
+        const f = { field: 'sandbox', values: ['NULL'] }
+        expect(cardMatchesLaneFunnel({ sandbox: null }, f)).toBe(true)
+        expect(cardMatchesLaneFunnel({}, f)).toBe(true)
+        expect(cardMatchesLaneFunnel({ sandbox: false }, f)).toBe(false)
+        expect(cardMatchesLaneFunnel({ sandbox: null }, { field: 'sandbox', values: ['false'] })).toBe(false)
+        expect(cardMatchesLaneFunnel({ sandbox: false }, { field: 'sandbox', values: ['false'] })).toBe(true)
+    })
+})
+
+describe('accesibilidad del control de tres estados', () => {
+    it('CRUD: el radiogroup toma la etiqueta traducida por aria-labelledby', async () => {
+        renderRecord(
+            [{ key: 'sandbox', label: 'payments.field.sandbox', type: 'boolean', nullable: true }],
+            { id: 9, sandbox: null },
+            vi.fn(),
+        )
+        const group = await screen.findByRole('radiogroup', { name: 'Modo de prueba' })
+        const labelId = group.getAttribute('aria-labelledby')
+        expect(labelId).toBe('sandbox-label')
+        expect(document.getElementById(labelId!)?.textContent).toContain('Modo de prueba')
+    })
+
+    it('DynamicForm: el <Label> visible nombra al radiogroup', async () => {
+        render(<DynamicForm fields={[sandbox]} initialValues={{ id: 'p1', sandbox: null }} onSubmit={vi.fn()} />)
+        const group = await screen.findByRole('radiogroup', { name: 'Sandbox' })
+        expect(group.getAttribute('aria-labelledby')).toBe('sandbox-label')
+    })
+
+    it('sin <label> (celda de renglón): aria-label traducido', async () => {
+        render(<TriStateBooleanField value={null} onChange={vi.fn()} label="payments.field.sandbox" />)
+        expect(await screen.findByRole('radiogroup', { name: 'Modo de prueba' })).toBeTruthy()
     })
 })

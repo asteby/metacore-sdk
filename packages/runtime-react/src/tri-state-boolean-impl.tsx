@@ -24,8 +24,10 @@ export interface TriStateBooleanFieldProps {
     value: unknown
     onChange: (value: boolean | null) => void
     disabled?: boolean
-    /** Nombre accesible del grupo (la etiqueta del campo). */
+    /** Nombre accesible del grupo (la etiqueta del campo; se traduce como las demás). */
     label?: string
+    /** id del <label> visible: el radiogroup no es «labelable», se asocia por aria-labelledby. */
+    labelledBy?: string
     size?: 'sm' | 'default'
     invalid?: boolean
 }
@@ -41,6 +43,7 @@ export function TriStateBooleanField({
     onChange,
     disabled,
     label,
+    labelledBy,
     size = 'sm',
     invalid,
 }: TriStateBooleanFieldProps) {
@@ -56,7 +59,8 @@ export function TriStateBooleanField({
             items={items}
             value={toTriState(value)}
             onValueChange={(s) => onChange(fromTriState(s))}
-            aria-label={label || t('common.unset', { defaultValue: 'Sin definir' })}
+            aria-label={label ? t(label, { defaultValue: label }) : t('common.unset', { defaultValue: 'Sin definir' })}
+            aria-labelledby={labelledBy}
             aria-invalid={invalid || undefined}
             aria-disabled={disabled || undefined}
             data-tri-state=""

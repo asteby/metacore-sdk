@@ -407,7 +407,7 @@ function FieldRow({ field, value, onChange, values, error, initialValues, onFiel
         resolveWidget(field) === 'richtext'
     return (
         <div className={'grid gap-2 ' + (fullWidth ? 'sm:col-span-2' : '')}>
-            <Label htmlFor={field.key}>
+            <Label id={`${field.key}-label`} htmlFor={field.key}>
                 {field.label}
                 {field.required && <span className="text-red-500 ml-1">*</span>}
             </Label>
@@ -543,7 +543,7 @@ function FieldRenderer({
         }
         case 'switch':
             if (usesTriState(field, initialValues?.[field.key])) {
-                return <TriStateBooleanField id={field.key} value={value} onChange={onChange} label={field.label} />
+                return <TriStateBooleanField id={field.key} value={value} onChange={onChange} label={field.label} labelledBy={`${field.key}-label`} />
             }
             return <Switch id={field.key} checked={!!value} onCheckedChange={onChange} />
         case 'number':
