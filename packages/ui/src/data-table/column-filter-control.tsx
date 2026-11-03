@@ -266,6 +266,11 @@ export function ColumnFilterControl({
 
   const handleLocalToggle = (value: string) => {
     setLocalSelected((prev) => {
+      // Booleano: una sola opción (Sí / No / Sin definir). El backend no tiene
+      // OR entre `= false` e `IS NULL`, así que combinar no es expresable.
+      if (filterType === 'boolean') {
+        return prev.has(value) ? new Set<string>() : new Set([value])
+      }
       const next = new Set(prev)
       if (next.has(value)) next.delete(value)
       else next.add(value)

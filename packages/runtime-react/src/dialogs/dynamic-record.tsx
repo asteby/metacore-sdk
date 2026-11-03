@@ -68,6 +68,8 @@ import { FieldSection, WizardProgress } from '../form-layout-ui'
 import { AssistInterview } from '../assist-interview'
 import { RecordPrefillBar } from '../record-prefill-bar'
 import { FieldCell } from '../field-grid'
+import { isNullableBooleanField, omitUntouchedNullBooleans, usesTriState } from '../nullable-boolean'
+import { NullBooleanMark, TriStateBooleanField } from '../tri-state-boolean'
 import { isNilUuid, normalizeNilUuid } from '../nil-uuid'
 import { normalizeRefFieldsForSubmit } from './normalize-submit'
 import { validateValues, bagHasErrors, exemptUnchangedRuleIssues } from '../validator'
@@ -115,6 +117,11 @@ export interface FieldDef {
     type: 'text' | 'textarea' | 'select' | 'search' | 'number' | 'date' | 'email' | 'url' | 'boolean' | 'image'
         | 'password' | 'phone' | 'tel' | 'checkbox' | 'time' | 'hidden' | 'multiselect' | 'file' | string
     required?: boolean
+    /**
+     * Contrato de nulabilidad del kernel (`nullable = !required`). En un
+     * booleano decide el control de tres estados (Sí / No / Sin definir).
+     */
+    nullable?: boolean
     options?: FieldOption[]
     defaultValue?: any
     placeholder?: string
@@ -235,7 +242,9 @@ export function pickDeclaredFieldValues(
     const out: Record<string, any> = {}
     for (const f of fields ?? []) {
         if (f.key in values) {
-            out[f.key] = values[f.key] ?? ''
+            // Un booleano opcional en null viaja null («Sin definir»): '' lo
+            // descartaría el kernel y no podría volver a NULL.
+            out[f.key] = values[f.key] === null && isNullableBooleanField(f) ? null : values[f.key] ?? ''
         } else if (!getVisibleWhen(f) && !f.hidden && f.type !== 'hidden' && !f.readonly) {
             out[f.key] = ''
         }
@@ -856,9 +865,16 @@ export function DynamicRecordDialog({
         const seedForm = (meta: ModalMetadata, rec: any) => {
             const initial: Record<string, any> = {}
             for (const field of meta.fields ?? []) {
+                const v = resolvePath(rec, field.key)
+                // Booleano opcional en NULL: se queda null («Sin definir»). Si
+                // cayera al default o a '' el PUT lo convertiría en otro valor.
+                if (v === null && isNullableBooleanField(field)) {
+                    initial[field.key] = null
+                    continue
+                }
                 initial[field.key] = isPasswordField(field)
                     ? ''
-                    : resolvePath(rec, field.key) ?? field.defaultValue ?? ''
+                    : v ?? field.defaultValue ?? ''
             }
             // En edición, un destino derivado ya guardado no se pisa: cuenta como manual.
             if (!isCreate) {
@@ -1118,6 +1134,10 @@ export function DynamicRecordDialog({
             normalizeRefFieldsForSubmit(submittedValues, modalMeta.fields),
             modalMeta.fields,
         )
+        // Edición: un booleano NULL que nadie tocó no viaja (conserva el NULL).
+        if (mode === 'edit' && record) {
+            payload = omitUntouchedNullBooleans(payload, modalMeta.fields, (k) => resolvePath(record, k))
+        }
 
         if (
             isCreate &&
@@ -1564,6 +1584,13 @@ export function ReadonlyEditField({ field, value }: { field: FieldDef; value: an
         return <HostWidget field={field as unknown as ActionFieldDef} value={value} onChange={noopChange} disabled />
     }
     if (field.type === 'boolean' || field.type === 'checkbox' || typeof value === 'boolean') {
+        if (value === null || value === undefined || value === '') {
+            return (
+                <div className="flex items-center gap-2 py-1">
+                    <NullBooleanMark className="text-sm text-muted-foreground" />
+                </div>
+            )
+        }
         return (
             <div className="flex items-center gap-2 py-1">
                 <Switch checked={!!value} disabled />
@@ -1801,6 +1828,10 @@ export function ViewValue({
     }
 
     if (field.type === 'boolean' || field.type === 'checkbox' || typeof value === 'boolean') {
+        // NULL no es «No»: se pinta «—» (misma convención que formatDisplayValue).
+        if (value === null || value === undefined || value === '') {
+            return <p className="text-sm py-1"><NullBooleanMark /></p>
+        }
         return (
             <div className="flex items-center gap-2 py-1">
                 <Switch checked={!!value} disabled />
@@ -2281,6 +2312,19 @@ export function EditField({ field, value, onChange, record, invalid, error }: {
                 <p className="text-[11px] text-muted-foreground">
                     {t('datatable.readOnly', { defaultValue: 'Solo lectura' })}
                 </p>
+            </div>
+        )
+    }
+
+    // Booleano opcional (nullable): Sí / No / Sin definir. Nunca convierte un
+    // NULL en `false` sin que el usuario lo elija.
+    if (
+        (field.type === 'boolean' || field.type === 'checkbox') &&
+        usesTriState(field, record ? resolvePath(record, field.key) : undefined)
+    ) {
+        return (
+            <div className="py-1">
+                <TriStateBooleanField id={field.key} value={value} onChange={onChange} label={field.label} invalid={invalid} />
             </div>
         )
     }

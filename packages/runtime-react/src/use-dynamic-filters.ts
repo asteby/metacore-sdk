@@ -11,7 +11,9 @@
 // filtering (RFC: a board is just another view of the model), so the logic is
 // factored here to guarantee both surfaces filter identically.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useApi } from './api-context'
+import { withBooleanUnsetOption } from './nullable-boolean'
 import { DATE_CELL_TYPES } from './dynamic-columns'
 import { getSearchableColumnKeys } from './column-visibility'
 import { useDebouncedValue } from './use-debounced-value'
@@ -80,6 +82,9 @@ export function useDynamicFilters(
 ): UseDynamicFiltersResult {
   const { defaultFilters, model, endpoint, facetsEndpoint } = opts
   const api = useApi()
+  const { t } = useTranslation()
+  // «Sin definir» del filtro booleano (NULL), ver withBooleanUnsetOption.
+  const unsetLabel = t('common.unset', { defaultValue: 'Sin definir' })
 
   const [dynamicFilters, setDynamicFilters] = useState<Record<string, string[]>>({})
   const [globalFilter, setGlobalFilter] = useState('')
@@ -236,6 +241,7 @@ export function useDynamicFilters(
         }
       }
       if (fType === 'select' && options.length === 0 && !f.searchEndpoint) continue
+      if (fType === 'boolean') options = withBooleanUnsetOption(options, unsetLabel)
       map.set(f.key, {
         filterType: fType,
         filterKey: f.column || f.key,
@@ -282,6 +288,7 @@ export function useDynamicFilters(
           ? filterOptionsMap.get(c.searchEndpoint!) || []
           : []
       if (isStageColumn) options = stageOptions
+      if (filterType === 'boolean') options = withBooleanUnsetOption(options, unsetLabel)
 
       // (B) Upgrade a plain text filter to a facet value-picker (unless it's a
       // long-text/body column — too many unique values to enumerate).
@@ -316,6 +323,7 @@ export function useDynamicFilters(
     facetsBase,
     getFacetLoader,
     facetOptions,
+    unsetLabel,
   ])
 
   // Prewarm every facet field in one burst once the configs settle, so the

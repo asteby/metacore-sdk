@@ -96,6 +96,8 @@ import { federatedModalComponent, resolveFederatedModal } from './primitives/con
 import { installedPredicate, useContributionsVersion } from './primitives/use-contributions'
 import { isTodayToken, todayInZone } from './calendar-date'
 import { useTimeZone } from './org-runtime-context'
+import { isNullableBooleanField, omitUntouchedNullBooleans, usesTriState } from './nullable-boolean'
+import { TriStateBooleanField } from './tri-state-boolean'
 
 export type { ActionMetadata, ActionModalProps }
 
@@ -1285,7 +1287,10 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
         setFormError(undefined)
         setExecuting(true)
         try {
-            let payload: Record<string, any> = { ...formData }
+            // Un booleano NULL del registro que nadie tocó no viaja.
+            let payload: Record<string, any> = record
+                ? omitUntouchedNullBooleans({ ...formData }, action.fields, (k) => readRecordPath(record, k))
+                : { ...formData }
             // Create-placement actions (and any create with no record) may need a
             // host branch stamp when the sidebar is on "Todas". Skip when the
             // form already collected branch_id, or the host has no gate.
@@ -1506,6 +1511,13 @@ export function buildFieldDefaults(
             defaults[field.key] = fromRecord
             continue
         }
+        // Booleano opcional en NULL en el registro: se siembra null («Sin
+        // definir»), no el default ni `false`. Si el usuario no lo toca, la
+        // llave no viaja (omitUntouchedNullBooleans) y el NULL se conserva.
+        if (record && isNullableBooleanField(field) && readRecordPath(record, field.key) === null) {
+            defaults[field.key] = null
+            continue
+        }
         defaults[field.key] = resolveFieldDefault(field, ctx) ?? (field.type === 'boolean' ? false : '')
     }
     return defaults
@@ -1611,7 +1623,12 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
             const res = await reasonPrompt.run({
                 title: tl(action.label),
                 description: t('actions.reason_desc', { defaultValue: 'Esta acción pide el motivo. Queda en la bitácora del documento.' }),
-                request: (reason) => api.post(url, withApproval(reason ? { ...formData, reason } : formData, auth)),
+                request: (reason) => {
+                    const data = record
+                        ? omitUntouchedNullBooleans(formData, steps.flatMap((s) => s.fields ?? []), (k) => readRecordPath(record, k))
+                        : formData
+                    return api.post(url, withApproval(reason ? { ...data, reason } : data, auth))
+                },
             })
             if (!res) return
             const allFields = steps.flatMap(s => s.fields ?? [])
@@ -1871,6 +1888,9 @@ export function renderField(
             )
         }
         case 'switch':
+            if (usesTriState(field, record ? readRecordPath(record, field.key) : undefined)) {
+                return <TriStateBooleanField id={field.key} value={value} onChange={onChange} label={field.label} invalid={invalid} />
+            }
             return <Switch id={field.key} checked={!!value} onCheckedChange={onChange} />
         case 'number':
             return <Input id={field.key} type="number" value={value ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {

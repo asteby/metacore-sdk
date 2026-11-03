@@ -74,6 +74,7 @@ import type { ColumnFilterConfig, GetDynamicColumns, RowActionPredicate } from '
 import { defaultGetDynamicColumns, DATE_CELL_TYPES, aggregateOf, formatAggregateTotal } from './dynamic-columns'
 import { useFacetLoaders, isLongTextColumn } from './use-facet-loaders'
 import { translateOptionLabels } from './filter-chips'
+import { withBooleanUnsetOption } from './nullable-boolean'
 import { applyColumnFilterFields } from './column-filter-field'
 import { dedupeById, useInfiniteScrollSentinel } from './use-infinite-scroll'
 import {
@@ -1376,6 +1377,8 @@ export function DynamicTable({
         // package has no i18n) so header filters, chips and value summaries show
         // localized text. A raw value with no key falls through via defaultValue.
         const tr = (label: string) => t(label, { defaultValue: label })
+        // «Sin definir» del filtro booleano (NULL), ver withBooleanUnsetOption.
+        const unsetLabel = t('common.unset', { defaultValue: 'Sin definir' })
         const stageOptions = (metadata.stages ?? []).map((s) => ({
             label: s.label,
             value: s.key,
@@ -1418,6 +1421,7 @@ export function DynamicTable({
                 }
             }
             if (fType === 'select' && options.length === 0 && !f.searchEndpoint) continue
+            if (fType === 'boolean') options = withBooleanUnsetOption(options, unsetLabel)
             map.set(f.key, {
                 filterType: fType,
                 filterKey: f.column || f.key,
@@ -1471,6 +1475,7 @@ export function DynamicTable({
                   ? filterOptionsMap.get(c.searchEndpoint!) || []
                   : []
             if (isStageColumn) options = stageOptions
+            if (filterType === 'boolean') options = withBooleanUnsetOption(options, unsetLabel)
 
             // (B) Upgrade a plain text filter to a facet value-picker unless it's
             // a long-text/body column (too many unique values to enumerate).

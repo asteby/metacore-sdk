@@ -399,6 +399,10 @@ export const getDynamicColumns = (
                         }
 
                     case 'boolean':
+                        // NULL (booleano opcional sin definir) no es «No».
+                        if (value === null || value === undefined) {
+                            return <span className='text-muted-foreground' title='Sin definir' aria-label='Sin definir'>—</span>
+                        }
                         return value ? <Badge>Sí</Badge> : <Badge variant="secondary">No</Badge>
 
                     default:

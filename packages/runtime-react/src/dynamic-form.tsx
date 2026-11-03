@@ -40,6 +40,8 @@ import { UploadField } from './upload-field'
 import { IconPickerField } from './icon-picker-field'
 import { ColorPickerField } from './color-picker-field'
 import { getFieldWidget, useFieldWidgetRegistryVersion } from './field-widget-registry'
+import { isBooleanField, isNullableBooleanField, usesTriState } from './nullable-boolean'
+import { TriStateBooleanField } from './tri-state-boolean'
 
 export { buildZodSchema, resolveWidget }
 export { DynamicLineItems } from './dynamic-line-items'
@@ -90,6 +92,18 @@ function seedValues(fields: ActionFieldDef[], initialValues?: Record<string, any
     for (const f of fields) {
         if (isLineItemsField(f)) {
             defaults[f.key] = initialValues?.[f.key] ?? f.defaultValue ?? []
+            continue
+        }
+        // Booleano opcional que el registro trae en NULL: se queda en null
+        // («Sin definir»), nunca cae al default ni a `false`. El default sólo
+        // aplica cuando la llave no viene (alta).
+        if (
+            initialValues &&
+            initialValues[f.key] === null &&
+            Object.prototype.hasOwnProperty.call(initialValues, f.key) &&
+            isNullableBooleanField(f)
+        ) {
+            defaults[f.key] = null
             continue
         }
         defaults[f.key] = initialValues?.[f.key] ?? f.defaultValue ?? (f.type === 'boolean' ? false : '')
@@ -213,6 +227,12 @@ export function DynamicForm({
                 if (resolveWidget(f) !== 'select') continue
                 if (touched.current.has(f.key)) continue
                 if (data[f.key] === '' || data[f.key] == null) delete data[f.key]
+            }
+            // Un booleano NULL que nadie tocó no viaja: el update parcial
+            // conserva el NULL del registro en vez de pisarlo.
+            for (const f of visibleFields) {
+                if (!isBooleanField(f) || touched.current.has(f.key)) continue
+                if (data[f.key] == null) delete data[f.key]
             }
         }
         setSubmitting(true)
@@ -522,6 +542,9 @@ function FieldRenderer({
             )
         }
         case 'switch':
+            if (usesTriState(field, initialValues?.[field.key])) {
+                return <TriStateBooleanField id={field.key} value={value} onChange={onChange} label={field.label} />
+            }
             return <Switch id={field.key} checked={!!value} onCheckedChange={onChange} />
         case 'number':
             return <Input id={field.key} type="number" value={value ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
