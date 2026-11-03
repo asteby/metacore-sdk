@@ -208,6 +208,36 @@ describe('PaymentMethodSection', () => {
     await new Promise((r) => setTimeout(r, 30))
     expect(syncDelivery).toHaveBeenCalledTimes(2)
   })
+  it('a save that FAILS after a newer quote is not sent again with that same quote (2 saves, not 3)', async () => {
+    let n = 0
+    const syncDelivery = vi.fn(async () => ++n === 1)
+    const view = setup({ syncDelivery, syncVersion: 1 })
+    await waitFor(() => expect(syncDelivery).toHaveBeenCalledTimes(1))
+    view.rerender(
+      <form ref={view.formRef} onSubmit={(e) => e.preventDefault()}>
+        <input name="email" aria-label="Correo" defaultValue="a@b.co" />
+        <PaymentMethodSection choices={buildPayChoices([method])} amount={total} scope="cart_1" formRef={view.formRef} payUrl="/p" delivery="rate:1" syncDelivery={syncDelivery} onDone={() => {}} brickProps={{ adapter: fakeAdapter().adapter, storage: null }} syncVersion={2} />
+      </form>,
+    )
+    await waitFor(() => expect(syncDelivery).toHaveBeenCalledTimes(2))
+    await new Promise((r) => setTimeout(r, 40))
+    expect(syncDelivery).toHaveBeenCalledTimes(2)
+  })
+  it('while the delivery is saved again for a newer quote the total shows as updating and cannot be paid', async () => {
+    let n = 0
+    const syncDelivery = vi.fn(() => (++n === 1 ? Promise.resolve(true) : new Promise<boolean>(() => {})))
+    const view = setup({ syncDelivery, syncVersion: 1 })
+    await waitFor(() => expect(screen.getByRole('button').textContent).toMatch(/2,185/))
+    view.rerender(
+      <form ref={view.formRef} onSubmit={(e) => e.preventDefault()}>
+        <input name="email" aria-label="Correo" defaultValue="a@b.co" />
+        <PaymentMethodSection choices={buildPayChoices([method])} amount={total} scope="cart_1" formRef={view.formRef} payUrl="/p" delivery="rate:1" syncDelivery={syncDelivery} onDone={() => {}} brickProps={{ adapter: fakeAdapter().adapter, storage: null }} syncVersion={2} />
+      </form>,
+    )
+    await waitFor(() => expect(syncDelivery).toHaveBeenCalledTimes(2))
+    await screen.findByText(/Actualizando el total/)
+    expect(screen.getByRole('button').textContent).not.toMatch(/2,185/)
+  })
   it('without syncVersion a refused delivery keeps the earlier retry (when wantSync changes)', async () => {
     const syncDelivery = vi.fn(async () => 'requote' as const)
     const view = setup({ syncDelivery })

@@ -293,13 +293,20 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
   const syncRef = useRef(syncDelivery)
   syncRef.current = syncDelivery
   // Without the prop the shop keeps the earlier behaviour (a 'requote' is sent again when wantSync or delivery change).
+  // With it, each (delivery, quote version) is saved ONCE whatever the answer: ok, failure or 'requote'. A newer quote
+  // saves it again; a plain failure is also retried when wantSync turns on again (the buyer fixed the address). There is
+  // no cap when the server keeps answering 'requote' for every new quote: each one costs one save, never a loop.
+  // Pickup: deliveryReady may not wait for the first quote, so the first save can go with version 0 and one more when
+  // the quote arrives.
   const versioned = props.syncVersion !== undefined
-  const newerQuote = versioned && !!sync && syncVersion > (sync.version ?? 0)
-  const resyncToken = newerQuote ? syncVersion : 0
+  const newerQuote = versioned && !!sync && sync.key === delivery && syncVersion > (sync.version ?? 0)
+  const lastWant = useRef(false)
   useEffect(() => {
+    const turnedOn = wantSync && !lastWant.current
+    lastWant.current = wantSync
     if (!wantSync || !syncRef.current) return
     if (sync?.key === delivery && sync.ok && !newerQuote) return
-    if (versioned && sync?.key === delivery && sync.requote && !newerQuote) return
+    if (versioned && sync?.key === delivery && !newerQuote && (sync.ok || sync.requote || !turnedOn)) return
     let cancelled = false
     const version = syncVersion
     syncRef.current(delivery).then(
@@ -310,8 +317,9 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wantSync, delivery, resyncToken])
-  const settled = sync?.key === delivery
+  }, [wantSync, delivery, versioned ? syncVersion : 0])
+  // A save that belongs to an older quote is not a settled save: the total waits ("Actualizando el total…").
+  const settled = sync?.key === delivery && !newerQuote
   const synced = !syncDelivery || (settled && sync!.ok)
   const requote = wantSync && settled && sync!.requote === true
   const syncFailed = wantSync && settled && !sync!.ok && !requote
