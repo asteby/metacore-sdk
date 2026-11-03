@@ -81,6 +81,9 @@
     "retry": "Reintentar",
     "continue": "Continuar",
     "done": "Listo",
+    "yes": "Sí",
+    "no": "No",
+    "unset": "Sin definir",
     "upload": {
       "choose": "Elegir archivo",
       "replace": "Reemplazar",

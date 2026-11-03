@@ -6,6 +6,7 @@ import type { ActionFieldDef, FieldOptionsConfig, OptionDef, VisibleWhen } from 
 import { fieldValidationOf } from './validator'
 import { applyOptionWhen, getDependsOn } from './option-when'
 import { resolveValidatorToken } from './use-org-config-bridge'
+import { isNullableBooleanField } from './nullable-boolean'
 
 // Viven en option-when.ts (el validador también los usa); se re-exportan aquí
 // para no romper a quien los importaba de este módulo.
@@ -307,7 +308,9 @@ function fieldToZod(field: ActionFieldDef): ZodTypeAny {
 
     if (isBool) {
         const base = z.boolean()
-        return field.required ? base : base.optional()
+        if (field.required) return base
+        // Booleano opcional: acepta null («Sin definir», kernel >= v0.248.4).
+        return isNullableBooleanField(field) ? base.nullable().optional() : base.optional()
     }
 
     if (isNumeric) {

@@ -89,7 +89,10 @@
     },
     "retry": "Retry",
     "continue": "Continue",
-    "done": "Done"
+    "done": "Done",
+    "yes": "Yes",
+    "no": "No",
+    "unset": "Not set"
   },
   "errors": {
     "generic": "Something went wrong",

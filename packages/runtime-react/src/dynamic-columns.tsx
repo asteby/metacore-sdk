@@ -60,6 +60,7 @@ import { useOptionsResolver } from './use-options-resolver'
 import { RowActionsMenu } from './row-actions-menu'
 import type { TableMetadata, ColumnDefinition } from './types'
 import { isColumnVisibleInTable } from './column-visibility'
+import { NullBooleanMark } from './tri-state-boolean'
 import type {
     ColumnFilterConfig,
     GetDynamicColumns,
@@ -1546,6 +1547,8 @@ export function makeDefaultGetDynamicColumns(
                         }
 
                         case 'boolean': {
+                            // NULL (booleano opcional sin definir) no es «No».
+                            if (value === null || value === undefined) return <NullBooleanMark />
                             const showText = styleCfg(col, 'show_text', 'showText') !== false
                             return (
                                 <span className="inline-flex items-center gap-1.5">

@@ -18,8 +18,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@asteby/metacore-ui/primitives'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Plus, Trash2, Check } from 'lucide-react'
+import { usesTriState } from './nullable-boolean'
+import { TriStateBooleanField } from './tri-state-boolean'
 import type { ActionFieldDef } from './types'
 import {
     resolveWidget,
@@ -407,6 +409,9 @@ interface CellRendererProps {
 // a scalar widget).
 function CellRenderer({ field, value, onChange, onPick, disabled, formValues, rowValues, invalid }: CellRendererProps) {
     const widget = resolveWidget(field)
+    // Un booleano opcional que llegó en NULL conserva el control de tres
+    // estados aunque el usuario elija Sí/No (puede volver a «Sin definir»).
+    const [seededNull] = useState(() => value === null)
     const invalidCls = invalid
         ? 'border-destructive ring-1 ring-destructive/30 focus-visible:ring-destructive'
         : ''
@@ -514,6 +519,9 @@ function CellRenderer({ field, value, onChange, onPick, disabled, formValues, ro
             )
         }
         case 'switch':
+            if (usesTriState(field, seededNull ? null : value)) {
+                return <TriStateBooleanField value={value} onChange={onChange} disabled={off} label={field.label} invalid={invalid} />
+            }
             return <Switch checked={!!value} onCheckedChange={onChange} disabled={off} />
         case 'number':
             return (

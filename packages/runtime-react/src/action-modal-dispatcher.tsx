@@ -15,7 +15,7 @@
 // The host injects its axios-like client via <ApiProvider>; we no longer
 // depend on a bundler alias to `@/lib/api`.
 import { emitRecordMutationSettled } from './record-mutation-events'
-import { Suspense, useState, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { Suspense, useState, useCallback, useEffect, useId, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
     Dialog,
@@ -96,6 +96,8 @@ import { federatedModalComponent, resolveFederatedModal } from './primitives/con
 import { installedPredicate, useContributionsVersion } from './primitives/use-contributions'
 import { isTodayToken, todayInZone } from './calendar-date'
 import { useTimeZone } from './org-runtime-context'
+import { isNullableBooleanField, omitUntouchedNullBooleans, usesTriState } from './nullable-boolean'
+import { TriStateBooleanField } from './tri-state-boolean'
 
 export type { ActionMetadata, ActionModalProps }
 
@@ -1088,6 +1090,8 @@ export function focusFirstInvalid(root: HTMLElement | null): HTMLElement | null 
 
 function GenericActionModal({ open, onOpenChange, action, model, record, endpoint, onSuccess }: ActionModalProps) {
     const { t, i18n } = useTranslation()
+    // Prefijo único por instancia para los ids de las etiquetas (aria-labelledby).
+    const formUid = useId()
     // Addon-contributed labels (action + fields) are i18n keys whose locale
     // bundle loads asynchronously; translate at render so they don't render raw.
     // defaultValue keeps an already-localized string unchanged.
@@ -1285,7 +1289,10 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
         setFormError(undefined)
         setExecuting(true)
         try {
-            let payload: Record<string, any> = { ...formData }
+            // Un booleano NULL del registro que nadie tocó no viaja.
+            let payload: Record<string, any> = record
+                ? omitUntouchedNullBooleans({ ...formData }, action.fields, (k) => readRecordPath(record, k))
+                : { ...formData }
             // Create-placement actions (and any create with no record) may need a
             // host branch stamp when the sidebar is on "Todas". Skip when the
             // form already collected branch_id, or the host has no gate.
@@ -1405,7 +1412,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                                 resolveWidget(field) === 'richtext'
                             return (
                                 <FieldCell key={field.key} fullWidth={fullWidth}>
-                                    <FieldLabel htmlFor={field.key} required={field.required}>
+                                    <FieldLabel id={`${formUid}${field.key}-label`} htmlFor={field.key} required={field.required}>
                                         {tl(field.label)}
                                     </FieldLabel>
                                     {renderField(
@@ -1415,6 +1422,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                                         formData,
                                         record,
                                         fieldErrors,
+                                        `${formUid}${field.key}-label`,
                                     )}
                                     {fieldErrors[field.key] && (
                                         <p id={`${field.key}-error`} className="text-destructive text-xs mt-1" data-field-error={field.key}>
@@ -1506,6 +1514,13 @@ export function buildFieldDefaults(
             defaults[field.key] = fromRecord
             continue
         }
+        // Booleano opcional en NULL en el registro: se siembra null («Sin
+        // definir»), no el default ni `false`. Si el usuario no lo toca, la
+        // llave no viaja (omitUntouchedNullBooleans) y el NULL se conserva.
+        if (record && isNullableBooleanField(field) && readRecordPath(record, field.key) === null) {
+            defaults[field.key] = null
+            continue
+        }
         defaults[field.key] = resolveFieldDefault(field, ctx) ?? (field.type === 'boolean' ? false : '')
     }
     return defaults
@@ -1533,6 +1548,7 @@ function wizardStepErrors(
 // single-page action form — no widget is duplicated.
 function WizardActionModal({ open, onOpenChange, action, model, record, endpoint, onSuccess }: ActionModalProps) {
     const { t, i18n } = useTranslation()
+    const formUid = useId()
     const tl = (s: string) => t(s, { defaultValue: s })
     const api = useApi()
     const reasonPrompt = useReasonPrompt()
@@ -1611,7 +1627,12 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
             const res = await reasonPrompt.run({
                 title: tl(action.label),
                 description: t('actions.reason_desc', { defaultValue: 'Esta acción pide el motivo. Queda en la bitácora del documento.' }),
-                request: (reason) => api.post(url, withApproval(reason ? { ...formData, reason } : formData, auth)),
+                request: (reason) => {
+                    const data = record
+                        ? omitUntouchedNullBooleans(formData, steps.flatMap((s) => s.fields ?? []), (k) => readRecordPath(record, k))
+                        : formData
+                    return api.post(url, withApproval(reason ? { ...data, reason } : data, auth))
+                },
             })
             if (!res) return
             const allFields = steps.flatMap(s => s.fields ?? [])
@@ -1697,10 +1718,10 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
                                 resolveWidget(field) === 'richtext'
                             return (
                                 <FieldCell key={field.key} fullWidth={fullWidth}>
-                                    <FieldLabel htmlFor={field.key} required={field.required}>
+                                    <FieldLabel id={`${formUid}${field.key}-label`} htmlFor={field.key} required={field.required}>
                                         {tl(field.label)}
                                     </FieldLabel>
-                                    {renderField(field, formData[field.key], (v: any) => updateField(field.key, v), formData, record)}
+                                    {renderField(field, formData[field.key], (v: any) => updateField(field.key, v), formData, record, undefined, `${formUid}${field.key}-label`)}
                                 </FieldCell>
                             )
                         })}
@@ -1804,6 +1825,8 @@ export function renderField(
     formValues?: Record<string, any>,
     record?: Record<string, any>,
     fieldErrors?: Record<string, string>,
+    // id único de la etiqueta visible: el control de tres estados la referencia.
+    labelId?: string,
 ) {
     // Repeatable line-items group → row grid (value is an array of row objects).
     // The header form values flow in so a cell can depend on a header field.
@@ -1871,6 +1894,9 @@ export function renderField(
             )
         }
         case 'switch':
+            if (usesTriState(field, record ? readRecordPath(record, field.key) : undefined)) {
+                return <TriStateBooleanField id={field.key} value={value} onChange={onChange} label={field.label} labelledBy={labelId} invalid={invalid} />
+            }
             return <Switch id={field.key} checked={!!value} onCheckedChange={onChange} />
         case 'number':
             return <Input id={field.key} type="number" value={value ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {

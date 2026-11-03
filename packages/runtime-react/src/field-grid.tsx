@@ -40,11 +40,14 @@ export function FieldCell({
 }
 
 export function FieldLabel({
+    id,
     htmlFor,
     required,
     tone = 'sentence',
     children,
 }: {
+    /** Lets a non-labelable control (a radiogroup) point `aria-labelledby` here. */
+    id?: string
     htmlFor?: string
     required?: boolean
     /**
@@ -58,6 +61,7 @@ export function FieldLabel({
 }) {
     return (
         <Label
+            id={id}
             htmlFor={htmlFor}
             className={
                 tone === 'sentence'

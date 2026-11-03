@@ -1,7 +1,7 @@
 // Minimal standalone DynamicForm. Factored from the dynamic-record-dialog
 // pattern + ActionFieldDef renderer so callers can reuse the form layout
 // outside the full record-edit modal.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { groupFieldsBySection, type FormLayout } from './form-layout'
 import { FieldSection, WizardProgress } from './form-layout-ui'
 import { AssistInterview } from './assist-interview'
@@ -40,6 +40,8 @@ import { UploadField } from './upload-field'
 import { IconPickerField } from './icon-picker-field'
 import { ColorPickerField } from './color-picker-field'
 import { getFieldWidget, useFieldWidgetRegistryVersion } from './field-widget-registry'
+import { isBooleanField, isNullableBooleanField, usesTriState } from './nullable-boolean'
+import { TriStateBooleanField } from './tri-state-boolean'
 
 export { buildZodSchema, resolveWidget }
 export { DynamicLineItems } from './dynamic-line-items'
@@ -90,6 +92,18 @@ function seedValues(fields: ActionFieldDef[], initialValues?: Record<string, any
     for (const f of fields) {
         if (isLineItemsField(f)) {
             defaults[f.key] = initialValues?.[f.key] ?? f.defaultValue ?? []
+            continue
+        }
+        // Booleano opcional que el registro trae en NULL: se queda en null
+        // («Sin definir»), nunca cae al default ni a `false`. El default sólo
+        // aplica cuando la llave no viene (alta).
+        if (
+            initialValues &&
+            initialValues[f.key] === null &&
+            Object.prototype.hasOwnProperty.call(initialValues, f.key) &&
+            isNullableBooleanField(f)
+        ) {
+            defaults[f.key] = null
             continue
         }
         defaults[f.key] = initialValues?.[f.key] ?? f.defaultValue ?? (f.type === 'boolean' ? false : '')
@@ -213,6 +227,12 @@ export function DynamicForm({
                 if (resolveWidget(f) !== 'select') continue
                 if (touched.current.has(f.key)) continue
                 if (data[f.key] === '' || data[f.key] == null) delete data[f.key]
+            }
+            // Un booleano NULL que nadie tocó no viaja: el update parcial
+            // conserva el NULL del registro en vez de pisarlo.
+            for (const f of visibleFields) {
+                if (!isBooleanField(f) || touched.current.has(f.key)) continue
+                if (data[f.key] == null) delete data[f.key]
             }
         }
         setSubmitting(true)
@@ -352,6 +372,8 @@ interface FieldRendererProps {
      */
     values?: Record<string, any>
     onFieldMeta?: (key: string, meta: { width?: number; height?: number }) => void
+    /** id único (useId) de la etiqueta visible; el control de tres estados la referencia. */
+    labelId?: string
 }
 
 interface FieldRowProps extends FieldRendererProps {
@@ -363,6 +385,8 @@ interface FieldRowProps extends FieldRendererProps {
 // value (`when`) can hide the ENTIRE row (label included) and run its reset
 // effect with valid hook ordering.
 function FieldRow({ field, value, onChange, values, error, initialValues, onFieldMeta }: FieldRowProps) {
+    // Único por instancia: dos formularios montados con el mismo campo no chocan.
+    const labelId = `${useId()}-label`
     const isStaticSelect =
         resolveWidget(field) === 'select' && !field.ref && Array.isArray(field.options)
     const effectiveOptions = isStaticSelect
@@ -387,7 +411,7 @@ function FieldRow({ field, value, onChange, values, error, initialValues, onFiel
         resolveWidget(field) === 'richtext'
     return (
         <div className={'grid gap-2 ' + (fullWidth ? 'sm:col-span-2' : '')}>
-            <Label htmlFor={field.key}>
+            <Label id={labelId} htmlFor={field.key}>
                 {field.label}
                 {field.required && <span className="text-red-500 ml-1">*</span>}
             </Label>
@@ -400,6 +424,7 @@ function FieldRow({ field, value, onChange, values, error, initialValues, onFiel
                 effectiveOptions={effectiveOptions}
                 error={error}
                 onFieldMeta={onFieldMeta}
+                labelId={labelId}
             />
             {error && <span className="text-red-500 text-sm" role="alert">{error}</span>}
         </div>
@@ -442,6 +467,7 @@ function FieldRenderer({
     effectiveOptions,
     error,
     onFieldMeta,
+    labelId,
 }: FieldRendererProps & { effectiveOptions?: import('./types').OptionDef[]; error?: string }) {
     // Host-registered widget (`widget: "<name>"`) wins over every built-in and
     // type-based branch. Unregistered names fall through untouched.
@@ -522,6 +548,9 @@ function FieldRenderer({
             )
         }
         case 'switch':
+            if (usesTriState(field, initialValues?.[field.key])) {
+                return <TriStateBooleanField id={field.key} value={value} onChange={onChange} label={field.label} labelledBy={labelId} />
+            }
             return <Switch id={field.key} checked={!!value} onCheckedChange={onChange} />
         case 'number':
             return <Input id={field.key} type="number" value={value ?? ''} onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
