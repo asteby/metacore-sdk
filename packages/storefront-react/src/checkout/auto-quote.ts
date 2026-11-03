@@ -86,6 +86,8 @@ export type UseAutoQuoteResult = {
   noCoverage: boolean
   /** A quote is pending or running: the pay button must wait. */
   quoting: boolean
+  /** Counts the successful quotes of this session (0 before the first). */
+  quoteVersion: number
   /** Quote again now (retry button). */
   retry: () => void
   /** Plain-language status for a live region ("Buscando…", "Listo", …) keys, not text. */
@@ -151,6 +153,7 @@ export function useAutoQuote(options: UseAutoQuoteOptions): UseAutoQuoteResult {
   const [status, setStatus] = useState<AutoQuoteStatus>('idle')
   const [delivery, setDelivery] = useState<DeliveryOptions | null>(options.initial?.delivery ?? null)
   const [quotedFor, setQuotedFor] = useState<QuoteAddress | null>(null)
+  const [quoteVersion, setQuoteVersion] = useState(0)
   const opts = useRef(options)
   opts.current = options
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -185,6 +188,7 @@ export function useAutoQuote(options: UseAutoQuoteOptions): UseAutoQuoteResult {
         setChange(prev && next && Number(prev.amount) !== Number(next.cost.amount) ? { from: prev, to: next.cost } : null)
         setDelivery(d)
         setQuotedFor(address)
+        setQuoteVersion((v) => v + 1)
         setStatus('ready')
         opts.current.onQuoted?.(d)
       })
@@ -270,6 +274,6 @@ export function useAutoQuote(options: UseAutoQuoteOptions): UseAutoQuoteResult {
 
   const noCoverage = status === 'ready' && !!delivery && delivery.rates.length === 0 && delivery.pickup.length === 0
   const quoting = status === 'waiting' || status === 'loading'
-  return { status, delivery, defaultValue, quotedFor, change, noCoverage, quoting, retry, announce }
+  return { status, delivery, defaultValue, quotedFor, change, noCoverage, quoting, quoteVersion, retry, announce }
 }
 

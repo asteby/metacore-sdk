@@ -150,6 +150,21 @@ describe('PaymentMethodSection', () => {
     await waitFor(() => expect(syncDelivery).toHaveBeenCalledWith('rate:2'))
     await waitFor(() => expect(screen.queryByText(/tarifas de envío se actualizaron/)).toBeNull())
   })
+  it("a re-quote that keeps the same rate id runs the sync again once the new quote arrives (syncVersion)", async () => {
+    let calls = 0
+    const syncDelivery = vi.fn(async () => (++calls === 1 ? ('requote' as const) : true))
+    const view = setup({ syncDelivery, syncVersion: 0 })
+    await screen.findByText(/tarifas de envío se actualizaron/)
+    expect(syncDelivery).toHaveBeenCalledTimes(1)
+    view.rerender(
+      <form ref={view.formRef} onSubmit={(e) => e.preventDefault()}>
+        <input name="email" aria-label="Correo" defaultValue="a@b.co" />
+        <PaymentMethodSection choices={buildPayChoices([method])} amount={total} scope="cart_1" formRef={view.formRef} payUrl="/p" delivery="rate:1" syncDelivery={syncDelivery} syncVersion={1} onDone={() => {}} brickProps={{ adapter: fakeAdapter().adapter, storage: null }} />
+      </form>,
+    )
+    await waitFor(() => expect(syncDelivery).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.queryByText(/tarifas de envío se actualizaron/)).toBeNull())
+  })
   it('draws brand marks: card networks, cash points and the provider on its own rows', () => {
     const mp: PaymentMethod = { ...method, key: 'mercadopago', options: [
       { key: 'card', redirect: false },

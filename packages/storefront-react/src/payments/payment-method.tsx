@@ -55,6 +55,12 @@ export type PaymentMethodSectionProps = {
   /** `false` while the buyer has not chosen a delivery that fixes the total (e.g. address pending). Default true. */
   deliveryReady?: boolean
   /**
+   * Changes every time the shop gets a fresh quote (`useLiveDelivery().quoteVersion`). A sync that ended in `'requote'` runs
+   * again when it changes, even if the new quote kept the same rate id (a fixed rate): otherwise the form would wait for a
+   * sync nobody retries until the buyer edits the address.
+   */
+  syncVersion?: number
+  /**
    * Saves the chosen delivery on the server cart so the server total includes it. Resolve `true` once the new total
    * has been read back (the `amount` prop is then up to date). Called once per delivery, whatever the payment row (so
    * the total on the button and in the shop's summary always holds the chosen delivery). Without it nothing waits.
@@ -201,6 +207,7 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
     statusUrl,
     delivery = '',
     deliveryReady = true,
+    syncVersion = 0,
     syncDelivery,
     addressFirst = false,
     retryAddress = false,
@@ -294,7 +301,7 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wantSync, delivery])
+  }, [wantSync, delivery, sync?.requote ? syncVersion : 0])
   const settled = sync?.key === delivery
   const synced = !syncDelivery || (settled && sync!.ok)
   const requote = wantSync && settled && sync!.requote === true

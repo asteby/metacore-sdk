@@ -7,7 +7,7 @@
  *   const live = useLiveDelivery({ formRef, delivery: loader.delivery, quoteUrl: '/pagar/envio', enabled: hydrated, saved })
  *   <DeliveryStatus {...live.statusProps} />
  *   <DeliveryOptions {...live.optionsProps} />
- *   <PaymentMethodSection earlyCard deliveryReady={live.deliveryReady} holdLabel={live.holdLabel} delivery={live.deliveryValue} ... />
+ *   <PaymentMethodSection earlyCard deliveryReady={live.deliveryReady} syncVersion={live.quoteVersion} holdLabel={live.holdLabel} delivery={live.deliveryValue} ... />
  *   <OrderSummary quoting={live.quoting} ... />
  *
  * Transport: `quoteUrl` (the shop's route that saves the destination in the cart and answers `DeliveryOptions`) or your
@@ -75,6 +75,8 @@ export type UseLiveDeliveryResult = {
   /** Pass to `PaymentMethodSection.holdLabel`: text while the button must wait, else `undefined`. */
   holdLabel: string | undefined
   quoting: boolean
+  /** Pass to `PaymentMethodSection.syncVersion`: changes with every fresh quote. */
+  quoteVersion: number
   change: QuoteChange | null
   /** Spread on `<DeliveryStatus>`. */
   statusProps: { state: DeliveryStatusState; change: QuoteChange | null; onRetry: () => void }
@@ -181,5 +183,5 @@ export function useLiveDelivery(options: UseLiveDeliveryOptions): UseLiveDeliver
     loading: enabled && quote.quoting && live.rates.length > 0,
     defaultValue: quote.defaultValue ?? savedValue ?? undefined,
   }
-  return { quote, live, deliveryValue, onFormChange, state: shownState, streetOk, shippingQuoted, deliveryReady, payReady, holdLabel, quoting: enabled && quote.quoting, change: quote.change, statusProps, optionsProps, requote }
+  return { quote, live, deliveryValue, onFormChange, state: shownState, streetOk, shippingQuoted, deliveryReady, payReady, holdLabel, quoting: enabled && quote.quoting, quoteVersion: quote.quoteVersion, change: quote.change, statusProps, optionsProps, requote }
 }
