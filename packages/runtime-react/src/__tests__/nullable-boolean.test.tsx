@@ -21,7 +21,7 @@ vi.mock('react-i18next', () => ({ useTranslation: () => I18N }))
 import { DynamicForm } from '../dynamic-form'
 import { buildZodSchema } from '../dynamic-form-schema'
 import { DynamicRecordDialog, pickDeclaredFieldValues } from '../dialogs/dynamic-record'
-import { buildFieldDefaults } from '../action-modal-dispatcher'
+import { buildFieldDefaults, renderField } from '../action-modal-dispatcher'
 import { makeDefaultGetDynamicColumns } from '../dynamic-columns'
 import { cardMatchesLaneFunnel } from '../dynamic-kanban'
 import { useDynamicFilters } from '../use-dynamic-filters'
@@ -384,10 +384,13 @@ describe('filtro booleano con NULL', () => {
 })
 
 describe('carril del kanban con NULL', () => {
-    it('«Sin definir» (NULL) casa con null/undefined; No sigue siendo false', () => {
+    it('«Sin definir» (NULL) casa sólo con null explícito; No sigue siendo false', () => {
         const f = { field: 'sandbox', values: ['NULL'] }
         expect(cardMatchesLaneFunnel({ sandbox: null }, f)).toBe(true)
-        expect(cardMatchesLaneFunnel({}, f)).toBe(true)
+        // Sin la columna (undefined) o con '' no es «Sin definir».
+        expect(cardMatchesLaneFunnel({}, f)).toBe(false)
+        expect(cardMatchesLaneFunnel({ sandbox: undefined }, f)).toBe(false)
+        expect(cardMatchesLaneFunnel({ sandbox: '' }, f)).toBe(false)
         expect(cardMatchesLaneFunnel({ sandbox: false }, f)).toBe(false)
         expect(cardMatchesLaneFunnel({ sandbox: null }, { field: 'sandbox', values: ['false'] })).toBe(false)
         expect(cardMatchesLaneFunnel({ sandbox: false }, { field: 'sandbox', values: ['false'] })).toBe(true)
@@ -403,14 +406,49 @@ describe('accesibilidad del control de tres estados', () => {
         )
         const group = await screen.findByRole('radiogroup', { name: 'Modo de prueba' })
         const labelId = group.getAttribute('aria-labelledby')
-        expect(labelId).toBe('sandbox-label')
+        expect(labelId).toBeTruthy()
         expect(document.getElementById(labelId!)?.textContent).toContain('Modo de prueba')
     })
 
     it('DynamicForm: el <Label> visible nombra al radiogroup', async () => {
         render(<DynamicForm fields={[sandbox]} initialValues={{ id: 'p1', sandbox: null }} onSubmit={vi.fn()} />)
         const group = await screen.findByRole('radiogroup', { name: 'Sandbox' })
-        expect(group.getAttribute('aria-labelledby')).toBe('sandbox-label')
+        expect(document.getElementById(group.getAttribute('aria-labelledby')!)?.tagName).toBe('LABEL')
+    })
+
+    it('dos formularios a la vez con el mismo campo: ids distintos, cada uno a su etiqueta', async () => {
+        render(
+            <>
+                <div data-testid="a">
+                    <DynamicForm fields={[{ ...sandbox, label: 'Sandbox A' }]} initialValues={{ id: 'a', sandbox: null }} onSubmit={vi.fn()} />
+                </div>
+                <div data-testid="b">
+                    <DynamicForm fields={[{ ...sandbox, label: 'Sandbox B' }]} initialValues={{ id: 'b', sandbox: null }} onSubmit={vi.fn()} />
+                </div>
+            </>,
+        )
+        const a = await screen.findByRole('radiogroup', { name: 'Sandbox A' })
+        const b = await screen.findByRole('radiogroup', { name: 'Sandbox B' })
+        const ida = a.getAttribute('aria-labelledby')!
+        const idb = b.getAttribute('aria-labelledby')!
+        expect(ida).not.toBe(idb)
+        expect(document.querySelectorAll(`[id="${ida}"]`)).toHaveLength(1)
+        expect(screen.getByTestId('a').contains(document.getElementById(ida))).toBe(true)
+        expect(screen.getByTestId('b').contains(document.getElementById(idb))).toBe(true)
+    })
+
+    it('modal de acción: renderField usa el id de etiqueta que le da su modal', async () => {
+        const field: ActionFieldDef = { key: 'sandbox', label: 'Sandbox', type: 'boolean', nullable: true }
+        render(
+            <>
+                <span id=":r1:sandbox-label">Modal 1</span>
+                {renderField(field, null, vi.fn(), {}, { sandbox: null }, undefined, ':r1:sandbox-label')}
+                <span id=":r2:sandbox-label">Modal 2</span>
+                {renderField(field, null, vi.fn(), {}, { sandbox: null }, undefined, ':r2:sandbox-label')}
+            </>,
+        )
+        expect(await screen.findByRole('radiogroup', { name: 'Modal 1' })).toBeTruthy()
+        expect(await screen.findByRole('radiogroup', { name: 'Modal 2' })).toBeTruthy()
     })
 
     it('sin <label> (celda de renglón): aria-label traducido', async () => {

@@ -15,7 +15,7 @@
 // The host injects its axios-like client via <ApiProvider>; we no longer
 // depend on a bundler alias to `@/lib/api`.
 import { emitRecordMutationSettled } from './record-mutation-events'
-import { Suspense, useState, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { Suspense, useState, useCallback, useEffect, useId, useMemo, useRef, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
     Dialog,
@@ -1090,6 +1090,8 @@ export function focusFirstInvalid(root: HTMLElement | null): HTMLElement | null 
 
 function GenericActionModal({ open, onOpenChange, action, model, record, endpoint, onSuccess }: ActionModalProps) {
     const { t, i18n } = useTranslation()
+    // Prefijo único por instancia para los ids de las etiquetas (aria-labelledby).
+    const formUid = useId()
     // Addon-contributed labels (action + fields) are i18n keys whose locale
     // bundle loads asynchronously; translate at render so they don't render raw.
     // defaultValue keeps an already-localized string unchanged.
@@ -1410,7 +1412,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                                 resolveWidget(field) === 'richtext'
                             return (
                                 <FieldCell key={field.key} fullWidth={fullWidth}>
-                                    <FieldLabel id={`${field.key}-label`} htmlFor={field.key} required={field.required}>
+                                    <FieldLabel id={`${formUid}${field.key}-label`} htmlFor={field.key} required={field.required}>
                                         {tl(field.label)}
                                     </FieldLabel>
                                     {renderField(
@@ -1420,6 +1422,7 @@ function GenericActionModal({ open, onOpenChange, action, model, record, endpoin
                                         formData,
                                         record,
                                         fieldErrors,
+                                        `${formUid}${field.key}-label`,
                                     )}
                                     {fieldErrors[field.key] && (
                                         <p id={`${field.key}-error`} className="text-destructive text-xs mt-1" data-field-error={field.key}>
@@ -1545,6 +1548,7 @@ function wizardStepErrors(
 // single-page action form — no widget is duplicated.
 function WizardActionModal({ open, onOpenChange, action, model, record, endpoint, onSuccess }: ActionModalProps) {
     const { t, i18n } = useTranslation()
+    const formUid = useId()
     const tl = (s: string) => t(s, { defaultValue: s })
     const api = useApi()
     const reasonPrompt = useReasonPrompt()
@@ -1714,10 +1718,10 @@ function WizardActionModal({ open, onOpenChange, action, model, record, endpoint
                                 resolveWidget(field) === 'richtext'
                             return (
                                 <FieldCell key={field.key} fullWidth={fullWidth}>
-                                    <FieldLabel id={`${field.key}-label`} htmlFor={field.key} required={field.required}>
+                                    <FieldLabel id={`${formUid}${field.key}-label`} htmlFor={field.key} required={field.required}>
                                         {tl(field.label)}
                                     </FieldLabel>
-                                    {renderField(field, formData[field.key], (v: any) => updateField(field.key, v), formData, record)}
+                                    {renderField(field, formData[field.key], (v: any) => updateField(field.key, v), formData, record, undefined, `${formUid}${field.key}-label`)}
                                 </FieldCell>
                             )
                         })}
@@ -1821,6 +1825,8 @@ export function renderField(
     formValues?: Record<string, any>,
     record?: Record<string, any>,
     fieldErrors?: Record<string, string>,
+    // id único de la etiqueta visible: el control de tres estados la referencia.
+    labelId?: string,
 ) {
     // Repeatable line-items group → row grid (value is an array of row objects).
     // The header form values flow in so a cell can depend on a header field.
@@ -1889,7 +1895,7 @@ export function renderField(
         }
         case 'switch':
             if (usesTriState(field, record ? readRecordPath(record, field.key) : undefined)) {
-                return <TriStateBooleanField id={field.key} value={value} onChange={onChange} label={field.label} labelledBy={`${field.key}-label`} invalid={invalid} />
+                return <TriStateBooleanField id={field.key} value={value} onChange={onChange} label={field.label} labelledBy={labelId} invalid={invalid} />
             }
             return <Switch id={field.key} checked={!!value} onCheckedChange={onChange} />
         case 'number':

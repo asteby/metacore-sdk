@@ -727,8 +727,9 @@ export function cardMatchesLaneFunnel(
     const value = card?.[filter.field]
     const raw = String(value ?? '')
     if (filter.values && filter.values.length > 0) {
-        // «Sin definir» de un booleano (valor de filtro NULL) casa con null/undefined.
-        if (value == null && filter.values.includes(BOOLEAN_UNSET_FILTER_VALUE)) return true
+        // «Sin definir» de un booleano (valor de filtro NULL) casa sólo con null
+        // explícito: una tarjeta sin la columna o con '' no es «Sin definir».
+        if (value === null && filter.values.includes(BOOLEAN_UNSET_FILTER_VALUE)) return true
         return filter.values.includes(raw)
     }
     if (filter.text?.trim()) {

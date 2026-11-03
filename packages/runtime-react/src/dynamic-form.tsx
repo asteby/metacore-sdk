@@ -1,7 +1,7 @@
 // Minimal standalone DynamicForm. Factored from the dynamic-record-dialog
 // pattern + ActionFieldDef renderer so callers can reuse the form layout
 // outside the full record-edit modal.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { groupFieldsBySection, type FormLayout } from './form-layout'
 import { FieldSection, WizardProgress } from './form-layout-ui'
 import { AssistInterview } from './assist-interview'
@@ -372,6 +372,8 @@ interface FieldRendererProps {
      */
     values?: Record<string, any>
     onFieldMeta?: (key: string, meta: { width?: number; height?: number }) => void
+    /** id único (useId) de la etiqueta visible; el control de tres estados la referencia. */
+    labelId?: string
 }
 
 interface FieldRowProps extends FieldRendererProps {
@@ -383,6 +385,8 @@ interface FieldRowProps extends FieldRendererProps {
 // value (`when`) can hide the ENTIRE row (label included) and run its reset
 // effect with valid hook ordering.
 function FieldRow({ field, value, onChange, values, error, initialValues, onFieldMeta }: FieldRowProps) {
+    // Único por instancia: dos formularios montados con el mismo campo no chocan.
+    const labelId = `${useId()}-label`
     const isStaticSelect =
         resolveWidget(field) === 'select' && !field.ref && Array.isArray(field.options)
     const effectiveOptions = isStaticSelect
@@ -407,7 +411,7 @@ function FieldRow({ field, value, onChange, values, error, initialValues, onFiel
         resolveWidget(field) === 'richtext'
     return (
         <div className={'grid gap-2 ' + (fullWidth ? 'sm:col-span-2' : '')}>
-            <Label id={`${field.key}-label`} htmlFor={field.key}>
+            <Label id={labelId} htmlFor={field.key}>
                 {field.label}
                 {field.required && <span className="text-red-500 ml-1">*</span>}
             </Label>
@@ -420,6 +424,7 @@ function FieldRow({ field, value, onChange, values, error, initialValues, onFiel
                 effectiveOptions={effectiveOptions}
                 error={error}
                 onFieldMeta={onFieldMeta}
+                labelId={labelId}
             />
             {error && <span className="text-red-500 text-sm" role="alert">{error}</span>}
         </div>
@@ -462,6 +467,7 @@ function FieldRenderer({
     effectiveOptions,
     error,
     onFieldMeta,
+    labelId,
 }: FieldRendererProps & { effectiveOptions?: import('./types').OptionDef[]; error?: string }) {
     // Host-registered widget (`widget: "<name>"`) wins over every built-in and
     // type-based branch. Unregistered names fall through untouched.
@@ -543,7 +549,7 @@ function FieldRenderer({
         }
         case 'switch':
             if (usesTriState(field, initialValues?.[field.key])) {
-                return <TriStateBooleanField id={field.key} value={value} onChange={onChange} label={field.label} labelledBy={`${field.key}-label`} />
+                return <TriStateBooleanField id={field.key} value={value} onChange={onChange} label={field.label} labelledBy={labelId} />
             }
             return <Switch id={field.key} checked={!!value} onCheckedChange={onChange} />
         case 'number':

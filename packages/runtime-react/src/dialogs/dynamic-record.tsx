@@ -1545,10 +1545,12 @@ function FieldRow({ field, record, value, mode, onChange, error, locked }: Field
     // CREATE for a caller-specified field (see `lockedFields`).
     const isEditReadonly = (mode === 'edit' && !!field.readonly) || !!locked
     const { t } = useTranslation()
+    // Único por instancia (dos diálogos abiertos con el mismo campo no chocan).
+    const labelId = `${useId()}-label`
 
     return (
         <div className="flex flex-col gap-1.5" data-aby-field={field.key}>
-            <Label id={`${field.key}-label`} className="text-sm font-medium text-foreground/80">
+            <Label id={labelId} className="text-sm font-medium text-foreground/80">
                 {localizeFieldLabel(field.label, t)}
                 {field.required && mode !== 'view' && !isEditReadonly && (
                     <span className="text-destructive ml-0.5">*</span>
@@ -1560,7 +1562,7 @@ function FieldRow({ field, record, value, mode, onChange, error, locked }: Field
             ) : isEditReadonly ? (
                 <ReadonlyEditField field={field} value={value} />
             ) : (
-                <EditField field={field} value={value} onChange={onChange} record={record} invalid={!!error} error={error} />
+                <EditField field={field} value={value} onChange={onChange} record={record} invalid={!!error} error={error} labelId={labelId} />
             )}
 
             {error && mode !== 'view' && (
@@ -2256,8 +2258,10 @@ function JsonObjectViewValue({ value }: { value: Record<string, unknown> }) {
     )
 }
 
-export function EditField({ field, value, onChange, record, invalid, error }: {
+export function EditField({ field, value, onChange, record, invalid, error, labelId }: {
     field: FieldDef
+    /** id de la etiqueta visible (FieldRow); el control de tres estados la referencia. */
+    labelId?: string
     value: any
     onChange: (val: any) => void
     /** The full record being edited — supplies FK relation siblings + line-items. */
@@ -2324,7 +2328,7 @@ export function EditField({ field, value, onChange, record, invalid, error }: {
     ) {
         return (
             <div className="py-1">
-                <TriStateBooleanField id={field.key} value={value} onChange={onChange} label={localizeFieldLabel(field.label, t)} labelledBy={`${field.key}-label`} invalid={invalid} />
+                <TriStateBooleanField id={field.key} value={value} onChange={onChange} label={localizeFieldLabel(field.label, t)} labelledBy={labelId} invalid={invalid} />
             </div>
         )
     }
