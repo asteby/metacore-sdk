@@ -286,22 +286,31 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
   // button: the shop saves it on the cart and re-reads the cart. Once per delivery, for every payment row (cash and
   // redirect included, otherwise the button and the summary show the cart without shipping).
   const wantSync = hydrated && selected !== null && !addressFirst && !retryAddress && deliveryReady && Boolean(syncDelivery)
-  const [sync, setSync] = useState<{ key: string; ok: boolean; requote?: boolean } | null>(null)
+  // `version`: the syncVersion the sync was sent with. With the prop, a NEWER quote (address or price changed, even when the
+  // rate kept its id) saves the delivery once more so the total is read again; a 'requote' is never re-sent with the
+  // same delivery and the same quote.
+  const [sync, setSync] = useState<{ key: string; ok: boolean; requote?: boolean; version?: number } | null>(null)
   const syncRef = useRef(syncDelivery)
   syncRef.current = syncDelivery
+  // Without the prop the shop keeps the earlier behaviour (a 'requote' is sent again when wantSync or delivery change).
+  const versioned = props.syncVersion !== undefined
+  const newerQuote = versioned && !!sync && syncVersion > (sync.version ?? 0)
+  const resyncToken = newerQuote ? syncVersion : 0
   useEffect(() => {
     if (!wantSync || !syncRef.current) return
-    if (sync?.key === delivery && sync.ok) return
+    if (sync?.key === delivery && sync.ok && !newerQuote) return
+    if (versioned && sync?.key === delivery && sync.requote && !newerQuote) return
     let cancelled = false
+    const version = syncVersion
     syncRef.current(delivery).then(
-      (ok) => !cancelled && setSync(ok === 'requote' ? { key: delivery, ok: false, requote: true } : { key: delivery, ok }),
-      () => !cancelled && setSync({ key: delivery, ok: false }),
+      (ok) => !cancelled && setSync(ok === 'requote' ? { key: delivery, ok: false, requote: true, version } : { key: delivery, ok, version }),
+      () => !cancelled && setSync({ key: delivery, ok: false, version }),
     )
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wantSync, delivery, sync?.requote ? syncVersion : 0])
+  }, [wantSync, delivery, resyncToken])
   const settled = sync?.key === delivery
   const synced = !syncDelivery || (settled && sync!.ok)
   const requote = wantSync && settled && sync!.requote === true

@@ -165,6 +165,64 @@ describe('PaymentMethodSection', () => {
     await waitFor(() => expect(syncDelivery).toHaveBeenCalledTimes(2))
     await waitFor(() => expect(screen.queryByText(/tarifas de envío se actualizaron/)).toBeNull())
   })
+  it('a refused delivery is NOT sent again with the same quote (no double PUT), only with a newer one', async () => {
+    const syncDelivery = vi.fn(async () => 'requote' as const)
+    const view = setup({ syncDelivery, syncVersion: 3 })
+    await screen.findByText(/tarifas de envío se actualizaron/)
+    await new Promise((r) => setTimeout(r, 30))
+    expect(syncDelivery).toHaveBeenCalledTimes(1)
+    const again = (over: Partial<PaymentMethodSectionProps>) =>
+      view.rerender(
+        <form ref={view.formRef} onSubmit={(e) => e.preventDefault()}>
+          <input name="email" aria-label="Correo" defaultValue="a@b.co" />
+          <PaymentMethodSection choices={buildPayChoices([method])} amount={total} scope="cart_1" formRef={view.formRef} payUrl="/p" delivery="rate:1" syncDelivery={syncDelivery} onDone={() => {}} brickProps={{ adapter: fakeAdapter().adapter, storage: null }} syncVersion={3} {...over} />
+        </form>,
+      )
+    // wantSync goes false -> true (address edited) with the SAME quote: nothing is sent.
+    again({ deliveryReady: false })
+    again({ deliveryReady: true })
+    await new Promise((r) => setTimeout(r, 30))
+    expect(syncDelivery).toHaveBeenCalledTimes(1)
+    // A newer quote: sent once; refused again: not re-sent until the next quote.
+    again({ syncVersion: 4 })
+    await waitFor(() => expect(syncDelivery).toHaveBeenCalledTimes(2))
+    await new Promise((r) => setTimeout(r, 30))
+    expect(syncDelivery).toHaveBeenCalledTimes(2)
+  })
+  it('a newer quote that keeps the rate id (postal code changed) saves the delivery once more to re-read the total', async () => {
+    const syncDelivery = vi.fn(async () => true)
+    const view = setup({ syncDelivery, syncVersion: 1 })
+    await waitFor(() => expect(syncDelivery).toHaveBeenCalledTimes(1))
+    const again = (syncVersion: number) =>
+      view.rerender(
+        <form ref={view.formRef} onSubmit={(e) => e.preventDefault()}>
+          <input name="email" aria-label="Correo" defaultValue="a@b.co" />
+          <PaymentMethodSection choices={buildPayChoices([method])} amount={total} scope="cart_1" formRef={view.formRef} payUrl="/p" delivery="rate:1" syncDelivery={syncDelivery} onDone={() => {}} brickProps={{ adapter: fakeAdapter().adapter, storage: null }} syncVersion={syncVersion} />
+        </form>,
+      )
+    again(1)
+    await new Promise((r) => setTimeout(r, 30))
+    expect(syncDelivery).toHaveBeenCalledTimes(1)
+    again(2)
+    await waitFor(() => expect(syncDelivery).toHaveBeenCalledTimes(2))
+    await new Promise((r) => setTimeout(r, 30))
+    expect(syncDelivery).toHaveBeenCalledTimes(2)
+  })
+  it('without syncVersion a refused delivery keeps the earlier retry (when wantSync changes)', async () => {
+    const syncDelivery = vi.fn(async () => 'requote' as const)
+    const view = setup({ syncDelivery })
+    await screen.findByText(/tarifas de envío se actualizaron/)
+    const again = (deliveryReady: boolean) =>
+      view.rerender(
+        <form ref={view.formRef} onSubmit={(e) => e.preventDefault()}>
+          <input name="email" aria-label="Correo" defaultValue="a@b.co" />
+          <PaymentMethodSection choices={buildPayChoices([method])} amount={total} scope="cart_1" formRef={view.formRef} payUrl="/p" delivery="rate:1" syncDelivery={syncDelivery} onDone={() => {}} brickProps={{ adapter: fakeAdapter().adapter, storage: null }} deliveryReady={deliveryReady} />
+        </form>,
+      )
+    again(false)
+    again(true)
+    await waitFor(() => expect(syncDelivery).toHaveBeenCalledTimes(2))
+  })
   it('draws brand marks: card networks, cash points and the provider on its own rows', () => {
     const mp: PaymentMethod = { ...method, key: 'mercadopago', options: [
       { key: 'card', redirect: false },

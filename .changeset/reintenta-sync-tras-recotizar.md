@@ -9,3 +9,5 @@ Checkout: tras una recotización de envío con la misma tarifa (mismo `rate.id`,
 - Prueba de guardia: cargar con dirección guardada cotiza sola al montar (con o sin tarifas en la página, con o sin consulta de CP).
 
 Requiere revisión adversarial (decide cuándo se guarda la entrega y se relee el total).
+
+Con `syncVersion`, una entrega rechazada con `'requote'` no se reenvía al instante con la misma cotización (antes salía un segundo PUT en cuanto cambiaba la dependencia y una tienda que cuenta rechazos lo tomaba como fallo real); se reenvía una sola vez cuando llega una cotización más nueva. Una cotización nueva que conserva el id (cambió el CP) guarda la entrega una vez más para releer el total. Sin la prop se conserva el comportamiento anterior.
