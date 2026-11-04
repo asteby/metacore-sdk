@@ -192,6 +192,7 @@ describe('mergeShopSections', () => {
     expect(isLegalHandle('aviso-privacidad')).toBe(true)
     expect(isLegalHandle('nuestros-terminos')).toBe(true)
     expect(isLegalHandle('preguntas-garantizadas')).toBe(false)
+    for (const h of ['return-policy', 'shipping-policy', 'cookie-policy', 'refund-policy']) expect(isLegalHandle(h), h).toBe(true)
   })
   it('does not mutate its input', () => {
     const copy = structuredClone(faq)
@@ -225,6 +226,11 @@ describe('third review', () => {
     const inj = shopFieldValues({ ...complete, legal: { ...complete.legal!, fiscal_address: 'https://a onmouseover=alert(1)' } })
     expect(resolveShopText('<a href={{shop.fiscal_address}}>x</a>', inj, { html: true })).toMatchObject({ text: null, unsafe: true })
     expect(resolveShopText('<img src="{{shop.privacy_email}}">', evil, { html: true }).text).toBeNull()
+    // A quoted value with an = before the field is fine; a > inside a quoted attribute does not hide the href.
+    expect(resolveShopText('<a href="https://wa.me/?text={{shop.name}}">x</a>', shopFieldValues(complete), { html: true }).text).not.toBeNull()
+    expect(resolveShopText('<a title="a>b" href="{{shop.privacy_email}}">x</a>', evil, { html: true }).text).toBeNull()
+    expect(resolveShopText('<img srcset="{{shop.privacy_email}} 1x">', evil, { html: true }).text).toBeNull()
+    expect(resolveShopText('<button formaction="{{shop.privacy_email}}">x</button>', evil, { html: true }).text).toBeNull()
     // A field in text after an equals sign is not an attribute.
     expect(resolveShopText('<p>Total = {{shop.name}}</p>', shopFieldValues(complete), { html: true }).text).toBe('<p>Total = Tienda &amp; Co</p>')
     const ent = shopFieldValues({ ...complete, legal: { ...complete.legal!, privacy_email: '&#106;avascript:alert(1)' } })

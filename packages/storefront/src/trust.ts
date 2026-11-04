@@ -92,17 +92,35 @@ export function hasTemplateBlank(text: string): boolean {
 }
 
 const SAFE_HREF = /^(?:https?:|mailto:|tel:|\/|#|\?|\.)/i
-const HREF_RE = /\b(?:href|src)\s*=\s*(?:(["'])(.*?)\1|([^\s>"']+))/gi
-/** A field inside an UNQUOTED attribute value: a value with a space could add another attribute (`onmouseover=`). */
-const UNQUOTED_FIELD_RE = /<[a-z][^<>]*=\s*[^\s"'<>=]*\{\{/i
+/** A real tag, quote-aware (a `>` inside a quoted attribute value does not end it). */
+const TAG_RE = /<[a-z](?:[^<>"']|"[^"]*"|'[^']*')*>/gi
+/** One attribute of a tag: name, then a double-quoted, single-quoted or unquoted value. */
+const ATTR_RE = /([a-z][a-z0-9:_-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'<>`=]+))/gi
+/** Attributes that hold a URL (srcset: a list; every candidate is checked). */
+const URL_ATTRS = new Set(['href', 'src', 'srcset', 'action', 'formaction', 'poster', 'xlink:href', 'data', 'cite'])
 
-/** A link whose target is not http(s), mailto, tel or a site path (e.g. `javascript:` from a field value). */
+/** A link-like attribute whose target is not http(s), mailto, tel or a site path (e.g. `javascript:`). */
 function hasUnsafeHref(html: string): boolean {
-  // Only real tags (escaped text such as `&lt;img src=x&gt;` is not a tag).
-  for (const tag of html.matchAll(/<[a-z][^<>]*>/gi)) {
-    for (const m of tag[0].matchAll(HREF_RE)) {
-      const target = decodeHtmlAttr(m[2] ?? m[3] ?? '').replace(/[\u0000-\u0020]/g, '')
-      if (target && !SAFE_HREF.test(target)) return true
+  for (const tag of html.matchAll(TAG_RE)) {
+    for (const m of tag[0].slice(1).matchAll(ATTR_RE)) {
+      const name = m[1]!.toLowerCase()
+      if (!URL_ATTRS.has(name)) continue
+      const raw = decodeHtmlAttr(m[2] ?? m[3] ?? m[4] ?? '')
+      const targets = name === 'srcset' ? raw.split(',').map((c) => c.trim().split(/\s+/)[0] ?? '') : [raw]
+      for (const t of targets) {
+        const target = t.replace(/[\u0000- ]/g, '')
+        if (target && !SAFE_HREF.test(target)) return true
+      }
+    }
+  }
+  return false
+}
+
+/** A `{{field}}` inside an UNQUOTED attribute value: a value with a space could add another attribute (`onmouseover=`). */
+function hasUnquotedField(html: string): boolean {
+  for (const tag of html.matchAll(TAG_RE)) {
+    for (const m of tag[0].slice(1).matchAll(ATTR_RE)) {
+      if (m[4] != null && m[4].includes('{{')) return true
     }
   }
   return false
@@ -225,7 +243,7 @@ export function resolveShopText(text: string, values: ShopFieldValues, { html = 
     }
   }
   const blank = hasTemplateBlank(out)
-  const unsafe = text.includes('{{') && (hasUnsafeHref(out) || UNQUOTED_FIELD_RE.test(text))
+  const unsafe = text.includes('{{') && (hasUnsafeHref(out) || hasUnquotedField(text))
   const blocked = draft || pending || missing.length > 0 || leftover || unsafe || (strict && blank)
   return { text: blocked ? null : out, missing, pending, draft, unknown, blank, unsafe }
 }
@@ -389,7 +407,7 @@ const LEGAL_HANDLES = new Set([
 ])
 
 /** Words that make a hand-made handle legal (`aviso-privacidad`, `nuestros-terminos`, `politica-garantia`…). */
-const LEGAL_WORDS = /(?:^|-)(?:privacidad|privacy|terminos|condiciones|terms|devoluciones|reembolsos|refunds?|garantia|warranty|cookies|arco|legal)(?:-|$)/
+const LEGAL_WORDS = /(?:^|-)(?:privacidad|privacy|terminos|condiciones|terms|devoluciones|reembolsos|refunds?|returns?|garantia|warranty|cookies?|arco|legal|policy|shipping-policy)(?:-|$)/
 
 /**
  * Whether a page handle is a legal or policy page (published only when complete): the known handles, any `politica-*`
