@@ -16,3 +16,9 @@ Confianza y transparencia con datos de OPS (contrato 1.30.0, aditivo). La regla 
   - `isInternalProduct` marca los productos de QA (etiqueta `qa`/`interno`, o todos sus SKU con `TEST-`) para sacarlos de listados, sitemaps, feeds y datos estructurados.
   - El mock sirve `GET /storefront/payment-methods` y una identidad legal vacía (no inventa ninguna).
 - `@asteby/storefront-react/checkout`: `acceptedPaymentMarks(methods)` convierte esa lista en marcas para `BrandMark` o en textos. La tarjeta usa la etiqueta del proveedor o «Pago con tarjeta», sin suponer redes; `bank_transfer` es «Transferencia bancaria»; los puntos de efectivo como OXXO, 7-Eleven o SPEI, y el monedero de Mercado Pago con su marca. `manual` se incluye solo si se pide y `mock` nunca.
+
+Las reglas fallan del lado seguro y es preferible ocultar a publicar algo dudoso:
+- «revisar con un abogado» oculta ese texto en cualquier página.
+- Un enlace a `whatsapp://` o a una ruta relativa sin `/` bloquea el texto si cita un campo.
+- Un «[LFPDPPP]» en mayúsculas deja sin publicar una página legal.
+- Los handles `aviso-*`, o los que llevan una palabra legal, se tratan como legales.

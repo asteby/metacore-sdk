@@ -72,7 +72,7 @@ describe('resolveShopText', () => {
     expect(resolveShopText('{{shop.name}} · {{ shop.domain }}', values).text).toBe('Tienda & Co · tienda.example.com')
   })
   it('never shows an unknown or misspelled placeholder', () => {
-    for (const t of ['&#123;&#123;shop.rfc&#125;&#125;', '&lbrace;&lbrace;x&rbrace;&rbrace;', '{{shop.name}', 'a {{ sin cierre', 'RFC {{shop.rfc}}', '{{Shop.Name}}', '{{order.id}}', 'Fecha {{completar : fecha}}', 'Fecha {{completar}}', '{{COMPLETAR: x}}', '{{__proto__}}', '{{constructor}}']) {
+    for (const t of ['{<b></b>{completar: x}}', '&#123;&#123;shop.rfc&#125;&#125;', '&lbrace;&lbrace;x&rbrace;&rbrace;', '{{shop.name}', 'a {{ sin cierre', 'RFC {{shop.rfc}}', '{{Shop.Name}}', '{{order.id}}', 'Fecha {{completar : fecha}}', 'Fecha {{completar}}', '{{COMPLETAR: x}}', '{{__proto__}}', '{{constructor}}']) {
       expect(resolveShopText(t, values).text, t).toBeNull()
     }
     expect(resolveShopText('RFC {{shop.rfc}}', values).unknown).toEqual(['shop.rfc'])
@@ -207,6 +207,8 @@ describe('third review', () => {
       { id: 'a', type: 'rich_text', props: { content: '<p>[RAZÓN SOCIAL O NOMBRE COMPLETO], con domicilio en [DOMICILIO COMPLETO]. Fecha: [FECHA].</p>' } },
     ] }
     expect(mergeShopPage(old, complete).publishable).toBe(false)
+    const titled = { ...old, title: 'Aviso de [RAZÓN SOCIAL]', sections: [{ id: 'a', type: 'rich_text', props: { content: '<p>Completo.</p>' } }] }
+    expect(mergeShopPage(titled, complete).publishable).toBe(false)
     // Outside legal pages a bracketed upper-case text is not a blank to block.
     expect(mergeShopPage({ ...old, handle: 'nosotros' }, complete).publishable).toBe(true)
     expect(mergeShopPage({ ...old, sections: [{ id: 'a', type: 'rich_text', props: { content: '<p>Texto [ver nota] final.</p>' } }] }, complete).publishable).toBe(true)
@@ -215,6 +217,7 @@ describe('third review', () => {
     const evil = shopFieldValues({ ...complete, legal: { ...complete.legal!, privacy_email: 'javascript:alert(1)' } })
     expect(resolveShopText('<a href="{{shop.privacy_email}}">x</a>', evil, { html: true })).toMatchObject({ text: null, unsafe: true })
     expect(resolveShopText('<a href="mailto:{{shop.privacy_email}}">x</a>', shopFieldValues(complete), { html: true }).text).toContain('mailto:hola@')
+    expect(resolveShopText('<a href={{shop.privacy_email}}>x</a>', evil, { html: true }).text).toBeNull()
     const ent = shopFieldValues({ ...complete, legal: { ...complete.legal!, privacy_email: '&#106;avascript:alert(1)' } })
     expect(resolveShopText('<a href="{{shop.privacy_email}}">x</a>', ent, { html: true }).text).toBeNull()
   })

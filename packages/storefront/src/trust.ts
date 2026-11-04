@@ -91,12 +91,12 @@ export function hasTemplateBlank(text: string): boolean {
 }
 
 const SAFE_HREF = /^(?:https?:|mailto:|tel:|\/|#|\?|\.)/i
-const HREF_RE = /\bhref\s*=\s*(["'])(.*?)\1/gi
+const HREF_RE = /\bhref\s*=\s*(?:(["'])(.*?)\1|([^\s>"']+))/gi
 
 /** A link whose target is not http(s), mailto, tel or a site path (e.g. `javascript:` from a field value). */
 function hasUnsafeHref(html: string): boolean {
   for (const m of html.matchAll(HREF_RE)) {
-    const target = decodeHtmlAttr(m[2]!).replace(/[\u0000- ]/g, '')
+    const target = decodeHtmlAttr(m[2] ?? m[3] ?? '').replace(/[\u0000- ]/g, '')
     if (target && !SAFE_HREF.test(target)) return true
   }
   return false
@@ -210,7 +210,7 @@ export function resolveShopText(text: string, values: ShopFieldValues, { html = 
   const pending = PENDING_RE.test(text) || PENDING_RE.test(out)
   // Any `{{` left (an unknown field, a typo, an unclosed `{{shop.name}`, a `{{completar…}}` in any spelling) blocks the text.
   // Also as HTML entities (`&#123;&#123;`, `&lbrace;`): a renderer would decode them into a visible placeholder.
-  const leftover = out.includes('{{') || (out.includes('&') && decodeHtmlAttr(out).includes('{{'))
+  const leftover = out.includes('{{') || out.replace(/<[^<>]*>/g, '').includes('{{') || (out.includes('&') && plain(out).includes('{{'))
   const unknown: string[] = []
   if (leftover) {
     for (const m of out.matchAll(LEFTOVER_NAMES_RE)) {
@@ -410,13 +410,15 @@ export function mergeShopPage<P extends Pick<Page, 'handle' | 'title' | 'seo' | 
   const strict = options.strict ?? isLegalHandle(page.handle)
   // Legal pages also refuse old-template blanks («[RAZÓN SOCIAL]», «[FECHA]»…).
   const merged = mergeShopSections(page.sections, shop, { strict })
-  const title = mergeShopText(page.title, shop)
+  const values = shopFieldValues(shop)
+  const loose = (t: string | null | undefined) => (t ? resolveShopText(t, values, { strict }).text : null)
+  const title = loose(page.title)
   const titleBad = !!page.title && title == null
   return {
     page: {
       ...page,
       title: title ?? shop.name,
-      seo: { ...page.seo, title: mergeShopText(page.seo?.title, shop), description: mergeShopText(page.seo?.description, shop) },
+      seo: { ...page.seo, title: loose(page.seo?.title), description: loose(page.seo?.description) },
       sections: merged.sections,
     },
     publishable: !titleBad && pagePublishable(merged, { strict }),
