@@ -138,6 +138,8 @@ describe('productTitle: review cases', () => {
   it('masculine nouns in -ión / -sis', () => {
     expect(productTitle(part({ pieza: 'CHASIS', position: 'trasera' }))).toBe('Chasis trasero para Nissan Tsuru 2000–2005')
     expect(productTitle(part({ pieza: 'SUSPENSION', position: 'trasera' }))).toBe('Suspensión trasera para Nissan Tsuru 2000–2005')
+    expect(productTitle(part({ pieza: 'UNION', position: 'trasera' }))).toBe('Unión trasera para Nissan Tsuru 2000–2005')
+    expect(productTitle(part({ pieza: 'BRAZO', detalle: 'TRAS Y L' }))).toBe('Brazo y L trasero para Nissan Tsuru 2000–2005')
   })
   it('feminine nouns that do not end in -a; short words lowercased in the type', () => {
     expect(productTitle(part({ pieza: 'UNIDAD MOTRIZ', position: 'trasera' }))).toBe('Unidad motriz trasera para Nissan Tsuru 2000–2005')

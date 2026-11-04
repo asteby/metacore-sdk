@@ -57,7 +57,7 @@ const ACCENTS_ES: Record<string, string> = {
   america: 'América', organica: 'orgánica', organico: 'orgánico', piston: 'pistón', presion: 'presión', publico: 'público',
   rotula: 'rótula', rotulas: 'rótulas', semimetalica: 'semimetálica', semisintetico: 'semisintético', sintetico: 'sintético',
   sintetica: 'sintética', solido: 'sólido', suspension: 'suspensión', tapon: 'tapón', torsion: 'torsión', traccion: 'tracción',
-  transmision: 'transmisión', valvula: 'válvula', vastago: 'vástago', version: 'versión', sedan: 'sedán', bateria: 'batería',
+  transmision: 'transmisión', union: 'unión', conexion: 'conexión', reduccion: 'reducción', valvula: 'válvula', vastago: 'vástago', version: 'versión', sedan: 'sedán', bateria: 'batería',
   electronico: 'electrónico', electronica: 'electrónica', termostato: 'termostato', inyeccion: 'inyección', proteina: 'proteína',
   vitamina: 'vitamina', energia: 'energía', capsulas: 'cápsulas', capsula: 'cápsula', kilometraje: 'kilometraje',
 }
@@ -80,7 +80,7 @@ const COMMON_ES = new Set(
     'sellos semi semieje sencilla sensor soporte sustituido tambor techo tensora terminal terminales tirante tope tornillo tractor ' +
     'transporte tubo tuerca universal varilla ventilado vueltas zapata rebote marcha motos maquinaria solo original ' +
     'delantero delantera trasero trasera inferior superior izquierdo izquierda derecho derecha ' +
-    'pieza piezas juego llanta llantas rin sabor polvo tabletas cerrada licuadora conductor pasajero motriz chango lado unidad soporte'
+    'pieza piezas juego llanta llantas rin sabor polvo tabletas cerrada licuadora conductor pasajero motriz chango lado unidad soporte luz'
   ).split(' '),
 )
 
@@ -114,7 +114,7 @@ const PART_TYPES_ES: Record<string, string> = {
 }
 
 /** Feminine head nouns that do not end in -a (Spanish agreement of the position: `terminal derecha`). */
-const FEMININE_ES = new Set(['terminal', 'base', 'llave', 'clave', 'red', 'mano', 'flor', 'piel', 'luz', 'calle', 'leche', 'fuente', 'gente', 'parte', 'serie'])
+const FEMININE_ES = new Set(['terminal', 'base', 'llave', 'clave', 'red', 'mano', 'flor', 'piel', 'luz', 'calle', 'leche', 'fuente', 'gente', 'parte', 'serie', 'union', 'region', 'opinion'])
 const MASCULINE_A_ES = new Set(['sistema', 'problema', 'kit', 'chasis', 'camion', 'avion', 'anion', 'cation', 'eje', 'pez', 'ajedrez'])
 
 type Side = { axle: string[]; level: string[]; side: string[] }
@@ -314,7 +314,8 @@ function splitDetail(raw: string): { words: string[]; positions: string[] } {
   const tokens = squash(joinUnits(raw).replace(/\s*\/\s+|\s+\/\s*|^\/|\/$/g, ' , ').replace(/(\S),(\s|$)/g, '$1 ,$2')).split(' ').filter(Boolean)
   const isPositionToken = (tok: string | undefined) => {
     const u = stripAccents(tok ?? '').toUpperCase().replace(/\.$/, '')
-    return !!u && (!!POSITION_ABBREV[u] || u.split('/').every((p) => POSITION_ABBREV[p] || /^DE(DER|IZQ)$/.test(p)))
+    // A lone R/L is not a position here (`TRAS Y L`): only the whole detail makes it a side.
+    return !!u && !/^[RL]$/.test(u) && (!!POSITION_ABBREV[u] || u.split('/').every((p) => POSITION_ABBREV[p] || /^DE(DER|IZQ)$/.test(p)))
   }
   let lastWasPosition = false
   for (const [i, t] of tokens.entries()) {
