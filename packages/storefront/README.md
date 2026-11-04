@@ -482,6 +482,49 @@ hide it or label it "test". `label_url` exists only on return shipments. The moc
 demo orders for every state (shipped with events, invoice + credit note + refund, sandbox shipment, pickup with a
 degraded section) and two pending vouchers for the demo buyer.
 
+## Product titles and shopping feeds (`@asteby/storefront/merchant`)
+
+ERP catalogs arrive shouted (`ROTULA IZQ 4X2 TOYOTA TACOMA 2.4 L4 1995 2004`). The title helpers change only how a
+title is **shown**; they never write to OPS and never add facts (every word comes from the title, `vendor` or the
+attributes; only grammar such as `de`/`para` and abbreviation expansions are added).
+
+```ts
+import { productTitle, distinctProductTitles, normalizeTitleText } from '@asteby/storefront'
+
+productTitle(product)                         // 'Rótula izquierda 4x2 para Toyota Tacoma 2.4 L4 1995–2004'
+productTitle(product, { identifiers: true })  // 'Rótula izquierda 4x2 Unicar UD2510003 para Toyota Tacoma 2.4 L4 1995–2004'
+distinctProductTitles(cards)                  // Map id → title; two parts that would read the same get ' · Unicar UD2510003'
+normalizeTitleText('FILTRO AIRE NISSAN TSURU 1.6 L4 1992 1992') // 'Filtro aire Nissan Tsuru 1.6 L4 1992' (any vertical)
+```
+
+With part attributes (`pieza`, `detalle`, `position`, `traccion`, `vehiculo_marca`, `vehiculo_modelo`, `motor`,
+`anio_desde`, `anio_hasta`, `part_number`; other names via `keys`) the title is type + detail + position + drive +
+[brand + part number] + `para` + make + model + engine + years. Without them it is `normalizeTitleText(product.title)`:
+mixed-case titles are left as written.
+
+Feeds (server only; walk the catalog with the anonymous client and serve them on the store's own domain):
+
+```ts
+import { collectFeed, googleFeedXml, googleFeedTsv, openAiFeedJsonl, robotsTxt, verificationTokens } from '@asteby/storefront/merchant'
+
+const feed = await collectFeed((after) => sf.products.list({ first: 100, after, sort: 'newest' }), {
+  siteUrl: 'https://protekauto.com.mx',
+  productPath: (h) => `/productos/${h}`,
+  includeOutOfStock: false, // default: out-of-stock items are left out
+})
+googleFeedXml(feed.items, { title: shop.name, link: 'https://protekauto.com.mx' }) // Merchant Center (RSS 2.0 + g:)
+openAiFeedJsonl(feed.items, { name: shop.name, url: 'https://protekauto.com.mx', return_days: shop.policies.returns_days })
+```
+
+- One item per variant; `id` = SKU. Price, sale price and availability are OPS's, in the market's currency (`494.71 MXN`).
+- `brand` = `vendor`; `mpn` = the `part_number` attribute (never a guessed SKU); `gtin` only from a barcode with a valid
+  check digit; without GTIN the item goes with `identifier_exists=no` (Google) and still sends brand + MPN.
+- Left out (counted in `feed.skipped`): internal products (`qa`/`interno` tags or every SKU `TEST-`), no price, no raster
+  image (SVG mockups do not count), no brand, and out of stock unless `includeOutOfStock`.
+- `robotsTxt({ disallow, sitemaps })`: the search agents (`Googlebot`, `Storebot-Google`, `OAI-SearchBot`,
+  `ChatGPT-User`…) named with the same rules as `*`; training crawlers (`GPTBot`, `Google-Extended`, `CCBot`…) blocked.
+- `verificationTokens(env)`: well-formed site-verification tokens from configuration (for `google-site-verification`).
+
 ## Connecting the store to OPS (`connect`, `diagnose`, token files)
 
 A server-side store (`sk_`) is connected to OPS with a one-time code, never by copying a secret around.

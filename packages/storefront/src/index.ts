@@ -166,3 +166,6 @@ export {
   readListQuery,
 } from './account-lists.js'
 export type { ListPageState, ListQuery, ListUrlNames } from './account-lists.js'
+
+export { normalizeTitleText, normalizeName, productTitle, productPartNumber, distinctProductTitles, PART_TITLE_KEYS } from './product-title.js'
+export type { NormalizeTitleOptions, PartTitleKeys, ProductTitleOptions, TitleLocale } from './product-title.js'

@@ -57,6 +57,16 @@
         "default": "./dist/mockup.cjs"
       }
     },
+    "./merchant": {
+      "import": {
+        "types": "./dist/merchant.d.ts",
+        "default": "./dist/merchant.js"
+      },
+      "require": {
+        "types": "./dist/merchant.d.cts",
+        "default": "./dist/merchant.cjs"
+      }
+    },
     "./fiscal-document": {
       "import": {
         "types": "./dist/fiscal-document.d.ts",

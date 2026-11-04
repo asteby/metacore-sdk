@@ -13,6 +13,7 @@ export default defineConfig([
       mock: 'src/mock/index.ts',
       geo: 'src/geo.ts',
       mockup: 'src/mockup.ts',
+      merchant: 'src/merchant.ts',
       'fiscal-document': 'src/fiscal-document/index.ts',
     },
     format: ['esm', 'cjs'],
