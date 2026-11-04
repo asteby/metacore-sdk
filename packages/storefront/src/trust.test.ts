@@ -72,7 +72,7 @@ describe('resolveShopText', () => {
     expect(resolveShopText('{{shop.name}} · {{ shop.domain }}', values).text).toBe('Tienda & Co · tienda.example.com')
   })
   it('never shows an unknown or misspelled placeholder', () => {
-    for (const t of ['{{shop.name}', 'a {{ sin cierre', 'RFC {{shop.rfc}}', '{{Shop.Name}}', '{{order.id}}', 'Fecha {{completar : fecha}}', 'Fecha {{completar}}', '{{COMPLETAR: x}}', '{{__proto__}}', '{{constructor}}']) {
+    for (const t of ['&#123;&#123;shop.rfc&#125;&#125;', '&lbrace;&lbrace;x&rbrace;&rbrace;', '{{shop.name}', 'a {{ sin cierre', 'RFC {{shop.rfc}}', '{{Shop.Name}}', '{{order.id}}', 'Fecha {{completar : fecha}}', 'Fecha {{completar}}', '{{COMPLETAR: x}}', '{{__proto__}}', '{{constructor}}']) {
       expect(resolveShopText(t, values).text, t).toBeNull()
     }
     expect(resolveShopText('RFC {{shop.rfc}}', values).unknown).toEqual(['shop.rfc'])
@@ -185,6 +185,9 @@ describe('mergeShopSections', () => {
     expect(isLegalHandle('preguntas-frecuentes')).toBe(false)
     expect(isLegalHandle('returning-customers')).toBe(false)
     expect(isLegalHandle('derechos-arco')).toBe(true)
+    expect(isLegalHandle('aviso-privacidad')).toBe(true)
+    expect(isLegalHandle('nuestros-terminos')).toBe(true)
+    expect(isLegalHandle('preguntas-garantizadas')).toBe(false)
   })
   it('does not mutate its input', () => {
     const copy = structuredClone(faq)

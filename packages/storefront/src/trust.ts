@@ -54,7 +54,7 @@ const DRAFT_RE = /\bBORRADOR\s*:\s*REVISAR\b|\bREVISAR\s+CON\s+(?:UN\s+)?(?:ABOG
 /** An old-template blank: «[RAZÓN SOCIAL]», «[FECHA]», «[DOMICILIO COMPLETO]» (upper case, 4+ chars). Strict pages only. */
 const BLANK_RE = /\[[A-Z0-9 ,./:;-]{4,}\]/
 
-const ENTITIES: Record<string, string> = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", shy: '' }
+const ENTITIES: Record<string, string> = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", shy: '', lbrace: '{', rbrace: '}', lcub: '{', rcub: '}' }
 
 function decodeEntity(whole: string, name: string): string {
   const n = name.toLowerCase()
@@ -209,7 +209,8 @@ export function resolveShopText(text: string, values: ShopFieldValues, { html = 
   const draft = hasLegalDraftNotice(text) || hasLegalDraftNotice(out)
   const pending = PENDING_RE.test(text) || PENDING_RE.test(out)
   // Any `{{` left (an unknown field, a typo, an unclosed `{{shop.name}`, a `{{completar…}}` in any spelling) blocks the text.
-  const leftover = out.includes('{{')
+  // Also as HTML entities (`&#123;&#123;`, `&lbrace;`): a renderer would decode them into a visible placeholder.
+  const leftover = out.includes('{{') || (out.includes('&') && decodeHtmlAttr(out).includes('{{'))
   const unknown: string[] = []
   if (leftover) {
     for (const m of out.matchAll(LEFTOVER_NAMES_RE)) {
@@ -381,10 +382,17 @@ const LEGAL_HANDLES = new Set([
   'politica-de-envios', 'politica-de-cookies', 'cookies', 'aviso-legal', 'legal',
 ])
 
-/** Whether a page handle is a legal or policy page (published only when complete). `politica-*` / `aviso-de-*` always are. */
+/** Words that make a hand-made handle legal (`aviso-privacidad`, `nuestros-terminos`, `politica-garantia`…). */
+const LEGAL_WORDS = /(?:^|-)(?:privacidad|privacy|terminos|condiciones|terms|devoluciones|reembolsos|refunds?|garantia|warranty|cookies|arco|legal)(?:-|$)/
+
+/**
+ * Whether a page handle is a legal or policy page (published only when complete): the known handles, any `politica-*`
+ * or `aviso-*`, or a handle with a legal word as a whole segment. Errs on the safe side: a strict page only needs to
+ * be complete to be served.
+ */
 export function isLegalHandle(handle: string): boolean {
   const h = handle.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase()
-  return LEGAL_HANDLES.has(h) || h.startsWith('politica-') || h.startsWith('aviso-de-')
+  return LEGAL_HANDLES.has(h) || h.startsWith('politica-') || h.startsWith('aviso-') || LEGAL_WORDS.test(h)
 }
 
 export type MergedPage<P extends Pick<Page, 'handle' | 'title' | 'seo' | 'sections'>> = {
