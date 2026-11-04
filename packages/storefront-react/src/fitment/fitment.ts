@@ -412,28 +412,38 @@ export function parseRowYears(years: string): [number, number] | null {
   return to >= from ? [from, to] : null
 }
 
-/** "1.5 L4" → "1.5", "1.5L" → "1.5", "2.0 TURBO" → "2.0 turbo": displacement plus qualifiers (no liters, no cylinders). */
-function engineCore(text: string): string {
-  return text
+/**
+ * Motor en dos partes: cilindrada con sus calificadores (sin litros ni acentos: «1.5 L» → «1.5», «2.5 diésel» → «2.5 diesel»)
+ * y cilindros aparte («L4», «V6», «I4»).
+ */
+function engineParts(text: string): { core: string; cyl: string } {
+  const tokens = text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/(\d)\s*l\b/g, (_m, digit: string) => digit)
     .split(/[\s-]+/)
-    .filter((t) => t && t !== 'l' && !/^[lvi]\d{1,2}$/.test(t))
-    .join(' ')
+    .filter((t) => t && t !== 'l')
+  const isCyl = (t: string) => /^[lvi]\d{1,2}$/.test(t)
+  return { core: tokens.filter((t) => !isCyl(t)).join(' '), cyl: tokens.filter(isCyl).join(' ') }
 }
 
 /**
- * The row's engine against the vehicle's. Each alternative of the row ("1.5 / 1.8", "1.5, 1.8") is compared WHOLE:
- * "1.5 L4" is a 1.5, but "1.5 TURBO" or "1.9 TDI" are never confirmed for an unqualified 1.5 or 1.9 ("unclear"). A row
- * without engine does not restrict.
+ * Motor de la fila vs. el del vehículo. Cada alternativa de la fila («1.5 / 1.8», «1.5, 1.8») se compara ENTERA con la
+ * forma más calificada del motor del vehículo: «1.5 L4» es un 1.5, pero «1.5 TURBO», «1.9 TDI», «3.5 V6» para un 3.5 V8
+ * o una celda con solo cilindros («V6») nunca se confirman ("unclear"). Sin motor en la fila (vacío o «-») no se restringe.
  */
 function engineFit(rowEngine: string, vehicle: Vehicle): 'match' | 'other' | 'unclear' {
-  const alternatives = rowEngine.split(/[/,]/).map(engineCore).filter(Boolean)
-  if (alternatives.length === 0) return 'match'
-  const mine = new Set([vehicle.engine.id, vehicle.engine.label].map(engineCore).filter(Boolean))
-  if (alternatives.some((e) => mine.has(e))) return 'match'
+  const raw = rowEngine.trim()
+  if (!raw || raw === '-') return 'match'
+  const alternatives = raw.split(/[\/,]/).map((e) => e.trim()).filter(Boolean).map(engineParts)
+  const mine = [vehicle.engine.label, vehicle.engine.id].map(engineParts).filter((e) => e.core).sort((x, y) => y.core.length - x.core.length)[0]
+  if (!mine) return 'unclear'
+  const same = (e: { core: string; cyl: string }) => e.core === mine.core && (!e.cyl || !mine.cyl || e.cyl === mine.cyl)
+  if (alternatives.some((e) => e.core && same(e))) return 'match'
+  // Otra cilindrada pura («2.4» para un 1.5): otro motor. Cualquier otra diferencia (calificadores, cilindros): no se sabe.
   const plain = (e: string) => /^\d+(\.\d+)?$/.test(e)
-  return alternatives.every(plain) && [...mine].every(plain) ? 'other' : 'unclear'
+  return alternatives.every((e) => plain(e.core) && e.core !== mine.core) && plain(mine.core) ? 'other' : 'unclear'
 }
 
 function rowNamesMake(row: CompatRow, vehicle: Vehicle, config: FitmentConfig): boolean {

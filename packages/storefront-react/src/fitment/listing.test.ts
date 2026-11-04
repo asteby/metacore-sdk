@@ -91,6 +91,16 @@ describe('compatibility table when the part has no fit tags', () => {
     expect(fitStatus(table('VW|JETTA|2015-2018|1.9 TDI|'), { ...jetta, engine: { id: '1.9', label: '1.9 L' } }, config)).toBe('unknown')
     expect(fitStatus(table('GM|CAPTIVA|2022-2025||premier only'), captiva, config)).toBe('unknown')
   })
+  it('never a false fit: cylinders-only cells or other cylinders; most qualified vehicle engine', () => {
+    expect(fitStatus(table('GM|CAPTIVA|2022-2025|V6|'), captiva, config)).toBe('unknown')
+    expect(fitStatus(table('GM|CAPTIVA|2022-2025|L4|'), captiva, config)).toBe('unknown')
+    const v8 = { ...captiva, engine: { id: '3.5-v8', label: '3.5 V8' } }
+    expect(fitStatus(table('GM|CAPTIVA|2022-2025|3.5 V6|'), v8, config)).toBe('unknown')
+    expect(fitStatus(table('GM|CAPTIVA|2022-2025|3.5 V8|'), v8, config)).toBe('fits')
+    expect(fitStatus(table('GM|CAPTIVA|2022-2025|-|'), captiva, config)).toBe('fits')
+    expect(fitStatus(table('GM|CAPTIVA|2022-2025|1.5|'), { ...captiva, engine: { id: '1.5', label: '1.5 TURBO' } }, config)).toBe('unknown')
+    expect(fitStatus(table('GM|CAPTIVA|2022-2025|2.5 DIESEL|'), { ...captiva, engine: { id: '2.5d', label: '2.5 L diésel' } }, config)).toBe('fits')
+  })
   it('clearly other engine or years: no', () => {
     expect(fitFromTable(compatRows(table('GM|CAPTIVA|2022-2025|2.4 L4|'), config), captiva, config)).toBe('no')
     expect(fitStatus(table('GM|CAPTIVA|2022-2025||'), { ...captiva, year: 2019 }, config)).toBe('no')
