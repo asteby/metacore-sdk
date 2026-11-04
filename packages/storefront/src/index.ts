@@ -186,3 +186,5 @@ export {
   shopWarrantyMonths,
 } from './trust.js'
 export type { BusinessIdentityRow, DroppedContent, MergedPage, MergedSections, PublishableOptions, ResolvedText, ShopFieldValues, ShopMergeField } from './trust.js'
+export { normalizeTitleText, normalizeName, productTitle, productPartNumber, distinctProductTitles, PART_TITLE_KEYS } from './product-title.js'
+export type { NormalizeTitleOptions, PartTitleKeys, ProductTitleOptions, TitleLocale } from './product-title.js'

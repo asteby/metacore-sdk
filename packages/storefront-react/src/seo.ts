@@ -145,11 +145,80 @@ function withVariant(url: string, variantId: string): string {
   }
 }
 
-/** schema.org `Product` with one `Offer` per variant. */
-export function productJsonLd(product: Product, shop: Pick<Shop, 'name' | 'domain'> | null, url: string, options: ResolveAvailabilityOptions = {}): JsonLdObject {
+/** Return policy for `hasMerchantReturnPolicy`: pass it only from the shop's real policy (e.g. OPS `policies.returns_days`). */
+export type ReturnPolicyJsonLd = {
+  /** ISO 3166-1 alpha-2 (`MX`). */
+  applicableCountry: string
+  /** Days to return; `0` = no returns accepted. Not a finite number (`null` from OPS) → nothing is published. */
+  days: number | null
+  /** Public returns page. */
+  url?: string | null
+  fees?: 'FreeReturn' | 'ReturnFeesCustomerResponsibility' | 'ReturnShippingFees' | null
+  method?: 'ReturnByMail' | 'ReturnInStore' | 'ReturnAtKiosk' | null
+}
+
+/** Shipping for `shippingDetails`: pass it only when the rate and times are the shop's real ones. */
+export type ShippingJsonLd = {
+  /** ISO 3166-1 alpha-2 destination (`MX`). */
+  country: string
+  rate: { amount: string; currency_code: string }
+  /** Business days `[min, max]`. */
+  handlingDays?: [number, number] | null
+  transitDays?: [number, number] | null
+}
+
+export type ProductJsonLdOptions = ResolveAvailabilityOptions & {
+  /** Display name (e.g. `productTitle(product, { identifiers: true })`); default `product.title`. */
+  name?: string | null
+  /** Manufacturer part number (`mpn`), on the product and on each offer of a single-variant product. */
+  mpn?: string | null
+  /** `YYYY-MM-DD`: only when the price really expires (a dated offer). */
+  priceValidUntil?: string | null
+  returnPolicy?: ReturnPolicyJsonLd | null
+  shipping?: ShippingJsonLd | null
+  /**
+   * URL of a variant's offer when the product has several (default: `?variant=<id>` on `url`). Use the same rule as
+   * the shopping feed (`productPath` of `@asteby/storefront/merchant`) so both point to the same page.
+   */
+  variantUrl?: ((variantId: string) => string) | null
+}
+
+function returnPolicyJsonLd(p: ReturnPolicyJsonLd): JsonLdObject | undefined {
+  // An unknown window is not «no returns»: only an explicit 0 publishes MerchantReturnNotPermitted.
+  if (typeof p.days !== 'number' || !Number.isFinite(p.days) || !p.applicableCountry) return undefined
+  const days = Math.max(0, Math.floor(p.days))
+  return compact({
+    '@type': 'MerchantReturnPolicy',
+    applicableCountry: p.applicableCountry,
+    returnPolicyCategory: days > 0 ? 'https://schema.org/MerchantReturnFiniteReturnWindow' : 'https://schema.org/MerchantReturnNotPermitted',
+    merchantReturnDays: days > 0 ? days : undefined,
+    returnMethod: days > 0 && p.method ? `https://schema.org/${p.method}` : undefined,
+    returnFees: days > 0 && p.fees ? `https://schema.org/${p.fees}` : undefined,
+    merchantReturnLink: p.url ?? undefined,
+  })
+}
+
+function shippingJsonLd(s: ShippingJsonLd): JsonLdObject {
+  const range = (r: [number, number] | null | undefined) => (r ? { '@type': 'QuantitativeValue', minValue: r[0], maxValue: r[1], unitCode: 'DAY' } : undefined)
+  const deliveryTime = s.handlingDays || s.transitDays ? compact({ '@type': 'ShippingDeliveryTime', handlingTime: range(s.handlingDays), transitTime: range(s.transitDays) }) : undefined
+  return compact({
+    '@type': 'OfferShippingDetails',
+    shippingRate: { '@type': 'MonetaryAmount', value: s.rate.amount, currency: s.rate.currency_code },
+    shippingDestination: { '@type': 'DefinedRegion', addressCountry: s.country },
+    deliveryTime,
+  })
+}
+
+/** schema.org `Product` with one `Offer` per variant. Brand, SKU, MPN and availability match the shopping feeds. */
+export function productJsonLd(product: Product, shop: Pick<Shop, 'name' | 'domain'> | null, url: string, options: ProductJsonLdOptions = {}): JsonLdObject {
   const images = (product.images.length ? product.images.map((i) => i.url) : product.featured_image ? [product.featured_image.url] : [])
     .map((u) => absoluteUrl(u, url))
     .filter((u): u is string => !!u)
+  const name = options.name?.trim() || product.title
+  const single = product.variants.length === 1
+  const mpn = options.mpn?.trim() || undefined
+  const returnPolicy = options.returnPolicy ? returnPolicyJsonLd(options.returnPolicy) : undefined
+  const shippingDetails = options.shipping ? shippingJsonLd(options.shipping) : undefined
   const offers = product.variants.map((v) => {
     // schema.org availability comes from the server state; the quantity is never published.
     const availability = resolveAvailability(v, options)
@@ -157,14 +226,18 @@ export function productJsonLd(product: Product, shop: Pick<Shop, 'name' | 'domai
       '@type': 'Offer',
       sku: v.sku,
       gtin: v.barcode ?? undefined,
-      name: product.variants.length > 1 ? `${product.title} - ${v.title}` : undefined,
+      name: product.variants.length > 1 ? `${name} - ${v.title}` : undefined,
+      mpn: single ? mpn : undefined,
       price: v.price.amount,
       priceCurrency: v.price.currency_code,
       availability: schemaAvailability(availability.status),
       availabilityStarts: availability.status === 'preorder' ? (availability.preorder_release_at ?? undefined) : undefined,
       itemCondition: 'https://schema.org/NewCondition',
-      url: product.variants.length > 1 ? withVariant(url, v.id) : url,
+      url: product.variants.length > 1 ? (options.variantUrl ? options.variantUrl(v.id) : withVariant(url, v.id)) : url,
       seller: shop ? { '@type': 'Organization', name: shop.name } : undefined,
+      priceValidUntil: options.priceValidUntil ?? undefined,
+      hasMerchantReturnPolicy: returnPolicy,
+      shippingDetails,
     })
   })
   const additionalProperty = Object.entries(product.attributes).map(([name, value]) => ({ '@type': 'PropertyValue', name, value }))
@@ -172,11 +245,12 @@ export function productJsonLd(product: Product, shop: Pick<Shop, 'name' | 'domai
     '@context': CONTEXT,
     '@type': 'Product',
     '@id': `${url}#product`,
-    name: product.title,
+    name,
     description: clean(product.description) ?? undefined,
     url,
     image: images,
-    sku: product.variants.length === 1 ? product.variants[0]!.sku : undefined,
+    sku: single ? product.variants[0]!.sku : undefined,
+    mpn,
     brand: product.vendor ? { '@type': 'Brand', name: product.vendor } : undefined,
     category: product.category?.title ?? product.product_type ?? undefined,
     additionalProperty,

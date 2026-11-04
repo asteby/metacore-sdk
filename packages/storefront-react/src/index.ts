@@ -54,7 +54,7 @@ export {
   collectionJsonLd,
   serializeJsonLd,
 } from './seo.js'
-export type { BreadcrumbItem, FaqItem, JsonLdObject, LocalBusinessOptions, MetaDescriptor, SeoMetaInput } from './seo.js'
+export type { BreadcrumbItem, FaqItem, JsonLdObject, LocalBusinessOptions, MetaDescriptor, ProductJsonLdOptions, ReturnPolicyJsonLd, SeoMetaInput, ShippingJsonLd } from './seo.js'
 export { JsonLd } from './json-ld.js'
 export type { JsonLdProps } from './json-ld.js'
 
