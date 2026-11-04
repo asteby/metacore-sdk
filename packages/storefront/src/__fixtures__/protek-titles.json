@@ -1,0 +1,1156 @@
+[
+ {
+  "sku": "UD2510003",
+  "title": "ROTULA IZQ 4X2 TOYOTA TACOMA 2.4 L4 1995 2004",
+  "vendor": "UNICAR",
+  "attributes": {
+   "motor": "2.4 L4",
+   "pieza": "ROTULA",
+   "position": "izquierda",
+   "traccion": "4X2",
+   "anio_desde": 1995,
+   "anio_hasta": 2004,
+   "part_number": "UD2510003",
+   "vehiculo_marca": "Toyota",
+   "vehiculo_modelo": "TACOMA"
+  },
+  "expected": "Rótula izquierda 4x2 para Toyota Tacoma 2.4 L4 1995–2004",
+  "expected_identifiers": "Rótula izquierda 4x2 Unicar UD2510003 para Toyota Tacoma 2.4 L4 1995–2004"
+ },
+ {
+  "sku": "UD2510001",
+  "title": "ROTULA IZQ 4X2 TOYOTA TACOMA 2.4 L4 1995 2004",
+  "vendor": "UNICAR",
+  "attributes": {
+   "motor": "2.4 L4",
+   "pieza": "ROTULA",
+   "position": "izquierda",
+   "traccion": "4X2",
+   "anio_desde": 1995,
+   "anio_hasta": 2004,
+   "part_number": "UD2510001",
+   "vehiculo_marca": "Toyota",
+   "vehiculo_modelo": "TACOMA"
+  },
+  "expected": "Rótula izquierda 4x2 para Toyota Tacoma 2.4 L4 1995–2004",
+  "expected_identifiers": "Rótula izquierda 4x2 Unicar UD2510001 para Toyota Tacoma 2.4 L4 1995–2004"
+ },
+ {
+  "sku": "GA6619",
+  "title": "FILTRO AIRE NISSAN TSURU 1.6 L4 1992 1992",
+  "vendor": "GONHER",
+  "attributes": {
+   "motor": "1.6 L4",
+   "pieza": "FILTRO AIRE",
+   "anio_desde": 1992,
+   "anio_hasta": 1992,
+   "part_number": "GA6619",
+   "vehiculo_marca": "Nissan",
+   "vehiculo_modelo": "TSURU"
+  },
+  "expected": "Filtro de aire para Nissan Tsuru 1.6 L4 1992",
+  "expected_identifiers": "Filtro de aire Gonher GA6619 para Nissan Tsuru 1.6 L4 1992"
+ },
+ {
+  "sku": "SD6376",
+  "title": "CUBRE POLVO IZQ/DER HIDRAULICA NISSAN TSURU III 1992 1992",
+  "vendor": "DAI",
+  "attributes": {
+   "pieza": "CUBRE POLVO",
+   "alto_cm": 21.16,
+   "detalle": "HIDRAULICA",
+   "ancho_cm": 7.5,
+   "largo_cm": 7.5,
+   "position": "izquierda/derecha",
+   "anio_desde": 1992,
+   "anio_hasta": 1992,
+   "part_number": "SD6376",
+   "vehiculo_marca": "Nissan",
+   "vehiculo_modelo": "TSURU III"
+  },
+  "expected": "Cubrepolvo hidráulica izquierdo/derecho para Nissan Tsuru III 1992",
+  "expected_identifiers": "Cubrepolvo hidráulica izquierdo/derecho DAI SD6376 para Nissan Tsuru III 1992"
+ },
+ {
+  "sku": "SD64660",
+  "title": "BUJE HORQUILLA GRANDE NISSAN TSURU III 1992 1992",
+  "vendor": "DAI",
+  "attributes": {
+   "pieza": "BUJE",
+   "alto_cm": 6,
+   "detalle": "HORQUILLA GRANDE",
+   "ancho_cm": 7.5,
+   "largo_cm": 7.5,
+   "anio_desde": 1992,
+   "anio_hasta": 1992,
+   "part_number": "SD64660",
+   "vehiculo_marca": "Nissan",
+   "vehiculo_modelo": "TSURU III"
+  },
+  "expected": "Buje horquilla grande para Nissan Tsuru III 1992",
+  "expected_identifiers": "Buje horquilla grande DAI SD64660 para Nissan Tsuru III 1992"
+ },
+ {
+  "sku": "MR1202548",
+  "title": "TERMINAL DIRECCION R FORD ECOSPORT 2 L4 2004 2012",
+  "vendor": "MASTER RIDE",
+  "attributes": {
+   "motor": "2.0 L4",
+   "pieza": "TERMINAL DIRECCION",
+   "detalle": "R",
+   "anio_desde": 2004,
+   "anio_hasta": 2012,
+   "part_number": "MR1202548",
+   "vehiculo_marca": "Ford",
+   "vehiculo_modelo": "ECOSPORT"
+  },
+  "expected": "Terminal de dirección derecha para Ford Ecosport 2.0 L4 2004–2012",
+  "expected_identifiers": "Terminal de dirección derecha Master Ride MR1202548 para Ford Ecosport 2.0 L4 2004–2012"
+ },
+ {
+  "sku": "MR1202549",
+  "title": "TERMINAL DIRECCION L FORD ECOSPORT 2 L4 2004 2012",
+  "vendor": "MASTER RIDE",
+  "attributes": {
+   "motor": "2.0 L4",
+   "pieza": "TERMINAL DIRECCION",
+   "detalle": "L",
+   "anio_desde": 2004,
+   "anio_hasta": 2012,
+   "part_number": "MR1202549",
+   "vehiculo_marca": "Ford",
+   "vehiculo_modelo": "ECOSPORT"
+  },
+  "expected": "Terminal de dirección izquierda para Ford Ecosport 2.0 L4 2004–2012",
+  "expected_identifiers": "Terminal de dirección izquierda Master Ride MR1202549 para Ford Ecosport 2.0 L4 2004–2012"
+ },
+ {
+  "sku": "FR08073",
+  "title": "DISCO FRONTAL / VENTILADO / 4 BARRENOS X 108MM / D.EXT. 258MM FORD ECOSPORT 2 L4 2004 2012",
+  "vendor": "FRITEC",
+  "attributes": {
+   "motor": "2.0 L4",
+   "pieza": "DISCO FRONTAL",
+   "detalle": "/ VENTILADO / 4 BARRENOS X 108MM / D.EXT. 258MM",
+   "anio_desde": 2004,
+   "anio_hasta": 2012,
+   "part_number": "FR08073",
+   "vehiculo_marca": "Ford",
+   "vehiculo_modelo": "ECOSPORT"
+  },
+  "expected": "Disco frontal ventilado, 4 barrenos x 108 mm, diám. ext. 258 mm para Ford Ecosport 2.0 L4 2004–2012",
+  "expected_identifiers": "Disco frontal ventilado, 4 barrenos x 108 mm, diám. ext. 258 mm Fritec FR08073 para Ford Ecosport 2.0 L4 2004–2012"
+ },
+ {
+  "sku": "M8289ZD1175",
+  "title": "BALATA DISCO DELANTERO SEMI-METALICA FORD ECOSPORT 2 L4 2004 2012",
+  "vendor": "FRITEC",
+  "attributes": {
+   "motor": "2.0 L4",
+   "pieza": "BALATA DISCO",
+   "detalle": "SEMI-METALICA",
+   "position": "delantera",
+   "anio_desde": 2004,
+   "anio_hasta": 2012,
+   "part_number": "M8289ZD1175",
+   "vehiculo_marca": "Ford",
+   "vehiculo_modelo": "ECOSPORT"
+  },
+  "expected": "Balata de disco semi-metálica delantera para Ford Ecosport 2.0 L4 2004–2012",
+  "expected_identifiers": "Balata de disco semi-metálica delantera Fritec M8289ZD1175 para Ford Ecosport 2.0 L4 2004–2012"
+ },
+ {
+  "sku": "OW1713ZVFT105",
+  "title": "BALATA TAMBOR TRASERO ORGANICA FORD ECOSPORT 1.5 L3 2018 2021",
+  "vendor": "FRITEC",
+  "attributes": {
+   "motor": "1.5 L3",
+   "pieza": "BALATA TAMBOR",
+   "detalle": "ORGANICA",
+   "position": "trasera",
+   "anio_desde": 2018,
+   "anio_hasta": 2021,
+   "part_number": "OW1713ZVFT105",
+   "vehiculo_marca": "Ford",
+   "vehiculo_modelo": "ECOSPORT"
+  },
+  "expected": "Balata de tambor orgánica trasera para Ford Ecosport 1.5 L3 2018–2021",
+  "expected_identifiers": "Balata de tambor orgánica trasera Fritec OW1713ZVFT105 para Ford Ecosport 1.5 L3 2018–2021"
+ },
+ {
+  "sku": "832782",
+  "title": "AMORTIGUADOR GAS TRAS DER/IZQ HONDA ACCORD 2018 2021",
+  "vendor": "BOGE",
+  "attributes": {
+   "pieza": "AMORTIGUADOR",
+   "alto_cm": 54.2,
+   "detalle": "GAS",
+   "ancho_cm": 15.6,
+   "largo_cm": 7.6,
+   "position": "trasera/izquierda/derecha",
+   "anio_desde": 2018,
+   "anio_hasta": 2021,
+   "part_number": "832782",
+   "vehiculo_marca": "Honda",
+   "vehiculo_modelo": "ACCORD"
+  },
+  "expected": "Amortiguador de gas trasero izquierdo/derecho para Honda Accord 2018–2021",
+  "expected_identifiers": "Amortiguador de gas trasero izquierdo/derecho Boge 832782 para Honda Accord 2018–2021"
+ },
+ {
+  "sku": "F91A00",
+  "title": "FILTRO AIRE KIA RIO 1.6 L4 2018 2023",
+  "vendor": "INTERFIL",
+  "attributes": {
+   "motor": "1.6 L4",
+   "pieza": "FILTRO AIRE",
+   "anio_desde": 2018,
+   "anio_hasta": 2023,
+   "part_number": "F91A00",
+   "vehiculo_marca": "Kia",
+   "vehiculo_modelo": "RIO"
+  },
+  "expected": "Filtro de aire para Kia Rio 1.6 L4 2018–2023",
+  "expected_identifiers": "Filtro de aire Interfil F91A00 para Kia Rio 1.6 L4 2018–2023"
+ },
+ {
+  "sku": "U40951L",
+  "title": "CILINDRO RUEDA 1 1/8 PULG FORD F350 1987 1989",
+  "vendor": "UNICAR",
+  "attributes": {
+   "pieza": "CILINDRO RUEDA",
+   "alto_cm": 5.5,
+   "detalle": "1 1/8 PULG",
+   "ancho_cm": 5.5,
+   "largo_cm": 10,
+   "anio_desde": 1987,
+   "anio_hasta": 1989,
+   "part_number": "U40951L",
+   "vehiculo_marca": "Ford",
+   "vehiculo_modelo": "F350"
+  },
+  "expected": "Cilindro de rueda 1 1/8 pulg. para Ford F350 1987–1989",
+  "expected_identifiers": "Cilindro de rueda 1 1/8 pulg. Unicar U40951L para Ford F350 1987–1989"
+ },
+ {
+  "sku": "UDK5239",
+  "title": "BRAZO DIRECCION GM CAMARO Z28 1973 1981",
+  "vendor": "UNICAR",
+  "attributes": {
+   "pieza": "BRAZO DIRECCION",
+   "alto_cm": 10,
+   "ancho_cm": 12,
+   "largo_cm": 25,
+   "anio_desde": 1973,
+   "anio_hasta": 1981,
+   "part_number": "UDK5239",
+   "vehiculo_marca": "GM",
+   "vehiculo_modelo": "CAMARO Z28"
+  },
+  "expected": "Brazo de dirección para GM Camaro Z28 1973–1981",
+  "expected_identifiers": "Brazo de dirección Unicar UDK5239 para GM Camaro Z28 1973–1981"
+ },
+ {
+  "sku": "UD2108003",
+  "title": "TORNILLO ESTABILIZADOR FORD MONDEO 2 L4 2001 2007",
+  "vendor": "UNICAR",
+  "attributes": {
+   "motor": "2.0 L4",
+   "pieza": "TORNILLO ESTABILIZADOR",
+   "anio_desde": 2001,
+   "anio_hasta": 2007,
+   "part_number": "UD2108003",
+   "vehiculo_marca": "Ford",
+   "vehiculo_modelo": "MONDEO"
+  },
+  "expected": "Tornillo estabilizador para Ford Mondeo 2.0 L4 2001–2007",
+  "expected_identifiers": "Tornillo estabilizador Unicar UD2108003 para Ford Mondeo 2.0 L4 2001–2007"
+ },
+ {
+  "sku": "GA2372",
+  "title": "FILTRO AIRE DODGE JOURNEY 1.5 TURBO L4 2022 2024",
+  "vendor": "GONHER",
+  "attributes": {
+   "motor": "1.5 TURBO L4",
+   "pieza": "FILTRO AIRE",
+   "anio_desde": 2022,
+   "anio_hasta": 2024,
+   "part_number": "GA2372",
+   "vehiculo_marca": "Dodge",
+   "vehiculo_modelo": "JOURNEY"
+  },
+  "expected": "Filtro de aire para Dodge Journey 1.5 Turbo L4 2022–2024",
+  "expected_identifiers": "Filtro de aire Gonher GA2372 para Dodge Journey 1.5 Turbo L4 2022–2024"
+ },
+ {
+  "sku": "FGI56",
+  "title": "FILTRO COMBUSTIBLE VOLKSWAGEN COMBI 1.6 L4 1974 1987",
+  "vendor": "INTERFIL",
+  "attributes": {
+   "motor": "1.6 L4",
+   "pieza": "FILTRO COMBUSTIBLE",
+   "anio_desde": 1974,
+   "anio_hasta": 1987,
+   "part_number": "FGI56",
+   "vehiculo_marca": "Volkswagen",
+   "vehiculo_modelo": "COMBI"
+  },
+  "expected": "Filtro de combustible para Volkswagen Combi 1.6 L4 1974–1987",
+  "expected_identifiers": "Filtro de combustible Interfil FGI56 para Volkswagen Combi 1.6 L4 1974–1987"
+ },
+ {
+  "sku": "UD1502048",
+  "title": "HORQUILLA (F55) INF DER MINI COOPER 2014 2019",
+  "vendor": "UNICAR",
+  "attributes": {
+   "pieza": "HORQUILLA",
+   "alto_cm": 14,
+   "detalle": "(F55)",
+   "ancho_cm": 35,
+   "largo_cm": 48,
+   "position": "inferior/derecha",
+   "anio_desde": 2014,
+   "anio_hasta": 2019,
+   "part_number": "UD1502048",
+   "vehiculo_marca": "Mini",
+   "vehiculo_modelo": "COOPER"
+  },
+  "expected": "Horquilla (F55) inferior derecha para Mini Cooper 2014–2019",
+  "expected_identifiers": "Horquilla (F55) inferior derecha Unicar UD1502048 para Mini Cooper 2014–2019"
+ },
+ {
+  "sku": "MP900",
+  "title": "AMORTIGUADOR HIDRAULICO DEL DER/IZQ VOLKSWAGEN JETTA 1.8 L4 1987 1999",
+  "vendor": "BOGE",
+  "attributes": {
+   "motor": "1.8 L4",
+   "pieza": "AMORTIGUADOR",
+   "detalle": "HIDRAULICO",
+   "position": "delantera/izquierda/derecha",
+   "anio_desde": 1987,
+   "anio_hasta": 1999,
+   "part_number": "MP900",
+   "vehiculo_marca": "Volkswagen",
+   "vehiculo_modelo": "JETTA"
+  },
+  "expected": "Amortiguador hidráulico delantero izquierdo/derecho para Volkswagen Jetta 1.8 L4 1987–1999",
+  "expected_identifiers": "Amortiguador hidráulico delantero izquierdo/derecho Boge MP900 para Volkswagen Jetta 1.8 L4 1987–1999"
+ },
+ {
+  "sku": "UDES3418L",
+  "title": "TERMINAL DIRECCION SUPER DUTY 4X2 DOBLE SEMIEJE FORD F250 1999 2010",
+  "vendor": "UNICAR",
+  "attributes": {
+   "pieza": "TERMINAL DIRECCION",
+   "alto_cm": 8,
+   "detalle": "SUPER DUTY DOBLE SEMIEJE",
+   "ancho_cm": 7,
+   "largo_cm": 18,
+   "traccion": "4X2",
+   "anio_desde": 1999,
+   "anio_hasta": 2010,
+   "part_number": "UDES3418L",
+   "vehiculo_marca": "Ford",
+   "vehiculo_modelo": "F250"
+  },
+  "expected": "Terminal de dirección Super Duty doble semieje 4x2 para Ford F250 1999–2010",
+  "expected_identifiers": "Terminal de dirección Super Duty doble semieje 4x2 Unicar UDES3418L para Ford F250 1999–2010"
+ },
+ {
+  "sku": "SD7573KIT",
+  "title": "BASE AMORTIGUADOR DEL IZQ/DER HONDA CRX 2006 2009",
+  "vendor": "DAI",
+  "attributes": {
+   "pieza": "BASE AMORTIGUADOR",
+   "alto_cm": 12,
+   "ancho_cm": 15,
+   "largo_cm": 15,
+   "position": "delantera/izquierda/derecha",
+   "anio_desde": 2006,
+   "anio_hasta": 2009,
+   "part_number": "SD7573KIT",
+   "vehiculo_marca": "Honda",
+   "vehiculo_modelo": "CRX"
+  },
+  "expected": "Base de amortiguador delantera izquierda/derecha para Honda CRX 2006–2009",
+  "expected_identifiers": "Base de amortiguador delantera izquierda/derecha DAI SD7573KIT para Honda CRX 2006–2009"
+ },
+ {
+  "sku": "SPC7653ZD785",
+  "title": "BALATA DISCO DELANTERO/TRASERO CERAMICA PARA EJE DELANTERO Y TRASERO GM SILVERADO 5.3 V8 1999 2007",
+  "vendor": "FRITEC",
+  "attributes": {
+   "motor": "5.3 V8",
+   "pieza": "BALATA DISCO",
+   "detalle": "CERAMICA PARA EJE Y",
+   "position": "delantera/trasera",
+   "anio_desde": 1999,
+   "anio_hasta": 2007,
+   "part_number": "SPC7653ZD785",
+   "vehiculo_marca": "GM",
+   "vehiculo_modelo": "SILVERADO"
+  },
+  "expected": "Balata de disco cerámica delantera/trasera para GM Silverado 5.3 V8 1999–2007",
+  "expected_identifiers": "Balata de disco cerámica delantera/trasera Fritec SPC7653ZD785 para GM Silverado 5.3 V8 1999–2007"
+ },
+ {
+  "sku": "GDB4723DTM",
+  "title": "BALATA DISCO DELANTERO/TRASERO CERAMICA PARA EJE DELANTERO Y TRASERO GM SILVERADO 5.3 V8 1999 2007",
+  "vendor": "TRW",
+  "attributes": {
+   "motor": "5.3 V8",
+   "nuevo": true,
+   "pieza": "BALATA DISCO",
+   "detalle": "CERAMICA PARA EJE Y",
+   "position": "delantera/trasera",
+   "anio_desde": 1999,
+   "anio_hasta": 2007,
+   "part_number": "GDB4723DTM",
+   "vehiculo_marca": "GM",
+   "vehiculo_modelo": "SILVERADO"
+  },
+  "expected": "Balata de disco cerámica delantera/trasera para GM Silverado 5.3 V8 1999–2007",
+  "expected_identifiers": "Balata de disco cerámica delantera/trasera TRW GDB4723DTM para GM Silverado 5.3 V8 1999–2007"
+ },
+ {
+  "sku": "SD31",
+  "title": "GOMA AMORTIGUADOR CONICA UNIVERSAL ALT: 28 MM DIAM EXT: 35 MM",
+  "vendor": "DAI",
+  "attributes": {
+   "pieza": "GOMA",
+   "detalle": "AMORTIGUADOR CONICA UNIVERSAL ALT: 28 MM DIAM EXT: 35 MM",
+   "part_number": "SD31"
+  },
+  "expected": "Goma amortiguador cónica universal alt.: 28 mm diám. exterior: 35 mm",
+  "expected_identifiers": "Goma amortiguador cónica universal alt.: 28 mm diám. exterior: 35 mm DAI SD31"
+ },
+ {
+  "sku": "TEST-PAY-5",
+  "title": "Producto de prueba (pago y envío)",
+  "vendor": null,
+  "attributes": {},
+  "expected": "Producto de prueba (pago y envío)",
+  "expected_identifiers": "Producto de prueba (pago y envío) TEST-PAY-5"
+ },
+ {
+  "sku": "U4601001A05",
+  "title": "CILINDRO MAESTRO NISSAN TSURU III 1.6 L4 1992 1992",
+  "vendor": "UNICAR",
+  "attributes": {
+   "motor": "1.6 L4",
+   "pieza": "CILINDRO MAESTRO",
+   "anio_desde": 1992,
+   "anio_hasta": 1992,
+   "part_number": "U4601001A05",
+   "vehiculo_marca": "Nissan",
+   "vehiculo_modelo": "TSURU III"
+  },
+  "expected": "Cilindro maestro para Nissan Tsuru III 1.6 L4 1992",
+  "expected_identifiers": "Cilindro maestro Unicar U4601001A05 para Nissan Tsuru III 1.6 L4 1992"
+ },
+ {
+  "sku": "SD709",
+  "title": "GOMA CREMALLERA DER ALTO:6.2 MM ANCHO:2.9 MM LARGO:5.8 MM VOLKSWAGEN CARIBE 1977 1987",
+  "vendor": "DAI",
+  "attributes": {
+   "pieza": "GOMA",
+   "alto_cm": 6.2,
+   "detalle": "CREMALLERA ALTO:6.2 MM ANCHO:2.9 MM LARGO:5.8 MM",
+   "ancho_cm": 2.9,
+   "largo_cm": 5.8,
+   "position": "derecha",
+   "anio_desde": 1977,
+   "anio_hasta": 1987,
+   "part_number": "SD709",
+   "vehiculo_marca": "Volkswagen",
+   "vehiculo_modelo": "CARIBE"
+  },
+  "expected": "Goma cremallera alto: 6.2 mm ancho: 2.9 mm largo: 5.8 mm derecha para Volkswagen Caribe 1977–1987",
+  "expected_identifiers": "Goma cremallera alto: 6.2 mm ancho: 2.9 mm largo: 5.8 mm derecha DAI SD709 para Volkswagen Caribe 1977–1987"
+ },
+ {
+  "sku": "UD1413008",
+  "title": "BUJE FWD MAZDA 3 2 L4 2014 2018",
+  "vendor": "UNICAR",
+  "attributes": {
+   "motor": "2.0 L4",
+   "pieza": "BUJE",
+   "traccion": "FWD",
+   "anio_desde": 2014,
+   "anio_hasta": 2018,
+   "part_number": "UD1413008",
+   "vehiculo_marca": "Mazda",
+   "vehiculo_modelo": "3"
+  },
+  "expected": "Buje FWD para Mazda 3 2.0 L4 2014–2018",
+  "expected_identifiers": "Buje FWD Unicar UD1413008 para Mazda 3 2.0 L4 2014–2018"
+ },
+ {
+  "sku": "DAI1413016",
+  "title": "BUJE FWD MAZDA 3 2 L4 2014 2018",
+  "vendor": "DAI",
+  "attributes": {
+   "motor": "2.0 L4",
+   "pieza": "BUJE",
+   "traccion": "FWD",
+   "anio_desde": 2014,
+   "anio_hasta": 2018,
+   "part_number": "DAI1413016",
+   "vehiculo_marca": "Mazda",
+   "vehiculo_modelo": "3"
+  },
+  "expected": "Buje FWD para Mazda 3 2.0 L4 2014–2018",
+  "expected_identifiers": "Buje FWD DAI DAI1413016 para Mazda 3 2.0 L4 2014–2018"
+ },
+ {
+  "sku": "MRES2078L",
+  "title": "TERMINAL DIRECCION 4WD FORD BRONCO 4.9 L6 1980 1993",
+  "vendor": "MASTER RIDE",
+  "attributes": {
+   "motor": "4.9 L6",
+   "pieza": "TERMINAL DIRECCION",
+   "traccion": "4WD",
+   "anio_desde": 1980,
+   "anio_hasta": 1993,
+   "part_number": "MRES2078L",
+   "vehiculo_marca": "Ford",
+   "vehiculo_modelo": "BRONCO"
+  },
+  "expected": "Terminal de dirección 4WD para Ford Bronco 4.9 L6 1980–1993",
+  "expected_identifiers": "Terminal de dirección 4WD Master Ride MRES2078L para Ford Bronco 4.9 L6 1980–1993"
+ },
+ {
+  "sku": "MRES2077R",
+  "title": "TERMINAL DIRECCION 4WD FORD BRONCO 4.9 L6 1980 1993",
+  "vendor": "MASTER RIDE",
+  "attributes": {
+   "motor": "4.9 L6",
+   "pieza": "TERMINAL DIRECCION",
+   "traccion": "4WD",
+   "anio_desde": 1980,
+   "anio_hasta": 1993,
+   "part_number": "MRES2077R",
+   "vehiculo_marca": "Ford",
+   "vehiculo_modelo": "BRONCO"
+  },
+  "expected": "Terminal de dirección 4WD para Ford Bronco 4.9 L6 1980–1993",
+  "expected_identifiers": "Terminal de dirección 4WD Master Ride MRES2077R para Ford Bronco 4.9 L6 1980–1993"
+ },
+ {
+  "sku": "U00GP3682",
+  "title": "FILTRO ACEITE NISSAN TSURU 1.6 L4 2005 2008",
+  "vendor": "UNICAR",
+  "attributes": {
+   "motor": "1.6 L4",
+   "pieza": "FILTRO ACEITE",
+   "anio_desde": 2005,
+   "anio_hasta": 2008,
+   "part_number": "U00GP3682",
+   "vehiculo_marca": "Nissan",
+   "vehiculo_modelo": "TSURU"
+  },
+  "expected": "Filtro de aceite para Nissan Tsuru 1.6 L4 2005–2008",
+  "expected_identifiers": "Filtro de aceite Unicar U00GP3682 para Nissan Tsuru 1.6 L4 2005–2008"
+ },
+ {
+  "sku": "UDEV433",
+  "title": "BIELETA 4X4 INT TOYOTA TACOMA 1995 2004",
+  "vendor": "UNICAR",
+  "attributes": {
+   "pieza": "BIELETA",
+   "alto_cm": 5,
+   "detalle": "INT",
+   "ancho_cm": 5,
+   "largo_cm": 40,
+   "traccion": "4X4",
+   "anio_desde": 1995,
+   "anio_hasta": 2004,
+   "part_number": "UDEV433",
+   "vehiculo_marca": "Toyota",
+   "vehiculo_modelo": "TACOMA"
+  },
+  "expected": "Bieleta interior 4x4 para Toyota Tacoma 1995–2004",
+  "expected_identifiers": "Bieleta interior 4x4 Unicar UDEV433 para Toyota Tacoma 1995–2004"
+ },
+ {
+  "sku": "FR11008",
+  "title": "DISCO TRASERO SOLIDO 4 BIRLOS O BARRENOS DODGE ATTITUDE 1.6 L4 2006 2011",
+  "vendor": "FRITEC",
+  "attributes": {
+   "motor": "1.6 L4",
+   "pieza": "DISCO",
+   "detalle": "SOLIDO 4 BIRLOS O BARRENOS",
+   "position": "trasera",
+   "anio_desde": 2006,
+   "anio_hasta": 2011,
+   "part_number": "FR11008",
+   "vehiculo_marca": "Dodge",
+   "vehiculo_modelo": "ATTITUDE"
+  },
+  "expected": "Disco sólido 4 birlos o barrenos trasero para Dodge Attitude 1.6 L4 2006–2011",
+  "expected_identifiers": "Disco sólido 4 birlos o barrenos trasero Fritec FR11008 para Dodge Attitude 1.6 L4 2006–2011"
+ },
+ {
+  "sku": "SD2025",
+  "title": "KIT TOPE REBOTE CUBRE POLVO DELANTERO IZQ/DER. NISSAN VERSA 1.6 L4 2014 2019",
+  "vendor": "DAI",
+  "attributes": {
+   "motor": "1.6 L4",
+   "pieza": "KIT TOPE",
+   "detalle": "REBOTE CUBRE POLVO IZQ/DER.",
+   "position": "delantera",
+   "anio_desde": 2014,
+   "anio_hasta": 2019,
+   "part_number": "SD2025",
+   "vehiculo_marca": "Nissan",
+   "vehiculo_modelo": "VERSA"
+  },
+  "expected": "Kit de tope rebote cubre polvo delantero izquierdo/derecho para Nissan Versa 1.6 L4 2014–2019",
+  "expected_identifiers": "Kit de tope rebote cubre polvo delantero izquierdo/derecho DAI SD2025 para Nissan Versa 1.6 L4 2014–2019"
+ },
+ {
+  "sku": "GAC81",
+  "title": "FILTRO CABINA GM AVEO 1.6 L4 2012 2018",
+  "vendor": "GONHER",
+  "attributes": {
+   "motor": "1.6 L4",
+   "pieza": "FILTRO CABINA",
+   "anio_desde": 2012,
+   "anio_hasta": 2018,
+   "part_number": "GAC81",
+   "vehiculo_marca": "GM",
+   "vehiculo_modelo": "AVEO"
+  },
+  "expected": "Filtro de cabina para GM Aveo 1.6 L4 2012–2018",
+  "expected_identifiers": "Filtro de cabina Gonher GAC81 para GM Aveo 1.6 L4 2012–2018"
+ },
+ {
+  "sku": "UKT619R",
+  "title": "KIT TAMBOR TRASERO TOYOTA CAMRY 1.8 L4 2003 2012",
+  "vendor": "UNICAR",
+  "attributes": {
+   "motor": "1.8 L4",
+   "pieza": "KIT TAMBOR",
+   "position": "trasera",
+   "anio_desde": 2003,
+   "anio_hasta": 2012,
+   "part_number": "UKT619R",
+   "vehiculo_marca": "Toyota",
+   "vehiculo_modelo": "CAMRY"
+  },
+  "expected": "Kit de tambor trasero para Toyota Camry 1.8 L4 2003–2012",
+  "expected_identifiers": "Kit de tambor trasero Unicar UKT619R para Toyota Camry 1.8 L4 2003–2012"
+ },
+ {
+  "sku": "UDDS1426",
+  "title": "VARILLA CENTRAL 4X4 FORD F150 1997 2003",
+  "vendor": "UNICAR",
+  "attributes": {
+   "pieza": "VARILLA",
+   "alto_cm": 8,
+   "detalle": "CENTRAL",
+   "ancho_cm": 8,
+   "largo_cm": 75,
+   "traccion": "4X4",
+   "anio_desde": 1997,
+   "anio_hasta": 2003,
+   "part_number": "UDDS1426",
+   "vehiculo_marca": "Ford",
+   "vehiculo_modelo": "F150"
+  },
+  "expected": "Varilla central 4x4 para Ford F150 1997–2003",
+  "expected_identifiers": "Varilla central 4x4 Unicar UDDS1426 para Ford F150 1997–2003"
+ },
+ {
+  "sku": "U42604671N",
+  "title": "CAJA DIRECCION ELECTROASISTIDA GM BEAT 1.2 L4 2018 2021",
+  "vendor": "UNICAR",
+  "attributes": {
+   "motor": "1.2 L4",
+   "pieza": "CAJA DIRECCION",
+   "detalle": "ELECTROASISTIDA",
+   "anio_desde": 2018,
+   "anio_hasta": 2021,
+   "part_number": "U42604671N",
+   "vehiculo_marca": "GM",
+   "vehiculo_modelo": "BEAT"
+  },
+  "expected": "Caja de dirección electroasistida para GM Beat 1.2 L4 2018–2021",
+  "expected_identifiers": "Caja de dirección electroasistida Unicar U42604671N para GM Beat 1.2 L4 2018–2021"
+ },
+ {
+  "sku": "UKC106",
+  "title": "KIT CALIPER DEL BALATA 7Y08-F221 SEAT CORDOBA 1.6 L4 2004 2009",
+  "vendor": "UNICAR",
+  "attributes": {
+   "motor": "1.6 L4",
+   "pieza": "KIT CALIPER",
+   "detalle": "BALATA 7Y08-F221",
+   "position": "delantera",
+   "anio_desde": 2004,
+   "anio_hasta": 2009,
+   "part_number": "UKC106",
+   "vehiculo_marca": "Seat",
+   "vehiculo_modelo": "CORDOBA"
+  },
+  "expected": "Kit de cáliper balata 7Y08-F221 delantero para Seat Córdoba 1.6 L4 2004–2009",
+  "expected_identifiers": "Kit de cáliper balata 7Y08-F221 delantero Unicar UKC106 para Seat Córdoba 1.6 L4 2004–2009"
+ },
+ {
+  "sku": "UR4GP",
+  "title": "BUJIA GM SILVERADO 5.7 V8 1995 1999",
+  "vendor": "NGK",
+  "attributes": {
+   "motor": "5.7 V8",
+   "pieza": "BUJIA",
+   "anio_desde": 1995,
+   "anio_hasta": 1999,
+   "part_number": "UR4GP",
+   "vehiculo_marca": "GM",
+   "vehiculo_modelo": "SILVERADO"
+  },
+  "expected": "Bujía para GM Silverado 5.7 V8 1995–1999",
+  "expected_identifiers": "Bujía NGK UR4GP para GM Silverado 5.7 V8 1995–1999"
+ },
+ {
+  "sku": "G40GSL",
+  "title": "ACEITE MOTOR MONOGRADO MINERAL SUPER HD SAE 40 GARRAFA 5 LITROS API SL CAJA C/4",
+  "vendor": "GONHER",
+  "attributes": {
+   "pieza": "ACEITE MOTOR",
+   "detalle": "MONOGRADO MINERAL SUPER HD SAE 40 GARRAFA 5 LITROS API SL",
+   "caja_piezas": 4,
+   "part_number": "G40GSL"
+  },
+  "expected": "Aceite de motor monogrado mineral Super HD SAE 40 garrafa 5 litros API SL caja con 4",
+  "expected_identifiers": "Aceite de motor monogrado mineral Super HD SAE 40 garrafa 5 litros API SL caja con 4 Gonher G40GSL"
+ },
+ {
+  "sku": "UC48",
+  "title": "KIT RESORTE TAMBOR IZQ CHRYSLER VOYAGER 1984 1995",
+  "vendor": "UNICAR",
+  "attributes": {
+   "pieza": "KIT RESORTE",
+   "alto_cm": 2,
+   "detalle": "TAMBOR",
+   "ancho_cm": 5,
+   "largo_cm": 17,
+   "position": "izquierda",
+   "anio_desde": 1984,
+   "anio_hasta": 1995,
+   "part_number": "UC48",
+   "vehiculo_marca": "Chrysler",
+   "vehiculo_modelo": "VOYAGER"
+  },
+  "expected": "Kit de resorte tambor izquierdo para Chrysler Voyager 1984–1995",
+  "expected_identifiers": "Kit de resorte tambor izquierdo Unicar UC48 para Chrysler Voyager 1984–1995"
+ },
+ {
+  "sku": "DH3022",
+  "title": "REPUESTO DIRECCION CAJA MERCURY GRAND MARQUIS 1978 1990",
+  "vendor": "CHROMITE",
+  "attributes": {
+   "pieza": "REPUESTO DIRECCION",
+   "alto_cm": 3,
+   "detalle": "CAJA",
+   "ancho_cm": 15,
+   "largo_cm": 20,
+   "anio_desde": 1978,
+   "anio_hasta": 1990,
+   "part_number": "DH3022",
+   "vehiculo_marca": "Mercury",
+   "vehiculo_modelo": "GRAND MARQUIS"
+  },
+  "expected": "Repuesto de dirección caja para Mercury Grand Marquis 1978–1990",
+  "expected_identifiers": "Repuesto de dirección caja Chromite DH3022 para Mercury Grand Marquis 1978–1990"
+ },
+ {
+  "sku": "UD1514012",
+  "title": "BRAZO SUSPENSION W219 DEL INF ANTERIOR DER MERCEDES BENZ CLASE CLS 2006 2011",
+  "vendor": "UNICAR",
+  "attributes": {
+   "pieza": "BRAZO SUSPENSION",
+   "alto_cm": 9,
+   "detalle": "W219 ANTERIOR",
+   "ancho_cm": 10,
+   "largo_cm": 45,
+   "position": "delantera/inferior/derecha",
+   "anio_desde": 2006,
+   "anio_hasta": 2011,
+   "part_number": "UD1514012",
+   "vehiculo_marca": "Mercedes-Benz",
+   "vehiculo_modelo": "CLASE CLS"
+  },
+  "expected": "Brazo de suspensión W219 delantero inferior derecho para Mercedes-Benz Clase CLS 2006–2011",
+  "expected_identifiers": "Brazo de suspensión W219 delantero inferior derecho Unicar UD1514012 para Mercedes-Benz Clase CLS 2006–2011"
+ },
+ {
+  "sku": "UBDH30016",
+  "title": "BOMBA DIRECCION HIDRAULICA LICUADORA S/POLEA S/DEPOSITO DODGE NEON 2 L4 1995 2000",
+  "vendor": "UNICAR",
+  "attributes": {
+   "motor": "2.0 L4",
+   "pieza": "BOMBA DIRECCION",
+   "detalle": "HIDRAULICA LICUADORA S/POLEA S/DEPOSITO",
+   "anio_desde": 1995,
+   "anio_hasta": 2000,
+   "part_number": "UBDH30016",
+   "vehiculo_marca": "Dodge",
+   "vehiculo_modelo": "NEON"
+  },
+  "expected": "Bomba de dirección hidráulica licuadora sin polea sin depósito para Dodge Neon 2.0 L4 1995–2000",
+  "expected_identifiers": "Bomba de dirección hidráulica licuadora sin polea sin depósito Unicar UBDH30016 para Dodge Neon 2.0 L4 1995–2000"
+ },
+ {
+  "sku": "SD2009",
+  "title": "TOPE REBOTE DEL IZQ/DER NISSAN TIIDA 2006 2018",
+  "vendor": "DAI",
+  "attributes": {
+   "pieza": "TOPE REBOTE",
+   "alto_cm": 12,
+   "ancho_cm": 6,
+   "largo_cm": 6,
+   "position": "delantera/izquierda/derecha",
+   "anio_desde": 2006,
+   "anio_hasta": 2018,
+   "part_number": "SD2009",
+   "vehiculo_marca": "Nissan",
+   "vehiculo_modelo": "TIIDA"
+  },
+  "expected": "Tope de rebote delantero izquierdo/derecho para Nissan Tiida 2006–2018",
+  "expected_identifiers": "Tope de rebote delantero izquierdo/derecho DAI SD2009 para Nissan Tiida 2006–2018"
+ },
+ {
+  "sku": "SD400",
+  "title": "AUMENTO RESORTE UNIVERSAL",
+  "vendor": "DAI",
+  "attributes": {
+   "pieza": "AUMENTO RESORTE",
+   "detalle": "UNIVERSAL",
+   "part_number": "SD400"
+  },
+  "expected": "Aumento de resorte universal",
+  "expected_identifiers": "Aumento de resorte universal DAI SD400"
+ },
+ {
+  "sku": "FT20004",
+  "title": "TAMBOR TRASERO / 4 BARRENOS/ D.EXT. 219MM/ D.NOM. 180MM NISSAN TSURU 1.6 L4 1992 2017",
+  "vendor": "FRITEC",
+  "attributes": {
+   "motor": "1.6 L4",
+   "pieza": "TAMBOR",
+   "detalle": "/ 4 BARRENOS/ D.EXT. 219MM/ D.NOM. 180MM",
+   "position": "trasera",
+   "anio_desde": 1992,
+   "anio_hasta": 2017,
+   "part_number": "FT20004",
+   "vehiculo_marca": "Nissan",
+   "vehiculo_modelo": "TSURU"
+  },
+  "expected": "Tambor 4 barrenos, diám. ext. 219 mm, diám. nom. 180 mm trasero para Nissan Tsuru 1.6 L4 1992–2017",
+  "expected_identifiers": "Tambor 4 barrenos, diám. ext. 219 mm, diám. nom. 180 mm trasero Fritec FT20004 para Nissan Tsuru 1.6 L4 1992–2017"
+ },
+ {
+  "sku": "U2514",
+  "title": "PISTON CALIPER TRAS D1411 GM SILVERADO 3500 6 V8 2011 2015",
+  "vendor": "UNICAR",
+  "attributes": {
+   "motor": "6.0 V8",
+   "pieza": "PISTON CALIPER",
+   "detalle": "D1411",
+   "position": "trasera",
+   "anio_desde": 2011,
+   "anio_hasta": 2015,
+   "part_number": "U2514",
+   "vehiculo_marca": "GM",
+   "vehiculo_modelo": "SILVERADO 3500"
+  },
+  "expected": "Pistón de cáliper D1411 trasero para GM Silverado 3500 6.0 V8 2011–2015",
+  "expected_identifiers": "Pistón de cáliper D1411 trasero Unicar U2514 para GM Silverado 3500 6.0 V8 2011–2015"
+ },
+ {
+  "sku": "UAB4015R",
+  "title": "AJUSTADOR BALATA DERECHO NISSAN TSUBAME 1.6 L4 1992 2003",
+  "vendor": "UNICAR",
+  "attributes": {
+   "motor": "1.6 L4",
+   "pieza": "AJUSTADOR BALATA",
+   "position": "derecha",
+   "anio_desde": 1992,
+   "anio_hasta": 2003,
+   "part_number": "UAB4015R",
+   "vehiculo_marca": "Nissan",
+   "vehiculo_modelo": "TSUBAME"
+  },
+  "expected": "Ajustador de balata derecho para Nissan Tsubame 1.6 L4 1992–2003",
+  "expected_identifiers": "Ajustador de balata derecho Unicar UAB4015R para Nissan Tsubame 1.6 L4 1992–2003"
+ },
+ {
+  "sku": "VW622",
+  "title": "CHICOTE FRENO LONG: 2945 MM VOLKSWAGEN POINTER 1.8 L4 1998 2008",
+  "vendor": "CAHSA",
+  "attributes": {
+   "motor": "1.8 L4",
+   "pieza": "CHICOTE FRENO",
+   "detalle": "LONG: 2945 MM",
+   "anio_desde": 1998,
+   "anio_hasta": 2008,
+   "part_number": "VW622",
+   "vehiculo_marca": "Volkswagen",
+   "vehiculo_modelo": "POINTER"
+  },
+  "expected": "Chicote de freno long.: 2945 mm para Volkswagen Pointer 1.8 L4 1998–2008",
+  "expected_identifiers": "Chicote de freno long.: 2945 mm Cahsa VW622 para Volkswagen Pointer 1.8 L4 1998–2008"
+ },
+ {
+  "sku": "SG223",
+  "title": "VALVULA PCV KIA SPORTAGE 2 L4 2011 2022",
+  "vendor": "UNICAR",
+  "attributes": {
+   "motor": "2.0 L4",
+   "pieza": "VALVULA PCV",
+   "anio_desde": 2011,
+   "anio_hasta": 2022,
+   "part_number": "SG223",
+   "vehiculo_marca": "Kia",
+   "vehiculo_modelo": "SPORTAGE"
+  },
+  "expected": "Válvula PCV para Kia Sportage 2.0 L4 2011–2022",
+  "expected_identifiers": "Válvula PCV Unicar SG223 para Kia Sportage 2.0 L4 2011–2022"
+ },
+ {
+  "sku": "U217M",
+  "title": "REPUESTO FRENO DISCO DEL TRASRAPTOR FORD F150 6.2 V8 2010 2016",
+  "vendor": "UNICAR",
+  "attributes": {
+   "motor": "6.2 V8",
+   "pieza": "REPUESTO FRENO",
+   "detalle": "DISCO TRASRAPTOR",
+   "position": "delantera",
+   "anio_desde": 2010,
+   "anio_hasta": 2016,
+   "part_number": "U217M",
+   "vehiculo_marca": "Ford",
+   "vehiculo_modelo": "F150"
+  },
+  "expected": "Repuesto de freno disco Trasraptor delantero para Ford F150 6.2 V8 2010–2016",
+  "expected_identifiers": "Repuesto de freno disco Trasraptor delantero Unicar U217M para Ford F150 6.2 V8 2010–2016"
+ },
+ {
+  "sku": "UD2617001",
+  "title": "TIRANTE TRAS PEUGEOT 406 2000 2005",
+  "vendor": "UNICAR",
+  "attributes": {
+   "pieza": "TIRANTE",
+   "alto_cm": 9,
+   "ancho_cm": 10,
+   "largo_cm": 45,
+   "position": "trasera",
+   "anio_desde": 2000,
+   "anio_hasta": 2005,
+   "part_number": "UD2617001",
+   "vehiculo_marca": "Peugeot",
+   "vehiculo_modelo": "406"
+  },
+  "expected": "Tirante trasero para Peugeot 406 2000–2005",
+  "expected_identifiers": "Tirante trasero Unicar UD2617001 para Peugeot 406 2000–2005"
+ },
+ {
+  "sku": "UDY02G0",
+  "title": "RESORTE SUSPENSION TRAS NISSAN TSURU III 1992 2017",
+  "vendor": "UNICAR",
+  "attributes": {
+   "pieza": "RESORTE SUSPENSION",
+   "alto_cm": 13,
+   "ancho_cm": 26,
+   "largo_cm": 40,
+   "position": "trasera",
+   "anio_desde": 1992,
+   "anio_hasta": 2017,
+   "part_number": "UDY02G0",
+   "vehiculo_marca": "Nissan",
+   "vehiculo_modelo": "TSURU III"
+  },
+  "expected": "Resorte de suspensión trasero para Nissan Tsuru III 1992–2017",
+  "expected_identifiers": "Resorte de suspensión trasero Unicar UDY02G0 para Nissan Tsuru III 1992–2017"
+ },
+ {
+  "sku": "UDES500S",
+  "title": "COPLE DIRECCION GM C1500 1988 1999",
+  "vendor": "UNICAR",
+  "attributes": {
+   "pieza": "COPLE DIRECCION",
+   "alto_cm": 4,
+   "ancho_cm": 10,
+   "largo_cm": 10,
+   "anio_desde": 1988,
+   "anio_hasta": 1999,
+   "part_number": "UDES500S",
+   "vehiculo_marca": "GM",
+   "vehiculo_modelo": "C1500"
+  },
+  "expected": "Cople de dirección para GM C1500 1988–1999",
+  "expected_identifiers": "Cople de dirección Unicar UDES500S para GM C1500 1988–1999"
+ },
+ {
+  "sku": "UD5421652G00",
+  "title": "TORNILLO BRAZO ELEVADOR 4X2 ELEVADOR NISSAN NP300 2009 2015",
+  "vendor": "UNICAR",
+  "attributes": {
+   "pieza": "TORNILLO BRAZO ELEVADOR ELEVADOR",
+   "alto_cm": 4,
+   "ancho_cm": 4,
+   "largo_cm": 20,
+   "traccion": "4X2",
+   "anio_desde": 2009,
+   "anio_hasta": 2015,
+   "part_number": "UD5421652G00",
+   "vehiculo_marca": "Nissan",
+   "vehiculo_modelo": "NP300"
+  },
+  "expected": "Tornillo de brazo elevador 4x2 para Nissan NP300 2009–2015",
+  "expected_identifiers": "Tornillo de brazo elevador 4x2 Unicar UD5421652G00 para Nissan NP300 2009–2015"
+ },
+ {
+  "sku": "SD9800",
+  "title": "KIT BUJE HORQUILLA INFERIOR VOLKSWAGEN JETTA 1998 2014",
+  "vendor": "DAI",
+  "attributes": {
+   "pieza": "KIT BUJE",
+   "alto_cm": 7,
+   "detalle": "HORQUILLA",
+   "ancho_cm": 14,
+   "largo_cm": 18,
+   "position": "inferior",
+   "anio_desde": 1998,
+   "anio_hasta": 2014,
+   "part_number": "SD9800",
+   "vehiculo_marca": "Volkswagen",
+   "vehiculo_modelo": "JETTA"
+  },
+  "expected": "Kit de buje horquilla inferior para Volkswagen Jetta 1998–2014",
+  "expected_identifiers": "Kit de buje horquilla inferior DAI SD9800 para Volkswagen Jetta 1998–2014"
+ },
+ {
+  "sku": "BVB5001",
+  "title": "BOOSTER NISSAN TSURU III 1.6 L4 1992 2016",
+  "vendor": "CHROMITE",
+  "attributes": {
+   "motor": "1.6 L4",
+   "pieza": "BOOSTER",
+   "anio_desde": 1992,
+   "anio_hasta": 2016,
+   "part_number": "BVB5001",
+   "vehiculo_marca": "Nissan",
+   "vehiculo_modelo": "TSURU III"
+  },
+  "expected": "Booster para Nissan Tsuru III 1.6 L4 1992–2016",
+  "expected_identifiers": "Booster Chromite BVB5001 para Nissan Tsuru III 1.6 L4 1992–2016"
+ },
+ {
+  "sku": "SD6142",
+  "title": "BALERO BASE AMORTIGUADOR NISSAN SENTRA 2006 2006",
+  "vendor": "DAI",
+  "attributes": {
+   "pieza": "BALERO",
+   "alto_cm": 3,
+   "detalle": "BASE AMORTIGUADOR",
+   "ancho_cm": 10,
+   "largo_cm": 10,
+   "anio_desde": 2006,
+   "anio_hasta": 2006,
+   "part_number": "SD6142",
+   "vehiculo_marca": "Nissan",
+   "vehiculo_modelo": "SENTRA"
+  },
+  "expected": "Balero base amortiguador para Nissan Sentra 2006",
+  "expected_identifiers": "Balero base amortiguador DAI SD6142 para Nissan Sentra 2006"
+ },
+ {
+  "sku": "SD6716",
+  "title": "REPUESTO BASE AMORTIGUADOR NISSAN TSURU III 1992 1992",
+  "vendor": "DAI",
+  "attributes": {
+   "pieza": "REPUESTO BASE AMORTIGUADOR",
+   "alto_cm": 3.5,
+   "ancho_cm": 8,
+   "largo_cm": 8,
+   "anio_desde": 1992,
+   "anio_hasta": 1992,
+   "part_number": "SD6716",
+   "vehiculo_marca": "Nissan",
+   "vehiculo_modelo": "TSURU III"
+  },
+  "expected": "Repuesto de base de amortiguador para Nissan Tsuru III 1992",
+  "expected_identifiers": "Repuesto de base de amortiguador DAI SD6716 para Nissan Tsuru III 1992"
+ },
+ {
+  "sku": "MR5421652G00",
+  "title": "TORNILLO BRAZO ELEVADOR RWD NISSAN D21 3 V6 1994 1994",
+  "vendor": "MASTER RIDE",
+  "attributes": {
+   "motor": "3.0 V6",
+   "pieza": "TORNILLO BRAZO ELEVADOR",
+   "traccion": "RWD",
+   "anio_desde": 1994,
+   "anio_hasta": 1994,
+   "part_number": "MR5421652G00",
+   "vehiculo_marca": "Nissan",
+   "vehiculo_modelo": "D21"
+  },
+  "expected": "Tornillo de brazo elevador RWD para Nissan D21 3.0 V6 1994",
+  "expected_identifiers": "Tornillo de brazo elevador RWD Master Ride MR5421652G00 para Nissan D21 3.0 V6 1994"
+ },
+ {
+  "sku": "IBE7300",
+  "title": "FILTRO NISSAN TSURU 1.6 L4 1992 2017",
+  "vendor": "INTERFIL",
+  "attributes": {
+   "motor": "1.6 L4",
+   "pieza": "FILTRO",
+   "anio_desde": 1992,
+   "anio_hasta": 2017,
+   "part_number": "IBE7300",
+   "vehiculo_marca": "Nissan",
+   "vehiculo_modelo": "TSURU"
+  },
+  "expected": "Filtro para Nissan Tsuru 1.6 L4 1992–2017",
+  "expected_identifiers": "Filtro Interfil IBE7300 para Nissan Tsuru 1.6 L4 1992–2017"
+ },
+ {
+  "sku": "UD04796791",
+  "title": "BARRA TORSION PERNO DELGADO PRIMEROS MODELOS 1994 4WD 3850 LBS EJE SOLIDO DODGE RAM 1500 3.9 V6 1994 1994",
+  "vendor": "UNICAR",
+  "attributes": {
+   "motor": "3.9 V6",
+   "pieza": "BARRA TORSION PERNO DELGADO PRIMEROS MODELOS 1994 3850 LBS EJE SOLIDO",
+   "traccion": "4WD",
+   "anio_desde": 1994,
+   "anio_hasta": 1994,
+   "part_number": "UD04796791",
+   "vehiculo_marca": "Dodge",
+   "vehiculo_modelo": "RAM 1500"
+  },
+  "expected": "Barra de torsión perno delgado primeros modelos 1994 3850 lb eje sólido 4WD para Dodge RAM 1500 3.9 V6 1994",
+  "expected_identifiers": "Barra de torsión perno delgado primeros modelos 1994 3850 lb eje sólido 4WD Unicar UD04796791 para Dodge RAM 1500 3.9 V6 1994"
+ },
+ {
+  "sku": "USFD2072",
+  "title": "SEGURO FRENO DISCO SUPER DUTY DEL D411 FORD F450 1988 1998",
+  "vendor": "UNICAR",
+  "attributes": {
+   "pieza": "SEGURO FRENO DISCO SUPER DUTY D411",
+   "alto_cm": 1.5,
+   "ancho_cm": 3,
+   "largo_cm": 11,
+   "position": "delantera",
+   "anio_desde": 1988,
+   "anio_hasta": 1998,
+   "part_number": "USFD2072",
+   "vehiculo_marca": "Ford",
+   "vehiculo_modelo": "F450"
+  },
+  "expected": "Seguro de freno de disco Super Duty D411 delantero para Ford F450 1988–1998",
+  "expected_identifiers": "Seguro de freno de disco Super Duty D411 delantero Unicar USFD2072 para Ford F450 1988–1998"
+ }
+]
