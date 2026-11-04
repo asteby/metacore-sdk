@@ -137,9 +137,11 @@ describe('BrandMark layout and accessibility', () => {
     expect(deco).toContain('aria-hidden="true"')
     expect(deco).not.toContain('role="img"')
     const named = renderToString(<BrandMark brand="fedex" title="FedEx" />)
-    expect(named).toContain('role="img"')
-    expect(named).toContain('aria-label="FedEx"')
-    expect(named).toContain('alt=""')
+    // The logo's <img> carries the name (one accessible image, never announced twice; audits count it as having alt).
+    expect(named).toContain('alt="FedEx"')
+    expect(named).not.toContain('role="img"')
+    expect(named).not.toContain('aria-label=')
+    expect(named).not.toContain('alt=""')
   })
 
   it('has no axe violations, with and without a name, across every brand', async () => {
