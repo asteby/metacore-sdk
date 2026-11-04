@@ -54,7 +54,8 @@ describe('shopFieldValues', () => {
     const v = shopFieldValues(complete)
     expect(v['shop.legal_name']).toBe('Ejemplo SA de CV')
     expect(v['shop.warranty_months']).toBe('6')
-    expect(shopWarrantyMonths({ policies: { ...base.policies, warranty_months: 0 } })).toBe(0)
+    expect(shopWarrantyMonths({ policies: { ...base.policies, warranty_months: 0 } })).toBeNull()
+    expect(shopFieldValues({ ...base, policies: { ...base.policies, returns_days: 0 } })['shop.returns_days']).toBeNull()
     expect(shopFieldValues({ ...base, policies: { ...base.policies, warranty_months: 0 } })['shop.warranty_months']).toBeNull()
     expect(shopWarrantyMonths({ policies: { ...base.policies, warranty_months: -2 } })).toBeNull()
   })
@@ -71,7 +72,7 @@ describe('resolveShopText', () => {
     expect(resolveShopText('{{shop.name}} · {{ shop.domain }}', values).text).toBe('Tienda & Co · tienda.example.com')
   })
   it('never shows an unknown or misspelled placeholder', () => {
-    for (const t of ['RFC {{shop.rfc}}', '{{Shop.Name}}', '{{order.id}}', 'Fecha {{completar : fecha}}', 'Fecha {{completar}}', '{{COMPLETAR: x}}', '{{__proto__}}', '{{constructor}}']) {
+    for (const t of ['{{shop.name}', 'a {{ sin cierre', 'RFC {{shop.rfc}}', '{{Shop.Name}}', '{{order.id}}', 'Fecha {{completar : fecha}}', 'Fecha {{completar}}', '{{COMPLETAR: x}}', '{{__proto__}}', '{{constructor}}']) {
       expect(resolveShopText(t, values).text, t).toBeNull()
     }
     expect(resolveShopText('RFC {{shop.rfc}}', values).unknown).toEqual(['shop.rfc'])
@@ -93,7 +94,7 @@ describe('resolveShopText', () => {
     expect(resolveShopText('<p>[REVISAR CON ASESOR LEGAL] viejo</p>', values)).toMatchObject({ text: null, draft: true })
   })
   it('detects the draft notice in any spelling', () => {
-    for (const t of ['<p><strong>[BORRADOR:</strong> REVISAR CON ABOGADO]</p>', '<p>[BORRADOR:&nbsp;REVISAR CON ABOGADO]</p>', '[Borrador: revisar con abogado]', '[ borrador ]']) {
+    for (const t of ['<p><strong>[BORRADOR:</strong> REVISAR CON ABOGADO]</p>', '<p>[BORRADOR:&nbsp;REVISAR CON ABOGADO]</p>', '[Borrador: revisar con abogado]', '[ borrador ]', '&#91;BORRADOR: x', '[\u200bBORRADOR]', '\uff3bBORRADOR\uff3d', 'BORRADOR: REVISAR CON ABOGADO', '<p>[BORRADOR:&#xA0;REVISAR]</p>']) {
       expect(hasLegalDraftNotice(t), t).toBe(true)
       expect(resolveShopText(t, values).text, t).toBeNull()
     }
@@ -158,8 +159,9 @@ describe('mergeShopSections', () => {
     expect(r.dropped[0]).toMatchObject({ section: 'faq', path: 'items.0', item: 0 })
     const grid: Section = { id: 's', type: 'grid', props: { rows: [['ok', '{{shop.tax_id}}'], ['b']] } }
     const g = mergeShopSections([grid], base)
-    expect(g.sections[0]!.props.rows).toEqual([['ok'], ['b']])
-    expect(g.dropped[0]).toMatchObject({ path: 'rows.0.1' })
+    // A table row goes whole, never a label without its value.
+    expect(g.sections[0]!.props.rows).toEqual([['b']])
+    expect(g.dropped[0]).toMatchObject({ path: 'rows.0' })
   })
   it('a nested object with a missing field drops the whole section', () => {
     const s: Section = { id: 'n', type: 'x', props: { card: { title: 'RFC {{shop.tax_id}}' } } }
@@ -180,6 +182,8 @@ describe('mergeShopSections', () => {
     expect(isLegalHandle('politica-de-garantia')).toBe(true)
     expect(isLegalHandle('términos')).toBe(true)
     expect(isLegalHandle('preguntas-frecuentes')).toBe(false)
+    expect(isLegalHandle('returning-customers')).toBe(false)
+    expect(isLegalHandle('derechos-arco')).toBe(true)
   })
   it('does not mutate its input', () => {
     const copy = structuredClone(faq)
@@ -190,6 +194,17 @@ describe('mergeShopSections', () => {
     expect(mergeShopText('Aviso de {{shop.name}}', base)).toBe('Aviso de Tienda & Co')
     expect(mergeShopText('{{shop.legal_name}}', base)).toBeNull()
     expect(mergeShopText('', base)).toBeNull()
+  })
+})
+
+describe('performance', () => {
+  it('stays linear on hostile input', () => {
+    const values = shopFieldValues(base)
+    const t0 = Date.now()
+    resolveShopText('{{'.repeat(50000), values)
+    resolveShopText('<'.repeat(50000), values, { html: true })
+    resolveShopText('&#'.repeat(50000) + '[BORRADOR', values)
+    expect(Date.now() - t0).toBeLessThan(1500)
   })
 })
 

@@ -41,18 +41,27 @@ export type ShopFieldValues = Record<ShopMergeField, string | null>
 export const LEGAL_DRAFT_MARKERS = ['[BORRADOR: REVISAR CON ABOGADO]', '[REVISAR CON ASESOR LEGAL]'] as const
 
 const FIELD_RE = /\{\{\s*([a-z0-9_.]+)\s*\}\}/g
-/** Any `{{…}}` left after substitution: an unknown field, a typo, a `{{completar…}}` in any spelling. */
-const LEFTOVER_RE = /\{\{[\s\S]*?\}\}/
+/** Names of the `{{…}}` left after substitution (bounded: linear time on any input). */
+const LEFTOVER_NAMES_RE = /\{\{([^{}]{0,80})\}\}/g
 const PENDING_RE = /\{\{\s*completar/i
-const DRAFT_RE = /\[\s*(?:BORRADOR|REVISAR\s+CON)\b/
+/** The review notice: `[BORRADOR…` / `[REVISAR CON…` (any bracket), or the words without a bracket. */
+const DRAFT_RE = /(?:[[［]\s*(?:BORRADOR|REVISAR\s+CON)\b)|(?:\bBORRADOR\s*:\s*REVISAR\b)/
 
-const ENTITIES: Record<string, string> = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", '#39': "'", '#160': ' ' }
+const ENTITIES: Record<string, string> = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" }
 
-/** Text as a reader sees it: no tags, entities decoded, spaces collapsed, upper case without accents. */
+function decodeEntity(whole: string, name: string): string {
+  const n = name.toLowerCase()
+  const code = n.startsWith('#x') ? Number.parseInt(n.slice(2), 16) : n.startsWith('#') ? Number.parseInt(n.slice(1), 10) : NaN
+  if (n.startsWith('#')) return Number.isFinite(code) && code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : whole
+  return ENTITIES[n] ?? whole
+}
+
+/** Text as a reader sees it: no tags, entities decoded, no zero-width marks, spaces collapsed, upper case without accents. */
 function readable(text: string): string {
   return text
-    .replace(/<[^>]*>/g, '')
-    .replace(/&([a-z0-9#]+);/gi, (whole, name: string) => ENTITIES[name.toLowerCase()] ?? whole)
+    .replace(/<[^<>]*>/g, '')
+    .replace(/&(#x[0-9a-f]{1,6}|#[0-9]{1,7}|[a-z]{2,8});/gi, decodeEntity)
+    .replace(/[​-‍⁠﻿]/g, '')
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .replace(/\s+/g, ' ')
@@ -80,14 +89,16 @@ export function shopLegal(shop: Pick<Shop, 'legal' | 'contact'>): ShopLegal {
   }
 }
 
-/** Warranty term in months, from the shop policy only (the single source); `null` = claim none. */
+/** Warranty term in months, from the shop policy only (the single source); `null` (also for 0) = claim none. */
 export function shopWarrantyMonths(shop: Pick<Shop, 'policies'>): number | null {
-  return wholeNonNeg(shop.policies?.warranty_months)
+  const v = wholeNonNeg(shop.policies?.warranty_months)
+  return v && v > 0 ? v : null
 }
 
-/** Returns window in days from the shop policy; `null` = no returns policy to show. */
+/** Returns window in days from the shop policy; `null` (also for 0) = no returns policy to show. */
 export function shopReturnsDays(shop: Pick<Shop, 'policies'>): number | null {
-  return wholeNonNeg(shop.policies?.returns_days)
+  const v = wholeNonNeg(shop.policies?.returns_days)
+  return v && v > 0 ? v : null
 }
 
 /** Value of every merge field; `null` when the shop does not have it. */
@@ -106,7 +117,7 @@ export function shopFieldValues(shop: Shop): ShopFieldValues {
     'shop.free_shipping_min': min ? formatMoney(min, shop.locale || 'es-MX', { withoutTrailingZeros: true }) : null,
     'shop.currency': clean(shop.currency_code),
     'shop.country': clean(shop.country_code),
-    'shop.warranty_months': warranty != null && warranty > 0 ? String(warranty) : null,
+    'shop.warranty_months': warranty != null ? String(warranty) : null,
     'shop.legal_name': legal.name,
     'shop.tax_id': legal.tax_id,
     'shop.fiscal_address': legal.fiscal_address,
@@ -154,14 +165,16 @@ export function resolveShopText(text: string, values: ShopFieldValues, { html = 
     : text
   const draft = hasLegalDraftNotice(text) || hasLegalDraftNotice(out)
   const pending = PENDING_RE.test(text) || PENDING_RE.test(out)
+  // Any `{{` left (an unknown field, a typo, an unclosed `{{shop.name}`, a `{{completar…}}` in any spelling) blocks the text.
+  const leftover = out.includes('{{')
   const unknown: string[] = []
-  if (LEFTOVER_RE.test(out)) {
-    for (const m of out.matchAll(/\{\{([\s\S]*?)\}\}/g)) {
+  if (leftover) {
+    for (const m of out.matchAll(LEFTOVER_NAMES_RE)) {
       const name = m[1]!.trim()
-      if (!missing.includes(name as ShopMergeField) && !/^completar/i.test(name) && !unknown.includes(name)) unknown.push(name)
+      if (!missing.includes(name as ShopMergeField) && !/^completar/i.test(name) && !unknown.includes(name) && unknown.length < 20) unknown.push(name)
     }
   }
-  const blocked = draft || pending || missing.length > 0 || LEFTOVER_RE.test(out)
+  const blocked = draft || pending || missing.length > 0 || leftover
   return { text: blocked ? null : out, missing, pending, draft, unknown }
 }
 
@@ -202,7 +215,15 @@ const report = (section: string, a: Acc, path?: string, item?: number): DroppedC
   unknown: [...a.unknown],
 })
 
-function mergeValue(value: unknown, values: ShopFieldValues, html: boolean, acc: Acc, path: string, onItemDrop: (path: string, i: number, a: Acc) => void): unknown {
+function mergeValue(
+  value: unknown,
+  values: ShopFieldValues,
+  html: boolean,
+  acc: Acc,
+  path: string,
+  onItemDrop: (path: string, i: number, a: Acc) => void,
+  inList = false,
+): unknown {
   if (typeof value === 'string') {
     const r = resolveShopText(value, values, { html: html || LOOKS_LIKE_HTML.test(value) })
     if (r.text != null) return r.text
@@ -213,12 +234,23 @@ function mergeValue(value: unknown, values: ShopFieldValues, html: boolean, acc:
     return DROP
   }
   if (Array.isArray(value)) {
+    // A list inside a list is a row (a table): a cell that cannot be shown takes the whole row with it (never a label
+    // without its value).
+    if (inList) {
+      const row: unknown[] = []
+      for (const v of value) {
+        const merged = mergeValue(v, values, html, acc, path, onItemDrop, true)
+        if (merged === DROP) return DROP
+        row.push(merged)
+      }
+      return row
+    }
     const out: unknown[] = []
     value.forEach((v, i) => {
       // A list entry (FAQ answer, warranty card…) that cannot be shown goes away alone; the rest of the section stays.
       const itemAcc = newAcc()
       const at = path ? `${path}.${i}` : String(i)
-      const merged = mergeValue(v, values, html, itemAcc, at, onItemDrop)
+      const merged = mergeValue(v, values, html, itemAcc, at, onItemDrop, true)
       if (merged === DROP) {
         onItemDrop(at, i, itemAcc)
         // A draft notice anywhere taints the whole page, even inside a list.
@@ -286,12 +318,22 @@ export function pagePublishable(merged: MergedSections, { strict = false }: Publ
   return !strict || merged.dropped.length === 0
 }
 
-/** Handles of legal / policy pages, which are published only when complete (`strict`). */
-const LEGAL_HANDLE = /(privacidad|privacy|terminos|condiciones|terms|politica|policy|legal|cookies|devoluc|reembols|refund|return|garantia|warranty|aviso)/i
+/**
+ * Legal / policy pages, published only when complete (`strict`): the storefront_content templates and the usual
+ * handles of a hand-made one. Anything else (FAQ, about, shipping info…) keeps the per-entry rule.
+ */
+const LEGAL_HANDLES = new Set([
+  'aviso-de-privacidad', 'privacidad', 'privacy', 'privacy-policy', 'datos-personales', 'derechos-arco',
+  'terminos-y-condiciones', 'terminos', 'tyc', 'terms', 'terms-of-service',
+  'politica-de-devoluciones', 'devoluciones', 'returns', 'refund-policy',
+  'politica-de-garantia', 'garantia', 'warranty',
+  'politica-de-envios', 'politica-de-cookies', 'cookies', 'aviso-legal', 'legal',
+])
 
-/** Whether a page handle is a legal or policy page (published only when complete). */
+/** Whether a page handle is a legal or policy page (published only when complete). `politica-*` / `aviso-de-*` always are. */
 export function isLegalHandle(handle: string): boolean {
-  return LEGAL_HANDLE.test(handle.normalize('NFD').replace(/[̀-ͯ]/g, ''))
+  const h = handle.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase()
+  return LEGAL_HANDLES.has(h) || h.startsWith('politica-') || h.startsWith('aviso-de-')
 }
 
 export type MergedPage<P extends Pick<Page, 'handle' | 'title' | 'seo' | 'sections'>> = {
@@ -302,7 +344,8 @@ export type MergedPage<P extends Pick<Page, 'handle' | 'title' | 'seo' | 'sectio
 
 /**
  * The whole page in one call: sections, title and SEO resolved; `publishable` is `pagePublishable` (strict for legal
- * handles, see `isLegalHandle`) and also false when the title itself carries a draft notice or a placeholder.
+ * handles, see `isLegalHandle`) and also false when the title itself carries a draft notice or a placeholder. A SEO
+ * title or description that cannot be shown only becomes `null` (the page falls back to its title); it never blocks.
  */
 export function mergeShopPage<P extends Pick<Page, 'handle' | 'title' | 'seo' | 'sections'>>(page: P, shop: Shop, options: PublishableOptions = {}): MergedPage<P> {
   const merged = mergeShopSections(page.sections, shop)
