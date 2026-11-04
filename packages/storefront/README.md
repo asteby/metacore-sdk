@@ -518,7 +518,7 @@ openAiFeedJsonl(feed.items, { name: shop.name, url: 'https://protekauto.com.mx',
 
 - One item per variant; `id` = SKU. Price, sale price and availability are OPS's, in the market's currency (`494.71 MXN`).
 - `brand` = `vendor`; `mpn` = the `part_number` attribute (never a guessed SKU); `gtin` only from a barcode with a valid
-  check digit; without GTIN the item goes with `identifier_exists=no` (Google) and still sends brand + MPN.
+  check digit; `identifier_exists=no` only when there is neither a GTIN nor a brand + MPN pair (Google's rule).
 - Left out (counted in `feed.skipped`): internal products (`qa`/`interno` tags or every SKU `TEST-`), no price, no raster
   image (SVG mockups do not count), no brand, and out of stock unless `includeOutOfStock`.
 - `robotsTxt({ disallow, sitemaps })`: the search agents (`Googlebot`, `Storebot-Google`, `OAI-SearchBot`,

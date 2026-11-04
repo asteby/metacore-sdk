@@ -10,7 +10,7 @@
  * Two layers:
  * - `normalizeTitleText(text)`: any vertical. Sentence case for shouted text (words in the vocabulary go lowercase,
  *   unknown words keep a capital as likely names, codes stay uppercase), accents from the vocabulary, a repeated
- *   word or trailing year pair collapsed (`1992 1992` → `1992`, `2018 2021` → `2018–2021`). Mixed-case text is left
+ * word or an equal trailing year pair collapsed (`1992 1992` → `1992`; ranges only from attributes). Mixed-case text is left
  *   as the merchant wrote it (only spaces and the trailing years are tidied).
  * - `productTitle(product)`: when the product carries part attributes (type + vehicle), the title is composed as
  *   type + detail + position + drive + [brand + part number] + `para` + make + model + engine + year range. Without
@@ -80,7 +80,7 @@ const COMMON_ES = new Set(
     'sellos semi semieje sencilla sensor soporte sustituido tambor techo tensora terminal terminales tirante tope tornillo tractor ' +
     'transporte tubo tuerca universal varilla ventilado vueltas zapata rebote marcha motos maquinaria solo original ' +
     'delantero delantera trasero trasera inferior superior izquierdo izquierda derecho derecha ' +
-    'pieza piezas juego llanta llantas rin sabor polvo tabletas cerrada licuadora'
+    'pieza piezas juego llanta llantas rin sabor polvo tabletas cerrada licuadora conductor pasajero motriz chango lado unidad soporte'
   ).split(' '),
 )
 
@@ -93,7 +93,7 @@ const UPPER_NAMES = new Set(['RAM', 'DAI', 'TDI', 'GTI', 'SRT', 'API', 'SAE', 'A
 /** Fixed spellings of ERP abbreviations and typos (uppercase key → text). */
 const ABBREVIATIONS_ES: Record<string, string> = {
   'C/': 'con', 'S/': 'sin', 'P/': 'para', GDE: 'grande', CH: 'chico', INT: 'interior', EXT: 'exterior', PULG: 'pulg.',
-  PZAS: 'piezas', LTS: 'l', LT: 'l', LBS: 'lb', ORAGANICA: 'orgánica', REMACHADAA: 'remachada', BIERLOS: 'birlos',
+  PZAS: 'piezas', LBS: 'lb', ORAGANICA: 'orgánica', REMACHADAA: 'remachada', BIERLOS: 'birlos',
   INFEROR: 'inferior', NFERIOR: 'inferior', STD: 'estándar', SEMIMETALICA: 'semimetálica',
   'TRANS.': 'transmisión', TRANS: 'transmisión', 'MAN.': 'manual', AUT: 'automática', 'AUT.': 'automática', 'CONT.': 'cont.', SINT: 'sint.', 'SINT.': 'sint.', IZQ: 'izq.', DER: 'der.', TRAS: 'tras.', INF: 'inf.', SUP: 'sup.', ALT: 'alt.', DIAM: 'diám.', LONG: 'long.', 'D.EXT.': 'diám. ext.', 'D.INT.': 'diám. int.', 'D.NOM.': 'diám. nom.',
 }
@@ -114,7 +114,7 @@ const PART_TYPES_ES: Record<string, string> = {
 }
 
 /** Feminine head nouns that do not end in -a (Spanish agreement of the position: `terminal derecha`). */
-const FEMININE_ES = new Set(['terminal', 'base', 'polea', 'llave', 'clave', 'red'])
+const FEMININE_ES = new Set(['terminal', 'base', 'llave', 'clave', 'red', 'mano', 'flor', 'piel', 'luz', 'calle', 'leche', 'fuente', 'gente', 'parte', 'serie'])
 const MASCULINE_A_ES = new Set(['sistema', 'problema', 'kit'])
 
 type Side = { axle: string[]; level: string[]; side: string[] }
@@ -141,17 +141,27 @@ const stripAccents = (s: string) => s.normalize('NFD').replace(/\p{Mn}/gu, '')
 const capitalize = (s: string) => (s ? s.charAt(0).toLocaleUpperCase('es') + s.slice(1) : s)
 const squash = (s: string) => s.replace(/\s+/g, ' ').trim()
 
-/** `108MM` → `108 mm`, `5L` → `5 l`, `946ML.` → `946 ml`. */
+/**
+ * `108MM` → `108 mm`, `4.73LTS` → `4.73 l`, `946ML.` → `946 ml`. A bare `M`, `L` or `G` only with a decimal
+ * (`2.4L`): `3M` is a brand and `2L` an engine.
+ */
 function measure(token: string): string | null {
   const m = /^(\d+(?:[.,]\d+)?)(MM|CM|M|PULG|LBS|LB|LTS|LT|L|ML|KG|G|OZ)\.?$/i.exec(token)
   if (!m) return null
   const unit = m[2]!.toUpperCase()
+  if ((unit === 'M' || unit === 'L' || unit === 'G') && !/[.,]/.test(m[1]!)) return null
   const map: Record<string, string> = { MM: 'mm', CM: 'cm', M: 'm', PULG: 'pulg.', LBS: 'lb', LB: 'lb', LTS: 'l', LT: 'l', L: 'l', ML: 'ml', KG: 'kg', G: 'g', OZ: 'oz' }
   return `${m[1]} ${map[unit]}`
 }
 
-/** `5 L` / `946 ML.` → `5L` / `946ML` so `measure` reads them as one quantity. */
-const joinUnits = (s: string) => s.replace(/\b(\d+(?:[.,]\d+)?)\s+(LTS|LT|L|ML|MM|CM|KG|LBS|LB)\b\.?/gi, '$1$2')
+/**
+ * `946 ML.` / `5 LTS` → `946ML` / `5LTS` so `measure` reads them as one quantity. Litres only below 100 (`1500 LT` is a
+ * Silverado trim, not 1,500 litres).
+ */
+const joinUnits = (s: string) =>
+  s.replace(/\b(\d+(?:[.,]\d+)?)\s+(LTS|LT|L|ML|MM|CM|KG|LBS|LB)\b\.?/gi, (all, n: string, unit: string) =>
+    /^L/i.test(unit) && Number(n.replace(',', '.')) >= 100 ? all : `${n}${unit}`,
+  )
 
 /** One token of shouted text inside a sentence (type, detail). */
 function sentenceWord(token: string, locale: TitleLocale): string {
@@ -159,7 +169,7 @@ function sentenceWord(token: string, locale: TitleLocale): string {
   const upper = token.toUpperCase()
   if (locale === 'es' && ABBREVIATIONS_ES[upper]) return ABBREVIATIONS_ES[upper]
   if (/^C\/\d+$/i.test(token)) return `con ${token.slice(2)}` // `C/12` (caja con 12)
-  if (/^[CSP]\/\S+$/i.test(token) && locale === 'es') return `${ABBREVIATIONS_ES[upper.slice(0, 2)]} ${sentenceWord(token.slice(2), locale)}`
+  if (/^[CSP]\/\p{L}{2,}\S*$/iu.test(token) && locale === 'es') return `${ABBREVIATIONS_ES[upper.slice(0, 2)]} ${sentenceWord(token.slice(2), locale)}`
   if (token.includes('-') && !/\d/.test(token)) return token.split('-').map((p) => sentenceWord(p, locale)).join('-')
   if (token.includes('/') && !/\d/.test(token)) return token.split('/').map((p) => sentenceWord(p, locale)).join('/')
   const m = measure(token)
@@ -195,14 +205,17 @@ export function normalizeName(text: string | null | undefined, locale: TitleLoca
   return s ? s.split(' ').map((t) => nameWord(t, locale)).join(' ') : ''
 }
 
-/** Drops a word repeated right after itself (`ELEVADOR ELEVADOR`, `1992 1992`), case-insensitive. */
+/** Drops a WORD repeated right after itself (`ELEVADOR ELEVADOR`), case-insensitive. Numbers are never dropped (`RIN 15 15`). */
 function dropRepeats(tokens: string[]): string[] {
-  return tokens.filter((t, i) => i === 0 || stripAccents(t).toLowerCase() !== stripAccents(tokens[i - 1]!).toLowerCase())
+  return tokens.filter((t, i) => i === 0 || /\d/.test(t) || stripAccents(t).toLowerCase() !== stripAccents(tokens[i - 1]!).toLowerCase())
 }
 
-/** Trailing `1995 2004` → `1995–2004`; `1992 1992` → `1992` (dropRepeats); reversed pairs stay untouched. */
+/**
+ * Only the trailing pair of equal years: `1992 1992` → `1992`. A pair of different numbers is left alone in free text
+ * (`PEUGEOT 2008 2020` may be the model 2008): ranges are only written from the year attributes.
+ */
 function trailingYears(text: string): string {
-  return text.replace(/\b((?:19|20)\d{2})\s*[-–]?\s*((?:19|20)\d{2})$/, (all, a: string, b: string) => (Number(b) > Number(a) ? `${a}–${b}` : Number(b) === Number(a) ? a : all))
+  return text.replace(/\b((?:19|20)\d{2})\s+\1$/, '$1')
 }
 
 export type NormalizeTitleOptions = { locale?: TitleLocale }
@@ -239,7 +252,7 @@ function isFeminine(headNoun: string): boolean {
   const w = stripAccents(headNoun).toLowerCase()
   if (FEMININE_ES.has(w)) return true
   if (MASCULINE_A_ES.has(w)) return false
-  return /as?$/.test(w)
+  return /as?$/.test(w) || /(dad|tad|tud|ion|iones|ez|sis)$/.test(w)
 }
 
 /** Position words → `delantera inferior izquierda/derecha` agreeing with the head noun. */
@@ -290,7 +303,7 @@ function partType(raw: string, locale: TitleLocale): string {
       if (PART_TYPES_ES[head]) return `${PART_TYPES_ES[head]} ${tokens.slice(n).map((t) => sentenceWord(t, locale)).join(' ')}`
     }
   }
-  return tokens.map((t) => (isShouted(t) || t.length <= 1 ? sentenceWord(t, locale) : t)).join(' ')
+  return tokens.map((t) => (isShouted(t) || t.length <= 1 || SHORT_WORDS_ES.has(stripAccents(t).toLowerCase()) ? sentenceWord(t, locale) : t)).join(' ')
 }
 
 /** Detail text without the position words it repeats; position abbreviations are returned apart. */
@@ -299,7 +312,7 @@ function splitDetail(raw: string): { words: string[]; positions: string[] } {
   const positions: string[] = []
   // `/ VENTILADO / 4 BARRENOS X 108MM /` → comma-separated phrases; a dangling connector at the end is dropped.
   const tokens = squash(joinUnits(raw).replace(/\s*\/\s+|\s+\/\s*|^\/|\/$/g, ' , ')).split(' ').filter(Boolean)
-  for (const t of tokens) {
+  for (const [i, t] of tokens.entries()) {
     // A lone `R`/`L` is the side only when it is the whole detail (`TERMINAL DIRECCION R`); elsewhere it can be litres.
     if (/^[RL]$/i.test(t) && tokens.length > 1) {
       words.push(t)
@@ -310,6 +323,15 @@ function splitDetail(raw: string): { words: string[]; positions: string[] } {
     if (pair.length > 1 && pair.every((p) => POSITION_ABBREV[p] || /^DE(DER|IZQ)$/.test(p))) {
       for (const p of pair) positions.push(...(POSITION_ABBREV[p] ?? []))
       continue
+    }
+    // `DEL` is also the preposition (`LADO DEL CONDUCTOR`): a position only last or next to another position word.
+    if (up === 'DEL') {
+      const next = stripAccents(tokens[i + 1] ?? '').toUpperCase().replace(/\.$/, '')
+      const isPosition = !next || !!POSITION_ABBREV[next] || next.split('/').every((p) => POSITION_ABBREV[p])
+      if (!isPosition) {
+        words.push(t)
+        continue
+      }
     }
     if (POSITION_ABBREV[up]) {
       positions.push(...POSITION_ABBREV[up]!)

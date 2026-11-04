@@ -52,6 +52,16 @@ describe('productJsonLd: name, mpn, return policy, shipping', () => {
     expect(none.hasMerchantReturnPolicy).toEqual({ '@type': 'MerchantReturnPolicy', applicableCountry: 'MX', returnPolicyCategory: 'https://schema.org/MerchantReturnNotPermitted' })
   })
 
+  it('an unknown return window (null) publishes no policy at all', () => {
+    const offer = productJsonLd(product(), shop, PAGE, { returnPolicy: { applicableCountry: 'MX', days: null } }).offers as Record<string, unknown>
+    expect(offer).not.toHaveProperty('hasMerchantReturnPolicy')
+  })
+
+  it('variantUrl sets the offer URL of each variant (same rule as the feed)', () => {
+    const ld = productJsonLd(product({ variants: [variant('a', 'A'), variant('b', 'B')] }), shop, PAGE, { variantUrl: (id) => `${PAGE}?variante=${id}` })
+    expect((ld.offers as Record<string, unknown>[]).map((o) => o.url)).toEqual([`${PAGE}?variante=a`, `${PAGE}?variante=b`])
+  })
+
   it('shippingDetails and priceValidUntil only when given', () => {
     const offer = productJsonLd(product(), shop, PAGE, { priceValidUntil: '2026-12-31', shipping: { country: 'MX', rate: money('199.00'), handlingDays: [0, 1], transitDays: [1, 3] } }).offers as Record<string, unknown>
     expect(offer.priceValidUntil).toBe('2026-12-31')

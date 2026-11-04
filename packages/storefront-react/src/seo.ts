@@ -149,8 +149,8 @@ function withVariant(url: string, variantId: string): string {
 export type ReturnPolicyJsonLd = {
   /** ISO 3166-1 alpha-2 (`MX`). */
   applicableCountry: string
-  /** Days to return; `0` = no returns accepted. */
-  days: number
+  /** Days to return; `0` = no returns accepted. Not a finite number (`null` from OPS) → nothing is published. */
+  days: number | null
   /** Public returns page. */
   url?: string | null
   fees?: 'FreeReturn' | 'ReturnFeesCustomerResponsibility' | 'ReturnShippingFees' | null
@@ -176,9 +176,16 @@ export type ProductJsonLdOptions = ResolveAvailabilityOptions & {
   priceValidUntil?: string | null
   returnPolicy?: ReturnPolicyJsonLd | null
   shipping?: ShippingJsonLd | null
+  /**
+   * URL of a variant's offer when the product has several (default: `?variant=<id>` on `url`). Use the same rule as
+   * the shopping feed (`productPath` of `@asteby/storefront/merchant`) so both point to the same page.
+   */
+  variantUrl?: ((variantId: string) => string) | null
 }
 
-function returnPolicyJsonLd(p: ReturnPolicyJsonLd): JsonLdObject {
+function returnPolicyJsonLd(p: ReturnPolicyJsonLd): JsonLdObject | undefined {
+  // An unknown window is not «no returns»: only an explicit 0 publishes MerchantReturnNotPermitted.
+  if (typeof p.days !== 'number' || !Number.isFinite(p.days) || !p.applicableCountry) return undefined
   const days = Math.max(0, Math.floor(p.days))
   return compact({
     '@type': 'MerchantReturnPolicy',
@@ -226,7 +233,7 @@ export function productJsonLd(product: Product, shop: Pick<Shop, 'name' | 'domai
       availability: schemaAvailability(availability.status),
       availabilityStarts: availability.status === 'preorder' ? (availability.preorder_release_at ?? undefined) : undefined,
       itemCondition: 'https://schema.org/NewCondition',
-      url: product.variants.length > 1 ? withVariant(url, v.id) : url,
+      url: product.variants.length > 1 ? (options.variantUrl ? options.variantUrl(v.id) : withVariant(url, v.id)) : url,
       seller: shop ? { '@type': 'Organization', name: shop.name } : undefined,
       priceValidUntil: options.priceValidUntil ?? undefined,
       hasMerchantReturnPolicy: returnPolicy,

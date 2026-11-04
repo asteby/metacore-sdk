@@ -9,7 +9,7 @@ Títulos legibles y feeds de compras (Google Merchant Center y ChatGPT Merchants
 - Nuevo subpaquete `@asteby/storefront/merchant`:
   - `collectFeed` / `productFeedItems` generan una fila por variante.
   - Toman de OPS precio, oferta y disponibilidad, `brand` del `vendor`, `mpn` del `part_number` y `gtin` solo si tiene un dígito verificador válido.
-  - `identifier_exists=no` cuando no hay GTIN.
+  - `identifier_exists=no` solo cuando no hay GTIN ni la pareja marca + MPN (regla de Google). Precios tal como vienen de OPS, con los decimales de la moneda y sin pasar por flotante. Ids estables aunque dos variantes compartan SKU.
   - Excluyen los productos internos o de prueba, sin precio, sin imagen rasterizada, sin marca y, por omisión, los agotados.
   - Escritores: `googleFeedXml` (RSS 2.0 con `g:`), `googleFeedTsv` y `openAiFeedJsonl` (Product Feed Spec: `item_id`, `title`, `description`, `url`, `brand`, `seller_name`, `image_url`, `availability`, `price`).
   - `robotsTxt`: permite explícitamente Googlebot, Storebot-Google, OAI-SearchBot y ChatGPT-User, y bloquea GPTBot y los demás de entrenamiento.

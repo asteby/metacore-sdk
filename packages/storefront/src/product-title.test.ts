@@ -63,7 +63,7 @@ describe('the audit cases (HyperDigital, 31-oct-2026)', () => {
 describe('normalizeTitleText (any vertical)', () => {
   it.each([
     ['FILTRO AIRE NISSAN TSURU 1.6 L4 1992 1992', 'Filtro aire Nissan Tsuru 1.6 L4 1992'],
-    ['ROTULA IZQ 4X2 TOYOTA TACOMA 2.4 L4 1995 2004', 'Rótula izq. 4x2 Toyota Tacoma 2.4 L4 1995–2004'],
+    ['ROTULA IZQ 4X2 TOYOTA TACOMA 2.4 L4 1995 2004', 'Rótula izq. 4x2 Toyota Tacoma 2.4 L4 1995 2004'],
     ['CAJA DIRECCION HIDRAULICA C/BIELETAS S/TERMINALES', 'Caja dirección hidráulica con bieletas sin terminales'],
     ['TORNILLO BRAZO ELEVADOR ELEVADOR', 'Tornillo brazo elevador'],
     ['PROTEINA WHEY ISOLATE 2 LB CHOCOLATE', 'Proteína Whey Isolate 2 lb Chocolate'],
@@ -76,12 +76,28 @@ describe('normalizeTitleText (any vertical)', () => {
   it('leaves mixed-case titles as the merchant wrote them (only spaces and trailing years)', () => {
     expect(normalizeTitleText('Proteína Whey  Gold Standard 2 lb')).toBe('Proteína Whey Gold Standard 2 lb')
     expect(normalizeTitleText('Producto de prueba (pago y envío)')).toBe('Producto de prueba (pago y envío)')
-    expect(normalizeTitleText('Balata Fritec para Aveo 2008 2018')).toBe('Balata Fritec para Aveo 2008–2018')
+    expect(normalizeTitleText('Balata Fritec para Aveo 2018 2018')).toBe('Balata Fritec para Aveo 2018')
   })
 
-  it('does not collapse years that are not the trailing pair, nor reversed pairs', () => {
+  it('free text: only an equal trailing pair collapses; a model number is never read as a year', () => {
     expect(normalizeTitleText('PEUGEOT 2008 1.6 L4')).toBe('Peugeot 2008 1.6 L4')
     expect(normalizeTitleText('KIT 2020 2010')).toBe('Kit 2020 2010')
+    expect(normalizeTitleText('FILTRO ACEITE PEUGEOT 2008 2020')).toBe('Filtro aceite Peugeot 2008 2020')
+    expect(normalizeTitleText('PEUGEOT 2008 2013 2013')).toBe('Peugeot 2008 2013')
+    expect(normalizeTitleText('RIN 15 15 PULG')).toBe('Rin 15 15 pulg.')
+  })
+
+  it('codes are not units: LT trims, 3M, 2L engines', () => {
+    expect(normalizeTitleText('CHEVROLET SILVERADO 1500 LT 2019')).toBe('Chevrolet Silverado 1500 LT 2019')
+    expect(normalizeTitleText('SILVERADO LT 2019 2021')).toBe('Silverado LT 2019 2021')
+    expect(normalizeTitleText('CINTA 3M')).toBe('Cinta 3M')
+    expect(normalizeTitleText('TOYOTA HILUX 2L')).toBe('Toyota Hilux 2L')
+    expect(normalizeTitleText('ACEITE 4.73L')).toBe('Aceite 4.73 l')
+    expect(normalizeTitleText('ACEITE 946 ML')).toBe('Aceite 946 ml')
+  })
+
+  it('S/N is not «sin N»', () => {
+    expect(normalizeTitleText('KIT S/N HONDA')).toBe('Kit S/N Honda')
   })
 
   it('empty input', () => {
@@ -104,6 +120,18 @@ describe('normalizeName', () => {
     ['1.5 TURBO L4', '1.5 Turbo L4'],
   ])('%s → %s', (raw, expected) => {
     expect(normalizeName(raw)).toBe(expected)
+  })
+})
+
+describe('productTitle: review cases', () => {
+  const part = (attributes: Record<string, string | number>) => ({ title: 'X', vendor: null, attributes: { vehiculo_marca: 'Nissan', vehiculo_modelo: 'TSURU', anio_desde: 2000, anio_hasta: 2005, ...attributes } })
+  it('DEL followed by a word is the preposition, not «delantero»', () => {
+    expect(productTitle(part({ pieza: 'SOPORTE MOTOR', detalle: 'LADO DEL CONDUCTOR' }))).toBe('Soporte motor lado del conductor para Nissan Tsuru 2000–2005')
+    expect(productTitle(part({ pieza: 'BUJE', detalle: 'DEL IZQ' }))).toBe('Buje delantero izquierdo para Nissan Tsuru 2000–2005')
+  })
+  it('feminine nouns that do not end in -a; short words lowercased in the type', () => {
+    expect(productTitle(part({ pieza: 'UNIDAD MOTRIZ', position: 'trasera' }))).toBe('Unidad motriz trasera para Nissan Tsuru 2000–2005')
+    expect(productTitle(part({ pieza: 'MANO DE CHANGO', position: 'delantera' }))).toBe('Mano de chango delantera para Nissan Tsuru 2000–2005')
   })
 })
 

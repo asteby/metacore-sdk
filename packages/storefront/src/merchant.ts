@@ -42,14 +42,21 @@ export type FeedItem = {
   variant_options: Record<string, string>
 }
 
-export type FeedSkipReason = 'hidden' | 'no_price' | 'no_image' | 'out_of_stock' | 'no_brand'
+/**
+ * Why a variant is not in the feed. `no_date`: a preorder without a release date (Google requires it, and it is
+ * never invented). `no_link`: `productPath` gave no http(s) URL. `duplicate_id`: SKU and OPS id both already used.
+ */
+export type FeedSkipReason = 'hidden' | 'no_price' | 'no_image' | 'out_of_stock' | 'no_brand' | 'no_date' | 'no_link' | 'duplicate_id'
 
 export type FeedOptions = {
   /** Public origin of the store, no trailing slash (`https://protekauto.com.mx`). */
   siteUrl: string
   /**
-   * Path of a product page; for a product with several variants it gets the variant id too (default query when the
-   * function ignores it: `?variant=<id>`). E.g. `(h, v) => `/productos/${h}` + (v ? `?variante=${v}` : '')`.
+   * Path of a product page. For a product with several variants it gets the variant id too; for a single-variant
+   * product `variantId` is `undefined`. Put the variant in the path or the query, never in a `#fragment` (crawlers drop
+   * it). When the function ignores the id, `?variant=<id>` is added. Pass the same rule to `productJsonLd`
+   * (`variantUrl`) so the feed `link` and the JSON-LD offer `url` match.
+   * E.g. `(h, v) => `/productos/${h}` + (v ? `?variante=${v}` : '')`.
    */
   productPath: (handle: string, variantId?: string) => string
   locale?: TitleLocale
@@ -78,16 +85,17 @@ function internalProduct(product: Pick<Product, 'tags'> & { variants?: readonly 
 }
 
 const squash = (s: string) => s.replace(/\s+/g, ' ').trim()
-const plain = (html: string | null | undefined) =>
+/** `description_html` → text: tags out, then entities decoded (`&amp;` last, so `&amp;lt;` stays `&lt;`). */
+const fromHtml = (html: string | null | undefined) =>
   squash(
     String(html ?? '')
       .replace(/<[^>]*>/g, ' ')
       .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'"),
+      .replace(/&#39;/g, "'")
+      .replace(/&amp;/g, '&'),
   )
 
 /** Cuts at a word boundary, never mid-word, adding `…` when it had to cut. */
@@ -124,14 +132,36 @@ export function validGtin(value: string | null | undefined): string | null {
   return (10 - (sum % 10)) % 10 === check ? digits : null
 }
 
-const positive = (m: Money | null | undefined): m is Money => !!m && Number.isFinite(Number(m.amount)) && Number(m.amount) > 0
+const positive = (m: Money | null | undefined): m is Money => !!m && feedAmount(m) !== null && Number(m.amount) > 0
 
-function variantLink(base: string, product: Product, variant: ProductVariant, productPath: FeedOptions['productPath']): string {
-  if (product.variants.length <= 1) return absolute(productPath(product.handle), base)!
-  const plain = productPath(product.handle)
-  const withVariant = productPath(product.handle, variant.id)
-  if (withVariant !== plain) return absolute(withVariant, base)!
-  const u = new URL(absolute(plain, base)!)
+/** Decimals of a currency (`MXN` 2, `JPY` 0). */
+function currencyDigits(code: string): number {
+  try {
+    return new Intl.NumberFormat('en', { style: 'currency', currency: code }).resolvedOptions().maximumFractionDigits ?? 2
+  } catch {
+    return 2
+  }
+}
+
+/**
+ * OPS's amount as the feeds want it, without passing through a float: `494.7` → `494.70`, `1500` JPY → `1500`.
+ * `null` (item skipped as `no_price`) when it is not a plain decimal or has more decimals than the currency.
+ */
+export function feedAmount(money: Money): string | null {
+  const m = /^(\d+)(?:\.(\d+))?$/.exec(String(money.amount ?? '').trim())
+  if (!m || !/^[A-Za-z]{3}$/.test(money.currency_code ?? '')) return null
+  const digits = currencyDigits(money.currency_code.toUpperCase())
+  const decimals = (m[2] ?? '').replace(/0+$/, '')
+  if (decimals.length > digits) return null
+  return digits ? `${m[1]}.${decimals.padEnd(digits, '0')}` : m[1]!
+}
+
+function variantLink(base: string, product: Product, variant: ProductVariant, productPath: FeedOptions['productPath']): string | null {
+  const plain = absolute(productPath(product.handle), base)
+  if (product.variants.length <= 1 || !plain) return plain
+  const withVariant = absolute(productPath(product.handle, variant.id), base)
+  if (withVariant && withVariant !== plain) return withVariant
+  const u = new URL(plain)
   u.searchParams.set('variant', variant.id)
   return u.toString()
 }
@@ -145,7 +175,7 @@ function feedAvailability(variant: ProductVariant): { status: FeedAvailability; 
     case 'backorder':
       return { status: 'backorder', date: a.restock_eta ?? null }
     case 'preorder':
-      return { status: 'preorder', date: a.preorder_release_at ?? null }
+      return { status: 'preorder', date: a.preorder_release_at || null }
     default:
       return { status: 'out_of_stock', date: null }
   }
@@ -160,7 +190,7 @@ export function productFeedItems(product: Product, options: FeedOptions): { item
 
   const base = options.siteUrl.replace(/\/+$/, '')
   const title = truncateText(squash(options.title ? options.title(product) : productTitle(product, { identifiers: true, locale: options.locale, keys: options.keys })), 150)
-  const description = truncateText(plain(product.description) || plain(product.description_html) || title, 5000)
+  const description = truncateText(squash(product.description ?? '') || fromHtml(product.description_html) || title, 5000)
   const brand = product.vendor?.trim() || options.brandFallback?.trim() || null
   const gallery = (product.images.length ? product.images : product.featured_image ? [product.featured_image] : []).map((i) => usableImage(i, base)).filter((u): u is string => !!u)
   const multi = product.variants.length > 1
@@ -187,6 +217,15 @@ export function productFeedItems(product: Product, options: FeedOptions): { item
       skipped.push('out_of_stock')
       continue
     }
+    if (availability.status === 'preorder' && !availability.date) {
+      skipped.push('no_date')
+      continue
+    }
+    const link = variantLink(base, product, variant, options.productPath)
+    if (!link) {
+      skipped.push('no_link')
+      continue
+    }
     const compare = variant.compare_at_price
     const onSale = positive(compare) && compare.currency_code === variant.price.currency_code && Number(compare.amount) > Number(variant.price.amount)
     const gtin = validGtin(variant.barcode)
@@ -198,7 +237,7 @@ export function productFeedItems(product: Product, options: FeedOptions): { item
       group_id: multi ? product.id : null,
       title: multi && variant.title && !/^(default title|predeterminado|default)$/i.test(variant.title) ? truncateText(`${title} - ${variant.title}`, 150) : title,
       description,
-      link: variantLink(base, product, variant, options.productPath),
+      link,
       image_link: image,
       additional_image_links: gallery.filter((u) => u !== image).slice(0, 10),
       availability: availability.status,
@@ -209,7 +248,8 @@ export function productFeedItems(product: Product, options: FeedOptions): { item
       // MPN = the manufacturer part number OPS has (attribute), never guessed from a variant SKU.
       mpn: multi ? null : partNumber,
       gtin,
-      identifier_exists: !!gtin,
+      // Google: `no` only when there is no GTIN AND no brand + MPN pair.
+      identifier_exists: !!gtin || !!(brand && !multi && partNumber),
       condition: 'new',
       product_type: product.category?.title ?? product.product_type ?? null,
       variant_options: multi ? options_ : {},
@@ -233,8 +273,13 @@ export type FeedBuild = {
  */
 export async function collectFeed(list: (after: string | undefined) => Promise<Connection<Product>>, options: FeedOptions & { maxProducts?: number }): Promise<FeedBuild> {
   const max = options.maxProducts ?? 50_000
-  const out: FeedBuild = { items: [], products: 0, skipped: { hidden: 0, no_price: 0, no_image: 0, out_of_stock: 0, no_brand: 0 }, truncated: false }
-  const seen = new Set<string>()
+  const out: FeedBuild = {
+    items: [],
+    products: 0,
+    skipped: { hidden: 0, no_price: 0, no_image: 0, out_of_stock: 0, no_brand: 0, no_date: 0, no_link: 0, duplicate_id: 0 },
+    truncated: false,
+  }
+  const all: FeedItem[] = []
   let after: string | undefined
   do {
     const page = await list(after)
@@ -246,16 +291,24 @@ export async function collectFeed(list: (after: string | undefined) => Promise<C
       out.products++
       const { items, skipped } = productFeedItems(product, options)
       for (const r of skipped) out.skipped[r]++
-      for (const item of items) {
-        // Two variants with the same SKU would collide in Merchant Center: the second goes with its OPS id.
-        const id = seen.has(item.id) ? item.variant_id : item.id
-        if (seen.has(id)) continue
-        seen.add(id)
-        out.items.push(id === item.id ? item : { ...item, id })
-      }
+      all.push(...items)
     }
     after = !out.truncated && page.page_info.has_next_page ? (page.page_info.end_cursor ?? undefined) : undefined
   } while (after)
+  // A SKU shared by two variants would merge them in Merchant Center: EVERY occurrence goes with its OPS id, so the
+  // ids do not depend on the order of the walk.
+  const uses = new Map<string, number>()
+  for (const item of all) uses.set(item.id, (uses.get(item.id) ?? 0) + 1)
+  const seen = new Set<string>()
+  for (const item of all) {
+    const id = (uses.get(item.id) ?? 0) > 1 ? item.variant_id : item.id
+    if (seen.has(id)) {
+      out.skipped.duplicate_id++
+      continue
+    }
+    seen.add(id)
+    out.items.push(id === item.id ? item : { ...item, id })
+  }
   return out
 }
 
@@ -263,10 +316,9 @@ export async function collectFeed(list: (after: string | undefined) => Promise<C
 // Writers
 // ---------------------------------------------------------------------------
 
-/** `494.71 MXN` (both channels): decimal point, no thousands separator, ISO 4217 code. */
+/** `494.71 MXN` (both channels): OPS's amount with the currency's decimals, no thousands separator, ISO 4217 code. */
 export function feedPrice(money: Money): string {
-  const n = Number(money.amount)
-  return `${Number.isFinite(n) ? n.toFixed(2) : money.amount} ${money.currency_code.toUpperCase()}`
+  return `${feedAmount(money) ?? money.amount} ${money.currency_code.toUpperCase()}`
 }
 
 const xml = (s: string) =>
@@ -364,8 +416,12 @@ export function openAiFeedRow(item: FeedItem, seller: OpenAiFeedSeller): Record<
   if (item.product_type) row.product_category = item.product_type
   if (item.group_id) {
     row.group_id = item.group_id
-    row.listing_has_variations = true
-    row.variant_dict = item.variant_options
+    // `variant_dict` needs non-empty keys and values; without options the row is only grouped.
+    const dict = Object.fromEntries(Object.entries(item.variant_options).filter(([k, v]) => k.trim() && v.trim()))
+    if (Object.keys(dict).length) {
+      row.listing_has_variations = true
+      row.variant_dict = dict
+    }
   }
   if (seller.url) row.seller_url = seller.url
   if (seller.return_policy_url) row.return_policy = seller.return_policy_url

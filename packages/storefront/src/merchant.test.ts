@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   collectFeed,
+  feedAmount,
   feedPrice,
   googleFeedTsv,
   googleFeedXml,
@@ -65,7 +66,7 @@ function product(over: Partial<Product> = {}): Product {
 const options: FeedOptions = { siteUrl: 'https://protekauto.com.mx', productPath: (h) => `/productos/${h}` }
 
 describe('productFeedItems', () => {
-  it('maps a part to a complete item (title, brand + mpn, no GTIN → identifier_exists=false, absolute images)', () => {
+  it('maps a part to a complete item (title, brand + mpn → identifiers exist without GTIN, absolute images)', () => {
     const { items, skipped } = productFeedItems(product(), options)
     expect(skipped).toEqual([])
     expect(items).toEqual([
@@ -85,7 +86,7 @@ describe('productFeedItems', () => {
         brand: 'UNICAR',
         mpn: 'UD2510003',
         gtin: null,
-        identifier_exists: false,
+        identifier_exists: true,
         condition: 'new',
         product_type: 'Suspensión y dirección',
         variant_options: {},
@@ -167,6 +168,41 @@ describe('productFeedItems', () => {
   })
 })
 
+describe('review cases', () => {
+  const pre = (date: string | null) => variant({ availability: { status: 'preorder', quantity: null, max_per_order: null, restock_eta: null, preorder_release_at: date, notify_available: false } })
+  it('a preorder without a release date is skipped (Google requires the date; never invented)', () => {
+    expect(productFeedItems(product({ variants: [pre(null)] }), options).skipped).toEqual(['no_date'])
+  })
+  it('a price that is not a plain decimal is skipped, not rounded', () => {
+    expect(productFeedItems(product({ variants: [variant({ price: money('1.005') })] }), options).skipped).toEqual(['no_price'])
+  })
+  it('without GTIN and without MPN: identifier_exists=false; with brand + MPN: true', () => {
+    expect(productFeedItems(product({ attributes: {} }), options).items[0]!.identifier_exists).toBe(false)
+    expect(productFeedItems(product(), options).items[0]!.identifier_exists).toBe(true)
+  })
+  it('an invalid productPath skips the item instead of breaking the feed', () => {
+    expect(productFeedItems(product(), { ...options, productPath: () => 'javascript:alert(1)' }).skipped).toEqual(['no_link'])
+    const multi = product({ variants: [variant({ id: 'a', sku: 'A' }), variant({ id: 'b', sku: 'B' })] })
+    expect(productFeedItems(multi, { ...options, productPath: () => 'javascript:x' }).skipped).toEqual(['no_link', 'no_link'])
+  })
+  it('the plain description keeps `<` and `&`; only description_html loses tags, entities decoded once', () => {
+    expect(productFeedItems(product({ description: 'Medida <10 mm> & más' }), options).items[0]!.description).toBe('Medida <10 mm> & más')
+    expect(productFeedItems(product({ description: '', description_html: '<p>a &amp;lt; b</p>' }), options).items[0]!.description).toBe('a &lt; b')
+  })
+  it('OpenAI: no empty variant_dict', () => {
+    const multi = product({ variants: [variant({ id: 'a', sku: 'A' }), variant({ id: 'b', sku: 'B' })] })
+    const row = openAiFeedRow(productFeedItems(multi, options).items[0]!, { name: 'S' })
+    expect(row.group_id).toBe('p1')
+    expect(row).not.toHaveProperty('variant_dict')
+    expect(row).not.toHaveProperty('listing_has_variations')
+  })
+  it('a repeated OPS id is counted, not dropped silently', async () => {
+    const out = await collectFeed(async () => ({ nodes: [product(), product()], page_info: { has_next_page: false, end_cursor: null } }), options)
+    expect(out.items).toHaveLength(1)
+    expect(out.skipped.duplicate_id).toBe(1)
+  })
+})
+
 describe('collectFeed', () => {
   it('walks every page, counts what it skipped and never repeats an id', async () => {
     const pages = [
@@ -180,8 +216,9 @@ describe('collectFeed', () => {
     }, options)
     expect(calls).toEqual([undefined, 'c1'])
     expect(out.products).toBe(4)
-    expect(out.items.map((i) => i.id)).toEqual(['UD2510003', 'v3'])
-    expect(out.skipped).toEqual({ hidden: 1, no_price: 1, no_image: 0, out_of_stock: 0, no_brand: 0 })
+    // p1 and p3 share the SKU UD2510003: both go with their OPS id, whatever the order of the walk.
+    expect(out.items.map((i) => i.id)).toEqual(['v1', 'v3'])
+    expect(out.skipped).toEqual({ hidden: 1, no_price: 1, no_image: 0, out_of_stock: 0, no_brand: 0, no_date: 0, no_link: 0, duplicate_id: 0 })
     expect(out.truncated).toBe(false)
   })
 
@@ -195,13 +232,18 @@ describe('collectFeed', () => {
 describe('writers', () => {
   const [item] = productFeedItems(product(), options).items
 
-  it('feedPrice: two decimals and the ISO code', () => {
+  it('feedPrice: the OPS string with the currency decimals, never through a float', () => {
     expect(feedPrice(money('494.7'))).toBe('494.70 MXN')
     expect(feedPrice(money('1200', 'usd'))).toBe('1200.00 USD')
+    expect(feedPrice(money('1500', 'JPY'))).toBe('1500 JPY')
+    expect(feedPrice(money('0.10'))).toBe('0.10 MXN')
+    expect(feedAmount(money('1.005'))).toBeNull()
+    expect(feedAmount(money('1e3'))).toBeNull()
+    expect(feedAmount(money('1,200.00'))).toBeNull()
   })
 
-  it('Google XML: RSS 2.0, g: namespace, escaped, identifier_exists=no', () => {
-    const body = googleFeedXml([{ ...item!, title: 'A & B <c>' }], { title: 'ProtekAuto', link: 'https://protekauto.com.mx' })
+  it('Google XML: RSS 2.0, g: namespace, escaped, identifier_exists=no without GTIN and MPN', () => {
+    const body = googleFeedXml([{ ...item!, title: 'A & B <c>', identifier_exists: false }], { title: 'ProtekAuto', link: 'https://protekauto.com.mx' })
     expect(body).toContain('<rss version="2.0" xmlns:g="http://base.google.com/ns/1.0">')
     expect(body).toContain('<g:title>A &amp; B &lt;c&gt;</g:title>')
     expect(body).toContain('<g:price>494.71 MXN</g:price>')
@@ -218,7 +260,7 @@ describe('writers', () => {
   })
 
   it('Google TSV: header + one row, tabs and newlines in values flattened', () => {
-    const tsv = googleFeedTsv([{ ...item!, description: 'a\tb\nc' }])
+    const tsv = googleFeedTsv([{ ...item!, description: 'a\tb\nc', identifier_exists: false }])
     const [header, row] = tsv.trim().split('\n')
     expect(header!.split('\t')).toContain('identifier_exists')
     const cells = Object.fromEntries(header!.split('\t').map((h, i) => [h, row!.split('\t')[i]]))
