@@ -66,7 +66,7 @@ export type FitmentConfig = {
    * `{ gm: 'chevrolet' }` when imported parts keep `fit:gm/…` but the selector shows Chevrolet). Presentation only:
    * a tag or table row with any equivalent name counts. Default none.
    */
-  makeAliases: Readonly<Record<string, string>>
+  makeAliases?: Readonly<Record<string, string>>
 }
 
 export const DEFAULT_FITMENT_CONFIG: FitmentConfig = {
@@ -342,12 +342,15 @@ export function popularVehicles(catalog: VehicleCatalog, limit = 6): { key: stri
 type WithTags = { tags: readonly string[] }
 type WithAttributes = { attributes: Record<string, unknown> }
 
-/** The make and every equivalent name of it (`makeAliases`), the given one first, without repeats. */
+const lowerKeys = (o: Readonly<Record<string, string>> | undefined) => Object.fromEntries(Object.entries(o ?? {}).map(([k, v]) => [k.toLowerCase(), v.toLowerCase()]))
+
+/** The make and every equivalent name of it (`makeAliases`, case-insensitive), the given one first, without repeats. */
 export function makeVariants(makeId: string, config: FitmentConfig = DEFAULT_FITMENT_CONFIG): string[] {
-  const aliases = config.makeAliases ?? {}
-  const canonical = aliases[makeId] ?? makeId
+  const aliases = lowerKeys(config.makeAliases)
+  const id = makeId.toLowerCase()
+  const canonical = aliases[id] ?? id
   const group = [canonical, ...Object.keys(aliases).filter((a) => aliases[a] === canonical)]
-  return [makeId, ...group.filter((m) => m !== makeId)]
+  return [...new Set([makeId, ...group.filter((m) => m !== id)])]
 }
 
 /** The vehicle key with every equivalent make name (the given one first). */
@@ -358,15 +361,19 @@ export function fitKeyVariants(key: string, config: FitmentConfig = DEFAULT_FITM
   return makeVariants(key.slice(0, i), config).map((make) => `${make}${rest}`)
 }
 
-const isFullVehicle = (v: { key: string } | Vehicle): v is Vehicle => 'make' in v && 'model' in v && 'engine' in v && 'year' in v
+/** A vehicle with names (not just the key): only then can it be compared with a table. Checks the field types. */
+function isFullVehicle(v: { key: string } | Vehicle): v is Vehicle {
+  const x = v as Partial<Vehicle>
+  const named = (o: unknown) => typeof (o as { id?: unknown } | undefined)?.id === 'string' && typeof (o as { label?: unknown } | undefined)?.label === 'string'
+  return named(x.make) && named(x.model) && named(x.engine) && typeof x.year === 'number'
+}
 
 /**
  * Does the part fit the vehicle? Only compares what the backend published:
  * 1. Tags: a `<prefix><key>` tag (fits; any make alias counts), the universal tag (fits everything) or, when the part
  *    has other fit tags, no fit.
  * 2. With no fit tags at all and a complete `Vehicle`, the part's compatibility table (`compatAttribute`, also backend
- *    data; see `fitFromTable`): a row with its make, model and year (and engine, when the row names one) fits; a table
- *    that never names its make and model does not.
+ *    data). Conservative, see `fitFromTable`.
  * With no fitment data nothing is asserted ("unknown").
  */
 export function fitStatus(product: WithTags & Partial<WithAttributes>, vehicle: { key: string } | Vehicle | null, config: FitmentConfig = DEFAULT_FITMENT_CONFIG): Fit {
@@ -388,7 +395,7 @@ export function fitFilterTags(vehicle: { key: string }, config: FitmentConfig = 
 
 /** "Alfa Romeo" → "alfa-romeo": the shape of catalog ids. */
 function slug(text: string): string {
-  return text
+  return String(text ?? '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
@@ -396,36 +403,89 @@ function slug(text: string): string {
     .replace(/^-+|-+$/g, '')
 }
 
-/** The row's engine against the vehicle's: "1.5 L4" contains "1.5"; a row without engine does not restrict. */
-function engineMatches(rowEngine: string, vehicle: Vehicle): boolean {
-  const row = rowEngine.trim().toLowerCase()
-  if (!row) return true
-  const ids = [vehicle.engine.id, vehicle.engine.label].map((e) => e.toLowerCase().replace(/\s*l$/, '').trim()).filter(Boolean)
-  return ids.some((e) => row === e || row.split(/[\s/]+/).includes(e))
+/** Years of a row in a strict form ("2016" or "2012-2019"); any other form is not interpreted (null). */
+export function parseRowYears(years: string): [number, number] | null {
+  const m = years.trim().match(/^(\d{4})(?:\s*[–-]\s*(\d{4}))?$/)
+  if (!m) return null
+  const from = Number(m[1])
+  const to = m[2] ? Number(m[2]) : from
+  return to >= from ? [from, to] : null
 }
 
-function rowNamesVehicle(row: CompatRow, vehicle: Vehicle, config: FitmentConfig): boolean {
-  const makes = new Set([...makeVariants(vehicle.make.id, config), slug(vehicle.make.label)])
-  const model = slug(row.model)
-  return makes.has(slug(row.make)) && (model === vehicle.model.id || model === slug(vehicle.model.label))
-}
-
-/** Is this compatibility-table row the vehicle (make or alias, model, year and, when the row says, engine)? */
-export function rowIsVehicle(row: CompatRow, vehicle: Vehicle | null, config: FitmentConfig = DEFAULT_FITMENT_CONFIG): boolean {
-  return Boolean(vehicle && rowNamesVehicle(row, vehicle, config) && rowCoversYear(row.years, vehicle.year) && engineMatches(row.engine, vehicle))
+/** "1.5 L4" → "1.5", "1.5L" → "1.5", "2.0 TURBO" → "2.0 turbo": displacement plus qualifiers (no liters, no cylinders). */
+function engineCore(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/(\d)\s*l\b/g, (_m, digit: string) => digit)
+    .split(/[\s-]+/)
+    .filter((t) => t && t !== 'l' && !/^[lvi]\d{1,2}$/.test(t))
+    .join(' ')
 }
 
 /**
- * Fit according to the backend's compatibility table (for parts without fit tags): a matching row fits; a table that
- * never names the vehicle's make and model, or only for other years, does not; rows of its model without readable
- * years cannot tell ("unknown").
+ * The row's engine against the vehicle's. Each alternative of the row ("1.5 / 1.8", "1.5, 1.8") is compared WHOLE:
+ * "1.5 L4" is a 1.5, but "1.5 TURBO" or "1.9 TDI" are never confirmed for an unqualified 1.5 or 1.9 ("unclear"). A row
+ * without engine does not restrict.
+ */
+function engineFit(rowEngine: string, vehicle: Vehicle): 'match' | 'other' | 'unclear' {
+  const alternatives = rowEngine.split(/[/,]/).map(engineCore).filter(Boolean)
+  if (alternatives.length === 0) return 'match'
+  const mine = new Set([vehicle.engine.id, vehicle.engine.label].map(engineCore).filter(Boolean))
+  if (alternatives.some((e) => mine.has(e))) return 'match'
+  const plain = (e: string) => /^\d+(\.\d+)?$/.test(e)
+  return alternatives.every(plain) && [...mine].every(plain) ? 'other' : 'unclear'
+}
+
+function rowNamesMake(row: CompatRow, vehicle: Vehicle, config: FitmentConfig): boolean {
+  const aliases = lowerKeys(config.makeAliases)
+  const names = new Set([...makeVariants(vehicle.make.id, config).map((m) => m.toLowerCase()), slug(vehicle.make.label)])
+  const make = slug(row.make)
+  return names.has(make) || names.has(aliases[make] ?? '')
+}
+
+function rowNamesVehicle(row: CompatRow, vehicle: Vehicle, config: FitmentConfig): boolean {
+  const model = slug(row.model)
+  return rowNamesMake(row, vehicle, config) && (model === vehicle.model.id || model === slug(vehicle.model.label))
+}
+
+/**
+ * Is this compatibility-table row the vehicle? Make (or alias), exact model, strict years covering its year and a
+ * confirmed engine. A row with a note (e.g. "premium trim only") is still its row (to highlight it), but `fitFromTable`
+ * does not call it a fit.
+ */
+export function rowIsVehicle(row: CompatRow, vehicle: Vehicle | null, config: FitmentConfig = DEFAULT_FITMENT_CONFIG): boolean {
+  if (!vehicle || !rowNamesVehicle(row, vehicle, config)) return false
+  const years = parseRowYears(row.years)
+  return Boolean(years && vehicle.year >= years[0] && vehicle.year <= years[1]) && engineFit(row.engine, vehicle) === 'match'
+}
+
+/**
+ * Fit according to the backend's compatibility table (for parts without fit tags). Conservative: it only asserts what
+ * the table says without ambiguity.
+ * - `fits`: a row with its make, exact model, years covering it, confirmed engine and NO note.
+ * - `no`: the table never names its make (abbreviations count only through `makeAliases`, e.g. `{ vw: 'volkswagen' }`),
+ *   or every row of its model is clearly for other years or another engine.
+ * - `unknown`: anything else (years or engine that cannot be read, a condition in the note, its make with a model
+ *   spelled differently…).
  */
 export function fitFromTable(rows: CompatRow[], vehicle: Vehicle, config: FitmentConfig = DEFAULT_FITMENT_CONFIG): Fit {
   if (rows.length === 0) return 'unknown'
+  if (!rows.some((r) => rowNamesMake(r, vehicle, config))) return 'no'
   const mine = rows.filter((r) => rowNamesVehicle(r, vehicle, config))
-  if (mine.length === 0) return 'no'
-  if (mine.some((r) => rowIsVehicle(r, vehicle, config))) return 'fits'
-  return mine.some((r) => !/\d/.test(r.years)) ? 'unknown' : 'no'
+  if (mine.length === 0) return 'unknown'
+  if (mine.some((r) => rowIsVehicle(r, vehicle, config) && !r.note)) return 'fits'
+  const clearlyOther = (r: CompatRow) => {
+    const years = parseRowYears(r.years)
+    if (!years) return false
+    if (vehicle.year < years[0] || vehicle.year > years[1]) return true
+    return engineFit(r.engine, vehicle) === 'other'
+  }
+  return mine.every(clearlyOther) ? 'no' : 'unknown'
+}
+
+/** Rows of the table that name the vehicle's make and model (to explain an "unknown"). */
+export function rowsNamingVehicle(rows: CompatRow[], vehicle: Vehicle | null, config: FitmentConfig = DEFAULT_FITMENT_CONFIG): CompatRow[] {
+  return vehicle ? rows.filter((r) => rowNamesVehicle(r, vehicle, config)) : []
 }
 
 export type CompatRow = { make: string; model: string; years: string; engine: string; note: string | null }

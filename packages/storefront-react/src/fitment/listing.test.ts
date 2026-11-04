@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ProductListParams } from '@asteby/storefront'
-import { fitmentConfig, fitFilterTags, fitFromTable, fitStatus, rowIsVehicle, compatRows } from './fitment.js'
+import { fitmentConfig, fitFilterTags, fitFromTable, fitStatus, makeVariants, parseRowYears, rowIsVehicle, compatRows } from './fitment.js'
 import { loadCompatibleListing } from './listing.js'
 
 const prod = (id: string, tags: string[], vendor = 'X') => ({ id, handle: id, title: id, tags, vendor, attributes: {} })
@@ -50,7 +50,10 @@ describe('loadCompatibleListing', () => {
   })
   it('drops what the backend returned without the tags', async () => {
     const loose = { products: { list: async () => ({ nodes: catalog, total_count: 32, facets: [], page_info: { has_next_page: false, end_cursor: null } }) as never } }
-    expect((await loadCompatibleListing(loose, {}, audi)).nodes.map((p) => p.id)).toEqual(['bieleta', 'aceite'])
+    const out = await loadCompatibleListing(loose, {}, audi)
+    expect(out.nodes.map((p) => p.id)).toEqual(['bieleta', 'aceite'])
+    expect(out.filteredOnClient).toBe(true)
+    expect(out.total_count).toBeUndefined()
   })
 })
 
@@ -67,25 +70,44 @@ describe('make aliases', () => {
 })
 
 describe('compatibility table when the part has no fit tags', () => {
-  const config = fitmentConfig({ compatAttribute: 'compatibilidad', makeAliases: { gm: 'chevrolet' } })
+  const config = fitmentConfig({ compatAttribute: 'compatibilidad', makeAliases: { GM: 'chevrolet', vw: 'volkswagen' } })
   const captiva = { key: 'chevrolet/captiva/2023/1.5', make: { id: 'chevrolet', label: 'Chevrolet' }, model: { id: 'captiva', label: 'Captiva' }, year: 2023, engine: { id: '1.5', label: '1.5 L' } }
-  const part = { tags: [], attributes: { compatibilidad: 'GM|CAPTIVA|2022-2025||premier' } }
+  const jetta = { key: 'volkswagen/jetta/2016/2.0', make: { id: 'volkswagen', label: 'Volkswagen' }, model: { id: 'jetta', label: 'Jetta' }, year: 2016, engine: { id: '2.0', label: '2.0 L' } }
+  const table = (t: string) => ({ tags: [] as string[], attributes: { compatibilidad: t } })
 
-  it('a table that does not name the vehicle: no (never an empty answer)', () => {
-    expect(fitStatus(part, audi, config)).toBe('no')
+  it('a table that never names its make: no (never an empty answer)', () => {
+    expect(fitStatus(table('GM|CAPTIVA|2022-2025||'), audi, config)).toBe('no')
   })
-  it('a row with its make (alias), model and year: fits', () => {
-    expect(fitStatus(part, captiva, config)).toBe('fits')
-    expect(rowIsVehicle(compatRows(part, config)[0]!, captiva, config)).toBe(true)
+  it('a row with its make (alias, any case), model, years and no note: fits', () => {
+    expect(fitStatus(table('GM|CAPTIVA|2022-2025||'), captiva, config)).toBe('fits')
+    expect(fitStatus(table('GM|CAPTIVA|2022-2025|1.5 L4|'), captiva, config)).toBe('fits')
+    expect(fitStatus(table('GM|CAPTIVA|2022-2025|1.5L|'), captiva, config)).toBe('fits')
+    expect(fitStatus(table('VW|JETTA|2015-2018||'), jetta, config)).toBe('fits')
+    expect(rowIsVehicle(compatRows(table('GM|CAPTIVA|2022-2025||'), config)[0]!, captiva, config)).toBe(true)
   })
-  it('the row engine restricts when given', () => {
-    const rows = compatRows({ attributes: { compatibilidad: 'GM|CAPTIVA|2022-2025|2.4 L4|' } }, config)
-    expect(fitFromTable(rows, captiva, config)).toBe('no')
-    expect(fitFromTable(rows, { ...captiva, engine: { id: '2.4', label: '2.4 L' } }, config)).toBe('fits')
+  it('never a false fit: engine qualifiers the vehicle lacks, or a note', () => {
+    expect(fitStatus(table('GM|CAPTIVA|2022-2025|1.5 TURBO|'), captiva, config)).toBe('unknown')
+    expect(fitStatus(table('VW|JETTA|2015-2018|2.0 TURBO|'), jetta, config)).toBe('unknown')
+    expect(fitStatus(table('VW|JETTA|2015-2018|1.9 TDI|'), { ...jetta, engine: { id: '1.9', label: '1.9 L' } }, config)).toBe('unknown')
+    expect(fitStatus(table('GM|CAPTIVA|2022-2025||premier only'), captiva, config)).toBe('unknown')
   })
-  it('only the key (no labels) or no table: unknown; tags always win', () => {
-    expect(fitStatus(part, { key: captiva.key }, config)).toBe('unknown')
+  it('clearly other engine or years: no', () => {
+    expect(fitFromTable(compatRows(table('GM|CAPTIVA|2022-2025|2.4 L4|'), config), captiva, config)).toBe('no')
+    expect(fitStatus(table('GM|CAPTIVA|2022-2025||'), { ...captiva, year: 2019 }, config)).toBe('no')
+  })
+  it('years in another form or a model spelled differently: unknown, never a false no', () => {
+    for (const y of ['2022-', '2022+', '22-25', '2022, 2023', '2022/2025']) expect(fitStatus(table(`GM|CAPTIVA|${y}||`), captiva, config), y).toBe('unknown')
+    expect(fitStatus(table('GM|CAPTIVA SPORT|2022-2025||'), captiva, config)).toBe('unknown')
+    expect(parseRowYears('2012 – 2019')).toEqual([2012, 2019])
+  })
+  it('only the key, a malformed vehicle or no table: unknown; tags always win', () => {
+    expect(fitStatus(table('GM|CAPTIVA|2022-2025||'), { key: captiva.key }, config)).toBe('unknown')
+    expect(fitStatus(table('GM|CAPTIVA|2022-2025||'), { key: 'a/b/1/2', make: 'a' } as never, config)).toBe('unknown')
     expect(fitStatus({ tags: [], attributes: {} }, audi, config)).toBe('unknown')
-    expect(fitStatus({ tags: ['fit:audi/a3/2020/1.4'], attributes: part.attributes }, audi, config)).toBe('fits')
+    expect(fitStatus({ tags: ['fit:audi/a3/2020/1.4'], attributes: table('GM|CAPTIVA|2022-2025||').attributes }, audi, config)).toBe('fits')
+  })
+  it('makeVariants: no repeats, case-insensitive aliases', () => {
+    expect(makeVariants('gm', fitmentConfig({ makeAliases: { gm: 'chevrolet' } }))).toEqual(['gm', 'chevrolet'])
+    expect(makeVariants('chevrolet', fitmentConfig({ makeAliases: { GM: 'Chevrolet' } }))).toEqual(['chevrolet', 'gm'])
   })
 })

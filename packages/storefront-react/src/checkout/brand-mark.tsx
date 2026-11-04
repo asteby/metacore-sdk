@@ -103,10 +103,9 @@ export function BrandMark({ brand, logoUrl, size = 24, title, className }: Brand
     const b = logoBox(real.ar, size)
     // Named: the <img> itself carries the commercial name in `alt` (the plate is only a frame), so automated audits that
     // count images without alt text agree with screen readers. Decorative: the whole plate is hidden and alt is empty.
-    const label = title ?? found.name
     return (
       <span className={className} style={plate(b.width, b.pad, b.padX)} data-sf-brand-mark={key} data-sf-brand-source="logo" {...(title ? {} : { 'aria-hidden': true })}>
-        <img src={real.src} alt={title ? label : ''} width={b.imgW} height={b.imgH} decoding="async" draggable={false} style={{ display: 'block', maxWidth: 'none' }} />
+        <img src={real.src} alt={title ?? ''} width={b.imgW} height={b.imgH} decoding="async" draggable={false} style={{ display: 'block', maxWidth: 'none' }} />
       </span>
     )
   }
