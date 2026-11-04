@@ -92,6 +92,8 @@ describe('normalizeTitleText (any vertical)', () => {
     expect(normalizeTitleText('SILVERADO LT 2019 2021')).toBe('Silverado LT 2019 2021')
     expect(normalizeTitleText('CINTA 3M')).toBe('Cinta 3M')
     expect(normalizeTitleText('TOYOTA HILUX 2L')).toBe('Toyota Hilux 2L')
+    expect(normalizeTitleText('CHEVROLET AVEO 1.6 LT 2012')).toBe('Chevrolet Aveo 1.6 LT 2012')
+    expect(normalizeTitleText('SPARK 1.2 LT 2015 2015')).toBe('Spark 1.2 LT 2015')
     expect(normalizeTitleText('ACEITE 4.73L')).toBe('Aceite 4.73 l')
     expect(normalizeTitleText('ACEITE 946 ML')).toBe('Aceite 946 ml')
   })
@@ -128,6 +130,14 @@ describe('productTitle: review cases', () => {
   it('DEL followed by a word is the preposition, not «delantero»', () => {
     expect(productTitle(part({ pieza: 'SOPORTE MOTOR', detalle: 'LADO DEL CONDUCTOR' }))).toBe('Soporte motor lado del conductor para Nissan Tsuru 2000–2005')
     expect(productTitle(part({ pieza: 'BUJE', detalle: 'DEL IZQ' }))).toBe('Buje delantero izquierdo para Nissan Tsuru 2000–2005')
+    expect(productTitle(part({ pieza: 'BRAZO', detalle: 'DEL Y TRAS' }))).toBe('Brazo delantero/trasero para Nissan Tsuru 2000–2005')
+    expect(productTitle(part({ pieza: 'BRAZO', detalle: 'DEL Y TRAS IZQ' }))).toBe('Brazo delantero/trasero izquierdo para Nissan Tsuru 2000–2005')
+    expect(productTitle(part({ pieza: 'BRAZO', detalle: 'CONTROL DEL / REFORZADO' }))).toBe('Brazo control, reforzado delantero para Nissan Tsuru 2000–2005')
+    expect(productTitle(part({ pieza: 'BRAZO', detalle: 'DEL, TRAS' }))).toBe('Brazo delantero/trasero para Nissan Tsuru 2000–2005')
+  })
+  it('masculine nouns in -ión / -sis', () => {
+    expect(productTitle(part({ pieza: 'CHASIS', position: 'trasera' }))).toBe('Chasis trasero para Nissan Tsuru 2000–2005')
+    expect(productTitle(part({ pieza: 'SUSPENSION', position: 'trasera' }))).toBe('Suspensión trasera para Nissan Tsuru 2000–2005')
   })
   it('feminine nouns that do not end in -a; short words lowercased in the type', () => {
     expect(productTitle(part({ pieza: 'UNIDAD MOTRIZ', position: 'trasera' }))).toBe('Unidad motriz trasera para Nissan Tsuru 2000–2005')

@@ -115,7 +115,7 @@ const PART_TYPES_ES: Record<string, string> = {
 
 /** Feminine head nouns that do not end in -a (Spanish agreement of the position: `terminal derecha`). */
 const FEMININE_ES = new Set(['terminal', 'base', 'llave', 'clave', 'red', 'mano', 'flor', 'piel', 'luz', 'calle', 'leche', 'fuente', 'gente', 'parte', 'serie'])
-const MASCULINE_A_ES = new Set(['sistema', 'problema', 'kit'])
+const MASCULINE_A_ES = new Set(['sistema', 'problema', 'kit', 'chasis', 'camion', 'avion', 'anion', 'cation', 'eje', 'pez', 'ajedrez'])
 
 type Side = { axle: string[]; level: string[]; side: string[] }
 
@@ -159,7 +159,7 @@ function measure(token: string): string | null {
  * Silverado trim, not 1,500 litres).
  */
 const joinUnits = (s: string) =>
-  s.replace(/\b(\d+(?:[.,]\d+)?)\s+(LTS|LT|L|ML|MM|CM|KG|LBS|LB)\b\.?/gi, (all, n: string, unit: string) =>
+  s.replace(/\b(\d+(?:[.,]\d+)?)\s+(LTS|L|ML|MM|CM|KG|LBS|LB)\b\.?/gi, (all, n: string, unit: string) =>
     /^L/i.test(unit) && Number(n.replace(',', '.')) >= 100 ? all : `${n}${unit}`,
   )
 
@@ -252,7 +252,7 @@ function isFeminine(headNoun: string): boolean {
   const w = stripAccents(headNoun).toLowerCase()
   if (FEMININE_ES.has(w)) return true
   if (MASCULINE_A_ES.has(w)) return false
-  return /as?$/.test(w) || /(dad|tad|tud|ion|iones|ez|sis)$/.test(w)
+  return /as?$/.test(w) || /(dad|tad|tud|sion|cion|xion|siones|ciones|ez|sis)$/.test(w)
 }
 
 /** Position words → `delantera inferior izquierda/derecha` agreeing with the head noun. */
@@ -311,8 +311,16 @@ function splitDetail(raw: string): { words: string[]; positions: string[] } {
   const words: string[] = []
   const positions: string[] = []
   // `/ VENTILADO / 4 BARRENOS X 108MM /` → comma-separated phrases; a dangling connector at the end is dropped.
-  const tokens = squash(joinUnits(raw).replace(/\s*\/\s+|\s+\/\s*|^\/|\/$/g, ' , ')).split(' ').filter(Boolean)
+  const tokens = squash(joinUnits(raw).replace(/\s*\/\s+|\s+\/\s*|^\/|\/$/g, ' , ').replace(/(\S),(\s|$)/g, '$1 ,$2')).split(' ').filter(Boolean)
+  const isPositionToken = (tok: string | undefined) => {
+    const u = stripAccents(tok ?? '').toUpperCase().replace(/\.$/, '')
+    return !!u && (!!POSITION_ABBREV[u] || u.split('/').every((p) => POSITION_ABBREV[p] || /^DE(DER|IZQ)$/.test(p)))
+  }
+  let lastWasPosition = false
   for (const [i, t] of tokens.entries()) {
+    // `DEL Y TRAS`: the connector between two positions goes with them (both axles), not into the detail.
+    if (/^(Y|O|E)$/i.test(t) && lastWasPosition && isPositionToken(tokens[i + 1])) continue
+    lastWasPosition = false
     // A lone `R`/`L` is the side only when it is the whole detail (`TERMINAL DIRECCION R`); elsewhere it can be litres.
     if (/^[RL]$/i.test(t) && tokens.length > 1) {
       words.push(t)
@@ -322,12 +330,16 @@ function splitDetail(raw: string): { words: string[]; positions: string[] } {
     const pair = up.split('/')
     if (pair.length > 1 && pair.every((p) => POSITION_ABBREV[p] || /^DE(DER|IZQ)$/.test(p))) {
       for (const p of pair) positions.push(...(POSITION_ABBREV[p] ?? []))
+      lastWasPosition = true
       continue
     }
     // `DEL` is also the preposition (`LADO DEL CONDUCTOR`): a position only last or next to another position word.
     if (up === 'DEL') {
-      const next = stripAccents(tokens[i + 1] ?? '').toUpperCase().replace(/\.$/, '')
-      const isPosition = !next || !!POSITION_ABBREV[next] || next.split('/').every((p) => POSITION_ABBREV[p])
+      // Skip connectors (`DEL Y TRAS`); a comma right after it ends the phrase (`CONTROL DEL / REFORZADO`).
+      let j = i + 1
+      while (j < tokens.length && /^(Y|O|E)$/i.test(tokens[j]!)) j++
+      const next = stripAccents(tokens[j] ?? '').toUpperCase().replace(/\.$/, '')
+      const isPosition = !next || next === ',' || !!POSITION_ABBREV[next] || next.split('/').every((p) => POSITION_ABBREV[p])
       if (!isPosition) {
         words.push(t)
         continue
@@ -335,6 +347,7 @@ function splitDetail(raw: string): { words: string[]; positions: string[] } {
     }
     if (POSITION_ABBREV[up]) {
       positions.push(...POSITION_ABBREV[up]!)
+      lastWasPosition = true
       continue
     }
     words.push(t)
