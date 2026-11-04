@@ -140,8 +140,8 @@ describe('ContactFields + AddressFields', () => {
     const { container } = render(<Form neighborhoodList="select" lookup={async () => ({ province: 'Ciudad de México', city: 'Cuauhtémoc', neighborhoods: ['Roma Norte', 'Roma Sur'] })} />)
     fireEvent.input(container.querySelector('[name="neighborhood"]')!, { target: { value: 'Roma Sur' } })
     fireEvent.input(screen.getByLabelText('Código postal'), { target: { value: '06700' } })
-    await waitFor(() => expect(container.querySelector('select[name="neighborhood"]')).not.toBeNull())
-    expect((container.querySelector('select[name="neighborhood"]') as HTMLSelectElement).value).toBe('Roma Sur')
+    // The typed colonia is carried to the new select in an effect after it mounts: wait for the value, not just the select.
+    await waitFor(() => expect((container.querySelector('select[name="neighborhood"]') as HTMLSelectElement | null)?.value).toBe('Roma Sur'))
   })
 
   it('lockProvinceOnFill locks a plain state field once the lookup fills it, but never one the buyer typed', async () => {
