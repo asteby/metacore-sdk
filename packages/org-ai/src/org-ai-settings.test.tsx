@@ -37,7 +37,9 @@ describe('OrgAISettings', () => {
     expect(group.querySelectorAll('[role="radio"]').length).toBe(4)
     expect(screen.getByRole('radio', { name: /Anthropic/ }).getAttribute('aria-checked')).toBe('true')
     expect((screen.getByLabelText('API key') as HTMLInputElement).value).toBe('')
-    expect((screen.getByLabelText('Model') as HTMLInputElement).value).toBe('claude-sonnet-4-5')
+    // The model starts empty and the default arrives in an effect once the config loads.
+    const model = screen.getByLabelText('Model') as HTMLInputElement
+    await waitFor(() => expect(model.value).toBe('claude-sonnet-4-5'))
     expect(document.body.textContent).not.toMatch(/spark|hub|billing/i)
   })
 
@@ -58,6 +60,8 @@ describe('OrgAISettings', () => {
     const notify = { success: vi.fn(), error: vi.fn() }
     const api = setup({}, { notify })
     await screen.findByRole('radiogroup')
+    // Let the config effect apply its defaults first, or it can overwrite the provider picked below.
+    await waitFor(() => expect((screen.getByLabelText('Model') as HTMLInputElement).value).toBe('claude-sonnet-4-5'))
     fireEvent.click(screen.getByRole('radio', { name: /^OpenAI GPT/ }))
     expect((screen.getByLabelText('Base URL') as HTMLInputElement).value).toBe('https://api.openai.com/v1')
     fireEvent.change(screen.getByLabelText('API key'), { target: { value: 'sk-test' } })
