@@ -235,7 +235,42 @@ export type LocationListParams = {
   postal_code?: string
 }
 
-export type ShopPolicies = { free_shipping_min: Money | null; returns_days: number | null }
+export type ShopPolicies = {
+  free_shipping_min: Money | null
+  returns_days: number | null
+  /**
+   * Warranty term in months (contract 1.30.0, StorefrontSettings.warranty_months): the ONLY source of the term a store
+   * shows on its home page, FAQ, product page and warranty policy. `null` = claim none. Absent on older servers.
+   */
+  warranty_months?: number | null
+}
+
+/**
+ * Business identity as the merchant typed it in OPS (contract 1.30.0). `null` = not configured: the store does not
+ * publish the page or the claim that cites it. Use `shopLegal(shop)` to read it with every field present.
+ */
+export type ShopLegal = {
+  /** Razón social or full name of the owner. */
+  name: string | null
+  /** Tax id (RFC in Mexico). */
+  tax_id: string | null
+  fiscal_address: string | null
+  /** Customer service / returns address, when it differs from the registered one. */
+  service_address: string | null
+  /** Person or department in charge of personal data (privacy notice). */
+  privacy_officer: string | null
+  /** Email for privacy (ARCO) requests; the server falls back to the contact email. */
+  privacy_email: string | null
+}
+
+/** One public option of a payment provider (`card`, `cash`, `wallet`…), with the names of its cash points. */
+export type AcceptedPaymentOption = { key: string; family?: string; label?: string; points?: string[] }
+
+/** One way to pay the shop offers (`GET /storefront/payment-methods`, contract 1.30.0). */
+export type AcceptedPaymentMethod = { key: string; kind: 'builtin' | 'provider'; options: AcceptedPaymentOption[] }
+
+/** The ways to pay the shop offers in the market, without a cart: the same list the checkout offers. */
+export type AcceptedPaymentMethods = { methods: AcceptedPaymentMethod[]; market: string | null }
 
 /**
  * How a market prices its catalog (contract 1.22.0). `legacy`: as before markets had price lists; `same`: the market's
@@ -272,6 +307,8 @@ export type Shop = {
   contact: ShopContact
   branches: ShopBranch[]
   policies: ShopPolicies
+  /** Business identity (contract 1.30.0); absent on older servers (read it with `shopLegal`). */
+  legal?: ShopLegal | null
   /**
    * Market of this request (contract 1.22.0); `null` in an organization without markets, absent from older servers —
    * then keep using `currency_code` / `locale`.
