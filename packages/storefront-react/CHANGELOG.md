@@ -1,5 +1,39 @@
 # @asteby/storefront-react
 
+## 0.53.0
+
+### Minor Changes
+
+- d5d7e75: Títulos legibles y feeds de compras (Google Merchant Center y ChatGPT Merchants), para todas las tiendas. Solo cambian cómo se presenta el catálogo: nunca escriben en OPS ni agregan datos.
+
+  - `@asteby/storefront`: `productTitle`, `distinctProductTitles`, `normalizeTitleText`, `normalizeName`, `productPartNumber` y `PART_TITLE_KEYS`. Un nombre del ERP («ROTULA IZQ 4X2 TOYOTA TACOMA 2.4 L4 1995 2004») queda como «Rótula izquierda 4x2 para Toyota Tacoma 2.4 L4 1995–2004». Se arma con tipo, posición, marca y modelo, motor y rango de años, en tipo oración, con acentos y con los años repetidos colapsados. Con `identifiers: true` agrega la marca y el número de parte, así que es único por pieza. En un listado, `distinctProductTitles` solo diferencia los títulos que chocan. Se probó con 66 productos reales de ProtekAuto y con los 5,106 del catálogo: ningún código alfanumérico se pierde y hay 0 títulos repetidos con identificadores (antes, 1,246 productos compartían nombre).
+  - Nuevo subpaquete `@asteby/storefront/merchant`:
+    - `collectFeed` / `productFeedItems` generan una fila por variante.
+    - Toman de OPS precio, oferta y disponibilidad, `brand` del `vendor`, `mpn` del `part_number` y `gtin` solo si tiene un dígito verificador válido.
+    - `identifier_exists=no` solo cuando no hay GTIN ni la pareja marca + MPN (regla de Google). Precios tal como vienen de OPS, con los decimales de la moneda y sin pasar por flotante. Ids estables aunque dos variantes compartan SKU.
+    - Excluyen los productos internos o de prueba, sin precio, sin imagen rasterizada, sin marca y, por omisión, los agotados.
+    - Escritores: `googleFeedXml` (RSS 2.0 con `g:`), `googleFeedTsv` y `openAiFeedJsonl` (Product Feed Spec: `item_id`, `title`, `description`, `url`, `brand`, `seller_name`, `image_url`, `availability`, `price`).
+    - `robotsTxt`: permite explícitamente Googlebot, Storebot-Google, OAI-SearchBot y ChatGPT-User, y bloquea GPTBot y los demás de entrenamiento.
+    - `verificationTokens`: lee de la configuración el token de verificación del sitio.
+  - `@asteby/storefront-react`: `productJsonLd` acepta `{ name, mpn, priceValidUntil, returnPolicy, shipping }`. Con ellas emite `mpn`, `hasMerchantReturnPolicy` y `shippingDetails` coherentes con el feed, pero solo cuando la tienda pasa datos reales. Sin opciones, la salida es la misma de antes y nunca emite `aggregateRating`.
+
+### Patch Changes
+
+- 38fb796: Checkout: tras una recotización de envío con la misma tarifa (mismo `rate.id`, p. ej. tarifa fija) el formulario ya no se queda en «Las tarifas de envío se actualizaron» / «Actualizando el total…» hasta que el comprador reescribe el código postal.
+
+  - `PaymentMethodSection`: nueva prop `syncVersion`. Un `syncDelivery` que terminó en `'requote'` se vuelve a ejecutar cuando `syncVersion` cambia, aunque `delivery` siga igual (antes el efecto solo dependía de `[wantSync, delivery]`, así que con el mismo id nadie reintentaba).
+  - `useAutoQuote` / `useLiveDelivery`: nuevo `quoteVersion` (cuenta las cotizaciones exitosas). Pásalo a `PaymentMethodSection syncVersion={live.quoteVersion}`.
+  - Prueba de guardia: cargar con dirección guardada cotiza sola al montar (con o sin tarifas en la página, con o sin consulta de CP).
+
+  Requiere revisión adversarial (decide cuándo se guarda la entrega y se relee el total).
+
+  Con `syncVersion`, una entrega rechazada con `'requote'` no se reenvía al instante con la misma cotización (antes salía un segundo PUT en cuanto cambiaba la dependencia y una tienda que cuenta rechazos lo tomaba como fallo real); se reenvía una sola vez cuando llega una cotización más nueva. Una cotización nueva que conserva el id (cambió el CP) guarda la entrega una vez más para releer el total. Sin la prop se conserva el comportamiento anterior.
+
+  Cada par (entrega, versión de cotización) se guarda una sola vez sea cual sea la respuesta (ok, fallo o `'requote'`): un fallo tras una cotización nueva ya no provoca un tercer guardado, y mientras se vuelve a guardar por una cotización más nueva el total se muestra como «Actualizando el total…» y no se puede pagar. Un fallo simple se reintenta además cuando `wantSync` vuelve a activarse. Sin tope si el servidor contesta `'requote'` a cada cotización nueva (un guardado por cotización, nunca un bucle); en recolección, el primer guardado puede salir antes de la primera cotización y uno más cuando llega.
+
+- Updated dependencies [d5d7e75]
+  - @asteby/storefront@0.37.0
+
 ## 0.52.0
 
 ### Minor Changes
