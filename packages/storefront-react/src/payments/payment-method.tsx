@@ -55,6 +55,12 @@ export type PaymentMethodSectionProps = {
   /** `false` while the buyer has not chosen a delivery that fixes the total (e.g. address pending). Default true. */
   deliveryReady?: boolean
   /**
+   * Changes every time the shop gets a fresh quote (`useLiveDelivery().quoteVersion`). A sync that ended in `'requote'` runs
+   * again when it changes, even if the new quote kept the same rate id (a fixed rate): otherwise the form would wait for a
+   * sync nobody retries until the buyer edits the address.
+   */
+  syncVersion?: number
+  /**
    * Saves the chosen delivery on the server cart so the server total includes it. Resolve `true` once the new total
    * has been read back (the `amount` prop is then up to date). Called once per delivery, whatever the payment row (so
    * the total on the button and in the shop's summary always holds the chosen delivery). Without it nothing waits.
@@ -201,6 +207,7 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
     statusUrl,
     delivery = '',
     deliveryReady = true,
+    syncVersion = 0,
     syncDelivery,
     addressFirst = false,
     retryAddress = false,
@@ -279,23 +286,40 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
   // button: the shop saves it on the cart and re-reads the cart. Once per delivery, for every payment row (cash and
   // redirect included, otherwise the button and the summary show the cart without shipping).
   const wantSync = hydrated && selected !== null && !addressFirst && !retryAddress && deliveryReady && Boolean(syncDelivery)
-  const [sync, setSync] = useState<{ key: string; ok: boolean; requote?: boolean } | null>(null)
+  // `version`: the syncVersion the sync was sent with. With the prop, a NEWER quote (address or price changed, even when the
+  // rate kept its id) saves the delivery once more so the total is read again; a 'requote' is never re-sent with the
+  // same delivery and the same quote.
+  const [sync, setSync] = useState<{ key: string; ok: boolean; requote?: boolean; version?: number } | null>(null)
   const syncRef = useRef(syncDelivery)
   syncRef.current = syncDelivery
+  // Without the prop the shop keeps the earlier behaviour (a 'requote' is sent again when wantSync or delivery change).
+  // With it, each (delivery, quote version) is saved ONCE whatever the answer: ok, failure or 'requote'. A newer quote
+  // saves it again; a plain failure is also retried when wantSync turns on again (the buyer fixed the address). There is
+  // no cap when the server keeps answering 'requote' for every new quote: each one costs one save, never a loop.
+  // Pickup: deliveryReady may not wait for the first quote, so the first save can go with version 0 and one more when
+  // the quote arrives.
+  const versioned = props.syncVersion !== undefined
+  const newerQuote = versioned && !!sync && sync.key === delivery && syncVersion > (sync.version ?? 0)
+  const lastWant = useRef(false)
   useEffect(() => {
+    const turnedOn = wantSync && !lastWant.current
+    lastWant.current = wantSync
     if (!wantSync || !syncRef.current) return
-    if (sync?.key === delivery && sync.ok) return
+    if (sync?.key === delivery && sync.ok && !newerQuote) return
+    if (versioned && sync?.key === delivery && !newerQuote && (sync.ok || sync.requote || !turnedOn)) return
     let cancelled = false
+    const version = syncVersion
     syncRef.current(delivery).then(
-      (ok) => !cancelled && setSync(ok === 'requote' ? { key: delivery, ok: false, requote: true } : { key: delivery, ok }),
-      () => !cancelled && setSync({ key: delivery, ok: false }),
+      (ok) => !cancelled && setSync(ok === 'requote' ? { key: delivery, ok: false, requote: true, version } : { key: delivery, ok, version }),
+      () => !cancelled && setSync({ key: delivery, ok: false, version }),
     )
     return () => {
       cancelled = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wantSync, delivery])
-  const settled = sync?.key === delivery
+  }, [wantSync, delivery, versioned ? syncVersion : 0])
+  // A save that belongs to an older quote is not a settled save: the total waits ("Actualizando el total…").
+  const settled = sync?.key === delivery && !newerQuote
   const synced = !syncDelivery || (settled && sync!.ok)
   const requote = wantSync && settled && sync!.requote === true
   const syncFailed = wantSync && settled && !sync!.ok && !requote
