@@ -47,8 +47,11 @@ export type FeedSkipReason = 'hidden' | 'no_price' | 'no_image' | 'out_of_stock'
 export type FeedOptions = {
   /** Public origin of the store, no trailing slash (`https://protekauto.com.mx`). */
   siteUrl: string
-  /** Path of a product page (`(h) => '/productos/' + h`). */
-  productPath: (handle: string) => string
+  /**
+   * Path of a product page; for a product with several variants it gets the variant id too (default query when the
+   * function ignores it: `?variant=<id>`). E.g. `(h, v) => `/productos/${h}` + (v ? `?variante=${v}` : '')`.
+   */
+  productPath: (handle: string, variantId?: string) => string
   locale?: TitleLocale
   /** Title of the item. Default: `productTitle(product, { identifiers: true })` (type, brand, part number, fitment). */
   title?: (product: Product) => string
@@ -123,9 +126,12 @@ export function validGtin(value: string | null | undefined): string | null {
 
 const positive = (m: Money | null | undefined): m is Money => !!m && Number.isFinite(Number(m.amount)) && Number(m.amount) > 0
 
-function variantLink(url: string, product: Product, variant: ProductVariant): string {
-  if (product.variants.length <= 1) return url
-  const u = new URL(url)
+function variantLink(base: string, product: Product, variant: ProductVariant, productPath: FeedOptions['productPath']): string {
+  if (product.variants.length <= 1) return absolute(productPath(product.handle), base)!
+  const plain = productPath(product.handle)
+  const withVariant = productPath(product.handle, variant.id)
+  if (withVariant !== plain) return absolute(withVariant, base)!
+  const u = new URL(absolute(plain, base)!)
   u.searchParams.set('variant', variant.id)
   return u.toString()
 }
@@ -153,7 +159,6 @@ export function productFeedItems(product: Product, options: FeedOptions): { item
   if (hidden(product)) return { items, skipped: product.variants.map(() => 'hidden' as const) }
 
   const base = options.siteUrl.replace(/\/+$/, '')
-  const url = absolute(options.productPath(product.handle), base)!
   const title = truncateText(squash(options.title ? options.title(product) : productTitle(product, { identifiers: true, locale: options.locale, keys: options.keys })), 150)
   const description = truncateText(plain(product.description) || plain(product.description_html) || title, 5000)
   const brand = product.vendor?.trim() || options.brandFallback?.trim() || null
@@ -193,7 +198,7 @@ export function productFeedItems(product: Product, options: FeedOptions): { item
       group_id: multi ? product.id : null,
       title: multi && variant.title && !/^(default title|predeterminado|default)$/i.test(variant.title) ? truncateText(`${title} - ${variant.title}`, 150) : title,
       description,
-      link: variantLink(url, product, variant),
+      link: variantLink(base, product, variant, options.productPath),
       image_link: image,
       additional_image_links: gallery.filter((u) => u !== image).slice(0, 10),
       availability: availability.status,

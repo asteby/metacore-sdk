@@ -148,6 +148,12 @@ describe('productFeedItems', () => {
     ])
   })
 
+  it('a productPath that takes the variant decides the variant URL', () => {
+    const p = product({ variants: [variant({ id: 'a', sku: 'A' }), variant({ id: 'b', sku: 'B' })] })
+    const links = productFeedItems(p, { ...options, productPath: (h, v) => `/productos/${h}${v ? `?variante=${v}` : ''}` }).items.map((i) => i.link)
+    expect(links).toEqual([`${options.siteUrl}/productos/${p.handle}?variante=a`, `${options.siteUrl}/productos/${p.handle}?variante=b`])
+  })
+
   it('title and description are capped (150 / 5000) at a word boundary', () => {
     const [item] = productFeedItems(product({ description: 'palabra '.repeat(1000) }), { ...options, title: () => 'pieza '.repeat(40) }).items
     expect(item!.title.length).toBeLessThanOrEqual(150)
