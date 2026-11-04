@@ -98,6 +98,7 @@ describe('compatibility table when the part has no fit tags', () => {
     expect(fitStatus(table('GM|CAPTIVA|2022-2025|3.5 V6|'), v8, config)).toBe('unknown')
     expect(fitStatus(table('GM|CAPTIVA|2022-2025|3.5 V8|'), v8, config)).toBe('fits')
     expect(fitStatus(table('GM|CAPTIVA|2022-2025|-|'), captiva, config)).toBe('fits')
+    expect(fitStatus(table('GM|CAPTIVA|2022-2025| / |'), captiva, config)).toBe('unknown')
     expect(fitStatus(table('GM|CAPTIVA|2022-2025|1.5|'), { ...captiva, engine: { id: '1.5', label: '1.5 TURBO' } }, config)).toBe('unknown')
     expect(fitStatus(table('GM|CAPTIVA|2022-2025|2.5 DIESEL|'), { ...captiva, engine: { id: '2.5d', label: '2.5 L diésel' } }, config)).toBe('fits')
   })
