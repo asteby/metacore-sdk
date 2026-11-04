@@ -6,7 +6,7 @@
 // muestra (ni un «[por completar]» al público); una página legal que sigue en
 // borrador no se sirve.
 import { formatMoney } from './money.js'
-import type { Product, Section, Shop, ShopLegal } from './types.js'
+import type { Page, Product, Section, Shop, ShopLegal } from './types.js'
 
 /** The `{{...}}` fields a page text may use. Any other `{{name}}` is left as is (not ours). */
 export const SHOP_MERGE_FIELDS = [
@@ -35,12 +35,34 @@ export type ShopFieldValues = Record<ShopMergeField, string | null>
 
 /**
  * Review markers of a legal draft (storefront_content templates): a text that still has one is not served. The first
- * is the current template notice, the second the one seeded before contract 1.30.0.
+ * is the current template notice, the second the one seeded before contract 1.30.0. Detection is tolerant: tags,
+ * entities (`&nbsp;`), spacing, case and accents are ignored, and the prefix (`[BORRADOR`, `[REVISAR CON`) is enough.
  */
 export const LEGAL_DRAFT_MARKERS = ['[BORRADOR: REVISAR CON ABOGADO]', '[REVISAR CON ASESOR LEGAL]'] as const
 
 const FIELD_RE = /\{\{\s*([a-z0-9_.]+)\s*\}\}/g
-const PENDING_RE = /\{\{\s*completar:[^{}]*\}\}/i
+/** Any `{{…}}` left after substitution: an unknown field, a typo, a `{{completar…}}` in any spelling. */
+const LEFTOVER_RE = /\{\{[\s\S]*?\}\}/
+const PENDING_RE = /\{\{\s*completar/i
+const DRAFT_RE = /\[\s*(?:BORRADOR|REVISAR\s+CON)\b/
+
+const ENTITIES: Record<string, string> = { nbsp: ' ', amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", '#39': "'", '#160': ' ' }
+
+/** Text as a reader sees it: no tags, entities decoded, spaces collapsed, upper case without accents. */
+function readable(text: string): string {
+  return text
+    .replace(/<[^>]*>/g, '')
+    .replace(/&([a-z0-9#]+);/gi, (whole, name: string) => ENTITIES[name.toLowerCase()] ?? whole)
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ')
+    .toUpperCase()
+}
+
+/** Whether a text still carries a legal review notice (any spelling). */
+export function hasLegalDraftNotice(text: string): boolean {
+  return DRAFT_RE.test(readable(text))
+}
 
 const clean = (v: string | null | undefined): string | null => (typeof v === 'string' && v.trim() ? v.trim() : null)
 const wholeNonNeg = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : null)
@@ -95,14 +117,16 @@ export function shopFieldValues(shop: Shop): ShopFieldValues {
 }
 
 export type ResolvedText = {
-  /** The text with the fields substituted, or `null` when it must not be shown (see `missing`, `pending`, `draft`). */
+  /** The text with the fields substituted, or `null` when it must not be shown (see the flags). */
   text: string | null
-  /** Fields it cites that the shop has not configured. */
+  /** Known fields it cites that the shop has not configured. */
   missing: ShopMergeField[]
   /** It still has a `{{completar: …}}` marker the merchant has to write. */
   pending: boolean
-  /** It still has a legal review notice (`LEGAL_DRAFT_MARKERS`). */
+  /** It still has a legal review notice (`LEGAL_DRAFT_MARKERS`, any spelling). */
   draft: boolean
+  /** It has a `{{…}}` that is not a known field (a typo, another system's placeholder): never shown. */
+  unknown: string[]
 }
 
 function escapeHtml(s: string): string {
@@ -110,25 +134,35 @@ function escapeHtml(s: string): string {
 }
 
 /**
- * Substitutes the fields of one text. Never invents: a text that cites a missing field, keeps a `{{completar: …}}`
- * marker or a legal review notice resolves to `text: null`. With `html` the values are escaped.
+ * Substitutes the fields of one text. Never invents and never leaks a placeholder: a text that cites a missing field,
+ * keeps any `{{…}}` (unknown field, `{{completar…}}`) or a legal review notice — before OR after substitution, so a
+ * value that itself carries a marker is caught too — resolves to `text: null`. With `html` the values are escaped;
+ * without it they are inserted as plain text, so a caller must not render a non-HTML prop as HTML.
  */
 export function resolveShopText(text: string, values: ShopFieldValues, { html = false }: { html?: boolean } = {}): ResolvedText {
-  const draft = LEGAL_DRAFT_MARKERS.some((m) => text.includes(m))
-  const pending = PENDING_RE.test(text)
   const missing: ShopMergeField[] = []
   const out = text.includes('{{')
     ? text.replace(FIELD_RE, (whole, name: string) => {
-        if (!(name in values)) return whole
+        if (!Object.prototype.hasOwnProperty.call(values, name)) return whole
         const v = values[name as ShopMergeField]
-        if (v == null) {
+        if (typeof v !== 'string') {
           if (!missing.includes(name as ShopMergeField)) missing.push(name as ShopMergeField)
           return whole
         }
         return html ? escapeHtml(v) : v
       })
     : text
-  return { text: draft || pending || missing.length ? null : out, missing, pending, draft }
+  const draft = hasLegalDraftNotice(text) || hasLegalDraftNotice(out)
+  const pending = PENDING_RE.test(text) || PENDING_RE.test(out)
+  const unknown: string[] = []
+  if (LEFTOVER_RE.test(out)) {
+    for (const m of out.matchAll(/\{\{([\s\S]*?)\}\}/g)) {
+      const name = m[1]!.trim()
+      if (!missing.includes(name as ShopMergeField) && !/^completar/i.test(name) && !unknown.includes(name)) unknown.push(name)
+    }
+  }
+  const blocked = draft || pending || missing.length > 0 || LEFTOVER_RE.test(out)
+  return { text: blocked ? null : out, missing, pending, draft, unknown }
 }
 
 /** Props whose value is HTML (rich text): values are escaped when inserted. */
@@ -136,7 +170,17 @@ const HTML_PROPS = new Set(['content', 'html', 'body'])
 const LOOKS_LIKE_HTML = /<\/?[a-z][a-z0-9]*(\s[^>]*)?>/i
 
 /** A section or list entry dropped because one of its texts could not be shown. */
-export type DroppedContent = { section: string; item?: number; missing: ShopMergeField[]; pending: boolean; draft: boolean }
+export type DroppedContent = {
+  section: string
+  /** Path of the dropped entry inside the section props (`items.0`, `rows.1.0`); absent when the whole section went. */
+  path?: string
+  /** Index of the dropped entry in its list (kept for convenience; `path` is unambiguous). */
+  item?: number
+  missing: ShopMergeField[]
+  pending: boolean
+  draft: boolean
+  unknown: string[]
+}
 
 export type MergedSections = {
   /** Sections safe to show: every field substituted, every unshowable text removed with its section or list entry. */
@@ -146,13 +190,24 @@ export type MergedSections = {
 }
 
 const DROP = Symbol('drop')
-type Acc = { missing: Set<ShopMergeField>; pending: boolean; draft: boolean }
+type Acc = { missing: Set<ShopMergeField>; pending: boolean; draft: boolean; unknown: Set<string> }
+const newAcc = (): Acc => ({ missing: new Set(), pending: false, draft: false, unknown: new Set() })
+const report = (section: string, a: Acc, path?: string, item?: number): DroppedContent => ({
+  section,
+  ...(path != null ? { path } : {}),
+  ...(item != null ? { item } : {}),
+  missing: [...a.missing],
+  pending: a.pending,
+  draft: a.draft,
+  unknown: [...a.unknown],
+})
 
-function mergeValue(value: unknown, values: ShopFieldValues, html: boolean, acc: Acc, onItemDrop: (i: number, a: Acc) => void): unknown {
+function mergeValue(value: unknown, values: ShopFieldValues, html: boolean, acc: Acc, path: string, onItemDrop: (path: string, i: number, a: Acc) => void): unknown {
   if (typeof value === 'string') {
     const r = resolveShopText(value, values, { html: html || LOOKS_LIKE_HTML.test(value) })
     if (r.text != null) return r.text
     r.missing.forEach((m) => acc.missing.add(m))
+    r.unknown.forEach((u) => acc.unknown.add(u))
     acc.pending ||= r.pending
     acc.draft ||= r.draft
     return DROP
@@ -161,17 +216,23 @@ function mergeValue(value: unknown, values: ShopFieldValues, html: boolean, acc:
     const out: unknown[] = []
     value.forEach((v, i) => {
       // A list entry (FAQ answer, warranty card…) that cannot be shown goes away alone; the rest of the section stays.
-      const itemAcc: Acc = { missing: new Set(), pending: false, draft: false }
-      const merged = mergeValue(v, values, html, itemAcc, onItemDrop)
-      if (merged === DROP) onItemDrop(i, itemAcc)
-      else out.push(merged)
+      const itemAcc = newAcc()
+      const at = path ? `${path}.${i}` : String(i)
+      const merged = mergeValue(v, values, html, itemAcc, at, onItemDrop)
+      if (merged === DROP) {
+        onItemDrop(at, i, itemAcc)
+        // A draft notice anywhere taints the whole page, even inside a list.
+        acc.draft ||= itemAcc.draft
+      } else out.push(merged)
     })
+    // A list that had entries and lost them all leaves an empty shell (a heading with nothing under it): drop it.
+    if (value.length > 0 && out.length === 0) return DROP
     return out
   }
   if (value && typeof value === 'object') {
     const out: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(value)) {
-      const merged = mergeValue(v, values, HTML_PROPS.has(k), acc, onItemDrop)
+      const merged = mergeValue(v, values, HTML_PROPS.has(k), acc, path ? `${path}.${k}` : k, onItemDrop)
       if (merged === DROP) return DROP
       out[k] = merged
     }
@@ -182,20 +243,18 @@ function mergeValue(value: unknown, values: ShopFieldValues, html: boolean, acc:
 
 /**
  * Resolves the fields in every prop of the sections (does not mutate the input). A list entry whose text cannot be
- * shown is removed from its list; a section whose own text cannot be shown is removed whole. Nothing reaches the
- * buyer with a placeholder or a made-up value.
+ * shown is removed from its list; a list left empty, or a section whose own text cannot be shown, removes the whole
+ * section. Nothing reaches the buyer with a placeholder or a made-up value.
  */
 export function mergeShopSections(sections: Section[], shop: Shop): MergedSections {
   const values = shopFieldValues(shop)
   const dropped: DroppedContent[] = []
   const out: Section[] = []
   for (const s of sections) {
-    const acc: Acc = { missing: new Set(), pending: false, draft: false }
-    const props = mergeValue(s.props, values, false, acc, (item, a) =>
-      dropped.push({ section: s.id, item, missing: [...a.missing], pending: a.pending, draft: a.draft }),
-    )
+    const acc = newAcc()
+    const props = mergeValue(s.props, values, false, acc, '', (path, item, a) => dropped.push(report(s.id, a, path, item)))
     if (props === DROP) {
-      dropped.push({ section: s.id, missing: [...acc.missing], pending: acc.pending, draft: acc.draft })
+      dropped.push(report(s.id, acc))
       continue
     }
     out.push({ ...s, props: props as Section['props'] })
@@ -203,19 +262,63 @@ export function mergeShopSections(sections: Section[], shop: Shop): MergedSectio
   return { sections: out, dropped }
 }
 
-/** Resolves a loose text (title, SEO description); `null` when it cannot be shown. */
+/** Resolves a loose text (title, SEO description); `null` when it is empty or cannot be shown. */
 export function mergeShopText(text: string | null | undefined, shop: Shop): string | null {
-  if (!text) return text ?? null
+  if (!text) return null
   return resolveShopText(text, shopFieldValues(shop)).text
 }
 
+export type PublishableOptions = {
+  /**
+   * Legal page (privacy notice, terms, returns, warranty…): ANY dropped text — a missing field, a pending marker —
+   * makes the whole page unpublishable, so an incomplete notice is never served with a hole in it.
+   */
+  strict?: boolean
+}
+
 /**
- * Whether a content page can be served to buyers: it has something left to show after `mergeShopSections` and none of
- * its sections was dropped for being a legal draft. A legal page with a single missing field is dropped whole (its
- * only section goes), so it 404s instead of publishing an incomplete notice.
+ * Whether a content page can be served to buyers: it has something left to show after `mergeShopSections`, nothing
+ * anywhere in it is a legal draft and, with `strict` (legal pages), nothing was dropped at all.
  */
-export function pagePublishable(merged: MergedSections): boolean {
-  return merged.sections.length > 0 && !merged.dropped.some((d) => d.draft && d.item == null)
+export function pagePublishable(merged: MergedSections, { strict = false }: PublishableOptions = {}): boolean {
+  if (merged.sections.length === 0) return false
+  if (merged.dropped.some((d) => d.draft)) return false
+  return !strict || merged.dropped.length === 0
+}
+
+/** Handles of legal / policy pages, which are published only when complete (`strict`). */
+const LEGAL_HANDLE = /(privacidad|privacy|terminos|condiciones|terms|politica|policy|legal|cookies|devoluc|reembols|refund|return|garantia|warranty|aviso)/i
+
+/** Whether a page handle is a legal or policy page (published only when complete). */
+export function isLegalHandle(handle: string): boolean {
+  return LEGAL_HANDLE.test(handle.normalize('NFD').replace(/[̀-ͯ]/g, ''))
+}
+
+export type MergedPage<P extends Pick<Page, 'handle' | 'title' | 'seo' | 'sections'>> = {
+  page: P
+  publishable: boolean
+  dropped: DroppedContent[]
+}
+
+/**
+ * The whole page in one call: sections, title and SEO resolved; `publishable` is `pagePublishable` (strict for legal
+ * handles, see `isLegalHandle`) and also false when the title itself carries a draft notice or a placeholder.
+ */
+export function mergeShopPage<P extends Pick<Page, 'handle' | 'title' | 'seo' | 'sections'>>(page: P, shop: Shop, options: PublishableOptions = {}): MergedPage<P> {
+  const merged = mergeShopSections(page.sections, shop)
+  const title = mergeShopText(page.title, shop)
+  const strict = options.strict ?? isLegalHandle(page.handle)
+  const titleBad = !!page.title && title == null
+  return {
+    page: {
+      ...page,
+      title: title ?? shop.name,
+      seo: { ...page.seo, title: mergeShopText(page.seo?.title, shop), description: mergeShopText(page.seo?.description, shop) },
+      sections: merged.sections,
+    },
+    publishable: !titleBad && pagePublishable(merged, { strict }),
+    dropped: merged.dropped,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -242,10 +345,13 @@ export function businessIdentity(shop: Pick<Shop, 'legal' | 'contact'>): Busines
   return rows.filter((r): r is [BusinessIdentityRow['key'], string] => r[1] != null).map(([key, value]) => ({ key, value }))
 }
 
-/** A contact / identity page needs at least the legal name and the registered address (what Merchant Center checks). */
+/**
+ * A contact / identity page needs the legal name, the tax id, the registered address and one contact channel (what
+ * Merchant Center and Profeco look for); with any of them missing it is not published.
+ */
 export function identityComplete(shop: Pick<Shop, 'legal' | 'contact'>): boolean {
   const l = shopLegal(shop)
-  return !!(l.name && l.fiscal_address && (clean(shop.contact?.email) || clean(shop.contact?.phone)))
+  return !!(l.name && l.tax_id && l.fiscal_address && (clean(shop.contact?.email) || clean(shop.contact?.phone)))
 }
 
 // ---------------------------------------------------------------------------

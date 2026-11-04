@@ -6,6 +6,9 @@ import {
   businessIdentity,
   identityComplete,
   isInternalProduct,
+  hasLegalDraftNotice,
+  isLegalHandle,
+  mergeShopPage,
   mergeShopSections,
   mergeShopText,
   pagePublishable,
@@ -64,8 +67,20 @@ describe('shopFieldValues', () => {
 
 describe('resolveShopText', () => {
   const values = shopFieldValues(base)
-  it('substitutes fields with and without spaces and leaves foreign ones', () => {
-    expect(resolveShopText('{{shop.name}} · {{ shop.domain }} · {{order.id}}', values).text).toBe('Tienda & Co · tienda.example.com · {{order.id}}')
+  it('substitutes fields with and without spaces', () => {
+    expect(resolveShopText('{{shop.name}} · {{ shop.domain }}', values).text).toBe('Tienda & Co · tienda.example.com')
+  })
+  it('never shows an unknown or misspelled placeholder', () => {
+    for (const t of ['RFC {{shop.rfc}}', '{{Shop.Name}}', '{{order.id}}', 'Fecha {{completar : fecha}}', 'Fecha {{completar}}', '{{COMPLETAR: x}}', '{{__proto__}}', '{{constructor}}']) {
+      expect(resolveShopText(t, values).text, t).toBeNull()
+    }
+    expect(resolveShopText('RFC {{shop.rfc}}', values).unknown).toEqual(['shop.rfc'])
+    expect(() => resolveShopText('<p>{{constructor}}</p>', values, { html: true })).not.toThrow()
+  })
+  it('catches a marker that arrives inside a configured value', () => {
+    const v = shopFieldValues({ ...complete, legal: { ...complete.legal!, name: '{{completar: razón social}}' } })
+    expect(resolveShopText('{{shop.legal_name}}', v).text).toBeNull()
+    expect(resolveShopText('{{shop.legal_name}}', shopFieldValues({ ...complete, legal: { ...complete.legal!, name: '[BORRADOR: x]' } })).text).toBeNull()
   })
   it('never shows a text that cites a missing field (no placeholder to the buyer)', () => {
     const r = resolveShopText('Garantía de {{shop.warranty_months}} meses', values)
@@ -76,6 +91,13 @@ describe('resolveShopText', () => {
     expect(resolveShopText('Actualizado: {{completar: fecha}}', values)).toMatchObject({ text: null, pending: true })
     expect(resolveShopText('<p><strong>[BORRADOR: REVISAR CON ABOGADO]</strong></p>', values)).toMatchObject({ text: null, draft: true })
     expect(resolveShopText('<p>[REVISAR CON ASESOR LEGAL] viejo</p>', values)).toMatchObject({ text: null, draft: true })
+  })
+  it('detects the draft notice in any spelling', () => {
+    for (const t of ['<p><strong>[BORRADOR:</strong> REVISAR CON ABOGADO]</p>', '<p>[BORRADOR:&nbsp;REVISAR CON ABOGADO]</p>', '[Borrador: revisar con abogado]', '[ borrador ]']) {
+      expect(hasLegalDraftNotice(t), t).toBe(true)
+      expect(resolveShopText(t, values).text, t).toBeNull()
+    }
+    expect(hasLegalDraftNotice('Sin borrador aquí')).toBe(false)
   })
   it('escapes values inserted in HTML', () => {
     const evil = shopFieldValues({ ...base, name: '<img src=x onerror="a()">' })
@@ -101,7 +123,7 @@ describe('mergeShopSections', () => {
     const r = mergeShopSections([faq], base)
     const items = r.sections[0]!.props.items as { answer: string }[]
     expect(items).toEqual([{ question: '¿Devoluciones?', answer: 'Tienes 15 días.' }])
-    expect(r.dropped).toEqual([{ section: 'faq', item: 0, missing: ['shop.warranty_months'], pending: false, draft: false }])
+    expect(r.dropped).toEqual([{ section: 'faq', path: 'items.0', item: 0, missing: ['shop.warranty_months'], pending: false, draft: false, unknown: [] }])
   })
   it('drops a whole section whose own text cannot be shown, so the page 404s', () => {
     const r = mergeShopSections([legal], base)
@@ -117,6 +139,48 @@ describe('mergeShopSections', () => {
     expect(r.sections.map((s) => s.id)).toEqual(['faq'])
     expect(pagePublishable(r)).toBe(false)
   })
+  it('a draft notice inside a list makes the page unpublishable', () => {
+    const blocks: Section = { id: 'aviso', type: 'legal_doc', props: { title: 'Aviso', blocks: [{ text: '[BORRADOR: REVISAR CON ABOGADO]' }, { text: 'Cláusula 1' }] } }
+    expect(pagePublishable(mergeShopSections([blocks], complete))).toBe(false)
+  })
+  it('strict (legal) pages are not published with any hole', () => {
+    const intro: Section = { id: 'a', type: 'rich_text', props: { content: '<p>Intro</p>' } }
+    const officer: Section = { id: 'b', type: 'rich_text', props: { content: '<p>Responsable: {{shop.privacy_officer}}</p>' } }
+    const r = mergeShopSections([intro, officer], base)
+    expect(pagePublishable(r)).toBe(true)
+    expect(pagePublishable(r, { strict: true })).toBe(false)
+    expect(pagePublishable(mergeShopSections([intro, officer], complete), { strict: true })).toBe(true)
+  })
+  it('drops a section whose list lost every entry, and reports paths', () => {
+    const only: Section = { id: 'faq', type: 'faq', props: { heading: 'Garantía', items: [{ question: 'x', answer: '{{shop.warranty_months}} meses' }] } }
+    const r = mergeShopSections([only], base)
+    expect(r.sections).toEqual([])
+    expect(r.dropped[0]).toMatchObject({ section: 'faq', path: 'items.0', item: 0 })
+    const grid: Section = { id: 's', type: 'grid', props: { rows: [['ok', '{{shop.tax_id}}'], ['b']] } }
+    const g = mergeShopSections([grid], base)
+    expect(g.sections[0]!.props.rows).toEqual([['ok'], ['b']])
+    expect(g.dropped[0]).toMatchObject({ path: 'rows.0.1' })
+  })
+  it('a nested object with a missing field drops the whole section', () => {
+    const s: Section = { id: 'n', type: 'x', props: { card: { title: 'RFC {{shop.tax_id}}' } } }
+    expect(mergeShopSections([s], base).sections).toEqual([])
+  })
+  it('mergeShopPage resolves title and SEO and is strict for legal handles', () => {
+    const page = { handle: 'aviso-de-privacidad', title: 'Aviso de {{shop.name}}', seo: { title: null, description: '{{shop.legal_name}}' }, sections: [
+      { id: 'a', type: 'rich_text', props: { content: '<p>Hola</p>' } },
+      { id: 'b', type: 'rich_text', props: { content: '<p>{{shop.privacy_officer}}</p>' } },
+    ] }
+    const r = mergeShopPage(page, base)
+    expect(r.publishable).toBe(false)
+    expect(r.page.title).toBe('Aviso de Tienda & Co')
+    expect(r.page.seo.description).toBeNull()
+    expect(mergeShopPage({ ...page, handle: 'preguntas-frecuentes' }, base).publishable).toBe(true)
+    expect(mergeShopPage({ ...page, title: '[BORRADOR: REVISAR CON ABOGADO] Aviso' }, complete).publishable).toBe(false)
+    expect(mergeShopPage(page, complete).publishable).toBe(true)
+    expect(isLegalHandle('politica-de-garantia')).toBe(true)
+    expect(isLegalHandle('términos')).toBe(true)
+    expect(isLegalHandle('preguntas-frecuentes')).toBe(false)
+  })
   it('does not mutate its input', () => {
     const copy = structuredClone(faq)
     mergeShopSections([faq], complete)
@@ -125,6 +189,7 @@ describe('mergeShopSections', () => {
   it('mergeShopText returns null for an unshowable title', () => {
     expect(mergeShopText('Aviso de {{shop.name}}', base)).toBe('Aviso de Tienda & Co')
     expect(mergeShopText('{{shop.legal_name}}', base)).toBeNull()
+    expect(mergeShopText('', base)).toBeNull()
   })
 })
 
@@ -136,6 +201,7 @@ describe('business identity', () => {
     expect(identityComplete(complete)).toBe(true)
     expect(shopLegal(complete).privacy_email).toBe('hola@tienda.example.com')
     expect(shopLegal({ contact: base.contact, legal: { ...complete.legal!, name: '   ' } }).name).toBeNull()
+    expect(identityComplete({ ...complete, legal: { ...complete.legal!, tax_id: null } })).toBe(false)
   })
 })
 

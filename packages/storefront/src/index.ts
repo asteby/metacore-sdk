@@ -171,8 +171,11 @@ export {
   SHOP_MERGE_FIELDS,
   LEGAL_DRAFT_MARKERS,
   businessIdentity,
+  hasLegalDraftNotice,
   identityComplete,
+  isLegalHandle,
   isInternalProduct,
+  mergeShopPage,
   mergeShopSections,
   mergeShopText,
   pagePublishable,
@@ -182,4 +185,4 @@ export {
   shopReturnsDays,
   shopWarrantyMonths,
 } from './trust.js'
-export type { BusinessIdentityRow, DroppedContent, MergedSections, ResolvedText, ShopFieldValues, ShopMergeField } from './trust.js'
+export type { BusinessIdentityRow, DroppedContent, MergedPage, MergedSections, PublishableOptions, ResolvedText, ShopFieldValues, ShopMergeField } from './trust.js'

@@ -7,13 +7,15 @@ export type AcceptedPaymentMark = { key: string; label: string; brand: string | 
 export type AcceptedPaymentMessages = {
   card: string
   cash: string
+  transfer: string
   wallet: string
   manual: string
 }
 
 export const acceptedPaymentMessages: AcceptedPaymentMessages = {
-  card: 'Tarjeta de crédito o débito',
+  card: 'Pago con tarjeta',
   cash: 'Pago en efectivo',
+  transfer: 'Transferencia bancaria',
   wallet: 'Monedero digital',
   manual: 'Transferencia o depósito',
 }
@@ -36,8 +38,8 @@ function pointBrand(label: string): string | null {
 
 /**
  * The marks of `GET /storefront/payment-methods` (`sf.shop.paymentMethods()`), deduplicated, in the order the checkout
- * offers them. It only names what the configuration says: a card option is «Tarjeta de crédito o débito» (the networks
- * the provider accepts are not in the data, so no Visa/Mastercard logo is assumed); cash points become their brands
+ * offers them. It only names what the configuration says: a card option is its provider label or «Pago con tarjeta» (the
+ * networks and credit/debit are not in the data, so no Visa/Mastercard logo is assumed); cash points become their brands
  * (OXXO, 7-Eleven, SPEI…); a Mercado Pago wallet is the Mercado Pago mark. The `mock` test provider is never listed.
  */
 export function acceptedPaymentMarks(methods: readonly AcceptedPaymentMethod[] | null | undefined, options: AcceptedPaymentMarksOptions = {}): AcceptedPaymentMark[] {
@@ -65,16 +67,19 @@ export function acceptedPaymentMarks(methods: readonly AcceptedPaymentMethod[] |
     for (const o of opts) {
       const family = o.family ?? o.key
       if (family === 'card') {
-        add({ key: o.key, label: msg.card, brand: null })
+        add({ key: o.key, label: o.label || msg.card, brand: null })
       } else if (family === 'cash' || family === 'ticket' || family === 'bank_transfer') {
         const points = o.points ?? []
-        if (points.length === 0) add({ key: o.key, label: o.label || msg.cash, brand: null })
+        if (points.length === 0) add({ key: o.key, label: o.label || (family === 'bank_transfer' ? msg.transfer : msg.cash), brand: null })
         for (const p of points) add({ key: `${o.key}:${brandKey(p)}`, label: p, brand: pointBrand(p) })
       } else if (family === 'wallet') {
         const brand = findBrand(method.key)
         add({ key: o.key, label: brand?.kind === 'wallet' ? brand.name : o.label || msg.wallet, brand: brand?.kind === 'wallet' ? brand.key : null })
-      } else if (o.label) {
-        add({ key: o.key, label: o.label, brand: null })
+      } else {
+        // An option without a known family: its own brand when the catalog has it (`oxxo`), else its label; never guessed.
+        const brand = pointBrand(o.label || o.key)
+        if (brand) add({ key: o.key, label: o.label || findBrand(brand)?.name || o.key, brand })
+        else if (o.label) add({ key: o.key, label: o.label, brand: null })
       }
     }
   }
