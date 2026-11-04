@@ -172,6 +172,7 @@ export {
   LEGAL_DRAFT_MARKERS,
   businessIdentity,
   hasLegalDraftNotice,
+  hasTemplateBlank,
   identityComplete,
   isLegalHandle,
   isInternalProduct,

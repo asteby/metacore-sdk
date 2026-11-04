@@ -81,7 +81,7 @@ describe('resolveShopText', () => {
   it('catches a marker that arrives inside a configured value', () => {
     const v = shopFieldValues({ ...complete, legal: { ...complete.legal!, name: '{{completar: razón social}}' } })
     expect(resolveShopText('{{shop.legal_name}}', v).text).toBeNull()
-    expect(resolveShopText('{{shop.legal_name}}', shopFieldValues({ ...complete, legal: { ...complete.legal!, name: '[BORRADOR: x]' } })).text).toBeNull()
+    expect(resolveShopText('{{shop.legal_name}}', shopFieldValues({ ...complete, legal: { ...complete.legal!, name: '[BORRADOR: REVISAR CON ABOGADO]' } })).text).toBeNull()
   })
   it('never shows a text that cites a missing field (no placeholder to the buyer)', () => {
     const r = resolveShopText('Garantía de {{shop.warranty_months}} meses', values)
@@ -94,11 +94,12 @@ describe('resolveShopText', () => {
     expect(resolveShopText('<p>[REVISAR CON ASESOR LEGAL] viejo</p>', values)).toMatchObject({ text: null, draft: true })
   })
   it('detects the draft notice in any spelling', () => {
-    for (const t of ['<p><strong>[BORRADOR:</strong> REVISAR CON ABOGADO]</p>', '<p>[BORRADOR:&nbsp;REVISAR CON ABOGADO]</p>', '[Borrador: revisar con abogado]', '[ borrador ]', '&#91;BORRADOR: x', '[\u200bBORRADOR]', '\uff3bBORRADOR\uff3d', 'BORRADOR: REVISAR CON ABOGADO', '<p>[BORRADOR:&#xA0;REVISAR]</p>']) {
+    for (const t of ['<p><strong>[BORRADOR:</strong> REVISAR CON ABOGADO]</p>', '<p>[BORRADOR:&nbsp;REVISAR CON ABOGADO]</p>', '[Borrador: revisar con abogado]', '&#91;BORRADOR: REVISAR CON ABOGADO&#93;', '[BORRA\u00adDOR: REVISAR CON ABOGADO]', 'BORRA&shy;DOR: REVISAR', 'BORRADOR: REVISAR CON ABOGADO', '<p>[BORRADOR:&#xA0;REVISAR]</p>', 'REVISAR CON ASESOR LEGAL', 'Revisa esto: revisar con un abogado']) {
       expect(hasLegalDraftNotice(t), t).toBe(true)
       expect(resolveShopText(t, values).text, t).toBeNull()
     }
     expect(hasLegalDraftNotice('Sin borrador aquí')).toBe(false)
+    expect(hasLegalDraftNotice('Guarda el [borrador] de tu pedido')).toBe(false)
   })
   it('escapes values inserted in HTML', () => {
     const evil = shopFieldValues({ ...base, name: '<img src=x onerror="a()">' })
@@ -194,6 +195,44 @@ describe('mergeShopSections', () => {
     expect(mergeShopText('Aviso de {{shop.name}}', base)).toBe('Aviso de Tienda & Co')
     expect(mergeShopText('{{shop.legal_name}}', base)).toBeNull()
     expect(mergeShopText('', base)).toBeNull()
+  })
+})
+
+describe('third review', () => {
+  it('strict legal pages refuse old-template blanks', () => {
+    const old = { handle: 'aviso-de-privacidad', title: 'Aviso', seo: { title: null, description: null }, sections: [
+      { id: 'a', type: 'rich_text', props: { content: '<p>[RAZÓN SOCIAL O NOMBRE COMPLETO], con domicilio en [DOMICILIO COMPLETO]. Fecha: [FECHA].</p>' } },
+    ] }
+    expect(mergeShopPage(old, complete).publishable).toBe(false)
+    // Outside legal pages a bracketed upper-case text is not a blank to block.
+    expect(mergeShopPage({ ...old, handle: 'nosotros' }, complete).publishable).toBe(true)
+    expect(mergeShopPage({ ...old, sections: [{ id: 'a', type: 'rich_text', props: { content: '<p>Texto [ver nota] final.</p>' } }] }, complete).publishable).toBe(true)
+  })
+  it('never lets a field value turn a link into javascript:', () => {
+    const evil = shopFieldValues({ ...complete, legal: { ...complete.legal!, privacy_email: 'javascript:alert(1)' } })
+    expect(resolveShopText('<a href="{{shop.privacy_email}}">x</a>', evil, { html: true })).toMatchObject({ text: null, unsafe: true })
+    expect(resolveShopText('<a href="mailto:{{shop.privacy_email}}">x</a>', shopFieldValues(complete), { html: true }).text).toContain('mailto:hola@')
+    const ent = shopFieldValues({ ...complete, legal: { ...complete.legal!, privacy_email: '&#106;avascript:alert(1)' } })
+    expect(resolveShopText('<a href="{{shop.privacy_email}}">x</a>', ent, { html: true }).text).toBeNull()
+  })
+  it('a __proto__ prop does not change the prototype of the output', () => {
+    const props = JSON.parse('{"__proto__": {"polluted": true}, "heading": "Hola"}')
+    const r = mergeShopSections([{ id: 'p', type: 'x', props }], complete)
+    const out = r.sections[0]!.props as Record<string, unknown>
+    expect(Object.getPrototypeOf(out)).toBe(Object.prototype)
+    expect((out as { polluted?: boolean }).polluted).toBeUndefined()
+    expect(({} as { polluted?: boolean }).polluted).toBeUndefined()
+  })
+  it('drops absurdly deep props instead of throwing', () => {
+    let deep: Record<string, unknown> = { text: 'fin' }
+    for (let i = 0; i < 5000; i++) deep = { n: deep }
+    expect(() => mergeShopSections([{ id: 'd', type: 'x', props: deep }], complete)).not.toThrow()
+    expect(mergeShopSections([{ id: 'd', type: 'x', props: deep }], complete).sections).toEqual([])
+  })
+  it('warranty_term is singular-aware', () => {
+    expect(shopFieldValues({ ...complete, policies: { ...complete.policies, warranty_months: 1 } })['shop.warranty_term']).toBe('1 mes')
+    expect(shopFieldValues(complete)['shop.warranty_term']).toBe('6 meses')
+    expect(shopFieldValues(base)['shop.warranty_term']).toBeNull()
   })
 })
 
