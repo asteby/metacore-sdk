@@ -8,7 +8,7 @@
 import { formatMoney } from './money.js'
 import type { Page, Product, Section, Shop, ShopLegal } from './types.js'
 
-/** The `{{...}}` fields a page text may use. Any other `{{name}}` is left as is (not ours). */
+/** The `{{...}}` fields a page text may use. Any other `{{name}}` (or a `{{` left anywhere) blocks the text. */
 export const SHOP_MERGE_FIELDS = [
   'shop.name',
   'shop.domain',
@@ -38,7 +38,8 @@ export type ShopFieldValues = Record<ShopMergeField, string | null>
 /**
  * Review markers of a legal draft (storefront_content templates): a text that still has one is not served. The first
  * is the current template notice, the second the one seeded before contract 1.30.0. Detection is tolerant: tags,
- * entities (`&nbsp;`), spacing, case and accents are ignored, and the prefix (`[BORRADOR`, `[REVISAR CON`) is enough.
+ * entities (`&nbsp;`), spacing, case and accents are ignored. Only the notice itself counts: «BORRADOR: REVISAR…» or
+ * «[REVISAR CON ASESOR LEGAL]» (in brackets), the same rule as the server (storefront_content IsLegalDraft).
  */
 export const LEGAL_DRAFT_MARKERS = ['[BORRADOR: REVISAR CON ABOGADO]', '[REVISAR CON ASESOR LEGAL]'] as const
 
@@ -47,10 +48,10 @@ const FIELD_RE = /\{\{\s*([a-z0-9_.]+)\s*\}\}/g
 const LEFTOVER_NAMES_RE = /\{\{([^{}]{0,80})\}\}/g
 const PENDING_RE = /\{\{\s*completar/i
 /**
- * The review notice, with or without brackets: «BORRADOR: REVISAR…» (current template) or «REVISAR CON (UN) ABOGADO /
- * ASESOR LEGAL» (older one). A bare «[borrador]» is not the notice.
+ * The review notice: «BORRADOR: REVISAR…» (current template, brackets optional) or «[REVISAR CON ASESOR LEGAL]» (older
+ * one). A bare «[borrador]» or the sentence «revisar con un abogado» is not the notice.
  */
-const DRAFT_RE = /\bBORRADOR\s*:\s*REVISAR\b|\bREVISAR\s+CON\s+(?:UN\s+)?(?:ABOGADO|ASESOR\s+LEGAL)\b/
+const DRAFT_RE = /\bBORRADOR\s*:\s*REVISAR\b|\[\s*REVISAR\s+CON\s+ASESOR\s+LEGAL\s*\]/
 /** An old-template blank: «[RAZÓN SOCIAL]», «[FECHA]», «[DOMICILIO COMPLETO]» (upper case, 4+ chars). Strict pages only. */
 const BLANK_RE = /\[[A-Z0-9 ,./:;-]{4,}\]/
 
@@ -91,13 +92,18 @@ export function hasTemplateBlank(text: string): boolean {
 }
 
 const SAFE_HREF = /^(?:https?:|mailto:|tel:|\/|#|\?|\.)/i
-const HREF_RE = /\bhref\s*=\s*(?:(["'])(.*?)\1|([^\s>"']+))/gi
+const HREF_RE = /\b(?:href|src)\s*=\s*(?:(["'])(.*?)\1|([^\s>"']+))/gi
+/** A field inside an UNQUOTED attribute value: a value with a space could add another attribute (`onmouseover=`). */
+const UNQUOTED_FIELD_RE = /<[a-z][^<>]*=\s*[^\s"'<>=]*\{\{/i
 
 /** A link whose target is not http(s), mailto, tel or a site path (e.g. `javascript:` from a field value). */
 function hasUnsafeHref(html: string): boolean {
-  for (const m of html.matchAll(HREF_RE)) {
-    const target = decodeHtmlAttr(m[2] ?? m[3] ?? '').replace(/[\u0000- ]/g, '')
-    if (target && !SAFE_HREF.test(target)) return true
+  // Only real tags (escaped text such as `&lt;img src=x&gt;` is not a tag).
+  for (const tag of html.matchAll(/<[a-z][^<>]*>/gi)) {
+    for (const m of tag[0].matchAll(HREF_RE)) {
+      const target = decodeHtmlAttr(m[2] ?? m[3] ?? '').replace(/[\u0000-\u0020]/g, '')
+      if (target && !SAFE_HREF.test(target)) return true
+    }
   }
   return false
 }
@@ -162,7 +168,7 @@ export function shopFieldValues(shop: Shop): ShopFieldValues {
     'shop.service_address': legal.service_address,
     'shop.privacy_officer': legal.privacy_officer,
     'shop.privacy_email': legal.privacy_email,
-    'shop.warranty_term': warranty != null ? `${warranty} ${warranty === 1 ? 'mes' : 'meses'}` : null,
+    'shop.warranty_term': warranty != null ? warrantyTerm(warranty, shop.locale) : null,
   }
 }
 
@@ -219,7 +225,7 @@ export function resolveShopText(text: string, values: ShopFieldValues, { html = 
     }
   }
   const blank = hasTemplateBlank(out)
-  const unsafe = text.includes('{{') && hasUnsafeHref(out)
+  const unsafe = text.includes('{{') && (hasUnsafeHref(out) || UNQUOTED_FIELD_RE.test(text))
   const blocked = draft || pending || missing.length > 0 || leftover || unsafe || (strict && blank)
   return { text: blocked ? null : out, missing, pending, draft, unknown, blank, unsafe }
 }
@@ -477,4 +483,12 @@ export function isInternalProduct(p: ProductLike | null | undefined): boolean {
   if ((p.tags ?? []).some((t) => INTERNAL_TAGS.has(t.trim().toLowerCase()))) return true
   const skus = (p.variants ?? []).map((v) => v.sku ?? '').filter(Boolean)
   return skus.length > 0 && skus.every((s) => TEST_SKU.test(s))
+}
+
+/** «1 mes» / «6 meses» in the shop language (Spanish by default; English and Portuguese also). */
+function warrantyTerm(months: number, locale: string | null | undefined): string {
+  const lang = (locale ?? 'es').slice(0, 2).toLowerCase()
+  if (lang === 'en') return `${months} ${months === 1 ? 'month' : 'months'}`
+  if (lang === 'pt') return `${months} ${months === 1 ? 'mês' : 'meses'}`
+  return `${months} ${months === 1 ? 'mes' : 'meses'}`
 }

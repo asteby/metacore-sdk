@@ -94,12 +94,16 @@ describe('resolveShopText', () => {
     expect(resolveShopText('<p>[REVISAR CON ASESOR LEGAL] viejo</p>', values)).toMatchObject({ text: null, draft: true })
   })
   it('detects the draft notice in any spelling', () => {
-    for (const t of ['<p><strong>[BORRADOR:</strong> REVISAR CON ABOGADO]</p>', '<p>[BORRADOR:&nbsp;REVISAR CON ABOGADO]</p>', '[Borrador: revisar con abogado]', '&#91;BORRADOR: REVISAR CON ABOGADO&#93;', '[BORRA\u00adDOR: REVISAR CON ABOGADO]', 'BORRA&shy;DOR: REVISAR', 'BORRADOR: REVISAR CON ABOGADO', '<p>[BORRADOR:&#xA0;REVISAR]</p>', 'REVISAR CON ASESOR LEGAL', 'Revisa esto: revisar con un abogado']) {
+    for (const t of ['<p><strong>[BORRADOR:</strong> REVISAR CON ABOGADO]</p>', '<p>[BORRADOR:&nbsp;REVISAR CON ABOGADO]</p>', '[Borrador: revisar con abogado]', '&#91;BORRADOR: REVISAR CON ABOGADO&#93;', '[BORRA\u00adDOR: REVISAR CON ABOGADO]', 'BORRA&shy;DOR: REVISAR', 'BORRADOR: REVISAR CON ABOGADO', '<p>[BORRADOR:&#xA0;REVISAR]</p>', '[ REVISAR CON ASESOR LEGAL ]']) {
       expect(hasLegalDraftNotice(t), t).toBe(true)
       expect(resolveShopText(t, values).text, t).toBeNull()
     }
     expect(hasLegalDraftNotice('Sin borrador aquí')).toBe(false)
     expect(hasLegalDraftNotice('Guarda el [borrador] de tu pedido')).toBe(false)
+    // A plain sentence is not the notice (same rule as the server): a FAQ answer with it stays published.
+    expect(hasLegalDraftNotice('Te sugerimos revisar con un abogado tu caso')).toBe(false)
+    const faq = { id: 'f', type: 'faq', props: { items: [{ question: '¿Contrato?', answer: 'Te sugerimos revisar con un abogado tu caso.' }] } }
+    expect(pagePublishable(mergeShopSections([faq], base))).toBe(true)
   })
   it('escapes values inserted in HTML', () => {
     const evil = shopFieldValues({ ...base, name: '<img src=x onerror="a()">' })
@@ -218,6 +222,11 @@ describe('third review', () => {
     expect(resolveShopText('<a href="{{shop.privacy_email}}">x</a>', evil, { html: true })).toMatchObject({ text: null, unsafe: true })
     expect(resolveShopText('<a href="mailto:{{shop.privacy_email}}">x</a>', shopFieldValues(complete), { html: true }).text).toContain('mailto:hola@')
     expect(resolveShopText('<a href={{shop.privacy_email}}>x</a>', evil, { html: true }).text).toBeNull()
+    const inj = shopFieldValues({ ...complete, legal: { ...complete.legal!, fiscal_address: 'https://a onmouseover=alert(1)' } })
+    expect(resolveShopText('<a href={{shop.fiscal_address}}>x</a>', inj, { html: true })).toMatchObject({ text: null, unsafe: true })
+    expect(resolveShopText('<img src="{{shop.privacy_email}}">', evil, { html: true }).text).toBeNull()
+    // A field in text after an equals sign is not an attribute.
+    expect(resolveShopText('<p>Total = {{shop.name}}</p>', shopFieldValues(complete), { html: true }).text).toBe('<p>Total = Tienda &amp; Co</p>')
     const ent = shopFieldValues({ ...complete, legal: { ...complete.legal!, privacy_email: '&#106;avascript:alert(1)' } })
     expect(resolveShopText('<a href="{{shop.privacy_email}}">x</a>', ent, { html: true }).text).toBeNull()
   })
@@ -239,6 +248,7 @@ describe('third review', () => {
     expect(shopFieldValues({ ...complete, policies: { ...complete.policies, warranty_months: 1 } })['shop.warranty_term']).toBe('1 mes')
     expect(shopFieldValues(complete)['shop.warranty_term']).toBe('6 meses')
     expect(shopFieldValues(base)['shop.warranty_term']).toBeNull()
+    expect(shopFieldValues({ ...complete, locale: 'en-US', policies: { ...complete.policies, warranty_months: 1 } })['shop.warranty_term']).toBe('1 month')
   })
 })
 
