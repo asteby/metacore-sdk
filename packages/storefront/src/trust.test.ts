@@ -192,7 +192,8 @@ describe('mergeShopSections', () => {
     expect(isLegalHandle('aviso-privacidad')).toBe(true)
     expect(isLegalHandle('nuestros-terminos')).toBe(true)
     expect(isLegalHandle('preguntas-garantizadas')).toBe(false)
-    for (const h of ['return-policy', 'shipping-policy', 'cookie-policy', 'refund-policy']) expect(isLegalHandle(h), h).toBe(true)
+    for (const h of ['return-policy', 'shipping-policy', 'cookie-policy', 'refund-policy', 'politica-de-cookies']) expect(isLegalHandle(h), h).toBe(true)
+    expect(isLegalHandle('cookie-recipes')).toBe(false)
   })
   it('does not mutate its input', () => {
     const copy = structuredClone(faq)
@@ -231,6 +232,11 @@ describe('third review', () => {
     expect(resolveShopText('<a title="a>b" href="{{shop.privacy_email}}">x</a>', evil, { html: true }).text).toBeNull()
     expect(resolveShopText('<img srcset="{{shop.privacy_email}} 1x">', evil, { html: true }).text).toBeNull()
     expect(resolveShopText('<button formaction="{{shop.privacy_email}}">x</button>', evil, { html: true }).text).toBeNull()
+    const inj2 = shopFieldValues({ ...complete, legal: { ...complete.legal!, fiscal_address: 'x onmouseover=alert(1)' } })
+    expect(resolveShopText('<a href=https://wa.me/?text={{shop.fiscal_address}}>x</a>', inj2, { html: true }).text).toBeNull()
+    expect(resolveShopText('<a title=a=b{{shop.fiscal_address}}>x</a>', inj2, { html: true }).text).toBeNull()
+    // A stray quote in an unquoted value: fail closed.
+    expect(resolveShopText('<a b=x"y href="{{shop.privacy_email}}">x</a>', evil, { html: true }).text).toBeNull()
     // A field in text after an equals sign is not an attribute.
     expect(resolveShopText('<p>Total = {{shop.name}}</p>', shopFieldValues(complete), { html: true }).text).toBe('<p>Total = Tienda &amp; Co</p>')
     const ent = shopFieldValues({ ...complete, legal: { ...complete.legal!, privacy_email: '&#106;avascript:alert(1)' } })

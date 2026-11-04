@@ -116,14 +116,22 @@ function hasUnsafeHref(html: string): boolean {
   return false
 }
 
-/** A `{{field}}` inside an UNQUOTED attribute value: a value with a space could add another attribute (`onmouseover=`). */
+/**
+ * A `{{field}}` inside an UNQUOTED attribute value: a value with a space could add another attribute (`onmouseover=`).
+ * Quoted values are removed from each tag and any `{{` left is unquoted (also after an `=` inside the value).
+ */
 function hasUnquotedField(html: string): boolean {
   for (const tag of html.matchAll(TAG_RE)) {
-    for (const m of tag[0].slice(1).matchAll(ATTR_RE)) {
-      if (m[4] != null && m[4].includes('{{')) return true
-    }
+    if (tag[0].replace(/"[^"]*"|'[^']*'/g, '').includes('{{')) return true
   }
   return false
+}
+
+/** Fail closed: a `<tag` the quote-aware reader cannot parse (a stray quote) is treated as unsafe when it carries a field. */
+function hasUnparsedTag(html: string): boolean {
+  const all = html.match(/<[a-z]/gi)?.length ?? 0
+  const parsed = html.match(TAG_RE)?.length ?? 0
+  return all !== parsed
 }
 
 function decodeHtmlAttr(v: string): string {
@@ -243,7 +251,7 @@ export function resolveShopText(text: string, values: ShopFieldValues, { html = 
     }
   }
   const blank = hasTemplateBlank(out)
-  const unsafe = text.includes('{{') && (hasUnsafeHref(out) || hasUnquotedField(text))
+  const unsafe = text.includes('{{') && (hasUnsafeHref(out) || hasUnquotedField(text) || hasUnparsedTag(text))
   const blocked = draft || pending || missing.length > 0 || leftover || unsafe || (strict && blank)
   return { text: blocked ? null : out, missing, pending, draft, unknown, blank, unsafe }
 }
@@ -407,7 +415,7 @@ const LEGAL_HANDLES = new Set([
 ])
 
 /** Words that make a hand-made handle legal (`aviso-privacidad`, `nuestros-terminos`, `politica-garantia`…). */
-const LEGAL_WORDS = /(?:^|-)(?:privacidad|privacy|terminos|condiciones|terms|devoluciones|reembolsos|refunds?|returns?|garantia|warranty|cookies?|arco|legal|policy|shipping-policy)(?:-|$)/
+const LEGAL_WORDS = /(?:^|-)(?:privacidad|privacy|terminos|condiciones|terms|devoluciones|reembolsos|refunds?|returns?|garantia|warranty|cookies|arco|legal|policy)(?:-|$)/
 
 /**
  * Whether a page handle is a legal or policy page (published only when complete): the known handles, any `politica-*`
