@@ -27,8 +27,10 @@ export const SHOP_MERGE_FIELDS = [
   'shop.service_address',
   'shop.privacy_officer',
   'shop.privacy_email',
-  /** «90 días» / «1 mes» / «6 meses»: the warranty term with its unit (days win over months; singular-aware). */
+  /** «90 días naturales» / «1 mes» / «6 meses»: the warranty term with its unit (days win over months; singular-aware). */
   'shop.warranty_term',
+  /** «sin costo alguno para el cliente» when returns are free; `null` otherwise (a text that promises it is not shown). */
+  'shop.returns_free',
   /** Customer service hours as published. */
   'shop.hours',
   /** «1 a 5 días hábiles». */
@@ -202,6 +204,7 @@ export function shopFieldValues(shop: Shop): ShopFieldValues {
     'shop.privacy_email': legal.privacy_email,
     'shop.warranty_term': shopWarrantyTerm(shop),
     'shop.hours': clean(shop.contact?.hours),
+    'shop.returns_free': shopReturnsFree(shop) ? ((shop.locale ?? 'es').toLowerCase().startsWith('en') ? 'at no cost to the customer' : 'sin costo alguno para el cliente') : null,
     'shop.shipping_days': shippingDaysText(shop),
     'shop.shipping_rate': shop.policies?.shipping_rate ? formatMoney(shop.policies.shipping_rate, shop.locale || 'es-MX', { withoutTrailingZeros: true }) : null,
   }
@@ -529,11 +532,12 @@ function warrantyTerm(months: number, locale: string | null | undefined): string
   return `${months} ${months === 1 ? 'mes' : 'meses'}`
 }
 
+/** A warranty in calendar days: «90 días naturales» / «90 calendar days». */
 function daysTerm(days: number, locale: string | null | undefined): string {
   const lang = (locale ?? 'es').slice(0, 2).toLowerCase()
-  if (lang === 'en') return `${days} ${days === 1 ? 'day' : 'days'}`
-  if (lang === 'pt') return `${days} ${days === 1 ? 'dia' : 'dias'}`
-  return `${days} ${days === 1 ? 'día' : 'días'}`
+  if (lang === 'en') return `${days} calendar ${days === 1 ? 'day' : 'days'}`
+  if (lang === 'pt') return `${days} ${days === 1 ? 'dia corrido' : 'dias corridos'}`
+  return `${days} ${days === 1 ? 'día natural' : 'días naturales'}`
 }
 
 /** Warranty in days from the shop policy; `null` = not set in days. */
@@ -543,7 +547,7 @@ export function shopWarrantyDays(shop: Pick<Shop, 'policies'>): number | null {
 }
 
 /**
- * The warranty term as shown everywhere (home, FAQ, product page, policy): «90 días» when the shop sets days, else
+ * The warranty term as shown everywhere (home, FAQ, product page, policy): «90 días naturales» when the shop sets days, else
  * «6 meses», else `null` (claim none). The single source of the term.
  */
 export function shopWarrantyTerm(shop: Pick<Shop, 'policies' | 'locale'>): string | null {
