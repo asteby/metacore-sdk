@@ -178,7 +178,13 @@ export type StockLevel = { sku: string; quantity_available: number | null; avail
 // Shop
 // ---------------------------------------------------------------------------
 
-export type ShopContact = { email: string | null; phone: string | null; whatsapp: string | null }
+export type ShopContact = {
+  email: string | null
+  phone: string | null
+  whatsapp: string | null
+  /** Customer service hours as published (1.30.0); absent on older servers. */
+  hours?: string | null
+}
 
 export type ShopBranch = {
   id: string
@@ -243,6 +249,14 @@ export type ShopPolicies = {
    * shows on its home page, FAQ, product page and warranty policy. `null` = claim none. Absent on older servers.
    */
   warranty_months?: number | null
+  /** Warranty in calendar days (1.30.0); when set it wins over `warranty_months`. Use `shopWarrantyTerm`. */
+  warranty_days?: number | null
+  /** Returns cost the customer nothing (1.30.0); only `true` with `returns_days`. */
+  returns_free?: boolean
+  /** Standard shipping rate the shop publishes (1.30.0), for structured data and texts. */
+  shipping_rate?: Money | null
+  /** Published delivery range in business days (1.30.0). */
+  shipping_days?: { min: number; max: number } | null
 }
 
 /**

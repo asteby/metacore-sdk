@@ -22,3 +22,8 @@ Las reglas fallan del lado seguro y es preferible ocultar a publicar algo dudoso
 - Un enlace a `whatsapp://` o a una ruta relativa sin `/` bloquea el texto si cita un campo.
 - Un «[LFPDPPP]» en mayúsculas deja sin publicar una página legal.
 - Los handles `aviso-*`, o los que llevan una palabra legal, se tratan como legales.
+- También son aditivos: `ShopPolicies.warranty_days`, `returns_free`, `shipping_rate`, `shipping_days` y `ShopContact.hours`. Los acompañan:
+  - `shopWarrantyTerm` («90 días», o «6 meses»): la única fuente del plazo.
+  - `shopWarrantyDays`, `shopShippingDays` y `shopReturnsFree`.
+  - Los campos `{{shop.hours}}`, `{{shop.shipping_days}}` («1 a 5 días hábiles») y `{{shop.shipping_rate}}`.
+  - `businessIdentity`, que ahora incluye el horario.

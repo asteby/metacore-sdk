@@ -253,7 +253,7 @@ export function buildShop(currency: string, imageUrl: MockImageUrl = MOCK_IMAGE_
     logo: { url: imageUrl('logo', 256, 256), alt: 'Mi tienda', width: 256, height: 256 },
     contact: { email: 'hola@mi-tienda.example', phone: '+52 55 0000 0000', whatsapp: '+5215500000000' },
     branches: buildLocations(currency),
-    policies: { free_shipping_min: money(999, currency), returns_days: 30, warranty_months: null },
+    policies: { free_shipping_min: money(999, currency), returns_days: 30, warranty_months: null, warranty_days: null, returns_free: false, shipping_rate: null, shipping_days: null },
     // The mock never invents a business identity: the store's contact page and legal pages stay unpublished in it.
     legal: { name: null, tax_id: null, fiscal_address: null, service_address: null, privacy_officer: null, privacy_email: 'hola@mi-tienda.example' },
   }

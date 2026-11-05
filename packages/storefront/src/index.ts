@@ -184,7 +184,11 @@ export {
   shopFieldValues,
   shopLegal,
   shopReturnsDays,
+  shopReturnsFree,
+  shopShippingDays,
+  shopWarrantyDays,
   shopWarrantyMonths,
+  shopWarrantyTerm,
 } from './trust.js'
 export type { BusinessIdentityRow, DroppedContent, MergedPage, MergedSections, PublishableOptions, ResolvedText, ShopFieldValues, ShopMergeField } from './trust.js'
 export { normalizeTitleText, normalizeName, productTitle, productPartNumber, distinctProductTitles, PART_TITLE_KEYS } from './product-title.js'

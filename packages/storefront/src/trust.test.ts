@@ -15,7 +15,10 @@ import {
   resolveShopText,
   shopFieldValues,
   shopLegal,
+  shopReturnsFree,
+  shopShippingDays,
   shopWarrantyMonths,
+  shopWarrantyTerm,
 } from './trust.js'
 import type { Section, Shop } from './types.js'
 
@@ -261,6 +264,29 @@ describe('third review', () => {
     expect(shopFieldValues(complete)['shop.warranty_term']).toBe('6 meses')
     expect(shopFieldValues(base)['shop.warranty_term']).toBeNull()
     expect(shopFieldValues({ ...complete, locale: 'en-US', policies: { ...complete.policies, warranty_months: 1 } })['shop.warranty_term']).toBe('1 month')
+  })
+})
+
+describe('policies in days, shipping and hours', () => {
+  it('warranty in days wins over months and is the single term', () => {
+    const s = { ...complete, policies: { ...complete.policies, warranty_days: 90 } }
+    expect(shopWarrantyTerm(s)).toBe('90 días')
+    expect(shopFieldValues(s)['shop.warranty_term']).toBe('90 días')
+    expect(shopWarrantyTerm({ ...s, policies: { ...s.policies, warranty_days: 1 } })).toBe('1 día')
+    expect(shopWarrantyTerm(complete)).toBe('6 meses')
+    expect(shopWarrantyTerm(base)).toBeNull()
+    expect(shopWarrantyTerm({ ...s, locale: 'en-US' })).toBe('90 days')
+  })
+  it('shipping days, rate, hours and free returns come only from the shop', () => {
+    const s = { ...complete, contact: { ...complete.contact, hours: ' lunes a sábado de 09:00 a 18:00 ' }, policies: { ...complete.policies, returns_free: true, shipping_rate: { amount: '199.00', currency_code: 'MXN' }, shipping_days: { min: 1, max: 5 } } }
+    const v = shopFieldValues(s)
+    expect(v['shop.shipping_days']).toBe('1 a 5 días hábiles')
+    expect(v['shop.shipping_rate']).toMatch(/199/)
+    expect(v['shop.hours']).toBe('lunes a sábado de 09:00 a 18:00')
+    expect(shopReturnsFree(s)).toBe(true)
+    expect(shopReturnsFree({ ...s, policies: { ...s.policies, returns_days: null } })).toBe(false)
+    expect(shopShippingDays({ policies: { ...s.policies, shipping_days: { min: 5, max: 1 } } })).toBeNull()
+    expect(shopFieldValues(base)['shop.shipping_days']).toBeNull()
   })
 })
 

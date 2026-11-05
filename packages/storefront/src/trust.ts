@@ -27,8 +27,14 @@ export const SHOP_MERGE_FIELDS = [
   'shop.service_address',
   'shop.privacy_officer',
   'shop.privacy_email',
-  /** «1 mes» / «6 meses»: the warranty term with its unit (singular-aware). */
+  /** «90 días» / «1 mes» / «6 meses»: the warranty term with its unit (days win over months; singular-aware). */
   'shop.warranty_term',
+  /** Customer service hours as published. */
+  'shop.hours',
+  /** «1 a 5 días hábiles». */
+  'shop.shipping_days',
+  /** The published standard shipping rate, formatted. */
+  'shop.shipping_rate',
 ] as const
 
 export type ShopMergeField = (typeof SHOP_MERGE_FIELDS)[number]
@@ -194,7 +200,10 @@ export function shopFieldValues(shop: Shop): ShopFieldValues {
     'shop.service_address': legal.service_address,
     'shop.privacy_officer': legal.privacy_officer,
     'shop.privacy_email': legal.privacy_email,
-    'shop.warranty_term': warranty != null ? warrantyTerm(warranty, shop.locale) : null,
+    'shop.warranty_term': shopWarrantyTerm(shop),
+    'shop.hours': clean(shop.contact?.hours),
+    'shop.shipping_days': shippingDaysText(shop),
+    'shop.shipping_rate': shop.policies?.shipping_rate ? formatMoney(shop.policies.shipping_rate, shop.locale || 'es-MX', { withoutTrailingZeros: true }) : null,
   }
 }
 
@@ -462,11 +471,11 @@ export function mergeShopPage<P extends Pick<Page, 'handle' | 'title' | 'seo' | 
 // Business identity (contact page, footer)
 // ---------------------------------------------------------------------------
 
-export type BusinessIdentityRow = { key: 'legal_name' | 'tax_id' | 'fiscal_address' | 'service_address' | 'phone' | 'email' | 'whatsapp'; value: string }
+export type BusinessIdentityRow = { key: 'legal_name' | 'tax_id' | 'fiscal_address' | 'service_address' | 'phone' | 'email' | 'whatsapp' | 'hours'; value: string }
 
 /**
  * The identity rows the shop really has, in display order (legal name, tax id, registered and service address,
- * phone, email, WhatsApp). Empty fields are left out; nothing is guessed.
+ * phone, email, WhatsApp, service hours). Empty fields are left out; nothing is guessed.
  */
 export function businessIdentity(shop: Pick<Shop, 'legal' | 'contact'>): BusinessIdentityRow[] {
   const l = shopLegal(shop)
@@ -478,6 +487,7 @@ export function businessIdentity(shop: Pick<Shop, 'legal' | 'contact'>): Busines
     ['phone', clean(shop.contact?.phone)],
     ['email', clean(shop.contact?.email)],
     ['whatsapp', clean(shop.contact?.whatsapp)],
+    ['hours', clean(shop.contact?.hours)],
   ]
   return rows.filter((r): r is [BusinessIdentityRow['key'], string] => r[1] != null).map(([key, value]) => ({ key, value }))
 }
@@ -517,4 +527,49 @@ function warrantyTerm(months: number, locale: string | null | undefined): string
   if (lang === 'en') return `${months} ${months === 1 ? 'month' : 'months'}`
   if (lang === 'pt') return `${months} ${months === 1 ? 'mês' : 'meses'}`
   return `${months} ${months === 1 ? 'mes' : 'meses'}`
+}
+
+function daysTerm(days: number, locale: string | null | undefined): string {
+  const lang = (locale ?? 'es').slice(0, 2).toLowerCase()
+  if (lang === 'en') return `${days} ${days === 1 ? 'day' : 'days'}`
+  if (lang === 'pt') return `${days} ${days === 1 ? 'dia' : 'dias'}`
+  return `${days} ${days === 1 ? 'día' : 'días'}`
+}
+
+/** Warranty in days from the shop policy; `null` = not set in days. */
+export function shopWarrantyDays(shop: Pick<Shop, 'policies'>): number | null {
+  const v = wholeNonNeg(shop.policies?.warranty_days)
+  return v && v > 0 ? v : null
+}
+
+/**
+ * The warranty term as shown everywhere (home, FAQ, product page, policy): «90 días» when the shop sets days, else
+ * «6 meses», else `null` (claim none). The single source of the term.
+ */
+export function shopWarrantyTerm(shop: Pick<Shop, 'policies' | 'locale'>): string | null {
+  const days = shopWarrantyDays(shop)
+  if (days) return daysTerm(days, shop.locale)
+  const months = shopWarrantyMonths(shop)
+  return months ? warrantyTerm(months, shop.locale) : null
+}
+
+/** Published delivery range (business days), or `null`. */
+export function shopShippingDays(shop: Pick<Shop, 'policies'>): { min: number; max: number } | null {
+  const d = shop.policies?.shipping_days
+  const lo = wholeNonNeg(d?.min)
+  const hi = wholeNonNeg(d?.max)
+  return lo != null && hi != null && lo <= hi ? { min: lo, max: hi } : null
+}
+
+function shippingDaysText(shop: Pick<Shop, 'policies' | 'locale'>): string | null {
+  const d = shopShippingDays(shop)
+  if (!d) return null
+  const en = (shop.locale ?? 'es').toLowerCase().startsWith('en')
+  if (d.min === d.max) return en ? `${d.max} business ${d.max === 1 ? 'day' : 'days'}` : `${d.max} ${d.max === 1 ? 'día hábil' : 'días hábiles'}`
+  return en ? `${d.min} to ${d.max} business days` : `${d.min} a ${d.max} días hábiles`
+}
+
+/** Returns cost the customer nothing (only with a returns window). */
+export function shopReturnsFree(shop: Pick<Shop, 'policies'>): boolean {
+  return shopReturnsDays(shop) != null && shop.policies?.returns_free === true
 }
