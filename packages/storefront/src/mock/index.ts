@@ -898,6 +898,22 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
 
   // Catalog
   route('GET', '/shop', 'catalog:read', () => ({ body: state.shop, cache: 'public' }))
+  // The ways to pay without a cart (contract 1.30.0): the same list `payment-methods` serves, public part only.
+  route('GET', '/payment-methods', 'catalog:read', () => {
+    const methods = (options.paymentMethods ?? [{ key: 'mock', kind: 'builtin', default: true }]).map((m) => ({
+      key: m.key,
+      kind: m.kind,
+      options: (m.options ?? []).flatMap((o) => {
+        const opt = (o ?? {}) as { key?: unknown; family?: unknown; label?: unknown; points?: unknown }
+        if (typeof opt.key !== 'string' || !opt.key) return []
+        const points = Array.isArray(opt.points)
+          ? opt.points.map((p) => (p as { label?: unknown })?.label).filter((l): l is string => typeof l === 'string' && !!l)
+          : []
+        return [{ key: opt.key, ...(typeof opt.family === 'string' ? { family: opt.family } : {}), ...(typeof opt.label === 'string' ? { label: opt.label } : {}), ...(points.length ? { points } : {}) }]
+      }),
+    }))
+    return { body: { methods, market: state.shop.market?.code ?? null }, cache: 'public' }
+  })
   route('GET', '/region', 'catalog:read', () => {
     if (!region) throw new HttpError(404, 'not_found', 'No region configured')
     return { body: region, cache: 'public' }
