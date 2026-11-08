@@ -310,6 +310,11 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   const appliedAmount = useRef<string | null>(null)
   const updating = useRef<Promise<void> | null>(null)
   const remountRequested = useRef(false)
+  // The provider form is being (re)built (`mounting`) / its `ready` already came (`formReady`). A click that finds its form
+  // replaced under it needs both to know where to wait (see `settleWithdrawn`).
+  const mounting = useRef(false)
+  const formReady = useRef(false)
+  const submitRef = useRef<() => Promise<void>>(() => Promise.resolve())
   // Silent remounts spent since the form last became ready (see `mountRetries`).
   const mountAttempts = useRef(0)
   const takeInitialRef = useRef<() => void>(() => {})
@@ -432,6 +437,8 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     }
     if (!container) return
     remountRequested.current = false
+    mounting.current = true
+    formReady.current = false
     const my = ++generation.current
     const started = Date.now()
     const abort = new AbortController()
@@ -446,6 +453,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
       generation.current++
       abort.abort()
       clearTimeout(timer)
+      mounting.current = false
       const m = mounted ?? form.current
       mounted = null
       form.current = null
@@ -500,6 +508,8 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
               if (stale()) return
               clearTimeout(timer)
               mountAttempts.current = 0
+              mounting.current = false
+              formReady.current = true
               // With a pending challenge from before a reload, PAY stays disabled: the challenge is taken up first.
               setStatus((s) => (s === 'loading' && !initialPending.current ? 'ready' : s))
               emit({ type: 'form_ready', ms: Date.now() - started })
@@ -531,6 +541,8 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
       clearTimeout(timer)
       generation.current++
       abort.abort()
+      mounting.current = false
+      formReady.current = false
       const m = mounted ?? form.current
       mounted = null
       form.current = null
@@ -771,10 +783,14 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     if (statusRef.current === 'network_error' && pendingData.current) return retryRef.current()
     // The total is read when the buyer presses PAY, and travels with the data.
     const total = live.current.amount
+    // Set when the click found its form replaced under it: it is taken up again on the new form (see `settleWithdrawn`).
+    const after: { next: (() => Promise<void>) | null } = { next: null }
     const run = (async () => {
-      // A total update in flight finishes first, so the token is made for the form the buyer sees.
-      if (updating.current) await updating.current.catch(() => {})
       setStatus('processing')
+      // A total update in flight finishes first, so the token is made for the form the buyer sees. If that update could not
+      // be applied in place the form is rebuilt: the click waits for the new one instead of dying with the old one.
+      if (updating.current) await updating.current.catch(() => {})
+      if (!alive.current || form.current !== m) return settleWithdrawn()
       setError(null)
       setOutcome(null)
       emit({ type: 'submit' })
@@ -782,9 +798,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
       // whatever it produced is never sent, and the status set by whoever removed it stays (no "ready" over a fallback).
       // Nothing reached the server, so this is not an indeterminate outcome: no key, no charge.
       const withdrawn = () => !alive.current || form.current !== m
-      const settle = () => {
-        if (alive.current) setStatus((s) => (s === 'processing' ? 'idle' : s))
-      }
+      const settle = () => settleWithdrawn()
       let data
       try {
         data = await m.collect()
@@ -804,9 +818,38 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
       // A total change that arrived during the charge is applied now, after the answer.
       syncAmount()
     })
+    // The form was replaced (remount for a total, a delivery change...) while this click was still before the charge. Nothing
+    // reached the server. If a new form is on its way (or already there) the click is kept and runs on it; otherwise (payment
+    // disabled, fallback, page left) it ends quietly, with the status the one who removed the form set.
+    function settleWithdrawn(): void {
+      if (!alive.current) return
+      if (statusRef.current !== 'processing') return
+      if (!mounting.current && !remountRequested.current && !formReady.current && !form.current) {
+        setStatus('idle')
+        return
+      }
+      if (form.current && form.current !== m && formReady.current) {
+        setStatus('ready')
+        after.next = () => submitRef.current()
+        return
+      }
+      if (!queuedSubmit.current) {
+        let resolve: () => void = () => {}
+        const promise = new Promise<void>((r) => {
+          resolve = r
+        })
+        queuedSubmit.current = { promise, resolve }
+      }
+      const q = queuedSubmit.current
+      after.next = () => q.promise
+      setStatus(formReady.current ? 'ready' : 'loading')
+    }
     inFlight.current = run
-    return run
+    const out = run.then(() => (after.next ? after.next() : undefined))
+    out.catch(() => {})
+    return out
   }, [emit, readAttempt, send, syncAmount])
+  submitRef.current = submit
 
   // The queued click (see `submit`): runs once the form is ready; dropped (resolved, nothing sent) if the form can no longer be used.
   useEffect(() => {
