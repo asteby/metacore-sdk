@@ -10,6 +10,7 @@ import {
   resetPaymentSdkCache,
   stripeAppearance,
   stripeElementsAdapter,
+  stripeWallets,
   type MountedPaymentForm,
   type PaymentFormAdapter,
   type PaymentFormMountOptions,
@@ -192,6 +193,47 @@ describe('stripeElementsAdapter.mount / collect / update / handleAction / unmoun
     expect(f.elements.create.mock.calls[0]![1]).toMatchObject({ defaultValues: { billingDetails: { email: 'a@b.us' } } })
     expect(f.element.mount).toHaveBeenCalledWith(opts.container)
     await waitFor(() => expect(opts.onReady).toHaveBeenCalledTimes(1))
+  })
+
+  it('por defecto ninguna billetera se ofrece, Link incluido ("Save my information" pide teléfono y bloquea el pago)', async () => {
+    const f = fakeStripe()
+    await stripeElementsAdapter({ getSdk: () => f.factory }).mount(mountOpts())
+    expect(f.elements.create.mock.calls[0]![1]).toMatchObject({ wallets: { applePay: 'never', googlePay: 'never', link: 'never' } })
+  })
+
+  it('la tienda enciende Link con la opción del adaptador, o el servidor con link:true en la opción card', async () => {
+    const a = fakeStripe()
+    await stripeElementsAdapter({ getSdk: () => a.factory, wallets: { link: 'auto' } }).mount(mountOpts())
+    expect(a.elements.create.mock.calls[0]![1]).toMatchObject({ wallets: { link: 'auto' } })
+    const b = fakeStripe()
+    const withLink: PaymentClient = { ...client, options: [{ key: 'card', redirect: false, link: true } as never] }
+    await stripeElementsAdapter({ getSdk: () => b.factory }).mount(mountOpts({ client: withLink }))
+    expect(b.elements.create.mock.calls[0]![1]).toMatchObject({ wallets: { link: 'auto' } })
+    // el servidor puede apagarlo aunque la tienda lo haya encendido
+    const c = fakeStripe()
+    const noLink: PaymentClient = { ...client, options: [{ key: 'card', redirect: false, link: false } as never] }
+    await stripeElementsAdapter({ getSdk: () => c.factory, wallets: { link: 'auto' } }).mount(mountOpts({ client: noLink }))
+    expect(c.elements.create.mock.calls[0]![1]).toMatchObject({ wallets: { link: 'never' } })
+  })
+
+  it('un Stripe.js que no conoce la llave de Link no tumba el formulario: se reintenta con las llaves de siempre', async () => {
+    const f = fakeStripe()
+    let calls = 0
+    f.elements.create.mockImplementation((_t: string, o?: Record<string, unknown>) => {
+      calls++
+      if (calls === 1) throw new Error('IntegrationError: Invalid value for elements.create(): wallets.link is not an accepted parameter.')
+      expect((o?.wallets as Record<string, unknown>).link).toBeUndefined()
+      return f.element
+    })
+    const opts = mountOpts()
+    await stripeElementsAdapter({ getSdk: () => f.factory }).mount(opts)
+    expect(calls).toBe(2)
+    await waitFor(() => expect(opts.onReady).toHaveBeenCalledTimes(1))
+  })
+
+  it('stripeWallets ignora valores que no son auto/never', () => {
+    expect(stripeWallets({ link: 'yes' as never, googlePay: 'auto' }, undefined)).toEqual({ applePay: 'never', googlePay: 'auto', link: 'never' })
+    expect(stripeWallets(undefined, { link: 'true' })).toEqual({ applePay: 'never', googlePay: 'never', link: 'never' })
   })
 
   it('light page -> stripe base theme without variables', () => {

@@ -28,7 +28,33 @@ type StripeInstance = {
 }
 export type StripeFactory = (publishableKey: string, options?: { locale?: string }) => StripeInstance
 
+/** Wallet toggles of the Payment Element. `never` hides it; `auto` lets Stripe decide. */
+export type StripeWallets = { applePay?: 'auto' | 'never'; googlePay?: 'auto' | 'never'; link?: 'auto' | 'never' }
+
+/**
+ * The wallets the form gets. The server flow is card-only and the shop's own button submits, so by default NO wallet shows:
+ * in particular Link's "Save my information for faster checkout" (it asks for a phone number and blocks the payment when
+ * left ticked). A shop turns Link on with the adapter option `wallets.link: 'auto'`, or the server does it per market with
+ * `link: true` on the `card` payment option (`PaymentClient.options`).
+ */
+export function stripeWallets(configured: StripeWallets | undefined, cardOption: { link?: unknown } | undefined): Required<StripeWallets> {
+  const wallets: Required<StripeWallets> = { applePay: 'never', googlePay: 'never', link: 'never', ...stripWallets(configured) }
+  if (typeof cardOption?.link === 'boolean') wallets.link = cardOption.link ? 'auto' : 'never'
+  return wallets
+}
+
+function stripWallets(w: StripeWallets | undefined): StripeWallets {
+  const out: StripeWallets = {}
+  for (const k of ['applePay', 'googlePay', 'link'] as const) {
+    const v = w?.[k]
+    if (v === 'auto' || v === 'never') out[k] = v
+  }
+  return out
+}
+
 export type StripeAdapterOptions = {
+  /** Wallet toggles (see `stripeWallets`). Default: every wallet hidden, Link included. */
+  wallets?: StripeWallets
   /** Exact origins allowed for `sdk_url`. Default: Stripe.js only (`https://js.stripe.com`). */
   allowedSdkOrigins?: readonly string[]
   /** Resolves the `Stripe` factory. Default: `window.Stripe`. Inject a fake in tests. */
@@ -175,12 +201,17 @@ export function stripeElementsAdapter(options: StripeAdapterOptions = {}): Payme
         paymentMethodTypes: ['card'],
         appearance: stripeAppearance(opts.theme, opts.colorScheme),
       })
-      const element = elements.create('payment', {
-        layout: 'tabs',
-        // No wallets / Link here: the server flow is card-only and the shop's own button submits.
-        wallets: { applePay: 'never', googlePay: 'never' },
-        ...(opts.email ? { defaultValues: { billingDetails: { email: opts.email } } } : {}),
-      })
+      const card = client.options?.find((o) => o.key === 'card') as ({ link?: unknown } & Record<string, unknown>) | undefined
+      const wallets = stripeWallets(options.wallets, card)
+      const defaults = opts.email ? { defaultValues: { billingDetails: { email: opts.email } } } : {}
+      let element: StripeElement
+      try {
+        element = elements.create('payment', { layout: 'tabs', wallets, ...defaults })
+      } catch {
+        // An older Stripe.js that does not know a wallet key must not take the whole form down: ask again with the keys it has always had.
+        const { applePay, googlePay } = wallets
+        element = elements.create('payment', { layout: 'tabs', wallets: { applePay, googlePay }, ...defaults })
+      }
 
       let gone = false
       element.on('ready', () => {
