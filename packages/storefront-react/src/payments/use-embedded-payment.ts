@@ -777,6 +777,27 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
         }
         return queuedSubmit.current.promise
       }
+      // `ready` came a tick before `mount` handed the form back: wait for it (briefly) and press again.
+      if (!m && statusRef.current === 'ready' && alive.current) {
+        return new Promise<void>((resolve) => {
+          let n = 0
+          const poll = () => {
+            if (!alive.current) return resolve()
+            if (form.current) return void submitRef.current().then(() => resolve(), () => resolve())
+            if (++n > 40) {
+              setError({ kind: 'generic', message: live.current.msgs['error.generic'], retrySameAttempt: false, canRetry: true })
+              return resolve()
+            }
+            setTimeout(poll, 50)
+          }
+          setTimeout(poll, 0)
+        })
+      }
+      // Never mute: a click that finds no usable form and no state of its own that explains it (`idle`, or `ready` without a
+      // form) tells the buyer so, instead of doing nothing.
+      if (alive.current && (statusRef.current === 'idle' || statusRef.current === 'ready')) {
+        setError({ kind: 'generic', message: live.current.msgs['error.generic'], retrySameAttempt: false, canRetry: true })
+      }
       return Promise.resolve()
     }
     // Unknown outcome: pressing PAY again must NOT tokenize anew (a new token with the same key is a 409): same data, same key.

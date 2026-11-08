@@ -53,6 +53,8 @@ function stripWallets(w: StripeWallets | undefined): StripeWallets {
 }
 
 export type StripeAdapterOptions = {
+  /** Wait before the single re-read of a transient failure of `elements.submit()` / `createConfirmationToken`. Default 300. */
+  collectRetryDelayMs?: number
   /** Wallet toggles (see `stripeWallets`). Default: every wallet hidden, Link included. */
   wallets?: StripeWallets
   /** Exact origins allowed for `sdk_url`. Default: Stripe.js only (`https://js.stripe.com`). */
@@ -155,6 +157,15 @@ function errText(prefix: string, e: StripeError | undefined): string {
   return parts.length ? `${prefix}: ${parts.join('/')}` : prefix
 }
 
+/** A failure reported by Stripe; `permanent` when it is about the buyer's data (validation / card), not a transient condition. */
+class StripeCollectError extends Error {
+  readonly permanent: boolean
+  constructor(prefix: string, e: StripeError | undefined) {
+    super(errText(prefix, e))
+    this.permanent = e?.type === 'validation_error' || e?.type === 'card_error'
+  }
+}
+
 /**
  * Stripe Payment Element adapter (deferred intent, ConfirmationToken flow).
  *
@@ -251,19 +262,37 @@ export function stripeElementsAdapter(options: StripeAdapterOptions = {}): Payme
       }
 
       let mountedCurrency = currency
+      // The last `elements.update` (new total): Stripe re-syncs the form with its servers after it, and a `submit()` that lands
+      // in that window can fail although the buyer filled everything in. `collect` waits for it, then reads again once.
+      let lastUpdate: Promise<unknown> = Promise.resolve()
+      const retryDelay = options.collectRetryDelayMs ?? 300
+      const attempt = async (): Promise<PaymentFormData> => {
+        // Validates the fields inside Stripe's iframes; Stripe shows the field errors itself.
+        const submitted = await elements.submit()
+        if (submitted?.error) throw new StripeCollectError('payment form incomplete', submitted.error)
+        if (gone) throw new Error('payment form is unmounted')
+        const res = await stripe.createConfirmationToken({ elements })
+        if (res?.error) throw new StripeCollectError('payment form: tokenization failed', res.error)
+        const id = res?.confirmationToken?.id
+        if (typeof id !== 'string' || id.length > 255 || !CTOKEN.test(id)) throw new StripeCollectError('payment form: invalid confirmation token', { type: 'validation_error' })
+        // Only the token travels: no amount, no card data, no device id (Stripe Radar collects its own signals).
+        return { provider_data: { confirmation_token: id } }
+      }
       return {
         async collect(): Promise<PaymentFormData> {
           if (gone) throw new Error('payment form is unmounted')
-          // Validates the fields inside Stripe's iframes; Stripe shows the field errors itself.
-          const submitted = await elements.submit()
-          if (submitted?.error) throw new Error(errText('payment form incomplete', submitted.error))
+          await lastUpdate.catch(() => {})
           if (gone) throw new Error('payment form is unmounted')
-          const res = await stripe.createConfirmationToken({ elements })
-          if (res?.error) throw new Error(errText('payment form: tokenization failed', res.error))
-          const id = res?.confirmationToken?.id
-          if (typeof id !== 'string' || id.length > 255 || !CTOKEN.test(id)) throw new Error('payment form: invalid confirmation token')
-          // Only the token travels: no amount, no card data, no device id (Stripe Radar collects its own signals).
-          return { provider_data: { confirmation_token: id } }
+          try {
+            return await attempt()
+          } catch (err) {
+            // A field problem (incomplete / invalid / declined card) is the buyer's to fix: report it. Anything else (Stripe
+            // still syncing, a dropped request, an exception from the iframe bridge) is read again once, after a short wait.
+            if (gone || (err instanceof StripeCollectError && err.permanent)) throw err
+            await new Promise((r) => setTimeout(r, retryDelay))
+            if (gone) throw new Error('payment form is unmounted')
+            return await attempt()
+          }
         },
         async update(next) {
           if (gone) throw new Error('payment form is unmounted')
@@ -271,7 +300,9 @@ export function stripeElementsAdapter(options: StripeAdapterOptions = {}): Payme
           // A different currency means a different form (methods, limits): let the hook remount it.
           if (nextCurrency !== mountedCurrency) throw new Error('payment form: currency changed')
           const amount = moneyToMinorUnits(next.amount)
-          await elements.update({ amount })
+          const updated = Promise.resolve(elements.update({ amount }))
+          lastUpdate = updated
+          await updated
           mountedCurrency = nextCurrency
         },
         async handleAction(action: PaymentAction) {
