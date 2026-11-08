@@ -39,7 +39,7 @@ function fakeStripe(o: { updateFails?: boolean; updateSlow?: boolean; slowToken?
 function setup(f: ReturnType<typeof fakeStripe>) {
   const submit = vi.fn(async () => paid)
   const h = { current: null as EmbeddedPaymentState | null }
-  const adapter = stripeElementsAdapter({ getSdk: () => f.factory })
+  const adapter = stripeElementsAdapter({ getSdk: () => f.factory, collectRetryDelayMs: 1 })
   adapter.load = async () => {}
   function C({ amount, pk = 'pk_test_x' }: { amount: string; pk?: string }) {
     const s = useEmbeddedPayment({ client: { ...client, public_key: pk }, amount: { amount, currency_code: 'MXN' }, transport: { submit }, adapter, sdkTimeoutMs: 2000, storage: null })
@@ -102,5 +102,67 @@ describe('Stripe: el primer clic en PAGAR con la tarjeta ya llena no se pierde s
     // lo que no puede pasar: quedarse en idle sin enviar ni avisar
     await waitFor(() => expect(h.current?.status).toBe('approved'))
     expect(submit).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('Stripe: tras cambiar el total (envio) Stripe aun se sincroniza y el primer elements.submit() falla', () => {
+  /** Stripe.js falso con la ventana real: tras `elements.update`, el primer `submit()` falla sin ser un error de campos. */
+  function syncingStripe(kind: 'transient' | 'validation') {
+    const f = fakeStripe()
+    let syncing = false
+    f.elements.update.mockImplementation((() => {
+      syncing = true
+      return undefined
+    }) as never)
+    f.elements.submit.mockImplementation((async () => {
+      if (kind === 'validation') return { error: { type: 'validation_error', code: 'incomplete_number' } }
+      if (syncing) {
+        syncing = false
+        return { error: { type: 'invalid_request_error', code: 'elements_update_in_progress' } }
+      }
+      return {}
+    }) as never)
+    return f
+  }
+
+  it('el primer clic envia el pago (se relee una vez la condicion transitoria)', async () => {
+    const f = syncingStripe('transient')
+    const { h, submit, setTotal } = setup(f)
+    await waitFor(() => expect(h.current?.status).toBe('ready'))
+    setTotal('149.99')
+    await waitFor(() => expect(f.elements.update).toHaveBeenCalled())
+    await act(async () => void (await h.current!.submit()))
+    await waitFor(() => expect(h.current?.status).toBe('approved'))
+    expect(submit).toHaveBeenCalledTimes(1)
+  })
+
+  it('si los campos no estan completos no se envia nada y el error es visible (nunca mudo)', async () => {
+    const f = syncingStripe('validation')
+    const { h, submit, setTotal } = setup(f)
+    await waitFor(() => expect(h.current?.status).toBe('ready'))
+    setTotal('149.99')
+    await waitFor(() => expect(f.elements.update).toHaveBeenCalled())
+    await act(async () => void (await h.current!.submit()))
+    expect(submit).not.toHaveBeenCalled()
+    expect(f.elements.submit).toHaveBeenCalledTimes(1) // un error de campos no se relee
+    expect(h.current?.status).toBe('ready')
+    expect(h.current?.error?.message).toBeTruthy()
+  })
+})
+
+describe('un clic sin formulario utilizable nunca queda mudo', () => {
+  it('estado idle: no se envia nada y se muestra un error', async () => {
+    const submit = vi.fn(async () => paid)
+    const h = { current: null as EmbeddedPaymentState | null }
+    function C() {
+      const s = useEmbeddedPayment({ client, amount: { amount: '10.00', currency_code: 'MXN' }, transport: { submit }, enabled: false, storage: null })
+      h.current = s
+      return <div ref={s.containerRef} />
+    }
+    render(<C />)
+    expect(h.current?.status).toBe('idle')
+    await act(async () => void (await h.current!.submit()))
+    expect(submit).not.toHaveBeenCalled()
+    expect(h.current?.error?.message).toBeTruthy()
   })
 })
