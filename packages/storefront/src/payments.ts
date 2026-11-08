@@ -103,7 +103,7 @@ const ES: PaymentMessages = {
   'form.label': 'Datos de tu tarjeta',
   'challenge.title': 'Verificación de tu banco',
   'challenge.escape': 'Cancelar y volver al pago',
-  'challenge.escape_hint': '¿Tarda demasiado? Puedes cerrar la verificación. Si ya la aprobaste en tu banco, el pago aún puede completarse: te confirmamos aquí antes de dejarte pagar de nuevo.',
+  'challenge.escape_hint': '¿La página del banco muestra un error o tarda demasiado? Puedes cerrarla. Si ya aprobaste el pago en tu banco, aún puede completarse: lo confirmamos aquí antes de dejarte pagar de nuevo y nunca se cobra dos veces.',
   'challenge.left': 'Cerraste la verificación. Estamos confirmando con tu banco si el pago se completó; no vuelvas a pagar todavía.',
   'challenge.verifying': 'Verificación terminada. Estamos confirmando el pago con tu banco; no vuelvas a pagar todavía.',
 }
@@ -153,7 +153,7 @@ const EN: PaymentMessages = {
   'form.label': 'Your card details',
   'challenge.title': 'Your bank verification',
   'challenge.escape': 'Cancel and go back to payment',
-  'challenge.escape_hint': 'Taking too long? You can close the verification. If you already approved it with your bank the payment may still go through: we confirm here before letting you pay again.',
+  'challenge.escape_hint': 'Does the bank page show an error or take too long? You can close it. If you already approved the payment with your bank it may still go through: we confirm it here before letting you pay again, and you are never charged twice.',
   'challenge.left': 'You closed the verification. We are checking with your bank whether the payment went through; do not pay again yet.',
   'challenge.verifying': 'Verification finished. We are confirming the payment with your bank; do not pay again yet.',
 }

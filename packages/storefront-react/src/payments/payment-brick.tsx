@@ -75,7 +75,10 @@ export type PaymentChallengeProps = {
    * progress; this button only appears after `escapeAfterMs`, so a stuck bank page never traps the buyer (WCAG 2.2.1).
    */
   onCancel?: () => void
-  /** How long the dialog stays locked before the exit shows. Default 120000. */
+  /**
+   * How long the dialog stays locked before the exit shows. Default 20000. Closing it never cancels or repeats the payment
+   * (the hook keeps verifying with the bank), so a bank page that fails with a 5xx must not trap the buyer for minutes.
+   */
   escapeAfterMs?: number
 }
 
@@ -84,7 +87,7 @@ export type PaymentChallengeProps = {
  * Esc and backdrop clicks do nothing until the payment ends (the owner unmounts it). Default content is the bank's
  * https iframe. Layout comes from `payments.css` (`dialog[data-sf-challenge]`), overridable with your own CSS.
  */
-export function PaymentChallenge({ outcome, locale, messages, render, onCancel, escapeAfterMs = 120_000 }: PaymentChallengeProps) {
+export function PaymentChallenge({ outcome, locale, messages, render, onCancel, escapeAfterMs = 20_000 }: PaymentChallengeProps) {
   const m = paymentMessages(locale, messages)
   // Esc and backdrop routed to a no-op: the dialog closes only by unmounting.
   const { ref } = useModalDialog({ open: true, onClose: () => {} })
@@ -138,7 +141,7 @@ export function PaymentChallenge({ outcome, locale, messages, render, onCancel, 
           {render ? (
             render(outcome)
           ) : url ? (
-            <iframe src={url} title={m['challenge.title']} data-sf-challenge-frame style={{ width: '100%', minHeight: 420, border: 0 }} />
+            <iframe src={url} title={m['challenge.title']} data-sf-challenge-frame style={{ width: '100%', border: 0 }} />
           ) : (
             <p>{m['state.challenge']}</p>
           )}

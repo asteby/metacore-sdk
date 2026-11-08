@@ -31,4 +31,28 @@ describe('PaymentChallenge lock', () => {
     fireEvent.click(btn)
     expect(onCancel).toHaveBeenCalledOnce()
   })
+
+  it('la salida aparece por defecto a los 20 s (una página 5xx del banco no atrapa al comprador minutos) y su texto es accionable', () => {
+    vi.useFakeTimers()
+    const { container } = render(<PaymentChallenge outcome={outcome} onCancel={() => {}} />)
+    expect(container.querySelector('[data-sf-challenge-escape] button')).toBeNull()
+    act(() => {
+      vi.advanceTimersByTime(19_999)
+    })
+    expect(container.querySelector('[data-sf-challenge-escape] button')).toBeNull()
+    act(() => {
+      vi.advanceTimersByTime(2)
+    })
+    expect(container.querySelector('[data-sf-challenge-escape] button')).not.toBeNull()
+    const hint = container.querySelector('[data-sf-challenge-escape] p')?.textContent ?? ''
+    expect(hint).toMatch(/error/i)
+    expect(hint).toMatch(/nunca se cobra dos veces/i)
+  })
+
+  it('el iframe no fija un alto en línea: el alto lo reparte el CSS para que la salida no se recorte en pantallas bajas', () => {
+    const { container } = render(<PaymentChallenge outcome={outcome} onCancel={() => {}} />)
+    const frame = container.querySelector('iframe[data-sf-challenge-frame]') as HTMLIFrameElement
+    expect(frame.style.minHeight).toBe('')
+  })
 })
+
