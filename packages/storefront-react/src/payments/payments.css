@@ -122,15 +122,23 @@ dialog[data-sf-challenge] h2 {
 dialog[data-sf-challenge] h2:focus {
   outline: none;
 }
+/* El cuerpo ocupa el diálogo y se reparte en columna: el iframe cede alto, la salida NUNCA se recorta (pantallas bajas / zoom). */
+dialog[data-sf-challenge] [data-sf-challenge-body] {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
 dialog[data-sf-challenge] [data-sf-challenge-frame] {
   display: block;
   flex: 1 1 auto;
-  min-height: 16rem;
+  min-height: min(26rem, 45dvh);
   width: 100%;
   overflow: auto;
   background: #ffffff;
 }
 dialog[data-sf-challenge] [data-sf-challenge-escape] {
+  flex: 0 0 auto;
   margin-top: 0.75rem;
   font-size: 0.875rem;
 }
