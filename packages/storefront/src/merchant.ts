@@ -8,6 +8,7 @@
  */
 import { resolveAvailability } from './availability.js'
 import { PART_TITLE_KEYS, productTitle, type PartTitleKeys, type TitleLocale } from './product-title.js'
+import { AI_SEARCH_AGENTS, AI_TRAINING_AGENTS, AI_USER_AGENTS, WEB_SEARCH_AGENTS, crawlerGroups, type CrawlerPolicy } from './seo-kit.js'
 import type { Connection, Image, Money, Product, ProductVariant } from './types.js'
 
 export type FeedAvailability = 'in_stock' | 'out_of_stock' | 'preorder' | 'backorder'
@@ -443,10 +444,10 @@ export function openAiFeedJsonl(items: readonly FeedItem[], seller: OpenAiFeedSe
 // robots.txt and site verification
 // ---------------------------------------------------------------------------
 
-/** Search and shopping crawlers allowed explicitly (a CDN default must not block them). */
-export const SEARCH_AGENTS = ['Googlebot', 'Storebot-Google', 'Googlebot-Image', 'Bingbot', 'OAI-SearchBot', 'ChatGPT-User']
-/** Crawlers that collect content to TRAIN models (not search): blocked by default. */
-export const TRAINING_AGENTS = ['GPTBot', 'Google-Extended', 'CCBot', 'ClaudeBot', 'anthropic-ai', 'Applebot-Extended', 'Bytespider', 'meta-externalagent']
+/** Search, AI-answer and shopping crawlers allowed explicitly (a CDN default must not block them). */
+export const SEARCH_AGENTS: string[] = [...WEB_SEARCH_AGENTS, ...AI_SEARCH_AGENTS, ...AI_USER_AGENTS]
+/** Crawlers that collect content to TRAIN models (not search): blocked by default; the owner may allow them (`training`). */
+export const TRAINING_AGENTS: string[] = [...AI_TRAINING_AGENTS]
 
 export type RobotsOptions = {
   /** Paths no crawler should index (cart, checkout, account, search, filtered listings). */
@@ -457,16 +458,19 @@ export type RobotsOptions = {
   allowAgents?: readonly string[]
   /** Agents denied everything (default `TRAINING_AGENTS`; `[]` to block none). */
   blockAgents?: readonly string[]
+  /** Per-crawler policy (training allow/block and per-agent overrides). Used when `allowAgents`/`blockAgents` are not given. */
+  policy?: CrawlerPolicy
 }
 
 /**
- * `robots.txt`: one group shared by the named search agents and `*` (same rules: allow all but `disallow`), then
- * one group that denies the training crawlers. A crawler obeys the most specific group that names it, so the
+ * `robots.txt`: one group shared by the named search/AI-answer agents and `*` (same rules: allow all but `disallow`),
+ * then one group that denies the training crawlers. A crawler obeys the most specific group that names it, so the
  * search agents get the same `Disallow` lines as everyone else.
  */
 export function robotsTxt(options: RobotsOptions = {}): string {
-  const allow = [...(options.allowAgents ?? SEARCH_AGENTS)]
-  const block = (options.blockAgents ?? TRAINING_AGENTS).filter((a) => !allow.some((b) => b.toLowerCase() === a.toLowerCase()))
+  const groups = crawlerGroups(options.policy)
+  const allow = [...(options.allowAgents ?? groups.allow)]
+  const block = (options.blockAgents ?? groups.block).filter((a) => !allow.some((b) => b.toLowerCase() === a.toLowerCase()))
   const lines = [...allow.map((a) => `User-agent: ${a}`), 'User-agent: *', 'Allow: /', ...(options.disallow ?? []).map((p) => `Disallow: ${p}`), '']
   if (block.length) lines.push(...block.map((a) => `User-agent: ${a}`), 'Disallow: /', '')
   for (const s of options.sitemaps ?? []) lines.push(`Sitemap: ${s}`)
@@ -483,3 +487,5 @@ export function verificationTokens(raw: string | null | undefined): string[] {
     .map((t) => t.trim())
     .filter((t) => /^[A-Za-z0-9_-]{8,128}$/.test(t))
 }
+
+export * from './seo-kit.js'

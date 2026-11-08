@@ -619,3 +619,27 @@ Helpers: `formatMoney(money, locale, options?)`, `parseMoney(money)`,
 
 All contract types (`Product`, `Cart`, `Shop`, `Page`, ...) are exported from
 the package root.
+
+## SEO kit (`@asteby/storefront/merchant`)
+
+Pure helpers shared by every store (no I/O except `submitIndexNow`, which takes the `fetch`):
+
+| Need | Helper |
+| --- | --- |
+| One canonical domain (https, no `www`) | `canonicalOrigin(env.SITE_URL, 'https://example.com')` |
+| Sitemap per market (hreflang, lastmod, images) and index | `renderSitemap`, `renderSitemapIndex` |
+| Crawler policy for search, AI-answer and training bots | `robotsTxt({ policy })`, `crawlerGroups` |
+| `/llms.txt`, `/llms-full.txt` | `llmsTxt`, `llmsFullTxt` (only real brand, policy, FAQ and contact text) |
+| IndexNow | `isIndexNowKey`, `submitIndexNow` (serve `/<key>.txt` yourself) |
+| GA4 e-commerce with a market dimension | `ga4Item`, `ga4ViewItem`, `ga4AddToCart`, `ga4BeginCheckout`, `ga4Purchase`, `ga4Bootstrap` |
+| AI assistant referrals | `aiReferrer`, `AI_REFERRER_HOSTS` |
+
+Crawler policy: search crawlers (`Googlebot`, `Bingbot`…), AI-search crawlers (`OAI-SearchBot`, `PerplexityBot`,
+`Claude-SearchBot`, `DuckAssistBot`) and user-triggered agents (`ChatGPT-User`, `Perplexity-User`, `Claude-User`) are named
+and allowed. Training crawlers (`GPTBot`, `CCBot`, `ClaudeBot`, `Google-Extended`…) are blocked by default and the owner
+chooses: `robotsTxt({ policy: { training: 'allow' } })` or per agent `{ agents: { GPTBot: 'allow' } }`. `Google-Extended`
+does not affect Google Search or AI Overviews (they follow `Googlebot`).
+
+JSON-LD builders live in `@asteby/storefront-react`: `websiteJsonLd`, `articleJsonLd`, `webPageJsonLd` (`AboutPage`,
+`lastReviewed`), `productReviewsJsonLd` (returns `null` without real reviews: never pass sample data) and
+`validateJsonLd` (required properties, currency, absolute URLs) for tests.
