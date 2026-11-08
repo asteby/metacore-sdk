@@ -507,7 +507,7 @@ export function productReviewsJsonLd(reviews: readonly RealReview[], summary?: {
 }
 
 const REQUIRED: Record<string, string[]> = {
-  Organization: ['name', 'url'],
+  Organization: ['name'],
   WebSite: ['name', 'url'],
   Product: ['name', 'offers'],
   Offer: ['price', 'priceCurrency', 'availability'],
