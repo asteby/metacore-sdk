@@ -84,6 +84,14 @@ export type UseEmbeddedPaymentOptions = {
   retryDelayMs?: number
   /** Longest wait for the provider's `create` before the form is declared failed. Default `sdkTimeoutMs`. */
   createTimeoutMs?: number
+  /**
+   * Silent remounts of the provider form when its FIRST mount times out or errors (a cold start: the provider's script,
+   * assets and fingerprint are fetched for the first time and the buyer's connection may need more than `sdkTimeoutMs`;
+   * the next mount finds them cached and is ready in a second). The buyer keeps seeing "loading" instead of a failure
+   * notice they must dismiss with "retry". Nothing is charged by a mount. Never over a pending challenge and never for a
+   * critical `form_error`. The budget is renewed each time a form becomes ready. Default 1; 0 shows the failure at once.
+   */
+  mountRetries?: number
   /** After an UNKNOWN outcome ("verifying"), how long the hook keeps reading `refresh`, with growing waits. Default 120000. */
   verifyTimeoutMs?: number
   /** First wait of that check (doubles up to 15 s). Default 2000. */
@@ -222,6 +230,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     enabled = true,
     locale,
     sdkTimeoutMs = 8000,
+    mountRetries = 1,
     autoRetries = 2,
     retryDelayMs = 600,
     pollIntervalMs = 2000,
@@ -290,6 +299,8 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   const appliedAmount = useRef<string | null>(null)
   const updating = useRef<Promise<void> | null>(null)
   const remountRequested = useRef(false)
+  // Silent remounts spent since the form last became ready (see `mountRetries`).
+  const mountAttempts = useRef(0)
   const takeInitialRef = useRef<() => void>(() => {})
   // A provider-run challenge (Stripe 3DS modal) is in progress: no submit, no total update, no second run.
   const actionRunning = useRef(false)
@@ -426,6 +437,20 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
       form.current = null
       appliedAmount.current = null
       if (m) void Promise.resolve(m.unmount())
+      // A cold first mount (script + assets not cached yet) often misses the deadline that the next mount, with
+      // everything cached, meets in a second: remount silently once before telling the buyer anything. A mount charges
+      // nothing; a critical provider error (`form_error`) and a pending challenge are never retried this way.
+      if (
+        (reason === 'sdk_timeout' || reason === 'sdk_error') &&
+        !initialPending.current &&
+        !actionRunning.current &&
+        !outcomePending(statusRef.current) &&
+        mountAttempts.current < (live.current.mountRetries ?? mountRetries)
+      ) {
+        mountAttempts.current++
+        setMountKey((k) => k + 1)
+        return
+      }
       // A challenge from before the reload is still pending: never offer the redirect (a second payment) over it.
       if (initialPending.current) takeInitialRef.current()
       // Same once something reached the server and its outcome is unknown (a challenge open or run by the provider,
@@ -460,6 +485,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
             onReady: () => {
               if (stale()) return
               clearTimeout(timer)
+              mountAttempts.current = 0
               // With a pending challenge from before a reload, PAY stays disabled: the challenge is taken up first.
               setStatus((s) => (s === 'loading' && !initialPending.current ? 'ready' : s))
               emit({ type: 'form_ready', ms: Date.now() - started })

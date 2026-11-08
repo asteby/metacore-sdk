@@ -83,6 +83,9 @@ type HarnessProps = {
   adapter: PaymentFormAdapter
   sdkTimeoutMs?: number
   createTimeoutMs?: number
+  mountRetries?: number
+  /** Every status the form went through (render by render). */
+  statuses?: Set<string>
   verifyIntervalMs?: number
   verifyTimeoutMs?: number
   holder: { current: EmbeddedPaymentState | null }
@@ -97,10 +100,12 @@ function Harness({ holder, amount, email, transport, adapter, ...rest }: Harness
     storage: null,
     sdkTimeoutMs: rest.sdkTimeoutMs ?? 2000,
     ...(rest.createTimeoutMs ? { createTimeoutMs: rest.createTimeoutMs } : {}),
+    ...(rest.mountRetries !== undefined ? { mountRetries: rest.mountRetries } : {}),
     ...(rest.verifyIntervalMs ? { verifyIntervalMs: rest.verifyIntervalMs } : {}),
     ...(rest.verifyTimeoutMs ? { verifyTimeoutMs: rest.verifyTimeoutMs } : {}),
   })
   holder.current = state
+  rest.statuses?.add(state.status)
   return <div ref={state.containerRef} />
 }
 const holder = () => ({ current: null as EmbeddedPaymentState | null })
@@ -226,13 +231,35 @@ describe('embedded card form is stable', () => {
     expect(mp.log.createdOnMissingNode).toBe(0)
   })
 
-  it('a create that never resolves times out and falls back instead of hanging the form', async () => {
+  it('a create that never resolves times out and falls back instead of hanging the form (no silent retry)', async () => {
     const mp = fakeMercadoPago({ hangCreates: 1 })
+    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor })
+    const h = holder()
+    render(<Harness holder={h} amount={money(100)} adapter={adapter} sdkTimeoutMs={120} createTimeoutMs={40} mountRetries={0} />)
+    await waitFor(() => expect(h.current?.status).toBe('fallback'))
+    expect(h.current?.fallbackReason).toBe('sdk_timeout')
+  })
+
+  it('a cold first mount that times out is remounted once, silently: the buyer never sees the failure', async () => {
+    const mp = fakeMercadoPago({ hangCreates: 1 })
+    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor })
+    const h = holder()
+    const seen = new Set<string>()
+    render(<Harness holder={h} amount={money(100)} adapter={adapter} sdkTimeoutMs={120} createTimeoutMs={40} statuses={seen} />)
+    await waitFor(() => expect(h.current?.status).toBe('ready'))
+    expect(mp.log.creates).toBe(2)
+    expect(seen.has('fallback')).toBe(false)
+    expect(mp.log.alive).toBe(1)
+  })
+
+  it('a form that fails again after the silent retry falls back (one retry, not a loop)', async () => {
+    const mp = fakeMercadoPago({ hangCreates: 5 })
     const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor })
     const h = holder()
     render(<Harness holder={h} amount={money(100)} adapter={adapter} sdkTimeoutMs={120} createTimeoutMs={40} />)
     await waitFor(() => expect(h.current?.status).toBe('fallback'))
     expect(h.current?.fallbackReason).toBe('sdk_timeout')
+    expect(mp.log.creates).toBe(2)
   })
 })
 
