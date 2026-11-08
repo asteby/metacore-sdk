@@ -53,8 +53,13 @@ export {
   faqJsonLd,
   collectionJsonLd,
   serializeJsonLd,
+  websiteJsonLd,
+  articleJsonLd,
+  webPageJsonLd,
+  productReviewsJsonLd,
+  validateJsonLd,
 } from './seo.js'
-export type { BreadcrumbItem, FaqItem, JsonLdObject, LocalBusinessOptions, MetaDescriptor, ProductJsonLdOptions, ReturnPolicyJsonLd, SeoMetaInput, ShippingJsonLd } from './seo.js'
+export type { ArticleJsonLdInput, RealReview, WebPageJsonLdInput, BreadcrumbItem, FaqItem, JsonLdObject, LocalBusinessOptions, MetaDescriptor, ProductJsonLdOptions, ReturnPolicyJsonLd, SeoMetaInput, ShippingJsonLd } from './seo.js'
 export { JsonLd } from './json-ld.js'
 export type { JsonLdProps } from './json-ld.js'
 

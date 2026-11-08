@@ -396,3 +396,142 @@ export function serializeJsonLd(data: unknown): string {
     .replace(/\u2028/g, '\\u2028')
     .replace(/\u2029/g, '\\u2029')
 }
+
+// ---------------------------------------------------------------------------
+// Site-level and editorial JSON-LD (entity, E-E-A-T) and a light validator
+// ---------------------------------------------------------------------------
+
+/** schema.org `WebSite` with a `SearchAction` (sitelinks search box). `searchUrl` has `{search_term_string}` as the query. */
+export function websiteJsonLd(input: { origin: string; url: string; name: string; locale?: string | null; searchUrl?: string | null }): JsonLdObject {
+  return compact({
+    '@context': CONTEXT,
+    '@type': 'WebSite',
+    '@id': `${input.origin}#website`,
+    url: input.url,
+    name: input.name,
+    inLanguage: input.locale ?? undefined,
+    publisher: { '@id': `${input.origin}#organization` },
+    potentialAction: input.searchUrl
+      ? { '@type': 'SearchAction', target: { '@type': 'EntryPoint', urlTemplate: input.searchUrl }, 'query-input': 'required name=search_term_string' }
+      : undefined,
+  })
+}
+
+export type ArticleJsonLdInput = {
+  url: string
+  title: string
+  description?: string | null
+  image?: string | null
+  publishedAt?: string | null
+  modifiedAt?: string | null
+  /** Real author (person). When absent the publisher is credited. */
+  author?: { name: string; url?: string | null; jobTitle?: string | null } | string | null
+  publisher: { name: string; url: string; logo?: string | null }
+  locale?: string | null
+  /** schema.org type (default `BlogPosting`). */
+  type?: 'BlogPosting' | 'Article' | 'NewsArticle'
+}
+
+/** `BlogPosting`/`Article` with author, publisher, dates and language (headline cut to 110 characters). */
+export function articleJsonLd(a: ArticleJsonLdInput): JsonLdObject {
+  const author = typeof a.author === 'string' ? { name: a.author } : a.author
+  return compact({
+    '@context': CONTEXT,
+    '@type': a.type ?? 'BlogPosting',
+    '@id': `${a.url}#article`,
+    headline: a.title.length > 110 ? `${a.title.slice(0, 109)}…` : a.title,
+    description: clean(a.description, 160),
+    image: absoluteUrl(a.image, a.url),
+    datePublished: a.publishedAt ?? undefined,
+    dateModified: a.modifiedAt ?? a.publishedAt ?? undefined,
+    author: author
+      ? compact({ '@type': 'Person', name: author.name, url: author.url ?? undefined, jobTitle: author.jobTitle ?? undefined })
+      : { '@type': 'Organization', name: a.publisher.name },
+    publisher: compact({ '@type': 'Organization', name: a.publisher.name, url: a.publisher.url, logo: a.publisher.logo ? { '@type': 'ImageObject', url: a.publisher.logo } : undefined }),
+    inLanguage: a.locale ?? undefined,
+    mainEntityOfPage: { '@type': 'WebPage', '@id': a.url },
+  })
+}
+
+export type WebPageJsonLdInput = {
+  url: string
+  name: string
+  type?: 'WebPage' | 'AboutPage' | 'ContactPage' | 'FAQPage' | 'CollectionPage'
+  description?: string | null
+  locale?: string | null
+  datePublished?: string | null
+  dateModified?: string | null
+  /** Date the content was last reviewed (E-E-A-T); publish only a real review. */
+  lastReviewed?: string | null
+  reviewedBy?: { name: string; url?: string | null } | null
+  origin?: string | null
+}
+
+/** `WebPage` (`AboutPage`, `ContactPage`…) with the content-review date and reviewer when the store has them. */
+export function webPageJsonLd(p: WebPageJsonLdInput): JsonLdObject {
+  return compact({
+    '@context': CONTEXT,
+    '@type': p.type ?? 'WebPage',
+    '@id': `${p.url}#webpage`,
+    url: p.url,
+    name: p.name,
+    description: clean(p.description, 160),
+    inLanguage: p.locale ?? undefined,
+    datePublished: p.datePublished ?? undefined,
+    dateModified: p.dateModified ?? undefined,
+    lastReviewed: p.lastReviewed ?? undefined,
+    reviewedBy: p.reviewedBy ? compact({ '@type': 'Organization', name: p.reviewedBy.name, url: p.reviewedBy.url ?? undefined }) : undefined,
+    isPartOf: p.origin ? { '@id': `${p.origin}#website` } : undefined,
+    about: p.origin ? { '@id': `${p.origin}#organization` } : undefined,
+  })
+}
+
+export type RealReview = { author: string; rating: number; text?: string | null; date?: string | null }
+
+/**
+ * `aggregateRating` + `review` for a Product, ONLY from real, visible reviews: every review needs an author and a 1–5
+ * rating; with none (or none valid) it returns `null`, so a store without reviews publishes nothing. The aggregate is
+ * computed from the reviews received (or from `summary` when the store keeps its own real count, e.g. migrated reviews).
+ * Never call it with sample or placeholder data.
+ */
+export function productReviewsJsonLd(reviews: readonly RealReview[], summary?: { value: number; count: number } | null): { aggregateRating: JsonLdObject; review: JsonLdObject[] } | null {
+  const valid = reviews.filter((r) => r.author?.trim() && Number.isFinite(r.rating) && r.rating >= 1 && r.rating <= 5)
+  if (!valid.length) return null
+  const sum = summary && summary.count >= valid.length && summary.value >= 1 && summary.value <= 5 ? summary : { value: valid.reduce((s, r) => s + r.rating, 0) / valid.length, count: valid.length }
+  return {
+    aggregateRating: { '@type': 'AggregateRating', ratingValue: Math.round(sum.value * 10) / 10, reviewCount: sum.count, bestRating: 5, worstRating: 1 },
+    review: valid.map((r) =>
+      compact({ '@type': 'Review', author: { '@type': 'Person', name: r.author.trim() }, reviewRating: { '@type': 'Rating', ratingValue: r.rating, bestRating: 5, worstRating: 1 }, reviewBody: clean(r.text) ?? undefined, datePublished: r.date ?? undefined }),
+    ),
+  }
+}
+
+const REQUIRED: Record<string, string[]> = {
+  Organization: ['name', 'url'],
+  WebSite: ['name', 'url'],
+  Product: ['name', 'offers'],
+  Offer: ['price', 'priceCurrency', 'availability'],
+  BreadcrumbList: ['itemListElement'],
+  FAQPage: ['mainEntity'],
+  BlogPosting: ['headline', 'datePublished', 'author', 'publisher'],
+  Article: ['headline', 'datePublished', 'author', 'publisher'],
+  AggregateRating: ['ratingValue', 'reviewCount'],
+  Review: ['author', 'reviewRating'],
+}
+
+/** Light structural check of a JSON-LD object (and its nested `offers`/`review`): required properties per type, ISO currency, absolute URLs. Returns human-readable issues; `[]` = ok. */
+export function validateJsonLd(obj: unknown, path = '$'): string[] {
+  const issues: string[] = []
+  if (Array.isArray(obj)) return obj.flatMap((o, i) => validateJsonLd(o, `${path}[${i}]`))
+  if (!obj || typeof obj !== 'object') return issues
+  const o = obj as Record<string, unknown>
+  const types = ([] as unknown[]).concat(o['@type'] ?? []).map(String)
+  for (const t of types) for (const key of REQUIRED[t] ?? []) if (o[key] === undefined || o[key] === null || o[key] === '') issues.push(`${path}: ${t} sin ${key}`)
+  if (typeof o.priceCurrency === 'string' && !/^[A-Z]{3}$/.test(o.priceCurrency)) issues.push(`${path}: priceCurrency inválida`)
+  if (typeof o.price === 'string' && !/^\d+(\.\d+)?$/.test(o.price)) issues.push(`${path}: price no numérico`)
+  for (const key of ['url', 'image', 'logo']) {
+    for (const v of ([] as unknown[]).concat(o[key] ?? [])) if (typeof v === 'string' && !/^https?:\/\//.test(v)) issues.push(`${path}.${key}: URL no absoluta`)
+  }
+  for (const [k, v] of Object.entries(o)) if (v && typeof v === 'object') issues.push(...validateJsonLd(v, `${path}.${k}`))
+  return issues
+}
