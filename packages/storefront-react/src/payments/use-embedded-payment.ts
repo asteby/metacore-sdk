@@ -96,6 +96,15 @@ export type UseEmbeddedPaymentOptions = {
   verifyTimeoutMs?: number
   /** First wait of that check (doubles up to 15 s). Default 2000. */
   verifyIntervalMs?: number
+  /**
+   * A charge request that has not answered after this long makes the hook ask the SERVER what happened (`transport.refresh`)
+   * every `slowSubmitPollMs`: the server may already have charged (and be busy creating the order or the shipment) while the
+   * response is still on its way. When the server reports a resolved payment, the hook finishes with that, instead of leaving
+   * the buyer on "confirming" for as long as the slow request takes. Needs `transport.refresh`; 0 turns it off. Default 12000.
+   */
+  slowSubmitMs?: number
+  /** Interval of that server check. Default 3000. */
+  slowSubmitPollMs?: number
   /** Poll interval/timeout for a pending 3DS challenge or review when `transport.refresh` exists. */
   pollIntervalMs?: number
   pollTimeoutMs?: number
@@ -139,6 +148,8 @@ export type EmbeddedPaymentState = {
   attemptId: string | null
   /** `true` while loading, mounting or processing. */
   busy: boolean
+  /** `true` while the form is still mounting / remounting. Show a "preparing" label; a press on PAY meanwhile is kept, not lost. */
+  preparing: boolean
   /** `true` while the hook reads the payment state in the background after an unknown outcome. The attempt stays the same. */
   verifying: boolean
   /**
@@ -302,6 +313,9 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   // Silent remounts spent since the form last became ready (see `mountRetries`).
   const mountAttempts = useRef(0)
   const takeInitialRef = useRef<() => void>(() => {})
+  // A click on PAY while the form is still mounting / remounting is kept here and runs the moment the form is ready (it used
+  // to be dropped silently, so the buyer had to press twice). One at a time; dropped if the form ends up unusable.
+  const queuedSubmit = useRef<{ promise: Promise<void>; resolve: () => void } | null>(null)
   // A provider-run challenge (Stripe 3DS modal) is in progress: no submit, no total update, no second run.
   const actionRunning = useRef(false)
   const runActionRef = useRef<(action: PaymentAction) => Promise<void>>(() => Promise.resolve())
@@ -636,13 +650,45 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     finish({ payment: { provider: client?.kind ?? 'unknown', status: 'requires_action', outcome: 'challenge', action } })
   }
 
+  const watchSlowSubmit = useCallback(
+    (submitted: Promise<PaymentAttemptResult>, signal: AbortSignal): { result: Promise<PaymentAttemptResult>; stop: () => void } => {
+      // The loser of the race must never raise an unhandled rejection.
+      submitted.catch(() => {})
+      let stopped = false
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const slowMs = live.current.slowSubmitMs ?? 12_000
+      const pollMs = live.current.slowSubmitPollMs ?? 3000
+      const refresh = transport.refresh
+      const stop = () => {
+        stopped = true
+        if (timer) clearTimeout(timer)
+      }
+      const result = new Promise<PaymentAttemptResult>((resolve) => {
+        if (!refresh || slowMs <= 0) return // never resolves: the submit alone decides
+        const tick = async () => {
+          if (stopped || !alive.current) return
+          try {
+            const r = await refresh({ signal })
+            if (!stopped && alive.current && isResolvedAttempt(r) && !providerAction(r)) return resolve(r)
+          } catch {
+            /* unknown: ask again */
+          }
+          if (!stopped) timer = setTimeout(tick, pollMs)
+        }
+        timer = setTimeout(tick, slowMs)
+      })
+      return { result, stop }
+    },
+    [transport],
+  )
+
   const send = useCallback(
     async (data: PayData, attempt: string, total: Money) => {
       const ctl = new AbortController()
       const maxRetries = live.current.autoRetries ?? autoRetries
       for (let n = 0; ; n++) {
         try {
-          const result = await transport.submit(
+          const submitted = transport.submit(
             {
               option: 'card',
               attempt,
@@ -653,6 +699,15 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
             },
             { signal: ctl.signal },
           )
+          // The server may have charged while the answer is still on its way (it also creates the order and the shipment):
+          // after `slowSubmitMs` ask it directly and take its word if it already resolved the payment.
+          const watch = watchSlowSubmit(submitted, ctl.signal)
+          let result: PaymentAttemptResult
+          try {
+            result = await Promise.race([submitted, watch.result])
+          } finally {
+            watch.stop()
+          }
           if (!alive.current) return
           const action = providerAction(result)
           // Awaited inside the submit: the buyer cannot pay again while the provider's 3DS modal is open.
@@ -690,7 +745,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
         }
       }
     },
-    [autoRetries, emit, finish, retryDelayMs, rotateAttempt, transport],
+    [autoRetries, emit, finish, retryDelayMs, rotateAttempt, transport, watchSlowSubmit],
   )
 
   const submit = useCallback((): Promise<void> => {
@@ -698,7 +753,20 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     // A challenge from before a reload has not been taken up yet: it goes first.
     if (initialPending.current || actionRunning.current) return Promise.resolve()
     const m = form.current
-    if (!m || (statusRef.current !== 'ready' && statusRef.current !== 'network_error')) return Promise.resolve()
+    if (!m || (statusRef.current !== 'ready' && statusRef.current !== 'network_error')) {
+      // Still preparing the form (loading SDK / remounting after a delivery or total change): keep the click, never lose it.
+      if (statusRef.current === 'loading' && alive.current) {
+        if (!queuedSubmit.current) {
+          let resolve: () => void = () => {}
+          const promise = new Promise<void>((r) => {
+            resolve = r
+          })
+          queuedSubmit.current = { promise, resolve }
+        }
+        return queuedSubmit.current.promise
+      }
+      return Promise.resolve()
+    }
     // Unknown outcome: pressing PAY again must NOT tokenize anew (a new token with the same key is a 409): same data, same key.
     if (statusRef.current === 'network_error' && pendingData.current) return retryRef.current()
     // The total is read when the buyer presses PAY, and travels with the data.
@@ -739,6 +807,22 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     inFlight.current = run
     return run
   }, [emit, readAttempt, send, syncAmount])
+
+  // The queued click (see `submit`): runs once the form is ready; dropped (resolved, nothing sent) if the form can no longer be used.
+  useEffect(() => {
+    const q = queuedSubmit.current
+    if (!q) return
+    if (status === 'ready') {
+      queuedSubmit.current = null
+      const run = () => void submit().then(q.resolve, q.resolve)
+      // A provider can announce `ready` a tick before `mount` hands the form back: give it that tick, never drop the click.
+      if (form.current) run()
+      else setTimeout(run, 0)
+    } else if (status !== 'loading') {
+      queuedSubmit.current = null
+      q.resolve()
+    }
+  }, [status, submit])
 
   const retry = useCallback((): Promise<void> => {
     if (inFlight.current) return inFlight.current
@@ -889,6 +973,8 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     attemptId,
     // A pending 3DS challenge / review counts as busy too: no second attempt while one is in the bank's hands.
     busy: status === 'loading' || status === 'processing' || status === 'challenge' || status === 'in_review',
+    /** The form is still mounting / remounting. A press on PAY now is kept and runs when it is ready (never dropped). */
+    preparing: status === 'loading',
     verifying,
     verifyTimedOut,
     recheck,
