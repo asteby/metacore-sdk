@@ -53,5 +53,7 @@ describe('validateJsonLd', () => {
     const issues = validateJsonLd({ '@type': 'Product', name: 'P', image: '/a.jpg', offers: { '@type': 'Offer', price: '9,99', priceCurrency: 'mxn' } })
     expect(issues).toEqual(expect.arrayContaining(['$.offers: Offer sin availability', '$.offers: priceCurrency inválida', '$.offers: price no numérico', '$: URL no absoluta'.replace('$:', '$.image:')]))
     expect(validateJsonLd({ '@type': 'Product', name: 'P' })).toContain('$: Product sin offers')
+    // an Organization used as seller/publisher needs only a name
+    expect(validateJsonLd({ '@type': 'Offer', price: '1', priceCurrency: 'MXN', availability: 'x', seller: { '@type': 'Organization', name: 'S' } })).toEqual([])
   })
 })
