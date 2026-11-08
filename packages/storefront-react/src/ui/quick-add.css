@@ -1,0 +1,186 @@
+/*
+ * <QuickAddDialog>: el modal «Elige tu presentación» de la tarjeta de producto. CSS plano sobre los tokens de la tienda
+ * (--background, --foreground, --muted, --muted-foreground, --border, --primary, --primary-foreground, --ring, --sale,
+ * --radius, --font-heading); el tema oscuro sale de esos mismos tokens y de color-mix, sin colores escritos aquí.
+ * Escritorio: diálogo centrado de dos columnas (foto | datos). Teléfono: hoja inferior a todo el ancho con el pie fijo.
+ * Va incluido en ui.css y también suelto como quick-add.css.
+ */
+[data-sf-quickadd] {
+  box-sizing: border-box;
+  width: min(53.75rem, calc(100vw - 2rem));
+  max-width: none;
+  max-height: min(44rem, calc(100dvh - 2rem));
+  margin: auto;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border, color-mix(in srgb, currentColor 14%, transparent));
+  border-radius: calc(var(--radius, 0.5rem) * 2.5);
+  background: var(--background, #fff);
+  color: var(--foreground, #111);
+  box-shadow: 0 24px 64px -12px rgb(0 0 0 / 0.45);
+}
+[data-sf-quickadd]:not([open]) { display: none; }
+[data-sf-quickadd]::backdrop { background: rgb(0 0 0 / 0.58); backdrop-filter: blur(2px); }
+@media (prefers-reduced-motion: no-preference) {
+  [data-sf-quickadd][open] { animation: sf-quickadd-in 200ms cubic-bezier(0.2, 0.7, 0.2, 1); }
+  [data-sf-quickadd][open]::backdrop { animation: sf-quickadd-fade 200ms ease-out; }
+}
+@keyframes sf-quickadd-in { from { opacity: 0; transform: translateY(12px) scale(0.985); } }
+@keyframes sf-quickadd-fade { from { opacity: 0; } }
+
+[data-sf-quickadd-form] { display: flex; flex-direction: column; max-height: inherit; min-height: 0; }
+
+[data-sf-quickadd-header] {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: 0.5rem 0.5rem 0.5rem 1.25rem;
+  border-bottom: 1px solid var(--border, color-mix(in srgb, currentColor 14%, transparent));
+}
+[data-sf-quickadd-eyebrow] {
+  margin: 0; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted-foreground, #555);
+}
+[data-sf-quickadd-close] {
+  display: grid; place-items: center; flex: none; width: 2.75rem; height: 2.75rem; padding: 0;
+  border: 0; border-radius: var(--radius, 0.5rem); background: transparent; color: inherit; cursor: pointer;
+}
+[data-sf-quickadd-close]:hover { background: var(--muted, color-mix(in srgb, currentColor 8%, transparent)); }
+
+[data-sf-quickadd-body] {
+  display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr); gap: 1.75rem;
+  min-height: 0; padding: 1.25rem; overflow-y: auto; overscroll-behavior: contain;
+}
+[data-sf-quickadd-media] {
+  --sf-preview-size: 100%;
+  align-self: start; position: sticky; top: 0;
+}
+[data-sf-quickadd-media] [data-sf-thumb] { display: block; width: 100%; background: #fff; border-radius: calc(var(--radius, 0.5rem) * 2); }
+:root[data-theme="dark"] [data-sf-quickadd-media] [data-sf-thumb] { background: #fff; }
+[data-sf-quickadd-media] > a { display: block; border-radius: calc(var(--radius, 0.5rem) * 2); }
+[data-sf-quickadd-media] > a:focus-visible, [data-sf-quickadd-title] a:focus-visible { outline: 3px solid var(--ring, var(--primary, #111)); outline-offset: 2px; }
+[data-sf-quickadd-title] a { color: inherit; text-decoration: none; }
+[data-sf-quickadd-title] a:hover { text-decoration: underline; text-underline-offset: 0.15em; }
+[data-sf-quickadd-media] img { max-width: 100%; height: auto; }
+
+[data-sf-quickadd-info] { display: flex; flex-direction: column; gap: 0.875rem; min-width: 0; }
+[data-sf-quickadd-vendor] {
+  margin: 0; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-foreground, #555);
+}
+[data-sf-quickadd-title] {
+  margin: 0; font-family: var(--font-heading, inherit); font-size: clamp(1.25rem, 1.05rem + 0.9vw, 1.625rem);
+  font-weight: 800; line-height: 1.15; text-transform: uppercase; text-wrap: balance; overflow-wrap: anywhere;
+}
+[data-sf-quickadd-rating] { font-size: 0.875rem; color: var(--muted-foreground, #555); }
+
+[data-sf-quickadd-price] { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.75rem; min-height: 2rem; font-variant-numeric: tabular-nums; }
+[data-sf-quickadd-now] { font-size: 1.625rem; font-weight: 800; line-height: 1.1; }
+[data-sf-quickadd-now][data-sale] { color: var(--sale, #c2410c); }
+[data-sf-quickadd-was] { font-size: 1rem; color: var(--muted-foreground, #555); }
+[data-sf-quickadd-stock] { font-size: 0.8125rem; font-weight: 600; color: var(--muted-foreground, #555); }
+[data-sf-quickadd-stock][data-low] { color: var(--sale, #c2410c); }
+[data-sf-quickadd-hint] { font-size: 0.875rem; color: var(--muted-foreground, #555); }
+
+[data-sf-quickadd-options] { margin: 0; padding: 0; border: 0; min-width: 0; }
+[data-sf-quickadd-options] legend,
+[data-sf-quickadd-qty] > label {
+  padding: 0; margin-bottom: 0.5rem; font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--muted-foreground, #555);
+}
+[data-sf-quickadd-options] ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr)); gap: 0.5rem; margin: 0; padding: 0; list-style: none; }
+[data-sf-quickadd-option] { display: block; position: relative; cursor: pointer; }
+[data-sf-quickadd-option][data-available="false"] { cursor: not-allowed; }
+[data-sf-quickadd-option] > input {
+  position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: inherit;
+}
+[data-sf-quickadd-card] {
+  position: relative; display: flex; align-items: center; gap: 0.625rem; box-sizing: border-box; min-height: 3.5rem;
+  padding: 0.5rem 2.25rem 0.5rem 0.75rem; border: 1.5px solid color-mix(in srgb, var(--foreground, #111) 22%, transparent);
+  border-radius: calc(var(--radius, 0.5rem) * 2); background: var(--background, #fff);
+  transition: border-color 140ms, background-color 140ms, box-shadow 140ms;
+}
+[data-sf-quickadd-option]:hover > input:not(:disabled) + [data-sf-quickadd-card] { border-color: var(--primary, #111); }
+[data-sf-quickadd-option] > input:checked + [data-sf-quickadd-card] {
+  border-color: var(--primary, #111);
+  background: color-mix(in srgb, var(--primary, #111) 8%, var(--background, #fff));
+  box-shadow: inset 0 0 0 1px var(--primary, #111);
+}
+[data-sf-quickadd-option] > input:focus-visible + [data-sf-quickadd-card] { outline: 3px solid var(--ring, var(--primary, #111)); outline-offset: 2px; }
+[data-sf-quickadd-option] > input:disabled + [data-sf-quickadd-card] {
+  opacity: 0.55; border-style: dashed; background: var(--muted, color-mix(in srgb, currentColor 6%, transparent));
+}
+[data-sf-quickadd-option] > input:disabled + [data-sf-quickadd-card] [data-sf-quickadd-name] { text-decoration: line-through; text-decoration-thickness: 1px; }
+[data-sf-quickadd-swatch] { display: inline-flex; flex: none; }
+[data-sf-quickadd-text] { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
+[data-sf-quickadd-name] { font-size: 0.875rem; font-weight: 700; text-transform: uppercase; overflow-wrap: anywhere; }
+[data-sf-quickadd-sub] { font-size: 0.8125rem; color: var(--muted-foreground, #555); font-variant-numeric: tabular-nums; }
+[data-sf-quickadd-option] > input:disabled + [data-sf-quickadd-card] [data-sf-quickadd-sub] { font-weight: 700; color: var(--foreground, #111); }
+[data-sf-quickadd-tick] {
+  position: absolute; top: 50%; right: 0.625rem; display: grid; place-items: center; width: 1.25rem; height: 1.25rem;
+  border-radius: 999px; background: var(--primary, #111); color: var(--primary-foreground, #fff);
+  transform: translateY(-50%) scale(0.6); opacity: 0; transition: opacity 140ms, transform 140ms;
+}
+[data-sf-quickadd-option] > input:checked + [data-sf-quickadd-card] [data-sf-quickadd-tick] { opacity: 1; transform: translateY(-50%) scale(1); }
+
+[data-sf-quickadd-qty] { display: flex; flex-direction: column; align-items: flex-start; }
+[data-sf-quickadd-stepper] {
+  display: inline-flex; align-items: stretch; height: 2.75rem;
+  border: 1.5px solid color-mix(in srgb, var(--foreground, #111) 22%, transparent); border-radius: calc(var(--radius, 0.5rem) * 2); overflow: hidden;
+}
+[data-sf-quickadd-stepper] button {
+  display: grid; place-items: center; width: 2.75rem; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer;
+}
+[data-sf-quickadd-stepper] button:hover:not(:disabled) { background: var(--muted, color-mix(in srgb, currentColor 8%, transparent)); }
+[data-sf-quickadd-stepper] button:disabled { opacity: 0.35; cursor: default; }
+[data-sf-quickadd-stepper] input {
+  width: 3.25rem; padding: 0; border: 0; border-inline: 1px solid var(--border, color-mix(in srgb, currentColor 14%, transparent));
+  background: transparent; color: inherit; font: inherit; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums;
+  appearance: textfield; -moz-appearance: textfield;
+}
+[data-sf-quickadd-stepper] input::-webkit-outer-spin-button,
+[data-sf-quickadd-stepper] input::-webkit-inner-spin-button { appearance: none; margin: 0; }
+[data-sf-quickadd-stepper] :is(button, input):focus-visible { outline: 3px solid var(--ring, var(--primary, #111)); outline-offset: -3px; }
+[data-sf-quickadd-max] { margin: 0.375rem 0 0; font-size: 0.8125rem; color: var(--muted-foreground, #555); }
+[data-sf-quickadd-error] { margin: 0; font-size: 0.875rem; font-weight: 600; color: var(--sale, #c2410c); }
+
+[data-sf-quickadd-footer] {
+  display: flex; flex-direction: column; align-items: stretch; gap: 0.5rem; padding: 0.875rem 1.25rem 1rem;
+  border-top: 1px solid var(--border, color-mix(in srgb, currentColor 14%, transparent)); background: var(--background, #fff);
+}
+[data-sf-quickadd-submit] {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.75rem; min-height: 3rem; padding: 0.5rem 1.25rem;
+  border: 0; border-radius: calc(var(--radius, 0.5rem) * 2); background: var(--primary, #111); color: var(--primary-foreground, #fff);
+  font: inherit; font-weight: 800; letter-spacing: 0.04em; text-transform: uppercase; cursor: pointer;
+}
+[data-sf-quickadd-submit]:hover:not(:disabled) { filter: brightness(1.12); }
+[data-sf-quickadd-submit]:disabled { opacity: 0.5; cursor: not-allowed; }
+[data-sf-quickadd-submit]:focus-visible { outline: 3px solid var(--ring, var(--primary, #111)); outline-offset: 3px; }
+[data-sf-quickadd-total] { padding-left: 0.75rem; border-left: 1px solid color-mix(in srgb, currentColor 40%, transparent); font-variant-numeric: tabular-nums; }
+[data-sf-quickadd-footer] [data-sf-quickadd-link] {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 2.75rem; padding: 0.25rem 0.5rem;
+  font-weight: 700; color: var(--brand-text, var(--primary, inherit)); text-decoration: underline; text-underline-offset: 0.2em;
+}
+[data-sf-quickadd-footer] [data-sf-quickadd-link]:hover { text-decoration-thickness: 2px; }
+[data-sf-quickadd-footer] [data-sf-quickadd-link]:focus-visible { outline: 3px solid var(--ring, var(--primary, #111)); outline-offset: 2px; border-radius: 0.25rem; }
+@media (min-width: 40.01rem) {
+  [data-sf-quickadd-footer] { flex-direction: row-reverse; align-items: center; justify-content: space-between; gap: 1rem; }
+  [data-sf-quickadd-submit] { min-width: 15rem; }
+}
+
+@media (max-width: 40rem) {
+  [data-sf-quickadd] {
+    width: 100vw; height: 94dvh; max-height: 94dvh; margin: auto 0 0; border-width: 1px 0 0;
+    border-radius: calc(var(--radius, 0.5rem) * 4) calc(var(--radius, 0.5rem) * 4) 0 0;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    [data-sf-quickadd][open] { animation-name: sf-quickadd-sheet; }
+  }
+  [data-sf-quickadd-form] { height: 100%; }
+  /* Imagen arriba (grande, cuadrada, sin recortes) y debajo la mini-ficha; el cuerpo desplaza y el pie queda fijo. */
+  [data-sf-quickadd-body] { flex: 1 1 auto; grid-template-columns: minmax(0, 1fr); gap: 1rem; padding: 1rem; }
+  [data-sf-quickadd-media] { position: static; max-width: min(100%, 22rem); width: 100%; margin-inline: auto; }
+}
+@keyframes sf-quickadd-sheet { from { transform: translateY(100%); } }
+@media (max-width: 22rem) { [data-sf-quickadd-options] ul { grid-template-columns: 1fr; } }
+@media (forced-colors: active) {
+  [data-sf-quickadd-option] > input:checked + [data-sf-quickadd-card] { outline: 3px solid Highlight; }
+  [data-sf-quickadd-tick] { forced-color-adjust: none; background: Highlight; color: HighlightText; }
+}

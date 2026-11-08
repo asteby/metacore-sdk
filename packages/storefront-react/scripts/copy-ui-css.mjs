@@ -2,12 +2,16 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 
 const preview = readFileSync(new URL('../src/ui/product-preview.css', import.meta.url), 'utf8')
+const quickAdd = readFileSync(new URL('../src/ui/quick-add.css', import.meta.url), 'utf8')
 const withPreview = (css) => `${css}\n${preview}`
 const read = (f) => readFileSync(new URL(`../src/ui/${f}`, import.meta.url), 'utf8')
 mkdirSync(new URL('../dist/', import.meta.url), { recursive: true })
 // Una sola fuente del scroll: la hoja de @asteby/metacore-theme (se inlinea, así el paquete no depende del tema en runtime).
 const scrollbars = readFileSync(new URL('../../theme/styles/scrollbars.css', import.meta.url), 'utf8')
-writeFileSync(new URL('../dist/ui.css', import.meta.url), `${scrollbars}\n${read('ui.css').replace('@import "./swatch.css";', read('swatch.css'))}\n${preview}`)
+writeFileSync(new URL('../dist/ui.css', import.meta.url), `${scrollbars}\n${read('ui.css').replace('@import "./swatch.css";', read('swatch.css'))}\n${preview}\n${quickAdd}`)
+
+// Hoja suelta del modal de agregado rápido (subpath /quick-add.css), para tiendas que no importan ui.css.
+writeFileSync(new URL('../dist/quick-add.css', import.meta.url), quickAdd)
 
 // Hoja por omisión del cajón del carrito (subpath /cart).
 writeFileSync(new URL('../dist/cart.css', import.meta.url), withPreview(readFileSync(new URL('../src/cart-drawer/cart-drawer.css', import.meta.url), 'utf8')))

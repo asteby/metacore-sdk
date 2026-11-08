@@ -194,6 +194,7 @@
       }
     },
     "./ui.css": "./dist/ui.css",
+    "./quick-add.css": "./dist/quick-add.css",
     "./progress.css": "./dist/progress.css",
     "./package.json": "./package.json",
     "./tracking": {

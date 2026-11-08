@@ -1,0 +1,5 @@
+---
+"@asteby/storefront-react": minor
+---
+
+feat(storefront-react/ui): `QuickAddDialog`, el modal «Elige tu presentación» de la tarjeta convertido en mini-ficha de producto. Dos columnas en escritorio (foto grande | datos) y hoja inferior casi a todo el alto en teléfono, con la foto de la variante elegida (o la del producto), nombre y foto que llevan a la ficha, calificación (slot), precio con precio tachado y aviso de pocas piezas, selector de variantes con radios nativos (seleccionado con marca y borde, agotado deshabilitado con texto), selector de cantidad limitado por existencias, botón «Agregar al carrito» y enlace visible «Ver producto completo» (`productHref` localizado, `renderLink` para el router). Foco atrapado con `showModal()`, cierre con X/Esc/clic fuera y foco devuelto al botón de origen. Textos es/en (`quickAddMessages`, sobrescribibles con `messages`), claro/oscuro por tokens. Nuevo `@asteby/storefront-react/quick-add.css` (también dentro de `ui.css`). Aditivo: no cambia nada existente.

@@ -26,3 +26,6 @@ export { NavigationProgress, Skeleton, Spinner, useDelayedFlag, type NavigationP
 export { PendingButton, type PendingButtonProps, type PendingLinkButtonProps } from './pending-button'
 export { useActionLock, useSubmitOnce, type ActionLock, type ActionResult, type UseActionLockOptions } from './use-action-lock'
 export { pendingMessages, type PendingKind, type PendingMessages, type PendingMessageKey } from './pending-messages'
+export { QuickAddDialog } from './quick-add-dialog'
+export type { QuickAddDialogProps, QuickAddClassNames, QuickAddLinkProps, QuickAddSelection } from './quick-add-dialog'
+export { quickAddMessages, type QuickAddMessages, type QuickAddMessageKey } from './quick-add-messages'
