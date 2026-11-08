@@ -51,7 +51,7 @@
 }
 [data-sf-quickadd-media] {
   --sf-preview-size: 100%;
-  align-self: start; position: sticky; top: 0;
+  align-self: center; position: sticky; top: 0;
 }
 [data-sf-quickadd-media] [data-sf-thumb] { display: block; width: 100%; background: #fff; border-radius: calc(var(--radius, 0.5rem) * 2); }
 :root[data-theme="dark"] [data-sf-quickadd-media] [data-sf-thumb] { background: #fff; }
@@ -98,10 +98,11 @@
   transition: border-color 140ms, background-color 140ms, box-shadow 140ms;
 }
 [data-sf-quickadd-option]:hover > input:not(:disabled) + [data-sf-quickadd-card] { border-color: var(--primary, #111); }
+/* --brand-text: el color de acento que contrasta con el fondo en claro y en oscuro (si la tienda lo define); si no, --primary. */
 [data-sf-quickadd-option] > input:checked + [data-sf-quickadd-card] {
-  border-color: var(--primary, #111);
-  background: color-mix(in srgb, var(--primary, #111) 8%, var(--background, #fff));
-  box-shadow: inset 0 0 0 1px var(--primary, #111);
+  border-color: var(--brand-text, var(--primary, #111));
+  background: color-mix(in srgb, var(--brand-text, var(--primary, #111)) 9%, var(--background, #fff));
+  box-shadow: inset 0 0 0 1px var(--brand-text, var(--primary, #111));
 }
 [data-sf-quickadd-option] > input:focus-visible + [data-sf-quickadd-card] { outline: 3px solid var(--ring, var(--primary, #111)); outline-offset: 2px; }
 [data-sf-quickadd-option] > input:disabled + [data-sf-quickadd-card] {
@@ -110,12 +111,12 @@
 [data-sf-quickadd-option] > input:disabled + [data-sf-quickadd-card] [data-sf-quickadd-name] { text-decoration: line-through; text-decoration-thickness: 1px; }
 [data-sf-quickadd-swatch] { display: inline-flex; flex: none; }
 [data-sf-quickadd-text] { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
-[data-sf-quickadd-name] { font-size: 0.875rem; font-weight: 700; text-transform: uppercase; overflow-wrap: anywhere; }
+[data-sf-quickadd-name] { font-size: 0.875rem; font-weight: 700; text-transform: uppercase; overflow-wrap: break-word; }
 [data-sf-quickadd-sub] { font-size: 0.8125rem; color: var(--muted-foreground, #555); font-variant-numeric: tabular-nums; }
 [data-sf-quickadd-option] > input:disabled + [data-sf-quickadd-card] [data-sf-quickadd-sub] { font-weight: 700; color: var(--foreground, #111); }
 [data-sf-quickadd-tick] {
   position: absolute; top: 50%; right: 0.625rem; display: grid; place-items: center; width: 1.25rem; height: 1.25rem;
-  border-radius: 999px; background: var(--primary, #111); color: var(--primary-foreground, #fff);
+  border-radius: 999px; background: var(--brand-text, var(--primary, #111)); color: var(--background, #fff);
   transform: translateY(-50%) scale(0.6); opacity: 0; transition: opacity 140ms, transform 140ms;
 }
 [data-sf-quickadd-option] > input:checked + [data-sf-quickadd-card] [data-sf-quickadd-tick] { opacity: 1; transform: translateY(-50%) scale(1); }
@@ -176,10 +177,10 @@
   [data-sf-quickadd-form] { height: 100%; }
   /* Imagen arriba (grande, cuadrada, sin recortes) y debajo la mini-ficha; el cuerpo desplaza y el pie queda fijo. */
   [data-sf-quickadd-body] { flex: 1 1 auto; grid-template-columns: minmax(0, 1fr); gap: 1rem; padding: 1rem; }
-  [data-sf-quickadd-media] { position: static; max-width: min(100%, 22rem); width: 100%; margin-inline: auto; }
+  [data-sf-quickadd-media] { position: static; max-width: 13rem; width: 100%; margin-inline: auto; }
 }
 @keyframes sf-quickadd-sheet { from { transform: translateY(100%); } }
-@media (max-width: 22rem) { [data-sf-quickadd-options] ul { grid-template-columns: 1fr; } }
+@media (max-width: 28rem) { [data-sf-quickadd-options] ul { grid-template-columns: 1fr; } [data-sf-quickadd-card] { min-height: 3.25rem; } }
 @media (forced-colors: active) {
   [data-sf-quickadd-option] > input:checked + [data-sf-quickadd-card] { outline: 3px solid Highlight; }
   [data-sf-quickadd-tick] { forced-color-adjust: none; background: Highlight; color: HighlightText; }

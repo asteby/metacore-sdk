@@ -157,6 +157,13 @@ describe('QuickAddDialog', () => {
     expect(document.querySelectorAll('a[data-router]').length).toBe(3)
   })
 
+  it('lets the product link follow the chosen variant', () => {
+    render(<Harness productHref={(v) => `/mx/productos/x${v ? `?variante=${v.id}` : ''}`} />)
+    expect(screen.getByRole('link', { name: /ver producto completo/i }).getAttribute('href')).toBe('/mx/productos/x?variante=v1')
+    fireEvent.click(screen.getByRole('radio', { name: /vainilla/i }))
+    expect(screen.getByRole('link', { name: /ver producto completo/i }).getAttribute('href')).toBe('/mx/productos/x?variante=v2')
+  })
+
   it('closes when the product link is followed (the list keeps its place)', () => {
     render(<Harness />)
     fireEvent.click(screen.getByRole('link', { name: /ver producto completo/i }))

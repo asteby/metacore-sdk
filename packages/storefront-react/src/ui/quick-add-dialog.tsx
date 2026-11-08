@@ -45,8 +45,8 @@ export type QuickAddDialogProps = {
   /** Esc, backdrop, the X and the product link. The owner closes (`open` -> false). */
   onClose: (reason: DialogCloseReason) => void
   product: Pick<Product, 'handle' | 'title' | 'vendor' | 'featured_image' | 'images' | 'variants'>
-  /** The product page, already localized (`/mx/productos/<slug>`, `/us/products/<slug>`). */
-  productHref: string
+  /** The product page, already localized (`/mx/productos/<slug>`, `/us/products/<slug>`). A function receives the chosen variant, so the page can open on it (`?variante=`). */
+  productHref: string | ((variant: ProductVariant | null) => string)
   /** Readable name when it differs from `product.title` (list titles). */
   name?: string
   /** Stars and review count, in the store's own look. Omitted when the product has no rating. */
@@ -149,7 +149,7 @@ function QuickAddDialogOpen({
   }
 
   const linkProps: QuickAddLinkProps = {
-    href: productHref,
+    href: typeof productHref === 'function' ? productHref(variant) : productHref,
     className: cx('sf-quickadd-link', cn.link) ?? 'sf-quickadd-link',
     children: m['quickadd.viewProduct'],
     onClick: () => onClose('action'),
