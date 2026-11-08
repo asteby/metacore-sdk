@@ -1,5 +1,18 @@
 # @asteby/storefront-react
 
+## 0.55.0
+
+### Minor Changes
+
+- 42b6c2b: useEmbeddedPayment: un clic en PAGAR mientras el formulario se prepara (carga del SDK o remontaje tras cambiar entrega o total) ya no se pierde en silencio: se guarda y el cobro sale solo cuando el formulario está listo, una sola vez; si el formulario no llega a estar disponible se descarta sin tocar al servidor. El estado expone `preparing` para mostrar "preparando" en el botón. Además, si la respuesta del cobro tarda más de `slowSubmitMs` (12 s) y el transporte tiene `refresh`, el hook consulta al servidor cada `slowSubmitPollMs` (3 s) y termina con el resultado en cuanto el servidor reporta el pago resuelto, en lugar de dejar al comprador en "confirmando" mientras la petición lenta termina.
+- 0a742ba: Modal de la verificación del banco (3DS): el botón de salida ya no se recorta en pantallas bajas (el iframe cede alto y la salida siempre se ve), aparece a los 20 s por defecto en lugar de 120 s (cerrar nunca cancela ni repite el pago; el hook sigue verificando con el banco, así que una página 5xx del banco no atrapa al comprador) y su texto es accionable: "¿La página del banco muestra un error o tarda demasiado? Puedes cerrarla… nunca se cobra dos veces." (es/en). El alto mínimo del iframe pasó del estilo en línea (420 px) al CSS (`min(26rem, 45dvh)`).
+- 4421f27: Adaptador de Stripe: ninguna billetera se ofrece por defecto, Link incluido. El bloque "Save my information for faster checkout" de Link pide un teléfono y bloquea el pago cuando se deja marcado. Se enciende con la opción del adaptador `wallets: { link: 'auto' }` o, por mercado, con `link: true` en la opción `card` de `PaymentClient.options` (el servidor puede apagarlo con `link: false`). Un Stripe.js que no conozca la llave de Link no tumba el formulario: se reintenta con las llaves de siempre. Nuevos exports: `stripeWallets`, tipo `StripeWallets`.
+
+### Patch Changes
+
+- Updated dependencies [0a742ba]
+  - @asteby/storefront@0.37.1
+
 ## 0.54.0
 
 ### Minor Changes
