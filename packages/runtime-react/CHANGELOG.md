@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 53.17.0
+
+### Minor Changes
+
+- 2aba15b: AddonSlot: consume `slots[].fallback` del manifest v3. `notice` pinta un aviso discreto (`SlotFailureNotice`) cuando la contribución falla; `hide` (o ausente) conserva el comportamiento anterior (el `fallback` del host, o nada).
+
 ## 53.16.0
 
 ### Minor Changes
