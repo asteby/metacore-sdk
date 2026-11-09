@@ -50,8 +50,16 @@ describe("loadFederatedAddon options", () => {
   });
 
   it("requireIntegrity no se satisface con una carga previa sin integrity (caché)", async () => {
-    stubContainer("c_4");
+    const { Comp } = stubContainer("c_4");
     await loadFederatedAddon(spec({}, 4), "k");
+    // El segundo spec sí trae integrity: la clave de caché difiere, así que no
+    // se sirve la entrada cacheada sin verificar (se evalúa como carga nueva).
+    const second = loadFederatedAddon(spec({ integrity: "sha384-AAAA" }, 4), "k", undefined, {
+      requireIntegrity: true,
+    });
+    const first = loadFederatedAddon(spec({}, 4), "k");
+    expect(second).not.toBe(first);
+    await expect(second).resolves.toBe(Comp);
     await expect(
       loadFederatedAddon(spec({}, 4), "k", undefined, { requireIntegrity: true }),
     ).rejects.toThrow(/requireIntegrity/);

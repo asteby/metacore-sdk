@@ -13,7 +13,8 @@
 > in favour of `<AddonSlot>` for one major (the `@deprecated` JSDoc tags land
 > with the follow-up that edits `slot.tsx` / `registry.ts`).
 
-The metacore SDK ships two registration APIs over that one store:
+The metacore SDK ships two registration APIs that share that one store (they
+are not parallel lists: `Registry.registerSlot` writes through to `slotStore`):
 
 - `Registry.registerSlot` from `@asteby/metacore-sdk` — consumed via
   `<Slot>` from `@asteby/metacore-sdk/react` (used by `ops` today).

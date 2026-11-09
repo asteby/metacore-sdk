@@ -6,13 +6,16 @@
 // `api.registry.registerSlot` (AddonAPI) y `registerDocumentContribution`, así
 // que hay una sola lista por slot. Una entrada con addon dueño (`owner`) que
 // consta como NO instalado (InstalledAddonsProvider) no se pinta.
-import React, { useSyncExternalStore } from 'react'
+import React from 'react'
 import { slotStore, type SlotComponent, type SlotEntry } from '@asteby/metacore-sdk'
-import { useInstalledAddons } from './installed-addons-context'
+import { AddonSlot } from './slots/addon-slot'
 
 export type { SlotComponent, SlotEntry }
 
-/** Alias histórico del store canónico (`slotRegistry.register/get/subscribe`). */
+/**
+ * @deprecated Alias histórico del store canónico (`slotRegistry.register/get/subscribe`);
+ * prefiere `slotStore` de `@asteby/metacore-sdk` y monta con `<AddonSlot>`.
+ */
 export const slotRegistry = slotStore
 
 export interface SlotProps {
@@ -24,21 +27,11 @@ export interface SlotProps {
     fallback?: React.ReactNode
 }
 
+/**
+ * @deprecated Usa `<AddonSlot kind context>` (monta además las contribuciones
+ * de manifest, con aislamiento y timeout). `<Slot>` delega en él y se mantiene
+ * un major: los componentes siguen recibiendo `props` esparcidos.
+ */
 export function Slot({ name, props, fallback = null }: SlotProps) {
-    const all = useSyncExternalStore(
-        (cb) => slotStore.subscribe(cb),
-        () => slotStore.get(name),
-        () => slotStore.get(name),
-    )
-    const installed = useInstalledAddons()
-    const entries = installed ? all.filter((e) => !e.owner || installed.addons.has(e.owner)) : all
-    if (entries.length === 0) return <>{fallback}</>
-    return (
-        <>
-            {entries.map((entry, i) => {
-                const C = entry.component
-                return <C key={`${entry.source ?? 'anon'}-${i}`} {...(props ?? {})} />
-            })}
-        </>
-    )
+    return <AddonSlot kind={name} context={props} empty={fallback} />
 }

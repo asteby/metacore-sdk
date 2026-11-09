@@ -4,6 +4,7 @@ export {
     sortSlotItems,
     ADDON_SLOT_FAILED,
     DEFAULT_ADDON_SLOT_TIMEOUT_MS,
+    resolveSlotTimeout,
     type AddonSlotProps,
     type AddonSlotProviderProps,
     type AddonSlotManifest,

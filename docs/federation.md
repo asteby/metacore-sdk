@@ -242,9 +242,20 @@ await loadFederatedAddon(spec, key, undefined, {
 })
 ```
 
-`requireIntegrity` is evaluated before the in-memory cache, so an earlier load
-without `integrity` never satisfies a caller that requires it. On timeout the
-cache entry is dropped so a retry loads again.
+`requireIntegrity` is evaluated before the in-memory cache, and the cache key
+includes `integrity`, so an earlier load without it (or with another hash)
+never satisfies a caller that requires one. Limit: if a container with the same
+global name is already registered on `window`, the loader reuses it and does
+not inject a new `<script>`, so SRI only protects the first load of a container.
+On timeout the cache entry is dropped so a retry loads again.
+
+`<AddonSlot>` does not go through `loadFederatedAddon`: it has its own
+`requireIntegrity` / `timeoutMs` (props or `<AddonSlotProvider>`). The
+manifest's `slot.timeout_ms` is clamped to 1000..30000 ms (invalid, 0 or
+negative values fall back to the host timeout). The slot does not read
+`metadata.visibility`, so a host that serves private addons must enable
+`requireIntegrity` itself. Visibility, `permission` and `condition` are
+enforced by the server filtering the manifests it hands to the host.
 
 ## Mounting slot contributions: `<AddonSlot>`
 

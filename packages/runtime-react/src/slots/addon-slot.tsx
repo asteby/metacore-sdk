@@ -39,6 +39,18 @@ import { satisfiesSdkRange } from './sdk-range'
 
 export const ADDON_SLOT_FAILED = 'addon_slot_failed'
 export const DEFAULT_ADDON_SLOT_TIMEOUT_MS = 10_000
+/** Rango permitido por el contrato C1 para `slot.timeout_ms` del manifest. */
+export const MIN_SLOT_TIMEOUT_MS = 1_000
+export const MAX_SLOT_TIMEOUT_MS = 30_000
+
+/**
+ * `timeout_ms` del manifest acotado a 1000..30000. Un valor no numérico, NaN,
+ * 0 o negativo se ignora y manda el del host (nunca anula el timeout).
+ */
+export function resolveSlotTimeout(slotValue: unknown, hostMs: number): number {
+    if (typeof slotValue !== 'number' || !Number.isFinite(slotValue) || slotValue <= 0) return hostMs
+    return Math.min(MAX_SLOT_TIMEOUT_MS, Math.max(MIN_SLOT_TIMEOUT_MS, slotValue))
+}
 
 export type AddonSlotFailureReason =
     | 'timeout'
@@ -154,6 +166,8 @@ export interface AddonSlotProps {
     loading?: ReactNode
     /** Qué se pinta en el lugar de una contribución que falló. Por omisión nada. */
     fallback?: ReactNode | ((failure: AddonSlotFailure) => ReactNode)
+    /** Qué se pinta cuando el slot no tiene ninguna contribución (por omisión nada). */
+    empty?: ReactNode
 }
 
 type RemoteItem_ = {
@@ -249,7 +263,7 @@ function RemoteItem({
     const [state, setState] = useState<RemoteState>({ status: 'loading' })
     const reportRef = useRef(report)
     reportRef.current = report
-    const effectiveTimeout = slot.timeout_ms ?? timeoutMs
+    const effectiveTimeout = resolveSlotTimeout(slot.timeout_ms, timeoutMs)
     const hostSdk = cfg?.sdkVersion
 
     useEffect(() => {
@@ -347,6 +361,7 @@ export function AddonSlot({
     onEvent,
     loading = null,
     fallback = null,
+    empty = null,
 }: AddonSlotProps) {
     const cfg = useContext(Ctx)
     const installed = useInstalledAddons()
@@ -403,7 +418,7 @@ export function AddonSlot({
     const renderFallback = (f: AddonSlotFailure): ReactNode =>
         typeof fallback === 'function' ? (fallback as (f: AddonSlotFailure) => ReactNode)(f) : fallback
 
-    if (items.length === 0) return null
+    if (items.length === 0) return <>{empty}</>
     return (
         <div data-addon-slot={kind} className={className} style={className ? undefined : { display: 'contents' }}>
             {items.map((item) => (

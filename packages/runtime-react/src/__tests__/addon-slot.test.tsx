@@ -17,6 +17,7 @@ import {
     AddonSlotProvider,
     satisfiesSdkRange,
     sortSlotItems,
+    resolveSlotTimeout,
     type AddonSlotManifest,
     type AddonSlotFailure,
 } from '../slots'
@@ -50,6 +51,7 @@ beforeEach(() => {
 afterEach(() => {
     cleanup()
     quiet.mockRestore()
+    vi.restoreAllMocks()
     vi.useRealTimers()
     vi.unstubAllGlobals()
 })
@@ -136,10 +138,10 @@ describe('AddonSlot', () => {
         vi.useFakeTimers()
         mf.loadRemote.mockImplementation(() => new Promise(() => {}))
         const m = manifest('slow')
-        m.contributions!.slots![0].timeout_ms = 200
+        m.contributions!.slots![0].timeout_ms = 1000
         render(<Shell manifests={[m]} timeoutMs={60000} />)
         await act(async () => {
-            await vi.advanceTimersByTimeAsync(250)
+            await vi.advanceTimersByTimeAsync(1050)
         })
         expect(screen.getByTestId('fb-slow').textContent).toBe('timeout')
     })
@@ -155,6 +157,39 @@ describe('AddonSlot', () => {
         unmount()
         render(<Shell manifests={[noInt]} />)
         await screen.findByTestId('remote-x')
+    })
+
+    it('integrity real: el hash correcto carga y el incorrecto falla sin montar el remoto', async () => {
+        const bytes = new TextEncoder().encode('export default {}')
+        const digest = btoa(String.fromCharCode(...new Uint8Array(await crypto.subtle.digest('SHA-384', bytes))))
+        vi.stubGlobal('fetch', vi.fn(async () => new Response(bytes)))
+        vi.spyOn(Object.getPrototypeOf(document.createElement('link').relList), 'supports').mockReturnValue(false) // fuerza la ruta fetch+hash
+        mf.loadRemote.mockImplementation(async () => remote('p'))
+        const good = manifest('p', { frontend: { entry: '/p.js', integrity: `sha384-${digest}` } })
+        const { unmount } = render(<Shell manifests={[good]} requireIntegrity />)
+        await screen.findByTestId('remote-p')
+        unmount()
+        __resetRemoteIntegrityCache()
+        mf.loadRemote.mockClear()
+        const badHash = btoa(String.fromCharCode(...new Uint8Array(48)))
+        const bad = manifest('q', { frontend: { entry: '/q.js', integrity: `sha384-${badHash}` } })
+        const onEvent = vi.fn()
+        render(<Shell manifests={[bad]} requireIntegrity onEvent={onEvent} />)
+        await screen.findByTestId('fb-q')
+        expect(mf.loadRemote).not.toHaveBeenCalled()
+        expect(onEvent).toHaveBeenCalledWith('addon_slot_failed', expect.objectContaining({ addon: 'q', reason: 'load' }))
+    })
+
+    it('timeout_ms 0 o negativo del manifest no anula el timeout del host', async () => {
+        vi.useFakeTimers()
+        mf.loadRemote.mockImplementation(() => new Promise(() => {}))
+        const m = manifest('slow')
+        m.contributions!.slots![0].timeout_ms = 0
+        render(<Shell manifests={[m]} timeoutMs={2000} />)
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(2100)
+        })
+        expect(screen.getByTestId('fb-slow').textContent).toBe('timeout')
     })
 
     it('frontend.sdk incompatible con el SDK del host: fallback y telemetría, sin cargar', async () => {
@@ -205,6 +240,19 @@ describe('sortSlotItems', () => {
             { id: 'd', order: 0, priority: 1 },
         ])
         expect(r.map((x) => x.id)).toEqual(['c', 'b', 'd', 'a'])
+    })
+})
+
+describe('resolveSlotTimeout', () => {
+    it('acota a 1000..30000 y cae al host si no es válido', () => {
+        expect(resolveSlotTimeout(5, 9000)).toBe(1000)
+        expect(resolveSlotTimeout(99999, 9000)).toBe(30000)
+        expect(resolveSlotTimeout(8000, 9000)).toBe(8000)
+        expect(resolveSlotTimeout(0, 9000)).toBe(9000)
+        expect(resolveSlotTimeout(-1, 9000)).toBe(9000)
+        expect(resolveSlotTimeout(NaN, 9000)).toBe(9000)
+        expect(resolveSlotTimeout('abc', 9000)).toBe(9000)
+        expect(resolveSlotTimeout(undefined, 9000)).toBe(9000)
     })
 })
 

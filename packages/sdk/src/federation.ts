@@ -95,7 +95,9 @@ export function loadFederatedAddon(
       ),
     );
   }
-  const cacheKey = `${spec.container ?? addonKey ?? ""}::${spec.entry}::${version ?? ""}`;
+  // `integrity` forma parte de la clave: una carga previa sin integrity (u
+  // con otro hash) no satisface a quien exige uno concreto.
+  const cacheKey = `${spec.container ?? addonKey ?? ""}::${spec.entry}::${version ?? ""}::${spec.integrity ?? ""}`;
   let shared = loaded.get(cacheKey);
   if (!shared) {
     const created = doLoad(spec, addonKey, version);
