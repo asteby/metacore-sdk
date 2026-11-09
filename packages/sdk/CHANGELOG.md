@@ -1,5 +1,11 @@
 # @asteby/metacore-sdk
 
+## 3.19.0
+
+### Minor Changes
+
+- e21acd8: `loadFederatedAddon(spec, addonKey?, version?, options?)` acepta `{ requireIntegrity, timeoutMs }`. `requireIntegrity` rechaza un remoto sin `frontend.integrity` (útil para addons privados); `timeoutMs` rechaza un remoto colgado y libera la caché para reintentar. Sin opciones el comportamiento es el de siempre. Exporta el tipo `LoadFederatedAddonOptions`.
+
 ## 3.18.1
 
 ### Patch Changes
