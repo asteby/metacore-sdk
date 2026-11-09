@@ -91,6 +91,11 @@ export interface AddonSlotContribution {
     order?: number
     props?: Record<string, unknown>
     timeout_ms?: number
+    /**
+     * Qué se ve si esta contribución falla (manifest v3 `slots[].fallback`): `hide` (por omisión)
+     * usa el `fallback` del host (nada si no hay); `notice` pinta un aviso discreto en su lugar.
+     */
+    fallback?: 'hide' | 'notice'
 }
 
 /** Lo que recibe el componente del remoto además de `context` y `props`. */
@@ -181,6 +186,15 @@ type RemoteItem_ = {
 }
 type LocalItem_ = { type: 'local'; id: string; addon: string; order: number; priority: number; entry: SlotEntry }
 type Item = RemoteItem_ | LocalItem_
+
+/** Aviso de `fallback: "notice"`: sin detalles internos del error. */
+export function SlotFailureNotice({ failure }: { failure: AddonSlotFailure }) {
+    return (
+        <div role="status" data-addon-slot-notice={failure.addon} data-reason={failure.reason}>
+            No se pudo cargar este módulo ({failure.addon}).
+        </div>
+    )
+}
 
 const EMPTY_OBJ: Record<string, unknown> = Object.freeze({}) as Record<string, unknown>
 
@@ -432,7 +446,9 @@ export function AddonSlot({
                             requireIntegrity={effRequire}
                             timeoutMs={effTimeout}
                             loading={loading}
-                            renderFallback={renderFallback}
+                            renderFallback={
+                                item.slot.fallback === 'notice' ? (f) => <SlotFailureNotice failure={f} /> : renderFallback
+                            }
                             report={report}
                         />
                     ) : (
