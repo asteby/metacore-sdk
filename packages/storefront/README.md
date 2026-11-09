@@ -482,6 +482,20 @@ hide it or label it "test". `label_url` exists only on return shipments. The moc
 demo orders for every state (shipped with events, invoice + credit note + refund, sandbox shipment, pickup with a
 degraded section) and two pending vouchers for the demo buyer.
 
+## Returns (`sf.customer.requestReturn` + helpers)
+
+```ts
+import { returnableLines, returnEligibility, RETURN_NOTES_MAX } from '@asteby/storefront'
+
+returnableLines(order)   // [{ sku, title, variantTitle, maxQuantity }] — lines with a SKU and a whole quantity; same SKU merged
+returnEligibility(order, { returnsDays: 30, warrantyDays: 365, now })
+// { eligible: true, deadline?, warrantyOnly? } | { eligible: false, reason: 'not_delivered' | 'cancelled' | 'refunded' | 'window_expired' | 'no_lines', deadline? }
+
+await sf.customer.requestReturn(order.id, { lines: [{ sku: 'BC-1', quantity: 1 }], reason: 'defective', notes: 'Llegó rota' }, { idempotencyKey })
+```
+
+`reason` is `defective | not_wanted | wrong_item | warranty` (server default `not_wanted`); `notes` is at most 500 (`RETURN_NOTES_MAX`) characters. The delivery date is only READ from the order (the `delivered` step of `progress`, shipments' `delivered_at`, `pickup.delivered_at`): without it the order is eligible with no `deadline`, and a window is only enforced when you pass `returnsDays` / `warrantyDays`. Texts: `returnMessages(locale)` (es-MX / en-US). The headless form and the server action are in `@asteby/storefront-react` (`ReturnRequestForm`, `createReturnRequestAction`).
+
 ## Product titles and shopping feeds (`@asteby/storefront/merchant`)
 
 ERP catalogs arrive shouted (`ROTULA IZQ 4X2 TOYOTA TACOMA 2.4 L4 1995 2004`). The title helpers change only how a

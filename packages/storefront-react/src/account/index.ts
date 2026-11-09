@@ -63,3 +63,9 @@ export { settingsMessages, settingsEnumText } from './settings-messages.js'
 export type { SettingsMessageKey, SettingsMessages } from './settings-messages.js'
 export type { SettingsTextProps } from './settings-ui.js'
 export type { AccountSettingsActionData, SettingsErrorCode, SettingsIntent } from './settings-types.js'
+
+// Returns ("Solicitar devolucion"): headless form; the action is in ./server.
+export { ReturnRequestForm } from './return-request.js'
+export type { ReturnRequestFormClassNames, ReturnRequestFormProps } from './return-request.js'
+export { RETURN_FORM } from './returns-form-names.js'
+export type { ReturnErrorCode, ReturnFieldErrorCode, ReturnFormValues, ReturnIntent, ReturnRequestActionData } from './returns-types.js'
