@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 53.16.0
+
+### Minor Changes
+
+- 97aaf79: AddonConfigSurface: una credencial de conector con `auto` (generada por el host) ya no se pide; la superficie muestra "Conectada automáticamente" / "Clave manual vigente" / "Requiere acción" y un botón Rotar que muestra la clave nueva una sola vez (`POST /integrations/:provider/auto/:key/rotate`). Sin `auto` nada cambia.
+
 ## 53.15.0
 
 ### Minor Changes
