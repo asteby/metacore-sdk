@@ -46,6 +46,20 @@ declare global {
 
 const loaded = new Map<string, Promise<unknown>>();
 
+export interface LoadFederatedAddonOptions {
+  /**
+   * Rechaza (promesa rechazada) un spec sin `integrity` en vez de cargarlo sin
+   * verificar. Pensado para remotos privados. Por omisión `false`: el
+   * comportamiento histórico (`integrity` opcional).
+   */
+  requireIntegrity?: boolean;
+  /**
+   * Rechaza si el remoto no termina de cargar en este tiempo (ms). Por omisión
+   * sin límite, como hasta ahora.
+   */
+  timeoutMs?: number;
+}
+
 /**
  * Load a federated addon. Returns whatever the addon's exposed module
  * default-exports — typically a `Plugin`. Subsequent calls for the same entry
@@ -67,17 +81,55 @@ export function loadFederatedAddon(
   spec: FrontendSpec,
   addonKey?: string,
   version?: string,
+  options?: LoadFederatedAddonOptions,
 ): Promise<unknown> {
   if (spec.format !== "federation") {
     throw new Error(`loadFederatedAddon: unsupported format ${spec.format}`);
   }
+  // Política de integridad: se evalúa ANTES de la caché para que una carga
+  // previa sin `integrity` no satisfaga a quien la exige.
+  if (options?.requireIntegrity && !spec.integrity) {
+    return Promise.reject(
+      new Error(
+        `metacore: addon ${spec.container ?? addonKey ?? spec.entry} has no frontend.integrity and requireIntegrity is set`,
+      ),
+    );
+  }
   const cacheKey = `${spec.container ?? addonKey ?? ""}::${spec.entry}::${version ?? ""}`;
-  const cached = loaded.get(cacheKey);
-  if (cached) return cached;
-  const p = doLoad(spec, addonKey, version);
-  loaded.set(cacheKey, p);
-  p.catch(() => loaded.delete(cacheKey));
-  return p;
+  let shared = loaded.get(cacheKey);
+  if (!shared) {
+    const created = doLoad(spec, addonKey, version);
+    shared = created;
+    loaded.set(cacheKey, created);
+    created.catch(() => {
+      if (loaded.get(cacheKey) === created) loaded.delete(cacheKey);
+    });
+  }
+  const ms = options?.timeoutMs;
+  if (!ms || ms <= 0) return shared;
+  // El timeout envuelve la promesa compartida (no la contamina) y, al vencer,
+  // libera la caché para que un reintento vuelva a intentar la carga.
+  const pending = shared;
+  return new Promise<unknown>((resolve, reject) => {
+    const t = setTimeout(() => {
+      if (loaded.get(cacheKey) === pending) loaded.delete(cacheKey);
+      reject(
+        new Error(
+          `metacore: addon ${spec.container ?? addonKey ?? spec.entry} did not load within ${ms} ms`,
+        ),
+      );
+    }, ms);
+    pending.then(
+      (v) => {
+        clearTimeout(t);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(t);
+        reject(e);
+      },
+    );
+  });
 }
 
 async function doLoad(

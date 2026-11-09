@@ -229,6 +229,37 @@ browser with bare specifiers and the browser throws
 `@asteby/metacore-starter-config/vite` to force pre-bundling — see
 [the starter-config README](../packages/starter-config/README.md#pre-bundling-linked-sdk-packages).
 
+## Hardening a remote: `requireIntegrity` and `timeoutMs`
+
+`loadFederatedAddon(spec, addonKey?, version?, options?)` takes two optional
+policies. Without `options` nothing changes (integrity stays optional, no
+timeout).
+
+```ts
+await loadFederatedAddon(spec, key, undefined, {
+  requireIntegrity: true, // promise rejects if spec.integrity is missing
+  timeoutMs: 8_000,       // promise rejects if the remote does not load in time
+})
+```
+
+`requireIntegrity` is evaluated before the in-memory cache, so an earlier load
+without `integrity` never satisfies a caller that requires it. On timeout the
+cache entry is dropped so a retry loads again.
+
+## Mounting slot contributions: `<AddonSlot>`
+
+`@asteby/metacore-runtime-react` exports `<AddonSlot kind context>`. It renders
+the `contributions.slots[]` of the installed manifests (provided through
+`<AddonSlotProvider manifests sdkVersion onEvent>`) plus the in-process entries
+of the canonical slot store, ordered by `order` ascending and then `priority`
+descending. Each contribution is isolated (ErrorBoundary + Suspense + timeout):
+a remote that throws, hangs, has no integrity (with `requireIntegrity`) or needs
+an incompatible `frontend.sdk` range shows its fallback and emits
+`addon_slot_failed{addon,kind,reason}` through `onEvent`; siblings and the shell
+are untouched. `reason` is one of `timeout | load | render | missing_expose |
+integrity_required | sdk_incompatible`. The exposed module default-exports
+`({ context, props, sdk }) => JSX`.
+
 ## See also
 
 - [`packages/starter-config/README.md`](../packages/starter-config/README.md#module-federation-singletons-metacorefederationshared) — full helper option reference.
