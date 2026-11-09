@@ -115,6 +115,25 @@ describe('AddonSlot', () => {
         expect(onEvent).toHaveBeenCalledWith('addon_slot_failed', expect.objectContaining({ addon: 'bad', reason: 'load' }))
     })
 
+    it('slots[].fallback=notice pinta el aviso del SDK; hide conserva el fallback del host', async () => {
+        mf.loadRemote.mockImplementation(async (id: string) => {
+            if (id.endsWith('bad') || id.endsWith('quiet')) throw new Error('404 expose')
+            return remote('ok')
+        })
+        const withFallback = (key: string, fb: 'hide' | 'notice'): AddonSlotManifest => {
+            const m = manifest(key)
+            m.contributions!.slots![0].fallback = fb
+            return m
+        }
+        render(<Shell manifests={[withFallback('bad', 'notice'), withFallback('quiet', 'hide'), manifest('ok')]} />)
+        await screen.findByTestId('remote-ok')
+        const notice = await screen.findByRole('status')
+        expect(notice.getAttribute('data-addon-slot-notice')).toBe('bad')
+        expect(notice.textContent).not.toContain('404')
+        expect(screen.queryByTestId('fb-bad')).toBeNull()
+        expect(screen.getByTestId('fb-quiet')).toBeTruthy()
+    })
+
     it('un remoto colgado muestra el fallback tras timeoutMs y el hermano sí pinta', async () => {
         vi.useFakeTimers()
         mf.loadRemote.mockImplementation((id: string) =>
