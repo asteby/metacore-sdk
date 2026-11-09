@@ -1228,3 +1228,21 @@ Muestra el correo con su estado (`Customer.email_verified`), un botón para pedi
 ### Vista previa y descargas de la factura
 
 `InvoiceList`, `InvoiceDetail` e `InvoiceHistory` (y por tanto «Mis facturas») muestran «Ver factura», «Descargar PDF» y «Descargar XML» cuando les pasas `fileHref`. Cada clic pide el archivo a TU ruta autenticada en ese momento (sin enlaces que venzan, tantas veces como quiera el comprador) y lo guarda con el nombre que manda el servidor (`factura-<serie>-<folio>.pdf`). «Ver factura» abre `InvoicePreviewDialog` (diálogo nativo con foco atrapado, Esc, título accesible, ES/EN; carga perezosa): el PDF incrustado, o mientras no exista, los datos del CFDI leídos del XML con «El PDF se está generando» y reintento. En móvil abre el PDF en una pestaña nueva. La ruta de la tienda solo necesita pasar `request` a `invoiceFileResponse`.
+
+## Reseñas de producto (`@asteby/storefront-react/reviews`)
+
+Aditivo y opcional (necesita el addon `product_reviews` en OPS). `ProductReviews` muestra el resumen con la distribución por estrellas, el listado («Más reseñas», filtro por calificación y orden) y, para un comprador verificado, el formulario («Escribir una reseña»); `ReviewsPolicy` es el texto «Cómo funcionan nuestras reseñas». Todas las reseñas se ven iguales: no hay insignias por reseña. Textos es/en (`messages` los sustituye), accesible (grupo de radios para las estrellas, mensajes con `role="alert"`, foco al abrir el formulario), claro/oscuro por `currentColor` y variables `--sf-reviews-*`, móvil primero. Hoja opcional: `@asteby/storefront-react/reviews.css`.
+
+```tsx
+import { ProductReviews, ReviewsPolicy, reviewsApiFromClient, reviewsJsonLdInput } from '@asteby/storefront-react/reviews'
+import '@asteby/storefront-react/reviews.css'
+
+// En el navegador `api` apunta a rutas de TU tienda (el token sk_ y la sesión no viajan a la página);
+// en el servidor se adapta un cliente: reviewsApiFromClient(sf)
+<ProductReviews handle={product.handle} api={api} initial={reviews} market="mx" signInHref="/cuenta" policy={<ReviewsPolicy />} />
+
+// JSON-LD solo con lo que la página muestra (las reseñas aprobadas de `initial`):
+const ld = reviewsJsonLdInput(reviews) // → productReviewsJsonLd(ld.items, ld.summary)
+```
+
+El botón consulta `eligibility`: sin sesión pide iniciar sesión, sin compra dice «Compra este producto para dejar tu reseña», con compra abre el formulario; al enviar muestra «Gracias, tu reseña será revisada» (nada se publica sin aprobar).

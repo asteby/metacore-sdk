@@ -57,6 +57,7 @@ import { buildAccountOrders, buildPendingPayments, buildSyntheticOrders } from '
 import { MOCK_REGION_MX, maskTaxId, validateInvoiceRequest } from './region.js'
 import { parseTagFacetsQuery, TagFacetsError, tagFacetsFromTags } from './tag-facets.js'
 import { isMasked, PRIVATE_MASK, resolveSubject, type SubjectValues } from '../subjects.js'
+import { cleanReviewText, publicReviewName, reviewTextProblem, summarizeReviews, toPublicReview, type MockReviewOptions, type MockReviewRecord } from './reviews.js'
 import {
   MOCK_CURRENCY,
   MOCK_IMAGE_URL,
@@ -75,6 +76,7 @@ import {
 
 export { MOCK_CURRENCY, MOCK_CUSTOMER_EMAIL, MOCK_IMAGE_URL, MOCK_POSTAL_CENTROIDS } from './seed.js'
 export { MOCK_SUBJECT_KINDS } from './subjects.js'
+export type { MockReviewOptions, MockReviewSeed } from './reviews.js'
 export { MOCK_CUSTOMER_TYPES } from './customer-types.js'
 export { MOCK_CSF_RULES, MOCK_FISCAL_ID_MX, MOCK_IDENTITY_DOCUMENT_MX_CSF, MOCK_REGION_MX } from './region.js'
 export type { MockImageUrl } from './seed.js'
@@ -182,6 +184,8 @@ export type MockStorefrontOptions = {
    * `customer.subjects`. Default none: no such section, as in a store that declares nothing (`MOCK_SUBJECT_KINDS` has two).
    */
   subjectKinds?: SubjectKind[]
+  /** Product reviews (addon `product_reviews`): seed reviews and who counts as a buyer. Default: no reviews; `cus_1` bought «Playera básica». */
+  reviews?: MockReviewOptions
 }
 
 type CartRecord = {
@@ -2092,6 +2096,138 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     if (cur.is_default && heir) setDefaultSubject(c, heir.id)
     return { status: 204 }
   })
+  // Product reviews (addon product_reviews): only buyers write, nothing is public until approved, text is plain.
+  const reviewRows: MockReviewRecord[] = (options.reviews?.seed ?? []).map((r, i) => ({ ...r, id: `rev_${i + 1}`, created_at: r.created_at ?? now(), status: r.status ?? 'approved' }))
+  const boughtHandle = (c: Customer, handle: string): boolean => {
+    if (options.reviews?.purchased) return options.reviews.purchased(c.id, handle)
+    const title = state.products.find((p) => p.handle === handle)?.title
+    return !!title && state.orders.some((o) => o.customer_id === c.id && o.lines.some((l) => l.title === title))
+  }
+  const sessionCustomer = (headers: Headers): Customer | undefined => {
+    const token = headers.get('x-customer-token')
+    const id = token ? state.sessions.get(token) : undefined
+    return id ? state.customers.find((c) => c.id === id) : undefined
+  }
+  const reviewProduct = (handle: string | undefined) => requireNode(state.products.find((p) => p.handle === handle), `Product ${handle}`)
+  const myReviewView = (r: MockReviewRecord) => ({ ...toPublicReview(r), status: r.status, ...(r.status === 'rejected' ? { reject_reason: 'other' } : {}) })
+  const textOrThrow = (field: 'title' | 'body', value: unknown, min: number, max: number): string => {
+    if (typeof value !== 'string') throw new HttpError(422, 'validation', `${field} is required`, field)
+    const text = cleanReviewText(value)
+    const problem = reviewTextProblem(text, min, max)
+    if (problem) throw new HttpError(422, 'validation', `${field}: ${problem}`, field)
+    return text
+  }
+  route('GET', '/products/:handle/reviews/eligibility', 'customer:read', ({ headers, params }) => {
+    const p = reviewProduct(params[0])
+    const c = sessionCustomer(headers)
+    if (!c) return { body: { can_review: false, reason: 'login_required' }, cache: 'private' }
+    const mine = reviewRows.find((r) => r.product_handle === p.handle && r.customer_id === c.id && !r.withdrawn)
+    if (mine) return { body: { can_review: false, reason: 'already_reviewed', mine: myReviewView(mine) }, cache: 'private' }
+    return { body: boughtHandle(c, p.handle) ? { can_review: true, reason: 'ok' } : { can_review: false, reason: 'not_purchased' }, cache: 'private' }
+  })
+  route('GET', '/products/:handle/reviews', 'catalog:read', ({ params, search }) => {
+    const p = reviewProduct(params[0])
+    const market = search.get('market')
+    const approved = reviewRows.filter((r) => r.product_handle === p.handle && r.status === 'approved' && !r.withdrawn && (!market || !r.market || r.market === market))
+    const rating = search.get('rating')
+    if (rating !== null && !/^[1-5]$/.test(rating)) throw new HttpError(400, 'validation', 'rating must be between 1 and 5', 'rating')
+    const sort = search.get('sort') ?? 'recent'
+    if (!['recent', 'highest', 'lowest'].includes(sort)) throw new HttpError(400, 'validation', 'sort must be recent, highest or lowest', 'sort')
+    const shown = approved
+      .filter((r) => !rating || r.rating === Number(rating))
+      .sort((a, b) => (sort === 'highest' ? b.rating - a.rating : sort === 'lowest' ? a.rating - b.rating : 0) || b.created_at.localeCompare(a.created_at))
+    return { body: { summary: summarizeReviews(approved), ...(({ nodes, ...rest }) => ({ nodes: nodes.map(toPublicReview), ...rest }))(paginate(shown, search, 10, 50)) }, cache: 'public' }
+  })
+  route('POST', '/products/:handle/reviews', 'customer:write', ({ headers, params, body }) => {
+    const p = reviewProduct(params[0])
+    const rating = body.rating
+    if (typeof rating !== 'number' || !Number.isInteger(rating) || rating < 1 || rating > 5) throw new HttpError(422, 'validation', 'rating must be an integer between 1 and 5', 'rating')
+    const title = textOrThrow('title', body.title, 3, 80)
+    const text = textOrThrow('body', body.body, 10, 2000)
+    if (typeof body.website === 'string' && body.website.trim()) return { status: 201, body: { id: 'rev_0', status: 'pending' }, cache: 'private' }
+    const c = sessionCustomer(headers)
+    if (!c) throw new HttpError(401, 'login_required', 'Sign in or open the link of your order to review')
+    if (!boughtHandle(c, p.handle)) throw new HttpError(403, 'not_purchased', 'Only buyers of this product can review it')
+    if (reviewRows.some((r) => r.product_handle === p.handle && r.customer_id === c.id && !r.withdrawn)) throw new HttpError(409, 'already_reviewed', 'You already reviewed this product')
+    const record: MockReviewRecord = {
+      id: nextId('rev'),
+      product_handle: p.handle,
+      rating,
+      title,
+      body: text,
+      display_name: publicReviewName(typeof body.display_name === 'string' ? body.display_name : '') || publicReviewName(`${c.first_name ?? ''} ${c.last_name ?? ''}`) || 'Cliente',
+      created_at: now(),
+      status: 'pending',
+      customer_id: c.id,
+    }
+    reviewRows.push(record)
+    return { status: 201, body: { id: record.id, status: 'pending' }, cache: 'private' }
+  })
+  route('GET', '/reviews/orders/:id', 'customer:read', ({ headers, params }) => {
+    const grant = headers.get('x-review-grant')
+    const c = sessionCustomer(headers)
+    const order = grant?.startsWith('rvg_mock_') ? state.orders.find((o) => o.id === grant.slice('rvg_mock_'.length)) : c ? state.orders.find((o) => o.customer_id === c.id && (o.id === params[0] || o.number === params[0])) : undefined
+    if (!order && !c && !grant) throw new HttpError(401, 'login_required', 'Sign in or open the link of your order')
+    if (!order || order.status === 'cancelled') throw new HttpError(404, 'not_found', 'Order not found')
+    const nodes = state.products
+      .filter((p) => order.lines.some((l) => l.title === p.title))
+      .map((p) => {
+        const mine = c ? reviewRows.find((r) => r.product_handle === p.handle && r.customer_id === c.id && !r.withdrawn) : undefined
+        return { product_handle: p.handle, title: p.title, can_review: !mine, ...(mine ? { review: { id: mine.id, status: mine.status } } : {}) }
+      })
+    return { body: { nodes }, cache: 'private' }
+  })
+  route('GET', '/reviews/mine', 'customer:read', ({ headers }) => {
+    const c = requireCustomer(headers)
+    return { body: { nodes: reviewRows.filter((r) => r.customer_id === c.id && !r.withdrawn).map((r) => ({ ...myReviewView(r), product_handle: r.product_handle })) }, cache: 'private' }
+  })
+  const ownReview = (headers: Headers, id: string | undefined) => {
+    const c = requireCustomer(headers)
+    return requireNode(reviewRows.find((r) => r.id === id && r.customer_id === c.id && !r.withdrawn), 'Review', 'id')
+  }
+  route('PATCH', '/reviews/:id', 'customer:write', ({ headers, params, body }) => {
+    const r = ownReview(headers, params[0])
+    if (body.rating !== undefined) {
+      if (typeof body.rating !== 'number' || !Number.isInteger(body.rating) || body.rating < 1 || body.rating > 5) throw new HttpError(422, 'validation', 'rating must be an integer between 1 and 5', 'rating')
+      r.rating = body.rating
+    }
+    if (body.title !== undefined) r.title = textOrThrow('title', body.title, 3, 80)
+    if (body.body !== undefined) r.body = textOrThrow('body', body.body, 10, 2000)
+    if (typeof body.display_name === 'string') r.display_name = publicReviewName(body.display_name) || r.display_name
+    r.status = 'pending'
+    return { body: myReviewView(r), cache: 'private' }
+  })
+  route('DELETE', '/reviews/:id', 'customer:write', ({ headers, params }) => {
+    ownReview(headers, params[0]).withdrawn = true
+    return { status: 204 }
+  })
+  route('POST', '/reviews/grants', 'orders:read', ({ body }) => {
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+    const order = state.orders.find((o) => o.number === String(body.order_number ?? '').trim() && state.customers.some((c) => c.id === o.customer_id && (c.email ?? '').toLowerCase() === email))
+    if (!order) throw new HttpError(404, 'not_found', 'Order not found')
+    const handles = state.products.filter((p) => order.lines.some((l) => l.title === p.title)).map((p) => p.handle)
+    if (!handles.length) throw new HttpError(404, 'not_found', 'Order not found')
+    const products = state.products.filter((p) => handles.includes(p.handle)).map((p) => ({ handle: p.handle, title: p.title }))
+    return { status: 201, body: { grant: 'rvg_mock_' + order.id, expires_at: new Date(Date.now() + 30 * 864e5).toISOString(), product_handles: handles, products }, cache: 'private' }
+  })
+  route('POST', '/reviews/import', 'reviews:admin', ({ body }) => {
+    const items = Array.isArray(body.items) ? (body.items as Record<string, unknown>[]) : []
+    let created = 0
+    let skipped = 0
+    const unknown = new Set<string>()
+    for (const it of items) {
+      const ref = String(it.external_ref ?? '')
+      if (!state.products.some((p) => p.handle === it.handle)) {
+        unknown.add(String(it.handle))
+        skipped++
+      } else if (reviewRows.some((r) => (r as MockReviewRecord & { external_ref?: string }).external_ref === ref)) skipped++
+      else {
+        reviewRows.push({ id: nextId('rev'), product_handle: String(it.handle), rating: Number(it.rating), title: String(it.title ?? ''), body: String(it.text), display_name: String(it.author), created_at: `${String(it.date).slice(0, 10)}T12:00:00.000Z`, status: 'approved', external_ref: ref, ...(typeof body.market === 'string' ? { market: body.market } : {}) } as MockReviewRecord)
+        created++
+      }
+    }
+    return { body: { created, skipped, unknown_products: [...unknown] }, cache: 'private' }
+  })
   route('GET', '/customer/addresses', 'customer:read', ({ headers }) => {
     const c = requireCustomer(headers)
     return { body: { nodes: state.addresses.get(c.id) ?? [] }, cache: 'private' }
@@ -2154,7 +2290,7 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     if (!token) return null
     let all: string[]
     if (token.startsWith('pk_')) all = ['catalog:read', 'content:read', 'cart:write']
-    else if (token.startsWith('sk_')) all = ['catalog:read', 'content:read', 'cart:write', 'checkout:write', 'customer:read', 'customer:write', 'orders:read']
+    else if (token.startsWith('sk_')) all = ['catalog:read', 'content:read', 'cart:write', 'checkout:write', 'customer:read', 'customer:write', 'orders:read', 'reviews:admin']
     else return null
     return new Set(all.filter((sc) => !missingScopes.includes(sc)))
   }

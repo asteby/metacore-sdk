@@ -1999,3 +1999,98 @@ export type ShipmentListNode = { order: OrderRef; stage: string; service: OrderS
 
 export type InvoiceConnection = Connection<InvoiceListNode>
 export type ShipmentConnection = Connection<ShipmentListNode>
+
+// ---------------------------------------------------------------------------
+// Product reviews (addon `product_reviews`): moderated, verified buyers only
+// ---------------------------------------------------------------------------
+
+/**
+ * A published review as the storefront shows it. Public by construction: the server never sends an e-mail, a phone,
+ * an order, a status or where the review came from; every review looks the same (no per-review badge).
+ */
+export type ProductReview = {
+  id: string
+  /** 1 to 5. */
+  rating: number
+  title: string
+  body: string
+  /** `First L.` (or the name the review was published with). Never a contact detail. */
+  display_name: string
+  /** Date shown (ISO 8601): the original date for a review written elsewhere. */
+  created_at: string
+  /** The answer of the brand, shown under the review. */
+  brand_reply?: { body: string; created_at: string }
+}
+
+/** Counts of the APPROVED reviews (the same rows the list shows): safe to mark up as `aggregateRating`. */
+export type ReviewSummary = {
+  count: number
+  /** Rounded to two decimals; 0 when there are no reviews. */
+  average: number
+  distribution: Record<'1' | '2' | '3' | '4' | '5', number>
+}
+
+export type ReviewList = {
+  summary: ReviewSummary
+  nodes: ProductReview[]
+  page_info: { has_next_page: boolean; end_cursor: string | null }
+  /** Reviews matching the filter (not only this page). */
+  total_count: number
+}
+
+export type ReviewListParams = {
+  /** 1 to 50 (server default 10). */
+  first?: number
+  after?: string
+  /** Only reviews with this rating (the summary does not change). */
+  rating?: 1 | 2 | 3 | 4 | 5
+  sort?: 'recent' | 'highest' | 'lowest'
+  /** Market code (`mx`, `us`): list and summary of that market only. */
+  market?: string
+}
+
+/** Why a shopper can or cannot write a review of a product. */
+export type ReviewEligibilityReason = 'ok' | 'login_required' | 'not_purchased' | 'already_reviewed'
+
+export type ReviewStatus = 'pending' | 'approved' | 'rejected'
+
+/** A review of the signed-in buyer (or the holder of an order grant), in any state. */
+export type MyReview = {
+  id: string
+  rating: number
+  title: string
+  body: string
+  display_name: string
+  status: ReviewStatus
+  created_at: string
+  /** Why it was rejected (`spam`, `offensive`, `personal_data`, `third_party`, `fake`, `other`). */
+  reject_reason?: string
+  brand_reply?: { body: string; created_at: string }
+  /** Only in `reviews.mine()`. */
+  product_handle?: string
+}
+
+export type ReviewEligibility = { can_review: boolean; reason: ReviewEligibilityReason; mine?: MyReview }
+
+export type ReviewInput = {
+  rating: number
+  title: string
+  body: string
+  /** Optional: any name is shown as `First L.`; empty = the name of the account or order. */
+  display_name?: string
+  market?: string
+  locale?: string
+  /** Honeypot: leave it out (a human never fills it). */
+  website?: string
+}
+
+export type ReviewPatch = Partial<Pick<ReviewInput, 'rating' | 'title' | 'body' | 'display_name'>>
+
+/** Permission to review the products of ONE paid order (30 days). Keep it server-side or in an httpOnly cookie. */
+export type ReviewGrant = { grant: string; expires_at: string; product_handles: string[]; products: { handle: string; title: string }[] }
+
+/** One product of a paid order and whether this buyer already reviewed it («Mi pedido», thank-you page). */
+export type OrderReviewProduct = { product_handle: string; title: string; can_review: boolean; review?: { id: string; status: ReviewStatus } }
+
+export type ReviewImportItem = { handle: string; author: string; rating: number; title?: string; text: string; date: string; external_ref: string }
+export type ReviewImportResult = { created: number; skipped: number; unknown_products: string[] }

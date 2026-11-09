@@ -21,6 +21,7 @@ export default defineConfig({
     tracking: 'src/tracking/index.ts',
     contact: 'src/contact/index.ts',
     product: 'src/product/index.ts',
+    reviews: 'src/reviews/index.ts',
     ui: 'src/ui/index.ts',
   },
   format: ['esm', 'cjs'],
