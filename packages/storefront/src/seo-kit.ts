@@ -122,6 +122,63 @@ export function crawlerGroups(policy: CrawlerPolicy = {}): { allow: string[]; bl
 }
 
 // ---------------------------------------------------------------------------
+// Operational switches read from the environment (shared by every shop so none copies them)
+// ---------------------------------------------------------------------------
+
+const OFF = /^(off|false|0|no)$/i
+
+/**
+ * Site-wide indexing switch. Indexed by default; `SEO_INDEXING=off` closes the site by configuration (staging, previews):
+ * the shop answers `CLOSED_ROBOTS_TXT`, publishes no sitemaps/llms.txt and sets `CLOSED_X_ROBOTS` on every response.
+ */
+export function indexingEnabled(env: Record<string, string | undefined> = {}): boolean {
+  return !OFF.test((env.SEO_INDEXING ?? '').trim())
+}
+export const CLOSED_ROBOTS_TXT = 'User-agent: *\nDisallow: /\n'
+export const CLOSED_X_ROBOTS = 'noindex, nofollow'
+
+/**
+ * Crawler policy from configuration: `AI_TRAINING_CRAWLERS=allow|block` and
+ * `CRAWLER_OVERRIDES="GPTBot=allow,CCBot=block"` (per agent; wins over the first). `defaults.training` is the shop's
+ * decision when the variable is absent (SDK default: `block`).
+ */
+export function crawlerPolicyFromEnv(env: Record<string, string | undefined> = {}, defaults: { training?: 'allow' | 'block' } = {}): CrawlerPolicy {
+  const agents: Record<string, 'allow' | 'block'> = {}
+  for (const part of (env.CRAWLER_OVERRIDES ?? '').split(',')) {
+    const [name, value] = part.split('=').map((s) => s.trim())
+    if (name && /^[A-Za-z0-9._-]{2,64}$/.test(name) && (value === 'allow' || value === 'block')) agents[name] = value
+  }
+  const raw = (env.AI_TRAINING_CRAWLERS ?? '').trim().toLowerCase()
+  const training = raw === 'allow' || raw === 'block' ? raw : (defaults.training ?? 'block')
+  return { training, agents }
+}
+
+/** Query parameters that change a listing (filters, order, pagination, search). Campaign ones (utm_*, gclid) do not. */
+export const LISTING_PARAMS: readonly string[] = ['orden', 'tras', 'q', 'disponible', 'precio-min', 'precio-max']
+
+/**
+ * True when the URL asks for a listing different from the clean one (a `f.*` filter or any of `params`, with a value):
+ * that view gets `noindex` and a canonical to the clean listing. Campaign parameters never make it "filtered".
+ */
+export function isFilteredListingUrl(url: URL | string, params: readonly string[] = LISTING_PARAMS): boolean {
+  const { searchParams } = typeof url === 'string' ? new URL(url) : url
+  for (const [key, value] of searchParams) if ((key.startsWith('f.') || params.includes(key)) && value !== '') return true
+  return false
+}
+
+/**
+ * Response for the IndexNow key file: `GET|HEAD /<key>.txt` -> `text/plain` with the key, else `null` (let the request
+ * continue). Use it from a middleware, not a loader: a loader's raw Response would be wrapped in the shop's HTML document
+ * and the verifier would not find the key.
+ */
+export function indexNowKeyResponse(request: { method: string; url: string }, key: string | null | undefined): Response | null {
+  const k = key?.trim()
+  if (!k || !isIndexNowKey(k) || (request.method !== 'GET' && request.method !== 'HEAD')) return null
+  if (new URL(request.url).pathname !== `/${k}.txt`) return null
+  return new Response(request.method === 'HEAD' ? null : k, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' } })
+}
+
+// ---------------------------------------------------------------------------
 // llms.txt / llms-full.txt (https://llmstxt.org)
 // ---------------------------------------------------------------------------
 

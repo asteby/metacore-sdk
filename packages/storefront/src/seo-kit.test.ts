@@ -2,7 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   aiReferrer,
   canonicalOrigin,
+  CLOSED_ROBOTS_TXT,
+  CLOSED_X_ROBOTS,
   crawlerGroups,
+  crawlerPolicyFromEnv,
+  indexingEnabled,
+  indexNowKeyResponse,
+  isFilteredListingUrl,
   ga4AddToCart,
   ga4BeginCheckout,
   ga4Bootstrap,
@@ -16,7 +22,7 @@ import {
   renderSitemapIndex,
   submitIndexNow,
 } from './seo-kit.js'
-import { robotsTxt } from './merchant.js'
+import { robotsTxt, variantGtin } from './merchant.js'
 
 const money = (amount: string, currency_code = 'MXN') => ({ amount, currency_code })
 
@@ -136,5 +142,43 @@ describe('GA4 events', () => {
     expect(aiReferrer('https://www.perplexity.ai/search?q=x')).toBe('perplexity.ai')
     expect(aiReferrer('https://www.google.com/')).toBeNull()
     expect(aiReferrer('nope')).toBeNull()
+  })
+})
+
+describe('operational switches', () => {
+  it('indexingEnabled: on by default, SEO_INDEXING=off closes', () => {
+    expect(indexingEnabled({})).toBe(true)
+    expect(indexingEnabled({ SEO_INDEXING: 'on' })).toBe(true)
+    for (const v of ['off', 'FALSE', '0', 'no', ' off ']) expect(indexingEnabled({ SEO_INDEXING: v })).toBe(false)
+    expect(CLOSED_ROBOTS_TXT).toBe('User-agent: *\nDisallow: /\n')
+    expect(CLOSED_X_ROBOTS).toBe('noindex, nofollow')
+  })
+  it('crawlerPolicyFromEnv: shop default, env wins, overrides validated', () => {
+    expect(crawlerPolicyFromEnv({})).toEqual({ training: 'block', agents: {} })
+    expect(crawlerPolicyFromEnv({}, { training: 'allow' }).training).toBe('allow')
+    expect(crawlerPolicyFromEnv({ AI_TRAINING_CRAWLERS: 'block' }, { training: 'allow' }).training).toBe('block')
+    expect(crawlerPolicyFromEnv({ CRAWLER_OVERRIDES: 'GPTBot=allow, CCBot=block, x=allow, Bad Name=allow, Foo=maybe' }).agents).toEqual({ GPTBot: 'allow', CCBot: 'block' })
+  })
+  it('isFilteredListingUrl: filters/order/page yes, campaign no, empty values no', () => {
+    expect(isFilteredListingUrl('https://x.test/c?f.marca=a')).toBe(true)
+    expect(isFilteredListingUrl('https://x.test/c?orden=precio')).toBe(true)
+    expect(isFilteredListingUrl('https://x.test/c?utm_source=a&gclid=b')).toBe(false)
+    expect(isFilteredListingUrl('https://x.test/c?orden=')).toBe(false)
+    expect(isFilteredListingUrl('https://x.test/c?sort=1', ['sort'])).toBe(true)
+  })
+  it('variantGtin: valid barcode, else valid SKU, never an invalid code', () => {
+    expect(variantGtin({ barcode: '4006381333931' })).toBe('4006381333931')
+    expect(variantGtin({ barcode: '4006381333932', sku: '4006381333931' })).toBe('4006381333931')
+    expect(variantGtin({ barcode: null, sku: '4006381333931' }, { env: { GTIN_FROM_SKU: 'off' } })).toBeNull()
+    expect(variantGtin({ barcode: '123', sku: 'ABC-1' })).toBeNull()
+  })
+  it('indexNowKeyResponse: only GET/HEAD of /<key>.txt with a valid key', async () => {
+    const key = 'abcdef1234567890'
+    const res = indexNowKeyResponse({ method: 'GET', url: `https://x.test/${key}.txt` }, key)
+    expect(await res?.text()).toBe(key)
+    expect(indexNowKeyResponse({ method: 'POST', url: `https://x.test/${key}.txt` }, key)).toBeNull()
+    expect(indexNowKeyResponse({ method: 'GET', url: 'https://x.test/other.txt' }, key)).toBeNull()
+    expect(indexNowKeyResponse({ method: 'GET', url: 'https://x.test/short.txt' }, 'short')).toBeNull()
+    expect(indexNowKeyResponse({ method: 'GET', url: `https://x.test/${key}.txt` }, undefined)).toBeNull()
   })
 })
