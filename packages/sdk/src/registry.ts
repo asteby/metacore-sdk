@@ -253,11 +253,6 @@ export class Registry {
     this.emit({ type: "action", contribution: c, owner });
   }
 
-  /**
-   * @deprecated Para montar usa `<AddonSlot kind context>` de
-   * `@asteby/metacore-runtime-react` (lee el mismo `slotStore`). Se mantiene
-   * un major.
-   */
   registerSlot(c: SlotContribution, owner?: string): void {
     const list = this.slots.get(c.name) ?? [];
     list.push({ owner, contribution: c });

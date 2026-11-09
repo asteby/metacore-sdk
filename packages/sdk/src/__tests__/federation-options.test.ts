@@ -14,6 +14,25 @@ function stubContainer(name: string, impl: Partial<{ init: () => Promise<void> }
   return { container, Comp };
 }
 
+// Simula la inyeccion de <script>: cada appendChild cuenta un script y, al
+// "descargarse", registra el contenedor en `window` y dispara onload.
+function fakeDom(name: string, init: () => Promise<void> = async () => {}) {
+  const Comp = () => null;
+  const scripts: any[] = [];
+  const container = { init, get: async () => () => ({ default: Comp }) };
+  (globalThis as any).window = {};
+  (globalThis as any).document = {
+    createElement: () => ({}),
+    head: { appendChild: (s: any) => scripts.push(s) },
+  };
+  const finish = () => {
+    (globalThis as any).window[name] = container;
+    scripts.forEach((s) => s.onload?.());
+  };
+  return { scripts, finish, Comp, container };
+}
+
+
 const spec = (over: Partial<FrontendSpec> = {}, n = 0) =>
   ({ entry: `/r${n}.js`, format: "federation", container: `c_${n}`, ...over }) as FrontendSpec;
 
@@ -23,6 +42,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   delete (globalThis as any).window;
+  delete (globalThis as any).document;
 });
 
 describe("loadFederatedAddon options", () => {
@@ -40,44 +60,71 @@ describe("loadFederatedAddon options", () => {
     expect(init).not.toHaveBeenCalled();
   });
 
-  it("requireIntegrity con integrity carga", async () => {
-    const { Comp } = stubContainer("c_3");
-    await expect(
-      loadFederatedAddon(spec({ integrity: "sha384-abc" }, 3), "k", undefined, {
-        requireIntegrity: true,
-      }),
-    ).resolves.toBe(Comp);
-  });
-
-  it("requireIntegrity no se satisface con una carga previa sin integrity (caché)", async () => {
-    const { Comp } = stubContainer("c_4");
-    await loadFederatedAddon(spec({}, 4), "k");
-    // El segundo spec sí trae integrity: la clave de caché difiere, así que no
-    // se sirve la entrada cacheada sin verificar (se evalúa como carga nueva).
-    const second = loadFederatedAddon(spec({ integrity: "sha384-AAAA" }, 4), "k", undefined, {
+  it("requireIntegrity con integrity carga inyectando el script con SRI", async () => {
+    const d = fakeDom("c_3");
+    const p = loadFederatedAddon(spec({ integrity: "sha384-abc" }, 3), "k", undefined, {
       requireIntegrity: true,
     });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(d.scripts).toHaveLength(1);
+    expect(d.scripts[0].integrity).toBe("sha384-abc");
+    d.finish();
+    await expect(p).resolves.toBe(d.Comp);
+  });
+
+  it("requireIntegrity no se satisface con un contenedor previo cargado sin integrity", async () => {
+    const d = fakeDom("c_4");
     const first = loadFederatedAddon(spec({}, 4), "k");
-    expect(second).not.toBe(first);
-    await expect(second).resolves.toBe(Comp);
+    await vi.advanceTimersByTimeAsync(0);
+    d.finish();
+    await expect(first).resolves.toBe(d.Comp);
+    await expect(
+      loadFederatedAddon(spec({ integrity: "sha384-AAAA" }, 4), "k", undefined, {
+        requireIntegrity: true,
+      }),
+    ).rejects.toThrow(/without verified integrity/);
     await expect(
       loadFederatedAddon(spec({}, 4), "k", undefined, { requireIntegrity: true }),
     ).rejects.toThrow(/requireIntegrity/);
   });
 
-  it("timeoutMs rechaza un remoto colgado y libera la caché para reintentar", async () => {
-    let hang = true;
-    const { Comp } = stubContainer("c_5", {
-      init: () => (hang ? new Promise<void>(() => {}) : Promise.resolve()),
-    });
+  it("requireIntegrity rechaza un contenedor ajeno ya presente en window", async () => {
+    stubContainer("c_7");
+    await expect(
+      loadFederatedAddon(spec({ integrity: "sha384-abc" }, 7), "k", undefined, {
+        requireIntegrity: true,
+      }),
+    ).rejects.toThrow(/without verified integrity/);
+  });
+
+  it("reintento tras timeout con el script en vuelo no inyecta un segundo script ni repite init", async () => {
+    const init = vi.fn(async () => {});
+    const d = fakeDom("c_8", init);
+    const p1 = loadFederatedAddon(spec({}, 8), "k", undefined, { timeoutMs: 100 });
+    const c1 = p1.catch((e: Error) => e);
+    await vi.advanceTimersByTimeAsync(101);
+    expect((await c1).message).toMatch(/did not load within/);
+    const p2 = loadFederatedAddon(spec({}, 8), "k", undefined, { timeoutMs: 5000 });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(d.scripts).toHaveLength(1);
+    d.finish();
+    await expect(p2).resolves.toBe(d.Comp);
+    expect(init).toHaveBeenCalledTimes(1);
+  });
+
+  it("timeoutMs rechaza un init lento y el reintento reutiliza el mismo init (no lo repite)", async () => {
+    let release!: () => void;
+    const init = vi.fn(() => new Promise<void>((r) => (release = r)));
+    const { Comp } = stubContainer("c_5", { init });
     const p = loadFederatedAddon(spec({}, 5), "k", undefined, { timeoutMs: 500 });
     const caught = p.catch((e: Error) => e);
     await vi.advanceTimersByTimeAsync(501);
     expect((await caught).message).toMatch(/did not load within 500 ms/);
-    hang = false;
-    await expect(
-      loadFederatedAddon(spec({}, 5), "k", undefined, { timeoutMs: 500 }),
-    ).resolves.toBe(Comp);
+    const retry = loadFederatedAddon(spec({}, 5), "k", undefined, { timeoutMs: 500 });
+    await vi.advanceTimersByTimeAsync(0);
+    release();
+    await expect(retry).resolves.toBe(Comp);
+    expect(init).toHaveBeenCalledTimes(1);
   });
 
   it("timeoutMs no afecta a una carga que termina a tiempo", async () => {

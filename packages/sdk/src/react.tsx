@@ -297,10 +297,6 @@ export interface SlotProps {
   fallback?: ReactNode;
 }
 
-/**
- * @deprecated Usa `<AddonSlot kind context>` de `@asteby/metacore-runtime-react`
- * (no se delega aquí: sdk no puede depender de runtime-react). Se mantiene un major.
- */
 export function Slot({ name, payload, fallback = null }: SlotProps) {
   const { registry } = useMetacore();
   const [items, setItems] = useState<SlotContribution[]>(registry.getSlot(name));
