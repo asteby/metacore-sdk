@@ -89,6 +89,15 @@ import type {
   TagFacets,
   TagFacetsParams,
   StorefrontErrorBody,
+  MyReview,
+  ReviewEligibility,
+  ReviewGrant,
+  ReviewImportItem,
+  ReviewImportResult,
+  ReviewInput,
+  ReviewList,
+  ReviewListParams,
+  ReviewPatch,
   Subject,
   SubjectInput,
   SubjectKind,
@@ -198,6 +207,8 @@ export type RequestOptions = {
   customerToken?: string | null
   /** Overrides the client-level shopper IP for this call (see `StorefrontClientOptions.clientIp`). */
   clientIp?: string | null
+  /** Review grant of a guest buyer (`reviews.grant`), sent as `X-Review-Grant`. */
+  reviewGrant?: string | null
   [key: string]: unknown
 }
 
@@ -228,7 +239,7 @@ type RequestSpec = {
   noRedirect?: boolean
 }
 
-const OWN_OPTION_KEYS = new Set(['headers', 'timeoutMs', 'customerToken', 'clientIp', 'idempotencyKey', 'preview', 'signal'])
+const OWN_OPTION_KEYS = new Set(['headers', 'timeoutMs', 'customerToken', 'clientIp', 'reviewGrant', 'idempotencyKey', 'preview', 'signal'])
 
 /** Header the gateway reads (only for tokens with `trust_client_ip`). */
 export const CLIENT_IP_HEADER = 'X-Storefront-Client-IP'
@@ -362,6 +373,7 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
     if (config.domain) headers.set('X-Storefront-Domain', storefrontDomainHeader(config.domain, config.market))
     const customerToken = options.customerToken !== undefined ? options.customerToken : config.customerToken
     if (customerToken) headers.set('X-Customer-Token', customerToken)
+    if (options.reviewGrant) headers.set('X-Review-Grant', options.reviewGrant)
     const clientIp = options.clientIp !== undefined ? options.clientIp : config.clientIp
     // Server-side tokens only: a pk_ token already gets a per-caller bucket from the gateway.
     const ip = isTokenPublishable(token) ? undefined : normalizeClientIp(clientIp)
@@ -941,6 +953,43 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
         delete: (id: string, options?: WriteOptions) =>
           write<void>('DELETE', `/storefront/customer/addresses/${enc(id)}`, undefined, options),
       },
+    },
+
+    /**
+     * Product reviews (addon `product_reviews`). The list is public and cacheable (approved reviews only, with the
+     * summary computed from the same rows). Writing needs a verified purchase: a buyer session (`customerToken`) with a
+     * paid order of the product, or a `reviewGrant` of a paid order. Nothing is published without moderation: a created
+     * review is `pending`. A server that predates the addon answers `404` on the list (`null`).
+     */
+    reviews: {
+      /** Approved reviews of a product with the rating summary; `null` when the product or the addon does not exist. */
+      list: (handle: string, params?: ReviewListParams, options?: RequestOptions): Promise<ReviewList | null> =>
+        getOrNull<ReviewList>(`/storefront/products/${enc(handle)}/reviews`, params as QueryParams | undefined, options),
+      /** Whether this buyer can review the product now (`reason` says why not). Private, never cached. */
+      eligibility: (handle: string, options?: RequestOptions): Promise<ReviewEligibility> =>
+        get<ReviewEligibility>(`/storefront/products/${enc(handle)}/reviews/eligibility`, undefined, { ...options, cache: 'no-store' }),
+      /**
+       * `201 {id, status: 'pending'}`. Errors: `401 login_required`, `403 not_purchased`, `409 already_reviewed`,
+       * `422` with `field` (`rating`, `title`, `body`: length, links, e-mail or phone in the text), `429` with `retryAfter`.
+       */
+      create: (handle: string, input: ReviewInput, options?: WriteOptions) =>
+        write<{ id: string; status: 'pending' }>('POST', `/storefront/products/${enc(handle)}/reviews`, input, options),
+      /** Every review of the buyer, in any state (rejected ones carry the reason). */
+      mine: async (options?: RequestOptions): Promise<MyReview[]> =>
+        (await get<{ nodes: MyReview[] }>('/storefront/reviews/mine', undefined, { ...options, cache: 'no-store' })).nodes,
+      /** Edit your own review: it goes back to moderation and leaves the page until approved. `404` if it is not yours. */
+      update: (id: string, patch: ReviewPatch, options?: WriteOptions) => write<MyReview>('PATCH', `/storefront/reviews/${enc(id)}`, patch, options),
+      /** Withdraw your own review: it leaves the page, the summary and the structured data, and its text is erased. */
+      delete: (id: string, options?: WriteOptions) => write<void>('DELETE', `/storefront/reviews/${enc(id)}`, undefined, options),
+      /**
+       * The permission of a guest buyer, from the order number and the e-mail of the order (the proof order tracking
+       * accepts). One uniform `404` when anything does not match. Server-side only; pass the returned `grant` as
+       * `reviewGrant` to the other calls.
+       */
+      grant: (input: { order_number: string; email: string }, options?: WriteOptions) => write<ReviewGrant>('POST', '/storefront/reviews/grants', input, options),
+      /** Load reviews written elsewhere (needs a token with the `reviews:admin` scope). Idempotent by `external_ref`. */
+      import: (input: { market: string; locale?: string; items: ReviewImportItem[] }, options?: WriteOptions) =>
+        write<ReviewImportResult>('POST', '/storefront/reviews/import', input, options),
     },
 
     content: {

@@ -228,7 +228,18 @@
         "default": "./dist/product.cjs"
       }
     },
-    "./product.css": "./dist/product.css"
+    "./product.css": "./dist/product.css",
+    "./reviews": {
+      "import": {
+        "types": "./dist/reviews.d.ts",
+        "default": "./dist/reviews.js"
+      },
+      "require": {
+        "types": "./dist/reviews.d.cts",
+        "default": "./dist/reviews.cjs"
+      }
+    },
+    "./reviews.css": "./dist/reviews.css"
   },
   "sideEffects": false,
   "engines": {

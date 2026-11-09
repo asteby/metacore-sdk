@@ -643,3 +643,7 @@ does not affect Google Search or AI Overviews (they follow `Googlebot`).
 JSON-LD builders live in `@asteby/storefront-react`: `websiteJsonLd`, `articleJsonLd`, `webPageJsonLd` (`AboutPage`,
 `lastReviewed`), `productReviewsJsonLd` (returns `null` without real reviews: never pass sample data) and
 `validateJsonLd` (required properties, currency, absolute URLs) for tests.
+
+## Reseñas de producto (`sf.reviews`)
+
+Addon `product_reviews` de OPS. `sf.reviews.list(handle, {first, after, rating, sort, market})` → `{summary: {count, average, distribution}, nodes, page_info, total_count}` (solo aprobadas; público y cacheable; `null` si el producto o el addon no existen). Escribir exige compra verificada: sesión del comprador (`customerToken`) con un pedido pagado del producto, o `reviewGrant` (`sf.reviews.grant({order_number, email})`, solo servidor). `eligibility(handle)` dice `ok | login_required | not_purchased | already_reviewed`; `create(handle, input)` → `201 {id, status: 'pending'}` (`401 login_required`, `403 not_purchased`, `409 already_reviewed`, `422` con `field`, `429` con `retryAfter`); `mine()`, `update(id, patch)` (vuelve a moderación) y `delete(id)` son del autor. `import(...)` carga reseñas de otra tienda (alcance `reviews:admin`, idempotente por `external_ref`). El mock (`createMockStorefront({ reviews: { seed, purchased } })`) ensaya todo.
