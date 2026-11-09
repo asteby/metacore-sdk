@@ -2087,7 +2087,10 @@ export type ReviewInput = {
 export type ReviewPatch = Partial<Pick<ReviewInput, 'rating' | 'title' | 'body' | 'display_name'>>
 
 /** Permission to review the products of ONE paid order (30 days). Keep it server-side or in an httpOnly cookie. */
-export type ReviewGrant = { grant: string; expires_at: string; product_handles: string[] }
+export type ReviewGrant = { grant: string; expires_at: string; product_handles: string[]; products: { handle: string; title: string }[] }
+
+/** One product of a paid order and whether this buyer already reviewed it («Mi pedido», thank-you page). */
+export type OrderReviewProduct = { product_handle: string; title: string; can_review: boolean; review?: { id: string; status: ReviewStatus } }
 
 export type ReviewImportItem = { handle: string; author: string; rating: number; title?: string; text: string; date: string; external_ref: string }
 export type ReviewImportResult = { created: number; skipped: number; unknown_products: string[] }

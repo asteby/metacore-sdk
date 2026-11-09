@@ -2163,6 +2163,20 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     reviewRows.push(record)
     return { status: 201, body: { id: record.id, status: 'pending' }, cache: 'private' }
   })
+  route('GET', '/reviews/orders/:id', 'customer:read', ({ headers, params }) => {
+    const grant = headers.get('x-review-grant')
+    const c = sessionCustomer(headers)
+    const order = grant?.startsWith('rvg_mock_') ? state.orders.find((o) => o.id === grant.slice('rvg_mock_'.length)) : c ? state.orders.find((o) => o.customer_id === c.id && (o.id === params[0] || o.number === params[0])) : undefined
+    if (!order && !c && !grant) throw new HttpError(401, 'login_required', 'Sign in or open the link of your order')
+    if (!order || order.status === 'cancelled') throw new HttpError(404, 'not_found', 'Order not found')
+    const nodes = state.products
+      .filter((p) => order.lines.some((l) => l.title === p.title))
+      .map((p) => {
+        const mine = c ? reviewRows.find((r) => r.product_handle === p.handle && r.customer_id === c.id && !r.withdrawn) : undefined
+        return { product_handle: p.handle, title: p.title, can_review: !mine, ...(mine ? { review: { id: mine.id, status: mine.status } } : {}) }
+      })
+    return { body: { nodes }, cache: 'private' }
+  })
   route('GET', '/reviews/mine', 'customer:read', ({ headers }) => {
     const c = requireCustomer(headers)
     return { body: { nodes: reviewRows.filter((r) => r.customer_id === c.id && !r.withdrawn).map((r) => ({ ...myReviewView(r), product_handle: r.product_handle })) }, cache: 'private' }
@@ -2193,7 +2207,8 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     if (!order) throw new HttpError(404, 'not_found', 'Order not found')
     const handles = state.products.filter((p) => order.lines.some((l) => l.title === p.title)).map((p) => p.handle)
     if (!handles.length) throw new HttpError(404, 'not_found', 'Order not found')
-    return { status: 201, body: { grant: 'rvg_mock_' + order.id, expires_at: new Date(Date.now() + 30 * 864e5).toISOString(), product_handles: handles }, cache: 'private' }
+    const products = state.products.filter((p) => handles.includes(p.handle)).map((p) => ({ handle: p.handle, title: p.title }))
+    return { status: 201, body: { grant: 'rvg_mock_' + order.id, expires_at: new Date(Date.now() + 30 * 864e5).toISOString(), product_handles: handles, products }, cache: 'private' }
   })
   route('POST', '/reviews/import', 'reviews:admin', ({ body }) => {
     const items = Array.isArray(body.items) ? (body.items as Record<string, unknown>[]) : []

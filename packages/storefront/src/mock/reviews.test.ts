@@ -112,3 +112,25 @@ describe('mock: product reviews', () => {
     expect(l.nodes[0]).toMatchObject({ display_name: 'Cesar De Alba', created_at: '2025-09-01T12:00:00.000Z' })
   })
 })
+
+describe('mock: reviewable products of an order', () => {
+  it('lists the products of the buyer paid order and flips can_review after reviewing', async () => {
+    const { sf } = setup()
+    const me = await signIn(sf)
+    const [order] = (await me.customer.orders.list({ first: 1 })).nodes
+    const before = await me.reviews.forOrder(order!.id)
+    expect(before).toEqual([{ product_handle: BOUGHT, title: 'Playera básica', can_review: true }])
+    await me.reviews.create(BOUGHT, GOOD)
+    expect((await me.reviews.forOrder(order!.id))[0]).toMatchObject({ can_review: false, review: { status: 'pending' } })
+    await expect(me.reviews.forOrder('nope')).rejects.toMatchObject({ status: 404 })
+    await expect(sf.reviews.forOrder(order!.id)).rejects.toMatchObject({ status: 401 })
+  })
+  it('a guest grant opens the order it was issued for, with product names', async () => {
+    const { sf } = setup()
+    const grant = await sf.reviews.grant({ order_number: '1000', email: MOCK_CUSTOMER_EMAIL })
+    expect(grant.products).toEqual([{ handle: BOUGHT, title: 'Playera básica' }])
+    const nodes = await sf.reviews.forOrder('current', { reviewGrant: grant.grant })
+    expect(nodes.map((n) => n.product_handle)).toEqual([BOUGHT])
+    await expect(sf.reviews.grant({ order_number: '1000', email: 'otro@example.com' })).rejects.toMatchObject({ status: 404 })
+  })
+})

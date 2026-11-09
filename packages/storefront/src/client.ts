@@ -90,6 +90,7 @@ import type {
   TagFacetsParams,
   StorefrontErrorBody,
   MyReview,
+  OrderReviewProduct,
   ReviewEligibility,
   ReviewGrant,
   ReviewImportItem,
@@ -977,6 +978,13 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
       /** Every review of the buyer, in any state (rejected ones carry the reason). */
       mine: async (options?: RequestOptions): Promise<MyReview[]> =>
         (await get<{ nodes: MyReview[] }>('/storefront/reviews/mine', undefined, { ...options, cache: 'no-store' })).nodes,
+      /**
+       * What can be reviewed from a PAID order of this buyer (`:id` = the order id or its external id), or from the order of
+       * a `reviewGrant` (the id is ignored): its products and whether each was already reviewed. One uniform `404` for an
+       * order that is not theirs, unknown or unpaid.
+       */
+      forOrder: async (orderId: string, options?: RequestOptions): Promise<OrderReviewProduct[]> =>
+        (await get<{ nodes: OrderReviewProduct[] }>(`/storefront/reviews/orders/${enc(orderId)}`, undefined, { ...options, cache: 'no-store' })).nodes,
       /** Edit your own review: it goes back to moderation and leaves the page until approved. `404` if it is not yours. */
       update: (id: string, patch: ReviewPatch, options?: WriteOptions) => write<MyReview>('PATCH', `/storefront/reviews/${enc(id)}`, patch, options),
       /** Withdraw your own review: it leaves the page, the summary and the structured data, and its text is erased. */
