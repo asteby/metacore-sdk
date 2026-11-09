@@ -133,6 +133,15 @@ export function validGtin(value: string | null | undefined): string | null {
   return (10 - (sum % 10)) % 10 === check ? digits : null
 }
 
+/**
+ * GTIN of a variant for JSON-LD and feeds: its OPS barcode when valid; else its SKU when that is a valid GTIN
+ * (`GTIN_FROM_SKU=off` in `env`, or `fromSku: false`, disables the fallback). Never an invalid code: Merchant Center rejects those.
+ */
+export function variantGtin(variant: { barcode?: string | null; sku?: string | null }, options: { fromSku?: boolean; env?: Record<string, string | undefined> } = {}): string | null {
+  const fromSku = options.fromSku ?? !/^(off|false|0|no)$/i.test((options.env?.GTIN_FROM_SKU ?? '').trim())
+  return validGtin(variant.barcode) ?? (fromSku ? validGtin(variant.sku) : null)
+}
+
 const positive = (m: Money | null | undefined): m is Money => !!m && feedAmount(m) !== null && Number(m.amount) > 0
 
 /** Decimals of a currency (`MXN` 2, `JPY` 0). */
