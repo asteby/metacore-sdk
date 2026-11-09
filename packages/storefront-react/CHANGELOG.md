@@ -1,5 +1,16 @@
 # @asteby/storefront-react
 
+## 0.57.0
+
+### Minor Changes
+
+- fb5af45: Nuevo subpath `@asteby/storefront-react/reviews` (+ `reviews.css`): `ProductReviews` (resumen con distribución por estrellas, listado con «Más reseñas», filtro y orden, botón «Escribir una reseña» con formulario accesible solo para compradores verificados y mensajes para los demás, estados de éxito, error y límite), `ReviewsPolicy` («Cómo funcionan nuestras reseñas»), `reviewsApiFromClient`, `reviewsJsonLdInput` (JSON-LD solo con lo visible) y `ReviewStars`/`StarInput`. es/en, claro/oscuro, móvil. Aditivo: nada existente cambia.
+
+### Patch Changes
+
+- Updated dependencies [fb5af45]
+  - @asteby/storefront@0.39.0
+
 ## 0.56.1
 
 ### Patch Changes
