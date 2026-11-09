@@ -1,5 +1,11 @@
 # @asteby/storefront-react
 
+## 0.56.1
+
+### Patch Changes
+
+- 953fcbb: `validateJsonLd`: una Organization anidada (vendedor, editorial) solo exige `name`; el `url` ya no se marca como faltante.
+
 ## 0.56.0
 
 ### Minor Changes

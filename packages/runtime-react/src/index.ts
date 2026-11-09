@@ -334,6 +334,7 @@ export {
     type AddonLayoutProviderProps,
 } from './addon-layout-context'
 export * from './slot'
+export * from './slots'
 export * from './capability-gate'
 export {
     PermissionsProvider,
