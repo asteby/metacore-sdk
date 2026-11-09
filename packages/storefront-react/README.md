@@ -1229,6 +1229,28 @@ Muestra el correo con su estado (`Customer.email_verified`), un botón para pedi
 
 `InvoiceList`, `InvoiceDetail` e `InvoiceHistory` (y por tanto «Mis facturas») muestran «Ver factura», «Descargar PDF» y «Descargar XML» cuando les pasas `fileHref`. Cada clic pide el archivo a TU ruta autenticada en ese momento (sin enlaces que venzan, tantas veces como quiera el comprador) y lo guarda con el nombre que manda el servidor (`factura-<serie>-<folio>.pdf`). «Ver factura» abre `InvoicePreviewDialog` (diálogo nativo con foco atrapado, Esc, título accesible, ES/EN; carga perezosa): el PDF incrustado, o mientras no exista, los datos del CFDI leídos del XML con «El PDF se está generando» y reintento. En móvil abre el PDF en una pestaña nueva. La ruta de la tienda solo necesita pasar `request` a `invoiceFileResponse`.
 
+## Solicitar devolución (`ReturnRequestForm`)
+
+En el detalle de un pedido entregado. Sin estilos propios (`classNames`, `data-sf-return-*`), es/en, y es un `<form method="post">` que funciona sin JavaScript. Muestra casilla + cantidad por línea devolvible, el motivo, «Notas» (máx. 500) y el botón; si el pedido no se puede devolver, muestra el porqué en lugar del formulario.
+
+```tsx
+// ruta del pedido (React Router)
+import { ReturnRequestForm } from '@asteby/storefront-react/account'
+import { createReturnRequestAction } from '@asteby/storefront-react/account/server'
+
+export const action = createReturnRequestAction({
+  storefront,                                   // cliente con la `sk_` de la tienda
+  readCustomerToken: (request) => readSession(request), // token del comprador (cookie), o null
+  eligibility: { returnsDays: 30, warrantyDays: 365 },  // opcional: la política de la tienda
+})
+
+export default function Order({ loaderData, actionData }) {
+  return <ReturnRequestForm order={loaderData.order} data={actionData} eligibility={{ returnsDays: 30, warrantyDays: 365 }} showNotesCount />
+}
+```
+
+La acción valida contra el pedido (al menos una línea, cantidad entera de 1 al máximo comprado, motivo `defective | not_wanted | wrong_item | warranty`, notas ≤ 500), manda `Idempotency-Key: return-<sha256>` derivada de la solicitud (reenviar el mismo formulario no abre otra devolución) y NUNCA redirige: devuelve `ReturnRequestActionData` (`{ ok: true, request }` o `{ ok: false, error: { code }, fieldErrors?, values? }`) que `<ReturnRequestForm data>` pinta junto a cada campo conservando lo escrito. La fecha límite solo se muestra si el pedido trae fecha de entrega; sin ella el pedido es elegible sin plazo y el servidor decide. Las cantidades de devoluciones anteriores no se descuentan en el cliente (`order.returns` no trae líneas). Los helpers puros (`returnableLines`, `returnEligibility`, `returnMessages`) están en `@asteby/storefront`.
+
 ## Reseñas de producto (`@asteby/storefront-react/reviews`)
 
 Aditivo y opcional (necesita el addon `product_reviews` en OPS). `ProductReviews` muestra el resumen con la distribución por estrellas, el listado («Más reseñas», filtro por calificación y orden) y, para un comprador verificado, el formulario («Escribir una reseña»); `ReviewsPolicy` es el texto «Cómo funcionan nuestras reseñas». Todas las reseñas se ven iguales: no hay insignias por reseña. Textos es/en (`messages` los sustituye), accesible (grupo de radios para las estrellas, mensajes con `role="alert"`, foco al abrir el formulario), claro/oscuro por `currentColor` y variables `--sf-reviews-*`, móvil primero. Hoja opcional: `@asteby/storefront-react/reviews.css`.

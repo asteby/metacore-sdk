@@ -1116,9 +1116,23 @@ export type InvoiceFile = {
 
 export type InvoiceFileKind = 'pdf' | 'xml'
 
+/** Why the buyer sends something back. The API default is `not_wanted`. */
+export type ReturnReason = 'defective' | 'not_wanted' | 'wrong_item' | 'warranty'
+
 export type ReturnRequestInput = {
-  lines: { sku: string; quantity: number }[]
-  reason?: string
+  lines: {
+    sku: string
+    /** Whole units, 1..quantity bought. */
+    quantity: number
+    /** Condition of the item as the buyer reports it (a code the store's returns flow defines). */
+    condition?: string
+  }[]
+  /** Defaults to `not_wanted` on the server. */
+  reason?: ReturnReason
+  /** Free text from the buyer, at most 500 characters (`RETURN_NOTES_MAX`). Older servers may ignore it. */
+  notes?: string
+  /** Whether the returned units go back to stock. */
+  restock?: boolean
 }
 
 export type ReturnRequest = { id: string; order_id: string; status: string }

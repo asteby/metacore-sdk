@@ -109,6 +109,28 @@ export {
   SHIPPING_STEPS,
   PICKUP_STEPS,
 } from './order-progress.js'
+export {
+  returnableLines,
+  returnEligibility,
+  orderDeliveredAt,
+  isReturnReason,
+  returnMessages,
+  returnIneligibleMessage,
+  returnReasonLabel,
+  fillReturnMessage,
+  RETURN_REASONS,
+  DEFAULT_RETURN_REASON,
+  RETURN_NOTES_MAX,
+} from './returns.js'
+export type {
+  ReturnableLine,
+  ReturnEligibility,
+  ReturnEligibilityOptions,
+  ReturnIneligibleReason,
+  ReturnLocale,
+  ReturnMessageKey,
+  ReturnMessages,
+} from './returns.js'
 export { checkoutNotice } from './checkout-notice.js'
 export type { CheckoutNotice } from './checkout-notice.js'
 export { normalizeTrackingView, visibleTrackingShipments } from './tracking.js'

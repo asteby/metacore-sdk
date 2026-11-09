@@ -500,3 +500,9 @@ export function pendingVoucherPdfResponse(options: Omit<PendingVoucherResponseOp
 export { createAccountSettingsAction, loadAccountSessions, loadAccountSettings, toSettingsFailure } from './settings-server.js'
 export type { AccountSettingsAction, AccountSettingsData, AccountSettingsActionArgs, CreateAccountSettingsActionOptions, SettingsCookie } from './settings-server.js'
 export type { AccountSettingsActionData, SettingsErrorCode, SettingsIntent } from './settings-types.js'
+
+// Return requests ("Solicitar devolución"): see ./returns-server.ts
+export { createReturnRequestAction, parseReturnForm, returnIdempotencyKey } from './returns-server.js'
+export { RETURN_FORM } from './returns-form-names.js'
+export type { CreateReturnRequestActionOptions, ParsedReturnForm, ReturnRequestAction } from './returns-server.js'
+export type { ReturnErrorCode, ReturnFieldErrorCode, ReturnFormValues, ReturnIntent, ReturnRequestActionData } from './returns-types.js'
