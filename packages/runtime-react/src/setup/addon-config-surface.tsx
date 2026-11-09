@@ -101,6 +101,11 @@ export interface ConnectorCredentialField {
   /** Shown only while a sibling credential has this value (kernel Setting.visible_when). */
   visible_when?: VisibleWhen
   visibleWhen?: VisibleWhen
+  /**
+   * Kernel Setting.auto: the HOST generates this secret (e.g. "storefront_bearer"),
+   * so the form never asks for it; the surface shows its state and "Rotar".
+   */
+  auto?: string
 }
 
 export interface ConnectorFormLayoutSection {
@@ -129,6 +134,8 @@ export interface ConnectorEntry {
   status?: string
   resources?: string[]
   credentials?: ConnectorCredentialField[]
+  /** State of each host-generated credential: generated | manual | missing. */
+  auto_credentials?: Record<string, 'generated' | 'manual' | 'missing' | string>
   form_layout?: ConnectorFormLayout
   test_export?: string
   // ops-native connectors (e.g. `hub`) expose a route "Sincronizar ahora" POSTs to.
@@ -629,7 +636,28 @@ export function AddonConfigSurface({
     if (!open) clearConnectorLookupCache()
   }, [open])
 
-  const credFields = connector?.credentials ?? []
+  const allCredFields = connector?.credentials ?? []
+  // Host-generated credentials (auto) are never asked from a person.
+  const credFields = allCredFields.filter((f) => !f.auto)
+  const autoFields = allCredFields.filter((f) => !!f.auto)
+  const [autoState, setAutoState] = useState<Record<string, string>>({})
+  const [revealedOnce, setRevealedOnce] = useState<Record<string, string>>({})
+  const [rotating, setRotating] = useState<string | null>(null)
+  const autoStateOf = (k: string) => autoState[k] ?? connector?.auto_credentials?.[k] ?? 'missing'
+  const rotateAuto = async (k: string) => {
+    if (!connector) return
+    setRotating(k)
+    try {
+      const res = await api.post(`/integrations/${connector.provider}/auto/${k}/rotate`, {})
+      const value = (res as { data?: { data?: { value?: string } } })?.data?.data?.value
+      setAutoState((prev) => ({ ...prev, [k]: 'generated' }))
+      if (value) setRevealedOnce((prev) => ({ ...prev, [k]: value }))
+    } catch {
+      toast.error(st('auto.rotate_failed'))
+    } finally {
+      setRotating(null)
+    }
+  }
   // A connector with a form_layout groups its credentials into titled sections
   // (a light wizard). Fall back to the required/advanced split when absent.
   const layoutSections = connector?.form_layout?.sections ?? []
@@ -1411,7 +1439,8 @@ export function AddonConfigSurface({
         : 'clean'
 
   const hasAnyBlocks = layoutSections.some((s) => (s.blocks?.length ?? 0) > 0) || extraBlocks.length > 0
-  const nothingToConfigure = !hasCredentials && !hasSettings && !isOAuth && !hasAnyBlocks
+  const nothingToConfigure =
+    !hasCredentials && !hasSettings && !isOAuth && !hasAnyBlocks && autoFields.length === 0
   const nothingToSave = !hasCredentials && !hasSettings
 
   return (
@@ -1537,6 +1566,54 @@ export function AddonConfigSurface({
           ) : (
             <>
               {oauthPanel}
+              {/* Credenciales generadas por el host: estado + Rotar, nunca un campo */}
+              {autoFields.length > 0 && (
+                <section className='flex flex-col gap-3' data-testid='auto-credentials'>
+                  {autoFields.map((f) => {
+                    const state = autoStateOf(f.key)
+                    const once = revealedOnce[f.key]
+                    return (
+                      <div
+                        key={f.key}
+                        className='flex flex-col gap-2 rounded-md border border-border/60 px-3 py-3'
+                      >
+                        <div className='flex items-center justify-between gap-2'>
+                          <div className='flex flex-col gap-1'>
+                            <span className='text-sm font-medium'>
+                              {state === 'missing'
+                                ? st('auto.needs_action')
+                                : state === 'manual'
+                                  ? st('auto.manual')
+                                  : st('auto.connected')}
+                            </span>
+                            <HelpText text={st('auto.help')} />
+                          </div>
+                          <Button
+                            type='button'
+                            variant='outline'
+                            size='sm'
+                            disabled={rotating === f.key || !canManageIssuer}
+                            onClick={() => void rotateAuto(f.key)}
+                          >
+                            {rotating === f.key ? (
+                              <Loader2 className='h-4 w-4 animate-spin' />
+                            ) : (
+                              <RefreshCw className='h-4 w-4' />
+                            )}
+                            {state === 'missing' ? st('auto.generate') : st('auto.rotate')}
+                          </Button>
+                        </div>
+                        {once && (
+                          <div className='flex flex-col gap-1'>
+                            <code className='break-all rounded bg-muted px-2 py-1 text-xs'>{once}</code>
+                            <HelpText text={st('auto.show_once')} />
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </section>
+              )}
               {/* Credenciales */}
               {hasCredentials && (
                 <section className='flex flex-col gap-3'>

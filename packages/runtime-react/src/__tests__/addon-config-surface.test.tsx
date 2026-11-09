@@ -325,3 +325,30 @@ describe('AddonConfigSurface', () => {
         expect(screen.queryByText('Serie N1')).toBeNull()
     })
 })
+
+describe('host-generated (auto) credentials', () => {
+    const autoConnector: ConnectorEntry = {
+        addon_key: 'pay',
+        provider: 'local_reviews',
+        connected: true,
+        credentials: [{ key: 'api_key', type: 'secret', required: true, auto: 'storefront_bearer', label: 'pay.token' }],
+        auto_credentials: { api_key: 'generated' },
+    }
+
+    it('hides the field, shows the state and rotates showing the value once', async () => {
+        const { calls } = setup(
+            { connector: autoConnector },
+            { 'POST /integrations/local_reviews/auto/api_key/rotate': { data: { value: 'mcs_NEWSECRET' } } },
+        )
+        expect(await screen.findByText('Conectada automáticamente')).toBeTruthy()
+        expect(screen.queryByLabelText(/Token/)).toBeNull()
+        fireEvent.click(screen.getByText('Rotar'))
+        await waitFor(() => expect(screen.getByText('mcs_NEWSECRET')).toBeTruthy())
+        expect(calls.some((c) => c.m === 'POST' && c.url === '/integrations/local_reviews/auto/api_key/rotate')).toBe(true)
+    })
+
+    it('asks for action when it was never generated', async () => {
+        setup({ connector: { ...autoConnector, auto_credentials: { api_key: 'missing' } } })
+        expect(await screen.findByText('Requiere acción')).toBeTruthy()
+    })
+})
