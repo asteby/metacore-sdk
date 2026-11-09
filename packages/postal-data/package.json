@@ -1,0 +1,49 @@
+{
+  "name": "@asteby/postal-data",
+  "version": "0.0.0",
+  "description": "Offline postal-code catalogs (Mexico, United States; GeoNames, CC BY 4.0) loaded on demand, plus one resolver (official OPS catalog first, offline fallback) shared by every storefront.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asteby/metacore-sdk",
+    "directory": "packages/postal-data"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "scripts",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./mx": {
+      "types": "./dist/mx.d.ts",
+      "import": "./dist/mx.js"
+    },
+    "./us": {
+      "types": "./dist/us.d.ts",
+      "import": "./dist/us.js"
+    }
+  },
+  "scripts": {
+    "build": "rm -rf dist && tsup",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "tsup": "^8.3.5",
+    "typescript": "^6.0.0",
+    "vitest": "^4.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

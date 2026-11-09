@@ -1,0 +1,5 @@
+export { lookupMxPostalCode } from './mx'
+export { lookupUsPostalCode } from './us'
+export { resolvePostalCode } from './resolve'
+export type { ResolvePostalOptions, ResolvedPostal } from './resolve'
+export type { PostalInfo } from './types'
