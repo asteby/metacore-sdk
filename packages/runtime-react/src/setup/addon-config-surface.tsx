@@ -41,7 +41,7 @@ import { evaluateVisibleWhen, getVisibleWhen } from '../dynamic-form-schema'
 import type { VisibleWhen } from '../types'
 import { useSetupT } from './messages'
 import { StepStatusBadge } from './step-status-badge'
-import { ConnectorBlocks, HelpText } from './connector-blocks'
+import { ConnectorBlocks, CopyValue, HelpText } from './connector-blocks'
 import {
   buildWizardSteps,
   errorMessage,
@@ -1464,8 +1464,8 @@ export function AddonConfigSurface({
           </Button>
         </div>
         {once && (
-          <div className='flex flex-col gap-1'>
-            <code className='break-all rounded bg-muted px-2 py-1 text-xs'>{once}</code>
+          <div className='flex flex-col gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-3' data-testid='auto-once'>
+            <CopyValue value={once} label={st('auto.once_label')} />
             <HelpText text={st('auto.show_once')} />
           </div>
         )}
