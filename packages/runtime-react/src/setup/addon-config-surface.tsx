@@ -661,7 +661,11 @@ export function AddonConfigSurface({
   // A connector with a form_layout groups its credentials into titled sections
   // (a light wizard). Fall back to the required/advanced split when absent.
   const layoutSections = connector?.form_layout?.sections ?? []
-  const useLayout = layoutSections.length > 0 && credFields.some((f) => !!f.section)
+  const useLayout =
+    layoutSections.length > 0 &&
+    (credFields.some((f) => !!f.section) ||
+      autoFields.some((f) => !!f.section) ||
+      layoutSections.some((sec) => (sec.blocks?.length ?? 0) > 0))
 
   // A form_layout with mode "steps" drives a real wizard (one section at a time
   // with Atrás/Siguiente), instead of stacked cards.
@@ -1423,6 +1427,52 @@ export function AddonConfigSurface({
     goToStep(stepIdx + 1)
   }
 
+  // Host-generated credential: state + Rotar, never an input. Shown in the flat form and inside the
+  // wizard step the credential binds to (credential.section).
+  const renderAutoCred = (f: (typeof autoFields)[number]) => {
+    const state = autoStateOf(f.key)
+    const once = revealedOnce[f.key]
+    return (
+      <div
+        key={f.key}
+        className='flex flex-col gap-2 rounded-md border border-border/60 px-3 py-3'
+      >
+        <div className='flex items-center justify-between gap-2'>
+          <div className='flex flex-col gap-1'>
+            <span className='text-sm font-medium'>
+              {state === 'missing'
+                ? st('auto.needs_action')
+                : state === 'manual'
+                  ? st('auto.manual')
+                  : st('auto.connected')}
+            </span>
+            <HelpText text={st('auto.help')} />
+          </div>
+          <Button
+            type='button'
+            variant='outline'
+            size='sm'
+            disabled={rotating === f.key || !canManageIssuer}
+            onClick={() => void rotateAuto(f.key)}
+          >
+            {rotating === f.key ? (
+              <Loader2 className='h-4 w-4 animate-spin' />
+            ) : (
+              <RefreshCw className='h-4 w-4' />
+            )}
+            {state === 'missing' ? st('auto.generate') : st('auto.rotate')}
+          </Button>
+        </div>
+        {once && (
+          <div className='flex flex-col gap-1'>
+            <code className='break-all rounded bg-muted px-2 py-1 text-xs'>{once}</code>
+            <HelpText text={st('auto.show_once')} />
+          </div>
+        )}
+      </div>
+    )
+  }
+
   const dirty = credDirty || touched.size > 0 || cleared.size > 0
   useEffect(() => {
     if (dirty) setJustSaved(false)
@@ -1558,6 +1608,7 @@ export function AddonConfigSurface({
                   <>
                     {renderBlocks(leadBlocks(blocksFor(activeStep?.key ?? '', activeStep?.blocks)))}
                     {activeFields.filter((f) => f.section === activeStep?.key).map(renderCred)}
+                    {autoFields.filter((f) => f.section === activeStep?.key).map(renderAutoCred)}
                     {renderBlocks(trailBlocks(blocksFor(activeStep?.key ?? '', activeStep?.blocks)))}
                   </>
                 )}
@@ -1569,49 +1620,7 @@ export function AddonConfigSurface({
               {/* Credenciales generadas por el host: estado + Rotar, nunca un campo */}
               {autoFields.length > 0 && (
                 <section className='flex flex-col gap-3' data-testid='auto-credentials'>
-                  {autoFields.map((f) => {
-                    const state = autoStateOf(f.key)
-                    const once = revealedOnce[f.key]
-                    return (
-                      <div
-                        key={f.key}
-                        className='flex flex-col gap-2 rounded-md border border-border/60 px-3 py-3'
-                      >
-                        <div className='flex items-center justify-between gap-2'>
-                          <div className='flex flex-col gap-1'>
-                            <span className='text-sm font-medium'>
-                              {state === 'missing'
-                                ? st('auto.needs_action')
-                                : state === 'manual'
-                                  ? st('auto.manual')
-                                  : st('auto.connected')}
-                            </span>
-                            <HelpText text={st('auto.help')} />
-                          </div>
-                          <Button
-                            type='button'
-                            variant='outline'
-                            size='sm'
-                            disabled={rotating === f.key || !canManageIssuer}
-                            onClick={() => void rotateAuto(f.key)}
-                          >
-                            {rotating === f.key ? (
-                              <Loader2 className='h-4 w-4 animate-spin' />
-                            ) : (
-                              <RefreshCw className='h-4 w-4' />
-                            )}
-                            {state === 'missing' ? st('auto.generate') : st('auto.rotate')}
-                          </Button>
-                        </div>
-                        {once && (
-                          <div className='flex flex-col gap-1'>
-                            <code className='break-all rounded bg-muted px-2 py-1 text-xs'>{once}</code>
-                            <HelpText text={st('auto.show_once')} />
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
+                  {autoFields.map(renderAutoCred)}
                 </section>
               )}
               {/* Credenciales */}
@@ -1747,7 +1756,7 @@ export function AddonConfigSurface({
           data-wizard-footer=''
           className='flex shrink-0 flex-col gap-2 border-t pt-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:space-x-0'
         >
-          {nothingToSave ? (
+          {nothingToSave && !useStepper ? (
             <Button className='h-11 w-full sm:ml-auto sm:h-9 sm:w-auto' onClick={() => onOpenChange(false)}>
               {st('common.close')}
             </Button>
@@ -1789,15 +1798,17 @@ export function AddonConfigSurface({
                     {st('common.next')}
                   </Button>
                 )}
-                <Button
-                  className='h-11 flex-1 sm:h-9 sm:flex-none'
-                  onClick={handleSave}
-                  disabled={saveMutation.isPending || loading}
-                  data-testid='config-save'
-                >
-                  {saveMutation.isPending && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
-                  {st('common.save')}
-                </Button>
+                {!nothingToSave && (
+                  <Button
+                    className='h-11 flex-1 sm:h-9 sm:flex-none'
+                    onClick={handleSave}
+                    disabled={saveMutation.isPending || loading}
+                    data-testid='config-save'
+                  >
+                    {saveMutation.isPending && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
+                    {st('common.save')}
+                  </Button>
+                )}
               </div>
             </>
           )}
