@@ -1756,7 +1756,7 @@ export function AddonConfigSurface({
           data-wizard-footer=''
           className='flex shrink-0 flex-col gap-2 border-t pt-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:space-x-0'
         >
-          {nothingToSave ? (
+          {nothingToSave && !useStepper ? (
             <Button className='h-11 w-full sm:ml-auto sm:h-9 sm:w-auto' onClick={() => onOpenChange(false)}>
               {st('common.close')}
             </Button>
@@ -1798,15 +1798,17 @@ export function AddonConfigSurface({
                     {st('common.next')}
                   </Button>
                 )}
-                <Button
-                  className='h-11 flex-1 sm:h-9 sm:flex-none'
-                  onClick={handleSave}
-                  disabled={saveMutation.isPending || loading}
-                  data-testid='config-save'
-                >
-                  {saveMutation.isPending && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
-                  {st('common.save')}
-                </Button>
+                {!nothingToSave && (
+                  <Button
+                    className='h-11 flex-1 sm:h-9 sm:flex-none'
+                    onClick={handleSave}
+                    disabled={saveMutation.isPending || loading}
+                    data-testid='config-save'
+                  >
+                    {saveMutation.isPending && <Loader2 className='mr-2 h-4 w-4 animate-spin' />}
+                    {st('common.save')}
+                  </Button>
+                )}
               </div>
             </>
           )}
