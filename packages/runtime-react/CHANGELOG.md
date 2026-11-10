@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 53.18.0
+
+### Minor Changes
+
+- bfc9a99: AddonConfigSurface: un conector con `form_layout` en pasos ahora se dibuja como asistente aunque sus credenciales sean todas `auto` (generadas por el host) o el layout solo traiga bloques (URL a copiar, instrucciones). Las credenciales `auto` aparecen en el paso al que se enlazan con `section` (estado + Rotar). Antes caía al formulario plano y el asistente no se veía.
+
 ## 53.17.0
 
 ### Minor Changes
