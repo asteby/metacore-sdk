@@ -344,6 +344,7 @@ describe('host-generated (auto) credentials', () => {
         expect(screen.queryByLabelText(/Token/)).toBeNull()
         fireEvent.click(screen.getByText('Rotar'))
         await waitFor(() => expect(screen.getByText('mcs_NEWSECRET')).toBeTruthy())
+        expect(screen.getByTestId('auto-once').querySelector('button')).toBeTruthy()
         expect(calls.some((c) => c.m === 'POST' && c.url === '/integrations/local_reviews/auto/api_key/rotate')).toBe(true)
     })
 
