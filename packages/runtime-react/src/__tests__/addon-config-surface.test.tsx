@@ -351,4 +351,40 @@ describe('host-generated (auto) credentials', () => {
         setup({ connector: { ...autoConnector, auto_credentials: { api_key: 'missing' } } })
         expect(await screen.findByText('Requiere acción')).toBeTruthy()
     })
+
+    it('a connector with ONLY auto credentials still renders its steps: URL block first, Rotar in the bound step', async () => {
+        const wizard: ConnectorEntry = {
+            ...autoConnector,
+            credentials: [{ key: 'api_key', type: 'secret', required: true, auto: 'webhook_signing', label: 'pay.token', section: 'secret' }],
+            form_layout: {
+                mode: 'steps',
+                sections: [
+                    {
+                        key: 'endpoint',
+                        title: 'Direccion de entrada',
+                        blocks: [
+                            {
+                                key: 'ingest_url',
+                                kind: 'webhook_url',
+                                webhook: 'fleet_instances',
+                                title: 'URL de la organizacion',
+                                value: 'https://ops.example/api/webhooks/org1/hub_fleet/fleet_instances',
+                            },
+                        ],
+                    },
+                    {
+                        key: 'secret',
+                        title: 'Secreto de firma',
+                        blocks: [{ key: 'secret_howto', kind: 'instructions', title: 'Ops genera el secreto' }],
+                    },
+                ],
+            },
+        }
+        setup({ connector: wizard })
+        expect(await screen.findByText('https://ops.example/api/webhooks/org1/hub_fleet/fleet_instances')).toBeTruthy()
+        expect(screen.queryByText('Rotar')).toBeNull()
+        fireEvent.click(screen.getByText('Siguiente'))
+        expect(await screen.findByText('Rotar')).toBeTruthy()
+        expect(screen.getByText('Conectada automáticamente')).toBeTruthy()
+    })
 })
