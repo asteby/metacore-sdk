@@ -83,6 +83,7 @@ import type {
   ReturnRequest,
   ReturnRequestInput,
   Shop,
+  AcceptedPaymentMethods,
   RestockSubscriptionInput,
   RestockSubscriptionResult,
   StockLevel,
@@ -492,6 +493,12 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
 
     shop: {
       get: (options?: RequestOptions) => get<Shop>('/storefront/shop', undefined, options),
+      /**
+       * The ways to pay the shop offers in the market, without a cart (`GET /storefront/payment-methods`, contract
+       * 1.30.0): the same list the checkout offers, with the public options of each provider (card, cash points…).
+       * For the footer or the «Shipping and payments» page. `null` on servers that do not serve it yet.
+       */
+      paymentMethods: (options?: RequestOptions) => getOrNull<AcceptedPaymentMethods>('/storefront/payment-methods', undefined, options),
     },
 
     /**

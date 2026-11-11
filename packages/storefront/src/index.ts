@@ -189,5 +189,29 @@ export {
 } from './account-lists.js'
 export type { ListPageState, ListQuery, ListUrlNames } from './account-lists.js'
 
+export {
+  SHOP_MERGE_FIELDS,
+  LEGAL_DRAFT_MARKERS,
+  businessIdentity,
+  hasLegalDraftNotice,
+  hasTemplateBlank,
+  identityComplete,
+  isLegalHandle,
+  isInternalProduct,
+  mergeShopPage,
+  mergeShopSections,
+  mergeShopText,
+  pagePublishable,
+  resolveShopText,
+  shopFieldValues,
+  shopLegal,
+  shopReturnsDays,
+  shopReturnsFree,
+  shopShippingDays,
+  shopWarrantyDays,
+  shopWarrantyMonths,
+  shopWarrantyTerm,
+} from './trust.js'
+export type { BusinessIdentityRow, DroppedContent, MergedPage, MergedSections, PublishableOptions, ResolvedText, ShopFieldValues, ShopMergeField } from './trust.js'
 export { normalizeTitleText, normalizeName, productTitle, productPartNumber, distinctProductTitles, PART_TITLE_KEYS } from './product-title.js'
 export type { NormalizeTitleOptions, PartTitleKeys, ProductTitleOptions, TitleLocale } from './product-title.js'
