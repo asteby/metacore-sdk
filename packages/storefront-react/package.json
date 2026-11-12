@@ -261,7 +261,7 @@
   "devDependencies": {
     "@asteby/metacore-maps": "workspace:*",
     "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "14.6.1",
+    "@testing-library/user-event": "14.6.10",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "axe-core": "4.11.4",
