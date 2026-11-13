@@ -1392,15 +1392,21 @@ export function makeDefaultGetDynamicColumns(
                         }
 
                         case 'currency': {
-                            const num =
+                            const rawNum =
                                 typeof value === 'number' ? value : Number(value)
-                            if (value === null || value === undefined || isNaN(num))
+                            if (value === null || value === undefined || isNaN(rawNum))
                                 return (
                                     <div className="text-right">
                                         <EmptyCell />
                                     </div>
                                 )
                             const decimals = styleCfg(col, 'decimals') ?? 2
+                            // `display_config.minor_units: true` — the column stores the amount in minor units
+                            // (cents: `est_cents`, `price_cents`), so it is divided by 10^decimals before formatting.
+                            const num =
+                                styleCfg(col, 'minor_units', 'minorUnits') === true
+                                    ? rawNum / Math.pow(10, Number(decimals))
+                                    : rawNum
                             // Per-row currency: `display_config.currency_field`
                             // names a sibling column carrying the ISO code of
                             // THIS row's amount (multi-currency tables: a Bs

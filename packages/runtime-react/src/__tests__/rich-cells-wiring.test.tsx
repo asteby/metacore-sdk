@@ -86,3 +86,15 @@ describe('color.also', () => {
         expect(el.firstElementChild?.getAttribute('title')).toBe('#0F766E · #F59E0B')
     })
 })
+
+describe('currency.minor_units', () => {
+  it('una columna en centavos se divide antes de formatear: 1038 -> $10.38', () => {
+    const el = cellFor({ key: 'est_cents', cellStyle: 'currency', styleConfig: { currency: 'USD', minor_units: true } } as never, { est_cents: 1038 })
+    expect(el.textContent).toBe('$10.38')
+  })
+
+  it('sin minor_units el valor se toma tal cual (comportamiento de siempre)', () => {
+    const el = cellFor({ key: 'price', cellStyle: 'currency', styleConfig: { currency: 'USD' } } as never, { price: 1038 })
+    expect(el.textContent).toBe('$1,038.00')
+  })
+})
