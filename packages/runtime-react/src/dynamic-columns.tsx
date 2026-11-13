@@ -55,6 +55,7 @@ import { MediaValue } from './rich-url'
 import { OptionsContext } from './options-context'
 import { DynamicIcon, Icon, isLucideIconName } from './dynamic-icon'
 import { CollectionCell } from './collection-cell'
+import { ChipsCell, MeterCell, SwatchCell } from './rich-cells'
 import { isNilUuid, normalizeNilUuid } from './nil-uuid'
 import { useOptionsResolver } from './use-options-resolver'
 import { RowActionsMenu } from './row-actions-menu'
@@ -1517,7 +1518,50 @@ export function makeDefaultGetDynamicColumns(
                             )
                         }
 
+                        case 'chips': {
+                            // A list (JSON array or CSV) as colored badges: what an instance exposes, a license's presets.
+                            // `display_config`: labels {value→text|i18n key}, colors {value→color}, icons {value→lucide}, max.
+                            const maxCfg = Number(styleCfg(col, 'max'))
+                            return (
+                                <ChipsCell
+                                    value={value}
+                                    labels={styleCfg(col, 'labels')}
+                                    colors={styleCfg(col, 'colors')}
+                                    icons={styleCfg(col, 'icons')}
+                                    max={Number.isFinite(maxCfg) && maxCfg >= 1 ? maxCfg : undefined}
+                                    t={t as any}
+                                    getImageUrl={getImageUrl}
+                                />
+                            )
+                        }
+
+                        case 'meter': {
+                            // A number with a bar when a ceiling is known: `display_config.max` or `max_field` (a row column).
+                            const maxField = styleCfg(col, 'max_field', 'maxField')
+                            const ceiling = maxField
+                                ? getNestedValue(row.original, String(maxField))
+                                : styleCfg(col, 'max')
+                            return (
+                                <MeterCell
+                                    value={value}
+                                    max={ceiling}
+                                    unit={styleCfg(col, 'unit')}
+                                    locale={currentLanguage}
+                                />
+                            )
+                        }
+
                         case 'color': {
+                            // `display_config.also: [<column>…]` paints the sibling columns' colors in the same cell (brand
+                            // primary + accent) instead of one column per color.
+                            const also: unknown = styleCfg(col, 'also')
+                            if (Array.isArray(also) && also.length > 0) {
+                                return (
+                                    <SwatchCell
+                                        colors={[value, ...also.map((k) => getNestedValue(row.original, String(k)))]}
+                                    />
+                                )
+                            }
                             if (!value) return <EmptyCell />
                             const hex = String(value)
                             return (
