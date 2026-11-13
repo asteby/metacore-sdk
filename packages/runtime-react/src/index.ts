@@ -537,6 +537,8 @@ export {
     type DynamicColumnsHelpers,
 } from './dynamic-columns'
 export { humanizeToken, localizeFieldLabel, translateMetadataLabel } from './dynamic-columns-helpers'
+export { ChipsCell, MeterCell, SwatchCell, chipItems, validSwatches } from './rich-cells'
+export type { ChipItem, ChipsCellProps, MeterCellProps } from './rich-cells'
 export type { MetadataTranslator } from './dynamic-columns-helpers'
 export {
     UrlChip,

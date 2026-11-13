@@ -481,6 +481,10 @@ export interface ColumnDefinition {
         | 'badge'
         | 'status'
         | 'tags'
+        // A list (JSON array / CSV) as colored badges; display_config: labels, colors, icons, max (see rich-cells.tsx).
+        | 'chips'
+        // A number with a bar when display_config.max / max_field gives a ceiling (see rich-cells.tsx).
+        | 'meter'
         | 'color'
         | 'code'
         | 'truncate-text'
