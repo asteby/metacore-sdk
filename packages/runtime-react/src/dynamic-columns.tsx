@@ -880,7 +880,7 @@ const AvatarCell: React.FC<{
             <AvatarImage
                 src={avatarSrc ? getImageUrl(avatarSrc) : ''}
                 alt={name}
-                className="object-cover"
+                className={shape === 'circle' ? 'object-cover' : 'object-contain p-0.5'}
             />
             <AvatarFallback
                 className={`text-[10px] font-bold ${radius} ${brand ? '' : 'bg-primary/5 text-primary'}`}

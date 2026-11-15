@@ -30,7 +30,9 @@ export function getInitials(
     if (!trimmed) return fallback
     const initials = trimmed
         .split(/\s+/)
-        .map((part) => part[0] ?? '')
+        // First letter/digit per token: separator tokens such as '·' in
+        // 'local · c967abad' must not become an initial ('L·').
+        .map((part) => part.match(/[\p{L}\p{N}]/u)?.[0] ?? '')
         .filter(Boolean)
         .slice(0, max)
         .join('')
