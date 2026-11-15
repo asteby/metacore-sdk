@@ -43,7 +43,7 @@ export type WhatsAppContextOptions = {
 }
 
 /**
- * The chat context of the page from the router's loader data (`useMatches().map((m) => m.data)`, outermost first): the
+ * The chat context of the page from the router's loader data (`useMatches().map((m) => m.loaderData)`, outermost first): the
  * deepest `product`, `order` or non-empty `cart` wins; anything else is `generic`. Pure: the SDK has no router.
  */
 export function whatsappContextFrom(entries: ReadonlyArray<unknown>, options: WhatsAppContextOptions = {}): WhatsAppContext {
