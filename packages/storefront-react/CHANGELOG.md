@@ -1,5 +1,13 @@
 # @asteby/storefront-react
 
+## 0.61.1
+
+### Patch Changes
+
+- 4141202: Mock sin red: `MOCK_IMAGE_URL` genera un SVG `data:` a partir de la semilla (mismo color para la misma semilla, tamaño intrínseco pedido) en vez de usar picsum.photos; una caída de ese servicio dejaba todas las páginas del mock sin evento `load` y rompía los e2e de las tiendas. `defaultImageLoader` deja intactas las URL `data:` y `blob:` (un `?width=` corrompía los bytes en línea).
+- Updated dependencies [4141202]
+  - @asteby/storefront@0.41.1
+
 ## 0.61.0
 
 ### Minor Changes
