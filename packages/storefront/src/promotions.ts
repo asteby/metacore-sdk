@@ -62,6 +62,25 @@ export type PromotionMessageKey =
   | 'note.saved'
   | 'note.error'
   | 'note.counter'
+  | 'code.label'
+  | 'code.placeholder'
+  | 'code.apply'
+  | 'code.applying'
+  | 'code.remove'
+  | 'code.applied'
+  | 'code.pending_shipping'
+  | 'code.invalid_format'
+  | 'code.reason.not_found'
+  | 'code.reason.inactive'
+  | 'code.reason.not_started'
+  | 'code.reason.expired'
+  | 'code.reason.usage_limit_reached'
+  | 'code.reason.customer_limit_reached'
+  | 'code.reason.min_subtotal_not_met'
+  | 'code.reason.no_eligible_items'
+  | 'code.reason.not_combinable'
+  | 'code.reason.currency_mismatch'
+  | 'code.reason.default'
 
 export type PromotionMessages = Record<PromotionMessageKey, string>
 
@@ -115,6 +134,25 @@ const ES: PromotionMessages = {
   'note.saved': 'Guardada',
   'note.error': 'No se pudo guardar la nota. Intenta de nuevo.',
   'note.counter': '{n} de {max} caracteres',
+  'code.label': 'Cupón de descuento',
+  'code.placeholder': 'Escribe tu cupón',
+  'code.apply': 'Aplicar',
+  'code.applying': 'Aplicando…',
+  'code.remove': 'Quitar',
+  'code.applied': 'Cupón {code} aplicado.',
+  'code.pending_shipping': 'El cupón {code} es válido: el envío gratis se aplica al elegir envío a domicilio.',
+  'code.invalid_format': 'Escribe un cupón válido: letras, números, guion o guion bajo.',
+  'code.reason.not_found': 'El cupón {code} no existe. Revisa que esté bien escrito.',
+  'code.reason.inactive': 'El cupón {code} no está activo.',
+  'code.reason.not_started': 'El cupón {code} todavía no está vigente.',
+  'code.reason.expired': 'El cupón {code} ya venció.',
+  'code.reason.usage_limit_reached': 'El cupón {code} ya se agotó.',
+  'code.reason.customer_limit_reached': 'Ya usaste el cupón {code} el máximo de veces permitido.',
+  'code.reason.min_subtotal_not_met': 'El cupón {code} requiere una compra mínima mayor.',
+  'code.reason.no_eligible_items': 'El cupón {code} no aplica a los productos de tu carrito.',
+  'code.reason.not_combinable': 'El cupón {code} no se puede combinar con otro descuento de tu carrito.',
+  'code.reason.currency_mismatch': 'El cupón {code} no aplica en esta moneda.',
+  'code.reason.default': 'El cupón {code} no aplica a este carrito.',
 }
 
 const EN: PromotionMessages = {
@@ -167,6 +205,25 @@ const EN: PromotionMessages = {
   'note.saved': 'Saved',
   'note.error': 'The note could not be saved. Please try again.',
   'note.counter': '{n} of {max} characters',
+  'code.label': 'Discount code',
+  'code.placeholder': 'Enter your code',
+  'code.apply': 'Apply',
+  'code.applying': 'Applying…',
+  'code.remove': 'Remove',
+  'code.applied': 'Code {code} applied.',
+  'code.pending_shipping': 'Code {code} is valid: free shipping applies once you choose home delivery.',
+  'code.invalid_format': 'Enter a valid code: letters, numbers, hyphen or underscore.',
+  'code.reason.not_found': 'Code {code} does not exist. Check the spelling.',
+  'code.reason.inactive': 'Code {code} is not active.',
+  'code.reason.not_started': 'Code {code} is not valid yet.',
+  'code.reason.expired': 'Code {code} has expired.',
+  'code.reason.usage_limit_reached': 'Code {code} has run out.',
+  'code.reason.customer_limit_reached': 'You have already used code {code} the maximum number of times.',
+  'code.reason.min_subtotal_not_met': 'Code {code} needs a higher minimum purchase.',
+  'code.reason.no_eligible_items': 'Code {code} does not apply to the products in your cart.',
+  'code.reason.not_combinable': 'Code {code} cannot be combined with another discount in your cart.',
+  'code.reason.currency_mismatch': 'Code {code} does not apply in this currency.',
+  'code.reason.default': 'Code {code} does not apply to this cart.',
 }
 
 const CATALOG: Record<PromotionLocale, PromotionMessages> = { es: ES, en: EN }
@@ -311,4 +368,56 @@ export function promoProgressView(
     }
   }
   return { discount, shipping }
+}
+
+/** Outcome of a discount code in the cart, from `Cart.discount_codes` (computed by OPS). */
+export type DiscountCodeFeedback = {
+  code: string
+  /** `applied`: discount in force. `pending`: valid, its free shipping waits for home delivery. `rejected`: not applied (see `reason`). */
+  status: 'applied' | 'pending' | 'rejected'
+  reason?: string
+}
+
+/** Server reasons a code does not apply (storefront_cart). Unknown reasons fall back to `code.reason.default`. */
+export const DISCOUNT_CODE_REASONS = [
+  'not_found',
+  'inactive',
+  'not_started',
+  'expired',
+  'usage_limit_reached',
+  'customer_limit_reached',
+  'min_subtotal_not_met',
+  'no_eligible_items',
+  'not_combinable',
+  'currency_mismatch',
+] as const
+
+/** Same rule the server enforces on a code (upper-cased): 2-40 of A-Z, 0-9, `-`, `_`. */
+export const DISCOUNT_CODE_PATTERN = /^[A-Z0-9][A-Z0-9_-]{1,39}$/
+
+/** Trims and upper-cases a typed code; `null` when empty, `false` when the server would reject its format. */
+export function normalizeDiscountCode(raw: string | null | undefined): string | null | false {
+  const code = (raw ?? '').trim().toUpperCase()
+  if (!code) return null
+  return DISCOUNT_CODE_PATTERN.test(code) ? code : false
+}
+
+/**
+ * One entry per code the cart carries, in order. Pure view of `Cart.discount_codes`: OPS decides applicability;
+ * `no_shipping_selected` on an applicable code means "valid, the free shipping applies once shipping is chosen".
+ */
+export function discountCodeFeedback(codes: readonly { code: string; applicable: boolean; reason?: string }[] | null | undefined): DiscountCodeFeedback[] {
+  return (codes ?? []).map((c) => {
+    if (c.applicable) return c.reason === 'no_shipping_selected' ? { code: c.code, status: 'pending', reason: c.reason } : { code: c.code, status: 'applied' }
+    return { code: c.code, status: 'rejected', ...(c.reason ? { reason: c.reason } : {}) }
+  })
+}
+
+/** Buyer-facing text for one feedback entry. */
+export function discountCodeMessage(f: DiscountCodeFeedback, m: PromotionMessages): string {
+  const vars = { code: f.code }
+  if (f.status === 'applied') return formatAvailabilityMessage(m['code.applied'], vars)
+  if (f.status === 'pending') return formatAvailabilityMessage(m['code.pending_shipping'], vars)
+  const key = (DISCOUNT_CODE_REASONS as readonly string[]).includes(f.reason ?? '') ? (`code.reason.${f.reason}` as PromotionMessageKey) : 'code.reason.default'
+  return formatAvailabilityMessage(m[key], vars)
 }

@@ -28,3 +28,6 @@ export {
   withinWindow,
 } from './promo-logic.js'
 export type { FrequencyInput, PathPattern, PromoFrequency, PromoSeenStore, PromoTrigger, PromoWindow, SeenRecord } from './promo-logic.js'
+
+export { DiscountCodeForm } from './discount-code.js'
+export type { DiscountCodeFormProps } from './discount-code.js'
