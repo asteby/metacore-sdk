@@ -1708,7 +1708,7 @@ export function DynamicTable({
                                                 key={header.id}
                                                 colSpan={header.colSpan}
                                                 style={header.column.columnDef.size ? { width: header.column.columnDef.size } : undefined}
-                                                className={cn('bg-card border-b h-10', isActionsColumn && 'sticky right-0 z-20 bg-card shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)]')}
+                                                className={cn('bg-card border-b h-10', isActionsColumn && 'sticky right-0 z-20 bg-card [background:linear-gradient(var(--card),var(--card)),var(--background)] shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)]')}
                                             >
                                                 {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                                             </TableHead>
@@ -1757,7 +1757,7 @@ export function DynamicTable({
                                                                 <TableCell
                                                                     key={cell.id}
                                                                     style={cell.column.columnDef.size ? { width: cell.column.columnDef.size } : undefined}
-                                                                    className={cn('py-2', isActionsColumn && 'sticky right-0 bg-card shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)]')}
+                                                                    className={cn('py-2', isActionsColumn && 'sticky right-0 bg-card [background:linear-gradient(var(--card),var(--card)),var(--background)] shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)]')}
                                                                     onClick={(isActionsColumn || isSelectColumn) ? (e: MouseEvent) => e.stopPropagation() : undefined}
                                                                 >
                                                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -1797,7 +1797,7 @@ export function DynamicTable({
                                                 <TableCell
                                                     key={cell.id}
                                                     style={cell.column.columnDef.size ? { width: cell.column.columnDef.size } : undefined}
-                                                    className={cn('py-2', isActionsColumn && 'sticky right-0 bg-card shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)]')}
+                                                    className={cn('py-2', isActionsColumn && 'sticky right-0 bg-card [background:linear-gradient(var(--card),var(--card)),var(--background)] shadow-[-2px_0_5px_-2px_rgba(0,0,0,0.1)]')}
                                                     onClick={(isActionsColumn || isSelectColumn) ? (e: MouseEvent) => e.stopPropagation() : undefined}
                                                 >
                                                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
