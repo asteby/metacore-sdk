@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import axe from 'axe-core'
-import { PhoneLink, WhatsAppBubble, isHiddenPath, isUsablePhone, phoneDigits, telHref, whatsappUrl } from './index.js'
+import { PhoneLink, WhatsAppBubble, WhatsAppLink, contactMessages, isHiddenPath, isUsablePhone, phoneDigits, telHref, whatsappText, whatsappUrl } from './index.js'
 
 afterEach(cleanup)
 const AXE = { rules: { 'color-contrast': { enabled: false } } }
@@ -116,5 +116,88 @@ describe('<PhoneLink />', () => {
   it('passes axe', async () => {
     const { container } = render(<PhoneLink phone="+525551046865" />)
     expect((await axe.run(container, AXE)).violations).toEqual([])
+  })
+})
+
+describe('whatsappText (contexts)', () => {
+  const m = contactMessages('es-MX')
+  it('names the product, its SKU and URL; drops the empty parts', () => {
+    expect(whatsappText({ kind: 'product', title: 'Llanta BF Goodrich 185/55R15', sku: 'BF-DRV', url: 'https://x.mx/p/1' }, m)).toBe(
+      'Hola, me interesa Llanta BF Goodrich 185/55R15 (SKU BF-DRV). https://x.mx/p/1',
+    )
+    expect(whatsappText({ kind: 'product', title: 'Creatina' }, m)).toBe('Hola, me interesa Creatina.')
+  })
+  it('cart, order and generic texts; overridable per store', () => {
+    expect(whatsappText({ kind: 'cart', count: 4, total: '$8,960.00' }, m)).toBe(
+      'Hola, tengo 4 artículo(s) en mi carrito ($8,960.00) y quiero ayuda para comprar.',
+    )
+    expect(whatsappText({ kind: 'cart', count: 1 }, m)).toBe('Hola, tengo 1 artículo(s) en mi carrito y quiero ayuda para comprar.')
+    expect(whatsappText({ kind: 'order', number: 'SO-00016' }, m)).toBe('Hola, tengo una duda sobre mi pedido SO-00016.')
+    expect(whatsappText(null, m)).toBe(m['whatsapp.message'])
+    const custom = contactMessages('es-MX', { 'whatsapp.message.order': 'Pedido {number}, ¿estatus?' })
+    expect(whatsappText({ kind: 'order', number: '7' }, custom)).toBe('Pedido 7, ¿estatus?')
+    expect(whatsappText({ kind: 'order', number: '7' }, contactMessages('en-US'))).toBe('Hi, I have a question about my order 7.')
+  })
+})
+
+describe('<WhatsAppBubble /> context, branches and analytics', () => {
+  it('uses the context text and reports the open', () => {
+    const seen: unknown[] = []
+    const { container } = render(
+      <WhatsAppBubble phone="+525551046865" context={{ kind: 'order', number: 'SO-1' }} onOpen={(e) => seen.push(e)} />,
+    )
+    const a = container.querySelector('a') as HTMLAnchorElement
+    expect(a.getAttribute('href')).toBe(whatsappUrl('+525551046865', 'Hola, tengo una duda sobre mi pedido SO-1.'))
+    a.click()
+    expect(seen).toEqual([{ phone: '+525551046865', context: 'order', source: 'bubble' }])
+  })
+  it('opens a branch menu with two or more usable numbers (deduplicated) and links straight with one', async () => {
+    const contacts = [
+      { label: 'Centro', phone: '+52 55 1111 2222' },
+      { label: 'Norte', phone: '+525533334444' },
+      { label: 'Repetida', phone: '52 55 1111 2222' },
+      { label: 'Sin número', phone: '' },
+    ]
+    const { container } = render(<WhatsAppBubble phone="+525500000000" contacts={contacts} />)
+    const details = container.querySelector('details[data-sf-whatsapp-bubble]') as HTMLDetailsElement
+    expect(details).toBeTruthy()
+    expect(details.querySelector('summary')?.getAttribute('aria-label')).toBe('Escríbenos por WhatsApp')
+    const links = [...details.querySelectorAll('a')].map((a) => [a.textContent, a.getAttribute('href')?.split('?')[0]])
+    expect(links).toEqual([
+      ['Centro', 'https://wa.me/525511112222'],
+      ['Norte', 'https://wa.me/525533334444'],
+    ])
+    expect((await axe.run(container, AXE)).violations).toEqual([])
+    cleanup()
+    const one = render(<WhatsAppBubble phone="+525500000000" contacts={[{ label: 'Centro', phone: '+525511112222' }]} />)
+    expect(one.container.querySelector('a')?.getAttribute('href')?.startsWith('https://wa.me/525511112222')).toBe(true)
+    cleanup()
+    const fallback = render(<WhatsAppBubble phone="+525500000000" contacts={[{ label: 'x', phone: '' }]} />)
+    expect(fallback.container.querySelector('a')?.getAttribute('href')?.startsWith('https://wa.me/525500000000')).toBe(true)
+  })
+})
+
+describe('<WhatsAppLink />', () => {
+  it('inline link with the default name, the context text and analytics', async () => {
+    const seen: unknown[] = []
+    const { container } = render(
+      <WhatsAppLink phone="+525551046865" className="btn" context={{ kind: 'product', title: 'Llanta' }} onOpen={(e) => seen.push(e)} />,
+    )
+    const a = container.querySelector('a[data-sf-whatsapp-link]') as HTMLAnchorElement
+    expect(a.textContent).toBe('Escríbenos por WhatsApp')
+    expect(a.className).toBe('btn')
+    expect(a.target).toBe('_blank')
+    expect(a.rel).toContain('noopener')
+    expect(a.getAttribute('href')).toBe(whatsappUrl('+525551046865', 'Hola, me interesa Llanta.'))
+    a.click()
+    expect(seen).toEqual([{ phone: '+525551046865', context: 'product', source: 'link' }])
+    expect((await axe.run(container, AXE)).violations).toEqual([])
+  })
+  it('custom children, explicit message and nothing without a number', () => {
+    const { container } = render(<WhatsAppLink phone="+525551046865" message="">Escríbenos</WhatsAppLink>)
+    expect(container.querySelector('a')?.textContent).toBe('Escríbenos')
+    expect(container.querySelector('a')?.getAttribute('href')).toBe('https://wa.me/525551046865')
+    cleanup()
+    expect(render(<WhatsAppLink phone="12" />).container.innerHTML).toBe('')
   })
 })
