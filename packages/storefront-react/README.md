@@ -875,6 +875,20 @@ const catalog = await catalogFromFacets(sf, { aliases: { gm: 'chevrolet' }, labe
 <VehicleMakeLogo make="Toyota" decorative={false} /> {/* único texto: alt="Toyota" */}
 ```
 
+**Selector con logos y búsqueda.** `VehicleCombobox` reemplaza el `<select>` de marca, modelo o año con el patrón ARIA combobox + listbox.
+
+- **Mejora progresiva:** en el servidor y sin JavaScript renderiza un `<select>` nativo con el mismo `id` y `name`. Al hidratar, ese `<select>` queda oculto pero sigue enviando su valor en el formulario.
+- **Logos:** con `logos`, cada opción y el campo muestran el logo de la marca.
+- **Populares:** `popular` pone una rejilla de logos arriba de la lista.
+- **Búsqueda:** el buscador aparece si hay más de 8 opciones. Escribir con el campo enfocado abre la lista y busca.
+- **Teclado:** ↓/↑, RePág/AvPág, Enter y Esc. Al cerrar, el foco vuelve al campo.
+- **Móvil:** se abre como hoja inferior, con opciones de 44 px.
+- **Estilos:** la tienda los pone con `classNames`: `trigger`, `panel`, `search`, `option` (con `data-active` y `aria-selected`), `grid`, `gridItem`, `heading` y `backdrop`.
+
+```tsx
+<VehicleCombobox id="marca" name="make" label="Marca" value={make} onChange={setMake} options={makes} logos popular={["NISSAN", "VOLKSWAGEN"]} />
+```
+
 ## Mis artículos / Mi garage (`@asteby/storefront-react/subjects`, contrato 1.9)
 
 Algo del comprador para lo que compra (un vehículo, una impresora, un celular, una mascota, una talla), de un **tipo que la organización declara como dato**: el SDK no nombra ninguno y los textos salen de los datos (`kind.label`, `kind.label_plural`). Una tienda que no declara tipos (God's Nutrition, Local) **no tiene sección**: `loadSubjectsContext` devuelve `kinds: []` y no se pinta nada.
