@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import axe from 'axe-core'
-import { PhoneLink, WhatsAppBubble, WhatsAppLink, contactMessages, isHiddenPath, isUsablePhone, phoneDigits, telHref, whatsappText, whatsappUrl } from './index.js'
+import { PhoneLink, WhatsAppBubble, WhatsAppLink, contactMessages, whatsappContextFrom, isHiddenPath, isUsablePhone, phoneDigits, telHref, whatsappText, whatsappUrl } from './index.js'
 
 afterEach(cleanup)
 const AXE = { rules: { 'color-contrast': { enabled: false } } }
@@ -199,5 +199,22 @@ describe('<WhatsAppLink />', () => {
     expect(container.querySelector('a')?.getAttribute('href')).toBe('https://wa.me/525551046865')
     cleanup()
     expect(render(<WhatsAppLink phone="12" />).container.innerHTML).toBe('')
+  })
+})
+
+describe('whatsappContextFrom (loader data)', () => {
+  const opts = { productUrl: (h: string) => `https://x.mx/productos/${h}` }
+  it('the deepest product, order or non-empty cart wins', () => {
+    const root = { shop: {}, cart: { total_quantity: 2, cost: { total: { amount: '4480.00', currency_code: 'MXN' } } } }
+    expect(whatsappContextFrom([root], opts)).toEqual({ kind: 'cart', count: 2, total: '$4,480.00' })
+    const product = { product: { title: 'Llanta', handle: 'llanta-1', variants: [{ sku: 'L-1' }] } }
+    expect(whatsappContextFrom([root, product], opts)).toEqual({ kind: 'product', title: 'Llanta', sku: 'L-1', url: 'https://x.mx/productos/llanta-1' })
+    expect(whatsappContextFrom([root, { order: { number: 'SO-9' } }], opts)).toEqual({ kind: 'order', number: 'SO-9' })
+  })
+  it('several variants → no SKU; no productUrl → no link; empty cart or nothing → generic', () => {
+    const p = { product: { title: 'Creatina', handle: 'c', variants: [{ sku: 'a' }, { sku: 'b' }] } }
+    expect(whatsappContextFrom([p])).toEqual({ kind: 'product', title: 'Creatina', sku: null, url: null })
+    expect(whatsappContextFrom([{ cart: { total_quantity: 0 } }, null, 'x'])).toEqual({ kind: 'generic' })
+    expect(whatsappContextFrom([])).toEqual({ kind: 'generic' })
   })
 })
