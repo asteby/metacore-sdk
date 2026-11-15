@@ -1,5 +1,11 @@
 # @asteby/storefront-react
 
+## 0.62.1
+
+### Patch Changes
+
+- 4be30d4: `VehicleCombobox`: fast type-ahead now keeps every key. The search box takes focus in the same commit, and any key that still lands on the field is added to the search.
+
 ## 0.62.0
 
 ### Minor Changes
