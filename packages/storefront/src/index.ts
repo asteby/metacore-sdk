@@ -82,9 +82,22 @@ export type {
   PaymentOutcomeKind,
 } from './payments.js'
 
-export { promotionMessages, rewardLabel, promoProgressView, clampPercent, normalizeNote, NOTE_MAX_LENGTH } from './promotions.js'
+export {
+  promotionMessages,
+  rewardLabel,
+  promoProgressView,
+  clampPercent,
+  normalizeNote,
+  NOTE_MAX_LENGTH,
+  DISCOUNT_CODE_PATTERN,
+  DISCOUNT_CODE_REASONS,
+  discountCodeFeedback,
+  discountCodeMessage,
+  normalizeDiscountCode,
+} from './promotions.js'
 export type {
   DiscountBarState,
+  DiscountCodeFeedback,
   DiscountBarView,
   PromoProgressView,
   PromotionLocale,
