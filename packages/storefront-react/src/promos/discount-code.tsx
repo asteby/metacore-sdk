@@ -1,4 +1,4 @@
-import { useId, useState, type ComponentType, type FormHTMLAttributes, type ReactNode } from 'react'
+import { useId, useState, type ElementType, type FormHTMLAttributes, type ReactNode } from 'react'
 import { useResolvedLocale } from '../locale.js'
 import {
   discountCodeFeedback,
@@ -9,9 +9,14 @@ import {
   type PromotionMessages,
 } from '@asteby/storefront'
 
-type FormLike = ComponentType<FormHTMLAttributes<HTMLFormElement> & { children?: ReactNode }>
+/**
+ * Any form element: `<form>`, React Router `Form` or a fetcher `Form`. Typed loosely on purpose: router forms narrow
+ * `method` to their own union, which a strict `ComponentType<FormHTMLAttributes>` would reject.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type FormLike = ElementType<any>
 
-const PlainForm: FormLike = (p) => <form {...p} />
+const PlainForm = (p: FormHTMLAttributes<HTMLFormElement> & { children?: ReactNode }) => <form {...p} />
 
 // Visually hidden, still read by screen readers (no CSS dependency).
 const SR_ONLY = { position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0, 0, 0, 0)', whiteSpace: 'nowrap', border: 0 } as const
