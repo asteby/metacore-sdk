@@ -135,6 +135,10 @@ export function VehicleCombobox({
   const listId = `${uid}-list`
   const optId = (i: number) => `${uid}-opt-${i}`
   const sheet = useMedia(sheetQuery, open)
+  const panelRef = useRef<HTMLDivElement>(null)
+  // Escritorio: el panel va en posición fija junto al campo, así no lo recorta un contenedor con overflow (p. ej. el
+  // desplegable de la cabecera). Se abre hacia abajo o, si no cabe, hacia arriba.
+  const [pos, setPos] = useState<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number } | null>(null)
   const canSearch = searchable ?? options.length > 8
 
   const current = options.find((o) => o.value === value) ?? null
@@ -168,6 +172,45 @@ export function VehicleCombobox({
     close(true)
     if (v !== value) onChange(v)
   }
+
+  useLayoutEffect(() => {
+    if (!open || sheet) {
+      setPos(null)
+      return
+    }
+    const place = () => {
+      const t = trigger.current?.getBoundingClientRect()
+      if (!t) return
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      const width = Math.min(Math.max(t.width, panelMinWidth), vw - 16)
+      const left = Math.max(8, Math.min(t.left, vw - width - 8))
+      const below = vh - t.bottom - 12
+      const above = t.top - 12
+      const up = below < 260 && above > below
+      const maxHeight = Math.max(200, Math.min(420, up ? above : below))
+      setPos(up ? { bottom: vh - t.top + 6, left, width, maxHeight } : { top: t.bottom + 6, left, width, maxHeight })
+    }
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [open, sheet, panelMinWidth])
+
+  // Un ancestro con transform convierte "fixed" en relativo a él: se corrige la diferencia medida.
+  useLayoutEffect(() => {
+    const el = panelRef.current
+    if (!el || !pos || sheet) return
+    const r = el.getBoundingClientRect()
+    const dx = pos.left - r.left
+    const dy = pos.top != null ? pos.top - r.top : 0
+    if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+      el.style.translate = `${dx}px ${dy}px`
+    } else el.style.translate = ''
+  }, [pos, sheet])
 
   // Foco al abrir: buscador (si hay) o la lista. En el mismo commit (layout effect), para que las teclas que siguen a la
   // que abrió la lista (type-ahead rápido) caigan ya en el buscador.
@@ -279,7 +322,9 @@ export function VehicleCombobox({
 
   const panelStyle: CSSProperties = sheet
     ? { position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 60, maxHeight: '85dvh', display: 'flex', flexDirection: 'column', paddingBottom: 'env(safe-area-inset-bottom)' }
-    : { position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 50, minWidth: `max(100%, ${panelMinWidth}px)`, maxHeight: 420, display: 'flex', flexDirection: 'column' }
+    : pos
+      ? { position: 'fixed', top: pos.top, bottom: pos.bottom, left: pos.left, width: pos.width, zIndex: 70, maxHeight: pos.maxHeight, display: 'flex', flexDirection: 'column' }
+      : { position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 50, minWidth: `max(100%, ${panelMinWidth}px)`, maxHeight: 420, display: 'flex', flexDirection: 'column' }
 
   return (
     <div
@@ -318,7 +363,7 @@ export function VehicleCombobox({
       {open ? (
         <>
           {sheet ? <div className={classNames.backdrop} data-vehicle-combobox-backdrop="" onClick={() => close(true)} style={{ position: 'fixed', inset: 0, zIndex: 59 }} /> : null}
-          <div className={classNames.panel} data-vehicle-combobox-panel={sheet ? 'sheet' : 'popover'} style={panelStyle} onKeyDown={onListKey}>
+          <div ref={panelRef} className={classNames.panel} data-vehicle-combobox-panel={sheet ? 'sheet' : 'popover'} style={panelStyle} onKeyDown={onListKey}>
             {sheet ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '12px 16px 4px' }}>
                 <span className={classNames.heading}>{label}</span>
