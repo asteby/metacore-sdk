@@ -47,6 +47,8 @@ export type ImageLoader = (src: string, width: number, height?: number) => strin
  * the OPS image proxy). URLs that cannot be parsed are returned unchanged.
  */
 export const defaultImageLoader: ImageLoader = (src, width, height) => {
+  // `data:` / `blob:` carry the bytes in the URL: a query would corrupt them (and there is nothing to resize).
+  if (/^(data|blob):/i.test(src)) return src
   try {
     const isAbsolute = /^[a-z][a-z0-9+.-]*:/i.test(src)
     const url = new URL(src, 'http://relative.invalid')

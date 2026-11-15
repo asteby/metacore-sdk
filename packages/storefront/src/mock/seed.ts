@@ -14,11 +14,25 @@ import type {
 } from '../types.js'
 
 /**
- * Placeholder image source for all seed data. Swap it (or pass `imageUrl` to
- * `createMockStorefront`) to use your own assets.
+ * Placeholder image source for all seed data: a small SVG `data:` URL generated from the seed (same seed → same color),
+ * with the requested size as its intrinsic size. No network: the mock, the tests and the e2e never depend on a third-party
+ * image host (they used picsum.photos, and an outage there left every page without its `load` event). Swap it (or pass
+ * `imageUrl` to `createMockStorefront`) to use your own assets.
  */
-export const MOCK_IMAGE_URL = (seed: string, width = 800, height = 800): string =>
-  `https://picsum.photos/seed/${encodeURIComponent(seed)}/${width}/${height}`
+export const MOCK_IMAGE_URL = (seed: string, width = 800, height = 800): string => {
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
+  const hue = h % 360
+  const label = seed.replace(/[^a-z0-9 -]/gi, '').slice(0, 24)
+  const fs = Math.max(12, Math.round(Math.min(width, height) / 14))
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">` +
+    `<rect width="100%" height="100%" fill="hsl(${hue} 45% 82%)"/>` +
+    `<circle cx="50%" cy="45%" r="${Math.round(Math.min(width, height) / 5)}" fill="hsl(${hue} 40% 62%)"/>` +
+    `<text x="50%" y="80%" font-family="sans-serif" font-size="${fs}" text-anchor="middle" fill="hsl(${hue} 35% 28%)">${label}</text>` +
+    `</svg>`
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
+}
 
 export type MockImageUrl = typeof MOCK_IMAGE_URL
 
