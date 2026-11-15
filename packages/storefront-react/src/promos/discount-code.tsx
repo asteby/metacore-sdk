@@ -1,4 +1,4 @@
-import { useId, useState, type ElementType, type FormHTMLAttributes, type ReactNode } from 'react'
+import { useId, useState, type ElementType, type FormEvent, type FormHTMLAttributes, type ReactNode } from 'react'
 import { useResolvedLocale } from '../locale.js'
 import {
   discountCodeFeedback,
@@ -91,7 +91,7 @@ export function DiscountCodeForm({
         method="post"
         {...(action ? { action } : {})}
         noValidate
-        onSubmit={(e) => {
+        onSubmit={(e: FormEvent<HTMLFormElement>) => {
           const input = e.currentTarget.elements.namedItem(fieldName) as HTMLInputElement | null
           const ok = normalizeDiscountCode(input?.value) !== false
           setFormatError(!ok)
