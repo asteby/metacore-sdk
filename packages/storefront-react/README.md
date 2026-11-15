@@ -863,6 +863,18 @@ El catálogo acepta motores con tramos de años reales (`["2.4", 2007, 2017, 202
 const catalog = await catalogFromFacets(sf, { aliases: { gm: 'chevrolet' }, labels: { make: (id) => pageLabels[id] } })
 ```
 
+**Logos de marcas de vehículo.** El paquete trae 59 logos normalizados en `vehicle-makes/`; su origen y su uso están en `vehicle-makes/README.md`.
+
+- **Copiar a la tienda:** `asteby-vehicle-makes public/vehicle-makes`, en `prebuild` y `predev`.
+- **Pintar:** `<VehicleMakeLogo make="Nissan" size={32} />` dibuja una caja fija, sin saltos de layout, sobre una placa clara en ambos temas.
+- **Sin logo:** si no hay logo o la imagen falla, el componente muestra iniciales.
+- **Helpers:** `resolveVehicleMake('VW')` devuelve `'volkswagen'` (con alias), y además están `vehicleMakeLogoSrc`, `hasVehicleMakeLogo` y `vehicleMakeInitials`.
+
+```tsx
+<VehicleMakeLogo make={vehicle.make} size={24} />   {/* decorativo: el nombre va al lado */}
+<VehicleMakeLogo make="Toyota" decorative={false} /> {/* único texto: alt="Toyota" */}
+```
+
 ## Mis artículos / Mi garage (`@asteby/storefront-react/subjects`, contrato 1.9)
 
 Algo del comprador para lo que compra (un vehículo, una impresora, un celular, una mascota, una talla), de un **tipo que la organización declara como dato**: el SDK no nombra ninguno y los textos salen de los datos (`kind.label`, `kind.label_plural`). Una tienda que no declara tipos (God's Nutrition, Local) **no tiene sección**: `loadSubjectsContext` devuelve `kinds: []` y no se pinta nada.
