@@ -131,3 +131,19 @@ describe('<VehicleCombobox>', () => {
     expect(opt.querySelector('.sf-vehicle-make')).not.toBeNull()
   })
 })
+
+describe('<VehicleCombobox> type-ahead rápido', () => {
+  it('varias teclas seguidas en el campo forman la búsqueda completa', () => {
+    render(<Harness />)
+    const combo = screen.getByRole('combobox', { name: /Marca/ })
+    combo.focus()
+    fireEvent.keyDown(combo, { key: 'n' })
+    // El buscador ya tiene el foco en el mismo commit; si una tecla llega todavía al campo, se suma.
+    const search = screen.getByRole('combobox', { name: 'Buscar marca' }) as HTMLInputElement
+    expect(document.activeElement).toBe(search)
+    fireEvent.keyDown(combo, { key: 'i' })
+    fireEvent.keyDown(combo, { key: 's' })
+    expect(search.value).toBe('nis')
+    expect(screen.getAllByRole('option')[0]!.textContent).toBe('Nissan')
+  })
+})

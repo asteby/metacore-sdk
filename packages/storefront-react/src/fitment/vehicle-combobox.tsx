@@ -3,7 +3,7 @@
 // JavaScript (y en el HTML del servidor) es un <select> nativo con el mismo id y name; al hidratar el <select> queda
 // oculto pero en el formulario (sigue enviando su valor) y la interacción pasa al combobox.
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
 import { VehicleMakeLogo } from './vehicle-make-logo.js'
 
 export type VehicleComboboxOption = { value: string; label: string }
@@ -169,11 +169,13 @@ export function VehicleCombobox({
     if (v !== value) onChange(v)
   }
 
-  // Foco al abrir: buscador (si hay) o la lista.
-  useEffect(() => {
+  // Foco al abrir: buscador (si hay) o la lista. En el mismo commit (layout effect), para que las teclas que siguen a la
+  // que abrió la lista (type-ahead rápido) caigan ya en el buscador.
+  useLayoutEffect(() => {
     if (!open) return
-    const t = requestAnimationFrame(() => (canSearch ? searchRef.current : listRef.current)?.focus())
-    return () => cancelAnimationFrame(t)
+    const el = canSearch ? searchRef.current : listRef.current
+    el?.focus()
+    if (el instanceof HTMLInputElement) el.setSelectionRange(el.value.length, el.value.length)
   }, [open, canSearch])
 
   // Clic fuera cierra (en escritorio; la hoja tiene su velo).
@@ -204,6 +206,13 @@ export function VehicleCombobox({
   }, [active, open])
 
   const onTriggerKey = (e: KeyboardEvent<HTMLButtonElement>) => {
+    if (open && canSearch && e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault()
+      setQuery((q) => q + e.key)
+      setActive(0)
+      searchRef.current?.focus()
+      return
+    }
     if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(e.key)) {
       e.preventDefault()
       openList()
