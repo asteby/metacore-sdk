@@ -93,7 +93,7 @@ export type MockStorefrontOptions = {
    * absent, as with a server older than 1.22).
    */
   market?: ShopMarket
-  /** Image URL builder for seed data (default: picsum.photos placeholders). */
+  /** Image URL builder for seed data (default: inline SVG placeholders, no network). */
   imageUrl?: MockImageUrl
   /** OTP code accepted by `/customer/session` (default `000000`). */
   otpCode?: string

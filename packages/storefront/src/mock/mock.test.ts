@@ -24,7 +24,7 @@ describe('mock catalog', () => {
     expect(pan.featured_image).toEqual(pan.images[0])
     expect(new Set(pan.images.map((i) => i.url)).size).toBe(5)
     expect(pan.images.map((i) => i.width)).toEqual([800, 800, 800, 100, 800])
-    expect(pan.images[3]!.url).toContain('/100/100')
+    expect(decodeURIComponent(pan.images[3]!.url)).toContain('width="100" height="100"')
     const others = (await sf.products.list({ first: 100 })).nodes.filter((p) => p.handle !== 'set-sartenes')
     expect(others.every((p) => p.images.length === 2)).toBe(true)
   })
@@ -82,7 +82,8 @@ describe('mock catalog', () => {
     const p = (await sf.products.get('playera-basica')) as Product
     expect(p.variants).toHaveLength(6)
     expect(p.options.map((o) => o.name)).toEqual(['Talla', 'Color'])
-    expect(p.featured_image?.url).toContain('picsum.photos/seed/playera-basica')
+    expect(p.featured_image?.url.startsWith('data:image/svg+xml,')).toBe(true)
+    expect(decodeURIComponent(p.featured_image!.url)).toContain('playera-basica')
     expect(await sf.products.get('nope')).toBeNull()
     const recs = await sf.products.recommendations('playera-basica')
     expect(recs.nodes.length).toBeGreaterThan(0)
