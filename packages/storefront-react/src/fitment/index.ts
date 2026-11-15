@@ -1,3 +1,6 @@
 export * from './fitment.js'
 export * from './facets.js'
 export * from './listing.js'
+export * from './vehicle-make.js'
+export * from './vehicle-make-logo.js'
+export { VEHICLE_MAKE_LOGO_SLUGS } from './vehicle-makes.generated.js'

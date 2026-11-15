@@ -14,7 +14,9 @@
   "types": "./dist/index.d.ts",
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "vehicle-makes",
+    "scripts/copy-vehicle-makes.mjs"
   ],
   "exports": {
     ".": {
@@ -239,7 +241,8 @@
         "default": "./dist/reviews.cjs"
       }
     },
-    "./reviews.css": "./dist/reviews.css"
+    "./reviews.css": "./dist/reviews.css",
+    "./vehicle-makes/*": "./vehicle-makes/*"
   },
   "sideEffects": false,
   "engines": {
@@ -274,5 +277,8 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "bin": {
+    "asteby-vehicle-makes": "./scripts/copy-vehicle-makes.mjs"
   }
 }
