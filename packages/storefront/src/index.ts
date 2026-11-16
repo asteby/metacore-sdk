@@ -144,6 +144,8 @@ export type {
   ReturnMessageKey,
   ReturnMessages,
 } from './returns.js'
+export { branchEntity, entitiesOf, isMultiEntity, isPickupBranch, pickupBranches, entityOfBranchId, splitByEntity, splitNotice } from './entity.js'
+export type { EntityGroup } from './entity.js'
 export { checkoutNotice } from './checkout-notice.js'
 export type { CheckoutNotice } from './checkout-notice.js'
 export { normalizeTrackingView, visibleTrackingShipments } from './tracking.js'

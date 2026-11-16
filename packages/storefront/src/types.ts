@@ -208,9 +208,17 @@ export type ShopBranch = {
   contacts?: LocationContacts
   /** Pickup ("recoge en sucursal") terms. Comes with `locations.v1`. */
   pickup?: LocationPickup
+  /**
+   * Seller entity (razón social) the branch belongs to: its stable `code` and commercial `name`. Never tax data
+   * (RFC 0001 §3.7). Absent / `null` when the shop has no entities: it then sells through one implicit entity.
+   */
+  entity?: LocationEntity | null
 }
 
-export type LocationKind = 'store' | 'warehouse' | 'pickup_point' | 'office' | (string & {})
+/** The entity of a branch as the storefront sees it: stable code (shared with the ERP) and commercial name. No tax data. */
+export type LocationEntity = { code: string; name: string }
+
+export type LocationKind = 'store' | 'warehouse' | 'pickup_point' | 'office' | 'channel' | (string & {})
 
 export type LocationContacts = { phone: string | null; email: string | null; whatsapp: string | null }
 
