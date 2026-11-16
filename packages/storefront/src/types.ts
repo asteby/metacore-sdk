@@ -213,7 +213,14 @@ export type ShopBranch = {
    * (RFC 0001 §3.7). Absent / `null` when the shop has no entities: it then sells through one implicit entity.
    */
   entity?: LocationEntity | null
+  /**
+   * Present only for a place that is NOT a counter: `channel` (Mercado Libre, Amazon) or `virtual_warehouse`
+   * (Storefront API 1.33). Such a branch is never offered to collect an order. Absent means a regular branch.
+   */
+  branch_type?: BranchType
 }
+
+export type BranchType = 'channel' | 'virtual_warehouse'
 
 /** The entity of a branch as the storefront sees it: stable code (shared with the ERP) and commercial name. No tax data. */
 export type LocationEntity = { code: string; name: string }

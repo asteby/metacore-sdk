@@ -12,6 +12,7 @@ import type { LocationEntity, ShopBranch } from './types.js'
 
 /** Kinds of place that can be offered as "recoge en sucursal". Channel branches (Mercado Libre, Amazon) and warehouses never are. */
 const NOT_PICKUP_KINDS = new Set(['channel', 'warehouse', 'office'])
+const NOT_PICKUP_BRANCH_TYPES = new Set(['channel', 'virtual_warehouse'])
 
 /** The entity of a branch, or `null` when the API does not publish one. Validates the shape so a malformed value never reaches the UI. */
 export function branchEntity(branch: Pick<ShopBranch, 'entity'> | null | undefined): LocationEntity | null {
@@ -36,13 +37,15 @@ export function isMultiEntity(branches: readonly Pick<ShopBranch, 'entity'>[] | 
 }
 
 /** Can a buyer collect an order here? A channel branch ("Siete Leguas Mercado Libre") or a warehouse is a place of the ERP, not a counter. */
-export function isPickupBranch(branch: Pick<ShopBranch, 'kind' | 'pickup'>): boolean {
+export function isPickupBranch(branch: Pick<ShopBranch, 'kind' | 'pickup' | 'branch_type'>): boolean {
+  // `branch_type` is what Storefront API 1.33 publishes (only for a non-counter); `kind` covers older servers and warehouses.
+  if (branch.branch_type && NOT_PICKUP_BRANCH_TYPES.has(String(branch.branch_type))) return false
   if (branch.kind && NOT_PICKUP_KINDS.has(String(branch.kind))) return false
   return branch.pickup ? branch.pickup.enabled !== false : true
 }
 
 /** Branches to offer as pickup: only real counters that allow pickup. */
-export function pickupBranches<T extends Pick<ShopBranch, 'kind' | 'pickup'>>(branches: readonly T[] | null | undefined): T[] {
+export function pickupBranches<T extends Pick<ShopBranch, 'kind' | 'pickup' | 'branch_type'>>(branches: readonly T[] | null | undefined): T[] {
   return (branches ?? []).filter(isPickupBranch)
 }
 
