@@ -42,6 +42,12 @@ describe('entidad vendedora en la tienda', () => {
     expect(pickupBranches(branches).map((b) => b.id)).toEqual(['sf', 'sl', 'bo'])
   })
 
+  it('branch_type (Storefront API 1.33) también saca la sucursal de la recolección', () => {
+    expect(isPickupBranch({ branch_type: 'channel' })).toBe(false)
+    expect(isPickupBranch({ branch_type: 'virtual_warehouse', kind: 'store' })).toBe(false)
+    expect(isPickupBranch({ kind: 'store' })).toBe(true)
+  })
+
   it('la entidad del pedido es la de la sucursal elegida', () => {
     expect(entityOfBranchId(branches, 'bo')).toEqual(rfc1)
     expect(entityOfBranchId(branches, 'ml')).toEqual(rfc2)
