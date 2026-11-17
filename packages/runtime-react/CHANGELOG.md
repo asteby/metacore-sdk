@@ -1,5 +1,13 @@
 # @asteby/metacore-runtime-react
 
+## 53.21.0
+
+### Minor Changes
+
+- 31b628a: AddonConfigSurface: secret credential fields gain Generar (crypto.getRandomValues, honours the `validation: "min_length:N"` hint), Copiar, Rotar with confirmation, a strength bar and live min-length validation that blocks Guardar. Long field help splits into a short lead plus a collapsible «Cómo se usa». The header shows the addon logo (new `logo` prop, `object-contain`), version and configured state. Closing with unsaved changes asks before discarding. No manifest/schema change: `validation` is an existing credential hint.
+- 54a5658: Add the shared `AddonLogo` primitive (ui/primitives): addon/provider logos fill a padded white tile with `object-contain` (inset ring instead of a layout-eating border), so wide, tall, SVG and transparent-PNG logos are never cropped. `AddonConfigSurface` gains an optional `logo` slot for the "Configurar <addon>" header.
+- 48f66ab: Notificaciones pro "saber a dónde ir": `NavBadge` (tono por severidad info/attention/urgent/critical, tope 99+, aria-label con el número exacto, pulso solo con motion-safe), `NavLinkItem.badge` acepta `NavBadgeValue` y `badgeId`, `AlertCard` (KPI con CTA), `useNavBadges` (un batch a `/nav/counts`, refresco por realtime, sin polling), `applyNavBadges` (carpetas suman deduplicando por id), `useDocumentAttention` (título "(99+) App" + punto en favicon) y el sistema de vistas: `ModelView`, `ViewSwitcher` (Tarjetas | Datos | Mapa opcional, etiqueta de tarjetas sobreescribible por manifest), `ViewToolbar` (búsqueda, chips rápidos, contador+orden, vistas guardables por usuario), estado de filtros compartido por URL entre modos y `ConfigurableCard` definida por `CardSpec`.
+
 ## 53.20.1
 
 ### Patch Changes
