@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { writeFileSync, readFileSync, mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { main, npmErrorMessage, distTag, sortByDeps, parseJson } from './publish-staged.mjs'
+import { main, npmErrorMessage, distTag, sortByDeps, parseJson, needsStaging } from './publish-staged.mjs'
 
 const ok = (stdout = '') => ({ status: 0, stdout, stderr: '' })
 const fail = (stdout = '', stderr = '') => ({ status: 1, stdout, stderr })
@@ -29,6 +29,8 @@ function pnpmPack(args) {
   return ok('pkg-1.0.0.tgz')
 }
 
+const STAGE_REQ = fail('{"error":{"code":"E_STAGE_REQUIRED","summary":"This token can only publish to a staging area."}}')
+const gitTag = () => ok()
 const E404 = fail('{"error":{"code":"E404","summary":"Not Found"}}')
 
 test('parseJson ignora avisos previos', () => {
@@ -71,6 +73,8 @@ test('prepara paquetes sin publicar, omite publicados y etapas pendientes, y con
       return ok('[]')
     },
     'pnpm pack': pnpmPack,
+    'npm publish': () => STAGE_REQ,
+    'git tag': gitTag,
     'npm stage publish': (a, o) =>
       o.cwd.endsWith('/x')
         ? fail('{"error":{"code":"E403","summary":"Forbidden","detail":"no tienes permiso"}}')
@@ -90,7 +94,7 @@ test('prepara paquetes sin publicar, omite publicados y etapas pendientes, y con
   assert.match(summary, /Fallaron/)
   assert.match(summary, /E403/)
   assert.ok(logs.every((l) => !/^New tag:/m.test(l)), 'no debe emitir New tag:')
-  const pub = calls.find((c) => c[1] === 'stage' && c[2] === 'publish')
+  const pub = calls.find((c) => c[0] === 'npm' && c[1] === 'stage' && c[2] === 'publish')
   assert.ok(pub.includes('--access') && pub.includes('public') && pub[3].endsWith('.tgz'))
 })
 
@@ -100,11 +104,13 @@ test('prerelease agrega --tag', () => {
     'npm view': () => E404,
     'npm stage list': () => ok('[]'),
     'pnpm pack': pnpmPack,
+    'npm publish': () => STAGE_REQ,
+    'git tag': gitTag,
     'npm stage publish': () => ok('{"stageId":"s1"}'),
   }, calls)
   const r = main({ run, packages: [pkg('@a/p', '1.0.0-next.1')], summaryFile: null, log() {}, dryRun: false })
   assert.equal(r.exitCode, 0)
-  const pub = calls.find((c) => c[2] === 'publish')
+  const pub = calls.find((c) => c[1] === 'stage' && c[2] === 'publish')
   assert.deepEqual(pub.slice(-2), ['--tag', 'next'])
 })
 
@@ -112,12 +118,13 @@ test('idempotente: segunda corrida no vuelve a preparar', () => {
   const calls = []
   const run = fakeRun({
     'npm view': () => E404,
+    'npm publish': () => STAGE_REQ,
     'npm stage list': () => ok('[{"id":"s1","version":"1.0.0","status":"validating"}]'),
   }, calls)
   const r = main({ run, packages: [pkg('@a/p', '1.0.0')], summaryFile: null, log() {}, dryRun: false })
   assert.equal(r.exitCode, 0)
   assert.equal(r.pending.length, 1)
-  assert.ok(!calls.some((c) => c[2] === 'publish'))
+  assert.ok(!calls.some((c) => c[1] === 'publish' || c[2] === 'publish'))
 })
 
 test('error de red en npm view cuenta como fallo, no como "no publicado"', () => {
@@ -133,4 +140,65 @@ test('dry-run no empaqueta ni prepara', () => {
   const r = main({ run, packages: [pkg('@a/p', '1.0.0')], summaryFile: null, log() {}, dryRun: true })
   assert.equal(r.exitCode, 0)
   assert.equal(calls.length, 2)
+})
+
+test('directo OK: publica por OIDC, crea tag, imprime New tag y no toca staging', () => {
+  const calls = []
+  const logs = []
+  const envs = []
+  const run = fakeRun({
+    'npm view': () => E404,
+    'npm stage list': () => ok('[]'),
+    'pnpm pack': pnpmPack,
+    'npm publish': (a, o) => { envs.push(o.env); return ok('+ @a/p@1.0.0') },
+    'git tag': gitTag,
+  }, calls)
+  const r = main({ run, packages: [pkg('@a/p', '1.0.0')], summaryFile: null, log: (l) => logs.push(l), dryRun: false, stageToken: 'SECRET' })
+  assert.deepEqual(r.direct, ['@a/p@1.0.0'])
+  assert.equal(r.exitCode, 0)
+  assert.ok(logs.includes('New tag: @a/p@1.0.0'))
+  assert.deepEqual(calls.find((c) => c[0] === 'git'), ['git', 'tag', '@a/p@1.0.0'])
+  assert.ok(!calls.some((c) => c[1] === 'stage' && c[2] === 'publish'))
+  assert.equal(envs[0], undefined, 'el intento directo no lleva el token')
+})
+
+test('directo con E_STAGE_REQUIRED cae a staging con token y sin New tag', () => {
+  const calls = []
+  const logs = []
+  const envs = []
+  const run = fakeRun({
+    'npm view': () => E404,
+    'npm stage list': () => ok('[]'),
+    'pnpm pack': pnpmPack,
+    'npm publish': () => STAGE_REQ,
+    'npm stage publish': (a, o) => { envs.push(o.env); return ok('{"stageId":"s9"}') },
+    'git tag': gitTag,
+  }, calls)
+  const r = main({ run, packages: [pkg('@a/p', '1.0.0')], summaryFile: null, log: (l) => logs.push(l), dryRun: false, stageToken: 'SECRET' })
+  assert.deepEqual(r.staged, [{ id: '@a/p@1.0.0', stageId: 's9' }])
+  assert.equal(r.exitCode, 0)
+  assert.equal(envs[0].NODE_AUTH_TOKEN, 'SECRET')
+  assert.ok(logs.every((l) => !/^New tag:/.test(l)))
+  assert.ok(!calls.some((c) => c[0] === 'git'))
+})
+
+test('error ajeno en el directo no cae a staging', () => {
+  const calls = []
+  const run = fakeRun({
+    'npm view': () => E404,
+    'npm stage list': () => ok('[]'),
+    'pnpm pack': pnpmPack,
+    'npm publish': () => fail('{"error":{"code":"EPUBLISHCONFLICT","summary":"boom raro"}}'),
+  }, calls)
+  const r = main({ run, packages: [pkg('@a/p', '1.0.0')], summaryFile: null, log() {}, dryRun: false })
+  assert.equal(r.exitCode, 1)
+  assert.match(r.failed[0].msg, /boom raro/)
+  assert.ok(!calls.some((c) => c[1] === 'stage' && c[2] === 'publish'))
+})
+
+test('needsStaging reconoce politica/autenticacion', () => {
+  assert.ok(needsStaging('[E_STAGE_REQUIRED] x'))
+  assert.ok(needsStaging('[E403] Forbidden'))
+  assert.ok(needsStaging('npm error code E404'))
+  assert.ok(!needsStaging('[ETIMEDOUT] red'))
 })

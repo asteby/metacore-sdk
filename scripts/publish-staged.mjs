@@ -1,19 +1,25 @@
 #!/usr/bin/env node
-// Prepara en staging de npm (`npm stage publish`) cada paquete publico del
-// workspace cuya version local aun no esta publicada. Reemplaza a
-// `changeset publish` en el workflow de release: desde 2026 los tokens
-// granulares con "bypass 2FA" ya no publican directo, solo pueden preparar, y
-// un humano aprueba en npmjs.com -> Staged Packages (ver docs/PUBLISHING.md).
+// Publica (o, si npm lo exige, prepara en staging) cada paquete publico del
+// workspace cuya version local aun no esta publicada.
 //
-// - Idempotente: omite versiones ya publicadas y las que ya tienen una etapa
-//   pendiente (`npm stage list`).
-// - Un fallo en un paquete no detiene a los demas; al final sale con codigo 1
-//   si alguno fallo, con el mensaje real de npm en el log y en el resumen.
-// - NO crea tags git ni GitHub Releases (ver docs/PUBLISHING.md): no se puede
-//   garantizar que la version quede publicada hasta que alguien apruebe.
-//   Por eso no imprime lineas "New tag:" que changesets/action interpretaria.
-// - Usa `pnpm pack` (resuelve `workspace:*` y publishConfig) y pasa el .tgz a
-//   `npm stage publish`.
+// Por paquete:
+//   1) INTENTA `npm publish <tgz> --access public`. Con `id-token: write`,
+//      npm >= 11.5 y un publicador confiable configurado (`npm trust github`),
+//      npm autentica por OIDC: sin token y sin aprobacion humana. Este intento
+//      corre con el entorno ambiente, SIN el secreto NPM_STAGE_TOKEN (el
+//      workflow lo entrega con ese nombre, no como NODE_AUTH_TOKEN), asi que
+//      solo puede autenticar por OIDC.
+//   2) Si npm responde que exige staging (E_STAGE_REQUIRED / "staging area") o
+//      rechaza por politica/autenticacion (E401/E403/E404), cae a
+//      `npm stage publish`, ahora CON el token (NPM_STAGE_TOKEN) si existe; un
+//      humano aprueba en npmjs.com -> Staged Packages.
+//   3) Cualquier otro error es un fallo con el mensaje real de npm.
+// - Publicacion directa OK: crea el tag git local e imprime `New tag: n@v`, que
+//   changesets/action usa para empujar tags y crear GitHub Releases.
+//   Lo preparado en staging NO genera tag (no esta publicado hasta aprobar).
+// - Idempotente: omite versiones ya publicadas o con etapa pendiente.
+// - Un fallo no detiene a los demas; sale 1 si alguno fallo.
+// - Usa `pnpm pack` (resuelve `workspace:*` y publishConfig) y pasa el .tgz a npm.
 import { spawnSync } from 'node:child_process'
 import { appendFileSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -28,6 +34,7 @@ const DEAD_STATUSES = new Set([
 export function defaultRun(cmd, args, opts = {}) {
   const r = spawnSync(cmd, args, {
     cwd: opts.cwd,
+    env: opts.env ? { ...process.env, ...opts.env } : process.env,
     encoding: 'utf8',
     shell: process.platform === 'win32',
     maxBuffer: 64 * 1024 * 1024,
@@ -65,6 +72,15 @@ export function npmErrorMessage(res) {
   const npmErr = lines.filter((l) => /^npm (error|ERR!)/i.test(l)).map((l) => l.replace(/^npm (error|ERR!)\s*/i, ''))
   const text = (npmErr.length ? npmErr : lines).join(' | ').slice(0, 1500)
   return text || (res.error ? String(res.error.message) : `npm termino con codigo ${res.status} sin salida`)
+}
+
+/** Errores del intento directo que justifican caer a staging (politica, no un fallo real). */
+export function needsStaging(msg) {
+  return /E_STAGE_REQUIRED|staging area|stage publish|\bE40[134]\b|\b40[134]\b/i.test(msg)
+}
+
+export function alreadyPublishedError(msg) {
+  return /cannot publish over the previously published version/i.test(msg)
 }
 
 /** Dist-tag requerido por npm para prereleases (1.2.0-next.3 -> next). */
@@ -121,8 +137,10 @@ export function main({
   summaryFile = process.env.GITHUB_STEP_SUMMARY,
   dryRun = process.env.DRY_RUN === '1' || process.argv.includes('--dry-run'),
   packages,
+  stageToken = process.env.NPM_STAGE_TOKEN,
 } = {}) {
   const pkgs = sortByDeps(packages ?? listPackages(run))
+  const direct = []
   const staged = []
   const pending = []
   const published = []
@@ -177,13 +195,34 @@ export function main({
         log(`x ${id} fallo el empaquetado: ${msg}`)
         continue
       }
-      const args = ['stage', 'publish', join(dir, tgz), '--access', 'public', '--json']
       const tag = distTag(pkg.version)
-      if (tag) args.push('--tag', tag)
-      const res = run('npm', args, { cwd: pkg.path })
+      const tgzPath = join(dir, tgz)
+      const extra = tag ? ['--tag', tag] : []
+
+      // 1) intento directo (solo OIDC: entorno ambiente, sin NPM_STAGE_TOKEN)
+      const pub = run('npm', ['publish', tgzPath, '--access', 'public', ...extra], { cwd: pkg.path })
+      if (pub.status === 0 || alreadyPublishedError(npmErrorMessage(pub))) {
+        direct.push(id)
+        log(`+ ${id} publicado directo${pub.status === 0 ? '' : ' (ya estaba publicado)'}`)
+        const t = run('git', ['tag', id])
+        if (t.status === 0 || /already exists/i.test(`${t.stderr}`)) log(`New tag: ${id}`)
+        else log(`! ${id}: no pude crear el tag git: ${npmErrorMessage(t)}`)
+        continue
+      }
+      const directMsg = npmErrorMessage(pub)
+      if (!needsStaging(directMsg)) {
+        failed.push({ id, step: 'npm publish', msg: directMsg })
+        log(`x ${id} fallo la publicacion directa: ${directMsg}`)
+        continue
+      }
+      log(`~ ${id} publicacion directa no disponible (${directMsg}); preparo en staging`)
+
+      // 2) fallback: staging, con token si existe
+      const env = stageToken ? { NODE_AUTH_TOKEN: stageToken, NPM_TOKEN: stageToken } : undefined
+      const res = run('npm', ['stage', 'publish', tgzPath, '--access', 'public', '--json', ...extra], { cwd: pkg.path, env })
       if (res.status !== 0) {
         const msg = npmErrorMessage(res)
-        failed.push({ id, step: 'npm stage publish', msg })
+        failed.push({ id, step: 'npm stage publish', msg: `${msg} (publicacion directa: ${directMsg})` })
         log(`x ${id} fallo al preparar: ${msg}`)
         continue
       }
@@ -196,7 +235,12 @@ export function main({
     }
   }
 
-  const lines = ['## Release npm: paquetes preparados en staging', '']
+  const lines = ['## Release npm', '']
+  if (direct.length) {
+    lines.push('### Publicados directo (OIDC)', '')
+    direct.forEach((d) => lines.push('- `' + d + '`'))
+    lines.push('')
+  }
   if (staged.length) {
     lines.push('### Preparados (pendientes de aprobacion humana)', '', '| Paquete | stageId |', '|---|---|')
     staged.forEach((s) => lines.push(`| \`${s.id}\` | \`${s.stageId ?? '?'}\` |`))
@@ -212,14 +256,14 @@ export function main({
     failed.forEach((f) => lines.push(`| \`${f.id}\` | ${f.step} | ${f.msg.replace(/\|/g, '\\|').replace(/\n/g, ' ')} |`))
     lines.push('')
   }
-  if (!staged.length && !pending.length && !failed.length) lines.push('Nada que preparar: todas las versiones ya estan publicadas.', '')
+  if (!direct.length && !staged.length && !pending.length && !failed.length) lines.push('Nada que preparar: todas las versiones ya estan publicadas.', '')
   lines.push(`Ya publicados (omitidos): ${published.length}`)
   const summary = lines.join('\n') + '\n'
   log('\n' + summary)
   if (summaryFile) {
     try { appendFileSync(summaryFile, summary) } catch (e) { log(`! no pude escribir el resumen: ${e.message}`) }
   }
-  return { staged, pending, published, failed, exitCode: failed.length ? 1 : 0 }
+  return { direct, staged, pending, published, failed, exitCode: failed.length ? 1 : 0 }
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
