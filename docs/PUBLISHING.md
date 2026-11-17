@@ -2,12 +2,31 @@
 
 End-to-end guide for releasing packages from this monorepo and propagating updates to consumer apps. The pipeline is fully automated with [Changesets](https://github.com/changesets/changesets) + a single GitHub Actions workflow.
 
-> **Estado actual: publicación automática por OIDC.** `release-npm.yml` publica directo
-> con `changeset publish` y Trusted Publishing, sin `NPM_TOKEN` ni aprobación manual.
-> Los 34 paquetes públicos tienen configurada la relación con `release-npm.yml` de
-> `asteby/metacore-sdk` (`npm trust list <paquete>` para comprobarlo). Si se renombra
-> el workflow hay que repetir `npm trust github`. `scripts/publish-staged.mjs` queda
-> como respaldo manual y las secciones de staging de abajo solo aplican a ese respaldo.
+> **Estado actual: publicacion hibrida (OIDC primero, staging de respaldo).**
+> `release-npm.yml` ejecuta `scripts/publish-staged.mjs`. Para cada paquete no publicado:
+>
+> 1. Intenta `npm publish <tgz> --access public` **sin token** (el secreto viaja como
+>    `NPM_STAGE_TOKEN`, no como `NODE_AUTH_TOKEN`/`NPM_TOKEN`), asi npm solo puede autenticar por OIDC
+>    (Trusted Publishing; `id-token: write`, npm 11). Si el paquete tiene publicador confiable, se
+>    publica solo, se crea el tag git y se imprime `New tag: <pkg>@<ver>` para que changesets/action
+>    cree tags y GitHub Releases.
+> 2. Si npm exige staging (`E_STAGE_REQUIRED`, "staging area") o rechaza por politica/autenticacion
+>    (E401/E403/E404), cae a `npm stage publish` **con** `NPM_STAGE_TOKEN`; un humano aprueba en
+>    npmjs.com -> Staged Packages. Sin tag hasta que se publique de verdad.
+> 3. Cualquier otro error es un fallo con el mensaje real de npm (el job queda rojo; los demas
+>    paquetes se procesan igual).
+>
+> El resumen del job (`$GITHUB_STEP_SUMMARY`) lista por paquete: publicado directo / preparado en
+> staging (stageId) / ya pendiente / fallo. Es idempotente.
+>
+> **Para que sea 100% automatico** el dueno ejecuta una vez `bash scripts/npm-trust-all.sh`
+> (`npm trust github <pkg> --repo asteby/metacore-sdk --file release-npm.yml --allow-publish --allow-stage-publish -y`
+> para los 34 paquetes; `npm trust list <pkg>` verifica). Funciona antes y despues de configurarlo.
+> Si se renombra el workflow hay que repetirlo.
+>
+> *Prioridad de credenciales:* no pude verificar en la documentacion de npm si un token presente
+> gana al OIDC, por eso el intento directo corre sin el secreto (solo OIDC) y el token solo se
+> entrega al fallback de staging; es seguro en ambos casos.
 
 ## Table of contents
 
@@ -57,7 +76,7 @@ Since npm's 2026 policy ([restricting bypass-2FA tokens](https://github.blog/cha
 2. Approve at <https://www.npmjs.com> → *Staged Packages* (2FA prompt), or `npm stage list <pkg>` / `npm stage approve <stageId>`. Stages may sit in `validating` for a moment first.
 3. Re-running the workflow is safe: published versions and versions with a pending stage are skipped.
 
-**Git tags / GitHub Releases:** `changeset publish` created them right after publishing. The script deliberately does **not**, because nothing is published until a human approves and tagging earlier would point releases at versions that may be rejected. After approving, tag manually from `main` (`pnpm exec changeset tag && git push --follow-tags`; `changeset tag` tags the versions in `package.json`). Trusted publishing (below) restores fully automatic tagging.
+**Git tags / GitHub Releases:** only versions published directly (OIDC) get a tag and a `New tag:` line. Staged versions get none, because nothing is published until a human approves. After approving, tag manually from `main` (`pnpm exec changeset tag && git push --follow-tags`).
 
 Locally: `pnpm release:stage -- --dry-run` (or `DRY_RUN=1`) lists what would be staged without staging anything.
 
@@ -67,7 +86,7 @@ npm [trusted publishing](https://docs.npmjs.com/trusted-publishers) lets the wor
 
 1. npmjs.com → the package → *Settings* → *Trusted publisher* → GitHub Actions: organization/user `asteby`, repository `metacore-sdk`, workflow filename `release-npm.yml` (no environment unless one is added).
 2. Brand-new packages must exist first (stage/approve once, or publish the first version by hand); the trusted publisher is configured on an existing package.
-3. In `release-npm.yml`, switch `publish:` back to `pnpm exec changeset publish` and **remove** `NODE_AUTH_TOKEN` / `NPM_TOKEN` from the step env (a token present takes precedence over OIDC). npm CLI ≥ 11.5.1 is required (Node 22 ships older: add a `npm i -g npm@latest` step) and provenance is generated automatically.
+3. No hace falta tocar el workflow: el script ya intenta OIDC primero. Con `scripts/npm-trust-all.sh` se configuran los paquetes (usa `--allow-stage-publish` ademas de `--allow-publish`). npm CLI >= 11.5.1 es requisito (el workflow instala npm 11) y la provenance se genera sola.
 4. Once every package is configured, delete the `NPM_TOKEN` secret and keep `scripts/publish-staged.mjs` only as a fallback.
 
 ## Authoring a changeset

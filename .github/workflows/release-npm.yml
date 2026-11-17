@@ -29,12 +29,14 @@ jobs:
       - name: Create Release PR or Publish
         uses: changesets/action@v1
         with:
-          # Publica directo por Trusted Publishing (OIDC): sin token ni aprobacion manual.
-          # Cada paquete debe tener `npm trust github <pkg> --file release-npm.yml
-          # --repo asteby/metacore-sdk --allow-publish`; ver docs/PUBLISHING.md
-          publish: pnpm exec changeset publish
+          # Intenta publicar directo por Trusted Publishing (OIDC) y, si npm exige
+          # staging, prepara con `npm stage publish`; ver docs/PUBLISHING.md
+          publish: node scripts/publish-staged.mjs
           version: pnpm run version
           commit: "chore(release): version packages"
           title: "chore(release): version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Solo para el fallback de staging. Deliberadamente NO se llama
+          # NODE_AUTH_TOKEN/NPM_TOKEN: asi el intento directo solo puede usar OIDC.
+          NPM_STAGE_TOKEN: ${{ secrets.NPM_TOKEN }}
