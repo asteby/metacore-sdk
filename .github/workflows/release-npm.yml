@@ -26,7 +26,8 @@ jobs:
       - name: Create Release PR or Publish
         uses: changesets/action@v1
         with:
-          publish: pnpm exec changeset publish
+          # Prepara en staging de npm (un humano aprueba con 2FA); ver docs/PUBLISHING.md
+          publish: node scripts/publish-staged.mjs
           version: pnpm run version
           commit: "chore(release): version packages"
           title: "chore(release): version packages"

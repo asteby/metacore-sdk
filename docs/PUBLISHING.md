@@ -7,6 +7,8 @@ End-to-end guide for releasing packages from this monorepo and propagating updat
 - [TL;DR](#tldr)
 - [Prerequisites](#prerequisites)
 - [The release workflow](#the-release-workflow)
+- [Approving staged packages](#approving-staged-packages)
+- [Durable alternative: trusted publishing (OIDC)](#durable-alternative-trusted-publishing-oidc)
 - [Authoring a changeset](#authoring-a-changeset)
 - [Pre-releases (next / beta / rc)](#pre-releases-next--beta--rc)
 - [Linked and ignored packages](#linked-and-ignored-packages)
@@ -19,7 +21,7 @@ End-to-end guide for releasing packages from this monorepo and propagating updat
 2. Run `pnpm changeset` and pick the bump (patch / minor / major) per affected package.
 3. Commit the generated `.changeset/*.md` alongside your code in a PR.
 4. When your PR merges to `main`, the **Release npm packages** workflow opens (or updates) a `chore(release): version packages` PR.
-5. Merging that "Version Packages" PR bumps versions, regenerates changelogs, and triggers `changeset publish` to npm under the `@asteby` scope.
+5. Merging that "Version Packages" PR bumps versions, regenerates changelogs, and triggers `scripts/publish-staged.mjs`, which **stages** every unpublished package on npm (`npm stage publish`). A maintainer then approves the staged versions with 2FA (see [Approving staged packages](#approving-staged-packages)).
 6. Renovate bots in consumer host applications pick up the new versions and open PRs. Patch / minor bumps auto-merge; majors await human review.
 
 ## Prerequisites
@@ -36,9 +38,30 @@ File: [`.github/workflows/release-npm.yml`](../.github/workflows/release-npm.yml
 It runs on every push to `main`:
 
 - If the push **contains** `.changeset/*.md` files not yet versioned, [`changesets/action@v1`](https://github.com/changesets/action) opens or updates a single PR titled `chore(release): version packages` whose diff bumps `package.json` versions and moves the changesets into `CHANGELOG.md`.
-- If the push **is** that PR being merged (so no changesets are left), the action runs `pnpm exec changeset publish`, which executes `turbo run build --filter=./packages/*` followed by `changeset publish`, pushing any packages whose versions bumped to npm.
+- If the push **is** that PR being merged (so no changesets are left), the action runs `node scripts/publish-staged.mjs` (after the workflow builds all packages). For each public workspace package whose local version is not on npm (same check `changeset publish` uses: `npm view name@version`) it runs `pnpm pack` (resolves `workspace:*` and `publishConfig`) and `npm stage publish <tgz> --access public`, in dependency order. It does not publish by itself.
 
 The action reads [`.changeset/config.json`](../.changeset/config.json) for scope, access (`public`), linked packages, and base branch.
+
+## Approving staged packages
+
+Since npm's 2026 policy ([restricting bypass-2FA tokens](https://github.blog/changelog/2026-07-31-restricting-npm-bypass-2fa-granular-access-tokens), [install-time security / GAT bypass2fa deprecation](https://github.blog/changelog/2026-07-08-npm-install-time-security-and-gat-bypass2fa-deprecation)), a granular token with *Bypass 2FA* can no longer publish directly: it can only **stage** (`E_STAGE_REQUIRED` otherwise; `changeset publish` surfaced it as a misleading `E403 undefined` / `E404`). A human must approve with 2FA:
+
+1. Merge the "Version Packages" PR. When the workflow finishes, open the run's **Summary**: it lists each `name@version` with its `stageId`, those that already had a pending stage (not duplicated) and those that failed with npm's real error message. The job is red if any package failed; the rest are still staged.
+2. Approve at <https://www.npmjs.com> → *Staged Packages* (2FA prompt), or `npm stage list <pkg>` / `npm stage approve <stageId>`. Stages may sit in `validating` for a moment first.
+3. Re-running the workflow is safe: published versions and versions with a pending stage are skipped.
+
+**Git tags / GitHub Releases:** `changeset publish` created them right after publishing. The script deliberately does **not**, because nothing is published until a human approves and tagging earlier would point releases at versions that may be rejected. After approving, tag manually from `main` (`pnpm exec changeset tag && git push --follow-tags`; `changeset tag` tags the versions in `package.json`). Trusted publishing (below) restores fully automatic tagging.
+
+Locally: `pnpm release:stage -- --dry-run` (or `DRY_RUN=1`) lists what would be staged without staging anything.
+
+## Durable alternative: trusted publishing (OIDC)
+
+npm [trusted publishing](https://docs.npmjs.com/trusted-publishers) lets the workflow publish with a short-lived OIDC identity instead of a stored token, with no staging step. The workflow already has `permissions: id-token: write`. Per package (all `@asteby/metacore-*`):
+
+1. npmjs.com → the package → *Settings* → *Trusted publisher* → GitHub Actions: organization/user `asteby`, repository `metacore-sdk`, workflow filename `release-npm.yml` (no environment unless one is added).
+2. Brand-new packages must exist first (stage/approve once, or publish the first version by hand); the trusted publisher is configured on an existing package.
+3. In `release-npm.yml`, switch `publish:` back to `pnpm exec changeset publish` and **remove** `NODE_AUTH_TOKEN` / `NPM_TOKEN` from the step env (a token present takes precedence over OIDC). npm CLI ≥ 11.5.1 is required (Node 22 ships older: add a `npm i -g npm@latest` step) and provenance is generated automatically.
+4. Once every package is configured, delete the `NPM_TOKEN` secret and keep `scripts/publish-staged.mjs` only as a fallback.
 
 ## Authoring a changeset
 
@@ -84,6 +107,7 @@ Do not edit these without understanding the downstream effect on consumers.
 ## Troubleshooting
 
 - **"Version Packages" PR never opens.** No unversioned `.changeset/*.md` files on `main`. Run `pnpm changeset` and push.
+- **Publish step shows `E_STAGE_REQUIRED`, or an old run showed `E403 undefined` / `E404`.** The token can only stage. This is now the expected flow; approve in *Staged Packages* (see above).
 - **Publish step fails with 401 / 403.** `NPM_TOKEN` missing, expired, or lacks publish rights on `@asteby`. Regenerate as a Granular Access Token with "Bypass 2FA" enabled and update the repo secret.
 - **Publish succeeds for some packages but skips others.** Check the package's `"private": true` flag and that `.changeset/config.json` `ignore` array doesn't list it.
 - **Linked packages drifted.** `@asteby/metacore-ui` and `@asteby/metacore-theme` must bump together. The `linked` array enforces this — don't remove it without understanding the downstream effect on consumers.
