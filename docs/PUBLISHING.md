@@ -2,6 +2,13 @@
 
 End-to-end guide for releasing packages from this monorepo and propagating updates to consumer apps. The pipeline is fully automated with [Changesets](https://github.com/changesets/changesets) + a single GitHub Actions workflow.
 
+> **Estado actual: publicación automática por OIDC.** `release-npm.yml` publica directo
+> con `changeset publish` y Trusted Publishing, sin `NPM_TOKEN` ni aprobación manual.
+> Los 34 paquetes públicos tienen configurada la relación con `release-npm.yml` de
+> `asteby/metacore-sdk` (`npm trust list <paquete>` para comprobarlo). Si se renombra
+> el workflow hay que repetir `npm trust github`. `scripts/publish-staged.mjs` queda
+> como respaldo manual y las secciones de staging de abajo solo aplican a ese respaldo.
+
 ## Table of contents
 
 - [TL;DR](#tldr)
