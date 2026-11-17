@@ -18,6 +18,8 @@ import {
   useSidebar,
 } from '@/primitives/sidebar'
 import { Badge } from '@/primitives/badge'
+import { NavBadge as ToneBadge } from './nav-badge'
+import { hasNavBadge, isNavBadgeValue, type NavBadgeValue } from './badge-model'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -143,8 +145,10 @@ export function NavGroup({
   )
 }
 
-function NavBadge({ children }: { children: ReactNode }) {
-  return <Badge className='rounded-full px-1 py-0 text-xs'>{children}</Badge>
+function NavBadge({ children }: { children?: number | string | NavBadgeValue }) {
+  if (children === undefined) return null
+  if (isNavBadgeValue(children)) return <ToneBadge value={children} />
+  return <Badge className='rounded-full px-1 py-0 text-xs'>{children as ReactNode}</Badge>
 }
 
 /**
@@ -152,9 +156,8 @@ function NavBadge({ children }: { children: ReactNode }) {
  * guards the classic JSX footgun where `{0 && <Badge/>}` would render a
  * literal `0`, letting consumers pass a raw count (0 == hide) safely.
  */
-function hasBadge(badge: number | string | undefined): boolean {
-  if (typeof badge === 'number') return badge !== 0
-  return Boolean(badge)
+function hasBadge(badge: number | string | NavBadgeValue | undefined): boolean {
+  return hasNavBadge(badge)
 }
 
 function SidebarMenuLink({
@@ -386,9 +389,12 @@ function SidebarMenuCollapsedDropdown({
               >
                 {sub.icon && <sub.icon />}
                 <span className='max-w-52 text-wrap'>{sub.title}</span>
-                {hasBadge(sub.badge) && (
-                  <span className='ms-auto text-xs'>{sub.badge}</span>
-                )}
+                {hasBadge(sub.badge) &&
+                  (isNavBadgeValue(sub.badge) ? (
+                    <NavBadge>{sub.badge}</NavBadge>
+                  ) : (
+                    <span className='ms-auto text-xs'>{sub.badge}</span>
+                  ))}
               </LinkComponent>
             </DropdownMenuItem>
           ))}

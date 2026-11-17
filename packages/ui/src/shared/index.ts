@@ -40,3 +40,4 @@ export {
   type ProductThumbSize,
   type ProductPreviewProps,
 } from './product-preview'
+export { AlertCard, type AlertCardProps } from './alert-card'

@@ -232,5 +232,23 @@
       "assisted": "Assisted",
       "automated": "Automated"
     }
+  },
+  "views": {
+    "switch": "View",
+    "cards": "Cards",
+    "data": "Data",
+    "map": "Map",
+    "all": "All",
+    "search": "Search…",
+    "quick_filters": "Quick filters",
+    "clear": "Clear",
+    "saved": "Views",
+    "saved_empty": "No saved views yet",
+    "save_current": "Save current view…",
+    "remove": "Remove",
+    "sorted_by": "sorted by {{by}}",
+    "empty": "No results",
+    "error": "Could not load the list",
+    "load_more": "Load more"
   }
 }

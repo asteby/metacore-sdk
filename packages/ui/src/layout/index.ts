@@ -38,3 +38,18 @@ export type {
   NavGroupData,
   LayoutUser,
 } from './types'
+export { NavBadge, BADGE_TONE_CLASS, type NavBadgeProps } from './nav-badge'
+export {
+  formatBadgeCount,
+  maxSeverity,
+  isSeverity,
+  isNavBadgeValue,
+  hasNavBadge,
+  formatTabTitle,
+  stripTabTitleCount,
+  aggregateBadges,
+  SEVERITIES,
+  DEFAULT_BADGE_MAX,
+  type Severity,
+  type NavBadgeValue,
+} from './badge-model'
