@@ -21,7 +21,7 @@ jobs:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
           cache: 'pnpm'
-      # `npm stage` (publicación en etapas) existe desde npm 11; Node 22 trae npm 10 y falla con EUNKNOWNCOMMAND.
+      # OIDC (Trusted Publishing) y `npm stage` piden npm >= 11.5; Node 22 trae npm 10.
       - name: npm 11 (npm stage)
         run: npm install -g npm@11 && npm --version
       - run: pnpm install --frozen-lockfile=false
@@ -29,12 +29,12 @@ jobs:
       - name: Create Release PR or Publish
         uses: changesets/action@v1
         with:
-          # Prepara en staging de npm (un humano aprueba con 2FA); ver docs/PUBLISHING.md
-          publish: node scripts/publish-staged.mjs
+          # Publica directo por Trusted Publishing (OIDC): sin token ni aprobacion manual.
+          # Cada paquete debe tener `npm trust github <pkg> --file release-npm.yml
+          # --repo asteby/metacore-sdk --allow-publish`; ver docs/PUBLISHING.md
+          publish: pnpm exec changeset publish
           version: pnpm run version
           commit: "chore(release): version packages"
           title: "chore(release): version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
