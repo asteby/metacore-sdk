@@ -57,6 +57,10 @@ release automation derives semver bumps from commit types.
 
 Keep tests fast (<30 s locally). Any flaky test is treated as a bug.
 
+## Releasing
+
+Releases are driven by Changesets. Merging the "Version Packages" PR *stages* the packages on npm; a maintainer approves them with 2FA at npmjs.com → Staged Packages. See [docs/PUBLISHING.md](docs/PUBLISHING.md) (including the trusted-publishing/OIDC alternative).
+
 ## Proposing changes to the manifest or ABI
 
 The manifest grammar and the WASM ABI live in the **kernel**
