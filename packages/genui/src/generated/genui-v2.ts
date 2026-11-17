@@ -75,6 +75,9 @@ export type Block =
   | BlockMedia
   | BlockSlot
   | BlockExt
+  | BlockMap
+  | BlockMetric
+  | BlockDiagram
 /**
  * Identificador único dentro del documento.
  *
@@ -3386,4 +3389,359 @@ export interface BlockExt {
   props?: {
     [k: string]: Scalar | (string | number | boolean)[]
   }
+}
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "block_map".
+ */
+export interface BlockMap {
+  type: 'map'
+  id?: Id
+  when?: Predicate
+  fallback?: string
+  title?: Label
+  /**
+   * @maxItems 200
+   */
+  points?: MapPoint[]
+  source?: Source
+  fields?: MapFields
+  /**
+   * Color por estado: status -> Tone (nunca colores literales).
+   */
+  status_tones?: {
+    [k: string]: Tone
+  }
+  group_by?: 'status' | 'group'
+  legend?: boolean
+  cluster?: boolean
+  tooltip?: boolean
+  /**
+   * Panel lateral con el detalle del punto seleccionado.
+   */
+  detail_panel?: boolean
+  on_select?: Action
+  height?: 'sm' | 'md' | 'lg'
+  /**
+   * Resumen accesible (obligatorio).
+   */
+  summary: string
+}
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "mapPoint".
+ */
+export interface MapPoint {
+  key: Key
+  lat: number
+  lng: number
+  label: Label
+  status?: string
+  group?: string
+  tone?: Tone
+  /**
+   * @maxItems 8
+   */
+  details?:
+    | []
+    | [
+        {
+          label?: Label
+          value: Text
+        }
+      ]
+    | [
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        }
+      ]
+    | [
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        }
+      ]
+    | [
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        }
+      ]
+    | [
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        }
+      ]
+    | [
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        }
+      ]
+    | [
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        }
+      ]
+    | [
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        },
+        {
+          label?: Label
+          value: Text
+        }
+      ]
+}
+/**
+ * Columnas de la fuente que alimentan cada punto.
+ *
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "mapFields".
+ */
+export interface MapFields {
+  key?: Key
+  lat?: Key
+  lng?: Key
+  label?: Key
+  status?: Key
+  group?: Key
+  tone?: Key
+}
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "block_metric".
+ */
+export interface BlockMetric {
+  type: 'metric'
+  id?: Id
+  when?: Predicate
+  fallback?: string
+  label: Label
+  value?: Value
+  source?: Source
+  field?: Key
+  format?: StatFormat
+  trend?: 'up' | 'down' | 'flat'
+  delta?: string
+  compare?: string
+  tone?: Tone
+  /**
+   * Tono por severidad: el umbral mayor alcanzado por el valor gana.
+   *
+   * @maxItems 4
+   */
+  thresholds?:
+    | []
+    | [
+        {
+          at: number
+          tone: Tone
+        }
+      ]
+    | [
+        {
+          at: number
+          tone: Tone
+        },
+        {
+          at: number
+          tone: Tone
+        }
+      ]
+    | [
+        {
+          at: number
+          tone: Tone
+        },
+        {
+          at: number
+          tone: Tone
+        },
+        {
+          at: number
+          tone: Tone
+        }
+      ]
+    | [
+        {
+          at: number
+          tone: Tone
+        },
+        {
+          at: number
+          tone: Tone
+        },
+        {
+          at: number
+          tone: Tone
+        },
+        {
+          at: number
+          tone: Tone
+        }
+      ]
+  /**
+   * @maxItems 60
+   */
+  spark?: number[]
+  spark_field?: Key
+  hint?: Label
+}
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "block_diagram".
+ */
+export interface BlockDiagram {
+  type: 'diagram'
+  id?: Id
+  when?: Predicate
+  fallback?: string
+  title?: Label
+  direction?: 'lr' | 'tb'
+  /**
+   * @minItems 1
+   * @maxItems 60
+   */
+  nodes: [DiagramNode, ...DiagramNode[]]
+  /**
+   * @maxItems 120
+   */
+  edges?: DiagramEdge[]
+  summary: string
+}
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "diagramNode".
+ */
+export interface DiagramNode {
+  id: Key
+  label: Label
+  kind?: 'service' | 'database' | 'queue' | 'user' | 'external' | 'group' | 'generic'
+  tone?: Tone
+  detail?: string
+  route?: Route
+}
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "diagramEdge".
+ */
+export interface DiagramEdge {
+  from: Key
+  to: Key
+  label?: Label
+  tone?: Tone
+  style?: 'solid' | 'dashed'
 }
