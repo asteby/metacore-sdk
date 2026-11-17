@@ -12,11 +12,11 @@
 // fields). Everything host-specific is injected: the API client (ApiProvider
 // or `client`), the admin gate (`canManageIssuer`), the active branch, the
 // addon i18n bundle loader and the notifier.
-import { createContext, useContext, useEffect, useId, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { AlertCircle, Cable, Check, Eye, EyeOff, Link2, Loader2, Pencil, RefreshCw, Settings, X } from 'lucide-react'
+import { AlertCircle, Cable, Check, Copy, Eye, EyeOff, KeyRound, Link2, Loader2, Pencil, RefreshCw, Settings, Sparkles, X } from 'lucide-react'
 import {
   Badge,
   Button,
@@ -42,6 +42,15 @@ import type { VisibleWhen } from '../types'
 import { useSetupT } from './messages'
 import { StepStatusBadge } from './step-status-badge'
 import { ConnectorBlocks, CopyValue, HelpText } from './connector-blocks'
+import { copyText } from './records-table'
+import {
+  generateSecret,
+  generatedLength,
+  secretMinLength,
+  secretStrength,
+  splitHelp,
+  tooShortSecrets,
+} from './secret-field-model'
 import {
   buildWizardSteps,
   errorMessage,
@@ -83,6 +92,7 @@ export interface AddonConfigAddon {
   manifest: {
     name: string
     display_name?: string
+    version?: string
     settings_defs?: AddonSettingDef[]
   }
 }
@@ -98,6 +108,12 @@ export interface ConnectorCredentialField {
   options?: { value: string; label: string }[]
   options_source?: string // dynamic_select: export the host runs to list options
   section?: string // binds to a form_layout section
+  /**
+   * Constraint hint from the manifest. For secrets the surface reads a minimum
+   * length from `min_length:N` (or the regex `^.{N,}$`): it sizes "Generar",
+   * validates live and blocks Guardar while shorter.
+   */
+  validation?: string
   /** Shown only while a sibling credential has this value (kernel Setting.visible_when). */
   visible_when?: VisibleWhen
   visibleWhen?: VisibleWhen
@@ -194,6 +210,13 @@ export interface AddonConfigSurfaceProps {
    * (the host starts its OAuth flow). Absent → no button.
    */
   onConnectOAuth?: (connector: ConnectorEntry) => void
+  /**
+   * Header mark of the addon (host-rendered, e.g. its `<AddonLogo>`). Wrapped in
+   * a fixed square that never crops it (`object-contain`). Absent → a neutral icon.
+   */
+  logo?: ReactNode
+  /** Addon version shown next to the name; default `manifest.version`. */
+  version?: string
 }
 
 /** Key of the implicit "Probar conexión" block (connector.test_export). */
@@ -227,6 +250,8 @@ interface ConnectorFormState {
   expectedOptionKinds: Record<string, string>
   /** Bumped after a save: dependent selects re-list their options in place. */
   reloadNonce?: number
+  /** The user may write credentials (org admin): gates Generar / Rotar. */
+  canManage?: boolean
 }
 const ConnectorFormStateContext = createContext<ConnectorFormState>({
   fields: [],
@@ -234,6 +259,26 @@ const ConnectorFormStateContext = createContext<ConnectorFormState>({
   idPrefix: 'addon-config',
   expectedOptionKinds: {},
 })
+
+// Field help: a short lead sentence, with the technical remainder (endpoints,
+// header names…) behind a collapsible «Cómo se usa» so the form stays calm.
+function FieldHelp({ text }: { text: string }) {
+  const st = useSetupT()
+  const { lead, detail } = splitHelp(text)
+  return (
+    <div className='flex flex-col gap-1'>
+      <HelpText text={lead} />
+      {detail ? (
+        <details className='group text-xs text-muted-foreground'>
+          <summary className='flex min-h-11 w-fit cursor-pointer items-center gap-1 font-medium text-primary select-none focus-visible:outline-2 focus-visible:outline-ring sm:min-h-6'>
+            {st('secret.how_to_use')}
+          </summary>
+          <p className='pb-1 leading-relaxed break-words whitespace-pre-line'>{detail}</p>
+        </details>
+      ) : null}
+    </div>
+  )
+}
 
 function ConnectorCredentialFieldControl({
   field,
@@ -260,6 +305,7 @@ function ConnectorCredentialFieldControl({
   const { t } = useTranslation()
   const st = useSetupT()
   const form = useContext(ConnectorFormStateContext)
+  const canManage = form.canManage !== false
   // label/description are i18n keys (addon locales are loaded into i18next);
   // never surface a raw dotted key: fall back to the humanized field key.
   const humanize = (k: string) =>
@@ -279,12 +325,20 @@ function ConnectorCredentialFieldControl({
   const [revealed, setRevealed] = useState<string | null>(null)
   const [revealing, setRevealing] = useState(false)
   const [armed, setArmed] = useState(false)
+  const [confirmRotate, setConfirmRotate] = useState(false)
+  const [generated, setGenerated] = useState(false)
+  const [genError, setGenError] = useState(false)
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  useEffect(() => () => clearTimeout(copyTimer.current), [])
   const initial = useRef('')
   const locked = stored && !editing
   useEffect(() => {
     setEditing(false)
     setVisible(false)
     setRevealed(null)
+    setConfirmRotate(false)
+    setGenerated(false)
   }, [resetKey])
   const canEye = isSecret ? (locked ? !!onReveal : true) : false
   const toggleEye = async () => {
@@ -320,8 +374,39 @@ function ConnectorCredentialFieldControl({
     onChange(initial.current)
     setVisible(false)
     setEditing(false)
+    setGenerated(false)
   }
-  const error = form.errors[field.key]
+  // Generate: a CSPRNG value at least as long as the manifest's minimum, shown
+  // so it can be copied before saving. Rotating a STORED secret goes through
+  // an explicit confirmation first (confirmRotate).
+  const minLen = isSecret ? secretMinLength(field) : 0
+  const generate = () => {
+    try {
+      const next = generateSecret(generatedLength(field))
+      if (stored && !editing) {
+        initial.current = value
+        setEditing(true)
+      }
+      setArmed(true)
+      setVisible(true)
+      setRevealed(null)
+      setGenerated(true)
+      setGenError(false)
+      setConfirmRotate(false)
+      onChange(next)
+    } catch {
+      setGenError(true)
+    }
+  }
+  const copyValue = async () => {
+    const ok = await copyText(value)
+    setCopyState(ok ? 'copied' : 'failed')
+    clearTimeout(copyTimer.current)
+    copyTimer.current = setTimeout(() => setCopyState('idle'), 2500)
+  }
+  const strength = isSecret ? secretStrength(value, minLen) : 'empty'
+  const shortBy = isSecret && minLen > 0 && value !== '' && value.length < minLen
+  const error = form.errors[field.key] ?? (shortBy ? st('secret.too_short', { min: minLen, n: value.length }) : undefined)
   const mismatch = shapeMismatch(field, value, form.fields)
   const target = mismatch?.suggestedKey
     ? form.fields.find((f) => f.key === mismatch.suggestedKey)
@@ -387,7 +472,10 @@ function ConnectorCredentialFieldControl({
             )}
             placeholder={(connected || stored) && isSecret ? '••••••••' : ''}
             value={locked && isSecret ? (revealed ?? '') : value}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={(e) => {
+              setGenerated(false)
+              onChange(e.target.value)
+            }}
           />
           {canEye && (
             <Button
@@ -427,8 +515,125 @@ function ConnectorCredentialFieldControl({
           ) : null}
         </div>
       )}
+      {isSecret && !isDynamic && field.type !== 'select' ? (
+        <div className='flex flex-col gap-2'>
+          <div className='flex flex-wrap items-center gap-2'>
+            {locked ? (
+              canManage ? (
+                <Button
+                  type='button'
+                  variant='outline'
+                  size='sm'
+                  className='h-11 gap-1.5 sm:h-8'
+                  aria-expanded={confirmRotate}
+                  onClick={() => setConfirmRotate(true)}
+                >
+                  <RefreshCw aria-hidden='true' className='size-3.5' />
+                  {st('secret.rotate')}
+                </Button>
+              ) : null
+            ) : (
+              <>
+                {canManage ? (
+                  <Button
+                    type='button'
+                    variant='outline'
+                    size='sm'
+                    className='h-11 gap-1.5 sm:h-8'
+                    onClick={generate}
+                  >
+                    <Sparkles aria-hidden='true' className='size-3.5' />
+                    {generated ? st('secret.regenerate') : st('secret.generate')}
+                  </Button>
+                ) : null}
+                {value !== '' ? (
+                  <Button
+                    type='button'
+                    variant='outline'
+                    size='sm'
+                    className='h-11 gap-1.5 sm:h-8'
+                    aria-label={st('blocks.copy_label', { what: st('secret.copy_what') })}
+                    onClick={() => void copyValue()}
+                  >
+                    {copyState === 'copied' ? (
+                      <Check aria-hidden='true' className='size-3.5' />
+                    ) : (
+                      <Copy aria-hidden='true' className='size-3.5' />
+                    )}
+                    {copyState === 'copied' ? st('records.copied') : st('secret.copy')}
+                  </Button>
+                ) : null}
+              </>
+            )}
+            <span className='sr-only' role='status' aria-live='polite'>
+              {copyState === 'copied' ? st('records.copied') : copyState === 'failed' ? st('records.copy_failed') : ''}
+            </span>
+          </div>
+          {confirmRotate ? (
+            <div
+              role='group'
+              aria-labelledby={`${form.idPrefix}-rot-${field.key}`}
+              className='flex flex-col gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3'
+            >
+              <p id={`${form.idPrefix}-rot-${field.key}`} className='text-sm font-medium'>
+                {st('secret.rotate_title')}
+              </p>
+              <p className='text-xs text-muted-foreground'>{st('secret.rotate_body')}</p>
+              <div className='flex flex-wrap gap-2'>
+                <Button type='button' size='sm' className='h-11 sm:h-8' onClick={generate}>
+                  {st('secret.rotate_confirm')}
+                </Button>
+                <Button
+                  type='button'
+                  size='sm'
+                  variant='ghost'
+                  className='h-11 sm:h-8'
+                  autoFocus
+                  onClick={() => setConfirmRotate(false)}
+                >
+                  {st('secret.rotate_cancel')}
+                </Button>
+              </div>
+            </div>
+          ) : null}
+          {value !== '' && !locked ? (
+            <div className='flex items-center gap-2' data-strength={strength}>
+              <span aria-hidden='true' className='flex flex-1 gap-1'>
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className={cn(
+                      'h-1.5 flex-1 rounded-full transition-colors',
+                      i <= (strength === 'strong' ? 2 : strength === 'fair' ? 1 : 0)
+                        ? strength === 'strong'
+                          ? 'bg-emerald-500'
+                          : strength === 'fair'
+                            ? 'bg-amber-500'
+                            : 'bg-destructive'
+                        : 'bg-muted',
+                    )}
+                  />
+                ))}
+              </span>
+              <span className='shrink-0 text-xs text-muted-foreground'>
+                {st('secret.strength')}: {st(`secret.strength_${strength === 'empty' ? 'weak' : strength}`)}
+              </span>
+            </div>
+          ) : null}
+          {generated && value !== '' ? (
+            <p role='status' className='text-xs text-emerald-700 dark:text-emerald-400'>
+              {st('secret.generated_hint')}
+            </p>
+          ) : null}
+          {genError ? (
+            <p role='alert' className='text-xs text-destructive'>
+              {st('secret.generate_unavailable')}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {error ? (
-        <p id={`${form.idPrefix}-cred-${field.key}-error`} role='alert' className='text-xs text-destructive'>
+        <p id={`${form.idPrefix}-cred-${field.key}-error`} role={form.errors[field.key] ? 'alert' : undefined} className='text-xs text-destructive'>
           {error}
         </p>
       ) : null}
@@ -437,7 +642,7 @@ function ConnectorCredentialFieldControl({
           {warning}
         </p>
       ) : null}
-      {help ? <HelpText text={help} /> : null}
+      {help ? <FieldHelp text={help} /> : null}
     </div>
   )
 }
@@ -625,6 +830,8 @@ export function AddonConfigSurface({
   expectedOptionKinds = NO_OPTION_KINDS,
   displayName,
   onConnectOAuth,
+  logo,
+  version,
 }: AddonConfigSurfaceProps) {
   const idPrefix = useId()
   const { t, i18n } = useTranslation()
@@ -1038,6 +1245,21 @@ export function AddonConfigSurface({
         return
       }
     }
+    const short = connector && canManageIssuer ? tooShortSecrets(activeFields, credValues) : []
+    if (short.length > 0) {
+      const errs: Record<string, string> = {}
+      for (const x of short) {
+        errs[x.key] = st('secret.too_short', { min: x.min, n: (credValues[x.key] ?? '').length })
+      }
+      setFieldErrors(errs)
+      setFormError(
+        st('secret.fix_fields', {
+          fields: short.map((x) => credLabel(credFields.find((f) => f.key === x.key)!)).join(', '),
+        }),
+      )
+      focusFirstInvalid(short.map((x) => x.key))
+      return
+    }
     setFieldErrors({})
     saveMutation.mutate()
   }
@@ -1055,6 +1277,13 @@ export function AddonConfigSurface({
       return st('installed_addons.missing_fields', {
         fields: miss.map((k) => credLabel(credFields.find((f) => f.key === k)!)).join(', '),
       })
+    }
+    const short = tooShortSecrets(activeFields, credValues)
+    if (short.length > 0) {
+      const errs: Record<string, string> = {}
+      for (const x of short) errs[x.key] = st('secret.too_short', { min: x.min, n: (credValues[x.key] ?? '').length })
+      setFieldErrors(errs)
+      return st('secret.too_short', { min: short[0].min, n: (credValues[short[0].key] ?? '').length })
     }
     const payload: Record<string, string> = {}
     for (const [k, v] of Object.entries(credValues)) {
@@ -1488,24 +1717,65 @@ export function AddonConfigSurface({
         ? 'saved'
         : 'clean'
 
+  // Closing with unsaved edits asks first (Esc, overlay click, X and Cancelar
+  // all land here); a save in flight never closes the dialog under it.
+  const [confirmDiscard, setConfirmDiscard] = useState(false)
+  const keepEditingRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (!open) setConfirmDiscard(false)
+  }, [open])
+  useEffect(() => {
+    if (confirmDiscard) keepEditingRef.current?.focus()
+  }, [confirmDiscard])
+  const requestClose = (next: boolean) => {
+    if (next) return onOpenChange(true)
+    if (saveMutation.isPending) return
+    if (dirty) return setConfirmDiscard(true)
+    onOpenChange(false)
+  }
+
+  const headerVersion = version ?? addon.manifest.version
+  const configured = connector ? !!connector.connected : null
+
   const hasAnyBlocks = layoutSections.some((s) => (s.blocks?.length ?? 0) > 0) || extraBlocks.length > 0
   const nothingToConfigure =
     !hasCredentials && !hasSettings && !isOAuth && !hasAnyBlocks && autoFields.length === 0
   const nothingToSave = !hasCredentials && !hasSettings
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={requestClose}>
       <DialogContent className='flex max-h-[85vh] flex-col max-sm:max-h-[calc(100dvh-1rem)] max-sm:gap-3 max-sm:p-4'>
        <ConnectorFormStateContext.Provider
-        value={{ fields: credFields, errors: fieldErrors, idPrefix, client: api, expectedOptionKinds, reloadNonce }}
+        value={{ fields: credFields, errors: fieldErrors, idPrefix, client: api, expectedOptionKinds, reloadNonce, canManage: canManageIssuer }}
       >
         <DialogHeader className='shrink-0 pe-8 text-start'>
-          <DialogTitle className='leading-snug'>
-            {st('installed_addons.configure_title', { name: displayName ?? addon.manifest.display_name ?? addon.manifest.name })}
-          </DialogTitle>
-          <DialogDescription>
-            {st('installed_addons.configure_description')}
-          </DialogDescription>
+          <div className='flex items-center gap-3'>
+            <div
+              data-testid='config-logo'
+              className='flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border bg-muted/40 p-1.5 [&_img]:size-full [&_img]:object-contain [&_svg]:max-h-full [&_svg]:max-w-full'
+            >
+              {logo ?? <KeyRound aria-hidden='true' className='size-5 text-muted-foreground' />}
+            </div>
+            <div className='flex min-w-0 flex-col gap-1'>
+              <DialogTitle className='leading-snug break-words'>
+                {st('installed_addons.configure_title', { name: displayName ?? addon.manifest.display_name ?? addon.manifest.name })}
+              </DialogTitle>
+              <div className='flex flex-wrap items-center gap-2'>
+                {headerVersion ? (
+                  <Badge variant='outline' className='text-[10px] tabular-nums'>
+                    {st('header.version', { version: String(headerVersion).replace(/^v/i, '') })}
+                  </Badge>
+                ) : null}
+                {configured !== null ? (
+                  <StepStatusBadge
+                    status={configured ? 'ok' : 'pending'}
+                    label={configured ? st('header.configured') : st('header.pending')}
+                  />
+                ) : null}
+              </div>
+            </div>
+          </div>
+          <DialogDescription className='sr-only'>{st('header.description')}</DialogDescription>
         </DialogHeader>
 
         <div className='-mr-2 flex min-h-0 flex-col gap-6 overflow-y-auto py-2 pr-2'>
@@ -1756,7 +2026,25 @@ export function AddonConfigSurface({
           data-wizard-footer=''
           className='flex shrink-0 flex-col gap-2 border-t pt-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:space-x-0'
         >
-          {nothingToSave && !useStepper ? (
+          {confirmDiscard ? (
+            <div
+              role='alertdialog'
+              aria-labelledby={`${idPrefix}-discard`}
+              className='flex w-full flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'
+            >
+              <p id={`${idPrefix}-discard`} className='text-sm font-medium'>
+                {st('discard.title')}
+              </p>
+              <div className='flex flex-wrap gap-2 sm:justify-end'>
+                <Button ref={keepEditingRef} className='h-11 sm:h-9' onClick={() => setConfirmDiscard(false)}>
+                  {st('discard.keep')}
+                </Button>
+                <Button variant='outline' className='h-11 sm:h-9' onClick={() => onOpenChange(false)}>
+                  {st('discard.confirm')}
+                </Button>
+              </div>
+            </div>
+          ) : nothingToSave && !useStepper ? (
             <Button className='h-11 w-full sm:ml-auto sm:h-9 sm:w-auto' onClick={() => onOpenChange(false)}>
               {st('common.close')}
             </Button>
@@ -1785,7 +2073,7 @@ export function AddonConfigSurface({
                 {st(`form.status_${saveStatus}`)}
               </p>
               <div className='flex flex-wrap items-center gap-2 sm:ml-auto sm:flex-nowrap sm:justify-end'>
-                <Button variant='ghost' className='h-11 px-3 sm:h-9' onClick={() => onOpenChange(false)}>
+                <Button variant='ghost' className='h-11 px-3 sm:h-9' onClick={() => requestClose(false)}>
                   {dirty ? st('common.cancel') : st('common.close')}
                 </Button>
                 {useStepper && stepIdx > 0 && (
