@@ -21,6 +21,14 @@ jobs:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
           cache: 'pnpm'
+      # `npm stage` (publicar a staging) no existe en el npm que trae Node 22
+      # (EUNKNOWNCOMMAND). Se fija una version con el subcomando y se comprueba
+      # aqui, para que un cambio de npm falle ruidoso antes de preparar nada.
+      - name: Usar npm con soporte de `npm stage`
+        run: |
+          npm install -g npm@11.19.0
+          npm --version
+          npm stage --help > /dev/null
       - run: pnpm install --frozen-lockfile=false
       - run: pnpm --filter "./packages/*" -r build
       - name: Create Release PR or Publish
