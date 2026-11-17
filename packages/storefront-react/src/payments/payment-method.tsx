@@ -5,8 +5,9 @@ import { useResolvedLocale } from '../locale.js'
 import { createFetchTransport, type PaymentTransport } from './adapter.js'
 import type { PayChoice, PayChoices } from './choices.js'
 import { paymentMethodMessages, type PaymentMethodMessages } from './payment-method.messages.js'
-import { PaymentBrick, type PaymentBrickHandle, type PaymentBrickProps } from './payment-brick.js'
-import type { PaymentEvent } from './use-embedded-payment.js'
+import { PaymentBrick, useRemaining, type PaymentBrickHandle, type PaymentBrickProps } from './payment-brick.js'
+import { formatCountdown } from './pending-watch.js'
+import type { EmbeddedPaymentStatus, PaymentEvent } from './use-embedded-payment.js'
 import type { PaymentOutcome } from '@asteby/storefront'
 import { BrandMark } from '../checkout/brand-mark.js'
 import { findBrand } from '../checkout/brands.js'
@@ -278,6 +279,10 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
   // that stopped with no answer (or there is nothing to read it with). The button never stays "processing" forever.
   const [review, setReview] = useState<'polling' | 'stalled' | null>(null)
   const brick = useRef<PaymentBrickHandle>(null)
+  // Mirrors of the card form's state machine (events), so the page button is never "processing" longer than the real work.
+  const [payStatus, setPayStatus] = useState<EmbeddedPaymentStatus>('idle')
+  const [blockedUntil, setBlockedUntil] = useState<string | null>(null)
+  const remaining = useRemaining(blockedUntil)
 
   const cardChosen = selected?.mode === 'card' && !retryAddress && !addressFirst
   const cardActive = hydrated && cardChosen && !fallback
@@ -356,6 +361,11 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
 
   const handleEvent = (e: PaymentEvent) => {
     if (e.type === 'form_ready') setReady(true)
+    if (e.type === 'status') {
+      setPayStatus(e.status)
+      if (e.status !== 'processing') setProcessing(false)
+    }
+    if (e.type === 'pay_blocked') setBlockedUntil(e.until)
     if (e.type === 'submit') setProcessing(true)
     if (e.type === 'tokenize_error' || e.type === 'retry') setProcessing(e.type === 'retry')
     if (e.type === 'result' && e.status === 'rejected') setProcessing(false)
@@ -397,8 +407,18 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
   // While the delivery is being saved the amount is stale: the button reads without it.
   const total = wantSync && (!settled || requote) ? null : renderAmount ? renderAmount(amount) : formatMoney(amount, locale)
   const held = holdLabel !== undefined && holdLabel !== null && holdLabel !== false
+  // The card form is waiting on the bank: a challenge is open, or its outcome is unknown (the server blocks a new payment).
+  const bankWait = cardActive && (payStatus === 'challenge' || payStatus === 'blocked')
+  const countingDown = bankWait && payStatus === 'blocked' && remaining !== null && remaining > 0
+  const released = bankWait && payStatus === 'blocked' && blockedUntil !== null && remaining === 0
   const label: ReactNode = held ? (
     holdLabel
+  ) : countingDown ? (
+    m.retryIn.replace('{time}', formatCountdown(remaining!))
+  ) : released ? (
+    m.tryAgain
+  ) : bankWait ? (
+    m.verifying
   ) : review ? (
     m.inReview
   ) : retryAddress ? (
@@ -438,6 +458,12 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
       formRef.current?.reportValidity()
       return
     }
+    // Waiting on the bank: never a second charge from this button. When the server's block window ended, it starts over.
+    if (bankWait) {
+      event.preventDefault()
+      if (released) brick.current?.startOver()
+      return
+    }
     // A payment under review: never a second charge from this button.
     if (review) {
       event.preventDefault()
@@ -449,6 +475,14 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
     const form = formRef.current
     if (form && !form.reportValidity()) return // required fields: the browser explains which is missing
     if (brickReady) void brick.current?.submit()
+  }
+
+  // "Cancel and choose another method": moves to the first non-card row (the choice the buyer can pay with right now).
+  const chooseOtherMethod = () => {
+    const other = choices.choices.find((c) => c.mode !== 'card')
+    if (other) setChoiceValue(other.value)
+    rootRef.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+    rootRef.current?.querySelector<HTMLInputElement>('input[type="radio"]:checked')?.focus()
   }
 
   const cardNotice = (k: 'syncing' | 'syncFailed' | 'pickDelivery' | 'requote', node: ReactNode) =>
@@ -544,6 +578,7 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
                     enabled={showBrick}
                     {...(cx.brick ? { className: cx.brick } : {})}
                     onEvent={handleEvent}
+                    {...(choices.choices.some((c) => c.mode !== 'card') ? { onChooseOtherMethod: chooseOtherMethod } : {})}
                     onFallback={() => setFallback(true)}
                     onResult={(o) => {
                       // Approved or voucher: the order is closed and the receipt is in the cookie. Under review (a payment
@@ -605,11 +640,11 @@ export function PaymentMethodSection(props: PaymentMethodSectionProps) {
           onClick={onPayClick}
           className={cx.submit}
           pending={busy || held}
-          busy={busy || processing || held}
+          busy={busy || processing || held || (bankWait && payStatus === 'challenge')}
           kind="pay"
-          pendingLabel={held ? label : m.processing}
+          pendingLabel={held || bankWait ? label : m.processing}
           disabled={blocked}
-          aria-disabled={blocked || held || review !== null || (cardActive && !syncFailed && deliveryReady && (!brickReady || !ready || processing)) || undefined}
+          aria-disabled={blocked || held || review !== null || (cardActive && !syncFailed && deliveryReady && (!brickReady || !ready || processing)) || (bankWait && !released) || undefined}
           data-sf-pay-method-submit
           {...tid('submit')}
         >

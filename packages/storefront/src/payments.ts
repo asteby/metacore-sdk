@@ -55,6 +55,18 @@ export type PaymentMessageKey =
   | 'challenge.escape_hint'
   | 'challenge.left'
   | 'challenge.verifying'
+  | 'challenge.timeout'
+  | 'challenge.help_title'
+  | 'challenge.help_body'
+  | 'verify.checking'
+  | 'verify.timeout'
+  | 'blocked.countdown'
+  | 'blocked.ready'
+  | 'support.charge'
+  | 'action.verify_now'
+  | 'action.retry_verification'
+  | 'action.choose_other'
+  | 'action.start_over'
 
 export type PaymentMessages = Record<PaymentMessageKey, string>
 
@@ -104,8 +116,20 @@ const ES: PaymentMessages = {
   'challenge.title': 'Verificación de tu banco',
   'challenge.escape': 'Cancelar y volver al pago',
   'challenge.escape_hint': '¿La página del banco muestra un error o tarda demasiado? Puedes cerrarla. Si ya aprobaste el pago en tu banco, aún puede completarse: lo confirmamos aquí antes de dejarte pagar de nuevo y nunca se cobra dos veces.',
-  'challenge.left': 'Cerraste la verificación. Estamos confirmando con tu banco si el pago se completó; no vuelvas a pagar todavía.',
+  'challenge.left': 'Cerraste la verificación. Todavía no sabemos si tu banco aprobó el pago, por eso no vuelvas a pagar aún. Puedes verificar el estado ahora, esperar o elegir otro método.',
   'challenge.verifying': 'Verificación terminada. Estamos confirmando el pago con tu banco; no vuelvas a pagar todavía.',
+  'challenge.timeout': 'Aún no recibimos la confirmación de tu banco. La verificación no avanzó: puedes reintentar la verificación o elegir otro método de pago.',
+  'challenge.help_title': '¿Algo salió mal?',
+  'challenge.help_body': 'Si la página de tu banco muestra un error o no avanza, puedes reintentar o cambiar de método. Nunca se cobra dos veces.',
+  'verify.checking': 'Confirmando con tu banco…',
+  'verify.timeout': 'Aún no recibimos la confirmación de tu banco. No vuelvas a pagar todavía: puedes verificar de nuevo o elegir otro método de pago.',
+  'blocked.countdown': 'Para evitar cobros dobles, podrás volver a pagar en {time}.',
+  'blocked.ready': 'Ya puedes intentar de nuevo.',
+  'support.charge': 'Si tu banco muestra un cargo, escríbenos o llámanos al teléfono que aparece al pie de la página: lo revisamos contigo.',
+  'action.verify_now': 'Verificar estado ahora',
+  'action.retry_verification': 'Reintentar verificación',
+  'action.choose_other': 'Cancelar y elegir otro método',
+  'action.start_over': 'Intentar de nuevo',
 }
 
 const EN: PaymentMessages = {
@@ -154,8 +178,20 @@ const EN: PaymentMessages = {
   'challenge.title': 'Your bank verification',
   'challenge.escape': 'Cancel and go back to payment',
   'challenge.escape_hint': 'Does the bank page show an error or take too long? You can close it. If you already approved the payment with your bank it may still go through: we confirm it here before letting you pay again, and you are never charged twice.',
-  'challenge.left': 'You closed the verification. We are checking with your bank whether the payment went through; do not pay again yet.',
+  'challenge.left': 'You closed the verification. We do not know yet whether your bank approved the payment, so do not pay again yet. You can check the status now, wait, or choose another method.',
   'challenge.verifying': 'Verification finished. We are confirming the payment with your bank; do not pay again yet.',
+  'challenge.timeout': "We have not received your bank's confirmation yet. The verification did not move forward: you can retry the verification or choose another payment method.",
+  'challenge.help_title': 'Something went wrong?',
+  'challenge.help_body': 'If your bank page shows an error or does not move forward, you can retry or switch method. You are never charged twice.',
+  'verify.checking': 'Confirming with your bank…',
+  'verify.timeout': "We have not received your bank's confirmation yet. Do not pay again yet: you can check again or choose another payment method.",
+  'blocked.countdown': 'To avoid double charges, you can pay again in {time}.',
+  'blocked.ready': 'You can try again now.',
+  'support.charge': 'If your bank shows a charge, write or call us (the phone is in the page footer) and we will sort it out with you.',
+  'action.verify_now': 'Check status now',
+  'action.retry_verification': 'Retry verification',
+  'action.choose_other': 'Cancel and choose another method',
+  'action.start_over': 'Try again',
 }
 
 const CATALOG: Record<PaymentLocale, PaymentMessages> = { es: ES, en: EN }

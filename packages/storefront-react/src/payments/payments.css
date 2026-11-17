@@ -96,9 +96,9 @@ dialog[data-sf-challenge] {
   margin: auto;
   box-sizing: border-box;
   inset: 0;
-  width: min(36rem, 100% - 2rem);
+  width: min(44rem, 100% - 2rem);
   max-width: none;
-  max-height: min(90dvh, 40rem);
+  max-height: min(96dvh, 52rem);
   display: flex;
   flex-direction: column;
   /* Solo el cuerpo (el iframe) scrollea; el diálogo no. */
@@ -132,7 +132,7 @@ dialog[data-sf-challenge] [data-sf-challenge-body] {
 dialog[data-sf-challenge] [data-sf-challenge-frame] {
   display: block;
   flex: 1 1 auto;
-  min-height: min(26rem, 45dvh);
+  min-height: min(32rem, 62dvh);
   width: 100%;
   overflow: auto;
   background: #ffffff;
@@ -159,5 +159,37 @@ dialog[data-sf-challenge] [data-sf-challenge-escape] button {
     width: calc(100% - 2rem);
     max-height: calc(100dvh - 2rem);
     padding: 1rem;
+  }
+}
+
+/* Ayuda del reto: barra compacta BAJO el iframe (el banco conserva casi todo el alto, también con el aviso de cookies de terceros). */
+dialog[data-sf-challenge] [data-sf-challenge-escape] p {
+  margin: 0;
+  line-height: 1.35;
+}
+dialog[data-sf-challenge] [data-sf-challenge-actions],
+[data-sf-pay-actions] {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+dialog[data-sf-challenge] [data-sf-challenge-actions] button {
+  margin-top: 0;
+}
+[data-sf-pay-wait] {
+  margin-top: 0.75rem;
+}
+[data-sf-pay-wait] p {
+  margin: 0.25rem 0;
+}
+[data-sf-pay-countdown] {
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 30rem) {
+  dialog[data-sf-challenge] {
+    max-height: 100dvh;
+    width: 100%;
+    border-radius: 0;
   }
 }

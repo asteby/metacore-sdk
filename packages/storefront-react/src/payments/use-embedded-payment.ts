@@ -55,6 +55,12 @@ export type PaymentEvent =
    * the payment changed: the attempt key is kept and no new payment can start from this form.
    */
   | { type: 'verify_timeout' }
+  /** The bank challenge did not move forward for `challengeTimeoutMs`: the hook left it and verifies with the server. Nothing was decided. */
+  | { type: 'challenge_timeout' }
+  /** The payment status changed (every transition of the state machine). Lets a page keep its own button honest. */
+  | { type: 'status'; status: EmbeddedPaymentStatus }
+  /** The server says no new payment can start until `until` (`checkout.pay_blocked_until`); `null` when it no longer blocks. */
+  | { type: 'pay_blocked'; until: string | null }
 
 export type UseEmbeddedPaymentOptions = {
   /** Provider data from `paymentMethods[].client`. `null`/absent: nothing to mount (status `idle`). */
@@ -108,6 +114,11 @@ export type UseEmbeddedPaymentOptions = {
   /** Poll interval/timeout for a pending 3DS challenge or review when `transport.refresh` exists. */
   pollIntervalMs?: number
   pollTimeoutMs?: number
+  /**
+   * Longest a bank challenge may stay open with no answer from the server before the hook leaves it and verifies instead
+   * (never an endless spinner). Default `min(pollTimeoutMs, 180000)`. The polling backs off from `pollIntervalMs` up to 10 s.
+   */
+  challengeTimeoutMs?: number
   /** Where the attempt id is kept so a reload/retry reuses it. Default `sessionStorage`; `null` disables. Never holds card data. */
   storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'> | null
   /** Scope of the stored attempt (e.g. the checkout or cart id). Default `default`. */
@@ -177,6 +188,19 @@ export type EmbeddedPaymentState = {
    * fresh form. A still-pending challenge does not reopen the dialog.
    */
   cancelChallenge: () => void
+  /** The server-reported end of the "no new payment" window (RFC 3339), or `null`. Read from `checkout.pay_blocked_until` of any answer. */
+  blockedUntil: string | null
+  /** `true` when the challenge timed out by itself with no answer from the bank. */
+  challengeTimedOut: boolean
+  /** A manual check (`verifyNow`) is in flight. */
+  checking: boolean
+  /** Reads the payment state once, right now (same attempt, nothing is charged). Works over an open challenge and while verifying. */
+  verifyNow: () => Promise<void>
+  /**
+   * Starts a NEW attempt after the server's block window (`blockedUntil`) ended and the earlier attempt never resolved:
+   * rotates the attempt key and rebuilds the form. No-op before that (the server would refuse it anyway).
+   */
+  startOver: () => void
 }
 
 const DEFAULT_ADAPTERS: Record<string, PaymentFormAdapter> = {}
@@ -266,6 +290,11 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   const [verifyTimedOut, setVerifyTimedOut] = useState(false)
   // Bumped by `recheck()`: a new background check window over the same unknown outcome.
   const [verifyRound, setVerifyRound] = useState(0)
+  const [blockedUntil, setBlockedUntil] = useState<string | null>(null)
+  const [challengeTimedOut, setChallengeTimedOut] = useState(false)
+  const [checking, setChecking] = useState(false)
+  const checkingRef = useRef(false)
+  const blockedUntilRef = useRef<string | null>(null)
 
   // Latest props without re-triggering effects.
   const live = useRef({ ...options, msgs })
@@ -287,6 +316,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
   const leftChallenge = useRef(false)
   statusRef.current = status
   errorRef.current = error
+  blockedUntilRef.current = blockedUntil
   // Status and error are mirrored into their refs AT ONCE (not on the next render): guards that run right after a state
   // change in the same task (`syncAmount` in a `finally`, `submit`) must see the real state, not the last rendered one.
   const setStatus = useCallback((next: EmbeddedPaymentStatus | ((s: EmbeddedPaymentStatus) => EmbeddedPaymentStatus)) => {
@@ -559,8 +589,15 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
 
   // Unknown outcome of a challenge: no new payment can start (same attempt), the hook keeps reading `refresh` and only a
   // definitive answer (paid / rejected / expired / cancelled) settles it; a still-open challenge does not reopen anything.
+  // Remembers the server's block window from any answer that carries it.
+  const observe = useCallback((r: PaymentAttemptResult) => {
+    const v = r.checkout?.pay_blocked_until
+    if (v === undefined) return
+    setBlockedUntil(v && Number.isFinite(Date.parse(v)) ? v : null)
+  }, [])
+
   const verifyPending = useCallback(
-    (key: 'challenge.verifying' | 'challenge.left') => {
+    (key: 'challenge.verifying' | 'challenge.left' | 'challenge.timeout') => {
       pendingData.current = null
       leftChallenge.current = true
       setOutcome(null)
@@ -572,6 +609,8 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
 
   const finish = useCallback(
     (result: PaymentAttemptResult) => {
+      observe(result)
+      setChallengeTimedOut(false)
       // The provider SDK runs this challenge (Stripe `handleNextAction`), not the page's iframe dialog.
       const action = providerAction(result)
       if (action) {
@@ -603,7 +642,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
         else if (typeof window !== 'undefined') window.location.assign(o.redirect_url)
       }
     },
-    [emit, rotateAttempt, setError, setStatus, verifyPending],
+    [emit, observe, rotateAttempt, setError, setStatus, verifyPending],
   )
 
   // Runs a provider-driven challenge (Stripe 3DS) and then asks the SERVER what happened. The SDK's answer is never taken
@@ -913,15 +952,19 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     if ((status !== 'challenge' && status !== 'in_review') || !transport.refresh) return
     let stop = false
     const ctl = new AbortController()
-    const until = Date.now() + pollTimeoutMs
+    const until = Date.now() + (status === 'challenge' ? (live.current.challengeTimeoutMs ?? Math.min(pollTimeoutMs, 180_000)) : pollTimeoutMs)
     if (status === 'in_review') setVerifyTimedOut(false)
     ;(async () => {
+      // Growing waits (never a hammer): pollIntervalMs, doubling each time, up to 10 s.
+      let wait = pollIntervalMs
       while (!stop && Date.now() < until) {
-        await sleep(pollIntervalMs)
+        await sleep(wait)
+        wait = Math.min(wait * 2, Math.max(pollIntervalMs, 10_000))
         if (stop || !alive.current) return
         try {
           const r = await transport.refresh!({ signal: ctl.signal })
           if (stop || !alive.current) return
+          observe(r)
           if (r.payment.status === 'none') continue
           const o = paymentOutcome(r, live.current.locale, live.current.messages)
           // A provider-run or page-less challenge reads as `in_review` but needs the hook (Stripe 3DS / verifying).
@@ -939,12 +982,19 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
         setVerifyTimedOut(true)
         emit({ type: 'verify_timeout' })
       }
+      // A bank challenge with no progress for the whole window: leave it (the attempt is kept; leaving charges nothing)
+      // and keep verifying, with a clear text and ways out. Never an open-ended dialog.
+      if (!stop && alive.current && status === 'challenge') {
+        setChallengeTimedOut(true)
+        emit({ type: 'challenge_timeout' })
+        verifyPending('challenge.timeout')
+      }
     })()
     return () => {
       stop = true
       ctl.abort()
     }
-  }, [status, transport, pollIntervalMs, pollTimeoutMs, finish, verifyRound, emit])
+  }, [status, transport, pollIntervalMs, pollTimeoutMs, finish, verifyRound, emit, observe, verifyPending])
 
   // Unknown outcome ("verifying"): the answer was lost or the payment is still in progress. Keep reading the payment state
   // with growing waits for about two minutes. Only a RESOLVED answer ends it (paid, rejected, voucher, challenge...);
@@ -963,7 +1013,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     let stop = false
     const ctl = new AbortController()
     // After leaving a challenge the bank may take as long as the challenge window itself.
-    const until = Date.now() + (leftChallenge.current ? Math.max(verifyTimeoutMs, pollTimeoutMs) : verifyTimeoutMs)
+    const until = Date.now() + verifyTimeoutMs
     setVerifying(true)
     ;(async () => {
       let wait = verifyIntervalMs
@@ -974,6 +1024,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
         try {
           const r = await transport.refresh!({ signal: ctl.signal })
           if (stop || !alive.current) return
+          observe(r)
           if (isResolvedAttempt(r)) {
             // The buyer left the bank page: a still-open challenge is not an answer; keep waiting for the bank's.
             const settled = r.payment.status === 'paid' || r.payment.status === 'failed' || r.payment.status === 'expired' || r.payment.status === 'cancelled'
@@ -998,12 +1049,54 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
       ctl.abort()
       setVerifying(false)
     }
-  }, [unknownOutcome, transport, verifyTimeoutMs, verifyIntervalMs, pollTimeoutMs, finish, verifyRound, emit])
+  }, [unknownOutcome, transport, verifyTimeoutMs, verifyIntervalMs, finish, verifyRound, emit, observe])
 
   const recheck = useCallback(() => {
     if (!(statusRef.current === 'network_error' || statusRef.current === 'in_review' || (statusRef.current === 'blocked' && errorRef.current?.kind === 'payment_in_progress'))) return
     setVerifyRound((n) => n + 1)
   }, [])
+
+  const verifyNow = useCallback(async (): Promise<void> => {
+    const refresh = transport.refresh
+    const st = statusRef.current
+    const open = st === 'challenge' || st === 'network_error' || (st === 'blocked' && errorRef.current?.kind === 'payment_in_progress')
+    if (!refresh || !open || checkingRef.current) return
+    checkingRef.current = true
+    setChecking(true)
+    let unresolved = true
+    try {
+      const r = await refresh({ signal: new AbortController().signal })
+      if (!alive.current) return
+      observe(r)
+      const settled = r.payment.status === 'paid' || r.payment.status === 'failed' || r.payment.status === 'expired' || r.payment.status === 'cancelled'
+      if (isResolvedAttempt(r) && (settled || !pendingChallenge(r.payment.action))) {
+        unresolved = false
+        finish(r)
+      }
+    } catch {
+      /* unknown: the background check goes on */
+    } finally {
+      checkingRef.current = false
+      if (alive.current) setChecking(false)
+    }
+    if (unresolved && alive.current && statusRef.current === 'blocked') setVerifyRound((n) => n + 1)
+  }, [finish, observe, transport])
+
+  const startOver = useCallback(() => {
+    const until = blockedUntilRef.current
+    if (!(statusRef.current === 'blocked' && errorRef.current?.kind === 'payment_in_progress')) return
+    if (!until || Date.parse(until) > Date.now()) return
+    leftChallenge.current = false
+    pendingData.current = null
+    setBlockedUntil(null)
+    setChallengeTimedOut(false)
+    setVerifyTimedOut(false)
+    setOutcome(null)
+    setError(null)
+    rotateAttempt()
+    setStatus('ready')
+    setMountKey((k) => k + 1)
+  }, [rotateAttempt, setError, setStatus])
 
   const dismiss = useCallback(() => {
     setError(null)
@@ -1019,13 +1112,23 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     setStatus('blocked')
   }, [])
 
+  // Every transition is announced (a page keeps its own button honest: no "processing" that outlives the real work).
+  useEffect(() => {
+    emit({ type: 'status', status })
+  }, [status, emit])
+  useEffect(() => {
+    emit({ type: 'pay_blocked', until: blockedUntil })
+  }, [blockedUntil, emit])
+
   // After a rejection the hook remounts the form; the rejection text stays visible via `outcome` until the next submit.
   const message =
     status === 'processing'
       ? msgs['state.processing']
       : status === 'fallback'
         ? msgs['state.fallback']
-        : (error?.message ?? outcome?.message ?? (status === 'loading' ? msgs['state.loading'] : null))
+        : status === 'blocked' && verifyTimedOut && error?.kind === 'payment_in_progress'
+          ? msgs['verify.timeout']
+          : (error?.message ?? outcome?.message ?? (status === 'loading' ? msgs['state.loading'] : null))
 
   return {
     status,
@@ -1048,6 +1151,11 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
     retry,
     dismiss,
     cancelChallenge,
+    blockedUntil,
+    challengeTimedOut,
+    checking,
+    verifyNow,
+    startOver,
   }
 }
 
