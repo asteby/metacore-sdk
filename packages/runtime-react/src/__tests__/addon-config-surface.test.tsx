@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 vi.mock('react-i18next', () => {
-    const dict: Record<string, string> = { 'pay.public_key': 'Llave pública', 'pay.token': 'Token', 'pay.serie_a': 'Serie A', 'pay.serie_b': 'Serie B', 'pay.settings.policy': 'Política de guía', 'pay.settings.policy_manual': 'A mano' }
+    const dict: Record<string, string> = { 'pay.public_key': 'Llave pública', 'pay.token': 'Token', 'pay.help': 'Secreto aleatorio; la tienda lo manda como Bearer a /submit_review y /list_reviews y cosas más largas todavía', 'pay.serie_a': 'Serie A', 'pay.serie_b': 'Serie B', 'pay.settings.policy': 'Política de guía', 'pay.settings.policy_manual': 'A mano' }
     const t = (k: string, o?: { defaultValue?: string }) => dict[k] ?? o?.defaultValue ?? k
     return { useTranslation: () => ({ t, i18n: { language: 'es', exists: (k: string) => k in dict } }) }
 })
@@ -387,5 +387,71 @@ describe('host-generated (auto) credentials', () => {
         fireEvent.click(screen.getByText('Siguiente'))
         expect(await screen.findByText('Rotar')).toBeTruthy()
         expect(screen.getByText('Conectada automáticamente')).toBeTruthy()
+    })
+})
+
+describe('secret field tools (generate / validate / discard)', () => {
+    const secretConnector: ConnectorEntry = {
+        addon_key: 'pay',
+        provider: 'rev',
+        connected: false,
+        credentials: [
+            { key: 'api_key', type: 'secret', required: true, label: 'pay.token', validation: 'min_length:40', description: 'pay.help' },
+        ],
+    }
+    const input = () => document.querySelector('input[name="cfg_api_key"]') as HTMLInputElement
+
+    it('Generar fills a CSPRNG value of at least the declared minimum and Guardar sends it', async () => {
+        const { calls } = setup({ connector: secretConnector })
+        await screen.findByText('Generar')
+        fireEvent.click(screen.getByText('Generar'))
+        const v = input().value
+        expect(v.length).toBeGreaterThanOrEqual(40)
+        expect(v).toMatch(/^[A-Za-z0-9]+$/)
+        expect(screen.getByText(/Clave generada/)).toBeTruthy()
+        fireEvent.click(screen.getByTestId('config-save'))
+        await waitFor(() => expect(calls.find((c) => c.m === 'POST' && c.url === '/integrations/rev')?.body).toEqual({ api_key: v }))
+    })
+
+    it('a too-short secret shows a live error and blocks saving', async () => {
+        const { calls } = setup({ connector: secretConnector })
+        await screen.findByText('Generar')
+        fireEvent.focus(input())
+        fireEvent.change(input(), { target: { value: 'abc' } })
+        expect(screen.getByText('Mínimo 40 caracteres (llevas 3).')).toBeTruthy()
+        fireEvent.click(screen.getByTestId('config-save'))
+        await Promise.resolve()
+        expect(calls.some((c) => c.m === 'POST' && c.url === '/integrations/rev')).toBe(false)
+    })
+
+    it('splits technical help under «Cómo se usa»', async () => {
+        setup({ connector: secretConnector })
+        expect(await screen.findByText('Cómo se usa')).toBeTruthy()
+    })
+
+    it('asks before discarding unsaved changes', async () => {
+        const { onOpenChange } = setup({ connector: secretConnector })
+        await screen.findByText('Generar')
+        fireEvent.click(screen.getByText('Generar'))
+        fireEvent.click(screen.getByText('Cancelar'))
+        expect(onOpenChange).not.toHaveBeenCalled()
+        expect(screen.getByText('¿Descartar los cambios sin guardar?')).toBeTruthy()
+        fireEvent.click(screen.getByText('Seguir editando'))
+        expect(screen.queryByText('¿Descartar los cambios sin guardar?')).toBeNull()
+        fireEvent.click(screen.getByText('Cancelar'))
+        fireEvent.click(screen.getByText('Descartar'))
+        expect(onOpenChange).toHaveBeenCalledWith(false)
+    })
+
+    it('Rotar on a stored secret confirms first, then fills a new value', async () => {
+        setup(
+            { connector: { ...secretConnector, connected: true } },
+            { 'GET /integrations/rev/values': { data: { values: {}, secrets_set: ['api_key'] } } },
+        )
+        fireEvent.click(await screen.findByText('Rotar'))
+        expect(screen.getByText('¿Rotar esta clave?')).toBeTruthy()
+        expect(input().value).toBe('')
+        fireEvent.click(screen.getByText('Sí, rotar'))
+        expect(input().value.length).toBeGreaterThanOrEqual(40)
     })
 })
