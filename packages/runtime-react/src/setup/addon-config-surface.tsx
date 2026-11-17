@@ -12,7 +12,7 @@
 // fields). Everything host-specific is injected: the API client (ApiProvider
 // or `client`), the admin gate (`canManageIssuer`), the active branch, the
 // addon i18n bundle loader and the notifier.
-import { createContext, useContext, useEffect, useId, useRef, useState } from 'react'
+import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -188,6 +188,9 @@ export interface AddonConfigSurfaceProps {
   expectedOptionKinds?: Record<string, string>
   /** Title name; default `manifest.display_name ?? manifest.name`. */
   displayName?: string
+  /** Logo drawn before the title (use `<AddonLogo size='modal' />` from
+   *  `@asteby/metacore-ui/primitives` so it is never cropped). */
+  logo?: ReactNode
   /**
    * OAuth connectors (auth != "token") have no credential form: the surface
    * shows the connection state and a "Conectar cuenta" button that calls this
@@ -624,6 +627,7 @@ export function AddonConfigSurface({
   client,
   expectedOptionKinds = NO_OPTION_KINDS,
   displayName,
+  logo,
   onConnectOAuth,
 }: AddonConfigSurfaceProps) {
   const idPrefix = useId()
@@ -1500,12 +1504,17 @@ export function AddonConfigSurface({
         value={{ fields: credFields, errors: fieldErrors, idPrefix, client: api, expectedOptionKinds, reloadNonce }}
       >
         <DialogHeader className='shrink-0 pe-8 text-start'>
-          <DialogTitle className='leading-snug'>
-            {st('installed_addons.configure_title', { name: displayName ?? addon.manifest.display_name ?? addon.manifest.name })}
-          </DialogTitle>
-          <DialogDescription>
-            {st('installed_addons.configure_description')}
-          </DialogDescription>
+          <div className='flex items-center gap-3'>
+            {logo}
+            <div className='flex min-w-0 flex-1 flex-col gap-1.5'>
+              <DialogTitle className='leading-snug'>
+                {st('installed_addons.configure_title', { name: displayName ?? addon.manifest.display_name ?? addon.manifest.name })}
+              </DialogTitle>
+              <DialogDescription>
+                {st('installed_addons.configure_description')}
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
 
         <div className='-mr-2 flex min-h-0 flex-col gap-6 overflow-y-auto py-2 pr-2'>
