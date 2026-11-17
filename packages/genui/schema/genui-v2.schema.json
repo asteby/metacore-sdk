@@ -1467,6 +1467,15 @@
         },
         {
           "$ref": "#/$defs/block_ext"
+        },
+        {
+          "$ref": "#/$defs/block_map"
+        },
+        {
+          "$ref": "#/$defs/block_metric"
+        },
+        {
+          "$ref": "#/$defs/block_diagram"
         }
       ]
     },
@@ -2759,6 +2768,383 @@
               }
             ]
           }
+        }
+      }
+    },
+    "mapPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "lat",
+        "lng",
+        "label"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "lat": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "lng": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "label": {
+          "$ref": "#/$defs/label"
+        },
+        "status": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "group": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "tone": {
+          "$ref": "#/$defs/tone"
+        },
+        "details": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "value"
+            ],
+            "properties": {
+              "label": {
+                "$ref": "#/$defs/label"
+              },
+              "value": {
+                "$ref": "#/$defs/text"
+              }
+            }
+          }
+        }
+      }
+    },
+    "mapFields": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Columnas de la fuente que alimentan cada punto.",
+      "properties": {
+        "key": {
+          "$ref": "#/$defs/key"
+        },
+        "lat": {
+          "$ref": "#/$defs/key"
+        },
+        "lng": {
+          "$ref": "#/$defs/key"
+        },
+        "label": {
+          "$ref": "#/$defs/key"
+        },
+        "status": {
+          "$ref": "#/$defs/key"
+        },
+        "group": {
+          "$ref": "#/$defs/key"
+        },
+        "tone": {
+          "$ref": "#/$defs/key"
+        }
+      }
+    },
+    "block_map": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "summary"
+      ],
+      "properties": {
+        "type": {
+          "const": "map"
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "when": {
+          "$ref": "#/$defs/predicate"
+        },
+        "fallback": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "title": {
+          "$ref": "#/$defs/label"
+        },
+        "points": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/mapPoint"
+          },
+          "maxItems": 200
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "fields": {
+          "$ref": "#/$defs/mapFields"
+        },
+        "status_tones": {
+          "type": "object",
+          "maxProperties": 16,
+          "propertyNames": {
+            "pattern": "^[A-Za-z0-9_.:-]{1,64}$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/tone"
+          },
+          "description": "Color por estado: status -> Tone (nunca colores literales)."
+        },
+        "group_by": {
+          "enum": [
+            "status",
+            "group"
+          ]
+        },
+        "legend": {
+          "type": "boolean"
+        },
+        "cluster": {
+          "type": "boolean"
+        },
+        "tooltip": {
+          "type": "boolean"
+        },
+        "detail_panel": {
+          "type": "boolean",
+          "description": "Panel lateral con el detalle del punto seleccionado."
+        },
+        "on_select": {
+          "$ref": "#/$defs/action"
+        },
+        "height": {
+          "enum": [
+            "sm",
+            "md",
+            "lg"
+          ]
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 2000,
+          "description": "Resumen accesible (obligatorio)."
+        }
+      }
+    },
+    "block_metric": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "label"
+      ],
+      "properties": {
+        "type": {
+          "const": "metric"
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "when": {
+          "$ref": "#/$defs/predicate"
+        },
+        "fallback": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "label": {
+          "$ref": "#/$defs/label"
+        },
+        "value": {
+          "$ref": "#/$defs/value"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "field": {
+          "$ref": "#/$defs/key"
+        },
+        "format": {
+          "$ref": "#/$defs/statFormat"
+        },
+        "trend": {
+          "enum": [
+            "up",
+            "down",
+            "flat"
+          ]
+        },
+        "delta": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "compare": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "tone": {
+          "$ref": "#/$defs/tone"
+        },
+        "thresholds": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "at",
+              "tone"
+            ],
+            "properties": {
+              "at": {
+                "type": "number"
+              },
+              "tone": {
+                "$ref": "#/$defs/tone"
+              }
+            }
+          },
+          "description": "Tono por severidad: el umbral mayor alcanzado por el valor gana."
+        },
+        "spark": {
+          "type": "array",
+          "maxItems": 60,
+          "items": {
+            "type": "number"
+          }
+        },
+        "spark_field": {
+          "$ref": "#/$defs/key"
+        },
+        "hint": {
+          "$ref": "#/$defs/label"
+        }
+      }
+    },
+    "diagramNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/key"
+        },
+        "label": {
+          "$ref": "#/$defs/label"
+        },
+        "kind": {
+          "enum": [
+            "service",
+            "database",
+            "queue",
+            "user",
+            "external",
+            "group",
+            "generic"
+          ]
+        },
+        "tone": {
+          "$ref": "#/$defs/tone"
+        },
+        "detail": {
+          "type": "string",
+          "maxLength": 160
+        },
+        "route": {
+          "$ref": "#/$defs/route"
+        }
+      }
+    },
+    "diagramEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "from",
+        "to"
+      ],
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/key"
+        },
+        "to": {
+          "$ref": "#/$defs/key"
+        },
+        "label": {
+          "$ref": "#/$defs/label"
+        },
+        "tone": {
+          "$ref": "#/$defs/tone"
+        },
+        "style": {
+          "enum": [
+            "solid",
+            "dashed"
+          ]
+        }
+      }
+    },
+    "block_diagram": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "nodes",
+        "summary"
+      ],
+      "properties": {
+        "type": {
+          "const": "diagram"
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "when": {
+          "$ref": "#/$defs/predicate"
+        },
+        "fallback": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "title": {
+          "$ref": "#/$defs/label"
+        },
+        "direction": {
+          "enum": [
+            "lr",
+            "tb"
+          ]
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diagramNode"
+          },
+          "maxItems": 60,
+          "minItems": 1
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diagramEdge"
+          },
+          "maxItems": 120
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 2000
         }
       }
     }

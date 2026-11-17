@@ -19,6 +19,10 @@
       "types": "./dist/setup/index.d.ts",
       "import": "./dist/setup/index.js"
     },
+    "./genui": {
+      "types": "./dist/genui/index.d.ts",
+      "import": "./dist/genui/index.js"
+    },
     "./charts": {
       "types": "./dist/widgets/charts.d.ts",
       "import": "./dist/widgets/charts.js"
@@ -64,7 +68,8 @@
     "sonner": ">=1.7",
     "zustand": ">=5",
     "@module-federation/runtime": ">=2.5",
-    "@testing-library/react": ">=14"
+    "@testing-library/react": ">=14",
+    "@asteby/metacore-genui": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@tanstack/react-router": {
@@ -77,6 +82,9 @@
       "optional": true
     },
     "@testing-library/react": {
+      "optional": true
+    },
+    "@asteby/metacore-genui": {
       "optional": true
     }
   },
@@ -102,6 +110,7 @@
     "typescript": "^6.0.0",
     "vitest": "^4.0.0",
     "zustand": "^5.0.0",
-    "@module-federation/runtime": "^2.5.0"
+    "@module-federation/runtime": "^2.5.0",
+    "@asteby/metacore-genui": "workspace:*"
   }
 }

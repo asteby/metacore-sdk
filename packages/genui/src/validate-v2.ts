@@ -326,6 +326,33 @@ function blockRules(b: Obj, type: string, path: string) {
   if (type === 'chart' && present('source') && present('rows')) throw new GenUIError('genui.invalid_block', `${path}: chart usa rows o source, no ambos`, path)
   if ((type === 'stats' || type === 'timeline') && present('source') && present('items')) throw new GenUIError('genui.invalid_block', `${path}: ${type} usa items o source, no ambos`, path)
   if ((type === 'stats' || type === 'timeline') && !present('source') && !present('items')) throw new GenUIError('genui.required', `${path}: ${type} requiere items o source`, path)
+  if (type === 'map') {
+    if (present('source') && present('points')) throw new GenUIError('genui.invalid_block', `${path}: map usa points o source, no ambos`, path)
+    if (!present('source') && !present('points')) throw new GenUIError('genui.required', `${path}: map requiere points o source`, path)
+    if (present('fields') && !present('source')) throw new GenUIError('genui.invalid_block', `${path}: fields solo aplica con source`, path)
+    const seen = new Set<string>()
+    for (const pt of (b.points as Obj[] | undefined) ?? []) {
+      if (seen.has(pt.key as string)) throw new GenUIError('genui.duplicate_id', `${path}: punto duplicado ${String(pt.key)}`, path)
+      seen.add(pt.key as string)
+    }
+  }
+  if (type === 'metric') {
+    if (present('source') && present('value')) throw new GenUIError('genui.invalid_block', `${path}: metric usa value o source, no ambos`, path)
+    if (!present('source') && !present('value')) throw new GenUIError('genui.required', `${path}: metric requiere value o source`, path)
+    if (present('source') !== present('field')) throw new GenUIError('genui.invalid_block', `${path}: source y field van juntos`, path)
+    if (present('spark_field') && !present('source')) throw new GenUIError('genui.invalid_block', `${path}: spark_field solo aplica con source`, path)
+    if (present('spark') && present('spark_field')) throw new GenUIError('genui.invalid_block', `${path}: metric usa spark o spark_field, no ambos`, path)
+  }
+  if (type === 'diagram') {
+    const ids = new Set<string>()
+    for (const n of b.nodes as Obj[]) {
+      if (ids.has(n.id as string)) throw new GenUIError('genui.duplicate_id', `${path}: nodo duplicado ${String(n.id)}`, path)
+      ids.add(n.id as string)
+    }
+    for (const e of (b.edges as Obj[] | undefined) ?? []) {
+      if (!ids.has(e.from as string) || !ids.has(e.to as string)) throw new GenUIError('genui.unknown_target', `${path}: la arista ${String(e.from)}->${String(e.to)} apunta a un nodo inexistente`, path)
+    }
+  }
   if (type === 'tabs') {
     const keys = new Set<string>()
     for (const t of b.tabs as Obj[]) {

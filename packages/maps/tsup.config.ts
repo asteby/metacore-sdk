@@ -7,6 +7,7 @@ export default defineConfig({
     view: 'src/view.ts',
     panel: 'src/panel.ts',
     'timeline-panel': 'src/timeline-panel.ts',
+    genui: 'src/genui.tsx',
   },
   format: ['esm'],
   // tsup's dts worker sets `baseUrl`, deprecated in TypeScript 6.

@@ -37,6 +37,10 @@
       "types": "./dist/timeline-panel.d.ts",
       "import": "./dist/timeline-panel.js"
     },
+    "./genui": {
+      "types": "./dist/genui.d.ts",
+      "import": "./dist/genui.js"
+    },
     "./package.json": "./package.json"
   },
   "sideEffects": false,
@@ -60,7 +64,8 @@
     "pmtiles": ">=3",
     "react": ">=18",
     "react-dom": ">=18",
-    "react-i18next": ">=13"
+    "react-i18next": ">=13",
+    "@asteby/metacore-genui": "workspace:^"
   },
   "peerDependenciesMeta": {
     "@asteby/metacore-runtime-react": {
@@ -73,6 +78,9 @@
       "optional": true
     },
     "react-i18next": {
+      "optional": true
+    },
+    "@asteby/metacore-genui": {
       "optional": true
     }
   },
@@ -91,7 +99,8 @@
     "react-i18next": "^17.0.0",
     "tsup": "^8.3.5",
     "typescript": "^6.0.0",
-    "vitest": "^4.0.0"
+    "vitest": "^4.0.0",
+    "@asteby/metacore-genui": "workspace:*"
   },
   "publishConfig": {
     "access": "public"

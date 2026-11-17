@@ -36,6 +36,19 @@ declare global {
         [key: string]: unknown;
     }
 }
+export interface LoadFederatedAddonOptions {
+    /**
+     * Rechaza (promesa rechazada) un spec sin `integrity` en vez de cargarlo sin
+     * verificar. Pensado para remotos privados. Por omisión `false`: el
+     * comportamiento histórico (`integrity` opcional).
+     */
+    requireIntegrity?: boolean;
+    /**
+     * Rechaza si el remoto no termina de cargar en este tiempo (ms). Por omisión
+     * sin límite, como hasta ahora.
+     */
+    timeoutMs?: number;
+}
 /**
  * Load a federated addon. Returns whatever the addon's exposed module
  * default-exports — typically a `Plugin`. Subsequent calls for the same entry
@@ -53,7 +66,7 @@ declare global {
  * invoke `clearFederationContainer(scope)` from runtime-react before
  * re-mounting the addon — see runtime-react's `hotswap-reload-policy`.
  */
-export declare function loadFederatedAddon(spec: FrontendSpec, addonKey?: string, version?: string): Promise<unknown>;
+export declare function loadFederatedAddon(spec: FrontendSpec, addonKey?: string, version?: string, options?: LoadFederatedAddonOptions): Promise<unknown>;
 /**
  * Append a `?v=<hash8>` query string to a `remoteEntry.js` URL so the
  * browser treats it as a distinct resource and bypasses any HTTP / module

@@ -170,6 +170,9 @@ export class FakePopup {
     addTo() {
         return this
     }
+    remove() {
+        return this
+    }
 }
 
 export const fakeMaplibre = {

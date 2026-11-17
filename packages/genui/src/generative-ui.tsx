@@ -55,7 +55,7 @@ export interface GenerativeUIProps {
   className?: string
 }
 
-const BADGE_VARIANT: Record<Tone, 'muted' | 'info' | 'success' | 'warning' | 'danger' | 'secondary'> = {
+export const BADGE_VARIANT: Record<Tone, 'muted' | 'info' | 'success' | 'warning' | 'danger' | 'secondary'> = {
   default: 'secondary',
   muted: 'muted',
   info: 'info',
@@ -64,7 +64,7 @@ const BADGE_VARIANT: Record<Tone, 'muted' | 'info' | 'success' | 'warning' | 'da
   danger: 'danger',
 }
 
-const TEXT_TONE: Record<Tone, string> = {
+export const TEXT_TONE: Record<Tone, string> = {
   default: 'text-foreground',
   muted: 'text-muted-foreground',
   info: 'text-[var(--info,oklch(0.55_0.13_235))]',
@@ -99,7 +99,7 @@ interface BlockProps {
   busy?: boolean
 }
 
-function Block({ block, ...rest }: BlockProps) {
+export function Block({ block, ...rest }: BlockProps) {
   switch (block.type) {
     case 'text':
       return <TextView block={block} />

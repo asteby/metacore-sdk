@@ -43,11 +43,11 @@ See [ADR 0001](../../docs/adr/0001-genui-ui-declarativa-universal.md)
   `q:caps`. The JSON Schema in the kernel is the single source; Go and TS types
   are generated and both validators run a shared conformance suite.
 
-## `genui/v2` contract (validator only; no renderers yet)
+## `genui/v2` contract and validator
 
-This is the first code PR of the genui/v2 plan (ADR 0001, section 3, row 4):
-the contract and the validator. Nothing is drawn for v2 yet: `GenerativeUI`
-still renders `genui/v1`.
+Contract and validator of the genui/v2 plan (ADR 0001, section 3, row 4).
+`GenerativeUI` still renders `genui/v1` only; the v2 renderer is `GenUI`
+(see "Renderer" below).
 
 ```ts
 import { parseGenUI, parseUISpecV2, upgradeV1, downgrade } from '@asteby/metacore-genui'
@@ -61,8 +61,9 @@ downgrade(spec, { versions: ['genui/v1'] })               // what a v1-only clie
   `pnpm --filter @asteby/metacore-genui codegen` regenerates
   `src/generated/genui-v2.ts` (types) and `src/generated/genui-v2-schema.ts`
   (embedded schema + allowed/required fields per block). CI fails on a diff.
-  The schema lives in this SDK; the Go kernel copies it (and the vectors) until
-  the kernel PR lands (`conformance/README.md`). The validator interprets a
+  The schema lives in this SDK; the Go kernel (`genui/v2`) copies it and the
+  vectors with `scripts/sync-genui-vectors.sh` and pins their hash in
+  `conformance.lock` (`conformance/README.md`). Both CIs run the same vectors. The validator interprets a
   small, whitelisted subset of JSON Schema and fails closed
   (`scripts/schema-keywords.mjs`, enforced by codegen and by a test).
 - **Hand-written rules** (what the schema cannot say), each with a vector, are
@@ -83,3 +84,36 @@ downgrade(spec, { versions: ['genui/v1'] })               // what a v1-only clie
   `genui/v1` document when the client only speaks v1. Without caps, v1 is assumed.
 - **Conformance vectors**: `conformance/{valid,invalid,upgrade,downgrade}/*.json`,
   shared with the Go kernel; see `conformance/README.md`.
+
+## Renderer (phase 1)
+
+```tsx
+import { GenUI, GenUIProvider, registerGenUIBlockRenderer } from '@asteby/metacore-genui'
+import { registerGenUIMapBlock } from '@asteby/metacore-maps/genui'      // `map` block (MapLibre, lazy)
+import { registerGenUISettingsBlock } from '@asteby/metacore-runtime-react/genui' // `settings` block (pilot)
+
+registerGenUIMapBlock()
+registerGenUISettingsBlock()
+
+<GenUIProvider sources={{ points: rows }} onNavigate={go} onAction={handle} t={t}>
+  <GenUI spec={untrustedV1OrV2} />
+</GenUIProvider>
+```
+
+- `GenUI` validates with `parseGenUI` (v1 is upgraded) and draws the closed block
+  set. Built in: `stack`, `grid`, `tabs`, `section`, `text`, `markdown` (safe
+  subset parsed to React nodes: no HTML, no images, links through `isSafeLink`),
+  `alert`, `empty`, `card`, `list`, `metric` (KPI with trend, severity
+  thresholds and sparkline), `diagram` (nodes + edges with automatic layered
+  layout, drawn as SVG text; there is no mermaid and no HTML path), plus the v1
+  blocks. Heavy blocks register themselves: `map` (`@asteby/metacore-maps/genui`:
+  facade over MapView with tone-by-status colours, legend by status or group,
+  hover tooltip, cluster and a side detail panel), `settings`
+  (`@asteby/metacore-runtime-react/genui`). A block with no renderer shows its
+  `fallback` text. `GenUIProvider` overrides renderers per tree.
+- Data never comes from the spec: blocks with `source` read rows the HOST
+  resolved (batch query, with the viewer's permissions) and passed in `sources`.
+- Not in phase 1: `$ref`/`when` evaluation, declared-source loading, the action
+  engine (only plain `navigate` runs here; every other verb and anything with
+  `confirm` goes to `onAction`) and streaming. A block with `when` is not shown.
+- Links: external `http(s)` are off unless `allowExternalLinks` (the chat turns it on).

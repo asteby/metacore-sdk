@@ -30,6 +30,14 @@
  * Keys are sanitized (non-alphanumeric → `_`) to yield valid JS identifiers.
  */
 const loaded = new Map();
+// Scripts en vuelo por contenedor: un reintento tras `timeoutMs` reutiliza la
+// inyeccion en curso en vez de anadir un segundo <script>.
+const injecting = new Map();
+// Contenedores cuyo script inyecto ESTE modulo con `integrity` (verificado por
+// el navegador). Solo ellos satisfacen `requireIntegrity`.
+const verifiedContainers = new Set();
+// `container.init` se ejecuta una sola vez por contenedor.
+const initialized = new WeakMap();
 /**
  * Load a federated addon. Returns whatever the addon's exposed module
  * default-exports — typically a `Plugin`. Subsequent calls for the same entry
@@ -47,31 +55,83 @@ const loaded = new Map();
  * invoke `clearFederationContainer(scope)` from runtime-react before
  * re-mounting the addon — see runtime-react's `hotswap-reload-policy`.
  */
-export function loadFederatedAddon(spec, addonKey, version) {
+export function loadFederatedAddon(spec, addonKey, version, options) {
     if (spec.format !== "federation") {
         throw new Error(`loadFederatedAddon: unsupported format ${spec.format}`);
     }
-    const cacheKey = `${spec.container ?? addonKey ?? ""}::${spec.entry}::${version ?? ""}`;
-    const cached = loaded.get(cacheKey);
-    if (cached)
-        return cached;
-    const p = doLoad(spec, addonKey, version);
-    loaded.set(cacheKey, p);
-    p.catch(() => loaded.delete(cacheKey));
-    return p;
+    // Política de integridad: se evalúa ANTES de la caché para que una carga
+    // previa sin `integrity` no satisfaga a quien la exige.
+    if (options?.requireIntegrity && !spec.integrity) {
+        return Promise.reject(new Error(`metacore: addon ${spec.container ?? addonKey ?? spec.entry} has no frontend.integrity and requireIntegrity is set`));
+    }
+    // `integrity` forma parte de la clave: una carga previa sin integrity (u
+    // con otro hash) no satisface a quien exige uno concreto.
+    const cacheKey = `${spec.container ?? addonKey ?? ""}::${spec.entry}::${version ?? ""}::${spec.integrity ?? ""}::${options?.requireIntegrity ? "ri" : ""}`;
+    let shared = loaded.get(cacheKey);
+    if (!shared) {
+        const created = doLoad(spec, addonKey, version, !!options?.requireIntegrity);
+        shared = created;
+        loaded.set(cacheKey, created);
+        created.catch(() => {
+            if (loaded.get(cacheKey) === created)
+                loaded.delete(cacheKey);
+        });
+    }
+    const ms = options?.timeoutMs;
+    if (!ms || ms <= 0)
+        return shared;
+    // El timeout envuelve la promesa compartida (no la contamina) y, al vencer,
+    // libera la caché para que un reintento vuelva a intentar la carga.
+    const pending = shared;
+    return new Promise((resolve, reject) => {
+        const t = setTimeout(() => {
+            if (loaded.get(cacheKey) === pending)
+                loaded.delete(cacheKey);
+            reject(new Error(`metacore: addon ${spec.container ?? addonKey ?? spec.entry} did not load within ${ms} ms`));
+        }, ms);
+        pending.then((v) => {
+            clearTimeout(t);
+            resolve(v);
+        }, (e) => {
+            clearTimeout(t);
+            reject(e);
+        });
+    });
 }
-async function doLoad(spec, addonKey, version) {
+async function doLoad(spec, addonKey, version, requireIntegrity = false) {
     const globalName = containerName(spec, addonKey);
+    if (requireIntegrity && window[globalName] && !verifiedContainers.has(globalName)) {
+        // Contenedor ya presente sin haber pasado por SRI: no se puede verificar.
+        throw new Error(`metacore: container ${globalName} is already present without verified integrity and requireIntegrity is set`);
+    }
     if (!window[globalName]) {
         const url = withVersionParam(spec.entry, version);
-        await injectScript(url, spec.integrity);
+        const key = `${globalName}::${url}::${spec.integrity ?? ""}`;
+        let inflight = injecting.get(key);
+        if (!inflight) {
+            const created = injectScript(url, spec.integrity);
+            inflight = created;
+            injecting.set(key, created);
+            created.then(() => {
+                injecting.delete(key);
+                if (spec.integrity)
+                    verifiedContainers.add(globalName);
+            }, () => injecting.delete(key));
+        }
+        await inflight;
     }
     const container = window[globalName];
     if (!container) {
         throw new Error(`metacore: remoteEntry at ${spec.entry} did not register container ${globalName}`);
     }
     window.__METACORE_SHARE_SCOPE__ ??= {};
-    await container.init(window.__METACORE_SHARE_SCOPE__);
+    let initP = initialized.get(container);
+    if (!initP) {
+        initP = Promise.resolve(container.init(window.__METACORE_SHARE_SCOPE__));
+        initialized.set(container, initP);
+        initP.catch(() => initialized.delete(container));
+    }
+    await initP;
     const factory = await container.get(spec.expose ?? "./plugin");
     const mod = factory();
     return mod.default;
