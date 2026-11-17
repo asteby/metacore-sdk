@@ -18,6 +18,12 @@ export type PaymentMethodMessages = {
   /** Button label when the address must be saved again. */
   retryAddress: string
   processing: string
+  /** Button while a bank challenge is open or the bank's answer is being confirmed (a real, bounded wait). */
+  verifying: string
+  /** Button while the server blocks a new payment: "{time}" is the countdown (m:ss). */
+  retryIn: string
+  /** Button once the block ended and the earlier attempt never resolved. */
+  tryAgain: string
   redirectNote: string
   cashPoints: string
   cashMore: string
@@ -54,6 +60,9 @@ const ES: PaymentMethodMessages = {
   continue: 'Continuar',
   retryAddress: 'Guardar dirección y continuar',
   processing: 'Procesando…',
+  verifying: 'Verificando con tu banco…',
+  retryIn: 'Podrás reintentar en {time}',
+  tryAgain: 'Intentar de nuevo',
   redirectNote: 'Te llevamos a la página del proveedor para terminar el pago y regresas aquí.',
   cashPoints: 'Elige dónde pagar en efectivo',
   cashMore: 'Ver más puntos de pago',
@@ -89,6 +98,9 @@ const EN: PaymentMethodMessages = {
   continue: 'Continue',
   retryAddress: 'Save address and continue',
   processing: 'Processing…',
+  verifying: 'Verifying with your bank…',
+  retryIn: 'You can retry in {time}',
+  tryAgain: 'Try again',
   redirectNote: "We'll take you to the provider's page to finish paying, then bring you back here.",
   cashPoints: 'Choose where to pay in cash',
   cashMore: 'Show more payment points',
