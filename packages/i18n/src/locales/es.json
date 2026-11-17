@@ -232,5 +232,23 @@
       "assisted": "Con asistencia",
       "automated": "Automático"
     }
+  },
+  "views": {
+    "switch": "Vista",
+    "cards": "Tarjetas",
+    "data": "Datos",
+    "map": "Mapa",
+    "all": "Todos",
+    "search": "Buscar…",
+    "quick_filters": "Filtros rápidos",
+    "clear": "Limpiar",
+    "saved": "Vistas",
+    "saved_empty": "Aún no guardas vistas",
+    "save_current": "Guardar vista actual…",
+    "remove": "Eliminar",
+    "sorted_by": "ordenados por {{by}}",
+    "empty": "Sin resultados",
+    "error": "No se pudo cargar la lista",
+    "load_more": "Cargar más"
   }
 }
