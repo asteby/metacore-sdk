@@ -21,6 +21,9 @@ jobs:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
           cache: 'pnpm'
+      # `npm stage` (publicación en etapas) existe desde npm 11; Node 22 trae npm 10 y falla con EUNKNOWNCOMMAND.
+      - name: npm 11 (npm stage)
+        run: npm install -g npm@11 && npm --version
       - run: pnpm install --frozen-lockfile=false
       - run: pnpm --filter "./packages/*" -r build
       - name: Create Release PR or Publish
