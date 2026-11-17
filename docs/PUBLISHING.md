@@ -1,5 +1,20 @@
 # Publishing `@asteby/metacore-*` packages
 
+> **Actualizacion: publicacion automatica por OIDC.** El workflow `release-npm.yml`
+> publica directo con Trusted Publishing (`changeset publish`), sin `NPM_TOKEN` ni
+> aprobacion manual. Requisito, una sola vez por paquete publico (34), con la sesion
+> de npm del dueno:
+>
+> ```
+> npm trust github <paquete> --file release-npm.yml --repo asteby/metacore-sdk --allow-publish -y
+> npm trust list <paquete>      # verificar
+> ```
+>
+> El nombre del archivo debe ser exactamente `release-npm.yml`. Si se renombra el
+> workflow hay que repetir la configuracion. El flujo de staging
+> (`scripts/publish-staged.mjs`) queda como respaldo manual, ya no lo usa el CI.
+
+
 End-to-end guide for releasing packages from this monorepo and propagating updates to consumer apps. The pipeline is fully automated with [Changesets](https://github.com/changesets/changesets) + a single GitHub Actions workflow.
 
 ## Table of contents

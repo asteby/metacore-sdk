@@ -21,25 +21,22 @@ jobs:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
           cache: 'pnpm'
-      # `npm stage` (publicar a staging) no existe en el npm que trae Node 22
-      # (EUNKNOWNCOMMAND). Se fija una version con el subcomando y se comprueba
-      # aqui, para que un cambio de npm falle ruidoso antes de preparar nada.
-      - name: Usar npm con soporte de `npm stage`
+      # Publicacion por Trusted Publishing (OIDC): sin token ni aprobacion manual.
+      # Requiere npm >= 11.5.1 (el de Node 22 es mas viejo) y que cada paquete tenga
+      # configurado `npm trust github <pkg> --file release-npm.yml --repo asteby/metacore-sdk --allow-publish`.
+      - name: Usar un npm con soporte de OIDC
         run: |
           npm install -g npm@11.19.0
           npm --version
-          npm stage --help > /dev/null
       - run: pnpm install --frozen-lockfile=false
       - run: pnpm --filter "./packages/*" -r build
       - name: Create Release PR or Publish
         uses: changesets/action@v1
         with:
-          # Prepara en staging de npm (un humano aprueba con 2FA); ver docs/PUBLISHING.md
-          publish: node scripts/publish-staged.mjs
+          # Publica directo por OIDC (Trusted Publishing); ver docs/PUBLISHING.md
+          publish: pnpm exec changeset publish
           version: pnpm run version
           commit: "chore(release): version packages"
           title: "chore(release): version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
