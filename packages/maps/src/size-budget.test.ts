@@ -9,7 +9,7 @@ import { build } from 'esbuild'
 import { describe, expect, it } from 'vitest'
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const entries = { index: 'src/index.ts', register: 'src/register.ts', view: 'src/view.ts', panel: 'src/panel.ts', 'timeline-panel': 'src/timeline-panel.ts' }
+const entries = { index: 'src/index.ts', register: 'src/register.ts', view: 'src/view.ts', panel: 'src/panel.ts', 'timeline-panel': 'src/timeline-panel.ts', genui: 'src/genui.tsx' }
 
 async function bundle() {
     const res = await build({
