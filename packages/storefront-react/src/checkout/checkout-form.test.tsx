@@ -105,7 +105,8 @@ describe('ContactFields + AddressFields', () => {
     await waitFor(() => expect((screen.getByLabelText('Estado') as HTMLInputElement).value).toBe('Ciudad de México'))
     expect(lookup).toHaveBeenCalledWith('06700')
     expect((screen.getByLabelText('Ciudad o municipio') as HTMLInputElement).value).toBe('CDMX')
-    expect([...container.querySelectorAll('datalist option')].map((o) => o.getAttribute('value'))).toEqual(['Roma Norte', 'Roma Sur'])
+    // Province and the colonia list land in separate commits: wait for the list, not just the province.
+    await waitFor(() => expect([...container.querySelectorAll('datalist option')].map((o) => o.getAttribute('value'))).toEqual(['Roma Norte', 'Roma Sur']))
     expect(screen.getByLabelText(/Colonia/).getAttribute('list')).toBeTruthy()
     expect(screen.getByRole('status').textContent).toMatch(/Completamos estado y ciudad/)
   })
@@ -898,7 +899,11 @@ describe('changing the postal code over an address that is already filled', () =
     fireEvent.change(el(c, 'city'), { target: { value: 'Monterrey' } })
     fireEvent.change(el(c, 'neighborhood'), { target: { value: 'La Finca' } })
     setZip('64000')
-    await waitFor(() => expect(el(c, 'province').readOnly).toBe(true))
+    // The lock and the «Cambiar código postal» action render in separate commits; wait for both.
+    await waitFor(() => {
+      expect(el(c, 'province').readOnly).toBe(true)
+      expect(c.querySelector('[data-sf-change-zip]')).not.toBeNull()
+    })
   }
 
   it('re-resolves over an autofilled address: state and city of the new code, locked; the colonia not in its list goes', async () => {

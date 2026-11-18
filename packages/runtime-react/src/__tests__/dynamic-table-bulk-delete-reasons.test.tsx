@@ -24,7 +24,10 @@ import { ApiProvider, type ApiClient } from '../api-context'
 import { useMetadataCache } from '../metadata-cache'
 import type { TableMetadata } from '../types'
 
-afterEach(cleanup)
+afterEach(() => {
+    cleanup()
+    vi.restoreAllMocks()
+})
 const getDynamicColumns = makeDefaultGetDynamicColumns()
 
 function meta(): TableMetadata {
@@ -88,6 +91,8 @@ describe('DynamicTable bulk delete reasons', () => {
         sessionStorage.clear()
         toastMock.success.mockClear()
         toastMock.error.mockClear()
+        // The component logs every failed delete; these tests fail deletes on purpose.
+        vi.spyOn(console, 'error').mockImplementation(() => undefined)
         useMetadataCache.getState().setMetadata('patient', meta())
     })
 
