@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { ActionChain, type ActionOptions } from './action-chain'
 import { incompleteActions } from './actions'
+import { inboundProblems } from './target-utils'
 import { CredentialOnce } from './credential-once'
 import type { TFunction } from './i18n'
 import type { InboundContract, InboundEndpoint, IntegrationsApi, OneTimeCredential } from './types'
@@ -17,12 +18,13 @@ export function InboundTab({ api, t }: InboundTabProps) {
   const list = useAsync(() => api.listInbound(), [api])
   const contracts = useAsync(() => api.listInboundContracts(), [api])
   const options = useAsync<ActionOptions>(async () => {
-    const [models, commands, templates] = await Promise.all([
-      (api.listTargets ? api.listTargets().then((ts) => ts.map((x) => x.model)) : api.listModels?.())?.catch(() => undefined),
+    const [targets, models, commands, templates] = await Promise.all([
+      api.listTargets?.().catch(() => undefined),
+      api.listTargets ? undefined : api.listModels?.().catch(() => undefined),
       api.listCommands?.().catch(() => undefined),
       api.listNotifyTemplates?.().catch(() => undefined),
     ])
-    return { models, commands, templates }
+    return { targets, models: targets ? targets.map((x) => x.model) : models, commands, templates }
   }, [api])
   const [editing, setEditing] = React.useState<InboundEndpoint | null>(null)
   const [credential, setCredential] = React.useState<OneTimeCredential | null>(null)
@@ -132,6 +134,10 @@ function InboundForm({
     if (d.name.trim() === '') errs.push(t('in.needName'))
     if (d.contract_key === '') errs.push(t('in.needContract'))
     for (const i of incompleteActions(d.actions)) errs.push(`${t('actions.step', { n: i + 1 })}: ${t(`actions.${d.actions[i]!.do}`)}`)
+    // Only with a server catalogue (listTargets); without it the legacy free text applies.
+    if (options?.targets) {
+      for (const p of inboundProblems(d.actions, options.targets)) errs.push(`${t('actions.step', { n: p.step + 1 })}: ${t(`in.blocked.${p.code}`, p.vars)}`)
+    }
     setProblems(errs)
     if (errs.length > 0) return
     setBusy(true)
@@ -188,7 +194,7 @@ function InboundForm({
           {t('in.rotate')}
         </button>
       ) : null}
-      <ActionChain actions={d.actions} onChange={(actions) => patch({ actions })} options={options} t={t} />
+      <ActionChain actions={d.actions} onChange={(actions) => patch({ actions })} options={options} contractSchema={contracts.find((c) => c.key === d.contract_key)?.schema} t={t} />
       <Field label={t('in.onError')}>
         {({ id }) => (
           <select id={id} className={cx.input} value={d.on_error} onChange={(e) => patch({ on_error: e.target.value as InboundEndpoint['on_error'] })}>

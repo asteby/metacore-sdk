@@ -1,11 +1,17 @@
 import * as React from 'react'
 import { moveItem, needsAdvanced, newAction, parseActions } from './actions'
 import type { TFunction } from './i18n'
-import { VISUAL_ACTION_KINDS, type ActionBlock, type ActionKind } from './types'
-import { cx } from './ui'
+import { InboundMappingEditor } from './inbound-mapping'
+import { templateToRow } from './schema'
+import { TargetPicker } from './target-picker'
+import { VISUAL_ACTION_KINDS, type ActionBlock, type ActionKind, type IngestTarget, type JSONSchemaLite, type MappingRow } from './types'
+import { cx, Field } from './ui'
 
 export interface ActionOptions {
+  /** Legacy suggestions (free text + datalist). Used when `targets` is absent. */
   models?: string[]
+  /** Server catalogue (`listTargets`): when present, `record.*` blocks pick from it. */
+  targets?: IngestTarget[]
   commands?: string[]
   templates?: string[]
 }
@@ -14,6 +20,8 @@ export interface ActionChainProps {
   actions: ActionBlock[]
   onChange: (next: ActionBlock[]) => void
   options?: ActionOptions
+  /** Schema of the endpoint contract: feeds the event fields of the inbound mapping. */
+  contractSchema?: JSONSchemaLite
   t: TFunction
 }
 
@@ -22,7 +30,7 @@ export interface ActionChainProps {
  * notify, command.run). The author fills fields; JSON is only an opt-in
  * "advanced view" that is validated against the same closed set.
  */
-export function ActionChain({ actions, onChange, options, t }: ActionChainProps) {
+export function ActionChain({ actions, onChange, options, contractSchema, t }: ActionChainProps) {
   const [advanced, setAdvanced] = React.useState(false)
   const [kind, setKind] = React.useState<ActionKind>('record.upsert')
   const set = (i: number, a: ActionBlock) => onChange(actions.map((x, idx) => (idx === i ? a : x)))
@@ -70,7 +78,7 @@ export function ActionChain({ actions, onChange, options, t }: ActionChainProps)
                     </button>
                   </div>
                 </div>
-                <ActionFields action={a} onChange={(n) => set(i, n)} options={options} t={t} />
+                <ActionFields action={a} onChange={(n) => set(i, n)} options={options} contractSchema={contractSchema} t={t} />
               </li>
             ))}
           </ol>
@@ -171,11 +179,13 @@ function ActionFields({
   action: a,
   onChange,
   options,
+  contractSchema,
   t,
 }: {
   action: ActionBlock
   onChange: (a: ActionBlock) => void
   options?: ActionOptions
+  contractSchema?: JSONSchemaLite
   t: TFunction
 }) {
   if (needsAdvanced(a)) {
@@ -188,6 +198,9 @@ function ActionFields({
   }
   switch (a.do) {
     case 'record.upsert':
+      if (options?.targets) {
+        return <TargetBlockFields action={a} onChange={onChange} targets={options.targets} contractSchema={contractSchema} t={t} />
+      }
       return (
         <div className="space-y-2">
           <TextInput label={t('actions.model')} value={a.model} list={options?.models} onChange={(v) => onChange({ ...a, model: v })} />
@@ -285,6 +298,90 @@ function AdvancedJson({ actions, onApply, t }: { actions: ActionBlock[]; onApply
       <button type="button" className={cx.button} onClick={apply}>
         {t('common.apply')}
       </button>
+    </div>
+  )
+}
+
+type RecordBlock = Extract<ActionBlock, { do: 'record.upsert' }>
+
+const candidateKey = (c: string[]) => c.join('\u0000')
+
+/**
+ * `record.*` block against the server catalogue: pick addon -> model, how to
+ * match the row (only the model's `match_candidates`), then map the writable
+ * columns from an example event. Changing the model clears match and mapping:
+ * the columns of another model do not apply.
+ */
+function TargetBlockFields({
+  action: a,
+  onChange,
+  targets,
+  contractSchema,
+  t,
+}: {
+  action: RecordBlock
+  onChange: (a: ActionBlock) => void
+  targets: IngestTarget[]
+  contractSchema?: JSONSchemaLite
+  t: TFunction
+}) {
+  const target = targets.find((x) => x.model === a.model)
+  const rows: MappingRow[] = Object.entries(a.mapping).map(([k, v]) => templateToRow(k, v))
+  const current = a.match.length > 0 ? target?.match_candidates.find((c) => candidateKey(c) === candidateKey(a.match)) : undefined
+  const matchInvalid = !!target && a.match.length > 0 && !current
+
+  return (
+    <div className="space-y-3">
+      <TargetPicker
+        targets={targets}
+        value={a.model}
+        kind={a.do}
+        t={t}
+        onChange={(model, tg) => {
+          if (model === a.model) return
+          onChange({ ...a, model, match: tg.match_candidates.length === 1 ? [...tg.match_candidates[0]!] : [], mapping: {} })
+        }}
+      />
+      {target ? (
+        <>
+          <Field label={t('targets.matchBy')}>
+            {({ id }) => (
+              <select
+                id={id}
+                className={cx.input}
+                value={current ? candidateKey(current) : ''}
+                aria-invalid={matchInvalid ? true : undefined}
+                onChange={(e) => onChange({ ...a, match: target.match_candidates.find((c) => candidateKey(c) === e.target.value) ?? [] })}
+              >
+                <option value="">{t('targets.matchPick')}</option>
+                {target.match_candidates.map((c) => (
+                  <option key={candidateKey(c)} value={candidateKey(c)}>
+                    {c.join(', ')}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
+          {matchInvalid ? (
+            <p role="alert" className={cx.error}>
+              {t('targets.matchInvalid')}
+            </p>
+          ) : null}
+          <InboundMappingEditor
+            target={target}
+            rows={rows}
+            contractSchema={contractSchema}
+            t={t}
+            onChange={(next) => {
+              const mapping: Record<string, string> = {}
+              for (const r of next) {
+                if (r.target.trim() !== '' && r.value !== '') mapping[r.target.trim()] = r.kind === 'field' ? `{{payload.${r.value}}}` : r.value
+              }
+              onChange({ ...a, mapping })
+            }}
+          />
+        </>
+      ) : null}
     </div>
   )
 }
