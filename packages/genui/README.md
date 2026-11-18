@@ -117,3 +117,17 @@ registerGenUISettingsBlock()
   engine (only plain `navigate` runs here; every other verb and anything with
   `confirm` goes to `onAction`) and streaming. A block with `when` is not shown.
 - Links: external `http(s)` are off unless `allowExternalLinks` (the chat turns it on).
+
+## Page renderers (page@1 / block@1)
+
+Additive layer for declarative addon pages (see `examples/fleet-map.tsx`):
+`PageView`/`PageBlocks` render `grid` with `areas` (+ `mobile` order),
+`stats`/`kpi_card`, `section` (`mode: declarative | hybrid | custom`,
+`chrome: card | bare`, loading/error/empty states, per-section ErrorBoundary,
+`permission` + `on_denied`) and a `map` whose selection writes
+`state.<select>` and emits a `select` event. `PageProvider` holds the shared
+state, an event bus and optional `url_state`. `defineBlock`/`registerPageBlock`
+define the custom block contract (`block@1`: props, reads, writes, events);
+federation/iframe loading is NOT implemented, an unregistered component renders
+a stub. These page-level keys are proposals and are not yet in the shared
+genui/v2 JSON Schema; core blocks still go through `parseGenUI`.
