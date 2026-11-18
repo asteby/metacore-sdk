@@ -2,11 +2,45 @@ import * as React from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TableMetadata } from '@asteby/metacore-runtime-react'
 import { colorFor, safeColor } from '../palette'
-import { DEFAULT_LABELS, type MapLabels, type PolygonCoords, type ZoneItem } from '../types'
+import { DEFAULT_LABELS, type MapLabels, type MapPrecision, type PolygonCoords, type ZoneItem } from '../types'
 import type { TrackingTimelineLabels } from '../tracking-timeline'
 import { DEFAULT_TIMELINE_LABELS } from '../tracking-timeline'
 
 export const MAX_FEATURES = 500
+
+/**
+ * Where a point's title comes from, in order: the first column the view lists in
+ * `popup` (what the addon declared), then the row's own `name`, `title`,
+ * `label` or `host`, and only then its id. An addon that wants a readable title
+ * declares `popup: ["name", ...]` (a model with no such column shows its id).
+ */
+export const TITLE_FIELDS = ['name', 'title', 'label', 'host'] as const
+
+export function rowTitle(row: Record<string, unknown>, declared: string | undefined, key: string): string {
+    if (declared) return declared
+    for (const f of TITLE_FIELDS) {
+        const v = row[f]
+        if ((typeof v === 'string' || typeof v === 'number') && String(v).trim()) return String(v).trim()
+    }
+    return key
+}
+
+/**
+ * Location accuracy of a map view. Not in the kernel's `view.map` schema yet
+ * (kernel change pending, additive and optional): `precision` is the accuracy of
+ * every row, `precision_field` names a column holding `exact | city | country` per row
+ * (wins over `precision`), `area_field` names the column printed on the bubble of an
+ * approximate location ("CA · 8").
+ */
+export interface MapPrecisionConfig {
+    precision?: string
+    precision_field?: string
+    area_field?: string
+}
+
+export function toPrecision(v: unknown): MapPrecision | undefined {
+    return v === 'exact' || v === 'city' || v === 'country' ? v : undefined
+}
 
 /** Labels through the host's i18n (`metacore.maps.*`), Spanish defaults. */
 export function useMapLabels(): MapLabels {

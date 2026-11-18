@@ -12,7 +12,21 @@ export interface PMTilesModule {
     Protocol: new () => { tile: (...args: any[]) => any }
 }
 
-export interface MapsConfig {
+export type MapBounds = [[number, number], [number, number]]
+
+/** Viewport limits of a map. Per-map props override `configureMaps`, which overrides DEFAULT_MAP_LIMITS. */
+export interface MapLimits {
+    /** Repeat the world horizontally (MapLibre's default). Off by default: points, clusters and bubbles draw once. */
+    renderWorldCopies?: boolean
+    /** Lowest zoom. `'auto'` (default) is the one at which the world just fills the container, so it never shrinks into black. */
+    minZoom?: number | 'auto'
+    /** Highest zoom (default 18); fitting and selecting stop here. */
+    maxZoom?: number
+    /** Pan limits `[[west, south], [east, north]]`; `null` lifts them (e.g. transoceanic routes). */
+    maxBounds?: MapBounds | null
+}
+
+export interface MapsConfig extends MapLimits {
     /**
      * Base map style per colour scheme: a style JSON URL (the host's CDN) or an
      * inline style object. `pmtiles://` sources are supported when `pmtiles` is
@@ -114,7 +128,7 @@ export function blankStyle(scheme: MapScheme): ML.StyleSpecification {
     return {
         version: 8,
         sources: {},
-        layers: [{ id: 'background', type: 'background', paint: { 'background-color': scheme === 'dark' ? '#16181d' : '#eef1f4' } }],
+        layers: [{ id: 'background', type: 'background', paint: { 'background-color': scheme === 'dark' ? '#252a35' : '#eef1f4' } }],
     }
 }
 

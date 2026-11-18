@@ -9,7 +9,7 @@ import { Geofence } from '../layers'
 import { MapView } from '../map-view'
 import { colorFor } from '../palette'
 import type { MapPointItem, ZoneItem } from '../types'
-import { MAX_FEATURES, statusMaps, toZones, useMapLabels } from './shared'
+import { MAX_FEATURES, rowTitle, statusMaps, toPrecision, toZones, useMapLabels, type MapPrecisionConfig } from './shared'
 
 type Row = Record<string, unknown>
 
@@ -20,6 +20,7 @@ export default function MapViewRenderer({ model, view, metadata, data, onOpenRec
     const [error, setError] = React.useState(false)
     const [selected, setSelected] = React.useState<MapPointItem | null>(null)
     const layers = view.layers
+    const ext = view as typeof view & MapPrecisionConfig
     const layersSig = JSON.stringify(layers ?? [])
 
     React.useEffect(() => {
@@ -50,11 +51,14 @@ export default function MapViewRenderer({ model, view, metadata, data, onOpenRec
         for (const f of toMapFeatures(rows ?? [], view)) {
             map.set(f.key, f.row)
             const [first, ...rest] = f.popup
+            const area = ext.area_field ? String(f.row[ext.area_field] ?? '').trim() : ''
             items.push({
                 key: f.key,
                 lat: f.lat,
                 lng: f.lng,
-                label: first?.value || f.key,
+                label: rowTitle(f.row, first?.value, f.key),
+                precision: toPrecision(ext.precision_field ? f.row[ext.precision_field] : undefined) ?? toPrecision(ext.precision),
+                area: area || undefined,
                 status: f.color,
                 statusLabel: f.color ? names[f.color] : undefined,
                 details: rest.filter((p) => p.value).map((p) => ({ label: metadata?.columns?.find((c) => c.key === p.field)?.label ?? p.field, value: p.value })),
@@ -65,12 +69,12 @@ export default function MapViewRenderer({ model, view, metadata, data, onOpenRec
             if (l.kind !== 'points') return
             const feats = toMapFeatures(layerRows.find((x) => x.index === i)?.rows ?? [], { point: l.point, geometry: l.geometry, popup: l.label ? [l.label] : [] })
             for (const f of feats) {
-                items.push({ key: `${i}:${f.key}`, lat: f.lat, lng: f.lng, label: f.popup[0]?.value || l.model, color: colorFor(`layer:${l.model}`), status: l.model })
+                items.push({ key: `${i}:${f.key}`, lat: f.lat, lng: f.lng, label: rowTitle(f.row, f.popup[0]?.value, l.model), color: colorFor(`layer:${l.model}`), status: l.model })
             }
         })
         return { points: items, byKey: map }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [rows, layerRows, view, names, metadata])
+    }, [rows, layerRows, view, names, metadata, ext.precision, ext.precision_field, ext.area_field])
 
     const zones = React.useMemo<ZoneItem[]>(
         () =>

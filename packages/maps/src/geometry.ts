@@ -3,7 +3,7 @@
 // module shared with the storefronts (`@asteby/storefront/geo`).
 import { isValidPoint, type GeoPoint } from '@asteby/storefront/geo'
 import { colorFor, safeColor } from './palette'
-import type { MapPointItem, PolygonCoords, ZoneItem } from './types'
+import type { MapPointItem, MapPrecision, PolygonCoords, ZoneItem } from './types'
 
 export type LngLatBounds = [[number, number], [number, number]]
 
@@ -33,6 +33,11 @@ export function boundsOf(points: ReadonlyArray<GeoPoint | null | undefined>): Ln
     return Number.isFinite(w) ? [[w, s], [e, n]] : null
 }
 
+/** Colour of a point: explicit (safe) colour, else the stable colour of its status. */
+export function pointColor(p: Pick<MapPointItem, 'color' | 'status'>, colors?: Record<string, string>): string {
+    return safeColor(p.color) ?? colorFor(p.status, colors)
+}
+
 /** Points → GeoJSON with the colour resolved per feature. */
 export function pointsToGeoJSON(points: MapPointItem[], colors?: Record<string, string>): FeatureCollection {
     return {
@@ -45,7 +50,7 @@ export function pointsToGeoJSON(points: MapPointItem[], colors?: Record<string, 
                     key: p.key,
                     label: p.label,
                     status: p.status ?? '',
-                    color: safeColor(p.color) ?? colorFor(p.status, colors),
+                    color: pointColor(p, colors),
                 },
                 geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
             })),
@@ -116,4 +121,88 @@ export function sameSpot(a: GeoPoint, b: GeoPoint): boolean {
 export function allCoincident(points: ReadonlyArray<GeoPoint>): boolean {
     const [first, ...rest] = points
     return !!first && rest.every((p) => sameSpot(first, p))
+}
+
+// --- Precision ------------------------------------------------------------
+
+/** Highest zoom a selection / fit reaches per approximate precision (a centroid has nothing to show closer). */
+export const DEFAULT_PRECISION_ZOOM: Readonly<Record<Exclude<MapPrecision, 'exact'>, number>> = { country: 5, city: 10 }
+
+export const isApproximate = (p: Pick<MapPointItem, 'precision'>): boolean => p.precision === 'city' || p.precision === 'country'
+
+/** Zoom cap of an approximate point, or undefined for an exact one. */
+export function precisionCap(p: Pick<MapPointItem, 'precision'>, caps?: Partial<Record<MapPrecision, number>>): number | undefined {
+    return p.precision === 'city' || p.precision === 'country' ? (caps?.[p.precision] ?? DEFAULT_PRECISION_ZOOM[p.precision]) : undefined
+}
+
+/**
+ * Zoom after selecting `item`. Never zooms out. Approximate points stop at their
+ * precision cap; exact ones go to `selectZoom`, unless others share their spot
+ * (then only centre: more zoom would not separate them).
+ */
+export function selectZoomFor(item: MapPointItem, all: ReadonlyArray<MapPointItem>, current: number, selectZoom: number, caps?: Partial<Record<MapPrecision, number>>): number {
+    const cap = precisionCap(item, caps)
+    if (cap !== undefined) return Math.max(current, Math.min(selectZoom, cap))
+    if (all.some((p) => p.key !== item.key && sameSpot(p, item))) return current
+    return Math.max(current, selectZoom)
+}
+
+/** Max zoom for fitting `points`: when all are approximate, the loosest of their caps. */
+export function fitMaxZoom(points: ReadonlyArray<MapPointItem>, caps?: Partial<Record<MapPrecision, number>>, base = 15): number {
+    const cs = points.map((p) => precisionCap(p, caps))
+    return points.length > 0 && cs.every((c) => c !== undefined) ? Math.min(base, Math.max(...(cs as number[]))) : base
+}
+
+/** Approximate points grouped by exact location (one entry per bubble), keyed by `"lat,lng"`. */
+export function areaGroups(points: ReadonlyArray<MapPointItem>): Map<string, MapPointItem[]> {
+    const out = new Map<string, MapPointItem[]>()
+    for (const p of points) {
+        if (!isApproximate(p) || !isValidPoint(p)) continue
+        const k = `${p.lat.toFixed(5)},${p.lng.toFixed(5)}`
+        out.set(k, [...(out.get(k) ?? []), p])
+    }
+    return out
+}
+
+/** One bubble feature per location: `text` ("CA · 8"), `r` (radius px, grows with the square root of the count). */
+export function pointsToAreas(points: ReadonlyArray<MapPointItem>): FeatureCollection {
+    return {
+        type: 'FeatureCollection',
+        features: [...areaGroups(points)].map(([gid, members]) => {
+            const first = members[0] as MapPointItem
+            const count = members.length
+            const area = members.find((m) => m.area)?.area
+            return {
+                type: 'Feature' as const,
+                properties: { gid, count, area: area ?? '', text: area ? `${area} · ${count}` : String(count), r: Math.min(44, Math.round(14 + 6 * Math.sqrt(count))) },
+                geometry: { type: 'Point', coordinates: [first.lng, first.lat] },
+            }
+        }),
+    }
+}
+
+// --- Spiderfy -------------------------------------------------------------
+
+const SPIDER_FOOT = 34
+
+/** Pixel offsets `[dx, dy]` of `n` members around their shared point: a circle up to 8, an outward spiral beyond. */
+export function spiderOffsets(n: number): Array<[number, number]> {
+    const round = (v: number) => Math.round(v * 10) / 10
+    if (n <= 0) return []
+    if (n <= 8) {
+        const r = Math.max(52, (SPIDER_FOOT * n) / (2 * Math.PI))
+        return Array.from({ length: n }, (_, i) => {
+            const a = -Math.PI / 2 + (i * 2 * Math.PI) / n
+            return [round(r * Math.cos(a)), round(r * Math.sin(a))]
+        })
+    }
+    const out: Array<[number, number]> = []
+    let a = 0
+    let r = 56
+    for (let i = 0; i < n; i++) {
+        out.push([round(r * Math.cos(a - Math.PI / 2)), round(r * Math.sin(a - Math.PI / 2))])
+        a += SPIDER_FOOT / r
+        r = 56 + 5.5 * a
+    }
+    return out
 }
