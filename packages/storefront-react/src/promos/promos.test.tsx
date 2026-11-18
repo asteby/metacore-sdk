@@ -43,6 +43,10 @@ beforeEach(() => {
 })
 afterEach(() => cleanup())
 
+// Lets timers due within `ms` fire AND flushes the renders they trigger. Only for asserting that
+// something does NOT happen; assertions that something happens use waitFor.
+const elapse = (ms: number) => act(async () => { await new Promise((r) => setTimeout(r, ms)) })
+
 const NOW = Date.parse('2026-10-25T12:00:00Z')
 const UA = 'Mozilla/5.0 Chrome/120 Safari/537.36'
 const base = { userAgent: UA, webdriver: false, now: () => NOW, trigger: { delayMs: 20, pageviews: false as const, scrollPercent: false as const } }
@@ -82,7 +86,7 @@ describe('PromoPopup mechanism', () => {
   ])('closes with %s and reports how', async (_n, act_, how) => {
     const events: PromoPopupEvent[] = []
     const { container } = render(<PromoPopup announcement={announcement()} {...base} store={memorySeenStore()} pathname="/" onEvent={(e) => events.push(e)} />)
-    await waitFor(() => expect(container.querySelector('dialog')).not.toBeNull())
+    await waitFor(() => expect(container.querySelector('dialog[open]')).not.toBeNull())
     act_(container.querySelector('dialog')!)
     await waitFor(() => expect(container.querySelector('dialog')).toBeNull())
     expect(events.at(-1)).toEqual({ type: 'close', id: 'camp1', how })
@@ -90,7 +94,7 @@ describe('PromoPopup mechanism', () => {
 
   it('backdrop click closes; clicking inside does not', async () => {
     const { container } = render(<PromoPopup announcement={announcement()} {...base} store={memorySeenStore()} pathname="/" />)
-    await waitFor(() => expect(container.querySelector('dialog')).not.toBeNull())
+    await waitFor(() => expect(container.querySelector('dialog[open]')).not.toBeNull())
     fireEvent.click(container.querySelector('[data-sf-promo-body]')!)
     expect(container.querySelector('dialog')).not.toBeNull()
     fireEvent.click(container.querySelector('dialog')!)
@@ -105,7 +109,7 @@ describe('PromoPopup mechanism', () => {
       </>,
     )
     screen.getByTestId('opener').focus()
-    await waitFor(() => expect(container.querySelector('dialog')).not.toBeNull())
+    await waitFor(() => expect(container.querySelector('dialog[open]')).not.toBeNull())
     fireEvent.click(screen.getByRole('button', { name: 'Cerrar' }))
     await waitFor(() => expect(document.activeElement).toBe(screen.getByTestId('opener')))
   })
@@ -123,19 +127,24 @@ describe('PromoPopup mechanism', () => {
     ])('%s -> shows again: %s', async (_n, ann, delta, again) => {
       const store = memorySeenStore()
       const first = mount(store, announcement({ ...ann, ends_at: null }))
-      await waitFor(() => expect(first.container.querySelector('dialog')).not.toBeNull())
+      await waitFor(() => expect(first.container.querySelector('dialog[open]')).not.toBeNull())
       first.unmount()
       const second = mount(store, announcement({ ...ann, ends_at: null }), {}, NOW + delta)
-      await new Promise((r) => setTimeout(r, 80))
-      expect(second.container.querySelector('dialog') !== null).toBe(again)
+      if (again) {
+        // Positive: wait for the condition (timer + render), not a fixed sleep that load can outrun.
+        await waitFor(() => expect(second.container.querySelector('dialog[open]')).not.toBeNull())
+      } else {
+        await elapse(80)
+        expect(second.container.querySelector('dialog')).toBeNull()
+      }
     })
     it('a new version of the announcement shows again immediately', async () => {
       const store = memorySeenStore()
       const first = mount(store)
-      await waitFor(() => expect(first.container.querySelector('dialog')).not.toBeNull())
+      await waitFor(() => expect(first.container.querySelector('dialog[open]')).not.toBeNull())
       first.unmount()
       const second = mount(store, announcement({ version: 2 }))
-      await waitFor(() => expect(second.container.querySelector('dialog')).not.toBeNull())
+      await waitFor(() => expect(second.container.querySelector('dialog[open]')).not.toBeNull())
     })
   })
 
@@ -150,17 +159,17 @@ describe('PromoPopup mechanism', () => {
       ['no announcement', {}, null],
     ])('%s', async (_n, extra, ann) => {
       const { container } = render(<PromoPopup announcement={ann} {...base} store={memorySeenStore()} pathname="/" {...extra} />)
-      await new Promise((r) => setTimeout(r, 80))
+      await elapse(80)
       expect(container.querySelector('dialog')).toBeNull()
     })
     it('custom excludePaths replace the defaults', async () => {
       const { container } = render(<PromoPopup announcement={announcement()} {...base} store={memorySeenStore()} pathname="/carrito" excludePaths={['/otra']} />)
-      await waitFor(() => expect(container.querySelector('dialog')).not.toBeNull())
+      await waitFor(() => expect(container.querySelector('dialog[open]')).not.toBeNull())
     })
     it('closes if the buyer navigates into an excluded path', async () => {
       const store = memorySeenStore()
       const { container, rerender } = render(<PromoPopup announcement={announcement()} {...base} store={store} pathname="/" />)
-      await waitFor(() => expect(container.querySelector('dialog')).not.toBeNull())
+      await waitFor(() => expect(container.querySelector('dialog[open]')).not.toBeNull())
       rerender(<PromoPopup announcement={announcement()} {...base} store={store} pathname="/pagar" />)
       await waitFor(() => expect(container.querySelector('dialog')).toBeNull())
     })
@@ -173,12 +182,12 @@ describe('PromoPopup mechanism', () => {
       const { container } = render(
         <PromoPopup announcement={announcement()} {...base} trigger={{ delayMs: false, pageviews: 2, scrollPercent: false }} store={memorySeenStore()} pathname="/" onEvent={(e) => events.push(e)} />,
       )
-      await waitFor(() => expect(container.querySelector('dialog')).not.toBeNull())
+      await waitFor(() => expect(container.querySelector('dialog[open]')).not.toBeNull())
       expect(events[0]).toMatchObject({ via: 'pageviews' })
     })
     it('first page view alone does not fire when only pageviews is enabled', async () => {
       const { container } = render(<PromoPopup announcement={announcement()} {...base} trigger={{ delayMs: false, pageviews: 2, scrollPercent: false }} store={memorySeenStore()} pathname="/" />)
-      await new Promise((r) => setTimeout(r, 60))
+      await elapse(60)
       expect(container.querySelector('dialog')).toBeNull()
     })
     it('scroll depth fires once it passes the threshold', async () => {
@@ -193,14 +202,14 @@ describe('PromoPopup mechanism', () => {
       expect(container.querySelector('dialog')).toBeNull()
       Object.defineProperty(window, 'scrollY', { value: 900, configurable: true }) // 45 %
       fireEvent.scroll(window)
-      await waitFor(() => expect(container.querySelector('dialog')).not.toBeNull())
+      await waitFor(() => expect(container.querySelector('dialog[open]')).not.toBeNull())
       expect(events[0]).toMatchObject({ via: 'scroll' })
     })
     it('the announcement can carry its own trigger', async () => {
       const { container } = render(
         <PromoPopup announcement={announcement({ trigger: { delay_ms: 10, pageviews: 99, scroll_percent: 99 } })} userAgent={UA} webdriver={false} now={() => NOW} store={memorySeenStore()} pathname="/" />,
       )
-      await waitFor(() => expect(container.querySelector('dialog')).not.toBeNull())
+      await waitFor(() => expect(container.querySelector('dialog[open]')).not.toBeNull())
     })
   })
 
@@ -212,7 +221,7 @@ describe('PromoPopup mechanism', () => {
       ['/colecciones/whey', true],
     ])('CTA url %s rendered: %s', async (url, rendered) => {
       const { container } = render(<PromoPopup announcement={announcement({ cta_url: url })} {...base} store={memorySeenStore()} pathname="/" />)
-      await waitFor(() => expect(container.querySelector('dialog')).not.toBeNull())
+      await waitFor(() => expect(container.querySelector('dialog[open]')).not.toBeNull())
       expect(container.querySelector('[data-sf-promo-cta]') !== null).toBe(rendered)
     })
     it('no "limited time" text without end date; image has the alt from OPS; CTA click reports and closes; custom renderCta', async () => {
@@ -231,7 +240,7 @@ describe('PromoPopup mechanism', () => {
           )}
         />,
       )
-      await waitFor(() => expect(container.querySelector('dialog')).not.toBeNull())
+      await waitFor(() => expect(container.querySelector('dialog[open]')).not.toBeNull())
       expect(container.textContent).not.toContain('Por tiempo limitado')
       expect(container.querySelector('img')?.getAttribute('alt')).toBe('Proteína')
       fireEvent.click(screen.getByTestId('cta'))
@@ -240,7 +249,7 @@ describe('PromoPopup mechanism', () => {
     })
     it('speaks English', async () => {
       const { container } = render(<PromoPopup announcement={announcement()} {...base} locale="en-US" store={memorySeenStore()} pathname="/" />)
-      await waitFor(() => expect(container.querySelector('dialog')).not.toBeNull())
+      await waitFor(() => expect(container.querySelector('dialog[open]')).not.toBeNull())
       expect(container.textContent).toContain('Limited time')
       expect(container.textContent).toContain('10% when you spend MX$2,700')
       expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy()
