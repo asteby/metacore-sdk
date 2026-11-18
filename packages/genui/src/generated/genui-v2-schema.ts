@@ -3247,6 +3247,28 @@ export const GENUI_V2_SCHEMA = {
         },
         "select": {
           "$ref": "#/$defs/statePath"
+        },
+        "popup": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/key"
+          },
+          "maxItems": 8,
+          "description": "Columnas de la fuente que se muestran al seleccionar un punto (maximo 8). Solo con source."
+        },
+        "precision": {
+          "enum": [
+            "exact",
+            "city",
+            "country"
+          ],
+          "description": "Precision de ubicacion constante de todos los puntos. Excluye precision_field."
+        },
+        "precision_field": {
+          "$ref": "#/$defs/key"
+        },
+        "area_field": {
+          "$ref": "#/$defs/key"
         }
       }
     },
@@ -3962,7 +3984,11 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "on_select",
       "height",
       "summary",
-      "select"
+      "select",
+      "popup",
+      "precision",
+      "precision_field",
+      "area_field"
     ],
     "required": [
       "type",

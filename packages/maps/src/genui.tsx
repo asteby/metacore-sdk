@@ -86,7 +86,7 @@ export function GenUIMapBlock({ block, rows, text, navigate, act }: GenUIBlockRe
             // The colour key is the grouping value; tone colours win, else a stable palette hue.
             const group = (groupBy === 'group' ? p.group : p.status) ?? '—'
             colors[group] ??= p.tone ? TONE_COLORS[p.tone] : colorFor(group)
-            return { key: p.key, lat: p.lat, lng: p.lng, label: p.label, status: group, statusLabel: group, details: p.details }
+            return { key: p.key, lat: p.lat, lng: p.lng, label: p.label, status: group, statusLabel: group, precision: p.precision, area: p.area, details: p.details }
         })
         return { items, colors }
     }, [raw, groupBy])
