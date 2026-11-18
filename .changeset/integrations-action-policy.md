@@ -1,5 +1,0 @@
----
-"@asteby/metacore-integrations": minor
----
-
-Editores visuales de politica para las acciones de entrada. `ActionPolicyForm` (nuevo) edita, segun el bloque y el destino del servidor (`IngestTarget`): `guard` (columna sugerida desde `ingest_cursor`/`guard_candidates`, campo del evento, `gte` recomendado), `defaults` tipados, `idempotency_field`, `max_rows` (1..100), `record.delete` siempre logico (sin `hard`), `record.action` (solo `actions_available`, `params` y `on_ineligible`), `record.transition` (solo transiciones declaradas) y `record.restore`. `WhenEditor` (nuevo) edita `when` con `eq|ne|in` (nunca `exists`; `in` de 1 a 50 escalares) con vista previa de la frase. `ActionChain` ofrece ahora todos los bloques `record.*` cuando el host provee `listTargets`; `needsAdvanced(block, { targets })` solo deriva a JSON lo que no tiene control (cada bloque conserva una vista JSON de solo lectura y los campos desconocidos se preservan). `inboundProblems` (y el nuevo `whenProblems`) bloquean el guardado con mensajes claros. Sin `listTargets` nada cambia. i18n es/en completo.

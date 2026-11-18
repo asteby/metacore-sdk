@@ -1,5 +1,13 @@
 # @asteby/metacore-integrations
 
+## 0.3.0
+
+### Minor Changes
+
+- e950f89: Editores visuales de politica para las acciones de entrada. `ActionPolicyForm` (nuevo) edita, segun el bloque y el destino del servidor (`IngestTarget`): `guard` (columna sugerida desde `ingest_cursor`/`guard_candidates`, campo del evento, `gte` recomendado), `defaults` tipados, `idempotency_field`, `max_rows` (1..100), `record.delete` siempre logico (sin `hard`), `record.action` (solo `actions_available`, `params` y `on_ineligible`), `record.transition` (solo transiciones declaradas) y `record.restore`. `WhenEditor` (nuevo) edita `when` con `eq|ne|in` (nunca `exists`; `in` de 1 a 50 escalares) con vista previa de la frase. `ActionChain` ofrece ahora todos los bloques `record.*` cuando el host provee `listTargets`; `needsAdvanced(block, { targets })` solo deriva a JSON lo que no tiene control (cada bloque conserva una vista JSON de solo lectura y los campos desconocidos se preservan). `inboundProblems` (y el nuevo `whenProblems`) bloquean el guardado con mensajes claros. Sin `listTargets` nada cambia. i18n es/en completo.
+- bef83bb: Entradas: `TargetPicker` accesible (addon -> modelo, buscable, teclado completo, destinos sin permiso deshabilitados con el motivo) y `MappingEditor direction="in"`: una fila por columna escribible del destino, `match` solo entre `match_candidates`, autosugerencia visible (nunca aplicada sola), obligatorias sin mapear bloquean el guardado y vista previa del registro con un evento de ejemplo (JSON pegado o del contrato). `ActionChain` usa el picker cuando el host provee `listTargets`; sin `listTargets` conserva `listModels`/texto libre. Nuevos helpers: `groupTargets`, `targetBlockedReason`, `suggestSource`, `validateRecord`, `unmappedRequired`, `inboundProblems`, `EDITABLE_WHEN_OPERATORS` (el editor de `when` no expone `exists`: OPS acepta `eq|ne|in`). i18n es/en completo.
+- 2f7e788: Tipos v0.3 del contrato de ingesta: `IngestTarget` (+ `IngestTargetColumn|Permissions|Scope|Action|Stage`, espejo del `inbound.Target` del kernel), `ActionBlock` ampliado (`record.create|update|delete|action|transition|restore`, `guard`, `defaults`, `idempotency_field`, `max_rows`), `Condition` (`eq|ne|in|exists`) en `when` de cualquier bloque, `IntegrationsApi.listTargets?()` (`listModels` queda `@deprecated`), `parseIngestTargets`, `needsAdvanced`, `targetColumnsToMappingRows` e `inferSchema`. `record.delete` rechaza `mode: 'hard'`. Compatible hacia atrás: los cuatro bloques anteriores y el panel visual no cambian; los bloques nuevos se editan en la vista avanzada.
+
 ## 0.2.0
 
 ### Minor Changes
