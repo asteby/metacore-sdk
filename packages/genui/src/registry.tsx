@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, type ComponentType, type ReactNode } from 'react'
+import type { GenUIIconResolver } from './icons'
 
 /** A genui/v2 block as the renderers see it: already validated by `parseGenUI`. */
 export type GenUIBlock = { type: string; id?: string; fallback?: string; [key: string]: any } // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -72,6 +73,8 @@ export interface GenUIContextValue {
   allowExternalLinks?: boolean
   locale?: string
   currency?: string
+  /** Resolves icon names declared in manifests (e.g. "MapPin") to host components. Falls back to the built-in set, then a neutral icon. */
+  resolveIcon?: GenUIIconResolver
 }
 
 const Ctx = createContext<GenUIContextValue>({})
@@ -95,7 +98,7 @@ export function GenUIProvider({ children, ...value }: GenUIProviderProps) {
       sources: { ...parent.sources, ...value.sources },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [parent, value.renderers, value.sources, value.onNavigate, value.onAction, value.t, value.allowExternalLinks, value.locale, value.currency],
+    [parent, value.renderers, value.sources, value.onNavigate, value.onAction, value.t, value.allowExternalLinks, value.locale, value.currency, value.resolveIcon],
   )
   return <Ctx.Provider value={merged}>{children}</Ctx.Provider>
 }

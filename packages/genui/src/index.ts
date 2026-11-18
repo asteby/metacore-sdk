@@ -25,6 +25,7 @@ export {
   type GenUIRow,
   type GenUISources,
 } from './registry'
+export { BUILTIN_ICONS, FALLBACK_ICON, ICON_NAME_PATTERN, resolveGenUIIcon, usePageIcon, type GenUIIconComponent, type GenUIIconResolver } from './icons'
 export { renderMarkdown, type MarkdownOptions } from './markdown'
 export { layoutDiagram } from './diagram'
 export { formatMetric, toneFor } from './metric'
