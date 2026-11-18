@@ -2,6 +2,7 @@ import type {
   CatalogEvent,
   InboundContract,
   InboundEndpoint,
+  IngestTarget,
   IntegrationsApi,
   LogEntry,
   Subscription,
@@ -13,6 +14,7 @@ export interface MemoryApiSeed {
   subscriptions?: Subscription[]
   inbound?: InboundEndpoint[]
   log?: LogEntry[]
+  targets?: IngestTarget[]
 }
 
 /** Example catalog in the shape the kernel `v3.Catalog` returns. */
@@ -47,6 +49,132 @@ export const EXAMPLE_EVENTS: CatalogEvent[] = [
   },
 ]
 
+/** Fixture of the kernel (inbound/testdata/targets.json), the shape OPS serves. */
+export const EXAMPLE_TARGETS: IngestTarget[] = [
+  {
+    addon: 'inventory',
+    addon_name: 'Inventario',
+    model: 'inventory.items',
+    label: 'Articulos',
+    columns: [
+      {
+        name: 'sku',
+        label: 'SKU',
+        type: 'text',
+        required: true,
+        unique: true
+      },
+      {
+        name: 'warehouse',
+        label: 'Almacen',
+        type: 'text',
+        ref: 'inventory.warehouses'
+      },
+      {
+        name: 'quantity',
+        label: 'Cantidad',
+        type: 'number',
+        default: 0
+      },
+      {
+        name: 'status',
+        label: 'Estado',
+        type: 'select',
+        options: [
+          {
+            value: 'active',
+            label: 'Activo'
+          },
+          {
+            value: 'archived',
+            label: 'Archivado'
+          }
+        ],
+        default: 'active'
+      }
+    ],
+    match_candidates: [
+      [
+        'sku'
+      ],
+      [
+        'warehouse',
+        'external_id'
+      ]
+    ],
+    soft_delete: true,
+    actions: [
+      'record.create',
+      'record.update',
+      'record.upsert',
+      'record.delete',
+      'record.action',
+      'record.transition',
+      'record.restore'
+    ],
+    permissions: {
+      create: true,
+      update: true,
+      delete: false
+    },
+    scope: {
+      branch: true,
+      entity: false
+    },
+    guard_candidates: [
+      'status'
+    ],
+    actions_available: [
+      {
+        key: 'reserve',
+        label: 'Reservar',
+        params: [
+          {
+            name: 'quantity',
+            label: 'Cantidad',
+            type: 'number',
+            required: true
+          },
+          {
+            name: 'reason',
+            label: 'Motivo',
+            type: 'text'
+          }
+        ],
+        requires_state: [
+          'active'
+        ],
+        permission: 'inventory.items.action:reserve'
+      }
+    ],
+    stage: {
+      field: 'status',
+      stages: [
+        {
+          key: 'active',
+          label: 'Activo'
+        },
+        {
+          key: 'archived',
+          label: 'Archivado'
+        }
+      ],
+      transitions: [
+        {
+          from: 'active',
+          to: 'archived'
+        },
+        {
+          from: 'archived',
+          to: 'active'
+        }
+      ]
+    },
+    restorable: true,
+    ingest_cursor: 'source_updated_at'
+  }
+]
+
 /**
  * In-memory `IntegrationsApi` for demos, storybook-style playgrounds and the
  * package tests. It also documents the contract: credentials are returned
@@ -58,6 +186,7 @@ export function createMemoryIntegrationsApi(seed: MemoryApiSeed = {}): Integrati
   const subs = [...(seed.subscriptions ?? [])]
   const inbound = [...(seed.inbound ?? [])]
   const log = [...(seed.log ?? [])]
+  const targets = seed.targets ?? EXAMPLE_TARGETS
   let n = 0
   const secret = () => `mcs_${(++n).toString(16).padStart(8, '0')}${'x'.repeat(24)}`
 
@@ -133,6 +262,10 @@ export function createMemoryIntegrationsApi(seed: MemoryApiSeed = {}): Integrati
     },
     async queueStatus() {
       return { pending: log.filter((l) => l.status === 'pending').length, failed: log.filter((l) => l.status === 'failed').length }
+    },
+    async listTargets() {
+      calls.push('listTargets')
+      return targets
     },
     async listModels() {
       return ['customers', 'orders']

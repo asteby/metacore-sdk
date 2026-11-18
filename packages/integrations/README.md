@@ -41,3 +41,29 @@ export const Demo = () => <IntegrationsPanel api={createMemoryIntegrationsApi()}
 Building blocks are exported too: `EventPicker`, `MappingEditor`,
 `ActionChain`, `CredentialOnce`, and the pure helpers (`flattenSchemaFields`,
 `previewBody`, `parseActions`, ...).
+
+## Contrato de destinos y acciones de ingesta (v0.3)
+
+Espejo del kernel (`inbound/targets.go`, `inbound/actions.go`) y de OPS
+(`eventsint.Block`). Nombres en snake_case, tal cual viajan.
+
+- `IntegrationsApi.listTargets?(): Promise<IngestTarget[]>` sirve el catalogo de
+  destinos (`GET /api/integrations/targets` de OPS). Opcional; `listModels?` queda
+  `@deprecated`. `parseIngestTargets(json)` valida la respuesta. Campos de v0.272
+  (`actions_available`, `stage`, `restorable`, `ingest_cursor`) son opcionales.
+- `ActionBlock` (`do`): `record.create` (`idempotency_field` obligatorio, `defaults`),
+  `record.update`, `record.upsert`, `record.delete` (`mode?: 'soft'`, `max_rows`),
+  `record.action` (`action`, `params`, `on_ineligible?: 'noop'|'fail'`, `max_rows`),
+  `record.transition` (`to`), `record.restore`, mas `event.emit`, `notify`, `command.run`.
+  `guard {field, path, op: 'gte'|'gt'}` solo en `create|update|upsert|delete`.
+  `when` (`Condition`: `path` + exactamente uno de `eq|ne|in|exists`) en cualquier bloque.
+- `mode: 'hard'` NO existe: OPS lo prohibe (`hard_delete_disabled`) y `parseActions` lo rechaza.
+- `exists` es del kernel; el `BlockWhen` de OPS hoy acepta `eq|ne|in`.
+- `parseActions` valida y normaliza (round-trip exacto, sin campos inventados);
+  `incompleteActions` marca los bloques vacios; `needsAdvanced(block)` indica que el
+  editor visual no puede mostrar el bloque entero (tipos nuevos, `guard`, `defaults`,
+  `when` distinto de un `eq` en `notify`): el panel lo muestra de solo lectura y se
+  edita en la vista avanzada. `VISUAL_ACTION_KINDS` son los que ofrece el selector.
+- Helpers puros: `targetColumnsToMappingRows(target, {requiredOnly?})`, `inferSchema(sample)`.
+- `createMemoryIntegrationsApi()` sirve `EXAMPLE_TARGETS` (la fixture del kernel,
+  `test/fixtures/targets.json`).

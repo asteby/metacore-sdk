@@ -18,7 +18,7 @@ export function InboundTab({ api, t }: InboundTabProps) {
   const contracts = useAsync(() => api.listInboundContracts(), [api])
   const options = useAsync<ActionOptions>(async () => {
     const [models, commands, templates] = await Promise.all([
-      api.listModels?.().catch(() => undefined),
+      (api.listTargets ? api.listTargets().then((ts) => ts.map((x) => x.model)) : api.listModels?.())?.catch(() => undefined),
       api.listCommands?.().catch(() => undefined),
       api.listNotifyTemplates?.().catch(() => undefined),
     ])

@@ -1,7 +1,7 @@
 import * as React from 'react'
-import { moveItem, newAction, parseActions } from './actions'
+import { moveItem, needsAdvanced, newAction, parseActions } from './actions'
 import type { TFunction } from './i18n'
-import { ACTION_KINDS, type ActionBlock, type ActionKind } from './types'
+import { VISUAL_ACTION_KINDS, type ActionBlock, type ActionKind } from './types'
 import { cx } from './ui'
 
 export interface ActionOptions {
@@ -18,7 +18,7 @@ export interface ActionChainProps {
 }
 
 /**
- * Ordered list of action blocks (closed set: record.upsert, event.emit,
+ * Ordered list of action blocks (closed set; the visual editor authors record.upsert, event.emit,
  * notify, command.run). The author fills fields; JSON is only an opt-in
  * "advanced view" that is validated against the same closed set.
  */
@@ -80,7 +80,7 @@ export function ActionChain({ actions, onChange, options, t }: ActionChainProps)
                 {t('actions.add')}
               </label>
               <select id={kindId} className={cx.input} value={kind} onChange={(e) => setKind(e.target.value as ActionKind)}>
-                {ACTION_KINDS.map((k) => (
+                {VISUAL_ACTION_KINDS.map((k) => (
                   <option key={k} value={k}>
                     {t(`actions.${k}`)}
                   </option>
@@ -178,6 +178,14 @@ function ActionFields({
   options?: ActionOptions
   t: TFunction
 }) {
+  if (needsAdvanced(a)) {
+    return (
+      <div className="space-y-2">
+        <p className={cx.muted}>{t('actions.advancedOnly')}</p>
+        <pre className="overflow-x-auto rounded border p-2 text-xs">{JSON.stringify(a, null, 2)}</pre>
+      </div>
+    )
+  }
   switch (a.do) {
     case 'record.upsert':
       return (
@@ -217,7 +225,7 @@ function ActionFields({
               aria-label={t('actions.whenEq')}
               placeholder={t('actions.whenEq')}
               className={cx.input}
-              value={a.when ? String(a.when.eq) : ''}
+              value={a.when ? String(a.when.eq ?? '') : ''}
               onChange={(e) => onChange({ ...a, when: { path: a.when?.path ?? '', eq: coerceScalar(e.target.value) } })}
             />
           </fieldset>
@@ -230,6 +238,8 @@ function ActionFields({
           <KeyValueRows title={t('actions.args')} value={a.args ?? {}} onChange={(args) => onChange({ ...a, args })} t={t} />
         </div>
       )
+    default:
+      return null
   }
 }
 
