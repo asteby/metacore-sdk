@@ -4,11 +4,12 @@
 // valida. Se interpretan aqui sobre definiciones tipadas (`PageBlockDef`) cuyos
 // campos hoja salen de los tipos generados; los bloques del nucleo se delegan a `GenUI`.
 import { Component, useId, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ErrorInfo, type KeyboardEvent, type ReactNode } from 'react'
-import { ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, Calendar, LayoutDashboard, LayoutGrid, List, Map as MapIcon, Table2, type LucideIcon } from 'lucide-react'
+import { ArrowDownRight, ArrowRight, ArrowUpRight } from 'lucide-react'
 import { Button, Card, CardContent, CardHeader, CardTitle, cn } from '@asteby/metacore-ui'
 import { GenUI } from '../render-v2'
 import { GenUIProvider, useGenUI, type GenUIActionRequest, type GenUISources } from '../registry'
 import { TEXT_TONE } from '../generative-ui'
+import { usePageIcon } from '../icons'
 import { formatMetric } from '../metric'
 import type { Tone } from '../types'
 import type { Area, AreaRow, BlockGrid, BlockKpiCard, BlockSection, BlockTabs, ExtName, ExtProps, GridTrack, PermissionKey, TabIcon } from '../generated/genui-v2'
@@ -54,8 +55,8 @@ export interface PageSectionDef extends PageBlockDef {
 export interface PageTabOption {
   key: string
   label: unknown
-  /** Icono del conjunto cerrado: map, cards, table, dashboard, list, calendar, chart. */
-  icon?: TabIcon
+  /** Conjunto interno (map, cards, table, dashboard, list, calendar, chart) o cualquier nombre que resuelva el host con `resolveIcon`. */
+  icon?: TabIcon | (string & {})
   /** Sin permiso efectivo la opcion no se pinta ni se monta. */
   permission?: PermissionKey
   /** Vista declarativa/hibrida: bloques de pagina. */
@@ -541,7 +542,10 @@ export function PageSection({ block, data }: { block: PageSectionDef; data?: Rec
 
 // ---- tabs / conmutador de vistas ----
 
-const TAB_ICONS: Record<string, LucideIcon> = { map: MapIcon, cards: LayoutGrid, table: Table2, dashboard: LayoutDashboard, list: List, calendar: Calendar, chart: BarChart3 }
+function TabIconView({ name }: { name: unknown }) {
+  const Icon = usePageIcon(name)
+  return Icon ? <Icon className='size-4' aria-hidden /> : null
+}
 
 function TabBody({ opt, data }: { opt: PageTabOption; data?: Record<string, unknown> }) {
   return (
@@ -607,7 +611,6 @@ function PageTabs({ block, data }: { block: PageTabsDef; data?: Record<string, u
     >
       {opts.map((o) => {
         const on = o.key === active
-        const Icon = o.icon ? TAB_ICONS[o.icon] : undefined
         return (
           <button
             key={o.key}
@@ -622,7 +625,7 @@ function PageTabs({ block, data }: { block: PageTabsDef; data?: Record<string, u
             onClick={() => select(o.key)}
             className={cn('inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-sm font-medium transition-colors', segmented ? 'rounded-md' : '-mb-px border-b-2', on ? (segmented ? 'bg-background shadow-sm' : 'border-primary text-foreground') : 'border-transparent text-muted-foreground hover:text-foreground')}
           >
-            {Icon ? <Icon className='size-4' aria-hidden /> : null}
+            <TabIconView name={o.icon} />
             {text(o.label)}
           </button>
         )

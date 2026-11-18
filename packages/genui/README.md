@@ -131,3 +131,23 @@ define the custom block contract (`block@1`: props, reads, writes, events);
 federation/iframe loading is NOT implemented, an unregistered component renders
 a stub. These page-level keys are proposals and are not yet in the shared
 genui/v2 JSON Schema; core blocks still go through `parseGenUI`.
+
+### Icons by name (`resolveIcon`)
+
+Option icons of the view switcher (`tabs[].icon`) are resolved by one hook,
+`usePageIcon`. Order: the host's `resolveIcon` (on `GenUIProvider`), then the
+built-in set (`map`, `cards`, `table`, `dashboard`, `list`, `calendar`, `chart`),
+then a neutral icon. It never throws: a resolver that fails is ignored and an
+invalid name (not `^[A-Za-z][A-Za-z0-9]{0,63}$`) paints no icon. The component
+only receives `className`, so it inherits the theme through `currentColor`.
+
+```tsx
+<GenUIProvider resolveIcon={(name) => (lucide as any)[name] ?? null}>
+  <PageView ui={ui} can={can} />
+</GenUIProvider>
+```
+
+See `examples/fleet-switcher-icons.tsx`. Kernel follow-up: the shared schema
+still restricts `tabs[].icon` to the closed enum; it must also accept the
+pattern `^[A-Za-z][A-Za-z0-9]{0,63}$` for host icon names to pass `parseGenUI`.
+The SDK already works with both.
