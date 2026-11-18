@@ -355,11 +355,26 @@ function blockRules(b: Obj, type: string, path: string) {
   }
   if (type === 'tabs') {
     const keys = new Set<string>()
-    for (const t of b.tabs as Obj[]) {
+    ;(b.tabs as Obj[]).forEach((t, i) => {
       if (keys.has(t.key as string)) throw new GenUIError('genui.duplicate_id', `${path}: pestaña duplicada ${String(t.key)}`, path)
       keys.add(t.key as string)
-    }
+      // Cada opción tiene blocks (declarativa/híbrida) o component+props (bloque custom), nunca ambos.
+      const where = `${path}.tabs[${i}]`
+      if (has(t, 'blocks') && has(t, 'component')) throw new GenUIError('genui.invalid_block', `${where}: la opción usa blocks o component, no ambos`, where)
+      if (!has(t, 'blocks') && !has(t, 'component')) throw new GenUIError('genui.required', `${where}: la opción requiere blocks o component`, where)
+      if (has(t, 'props') && !has(t, 'component')) throw new GenUIError('genui.invalid_block', `${where}: props solo aplica con component`, where)
+    })
   }
+  if (type === 'section') {
+    // declarative|hybrid -> blocks; custom -> component (+ props). Excluyentes.
+    const mode = b.mode
+    if (present('component') && present('blocks')) throw new GenUIError('genui.invalid_block', `${path}: section usa blocks o component, no ambos`, path)
+    if (present('component') && mode !== 'custom') throw new GenUIError('genui.invalid_block', `${path}: component requiere mode custom`, path)
+    if (present('blocks') && mode === 'custom') throw new GenUIError('genui.invalid_block', `${path}: mode custom usa component, no blocks`, path)
+    if (!present('component') && !present('blocks')) throw new GenUIError('genui.required', `${path}: section requiere blocks, o component con mode custom`, path)
+    if (present('props') && !present('component')) throw new GenUIError('genui.invalid_block', `${path}: props solo aplica con component`, path)
+  }
+  if (type === 'grid') gridRules(b, path)
   if (type === 'form' || type === 'wizard') {
     const keys = new Set<string>()
     for (const f of (b.fields as Obj[] | undefined) ?? []) {
@@ -376,6 +391,41 @@ function blockRules(b: Obj, type: string, path: string) {
     if (type === 'form' && !hasFields) throw new GenUIError('genui.required', `${path}: form requiere fields`, path)
     if (type === 'wizard' && !present('ref') && !(steps?.length && hasFields)) throw new GenUIError('genui.required', `${path}: wizard requiere steps y fields, o ref`, path)
   }
+}
+
+/**
+ * Layout de página de un grid. Sin `areas` es el grid clásico (columns entero);
+ * rows, mobile y columns como lista de pistas requieren areas. Con areas la
+ * plantilla debe ser rectangular y cada hijo debe colocarse en una región
+ * declarada (uno sin área válida nunca se pintaría). Igual que `gridRules` del kernel.
+ */
+function gridRules(b: Obj, path: string) {
+  const areas = b.areas
+  const colsList = Array.isArray(b.columns)
+  if (!Array.isArray(areas)) {
+    for (const k of ['rows', 'mobile']) if (has(b, k)) throw new GenUIError('genui.invalid_block', `${path}: ${k} requiere areas`, path)
+    if (colsList) throw new GenUIError('genui.invalid_block', `${path}: columns como lista de pistas requiere areas`, path)
+    return
+  }
+  let width = -1
+  const names = new Set<string>()
+  for (const row of areas) {
+    const cells = String(row).split(/\s+/).filter(Boolean)
+    if (width < 0) width = cells.length
+    else if (cells.length !== width) throw new GenUIError('genui.invalid_block', `${path}: areas debe ser rectangular (todas las filas con ${width} celdas)`, path)
+    for (const n of cells) if (n !== '.') names.add(n)
+  }
+  const cols = colsList ? (b.columns as unknown[]).length : 0
+  if (colsList && cols > width) throw new GenUIError('genui.invalid_block', `${path}: columns tiene ${cols} pistas y areas ${width} columnas`, path)
+  if (Array.isArray(b.rows) && b.rows.length > areas.length) throw new GenUIError('genui.invalid_block', `${path}: rows tiene más pistas que filas de areas`, path)
+  for (const m of (b.mobile as unknown[] | undefined) ?? []) {
+    if (!names.has(String(m))) throw new GenUIError('genui.unknown_target', `${path}: mobile usa una región inexistente ${String(m)}`, path)
+  }
+  ;((b.blocks as Obj[] | undefined) ?? []).forEach((k, i) => {
+    const where = `${path}.blocks[${i}]`
+    if (typeof k.area !== 'string') throw new GenUIError('genui.invalid_block', `${where}: el hijo de un grid con areas debe declarar area`, where)
+    if (!names.has(k.area)) throw new GenUIError('genui.unknown_target', `${where}.area: la región ${k.area} no está en areas`, `${where}.area`)
+  })
 }
 
 const CTX_KEYS = new Set(['locale', 'currency', 'time_zone', 'branch_id'])

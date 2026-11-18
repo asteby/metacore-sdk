@@ -449,6 +449,9 @@ export const GENUI_V2_SCHEMA = {
         },
         "format": {
           "$ref": "#/$defs/statFormat"
+        },
+        "action": {
+          "$ref": "#/$defs/action"
         }
       }
     },
@@ -1364,6 +1367,83 @@ export const GENUI_V2_SCHEMA = {
       "pattern": "^data\\.[A-Za-z_][A-Za-z0-9_]{0,63}$",
       "description": "Referencia a data.<nombre>."
     },
+    "area": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]{0,31}$",
+      "description": "Nombre de región de un grid con `areas` (page@1)."
+    },
+    "areaRow": {
+      "type": "string",
+      "maxLength": 400,
+      "pattern": "^(\\.|[a-z][a-z0-9_]{0,31})( (\\.|[a-z][a-z0-9_]{0,31})){0,11}$",
+      "description": "Fila de la plantilla de `grid.areas`: nombres de región o `.` (celda vacía) separados por un espacio."
+    },
+    "gridTrack": {
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^(auto|[0-9]+(\\.[0-9]+)?fr|[0-9]{1,4}px|minmax\\( *[0-9]{1,4}px *, *([0-9]+(\\.[0-9]+)?fr|[0-9]{1,4}px) *\\))$",
+      "description": "Pista de `grid.columns`/`grid.rows`: auto, Nfr, Npx o minmax(Npx, Nfr|Npx). Sin CSS libre."
+    },
+    "statePath": {
+      "type": "string",
+      "pattern": "^(?!(?:.*\\.)?(?:__proto__|constructor|prototype)(?:\\.|$))state(\\.[A-Za-z_][A-Za-z0-9_]{0,63}|\\.[0-9]{1,3}){1,6}$",
+      "x-no-proto": true,
+      "description": "Ruta de escritura en el estado de la página: raíz state."
+    },
+    "permissionKey": {
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^[a-z][a-z0-9_]*(?:\\.[a-z][a-z0-9_:]*)+$",
+      "description": "Clave de permiso del manifiesto (<addon>.<recurso>.<acción>)."
+    },
+    "chrome": {
+      "enum": [
+        "card",
+        "bare"
+      ],
+      "description": "Marco de una sección/vista: card (el host pinta marco y estados) o bare."
+    },
+    "tabIcon": {
+      "enum": [
+        "map",
+        "cards",
+        "table",
+        "dashboard",
+        "list",
+        "calendar",
+        "chart"
+      ],
+      "description": "Icono de una opción de tabs: conjunto cerrado."
+    },
+    "extName": {
+      "type": "string",
+      "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9_]{0,63}\\.[a-z][a-z0-9_]{0,63}@[0-9]{1,3}$",
+      "x-no-proto": true,
+      "description": "Bloque custom registrado: <addon>.<nombre>@<mayor>."
+    },
+    "extProps": {
+      "type": "object",
+      "maxProperties": 16,
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/scalar"
+          },
+          {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "number",
+                "boolean"
+              ]
+            },
+            "maxItems": 50
+          }
+        ]
+      },
+      "description": "Props escalares de un bloque custom; sin objetos libres."
+    },
     "overlay": {
       "type": "object",
       "additionalProperties": false,
@@ -1427,6 +1507,9 @@ export const GENUI_V2_SCHEMA = {
         },
         {
           "$ref": "#/$defs/block_kpi"
+        },
+        {
+          "$ref": "#/$defs/block_kpi_card"
         },
         {
           "$ref": "#/$defs/block_stats"
@@ -1502,6 +1585,9 @@ export const GENUI_V2_SCHEMA = {
           "type": "string",
           "maxLength": 2000
         },
+        "area": {
+          "$ref": "#/$defs/area"
+        },
         "direction": {
           "enum": [
             "vertical",
@@ -1542,10 +1628,53 @@ export const GENUI_V2_SCHEMA = {
           "type": "string",
           "maxLength": 2000
         },
+        "area": {
+          "$ref": "#/$defs/area"
+        },
         "columns": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 4
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 4
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/gridTrack"
+              },
+              "maxItems": 12,
+              "minItems": 1
+            }
+          ],
+          "description": "Número de columnas (1-4) o, con `areas`, una pista por columna."
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/gridTrack"
+          },
+          "maxItems": 24,
+          "minItems": 1,
+          "description": "Pistas de fila (solo con `areas`)."
+        },
+        "areas": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/areaRow"
+          },
+          "maxItems": 24,
+          "minItems": 1,
+          "description": "Plantilla de regiones; cada hijo declara `area`."
+        },
+        "mobile": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/area"
+          },
+          "maxItems": 24,
+          "minItems": 1,
+          "description": "Orden de regiones en pantalla angosta, una por fila."
         },
         "title": {
           "$ref": "#/$defs/label"
@@ -1581,6 +1710,9 @@ export const GENUI_V2_SCHEMA = {
           "type": "string",
           "maxLength": 2000
         },
+        "area": {
+          "$ref": "#/$defs/area"
+        },
         "state": {
           "$ref": "#/$defs/bindingPath"
         },
@@ -1591,8 +1723,7 @@ export const GENUI_V2_SCHEMA = {
             "additionalProperties": false,
             "required": [
               "key",
-              "label",
-              "blocks"
+              "label"
             ],
             "properties": {
               "key": {
@@ -1608,11 +1739,47 @@ export const GENUI_V2_SCHEMA = {
                 },
                 "maxItems": 24,
                 "minItems": 1
+              },
+              "icon": {
+                "$ref": "#/$defs/tabIcon"
+              },
+              "permission": {
+                "$ref": "#/$defs/permissionKey"
+              },
+              "component": {
+                "$ref": "#/$defs/extName"
+              },
+              "props": {
+                "$ref": "#/$defs/extProps"
               }
             }
           },
           "maxItems": 8,
           "minItems": 1
+        },
+        "variant": {
+          "enum": [
+            "tabs",
+            "segmented"
+          ]
+        },
+        "default": {
+          "$ref": "#/$defs/key"
+        },
+        "keep_alive": {
+          "type": "boolean"
+        },
+        "chrome": {
+          "$ref": "#/$defs/chrome"
+        },
+        "label": {
+          "$ref": "#/$defs/label"
+        },
+        "mobile": {
+          "enum": [
+            "select",
+            "scroll"
+          ]
         }
       }
     },
@@ -1620,9 +1787,7 @@ export const GENUI_V2_SCHEMA = {
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "type",
-        "title",
-        "blocks"
+        "type"
       ],
       "properties": {
         "type": {
@@ -1637,6 +1802,9 @@ export const GENUI_V2_SCHEMA = {
         "fallback": {
           "type": "string",
           "maxLength": 2000
+        },
+        "area": {
+          "$ref": "#/$defs/area"
         },
         "title": {
           "$ref": "#/$defs/label"
@@ -1654,6 +1822,38 @@ export const GENUI_V2_SCHEMA = {
           },
           "maxItems": 24,
           "minItems": 1
+        },
+        "mode": {
+          "enum": [
+            "declarative",
+            "hybrid",
+            "custom"
+          ],
+          "description": "declarative|hybrid usan `blocks`; custom usa `component`."
+        },
+        "permission": {
+          "$ref": "#/$defs/permissionKey"
+        },
+        "on_denied": {
+          "enum": [
+            "hide",
+            "notice"
+          ]
+        },
+        "chrome": {
+          "$ref": "#/$defs/chrome"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "empty": {
+          "$ref": "#/$defs/label"
+        },
+        "component": {
+          "$ref": "#/$defs/extName"
+        },
+        "props": {
+          "$ref": "#/$defs/extProps"
         }
       }
     },
@@ -1677,6 +1877,9 @@ export const GENUI_V2_SCHEMA = {
         "fallback": {
           "type": "string",
           "maxLength": 2000
+        },
+        "area": {
+          "$ref": "#/$defs/area"
         },
         "text": {
           "$ref": "#/$defs/text"
@@ -1707,6 +1910,9 @@ export const GENUI_V2_SCHEMA = {
           "type": "string",
           "maxLength": 2000
         },
+        "area": {
+          "$ref": "#/$defs/area"
+        },
         "markdown": {
           "type": "string",
           "maxLength": 8000
@@ -1733,6 +1939,9 @@ export const GENUI_V2_SCHEMA = {
         "fallback": {
           "type": "string",
           "maxLength": 2000
+        },
+        "area": {
+          "$ref": "#/$defs/area"
         },
         "title": {
           "$ref": "#/$defs/label"
@@ -1765,6 +1974,9 @@ export const GENUI_V2_SCHEMA = {
         "fallback": {
           "type": "string",
           "maxLength": 2000
+        },
+        "area": {
+          "$ref": "#/$defs/area"
         },
         "title": {
           "$ref": "#/$defs/label"
@@ -1802,6 +2014,9 @@ export const GENUI_V2_SCHEMA = {
         "fallback": {
           "type": "string",
           "maxLength": 2000
+        },
+        "area": {
+          "$ref": "#/$defs/area"
         },
         "title": {
           "$ref": "#/$defs/label"
@@ -1858,6 +2073,9 @@ export const GENUI_V2_SCHEMA = {
           "type": "string",
           "maxLength": 2000
         },
+        "area": {
+          "$ref": "#/$defs/area"
+        },
         "title": {
           "$ref": "#/$defs/label"
         },
@@ -1910,6 +2128,9 @@ export const GENUI_V2_SCHEMA = {
           "type": "string",
           "maxLength": 2000
         },
+        "area": {
+          "$ref": "#/$defs/area"
+        },
         "title": {
           "$ref": "#/$defs/label"
         },
@@ -1920,6 +2141,65 @@ export const GENUI_V2_SCHEMA = {
           },
           "maxItems": 12,
           "minItems": 1
+        }
+      }
+    },
+    "block_kpi_card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "label",
+        "value"
+      ],
+      "properties": {
+        "type": {
+          "const": "kpi_card"
+        },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "when": {
+          "$ref": "#/$defs/predicate"
+        },
+        "fallback": {
+          "type": "string",
+          "maxLength": 2000
+        },
+        "area": {
+          "$ref": "#/$defs/area"
+        },
+        "label": {
+          "$ref": "#/$defs/label"
+        },
+        "value": {
+          "$ref": "#/$defs/value"
+        },
+        "format": {
+          "$ref": "#/$defs/statFormat"
+        },
+        "trend": {
+          "anyOf": [
+            {
+              "enum": [
+                "up",
+                "down",
+                "flat"
+              ]
+            },
+            {
+              "$ref": "#/$defs/ref"
+            }
+          ]
+        },
+        "tone": {
+          "$ref": "#/$defs/tone"
+        },
+        "hint": {
+          "$ref": "#/$defs/label"
+        },
+        "cta": {
+          "$ref": "#/$defs/action"
         }
       }
     },
@@ -1942,6 +2222,9 @@ export const GENUI_V2_SCHEMA = {
         "fallback": {
           "type": "string",
           "maxLength": 2000
+        },
+        "area": {
+          "$ref": "#/$defs/area"
         },
         "title": {
           "$ref": "#/$defs/label"
@@ -1994,6 +2277,9 @@ export const GENUI_V2_SCHEMA = {
           "type": "string",
           "maxLength": 2000
         },
+        "area": {
+          "$ref": "#/$defs/area"
+        },
         "title": {
           "$ref": "#/$defs/label"
         },
@@ -2026,6 +2312,9 @@ export const GENUI_V2_SCHEMA = {
         "fallback": {
           "type": "string",
           "maxLength": 2000
+        },
+        "area": {
+          "$ref": "#/$defs/area"
         },
         "title": {
           "$ref": "#/$defs/label"
@@ -2063,6 +2352,9 @@ export const GENUI_V2_SCHEMA = {
         "fallback": {
           "type": "string",
           "maxLength": 2000
+        },
+        "area": {
+          "$ref": "#/$defs/area"
         },
         "title": {
           "$ref": "#/$defs/label"
@@ -2147,6 +2439,9 @@ export const GENUI_V2_SCHEMA = {
           "type": "string",
           "maxLength": 2000
         },
+        "area": {
+          "$ref": "#/$defs/area"
+        },
         "title": {
           "$ref": "#/$defs/label"
         },
@@ -2200,6 +2495,9 @@ export const GENUI_V2_SCHEMA = {
           "type": "string",
           "maxLength": 2000
         },
+        "area": {
+          "$ref": "#/$defs/area"
+        },
         "title": {
           "$ref": "#/$defs/label"
         },
@@ -2248,6 +2546,9 @@ export const GENUI_V2_SCHEMA = {
         "fallback": {
           "type": "string",
           "maxLength": 2000
+        },
+        "area": {
+          "$ref": "#/$defs/area"
         },
         "title": {
           "$ref": "#/$defs/label"
@@ -2318,6 +2619,9 @@ export const GENUI_V2_SCHEMA = {
         "fallback": {
           "type": "string",
           "maxLength": 2000
+        },
+        "area": {
+          "$ref": "#/$defs/area"
         },
         "title": {
           "$ref": "#/$defs/label"
@@ -2401,6 +2705,9 @@ export const GENUI_V2_SCHEMA = {
           "type": "string",
           "maxLength": 2000
         },
+        "area": {
+          "$ref": "#/$defs/area"
+        },
         "title": {
           "$ref": "#/$defs/label"
         },
@@ -2483,6 +2790,9 @@ export const GENUI_V2_SCHEMA = {
         "fallback": {
           "type": "string",
           "maxLength": 2000
+        },
+        "area": {
+          "$ref": "#/$defs/area"
         },
         "title": {
           "$ref": "#/$defs/label"
@@ -2620,6 +2930,9 @@ export const GENUI_V2_SCHEMA = {
           "type": "string",
           "maxLength": 2000
         },
+        "area": {
+          "$ref": "#/$defs/area"
+        },
         "addon": {
           "type": "string",
           "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9_]{0,63}$",
@@ -2668,6 +2981,9 @@ export const GENUI_V2_SCHEMA = {
           "type": "string",
           "maxLength": 2000
         },
+        "area": {
+          "$ref": "#/$defs/area"
+        },
         "src": {
           "type": "string",
           "maxLength": 2048,
@@ -2713,6 +3029,9 @@ export const GENUI_V2_SCHEMA = {
           "type": "string",
           "maxLength": 2000
         },
+        "area": {
+          "$ref": "#/$defs/area"
+        },
         "name": {
           "type": "string",
           "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*){1,3}$",
@@ -2744,32 +3063,14 @@ export const GENUI_V2_SCHEMA = {
           "type": "string",
           "maxLength": 2000
         },
+        "area": {
+          "$ref": "#/$defs/area"
+        },
         "ext": {
-          "type": "string",
-          "pattern": "^(?!(?:.*[.:@])?(?:__proto__|constructor|prototype)(?:[.:@]|$))[a-z][a-z0-9_]{0,63}\\.[a-z][a-z0-9_]{0,63}@[0-9]{1,3}$",
-          "x-no-proto": true
+          "$ref": "#/$defs/extName"
         },
         "props": {
-          "type": "object",
-          "maxProperties": 16,
-          "additionalProperties": {
-            "anyOf": [
-              {
-                "$ref": "#/$defs/scalar"
-              },
-              {
-                "type": "array",
-                "items": {
-                  "type": [
-                    "string",
-                    "number",
-                    "boolean"
-                  ]
-                },
-                "maxItems": 50
-              }
-            ]
-          }
+          "$ref": "#/$defs/extProps"
         }
       }
     },
@@ -2880,6 +3181,9 @@ export const GENUI_V2_SCHEMA = {
           "type": "string",
           "maxLength": 2000
         },
+        "area": {
+          "$ref": "#/$defs/area"
+        },
         "title": {
           "$ref": "#/$defs/label"
         },
@@ -2940,6 +3244,9 @@ export const GENUI_V2_SCHEMA = {
           "type": "string",
           "maxLength": 2000,
           "description": "Resumen accesible (obligatorio)."
+        },
+        "select": {
+          "$ref": "#/$defs/statePath"
         }
       }
     },
@@ -2963,6 +3270,9 @@ export const GENUI_V2_SCHEMA = {
         "fallback": {
           "type": "string",
           "maxLength": 2000
+        },
+        "area": {
+          "$ref": "#/$defs/area"
         },
         "label": {
           "$ref": "#/$defs/label"
@@ -3120,6 +3430,9 @@ export const GENUI_V2_SCHEMA = {
           "type": "string",
           "maxLength": 2000
         },
+        "area": {
+          "$ref": "#/$defs/area"
+        },
         "title": {
           "$ref": "#/$defs/label"
         },
@@ -3161,6 +3474,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "direction",
       "title",
       "blocks"
@@ -3176,7 +3490,11 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "columns",
+      "rows",
+      "areas",
+      "mobile",
       "title",
       "blocks"
     ],
@@ -3191,8 +3509,15 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "state",
-      "tabs"
+      "tabs",
+      "variant",
+      "default",
+      "keep_alive",
+      "chrome",
+      "label",
+      "mobile"
     ],
     "required": [
       "type",
@@ -3205,15 +3530,22 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "title",
       "collapsible",
       "collapsed",
-      "blocks"
+      "blocks",
+      "mode",
+      "permission",
+      "on_denied",
+      "chrome",
+      "source",
+      "empty",
+      "component",
+      "props"
     ],
     "required": [
-      "type",
-      "title",
-      "blocks"
+      "type"
     ]
   },
   "text": {
@@ -3222,6 +3554,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "text",
       "tone"
     ],
@@ -3236,6 +3569,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "markdown"
     ],
     "required": [
@@ -3249,6 +3583,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "title",
       "text",
       "tone"
@@ -3264,6 +3599,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "title",
       "text",
       "icon",
@@ -3280,6 +3616,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "title",
       "subtitle",
       "body",
@@ -3300,6 +3637,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "title",
       "items"
     ],
@@ -3314,6 +3652,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "title",
       "items"
     ],
@@ -3322,12 +3661,34 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "items"
     ]
   },
+  "kpi_card": {
+    "allowed": [
+      "type",
+      "id",
+      "when",
+      "fallback",
+      "area",
+      "label",
+      "value",
+      "format",
+      "trend",
+      "tone",
+      "hint",
+      "cta"
+    ],
+    "required": [
+      "type",
+      "label",
+      "value"
+    ]
+  },
   "stats": {
     "allowed": [
       "type",
       "id",
       "when",
       "fallback",
+      "area",
       "title",
       "source",
       "format",
@@ -3345,6 +3706,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "title",
       "items"
     ],
@@ -3359,6 +3721,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "title",
       "items",
       "source"
@@ -3373,6 +3736,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "title",
       "caption",
       "columns",
@@ -3395,6 +3759,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "title",
       "model",
       "view",
@@ -3412,6 +3777,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "title",
       "model",
       "record",
@@ -3429,6 +3795,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "title",
       "kind",
       "x",
@@ -3454,6 +3821,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "title",
       "description",
       "fields",
@@ -3472,6 +3840,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "title",
       "description",
       "fields",
@@ -3489,6 +3858,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "title",
       "description",
       "fields",
@@ -3509,6 +3879,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "addon",
       "keys",
       "scope",
@@ -3526,6 +3897,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "src",
       "alt",
       "width",
@@ -3546,6 +3918,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "name",
       "record"
     ],
@@ -3560,6 +3933,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "ext",
       "props"
     ],
@@ -3574,6 +3948,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "title",
       "points",
       "source",
@@ -3586,7 +3961,8 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "detail_panel",
       "on_select",
       "height",
-      "summary"
+      "summary",
+      "select"
     ],
     "required": [
       "type",
@@ -3599,6 +3975,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "label",
       "value",
       "source",
@@ -3624,6 +4001,7 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "id",
       "when",
       "fallback",
+      "area",
       "title",
       "direction",
       "nodes",

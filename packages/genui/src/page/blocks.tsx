@@ -1,8 +1,8 @@
 // Renderers de pagina (page@1) para genui v2: grid con areas, stats/kpi_card,
 // section (declarative | hybrid | custom), map con seleccion y el bloque `ext`.
-// Son contratos [P] del plan de paginas: el validador v2 compartido con el
-// kernel todavia no los conoce, asi que se interpretan aqui sobre definiciones
-// tipadas (`PageBlockDef`) y los bloques del nucleo se delegan a `GenUI`.
+// Contratos de page@1 que el esquema genui/v2 (compartido con el kernel) ya
+// valida. Se interpretan aqui sobre definiciones tipadas (`PageBlockDef`) cuyos
+// campos hoja salen de los tipos generados; los bloques del nucleo se delegan a `GenUI`.
 import { Component, useId, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ErrorInfo, type KeyboardEvent, type ReactNode } from 'react'
 import { ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, Calendar, LayoutDashboard, LayoutGrid, List, Map as MapIcon, Table2, type LucideIcon } from 'lucide-react'
 import { Button, Card, CardContent, CardHeader, CardTitle, cn } from '@asteby/metacore-ui'
@@ -11,75 +11,76 @@ import { GenUIProvider, useGenUI, type GenUIActionRequest, type GenUISources } f
 import { TEXT_TONE } from '../generative-ui'
 import { formatMetric } from '../metric'
 import type { Tone } from '../types'
+import type { Area, AreaRow, BlockGrid, BlockKpiCard, BlockSection, BlockTabs, ExtName, ExtProps, GridTrack, PermissionKey, TabIcon } from '../generated/genui-v2'
 import { PageProvider, evalPredicate, getPath, isSafePath, resolveRef, usePageContext, type PageContextValue, type PageProviderProps } from './context'
 import { getPageBlock, type BlockData, type BlockDefinition } from './custom'
 
 type Obj = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
 
 /** Un bloque de pagina: cualquier bloque genui v2 mas los de pagina (`area`, `mode`, `kpi_card`...). */
-export type PageBlockDef = { type: string; id?: string; area?: string; when?: unknown; fallback?: string; [key: string]: any } // eslint-disable-line @typescript-eslint/no-explicit-any
+export type PageBlockDef = { type: string; id?: string; area?: Area; when?: unknown; fallback?: string; [key: string]: any } // eslint-disable-line @typescript-eslint/no-explicit-any
 
 export interface PageGridDef extends PageBlockDef {
   type: 'grid'
   /** Filas de la plantilla: `"kpis kpis"`, `"map detail"`. Tokens `[a-z][a-z0-9_]*` o `.`. */
-  areas?: string[]
+  areas?: AreaRow[]
   /** Pistas de columna: `auto`, `Nfr`, `Npx` (120-640), `minmax(Npx, Nfr)`. */
-  columns?: number | string[]
-  rows?: string[]
+  columns?: number | GridTrack[]
+  rows?: GridTrack[]
   /** Orden de areas en pantalla angosta, una por fila. */
-  mobile?: string[]
+  mobile?: Area[]
   blocks?: PageBlockDef[]
 }
 
-export type PageSectionMode = 'declarative' | 'hybrid' | 'custom'
+export type PageSectionMode = NonNullable<BlockSection['mode']>
 
 export interface PageSectionDef extends PageBlockDef {
   type: 'section'
   mode?: PageSectionMode
-  chrome?: 'card' | 'bare'
+  chrome?: BlockSection['chrome']
   title?: unknown
-  permission?: string
-  on_denied?: 'hide' | 'notice'
+  permission?: PermissionKey
+  on_denied?: BlockSection['on_denied']
   /** `data.<fuente>`: da los estados de carga/error/vacio de la seccion. */
   source?: string
   empty?: unknown
   /** mode=declarative|hybrid. */
   blocks?: PageBlockDef[]
   /** mode=custom: `<addon>.<nombre>@<mayor>` registrado con `registerPageBlock`. */
-  component?: string
-  props?: Record<string, string | number | boolean | null | Array<string | number | boolean>>
+  component?: ExtName
+  props?: ExtProps
 }
 
 export interface PageTabOption {
   key: string
   label: unknown
   /** Icono del conjunto cerrado: map, cards, table, dashboard, list, calendar, chart. */
-  icon?: string
+  icon?: TabIcon
   /** Sin permiso efectivo la opcion no se pinta ni se monta. */
-  permission?: string
+  permission?: PermissionKey
   /** Vista declarativa/hibrida: bloques de pagina. */
   blocks?: PageBlockDef[]
   /** Vista custom: `<addon>.<nombre>@<mayor>` registrado con `registerPageBlock`. */
-  component?: string
-  props?: Record<string, string | number | boolean | null | Array<string | number | boolean>>
+  component?: ExtName
+  props?: ExtProps
 }
 
 /** `tabs` de pagina: extiende el `tabs` del nucleo (conmutador de vistas sobre las mismas fuentes). */
 export interface PageTabsDef extends PageBlockDef {
   type: 'tabs'
   /** `tabs` (por defecto) | `segmented` (control segmentado, a la derecha). */
-  variant?: 'tabs' | 'segmented'
+  variant?: BlockTabs['variant']
   /** `state.<ruta>` donde vive la vista activa; sin ella el estado es local al bloque. */
   state?: string
   /** Clave de la vista inicial (si no existe o no es visible: la primera visible). */
   default?: string
   /** Conserva montadas (ocultas) las vistas ya visitadas; por defecto solo la activa. */
   keep_alive?: boolean
-  chrome?: 'card' | 'bare'
+  chrome?: BlockTabs['chrome']
   /** Nombre accesible del control. */
   label?: unknown
   /** Pantalla angosta: `select` (por defecto) o `scroll` (tira con scroll horizontal). */
-  mobile?: 'select' | 'scroll'
+  mobile?: BlockTabs['mobile']
   tabs: PageTabOption[]
 }
 
@@ -87,8 +88,8 @@ export interface PageKpiCardDef extends PageBlockDef {
   type: 'kpi_card'
   label: unknown
   value: unknown
-  format?: string
-  trend?: 'up' | 'down' | 'flat' | { $ref: string }
+  format?: BlockKpiCard['format']
+  trend?: BlockKpiCard['trend']
   tone?: Tone
   hint?: unknown
   cta?: Obj

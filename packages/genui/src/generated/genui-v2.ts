@@ -61,6 +61,7 @@ export type Block =
   | BlockCard
   | BlockList
   | BlockKpi
+  | BlockKpiCard
   | BlockStats
   | BlockLinks
   | BlockTimeline
@@ -86,12 +87,68 @@ export type Block =
  */
 export type Id = string
 /**
+ * Nombre de región de un grid con `areas` (page@1).
+ *
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "area".
+ */
+export type Area = string
+/**
+ * Pista de `grid.columns`/`grid.rows`: auto, Nfr, Npx o minmax(Npx, Nfr|Npx). Sin CSS libre.
+ *
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "gridTrack".
+ */
+export type GridTrack = string
+/**
+ * Fila de la plantilla de `grid.areas`: nombres de región o `.` (celda vacía) separados por un espacio.
+ *
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "areaRow".
+ */
+export type AreaRow = string
+/**
  * Clave de campo, columna o entrada: segmentos no vacíos [A-Za-z_][A-Za-z0-9_]* separados por punto (sin "a..b" ni "a."); ningún segmento puede ser __proto__, constructor ni prototype.
  *
  * This interface was referenced by `GenuiV2`'s JSON-Schema
  * via the `definition` "key".
  */
 export type Key = string
+/**
+ * Icono de una opción de tabs: conjunto cerrado.
+ *
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "tabIcon".
+ */
+export type TabIcon = 'map' | 'cards' | 'table' | 'dashboard' | 'list' | 'calendar' | 'chart'
+/**
+ * Clave de permiso del manifiesto (<addon>.<recurso>.<acción>).
+ *
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "permissionKey".
+ */
+export type PermissionKey = string
+/**
+ * Bloque custom registrado: <addon>.<nombre>@<mayor>.
+ *
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "extName".
+ */
+export type ExtName = string
+/**
+ * Marco de una sección/vista: card (el host pinta marco y estados) o bare.
+ *
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "chrome".
+ */
+export type Chrome = 'card' | 'bare'
+/**
+ * Referencia a data.<nombre>.
+ *
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "source".
+ */
+export type Source = string
 /**
  * Texto visible: literal, clave i18n o vinculación.
  *
@@ -163,13 +220,6 @@ export type Link = string
  */
 export type StatFormat = 'number' | 'currency' | 'percent' | 'compact' | 'date' | 'datetime' | 'relative_date'
 /**
- * Referencia a data.<nombre>.
- *
- * This interface was referenced by `GenuiV2`'s JSON-Schema
- * via the `definition` "source".
- */
-export type Source = string
-/**
  * Tipos de campo (field.kind).
  *
  * This interface was referenced by `GenuiV2`'s JSON-Schema
@@ -191,6 +241,13 @@ export type FieldKind =
   | 'select'
   | 'multiselect'
   | 'search'
+/**
+ * Ruta de escritura en el estado de la página: raíz state.
+ *
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "statePath".
+ */
+export type StatePath = string
 /**
  * This interface was referenced by `GenuiV2`'s JSON-Schema
  * via the `definition` "widgetSize".
@@ -293,6 +350,7 @@ export interface BlockStack {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   direction?: 'vertical' | 'horizontal'
   title?: Label
   /**
@@ -329,7 +387,70 @@ export interface BlockGrid {
   id?: Id
   when?: Predicate
   fallback?: string
-  columns?: number
+  area?: Area
+  /**
+   * Número de columnas (1-4) o, con `areas`, una pista por columna.
+   */
+  columns?:
+    | number
+    | [GridTrack]
+    | [GridTrack, GridTrack]
+    | [GridTrack, GridTrack, GridTrack]
+    | [GridTrack, GridTrack, GridTrack, GridTrack]
+    | [GridTrack, GridTrack, GridTrack, GridTrack, GridTrack]
+    | [GridTrack, GridTrack, GridTrack, GridTrack, GridTrack, GridTrack]
+    | [GridTrack, GridTrack, GridTrack, GridTrack, GridTrack, GridTrack, GridTrack]
+    | [GridTrack, GridTrack, GridTrack, GridTrack, GridTrack, GridTrack, GridTrack, GridTrack]
+    | [GridTrack, GridTrack, GridTrack, GridTrack, GridTrack, GridTrack, GridTrack, GridTrack, GridTrack]
+    | [GridTrack, GridTrack, GridTrack, GridTrack, GridTrack, GridTrack, GridTrack, GridTrack, GridTrack, GridTrack]
+    | [
+        GridTrack,
+        GridTrack,
+        GridTrack,
+        GridTrack,
+        GridTrack,
+        GridTrack,
+        GridTrack,
+        GridTrack,
+        GridTrack,
+        GridTrack,
+        GridTrack
+      ]
+    | [
+        GridTrack,
+        GridTrack,
+        GridTrack,
+        GridTrack,
+        GridTrack,
+        GridTrack,
+        GridTrack,
+        GridTrack,
+        GridTrack,
+        GridTrack,
+        GridTrack,
+        GridTrack
+      ]
+  /**
+   * Pistas de fila (solo con `areas`).
+   *
+   * @minItems 1
+   * @maxItems 24
+   */
+  rows?: [GridTrack, ...GridTrack[]]
+  /**
+   * Plantilla de regiones; cada hijo declara `area`.
+   *
+   * @minItems 1
+   * @maxItems 24
+   */
+  areas?: [AreaRow, ...AreaRow[]]
+  /**
+   * Orden de regiones en pantalla angosta, una por fila.
+   *
+   * @minItems 1
+   * @maxItems 24
+   */
+  mobile?: [Area, ...Area[]]
   title?: Label
   /**
    * @minItems 1
@@ -346,6 +467,7 @@ export interface BlockTabs {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   state?: BindingPath
   /**
    * @minItems 1
@@ -360,7 +482,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         }
       ]
     | [
@@ -371,7 +497,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -380,7 +510,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         }
       ]
     | [
@@ -391,7 +525,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -400,7 +538,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -409,7 +551,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         }
       ]
     | [
@@ -420,7 +566,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -429,7 +579,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -438,7 +592,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -447,7 +605,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         }
       ]
     | [
@@ -458,7 +620,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -467,7 +633,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -476,7 +646,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -485,7 +659,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -494,7 +672,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         }
       ]
     | [
@@ -505,7 +687,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -514,7 +700,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -523,7 +713,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -532,7 +726,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -541,7 +739,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -550,7 +752,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         }
       ]
     | [
@@ -561,7 +767,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -570,7 +780,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -579,7 +793,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -588,7 +806,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -597,7 +819,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -606,7 +832,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -615,7 +845,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         }
       ]
     | [
@@ -626,7 +860,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -635,7 +873,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -644,7 +886,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -653,7 +899,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -662,7 +912,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -671,7 +925,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -680,7 +938,11 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         },
         {
           key: Key
@@ -689,9 +951,28 @@ export interface BlockTabs {
            * @minItems 1
            * @maxItems 24
            */
-          blocks: [Block, ...Block[]]
+          blocks?: [Block, ...Block[]]
+          icon?: TabIcon
+          permission?: PermissionKey
+          component?: ExtName
+          props?: ExtProps
         }
       ]
+  variant?: 'tabs' | 'segmented'
+  default?: Key
+  keep_alive?: boolean
+  chrome?: Chrome
+  label?: Label
+  mobile?: 'select' | 'scroll'
+}
+/**
+ * Props escalares de un bloque custom; sin objetos libres.
+ *
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "extProps".
+ */
+export interface ExtProps {
+  [k: string]: Scalar | (string | number | boolean)[]
 }
 /**
  * This interface was referenced by `GenuiV2`'s JSON-Schema
@@ -702,14 +983,26 @@ export interface BlockSection {
   id?: Id
   when?: Predicate
   fallback?: string
-  title: Label
+  area?: Area
+  title?: Label
   collapsible?: boolean
   collapsed?: boolean
   /**
    * @minItems 1
    * @maxItems 24
    */
-  blocks: [Block, ...Block[]]
+  blocks?: [Block, ...Block[]]
+  /**
+   * declarative|hybrid usan `blocks`; custom usa `component`.
+   */
+  mode?: 'declarative' | 'hybrid' | 'custom'
+  permission?: PermissionKey
+  on_denied?: 'hide' | 'notice'
+  chrome?: Chrome
+  source?: Source
+  empty?: Label
+  component?: ExtName
+  props?: ExtProps
 }
 /**
  * This interface was referenced by `GenuiV2`'s JSON-Schema
@@ -720,6 +1013,7 @@ export interface BlockText {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   text: Text
   tone?: Tone
 }
@@ -732,6 +1026,7 @@ export interface BlockMarkdown {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   markdown: string
 }
 /**
@@ -743,6 +1038,7 @@ export interface BlockAlert {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   title?: Label
   text: Text
   tone?: Tone
@@ -756,6 +1052,7 @@ export interface BlockEmpty {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   title: Label
   text?: Text
   icon?: string
@@ -1006,6 +1303,7 @@ export interface BlockCard {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   title: Label
   subtitle?: Label
   body?: Text
@@ -1067,6 +1365,7 @@ export interface BlockList {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   title?: Label
   /**
    * @minItems 1
@@ -1096,6 +1395,7 @@ export interface BlockKpi {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   title?: Label
   /**
    * @minItems 1
@@ -1133,6 +1433,25 @@ export interface Item {
   status?: string
   tone?: Tone
   format?: StatFormat
+  action?: Action
+}
+/**
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "block_kpi_card".
+ */
+export interface BlockKpiCard {
+  type: 'kpi_card'
+  id?: Id
+  when?: Predicate
+  fallback?: string
+  area?: Area
+  label: Label
+  value: Value
+  format?: StatFormat
+  trend?: ('up' | 'down' | 'flat') | Ref
+  tone?: Tone
+  hint?: Label
+  cta?: Action
 }
 /**
  * This interface was referenced by `GenuiV2`'s JSON-Schema
@@ -1143,6 +1462,7 @@ export interface BlockStats {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   title?: Label
   source?: Source
   format?: StatFormat
@@ -1175,6 +1495,7 @@ export interface BlockLinks {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   title?: Label
   /**
    * @minItems 1
@@ -1191,6 +1512,7 @@ export interface BlockTimeline {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   title?: Label
   /**
    * @minItems 1
@@ -1208,6 +1530,7 @@ export interface BlockTable {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   title?: Label
   caption?: Label
   /**
@@ -1263,6 +1586,7 @@ export interface BlockModelView {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   title?: Label
   model: Key
   view?: 'table' | 'kanban' | 'calendar' | 'map' | 'timeline' | 'chart'
@@ -1296,6 +1620,7 @@ export interface BlockView {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   title?: Label
   model: Key
   record?: Value
@@ -1330,6 +1655,7 @@ export interface BlockChart {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   title?: Label
   kind: 'bar' | 'line' | 'area' | 'pie' | 'donut' | 'sparkline'
   x: Key
@@ -1363,6 +1689,7 @@ export interface BlockForm {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   title?: Label
   description?: Text
   /**
@@ -1782,6 +2109,7 @@ export interface BlockWizard {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   title?: Label
   description?: Text
   /**
@@ -2148,6 +2476,7 @@ export interface BlockConfirm {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   title: Label
   description?: Text
   /**
@@ -3341,6 +3670,7 @@ export interface BlockSettings {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   addon: string
   /**
    * @maxItems 40
@@ -3358,6 +3688,7 @@ export interface BlockMedia {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   src: string
   alt: string
   width: number
@@ -3373,6 +3704,7 @@ export interface BlockSlot {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   name: string
   record?: Value
 }
@@ -3385,10 +3717,9 @@ export interface BlockExt {
   id?: Id
   when?: Predicate
   fallback?: string
-  ext: string
-  props?: {
-    [k: string]: Scalar | (string | number | boolean)[]
-  }
+  area?: Area
+  ext: ExtName
+  props?: ExtProps
 }
 /**
  * This interface was referenced by `GenuiV2`'s JSON-Schema
@@ -3399,6 +3730,7 @@ export interface BlockMap {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   title?: Label
   /**
    * @maxItems 200
@@ -3426,6 +3758,7 @@ export interface BlockMap {
    * Resumen accesible (obligatorio).
    */
   summary: string
+  select?: StatePath
 }
 /**
  * This interface was referenced by `GenuiV2`'s JSON-Schema
@@ -3629,6 +3962,7 @@ export interface BlockMetric {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   label: Label
   value?: Value
   source?: Source
@@ -3709,6 +4043,7 @@ export interface BlockDiagram {
   id?: Id
   when?: Predicate
   fallback?: string
+  area?: Area
   title?: Label
   direction?: 'lr' | 'tb'
   /**
