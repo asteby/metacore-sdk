@@ -168,13 +168,28 @@ describe('action blocks v0.3 round-trip (OPS Block field names)', () => {
     ]
     const parsed = ok(classic)
     expect(parsed).toEqual(classic)
-    expect(parsed.some(needsAdvanced)).toBe(false)
+    expect(parsed.some((x) => needsAdvanced(x))).toBe(false)
   })
 
-  it('marks as advanced what the visual editor cannot show', () => {
-    expect(needsAdvanced(ok([{ do: 'notify', template: 't', when: { path: 'p', ne: 1 } }])[0]!)).toBe(true)
-    expect(needsAdvanced(ok([{ do: 'event.emit', name: 'a.b.c', payload: {}, when: { path: 'p', eq: 1 } }])[0]!)).toBe(true)
-    expect(needsAdvanced(ok([{ do: 'record.upsert', model: 'm', match: ['k'], mapping: {}, guard: { field: 'f', path: 'payload.x', op: 'gt' } }])[0]!)).toBe(true)
+  it('marks as advanced only what no visual control can represent', () => {
+    const adv = (b: unknown, targets = false) => needsAdvanced(ok([b])[0]!, { targets })
+    // when eq|ne|in is edited visually (WhenEditor); exists is not exposed
+    expect(adv({ do: 'notify', template: 't', when: { path: 'p', ne: 1 } })).toBe(false)
+    expect(adv({ do: 'event.emit', name: 'a.b.c', payload: {}, when: { path: 'p', in: [1, 2] } })).toBe(false)
+    expect(adv({ do: 'notify', template: 't', when: { path: 'p', exists: true } })).toBe(true)
+    // old hosts (no catalogue): guard/defaults and the state blocks stay advanced
+    const guarded = { do: 'record.upsert', model: 'm', match: ['k'], mapping: {}, guard: { field: 'f', path: 'payload.x', op: 'gt' } }
+    expect(adv(guarded)).toBe(true)
+    expect(adv({ do: 'record.delete', model: 'm', match: ['k'], mapping: {} })).toBe(true)
+    // with the catalogue every record.* block is visual
+    expect(adv(guarded, true)).toBe(false)
+    expect(adv({ do: 'record.delete', model: 'm', match: ['k'], mapping: {}, mode: 'soft', max_rows: 2 }, true)).toBe(false)
+    expect(adv({ do: 'record.action', model: 'm', match: ['k'], mapping: {}, action: 'a', params: { q: '1' } }, true)).toBe(false)
+    expect(adv({ do: 'record.transition', model: 'm', match: ['k'], mapping: {}, to: 'x' }, true)).toBe(false)
+    // non-representable: non-scalar defaults, non-string params
+    expect(adv({ do: 'record.upsert', model: 'm', match: ['k'], mapping: {}, defaults: { a: { b: 1 } } }, true)).toBe(true)
+    expect(adv({ do: 'record.action', model: 'm', match: ['k'], mapping: {}, action: 'a', params: { q: 1 } }, true)).toBe(true)
+    expect(adv({ do: 'record.upsert', model: 'm', match: ['k'], mapping: {}, when: { path: 'p', exists: false } }, true)).toBe(true)
   })
 
   it('rejects record.delete with mode hard (OPS hard_delete_disabled) and unknown modes', () => {

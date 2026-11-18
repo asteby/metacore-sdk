@@ -5,6 +5,8 @@ export interface SourceField {
   path: string
   type: string
   description?: string
+  /** JSON Schema `format` (e.g. `date-time`), when declared. */
+  format?: string
   required: boolean
 }
 
@@ -31,7 +33,7 @@ export function flattenSchemaFields(schema: JSONSchemaLite | undefined): SourceF
       if (!child) continue
       const path = prefix ? `${prefix}.${key}` : key
       const type = typeOf(child)
-      out.push({ path, type, description: child.description, required: req.has(key) })
+      out.push({ path, type, description: child.description, ...(child.format ? { format: child.format } : {}), required: req.has(key) })
       if (type === 'object') walk(child, path, depth + 1)
     }
   }

@@ -1,3 +1,4 @@
+import { policyProblems, type PolicyCode } from './policy-utils'
 import type { IngestTarget } from './types'
 
 // Pure helpers for the TargetPicker and the inbound mapping editor.
@@ -129,7 +130,7 @@ export function unmappedRequired(target: IngestTarget, mapping: Record<string, s
 
 export interface InboundProblem {
   step: number
-  code: 'unknownTarget' | 'blocked' | 'matchNotCandidate' | 'matchMissing' | 'requiredUnmapped' | 'columnNotAllowed'
+  code: 'unknownTarget' | 'blocked' | 'matchNotCandidate' | 'matchMissing' | 'requiredUnmapped' | 'columnNotAllowed' | PolicyCode
   vars: Record<string, string | number>
 }
 
@@ -138,6 +139,8 @@ interface CheckableBlock {
   model?: string
   match?: string[]
   mapping?: Record<string, string>
+  defaults?: Record<string, unknown>
+  idempotency_field?: string
 }
 
 const WRITES = new Set(['record.create', 'record.update', 'record.upsert'])
@@ -166,9 +169,14 @@ export function inboundProblems(actions: CheckableBlock[], targets: IngestTarget
     const allowed = new Set(tg.columns.map((c) => c.name))
     for (const k of Object.keys(mapping)) if (!allowed.has(k)) out.push({ step, code: 'columnNotAllowed', vars: { column: k } })
     if (WRITES.has(a.do)) {
-      const missing = unmappedRequired(tg, mapping)
+      // Columns the block fills by other means (fixed values, the retry-key column) are not "unmapped".
+      const covered: Record<string, string> = { ...mapping }
+      for (const k of Object.keys(a.defaults ?? {})) covered[k] ||= 'default'
+      if (a.idempotency_field) covered[a.idempotency_field] ||= 'idempotency'
+      const missing = unmappedRequired(tg, covered)
       if (missing.length > 0) out.push({ step, code: 'requiredUnmapped', vars: { columns: missing.join(', ') } })
     }
+    for (const p of policyProblems(a as never, tg)) out.push({ step, ...p })
   })
   return out
 }
