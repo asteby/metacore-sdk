@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 53.21.1
+
+### Patch Changes
+
+- 3425cb1: Fix: `ConnectorCredentialFieldControl` (campos de credencial de `AddonConfigSurface`) ya no ejecuta su reset de estado al montar, solo cuando cambia el entorno (`resetKey`). Antes, un clic en «Rotar» o «Generar» que llegaba antes de que se vaciaran los efectos de montaje quedaba anulado por `setConfirmRotate(false)`/`setGenerated(false)`.
+
 ## 53.21.0
 
 ### Minor Changes
