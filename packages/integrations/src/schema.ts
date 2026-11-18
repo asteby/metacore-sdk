@@ -1,4 +1,4 @@
-import type { CatalogEvent, JSONSchemaLite, MappingRow } from './types'
+import type { CatalogEvent, IngestTarget, JSONSchemaLite, MappingRow } from './types'
 
 /** A leaf (or container) field of an event payload, addressed by dotted path. */
 export interface SourceField {
@@ -180,4 +180,47 @@ export function groupEvents(events: CatalogEvent[], query: string): EventGroup[]
   const out = [...groups.values()].sort((a, b) => a.addonName.localeCompare(b.addonName))
   for (const g of out) g.events.sort((a, b) => a.name.localeCompare(b.name))
   return out
+}
+
+/**
+ * Mapping rows to start an inbound `mapping` from a target: one row per
+ * writable column, in declaration order (`target` = column name, empty
+ * `value` to fill with a payload field). `requiredOnly` keeps just the
+ * required columns.
+ */
+export function targetColumnsToMappingRows(target: IngestTarget, opts: { requiredOnly?: boolean } = {}): MappingRow[] {
+  return target.columns
+    .filter((c) => !opts.requiredOnly || c.required)
+    .map((c) => ({ target: c.name, kind: 'field' as const, value: '' }))
+}
+
+/**
+ * Infers a payload schema from a sample JSON (the inverse of
+ * `buildSamplePayload`): objects recurse, arrays use the first item, strings
+ * that look like a date-time / email / uuid get their `format`. Every
+ * sample value becomes `example`. Pure and bounded by depth.
+ */
+export function inferSchema(sample: unknown, depth = 0): JSONSchemaLite {
+  if (sample === null || sample === undefined) return { type: 'string' }
+  if (Array.isArray(sample)) return sample.length > 0 && depth < MAX_DEPTH ? { type: 'array', items: inferSchema(sample[0], depth + 1) } : { type: 'array' }
+  switch (typeof sample) {
+    case 'boolean':
+      return { type: 'boolean', example: sample }
+    case 'number':
+      return { type: Number.isInteger(sample) ? 'integer' : 'number', example: sample }
+    case 'object': {
+      if (depth >= MAX_DEPTH) return { type: 'object' }
+      const properties: Record<string, JSONSchemaLite> = {}
+      for (const [k, v] of Object.entries(sample as Record<string, unknown>)) properties[k] = inferSchema(v, depth + 1)
+      return { type: 'object', properties }
+    }
+    default: {
+      const s = String(sample)
+      const out: JSONSchemaLite = { type: 'string', example: s }
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s)) out.format = 'date-time'
+      else if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)) out.format = 'email'
+      else if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)) out.format = 'uuid'
+      return out
+    }
+  }
 }
