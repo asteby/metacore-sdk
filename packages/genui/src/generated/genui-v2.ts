@@ -115,12 +115,19 @@ export type AreaRow = string
  */
 export type Key = string
 /**
- * Icono de una opción de tabs: conjunto cerrado.
+ * Icono de una opción de tabs: uno del conjunto base (map, cards, table, dashboard, list, calendar, chart) o un nombre de icono que resuelve el host.
  *
  * This interface was referenced by `GenuiV2`'s JSON-Schema
  * via the `definition` "tabIcon".
  */
-export type TabIcon = 'map' | 'cards' | 'table' | 'dashboard' | 'list' | 'calendar' | 'chart'
+export type TabIcon = ('map' | 'cards' | 'table' | 'dashboard' | 'list' | 'calendar' | 'chart') | IconName
+/**
+ * Nombre de un icono que resuelve el host (p. ej. MapPin de lucide): identificador alfanumérico sin separadores.
+ *
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "iconName".
+ */
+export type IconName = string
 /**
  * Clave de permiso del manifiesto (<addon>.<recurso>.<acción>).
  *
