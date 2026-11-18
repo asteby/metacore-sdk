@@ -163,7 +163,11 @@ export function MapView(props: MapViewProps): React.ReactElement {
                     setStatus('ready')
                 })
             })
-            .catch(() => !cancelled && setStatus('unavailable'))
+            .catch((err) => {
+                // No tragarse el motivo: un fallo al crear el mapa no debe quedar invisible (asi se escondio el TypeError de maxBounds).
+                console.warn('metacore-maps: no se pudo crear el mapa', err)
+                if (!cancelled) setStatus('unavailable')
+            })
         return () => {
             cancelled = true
             setHandle(null)
