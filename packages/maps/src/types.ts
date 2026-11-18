@@ -2,6 +2,9 @@ import type { GeoPoint } from '@asteby/storefront/geo'
 
 export type { GeoPoint }
 
+/** How exact a location is. `city` / `country` are approximate (a centroid): drawn as one count bubble per place, never as stacked pins. */
+export type MapPrecision = 'exact' | 'city' | 'country'
+
 /** A feature on the map. `key` is stable (record id); `status` is shown as text, never colour alone. */
 export interface MapPointItem {
     key: string
@@ -17,6 +20,10 @@ export interface MapPointItem {
     color?: string
     /** One or two characters drawn inside DOM markers (e.g. the stop number). */
     glyph?: string
+    /** Location accuracy (default `exact`). Approximate points aggregate into a bubble and zoom is capped on select. */
+    precision?: MapPrecision
+    /** Place name of an approximate location (e.g. `CA`): printed on its bubble as `CA · 8`. */
+    area?: string
     /** Extra popup rows, in order. */
     details?: Array<{ label?: string; value: string }>
 }

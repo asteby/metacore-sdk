@@ -32,7 +32,10 @@ export {
 } from './config'
 export { boundsOf, circlePolygon, pointsToGeoJSON, zonesToGeoJSON } from './geometry'
 export { colorFor, PALETTE } from './palette'
-export { DEFAULT_LABELS, type MapLabels, type MapPointItem, type ZoneItem, type PolygonCoords, type GeoPoint } from './types'
+export { DEFAULT_PRECISION_ZOOM } from './geometry'
+export type { MapBounds, MapLimits } from './config'
+export { DEFAULT_MAP_LIMITS } from './limits'
+export { DEFAULT_LABELS, type MapLabels, type MapPrecision, type MapPointItem, type ZoneItem, type PolygonCoords, type GeoPoint } from './types'
 // Geo maths are shared with the storefronts: re-exported, not copied.
 export { distanceKm, formatDistance, isValidPoint, parseLatLng, directionsUrl } from '@asteby/storefront/geo'
 export { buildChoropleth, sequentialRamp, toRegionCollection, type ChoroplethLoader, type ChoroplethGeometry, type ChoroplethRegion, type ChoroplethStep, type RegionCollection } from './choropleth'

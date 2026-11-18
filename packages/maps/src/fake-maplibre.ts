@@ -104,6 +104,10 @@ export class FakeMap implements FakeMapState {
     easeTo(o: unknown) {
         this.calls.push(['easeTo', o])
     }
+    setMinZoom(z: number) {
+        this.options.minZoom = z
+        this.calls.push(['setMinZoom', z])
+    }
     getZoom() {
         return this.zoom
     }

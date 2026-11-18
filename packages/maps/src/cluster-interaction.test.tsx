@@ -3,7 +3,7 @@ import * as React from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { configureMaps, resetMapsConfig } from './config'
-import { fakeMaplibre, instances, popups, resetFakes } from './fake-maplibre'
+import { fakeMaplibre, instances, markers, popups, resetFakes } from './fake-maplibre'
 import { MapView } from './map-view'
 import type { MapPointItem } from './types'
 
@@ -36,30 +36,43 @@ const easeCalls = (map: { calls: Array<[string, ...unknown[]]> }) => map.calls.f
 const lastPopup = () => popups[popups.length - 1]!
 
 describe('cluster click', () => {
-    it('lists the members instead of flying to max zoom when they share coordinates', async () => {
+    it('fans the members out instead of flying to max zoom when they share coordinates', async () => {
         const onSelect = vi.fn()
         const map = await mount(same, { onSelect })
         map.expansionZoom = 15
         map.emit('click', { features: [clusterFeature(12)] }, 'mcm-points-clusters')
-        await waitFor(() => expect(popups.some((p) => p.node?.querySelector('ul'))).toBe(true))
-        const list = lastPopup().node as HTMLElement
-        const buttons = list.querySelectorAll('button')
-        expect(buttons).toHaveLength(10)
-        expect(buttons[0]!.textContent).toBe('Inst 0, En línea')
-        expect(list.textContent).toContain('12 instancias')
-        expect(list.textContent).toContain('+2 más')
+        await waitFor(() => expect(markers).toHaveLength(1))
+        const pins = [...markers[0]!.el.querySelectorAll('button')]
+        expect(pins).toHaveLength(12)
+        expect(pins[0]!.getAttribute('aria-label')).toBe('Inst 0, En línea')
         expect(easeCalls(map).some((c) => c.zoom > 14)).toBe(false)
-        fireEvent.click(buttons[3]!)
+        fireEvent.click(pins[3]!)
         expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ key: 's3' }))
-        // Picking only centres: same-coordinate neighbours, so no zoom beyond the current one.
+        // The pin opens a popup with a status chip, and only centres (neighbours share the spot).
+        const pop = lastPopup().node as HTMLElement
+        expect(pop.querySelector('strong')?.textContent).toBe('Inst 3')
+        expect(pop.querySelector('.mcm-chip')?.textContent).toBe('En línea')
         expect(easeCalls(map).at(-1)?.zoom).toBe(map.zoom)
     })
 
-    it('lists a small cluster whose leaves are all coincident even if the expansion zoom looks fine', async () => {
+    it('lists (10 + "+N más") when too many share the spot to fan out', async () => {
+        const crowd = Array.from({ length: 30 }, (_, i): MapPointItem => ({ key: `c${i}`, ...C, label: `Nodo ${i}` }))
+        const map = await mount(crowd)
+        map.expansionZoom = 15
+        map.emit('click', { features: [clusterFeature(30)] }, 'mcm-points-clusters')
+        await waitFor(() => expect(popups.some((p) => p.node?.querySelector('ul'))).toBe(true))
+        const list = lastPopup().node as HTMLElement
+        expect(list.querySelectorAll('button')).toHaveLength(10)
+        expect(list.textContent).toContain('30 instancias')
+        expect(list.textContent).toContain('+20 más')
+        expect(markers).toHaveLength(0)
+    })
+
+    it('fans a small cluster whose leaves are all coincident even if the expansion zoom looks fine', async () => {
         const map = await mount(same.slice(0, 3), { fit: false })
         map.expansionZoom = 9
         map.emit('click', { features: [clusterFeature(3)] }, 'mcm-points-clusters')
-        await waitFor(() => expect(popups.some((p) => p.node?.querySelector('ul'))).toBe(true))
+        await waitFor(() => expect(markers).toHaveLength(1))
         expect(easeCalls(map)).toHaveLength(0)
     })
 

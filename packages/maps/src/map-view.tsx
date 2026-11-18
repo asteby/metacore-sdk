@@ -8,18 +8,20 @@ import {
     resolveStyle,
     supportsWebGL,
     type MapLibreModule,
+    type MapLimits,
     type MapScheme,
     type MapStyle,
 } from './config'
+import { resolveMapLimits } from './limits'
 import { MapContext, type MapContextValue } from './context'
 import { ensureStyles } from './dom'
-import { sameSpot } from './geometry'
+import { fitMaxZoom, isApproximate, selectZoomFor } from './geometry'
 import { CLUSTER_THRESHOLD, ClusterLayer, Marker, useFitBounds } from './layers'
 import { MapList } from './map-list'
 import { prefersReducedMotion, useMapScheme } from './theme'
-import { mergeLabels, type GeoPoint, type MapLabels, type MapPointItem } from './types'
+import { mergeLabels, type GeoPoint, type MapLabels, type MapPointItem, type MapPrecision } from './types'
 
-export interface MapViewProps {
+export interface MapViewProps extends MapLimits {
     /** Features to draw. They also feed the list alternative. */
     points?: MapPointItem[]
     /** Cluster the points (default: automatic above 150). */
@@ -42,6 +44,8 @@ export interface MapViewProps {
     onSelect?: (item: MapPointItem) => void
     /** Zoom a selected point is brought to (default 13). Never zooms in when other points share its coordinates. */
     selectZoom?: number
+    /** Highest zoom per approximate precision, for selection and fitting (default `{ country: 5, city: 10 }`). `exact` points use `selectZoom`. */
+    precisionZoom?: Partial<Record<MapPrecision, number>>
     /** Click on the empty map (e.g. a picker). */
     onMapClick?: (p: GeoPoint) => void
     /** Show the "Ver lista" toggle (default true; the list is still the fallback when the map cannot render). */
@@ -55,14 +59,18 @@ export interface MapViewProps {
 
 type Status = 'loading' | 'ready' | 'unavailable'
 
-function PointsLayer({ points, cluster, colors, selectedKey, onSelect, fit, labels }: Pick<MapViewProps, 'points' | 'cluster' | 'colors' | 'selectedKey' | 'onSelect' | 'fit' | 'labels'>) {
+function PointsLayer({ points, cluster, colors, selectedKey, onSelect, fit, labels, precisionZoom }: Pick<MapViewProps, 'points' | 'cluster' | 'colors' | 'selectedKey' | 'onSelect' | 'fit' | 'labels' | 'precisionZoom'>) {
     const pts = React.useMemo(() => (points ?? []).filter((p) => isValidPoint(p)), [points])
-    useFitBounds(pts, fit !== false)
+    useFitBounds(pts, fit !== false, fitMaxZoom(pts, precisionZoom))
     const clustered = cluster ?? pts.length > CLUSTER_THRESHOLD
-    if (clustered) return <ClusterLayer points={pts} colors={colors} onSelect={onSelect} labels={mergeLabels(labels)} />
+    const merged = mergeLabels(labels)
+    if (clustered) return <ClusterLayer points={pts} colors={colors} onSelect={onSelect} labels={merged} />
+    const approx = pts.filter(isApproximate)
     return (
         <>
-            {pts.map((p) => (
+            {/* Approximate places are count bubbles, never stacked pins. */}
+            {approx.length ? <ClusterLayer points={approx} cluster={false} colors={colors} onSelect={onSelect} labels={merged} /> : null}
+            {pts.filter((p) => !isApproximate(p)).map((p) => (
                 <Marker
                     key={p.key}
                     lat={p.lat}
@@ -128,16 +136,22 @@ export function MapView(props: MapViewProps): React.ReactElement {
                 await ensureProtocols(ml, style)
                 if (cancelled) return
                 const cfg = getMapsConfig()
+                const limits: MapLimits = { renderWorldCopies: props.renderWorldCopies, minZoom: props.minZoom, maxZoom: props.maxZoom, maxBounds: props.maxBounds }
+                const sizeOf = () => ({ width: el.clientWidth, height: el.clientHeight })
                 map = new ml.Map({
                     container: el,
                     style,
                     center: props.center ?? cfg.center ?? [-102.5, 23.6],
                     zoom: props.zoom ?? cfg.zoom ?? 4,
+                    ...resolveMapLimits(cfg, limits, sizeOf()),
                     attributionControl: false,
                 })
                 map.addControl(new ml.NavigationControl({ showCompass: false }), 'top-right')
                 map.addControl(new ml.AttributionControl({ compact: true, customAttribution: cfg.attribution }))
                 map.on('style.load', () => setStyleVersion((v) => v + 1))
+                // `auto` minZoom follows the container (the world keeps filling it after a resize).
+                const m0 = map
+                if ((limits.minZoom ?? cfg.minZoom ?? 'auto') === 'auto') m0.on('resize', () => m0.setMinZoom(resolveMapLimits(cfg, limits, sizeOf()).minZoom as number))
                 map.on('click', (e: ML.MapMouseEvent) => {
                     const cb = live.current.onMapClick
                     if (cb && !(e as { defaultPrevented?: boolean }).defaultPrevented) cb({ lat: e.lngLat.lat, lng: e.lngLat.lng })
@@ -180,13 +194,12 @@ export function MapView(props: MapViewProps): React.ReactElement {
             setSelected(item.key)
             props.onSelect?.(item)
             if (!handle) return
-            // Approximate places (e.g. country centroids) share coordinates: only centre, never zoom into empty map.
-            const crowded = items.some((p) => p.key !== item.key && sameSpot(p, item))
-            const current = handle.map.getZoom()
-            handle.map.easeTo({ center: [item.lng, item.lat], zoom: crowded ? current : Math.max(current, props.selectZoom ?? 13), duration: reducedMotion ? 0 : 400 })
+            // Approximate places stop at their precision cap, crowded exact ones only centre: more zoom would show empty map.
+            const zoom = selectZoomFor(item, items, handle.map.getZoom(), props.selectZoom ?? 13, props.precisionZoom)
+            handle.map.easeTo({ center: [item.lng, item.lat], zoom, duration: reducedMotion ? 0 : 400 })
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [handle, reducedMotion, props.onSelect, props.selectZoom, items],
+        [handle, reducedMotion, props.onSelect, props.selectZoom, props.precisionZoom, items],
     )
 
     const unavailable = status === 'unavailable'
@@ -210,7 +223,7 @@ export function MapView(props: MapViewProps): React.ReactElement {
             )}
             {ctx ? (
                 <MapContext.Provider value={ctx}>
-                    <PointsLayer points={points} cluster={props.cluster} colors={props.colors} selectedKey={selected} onSelect={select} fit={props.fit} labels={props.labels} />
+                    <PointsLayer points={points} cluster={props.cluster} colors={props.colors} selectedKey={selected} onSelect={select} fit={props.fit} labels={props.labels} precisionZoom={props.precisionZoom} />
                     {children}
                 </MapContext.Provider>
             ) : null}
