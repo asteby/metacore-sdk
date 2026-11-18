@@ -3,15 +3,15 @@
 // Son contratos [P] del plan de paginas: el validador v2 compartido con el
 // kernel todavia no los conoce, asi que se interpretan aqui sobre definiciones
 // tipadas (`PageBlockDef`) y los bloques del nucleo se delegan a `GenUI`.
-import { Component, useMemo, useSyncExternalStore, type CSSProperties, type ErrorInfo, type ReactNode } from 'react'
-import { ArrowDownRight, ArrowRight, ArrowUpRight } from 'lucide-react'
+import { Component, useId, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ErrorInfo, type KeyboardEvent, type ReactNode } from 'react'
+import { ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, Calendar, LayoutDashboard, LayoutGrid, List, Map as MapIcon, Table2, type LucideIcon } from 'lucide-react'
 import { Button, Card, CardContent, CardHeader, CardTitle, cn } from '@asteby/metacore-ui'
 import { GenUI } from '../render-v2'
 import { GenUIProvider, useGenUI, type GenUIActionRequest, type GenUISources } from '../registry'
 import { TEXT_TONE } from '../generative-ui'
 import { formatMetric } from '../metric'
 import type { Tone } from '../types'
-import { PageProvider, evalPredicate, isSafePath, resolveRef, usePageContext, type PageContextValue, type PageProviderProps } from './context'
+import { PageProvider, evalPredicate, getPath, isSafePath, resolveRef, usePageContext, type PageContextValue, type PageProviderProps } from './context'
 import { getPageBlock, type BlockData, type BlockDefinition } from './custom'
 
 type Obj = Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -48,6 +48,39 @@ export interface PageSectionDef extends PageBlockDef {
   /** mode=custom: `<addon>.<nombre>@<mayor>` registrado con `registerPageBlock`. */
   component?: string
   props?: Record<string, string | number | boolean | null | Array<string | number | boolean>>
+}
+
+export interface PageTabOption {
+  key: string
+  label: unknown
+  /** Icono del conjunto cerrado: map, cards, table, dashboard, list, calendar, chart. */
+  icon?: string
+  /** Sin permiso efectivo la opcion no se pinta ni se monta. */
+  permission?: string
+  /** Vista declarativa/hibrida: bloques de pagina. */
+  blocks?: PageBlockDef[]
+  /** Vista custom: `<addon>.<nombre>@<mayor>` registrado con `registerPageBlock`. */
+  component?: string
+  props?: Record<string, string | number | boolean | null | Array<string | number | boolean>>
+}
+
+/** `tabs` de pagina: extiende el `tabs` del nucleo (conmutador de vistas sobre las mismas fuentes). */
+export interface PageTabsDef extends PageBlockDef {
+  type: 'tabs'
+  /** `tabs` (por defecto) | `segmented` (control segmentado, a la derecha). */
+  variant?: 'tabs' | 'segmented'
+  /** `state.<ruta>` donde vive la vista activa; sin ella el estado es local al bloque. */
+  state?: string
+  /** Clave de la vista inicial (si no existe o no es visible: la primera visible). */
+  default?: string
+  /** Conserva montadas (ocultas) las vistas ya visitadas; por defecto solo la activa. */
+  keep_alive?: boolean
+  chrome?: 'card' | 'bare'
+  /** Nombre accesible del control. */
+  label?: unknown
+  /** Pantalla angosta: `select` (por defecto) o `scroll` (tira con scroll horizontal). */
+  mobile?: 'select' | 'scroll'
+  tabs: PageTabOption[]
 }
 
 export interface PageKpiCardDef extends PageBlockDef {
@@ -178,6 +211,8 @@ function PageBlock({ block, data, allowExt = true }: { block: PageBlockDef; data
       return <PageGrid block={block as PageGridDef} data={data} allowExt={allowExt} />
     case 'section':
       return <PageSection block={block as PageSectionDef} data={data} />
+    case 'tabs':
+      return <PageTabs block={block as PageTabsDef} data={data} />
     case 'kpi_card':
       return <KpiCard block={block as PageKpiCardDef} />
     case 'stats':
@@ -500,6 +535,119 @@ export function PageSection({ block, data }: { block: PageSectionDef; data?: Rec
     <SectionBoundary id={block.id} label={MSG.failed} retryLabel={MSG.retry}>
       {framed}
     </SectionBoundary>
+  )
+}
+
+// ---- tabs / conmutador de vistas ----
+
+const TAB_ICONS: Record<string, LucideIcon> = { map: MapIcon, cards: LayoutGrid, table: Table2, dashboard: LayoutDashboard, list: List, calendar: Calendar, chart: BarChart3 }
+
+function TabBody({ opt, data }: { opt: PageTabOption; data?: Record<string, unknown> }) {
+  return (
+    <SectionBoundary id={opt.key} label={MSG.failed} retryLabel={MSG.retry}>
+      {typeof opt.component === 'string' ? (
+        <CustomBody block={{ type: 'section', id: opt.key, component: opt.component, props: opt.props } as PageSectionDef} />
+      ) : (
+        <>{(opt.blocks ?? []).map((b, i) => <PageBlock key={b.id ?? i} block={b} data={data} />)}</>
+      )}
+    </SectionBoundary>
+  )
+}
+
+/**
+ * `tabs` de pagina. Las vistas comparten el PageContext y las fuentes ya
+ * resueltas (cambiar de vista no vuelve a pedir datos). Solo la vista activa se
+ * monta (perezoso) salvo `keep_alive`. Semantica tablist/tab/tabpanel con
+ * teclado (flechas, Home, End); en pantalla angosta pasa a select.
+ */
+function PageTabs({ block, data }: { block: PageTabsDef; data?: Record<string, unknown> }) {
+  const pc = usePageContext()
+  const text = useText()
+  const narrow = useNarrow()
+  const uid = useId()
+  const [local, setLocal] = useState<string | undefined>(undefined)
+  const [visited, setVisited] = useState<string[]>([])
+  const refs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const opts = (Array.isArray(block.tabs) ? block.tabs : []).filter((o) => o && typeof o.key === 'string' && (!o.permission || pc.can(o.permission)))
+  if (!opts.length) return null
+  const bound = typeof block.state === 'string' && block.state.startsWith('state.') && isSafePath(block.state.slice(6)) ? block.state.slice(6) : undefined
+  const stored = bound ? getPath(pc.state, bound) : local
+  const keys = opts.map((o) => o.key)
+  const active = typeof stored === 'string' && keys.includes(stored) ? stored : block.default && keys.includes(block.default) ? block.default : keys[0]!
+  const select = (key: string) => {
+    if (bound) pc.setState(bound, key)
+    else setLocal(key)
+    if (block.keep_alive) setVisited((v) => [...new Set([...v, active, key])])
+  }
+  const segmented = block.variant === 'segmented'
+  const label = block.label ? text(block.label) : undefined
+  const onKey = (e: KeyboardEvent) => {
+    const i = keys.indexOf(active)
+    const to = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? (i + 1) % keys.length : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? (i - 1 + keys.length) % keys.length : e.key === 'Home' ? 0 : e.key === 'End' ? keys.length - 1 : -1
+    if (to < 0) return
+    e.preventDefault()
+    select(keys[to]!)
+    refs.current[keys[to]!]?.focus()
+  }
+  const mounted = (key: string) => key === active || (!!block.keep_alive && visited.includes(key))
+
+  const bar = narrow && block.mobile !== 'scroll' ? (
+    <select aria-label={label ?? 'Vista'} data-genui-block='tabs-select' value={active} onChange={(e) => select(e.target.value)} className='h-9 rounded-md border bg-background px-2 text-sm'>
+      {opts.map((o) => <option key={o.key} value={o.key}>{text(o.label)}</option>)}
+    </select>
+  ) : (
+    <div
+      role='tablist'
+      aria-label={label}
+      data-genui-block='tabs-list'
+      data-variant={segmented ? 'segmented' : 'tabs'}
+      onKeyDown={onKey}
+      className={cn('flex max-w-full gap-1 overflow-x-auto', segmented ? 'rounded-lg bg-muted p-1' : 'border-b')}
+    >
+      {opts.map((o) => {
+        const on = o.key === active
+        const Icon = o.icon ? TAB_ICONS[o.icon] : undefined
+        return (
+          <button
+            key={o.key}
+            ref={(el) => void (refs.current[o.key] = el)}
+            type='button'
+            role='tab'
+            id={`${uid}-t-${o.key}`}
+            aria-selected={on}
+            aria-controls={`${uid}-p-${o.key}`}
+            tabIndex={on ? 0 : -1}
+            data-state={on ? 'active' : 'inactive'}
+            onClick={() => select(o.key)}
+            className={cn('inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-sm font-medium transition-colors', segmented ? 'rounded-md' : '-mb-px border-b-2', on ? (segmented ? 'bg-background shadow-sm' : 'border-primary text-foreground') : 'border-transparent text-muted-foreground hover:text-foreground')}
+          >
+            {Icon ? <Icon className='size-4' aria-hidden /> : null}
+            {text(o.label)}
+          </button>
+        )
+      })}
+    </div>
+  )
+  const inner = (
+    <>
+      <div className={cn('flex', segmented ? 'justify-end' : 'justify-start')}>{bar}</div>
+      {opts.map((o) =>
+        mounted(o.key) ? (
+          <div key={o.key} role='tabpanel' id={`${uid}-p-${o.key}`} aria-labelledby={`${uid}-t-${o.key}`} hidden={o.key !== active} data-view={o.key} className='flex flex-col gap-2'>
+            <TabBody opt={o} data={data} />
+          </div>
+        ) : null,
+      )}
+    </>
+  )
+  return block.chrome === 'card' ? (
+    <Card data-genui-block='tabs' data-chrome='card'>
+      <CardContent className='flex flex-col gap-2 pt-4'>{inner}</CardContent>
+    </Card>
+  ) : (
+    <div data-genui-block='tabs' data-chrome='bare' className='flex flex-col gap-2'>
+      {inner}
+    </div>
   )
 }
 

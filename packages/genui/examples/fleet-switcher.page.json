@@ -1,0 +1,56 @@
+{
+  "state": { "view": "map", "selected": null, "filters": { "presence": null } },
+  "data": {
+    "fleet": { "q": "t:hub_instances" }
+  },
+  "blocks": [
+    {
+      "type": "tabs",
+      "variant": "segmented",
+      "label": "Vista de la flota",
+      "state": "state.view",
+      "default": "map",
+      "keep_alive": true,
+      "chrome": "bare",
+      "tabs": [
+        {
+          "key": "map",
+          "label": "Mapa",
+          "icon": "map",
+          "blocks": [
+            {
+              "type": "map",
+              "summary": "Mapa de instancias",
+              "source": "data.fleet",
+              "fields": { "key": "id", "label": "customer", "status": "presence" },
+              "select": "state.selected"
+            }
+          ]
+        },
+        {
+          "key": "cards",
+          "label": "Tarjetas",
+          "icon": "cards",
+          "component": "hub_fleet.instance_cards@1",
+          "props": { "compact": true }
+        },
+        {
+          "key": "table",
+          "label": "Datos",
+          "icon": "table",
+          "permission": "hub_instances.index",
+          "blocks": [
+            {
+              "type": "table",
+              "source": "data.fleet",
+              "columns": [
+                { "key": "customer", "label": "Cliente" },
+                { "key": "presence", "label": "Presencia" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
