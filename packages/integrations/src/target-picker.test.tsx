@@ -93,7 +93,7 @@ describe('target helpers', () => {
   it('flags save-blocking problems against the catalogue', () => {
     const base = { do: 'record.upsert', model: 'inventory.items', match: ['sku'], mapping: { sku: '{{payload.sku}}' } }
     expect(inboundProblems([base], EXAMPLE_TARGETS)).toEqual([])
-    expect(inboundProblems([{ ...base, mapping: {} }], EXAMPLE_TARGETS).map((p) => p.code)).toEqual(['requiredUnmapped'])
+    expect(inboundProblems([{ ...base, mapping: {} }], EXAMPLE_TARGETS).map((p) => p.code)).toEqual(['requiredUnmapped', 'mappingEmpty', 'matchUnmapped'])
     expect(inboundProblems([{ ...base, match: ['name'] }], EXAMPLE_TARGETS).map((p) => p.code)).toEqual(['matchNotCandidate'])
     expect(inboundProblems([{ ...base, model: 'ghost.model' }], EXAMPLE_TARGETS).map((p) => p.code)).toEqual(['unknownTarget'])
     expect(inboundProblems([{ ...base, mapping: { ...base.mapping, secret: 'x' } }], EXAMPLE_TARGETS).map((p) => p.code)).toEqual(['columnNotAllowed'])

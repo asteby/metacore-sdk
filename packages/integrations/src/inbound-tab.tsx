@@ -2,9 +2,10 @@ import * as React from 'react'
 import { ActionChain, type ActionOptions } from './action-chain'
 import { incompleteActions } from './actions'
 import { inboundProblems } from './target-utils'
+import { whenProblems } from './policy-utils'
 import { CredentialOnce } from './credential-once'
 import type { TFunction } from './i18n'
-import type { InboundContract, InboundEndpoint, IntegrationsApi, OneTimeCredential } from './types'
+import { MAX_CONDITION_IN, type InboundContract, type InboundEndpoint, type IntegrationsApi, type OneTimeCredential } from './types'
 import { cx, ErrorNote, Field, useAsync } from './ui'
 
 export interface InboundTabProps {
@@ -134,6 +135,10 @@ function InboundForm({
     if (d.name.trim() === '') errs.push(t('in.needName'))
     if (d.contract_key === '') errs.push(t('in.needContract'))
     for (const i of incompleteActions(d.actions)) errs.push(`${t('actions.step', { n: i + 1 })}: ${t(`actions.${d.actions[i]!.do}`)}`)
+    // `when` is checked with or without a catalogue (OPS accepts eq|ne|in, 1 to 50 values).
+    d.actions.forEach((a, step) => {
+      for (const p of whenProblems(a)) errs.push(`${t('actions.step', { n: step + 1 })}: ${t('in.blocked.whenInvalid', { reason: t(`when.err.${p.vars.reason as 'path'}` as 'when.err.path', { max: MAX_CONDITION_IN }) })}`)
+    })
     // Only with a server catalogue (listTargets); without it the legacy free text applies.
     if (options?.targets) {
       for (const p of inboundProblems(d.actions, options.targets)) errs.push(`${t('actions.step', { n: p.step + 1 })}: ${t(`in.blocked.${p.code}`, p.vars)}`)

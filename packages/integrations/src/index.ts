@@ -12,6 +12,7 @@ export type { ActionChainProps, ActionOptions } from './action-chain'
 export { CredentialOnce } from './credential-once'
 export type { CredentialOnceProps } from './credential-once'
 export { EDITABLE_WHEN_OPERATORS, newAction, parseActions, incompleteActions, needsAdvanced } from './actions'
+export type { NeedsAdvancedContext } from './actions'
 export { parseIngestTargets } from './targets'
 export {
   flattenSchemaFields,
@@ -49,3 +50,20 @@ export {
   inboundProblems,
 } from './target-utils'
 export type { TargetGroup, BlockedReason, RecordIssue, InboundProblem } from './target-utils'
+export { ActionPolicyForm } from './action-policy'
+export type { ActionPolicyFormProps, RecordBlock } from './action-policy'
+export { WhenEditor } from './when-editor'
+export type { WhenEditorProps } from './when-editor'
+export {
+  guardColumns,
+  isGuardField,
+  transitionTargets,
+  transitionSources,
+  whenIssue,
+  whenProblems,
+  policyProblems,
+  resetPolicy,
+  coerceWhenValue,
+  WHEN_OPS,
+} from './policy-utils'
+export type { GuardColumns, PolicyCode, PolicyProblem, WhenIssue, WhenOp } from './policy-utils'

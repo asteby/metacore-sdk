@@ -8,6 +8,7 @@ import {
   type Condition,
   type ConditionScalar,
 } from './types'
+import { whenEditable } from './policy-utils'
 
 /**
  * Operators the visual `when` editor may offer. `exists` is valid in the kernel
@@ -249,19 +250,33 @@ export function incompleteActions(actions: ActionBlock[]): number[] {
   return bad
 }
 
+export interface NeedsAdvancedContext {
+  /** The host serves the `listTargets` catalogue: every `record.*` block has a visual editor. */
+  targets?: boolean
+}
+
+const isScalarValue = (v: unknown) => ['string', 'number', 'boolean'].includes(typeof v)
+
 /**
- * True when the visual editor cannot show the whole block (a kind it does not
- * author, a guard/defaults, or a `when` other than a single `eq` on notify):
- * the panel then sends the author to the advanced (JSON) view.
+ * True when the visual editor cannot show the whole block, so the panel sends
+ * the author to the advanced (JSON) view. With the server catalogue
+ * (`ctx.targets`) every `record.*` block (guard, defaults, params, `to`,
+ * `max_rows`) and a `when` of `eq|ne|in` are edited visually; what stays
+ * advanced is what no control can represent: `exists`, a `mode` other than
+ * `soft`, non-scalar `defaults` or non-string `params`. Without the catalogue
+ * (old hosts) only `record.upsert` without guard/defaults is visual.
  */
-export function needsAdvanced(a: ActionBlock): boolean {
-  if (!VISUAL_ACTION_KINDS.includes(a.do)) return true
-  if ('guard' in a && a.guard) return true
-  if ('defaults' in a && a.defaults) return true
-  if (a.when) {
-    const w = a.when
-    return !(a.do === 'notify' && w.eq !== undefined && w.ne === undefined && w.in === undefined && w.exists === undefined)
+export function needsAdvanced(a: ActionBlock, ctx: NeedsAdvancedContext = {}): boolean {
+  if (!VISUAL_ACTION_KINDS.includes(a.do) && !(ctx.targets && a.do.startsWith('record.'))) return true
+  if (!whenEditable(a.when)) return true
+  if (!ctx.targets) {
+    if ('guard' in a && a.guard) return true
+    if ('defaults' in a && a.defaults) return true
+    return false
   }
+  if ('mode' in a && a.mode !== undefined && a.mode !== 'soft') return true
+  if ('defaults' in a && a.defaults && !Object.values(a.defaults).every(isScalarValue)) return true
+  if ('params' in a && a.params && !Object.values(a.params).every((v) => typeof v === 'string')) return true
   return false
 }
 

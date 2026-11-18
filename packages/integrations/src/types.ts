@@ -206,6 +206,8 @@ export interface IngestTargetActionParam {
   label?: string
   type?: string
   required?: boolean
+  /** Closed set of values, when the action declares one. */
+  options?: IngestTargetOption[]
 }
 
 /** Model action a `record.action` may run (kernel `TargetAction`). */

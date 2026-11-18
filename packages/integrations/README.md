@@ -92,5 +92,35 @@ comportamiento anterior (`listModels` / texto libre).
   y `mapping`.
 - `when`: el editor visual no expone `exists`. El kernel lo define, pero el `BlockWhen` de OPS
   hoy acepta solo `eq|ne|in` y rechaza lo demas (`EDITABLE_WHEN_OPERATORS`).
-- Pendiente (siguientes PR): asistente por pasos, presets, editor de `guard`/`defaults` y de las
-  acciones de estado (`record.create|update|delete|action|transition|restore` siguen en la vista avanzada).
+- Pendiente (S-4): asistente por pasos y presets (upsert, borrado logico, estado, ...).
+
+## Editores de politica: guarda, valores fijos, acciones de estado y condiciones
+
+Con `listTargets`, **todos** los bloques `record.*` se editan visualmente (ya no solo JSON);
+`needsAdvanced(block, { targets: true })` solo manda a la vista avanzada lo que ningun control
+representa: `when` con `exists`, `mode` distinto de `soft`, `defaults` no escalares o `params` no
+string. Sin `listTargets` (hosts viejos) todo sigue como antes (4 tipos clasicos, guarda/defaults en JSON).
+Cada bloque trae ademas una vista JSON de solo lectura y la vista avanzada global sigue siendo el respaldo.
+Un campo que el editor no conoce (p. ej. `scope`) se conserva intacto al editar.
+
+- `<ActionPolicyForm action target onChange fields t />` segun el tipo de bloque y el destino:
+  - `create|update|upsert`: **guarda** (`{field,path,op}`: columna sugerida desde `ingest_cursor` /
+    `guard_candidates` o columnas fecha/numero; `path` = campo del evento de ejemplo, `payload.*`;
+    `gte` recomendado: «solo aplica si el evento es igual o mas nuevo»), **valores fijos** (`defaults`, tipados
+    por columna; no mapeadas) y, en `create`, `idempotency_field` (columna de texto escribible sin mapear).
+  - `delete`: borrado **siempre logico** (sin `hard`), `max_rows` 1..100 y guarda.
+  - `action`: solo las `actions_available` del destino, formulario de `params` (tipo, requerido, opciones,
+    campo del evento o texto fijo) y `on_ineligible` (`noop`: ya estaba en ese estado; `fail`: error 409).
+  - `transition`: `to` entre los estados de `stage.transitions` (los no declarados, deshabilitados).
+  - `restore`: `max_rows`.
+- `<WhenEditor value onChange fields t />`: operador `eq|ne|in` (nunca `exists`), ruta del evento y valor(es);
+  `in` = lista de 1 a 50 escalares; vista previa en lenguaje claro («Se ejecuta cuando payload.action sea
+  created o updated»). Los escalares conservan su tipo (numero/booleano) salvo que el campo sea string.
+- Validacion que **bloquea el guardado** (`inboundProblems` ahora tambien cubre la politica, y `whenProblems`
+  la condicion, con o sin catalogo): guarda sin columna/campo o con columna no permitida, `in` vacio o de mas de
+  50, `to` no declarado, accion no disponible, parametro obligatorio sin valor, `max_rows` fuera de 1..100,
+  default con tipo invalido o tambien mapeado, `idempotency_field` invalido, y que el `mapping` de los bloques que
+  eligen filas solo lleve las columnas de `match` (todas mapeadas). Helpers puros en `policy-utils`:
+  `guardColumns`, `policyProblems`, `whenProblems`, `transitionTargets`, `resetPolicy`.
+- Al cambiar de modelo se limpian `match`, `mapping`, `guard`, `defaults`, `idempotency_field`, `action`,
+  `params` y `to`.
