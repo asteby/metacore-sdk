@@ -9,6 +9,13 @@ import {
   type ConditionScalar,
 } from './types'
 
+/**
+ * Operators the visual `when` editor may offer. `exists` is valid in the kernel
+ * `Condition` (and `parseActions` accepts it) but the OPS `BlockWhen` accepts only
+ * `eq|ne|in` today and rejects the rest, so the editor never exposes it.
+ */
+export const EDITABLE_WHEN_OPERATORS = ['eq', 'ne', 'in'] as const
+
 export function newAction(kind: ActionKind): ActionBlock {
   switch (kind) {
     case 'record.create':

@@ -67,3 +67,30 @@ Espejo del kernel (`inbound/targets.go`, `inbound/actions.go`) y de OPS
 - Helpers puros: `targetColumnsToMappingRows(target, {requiredOnly?})`, `inferSchema(sample)`.
 - `createMemoryIntegrationsApi()` sirve `EXAMPLE_TARGETS` (la fixture del kernel,
   `test/fixtures/targets.json`).
+
+## Entradas: elegir destino y mapear (TargetPicker)
+
+Cuando el host implementa `listTargets()`, los bloques `record.*` del editor visual
+dejan de pedir el modelo como texto y ofrecen: **addon -> modelo -> como identificar
+el registro (`match`) -> columnas escribibles -> vista previa del registro**. Solo se
+ofrece lo que el servidor declara. Sin `listTargets` (o si falla) se conserva el
+comportamiento anterior (`listModels` / texto libre).
+
+- `<TargetPicker targets value onChange kind t />`: listbox buscable agrupada por addon,
+  teclado completo (flechas, Inicio/Fin, Enter, Esc; `aria-activedescendant`). Un destino
+  sin el permiso que exige `kind` (`create`, `update`, `delete` de `permissions`; `upsert`
+  pide create+update) o que no lista esa accion en `actions` aparece **deshabilitado con el
+  motivo**, nunca oculto. Badges: nº de columnas, borrado suave, alcance sucursal/entidad.
+- `<MappingEditor direction="in" target rows onChange contractSchema t />`: una fila por columna
+  escribible (nombre, etiqueta, tipo, obligatoria, unica, `ref`, `options`), origen `Campo del evento`
+  o `Texto fijo` (sin `{{input.x}}` todavia). La autosugerencia por nombre normalizado
+  (`suggestSource`) solo se muestra, nunca se aplica sola. Las obligatorias sin origen se
+  avisan y **bloquean el guardado** (`inboundProblems`, tambien: modelo no declarado, `match`
+  que no es candidato, columna no permitida, sin permiso). Evento de ejemplo: pegar JSON o el
+  generado desde el esquema del contrato; avisos locales de requerida/tipo/opcion (`validateRecord`).
+- `match` se elige solo entre `target.match_candidates`. Al cambiar de modelo se limpian `match`
+  y `mapping`.
+- `when`: el editor visual no expone `exists`. El kernel lo define, pero el `BlockWhen` de OPS
+  hoy acepta solo `eq|ne|in` y rechaza lo demas (`EDITABLE_WHEN_OPERATORS`).
+- Pendiente (siguientes PR): asistente por pasos, presets, editor de `guard`/`defaults` y de las
+  acciones de estado (`record.create|update|delete|action|transition|restore` siguen en la vista avanzada).

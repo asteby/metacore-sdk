@@ -11,7 +11,7 @@ export { ActionChain } from './action-chain'
 export type { ActionChainProps, ActionOptions } from './action-chain'
 export { CredentialOnce } from './credential-once'
 export type { CredentialOnceProps } from './credential-once'
-export { newAction, parseActions, incompleteActions, needsAdvanced } from './actions'
+export { EDITABLE_WHEN_OPERATORS, newAction, parseActions, incompleteActions, needsAdvanced } from './actions'
 export { parseIngestTargets } from './targets'
 export {
   flattenSchemaFields,
@@ -34,3 +34,18 @@ export { createMemoryIntegrationsApi, EXAMPLE_EVENTS, EXAMPLE_TARGETS } from './
 export type { MemoryApiSeed } from './memory-api'
 export { ACTION_KINDS, VISUAL_ACTION_KINDS, MAX_CONDITION_IN } from './types'
 export type * from './types'
+export { TargetPicker } from './target-picker'
+export type { TargetPickerProps } from './target-picker'
+export { InboundMappingEditor } from './inbound-mapping'
+export type { InboundMappingEditorProps } from './inbound-mapping'
+export type { OutboundMappingEditorProps } from './mapping-editor'
+export {
+  groupTargets,
+  requiredPermissions,
+  targetBlockedReason,
+  suggestSource,
+  validateRecord,
+  unmappedRequired,
+  inboundProblems,
+} from './target-utils'
+export type { TargetGroup, BlockedReason, RecordIssue, InboundProblem } from './target-utils'

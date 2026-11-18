@@ -1,10 +1,12 @@
 import * as React from 'react'
 import type { TFunction } from './i18n'
 import { buildSamplePayload, flattenSchemaFields, previewBody } from './schema'
+import { InboundMappingEditor, type InboundMappingEditorProps } from './inbound-mapping'
 import type { CatalogEvent, MappingRow } from './types'
 import { cx } from './ui'
 
-export interface MappingEditorProps {
+export interface OutboundMappingEditorProps {
+  direction?: 'out'
   /** Selected catalog events; the first one feeds the source fields. */
   events: CatalogEvent[]
   rows: MappingRow[]
@@ -17,7 +19,14 @@ export interface MappingEditorProps {
  * payload schema) or a fixed text to a destination field. A live preview shows
  * the body built from a sample event. No JSON editing here.
  */
-export function MappingEditor({ events, rows, onChange, t }: MappingEditorProps) {
+/** `direction: 'in'` maps an event onto the writable columns of an `IngestTarget`. */
+export type MappingEditorProps = OutboundMappingEditorProps | ({ direction: 'in' } & InboundMappingEditorProps)
+
+export function MappingEditor(props: MappingEditorProps) {
+  return props.direction === 'in' ? <InboundMappingEditor {...props} /> : <OutboundMappingEditor {...props} />
+}
+
+function OutboundMappingEditor({ events, rows, onChange, t }: OutboundMappingEditorProps) {
   const [previewName, setPreviewName] = React.useState<string>('')
   const active = events.find((e) => e.name === previewName) ?? events[0]
   const fields = React.useMemo(() => {
