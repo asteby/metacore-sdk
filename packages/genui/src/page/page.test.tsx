@@ -416,13 +416,16 @@ describe('conformance vectors through the page renderer', () => {
   for (const [name, v] of vectors) {
     it(`${name}: no section error and no throw`, () => {
       const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
-      const { container } = render(
-        <PageProvider can={() => true}>
-          <PageBlocks blocks={v.input.blocks!} data={v.input.data} />
-        </PageProvider>,
-      )
-      expect(container.querySelector('[data-genui-block="section-error"]')).toBeNull()
-      spy.mockRestore()
+      try {
+        const { container } = render(
+          <PageProvider can={() => true}>
+            <PageBlocks blocks={v.input.blocks!} data={v.input.data} />
+          </PageProvider>,
+        )
+        expect(container.querySelector('[data-genui-block="section-error"]')).toBeNull()
+      } finally {
+        spy.mockRestore()
+      }
     })
   }
 })

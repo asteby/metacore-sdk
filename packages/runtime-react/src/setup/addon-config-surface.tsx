@@ -331,7 +331,13 @@ function ConnectorCredentialFieldControl({
   useEffect(() => () => clearTimeout(copyTimer.current), [])
   const initial = useRef('')
   const locked = stored && !editing
+  // Reset only when the environment actually CHANGES. Running on mount too would queue
+  // setConfirmRotate(false)/setGenerated(false) behind a click that lands before the mount
+  // effects flush, silently discarding the user's action (flaky under load).
+  const lastResetKey = useRef(resetKey)
   useEffect(() => {
+    if (lastResetKey.current === resetKey) return
+    lastResetKey.current = resetKey
     setEditing(false)
     setVisible(false)
     setRevealed(null)

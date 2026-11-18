@@ -24,7 +24,12 @@ afterEach(() => {
     document.documentElement.removeAttribute('data-theme')
 })
 
-const ready = () => waitFor(() => expect(screen.getByTestId('metacore-map').getAttribute('data-status')).toBe('ready'))
+// 'ready' flips in the commit, but children (markers, layers) are created in passive
+// effects that run AFTER it; under CPU load waitFor can resolve in between. Flush them.
+const ready = async () => {
+    await waitFor(() => expect(screen.getByTestId('metacore-map').getAttribute('data-status')).toBe('ready'))
+    await act(async () => {})
+}
 
 describe('<MapView>', () => {
     it('loads MapLibre lazily, shows a status while loading, then draws one focusable marker per point', async () => {
