@@ -28,5 +28,5 @@ export {
 export { renderMarkdown, type MarkdownOptions } from './markdown'
 export { layoutDiagram } from './diagram'
 export { formatMetric, toneFor } from './metric'
-export { MAP_MAX_POINTS, mapLegend, normalizeMapPoints, type GenUIMapPoint } from './map-points'
+export { MAP_MAX_POINTS, MAP_PRECISIONS, mapLegend, normalizeMapPoints, type GenUIMapPoint, type MapPrecision } from './map-points'
 export * from './page'

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { GenUI, GenUIProvider, getGenUIBlockRenderer } from '@asteby/metacore-genui'
 import { configureMaps, resetMapsConfig } from './config'
-import { fakeMaplibre, markers, resetFakes } from './fake-maplibre'
+import { fakeMaplibre, instances, markers, resetFakes } from './fake-maplibre'
 import { registerGenUIMapBlock } from './genui'
 
 let undo: () => void
@@ -70,6 +70,23 @@ describe('genui map block', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Acme, late' }))
         await waitFor(() => expect(screen.getByRole('complementary', { name: 'Acme' }).textContent).toContain('1.2'))
         expect(onNavigate).toHaveBeenCalledWith('/ops/instances')
+    })
+
+    it('passes precision and area to the map (bubble "GT · 2") and shows the popup columns of the selected point', async () => {
+        const approx = [
+            { id: 'a', name: 'Acme', lat: 14.6, lng: -90.5, status: 'ok', prec: 'country', iso: 'GT', plan: 'pro', secret: 'x' },
+            { id: 'b', name: 'Beta', lat: 14.6, lng: -90.5, status: 'ok', prec: 'country', iso: 'GT', plan: 'free', secret: 'y' },
+        ]
+        const s2 = { ...spec, blocks: [{ ...spec.blocks[0], precision_field: 'prec', area_field: 'iso', popup: ['plan'] }] }
+        render(
+            <GenUIProvider sources={{ points: approx }}>
+                <GenUI spec={s2} />
+            </GenUIProvider>,
+        )
+        await waitFor(() => expect(instances[0]?.layers.has('mcm-points-areas')).toBe(true))
+        const props = instances[0]!.sources.get('mcm-points-areas').data.features[0].properties
+        expect(JSON.stringify(props)).toContain('GT')
+        expect(JSON.stringify(props)).toContain('2')
     })
 
     it('waits (busy) while the host has not resolved the source', () => {

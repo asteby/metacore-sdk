@@ -3759,6 +3759,27 @@ export interface BlockMap {
    */
   summary: string
   select?: StatePath
+  /**
+   * Columnas de la fuente que se muestran al seleccionar un punto (maximo 8). Solo con source.
+   *
+   * @maxItems 8
+   */
+  popup?:
+    | []
+    | [Key]
+    | [Key, Key]
+    | [Key, Key, Key]
+    | [Key, Key, Key, Key]
+    | [Key, Key, Key, Key, Key]
+    | [Key, Key, Key, Key, Key, Key]
+    | [Key, Key, Key, Key, Key, Key, Key]
+    | [Key, Key, Key, Key, Key, Key, Key, Key]
+  /**
+   * Precision de ubicacion constante de todos los puntos. Excluye precision_field.
+   */
+  precision?: 'exact' | 'city' | 'country'
+  precision_field?: Key
+  area_field?: Key
 }
 /**
  * This interface was referenced by `GenuiV2`'s JSON-Schema
