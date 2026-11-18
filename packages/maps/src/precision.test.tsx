@@ -200,7 +200,7 @@ describe('viewport limits', () => {
     it('defaults: one world, capped zoom and pan, minZoom from the container', async () => {
         setWidth(1024)
         const map = await mount([exactOne])
-        expect(map.options).toMatchObject({ renderWorldCopies: false, maxZoom: 18, maxBounds: [[-180, -85], [180, 85]], minZoom: 1 })
+        expect(map.options).toMatchObject({ renderWorldCopies: false, maxZoom: 18, maxBounds: [[-179.99, -84.99], [179.99, 84.99]], minZoom: 1 })
     })
 
     it('configureMaps overrides the defaults and props override the config', async () => {
