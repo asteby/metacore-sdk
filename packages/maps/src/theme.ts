@@ -1,5 +1,6 @@
 import * as React from 'react'
 import type { MapScheme } from './config'
+import { DEFAULT_COLOR } from './palette'
 
 function detect(): MapScheme {
     if (typeof document === 'undefined') return 'light'
@@ -39,4 +40,19 @@ export function useMapScheme(theme: MapScheme | 'auto' = 'auto'): MapScheme {
 
 export function prefersReducedMotion(): boolean {
     return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
+export interface PointsPaint {
+    clusterColor: string
+    clusterText: string
+    stroke: string
+    clusterStrokeWidth: number
+    pointStrokeWidth: number
+}
+
+/** Cluster / point paint per scheme: on the dark base map the Okabe-Ito blue is lifted and ringed in white so it does not sink. */
+export function pointsPaint(scheme: MapScheme): PointsPaint {
+    return scheme === 'dark'
+        ? { clusterColor: '#56B4E9', clusterText: '#0b1220', stroke: '#ffffff', clusterStrokeWidth: 4, pointStrokeWidth: 3 }
+        : { clusterColor: DEFAULT_COLOR, clusterText: '#ffffff', stroke: '#ffffff', clusterStrokeWidth: 3, pointStrokeWidth: 2 }
 }

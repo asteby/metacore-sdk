@@ -55,6 +55,10 @@ export interface MapLabels {
     point: string
     zone: string
     loading: string
+    /** Cluster hover text; `{n}` is the member count. */
+    clusterCount: string
+    /** Overflow row of a cluster list; `{n}` is how many are not listed. */
+    moreItems: string
 }
 
 export const DEFAULT_LABELS: MapLabels = {
@@ -77,6 +81,8 @@ export const DEFAULT_LABELS: MapLabels = {
     point: 'Ubicación',
     zone: 'Zona',
     loading: 'Cargando mapa…',
+    clusterCount: '{n} instancias',
+    moreItems: '+{n} más',
 }
 
 export function mergeLabels(l?: Partial<MapLabels>): MapLabels {

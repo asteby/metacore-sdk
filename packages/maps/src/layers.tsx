@@ -3,11 +3,12 @@ import { createPortal } from 'react-dom'
 import type * as ML from 'maplibre-gl'
 import { isValidPoint } from '@asteby/storefront/geo'
 import { removeLayers, useMap } from './context'
-import { ensureStyles, popupNode, readableOn } from './dom'
-import { boundsOf, lineToGeoJSON, pointsToGeoJSON, zonePoints, zonesToGeoJSON } from './geometry'
+import { ensureStyles, listNode, popupNode, readableOn, tooltipNode } from './dom'
+import { allCoincident, boundsOf, lineToGeoJSON, pointsToGeoJSON, zonePoints, zonesToGeoJSON } from './geometry'
 import { colorFor, DEFAULT_COLOR, safeColor } from './palette'
 import { buildChoropleth, toRegionCollection, type ChoroplethLoader, type ChoroplethRegion, type ChoroplethStep, type RegionCollection } from './choropleth'
-import type { GeoPoint, MapPointItem, ZoneItem } from './types'
+import { pointsPaint } from './theme'
+import { DEFAULT_LABELS, type GeoPoint, type MapLabels, type MapPointItem, type ZoneItem } from './types'
 
 /** Auto-cluster above this many points (DOM markers stay focusable below it). */
 export const CLUSTER_THRESHOLD = 150
@@ -121,22 +122,33 @@ export interface ClusterLayerProps {
     onSelect?: (item: MapPointItem) => void
     /** Layer id prefix (several layers per map need distinct ids). */
     id?: string
+    /** Hover / list texts (`clusterCount`, `moreItems`); Spanish by default. */
+    labels?: Pick<MapLabels, 'clusterCount' | 'moreItems'>
 }
 
+/** Highest zoom a cluster click flies to; members that only separate beyond it are listed instead. */
+export const CLUSTER_MAX_EXPAND_ZOOM = 14
+/** Members named in a cluster list popup (the rest is "+N más"). */
+const CLUSTER_LIST_LIMIT = 10
+
+const fill = (template: string, n: number): string => template.replace('{n}', String(n))
+const coordsOf = (f: ML.MapGeoJSONFeature): [number, number] => (f.geometry as unknown as { coordinates: [number, number] }).coordinates
+
 /** WebGL points with native clustering — thousands of features, no DOM per point. */
-export function ClusterLayer({ points, cluster = true, colors, onSelect, id = 'mcm-points' }: ClusterLayerProps): null {
-    const { map, ml, styleVersion } = useMap()
-    const latest = React.useRef({ points, colors, onSelect })
-    latest.current = { points, colors, onSelect }
+export function ClusterLayer({ points, cluster = true, colors, onSelect, id = 'mcm-points', labels = DEFAULT_LABELS }: ClusterLayerProps): null {
+    const { map, ml, scheme, styleVersion } = useMap()
+    const latest = React.useRef({ points, colors, onSelect, labels })
+    latest.current = { points, colors, onSelect, labels }
     const layerIds = [`${id}-clusters`, `${id}-count`, `${id}-points`]
 
     React.useEffect(() => {
+        const paint = pointsPaint(scheme)
         map.addSource(id, {
             type: 'geojson',
             data: pointsToGeoJSON(latest.current.points, latest.current.colors) as never,
             cluster,
             clusterRadius: 50,
-            clusterMaxZoom: 14,
+            clusterMaxZoom: CLUSTER_MAX_EXPAND_ZOOM,
         })
         map.addLayer({
             id: `${id}-clusters`,
@@ -144,10 +156,10 @@ export function ClusterLayer({ points, cluster = true, colors, onSelect, id = 'm
             source: id,
             filter: ['has', 'point_count'],
             paint: {
-                'circle-color': DEFAULT_COLOR,
-                'circle-radius': ['step', ['get', 'point_count'], 16, 20, 20, 100, 26],
-                'circle-stroke-width': 3,
-                'circle-stroke-color': '#ffffff',
+                'circle-color': paint.clusterColor,
+                'circle-radius': ['step', ['get', 'point_count'], 18, 20, 22, 100, 28],
+                'circle-stroke-width': paint.clusterStrokeWidth,
+                'circle-stroke-color': paint.stroke,
             },
         })
         if ((map.getStyle() as { glyphs?: string } | undefined)?.glyphs) {
@@ -157,7 +169,7 @@ export function ClusterLayer({ points, cluster = true, colors, onSelect, id = 'm
                 source: id,
                 filter: ['has', 'point_count'],
                 layout: { 'text-field': ['get', 'point_count_abbreviated'], 'text-size': 12 },
-                paint: { 'text-color': '#ffffff' },
+                paint: { 'text-color': paint.clusterText },
             })
         }
         map.addLayer({
@@ -167,49 +179,100 @@ export function ClusterLayer({ points, cluster = true, colors, onSelect, id = 'm
             filter: ['!', ['has', 'point_count']],
             paint: {
                 'circle-color': ['get', 'color'],
-                'circle-radius': 8,
-                'circle-stroke-width': 2,
-                'circle-stroke-color': '#ffffff',
+                // Never smaller than 7 px, so lone points stay visible zoomed out.
+                'circle-radius': ['interpolate', ['linear'], ['zoom'], 3, 7, 10, 9, 14, 11],
+                'circle-stroke-width': paint.pointStrokeWidth,
+                'circle-stroke-color': paint.stroke,
             },
         })
+
+        let popup: ML.Popup | null = null
+        const showPoint = (item: MapPointItem) => {
+            popup?.remove()
+            popup = new ml.Popup({ offset: 10 }).setLngLat([item.lng, item.lat]).setDOMContent(popupNode(item.label, [{ value: item.statusLabel ?? item.status ?? '' }, ...(item.details ?? [])])).addTo(map)
+            latest.current.onSelect?.(item)
+        }
         const onCluster = async (e: ML.MapLayerMouseEvent) => {
             const f = e.features?.[0]
             const src = map.getSource(id) as ML.GeoJSONSource | undefined
             if (!f || !src) return
+            const clusterId = f.properties?.cluster_id as number
+            const count = Number(f.properties?.point_count) || 0
+            const center = coordsOf(f)
             try {
-                const zoom = await src.getClusterExpansionZoom(f.properties?.cluster_id as number)
-                map.easeTo({ center: (f.geometry as unknown as { coordinates: [number, number] }).coordinates, zoom, duration: 300 })
+                const zoom = await src.getClusterExpansionZoom(clusterId)
+                let members: MapPointItem[] = []
+                try {
+                    const byKey = new Map(latest.current.points.map((p) => [p.key, p]))
+                    const leaves = await src.getClusterLeaves(clusterId, CLUSTER_LIST_LIMIT, 0)
+                    members = leaves.flatMap((l) => byKey.get(l.properties?.key as string) ?? [])
+                } catch {
+                    /* leaves unavailable: fall back to zooming */
+                }
+                // Points on the very same coordinates never split, so zooming only shows empty map: list them.
+                const stuck = zoom > CLUSTER_MAX_EXPAND_ZOOM || (count <= CLUSTER_LIST_LIMIT && allCoincident(members))
+                if (stuck && members.length) {
+                    popup?.remove()
+                    const list = new ml.Popup({ offset: 14 })
+                    popup = list
+                    const rows = members.map((it) => ({
+                        label: it.label,
+                        status: it.statusLabel ?? it.status,
+                        onPick: () => {
+                            list.remove()
+                            showPoint(it)
+                        },
+                    }))
+                    const l = latest.current.labels
+                    list.setLngLat(center).setDOMContent(listNode(fill(l.clusterCount, count), rows, count > rows.length ? fill(l.moreItems, count - rows.length) : undefined)).addTo(map)
+                    return
+                }
+                map.easeTo({ center, zoom: Math.min(zoom, CLUSTER_MAX_EXPAND_ZOOM), duration: 300 })
             } catch {
                 /* cluster vanished mid-zoom */
             }
         }
         const onPoint = (e: ML.MapLayerMouseEvent) => {
-            const f = e.features?.[0]
-            if (!f) return
-            const item = latest.current.points.find((p) => p.key === f.properties?.key)
-            if (!item) return
-            new ml.Popup({ offset: 10 }).setLngLat([item.lng, item.lat]).setDOMContent(popupNode(item.label, [{ value: item.statusLabel ?? item.status ?? '' }, ...(item.details ?? [])])).addTo(map)
-            latest.current.onSelect?.(item)
+            const key = e.features?.[0]?.properties?.key
+            const item = latest.current.points.find((p) => p.key === key)
+            if (item) showPoint(item)
         }
-        const pointer = () => (map.getCanvas().style.cursor = 'pointer')
-        const arrow = () => (map.getCanvas().style.cursor = '')
+
+        // Hover: a light, non-interactive tooltip (the click popup/list stays the accessible path).
+        const tip = new ml.Popup({ closeButton: false, closeOnClick: false, offset: 14, className: 'mcm-tooltip' })
+        const hover = (e: ML.MapLayerMouseEvent) => {
+            const f = e.features?.[0]
+            map.getCanvas().style.cursor = 'pointer'
+            if (!f) return
+            const count = Number(f.properties?.point_count) || 0
+            const item = count ? undefined : latest.current.points.find((p) => p.key === f.properties?.key)
+            const body = count ? tooltipNode(fill(latest.current.labels.clusterCount, count)) : tooltipNode(item?.label ?? String(f.properties?.label ?? ''), item?.statusLabel ?? item?.status ?? (f.properties?.status as string | undefined))
+            tip.setLngLat(coordsOf(f)).setDOMContent(body).addTo(map)
+        }
+        const leave = () => {
+            map.getCanvas().style.cursor = ''
+            tip.remove()
+        }
+        const hit = [`${id}-clusters`, `${id}-points`]
         map.on('click', `${id}-clusters`, onCluster)
         map.on('click', `${id}-points`, onPoint)
-        for (const l of [`${id}-clusters`, `${id}-points`]) {
-            map.on('mouseenter', l, pointer)
-            map.on('mouseleave', l, arrow)
+        for (const l of hit) {
+            map.on('mouseenter', l, hover)
+            map.on('mouseleave', l, leave)
         }
         return () => {
-            for (const l of [`${id}-clusters`, `${id}-points`]) {
-                map.off('mouseenter', l, pointer)
-                map.off('mouseleave', l, arrow)
+            for (const l of hit) {
+                map.off('mouseenter', l, hover)
+                map.off('mouseleave', l, leave)
             }
             map.off('click', `${id}-clusters`, onCluster)
             map.off('click', `${id}-points`, onPoint)
+            tip.remove()
+            popup?.remove()
             removeLayers(map, layerIds, id)
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [map, ml, id, cluster, styleVersion])
+    }, [map, ml, id, cluster, scheme, styleVersion])
 
     React.useEffect(() => {
         ;(map.getSource(id) as ML.GeoJSONSource | undefined)?.setData(pointsToGeoJSON(points, colors) as never)

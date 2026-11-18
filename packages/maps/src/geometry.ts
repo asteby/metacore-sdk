@@ -106,3 +106,14 @@ export function zonePoints(zones: ZoneItem[]): GeoPoint[] {
     }
     return out
 }
+
+/** Same place to ~1 m: approximate locations (country centroids) land on exactly the same coordinates. */
+export function sameSpot(a: GeoPoint, b: GeoPoint): boolean {
+    return Math.abs(a.lat - b.lat) < 1e-5 && Math.abs(a.lng - b.lng) < 1e-5
+}
+
+/** True when every point sits on the first one (zooming in can never separate them). */
+export function allCoincident(points: ReadonlyArray<GeoPoint>): boolean {
+    const [first, ...rest] = points
+    return !!first && rest.every((p) => sameSpot(first, p))
+}

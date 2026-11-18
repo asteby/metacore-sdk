@@ -12,6 +12,12 @@ const CSS = `
 .mcm-dark .maplibregl-popup-content{background:#1f2430;color:#e8eaed}
 .mcm-dark .maplibregl-popup-tip{border-top-color:#1f2430;border-bottom-color:#1f2430}
 .mcm-dark .maplibregl-popup-close-button{color:#e8eaed}
+.mcm-tooltip{pointer-events:none}
+.mcm-tooltip .maplibregl-popup-content{padding:6px 10px}
+.mcm-list{display:block;margin:6px 0 0;padding:0;list-style:none}
+.mcm-list button{display:block;width:100%;text-align:left;font:inherit;color:inherit;background:none;border:0;border-radius:4px;padding:4px 6px;cursor:pointer}
+.mcm-list button:hover,.mcm-list button:focus-visible{background:rgba(127,127,127,.2);outline:2px solid currentColor}
+.mcm-list em{display:block;font-style:normal;opacity:.8;padding:2px 6px}
 @media (prefers-reduced-motion:reduce){.mcm-marker{transition:none}}
 `
 
@@ -50,6 +56,38 @@ export function popupNode(title: string, rows: Array<{ label?: string; value: st
         s.textContent = r.label ? `${r.label}: ${r.value}` : r.value
         root.appendChild(s)
     }
+    return root
+}
+
+/** Hover tooltip body: the popup text, flagged as a tooltip (it never replaces the click popup). */
+export function tooltipNode(title: string, status?: string): HTMLElement {
+    const n = popupNode(title, [{ value: status ?? '' }])
+    n.setAttribute('role', 'tooltip')
+    return n
+}
+
+/** Popup listing cluster members as buttons (data goes in as text). `more` is the overflow row, if any. */
+export function listNode(title: string, items: Array<{ label: string; status?: string; onPick: () => void }>, more?: string): HTMLElement {
+    const root = popupNode(title)
+    const ul = document.createElement('ul')
+    ul.className = 'mcm-list'
+    for (const it of items) {
+        const li = document.createElement('li')
+        const b = document.createElement('button')
+        b.type = 'button'
+        b.textContent = it.status ? `${it.label}, ${it.status}` : it.label
+        b.addEventListener('click', it.onPick)
+        li.appendChild(b)
+        ul.appendChild(li)
+    }
+    if (more) {
+        const li = document.createElement('li')
+        const em = document.createElement('em')
+        em.textContent = more
+        li.appendChild(em)
+        ul.appendChild(li)
+    }
+    root.appendChild(ul)
     return root
 }
 
