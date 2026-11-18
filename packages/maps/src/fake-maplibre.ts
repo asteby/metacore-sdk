@@ -29,6 +29,9 @@ export class FakeMap implements FakeMapState {
     removed = false
     style: unknown
     zoom = 4
+    /** Test knobs for cluster clicks. */
+    expansionZoom = 9
+    clusterLeaves: any[] | null = null
     constructor(options: Record<string, any>) {
         this.options = options
         this.style = options.style
@@ -68,7 +71,7 @@ export class FakeMap implements FakeMapState {
         this.calls.push(['addControl', (c as { kind?: string }).kind, pos])
     }
     addSource(id: string, spec: any) {
-        this.sources.set(id, { ...spec, setData: (d: unknown) => ((this.sources.get(id).data = d), this.calls.push(['setData', id, d])), getClusterExpansionZoom: async () => 9 })
+        this.sources.set(id, { ...spec, setData: (d: unknown) => ((this.sources.get(id).data = d), this.calls.push(['setData', id, d])), getClusterExpansionZoom: async () => this.expansionZoom, getClusterLeaves: async (_id: number, limit: number) => this.clusterLeaves ?? this.sources.get(id).data.features.slice(0, limit) })
     }
     getSource(id: string) {
         return this.sources.get(id)
@@ -156,6 +159,8 @@ export class FakeMarker {
 export class FakePopup {
     node: Node | null = null
     ll: unknown
+    removed = false
+    added = false
     constructor(public options?: unknown) {
         popups.push(this)
     }
@@ -168,9 +173,12 @@ export class FakePopup {
         return this
     }
     addTo() {
+        this.added = true
+        this.removed = false
         return this
     }
     remove() {
+        this.removed = true
         return this
     }
 }

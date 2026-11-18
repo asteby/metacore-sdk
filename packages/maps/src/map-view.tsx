@@ -13,6 +13,7 @@ import {
 } from './config'
 import { MapContext, type MapContextValue } from './context'
 import { ensureStyles } from './dom'
+import { sameSpot } from './geometry'
 import { CLUSTER_THRESHOLD, ClusterLayer, Marker, useFitBounds } from './layers'
 import { MapList } from './map-list'
 import { prefersReducedMotion, useMapScheme } from './theme'
@@ -39,6 +40,8 @@ export interface MapViewProps {
     labels?: Partial<MapLabels>
     selectedKey?: string | null
     onSelect?: (item: MapPointItem) => void
+    /** Zoom a selected point is brought to (default 13). Never zooms in when other points share its coordinates. */
+    selectZoom?: number
     /** Click on the empty map (e.g. a picker). */
     onMapClick?: (p: GeoPoint) => void
     /** Show the "Ver lista" toggle (default true; the list is still the fallback when the map cannot render). */
@@ -52,11 +55,11 @@ export interface MapViewProps {
 
 type Status = 'loading' | 'ready' | 'unavailable'
 
-function PointsLayer({ points, cluster, colors, selectedKey, onSelect, fit }: Pick<MapViewProps, 'points' | 'cluster' | 'colors' | 'selectedKey' | 'onSelect' | 'fit'>) {
+function PointsLayer({ points, cluster, colors, selectedKey, onSelect, fit, labels }: Pick<MapViewProps, 'points' | 'cluster' | 'colors' | 'selectedKey' | 'onSelect' | 'fit' | 'labels'>) {
     const pts = React.useMemo(() => (points ?? []).filter((p) => isValidPoint(p)), [points])
     useFitBounds(pts, fit !== false)
     const clustered = cluster ?? pts.length > CLUSTER_THRESHOLD
-    if (clustered) return <ClusterLayer points={pts} colors={colors} onSelect={onSelect} />
+    if (clustered) return <ClusterLayer points={pts} colors={colors} onSelect={onSelect} labels={mergeLabels(labels)} />
     return (
         <>
             {pts.map((p) => (
@@ -170,19 +173,24 @@ export function MapView(props: MapViewProps): React.ReactElement {
         [handle, scheme, styleVersion, reducedMotion],
     )
 
+    const items = React.useMemo(() => (points ?? []).filter((p) => isValidPoint(p)), [points])
+
     const select = React.useCallback(
         (item: MapPointItem) => {
             setSelected(item.key)
             props.onSelect?.(item)
-            handle?.map.easeTo({ center: [item.lng, item.lat], zoom: Math.max(handle.map.getZoom(), 13), duration: reducedMotion ? 0 : 400 })
+            if (!handle) return
+            // Approximate places (e.g. country centroids) share coordinates: only centre, never zoom into empty map.
+            const crowded = items.some((p) => p.key !== item.key && sameSpot(p, item))
+            const current = handle.map.getZoom()
+            handle.map.easeTo({ center: [item.lng, item.lat], zoom: crowded ? current : Math.max(current, props.selectZoom ?? 13), duration: reducedMotion ? 0 : 400 })
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [handle, reducedMotion, props.onSelect],
+        [handle, reducedMotion, props.onSelect, props.selectZoom, items],
     )
 
     const unavailable = status === 'unavailable'
     const listVisible = unavailable || showList
-    const items = React.useMemo(() => (points ?? []).filter((p) => isValidPoint(p)), [points])
 
     return (
         <div className={['mcm-root', scheme === 'dark' ? 'mcm-dark' : '', className].filter(Boolean).join(' ')} data-testid="metacore-map" data-status={status} data-scheme={scheme}>
@@ -202,7 +210,7 @@ export function MapView(props: MapViewProps): React.ReactElement {
             )}
             {ctx ? (
                 <MapContext.Provider value={ctx}>
-                    <PointsLayer points={points} cluster={props.cluster} colors={props.colors} selectedKey={selected} onSelect={select} fit={props.fit} />
+                    <PointsLayer points={points} cluster={props.cluster} colors={props.colors} selectedKey={selected} onSelect={select} fit={props.fit} labels={props.labels} />
                     {children}
                 </MapContext.Provider>
             ) : null}
