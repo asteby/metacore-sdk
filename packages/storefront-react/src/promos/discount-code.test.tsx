@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import axe from 'axe-core'
 import { renderToString } from 'react-dom/server'
+import type { CartPromotions } from '@asteby/storefront'
 import { DiscountCodeForm } from './index.js'
 
 afterEach(cleanup)
@@ -56,5 +57,24 @@ describe('DiscountCodeForm', () => {
     const b = screen.getByRole('button', { name: 'Aplicando…' }) as HTMLButtonElement
     expect(b.disabled).toBe(true)
     expect(renderToString(<DiscountCodeForm codes={[{ code: 'A1', applicable: true }]} locale="es-MX" />)).toContain('Cupón A1 aplicado.')
+  })
+})
+
+describe('DiscountCodeForm con bloqueo de cupones', () => {
+  const promos = (blocks_codes: boolean) => ({ version: 1, blocks_codes }) as unknown as CartPromotions
+  it('no pinta el campo cuando la promoción vigente bloquea cupones', () => {
+    const { container } = render(<DiscountCodeForm codes={[]} locale="es-MX" promotions={promos(true)} />)
+    expect(container.innerHTML).toBe('')
+  })
+  it('con blocks_codes=false o sin promociones el campo sigue ahí', () => {
+    const a = render(<DiscountCodeForm codes={[]} locale="es-MX" promotions={promos(false)} />)
+    expect(screen.getByLabelText('Cupón de descuento')).toBeTruthy()
+    a.unmount()
+    render(<DiscountCodeForm codes={[]} locale="es-MX" />)
+    expect(screen.getByLabelText('Cupón de descuento')).toBeTruthy()
+  })
+  it('muestra el motivo promo_blocks_codes si el servidor rechaza un código ya guardado', () => {
+    render(<DiscountCodeForm codes={[{ code: 'OTONO10', applicable: false, reason: 'promo_blocks_codes' }]} locale="es-MX" />)
+    expect(screen.getByRole('alert').textContent).toContain('no se aceptan cupones')
   })
 })

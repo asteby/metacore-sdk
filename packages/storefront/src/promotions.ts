@@ -79,6 +79,7 @@ export type PromotionMessageKey =
   | 'code.reason.min_subtotal_not_met'
   | 'code.reason.no_eligible_items'
   | 'code.reason.not_combinable'
+  | 'code.reason.promo_blocks_codes'
   | 'code.reason.currency_mismatch'
   | 'code.reason.default'
 
@@ -151,6 +152,7 @@ const ES: PromotionMessages = {
   'code.reason.min_subtotal_not_met': 'El cupón {code} requiere una compra mínima mayor.',
   'code.reason.no_eligible_items': 'El cupón {code} no aplica a los productos de tu carrito.',
   'code.reason.not_combinable': 'El cupón {code} no se puede combinar con otro descuento de tu carrito.',
+  'code.reason.promo_blocks_codes': 'Durante esta promoción no se aceptan cupones; ya tienes el descuento por monto.',
   'code.reason.currency_mismatch': 'El cupón {code} no aplica en esta moneda.',
   'code.reason.default': 'El cupón {code} no aplica a este carrito.',
 }
@@ -222,6 +224,7 @@ const EN: PromotionMessages = {
   'code.reason.min_subtotal_not_met': 'Code {code} needs a higher minimum purchase.',
   'code.reason.no_eligible_items': 'Code {code} does not apply to the products in your cart.',
   'code.reason.not_combinable': 'Code {code} cannot be combined with another discount in your cart.',
+  'code.reason.promo_blocks_codes': 'Coupons are not accepted during this promotion; you already get the order-amount discount.',
   'code.reason.currency_mismatch': 'Code {code} does not apply in this currency.',
   'code.reason.default': 'Code {code} does not apply to this cart.',
 }
@@ -295,6 +298,14 @@ export type ShippingBarView = {
   remaining: Money | null
   /** `false` for `always`: there is nothing to fill. */
   showBar: boolean
+}
+
+/**
+ * Whether the store must hide the discount-code field: the promotion in force rejects every
+ * shopper coupon (`blocks_codes`). Display-only; the server rejects them anyway with `promo_blocks_codes`.
+ */
+export function couponsBlocked(promotions: CartPromotions | null | undefined): boolean {
+  return promotions?.blocks_codes === true
 }
 
 export type PromoProgressView = { discount: DiscountBarView | null; shipping: ShippingBarView | null }
@@ -389,6 +400,7 @@ export const DISCOUNT_CODE_REASONS = [
   'min_subtotal_not_met',
   'no_eligible_items',
   'not_combinable',
+  'promo_blocks_codes',
   'currency_mismatch',
 ] as const
 

@@ -86,6 +86,7 @@ export {
   promotionMessages,
   rewardLabel,
   promoProgressView,
+  couponsBlocked,
   clampPercent,
   normalizeNote,
   NOTE_MAX_LENGTH,
