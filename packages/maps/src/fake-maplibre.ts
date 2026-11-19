@@ -82,6 +82,21 @@ export class FakeMap implements FakeMapState {
     getLayer(id: string) {
         return this.layers.get(id)
     }
+    /** Test knob: what `querySourceFeatures` returns per source id (features "in the loaded tiles"); default = the source's GeoJSON features. */
+    sourceFeatures = new Map<string, any[]>()
+    /** Test knob: whether a lng/lat is inside the viewport. */
+    inView: (ll: [number, number]) => boolean = () => true
+    filters = new Map<string, unknown>()
+    querySourceFeatures(id: string) {
+        return this.sourceFeatures.get(id) ?? this.sources.get(id)?.data?.features ?? []
+    }
+    getBounds() {
+        return { contains: (ll: [number, number]) => this.inView(ll) }
+    }
+    setFilter(layer: string, filter: unknown) {
+        this.filters.set(layer, filter)
+        this.calls.push(['setFilter', layer, filter])
+    }
     removeLayer(id: string) {
         this.layers.delete(id)
     }

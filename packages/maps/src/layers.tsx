@@ -3,7 +3,9 @@ import { createPortal } from 'react-dom'
 import type * as ML from 'maplibre-gl'
 import { isValidPoint } from '@asteby/storefront/geo'
 import { removeLayers, useMap } from './context'
+import { avatarNode, isBranded } from './avatar'
 import { ensureStyles, listNode, popupNode, readableOn, tooltipNode } from './dom'
+import type { LogoOverlay } from './logo-overlay'
 import { openSpider, SPIDER_MAX, type Spider } from './spiderfy'
 import { allCoincident, areaGroups, boundsOf, isApproximate, lineToGeoJSON, pointColor, pointsToAreas, pointsToGeoJSON, sameSpot, zonePoints, zonesToGeoJSON } from './geometry'
 import { colorFor, DEFAULT_COLOR, safeColor } from './palette'
@@ -42,6 +44,14 @@ export interface MarkerProps {
     status?: string
     /** One or two characters inside the pin (stop number, initial…). */
     glyph?: string
+    /** Display name the avatar's initials come from (default `label`, which may also carry the status). */
+    name?: string
+    /** Logo URL: the pin becomes a round avatar (https or same-origin only; initials if it fails to load). */
+    image?: string
+    /** Brand colour of the initials background; the status colour is the avatar ring. */
+    accent?: string
+    /** Draw an avatar (initials on neutral grey) even without `image` / `accent`: keeps a map with some logos visually uniform. */
+    avatar?: boolean
     draggable?: boolean
     selected?: boolean
     /** Popup content (opens on click / Enter / Space). */
@@ -53,7 +63,7 @@ export interface MarkerProps {
 /** A focusable DOM marker with an optional popup. Keep to a few hundred; use `ClusterLayer` beyond that. */
 export function Marker(props: MarkerProps): React.ReactElement | null {
     const { map, ml } = useMap()
-    const { lat, lng, label, color, status, glyph, draggable, selected, children } = props
+    const { lat, lng, label, color, status, glyph, image, accent, avatar, name, draggable, selected, children } = props
     const handlers = React.useRef(props)
     handlers.current = props
     const markerRef = React.useRef<ML.Marker | null>(null)
@@ -90,12 +100,20 @@ export function Marker(props: MarkerProps): React.ReactElement | null {
         const el = elRef.current
         if (!el) return
         const bg = safeColor(color) ?? colorFor(status)
-        el.style.background = bg
-        el.style.color = readableOn(bg)
-        el.textContent = glyph ?? ''
         el.setAttribute('aria-label', label)
         el.setAttribute('aria-pressed', selected ? 'true' : 'false')
-    }, [label, color, status, glyph, selected])
+        if (avatar || isBranded({ image, accent })) {
+            // A branded point is an avatar: logo (or initials) inside a ring of the status colour.
+            el.className = 'mcm-marker mcm-marker--avatar'
+            el.style.background = ''
+            el.replaceChildren(avatarNode({ label: name ?? label, image, accent, ring: bg, size: 34, decorative: true }))
+        } else {
+            el.className = 'mcm-marker'
+            el.style.background = bg
+            el.style.color = readableOn(bg)
+            el.textContent = glyph ?? ''
+        }
+    }, [label, name, color, status, glyph, image, accent, avatar, selected])
 
     React.useEffect(() => {
         const marker = markerRef.current
@@ -146,7 +164,7 @@ const coordsOf = (f: ML.MapGeoJSONFeature): [number, number] => (f.geometry as u
 /** Popup of one point: its name, the status as a coloured pill and the detail rows. */
 function pointPopup(item: MapPointItem, colors?: Record<string, string>): HTMLElement {
     const status = item.statusLabel ?? item.status
-    return popupNode(item.label, item.details ?? [], status ? { text: status, color: pointColor(item, colors) } : undefined)
+    return popupNode(item.label, item.details ?? [], status ? { text: status, color: pointColor(item, colors) } : undefined, { image: item.image, accent: item.accent, ring: pointColor(item, colors) }, item.subtitle)
 }
 
 /**
@@ -159,6 +177,9 @@ export function ClusterLayer({ points, cluster = true, colors, onSelect, id = 'm
     const { map, ml, scheme, styleVersion } = useMap()
     const latest = React.useRef({ points, colors, onSelect, labels })
     latest.current = { points, colors, onSelect, labels }
+    const overlayRef = React.useRef<LogoOverlay | null>(null)
+    const overlayHandlers = React.useRef<Pick<Parameters<typeof import('./logo-overlay').mountLogoOverlay>[0], 'onPoint' | 'onCluster' | 'onArea'> | null>(null)
+    const branded = React.useMemo(() => points.some(isBranded), [points])
     const areaId = `${id}-areas`
     const exact = React.useMemo(() => points.filter((p) => !isApproximate(p)), [points])
     const layerIds = [`${id}-clusters`, `${id}-count`, `${id}-halo`, `${id}-points`]
@@ -273,6 +294,8 @@ export function ClusterLayer({ points, cluster = true, colors, onSelect, id = 'm
                 label: it.label,
                 status: it.statusLabel ?? it.status,
                 color: pointColor(it, latest.current.colors),
+                image: it.image,
+                accent: it.accent,
                 onPick: () => {
                     list.remove()
                     showPoint(it)
@@ -361,7 +384,22 @@ export function ClusterLayer({ points, cluster = true, colors, onSelect, id = 'm
             map.on('mouseenter', layer, hover)
             map.on('mouseleave', layer, leave)
         }
+        // The logo overlay (see logo-overlay.ts) clicks through the same handlers as the circles.
+        overlayHandlers.current = {
+            onPoint: (item) => {
+                const pts = latest.current.points
+                const together = pts.filter((p) => !isApproximate(p) && sameSpot(p, item))
+                if (together.length > 1) reveal([item.lng, item.lat], together, together.length)
+                else {
+                    closeAll()
+                    showPoint(item)
+                }
+            },
+            onCluster: (f) => void onCluster({ features: [f] } as unknown as ML.MapLayerMouseEvent),
+            onArea: (f) => onArea({ features: [f] } as unknown as ML.MapLayerMouseEvent),
+        }
         return () => {
+            overlayHandlers.current = null
             for (const [layer, onClick] of targets) {
                 map.off('click', layer, onClick)
                 map.off('mouseenter', layer, hover)
@@ -375,9 +413,36 @@ export function ClusterLayer({ points, cluster = true, colors, onSelect, id = 'm
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [map, ml, id, cluster, scheme, styleVersion])
 
+    // Logos over the circles: loaded only when some point has a logo or brand colour (no cost for plain maps).
+    React.useEffect(() => {
+        if (!branded) return
+        let cancelled = false
+        let overlay: LogoOverlay | null = null
+        void import('./logo-overlay').then((m) => {
+            if (cancelled) return
+            overlay = m.mountLogoOverlay({
+                map,
+                ml,
+                ids: { source: id, points: `${id}-points`, halo: `${id}-halo`, clusters: `${id}-clusters`, count: `${id}-count`, area: areaId, areaHalo: `${areaId}-halo`, areaCount: `${areaId}-count` },
+                state: () => ({ points: latest.current.points, colors: latest.current.colors, selectedKey: null, clusterText: (n) => fill(latest.current.labels.clusterCount, n) }),
+                onPoint: (item) => overlayHandlers.current?.onPoint(item),
+                onCluster: (f) => overlayHandlers.current?.onCluster(f),
+                onArea: (f) => overlayHandlers.current?.onArea(f),
+            })
+            overlayRef.current = overlay
+        })
+        return () => {
+            cancelled = true
+            overlay?.destroy()
+            overlayRef.current = null
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [map, ml, id, branded, cluster, scheme, styleVersion])
+
     React.useEffect(() => {
         ;(map.getSource(id) as ML.GeoJSONSource | undefined)?.setData(pointsToGeoJSON(exact, colors) as never)
         ;(map.getSource(areaId) as ML.GeoJSONSource | undefined)?.setData(pointsToAreas(points) as never)
+        overlayRef.current?.refresh()
     }, [map, id, areaId, points, exact, colors, styleVersion])
     return null
 }

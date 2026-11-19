@@ -12,6 +12,7 @@ import {
     type GenUIBlockRendererProps,
     type GenUIMapPoint,
 } from '@asteby/metacore-genui'
+import { Avatar, isBranded } from './avatar'
 import { useMap } from './context'
 import { MapView } from './map-view'
 import { PALETTE, colorFor } from './palette'
@@ -86,7 +87,7 @@ export function GenUIMapBlock({ block, rows, text, navigate, act }: GenUIBlockRe
             // The colour key is the grouping value; tone colours win, else a stable palette hue.
             const group = (groupBy === 'group' ? p.group : p.status) ?? '—'
             colors[group] ??= p.tone ? TONE_COLORS[p.tone] : colorFor(group)
-            return { key: p.key, lat: p.lat, lng: p.lng, label: p.label, status: group, statusLabel: group, precision: p.precision, area: p.area, details: p.details }
+            return { key: p.key, lat: p.lat, lng: p.lng, label: p.label, status: group, statusLabel: group, precision: p.precision, area: p.area, image: p.image, accent: p.accent, subtitle: p.subtitle, details: p.details }
         })
         return { items, colors }
     }, [raw, groupBy])
@@ -124,7 +125,13 @@ export function GenUIMapBlock({ block, rows, text, navigate, act }: GenUIBlockRe
                     </MapView>
                     {block.detail_panel && chosen ? (
                         <aside aria-label={chosen.label} style={{ border: '1px solid var(--border, #e5e7eb)', borderRadius: 8, padding: 10, fontSize: 14 }}>
-                            <p style={{ margin: 0, fontWeight: 600 }}>{chosen.label}</p>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                {isBranded(chosen) ? <Avatar label={chosen.label} image={chosen.image} accent={chosen.accent} ring={colors[(groupBy === 'group' ? chosen.group : chosen.status) ?? '—']} size={44} decorative /> : null}
+                                <div style={{ minWidth: 0 }}>
+                                    <p style={{ margin: 0, fontWeight: 600 }}>{chosen.label}</p>
+                                    {chosen.subtitle ? <p style={{ margin: 0, fontSize: 12, color: 'var(--muted-foreground, #6b7280)' }}>{chosen.subtitle}</p> : null}
+                                </div>
+                            </div>
                             {chosen.status ? <p style={{ margin: '2px 0 6px', color: 'var(--muted-foreground, #6b7280)' }}>{chosen.status}</p> : null}
                             <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 8px' }}>
                                 {chosen.details.map((d, i) => (

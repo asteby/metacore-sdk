@@ -1,4 +1,4 @@
-// Size budget (plan §0.2): the package's initial chunk stays under 17 KB gzip,
+// Size budget (plan §0.2): the package's initial chunk stays under 20 KB gzip (17 until the avatar primitives: logo avatars, fan pins, popup headers and list rows, ~2.2 KB; the logo overlay is a lazy chunk),
 // the registration entry is near zero, and MapLibre is never part of the
 // static graph — it is a dynamic import only. Bundles the sources with
 // esbuild (peers external) so the check does not depend on a prior build.
@@ -47,13 +47,13 @@ function staticClosure(files: Map<string, string>, name: string): string[] {
 const gz = (files: Map<string, string>, names: string[]) => names.reduce((n, f) => n + gzipSync(files.get(f) ?? '', { level: 9 }).length, 0)
 
 describe('size budget', () => {
-    it('keeps the initial chunk under 17 KB gzip and register tiny', async () => {
+    it('keeps the initial chunk under 20 KB gzip and register tiny', async () => {
         const files = await bundle()
         const index = gz(files, staticClosure(files, 'index.js'))
         const register = gz(files, staticClosure(files, 'register.js'))
         // eslint-disable-next-line no-console
         console.log(`[size] index.js static closure: ${(index / 1024).toFixed(2)} KB gzip; register.js: ${(register / 1024).toFixed(2)} KB gzip`)
-        expect(index).toBeLessThan(17 * 1024)
+        expect(index).toBeLessThan(20 * 1024)
         expect(register).toBeLessThan(1024)
     })
 

@@ -14,6 +14,12 @@ export interface GenUIMapPoint {
   precision?: MapPrecision
   /** Area name/code of the row (`area_field`): labels the aggregated bubble. */
   area?: string
+  /** Image / logo URL of the row (`image_field`). Untrusted: the renderer only loads https or same-origin paths. */
+  image?: string
+  /** Brand colour of the row (`color_field`): tints the avatar initials; the status colour stays separate. */
+  accent?: string
+  /** Second line under the name (`subtitle_field`). */
+  subtitle?: string
   details: Array<{ label?: string; value: string }>
 }
 
@@ -33,7 +39,8 @@ const DEFAULT_FIELDS = { key: 'id', lat: 'lat', lng: 'lng', label: 'name', statu
  * dropped; the count is clamped to the block limit (data never widens a block).
  * Tone of a point: its own `tone`, else `status_tones[status]`.
  * `precision_field` (per row) wins over the constant `precision`; `area_field` names
- * the area column; `popup` lists the columns shown as the point's details (in that
+ * the area column; `image_field` / `color_field` / `subtitle_field` name the columns of the
+ * point's logo, brand colour and second line (they are left out of the detail rows); `popup` lists the columns shown as the point's details (in that
  * order, max 8); without it the unmapped columns are shown, as before.
  */
 export function normalizeMapPoints(block: GenUIBlock, rows?: GenUIRow[], text: (v: unknown) => string = (v) => String(v ?? '')): GenUIMapPoint[] {
@@ -58,6 +65,15 @@ export function normalizeMapPoints(block: GenUIBlock, rows?: GenUIRow[], text: (
   const popup = Array.isArray(block.popup) ? (block.popup as string[]).slice(0, 8) : undefined
   const precisionField = typeof block.precision_field === 'string' ? block.precision_field : undefined
   const areaField = typeof block.area_field === 'string' ? block.area_field : undefined
+  const imageField = typeof block.image_field === 'string' ? block.image_field : undefined
+  const colorField = typeof block.color_field === 'string' ? block.color_field : undefined
+  const subtitleField = typeof block.subtitle_field === 'string' ? block.subtitle_field : undefined
+  // Columns that feed the avatar / subtitle are not repeated as detail rows (a URL as text is noise).
+  for (const c of [imageField, colorField, subtitleField]) if (c) mapped.add(c)
+  const cell = (r: GenUIRow, col: string | undefined): string | undefined => {
+    const v = col ? r[col] : undefined
+    return v === undefined || v === null || typeof v === 'object' ? undefined : String(v).trim() || undefined
+  }
   for (const r of rows ?? []) {
     const lat = Number(r[f.lat])
     const lng = Number(r[f.lng])
@@ -70,6 +86,7 @@ export function normalizeMapPoints(block: GenUIBlock, rows?: GenUIRow[], text: (
       tone: toneOf(status, r[f.tone]),
       precision: (precisionField ? asPrecision(r[precisionField]) : undefined) ?? constant,
       area: areaField && r[areaField] !== null && r[areaField] !== undefined ? String(r[areaField]).trim() || undefined : undefined,
+      image: cell(r, imageField), accent: cell(r, colorField), subtitle: cell(r, subtitleField),
       details: (popup ? popup.map((k) => [k, r[k]] as const) : Object.entries(r).filter(([k]) => !mapped.has(k)))
         .filter(([, v]) => v !== null && v !== undefined && v !== '' && typeof v !== 'object').slice(0, 8).map(([k, v]) => ({ label: k, value: String(v) })),
     })

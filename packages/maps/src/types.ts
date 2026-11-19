@@ -24,6 +24,12 @@ export interface MapPointItem {
     precision?: MapPrecision
     /** Place name of an approximate location (e.g. `CA`): printed on its bubble as `CA · 8`. */
     area?: string
+    /** Logo / photo URL of the point (https or same-origin path; anything else is ignored). Shown as a round avatar on pins, fan, popup and lists. */
+    image?: string
+    /** Brand colour (hex / rgb / hsl): tints the initials shown while `image` is missing or fails to load. The status colour stays on the avatar ring. */
+    accent?: string
+    /** Second line under the name in popups and lists (e.g. a host or an address). */
+    subtitle?: string
     /** Extra popup rows, in order. */
     details?: Array<{ label?: string; value: string }>
 }

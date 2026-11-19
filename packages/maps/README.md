@@ -82,6 +82,10 @@ import { MapView, Route, Geofence, LocationPicker, TrackingTimeline } from '@ast
 | `configureMaps`, `loadMaplibre`, `useMap`, `useMapScheme` | Host config, the shared lazy loader, and hooks for custom layers. |
 | `distanceKm`, `formatDistance`, `isValidPoint`, `parseLatLng`, `directionsUrl` | Re-exported from `@asteby/storefront/geo` — the one geo module shared with the storefronts. |
 
+### Logos and avatars
+
+Give a point `image` (https URL or same-origin path), `accent` (brand colour) and `subtitle` and every surface shows a round avatar: fan pins, markers, the popup header (logo + name + subtitle + status chip), the list under the map and cluster lists. The ring is the status colour; a missing or failing image falls back to initials on the brand colour (or neutral grey). On the WebGL layers, avatars are DOM markers drawn only for what is on screen and only when there are at most 50 of them per view (above that the circles stay); clusters and country/city bubbles show up to 3 stacked logos plus the count. Declaratively: `image_field`, `color_field`, `subtitle_field` on the genui `map` block and the `map` nav view.
+
 ### Accessibility
 
 - Every map has an equivalent **list** ("Ver lista"), keyboard reachable, with each status written out and an "open in map" link. When WebGL or MapLibre are unavailable the list is the only view and a message says so.

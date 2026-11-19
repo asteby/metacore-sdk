@@ -1,6 +1,9 @@
 // Small DOM helpers: marker/popup styling without a CSS file (the package
 // ships no stylesheet; the host's MapLibre CSS is injected with the chunk).
-import { safeColor } from './palette'
+import { avatarNode, initialsOf, isBranded } from './avatar'
+import { readableOn, safeColor } from './palette'
+
+export { readableOn }
 
 const STYLE_ID = 'metacore-maps-style'
 
@@ -27,11 +30,27 @@ const CSS = `
 .mcm-spider-pin:hover::after,.mcm-spider-pin:focus-visible::after{display:block}
 .mcm-spider-pin:hover,.mcm-spider-pin:focus-visible{z-index:2}
 .mcm-spider-pin:focus-visible{outline:3px solid #111;outline-offset:2px;box-shadow:0 0 0 5px #fff}
-.mcm-dark .maplibregl-ctrl-group{background:#2a3040}
-.mcm-dark .maplibregl-ctrl-group button+button{border-top-color:#4a5163}
-.mcm-dark .maplibregl-ctrl button .maplibregl-ctrl-icon{filter:invert(1)}
-.mcm-dark .maplibregl-ctrl-attrib{background:rgba(31,36,48,.8);color:#cbd5e1}
-.mcm-dark .maplibregl-ctrl-attrib a{color:#e8eaed}
+.mcm-avatar{position:relative;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;border-radius:50%;border:3px solid #fff;font-family:system-ui,sans-serif;font-weight:700;line-height:1;letter-spacing:.02em;user-select:none;box-shadow:0 0 0 1.5px rgba(17,24,39,.55),0 1px 5px rgba(0,0,0,.45)}
+.mcm-avatar-img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#fff;border-radius:50%}
+.mcm-marker--avatar{width:auto;height:auto;border:0;background:none!important;box-shadow:none;padding:0;border-radius:50%}
+.mcm-marker--avatar:focus-visible{outline:3px solid #111;outline-offset:3px;box-shadow:0 0 0 6px #fff}
+.mcm-mosaic{display:inline-flex;align-items:center;border:0;background:none;padding:0;cursor:pointer;border-radius:999px}
+.mcm-mosaic:focus-visible{outline:3px solid #111;outline-offset:3px;box-shadow:0 0 0 6px #fff}
+.mcm-mosaic .mcm-avatar+.mcm-avatar{margin-left:-12px}
+.mcm-mosaic-n{margin-left:4px;min-width:22px;padding:2px 7px;border-radius:999px;background:#111827;color:#fff;border:2px solid #fff;font:700 12px/1.3 system-ui,sans-serif;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+.mcm-head{display:flex;align-items:center;gap:10px;margin:0 22px 4px 0}
+.mcm-head-text{min-width:0}
+.mcm-head strong{margin:0}
+.mcm-sub{display:block;font-size:12px;opacity:.75;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mcm-spider-pin.mcm-has-avatar{width:38px;height:38px;margin:-19px 0 0 -19px;padding:0;background:none!important;border:0;box-shadow:none;border-radius:50%}
+.mcm-root.mcm-dark .maplibregl-ctrl-group{background:#2a3040}
+.mcm-root.mcm-dark .maplibregl-ctrl-group button+button{border-top-color:#4a5163}
+.mcm-root.mcm-dark .maplibregl-ctrl button .maplibregl-ctrl-icon{filter:invert(1)}
+.mcm-root .maplibregl-ctrl.maplibregl-ctrl-attrib,.mcm-root .maplibregl-ctrl.maplibregl-ctrl-attrib.maplibregl-compact,.mcm-root .maplibregl-ctrl.maplibregl-ctrl-attrib.maplibregl-compact-show{background:rgba(255,255,255,.88);color:#1f2937}
+.mcm-root .maplibregl-ctrl-attrib a,.mcm-root .maplibregl-ctrl-attrib a:visited{color:#1d4ed8}
+.mcm-root.mcm-dark .maplibregl-ctrl.maplibregl-ctrl-attrib,.mcm-root.mcm-dark .maplibregl-ctrl.maplibregl-ctrl-attrib.maplibregl-compact,.mcm-root.mcm-dark .maplibregl-ctrl.maplibregl-ctrl-attrib.maplibregl-compact-show{background:rgba(24,28,38,.88);color:#e2e8f0}
+.mcm-root.mcm-dark .maplibregl-ctrl-attrib a,.mcm-root.mcm-dark .maplibregl-ctrl-attrib a:visited{color:#93c5fd}
+.mcm-root.mcm-dark .maplibregl-ctrl-attrib .maplibregl-ctrl-attrib-button{background-color:transparent;filter:invert(1)}
 .mcm-dark .maplibregl-popup-content{background:#1f2430;color:#e8eaed}
 .mcm-dark .maplibregl-popup-tip{border-top-color:#1f2430;border-bottom-color:#1f2430}
 .mcm-dark .maplibregl-popup-close-button{color:#e8eaed}
@@ -53,20 +72,6 @@ export function ensureStyles(): void {
     document.head.appendChild(el)
 }
 
-/** Black or white, whichever reads better on `hex` (WCAG relative luminance). */
-export function readableOn(hex: string): string {
-    const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim())
-    if (!m) return '#fff'
-    let h = m[1] as string
-    if (h.length === 3) h = h.replace(/./g, (c) => c + c)
-    const ch = [0, 2, 4].map((i) => {
-        const v = parseInt(h.slice(i, i + 2), 16) / 255
-        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
-    })
-    const l = 0.2126 * (ch[0] as number) + 0.7152 * (ch[1] as number) + 0.0722 * (ch[2] as number)
-    return l > 0.4 ? '#111' : '#fff'
-}
-
 /** Status pill: text plus the status colour (the text stays, colour is never the only channel). */
 export function chipNode(text: string, color?: string): HTMLElement {
     const c = document.createElement('span')
@@ -80,13 +85,45 @@ export function chipNode(text: string, color?: string): HTMLElement {
     return c
 }
 
-/** Popup body as DOM text nodes (labels/values come from data: never innerHTML). Rows with a label align as key / value; `chip` is the status pill under the title. */
-export function popupNode(title: string, rows: Array<{ label?: string; value: string }> = [], chip?: { text: string; color?: string }): HTMLElement {
+/** Branding of a point in a popup header or list row. */
+export interface PointBrand {
+    image?: string
+    accent?: string
+    /** Status / presence colour of the avatar ring. */
+    ring?: string
+}
+
+function subtitleNode(text: string): HTMLElement {
+    const s = document.createElement('small')
+    s.className = 'mcm-sub'
+    s.textContent = text
+    return s
+}
+
+/**
+ * Popup body as DOM text nodes (labels/values come from data: never innerHTML). Rows with a label align as key / value;
+ * `chip` is the status pill under the title. With `brand` (a logo or a brand colour) the title gets an avatar on its left;
+ * `subtitle` goes under the name.
+ */
+export function popupNode(title: string, rows: Array<{ label?: string; value: string }> = [], chip?: { text: string; color?: string }, brand?: PointBrand, subtitle?: string): HTMLElement {
     const root = document.createElement('div')
     root.className = 'mcm-popup'
     const t = document.createElement('strong')
     t.textContent = title
-    root.appendChild(t)
+    if (brand && isBranded(brand)) {
+        const head = document.createElement('div')
+        head.className = 'mcm-head'
+        head.appendChild(avatarNode({ label: title, ...brand, size: 40 }))
+        const text = document.createElement('div')
+        text.className = 'mcm-head-text'
+        text.appendChild(t)
+        if (subtitle) text.appendChild(subtitleNode(subtitle))
+        head.appendChild(text)
+        root.appendChild(head)
+    } else {
+        root.appendChild(t)
+        if (subtitle) root.appendChild(subtitleNode(subtitle))
+    }
     if (chip?.text) root.appendChild(chipNode(chip.text, chip.color))
     const body = document.createElement('div')
     body.className = 'mcm-rows'
@@ -118,7 +155,7 @@ export function tooltipNode(title: string, status?: string): HTMLElement {
 }
 
 /** Popup listing members as buttons with their status pill (data goes in as text). `more` is the overflow row, if any. */
-export function listNode(title: string, items: Array<{ label: string; status?: string; color?: string; onPick: () => void }>, more?: string): HTMLElement {
+export function listNode(title: string, items: Array<{ label: string; status?: string; color?: string; image?: string; accent?: string; onPick: () => void }>, more?: string): HTMLElement {
     const root = popupNode(title)
     const ul = document.createElement('ul')
     ul.className = 'mcm-list'
@@ -127,8 +164,10 @@ export function listNode(title: string, items: Array<{ label: string; status?: s
         const b = document.createElement('button')
         b.type = 'button'
         b.setAttribute('aria-label', it.status ? `${it.label}, ${it.status}` : it.label)
+        if (isBranded(it)) b.appendChild(avatarNode({ label: it.label, image: it.image, accent: it.accent, ring: it.color, size: 28, decorative: true }))
         const name = document.createElement('span')
         name.className = 'mcm-li-name'
+        name.style.flex = '1'
         name.textContent = it.label
         b.appendChild(name)
         if (it.status) b.appendChild(chipNode(it.status, it.color))
@@ -151,6 +190,9 @@ export interface SpiderPin {
     label: string
     status?: string
     color?: string
+    /** Logo and brand colour: the pin shows an avatar (logo, else initials) instead of its number. */
+    image?: string
+    accent?: string
     onPick: () => void
 }
 
@@ -159,6 +201,8 @@ export interface SpiderPin {
  * per member at the given pixel offsets. Pins are buttons named `label, status`.
  */
 export function spiderNode(pins: SpiderPin[], offsets: Array<[number, number]>): { root: HTMLElement; pins: HTMLButtonElement[] } {
+    // Avatars when anyone in the fan is branded (logos, or initials for the rest); plain numbers otherwise.
+    const avatars = pins.some(isBranded)
     const root = document.createElement('div')
     root.className = 'mcm-spider'
     root.setAttribute('role', 'group')
@@ -175,13 +219,16 @@ export function spiderNode(pins: SpiderPin[], offsets: Array<[number, number]>):
         const b = document.createElement('button')
         b.type = 'button'
         b.className = 'mcm-spider-pin'
-        b.textContent = String(i + 1)
+        if (avatars && initialsOf(p.label)) {
+            b.classList.add('mcm-has-avatar')
+            b.appendChild(avatarNode({ label: p.label, image: p.image, accent: p.accent, ring: p.color, size: 36, decorative: true }))
+        } else b.textContent = String(i + 1)
         b.dataset.label = p.status ? `${p.label} · ${p.status}` : p.label
         b.setAttribute('aria-label', p.status ? `${p.label}, ${p.status}` : p.label)
         b.style.left = `${dx}px`
         b.style.top = `${dy}px`
         const c = safeColor(p.color)
-        if (c) {
+        if (c && !b.classList.contains('mcm-has-avatar')) {
             b.style.background = c
             b.style.color = readableOn(c)
         }
