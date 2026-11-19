@@ -26,8 +26,8 @@ export function rowTitle(row: Record<string, unknown>, declared: string | undefi
 }
 
 /**
- * Location accuracy of a map view. Not in the kernel's `view.map` schema yet
- * (kernel change pending, additive and optional): `precision` is the accuracy of
+ * Optional extras of a map view (the kernel's `view.map` carries them; older runtimes
+ * type them out): `precision` is the accuracy of
  * every row, `precision_field` names a column holding `exact | city | country` per row
  * (wins over `precision`), `area_field` names the column printed on the bubble of an
  * approximate location ("CA · 8").
@@ -36,6 +36,17 @@ export interface MapPrecisionConfig {
     precision?: string
     precision_field?: string
     area_field?: string
+    /** Column with the logo / image URL of each point (manifest/v3 `view.map.image_field`). */
+    image_field?: string
+    /** Column with the brand colour of each point (`view.map.color_field`). */
+    color_field?: string
+    /** Column printed under the name in popups and lists (`view.map.subtitle_field`). */
+    subtitle_field?: string
+}
+
+/** Text of a scalar cell, trimmed; undefined for empty, null or object values. */
+export function cellText(v: unknown): string | undefined {
+    return v === undefined || v === null || typeof v === 'object' ? undefined : String(v).trim() || undefined
 }
 
 export function toPrecision(v: unknown): MapPrecision | undefined {

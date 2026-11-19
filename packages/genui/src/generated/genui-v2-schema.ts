@@ -3282,6 +3282,15 @@ export const GENUI_V2_SCHEMA = {
         },
         "area_field": {
           "$ref": "#/$defs/key"
+        },
+        "image_field": {
+          "$ref": "#/$defs/key"
+        },
+        "color_field": {
+          "$ref": "#/$defs/key"
+        },
+        "subtitle_field": {
+          "$ref": "#/$defs/key"
         }
       }
     },
@@ -4001,7 +4010,10 @@ export const GENUI_V2_BLOCKS: Readonly<Record<string, { readonly allowed: readon
       "popup",
       "precision",
       "precision_field",
-      "area_field"
+      "area_field",
+      "image_field",
+      "color_field",
+      "subtitle_field"
     ],
     "required": [
       "type",

@@ -330,7 +330,7 @@ function blockRules(b: Obj, type: string, path: string) {
     if (present('source') && present('points')) throw new GenUIError('genui.invalid_block', `${path}: map usa points o source, no ambos`, path)
     if (!present('source') && !present('points')) throw new GenUIError('genui.required', `${path}: map requiere points o source`, path)
     if (present('fields') && !present('source')) throw new GenUIError('genui.invalid_block', `${path}: fields solo aplica con source`, path)
-    for (const k of ['popup', 'precision_field', 'area_field']) {
+    for (const k of ['popup', 'precision_field', 'area_field', 'image_field', 'color_field', 'subtitle_field']) {
       if (present(k) && !present('source')) throw new GenUIError('genui.invalid_block', `${path}: ${k} solo aplica con source`, path)
     }
     if (present('precision') && present('precision_field')) throw new GenUIError('genui.invalid_block', `${path}: map usa precision o precision_field, no ambos`, path)

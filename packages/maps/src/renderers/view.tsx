@@ -9,7 +9,7 @@ import { Geofence } from '../layers'
 import { MapView } from '../map-view'
 import { colorFor } from '../palette'
 import type { MapPointItem, ZoneItem } from '../types'
-import { MAX_FEATURES, rowTitle, statusMaps, toPrecision, toZones, useMapLabels, type MapPrecisionConfig } from './shared'
+import { MAX_FEATURES, cellText, rowTitle, statusMaps, toPrecision, toZones, useMapLabels, type MapPrecisionConfig } from './shared'
 
 type Row = Record<string, unknown>
 
@@ -59,6 +59,9 @@ export default function MapViewRenderer({ model, view, metadata, data, onOpenRec
                 label: rowTitle(f.row, first?.value, f.key),
                 precision: toPrecision(ext.precision_field ? f.row[ext.precision_field] : undefined) ?? toPrecision(ext.precision),
                 area: area || undefined,
+                image: ext.image_field ? cellText(f.row[ext.image_field]) : undefined,
+                accent: ext.color_field ? cellText(f.row[ext.color_field]) : undefined,
+                subtitle: ext.subtitle_field ? cellText(f.row[ext.subtitle_field]) : undefined,
                 status: f.color,
                 statusLabel: f.color ? names[f.color] : undefined,
                 details: rest.filter((p) => p.value).map((p) => ({ label: metadata?.columns?.find((c) => c.key === p.field)?.label ?? p.field, value: p.value })),
@@ -74,7 +77,7 @@ export default function MapViewRenderer({ model, view, metadata, data, onOpenRec
         })
         return { points: items, byKey: map }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [rows, layerRows, view, names, metadata, ext.precision, ext.precision_field, ext.area_field])
+    }, [rows, layerRows, view, names, metadata, ext.precision, ext.precision_field, ext.area_field, ext.image_field, ext.color_field, ext.subtitle_field])
 
     const zones = React.useMemo<ZoneItem[]>(
         () =>

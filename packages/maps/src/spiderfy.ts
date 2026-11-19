@@ -4,7 +4,8 @@
 import type * as ML from 'maplibre-gl'
 import type { MapLibreModule } from './config'
 import { spiderNode } from './dom'
-import { pointColor, spiderOffsets } from './geometry'
+import { isBranded } from './avatar'
+import { pointColor, SPIDER_FOOT_AVATAR, spiderOffsets } from './geometry'
 import type { MapPointItem } from './types'
 
 /** Most members fanned out at once; more are listed instead. */
@@ -28,12 +29,14 @@ export interface Spider {
 
 /** Fan `members` out around `center`. Closes with Esc, a click outside, or zooming out; the first pin takes focus. */
 export function openSpider(map: ML.Map, ml: MapLibreModule, { center, members, colors, onPick, onClose }: SpiderOptions): Spider {
-    const offsets = spiderOffsets(members.length)
+    const offsets = spiderOffsets(members.length, members.some(isBranded) ? SPIDER_FOOT_AVATAR : undefined)
     const { root, pins } = spiderNode(
         members.map((m, i) => ({
             label: m.label,
             status: m.statusLabel ?? m.status,
             color: pointColor(m, colors),
+            image: m.image,
+            accent: m.accent,
             onPick: () => onPick(m, offsets[i] as [number, number]),
         })),
         offsets,

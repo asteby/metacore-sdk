@@ -37,3 +37,21 @@ describe('normalizeMapPoints: popup, precision, precision_field, area_field', ()
     expect(normalizeMapPoints(block({ precision: 'street' }) as never, rows)[0]!.precision).toBeUndefined()
   })
 })
+
+describe('normalizeMapPoints: image_field, color_field, subtitle_field', () => {
+  const branded = [
+    { id: 'a', name: 'Acme', lat: 14.6, lng: -90.5, status: 'ok', logo: 'https://cdn.example/a.png', brand: '#0072B2', host: 'acme.test', plan: 'pro' },
+    { id: 'b', name: 'Beta', lat: 19.4, lng: -99.1, status: 'ok', logo: '', brand: null, host: ' ', plan: 'free' },
+  ]
+  it('maps the logo, brand colour and subtitle of each row and keeps them out of the detail rows', () => {
+    const [a, b] = normalizeMapPoints(block({ image_field: 'logo', color_field: 'brand', subtitle_field: 'host' }) as never, branded)
+    expect([a!.image, a!.accent, a!.subtitle]).toEqual(['https://cdn.example/a.png', '#0072B2', 'acme.test'])
+    expect([b!.image, b!.accent, b!.subtitle]).toEqual([undefined, undefined, undefined])
+    expect(a!.details.map((d) => d.label)).toEqual(['plan'])
+  })
+  it('without them nothing changes (the columns stay as detail rows)', () => {
+    const [a] = normalizeMapPoints(block({}) as never, branded)
+    expect([a!.image, a!.accent, a!.subtitle]).toEqual([undefined, undefined, undefined])
+    expect(a!.details.map((d) => d.label)).toContain('logo')
+  })
+})

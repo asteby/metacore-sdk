@@ -3787,6 +3787,9 @@ export interface BlockMap {
   precision?: 'exact' | 'city' | 'country'
   precision_field?: Key
   area_field?: Key
+  image_field?: Key
+  color_field?: Key
+  subtitle_field?: Key
 }
 /**
  * This interface was referenced by `GenuiV2`'s JSON-Schema

@@ -15,7 +15,8 @@ import {
 import { resolveMapLimits } from './limits'
 import { MapContext, type MapContextValue } from './context'
 import { ensureStyles } from './dom'
-import { fitMaxZoom, isApproximate, selectZoomFor } from './geometry'
+import { Avatar, isBranded } from './avatar'
+import { fitMaxZoom, isApproximate, pointColor, selectZoomFor } from './geometry'
 import { CLUSTER_THRESHOLD, ClusterLayer, Marker, useFitBounds } from './layers'
 import { MapList } from './map-list'
 import { prefersReducedMotion, useMapScheme } from './theme'
@@ -64,6 +65,8 @@ function PointsLayer({ points, cluster, colors, selectedKey, onSelect, fit, labe
     useFitBounds(pts, fit !== false, fitMaxZoom(pts, precisionZoom))
     const clustered = cluster ?? pts.length > CLUSTER_THRESHOLD
     const merged = mergeLabels(labels)
+    // One logo on the map makes every pin an avatar (initials for the rest): a mix of dots and faces reads as broken.
+    const avatars = pts.some(isBranded)
     if (clustered) return <ClusterLayer points={pts} colors={colors} onSelect={onSelect} labels={merged} />
     const approx = pts.filter(isApproximate)
     return (
@@ -79,10 +82,20 @@ function PointsLayer({ points, cluster, colors, selectedKey, onSelect, fit, labe
                     status={p.status}
                     color={p.color ?? (p.status ? colors?.[p.status] : undefined)}
                     glyph={p.glyph}
+                    name={p.label}
+                    image={p.image}
+                    accent={p.accent}
+                    avatar={avatars}
                     selected={selectedKey === p.key}
                     onClick={() => onSelect?.(p)}
                 >
-                    <strong style={{ display: 'block' }}>{p.label}</strong>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        {isBranded(p) ? <Avatar label={p.label} image={p.image} accent={p.accent} ring={pointColor(p, colors)} size={40} decorative /> : null}
+                        <div style={{ minWidth: 0 }}>
+                            <strong style={{ display: 'block' }}>{p.label}</strong>
+                            {p.subtitle ? <span style={{ display: 'block', fontSize: 12, opacity: 0.75 }}>{p.subtitle}</span> : null}
+                        </div>
+                    </div>
                     {p.statusLabel ?? p.status ? <span style={{ display: 'block' }}>{p.statusLabel ?? p.status}</span> : null}
                     {(p.details ?? []).map((d, i) => (
                         <span key={i} style={{ display: 'block' }}>
@@ -238,7 +251,7 @@ export function MapView(props: MapViewProps): React.ReactElement {
             ) : null}
             {listVisible ? (
                 <div id={listId} style={{ marginTop: 8 }}>
-                    <MapList items={items} labels={labels} selectedKey={selected} locale={locale} onSelect={unavailable ? undefined : select} />
+                    <MapList items={items} labels={labels} colors={props.colors} selectedKey={selected} locale={locale} onSelect={unavailable ? undefined : select} />
                     {listExtra}
                 </div>
             ) : null}

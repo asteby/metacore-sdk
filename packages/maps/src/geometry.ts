@@ -184,13 +184,15 @@ export function pointsToAreas(points: ReadonlyArray<MapPointItem>): FeatureColle
 // --- Spiderfy -------------------------------------------------------------
 
 const SPIDER_FOOT = 34
+/** Spacing of the fan when its pins are avatars (bigger than numbered pins). */
+export const SPIDER_FOOT_AVATAR = 46
 
-/** Pixel offsets `[dx, dy]` of `n` members around their shared point: a circle up to 8, an outward spiral beyond. */
-export function spiderOffsets(n: number): Array<[number, number]> {
+/** Pixel offsets `[dx, dy]` of `n` members around their shared point: a circle up to 8, an outward spiral beyond. `foot` is the distance between neighbours. */
+export function spiderOffsets(n: number, foot = SPIDER_FOOT): Array<[number, number]> {
     const round = (v: number) => Math.round(v * 10) / 10
     if (n <= 0) return []
     if (n <= 8) {
-        const r = Math.max(52, (SPIDER_FOOT * n) / (2 * Math.PI))
+        const r = Math.max(52 * (foot / SPIDER_FOOT), (foot * n) / (2 * Math.PI))
         return Array.from({ length: n }, (_, i) => {
             const a = -Math.PI / 2 + (i * 2 * Math.PI) / n
             return [round(r * Math.cos(a)), round(r * Math.sin(a))]
@@ -198,11 +200,12 @@ export function spiderOffsets(n: number): Array<[number, number]> {
     }
     const out: Array<[number, number]> = []
     let a = 0
-    let r = 56
+    const r0 = 56 * (foot / SPIDER_FOOT)
+    let r = r0
     for (let i = 0; i < n; i++) {
         out.push([round(r * Math.cos(a - Math.PI / 2)), round(r * Math.sin(a - Math.PI / 2))])
-        a += SPIDER_FOOT / r
-        r = 56 + 5.5 * a
+        a += foot / r
+        r = r0 + 5.5 * (foot / SPIDER_FOOT) * a
     }
     return out
 }
