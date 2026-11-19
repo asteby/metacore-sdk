@@ -40,6 +40,16 @@
       }
     },
     "./cart.css": "./dist/cart.css",
+    "./revalidate": {
+      "import": {
+        "types": "./dist/revalidate.d.ts",
+        "default": "./dist/revalidate.js"
+      },
+      "require": {
+        "types": "./dist/revalidate.d.cts",
+        "default": "./dist/revalidate.cjs"
+      }
+    },
     "./checkout": {
       "import": {
         "types": "./dist/checkout.d.ts",
