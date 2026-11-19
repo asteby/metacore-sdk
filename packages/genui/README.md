@@ -132,6 +132,20 @@ federation/iframe loading is NOT implemented, an unregistered component renders
 a stub. These page-level keys are proposals and are not yet in the shared
 genui/v2 JSON Schema; core blocks still go through `parseGenUI`.
 
+### Table block UX (`table`)
+
+`column.format` (incl. `relative_date`, with the host locale) is applied. Optional
+column fields: `variant` (`text` | `badge` | `icon_text`), `tones` (value ->
+`success|warning|danger|info|muted`), `labels` (value -> text or `{ $t }`
+resolved with the host `t`; no label -> the value is humanized, never the raw
+key) and `icons` (value -> icon name via `resolveIcon`; unknown icons are
+omitted). Block fields: `max_height` (`sm|md|lg` = 16/24/32rem, `TABLE_MAX_HEIGHT`)
+for an inner, keyboard-reachable scroll with a sticky header, and
+`density: "compact"` for one/two-line rows instead of stacked cards in narrow
+containers. `TableView` is exported for direct use. The shared schema
+(kernel PR #639) is synced into `schema/genui-v2.schema.json`; `tones`/`labels`/`icons`
+require `variant` `badge` or `icon_text` (`genui.invalid_block` otherwise).
+
 ### Icons by name (`resolveIcon`)
 
 Option icons of the view switcher (`tabs[].icon`) are resolved by one hook,

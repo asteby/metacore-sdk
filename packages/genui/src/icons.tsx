@@ -29,10 +29,11 @@ export const BUILTIN_ICONS: Readonly<Record<string, GenUIIconComponent>> = {
 export const FALLBACK_ICON: GenUIIconComponent = Circle
 
 /**
- * Orden: host -> conjunto interno -> icono neutro. `null` solo si no hay nombre
- * o no es un nombre valido (no se pinta nada). Un resolutor que lanza se ignora.
+ * Host -> conjunto interno; `null` si nadie conoce el nombre (o no es valido).
+ * Para un icono OPCIONAL que se omite cuando se desconoce (p. ej. el de un
+ * valor de celda). Un resolutor que lanza se ignora.
  */
-export function resolveGenUIIcon(name: unknown, resolver?: GenUIIconResolver): GenUIIconComponent | null {
+export function lookupGenUIIcon(name: unknown, resolver?: GenUIIconResolver): GenUIIconComponent | null {
   if (typeof name !== 'string' || !ICON_NAME_PATTERN.test(name)) return null
   if (resolver) {
     try {
@@ -42,7 +43,16 @@ export function resolveGenUIIcon(name: unknown, resolver?: GenUIIconResolver): G
       // un resolutor roto del host no debe romper el render
     }
   }
-  return (Object.hasOwn(BUILTIN_ICONS, name) ? BUILTIN_ICONS[name] : undefined) ?? FALLBACK_ICON
+  return Object.hasOwn(BUILTIN_ICONS, name) ? BUILTIN_ICONS[name]! : null
+}
+
+/**
+ * Orden: host -> conjunto interno -> icono neutro. `null` solo si no hay nombre
+ * o no es un nombre valido (no se pinta nada).
+ */
+export function resolveGenUIIcon(name: unknown, resolver?: GenUIIconResolver): GenUIIconComponent | null {
+  if (typeof name !== 'string' || !ICON_NAME_PATTERN.test(name)) return null
+  return lookupGenUIIcon(name, resolver) ?? FALLBACK_ICON
 }
 
 /** Hook unico para pintar un icono por nombre con el resolutor del `GenUIProvider`. */

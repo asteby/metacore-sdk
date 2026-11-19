@@ -7,6 +7,13 @@ import type { Tone } from './types'
 const TREND_ICON = { up: ArrowUpRight, down: ArrowDownRight, flat: ArrowRight }
 const TREND_LABEL = { up: 'al alza', down: 'a la baja', flat: 'estable' }
 
+const RELATIVE_UNITS: ReadonlyArray<readonly [number, Intl.RelativeTimeFormatUnit]> = [
+  [86_400_000, 'day'],
+  [3_600_000, 'hour'],
+  [60_000, 'minute'],
+  [1000, 'second'],
+]
+
 /** Formats a metric value with Intl (no host dependency). Unknown shapes print as text. */
 export function formatMetric(value: unknown, format: string | undefined, locale?: string, currency = 'MXN'): string {
   if (value === null || value === undefined) return '—'
@@ -27,8 +34,10 @@ export function formatMetric(value: unknown, format: string | undefined, locale?
       case 'relative_date': {
         const d = new Date(String(value))
         if (Number.isNaN(d.getTime())) return String(value)
-        const days = Math.round((d.getTime() - Date.now()) / 86_400_000)
-        return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(days, 'day')
+        const diff = d.getTime() - Date.now()
+        // Unidad mas grande que quepa (minutos/horas/dias) para que "hace 3 horas" no sea "hoy".
+        const [step, unit] = RELATIVE_UNITS.find(([ms]) => Math.abs(diff) >= ms) ?? RELATIVE_UNITS[RELATIVE_UNITS.length - 1]!
+        return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(Math.round(diff / step), unit)
       }
       default:
         return Number.isNaN(n) ? String(value) : new Intl.NumberFormat(locale).format(n)

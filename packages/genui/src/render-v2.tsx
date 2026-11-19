@@ -1,7 +1,9 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { AlertTriangle, ChevronDown, Info } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle, Badge, Button, Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle, Tabs, TabsContent, TabsList, TabsTrigger, cn } from '@asteby/metacore-ui'
-import { BADGE_VARIANT, Block as V1Block, TEXT_TONE } from './generative-ui'
+import { Block as V1Block } from './generative-ui'
+import { BADGE_VARIANT, TEXT_TONE } from './tones'
+import { TableView } from './table-view'
 import { parseGenUI } from './compat'
 import type { ParseV2Options } from './validate-v2'
 import { DiagramBlock } from './diagram'
@@ -267,6 +269,12 @@ function Stats({ block, rows, text, ...rest }: GenUIBlockRendererProps) {
   return <V1Block block={{ type: 'kpi', title: block.title ? text(block.title) : undefined, items: resolved } as never} onNavigate={rest.navigate} />
 }
 
+/** `table`: columnas con formato/insignias/iconos y alto maximo; `$t` y los iconos los resuelve el host. */
+function TableV2({ block, rows, text, locale, currency }: GenUIBlockRendererProps) {
+  const { resolveIcon } = useGenUI()
+  return <TableView block={block as never} rows={rows} text={text} locale={locale} currency={currency} resolveIcon={resolveIcon} />
+}
+
 /**
  * v1-shaped blocks keep their v1 view. v2-only fields (`id`, `when`, `fallback`)
  * are dropped and `$t` text is resolved first, so the v1 view sees plain strings.
@@ -325,7 +333,7 @@ const BUILTIN: Record<string, (p: GenUIBlockRendererProps) => ReactNode> = {
   stack: Stack, grid: Grid, tabs: Tabbed, section: Section,
   text: Text, markdown: Markdown, alert: AlertBlock, empty: Empty, card: CardBlock, list: ListBlock,
   metric: MetricBlock, diagram: DiagramBlock, map: MapFallback, stats: Stats,
-  kpi: V1Passthrough, links: V1Passthrough, timeline: V1Passthrough, table: V1Passthrough, chart: V1Passthrough, confirm: V1Passthrough,
+  kpi: V1Passthrough, links: V1Passthrough, timeline: V1Passthrough, table: TableV2, chart: V1Passthrough, confirm: V1Passthrough,
 }
 
 /** The block types this build can draw by itself (before any `registerGenUIBlockRenderer`). */

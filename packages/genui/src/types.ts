@@ -26,9 +26,23 @@ export interface UIItem {
   status?: string
   tone?: Tone
 }
+/** Texto literal o clave i18n del host (`{ $t }`), resuelto con el `t` del provider. */
+export type UIText = string | { $t: string; args?: Record<string, unknown> }
+/** Formatos de valor de columna (los mismos que `statFormat` del esquema). */
+export type UIColumnFormat = 'number' | 'currency' | 'percent' | 'compact' | 'date' | 'datetime' | 'relative_date'
 export interface UIColumn {
   key: string
   label: string
+  /** Formato del valor (fechas, moneda...) con la configuracion regional del host. */
+  format?: UIColumnFormat
+  /** `text` (por defecto), `badge` (insignia con tono) o `icon_text` (icono + texto). */
+  variant?: 'text' | 'badge' | 'icon_text'
+  /** valor -> tono (reusa el mapeo tono->clases de las insignias). */
+  tones?: Record<string, Tone>
+  /** valor -> texto legible; sin entrada se humaniza el valor (nunca la clave cruda). */
+  labels?: Record<string, UIText>
+  /** valor -> nombre de icono (host/conjunto interno); si no se conoce, se omite. */
+  icons?: Record<string, string>
 }
 export interface UIOption {
   value: string
@@ -77,6 +91,10 @@ export interface TableBlock extends BlockBase {
   columns: UIColumn[]
   rows?: Record<string, Scalar>[]
   caption?: string
+  /** Alto maximo con scroll interno y cabecera fija (ver `TABLE_MAX_HEIGHT`). */
+  max_height?: 'sm' | 'md' | 'lg'
+  /** `compact`: filas compactas tambien en contenedor estrecho (sin tarjetas apiladas). */
+  density?: 'compact' | 'comfortable'
 }
 export interface LinksBlock extends BlockBase {
   type: 'links'

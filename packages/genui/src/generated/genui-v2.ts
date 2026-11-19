@@ -227,6 +227,13 @@ export type Link = string
  */
 export type StatFormat = 'number' | 'currency' | 'percent' | 'compact' | 'date' | 'datetime' | 'relative_date'
 /**
+ * Texto corto traducible: literal o clave i18n {"$t"} (sin vinculaciones). El host lo resuelve con t.
+ *
+ * This interface was referenced by `GenuiV2`'s JSON-Schema
+ * via the `definition` "i18nLabel".
+ */
+export type I18NLabel = string | Tref
+/**
  * Tipos de campo (field.kind).
  *
  * This interface was referenced by `GenuiV2`'s JSON-Schema
@@ -1529,6 +1536,8 @@ export interface BlockTimeline {
   source?: Source
 }
 /**
+ * Tabla de datos: columns + rows en linea (hasta 200) o source (consulta del servidor). Cada columna puede presentarse como texto, insignia o icono con tono segun el valor (variant/tones/labels/icons). max_height acota el alto con scroll interno; density ajusta el espaciado.
+ *
  * This interface was referenced by `GenuiV2`'s JSON-Schema
  * via the `definition` "block_table".
  */
@@ -1574,8 +1583,18 @@ export interface BlockTable {
   page_size?: number
   row_actions?: Actions
   bulk_actions?: Actions
+  /**
+   * Alto maximo de la tabla con scroll interno y cabecera fija (sm, md, lg; el host decide la medida). Util en widgets de tablero y feeds (p. ej. eventos en vivo) que no deben crecer con las filas. Sin el, la tabla crece con su contenido.
+   */
+  max_height?: 'sm' | 'md' | 'lg'
+  /**
+   * Densidad de las filas: compact (filas apretadas, feeds y listas largas) o comfortable (por defecto).
+   */
+  density?: 'compact' | 'comfortable'
 }
 /**
+ * Columna de una tabla. format aplica a variant text; variant badge/icon_text presenta el valor como insignia o icono con tono, texto traducido e icono por valor (tones/labels/icons, hasta 32 entradas, claves de 1 a 64 caracteres).
+ *
  * This interface was referenced by `GenuiV2`'s JSON-Schema
  * via the `definition` "column".
  */
@@ -1583,6 +1602,28 @@ export interface Column {
   key: Key
   label: Label
   format?: StatFormat
+  /**
+   * Presentacion de la celda: text (por defecto, texto plano con format), badge (insignia con tono segun el valor) o icon_text (icono + texto). Usa badge/icon_text para estados o resultados (ok/pending/error); con badge/icon_text declara tones, labels e icons por valor.
+   */
+  variant?: 'text' | 'badge' | 'icon_text'
+  /**
+   * Solo con variant badge o icon_text. Tono por valor de la celda: valor -> Tone (nunca colores literales). Un valor sin entrada usa el tono default.
+   */
+  tones?: {
+    [k: string]: Tone
+  }
+  /**
+   * Solo con variant badge o icon_text. Texto visible por valor de la celda: valor -> texto o {"$t": clave i18n} que el host traduce con t. Un valor sin entrada muestra el valor crudo.
+   */
+  labels?: {
+    [k: string]: I18NLabel
+  }
+  /**
+   * Solo con variant badge o icon_text. Icono por valor de la celda: valor -> nombre de icono que resuelve el host (p. ej. CheckCircle). Un valor sin entrada no lleva icono.
+   */
+  icons?: {
+    [k: string]: IconName
+  }
 }
 /**
  * This interface was referenced by `GenuiV2`'s JSON-Schema
