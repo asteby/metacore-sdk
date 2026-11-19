@@ -4,7 +4,7 @@
 // itself is a thin react-query wrapper over `useApi`; the load-bearing logic
 // is this pure merge, so that's what we test directly.
 import { describe, it, expect } from 'vitest'
-import { mergeAddonSettings, addonSettingsKey, addonSettingsUrl } from '../use-addon-settings'
+import { mergeAddonSettings, addonSettingsKey, addonSettingsUrl, parseAddonSettingsBody } from '../use-addon-settings'
 
 interface PosSettings extends Record<string, unknown> {
     allowNegativeStock: boolean
@@ -77,13 +77,29 @@ describe('branch-scoped settings (POS-1)', () => {
     it('keys and urls carry the branch only when given', () => {
         expect(addonSettingsKey('pos', 'b1')).toEqual(['addon-settings', 'pos', 'b1'])
         expect(addonSettingsKey('pos', null)).toEqual(['addon-settings', 'pos'])
-        expect(addonSettingsUrl('pos')).toBe('/api/addons/pos/settings')
-        expect(addonSettingsUrl('pos', 'b 1')).toBe('/api/addons/pos/settings?branch_id=b%201')
+        expect(addonSettingsUrl('pos')).toBe('/addons/pos/settings')
+        expect(addonSettingsUrl('pos', 'b 1')).toBe('/addons/pos/settings?branch_id=b%201')
     })
 
     it('an org-key prefix matches every branch read (invalidation)', () => {
         const org = addonSettingsKey('pos')
         const branch = addonSettingsKey('pos', 'b1')
         expect(branch.slice(0, org.length)).toEqual([...org])
+    })
+})
+
+describe('parseAddonSettingsBody', () => {
+    it('reads values, definitions and overrides from the envelope', () => {
+        const defs = [{ key: 'a' }]
+        expect(parseAddonSettingsBody({ success: true, data: { a: 1 }, definitions: defs, overrides: { a: 2 } })).toEqual({
+            values: { a: 1 },
+            definitions: defs,
+            overrides: { a: 2 },
+        })
+    })
+    it('tolerates a missing data/definitions and a bare map', () => {
+        expect(parseAddonSettingsBody({ success: true })).toEqual({ values: {}, definitions: [], overrides: {} })
+        expect(parseAddonSettingsBody({ a: 1 })).toEqual({ values: { a: 1 }, definitions: [], overrides: {} })
+        expect(parseAddonSettingsBody(null)).toEqual({ values: {}, definitions: [], overrides: {} })
     })
 })

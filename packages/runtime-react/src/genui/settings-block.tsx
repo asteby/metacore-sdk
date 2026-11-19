@@ -14,6 +14,7 @@ import * as React from 'react'
 import { useTranslation } from 'react-i18next'
 import { registerGenUIBlockRenderer, type GenUIBlockRendererProps } from '@asteby/metacore-genui'
 import { useApi } from '../api-context'
+import { useAddonSettings } from '../use-addon-settings'
 import { DynamicForm } from '../dynamic-form'
 import type { ActionFieldDef } from '../types'
 
@@ -72,20 +73,13 @@ export function SettingsBlock({ block, text }: GenUIBlockRendererProps) {
     const api = useApi()
     const { t } = useTranslation()
     const addon = String(block.addon)
-    const [state, setState] = React.useState<{ values: Record<string, unknown>; defs: SettingDefLike[] } | 'loading' | 'error'>('loading')
     const [msg, setMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
-
-    React.useEffect(() => {
-        let alive = true
-        setState('loading')
-        api
-            .get(`/addons/${addon}/settings`)
-            .then((res) => alive && setState({ values: res.data?.data ?? {}, defs: res.data?.definitions ?? [] }))
-            .catch(() => alive && setState('error'))
-        return () => {
-            alive = false
-        }
-    }, [api, addon])
+    const remote = useAddonSettings(addon, { staleTime: 0 })
+    const state: { values: Record<string, unknown>; defs: SettingDefLike[] } | 'loading' | 'error' = remote.error
+        ? 'error'
+        : remote.isLoading
+          ? 'loading'
+          : { values: remote.stored, defs: remote.definitions }
 
     if (block.scope === 'branch') return block.fallback ? <p className="m-0 text-sm text-muted-foreground">{block.fallback}</p> : null
     if (state === 'loading') return <div aria-busy="true" role="status" aria-label={t('metacore.genui.loading', { defaultValue: 'Cargando ajustes…' })} className="h-24" />
