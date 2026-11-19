@@ -415,6 +415,17 @@ export interface RelationMeta {
      * kernels) = not embedded.
      */
     embed?: boolean
+    /**
+     * Capturable al CREAR el padre: el modal de registro en modo crear pinta
+     * esta relación como una tabla editable de filas borrador y las envía con
+     * el padre en `_children.<name>`. Aditivo; ausente = no se captura al crear.
+     */
+    create_inline?: boolean
+    /**
+     * Mínimo de filas hijas que el servidor exige al crear (422 `min` en
+     * `_children.<name>`). El cliente lo muestra y bloquea el envío por debajo.
+     */
+    min?: number
 }
 
 export interface FilterDefinition {

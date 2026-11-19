@@ -26,6 +26,8 @@ const i18n = (() => {
 })()
 
 const post = vi.fn(async (..._a: unknown[]) => ({ data: { data: { url: '/files/x.png' } } }))
+// Llamadas reales (el lote de metadata `/q` también viaja por post).
+const posts = () => post.mock.calls.filter((c) => c[0] !== '/q')
 const api = {
     get: vi.fn(async () => ({ data: { data: {} } })),
     post,
@@ -126,7 +128,7 @@ describe('upload validation', () => {
         const input = document.querySelector('input[type="file"]') as HTMLInputElement
         fireEvent.change(input, { target: { files: [png(5000)] } })
         await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
-        expect(post).not.toHaveBeenCalled()
+        expect(posts()).toHaveLength(0)
         expect(toast.error).toHaveBeenCalled()
     })
 
@@ -136,7 +138,7 @@ describe('upload validation', () => {
         const zone = document.querySelector('input[type="file"]')!.parentElement as HTMLElement
         fireEvent.drop(zone, { dataTransfer: { files: [png(10, 'image/gif', 'a.gif')] } })
         await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
-        expect(post).not.toHaveBeenCalled()
+        expect(posts()).toHaveLength(0)
     })
 
     it('image: drop/dragover call preventDefault even with a value or while uploading', async () => {
@@ -172,8 +174,8 @@ describe('upload validation', () => {
         const input = document.querySelector('input[type="file"]') as HTMLInputElement
         expect(input.accept).toBe('image/*')
         fireEvent.change(input, { target: { files: [png(10_000_000)] } })
-        await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
-        const call = post.mock.calls[0] as unknown[]
+        await waitFor(() => expect(posts()).toHaveLength(1))
+        const call = posts()[0] as unknown[]
         expect(call[0]).toBe('/upload')
         expect((call[1] as FormData).get('folder')).toBe('reviews')
     })
@@ -184,9 +186,9 @@ describe('upload validation', () => {
         const input = document.querySelector('input[type="file"]') as HTMLInputElement
         fireEvent.change(input, { target: { files: [png(10, 'image/gif', 'a.gif')] } })
         await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy())
-        expect(post).not.toHaveBeenCalled()
+        expect(posts()).toHaveLength(0)
         fireEvent.change(input, { target: { files: [png(10)] } })
-        await waitFor(() => expect(post).toHaveBeenCalledTimes(1))
+        await waitFor(() => expect(posts()).toHaveLength(1))
     })
 })
 

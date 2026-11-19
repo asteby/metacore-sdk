@@ -288,3 +288,20 @@ El o2m **puede** funcionar sólo con los endpoints flat existentes (filtro `f_<f
 3. **SDK runtime-react.** Implementar `dynamic-relation.tsx` reusando `<DynamicTable>` y `<DynamicForm>`. Re-exportar desde `index.ts`.
 4. **Tests.** Snapshot del shape de props + test de integración contra un kernel mockeado (mismo patrón que `dynamic-table` ya usa).
 5. **Adopción.** Una app del ecosistema (probablemente *link*) migra al menos una pantalla detail-with-children como dogfood antes del release.
+
+## 9. Relaciones hijas al crear (`create_inline`)
+
+En **ver/editar** las relaciones `embed` se gestionan fila a fila contra el servidor (`<DynamicRelations>`). En **crear** el padre aún no existe, así que una relación servida con `create_inline: true` se captura como una tabla de filas borrador dentro del modal y viaja con el padre en un solo `POST`.
+
+Contrato (aditivo en `RelationMeta`):
+
+| Campo | Significado |
+| --- | --- |
+| `create_inline?: boolean` | `true` → el modal en modo crear pinta la relación como tabla editable. Ausente/`false` → no aparece al crear. |
+| `min?: number` | Filas mínimas. El cliente lo muestra («0 de 2 como mínimo») y bloquea el envío por debajo; el servidor lo vuelve a validar. |
+
+Cuerpo del envío: el de siempre más `_children: { "<relation.name>": [ {fila}, … ] }`, solo si hay relaciones inline. Las filas llevan únicamente los campos capturables del modelo hijo (`through`, vía `/metadata/modal/<through>`): sin la FK (`foreign_key`), columnas `scope`, auditoría, ocultas ni de solo lectura; opcionales vacíos se omiten y los números viajan como números.
+
+Errores 422: `_children.<relación>.<i>.<campo>` se pinta en la celda de esa fila; `_children.<relación>.<i>` (`invalid_relation`/`invalid_type`) en la fila; `_children.<relación>` con `min` (params `min`, `count`) como error de la sección. Lo capturado no se pierde al fallar.
+
+Teclado: Enter en una celda avanza al siguiente control y, tras el último, agrega una fila (nunca envía el padre); los botones Agregar/Quitar miden 44 px. Implementación: `dialogs/inline-relation-rows.tsx` (UI), `dialogs/inline-relations.ts` (modelo puro y reparto de errores) y `draft-rows.ts` (núcleo de filas borrador, compartido con `business/line-items`).

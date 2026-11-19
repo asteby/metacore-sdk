@@ -71,7 +71,12 @@ import { FieldCell } from '../field-grid'
 import { isNullableBooleanField, omitUntouchedNullBooleans, usesTriState } from '../nullable-boolean'
 import { NullBooleanMark, TriStateBooleanField } from '../tri-state-boolean'
 import { isNilUuid, normalizeNilUuid } from '../nil-uuid'
-import { normalizeRefFieldsForSubmit } from './normalize-submit'
+import { normalizeRefFieldsForSubmit, withInlineChildren } from './normalize-submit'
+import { InlineRelationRows } from './inline-relation-rows'
+import { relationMin, splitChildErrors } from './inline-relations'
+import { useInlineRelations } from './use-inline-relations'
+import { validateDraftRows, type DraftRow } from '../draft-rows'
+import { clearFieldErrorTree, lineItemErrorsFor } from '../field-validation-ui'
 import { validateValues, bagHasErrors, exemptUnchangedRuleIssues } from '../validator'
 import { DynamicIcon, Icon, isLucideIconName } from '../dynamic-icon'
 import { IconPickerField } from '../icon-picker-field'
@@ -801,7 +806,7 @@ export function DynamicRecordDialog({
 }: DynamicRecordDialogProps) {
     const api = useApi()
     const branchGate = useBranchCreateGate()
-    const { t } = useTranslation()
+    const { t, i18n } = useTranslation()
     const [modalMeta, setModalMeta] = useState<ModalMetadata | null>(
         schema ? (schema as ModalMetadata) : null,
     )
@@ -828,6 +833,44 @@ export function DynamicRecordDialog({
     const [stepIndex, setStepIndex] = useState(0)
 
     const isCreate = mode === 'create'
+
+    // Relaciones hijas `create_inline`: se capturan como filas borrador y viajan
+    // con el padre en `_children`. Solo al crear; ver/editar no cambia.
+    const inline = useInlineRelations<FieldDef>({
+        enabled: open && isCreate,
+        model,
+        localizeLabel: (label) => (t(label) !== label ? t(label) : label),
+    })
+    const [inlineRows, setInlineRows] = useState<Record<string, DraftRow[]>>({})
+    // Errores de filas hijas, ya localizados: `"<relación>.<i>.<campo>"`.
+    const [inlineErrors, setInlineErrors] = useState<Record<string, string>>({})
+    const inlineLabel = (relation: string, key: string): string => {
+        const f = inline.fields[relation]?.find(x => x.key === key)
+        return f?.label ? localizeFieldLabel(f.label, t) : key
+    }
+    // Validación de las filas (requeridos + mínimo) con mensajes localizados.
+    const validateInline = () => {
+        const errors: Record<string, string> = {}
+        for (const rel of inline.relations) {
+            const v = validateDraftRows(inlineRows[rel.name] ?? [], inline.fields[rel.name] ?? [], {
+                min: relationMin(rel),
+                messages: {
+                    required: label =>
+                        localizeFieldIssue({ code: 'required' }, label, t),
+                    min: (min, count) =>
+                        t('inlineRelation.min', {
+                            defaultValue: 'Agrega al menos {{min}} {{label}} (hay {{count}})',
+                            label: rel.label || rel.name,
+                            min,
+                            count,
+                        }),
+                },
+            })
+            for (const [k, msg] of Object.entries(v.errors)) errors[`${rel.name}.${k}`] = msg
+            if (v.form) errors[rel.name] = v.form
+        }
+        return errors
+    }
     const isView = mode === 'view'
     const isEditable = mode === 'create' || mode === 'edit'
     // Claves que un ayudante de captura (RecordPrefillBar) puede escribir: sólo
@@ -968,6 +1011,8 @@ export function DynamicRecordDialog({
             setRelations([])
             setRecord(null)
             setFormValues({})
+            setInlineRows({})
+            setInlineErrors({})
         }
     }, [open])
 
@@ -1052,8 +1097,16 @@ export function DynamicRecordDialog({
     // inline field errors + a summary toast. When there is no field map, fall
     // back to the existing single cause-carrying toast.
     const handleSubmitError = (err: unknown) => {
-        const map = extractFieldErrors(err)
-        if (map) {
+        const rawMap = extractFieldErrors(err)
+        // Errores de filas hijas (`_children.<relación>.<i>.<campo>`) van a su celda.
+        const split = rawMap
+            ? splitChildErrors(rawMap, inline.relations, inlineLabel, t, i18n.language)
+            : undefined
+        const map = split?.parent
+        const childMsgs = split?.children ?? {}
+        const hasChildErrors = Object.keys(childMsgs).length > 0
+        if (hasChildErrors) setInlineErrors(childMsgs)
+        if (map && (Object.keys(map).length > 0 || hasChildErrors)) {
             const next: Record<string, string> = {}
             for (const [key, issues] of Object.entries(map)) {
                 next[key] = localizeFieldIssue(issues[0], labelForKey(key), t)
@@ -1065,7 +1118,9 @@ export function DynamicRecordDialog({
             const orphans = Object.entries(next).filter(([k]) => !visibleKeys.has(k))
             const description = orphans.length
                 ? orphans.map(([k, msg]) => `${labelForKey(k)}: ${msg}`).join(' · ')
-                : undefined
+                : hasChildErrors
+                  ? Object.values(childMsgs).join(' · ')
+                  : undefined
             toast.error(
                 t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }),
                 description ? { description } : undefined,
@@ -1078,6 +1133,10 @@ export function DynamicRecordDialog({
     const handleSubmit = async (e?: React.FormEvent) => {
         e?.preventDefault()
         if (!modalMeta) return
+
+        // Filas hijas (solo crear): se validan junto al padre para marcar todo de una vez.
+        const inlineIssues = isCreate && inline.relations.length > 0 ? validateInline() : {}
+        setInlineErrors(inlineIssues)
 
         if (isEditable) {
             // Laravel-style: collect every issue from the shared validator
@@ -1118,6 +1177,12 @@ export function DynamicRecordDialog({
         // Required check passed → clear any prior validation errors.
         setFieldErrors({})
 
+        if (Object.keys(inlineIssues).length > 0) {
+            const description = Object.values(inlineIssues).join(' · ')
+            toast.error(t('dynamic.validation_failed', { defaultValue: 'Revisa los campos marcados' }), { description })
+            return
+        }
+
         // Fields hidden by their `visible_when` predicate must not be POSTed:
         // the render, the required-gate and the payload all drive off the same
         // filter, so a DiscountRule with scope=category never submits the
@@ -1147,6 +1212,17 @@ export function DynamicRecordDialog({
             const branchId = await branchGate.ensureBranchForCreate(model)
             if (branchId === null) return
             if (branchId) payload = { ...payload, branch_id: branchId }
+        }
+
+        if (isCreate) {
+            payload = withInlineChildren(
+                payload,
+                inline.relations.map(rel => ({
+                    relation: rel.name,
+                    rows: inlineRows[rel.name] ?? [],
+                    columns: inline.fields[rel.name] ?? [],
+                })),
+            )
         }
 
         setSaving(true)
@@ -1423,6 +1499,36 @@ export function DynamicRecordDialog({
                                         canDelete={mode === 'edit'}
                                         onChange={handleChildChange}
                                     />
+                                </div>
+                            )}
+                            {isCreate && inline.relations.length > 0 && (
+                                <div className="mt-6 space-y-6" data-slot="inline-relations">
+                                    {inline.relations.map(rel => (
+                                        <InlineRelationRows
+                                            key={rel.name}
+                                            relation={rel}
+                                            fields={inline.fields[rel.name] ?? []}
+                                            rows={inlineRows[rel.name] ?? []}
+                                            onChange={rows => setInlineRows(prev => ({ ...prev, [rel.name]: rows }))}
+                                            errors={lineItemErrorsFor(rel.name, inlineErrors)}
+                                            formError={inlineErrors[rel.name]}
+                                            onRowRemoved={() => setInlineErrors(prev => clearFieldErrorTree(prev, rel.name))}
+                                            onCellEdited={(i, f) =>
+                                                setInlineErrors(prev => clearFieldErrorTree(clearFieldErrorTree(prev, `${rel.name}.${i}.${f}`), rel.name))
+                                            }
+                                            disabled={saving}
+                                            renderField={(field, value, onChange, state) => (
+                                                <EditField
+                                                    field={field as FieldDef}
+                                                    value={value}
+                                                    onChange={onChange}
+                                                    record={null}
+                                                    invalid={state.invalid}
+                                                    error={state.error}
+                                                />
+                                            )}
+                                        />
+                                    ))}
                                 </div>
                             )}
                             {!isCreate && record && audit && (
