@@ -267,6 +267,9 @@ Especificación exacta (la sigue el espejo Go `colorx`; vectores en `logo-backin
    - tono `unknown` (sin CORS / sin canvas / sin píxeles opacos): `#767676`, sin anillo.
    - `lightShare >= 0.6` (logo claro): candidatos `[brand, dark]` (marca ignorada si no parsea); gana el primero que separa, si no el de mayor
      contraste mínimo. Sin anillo.
-   - cualquier otro caso (oscuro, de color, multicolor): placa clara si separa; si no, la marca como fondo si separa; si no, la de mayor
-     contraste mínimo entre `[plate, dark]` (empate: la primera). Anillo fino = color de marca, salvo que sea igual al fondo.
+   - cualquier otro caso (oscuro, de color, multicolor): los colores a separar son los dominantes SIN el «papel» del logo (luminancia >= 0.9:
+     el relleno blanco de un logo hecho para fondo claro; solo si queda alguno). Placa clara si separa todos; si no, la marca como fondo si
+     separa todos; si no, la placa, salvo que el oscuro tenga un contraste mínimo >= 0.5 mayor (empate o diferencia pequeña: placa).
+     Anillo fino = color de marca, salvo que sea igual al fondo.
+   - un logo claro (`lightShare >= 0.6`) no tiene «papel»: su blanco es la marca y necesita fondo de marca u oscuro.
    La marca nunca es fondo si alguno de los colores dominantes del logo cae por debajo de 3:1 contra ella.

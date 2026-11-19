@@ -131,3 +131,39 @@ describe('real logo: ProtekAuto (256 px sample of the production PNG)', () => {
     expect(logoBacking(t, '#ff6600')).toEqual({ fill: '#ffffff', ring: '#ff6600' })
   })
 })
+
+describe('real logos (rasterised fixtures, brand colours of production)', () => {
+  const load = (f: string) => {
+    const png = decodePng(readFileSync(resolve(here, '__fixtures__', f)))
+    return toneOfPixels(png.data, png.width, png.height) as ImageToneInfo
+  }
+  it('7 Leguas (red + near-black): light plate ringed in the brand red, black outline stays visible', () => {
+    const r = logoBacking(load('7leguas-256.png'), '#d00d14')
+    expect(r).toEqual({ fill: '#ffffff', ring: '#d00d14' })
+  })
+  it('Hub (pink gradient, brand #ec4899): light plate, pink ring; the pinks read on white (>= 3:1)', () => {
+    const t = load('hub-256.png')
+    const r = logoBacking(t, '#ec4899')
+    expect(r).toEqual({ fill: '#ffffff', ring: '#ec4899' })
+    for (const d of t.dominant) expect(contrastRatio(d.color, '#ffffff')).toBeGreaterThanOrEqual(3)
+  })
+  it('ProtekAuto: light plate, orange ring', () => {
+    expect(logoBacking(load('protekauto-256.png'), '#ff6600')).toEqual({ fill: '#ffffff', ring: '#ff6600' })
+  })
+  it("God's Nutrition (white wordmark, brand blue): brand fill", () => {
+    expect(logoBacking(load('gods-300.png'), '#2f7fd6')).toEqual({ fill: '#2f7fd6' })
+  })
+})
+
+describe('paper and fallback tie-break', () => {
+  it('white fill of a non-light logo is paper: red + black + white stays on the plate', () => {
+    expect(logoBacking(tone([[200, 16, 46, 255, 400], [255, 255, 255, 255, 300], [0, 0, 0, 255, 300]]), '#c8102e')).toEqual({ fill: '#ffffff', ring: '#c8102e' })
+  })
+  it('a light logo does not treat white as paper (white wordmark needs a dark or brand ground)', () => {
+    expect(logoBacking(tone([[255, 255, 255, 255, 100]])).fill).toBe('#1f2937')
+  })
+  it('dark neutral only wins the fallback by >= 0.5 of minimum contrast', () => {
+    expect(logoBacking(tone([[0, 0, 0, 255, 500], [224, 224, 224, 255, 450]])).fill).toBe('#ffffff')
+    expect(logoBacking(tone([[204, 204, 204, 255, 500]]), '#ff6600').fill).toBe('#1f2937')
+  })
+})

@@ -1,5 +1,5 @@
 {
-  "spec": "docs: packages/theme/README.md \"Fondo de un logo\". pixels = [r,g,b,a,count]; alpha<=40 ignored; shares/weights tolerance 0.001; fill/ring exact (lowercase hex or the brand string as given).",
+  "spec": "docs: packages/theme/README.md \"Fondo de un logo\" (paper L>=0.9 ignored when lightShare<0.6; dark fallback needs +0.5 min contrast). pixels = [r,g,b,a,count]; alpha<=40 ignored; shares/weights tolerance 0.001; fill/ring exact (lowercase hex or the brand string as given).",
   "cases": [
     {
       "name": "white wordmark, brand blue: brand fill",
@@ -228,7 +228,7 @@
       }
     },
     {
-      "name": "red + white + black: nothing separates all three, highest minimum contrast wins (dark), brand ring",
+      "name": "red + white + black (white = the logo paper, ignored): light plate with brand ring",
       "pixels": [
         [
           200,
@@ -271,7 +271,7 @@
             "weight": 0.3
           }
         ],
-        "fill": "#1f2937",
+        "fill": "#ffffff",
         "ring": "#c8102e"
       }
     },
@@ -349,6 +349,41 @@
           }
         ],
         "fill": "#2f7fd6"
+      }
+    },
+    {
+      "name": "black + light grey, no brand: nothing separates both, dark does not win by 0.5, plate",
+      "pixels": [
+        [
+          0,
+          0,
+          0,
+          255,
+          500
+        ],
+        [
+          224,
+          224,
+          224,
+          255,
+          450
+        ]
+      ],
+      "expect": {
+        "lightShare": 0.4737,
+        "darkShare": 0.5263,
+        "midShare": 0,
+        "dominant": [
+          {
+            "color": "#000000",
+            "weight": 0.5263
+          },
+          {
+            "color": "#eeeeee",
+            "weight": 0.4737
+          }
+        ],
+        "fill": "#ffffff"
       }
     },
     {
