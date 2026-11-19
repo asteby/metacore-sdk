@@ -12,8 +12,12 @@ import {
     type GenUIBlockRendererProps,
     type GenUIMapPoint,
 } from '@asteby/metacore-genui'
+import { AreaPanel, StatusBadge } from './area-panel'
 import { Avatar, isBranded } from './avatar'
 import { useMap } from './context'
+import { makeTerms, regionName } from './field-labels'
+import type { AreaSelection } from './layers'
+import { pointColor } from './geometry'
 import { MapView } from './map-view'
 import { PALETTE, colorFor } from './palette'
 import { useMapLabels } from './renderers/shared'
@@ -75,11 +79,15 @@ function HoverTooltip({ points }: { points: MapPointItem[] }) {
 }
 
 /** The `map` block renderer. */
-export function GenUIMapBlock({ block, rows, text, navigate, act }: GenUIBlockRendererProps) {
+export function GenUIMapBlock({ block, rows, text, navigate, act, locale }: GenUIBlockRendererProps) {
     const labels = useMapLabels()
     const [selected, setSelected] = React.useState<string | null>(null)
+    /** The area bubble whose members the side panel lists (country / city precision: they share a centroid). */
+    const [area, setArea] = React.useState<{ gid: string; name: string; keys: string[] } | null>(null)
     const groupBy: 'status' | 'group' = block.group_by === 'group' ? 'group' : 'status'
     const raw = React.useMemo(() => normalizeMapPoints(block, rows, text), [block, rows, text])
+    const terms = makeTerms(block as { field_labels?: unknown; status_labels?: unknown }, text)
+    const panel = !!block.detail_panel
 
     const { items, colors } = React.useMemo(() => {
         const colors: Record<string, string> = {}
@@ -87,13 +95,19 @@ export function GenUIMapBlock({ block, rows, text, navigate, act }: GenUIBlockRe
             // The colour key is the grouping value; tone colours win, else a stable palette hue.
             const group = (groupBy === 'group' ? p.group : p.status) ?? '—'
             colors[group] ??= p.tone ? TONE_COLORS[p.tone] : colorFor(group)
-            return { key: p.key, lat: p.lat, lng: p.lng, label: p.label, status: group, statusLabel: group, precision: p.precision, area: p.area, image: p.image, accent: p.accent, subtitle: p.subtitle, details: p.details }
+            // What the title, subtitle and status already say is not repeated as a detail row.
+            const said = new Set([p.label, p.subtitle, p.status, p.group].filter(Boolean))
+            const details = p.details.filter((d) => !said.has(d.value)).map((d) => ({ ...d, label: d.field ? terms.field(d.field) : d.label }))
+            return { key: p.key, lat: p.lat, lng: p.lng, label: p.label, status: group, statusLabel: groupBy === 'status' ? terms.status(group) : group, precision: p.precision, area: p.area, image: p.image, accent: p.accent, subtitle: p.subtitle, details }
         })
         return { items, colors }
-    }, [raw, groupBy])
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [raw, groupBy, block.field_labels, block.status_labels, text])
 
     const legend = React.useMemo(() => mapLegend(raw, groupBy), [raw, groupBy])
-    const chosen = selected ? raw.find((p) => p.key === selected) : undefined
+    const chosen = selected ? items.find((p) => p.key === selected) : undefined
+    const areaMembers = area ? items.filter((p) => area.keys.includes(p.key)) : []
+    const showArea = panel && area !== null && areaMembers.length > 0 && !chosen
     const pick = (item: MapPointItem) => {
         setSelected(item.key)
         const action = block.on_select as Record<string, any> | undefined // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -102,58 +116,97 @@ export function GenUIMapBlock({ block, rows, text, navigate, act }: GenUIBlockRe
             else act({ action, blockId: block.id, context: { point: raw.find((p) => p.key === item.key) } })
         }
     }
+    const openArea = (a: AreaSelection) => {
+        setSelected(null)
+        setArea({ gid: a.gid, name: a.area ? regionName(a.area, locale) : labels.zone, keys: a.members.map((m) => m.key) })
+    }
+    const statusOf = (p: MapPointItem) => p.statusLabel ?? p.status
 
     const loading = block.source && rows === undefined
+    const panelOpen = panel && (!!chosen || showArea)
     return (
         <section aria-label={block.summary} className="mcm-genui-map" data-genui-block="map" style={{ display: 'grid', gap: 8 }}>
             {block.title ? <p style={{ margin: 0, fontSize: 12, fontWeight: 500, color: 'var(--muted-foreground, #6b7280)' }}>{text(block.title)}</p> : null}
             {loading ? (
                 <div aria-busy="true" role="status" aria-label={labels.loading} style={{ height: HEIGHTS[block.height as keyof typeof HEIGHTS] ?? HEIGHTS.md }} />
             ) : (
-                <div style={{ display: 'grid', gap: 8, gridTemplateColumns: block.detail_panel && chosen ? 'minmax(0,1fr) minmax(12rem,16rem)' : 'minmax(0,1fr)' }}>
+                <div style={{ display: 'grid', gap: 8, gridTemplateColumns: panelOpen ? 'minmax(0,1fr) minmax(12rem,18rem)' : 'minmax(0,1fr)' }}>
                     <MapView
                         points={items}
                         cluster={block.cluster === undefined ? undefined : !!block.cluster}
                         colors={colors}
                         height={HEIGHTS[block.height as keyof typeof HEIGHTS] ?? HEIGHTS.md}
                         labels={labels}
+                        locale={locale}
                         ariaLabel={block.summary}
                         selectedKey={selected}
                         onSelect={pick}
+                        onArea={panel ? openArea : undefined}
+                        popupDetails={!panel}
                     >
                         {block.tooltip !== false ? <HoverTooltip points={items} /> : null}
                     </MapView>
-                    {block.detail_panel && chosen ? (
-                        <aside aria-label={chosen.label} style={{ border: '1px solid var(--border, #e5e7eb)', borderRadius: 8, padding: 10, fontSize: 14 }}>
+                    {showArea && area ? (
+                        <AreaPanel
+                            title={area.name}
+                            count={labels.clusterCount.replace('{n}', String(areaMembers.length))}
+                            members={areaMembers}
+                            colors={colors}
+                            listLabel={labels.list}
+                            closeLabel={labels.closeDetail}
+                            selectedKey={selected}
+                            onPick={pick}
+                            onClose={() => setArea(null)}
+                        />
+                    ) : null}
+                    {panel && chosen ? (
+                        <aside aria-label={chosen.label} data-testid="map-detail-panel" style={{ border: '1px solid var(--border, #e5e7eb)', borderRadius: 8, padding: 10, fontSize: 14 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                {isBranded(chosen) ? <Avatar label={chosen.label} image={chosen.image} accent={chosen.accent} ring={colors[(groupBy === 'group' ? chosen.group : chosen.status) ?? '—']} size={44} decorative /> : null}
+                                {isBranded(chosen) ? <Avatar label={chosen.label} image={chosen.image} accent={chosen.accent} ring={pointColor(chosen, colors)} size={44} decorative /> : null}
                                 <div style={{ minWidth: 0 }}>
                                     <p style={{ margin: 0, fontWeight: 600 }}>{chosen.label}</p>
                                     {chosen.subtitle ? <p style={{ margin: 0, fontSize: 12, color: 'var(--muted-foreground, #6b7280)' }}>{chosen.subtitle}</p> : null}
                                 </div>
                             </div>
-                            {chosen.status ? <p style={{ margin: '2px 0 6px', color: 'var(--muted-foreground, #6b7280)' }}>{chosen.status}</p> : null}
+                            {statusOf(chosen) ? (
+                                <p style={{ margin: '6px 0' }}>
+                                    <StatusBadge text={statusOf(chosen) as string} color={pointColor(chosen, colors)} />
+                                </p>
+                            ) : null}
                             <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '2px 8px' }}>
-                                {chosen.details.map((d, i) => (
+                                {(chosen.details ?? []).map((d, i) => (
                                     <React.Fragment key={i}>
                                         <dt style={{ color: 'var(--muted-foreground, #6b7280)' }}>{d.label ?? ''}</dt>
                                         <dd style={{ margin: 0, overflowWrap: 'anywhere' }}>{d.value}</dd>
                                     </React.Fragment>
                                 ))}
                             </dl>
-                            <button type="button" onClick={() => setSelected(null)} style={{ marginTop: 8 }}>
-                                {labels.hideList.replace(/lista/i, 'detalle')}
-                            </button>
+                            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                                {area?.keys.includes(chosen.key) ? (
+                                    <button type="button" onClick={() => setSelected(null)}>
+                                        {labels.backToList}
+                                    </button>
+                                ) : null}
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setSelected(null)
+                                        setArea(null)
+                                    }}
+                                >
+                                    {labels.closeDetail}
+                                </button>
+                            </div>
                         </aside>
                     ) : null}
                 </div>
             )}
             {block.legend !== false && legend.length > 0 ? (
-                <ul aria-label={groupBy === 'group' ? 'Leyenda por grupo' : 'Leyenda por estado'} style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexWrap: 'wrap', gap: '4px 12px', fontSize: 12 }}>
+                <ul aria-label={groupBy === 'group' ? labels.legendByGroup : labels.legendByStatus} style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexWrap: 'wrap', gap: '4px 12px', fontSize: 12 }}>
                     {legend.map((l) => (
                         <li key={l.value} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                             <span aria-hidden style={{ width: 10, height: 10, borderRadius: 999, background: colors[l.value] ?? colorFor(l.value) }} />
-                            {l.value} · {l.count}
+                            {groupBy === 'status' ? terms.status(l.value) : l.value} · {l.count}
                         </li>
                     ))}
                 </ul>

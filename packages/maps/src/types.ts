@@ -31,7 +31,7 @@ export interface MapPointItem {
     /** Second line under the name in popups and lists (e.g. a host or an address). */
     subtitle?: string
     /** Extra popup rows, in order. */
-    details?: Array<{ label?: string; value: string }>
+    details?: Array<{ label?: string; value: string; /** Source column of the row (lets the host label it). */ field?: string }>
 }
 
 /** Polygon ring list in GeoJSON order (`[lng, lat]`), first ring = outer. */
@@ -72,6 +72,14 @@ export interface MapLabels {
     clusterCount: string
     /** Overflow row of a cluster list; `{n}` is how many are not listed. */
     moreItems: string
+    /** Back from a member's detail to its area list. */
+    backToList: string
+    /** Close a detail / area panel. */
+    closeDetail: string
+    /** Accessible name of the legend by status. */
+    legendByStatus: string
+    /** Accessible name of the legend by group. */
+    legendByGroup: string
 }
 
 export const DEFAULT_LABELS: MapLabels = {
@@ -96,6 +104,10 @@ export const DEFAULT_LABELS: MapLabels = {
     loading: 'Cargando mapa…',
     clusterCount: '{n} instancias',
     moreItems: '+{n} más',
+    backToList: 'Volver a la lista',
+    closeDetail: 'Cerrar',
+    legendByStatus: 'Leyenda por estado',
+    legendByGroup: 'Leyenda por grupo',
 }
 
 export function mergeLabels(l?: Partial<MapLabels>): MapLabels {

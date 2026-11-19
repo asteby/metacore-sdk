@@ -2,7 +2,7 @@
 // circle polygons. Distances and point validation come from the single geo
 // module shared with the storefronts (`@asteby/storefront/geo`).
 import { isValidPoint, type GeoPoint } from '@asteby/storefront/geo'
-import { colorFor, safeColor } from './palette'
+import { colorFor, readableOn, safeColor } from './palette'
 import type { MapPointItem, MapPrecision, PolygonCoords, ZoneItem } from './types'
 
 export type LngLatBounds = [[number, number], [number, number]]
@@ -164,17 +164,47 @@ export function areaGroups(points: ReadonlyArray<MapPointItem>): Map<string, Map
     return out
 }
 
-/** One bubble feature per location: `text` ("CA · 8"), `r` (radius px, grows with the square root of the count). */
-export function pointsToAreas(points: ReadonlyArray<MapPointItem>): FeatureCollection {
+/**
+ * Colour of an area bubble: the colour of its dominant status (most members; ties go to the first seen), or the
+ * explicit colour of the members. Undefined when no member carries a status or colour (the bubble keeps the theme hue).
+ */
+export function areaTone(members: ReadonlyArray<MapPointItem>, colors?: Record<string, string>): string | undefined {
+    const counts = new Map<string, number>()
+    for (const m of members) {
+        if (!m.color && !m.status) continue
+        const c = pointColor(m, colors)
+        counts.set(c, (counts.get(c) ?? 0) + 1)
+    }
+    let best: string | undefined
+    let max = 0
+    for (const [c, n] of counts) {
+        if (n > max) {
+            best = c
+            max = n
+        }
+    }
+    return best
+}
+
+/** One bubble feature per location: `text` ("CA · 8"), `r` (radius px, grows with the square root of the count), `color` / `tc` (dominant tone and its readable text colour, when known). */
+export function pointsToAreas(points: ReadonlyArray<MapPointItem>, colors?: Record<string, string>): FeatureCollection {
     return {
         type: 'FeatureCollection',
         features: [...areaGroups(points)].map(([gid, members]) => {
             const first = members[0] as MapPointItem
             const count = members.length
             const area = members.find((m) => m.area)?.area
+            const tone = areaTone(members, colors)
             return {
                 type: 'Feature' as const,
-                properties: { gid, count, area: area ?? '', text: area ? `${area} · ${count}` : String(count), r: Math.min(44, Math.round(14 + 6 * Math.sqrt(count))) },
+                properties: {
+                    gid,
+                    count,
+                    area: area ?? '',
+                    text: area ? `${area} · ${count}` : String(count),
+                    r: Math.min(44, Math.round(14 + 6 * Math.sqrt(count))),
+                    ...(tone ? { color: tone, tc: readableOn(tone) } : {}),
+                },
                 geometry: { type: 'Point', coordinates: [first.lng, first.lat] },
             }
         }),

@@ -17,7 +17,7 @@ describe('normalizeMapPoints: popup, precision, precision_field, area_field', ()
 
   it('popup lists exactly those columns, in order, skipping empty values', () => {
     const [a, b] = normalizeMapPoints(block({ popup: ['plan', 'note', 'version'] }) as never, rows)
-    expect(a!.details).toEqual([{ label: 'plan', value: 'pro' }, { label: 'version', value: '1.2' }])
+    expect(a!.details).toEqual([{ label: 'plan', value: 'pro', field: 'plan' }, { label: 'version', value: '1.2', field: 'version' }])
     expect(b!.details.map((d) => d.label)).toEqual(['plan', 'version'])
   })
 
