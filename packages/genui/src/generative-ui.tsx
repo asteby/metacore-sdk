@@ -12,13 +12,6 @@ import {
   Input,
   Label,
   Switch,
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
   Textarea,
   cn,
 } from '@asteby/metacore-ui'
@@ -40,6 +33,8 @@ import type {
   UISpec,
 } from './types'
 import { isSafeLink, parseUISpec } from './validate'
+import { BADGE_VARIANT, TEXT_TONE } from './tones'
+import { TableView, cell } from './table-view'
 
 export interface GenerativeUIProps {
   /** Untrusted spec (validated here before anything is drawn). */
@@ -55,23 +50,7 @@ export interface GenerativeUIProps {
   className?: string
 }
 
-export const BADGE_VARIANT: Record<Tone, 'muted' | 'info' | 'success' | 'warning' | 'danger' | 'secondary'> = {
-  default: 'secondary',
-  muted: 'muted',
-  info: 'info',
-  success: 'success',
-  warning: 'warning',
-  danger: 'danger',
-}
-
-export const TEXT_TONE: Record<Tone, string> = {
-  default: 'text-foreground',
-  muted: 'text-muted-foreground',
-  info: 'text-[var(--info,oklch(0.55_0.13_235))]',
-  success: 'text-[var(--success,oklch(0.6_0.15_155))]',
-  warning: 'text-[var(--warning,oklch(0.6_0.15_65))]',
-  danger: 'text-destructive',
-}
+export { BADGE_VARIANT, TEXT_TONE }
 
 /**
  * Renders a genui/v1 spec with the SDK's own components. Text is always
@@ -231,48 +210,6 @@ function CardView({ block, onNavigate }: { block: CardBlock; onNavigate?: (p: st
         </CardContent>
       ) : null}
     </Card>
-  )
-}
-
-const cell = (v: Scalar | undefined) => (v === null || v === undefined ? '—' : typeof v === 'boolean' ? (v ? 'Sí' : 'No') : String(v))
-
-function TableView({ block }: { block: TableBlock }) {
-  const rows = block.rows ?? []
-  return (
-    <div className='w-full'>
-      {block.title ? <p className='mb-1 text-xs font-medium text-muted-foreground'>{block.title}</p> : null}
-      {/* Desktop: table. Mobile: one card per row. */}
-      <div className='hidden overflow-x-auto rounded-lg border @md:block'>
-        <Table>
-          {block.caption ? <TableCaption>{block.caption}</TableCaption> : null}
-          <TableHeader>
-            <TableRow>
-              {block.columns.map((c) => (
-                <TableHead key={c.key}>{c.label}</TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((r, i) => (
-              <TableRow key={i}>
-                {block.columns.map((c) => (
-                  <TableCell key={c.key} className='whitespace-normal'>
-                    {cell(r[c.key])}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-      <ul className='m-0 flex list-none flex-col gap-2 p-0 @md:hidden'>
-        {rows.map((r, i) => (
-          <li key={i} className='rounded-lg border bg-card p-2.5'>
-            <Fields fields={block.columns.map((c) => ({ label: c.label, value: cell(r[c.key]) }))} />
-          </li>
-        ))}
-      </ul>
-    </div>
   )
 }
 

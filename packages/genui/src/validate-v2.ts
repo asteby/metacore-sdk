@@ -313,6 +313,13 @@ function blockRules(b: Obj, type: string, path: string) {
   const L = GENUI_V2_LIMITS
   const present = (k: string) => has(b, k)
   if (type === 'table') {
+    // tones/labels/icons solo tienen sentido con una presentación por valor (igual que el validador Go del kernel).
+    ;(b.columns as Obj[]).forEach((co, i) => {
+      if (co.variant === 'badge' || co.variant === 'icon_text') return
+      for (const k of ['tones', 'labels', 'icons']) {
+        if (has(co, k)) throw new GenUIError('genui.invalid_block', `${path}.columns[${i}]: ${k} solo aplica con variant badge o icon_text`, `${path}.columns[${i}]`)
+      }
+    })
     const cols = (b.columns as unknown[]).length
     if (present('source')) {
       if (present('rows')) throw new GenUIError('genui.invalid_block', `${path}: table usa rows o source, no ambos`, path)

@@ -25,10 +25,12 @@ export {
   type GenUIRow,
   type GenUISources,
 } from './registry'
-export { BUILTIN_ICONS, FALLBACK_ICON, ICON_NAME_PATTERN, resolveGenUIIcon, usePageIcon, type GenUIIconComponent, type GenUIIconResolver } from './icons'
+export { BUILTIN_ICONS, FALLBACK_ICON, ICON_NAME_PATTERN, lookupGenUIIcon, resolveGenUIIcon, usePageIcon, type GenUIIconComponent, type GenUIIconResolver } from './icons'
 export { renderMarkdown, type MarkdownOptions } from './markdown'
 export { layoutDiagram } from './diagram'
 export { formatMetric, toneFor } from './metric'
+export { TABLE_MAX_HEIGHT, TableView, humanize, type TableViewProps } from './table-view'
+export { toTone } from './tones'
 export { MAP_MAX_POINTS, MAP_PRECISIONS, mapLegend, normalizeMapPoints, type GenUIMapPoint, type MapPrecision } from './map-points'
 export * from './page'
 // Adaptador de host (`genui.host/v1`): GenUIBody para paginas, Tablero y chat.
