@@ -98,7 +98,7 @@ export function parseColor(input: string): Rgba | null {
     const n = (i: number) => parseInt(hex.slice(i, i + 2), 16) / 255
     return { r: n(0), g: n(2), b: n(4), a: hex.length === 8 ? n(6) : 1 }
   }
-  const fn = /^(oklch|rgba?)\((.*)\)$/.exec(s)
+  const fn = /^(oklch|rgba?|hsla?)\((.*)\)$/.exec(s)
   if (!fn) return null
   const [body, alphaPart] = fn[2]!.split('/')
   const parts = body!.replace(/,/g, ' ').trim().split(/\s+/)
@@ -106,6 +106,17 @@ export function parseColor(input: string): Rgba | null {
   let alpha = 1
   if (alphaPart !== undefined) alpha = parseNumber(alphaPart)
   else if (fn[1] !== 'oklch' && parts.length === 4) alpha = parseNumber(parts[3]!)
+  if (fn[1] === 'hsl' || fn[1] === 'hsla') {
+    const hue = ((parseFloat(parts[0]!) % 360) + 360) % 360
+    const sat = clamp01(parseNumber(parts[1]!))
+    const lig = clamp01(parseNumber(parts[2]!))
+    const a = sat * Math.min(lig, 1 - lig)
+    const f = (n: number) => {
+      const k = (n + hue / 30) % 12
+      return lig - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))
+    }
+    return { r: clamp01(f(0)), g: clamp01(f(8)), b: clamp01(f(4)), a: clamp01(alpha) }
+  }
   if (fn[1] === 'oklch') {
     const [r, g, b] = oklchToRgb(parseNumber(parts[0]!), parseNumber(parts[1]!, 0.4), parseFloat(parts[2]!))
     return { r, g, b, a: clamp01(alpha) }
@@ -171,18 +182,85 @@ export function toHex(color: string | Rgba): string {
  * an `oklch()` string; when the target is unreachable it returns the closest
  * extreme (L 0 or 1). Use it to derive readable brand accents / chart series.
  */
-export function ensureContrast(color: string, background: string, min: number = WCAG.text): string {
+export interface EnsureContrastOptions {
+  /** `oklch` (default, the historical output) or `hex` (`#rrggbb`: what canvas, MapLibre paint and the Go mirror consume). */
+  format?: 'oklch' | 'hex'
+}
+
+export function ensureContrast(color: string, background: string, min: number = WCAG.text, options: EnsureContrastOptions = {}): string {
   const c = toRgba(color)
   const bg = toRgba(background)
   const [l0, ch, hue] = rgbToOklch(c.r, c.g, c.b)
-  const fmt = (l: number) => `oklch(${l.toFixed(4)} ${ch.toFixed(4)} ${hue.toFixed(2)})`
-  if (contrastRatio(fmt(l0), bg) >= min) return fmt(l0)
+  const hex = options.format === 'hex'
+  const fmt = (l: number) => (hex ? toHex({ ...rgbOf(oklchToRgb(l, ch, hue)), a: 1 }) : `oklch(${l.toFixed(4)} ${ch.toFixed(4)} ${hue.toFixed(2)})`)
+  // In hex mode the original colour is returned as is when it already passes (no OKLCH round trip noise).
+  const first = hex ? toHex(c) : fmt(l0)
+  if (contrastRatio(first, bg) >= min) return first
   const lighten = relativeLuminance(bg) < 0.18
   for (let i = 1; i <= 100; i++) {
     const l = lighten ? Math.min(1, l0 + i * 0.01) : Math.max(0, l0 - i * 0.01)
-    if (contrastRatio(fmt(l), bg) >= min || l === 0 || l === 1) return fmt(l)
+    const out = fmt(l)
+    if (contrastRatio(out, bg) >= min || l === 0 || l === 1) return out
   }
   return fmt(lighten ? 1 : 0)
+}
+
+const rgbOf = ([r, g, b]: [number, number, number]) => ({ r, g, b })
+
+/** Default candidates of `onColor`: pure white and pure black (the Go mirror `colorx` uses the same). */
+export const ON_LIGHT = '#ffffff'
+export const ON_DARK = '#000000'
+
+export interface OnColorOptions {
+  /** Text colour for dark backgrounds (default `#ffffff`). */
+  light?: string
+  /** Text colour for light backgrounds (default `#000000`). */
+  dark?: string
+  /** Minimum WCAG contrast (default 4.5, AA normal text; pass 3 for large text / icons). */
+  min?: number
+}
+
+/**
+ * The text colour (`light` or `dark`) with the higher contrast on `bg`, as `#rrggbb`. When neither reaches `min` (custom
+ * candidates that are too close to `bg`) the better one goes through `ensureContrast` (OKLCH lightness in steps of 0.01,
+ * returned as `oklch()`). With the default candidates the result is always ≥ 4.5 (in fact ≥ 4.58).
+ * A translucent `bg` is flattened over white first; an unparsable one yields `light`. Ties go to `light`. The single decision point of
+ * "which text goes on this colour": every component that paints colour over data colour calls it.
+ */
+export function onColor(bg: string | Rgba, options: OnColorOptions = {}): string {
+  const { light = ON_LIGHT, dark = ON_DARK, min = WCAG.text } = options
+  const parsed = typeof bg === 'string' ? parseColor(bg) : bg
+  const l = parseColor(light)
+  const d = parseColor(dark)
+  if (!parsed || !l || !d) return light
+  const base = composite(parsed, { r: 1, g: 1, b: 1, a: 1 })
+  const rl = contrastRatio(l, base)
+  const rd = contrastRatio(d, base)
+  const bestRgba = rl >= rd ? l : d
+  if (Math.max(rl, rd) >= min) return toHex(bestRgba)
+  return ensureContrast(toHex(bestRgba), toHex(base), min)
+}
+
+/**
+ * Backing for a mark (logo, glyph) of colour `fg`: the candidate with the highest contrast against it (ties and
+ * unparsable candidates: the first / skipped), returned as given; `undefined` when none parses. With `min` the list is
+ * a preference order instead: the first candidate that reaches `min` (e.g. 3, WCAG 1.4.11 non-text) wins, so a brand
+ * colour that already shows the logo beats a neutral that shows it better; below `min` everywhere the best one wins.
+ */
+export function pickBacking(fg: string | Rgba, candidates: ReadonlyArray<string>, min?: number): string | undefined {
+  let best: string | undefined
+  let bestRatio = -1
+  for (const c of candidates) {
+    const p = parseColor(c)
+    if (!p) continue
+    const r = contrastRatio(fg, composite(p, { r: 1, g: 1, b: 1, a: 1 }))
+    if (min !== undefined && r >= min) return c
+    if (r > bestRatio) {
+      best = c
+      bestRatio = r
+    }
+  }
+  return best
 }
 
 /** Picks whichever of `candidates` contrasts most with `background`. */

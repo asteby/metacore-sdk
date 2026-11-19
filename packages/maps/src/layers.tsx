@@ -10,7 +10,7 @@ import { openSpider, SPIDER_MAX, type Spider } from './spiderfy'
 import { allCoincident, areaGroups, boundsOf, isApproximate, lineToGeoJSON, pointColor, pointsToAreas, pointsToGeoJSON, sameSpot, zonePoints, zonesToGeoJSON } from './geometry'
 import { colorFor, DEFAULT_COLOR, safeColor } from './palette'
 import { buildChoropleth, toRegionCollection, type ChoroplethLoader, type ChoroplethRegion, type ChoroplethStep, type RegionCollection } from './choropleth'
-import { pointsPaint } from './theme'
+import { pointsPaint, TEXT_FONT } from './theme'
 import { DEFAULT_LABELS, type GeoPoint, type MapLabels, type MapPointItem, type ZoneItem } from './types'
 
 /** Auto-cluster above this many points (DOM markers stay focusable below it). */
@@ -234,7 +234,7 @@ export function ClusterLayer({ points, cluster = true, colors, onSelect, onArea,
                 type: 'symbol',
                 source: id,
                 filter: ['has', 'point_count'],
-                layout: { 'text-field': ['get', 'point_count_abbreviated'], 'text-size': 12 },
+                layout: { 'text-field': ['get', 'point_count_abbreviated'], 'text-font': [...TEXT_FONT.bold], 'text-size': 12 },
                 paint: { 'text-color': paint.clusterText },
             })
         }
@@ -285,7 +285,7 @@ export function ClusterLayer({ points, cluster = true, colors, onSelect, onArea,
                 id: `${areaId}-count`,
                 type: 'symbol',
                 source: areaId,
-                layout: { 'text-field': ['get', 'text'], 'text-size': 12, 'text-allow-overlap': true },
+                layout: { 'text-field': ['get', 'text'], 'text-font': [...TEXT_FONT.bold], 'text-size': 12, 'text-allow-overlap': true },
                 paint: { 'text-color': ['coalesce', ['get', 'tc'], paint.clusterText] },
             })
         }

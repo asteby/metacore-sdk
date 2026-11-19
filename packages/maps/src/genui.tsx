@@ -157,6 +157,7 @@ export function GenUIMapBlock({ block, rows, text, navigate, act, locale }: GenU
                             selectedKey={selected}
                             onPick={pick}
                             onClose={() => setArea(null)}
+                            style={{ contain: 'size' }}
                         />
                     ) : null}
                     {panel && chosen ? (

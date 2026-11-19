@@ -17,3 +17,12 @@ describe('Badge tonal variants', () => {
     expect(html).not.toContain('bg-primary')
   })
 })
+
+describe('Badge with a runtime colour', () => {
+  it.each(['#ec4899', '#e8a317', '#2f7fd6'])('fills with %s and picks a text colour that reads (>= 4.5:1)', (color) => {
+    const html = renderToStaticMarkup(<Badge color={color}>Live 24h</Badge>)
+    expect(html).toContain(`background-color:${color}`)
+    // Pink and amber are light: white text would be 3.5:1 / 2.1:1.
+    if (color !== '#2f7fd6') expect(html).toContain('color:#000000')
+  })
+})

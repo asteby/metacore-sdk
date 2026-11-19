@@ -55,6 +55,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@asteby/metacore-theme": "workspace:^",
     "@asteby/storefront": "workspace:^"
   },
   "peerDependencies": {

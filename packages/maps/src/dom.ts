@@ -31,7 +31,9 @@ const CSS = `
 .mcm-spider-pin:hover,.mcm-spider-pin:focus-visible{z-index:2}
 .mcm-spider-pin:focus-visible{outline:3px solid #111;outline-offset:2px;box-shadow:0 0 0 5px #fff}
 .mcm-avatar{position:relative;box-sizing:border-box;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;border-radius:50%;border:3px solid #fff;font-family:system-ui,sans-serif;font-weight:700;line-height:1;letter-spacing:.02em;user-select:none;box-shadow:0 0 0 1.5px rgba(17,24,39,.55),0 1px 5px rgba(0,0,0,.45)}
-.mcm-avatar-img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#fff;border-radius:50%}
+.mcm-avatar-img{position:absolute;inset:0;box-sizing:border-box;width:100%;height:100%;padding:12%;object-fit:contain;background:transparent;border-radius:inherit}
+.mcm-avatar--pill{border-radius:999px}
+.mcm-avatar--img{color:transparent!important}
 .mcm-marker--avatar{width:auto;height:auto;border:0;background:none!important;box-shadow:none;padding:0;border-radius:50%}
 .mcm-marker--avatar:focus-visible{outline:3px solid #111;outline-offset:3px;box-shadow:0 0 0 6px #fff}
 .mcm-mosaic{display:inline-flex;align-items:center;border:0;background:none;padding:0;cursor:pointer;border-radius:999px}

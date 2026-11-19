@@ -820,6 +820,9 @@ importers:
 
   packages/maps:
     dependencies:
+      '@asteby/metacore-theme':
+        specifier: workspace:^
+        version: link:../theme
       '@asteby/storefront':
         specifier: workspace:^
         version: link:../storefront
@@ -1562,6 +1565,9 @@ importers:
 
   packages/ui:
     dependencies:
+      '@asteby/metacore-theme':
+        specifier: workspace:^
+        version: link:../theme
       '@radix-ui/react-accordion':
         specifier: ^1.2.2
         version: 1.2.20(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)

@@ -48,8 +48,14 @@ export {
   ensureContrast,
   mostReadable,
   toHex,
+  onColor,
+  pickBacking,
+  ON_LIGHT,
+  ON_DARK,
 } from './contrast.js'
-export type { Rgba } from './contrast.js'
+export type { Rgba, OnColorOptions, EnsureContrastOptions } from './contrast.js'
+export { imageTone, toneOfPixels, clearImageToneCache } from './image-tone.js'
+export type { ImageTone, ImageToneInfo, ImageToneOptions } from './image-tone.js'
 
 export {
   DEFAULT_TOUCH_TOKENS,

@@ -1,3 +1,5 @@
+import { onColor } from '@asteby/metacore-theme/contrast'
+
 // Colour is never the only channel (the list prints the status and DOM markers
 // carry a glyph); these hues are the Okabe–Ito set, distinguishable under the
 // common colour-vision deficiencies. Hosts can override per point.
@@ -31,16 +33,7 @@ export function safeColor(c: unknown): string | undefined {
     return typeof c === 'string' && SAFE_COLOR.test(c.trim()) ? c.trim() : undefined
 }
 
-/** Black or white, whichever reads better on `hex` (WCAG relative luminance). */
-export function readableOn(hex: string): string {
-    const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim())
-    if (!m) return '#fff'
-    let h = m[1] as string
-    if (h.length === 3) h = h.replace(/./g, (c) => c + c)
-    const ch = [0, 2, 4].map((i) => {
-        const v = parseInt(h.slice(i, i + 2), 16) / 255
-        return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4
-    })
-    const l = 0.2126 * (ch[0] as number) + 0.7152 * (ch[1] as number) + 0.0722 * (ch[2] as number)
-    return l > 0.4 ? '#111' : '#fff'
+/** Text colour (white or black, ≥ 4.5:1) for a label painted on `bg`: the shared `onColor` primitive, the only place that decides. */
+export function readableOn(bg: string): string {
+    return onColor(bg)
 }
