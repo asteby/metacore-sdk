@@ -15,6 +15,25 @@
   --info-foreground: oklch(1 0 0);
 
   /*
+   * Tone pairs: a solid status fill (`--tone-x`) and the text/icon colour that sits on it (`--on-tone-x`). Aliases of the
+   * status tokens above, so one edit recolours both; a theme pack overrides the source token. For colours that arrive at
+   * runtime (brand colour of a row, `color_field`) CSS cannot decide: use `onColor` from @asteby/metacore-theme/contrast.
+   * Enforced by src/tokens-contrast.test.ts: on-tone/tone >= 4.5:1, tone as border or icon on --card >= 3:1.
+   */
+  --tone-success: var(--success);
+  --on-tone-success: var(--success-foreground);
+  --tone-warning: var(--warning);
+  --on-tone-warning: var(--warning-foreground);
+  --tone-danger: var(--destructive);
+  --on-tone-danger: var(--destructive-foreground);
+  --tone-info: var(--info);
+  --on-tone-info: var(--info-foreground);
+  --tone-muted: var(--muted-foreground);
+  --on-tone-muted: var(--card);
+  --tone-brand: var(--primary);
+  --on-tone-brand: var(--primary-foreground);
+
+  /*
    * Semantic surfaces for floating UI outside the metacore-ui primitives
    * (chat panels, composers, result cards). Defaults are the plain tokens;
    * a theme pack (glass.css) redefines them, so screens that paint with
@@ -172,6 +191,19 @@
   --warning-foreground: oklch(0.18 0 0);
   --info: oklch(0.78 0.11 235);
   --info-foreground: oklch(0.18 0 0);
+
+  --tone-success: var(--success);
+  --on-tone-success: var(--success-foreground);
+  --tone-warning: var(--warning);
+  --on-tone-warning: var(--warning-foreground);
+  --tone-danger: var(--destructive);
+  --on-tone-danger: var(--destructive-foreground);
+  --tone-info: var(--info);
+  --on-tone-info: var(--info-foreground);
+  --tone-muted: var(--muted-foreground);
+  --on-tone-muted: var(--card);
+  --tone-brand: var(--primary);
+  --on-tone-brand: var(--primary-foreground);
 }
 
 @theme inline {

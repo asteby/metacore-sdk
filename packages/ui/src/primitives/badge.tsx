@@ -1,6 +1,7 @@
 import * as React from 'react'
 import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
+import { onColor } from '@asteby/metacore-theme/contrast'
 import { cn } from '@/lib/utils'
 
 const badgeVariants = cva(
@@ -40,15 +41,22 @@ function Badge({
   className,
   variant,
   asChild = false,
+  color,
+  style,
   ...props
-}: React.ComponentProps<'span'> &
-  VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
+}: Omit<React.ComponentProps<'span'>, 'color'> &
+  VariantProps<typeof badgeVariants> & {
+    asChild?: boolean
+    /** A colour that arrives at runtime (brand colour, option colour): the chip is filled with it and the text colour is chosen by `onColor` (>= 4.5:1). */
+    color?: string
+  }) {
   const Comp = asChild ? Slot : 'span'
 
   return (
     <Comp
       data-slot='badge'
-      className={cn(badgeVariants({ variant }), className)}
+      className={cn(badgeVariants({ variant: color ? 'outline' : variant }), color && 'border-transparent', className)}
+      style={color ? { backgroundColor: color, color: onColor(color), ...style } : style}
       {...props}
     />
   )

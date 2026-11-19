@@ -119,6 +119,10 @@ const PAIRS: Pair[] = [
     [`${k} badge (text on 14% tint)`, `--${k}`, tint(`--${k}`, 0.14, card), WCAG.text],
     [`${k}-foreground / ${k}`, `--${k}-foreground`, on(`--${k}`, card), WCAG.text],
   ]),
+  ...(['success', 'warning', 'danger', 'info', 'muted', 'brand'] as const).flatMap<Pair>((k) => [
+    [`on-tone-${k} / tone-${k} (text on solid fill)`, `--on-tone-${k}`, on(`--tone-${k}`, card), WCAG.text],
+    [`tone-${k} (border / icon) / card`, `--tone-${k}`, card, WCAG.nonText],
+  ]),
   ['destructive badge (text on 12% tint)', '--destructive', tint('--destructive', 0.12, card), WCAG.text],
   ['input (control boundary) / card', '--input', card, WCAG.nonText],
   ['ring at 50% (focus) / card', '--ring', card, WCAG.nonText, 0.5],

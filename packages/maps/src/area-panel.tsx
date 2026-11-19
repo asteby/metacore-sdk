@@ -6,6 +6,23 @@ import { pointColor } from './geometry'
 import { readableOn, safeColor } from './palette'
 import type { MapPointItem } from './types'
 
+/**
+ * The list takes all the height the panel gives it (flex child, no fixed max-height) and scrolls only when the rows do
+ * not fit. Scroll shadows (local/scroll background pairs) show there is more on either edge; rows snap to the top
+ * and the bottom padding keeps the last visible row from being cut in half.
+ */
+const SHADE = 'var(--card, var(--background, Canvas))'
+export const LIST_SCROLL: React.CSSProperties = {
+    flex: '1 1 auto',
+    minHeight: 0,
+    overflowY: 'auto',
+    overscrollBehavior: 'contain',
+    scrollSnapType: 'y proximity',
+    scrollPaddingBlock: 4,
+    paddingBottom: 4,
+    background: `linear-gradient(${SHADE} 30%, transparent) top / 100% 24px no-repeat local, linear-gradient(transparent, ${SHADE} 70%) bottom / 100% 24px no-repeat local, radial-gradient(farthest-side at 50% 0, rgba(0,0,0,.28), transparent) top / 100% 8px no-repeat scroll, radial-gradient(farthest-side at 50% 100%, rgba(0,0,0,.28), transparent) bottom / 100% 8px no-repeat scroll`,
+}
+
 const MUTED = 'var(--muted-foreground, #6b7280)'
 
 /** Status pill: the text plus its tone (colour is never the only channel). */
@@ -31,13 +48,15 @@ export interface AreaPanelProps {
     selectedKey?: string | null
     onPick: (item: MapPointItem) => void
     onClose: () => void
+    /** Extra style of the panel (e.g. `contain: 'size'` so a grid row is as tall as the map, not the list). */
+    style?: React.CSSProperties
 }
 
 /**
  * Members of one area: avatar or logo, title, subtitle and the translated status as a toned badge. The list scrolls
  * inside the panel; Up / Down / Home / End move between members, Enter opens one, Esc closes the panel.
  */
-export function AreaPanel({ title, count, members, colors, listLabel, closeLabel, selectedKey, onPick, onClose }: AreaPanelProps): React.ReactElement {
+export function AreaPanel({ title, count, members, colors, listLabel, closeLabel, selectedKey, onPick, onClose, style }: AreaPanelProps): React.ReactElement {
     const list = React.useRef<HTMLUListElement | null>(null)
     const avatars = members.some(isBranded)
     React.useEffect(() => {
@@ -56,7 +75,7 @@ export function AreaPanel({ title, count, members, colors, listLabel, closeLabel
         btns[Math.max(0, Math.min(btns.length - 1, to))]?.focus()
     }
     return (
-        <aside aria-label={title} onKeyDown={onKey} data-testid="map-area-panel" style={{ border: '1px solid var(--border, #e5e7eb)', borderRadius: 8, padding: 10, fontSize: 14, display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0, minWidth: 0 }}>
+        <aside aria-label={title} onKeyDown={onKey} data-testid="map-area-panel" style={{ border: '1px solid var(--border, #e5e7eb)', borderRadius: 8, padding: 10, fontSize: 14, display: 'flex', flexDirection: 'column', gap: 8, minHeight: 0, minWidth: 0, boxSizing: 'border-box', overflow: 'hidden', ...style }}>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                 <div style={{ minWidth: 0 }}>
                     <p style={{ margin: 0, fontWeight: 600 }}>{title}</p>
@@ -66,11 +85,11 @@ export function AreaPanel({ title, count, members, colors, listLabel, closeLabel
                     ×
                 </button>
             </div>
-            <ul ref={list} aria-label={listLabel} style={{ listStyle: 'none', margin: 0, padding: 0, maxHeight: '16rem', overflowY: 'auto', overscrollBehavior: 'contain', display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 2 }}>
+            <ul ref={list} aria-label={listLabel} style={{ listStyle: 'none', margin: 0, padding: 0, ...LIST_SCROLL, display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 2 }}>
                 {members.map((m) => {
                     const status = m.statusLabel ?? m.status
                     return (
-                        <li key={m.key}>
+                        <li key={m.key} style={{ scrollSnapAlign: 'start' }}>
                             <button
                                 type="button"
                                 aria-current={selectedKey === m.key || undefined}

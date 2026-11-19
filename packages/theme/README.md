@@ -218,3 +218,37 @@ style.textContent += touchCss(touch, '.kiosk')      // .kiosk{--touch-min-target
 Defaults: `minTarget` 60 px (rango 44–160) y `fontScale` 1.25 (rango 0.75–2). Los primitivos de `@asteby/metacore-ui/touch` leen esas variables con los mismos defaults como fallback.
 
 Encaje con ThemePack: el contrato completo (`ThemePack.tokens`) aún no está en `main`; esto define solo la extensión `tokens.touch?: Partial<TouchTokens>`. Cuando el contrato aterrice, el pack pasa `tokens.touch` por `resolveTouchTokens` y aplica `touchCss` junto al resto de variables.
+
+## Contraste dinámico (`@asteby/metacore-theme/contrast`)
+
+Un solo lugar decide «qué texto va sobre este color». Funciones puras, sin dependencias (WCAG 2.x). Los colores que llegan en
+tiempo de ejecución (`brand_primary_color`, `color_field`, tonos) no se pueden resolver con CSS estático: usa estas funciones.
+
+| API | Qué hace |
+|---|---|
+| `parseColor(s)` | `#rgb[a]`, `#rrggbb[aa]`, `rgb()/rgba()`, `hsl()/hsla()`, `oklch()`, `white/black/transparent`; si no entiende, `null`. |
+| `relativeLuminance(c)`, `contrastRatio(fg, bg)` | Luminancia y razón WCAG (1..21). |
+| `onColor(bg, {light='#ffffff', dark='#000000', min=4.5})` | Texto con mayor contraste (empate: `light`); si ninguno llega a `min`, ajusta en OKLCH. Con los valores por defecto siempre ≥ 4.58. Un `bg` translúcido se aplana sobre blanco. |
+| `ensureContrast(fg, bg, min=4.5, {format})` | Ajusta la luminosidad OKLCH de `fg` en pasos de 0.01 hasta `min`. Devuelve `oklch()` (o `#rrggbb` con `format:'hex'`). |
+| `pickBacking(fg, candidates, min?)` | Fondo con mayor contraste contra `fg` (empate: el primero; no parseables se omiten). Con `min`, la lista es un orden de preferencia: gana el primero que llega a `min` (p. ej. color de marca antes que un neutro). |
+| `imageTone(url \| ImageBitmap \| img)` (`/image-tone`) | Color medio (gamma, sin premultiplicar) de los píxeles con alfa > 40, rejilla ≤ 256 px, `tone` `light` (≥0.6) / `dark` (≤0.2) / `mid`, `aspect` y `coverage`. Caché por URL; sin CORS, sin canvas o sin píxeles opacos devuelve `'unknown'` (nunca lanza): pinta un fondo neutro con borde. |
+| `useOnColor(bg)`, `useImageTone(url)` (`/contrast-react`) | Hooks de React. |
+
+```ts
+import { onColor, pickBacking } from '@asteby/metacore-theme/contrast'
+import { imageTone } from '@asteby/metacore-theme/image-tone'
+onColor('#ec4899') // '#000000' (el blanco daba 3.5:1)
+const tone = await imageTone(logoUrl)
+const backing = tone === 'unknown' ? '#767676' : pickBacking(tone.color, [brand, '#1f2937', '#ffffff'], 3)
+```
+
+CSS: `--tone-{success,warning,danger,info,muted,brand}` + `--on-tone-*` (claro y oscuro, alias de los tokens de estado);
+`src/tokens-contrast.test.ts` falla si un par baja de 4.5:1 (texto) o 3:1 (borde/ícono). `contrast-color()` no se usa: elige
+solo blanco/negro sin garantía de 4.5:1 en medios tonos, así que el token calculado es la única fuente.
+
+### Vectores de conformidad
+
+`packages/theme/contrast-vectors.json` (también `@asteby/metacore-theme/contrast-vectors.json`): secciones `onColor`,
+`ensureContrast`, `pickBacking`, tolerancia de razón 0.01, cadenas exactas. Es copia literal de
+`metacore-kernel/colorx/testdata/contrast-vectors.json` (espejo en Go, PR asteby/metacore-kernel#640); `src/color-primitive.test.ts`
+los recorre. Si cambia el algoritmo, cambia el archivo en ambos repos a la vez.

@@ -14,6 +14,7 @@
   "files": [
     "dist",
     "styles",
+    "contrast-vectors.json",
     "README.md"
   ],
   "exports": {
@@ -44,6 +45,15 @@
       "types": "./dist/contrast.d.ts",
       "import": "./dist/contrast.js"
     },
+    "./image-tone": {
+      "types": "./dist/image-tone.d.ts",
+      "import": "./dist/image-tone.js"
+    },
+    "./contrast-react": {
+      "types": "./dist/contrast-react.d.ts",
+      "import": "./dist/contrast-react.js"
+    },
+    "./contrast-vectors.json": "./contrast-vectors.json",
     "./scrollbars.css": "./styles/scrollbars.css"
   },
   "scripts": {

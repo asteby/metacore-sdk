@@ -18,6 +18,7 @@ import { ensureStyles } from './dom'
 import { Avatar, isBranded } from './avatar'
 import { fitMaxZoom, isApproximate, pointColor, selectZoomFor } from './geometry'
 import { CLUSTER_THRESHOLD, ClusterLayer, Marker, useFitBounds, type AreaSelection } from './layers'
+import { applyLabelContrast } from './label-contrast'
 import { MapList } from './map-list'
 import { prefersReducedMotion, useMapScheme } from './theme'
 import { mergeLabels, type GeoPoint, type MapLabels, type MapPointItem, type MapPrecision } from './types'
@@ -165,7 +166,10 @@ export function MapView(props: MapViewProps): React.ReactElement {
                 })
                 map.addControl(new ml.NavigationControl({ showCompass: false }), 'top-right')
                 map.addControl(new ml.AttributionControl({ compact: true, customAttribution: cfg.attribution }))
-                map.on('style.load', () => setStyleVersion((v) => v + 1))
+                map.on('style.load', () => {
+                    applyLabelContrast(map as ML.Map)
+                    setStyleVersion((v) => v + 1)
+                })
                 // `auto` minZoom follows the container (the world keeps filling it after a resize).
                 const m0 = map
                 if ((limits.minZoom ?? cfg.minZoom ?? 'auto') === 'auto') m0.on('resize', () => m0.setMinZoom(resolveMapLimits(cfg, limits, sizeOf()).minZoom as number))

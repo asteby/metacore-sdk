@@ -1,6 +1,6 @@
 import * as React from 'react'
 import type { MapScheme } from './config'
-import { DEFAULT_COLOR } from './palette'
+import { DEFAULT_COLOR, readableOn } from './palette'
 
 function detect(): MapScheme {
     if (typeof document === 'undefined') return 'light'
@@ -42,6 +42,8 @@ export function prefersReducedMotion(): boolean {
     return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
+const DARK_CLUSTER = '#56B4E9'
+
 export interface PointsPaint {
     clusterColor: string
     clusterText: string
@@ -55,6 +57,6 @@ export interface PointsPaint {
 /** Cluster / point paint per scheme: on the dark base map the Okabe-Ito blue is lifted and ringed in white so it does not sink. */
 export function pointsPaint(scheme: MapScheme): PointsPaint {
     return scheme === 'dark'
-        ? { clusterColor: '#56B4E9', clusterText: '#0b1220', stroke: '#ffffff', clusterStrokeWidth: 4, pointStrokeWidth: 3, halo: 'rgba(255,255,255,0.35)' }
-        : { clusterColor: DEFAULT_COLOR, clusterText: '#ffffff', stroke: '#ffffff', clusterStrokeWidth: 3, pointStrokeWidth: 2, halo: 'rgba(17,24,39,0.22)' }
+        ? { clusterColor: DARK_CLUSTER, clusterText: readableOn(DARK_CLUSTER), stroke: '#ffffff', clusterStrokeWidth: 4, pointStrokeWidth: 3, halo: 'rgba(255,255,255,0.35)' }
+        : { clusterColor: DEFAULT_COLOR, clusterText: readableOn(DEFAULT_COLOR), stroke: '#ffffff', clusterStrokeWidth: 3, pointStrokeWidth: 2, halo: 'rgba(17,24,39,0.22)' }
 }
