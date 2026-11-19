@@ -1,6 +1,7 @@
 // Default ViewDataSource over the runtime-react ApiClient, plus the pure
 // helpers renderers share (capability input mapping, item extraction, date
 // grouping). Light on purpose: this module is in the static graph.
+import { unwrapEnvelope, unwrapList } from '@asteby/metacore-lib/envelope'
 import type { ApiClient } from '../api-context'
 import type { WidgetData } from '../dashboard-types'
 import type { ChartRequest, ViewDataSource, ViewListParams, ViewRows } from './types'
@@ -16,17 +17,6 @@ export interface ApiViewDataSourceOptions {
     capabilityPath?: string
 }
 
-type Envelope<T> = { success?: boolean; data?: T; meta?: { total?: number }; message?: string }
-
-function unwrap<T>(body: unknown): { data: T | undefined; total?: number } {
-    const env = body as Envelope<T>
-    if (env && typeof env === 'object' && 'success' in env) {
-        if (env.success === false) throw new Error(env.message || 'request failed')
-        return { data: env.data, total: env.meta?.total }
-    }
-    return { data: body as T }
-}
-
 export function createApiViewDataSource(
     api: ApiClient,
     opts: ApiViewDataSourceOptions = {},
@@ -36,12 +26,12 @@ export function createApiViewDataSource(
     return {
         async list(model: string, params?: ViewListParams): Promise<ViewRows> {
             const res = await api.get(`/data/${encodeURIComponent(model)}`, params ? { params } : undefined)
-            const { data, total } = unwrap<Record<string, unknown>[]>(res.data)
-            return { rows: Array.isArray(data) ? data : [], total }
+            const { items, meta } = unwrapList<Record<string, unknown>>(res.data)
+            return { rows: items, total: meta.total }
         },
         async record(model: string, id: string) {
             const res = await api.get(`/data/${encodeURIComponent(model)}/${encodeURIComponent(id)}`)
-            return unwrap<Record<string, unknown>>(res.data).data ?? null
+            return unwrapEnvelope<Record<string, unknown> | undefined>(res.data) ?? null
         },
         async chart(req: ChartRequest): Promise<WidgetData> {
             const res = await api.post(chartPath, {
@@ -51,11 +41,11 @@ export function createApiViewDataSource(
                 record_id: req.recordId,
                 panel_key: req.panelKey,
             })
-            return unwrap<WidgetData>(res.data).data ?? {}
+            return unwrapEnvelope<WidgetData | undefined>(res.data) ?? {}
         },
         async capability(key: string, input: Record<string, unknown>) {
             const res = await api.post(capabilityPath, { capability: key, input })
-            return unwrap<unknown>(res.data).data
+            return unwrapEnvelope<unknown>(res.data)
         },
     }
 }

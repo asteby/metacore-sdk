@@ -1,3 +1,4 @@
+import { unwrapResponse } from '@asteby/metacore-lib/envelope'
 import { parseTime } from './utils'
 import type {
   DataloadHttpClient,
@@ -22,8 +23,6 @@ import type {
   VerifyReport,
 } from './types'
 
-type Envelope<T> = { success?: boolean; data: T; message?: string }
-const unwrap = <T>(res: { data?: unknown }): T => (res.data as Envelope<T>).data
 
 /** Reference to send as `profile` in a request: `base/name@version` for the host's shared catalog. */
 export function profileRef(p: { name: string; version: string; shared?: boolean; org?: string }): string {
@@ -142,40 +141,40 @@ export function createDataloadApi(http: DataloadHttpClient, opts: { basePath?: s
   const id = (v: string) => encodeURIComponent(v)
   const q = (runId?: string) => (runId ? `?run_id=${encodeURIComponent(runId)}` : '')
   return {
-    listProfiles: async () => nz(unwrap<ProfileSummary[]>(await http.get(`${base}/profiles`))),
-    publishVersion: async (body) => unwrap<StoredProfileVersion>(await http.post(`${base}/profiles`, body)),
+    listProfiles: async () => nz(unwrapResponse<ProfileSummary[]>(await http.get(`${base}/profiles`))),
+    publishVersion: async (body) => unwrapResponse<StoredProfileVersion>(await http.post(`${base}/profiles`, body)),
     profileVersion: async (k) =>
-      unwrap<StoredProfileVersion>(await http.get(`${base}/profiles/${id(k.name)}/versions/${id(k.version)}${k.shared || k.org === '' ? '?base=1' : ''}`)),
+      unwrapResponse<StoredProfileVersion>(await http.get(`${base}/profiles/${id(k.name)}/versions/${id(k.version)}${k.shared || k.org === '' ? '?base=1' : ''}`)),
     dryRun: async (body) => {
-      const r = unwrap<DryRunResult>(await http.post(`${base}/dry-run`, body))
+      const r = unwrapResponse<DryRunResult>(await http.post(`${base}/dry-run`, body))
       return { plan: normalizePlan(r.plan), run: normalizeRun(r.run), ...(r.source ? { source: r.source } : {}) }
     },
-    execute: async (body) => normalizeRun(unwrap<DataloadRun>(await http.post(`${base}/runs`, body))),
-    run: async (v) => normalizeRun(unwrap<DataloadRun>(await http.get(`${base}/runs/${id(v)}`))),
-    runPlan: async (v, query) => normalizePlan(unwrap<PlanPage>(await http.get(`${base}/runs/${id(v)}/plan${planQuery(query)}`))),
-    runs: async (limit = 30) => nz(unwrap<DataloadRun[]>(await http.get(`${base}/runs?limit=${limit}`))).map(normalizeRun),
-    cancel: async (v) => normalizeRun(unwrap<DataloadRun>(await http.post(`${base}/runs/${id(v)}/cancel`))),
-    mediaStatus: async (runId) => normalizeStatus(unwrap<MediaBackupStatus>(await http.get(`${base}/media/status${q(runId)}`))),
-    mediaManifest: async () => nz(unwrap<ManifestEntry[]>(await http.get(`${base}/media/manifest`))),
+    execute: async (body) => normalizeRun(unwrapResponse<DataloadRun>(await http.post(`${base}/runs`, body))),
+    run: async (v) => normalizeRun(unwrapResponse<DataloadRun>(await http.get(`${base}/runs/${id(v)}`))),
+    runPlan: async (v, query) => normalizePlan(unwrapResponse<PlanPage>(await http.get(`${base}/runs/${id(v)}/plan${planQuery(query)}`))),
+    runs: async (limit = 30) => nz(unwrapResponse<DataloadRun[]>(await http.get(`${base}/runs?limit=${limit}`))).map(normalizeRun),
+    cancel: async (v) => normalizeRun(unwrapResponse<DataloadRun>(await http.post(`${base}/runs/${id(v)}/cancel`))),
+    mediaStatus: async (runId) => normalizeStatus(unwrapResponse<MediaBackupStatus>(await http.get(`${base}/media/status${q(runId)}`))),
+    mediaManifest: async () => nz(unwrapResponse<ManifestEntry[]>(await http.get(`${base}/media/manifest`))),
     mediaVerify: async () => {
-      const r = unwrap<VerifyReport>(await http.post(`${base}/media/verify`))
+      const r = unwrapResponse<VerifyReport>(await http.post(`${base}/media/verify`))
       return { ...r, missing: nz(r.missing), corrupt: nz(r.corrupt) }
     },
-    mediaRetry: async (runId) => unwrap<{ requeued: number }>(await http.post(`${base}/media/retry`, runId ? { run_id: runId } : {})).requeued,
+    mediaRetry: async (runId) => unwrapResponse<{ requeued: number }>(await http.post(`${base}/media/retry`, runId ? { run_id: runId } : {})).requeued,
     reviews: async (f) => {
-      const page = unwrap<ReviewPage>(await http.get(`${base}/reviews${reviewQuery(f)}`))
+      const page = unwrapResponse<ReviewPage>(await http.get(`${base}/reviews${reviewQuery(f)}`))
       return { items: nz(page?.items).map(normalizeReview), counts: page?.counts ?? {}, ...(page?.next ? { next: page.next } : {}) }
     },
-    decideReviews: async (decisions) => nz(unwrap<ReviewEntry[]>(await http.post(`${base}/reviews/decide`, { decisions }))).map(normalizeReview),
-    applyApproved: async (entity) => normalizeRun(unwrap<DataloadRun>(await http.post(`${base}/reviews/apply`, { entity }))),
-    createUpload: async (body) => normalizeUpload(unwrap<UploadSession>(await http.post(`${base}/uploads`, body))),
-    upload: async (v) => normalizeUpload(unwrap<UploadSession>(await http.get(`${base}/uploads/${id(v)}`))),
+    decideReviews: async (decisions) => nz(unwrapResponse<ReviewEntry[]>(await http.post(`${base}/reviews/decide`, { decisions }))).map(normalizeReview),
+    applyApproved: async (entity) => normalizeRun(unwrapResponse<DataloadRun>(await http.post(`${base}/reviews/apply`, { entity }))),
+    createUpload: async (body) => normalizeUpload(unwrapResponse<UploadSession>(await http.post(`${base}/uploads`, body))),
+    upload: async (v) => normalizeUpload(unwrapResponse<UploadSession>(await http.get(`${base}/uploads/${id(v)}`))),
     uploadPart: async (v, index, chunk, o = {}) => {
       const headers: Record<string, string> = { 'Content-Type': 'application/octet-stream' }
       if (o.sha256) headers['X-Content-Sha256'] = o.sha256
       await http.post(`${base}/uploads/${id(v)}/parts/${index}`, chunk, { headers, ...(o.signal ? { signal: o.signal } : {}) })
     },
-    completeUpload: async (v, o = {}) => normalizeUpload(unwrap<UploadSession>(await http.post(`${base}/uploads/${id(v)}/complete`, o.sha256 ? { sha256: o.sha256 } : {}))),
+    completeUpload: async (v, o = {}) => normalizeUpload(unwrapResponse<UploadSession>(await http.post(`${base}/uploads/${id(v)}/complete`, o.sha256 ? { sha256: o.sha256 } : {}))),
     abortUpload: async (v) => {
       await http.post(`${base}/uploads/${id(v)}/abort`)
     },

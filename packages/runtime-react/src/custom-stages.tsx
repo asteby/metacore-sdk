@@ -17,6 +17,7 @@
 // or errors the hook reports `available: false`, the "+ Agregar etapa" column
 // and the lane context menus simply don't render, and the board keeps working.
 // All UI text goes through t() with a Spanish defaultValue.
+import { unwrapResponse } from '@asteby/metacore-lib/envelope'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Plus, Trash2, Pencil, MoreVertical, Filter, Flag, GripVertical, Lock, RotateCcw, X } from 'lucide-react'
@@ -310,12 +311,6 @@ export function slugifyStageKey(label: string): string {
 // Data hook
 // ---------------------------------------------------------------------------
 
-function unwrap(res: { data: any }): any {
-    const body = res?.data
-    if (body && typeof body === 'object' && 'data' in body) return body.data
-    return body
-}
-
 export interface UseCustomStagesResult {
     /** False when the endpoint is missing/errored — hide the whole feature. */
     available: boolean
@@ -351,7 +346,7 @@ export function useCustomStages(model: string): UseCustomStagesResult {
             const res = await api.get(
                 `/custom-stages?model=${encodeURIComponent(model)}`,
             )
-            const data = unwrap(res)
+            const data = unwrapResponse<any>(res)
             setStages(Array.isArray(data) ? data : [])
             setAvailable(true)
         } catch {

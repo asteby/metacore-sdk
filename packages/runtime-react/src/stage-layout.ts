@@ -13,6 +13,7 @@
 //   GET    /stage-layout?model=<m>  → { model, stage_order: string[] } | null
 //   PUT    /stage-layout            { model, stage_order: string[] }  (full order)
 //   DELETE /stage-layout?model=<m>  → reset to the declared order
+import { unwrapResponse } from '@asteby/metacore-lib/envelope'
 import { useCallback, useEffect, useState } from 'react'
 import { useApi } from './api-context'
 
@@ -33,12 +34,6 @@ export interface UseStageLayoutResult {
     reset: () => Promise<void>
 }
 
-function unwrap(res: { data: any }): any {
-    const body = res?.data
-    if (body && typeof body === 'object' && 'data' in body) return body.data
-    return body
-}
-
 /**
  * Loads a model's saved lane order (only to learn availability + whether a
  * custom order exists) and exposes save/reset. A missing endpoint degrades to
@@ -57,7 +52,7 @@ export function useStageLayout(model: string): UseStageLayoutResult {
             .then((res) => {
                 if (cancelled) return
                 setAvailable(true)
-                const data = unwrap(res)
+                const data = unwrapResponse<any>(res)
                 const order = data?.stage_order
                 setHasCustomLayout(Array.isArray(order) && order.length > 0)
             })

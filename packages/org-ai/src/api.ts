@@ -1,3 +1,4 @@
+import { unwrapResponse } from '@asteby/metacore-lib/envelope'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
   ClaudeConnectApi,
@@ -19,8 +20,6 @@ export const CLAUDE_CONNECT_ERROR_CODES = [
 ] as const
 export type ClaudeConnectErrorCode = (typeof CLAUDE_CONNECT_ERROR_CODES)[number]
 
-type Envelope<T> = { success?: boolean; data: T }
-const unwrap = <T>(res: { data?: unknown }): T => (res.data as Envelope<T>).data
 
 export function createOrgAIApi(
   http: OrgAIHttpClient,
@@ -30,15 +29,15 @@ export function createOrgAIApi(
   const userSourcePath = opts.userSourcePath === undefined ? '/organization/ai-source' : opts.userSourcePath
   const api: OrgAIApi = {
     async getConfig() {
-      return unwrap<OrgAIConfig>(await http.get(base))
+      return unwrapResponse<OrgAIConfig>(await http.get(base))
     },
     async updateConfig(body) {
-      return unwrap<OrgAIConfig>(await http.put(base, body))
+      return unwrapResponse<OrgAIConfig>(await http.put(base, body))
     },
   }
   if (userSourcePath) {
     api.updateUserSource = async (source) =>
-      unwrap<{ user_ai_source: 'inherit' | 'local' }>(await http.put(userSourcePath, { source })).user_ai_source
+      unwrapResponse<{ user_ai_source: 'inherit' | 'local' }>(await http.put(userSourcePath, { source })).user_ai_source
   }
   return api
 }
@@ -49,15 +48,15 @@ export function createClaudeConnectApi(
 ): ClaudeConnectApi {
   const base = opts.basePath ?? '/organization/ai-config/claude'
   return {
-    getBinary: async () => unwrap(await http.get(`${base}/binary`)),
-    install: async () => unwrap(await http.post(`${base}/install`)),
-    start: async () => unwrap(await http.post(`${base}/connect`)),
+    getBinary: async () => unwrapResponse(await http.get(`${base}/binary`)),
+    install: async () => unwrapResponse(await http.post(`${base}/install`)),
+    start: async () => unwrapResponse(await http.post(`${base}/connect`)),
     submitCode: async (id, code) =>
-      unwrap<{ connected: boolean }>(
+      unwrapResponse<{ connected: boolean }>(
         await http.post(`${base}/connect/${encodeURIComponent(id)}/code`, { code }),
       ).connected === true,
     submitToken: async (token) =>
-      unwrap<{ connected: boolean }>(await http.put(`${base}/token`, { token })).connected === true,
+      unwrapResponse<{ connected: boolean }>(await http.put(`${base}/token`, { token })).connected === true,
     cancel: async (id) => {
       await http.delete(`${base}/connect/${encodeURIComponent(id)}`)
     },

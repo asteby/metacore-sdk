@@ -7,6 +7,7 @@
 // One implementation for EntitySelect, CustomerPicker and VehiclePicker: the
 // searched text prefills the new record's label field, the saved record is
 // handed back to select it (create) or refresh its label (edit).
+import { unwrapResponse } from '@asteby/metacore-lib/envelope'
 import { useState, type ReactNode } from 'react'
 import { CreateRecordDialog } from './dialogs/create-record-dialog'
 import { useApi } from './api-context'
@@ -34,7 +35,7 @@ export interface UseRecordPickerDialogResult {
     dialog: ReactNode
 }
 
-const unwrap = (res: { data?: any }) => ((res.data?.data ?? res.data) ?? {}) as Record<string, unknown>
+const unwrapRecord = (res: { data?: unknown }) => unwrapResponse<Record<string, unknown> | null>(res) ?? {}
 
 export function useRecordPickerDialog({
     model,
@@ -60,12 +61,12 @@ export function useRecordPickerDialog({
             defaults={state.recordId ? undefined : state.defaults}
             lockedFields={state.recordId ? undefined : lockedCreateFields}
             onCreate={async (data) => {
-                const rec = unwrap(await api.post(base, data))
+                const rec = unwrapRecord(await api.post(base, data))
                 onSaved(rec, 'create')
                 return rec.id != null ? { id: String(rec.id) } : undefined
             }}
             onUpdate={async (id, data) => {
-                const rec = unwrap(await api.put(`${base}/${id}`, data))
+                const rec = unwrapRecord(await api.put(`${base}/${id}`, data))
                 onSaved({ ...rec, id: rec.id ?? id }, 'edit')
                 return { id: String(id) }
             }}

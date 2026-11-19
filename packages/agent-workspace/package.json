@@ -46,12 +46,13 @@
     "@asteby/metacore-starter-core": "workspace:^"
   },
   "dependencies": {
-    "driver.js": "^1.4.0",
-    "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1",
+    "@asteby/metacore-lib": "workspace:^",
     "@emoji-mart/data": "^1.2.1",
     "@emoji-mart/react": "^1.1.1",
-    "emoji-mart": "^5.6.0"
+    "driver.js": "^1.4.0",
+    "emoji-mart": "^5.6.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@asteby/metacore-app-providers": "workspace:*",

@@ -12,6 +12,7 @@
 //   POST /assist/:provider/sessions            { input }         → Session
 //   GET  /assist/:provider/sessions/:id                          → Session (poll while working)
 //   POST /assist/:provider/sessions/:id/reply  { key, value }    → Session
+import { unwrapResponse } from '@asteby/metacore-lib/envelope'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Input } from '@asteby/metacore-ui/primitives'
 import { ArrowRight, Check, CheckCircle2, Loader2, RotateCcw, Sparkles, XCircle } from 'lucide-react'
@@ -81,11 +82,6 @@ export interface AssistInterviewProps {
 const POLL_MS = 800
 const THINKING_HINTS = ['Un momento…', 'Sigo trabajando…', 'Casi listo…']
 
-function unwrap(res: any): AssistSession {
-    const d = res?.data?.data ?? res?.data ?? res
-    return d as AssistSession
-}
-
 function useTypewriter(text: string) {
     const [n, setN] = useState(0)
     const reduce = typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -128,7 +124,7 @@ export function AssistInterview({ assist, values, onApply, autoStart = true, eye
         answersRef.current = []
         try {
             const res = await api.post(base, { input: inputPayload })
-            setSession(unwrap(res))
+            setSession(unwrapResponse<AssistSession>(res))
         } catch (e: any) {
             setError(e?.response?.data?.message || e?.message || 'No se pudo iniciar el asistente')
         } finally {
@@ -149,7 +145,7 @@ export function AssistInterview({ assist, values, onApply, autoStart = true, eye
         const t = setInterval(async () => {
             try {
                 const res = await api.get(`${base}/${session.id}`)
-                setSession(unwrap(res))
+                setSession(unwrapResponse<AssistSession>(res))
             } catch (e: any) {
                 if (isGone(e)) {
                     try {
@@ -190,15 +186,15 @@ export function AssistInterview({ assist, values, onApply, autoStart = true, eye
     // Recreate the session and replay every answer (host lost it).
     const recover = useCallback(async () => {
         const res = await api.post(base, { input: inputPayload })
-        let s = unwrap(res)
+        let s = unwrapResponse<AssistSession>(res)
         for (const a of answersRef.current) {
             // wait until the provider is ready for the next answer
             for (let i = 0; i < 120 && s.working && !s.done; i++) {
                 await new Promise(r => setTimeout(r, POLL_MS))
-                s = unwrap(await api.get(`${base}/${s.id}`))
+                s = unwrapResponse<AssistSession>(await api.get(`${base}/${s.id}`))
             }
             if (s.done) break
-            s = unwrap(await api.post(`${base}/${s.id}/reply`, { key: a.key, value: a.value }))
+            s = unwrapResponse<AssistSession>(await api.post(`${base}/${s.id}/reply`, { key: a.key, value: a.value }))
         }
         return s
     }, [api, base, inputPayload])
@@ -212,7 +208,7 @@ export function AssistInterview({ assist, values, onApply, autoStart = true, eye
             try {
                 const res = await api.post(`${base}/${session.id}/reply`, { key, value })
                 answersRef.current = [...answersRef.current, { key, value }]
-                setSession(unwrap(res))
+                setSession(unwrapResponse<AssistSession>(res))
             } catch (e: any) {
                 if (isGone(e)) {
                     try {

@@ -8,6 +8,7 @@
 // `available: false` and the lane simply omits the ⚡ affordance — the board
 // keeps working. All UI text goes through t() with a Spanish defaultValue so a
 // host that ships no `dynamic.automations.*` keys still renders in Spanish.
+import { unwrapResponse } from '@asteby/metacore-lib/envelope'
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Zap, Trash2, Plus } from 'lucide-react'
@@ -127,13 +128,6 @@ export function activeAutomationCount(rules: StageAutomation[] | undefined): num
 // Data hook
 // ---------------------------------------------------------------------------
 
-function unwrap(res: { data: any }): any {
-    const body = res?.data
-    // Envelope {success, data}; tolerate a bare array/object too.
-    if (body && typeof body === 'object' && 'data' in body) return body.data
-    return body
-}
-
 export interface UseStageAutomationsResult {
     /** False when the endpoint is missing/errored — hide the ⚡ affordance. */
     available: boolean
@@ -162,7 +156,7 @@ export function useStageAutomations(model: string): UseStageAutomationsResult {
         setLoading(true)
         try {
             const res = await api.get(`/stage-automations?model=${encodeURIComponent(model)}`)
-            const data = unwrap(res)
+            const data = unwrapResponse<any>(res)
             setRules(Array.isArray(data) ? data : [])
             setAvailable(true)
         } catch {
@@ -182,7 +176,7 @@ export function useStageAutomations(model: string): UseStageAutomationsResult {
         async (draft: NewStageAutomation) => {
             try {
                 const res = await api.post('/stage-automations', draft)
-                const created = unwrap(res) as StageAutomation | null
+                const created = unwrapResponse<any>(res) as StageAutomation | null
                 await load()
                 if (!created) return
             } catch (e) {

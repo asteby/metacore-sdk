@@ -158,44 +158,7 @@ export function useWorkspacePlatformConfig() {
   }
 }
 
-/** Extracts a human message from an axios-style error. */
-export function getApiErrorMessage(err: unknown, fallback = 'Error'): string {
-  if (err == null) return fallback
-
-  const ax = err as {
-    response?: { data?: unknown; status?: number }
-    message?: string
-  }
-  const data = ax.response?.data
-
-  if (typeof data === 'string') {
-    const trimmed = data.trim()
-    if (trimmed) {
-      const title = trimmed.match(/<title>([^<]+)<\/title>/i)?.[1]?.trim()
-      if (title) return title
-      // Avoid dumping full HTML pages into toasts.
-      if (!trimmed.startsWith('<') && trimmed.length < 800) return trimmed
-    }
-  }
-
-  if (data && typeof data === 'object') {
-    const o = data as Record<string, unknown>
-    for (const key of ['message', 'error', 'detail', 'title'] as const) {
-      const v = o[key]
-      if (typeof v === 'string' && v.trim()) return v.trim()
-    }
-    const nested = o.data
-    if (nested && typeof nested === 'object') {
-      const m = (nested as Record<string, unknown>).message
-      if (typeof m === 'string' && m.trim()) return m.trim()
-    }
-  }
-
-  if (typeof ax.message === 'string' && ax.message.trim()) {
-    return ax.message.trim()
-  }
-  return fallback
-}
+export { getApiErrorMessage } from '@asteby/metacore-lib/envelope'
 
 /** Resolves a lucide icon name (any casing/separator) with a fallback glyph. */
 export function resolveIcon(iconName?: string, fallback: LucideIcon = Box): LucideIcon {
