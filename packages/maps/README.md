@@ -92,6 +92,10 @@ Give a point `image` (https URL or same-origin path), `accent` (brand colour) an
 - Markers are buttons with `aria-label`; colour is never the only channel (status text, glyphs); popups are built from text nodes (no HTML injection).
 - `prefers-reduced-motion` makes `fitBounds` / `easeTo` instant. Strings are overridable through `labels` (and `metacore.maps.*` keys in the renderers).
 
+## Logos: tone sampling and CORS
+
+Avatars choose their backing from the logo's own tone, measured on a canvas (`imageTone` from `@asteby/metacore-theme`). A logo served from the **same origin** as the app (e.g. the hub: `https://hub.asteby.com/v1/brand/assets/<hash>` with the SPA at `hub.asteby.com/app`) is sampled without CORS. A logo from **another origin** needs `Access-Control-Allow-Origin` on its host; without it the canvas is tainted, the tone is `'unknown'` and the avatar falls back to the neutral grey `#767676` (shows white and black logos at >= 4.5:1) with a border.
+
 ## Declarative views (kernel contract)
 
 ```ts

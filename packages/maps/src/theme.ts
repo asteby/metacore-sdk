@@ -42,6 +42,9 @@ export function prefersReducedMotion(): boolean {
     return typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
+/** Glyph stacks of every text layer this package adds (one place). MapLibre's default stack 404s on OpenFreeMap; these are the ones it serves. */
+export const TEXT_FONT = { regular: ['Noto Sans Regular'], bold: ['Noto Sans Bold'] } as const
+
 const DARK_CLUSTER = '#56B4E9'
 
 export interface PointsPaint {
