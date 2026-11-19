@@ -76,3 +76,7 @@ export function normalizeRefFieldsForSubmit(
     }
     return out
 }
+
+// Relaciones hijas capturadas al crear (`create_inline`): `_children` viaja con
+// el padre; sin ellas el cuerpo no cambia. Ver `inline-relations.ts`.
+export { withInlineChildren } from './inline-relations'

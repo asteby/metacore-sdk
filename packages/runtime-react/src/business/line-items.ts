@@ -2,6 +2,7 @@
 // Lógica pura del <LineItemsEditor>: cálculo, validación y serialización. El
 // guardado de renglones fallaba (PIT-018) por mandar al API cadenas vacías y
 // claves de UI; `serializeLineItems` es la única puerta de salida hacia el backend.
+import { newDraftKey } from '../draft-rows'
 import { roundMoney, toAmount } from './format'
 import type { ProductVariant } from './product-search'
 
@@ -99,11 +100,9 @@ export interface LineItemsPolicy {
     allowZeroQuantity?: boolean
 }
 
-let seq = 0
-/** Clave de UI única en el proceso. */
+/** Clave de UI única en el proceso (núcleo compartido con las filas borrador). */
 export function newLineKey(): string {
-    seq += 1
-    return `li_${Date.now().toString(36)}_${seq}`
+    return newDraftKey('li')
 }
 
 export function makeLine(partial: Partial<LineItem> = {}): LineItem {
