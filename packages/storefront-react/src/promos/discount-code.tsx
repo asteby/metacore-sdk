@@ -1,10 +1,12 @@
 import { useId, useState, type ElementType, type FormEvent, type FormHTMLAttributes, type ReactNode } from 'react'
 import { useResolvedLocale } from '../locale.js'
 import {
+  couponsBlocked,
   discountCodeFeedback,
   discountCodeMessage,
   normalizeDiscountCode,
   promotionMessages,
+  type CartPromotions,
   type DiscountCodeFeedback,
   type PromotionMessages,
 } from '@asteby/storefront'
@@ -48,6 +50,11 @@ export type DiscountCodeFormProps = {
   removeButtonClassName?: string
   /** Visually hide the label (it stays for screen readers). Default false. */
   hideLabel?: boolean
+  /**
+   * `Cart.promotions`. When the promotion in force blocks shopper coupons (`blocks_codes`) the form renders nothing:
+   * the server rejects them anyway (`promo_blocks_codes`); this only avoids offering a field that cannot work.
+   */
+  promotions?: CartPromotions | null
 }
 
 /**
@@ -72,6 +79,7 @@ export function DiscountCodeForm({
   buttonClassName,
   removeButtonClassName,
   hideLabel = false,
+  promotions,
 }: DiscountCodeFormProps) {
   const locale = useResolvedLocale(localeProp)
   const m = promotionMessages(locale, messages)
@@ -83,6 +91,7 @@ export function DiscountCodeForm({
   const F: FormLike = FormEl ?? PlainForm
   const invalid = formatError || rejected.length > 0 || !!error
   const describedBy = `${id}-msg`
+  if (couponsBlocked(promotions)) return null
 
   const hidden = <input type="hidden" name={intentName} value={intent} />
   return (

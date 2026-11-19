@@ -1485,6 +1485,11 @@ export type CartPromotions = {
   max_reached: boolean
   percent_of_max: number
   combines_with_codes: boolean
+  /**
+   * OPS 1.1.0 (promospec): the rule in force rejects EVERY shopper coupon (reason `promo_blocks_codes`).
+   * The store hides the coupon field (`couponsBlocked`); the server is the source of truth. Absent = false.
+   */
+  blocks_codes?: boolean
   ends_at: string | null
   excluded_line_ids: string[]
   suppressed: { reason: 'code_better' | 'list_final' | 'limit_reached' } | null

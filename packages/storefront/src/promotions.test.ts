@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { createStorefrontClient } from './client.js'
 import { createMockStorefront } from './mock/index.js'
-import { NOTE_MAX_LENGTH, clampPercent, normalizeNote, promoProgressView, promotionMessages, rewardLabel } from './promotions.js'
+import { NOTE_MAX_LENGTH, clampPercent, couponsBlocked, normalizeNote, promoProgressView, promotionMessages, rewardLabel } from './promotions.js'
 import type { CartPromotions, Money } from './types.js'
 
 const mxn = (amount: string): Money => ({ amount, currency_code: 'MXN' })
@@ -141,5 +141,15 @@ describe('client + mock: note, recommendations, promotions', () => {
   })
   it('promotions.list answers', async () => {
     expect(await sf.promotions.list()).toEqual({ nodes: [], announcements: [] })
+  })
+})
+
+describe('couponsBlocked', () => {
+  it('is true only when the rule in force blocks codes', () => {
+    expect(couponsBlocked(promos({ blocks_codes: true }))).toBe(true)
+    expect(couponsBlocked(promos({ blocks_codes: false }))).toBe(false)
+    expect(couponsBlocked(promos())).toBe(false)
+    expect(couponsBlocked(null)).toBe(false)
+    expect(couponsBlocked(undefined)).toBe(false)
   })
 })
