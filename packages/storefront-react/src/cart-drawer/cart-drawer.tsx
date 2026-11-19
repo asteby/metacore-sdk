@@ -1,4 +1,4 @@
-import { useEffect, useId, type ElementType, type ReactNode } from 'react'
+import { useEffect, useId, useRef, useState, type ElementType, type MouseEvent, type ReactNode } from 'react'
 import { formatMoney, type Cart, type CartLine, type Money } from '@asteby/storefront'
 import { CartLineShipDate } from '../availability.js'
 import { useModalDialog } from '../dialog.js'
@@ -6,6 +6,7 @@ import { useResolvedLocale } from '../locale.js'
 import { ProductThumb } from '../ui/product-preview.js'
 import { closeCartDrawer, isQuietOpen, useCartDrawer } from './store.js'
 import { cartOptimistic, useOptimisticCart, type OptimisticNotice, type OptimisticRow } from './optimistic.js'
+import { optimisticSubtotal, scaleLineTotal } from './optimistic-quantity.js'
 
 /** Textos del estado optimista. Por omisión es-MX; la tienda puede traducirlos o cambiarlos. */
 export type CartDrawerOptimisticLabels = {
@@ -79,6 +80,12 @@ export type CartDrawerLineForm = {
   Form: ElementType
   /** Datos en vuelo del formulario, para pintar la cantidad de forma optimista. */
   formData?: FormData | null | undefined
+  /**
+   * Envío programático (`fetcher.submit`). Con él, los clics seguidos en «+»/«−» se agrupan en UNA petición con la cantidad
+   * final (ver `quantityDebounceMs`) y la cantidad, el precio de la línea y el subtotal se mueven al instante. Sin él se
+   * usa el formulario nativo (funciona sin JavaScript) y cada clic es una petición.
+   */
+  submit?: ((target: FormData, options: { method: 'post'; action: string }) => void) | undefined
 }
 
 export type CartDrawerLinkProps = { href: string; className?: string | undefined; children: ReactNode; onClick?: () => void }
@@ -119,6 +126,11 @@ export type CartDrawerProps = {
   locale?: string
   /** Se llama al abrir/cerrar por cualquier vía. */
   onOpenChange?: (open: boolean) => void
+  /**
+   * Espera (ms) tras el último clic en «+»/«−» antes de mandar la cantidad a OPS; 0 = una petición por clic. Solo aplica con
+   * `useLineForm().submit`. Por omisión 250.
+   */
+  quantityDebounceMs?: number
 }
 
 const DEFAULT_FORM: Required<CartDrawerFormContract> = {
@@ -146,6 +158,17 @@ export function CartDrawer(props: CartDrawerProps) {
   const locale = useResolvedLocale(props.locale)
   const { open } = useCartDrawer()
   const opt = useOptimisticCart()
+  // Cantidades que la persona ya eligió y OPS aún no confirmó (línea → cantidad). Mueven la fila y el subtotal al instante.
+  const [drafts, setDrafts] = useState<Record<string, number>>({})
+  const setDraft = (lineId: string, quantity: number | null) =>
+    setDrafts((d) => {
+      if (quantity === null) {
+        if (!(lineId in d)) return d
+        const { [lineId]: _gone, ...rest } = d
+        return rest
+      }
+      return d[lineId] === quantity ? d : { ...d, [lineId]: quantity }
+    })
   const ol = { ...DEFAULT_OPTIMISTIC_LABELS, ...props.optimisticLabels }
   const quiet = open && isQuietOpen()
   const titleId = useId()
@@ -173,6 +196,8 @@ export function CartDrawer(props: CartDrawerProps) {
   const lines = cart?.lines ?? []
   const extraRows = opt.rows.filter((r) => !lines.some((l) => l.merchandise.id === r.variantId))
   const pending = opt.rows.length > 0
+  const syncing = Object.keys(drafts).length > 0
+  const subtotal = cart ? (syncing ? optimisticSubtotal(cart, drafts) : cart.cost.subtotal) : null
   const empty = lines.length === 0 && extraRows.length === 0
   const close = () => closeCartDrawer()
 
@@ -186,6 +211,7 @@ export function CartDrawer(props: CartDrawerProps) {
       onClose={close}
       className={cx.dialog}
       data-sf-cart-drawer=""
+      data-sf-cart-syncing={syncing || undefined}
     >
       <div className={cx.panel} data-sf-cart-panel="">
         <div className={cx.header} data-sf-cart-header="">
@@ -233,7 +259,7 @@ export function CartDrawer(props: CartDrawerProps) {
 
               <ul className={cx.lines} data-sf-cart-lines="">
                 {lines.map((line) => (
-                  <DrawerLine key={line.id} line={line} props={props} money={money} link={link} close={close} pending={pendingByVariant.get(line.merchandise.id)} pendingLabel={ol.adding} />
+                  <DrawerLine key={line.id} line={line} props={props} money={money} link={link} close={close} pending={pendingByVariant.get(line.merchandise.id)} pendingLabel={ol.adding} draft={drafts[line.id]} onDraft={setDraft} />
                 ))}
                 {extraRows.map((row) => (
                   <PendingLine key={`pending-${row.variantId}`} row={row} props={props} money={money} label={ol.adding} />
@@ -249,9 +275,9 @@ export function CartDrawer(props: CartDrawerProps) {
             </div>
 
             <div className={cx.footer} data-sf-cart-footer="">
-              <div className={cx.subtotal} data-sf-cart-subtotal="" aria-busy={pending || undefined}>
+              <div className={cx.subtotal} data-sf-cart-subtotal="" aria-busy={pending || syncing || undefined}>
                 <span className={cx.subtotalLabel}>{labels.subtotal}</span>
-                <span className={cx.subtotalValue} data-sf-cart-subtotal-value="">{cart ? money(cart.cost.subtotal) : null}{pending ? <span data-sf-cart-calculating="">{cart ? ' ' : ''}{ol.calculating}</span> : null}</span>
+                <span className={cx.subtotalValue} data-sf-cart-subtotal-value="" data-sf-optimistic={syncing || undefined}>{subtotal ? money(subtotal) : null}{pending ? <span data-sf-cart-calculating="">{cart ? ' ' : ''}{ol.calculating}</span> : null}</span>
               </div>
               {labels.note ? <p className={cx.note} data-sf-cart-note="">{labels.note}</p> : null}
               <div className={cx.actions} data-sf-cart-actions="">
@@ -274,9 +300,14 @@ function DrawerLine({
   close,
   pending,
   pendingLabel,
+  draft,
+  onDraft,
 }: {
   pending?: OptimisticRow | undefined
   pendingLabel: string
+  /** Cantidad elegida que OPS aún no confirma (undefined = ninguna). */
+  draft?: number | undefined
+  onDraft: (lineId: string, quantity: number | null) => void
   line: CartLine
   props: CartDrawerProps
   money: (m: Money) => ReactNode
@@ -286,9 +317,57 @@ function DrawerLine({
   const { labels, paths, icons, classNames: cx = {} } = props
   const locale = useResolvedLocale(props.locale)
   const f = { ...DEFAULT_FORM, ...props.form }
-  const { Form, formData } = (props.useLineForm ?? useNativeForm)()
-  const quantity = formData ? Number(formData.get(f.quantityField) ?? 0) : line.quantity + (pending?.quantity ?? 0)
-  if (formData && (formData.get(f.intentField) === f.removeIntent || quantity === 0)) return null
+  const { Form, formData, submit } = (props.useLineForm ?? useNativeForm)()
+  const debounceMs = props.quantityDebounceMs ?? 250
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const sawForm = useRef(false)
+  const flush = useRef<(() => void) | null>(null)
+  const quantity = draft ?? (formData ? Number(formData.get(f.quantityField) ?? 0) : line.quantity + (pending?.quantity ?? 0))
+
+  useEffect(() => {
+    if (formData) sawForm.current = true
+  }, [formData])
+  useEffect(() => {
+    if (draft === undefined) return
+    // OPS confirmó la cantidad elegida, o respondió con otra (tope de existencias…): se muestra lo de OPS.
+    if (line.quantity === draft || (sawForm.current && !formData && timer.current === null)) {
+      sawForm.current = false
+      onDraft(line.id, null)
+    }
+  }, [draft, line.quantity, formData]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(
+    () => () => {
+      // Si el cajón se cierra en la espera, la última cantidad elegida no se pierde.
+      if (timer.current) {
+        clearTimeout(timer.current)
+        timer.current = null
+        flush.current?.()
+      }
+    },
+    [],
+  )
+
+  if (formData && formData.get(f.intentField) === f.removeIntent) return null
+  if (draft !== undefined ? draft === 0 : Boolean(formData) && quantity === 0) return null
+
+  const change = (next: number) => (event: MouseEvent<HTMLButtonElement>) => {
+    if (!submit) return // sin envío programático: el formulario nativo manda la cantidad
+    event.preventDefault()
+    const target = Math.max(0, next)
+    onDraft(line.id, target)
+    if (timer.current) clearTimeout(timer.current)
+    const send = () => {
+      timer.current = null
+      const body = new FormData()
+      body.set(f.intentField, f.updateIntent)
+      body.set(f.lineField, line.id)
+      body.set(f.quantityField, String(target))
+      submit(body, { method: 'post', action: paths.cart })
+    }
+    flush.current = send
+    if (debounceMs > 0) timer.current = setTimeout(send, debounceMs)
+    else send()
+  }
 
   const merch = line.merchandise
   const isDefault = props.isDefaultVariantTitle ?? defaultIsDefaultVariant
@@ -298,17 +377,22 @@ function DrawerLine({
   const image = props.renderImage ? props.renderImage(line) : <ProductThumb image={img ?? null} name={title} size={80} decorative />
 
   const imageNode = <span className={cx.image} data-sf-cart-image="">{image}</span>
-  const price = <span className={cx.price} data-sf-cart-price="">{money(line.cost.total)}</span>
+  const optimisticPrice = draft !== undefined && draft !== line.quantity
+  const price = (
+    <span className={cx.price} data-sf-cart-price="" data-sf-optimistic={optimisticPrice || undefined}>
+      {money(optimisticPrice ? scaleLineTotal(line, draft) : line.cost.total)}
+    </span>
+  )
   const controls = (
     <div className={cx.controls} data-sf-cart-controls="">
       <Form method="post" action={paths.cart} className={cx.qty} data-sf-cart-qty="">
         <input type="hidden" name={f.intentField} value={f.updateIntent} />
         <input type="hidden" name={f.lineField} value={line.id} />
-        <button type="submit" name={f.quantityField} value={quantity - 1} aria-label={labels.decrease} className={cx.qtyButton} data-sf-cart-qty-button="">
+        <button type="submit" name={f.quantityField} value={quantity - 1} onClick={change(quantity - 1)} aria-label={labels.decrease} className={cx.qtyButton} data-sf-cart-qty-button="">
           {icons?.decrease ?? <span aria-hidden="true">−</span>}
         </button>
         <span className={cx.qtyValue} aria-live="polite" data-sf-cart-qty-value="">{quantity}</span>
-        <button type="submit" name={f.quantityField} value={quantity + 1} aria-label={labels.increase} className={cx.qtyButton} data-sf-cart-qty-button="">
+        <button type="submit" name={f.quantityField} value={quantity + 1} onClick={change(quantity + 1)} aria-label={labels.increase} className={cx.qtyButton} data-sf-cart-qty-button="">
           {icons?.increase ?? <span aria-hidden="true">+</span>}
         </button>
       </Form>
