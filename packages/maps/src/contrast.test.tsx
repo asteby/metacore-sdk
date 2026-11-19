@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { cleanup, render } from '@testing-library/react'
 import { contrastRatio } from '@asteby/metacore-theme/contrast'
 import { AreaPanel } from './area-panel'
-import { BACKING_UNKNOWN, logoBacking } from './avatar'
+import { BACKING_UNKNOWN, backingOf } from './avatar'
 import { applyLabelContrast } from './label-contrast'
 import { readableOn } from './palette'
 import { pointsToAreas } from './geometry'
@@ -35,23 +35,24 @@ describe('text on data colours', () => {
     })
 })
 
-describe('logo backing', () => {
+describe('logo backing (shared rule logoBacking, see @asteby/metacore-theme)', () => {
     const brand = '#2f7fd6'
+    const tone = (color: string, light: number, dominant = [{ color, weight: 1 }]) => ({ color, luminance: 0, tone: 'mid' as const, lightShare: light, darkShare: 1 - light, midShare: 0, dominant, coverage: 0.3, aspect: 4.69 })
     it("God's Nutrition: a white logo sits on the brand blue, not on a white disc", () => {
-        expect(logoBacking({ color: '#ffffff', luminance: 1, tone: 'light', coverage: 0.3, aspect: 4.69 }, brand)).toBe(brand)
+        expect(backingOf(tone('#ffffff', 1), brand)).toEqual({ fill: brand })
     })
-    it('a black logo is also visible on the brand blue (5.1:1)', () => {
-        expect(logoBacking({ color: '#000000', luminance: 0, tone: 'dark', coverage: 0.3, aspect: 1 }, brand)).toBe(brand)
+    it('a black logo gets a light plate with a brand ring', () => {
+        expect(backingOf(tone('#000000', 0), brand)).toEqual({ fill: '#ffffff', ring: brand })
     })
-    it('a logo of the brand colour moves to a neutral; no brand colour: neutral', () => {
-        expect(logoBacking({ color: brand, luminance: 0.2, tone: 'mid', coverage: 1, aspect: 1 }, brand)).not.toBe(brand)
-        expect(logoBacking({ color: '#ffffff', luminance: 1, tone: 'light', coverage: 1, aspect: 1 })).toBe('#1f2937')
+    it('navy + orange with an orange brand: light plate, orange ring, never an orange fill', () => {
+        const t = tone('#7f4d26', 0, [{ color: '#001144', weight: 0.5 }, { color: '#ff6600', weight: 0.45 }])
+        expect(backingOf(t, '#ff6600')).toEqual({ fill: '#ffffff', ring: '#ff6600' })
     })
     it('unmeasurable (no CORS): the mid grey that shows white and black logos; not measured yet: keep', () => {
-        expect(logoBacking('unknown', brand)).toBe(BACKING_UNKNOWN)
+        expect(backingOf('unknown', brand)).toEqual({ fill: BACKING_UNKNOWN })
         expect(contrastRatio('#ffffff', BACKING_UNKNOWN)).toBeGreaterThanOrEqual(4.5)
         expect(contrastRatio('#000000', BACKING_UNKNOWN)).toBeGreaterThanOrEqual(4.5)
-        expect(logoBacking(undefined, brand)).toBeUndefined()
+        expect(backingOf(undefined, brand)).toBeUndefined()
     })
 })
 

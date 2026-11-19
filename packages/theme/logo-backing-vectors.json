@@ -1,0 +1,397 @@
+{
+  "spec": "docs: packages/theme/README.md \"Fondo de un logo\". pixels = [r,g,b,a,count]; alpha<=40 ignored; shares/weights tolerance 0.001; fill/ring exact (lowercase hex or the brand string as given).",
+  "cases": [
+    {
+      "name": "white wordmark, brand blue: brand fill",
+      "pixels": [
+        [
+          255,
+          255,
+          255,
+          255,
+          300
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          700
+        ]
+      ],
+      "brand": "#2f7fd6",
+      "expect": {
+        "lightShare": 1,
+        "darkShare": 0,
+        "midShare": 0,
+        "dominant": [
+          {
+            "color": "#ffffff",
+            "weight": 1
+          }
+        ],
+        "fill": "#2f7fd6"
+      }
+    },
+    {
+      "name": "white wordmark, brand yellow: dark neutral (yellow does not separate white)",
+      "pixels": [
+        [
+          255,
+          255,
+          255,
+          255,
+          300
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          700
+        ]
+      ],
+      "brand": "#f5c518",
+      "expect": {
+        "lightShare": 1,
+        "darkShare": 0,
+        "midShare": 0,
+        "dominant": [
+          {
+            "color": "#ffffff",
+            "weight": 1
+          }
+        ],
+        "fill": "#1f2937"
+      }
+    },
+    {
+      "name": "white wordmark, no brand: dark neutral",
+      "pixels": [
+        [
+          255,
+          255,
+          255,
+          255,
+          300
+        ]
+      ],
+      "expect": {
+        "lightShare": 1,
+        "darkShare": 0,
+        "midShare": 0,
+        "dominant": [
+          {
+            "color": "#ffffff",
+            "weight": 1
+          }
+        ],
+        "fill": "#1f2937"
+      }
+    },
+    {
+      "name": "black logo, brand blue: light plate with brand ring",
+      "pixels": [
+        [
+          0,
+          0,
+          0,
+          255,
+          400
+        ],
+        [
+          0,
+          0,
+          0,
+          0,
+          600
+        ]
+      ],
+      "brand": "#2f7fd6",
+      "expect": {
+        "lightShare": 0,
+        "darkShare": 1,
+        "midShare": 0,
+        "dominant": [
+          {
+            "color": "#000000",
+            "weight": 1
+          }
+        ],
+        "fill": "#ffffff",
+        "ring": "#2f7fd6"
+      }
+    },
+    {
+      "name": "black logo, no brand: light plate, no ring",
+      "pixels": [
+        [
+          0,
+          0,
+          0,
+          255,
+          400
+        ]
+      ],
+      "expect": {
+        "lightShare": 0,
+        "darkShare": 1,
+        "midShare": 0,
+        "dominant": [
+          {
+            "color": "#000000",
+            "weight": 1
+          }
+        ],
+        "fill": "#ffffff"
+      }
+    },
+    {
+      "name": "navy + orange, brand orange: light plate with orange ring (never orange fill)",
+      "pixels": [
+        [
+          0,
+          26,
+          77,
+          255,
+          500
+        ],
+        [
+          255,
+          102,
+          0,
+          255,
+          450
+        ],
+        [
+          128,
+          64,
+          38,
+          255,
+          30
+        ]
+      ],
+      "brand": "#ff6600",
+      "expect": {
+        "lightShare": 0,
+        "darkShare": 0.5408,
+        "midShare": 0.4592,
+        "dominant": [
+          {
+            "color": "#001144",
+            "weight": 0.5102
+          },
+          {
+            "color": "#ff6600",
+            "weight": 0.4592
+          }
+        ],
+        "fill": "#ffffff",
+        "ring": "#ff6600"
+      }
+    },
+    {
+      "name": "red + black multicolour (7 Leguas style): light plate with brand ring",
+      "pixels": [
+        [
+          200,
+          16,
+          46,
+          255,
+          500
+        ],
+        [
+          0,
+          0,
+          0,
+          255,
+          450
+        ]
+      ],
+      "brand": "#c8102e",
+      "expect": {
+        "lightShare": 0,
+        "darkShare": 1,
+        "midShare": 0,
+        "dominant": [
+          {
+            "color": "#cc1122",
+            "weight": 0.5263
+          },
+          {
+            "color": "#000000",
+            "weight": 0.4737
+          }
+        ],
+        "fill": "#ffffff",
+        "ring": "#c8102e"
+      }
+    },
+    {
+      "name": "red + white + black: nothing separates all three, highest minimum contrast wins (dark), brand ring",
+      "pixels": [
+        [
+          200,
+          16,
+          46,
+          255,
+          400
+        ],
+        [
+          255,
+          255,
+          255,
+          255,
+          300
+        ],
+        [
+          0,
+          0,
+          0,
+          255,
+          300
+        ]
+      ],
+      "brand": "#c8102e",
+      "expect": {
+        "lightShare": 0.3,
+        "darkShare": 0.7,
+        "midShare": 0,
+        "dominant": [
+          {
+            "color": "#cc1122",
+            "weight": 0.4
+          },
+          {
+            "color": "#000000",
+            "weight": 0.3
+          },
+          {
+            "color": "#ffffff",
+            "weight": 0.3
+          }
+        ],
+        "fill": "#1f2937",
+        "ring": "#c8102e"
+      }
+    },
+    {
+      "name": "pale grey logo: plate fails, brand fails, dark neutral wins with brand ring",
+      "pixels": [
+        [
+          192,
+          192,
+          192,
+          255,
+          500
+        ]
+      ],
+      "brand": "#ff6600",
+      "expect": {
+        "lightShare": 0,
+        "darkShare": 0,
+        "midShare": 1,
+        "dominant": [
+          {
+            "color": "#cccccc",
+            "weight": 1
+          }
+        ],
+        "fill": "#1f2937",
+        "ring": "#ff6600"
+      }
+    },
+    {
+      "name": "pale grey logo, brand dark navy: brand fill separates it",
+      "pixels": [
+        [
+          192,
+          192,
+          192,
+          255,
+          500
+        ]
+      ],
+      "brand": "#0b3d91",
+      "expect": {
+        "lightShare": 0,
+        "darkShare": 0,
+        "midShare": 1,
+        "dominant": [
+          {
+            "color": "#cccccc",
+            "weight": 1
+          }
+        ],
+        "fill": "#0b3d91"
+      }
+    },
+    {
+      "name": "yellow logo (light), brand blue: brand fill",
+      "pixels": [
+        [
+          255,
+          215,
+          0,
+          255,
+          500
+        ]
+      ],
+      "brand": "#2f7fd6",
+      "expect": {
+        "lightShare": 1,
+        "darkShare": 0,
+        "midShare": 0,
+        "dominant": [
+          {
+            "color": "#ffdd00",
+            "weight": 1
+          }
+        ],
+        "fill": "#2f7fd6"
+      }
+    },
+    {
+      "name": "unparsable brand is ignored",
+      "pixels": [
+        [
+          0,
+          0,
+          0,
+          255,
+          10
+        ]
+      ],
+      "brand": "not-a-colour",
+      "expect": {
+        "lightShare": 0,
+        "darkShare": 1,
+        "midShare": 0,
+        "dominant": [
+          {
+            "color": "#000000",
+            "weight": 1
+          }
+        ],
+        "fill": "#ffffff"
+      }
+    },
+    {
+      "name": "fully transparent: unknown",
+      "pixels": [
+        [
+          0,
+          0,
+          0,
+          0,
+          50
+        ]
+      ],
+      "brand": "#2f7fd6",
+      "expect": {
+        "tone": "unknown",
+        "fill": "#767676"
+      }
+    }
+  ]
+}

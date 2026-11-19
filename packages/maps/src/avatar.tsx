@@ -14,37 +14,31 @@
 //  - on a failed load the image is removed and the initials show, tinted with the
 //    brand colour (`accent`) or a neutral grey.
 import * as React from 'react'
-import { imageTone, type ImageTone } from '@asteby/metacore-theme/image-tone'
+import { imageTone, logoBacking, LOGO_MIN_CONTRAST, type ImageTone, type LogoBackingResult } from '@asteby/metacore-theme/image-tone'
 import { pickBacking } from '@asteby/metacore-theme/contrast'
 import { readableOn, safeColor } from './palette'
 
 /** Neutral background of initials without a brand colour (white text: contrast 7.5:1). */
 export const NEUTRAL_AVATAR = '#4B5563'
-/** Backings a logo can sit on besides the brand colour: dark, light, and a mid grey that shows BOTH a white and a black logo (≥ 4.5:1 each). */
-export const BACKING_DARK = '#1f2937'
-export const BACKING_LIGHT = '#ffffff'
-export const BACKING_UNKNOWN = '#767676'
-/** Minimum contrast between a logo and its backing (WCAG 1.4.11, non-text). */
-export const LOGO_MIN_CONTRAST = 3
+export { BACKING_UNKNOWN } from '@asteby/metacore-theme/image-tone'
 /** Wider than this (width / height) a logo does not fit a circle: it gets a pill. */
 export const PILL_RATIO = 1.6
 /** A pill is at most this many diameters wide. */
 export const PILL_MAX = 2.6
 
 /**
- * Backing for a logo of tone `tone`: the brand colour when it shows the logo (≥ 3:1), else the dark or the light
- * neutral; a logo whose tone could not be measured (`'unknown'`: no CORS, no canvas) gets the mid grey that shows white and
- * black marks alike. `undefined` is "keep the initial background" (not measured yet).
+ * Backing of a logo: the shared rule `logoBacking` (it separates every dominant colour of the logo, never just the mean).
+ * `undefined` is "keep the initial background" (not measured yet).
  */
-export function logoBacking(tone: ImageTone | undefined, accent?: string): string | undefined {
-    if (tone === undefined) return undefined
-    if (tone === 'unknown') return BACKING_UNKNOWN
-    return pickBacking(tone.color, [safeColor(accent), BACKING_DARK, BACKING_LIGHT].filter((c): c is string => !!c), LOGO_MIN_CONTRAST)
+export function backingOf(tone: ImageTone | undefined, accent?: string): LogoBackingResult | undefined {
+    return tone === undefined ? undefined : logoBacking(tone, safeColor(accent))
 }
 
 /** Ring colour of a backing when the host gives none: white if it reads on the backing (≥ 3:1), else near-black. */
 const ringOn = (bg: string) => pickBacking(bg, ['#ffffff', '#111111'], LOGO_MIN_CONTRAST) ?? '#ffffff'
 
+/** Outer shadow of `.mcm-avatar` (kept when an inline inset ring replaces the stylesheet's box-shadow). */
+const OUTER_SHADOW = '0 0 0 1.5px rgba(17,24,39,.55),0 1px 5px rgba(0,0,0,.45)'
 const MAX_URL = 2048
 const SENTINEL = 'https://same-origin.invalid'
 
@@ -107,10 +101,12 @@ export function avatarNode({ label, image, accent, ring, size = 32, decorative =
     root.style.width = root.style.height = `${size}px`
     root.style.fontSize = `${Math.max(9, Math.round(size * 0.38))}px`
     const bg = safeColor(accent) ?? NEUTRAL_AVATAR
-    const paintBacking = (b: string) => {
+    const paintBacking = (b: string, brandRing?: string) => {
         root.style.background = b
         root.style.color = readableOn(b)
         root.style.borderColor = safeColor(ring) ?? ringOn(b)
+        // A neutral plate carries a thin ring in the brand colour (inside the border, under the logo).
+        root.style.boxShadow = brandRing ? `inset 0 0 0 2px ${brandRing}, ${OUTER_SHADOW}` : ''
     }
     paintBacking(bg)
     if (decorative) root.setAttribute('aria-hidden', 'true')
@@ -146,8 +142,8 @@ export function avatarNode({ label, image, accent, ring, size = 32, decorative =
         })
         // The logo's own tone decides the backing (a white logo needs the brand colour, not a white disc).
         void imageTone(src).then((tone) => {
-            const b = logoBacking(tone, accent)
-            if (b && img.parentNode) paintBacking(b)
+            const b = backingOf(tone, accent)
+            if (b && img.parentNode) paintBacking(b.fill, b.ring)
         })
         img.src = src
         root.appendChild(img)
