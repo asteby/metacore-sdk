@@ -1,5 +1,12 @@
 # @asteby/metacore-starter-vite
 
+## 0.1.356
+
+### Patch Changes
+
+- Updated dependencies [6c3d83b]
+  - @asteby/metacore-theme@2.35.0
+
 ## 0.1.355
 
 ### Patch Changes
