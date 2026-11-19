@@ -31,3 +31,6 @@ export { layoutDiagram } from './diagram'
 export { formatMetric, toneFor } from './metric'
 export { MAP_MAX_POINTS, MAP_PRECISIONS, mapLegend, normalizeMapPoints, type GenUIMapPoint, type MapPrecision } from './map-points'
 export * from './page'
+// Adaptador de host (`genui.host/v1`): GenUIBody para paginas, Tablero y chat.
+export * from './host'
+export * from './host'

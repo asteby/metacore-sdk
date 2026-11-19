@@ -7,6 +7,17 @@ export { AIChatWidget } from './workspace/ai-chat-widget'
 export { AGENT_BAR } from './workspace/agent-surfaces'
 export * from './workspace/agent-workspace-chrome'
 export { Mascot } from './workspace/mascot'
+export {
+  AGENT_UI_CHAT_BLOCKS,
+  AGENT_UI_CHAT_VERBS,
+  agentUiPlainText,
+  createAgentUiResult,
+  inlineOnlySources,
+  prepareAgentUi,
+  type AgentUiHost,
+  type AgentUiOptions,
+  type PreparedAgentUi,
+} from './workspace/agent-ui-result'
 
 // Team chat + calls
 export { TeamChat } from './team-chat'

@@ -271,11 +271,13 @@ function Stats({ block, rows, text, ...rest }: GenUIBlockRendererProps) {
  * v1-shaped blocks keep their v1 view. v2-only fields (`id`, `when`, `fallback`)
  * are dropped and `$t` text is resolved first, so the v1 view sees plain strings.
  */
-function V1Passthrough({ block, text, navigate }: GenUIBlockRendererProps) {
+function V1Passthrough({ block, rows, text, navigate }: GenUIBlockRendererProps) {
   const plain = useMemo(() => resolveText(block, text), [block, text])
-  const { id: _id, when: _w, fallback: _f, ...rest } = plain as GenUIBlock
-  void _id; void _w; void _f
-  return <V1Block block={rest as never} onNavigate={navigate} />
+  const { id: _id, when: _w, fallback: _f, source: _s, ...rest } = plain as GenUIBlock
+  void _id; void _w; void _f; void _s
+  // `source`: the host's rows feed the v1 view (chart/table/...) unless the block carries inline rows.
+  const withRows = rows && rest.rows === undefined ? { ...rest, rows } : rest
+  return <V1Block block={withRows as never} onNavigate={navigate} />
 }
 
 const TEXT_KEYS = new Set(['title', 'text', 'label', 'subtitle', 'body', 'description', 'hint', 'caption', 'value'])
