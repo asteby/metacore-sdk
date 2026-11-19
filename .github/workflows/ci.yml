@@ -24,6 +24,8 @@ jobs:
       # pipeline; extending the intent to CI keeps unrelated PRs green.
       - run: pnpm turbo run build typecheck test --filter=...[origin/main] --filter=!@asteby/metacore-starter-vite --filter=!@asteby/metacore-fullstack-example
       - run: node --test scripts/publish-staged.test.mjs
+      # Sin `.data.data` nuevo: usar @asteby/metacore-lib/envelope.
+      - run: node scripts/check-no-data-data.mjs
 
   # Gate de codegen (MD0.6): los tipos TS de packages/sdk/src/generated salen de
   # los structs Go del kernel fijado en go.mod via tygo. Si alguien sube el

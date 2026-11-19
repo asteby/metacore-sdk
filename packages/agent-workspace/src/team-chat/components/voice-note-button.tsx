@@ -1,3 +1,4 @@
+import { unwrapResponse } from '@asteby/metacore-lib/envelope'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Square, AudioLines } from 'lucide-react'
 import { Button } from '@asteby/metacore-ui'
@@ -95,13 +96,15 @@ export function VoiceNoteButton({
     fd.append('file', blob, filename)
     fd.append('folder', 'chat')
     try {
-      const { data } = await api.post('/upload', fd)
-      if (data?.data?.url) {
+      const up = unwrapResponse<{ url?: string; original_name?: string; mime_type?: string; size?: number } | undefined>(
+          await api.post('/upload', fd),
+        )
+      if (up?.url) {
         onReady({
-          url: data.data.url,
+          url: up.url,
           name: filename,
-          mime_type: data.data.mime_type || blob.type || 'audio/webm',
-          size: data.data.size || blob.size,
+          mime_type: up.mime_type || blob.type || 'audio/webm',
+          size: up.size || blob.size,
           waveform,
           duration,
         })

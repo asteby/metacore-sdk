@@ -12,6 +12,7 @@
  * module normalises by unwrapping `data` when present.
  */
 
+import { unwrapEnvelope } from '@asteby/metacore-lib/envelope'
 import type {
   CheckoutInput,
   CheckoutOutput,
@@ -38,26 +39,6 @@ export interface BillingClientOptions {
   fetcher: BillingFetcher
 }
 
-interface Enveloped<T> {
-  success: boolean
-  data?: T
-  error?: string
-  message?: string
-}
-
-function unwrap<T>(raw: T | Enveloped<T>): T {
-  // Heuristic: if the response carries an explicit `success` boolean we
-  // treat it as the kernel envelope and unwrap `data`. Otherwise it's
-  // the bare ops-legacy shape — return it untouched.
-  if (raw && typeof raw === 'object' && 'success' in (raw as object)) {
-    const env = raw as Enveloped<T>
-    if (env.success === false) {
-      throw new Error(env.message || env.error || 'billing request failed')
-    }
-    return (env.data ?? (raw as unknown)) as T
-  }
-  return raw as T
-}
 
 /** Concrete billing client built around a host-supplied fetcher. */
 export class BillingClient {
@@ -71,28 +52,28 @@ export class BillingClient {
 
   /** GET /billing/subscription. */
   async getSubscription(): Promise<SubscriptionState> {
-    const raw = await this.http.get<SubscriptionState | Enveloped<SubscriptionState>>(
+    const raw = await this.http.get<SubscriptionState>(
       `${this.basePath}/subscription`,
     )
-    return unwrap(raw)
+    return unwrapEnvelope(raw)
   }
 
   /** POST /billing/checkout-session. */
   async createCheckoutSession(input: CheckoutInput): Promise<CheckoutOutput> {
-    const raw = await this.http.post<CheckoutOutput | Enveloped<CheckoutOutput>>(
+    const raw = await this.http.post<CheckoutOutput>(
       `${this.basePath}/checkout-session`,
       input,
     )
-    return unwrap(raw)
+    return unwrapEnvelope(raw)
   }
 
   /** POST /billing/portal-session. */
   async createPortalSession(input: PortalInput = {}): Promise<PortalOutput> {
-    const raw = await this.http.post<PortalOutput | Enveloped<PortalOutput>>(
+    const raw = await this.http.post<PortalOutput>(
       `${this.basePath}/portal-session`,
       input,
     )
-    return unwrap(raw)
+    return unwrapEnvelope(raw)
   }
 
   /**

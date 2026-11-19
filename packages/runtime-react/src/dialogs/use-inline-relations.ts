@@ -6,6 +6,7 @@
 // mismo contrato que usa el modal del hijo (requeridos, opciones, `ref`);
 // si no responde, las columnas de `/metadata/table/<through>` pasan por
 // `deriveRelationFormFields`, el mecanismo que ya usa `<DynamicRelation>`.
+import { unwrapResponse } from '@asteby/metacore-lib/envelope'
 import { useEffect, useState } from 'react'
 import { useApi } from '../api-context'
 import { deriveRelationFormFields } from '../dynamic-relation-helpers'
@@ -18,8 +19,6 @@ export interface InlineRelationsState<F> {
     /** true mientras se cargan relaciones/campos. */
     loading: boolean
 }
-
-const unwrap = (res: any) => res?.data?.data ?? res?.data
 
 export function useInlineRelations<F extends { key: string; hidden?: boolean; readonly?: boolean; type?: string }>(
     opts: { enabled: boolean; model: string; localizeLabel: (label: string) => string },
@@ -40,7 +39,7 @@ export function useInlineRelations<F extends { key: string; hidden?: boolean; re
         setState((s) => ({ ...s, loading: true }))
         ;(async () => {
             try {
-                const meta = unwrap(await api.get(`/metadata/table/${model}`))
+                const meta = unwrapResponse<any>(await api.get(`/metadata/table/${model}`))
                 const rels: RelationMeta[] = (Array.isArray(meta?.relations) ? meta.relations : [])
                     .filter(isCreateInline)
                     .map((rel: RelationMeta) => ({ ...rel, label: rel.label ? localize.fn(rel.label) : rel.name }))
@@ -49,14 +48,14 @@ export function useInlineRelations<F extends { key: string; hidden?: boolean; re
                     rels.map(async (rel) => {
                         let raw: any[] | undefined
                         try {
-                            const m = unwrap(await api.get(`/metadata/modal/${rel.through}`))
+                            const m = unwrapResponse<any>(await api.get(`/metadata/modal/${rel.through}`))
                             if (Array.isArray(m?.fields)) raw = m.fields
                         } catch {
                             /* cae a la metadata de tabla */
                         }
                         if (!raw) {
                             try {
-                                const m = unwrap(await api.get(`/metadata/table/${rel.through}`))
+                                const m = unwrapResponse<any>(await api.get(`/metadata/table/${rel.through}`))
                                 raw = deriveRelationFormFields(m, rel.foreign_key) as any[]
                             } catch {
                                 raw = []

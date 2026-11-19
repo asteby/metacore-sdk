@@ -1,3 +1,4 @@
+import { unwrapResponse } from '@asteby/metacore-lib/envelope'
 import { useState, useRef, useEffect, useCallback, type ClipboardEvent } from 'react'
 import { useLocation, Link } from '@tanstack/react-router'
 import {
@@ -362,13 +363,15 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
       fd.append('file', file)
       fd.append('folder', 'chat')
       try {
-        const { data } = await api.post('/upload', fd)
-        if (data?.data?.url) {
+        const up = unwrapResponse<{ url?: string; original_name?: string; mime_type?: string; size?: number } | undefined>(
+          await api.post('/upload', fd),
+        )
+        if (up?.url) {
           uploaded.push({
-            url: data.data.url,
-            name: data.data.original_name || file.name,
-            mime_type: data.data.mime_type || file.type,
-            size: data.data.size || file.size,
+            url: up.url,
+            name: up.original_name || file.name,
+            mime_type: up.mime_type || file.type,
+            size: up.size || file.size,
           })
         }
       } catch {

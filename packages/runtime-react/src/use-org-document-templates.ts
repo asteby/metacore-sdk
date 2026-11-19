@@ -13,6 +13,7 @@
 //   POST   /api/settings/templates/preview       → application/pdf
 //
 // ApiClient is a PEER via <ApiProvider> (same one usePrintDocument uses).
+import { unwrapResponse } from '@asteby/metacore-lib/envelope'
 import { useCallback, useMemo } from 'react'
 import {
     useMutation,
@@ -45,19 +46,13 @@ export function orgDocumentTemplateKey(addonKey: string, documentKey: string) {
     return ['org-document-templates', addonKey, documentKey] as const
 }
 
-function unwrapData<T>(res: { data?: unknown }): T {
-    const body = (res as { data: any }).data
-    const values = body?.success ? body.data : body
-    return values as T
-}
-
 export function useOrgDocumentCatalog(opts?: { enabled?: boolean }) {
     const api = useApi()
     const query = useQuery<OrgDocumentCatalogItem[]>({
         queryKey: orgDocumentCatalogKey(),
         queryFn: async () => {
             const res = await api.get('/settings/templates')
-            const data = unwrapData<OrgDocumentCatalogItem[] | null>(res)
+            const data = unwrapResponse<OrgDocumentCatalogItem[] | null>(res)
             return Array.isArray(data) ? data : []
         },
         staleTime: 30_000,
@@ -85,7 +80,7 @@ export function useOrgDocumentTemplate(
             const res = await api.get(
                 `/settings/templates/${encodeURIComponent(addonKey)}/${encodeURIComponent(documentKey)}`,
             )
-            return unwrapData<OrgDocumentTemplateDetail>(res)
+            return unwrapResponse<OrgDocumentTemplateDetail>(res)
         },
         enabled:
             (opts?.enabled ?? true) && !!addonKey && !!documentKey,
@@ -113,7 +108,7 @@ export function useSaveOrgDocumentTemplate() {
                 `/settings/templates/${encodeURIComponent(addonKey)}/${encodeURIComponent(documentKey)}`,
                 { html, paper },
             )
-            return unwrapData<OrgDocumentTemplateDetail>(res)
+            return unwrapResponse<OrgDocumentTemplateDetail>(res)
         },
         onSuccess: (_data, vars) => {
             void qc.invalidateQueries({ queryKey: orgDocumentCatalogKey() })
@@ -136,7 +131,7 @@ export function useResetOrgDocumentTemplate() {
             const res = await api.delete(
                 `/settings/templates/${encodeURIComponent(addonKey)}/${encodeURIComponent(documentKey)}`,
             )
-            return unwrapData<OrgDocumentTemplateDetail>(res)
+            return unwrapResponse<OrgDocumentTemplateDetail>(res)
         },
         onSuccess: (_data, vars) => {
             void qc.invalidateQueries({ queryKey: orgDocumentCatalogKey() })

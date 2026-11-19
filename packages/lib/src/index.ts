@@ -75,4 +75,23 @@ export {
 } from './http-errors'
 export type { HtmlResponseErrorInit, DetectHtmlInput } from './http-errors'
 
+export {
+  ApiError,
+  isApiError,
+  isEnvelope,
+  unwrapEnvelope,
+  unwrapResponse,
+  unwrapList,
+  unwrapListResponse,
+  getApiErrorMessage,
+  isAbortError,
+} from './envelope'
+export type {
+  Envelope,
+  EnvelopeMeta,
+  ResponseLike,
+  ApiErrorInit,
+  UnwrappedList,
+} from './envelope'
+
 export { showSubmittedData } from './show-submitted-data'

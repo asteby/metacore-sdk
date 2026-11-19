@@ -1,3 +1,4 @@
+import { unwrapResponse } from '@asteby/metacore-lib/envelope'
 import { lazy, Suspense, useState, useEffect, useCallback, useRef, useMemo, type ClipboardEvent } from 'react'
 import { Fragment } from 'react/jsx-runtime'
 import { useTranslation } from 'react-i18next'
@@ -429,13 +430,15 @@ export function TeamChat() {
       fd.append('file', file)
       fd.append('folder', 'chat')
       try {
-        const { data } = await api.post('/upload', fd)
-        if (data?.data?.url) {
+        const up = unwrapResponse<{ url?: string; original_name?: string; mime_type?: string; size?: number } | undefined>(
+          await api.post('/upload', fd),
+        )
+        if (up?.url) {
           uploaded.push({
-            url: data.data.url,
-            name: data.data.original_name || file.name,
-            mime_type: data.data.mime_type || file.type,
-            size: data.data.size || file.size,
+            url: up.url,
+            name: up.original_name || file.name,
+            mime_type: up.mime_type || file.type,
+            size: up.size || file.size,
           })
         }
       } catch {

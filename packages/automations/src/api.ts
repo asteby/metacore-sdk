@@ -1,3 +1,4 @@
+import { unwrapResponse } from '@asteby/metacore-lib/envelope'
 import type {
   Automation,
   AutomationCatalog,
@@ -9,8 +10,6 @@ import type {
   RunNowResult,
 } from './types'
 
-type Envelope<T> = { success?: boolean; data: T; message?: string }
-const unwrap = <T>(res: { data?: unknown }): T => (res.data as Envelope<T>).data
 
 export interface AutomationsApi {
   list(filter?: { status?: AutomationStatus; kind?: AutomationKind; all?: boolean }): Promise<Automation[]>
@@ -37,17 +36,17 @@ export function createAutomationsApi(http: AutomationsHttpClient, opts: { basePa
   }
   const id = (v: string) => encodeURIComponent(v)
   return {
-    list: async (f) => unwrap<Automation[]>(await http.get(base + qs(f))) ?? [],
-    get: async (v) => unwrap<Automation>(await http.get(`${base}/${id(v)}`)),
-    runs: async (v, limit = 30) => unwrap<AutomationRun[]>(await http.get(`${base}/${id(v)}/runs?limit=${limit}`)) ?? [],
-    catalog: async () => unwrap<AutomationCatalog>(await http.get(`${base}/catalog`)),
-    create: async (body) => unwrap<Automation>(await http.post(base, body)),
-    update: async (v, body) => unwrap<Automation>(await http.patch(`${base}/${id(v)}`, body)),
-    confirm: async (v) => unwrap<Automation>(await http.post(`${base}/${id(v)}/confirm`)),
-    pause: async (v) => unwrap<Automation>(await http.post(`${base}/${id(v)}/pause`)),
-    resume: async (v) => unwrap<Automation>(await http.post(`${base}/${id(v)}/resume`)),
-    archive: async (v) => unwrap<Automation>(await http.delete(`${base}/${id(v)}`)),
-    run: async (v, dryRun = true) => unwrap<RunNowResult>(await http.post(`${base}/${id(v)}/run`, { dry_run: dryRun })),
+    list: async (f) => unwrapResponse<Automation[]>(await http.get(base + qs(f))) ?? [],
+    get: async (v) => unwrapResponse<Automation>(await http.get(`${base}/${id(v)}`)),
+    runs: async (v, limit = 30) => unwrapResponse<AutomationRun[]>(await http.get(`${base}/${id(v)}/runs?limit=${limit}`)) ?? [],
+    catalog: async () => unwrapResponse<AutomationCatalog>(await http.get(`${base}/catalog`)),
+    create: async (body) => unwrapResponse<Automation>(await http.post(base, body)),
+    update: async (v, body) => unwrapResponse<Automation>(await http.patch(`${base}/${id(v)}`, body)),
+    confirm: async (v) => unwrapResponse<Automation>(await http.post(`${base}/${id(v)}/confirm`)),
+    pause: async (v) => unwrapResponse<Automation>(await http.post(`${base}/${id(v)}/pause`)),
+    resume: async (v) => unwrapResponse<Automation>(await http.post(`${base}/${id(v)}/resume`)),
+    archive: async (v) => unwrapResponse<Automation>(await http.delete(`${base}/${id(v)}`)),
+    run: async (v, dryRun = true) => unwrapResponse<RunNowResult>(await http.post(`${base}/${id(v)}/run`, { dry_run: dryRun })),
   }
 }
 

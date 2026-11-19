@@ -52,6 +52,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@asteby/metacore-genui": "workspace:^"
+    "@asteby/metacore-genui": "workspace:^",
+    "@asteby/metacore-lib": "workspace:^"
   }
 }
