@@ -38,7 +38,7 @@ export type OptimisticRow = {
   actionIds: string[]
 }
 
-export type OptimisticNotice = { id: string; title: string; reason: string }
+export type OptimisticNotice = { id: string; title: string; reason: string; /** Texto ya armado (avisos que no son «no pudimos agregar»). */ text?: string }
 
 export type OptimisticSnapshot = {
   rows: readonly OptimisticRow[]
@@ -150,6 +150,12 @@ export const cartOptimistic = {
   /** Quita la acción sin avisar (el componente que la lanzó se desmontó). */
   discard(id: string) {
     if (drop(id)) emit()
+  },
+
+  /** Aviso con texto propio (p. ej. el tope de existencias al subir la cantidad), sin tocar filas ni contadores. */
+  warn(text: string, title = '') {
+    notices = [...notices, { id: `n-${++seq}`, title, reason: '', text }]
+    emit()
   },
 
   dismissNotice(id: string) {
