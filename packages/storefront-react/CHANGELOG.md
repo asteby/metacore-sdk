@@ -1,5 +1,12 @@
 # @asteby/storefront-react
 
+## 0.65.0
+
+### Minor Changes
+
+- c3b9fda: Mini-carrito (`CartDrawer`): al sumar o restar, la cantidad, el precio de la línea y el subtotal se mueven al instante y los clics seguidos se agrupan en UNA petición con la cantidad final (por omisión 250 ms; `quantityDebounceMs`, 0 = una por clic). Antes solo la cantidad era optimista: el precio, el subtotal y las barras esperaban a OPS y cada clic mandaba su propia petición. Se activa con el nuevo `useLineForm().submit` (`fetcher.submit`); sin él queda el formulario nativo (funciona sin JavaScript) como hasta ahora. El cálculo solo escala por la cantidad lo que OPS ya mandó (precio de línea y subtotal, detectando si el subtotal viene antes o después del descuento de línea): los descuentos, el envío y el total siguen saliendo solo de OPS, que reemplaza el estimado al responder. Nuevos `data-sf-optimistic` (precio y subtotal estimados) y `data-sf-cart-syncing` (cajón con un cambio en vuelo) para que las tiendas atenúen lo que depende de OPS (barras de descuento).
+- c3b9fda: Nuevo `@asteby/storefront-react/revalidate` (`createStoreRevalidation`): una sola política de `shouldRevalidate` para todas las tiendas. `skipOnCartAction` (rutas de catálogo y contenido) no vuelve a pedir a OPS lo que una acción del carrito o del boletín no pudo cambiar: antes cada «+/−» del mini-carrito repetía el loader de la ficha del producto (recomendaciones, reseñas, ~1 s). `skipOnSearchOnlyChange` (root) no revalida tienda, tema, menús ni carrito al filtrar, ordenar o paginar. Sustituye la copia que tenía `store-protekauto` y la que faltaba en las demás; cada tienda solo declara cuáles de sus acciones son del carrito.
+
 ## 0.64.0
 
 ### Minor Changes
