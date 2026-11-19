@@ -19,6 +19,15 @@ const fromMinor = (minor: number, digits: number, currency: string): Money => ({
   currency_code: currency,
 })
 
+/**
+ * Cantidad máxima que se puede pedir de una línea según lo que OPS dijo que hay (`quantity_available`); `null` = no se sabe
+ * o no se controla el stock: sin tope. Pedir más no tiene caso: OPS lo rechazaría.
+ */
+export function stockCap(line: CartLine): number | null {
+  const available = (line.merchandise as { quantity_available?: number | null }).quantity_available
+  return typeof available === 'number' && Number.isFinite(available) ? Math.max(0, Math.floor(available)) : null
+}
+
 /** Precio de la línea (el que muestra el cajón) para `quantity` piezas: escala el total de OPS por la cantidad. */
 export function scaleLineTotal(line: CartLine, quantity: number): Money {
   const total = line.cost.total

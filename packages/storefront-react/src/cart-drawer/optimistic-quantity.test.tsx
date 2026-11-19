@@ -2,8 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { Cart, CartLine } from '@asteby/storefront'
-import { CartDrawer, closeCartDrawer, openCartDrawer, type CartDrawerLabels, type CartDrawerPaths } from './index.js'
-import { optimisticSubtotal, scaleLineTotal } from './optimistic-quantity.js'
+import { CartDrawer, cartOptimistic, closeCartDrawer, openCartDrawer, type CartDrawerLabels, type CartDrawerPaths } from './index.js'
+import { optimisticSubtotal, scaleLineTotal, stockCap } from './optimistic-quantity.js'
 
 const mxn = (amount: string) => ({ amount, currency_code: 'MXN' })
 const labels: CartDrawerLabels = {
@@ -186,5 +186,83 @@ describe('CartDrawer: sin envío programático (formulario nativo)', () => {
     const allowed = fireEvent.click(plus)
     expect(allowed).toBe(true) // no se llamó a preventDefault
     expect(document.querySelector('[data-sf-cart-qty-value]')?.textContent).toBe('2')
+  })
+})
+
+const withStock = (l: CartLine, available: number | null): CartLine =>
+  ({ ...l, merchandise: { ...(l.merchandise as object), quantity_available: available } }) as unknown as CartLine
+
+describe('tope de existencias', () => {
+  it('stockCap: entero sin negativos; null o no numérico = sin tope', () => {
+    expect(stockCap(withStock(line('1', 1, '10.00'), 3))).toBe(3)
+    expect(stockCap(withStock(line('1', 1, '10.00'), 2.9))).toBe(2)
+    expect(stockCap(withStock(line('1', 1, '10.00'), -4))).toBe(0)
+    expect(stockCap(withStock(line('1', 1, '10.00'), null))).toBeNull()
+    expect(stockCap(line('1', 1, '10.00'))).toBeNull()
+  })
+
+  describe('en el cajón', () => {
+    beforeEach(() => {
+      vi.useFakeTimers()
+      cartOptimistic.reset()
+    })
+    afterEach(() => {
+      act(() => closeCartDrawer())
+      cleanup()
+      cartOptimistic.reset()
+      vi.useRealTimers()
+    })
+    const mount = (available: number | null, quantity: number, extra: Record<string, unknown> = {}) => {
+      const submit = vi.fn()
+      const Form = (p: Record<string, unknown>) => <form {...p} />
+      render(<CartDrawer cart={cart([withStock(line('1', quantity, '100.00'), available)], '100.00')} labels={labels} paths={paths} useLineForm={() => ({ Form, formData: null, submit })} {...extra} />)
+      act(() => openCartDrawer())
+      return submit
+    }
+
+    it('no deja subir más de lo que hay: no manda nada, no cambia la cantidad y avisa', () => {
+      const submit = mount(3, 3)
+      fireEvent.click(screen.getByLabelText('Más'))
+      act(() => void vi.advanceTimersByTime(500))
+      expect(submit).not.toHaveBeenCalled()
+      expect(document.querySelector('[data-sf-cart-qty-value]')?.textContent).toBe('3')
+      expect(document.querySelector('[data-sf-cart-notice]')?.textContent).toContain('Solo hay 3 disponibles de Producto 1')
+    })
+
+    it('hasta el tope sí sube', () => {
+      const submit = mount(3, 2)
+      fireEvent.click(screen.getByLabelText('Más'))
+      act(() => void vi.advanceTimersByTime(250))
+      expect((submit.mock.calls[0]?.[0] as FormData).get('quantity')).toBe('3')
+      expect(document.querySelector('[data-sf-cart-notice]')).toBeNull()
+    })
+
+    it('bajar siempre se permite, aunque la línea ya esté por encima del tope', () => {
+      const submit = mount(1, 3)
+      fireEvent.click(screen.getByLabelText('Menos'))
+      act(() => void vi.advanceTimersByTime(250))
+      expect((submit.mock.calls[0]?.[0] as FormData).get('quantity')).toBe('2')
+    })
+
+    it('sin dato de stock no hay tope', () => {
+      const submit = mount(null, 5)
+      fireEvent.click(screen.getByLabelText('Más'))
+      act(() => void vi.advanceTimersByTime(250))
+      expect((submit.mock.calls[0]?.[0] as FormData).get('quantity')).toBe('6')
+    })
+
+    it('onQuantityLimit sustituye al aviso del cajón', () => {
+      const onQuantityLimit = vi.fn()
+      mount(2, 2, { onQuantityLimit })
+      fireEvent.click(screen.getByLabelText('Más'))
+      expect(onQuantityLimit).toHaveBeenCalledWith(expect.objectContaining({ max: 2 }))
+      expect(document.querySelector('[data-sf-cart-notice]')).toBeNull()
+    })
+
+    it('agotado (0) usa el texto de agotado', () => {
+      mount(0, 1)
+      fireEvent.click(screen.getByLabelText('Más'))
+      expect(document.querySelector('[data-sf-cart-notice]')?.textContent).toContain('se agotó')
+    })
   })
 })

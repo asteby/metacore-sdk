@@ -6,7 +6,7 @@ import { useResolvedLocale } from '../locale.js'
 import { ProductThumb } from '../ui/product-preview.js'
 import { closeCartDrawer, isQuietOpen, useCartDrawer } from './store.js'
 import { cartOptimistic, useOptimisticCart, type OptimisticNotice, type OptimisticRow } from './optimistic.js'
-import { optimisticSubtotal, scaleLineTotal } from './optimistic-quantity.js'
+import { optimisticSubtotal, scaleLineTotal, stockCap } from './optimistic-quantity.js'
 
 /** Textos del estado optimista. Por omisión es-MX; la tienda puede traducirlos o cambiarlos. */
 export type CartDrawerOptimisticLabels = {
@@ -18,6 +18,8 @@ export type CartDrawerOptimisticLabels = {
   calculating: string
   /** Aviso de error: «No pudimos agregar X: motivo». */
   failed: (title: string, reason: string) => string
+  /** Aviso al pedir más de lo que hay: «Solo hay N disponibles de X». */
+  limit: (title: string, max: number) => string
   dismiss: string
 }
 
@@ -26,6 +28,7 @@ export const DEFAULT_OPTIMISTIC_LABELS: CartDrawerOptimisticLabels = {
   added: 'Agregado al carrito',
   calculating: 'calculando…',
   failed: (title, reason) => `No pudimos agregar ${title}: ${reason}`,
+  limit: (title, max) => (max <= 0 ? `${title} se agotó.` : max === 1 ? `Solo hay 1 disponible de ${title}.` : `Solo hay ${max} disponibles de ${title}.`),
   dismiss: 'Descartar aviso',
 }
 
@@ -131,6 +134,11 @@ export type CartDrawerProps = {
    * `useLineForm().submit`. Por omisión 250.
    */
   quantityDebounceMs?: number
+  /**
+   * Se llama cuando «+» pediría más de lo que OPS dice que hay (`quantity_available`): no se manda nada. Por omisión el cajón
+   * avisa con su propio aviso («Solo hay N disponibles…»). Solo aplica con `useLineForm().submit`.
+   */
+  onQuantityLimit?: (info: { line: CartLine; max: number }) => void
 }
 
 const DEFAULT_FORM: Required<CartDrawerFormContract> = {
@@ -353,6 +361,16 @@ function DrawerLine({
   const change = (next: number) => (event: MouseEvent<HTMLButtonElement>) => {
     if (!submit) return // sin envío programático: el formulario nativo manda la cantidad
     event.preventDefault()
+    const cap = stockCap(line)
+    if (cap !== null && next > cap && next > line.quantity) {
+      // Más de lo que hay: no se manda; se avisa en vez de mostrar una cantidad que OPS rechazaría.
+      if (props.onQuantityLimit) props.onQuantityLimit({ line, max: cap })
+      else {
+        const name = line.merchandise.product.title
+        cartOptimistic.warn({ ...DEFAULT_OPTIMISTIC_LABELS, ...props.optimisticLabels }.limit(name, cap), name)
+      }
+      return
+    }
     const target = Math.max(0, next)
     onDraft(line.id, target)
     if (timer.current) clearTimeout(timer.current)
@@ -465,7 +483,7 @@ function OptimisticNotices({ notices, labels, classNames: cx }: { notices: reado
     <div role="alert" aria-live="assertive" data-sf-cart-notices="" className={cx.notices}>
       {notices.map((n) => (
         <p key={n.id} data-sf-cart-notice="">
-          <span>{labels.failed(n.title, n.reason)}</span>
+          <span>{n.text ?? labels.failed(n.title, n.reason)}</span>
           <button type="button" onClick={() => cartOptimistic.dismissNotice(n.id)} aria-label={labels.dismiss} data-sf-cart-notice-dismiss="">
             <span aria-hidden="true">✕</span>
           </button>
