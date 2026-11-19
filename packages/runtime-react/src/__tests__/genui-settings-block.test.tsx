@@ -7,6 +7,7 @@ vi.mock('react-i18next', () => {
     return { useTranslation: () => ({ t, i18n: { language: 'es', exists: () => false } }) }
 })
 
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { GenUI } from '@asteby/metacore-genui'
 import { ApiProvider } from '../api-context'
 import { coerceSettings, registerGenUISettingsBlock, settingsToFields } from '../genui'
@@ -50,9 +51,11 @@ describe('genui settings block (pilot)', () => {
             delete: vi.fn(),
         }
         render(
-            <ApiProvider client={client as never}>
-                <GenUI spec={{ version: 'genui/v2', blocks: [{ type: 'settings', addon: 'inventory', scope: 'org' }] }} />
-            </ApiProvider>,
+            <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                <ApiProvider client={client as never}>
+                    <GenUI spec={{ version: 'genui/v2', blocks: [{ type: 'settings', addon: 'inventory', scope: 'org' }] }} />
+                </ApiProvider>
+            </QueryClientProvider>,
         )
         const lines = await screen.findByRole('spinbutton')
         expect(screen.queryByText(/Token/)).toBeNull()

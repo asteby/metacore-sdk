@@ -60,6 +60,7 @@ import {
   type BlockResult,
   type ConnectorFormBlock,
 } from './connector-blocks-model'
+import { useAddonSettings } from '../use-addon-settings'
 import {
   isSecretCredential,
   missingRequired,
@@ -938,6 +939,11 @@ export function AddonConfigSurface({
   // ones the operator touched are saved (an untouched key keeps inheriting the org
   // value) and «Heredar de la organización» clears an override.
   const [target, setTarget] = useState<'org' | 'branch'>('org')
+  // One loader for `GET /addons/:key/settings` (branch-aware); `reload()` always hits the network.
+  const addonSettings = useAddonSettings(addon.addon_key, {
+    branchId: target === 'branch' && activeBranch ? activeBranchId : null,
+    enabled: false,
+  })
   const [overrides, setOverrides] = useState<Record<string, unknown>>({})
   const [touched, setTouched] = useState<Set<string>>(new Set())
   const [cleared, setCleared] = useState<Set<string>>(new Set())
@@ -1056,17 +1062,14 @@ export function AddonConfigSurface({
     setLoading(true)
     setTouched(new Set())
     setCleared(new Set())
-    const branchQuery =
-      target === 'branch' && activeBranch ? `?branch_id=${encodeURIComponent(activeBranchId)}` : ''
-    api
-      .get(`/addons/${addon.addon_key}/settings${branchQuery}`)
+    addonSettings
+      .reload()
       .then((res) => {
-        setSettingsValues(res.data?.data || {})
-        setOverrides(res.data?.overrides || {})
-        const defs: AddonSettingDef[] =
-          res.data?.definitions?.length > 0
-            ? res.data.definitions
-            : (addon.manifest.settings_defs ?? [])
+        setSettingsValues(res.values || {})
+        setOverrides(res.overrides || {})
+        const defs = (
+          res.definitions.length > 0 ? res.definitions : (addon.manifest.settings_defs ?? [])
+        ) as AddonSettingDef[]
         setDefinitions(defs)
       })
       .catch(() => {
@@ -1129,11 +1132,9 @@ export function AddonConfigSurface({
       /* keep what is on screen */
     }
     try {
-      const branchQuery =
-        target === 'branch' && activeBranch ? `?branch_id=${encodeURIComponent(activeBranchId)}` : ''
-      const res = await api.get(`/addons/${addon.addon_key}/settings${branchQuery}`)
-      setSettingsValues(res.data?.data || {})
-      setOverrides(res.data?.overrides || {})
+      const res = await addonSettings.reload()
+      setSettingsValues(res.values || {})
+      setOverrides(res.overrides || {})
     } catch {
       /* keep what is on screen */
     }

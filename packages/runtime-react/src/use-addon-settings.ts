@@ -4,8 +4,9 @@
 //
 // The host (ops) persists settings per org on `AddonInstallation.settings`
 // (jsonb) and exposes:
-//   GET  /api/addons/:key/settings  → { success, data: { <key>: <value> } }
-//   PUT  /api/addons/:key/settings  → body = object of values
+//   GET  /addons/:key/settings  → { success, data: { <key>: <value> }, definitions?, overrides? }
+//   PUT  /addons/:key/settings  → body = object of values
+// (paths are relative to the host api client's baseURL, like every other call.)
 // A setting the org has never saved simply isn't present in `data`; the
 // caller supplies the fallback via `opts.defaults` (which mirror the
 // manifest's `settings[].default`). runtime-react has no access to the
@@ -19,13 +20,42 @@
 // Server-side gating (wasm/Go backends) is out of scope here: a backend that
 // must gate behaviour on org config reads the same `AddonInstallation.settings`
 // jsonb directly — this hook is the client-read half of that contract.
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import {
     useMutation,
     useQuery,
     useQueryClient,
 } from '@tanstack/react-query'
 import { useApi } from './api-context'
+import type { SettingDefLike } from './genui/settings-block'
+
+/** What `GET /addons/:key/settings` answers, normalised. */
+export interface AddonSettingsPayload<T = Record<string, unknown>> {
+    /** Stored values (org, or the branch's resolution when `branchId` is given). */
+    values: Partial<T>
+    /** The manifest's setting definitions the host serves alongside the values. */
+    definitions: SettingDefLike[]
+    /** Branch overrides (only meaningful with `branchId`). */
+    overrides: Record<string, unknown>
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
+
+/**
+ * Normalises the settings response. Envelope `{ success?, data, definitions?,
+ * overrides? }` (definitions/overrides are siblings of `data`); a bare
+ * `{ key: value }` map is accepted too. Pure + exported for tests.
+ */
+export function parseAddonSettingsBody<T = Record<string, unknown>>(body: unknown): AddonSettingsPayload<T> {
+    if (isRecord(body) && ('data' in body || 'success' in body)) {
+        return {
+            values: (isRecord(body.data) ? body.data : {}) as Partial<T>,
+            definitions: Array.isArray(body.definitions) ? (body.definitions as SettingDefLike[]) : [],
+            overrides: isRecord(body.overrides) ? body.overrides : {},
+        }
+    }
+    return { values: (isRecord(body) ? body : {}) as Partial<T>, definitions: [], overrides: {} }
+}
 
 /** Stable react-query key for an addon's per-org settings (per branch when given). */
 export function addonSettingsKey(addonKey: string, branchId?: string | null) {
@@ -38,7 +68,9 @@ export function addonSettingsKey(addonKey: string, branchId?: string | null) {
  * override (POS-1). Without one, the org values (legacy behaviour).
  */
 export function addonSettingsUrl(addonKey: string, branchId?: string | null): string {
-    const base = `/api/addons/${addonKey}/settings`
+    // Relative to the host api client's baseURL (ops: `/api`); a literal `/api`
+    // here would double-prefix to `/api/api/addons/...`.
+    const base = `/addons/${addonKey}/settings`
     return branchId ? `${base}?branch_id=${encodeURIComponent(branchId)}` : base
 }
 
@@ -84,9 +116,17 @@ export interface UseAddonSettingsOptions<T> {
 export interface UseAddonSettingsResult<T> {
     /** Saved org values merged over `defaults`. Never null. */
     settings: T
+    /** Stored values only (no defaults merged); `{}` until loaded. */
+    stored: Partial<T>
+    /** Setting definitions served with the values (`[]` when the host sends none). */
+    definitions: SettingDefLike[]
+    /** Branch overrides served with the values. */
+    overrides: Record<string, unknown>
     isLoading: boolean
     error: unknown
     refetch: () => void
+    /** Forces a fresh GET (bypassing staleTime), updates the cache and resolves with the payload. Rejects on error. */
+    reload: () => Promise<AddonSettingsPayload<T>>
 }
 
 /**
@@ -110,26 +150,40 @@ export function useAddonSettings<T extends Record<string, unknown> = Record<stri
     const api = useApi()
     const { defaults, staleTime, enabled, branchId } = opts
 
-    const query = useQuery<Partial<T>>({
-        queryKey: addonSettingsKey(addonKey, branchId),
-        queryFn: async () => {
+    const qc = useQueryClient()
+    const queryKey = addonSettingsKey(addonKey, branchId)
+    const fetchPayload = useCallback(
+        async (): Promise<AddonSettingsPayload<T>> => {
             const res = await api.get(addonSettingsUrl(addonKey, branchId))
-            const body = (res as { data: any }).data
-            // Host envelope: { success, data: { <key>: <value> } }.
-            const values = body?.success ? body.data : body
-            return (values ?? {}) as Partial<T>
+            return parseAddonSettingsBody<T>((res as { data: unknown }).data)
         },
+        [api, addonKey, branchId],
+    )
+
+    const query = useQuery<AddonSettingsPayload<T>>({
+        queryKey,
+        queryFn: fetchPayload,
         staleTime: staleTime ?? 30_000,
         enabled: (enabled ?? true) && !!addonKey,
     })
 
     const settings = useMemo(
-        () => mergeAddonSettings<T>(defaults, query.data),
+        () => mergeAddonSettings<T>(defaults, query.data?.values),
         [defaults, query.data],
+    )
+
+    const reload = useCallback(
+        () => qc.fetchQuery({ queryKey, queryFn: fetchPayload, staleTime: 0 }),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [qc, fetchPayload, addonKey, branchId],
     )
 
     return {
         settings,
+        stored: query.data?.values ?? {},
+        definitions: query.data?.definitions ?? [],
+        overrides: query.data?.overrides ?? {},
+        reload,
         isLoading: query.isLoading,
         error: query.error,
         refetch: () => {
