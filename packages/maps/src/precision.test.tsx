@@ -181,6 +181,12 @@ describe('theme', () => {
         expect(dp['circle-stroke-color']).toBe('#ffffff')
         expect(dark.layers.get('mcm-points-areas-halo').paint['circle-color']).not.toBe(lh)
         expect(dark.layers.get('mcm-points-halo').paint['circle-color']).toBe('rgba(255,255,255,0.35)')
+        // MapLibre rechaza ['zoom'] anidado (['+', ['interpolate', ..., ['zoom'], ...], 6]): el radio es un interpolate de nivel superior.
+        for (const layer of ['mcm-points-halo', 'mcm-points-points']) {
+            const r = dark.layers.get(layer).paint['circle-radius']
+            expect(r[0]).toBe('interpolate')
+            expect(JSON.stringify(r.slice(3))).not.toContain('zoom')
+        }
     })
 
     it('the dark blank base is not black', async () => {

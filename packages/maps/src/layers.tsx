@@ -115,6 +115,14 @@ export function Marker(props: MarkerProps): React.ReactElement | null {
 
 // --- Clustered points -----------------------------------------------------
 
+/** Radio de los puntos por zoom (parada: [zoom, radio px]). */
+export const POINT_RADIUS_STOPS: ReadonlyArray<readonly [number, number]> = [[3, 7], [10, 9], [14, 11]]
+
+/** Expresion de radio por zoom con un margen extra: SIEMPRE un 'interpolate' de nivel superior (requisito de MapLibre). */
+export function zoomRadius(extra: number): ML.ExpressionSpecification {
+    return ['interpolate', ['linear'], ['zoom'], ...POINT_RADIUS_STOPS.flatMap(([z, r]) => [z, r + extra])] as ML.ExpressionSpecification
+}
+
 export interface ClusterLayerProps {
     points: MapPointItem[]
     /** Group nearby points (default true). Off draws plain circles. */
@@ -189,13 +197,15 @@ export function ClusterLayer({ points, cluster = true, colors, onSelect, id = 'm
                 paint: { 'text-color': paint.clusterText },
             })
         }
-        const pointRadius: ML.ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 3, 7, 10, 9, 14, 11]
+        // MapLibre solo admite ['zoom'] como entrada de un 'interpolate'/'step' de NIVEL SUPERIOR: no se puede
+        // anidar en ['+', ...]. El halo (radio + margen) se construye con sus propias paradas.
+        const pointRadius = zoomRadius(0)
         map.addLayer({
             id: `${id}-halo`,
             type: 'circle',
             source: id,
             filter: ['!', ['has', 'point_count']],
-            paint: { 'circle-color': paint.halo, 'circle-radius': ['+', pointRadius, 6], 'circle-blur': 0.5 },
+            paint: { 'circle-color': paint.halo, 'circle-radius': zoomRadius(6), 'circle-blur': 0.5 },
         })
         map.addLayer({
             id: `${id}-points`,
