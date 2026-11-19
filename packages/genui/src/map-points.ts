@@ -20,7 +20,8 @@ export interface GenUIMapPoint {
   accent?: string
   /** Second line under the name (`subtitle_field`). */
   subtitle?: string
-  details: Array<{ label?: string; value: string }>
+  /** `field` is the source column of a row-built detail (its `label` is that same raw key): hosts translate it. */
+  details: Array<{ label?: string; value: string; field?: string }>
 }
 
 export const MAP_MAX_POINTS = 200
@@ -88,7 +89,7 @@ export function normalizeMapPoints(block: GenUIBlock, rows?: GenUIRow[], text: (
       area: areaField && r[areaField] !== null && r[areaField] !== undefined ? String(r[areaField]).trim() || undefined : undefined,
       image: cell(r, imageField), accent: cell(r, colorField), subtitle: cell(r, subtitleField),
       details: (popup ? popup.map((k) => [k, r[k]] as const) : Object.entries(r).filter(([k]) => !mapped.has(k)))
-        .filter(([, v]) => v !== null && v !== undefined && v !== '' && typeof v !== 'object').slice(0, 8).map(([k, v]) => ({ label: k, value: String(v) })),
+        .filter(([, v]) => v !== null && v !== undefined && v !== '' && typeof v !== 'object').slice(0, 8).map(([k, v]) => ({ label: k, value: String(v), field: k })),
     })
     if (out.length >= MAP_MAX_POINTS) break
   }

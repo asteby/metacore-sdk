@@ -17,7 +17,7 @@ import { MapContext, type MapContextValue } from './context'
 import { ensureStyles } from './dom'
 import { Avatar, isBranded } from './avatar'
 import { fitMaxZoom, isApproximate, pointColor, selectZoomFor } from './geometry'
-import { CLUSTER_THRESHOLD, ClusterLayer, Marker, useFitBounds } from './layers'
+import { CLUSTER_THRESHOLD, ClusterLayer, Marker, useFitBounds, type AreaSelection } from './layers'
 import { MapList } from './map-list'
 import { prefersReducedMotion, useMapScheme } from './theme'
 import { mergeLabels, type GeoPoint, type MapLabels, type MapPointItem, type MapPrecision } from './types'
@@ -47,6 +47,10 @@ export interface MapViewProps extends MapLimits {
     selectZoom?: number
     /** Highest zoom per approximate precision, for selection and fitting (default `{ country: 5, city: 10 }`). `exact` points use `selectZoom`. */
     precisionZoom?: Partial<Record<MapPrecision, number>>
+    /** Click on an area bubble (country / city precision) with several members: the host lists them in its own panel. Without it the bubble opens a popup list. */
+    onArea?: (area: AreaSelection) => void
+    /** Detail rows in point popups (default true). With a detail panel pass false so the popup is a summary and nothing shows twice. */
+    popupDetails?: boolean
     /** Click on the empty map (e.g. a picker). */
     onMapClick?: (p: GeoPoint) => void
     /** Show the "Ver lista" toggle (default true; the list is still the fallback when the map cannot render). */
@@ -60,19 +64,19 @@ export interface MapViewProps extends MapLimits {
 
 type Status = 'loading' | 'ready' | 'unavailable'
 
-function PointsLayer({ points, cluster, colors, selectedKey, onSelect, fit, labels, precisionZoom }: Pick<MapViewProps, 'points' | 'cluster' | 'colors' | 'selectedKey' | 'onSelect' | 'fit' | 'labels' | 'precisionZoom'>) {
+function PointsLayer({ points, cluster, colors, selectedKey, onSelect, onArea, popupDetails = true, fit, labels, precisionZoom }: Pick<MapViewProps, 'points' | 'cluster' | 'colors' | 'selectedKey' | 'onSelect' | 'onArea' | 'popupDetails' | 'fit' | 'labels' | 'precisionZoom'>) {
     const pts = React.useMemo(() => (points ?? []).filter((p) => isValidPoint(p)), [points])
     useFitBounds(pts, fit !== false, fitMaxZoom(pts, precisionZoom))
     const clustered = cluster ?? pts.length > CLUSTER_THRESHOLD
     const merged = mergeLabels(labels)
     // One logo on the map makes every pin an avatar (initials for the rest): a mix of dots and faces reads as broken.
     const avatars = pts.some(isBranded)
-    if (clustered) return <ClusterLayer points={pts} colors={colors} onSelect={onSelect} labels={merged} />
+    if (clustered) return <ClusterLayer points={pts} colors={colors} onSelect={onSelect} onArea={onArea} popupDetails={popupDetails} labels={merged} />
     const approx = pts.filter(isApproximate)
     return (
         <>
             {/* Approximate places are count bubbles, never stacked pins. */}
-            {approx.length ? <ClusterLayer points={approx} cluster={false} colors={colors} onSelect={onSelect} labels={merged} /> : null}
+            {approx.length ? <ClusterLayer points={approx} cluster={false} colors={colors} onSelect={onSelect} onArea={onArea} popupDetails={popupDetails} labels={merged} /> : null}
             {pts.filter((p) => !isApproximate(p)).map((p) => (
                 <Marker
                     key={p.key}
@@ -97,7 +101,7 @@ function PointsLayer({ points, cluster, colors, selectedKey, onSelect, fit, labe
                         </div>
                     </div>
                     {p.statusLabel ?? p.status ? <span style={{ display: 'block' }}>{p.statusLabel ?? p.status}</span> : null}
-                    {(p.details ?? []).map((d, i) => (
+                    {(popupDetails ? (p.details ?? []) : []).map((d, i) => (
                         <span key={i} style={{ display: 'block' }}>
                             {d.label ? `${d.label}: ${d.value}` : d.value}
                         </span>
@@ -240,7 +244,7 @@ export function MapView(props: MapViewProps): React.ReactElement {
             )}
             {ctx ? (
                 <MapContext.Provider value={ctx}>
-                    <PointsLayer points={points} cluster={props.cluster} colors={props.colors} selectedKey={selected} onSelect={select} fit={props.fit} labels={props.labels} precisionZoom={props.precisionZoom} />
+                    <PointsLayer points={points} cluster={props.cluster} colors={props.colors} selectedKey={selected} onSelect={select} onArea={props.onArea} popupDetails={props.popupDetails} fit={props.fit} labels={props.labels} precisionZoom={props.precisionZoom} />
                     {children}
                 </MapContext.Provider>
             ) : null}

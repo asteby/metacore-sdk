@@ -151,32 +151,52 @@ export interface ClusterLayerProps {
     id?: string
     /** Hover / list texts (`clusterCount`, `moreItems`); Spanish by default. */
     labels?: Pick<MapLabels, 'clusterCount' | 'moreItems'>
+    /**
+     * Click on an area bubble (country / city precision) with several members. The host shows them in its own panel
+     * (a scrollable list of members). Without it the bubble opens a popup list. Either way the members are never fanned
+     * out: they share a centroid, not a place.
+     */
+    onArea?: (area: AreaSelection) => void
+    /** Detail rows in a point popup (default true). Hosts with a detail panel pass false: the popup stays a summary. */
+    popupDetails?: boolean
+}
+
+/** The members of one area bubble. */
+export interface AreaSelection {
+    gid: string
+    /** Area name / code printed on the bubble (e.g. `GT`). */
+    area?: string
+    members: MapPointItem[]
+    center: [number, number]
 }
 
 /** Highest zoom a cluster click flies to; members that only separate beyond it are revealed in place instead. */
 export const CLUSTER_MAX_EXPAND_ZOOM = 14
 /** Members named in a cluster list popup (the rest is "+N más"). */
 const CLUSTER_LIST_LIMIT = 10
+/** Members named in an area list popup (it scrolls). */
+const AREA_LIST_LIMIT = 50
 
 const fill = (template: string, n: number): string => template.replace('{n}', String(n))
 const coordsOf = (f: ML.MapGeoJSONFeature): [number, number] => (f.geometry as unknown as { coordinates: [number, number] }).coordinates
 
 /** Popup of one point: its name, the status as a coloured pill and the detail rows. */
-function pointPopup(item: MapPointItem, colors?: Record<string, string>): HTMLElement {
+function pointPopup(item: MapPointItem, colors?: Record<string, string>, details = true): HTMLElement {
     const status = item.statusLabel ?? item.status
-    return popupNode(item.label, item.details ?? [], status ? { text: status, color: pointColor(item, colors) } : undefined, { image: item.image, accent: item.accent, ring: pointColor(item, colors) }, item.subtitle)
+    return popupNode(item.label, details ? (item.details ?? []) : [], status ? { text: status, color: pointColor(item, colors) } : undefined, { image: item.image, accent: item.accent, ring: pointColor(item, colors) }, item.subtitle)
 }
 
 /**
  * WebGL points with native clustering — thousands of features, no DOM per point.
  * Approximate points (`precision: 'city' | 'country'`) are not drawn one by one:
- * each location becomes one count bubble. Members that share a spot are revealed
- * by a spiderfy fan (a list when there are too many), never by zooming.
+ * each location becomes one count bubble, tinted by its dominant status. Its members come out as a list (the host's
+ * panel via `onArea`, else a popup): never as a fan, they do not stand on a real spot. Exact points that coincide
+ * do fan out (spiderfy), as zooming cannot separate them.
  */
-export function ClusterLayer({ points, cluster = true, colors, onSelect, id = 'mcm-points', labels = DEFAULT_LABELS }: ClusterLayerProps): null {
+export function ClusterLayer({ points, cluster = true, colors, onSelect, onArea, popupDetails = true, id = 'mcm-points', labels = DEFAULT_LABELS }: ClusterLayerProps): null {
     const { map, ml, scheme, styleVersion } = useMap()
-    const latest = React.useRef({ points, colors, onSelect, labels })
-    latest.current = { points, colors, onSelect, labels }
+    const latest = React.useRef({ points, colors, onSelect, onArea, popupDetails, labels })
+    latest.current = { points, colors, onSelect, onArea, popupDetails, labels }
     const overlayRef = React.useRef<LogoOverlay | null>(null)
     const overlayHandlers = React.useRef<Pick<Parameters<typeof import('./logo-overlay').mountLogoOverlay>[0], 'onPoint' | 'onCluster' | 'onArea'> | null>(null)
     const branded = React.useMemo(() => points.some(isBranded), [points])
@@ -242,7 +262,7 @@ export function ClusterLayer({ points, cluster = true, colors, onSelect, id = 'm
             },
         })
         // One bubble per approximate location, sized by how many share it.
-        map.addSource(areaId, { type: 'geojson', data: pointsToAreas(all) as never })
+        map.addSource(areaId, { type: 'geojson', data: pointsToAreas(all, cols) as never })
         map.addLayer({
             id: `${areaId}-halo`,
             type: 'circle',
@@ -254,7 +274,7 @@ export function ClusterLayer({ points, cluster = true, colors, onSelect, id = 'm
             type: 'circle',
             source: areaId,
             paint: {
-                'circle-color': paint.clusterColor,
+                'circle-color': ['coalesce', ['get', 'color'], paint.clusterColor],
                 'circle-radius': ['get', 'r'],
                 'circle-stroke-width': paint.clusterStrokeWidth,
                 'circle-stroke-color': paint.stroke,
@@ -266,7 +286,7 @@ export function ClusterLayer({ points, cluster = true, colors, onSelect, id = 'm
                 type: 'symbol',
                 source: areaId,
                 layout: { 'text-field': ['get', 'text'], 'text-size': 12, 'text-allow-overlap': true },
-                paint: { 'text-color': paint.clusterText },
+                paint: { 'text-color': ['coalesce', ['get', 'tc'], paint.clusterText] },
             })
         }
 
@@ -282,14 +302,14 @@ export function ClusterLayer({ points, cluster = true, colors, onSelect, id = 'm
             // From a fan pin the popup hangs off the pin, not off the shared anchor.
             popup = new ml.Popup({ offset: offset ? [offset[0], offset[1] - 16] : 10, maxWidth: '300px' })
                 .setLngLat([item.lng, item.lat])
-                .setDOMContent(pointPopup(item, latest.current.colors))
+                .setDOMContent(pointPopup(item, latest.current.colors, latest.current.popupDetails))
                 .addTo(map)
             latest.current.onSelect?.(item)
         }
-        const showList = (center: [number, number], members: MapPointItem[], total: number) => {
+        const showList = (center: [number, number], members: MapPointItem[], total: number, limit = CLUSTER_LIST_LIMIT, title?: string) => {
             const list = new ml.Popup({ offset: 14, maxWidth: '300px' })
             popup = list
-            const shown = members.slice(0, CLUSTER_LIST_LIMIT)
+            const shown = members.slice(0, limit)
             const rows = shown.map((it) => ({
                 label: it.label,
                 status: it.statusLabel ?? it.status,
@@ -302,7 +322,7 @@ export function ClusterLayer({ points, cluster = true, colors, onSelect, id = 'm
                 },
             }))
             const l = latest.current.labels
-            list.setLngLat(center).setDOMContent(listNode(fill(l.clusterCount, total), rows, total > rows.length ? fill(l.moreItems, total - rows.length) : undefined)).addTo(map)
+            list.setLngLat(center).setDOMContent(listNode(title ?? fill(l.clusterCount, total), rows, total > rows.length ? fill(l.moreItems, total - rows.length) : undefined)).addTo(map)
         }
         /** Several members on one spot: a fan up to SPIDER_MAX, a list beyond; a single one is just its popup. */
         const reveal = (center: [number, number], members: MapPointItem[], total: number) => {
@@ -350,10 +370,21 @@ export function ClusterLayer({ points, cluster = true, colors, onSelect, id = 'm
                 showPoint(item)
             }
         }
+        /** An area bubble: a lone member is its popup; several are a list (host panel or popup), never a fan. */
         const onArea = (e: ML.MapLayerMouseEvent) => {
             const f = e.features?.[0]
             const members = f ? areaGroups(latest.current.points).get(String(f.properties?.gid)) : undefined
-            if (f && members) reveal(coordsOf(f), members, members.length)
+            if (!f || !members) return
+            closeAll()
+            if (members.length === 1) return showPoint(members[0] as MapPointItem)
+            const center = coordsOf(f)
+            const handler = latest.current.onArea
+            if (handler) handler({ gid: String(f.properties?.gid), area: members.find((m) => m.area)?.area, members, center })
+            else {
+                const name = members.find((m) => m.area)?.area
+                const count = fill(latest.current.labels.clusterCount, members.length)
+                showList(center, members, members.length, AREA_LIST_LIMIT, name ? `${name} · ${count}` : count)
+            }
         }
 
         // Hover: a light, non-interactive tooltip (the click popup/fan stays the accessible path).
@@ -441,7 +472,7 @@ export function ClusterLayer({ points, cluster = true, colors, onSelect, id = 'm
 
     React.useEffect(() => {
         ;(map.getSource(id) as ML.GeoJSONSource | undefined)?.setData(pointsToGeoJSON(exact, colors) as never)
-        ;(map.getSource(areaId) as ML.GeoJSONSource | undefined)?.setData(pointsToAreas(points) as never)
+        ;(map.getSource(areaId) as ML.GeoJSONSource | undefined)?.setData(pointsToAreas(points, colors) as never)
         overlayRef.current?.refresh()
     }, [map, id, areaId, points, exact, colors, styleVersion])
     return null

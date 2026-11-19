@@ -102,31 +102,51 @@ describe('approximate points are bubbles', () => {
         expect(popups.at(-1)!.node?.textContent).toBe('8 instanciasCA')
     })
 
-    it('click fans the members out; pins open a popup; Esc, outside click and zoom-out fold it', async () => {
+    it('click lists the members in a popup (never a fan); picking one opens its popup and caps the zoom at the country', async () => {
         const onSelect = vi.fn()
         const map = await mount(eight, { onSelect })
         map.emit('click', { features: [areaFeature(map)] }, 'mcm-points-areas')
-        expect(markers).toHaveLength(1)
-        const pins = markers[0]!.el.querySelectorAll('button')
-        expect(pins).toHaveLength(8)
-        expect(document.activeElement).toBe(pins[0])
-        fireEvent.click(pins[2]!)
+        // No spiderfy: no fan marker, no leader lines, no numbered pins.
+        expect(markers).toHaveLength(0)
+        const list = popups.at(-1)!.node!
+        expect(list.querySelector('strong')?.textContent).toBe('CA · 8 instancias')
+        const rows = list.querySelectorAll('.mcm-list button')
+        expect(rows).toHaveLength(8)
+        fireEvent.click(rows[2]!)
         expect(onSelect).toHaveBeenCalledWith(expect.objectContaining({ key: 'ca2' }))
-        // Country precision: selecting zooms at most to the country cap.
+        expect(popups.at(-1)!.node?.querySelector('strong')?.textContent).toBe('Instancia 2')
+        expect(markers).toHaveLength(0)
         expect(Math.max(...easeZooms(map))).toBeLessThanOrEqual(DEFAULT_PRECISION_ZOOM.country)
-        // Esc folds.
-        fireEvent.keyDown(document, { key: 'Escape' })
-        expect(markers[0]!.removed).toBe(true)
-        // Re-open, then an outside click folds (after the opening click settled).
+    })
+
+    it('with onArea the host gets the members and no popup or fan opens', async () => {
+        const onArea = vi.fn()
+        const map = await mount(eight, { onArea })
+        const before = popups.length
         map.emit('click', { features: [areaFeature(map)] }, 'mcm-points-areas')
-        await new Promise((r) => setTimeout(r, 5))
-        map.emit('click', {})
-        expect(markers[1]!.removed).toBe(true)
-        // Re-open, then zooming out folds.
-        map.emit('click', { features: [areaFeature(map)] }, 'mcm-points-areas')
-        map.zoom = map.zoom - 2
-        map.emit('zoom', {})
-        expect(markers[2]!.removed).toBe(true)
+        expect(onArea).toHaveBeenCalledTimes(1)
+        const sel = onArea.mock.calls[0]![0]
+        expect(sel.area).toBe('CA')
+        expect(sel.members.map((m: MapPointItem) => m.key)).toEqual(eight.map((m) => m.key))
+        expect(popups.length).toBe(before)
+        expect(markers).toHaveLength(0)
+    })
+
+    it('the area bubble takes the colour of its dominant status', async () => {
+        const mixed = [country(1, { status: 'late' }), country(2, { status: 'ok' }), country(3, { status: 'ok' })]
+        const map = await mount(mixed, { colors: { ok: '#009E73', late: '#D55E00' } })
+        const p = map.sources.get('mcm-points-areas').data.features[0].properties
+        expect(p.color).toBe('#009E73')
+        expect(p.tc).toMatch(/^#/)
+        expect(JSON.stringify(map.layers.get('mcm-points-areas').paint['circle-color'])).toContain('coalesce')
+    })
+
+    it('exact points on the very same spot still fan out (spiderfy is for exact coincidences only)', async () => {
+        const twins: MapPointItem[] = [0, 1, 2].map((i) => ({ key: `t${i}`, lat: 19.4, lng: -99.1, label: `Gemelo ${i}` }))
+        const map = await mount(twins, { cluster: true })
+        await waitFor(() => expect(map.layers.has('mcm-points-points')).toBe(true))
+        map.emit('click', { features: [{ properties: { key: 't1' }, geometry: { coordinates: [-99.1, 19.4] } }] }, 'mcm-points-points')
+        expect(markers.some((m) => m.el.classList.contains('mcm-spider'))).toBe(true)
     })
 
     it('a lone approximate point opens its popup directly', async () => {

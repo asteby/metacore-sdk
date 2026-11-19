@@ -135,7 +135,7 @@ describe('genui helpers', () => {
     ])
     expect(pts.map((p) => p.key)).toEqual(['1', '3'])
     expect(pts[0]!.tone).toBe('danger')
-    expect(pts[0]!.details).toEqual([{ label: 'version', value: '1.2' }])
+    expect(pts[0]!.details).toEqual([{ label: 'version', value: '1.2', field: 'version' }])
     expect(mapLegend(pts).map((l) => `${l.value}:${l.count}`)).toEqual(['late:1', 'ok:1'])
     expect(mapLegend(pts, 'group').map((l) => l.value)).toEqual(['retail', '—'])
   })

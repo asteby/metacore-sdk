@@ -56,7 +56,7 @@ const CSS = `
 .mcm-dark .maplibregl-popup-close-button{color:#e8eaed}
 .mcm-tooltip{pointer-events:none}
 .mcm-tooltip .maplibregl-popup-content{padding:6px 10px}
-.mcm-list{display:block;margin:6px 0 0;padding:0;list-style:none}
+.mcm-list{display:block;margin:6px 0 0;padding:0;list-style:none;max-height:14rem;overflow-y:auto;overscroll-behavior:contain}
 .mcm-list button{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left;font:inherit;color:inherit;background:none;border:0;border-radius:4px;padding:5px 6px;cursor:pointer}
 .mcm-li-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mcm-list button:hover,.mcm-list button:focus-visible{background:rgba(127,127,127,.2);outline:2px solid currentColor}
@@ -175,6 +175,15 @@ export function listNode(title: string, items: Array<{ label: string; status?: s
         li.appendChild(b)
         ul.appendChild(li)
     }
+    // Arrow keys move between members (Tab still reaches each one: the list is not a trap).
+    ul.addEventListener('keydown', (e) => {
+        const btns = [...ul.querySelectorAll<HTMLButtonElement>('button')]
+        const i = btns.indexOf(document.activeElement as HTMLButtonElement)
+        const to = e.key === 'ArrowDown' ? i + 1 : e.key === 'ArrowUp' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? btns.length - 1 : null
+        if (to === null || i < 0) return
+        e.preventDefault()
+        btns[Math.max(0, Math.min(btns.length - 1, to))]?.focus()
+    })
     if (more) {
         const li = document.createElement('li')
         const em = document.createElement('em')

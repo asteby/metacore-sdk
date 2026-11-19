@@ -241,7 +241,7 @@ describe('logo overlay over the WebGL layers', () => {
         expect(JSON.stringify(map.filters.get('mcm-points-clusters'))).toContain('7')
     })
 
-    it('an area bubble (country precision) shows up to 3 logos stacked plus the count', async () => {
+    it('an area bubble (country precision) shows up to 3 logos stacked plus "+N" for the rest', async () => {
         const pts = branded(8, () => ({ lat: 14.6, lng: -90.5, precision: 'country' as const, area: 'GT' }))
         const map = await mount(pts)
         await waitFor(() => expect(map.layers.has('mcm-points-areas')).toBe(true))
@@ -250,11 +250,12 @@ describe('logo overlay over the WebGL layers', () => {
         const mosaic = document.querySelector<HTMLElement>('.mcm-mosaic')!
         expect(mosaic.querySelectorAll('.mcm-avatar')).toHaveLength(3)
         expect(mosaic.getAttribute('aria-label')).toBe('GT · 8 instancias')
+        expect(mosaic.querySelector('.mcm-mosaic-n')?.textContent).toBe('+5')
         expect(JSON.stringify(map.filters.get('mcm-points-areas'))).toContain('"in"')
-        // Clicking it fans the members out like the bubble does.
+        // Clicking it lists the members (a popup here, no host panel): never a fan.
         fireEvent.click(mosaic)
-        await waitFor(() => expect(markers.some((m) => m.el.classList.contains('mcm-spider'))).toBe(true))
-        expect(markers.find((m) => m.el.classList.contains('mcm-spider'))!.el.querySelectorAll('.mcm-has-avatar')).toHaveLength(8)
+        await waitFor(() => expect(popups.at(-1)?.node?.querySelectorAll('.mcm-list button')).toHaveLength(8))
+        expect(markers.some((m) => m.el.classList.contains('mcm-spider'))).toBe(false)
     })
 })
 

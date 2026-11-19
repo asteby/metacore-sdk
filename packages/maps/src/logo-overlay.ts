@@ -22,7 +22,8 @@
 import type * as ML from 'maplibre-gl'
 import type { MapLibreModule } from './config'
 import { avatarNode, isBranded } from './avatar'
-import { areaGroups, pointColor } from './geometry'
+import { areaGroups, areaTone, pointColor } from './geometry'
+import { readableOn } from './palette'
 import type { MapPointItem } from './types'
 
 /** Most marks of each kind drawn as DOM per view. */
@@ -68,16 +69,28 @@ function setHidden(map: ML.Map, layers: string[], base: unknown, prop: string, i
     for (const l of layers) if (map.getLayer(l)) map.setFilter(l, filter as never)
 }
 
-function mosaicNode(members: MapPointItem[], total: number, text: string): HTMLButtonElement {
+/**
+ * Up to MOSAIC_MAX stacked avatars plus a badge. A cluster's badge is its total; an area's (`overflow`) is "+N" for the
+ * members not drawn (none, no badge), tinted by the dominant status (`tone`).
+ */
+function mosaicNode(members: MapPointItem[], total: number, text: string, area?: { tone?: string; colors?: Record<string, string> }): HTMLButtonElement {
     const b = document.createElement('button')
     b.type = 'button'
     b.className = 'mcm-mosaic'
     b.setAttribute('aria-label', text)
-    for (const m of members.slice(0, MOSAIC_MAX)) b.appendChild(avatarNode({ label: m.label, image: m.image, accent: m.accent, size: 30, decorative: true }))
-    const n = document.createElement('span')
-    n.className = 'mcm-mosaic-n'
-    n.textContent = String(total)
-    b.appendChild(n)
+    const shown = members.slice(0, MOSAIC_MAX)
+    for (const m of shown) b.appendChild(avatarNode({ label: m.label, image: m.image, accent: m.accent, ring: area ? pointColor(m, area.colors) : undefined, size: 30, decorative: true }))
+    const label = area ? (total > shown.length ? `+${total - shown.length}` : '') : String(total)
+    if (label) {
+        const n = document.createElement('span')
+        n.className = 'mcm-mosaic-n'
+        n.textContent = label
+        if (area?.tone) {
+            n.style.background = area.tone
+            n.style.color = readableOn(area.tone)
+        }
+        b.appendChild(n)
+    }
     return b
 }
 
@@ -165,8 +178,8 @@ export function mountLogoOverlay(o: LogoOverlayOptions): LogoOverlay {
             const first = members[0] as MapPointItem
             const area = members.find((m) => m.area)?.area
             const text = area ? `${area} · ${clusterText(members.length)}` : clusterText(members.length)
-            put(k, [gid, members.length, branded.slice(0, MOSAIC_MAX).map((m) => `${m.key}:${m.image}:${m.accent}`).join(',')].join('|'), first.lng, first.lat, () => {
-                const b = mosaicNode(branded, members.length, text)
+            put(k, [gid, members.length, areaTone(members, colors), branded.slice(0, MOSAIC_MAX).map((m) => `${m.key}:${m.image}:${m.accent}`).join(',')].join('|'), first.lng, first.lat, () => {
+                const b = mosaicNode(branded, members.length, text, { tone: areaTone(members, colors), colors })
                 b.addEventListener('click', (e) => {
                     e.stopPropagation()
                     o.onArea({ properties: { gid }, geometry: { coordinates: [first.lng, first.lat] } })
