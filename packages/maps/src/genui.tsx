@@ -12,7 +12,7 @@ import {
     type GenUIBlockRendererProps,
     type GenUIMapPoint,
 } from '@asteby/metacore-genui'
-import { AreaPanel, StatusBadge } from './area-panel'
+import { AreaPanel, PanelButton, StatusBadge } from './area-panel'
 import { Avatar, isBranded } from './avatar'
 import { useMap } from './context'
 import { makeTerms, regionName } from './field-labels'
@@ -184,19 +184,18 @@ export function GenUIMapBlock({ block, rows, text, navigate, act, locale }: GenU
                             </dl>
                             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
                                 {area?.keys.includes(chosen.key) ? (
-                                    <button type="button" onClick={() => setSelected(null)}>
+                                    <PanelButton onClick={() => setSelected(null)}>
                                         {labels.backToList}
-                                    </button>
+                                    </PanelButton>
                                 ) : null}
-                                <button
-                                    type="button"
+                                <PanelButton
                                     onClick={() => {
                                         setSelected(null)
                                         setArea(null)
                                     }}
                                 >
                                     {labels.closeDetail}
-                                </button>
+                                </PanelButton>
                             </div>
                         </aside>
                     ) : null}
