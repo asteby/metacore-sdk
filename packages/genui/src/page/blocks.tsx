@@ -236,7 +236,28 @@ function Fallback({ block }: { block: PageBlockDef }) {
 function Core({ block, data }: { block: PageBlockDef; data?: Record<string, unknown> }) {
   const { area: _a, when: _w, ...core } = block
   void _a; void _w
+  const pc = usePageContext()
+  const g = useGenUI()
   const spec = useMemo(() => ({ version: 'genui/v2', ...(data ? { data } : {}), blocks: [core] }), [core, data])
+  // Estado de su fuente: un bloque hoja con la fuente caida o cargando no se queda mudo ni en blanco.
+  const name = typeof block.source === 'string' ? block.source.replace(/^data\./, '') : undefined
+  const st = name !== undefined ? pc.sourceStatus[name] : undefined
+  const loaded = name !== undefined && !!g.sources && Object.hasOwn(g.sources, name) && g.sources[name] !== undefined
+  if (st?.status === 'error') {
+    return (
+      <div role='alert' data-genui-block='source-error' className='flex flex-col items-start gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
+        <p className='m-0'>{st.error || MSG.error}</p>
+        {st.retry ? (
+          <Button size='sm' variant='secondary' onClick={st.retry}>
+            {MSG.retry}
+          </Button>
+        ) : null}
+      </div>
+    )
+  }
+  if (st?.status === 'loading' && !loaded && block.type !== 'metric') {
+    return <div role='status' aria-busy='true' aria-label={MSG.loading} data-genui-block='source-loading' className='h-24 animate-pulse rounded-md bg-muted' />
+  }
   return <GenUI spec={spec} fallback={<Fallback block={block} />} />
 }
 

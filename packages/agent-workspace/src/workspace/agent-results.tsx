@@ -16,6 +16,7 @@ import { ChatEmbedCard, ChatImageEmbed } from '../team-chat/components/chat-embe
 import type { ChatAttachment } from '../team-chat/data/types'
 import { AbyProposalCard, AbyProposalPlan, type AbyProposal } from './aby-proposal-card'
 import { AGENT_CARD, AGENT_CARD_INTERACTIVE, AGENT_ENTER } from './agent-surfaces'
+import { createAgentUiResult } from './agent-ui-result'
 
 const AbyChartEmbed = lazy(() =>
   import('./aby-chart-embed').then((m) => ({ default: m.AbyChartEmbed })),
@@ -153,6 +154,7 @@ export function registerDefaultAgentResults(): void {
   registerDefault('proposal', ProposalResultView)
   registerDefault('plan', PlanResultView)
   registerDefault('guide', GuideResult)
+  registerDefault('ui', createAgentUiResult())
 }
 
 registerDefaultAgentResults()

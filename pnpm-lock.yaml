@@ -264,6 +264,9 @@ importers:
       '@asteby/metacore-app-providers':
         specifier: workspace:*
         version: link:../app-providers
+      '@asteby/metacore-genui':
+        specifier: workspace:*
+        version: link:../genui
       '@asteby/metacore-runtime-react':
         specifier: workspace:*
         version: link:../runtime-react
