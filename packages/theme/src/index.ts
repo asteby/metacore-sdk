@@ -54,8 +54,8 @@ export {
   ON_DARK,
 } from './contrast.js'
 export type { Rgba, OnColorOptions, EnsureContrastOptions } from './contrast.js'
-export { imageTone, toneOfPixels, clearImageToneCache } from './image-tone.js'
-export type { ImageTone, ImageToneInfo, ImageToneOptions } from './image-tone.js'
+export { imageTone, toneOfPixels, clearImageToneCache, logoBacking, BACKING_DARK, BACKING_PLATE, BACKING_UNKNOWN } from './image-tone.js'
+export type { ImageTone, ImageToneInfo, ImageToneOptions, DominantColor, LogoBackingOptions, LogoBackingResult } from './image-tone.js'
 
 export {
   DEFAULT_TOUCH_TOKENS,

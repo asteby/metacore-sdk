@@ -252,3 +252,24 @@ solo blanco/negro sin garantía de 4.5:1 en medios tonos, así que el token calc
 `ensureContrast`, `pickBacking`, tolerancia de razón 0.01, cadenas exactas. Es copia literal de
 `metacore-kernel/colorx/testdata/contrast-vectors.json` (espejo en Go, PR asteby/metacore-kernel#640); `src/color-primitive.test.ts`
 los recorre. Si cambia el algoritmo, cambia el archivo en ambos repos a la vez.
+
+### Fondo de un logo (`logoBacking`, `/image-tone`)
+
+El tono medio engaña con logos de varios colores (azul marino + naranja promedian un tono medio que no se parece a nada), así
+que `imageTone` devuelve además la distribución y `logoBacking(tone, brand)` decide con los colores **dominantes**, no con la media.
+Especificación exacta (la sigue el espejo Go `colorx`; vectores en `logo-backing-vectors.json`):
+
+1. Píxeles: solo alfa > 40. Luminancia relativa WCAG por píxel (canales en gamma sin premultiplicar).
+   `lightShare` = fracción con L >= 0.6, `darkShare` = fracción con L <= 0.2, `midShare` = el resto.
+2. `dominant`: cuantiza cada canal a 4 bits (`v >> 4`), cuenta por cubo, ordena por peso descendente (empate: clave `r<<8|g<<4|b` menor),
+   conserva los cubos con peso >= 0.05 y como máximo 3. Color del cubo = cada nivel q → `q * 17` (`#rrggbb`); peso = cubo / píxeles opacos.
+3. `logoBacking(tone, brand, {dark:'#1f2937', plate:'#ffffff', min:3})` → `{fill, ring?}`. «Separa» = contraste >= `min` contra TODOS los dominantes.
+   - tono `unknown` (sin CORS / sin canvas / sin píxeles opacos): `#767676`, sin anillo.
+   - `lightShare >= 0.6` (logo claro): candidatos `[brand, dark]` (marca ignorada si no parsea); gana el primero que separa, si no el de mayor
+     contraste mínimo. Sin anillo.
+   - cualquier otro caso (oscuro, de color, multicolor): los colores a separar son los dominantes SIN el «papel» del logo (luminancia >= 0.9:
+     el relleno blanco de un logo hecho para fondo claro; solo si queda alguno). Placa clara si separa todos; si no, la marca como fondo si
+     separa todos; si no, la placa, salvo que el oscuro tenga un contraste mínimo >= 0.5 mayor (empate o diferencia pequeña: placa).
+     Anillo fino = color de marca, salvo que sea igual al fondo.
+   - un logo claro (`lightShare >= 0.6`) no tiene «papel»: su blanco es la marca y necesita fondo de marca u oscuro.
+   La marca nunca es fondo si alguno de los colores dominantes del logo cae por debajo de 3:1 contra ella.

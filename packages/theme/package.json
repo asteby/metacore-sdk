@@ -15,6 +15,7 @@
     "dist",
     "styles",
     "contrast-vectors.json",
+    "logo-backing-vectors.json",
     "README.md"
   ],
   "exports": {
@@ -54,6 +55,7 @@
       "import": "./dist/contrast-react.js"
     },
     "./contrast-vectors.json": "./contrast-vectors.json",
+    "./logo-backing-vectors.json": "./logo-backing-vectors.json",
     "./scrollbars.css": "./styles/scrollbars.css"
   },
   "scripts": {
