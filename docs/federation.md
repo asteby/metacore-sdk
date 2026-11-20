@@ -69,6 +69,40 @@ export default defineConfig({
 })
 ```
 
+### Addon that imports only part of the list: `only`
+
+By default the helper declares the whole singleton list. A remote that
+declares a shared package it never imports breaks `loadShare` at runtime
+(`Cannot read properties of undefined (reading 'M_ID')`), so an addon that
+only uses React plus the host UI passes `only`: the result contains exactly
+those canonical singletons (same `singleton` / host-only router
+`import: false` config), nothing else.
+
+```ts
+metacoreFederationShared({
+  host: 'metacore_warehouse',
+  exposes: { './register': './src/register.tsx' },
+  only: ['react', 'react-dom', 'react/jsx-runtime', '@asteby/metacore-runtime-react'],
+  hostProvided: ['@asteby/metacore-ui'], // singleton + import:false (added on top of `only`)
+  extras: ['sonner'],                    // non-canonical package
+  overrides: { react: { requiredVersion: false } },
+})
+```
+
+- `only` is preferred over an `omit` list on purpose: it is explicit and a
+  singleton added to the canonical list later is not pulled into addons that
+  do not use it. There is no `omit`.
+- Names must belong to `METACORE_FEDERATION_SINGLETONS`; anything else throws
+  (non-canonical packages go in `extras` / `extra`).
+- Precedence: `only` picks the canonical base, then manifest/`pageShares`,
+  `extras`, `extra`, `hostProvided` and `overrides` apply on top (so
+  `hostProvided` naming a singleton outside `only` adds it). A mandatory
+  singleton that is declared must still be `singleton: true`.
+- In `overrides`, a property set to `undefined` removes it, e.g.
+  `{ '@tanstack/react-router': { import: undefined } }` drops the canonical
+  `import: false` to match an older hand-written entry.
+- The hand-rolled `shared` guard accepts configs built with `only`.
+
 ### Host (shell consuming addons)
 
 ```ts
