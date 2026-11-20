@@ -100,7 +100,8 @@ export function SearchableSelectField({
             getKey={(o) => String(o.id)}
             getLabel={(o) => o.label}
             getDescription={(o) => o.description}
-            renderLead={(o, where) => <OptionLead option={o} size={where === 'option' ? 24 : 20} />}
+            // Plain text options get no lead (OptionLead would add an initials avatar).
+            renderLead={(o, where) => (o.image || o.icon || o.color ? <OptionLead option={o} size={where === 'option' ? 24 : 20} /> : null)}
             value={valueKey || null}
             selected={selected}
             onSelect={(o) => onChange(String(o.id))}
