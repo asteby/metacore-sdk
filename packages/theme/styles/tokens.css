@@ -289,3 +289,25 @@ body {
     --motion-duration-slow: 0ms;
   }
 }
+
+/*
+ * Skeleton sizing contract. Every loading placeholder (ui `Skeleton*`,
+ * notifications, inbox, ...) sizes itself from these tokens so panels loading
+ * side by side match, and so they follow the density the host selects through
+ * `data-ui-density`. Components keep a literal fallback, so the tokens are
+ * optional for hosts that do not load this stylesheet.
+ */
+:root {
+  --skeleton-row-h: 3.25rem; /* compact list row: notifications, menus */
+  --skeleton-row-h-lg: 4.75rem; /* two-line row: inbox, conversations */
+  --skeleton-line-h: 0.75rem;
+  --skeleton-avatar: 2.5rem;
+  --skeleton-radius: var(--radius-md, 0.375rem);
+}
+
+:root[data-ui-density='compact'] {
+  --skeleton-row-h: 2.75rem;
+  --skeleton-row-h-lg: 4rem;
+  --skeleton-line-h: 0.625rem;
+  --skeleton-avatar: 2rem;
+}
