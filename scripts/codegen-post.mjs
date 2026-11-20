@@ -18,6 +18,17 @@ for (const f of files) {
     total++
     return `${pre}${MS[unit]} /* time.${unit} en ms */${post}`
   })
-  if (out !== src) writeFileSync(f, out)
+  // tygo emite las constantes en orden de archivo Go; `A = B` con B declarada
+  // despues rompe TS (TS2448). Se sustituye B por su literal (determinista).
+  const lits = new Map()
+  for (const m of out.matchAll(/^export const (\w+) = ([\d_.*+\s\-()]+);$/gm)) lits.set(m[1], m[2])
+  let fwd = 0
+  const out2 = out.replace(/^export const (\w+) = (\w+);$/gm, (m, a, b) => {
+    if (!lits.has(b) || out.indexOf(`export const ${b} =`) < out.indexOf(`export const ${a} =`)) return m
+    fwd++
+    return `export const ${a} = ${lits.get(b)}; // = ${b}`
+  })
+  total += fwd
+  if (out2 !== src) writeFileSync(f, out2)
 }
 console.log(`codegen-post: ${total} constantes de time.* resueltas`)
