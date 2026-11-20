@@ -38,6 +38,8 @@ import {
     applyOptionWhen,
 } from './dynamic-form-schema'
 import { DynamicSelectField, DEFAULT_DEPENDS_HINT } from './dynamic-select-field'
+import { SearchableSelectField } from './searchable-select-field'
+import { isSearchableSelect } from './searchable-select'
 import { getOptionFilter } from './option-filter'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 
@@ -503,6 +505,21 @@ function CellRenderer({ field, value, onChange, onPick, disabled, formValues, ro
             const opts = effectiveOptions ?? field.options
             // No option applies under the current sibling value → hide the cell.
             if (effectiveOptions && effectiveOptions.length === 0) return null
+            if (isSearchableSelect(field, opts?.length ?? 0)) {
+                return (
+                    <SearchableSelectField
+                        id={field.key}
+                        ariaLabel={field.label || field.key}
+                        options={opts ?? []}
+                        value={value}
+                        onChange={onChange}
+                        placeholder={field.placeholder || undefined}
+                        required={!!field.required}
+                        disabled={off}
+                        invalid={invalid}
+                    />
+                )
+            }
             return (
                 <Select value={value || ''} onValueChange={onChange} disabled={off}>
                     <SelectTrigger className={'w-full' + (invalidCls ? ` ${invalidCls}` : '')} aria-invalid={invalid || undefined}>

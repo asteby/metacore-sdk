@@ -67,6 +67,8 @@ import { DynamicIcon } from './dynamic-icon'
 import { DynamicLineItems } from './dynamic-line-items'
 import { DynamicRelations } from './dynamic-relations'
 import { DynamicSelectField } from './dynamic-select-field'
+import { SearchableSelectField } from './searchable-select-field'
+import { isSearchableSelect } from './searchable-select'
 import { DynamicDateField } from './dynamic-date-field'
 import { UploadField } from './upload-field'
 import { isLineItemsField, resolveWidget, resolveDependsValue, getDependsOn, getFieldRef, applyOptionWhen } from './dynamic-form-schema'
@@ -1884,6 +1886,20 @@ export function renderField(
             const stale = !!value && !options.some((o) => String(o.value) === String(value))
             const selectInvalid = invalid || stale
             const selectCls = selectInvalid ? 'border-destructive ring-1 ring-destructive/30 focus-visible:ring-destructive' : ''
+            if (isSearchableSelect(field, options.length)) {
+                return (
+                    <SearchableSelectField
+                        id={field.key}
+                        ariaLabel={field.label || field.key}
+                        options={options}
+                        value={stale ? '' : value}
+                        onChange={onChange}
+                        placeholder={field.placeholder || undefined}
+                        required={!!field.required}
+                        invalid={selectInvalid}
+                    />
+                )
+            }
             return (
                 <Select value={stale ? '' : value || ''} onValueChange={onChange}>
                     <SelectTrigger className={'w-full' + (selectCls ? ` ${selectCls}` : '')} aria-invalid={selectInvalid || undefined} data-stale-option={stale || undefined}><SelectValue placeholder={field.placeholder || 'Seleccionar...'} /></SelectTrigger>

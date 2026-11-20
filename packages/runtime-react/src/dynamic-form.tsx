@@ -34,6 +34,8 @@ import { getOptionFilter } from './option-filter'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { DynamicLineItems } from './dynamic-line-items'
 import { DynamicSelectField } from './dynamic-select-field'
+import { SearchableSelectField } from './searchable-select-field'
+import { isSearchableSelect } from './searchable-select'
 import { DynamicMultiSelectField } from './dynamic-multi-select-field'
 import { DynamicDateField } from './dynamic-date-field'
 import { UploadField } from './upload-field'
@@ -538,6 +540,21 @@ function FieldRenderer({
             )
         case 'select': {
             const opts = effectiveOptions ?? field.options
+            // Long static list (or `searchable: true`): combobox with a search box
+            // instead of a flat dropdown the user has to scroll.
+            if (isSearchableSelect(field, opts?.length ?? 0)) {
+                return (
+                    <SearchableSelectField
+                        id={field.key}
+                        ariaLabel={field.label || field.key}
+                        options={opts ?? []}
+                        value={value}
+                        onChange={onChange}
+                        placeholder={field.placeholder || undefined}
+                        required={!!field.required}
+                    />
+                )
+            }
             return (
                 <Select value={value || ''} onValueChange={guardEmptySelect(value, onChange, (opts ?? []).map((o) => o.value))}>
                     <SelectTrigger className="w-full"><SelectValue placeholder={field.placeholder || 'Seleccionar...'} /></SelectTrigger>

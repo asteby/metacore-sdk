@@ -2,6 +2,7 @@ import * as React from 'react'
 import { CheckIcon } from '@radix-ui/react-icons'
 import { cn } from '@/lib/utils'
 import { resolveColorCss } from '@/lib/option-colors'
+import { matchesSearch } from '@/lib/search-text'
 import {
   Command,
   CommandEmpty,
@@ -86,7 +87,15 @@ export function FilterValueCombobox({
   const selectedSet = new Set(selected)
 
   return (
-    <Command shouldFilter={!loadOptions} className={className}>
+    <Command
+      shouldFilter={!loadOptions}
+      // cmdk would match only the raw `value` (an id such as "630") with its
+      // own fuzzy scorer; match the visible label too, ignoring case/accents.
+      filter={(value, search, keywords) =>
+        matchesSearch(`${value} ${(keywords ?? []).join(' ')}`, search) ? 1 : 0
+      }
+      className={className}
+    >
       <CommandInput
         placeholder={searchPlaceholder}
         value={query}
@@ -101,6 +110,7 @@ export function FilterValueCombobox({
               <CommandItem
                 key={option.value}
                 value={option.value}
+                keywords={[option.label]}
                 onSelect={() => onToggle(option.value)}
                 onPointerDown={(e) => e.preventDefault()}
               >

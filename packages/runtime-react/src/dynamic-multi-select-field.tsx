@@ -22,6 +22,7 @@
 // with ONE `?ids=` lookup (useResolveOptionIds): a chip reads "Cargando…" while
 // it resolves and "(registro eliminado)" when the record is gone — never the id.
 import { useMemo, useState } from 'react'
+import { filterSearchableOptions } from './searchable-select'
 import { getOptionFilter } from './option-filter'
 import { RecordPicker } from './record-picker'
 import { OptionLead } from './record-picker-option'
@@ -89,10 +90,9 @@ export function DynamicMultiSelectField({ field, value, onChange, staticOptions 
         const label = useStatic ? id : !r ? 'Cargando…' : r.status === 'missing' ? DELETED_RECORD_LABEL : id
         return { id, value: id, label, name: label }
     })
-    const shown = useMemo(() => {
-        const q = query.trim().toLowerCase()
-        return q ? options.filter((o) => String(o.label ?? '').toLowerCase().includes(q)) : options
-    }, [options, query])
+    // Case/accent-insensitive, by label, code and description (shared with the
+    // single searchable select); order kept inside each relevance rank.
+    const shown = useMemo(() => filterSearchableOptions(options, query), [options, query])
 
     const toggle = (o: ResolvedOption) => {
         const id = String(o.id)
@@ -110,6 +110,7 @@ export function DynamicMultiSelectField({ field, value, onChange, staticOptions 
             getLabel={(o) => o.label}
             renderLead={(o) => <OptionLead option={o} size={20} />}
             getDescription={(o) => o.description}
+            highlightQuery
             value={selected}
             selected={selectedItems}
             onSelect={toggle}

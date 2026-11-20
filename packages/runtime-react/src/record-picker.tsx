@@ -47,6 +47,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from '@asteby/metacore-ui/primitives'
+import { splitHighlight } from '@asteby/metacore-ui/lib'
 import { JOINED_TRIGGER_CLASS, RecordPickerAction, hasRecordPickerAction } from './record-picker-actions'
 import { useDebouncedValue } from './use-debounced-value'
 
@@ -129,6 +130,25 @@ export function useRecordSearch<T>(
     }, [q, search, minChars, enabled])
 
     return { results, loading, error, pending: enabled && trimmed.length >= minChars && doneFor !== trimmed }
+}
+
+/** Label text with the query matches wrapped in <mark> (themed, accent-insensitive). */
+function Highlighted({ text, query }: { text: string; query: string }) {
+    const parts = splitHighlight(text, query)
+    if (parts.length === 1 && !parts[0]!.match) return <>{text}</>
+    return (
+        <>
+            {parts.map((p, i) =>
+                p.match ? (
+                    <mark key={i} className="rounded-[2px] bg-primary/15 px-0 font-semibold text-foreground" data-slot="record-picker-match">
+                        {p.text}
+                    </mark>
+                ) : (
+                    <span key={i}>{p.text}</span>
+                ),
+            )}
+        </>
+    )
 }
 
 const NO_SEARCH = () => Promise.resolve([] as never[])
@@ -215,6 +235,11 @@ export interface RecordPickerProps<T> {
     isItemDisabled?: (item: T) => boolean
     /** Check mark column. Default: true in button mode. */
     showCheck?: boolean
+    /**
+     * Highlight the typed text inside the default option label / description
+     * (case and accent insensitive). Ignored when `renderItem` is set. Default false.
+     */
+    highlightQuery?: boolean
 
     // --- copy -------------------------------------------------------------
     placeholder?: string
@@ -326,6 +351,7 @@ export function RecordPicker<T>(props: RecordPickerProps<T>) {
         loadingText = 'Buscando…',
         errorText = 'No se pudo buscar. Inténtalo de nuevo.',
         minCharsText,
+        highlightQuery = false,
         clearLabel = 'Quitar selección',
         listLabel,
         entityLabel = '',
@@ -552,7 +578,8 @@ export function RecordPicker<T>(props: RecordPickerProps<T>) {
 
     const optionClass = (on: boolean, dis: boolean) =>
         cx(
-            'relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden',
+            // Coarse pointers (touch) get a 44px row; mouse keeps the compact one.
+            'relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-hidden [@media(pointer:coarse)]:min-h-11',
             on && 'bg-accent text-accent-foreground',
             dis && 'pointer-events-none opacity-50',
         )
@@ -607,9 +634,11 @@ export function RecordPicker<T>(props: RecordPickerProps<T>) {
                                     ) : null}
                                     {renderLead?.(item, 'option')}
                                     <span className="flex min-w-0 flex-1 flex-col">
-                                        <span className="line-clamp-2 break-words">{getLabel(item)}</span>
+                                        <span className="line-clamp-2 break-words">{highlightQuery ? <Highlighted text={getLabel(item)} query={trimmed} /> : getLabel(item)}</span>
                                         {desc != null && desc !== '' ? (
-                                            <span className="truncate text-xs text-muted-foreground">{desc}</span>
+                                            <span className="truncate text-xs text-muted-foreground">
+                                                {highlightQuery && typeof desc === 'string' ? <Highlighted text={desc} query={trimmed} /> : desc}
+                                            </span>
                                         ) : null}
                                     </span>
                                     {renderTrailing ? (

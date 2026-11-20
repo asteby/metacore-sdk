@@ -20,3 +20,9 @@ export {
   pushNestedInlineCreate,
   guardNestedInlineCreateDismiss,
 } from './nested-inline-create'
+export {
+  normalizeSearchText,
+  matchesSearch,
+  splitHighlight,
+  type HighlightPart,
+} from './search-text'
