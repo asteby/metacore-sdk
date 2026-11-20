@@ -25,6 +25,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { unwrapResponse } from '@asteby/metacore-lib/envelope'
 import { cn } from '@asteby/metacore-ui'
 import type { ChartKind, ChartSpec } from '../team-chat/data/types'
 import { api, useWorkspaceHost } from '../host'
@@ -76,7 +77,7 @@ export function AbyChartEmbed({ spec, className }: { spec: ChartSpec; className?
     api
       .get(`/bi/geo/${encodeURIComponent(cc)}`)
       .then((r) => {
-        if (!cancelled) setAtlas(r.data?.data ?? null)
+        if (!cancelled) setAtlas(unwrapResponse<unknown>(r) ?? null)
       })
       .catch(() => undefined)
     return () => {
