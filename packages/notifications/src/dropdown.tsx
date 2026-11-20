@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
+  SkeletonList,
 } from '@asteby/metacore-ui/primitives'
 import { useWebSocketMessage } from '@asteby/metacore-websocket/hooks'
 import type { WebSocketMessage } from '@asteby/metacore-websocket'
@@ -761,12 +762,8 @@ function DropdownShell({
         </DropdownMenuLabel>
         <DropdownMenuGroup className='max-h-[min(24rem,60vh)] overflow-y-auto py-1'>
           {notifications.length === 0 && isLoading ? (
-            <div
-              className='px-4 py-10 text-center text-sm text-muted-foreground'
-              role='status'
-              data-state='loading'
-            >
-              {labels.loading}
+            <div data-state='loading'>
+              <SkeletonList rows={4} label={labels.loading} />
             </div>
           ) : notifications.length === 0 && error ? (
             <div

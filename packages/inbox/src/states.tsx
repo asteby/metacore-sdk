@@ -60,13 +60,13 @@ export function ErrorState({ title, description, onRetry, className, labels: o }
 }
 
 /** Shimmer rows that match the real row height so the layout does not jump. */
-export function ListSkeleton({ rows = 8, rowHeight = 76 }: { rows?: number; rowHeight?: number }) {
+export function ListSkeleton({ rows = 8, rowHeight }: { rows?: number; rowHeight?: number }) {
   const { labels } = useInboxLabels()
   return (
     <div role="status" aria-live="polite" aria-label={labels.loading} className="overflow-hidden">
       {Array.from({ length: rows }, (_, i) => (
-        <div key={i} className="flex items-center gap-3 px-4" style={{ height: rowHeight }} aria-hidden>
-          <div className="size-10 shrink-0 animate-pulse rounded-full bg-muted motion-reduce:animate-none" />
+        <div key={i} className="flex items-center gap-3 px-4" style={{ height: rowHeight ?? 'var(--skeleton-row-h-lg, 4.75rem)' }} aria-hidden>
+          <div className="shrink-0 animate-pulse rounded-full bg-muted motion-reduce:animate-none" style={{ width: 'var(--skeleton-avatar, 2.5rem)', height: 'var(--skeleton-avatar, 2.5rem)' }} />
           <div className="flex-1 space-y-2">
             <div className="h-3 w-2/5 animate-pulse rounded bg-muted motion-reduce:animate-none" />
             <div className="h-3 w-4/5 animate-pulse rounded bg-muted/70 motion-reduce:animate-none" />
