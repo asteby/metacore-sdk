@@ -35,6 +35,7 @@ import {
 import {
     generateBadgeStyles,
     getInitials,
+    optionColor,
     relationChipStyles,
 } from '@asteby/metacore-ui/lib'
 import { Progress } from './dialogs/_primitives'
@@ -697,6 +698,21 @@ export function resolveActorDisplayName(raw: unknown): string | undefined {
  * any backend that stores just `"2.png"` next to a nested key) and the value
  * branch injected basePath into already-rooted paths (junk URLs).
  */
+/**
+ * Whether `raw` can plausibly be an image reference (URL, data/blob URI,
+ * rooted/relative path or a file name with an image extension). A plain label
+ * such as "Ana Perez" — what a backend sends when it fills `avatar` with the
+ * display name instead of a file — is NOT, and must never be turned into a
+ * request (it used to become `apiBaseUrl + "Ana Perez"`, a 404 per row).
+ */
+export const looksLikeImageRef = (raw: string): boolean => {
+    const v = raw.trim()
+    if (!v) return false
+    if (/^(https?:|data:image\/|blob:)/i.test(v) || v.startsWith('/')) return true
+    if (/\s/.test(v)) return false
+    return v.includes('/') || /\.(png|jpe?g|gif|webp|avif|svg|bmp|ico)(\?.*)?$/i.test(v)
+}
+
 export const resolveAvatarSrc = (
     col: ColumnDefinition,
     row: any,
@@ -718,7 +734,7 @@ export const resolveAvatarSrc = (
         if (sibling) raw = String(sibling)
     }
     if (!raw && value !== undefined && value !== null && value !== '') raw = String(value)
-    if (!raw) return undefined
+    if (!raw || !looksLikeImageRef(raw)) return undefined
     if (raw.startsWith('http') || raw.startsWith('/')) return raw
     const basePath = styleCfg(col, 'base_path', 'basePath') ?? col.basePath ?? ''
     return `${apiBaseUrl}${basePath}${raw}`
@@ -898,17 +914,23 @@ const AvatarCell: React.FC<{
     shape?: 'rounded' | 'circle'
     /** Per-row brand colour (hex) for the initials fallback. */
     color?: string
-}> = ({ name, desc, avatarSrc, getImageUrl, shape, color }) => {
+    /** Paint the initials fallback with a stable colour derived from `name`. */
+    autoColor?: boolean
+}> = ({ name, desc, avatarSrc, getImageUrl, shape, color, autoColor }) => {
     const radius = shape === 'circle' ? 'rounded-full' : 'rounded-lg'
-    const brand = brandAvatarColors(color)
+    // Brand colour wins; with `autoColor` a stable per-name colour (same hash as
+    // every other avatar in the platform) so the imageless case needs no backend colour.
+    const brand = brandAvatarColors(color) ?? (autoColor ? brandAvatarColors(`#${optionColor(name)}`) : undefined)
     return (
     <div className="flex items-center gap-3 min-w-0">
         <Avatar className={`h-8 w-8 ${radius} ring-1 ring-border/50`}>
-            <AvatarImage
-                src={avatarSrc ? getImageUrl(avatarSrc) : ''}
-                alt={name}
-                className={shape === 'circle' ? 'object-cover' : 'object-contain p-0.5'}
-            />
+            {avatarSrc ? (
+                <AvatarImage
+                    src={getImageUrl(avatarSrc)}
+                    alt={name}
+                    className={shape === 'circle' ? 'object-cover' : 'object-contain p-0.5'}
+                />
+            ) : null}
             <AvatarFallback
                 className={`text-[10px] font-bold ${radius} ${brand ? '' : 'bg-primary/5 text-primary'}`}
                 style={brand ? { backgroundColor: brand.background, color: brand.color } : undefined}
@@ -1284,6 +1306,8 @@ export function makeDefaultGetDynamicColumns(
                             )
                         }
 
+                        case 'initial':
+                        case 'initials':
                         case 'search':
                         case 'avatar':
                         case 'creator':
@@ -1344,7 +1368,13 @@ export function makeDefaultGetDynamicColumns(
                                 )
                             }
 
-                            const avatarSrc = resolveAvatarSrc(col, row.original, value, apiBaseUrl)
+                            // `initial`/`initials`: declarative imageless avatar — never
+                            // resolves a source, so it can't hit the network.
+                            const isInitialStyle = renderAs === 'initial' || renderAs === 'initials'
+                            const avatarSrc =
+                                isInitialStyle
+                                    ? undefined
+                                    : resolveAvatarSrc(col, row.original, value, apiBaseUrl)
 
                             return (
                                 <AvatarCell
@@ -1354,6 +1384,7 @@ export function makeDefaultGetDynamicColumns(
                                     getImageUrl={getImageUrl}
                                     shape={avatarShape}
                                     color={brandColor ? String(brandColor) : undefined}
+                                    autoColor={isInitialStyle || styleCfg(col, 'tone') === 'auto'}
                                 />
                             )
                         }
