@@ -1,5 +1,13 @@
 # @asteby/metacore-runtime-react
 
+## 53.28.0
+
+### Minor Changes
+
+- 425b270: Etiquetas de modelo declaradas por el backend. `TableMetadata` acepta `singular_label`, `plural_label`, `new_label` y `gender`; `DynamicRecordDialog` arma "Crear/Editar {x}" con `models.<model>.singular` (i18n del host) > `singular_label` > `titleKey` > `title` (ya no sale "Editar Client" cuando el backend manda un `title` tecnico), y los verbos son traducibles con `dynamic.create_title|edit_title|delete_title` (`{{name}}`). `DynamicCRUDPage`/`useModelLabels` usan `singular_label`/`new_label` y el genero (`common.new_f`/`common.new_m`: "Nueva"/"Nuevo") antes de `common.new`. Nuevos exports `resolveModelNoun` y `modelVerbTitle`. Botones, descripciones y placeholders genericos del dialogo pasan por i18n (`dynamic.*`, defaults en espanol). Sin `singular_label` el comportamiento es el anterior. Semver: minor.
+- 8325800: `FieldWidgetProps.setValues(patch)`: un widget de campo registrado puede llenar varios campos hermanos del formulario a la vez (modal `DynamicRecordDialog` y `DynamicForm`). `CreateRecordDialog`, `useRecordPickerDialog` y `CustomerPicker` aceptan `ensureFields` (campos extra fusionados al esquema del modal, p. ej. un campo `widget` que precarga desde un documento). `RecordPicker` (trigger input) y `CustomerPicker` aceptan `openOnFocus`. Sin cambios por defecto.
+- d90bf4e: ui: `ProductTile` acepta `imageAspect` (relacion del recuadro, default `4 / 3`), `code` (SKU en mono) y `footer`; `ProductTileSkeletonGrid` acepta `imageAspect` y `fill` (sobredibuja y recorta para llenar el area); nuevo `Pagination` independiente de TanStack (`page`, `pageCount`, `onPageChange`, tamano de pagina opcional) y `DataTablePagination` pasa a ser su adaptador. runtime-react: se exporta `useInfiniteScrollSentinel` (y `dedupeById`) con sus tipos. Sin cambios de comportamiento por defecto.
+
 ## 53.27.0
 
 ### Minor Changes
