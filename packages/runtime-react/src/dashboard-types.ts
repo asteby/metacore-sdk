@@ -152,6 +152,8 @@ export interface DashboardGridProps {
     currency?: string
     /** Extra class on the grid root. */
     className?: string
+    /** Max ms the batch load may take before an error + retry replaces the skeletons. Default 15000; 0 disables. */
+    loadTimeoutMs?: number
     /** Optional override for empty/loading/error copy. */
     strings?: Partial<DashboardGridStrings>
 }
@@ -166,4 +168,8 @@ export interface DashboardGridStrings {
     widgetError: string
     /** Per-widget empty (no data) fallback when the spec has no `empty` key. */
     widgetEmpty: string
+    /** Optional overrides of the load-failure state (default: i18n `loadState.*`). */
+    loadErrorTitle?: string
+    loadErrorHint?: string
+    retry?: string
 }

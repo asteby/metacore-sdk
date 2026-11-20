@@ -3,3 +3,9 @@ export { default as useDialogState } from './use-dialog-state'
 export { useTableUrlState, type NavigateFn } from './use-table-url-state'
 export { useRadixModalBodyGuard } from './use-radix-modal-body-guard'
 export { useNestedInlineCreateLock } from './use-nested-inline-create-lock'
+export {
+  useLoadingGuard,
+  DEFAULT_LOAD_TIMEOUT_MS,
+  type UseLoadingGuardOptions,
+  type LoadingGuard,
+} from './use-loading-guard'

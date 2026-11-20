@@ -37,6 +37,7 @@ import {
 } from '@tanstack/react-table'
 import { cn } from '@asteby/metacore-ui/lib'
 import { preloadGlyphs } from '@asteby/metacore-ui/icons'
+import { useLoadingGuard } from '@asteby/metacore-ui/hooks'
 import {
     Table,
     TableBody,
@@ -47,6 +48,7 @@ import {
     TableRow,
     Button,
     Skeleton,
+    LoadState,
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
@@ -300,6 +302,8 @@ export interface DynamicTableProps {
      * mode exactly as before.
      */
     infiniteScroll?: boolean
+    /** Max ms a metadata/list request may stay loading before an error + retry replaces the skeleton. Default 15000; 0 disables. */
+    loadTimeoutMs?: number
     /**
      * Row virtualization. When the visible row model has at least N rows,
      * only viewport rows are mounted (helps infinite scroll and large page
@@ -424,6 +428,7 @@ export function DynamicTable({
     currency: currencyProp,
     pagination: paginationMode,
     infiniteScroll: infiniteScrollProp = false,
+    loadTimeoutMs,
     virtualizeRows,
     extraBulkActions,
     hideBulkDelete,
@@ -492,6 +497,12 @@ export function DynamicTable({
     // A list request that failed for a reason other than 403 (500, network,
     // `success: false`). Shown with a retry instead of a misleading "no results".
     const [loadError, setLoadError] = useState(false)
+    // A list request that never answers must not leave the skeleton up forever:
+    // after the guard's timeout it is shown as a load error with retry.
+    const dataGuard = useLoadingGuard(loadingData && data.length === 0, { timeoutMs: loadTimeoutMs })
+    const showLoadError = loadError || dataGuard.timedOut
+    const showDataSkeleton = loadingData && data.length === 0 && !dataGuard.timedOut
+    const [metaReload, setMetaReload] = useState(0)
     const infPageRef = useRef(1)
     const [optionsMap, setOptionsMap] = useState<Map<string, any[]>>(new Map())
 
@@ -896,7 +907,12 @@ export function DynamicTable({
             }
         }
         initMetadataAndOptions()
-    }, [model]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [model, metaReload]) // eslint-disable-line react-hooks/exhaustive-deps
+
+    const retryMetadata = useCallback(() => {
+        metaInitRef.current = false
+        setMetaReload((n) => n + 1)
+    }, [])
 
     // Derived from `metadata.columns[].searchable`. `null` means the kernel
     // didn't emit the flag for any column → preserve legacy "search every
@@ -1278,6 +1294,11 @@ export function DynamicTable({
         fetchAggregates()
     }, [infiniteScroll, fetchPage, fetchData, fetchAggregates])
 
+    const retryLoad = useCallback(() => {
+        dataGuard.retry()
+        handleRefresh()
+    }, [dataGuard.retry, handleRefresh])
+
     // Per-row action dispatch (view/edit/delete/link/custom) + its dialogs live
     // in the shared hook so DynamicKanban's card menu behaves identically.
     const { handleInternalAction, dialogs: rowActionDialogs } = useDynamicRowActions({
@@ -1626,8 +1647,15 @@ export function DynamicTable({
         </>
     )
 
-    if (loading) {
+    if (loading || !metadata) {
         return (
+            <LoadState
+                loading={loading}
+                timeoutMs={loadTimeoutMs}
+                error={!loading && !metadata}
+                onRetry={retryMetadata}
+                className='flex flex-col h-full min-h-0 w-full'
+                skeleton={
             <div className='flex flex-col h-full min-h-0 w-full'>
                 <div className='pb-4 shrink-0'>
                     <div className="flex items-center justify-between">
@@ -1653,11 +1681,9 @@ export function DynamicTable({
                     </Table>
                 </div>
             </div>
+                }
+            />
         )
-    }
-
-    if (!metadata) {
-        return <div className="text-center text-muted-foreground py-8">Error al cargar la configuración de la tabla.</div>
     }
 
     return (
@@ -1718,7 +1744,7 @@ export function DynamicTable({
                             ))}
                         </TableHeader>
                         <TableBody>
-                            {loadingData && data.length === 0 ? (
+                            {showDataSkeleton ? (
                                 <TableSkeleton />
                             ) : tableRows.length ? (
                                 <>
@@ -1829,11 +1855,11 @@ export function DynamicTable({
                                                         <h3 className="text-lg font-semibold text-foreground" role="alert">{t('dynamic.forbidden_title', { defaultValue: 'Sin permiso para ver este módulo' })}</h3>
                                                         <p className="text-sm text-muted-foreground">{t('dynamic.forbidden_hint', { defaultValue: 'Tu rol no tiene acceso de lectura a estos datos. Pide acceso a un administrador.' })}</p>
                                                     </>
-                                                ) : loadError ? (
+                                                ) : showLoadError ? (
                                                     <>
                                                         <h3 className="text-lg font-semibold text-foreground" role="alert">{t('dynamic.load_error_title', { defaultValue: 'No se pudieron cargar los datos' })}</h3>
                                                         <p className="text-sm text-muted-foreground">{t('dynamic.load_error_hint', { defaultValue: 'Ocurrió un error al consultar la lista. Inténtalo de nuevo.' })}</p>
-                                                        <Button variant="outline" size="sm" className="mt-2" onClick={handleRefresh}>{t('dynamic.retry', { defaultValue: 'Reintentar' })}</Button>
+                                                        <Button variant="outline" size="sm" className="mt-2" onClick={retryLoad}>{t('dynamic.retry', { defaultValue: 'Reintentar' })}</Button>
                                                     </>
                                                 ) : emptyState && !hasActiveFilters ? (
                                                     emptyState
@@ -1910,7 +1936,7 @@ export function DynamicTable({
                     stacks its columns as label : value pairs with the row actions
                     pinned at the bottom. */}
                 <div ref={infMobileRoot} className='flex flex-1 min-h-0 flex-col gap-2 overflow-y-auto sm:hidden'>
-                    {loadingData && data.length === 0 ? (
+                    {showDataSkeleton ? (
                         Array.from({ length: 5 }).map((_, i) => (
                             <div key={i} className='rounded-lg border bg-card p-3'>
                                 <Skeleton className='h-4 w-24' />
@@ -2036,11 +2062,11 @@ export function DynamicTable({
                                     <h3 className='text-base font-semibold text-foreground' role='alert'>{t('dynamic.forbidden_title', { defaultValue: 'Sin permiso para ver este módulo' })}</h3>
                                     <p className='text-sm text-muted-foreground'>{t('dynamic.forbidden_hint', { defaultValue: 'Tu rol no tiene acceso de lectura a estos datos. Pide acceso a un administrador.' })}</p>
                                 </>
-                            ) : loadError ? (
+                            ) : showLoadError ? (
                                 <>
                                     <h3 className='text-base font-semibold text-foreground' role='alert'>{t('dynamic.load_error_title', { defaultValue: 'No se pudieron cargar los datos' })}</h3>
                                     <p className='text-sm text-muted-foreground'>{t('dynamic.load_error_hint', { defaultValue: 'Ocurrió un error al consultar la lista. Inténtalo de nuevo.' })}</p>
-                                    <Button variant='outline' size='sm' onClick={handleRefresh}>{t('dynamic.retry', { defaultValue: 'Reintentar' })}</Button>
+                                    <Button variant='outline' size='sm' onClick={retryLoad}>{t('dynamic.retry', { defaultValue: 'Reintentar' })}</Button>
                                 </>
                             ) : emptyState && !hasActiveFilters ? (
                                 emptyState

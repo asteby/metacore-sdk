@@ -25,6 +25,14 @@
       "signInLink": "Sign in"
     }
   },
+  "loadState": {
+    "loading": "Loading…",
+    "timeoutTitle": "This is taking too long",
+    "timeoutHint": "The server did not respond. Check your connection and try again.",
+    "errorTitle": "Could not load",
+    "errorHint": "Something went wrong while fetching this content.",
+    "retry": "Retry"
+  },
   "common": {
     "all": "All",
     "search": "Search...",

@@ -25,6 +25,14 @@
       "signInLink": "Iniciar sesión"
     }
   },
+  "loadState": {
+    "loading": "Cargando…",
+    "timeoutTitle": "Esto está tardando demasiado",
+    "timeoutHint": "El servidor no respondió. Revisa tu conexión e inténtalo de nuevo.",
+    "errorTitle": "No se pudo cargar",
+    "errorHint": "Ocurrió un error al obtener este contenido.",
+    "retry": "Reintentar"
+  },
   "common": {
     "all": "Todos",
     "search": "Buscar...",
