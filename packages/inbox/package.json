@@ -29,6 +29,9 @@
     "clean": "rm -rf dist",
     "test": "vitest run"
   },
+  "dependencies": {
+    "@asteby/metacore-lib": "workspace:^"
+  },
   "peerDependencies": {
     "lucide-react": ">=0.460",
     "react": ">=18",

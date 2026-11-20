@@ -369,6 +369,10 @@ importers:
         version: 4.1.11(@types/node@26.6.2)(happy-dom@20.14.6)(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))
 
   packages/app-providers:
+    dependencies:
+      '@asteby/metacore-lib':
+        specifier: workspace:^
+        version: link:../lib
     devDependencies:
       '@asteby/metacore-pwa':
         specifier: workspace:*
@@ -544,6 +548,9 @@ importers:
 
   packages/charts:
     dependencies:
+      '@asteby/metacore-lib':
+        specifier: workspace:^
+        version: link:../lib
       recharts:
         specifier: ^3.8.1
         version: 3.10.1(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react-is@18.3.1)(react@19.3.0)(redux@5.0.1)
@@ -679,6 +686,10 @@ importers:
         version: 4.1.11(@types/node@26.6.2)(happy-dom@20.14.6)(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))
 
   packages/genui:
+    dependencies:
+      '@asteby/metacore-lib':
+        specifier: workspace:^
+        version: link:../lib
     devDependencies:
       '@asteby/metacore-ui':
         specifier: workspace:*
@@ -755,6 +766,10 @@ importers:
         version: 4.1.11(@types/node@26.6.2)(happy-dom@20.14.6)(vite@8.3.1(@types/node@26.6.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))
 
   packages/inbox:
+    dependencies:
+      '@asteby/metacore-lib':
+        specifier: workspace:^
+        version: link:../lib
     devDependencies:
       '@testing-library/react':
         specifier: ^16.3.2

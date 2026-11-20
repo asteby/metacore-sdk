@@ -7,6 +7,21 @@ export {
 } from './date'
 export type { TimezoneInfo } from './date'
 
+export {
+  formatAmount,
+  formatLocalizedDate,
+  relativeTime,
+  formatBytes,
+  compareVersions,
+} from './intl-format'
+export type {
+  FormatAmountOptions,
+  FormatLocalizedDateOptions,
+  FormatBytesOptions,
+  RelativeTimeOptions,
+  MoneyDisplay,
+} from './intl-format'
+
 export { formatNumber, formatPercentage, formatDuration, truncate } from './format'
 export type { FormatNumberOptions, FormatDurationOptions } from './format'
 

@@ -40,6 +40,7 @@ export {
   type OrgConfigFetcher,
   type OrgConfigProviderProps,
 } from './org-config-provider'
+export { useFormatMoney, type FormatMoney, type FormatMoneyOverrides } from './use-format-money'
 export {
   Mascot,
   MASCOT_SKINS,

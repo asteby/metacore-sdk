@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next'
 import { buildRelationFilterParams } from '../dynamic-relation-helpers'
 import type { PanelRendererProps } from './types'
 import { displayValue, toDate } from './data-source'
+import { formatAmount } from '@asteby/metacore-lib'
 import { ViewSkeleton } from './skeleton'
 
 export type StatFormat =
@@ -30,7 +31,7 @@ export function formatStat(
         switch (format as StatFormat | undefined) {
             case 'currency':
                 if (Number.isNaN(num)) break
-                return new Intl.NumberFormat(locale, { style: 'currency', currency: currency || 'MXN' }).format(num)
+                return formatAmount(num, { currency, locale })
             case 'percent':
                 if (Number.isNaN(num)) break
                 return new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 1 }).format(num)

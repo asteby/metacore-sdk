@@ -43,6 +43,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@asteby/metacore-lib": "workspace:^",
     "recharts": "^3.8.1"
   },
   "peerDependencies": {

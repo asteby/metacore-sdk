@@ -22,9 +22,9 @@ import {
 import { useQuery } from '@tanstack/react-query'
 
 export interface OrgConfig {
-  /** ISO 4217 currency code, e.g. "MXN", "COP", "USD". */
+  /** ISO 4217 currency code, e.g. "MXN", "COP", "USD". Empty = org has not configured one. */
   currency: string
-  /** BCP-47 locale tag, e.g. "es-MX", "es-CO", "en-US". */
+  /** BCP-47 locale tag, e.g. "es-MX", "es-CO", "en-US". Empty = use the runtime locale. */
   locale: string
   /**
    * Validator identifiers keyed by the `$org.<key>` reference shape used
@@ -47,9 +47,12 @@ export interface OrgConfig {
   extra: Record<string, unknown>
 }
 
+// No regional defaults: an unconfigured org has NO currency and NO locale
+// (empty strings). Formatters (`useFormatMoney`) then print plain numbers in the
+// runtime's own locale instead of guessing a country.
 export const FALLBACK_ORG_CONFIG: OrgConfig = {
-  currency: 'USD',
-  locale: 'en-US',
+  currency: '',
+  locale: '',
   validators: {},
   addressFormat: '',
   extra: {},
