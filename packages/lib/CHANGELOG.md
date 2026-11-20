@@ -1,5 +1,11 @@
 # @asteby/metacore-lib
 
+## 0.12.1
+
+### Patch Changes
+
+- 5dae350: Fix: `dist/envelope.js` (and index, errors, pricing) se publicaban con imports relativos sin extension (`'./error-catalog'`) y el JSON del catalogo sin `with { type: 'json' }`; Node ESM (vitest, SSR) no los resolvia. El fuente usa ahora `.js` explicito. Nuevo chequeo `scripts/check-dist-esm-imports.mjs` (CI y `pnpm test` de lib).
+
 ## 0.12.0
 
 ### Minor Changes

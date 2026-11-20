@@ -1,5 +1,13 @@
 # @asteby/metacore-ui
 
+## 2.37.1
+
+### Patch Changes
+
+- 5dae350: `createHostApiClient(api, { defaultHeaders })`, `useHostApiClient({ defaultHeaders })` y `headers` por llamada (`X-Correlation-ID`...), aditivo. El host descarta las cabeceras que posee (Authorization, X-Organization-ID, X-Branch-ID, Accept-Language, Cookie...; `PROTECTED_HOST_HEADERS`). `HostApiRequestOptions.headers` en sdk. Ademas sdk, genui, ui y runtime-react reescriben en postbuild sus imports relativos de `dist/` con extension (`.js`) para que Node ESM los resuelva.
+- Updated dependencies [5dae350]
+  - @asteby/metacore-theme@2.37.1
+
 ## 2.37.0
 
 ### Minor Changes

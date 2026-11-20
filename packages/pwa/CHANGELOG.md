@@ -1,5 +1,13 @@
 # @asteby/metacore-pwa
 
+## 0.9.7
+
+### Patch Changes
+
+- 5dae350: Postbuild fix-dist-esm-imports: los imports relativos de dist/ llevan extension (.js) para que Node ESM los resuelva; i18n importa sus JSON con `with { type: 'json' }`.
+- Updated dependencies [5dae350]
+  - @asteby/metacore-notifications@42.2.2
+
 ## 0.9.6
 
 ### Patch Changes

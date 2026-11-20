@@ -1,5 +1,15 @@
 # @asteby/metacore-automations
 
+## 2.0.4
+
+### Patch Changes
+
+- 5dae350: Postbuild fix-dist-esm-imports: los imports relativos de dist/ llevan extension (.js) para que Node ESM los resuelva; i18n importa sus JSON con `with { type: 'json' }`.
+- Updated dependencies [5dae350]
+- Updated dependencies [5dae350]
+  - @asteby/metacore-lib@0.12.1
+  - @asteby/metacore-genui@2.9.3
+
 ## 2.0.3
 
 ### Patch Changes

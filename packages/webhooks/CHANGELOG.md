@@ -1,5 +1,11 @@
 # @asteby/metacore-webhooks
 
+## 32.0.1
+
+### Patch Changes
+
+- 5dae350: Postbuild fix-dist-esm-imports: los imports relativos de dist/ llevan extension (.js) para que Node ESM los resuelva; i18n importa sus JSON con `with { type: 'json' }`.
+
 ## 32.0.0
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @asteby/metacore-theme
 
+## 2.37.1
+
+### Patch Changes
+
+- 5dae350: Postbuild fix-dist-esm-imports: los imports relativos de dist/ llevan extension (.js) para que Node ESM los resuelva; i18n importa sus JSON con `with { type: 'json' }`.
+
 ## 2.37.0
 
 ### Minor Changes

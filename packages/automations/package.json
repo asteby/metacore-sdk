@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-automations",
-  "version": "2.0.3",
+  "version": "2.0.4",
   "description": "Metacore automations - client, hooks and screens to list, inspect, edit (form generated from the automation/v1 JSON Schema) and confirm declarative automations and dynamic tools.",
   "license": "Apache-2.0",
   "repository": {

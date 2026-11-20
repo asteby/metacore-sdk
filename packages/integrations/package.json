@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-integrations",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Metacore integrations panel (RFC 0003) — Salidas / Entradas / Registro: event picker grouped by addon, visual payload mapping with live preview, one-time credentials and an action-block chain for inbound contracts. Headless over an abstract API the host implements.",
   "license": "Apache-2.0",
   "repository": {
