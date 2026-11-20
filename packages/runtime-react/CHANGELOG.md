@@ -1,5 +1,17 @@
 # @asteby/metacore-runtime-react
 
+## 53.23.0
+
+### Minor Changes
+
+- ae85841: Ajustes de addon: un solo cargador. `useAddonSettings` ahora también devuelve `stored` (valores sin defaults), `definitions`, `overrides` y `reload()` (GET fresco que resuelve con el payload), y la URL pasa a `/addons/:key/settings` relativa al `baseURL` del cliente (antes `/api/addons/...`, que con `baseURL: '/api'` duplicaba el prefijo). Nuevo `useAddonInstalledProbe(key)`: «¿está instalado?» por la API de instalación (404 → false; sin provider), y con `InstalledAddonsProvider` responde del provider sin red. `SettingsBlock` y `AddonConfigSurface` usan el hook (misma petición y mismo contrato GET/PUT que antes; ahora requieren el `QueryClientProvider` del host, ya peer). Nota: `useAddonInstalled` (provider) ya existía.
+
+### Patch Changes
+
+- 46da5c6: `@asteby/metacore-lib/envelope`: una sola implementación del envelope `{success,data,meta}` y de los mensajes de error. Nuevos `unwrapEnvelope(body)`, `unwrapResponse(res)`, `unwrapList(body)` / `unwrapListResponse(res)` (`items` + `meta.total`), `ApiError` / `isApiError`, `isEnvelope`, `getApiErrorMessage(err, fallback)` e `isAbortError`. Los `unwrap` locales de automations, dataload, org-ai, billing, runtime-react y agent-workspace usan ahora este módulo (agent-workspace sigue re-exportando `getApiErrorMessage`). CI rechaza `.data.data` nuevo (`scripts/check-no-data-data.mjs`, baseline ratcheteado).
+- Updated dependencies [46da5c6]
+  - @asteby/metacore-lib@0.10.0
+
 ## 53.22.0
 
 ### Minor Changes

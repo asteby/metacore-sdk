@@ -1,5 +1,12 @@
 # @asteby/metacore-auth
 
+## 33.0.3
+
+### Patch Changes
+
+- Updated dependencies [46da5c6]
+  - @asteby/metacore-lib@0.10.0
+
 ## 33.0.2
 
 ### Patch Changes
