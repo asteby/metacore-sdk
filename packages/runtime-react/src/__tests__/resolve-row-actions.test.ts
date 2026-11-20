@@ -133,4 +133,21 @@ describe('isRowActionVisible', () => {
         expect(isActionConditionMet(either, { a: null, b: 1 })).toBe(true)
         expect(isActionConditionMet(either, { a: null, b: 0 })).toBe(false)
     })
+
+    it('supports nested groups and legacy aliases stay intact', () => {
+        const nested = {
+            condition: {
+                operator: 'any',
+                conditions: [
+                    { operator: 'all', conditions: [{ field: 'a', operator: 'gt', value: 1 }, { field: 'b', operator: 'falsy' }] },
+                    { field: 'c', operator: 'in', value: [1, 2] },
+                ],
+            },
+        }
+        expect(isActionConditionMet(nested, { a: 2, b: 0, c: 9 })).toBe(true)
+        expect(isActionConditionMet(nested, { a: 2, b: 1, c: 2 })).toBe(true)
+        expect(isActionConditionMet(nested, { a: 2, b: 1, c: 9 })).toBe(false)
+        expect(isActionConditionMet({ condition: { field: 'x', operator: 'notEquals', value: 'y' } }, { x: 'z' })).toBe(true)
+        expect(isActionConditionMet({ condition: { field: 'x', operator: 'weird' } }, { x: 'z' })).toBe(true)
+    })
 })
