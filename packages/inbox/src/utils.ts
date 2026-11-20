@@ -1,3 +1,4 @@
+import { formatBytes as formatBytesShared } from '@asteby/metacore-lib'
 import type { InboxTime } from './types'
 
 export const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(' ')
@@ -32,11 +33,9 @@ export function formatFullTime(t: InboxTime, locale: string): string {
   return d ? d.toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' }) : ''
 }
 
+/** Human byte size, '' when unknown (shared implementation in `@asteby/metacore-lib`). */
 export function formatBytes(n?: number): string {
-  if (n == null || !Number.isFinite(n)) return ''
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(n < 10240 ? 1 : 0)} KB`
-  return `${(n / 1024 / 1024).toFixed(1)} MB`
+  return formatBytesShared(n, { invalid: '' })
 }
 
 export function initials(name: string): string {

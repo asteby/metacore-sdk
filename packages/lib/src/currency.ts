@@ -38,6 +38,8 @@ export const SPANISH_SYMBOLS: Record<string, string> = {
 /**
  * Format a numeric amount as a currency string.
  * @example formatCurrency(1234.56, 'USD', 'en') -> "$1,234.56"
+ * @deprecated Defaults to USD/'es' (regional guesses). Use `formatAmount` or
+ * `useFormatMoney()` so currency and locale come from the org config.
  */
 export function formatCurrency(
   amount: number,

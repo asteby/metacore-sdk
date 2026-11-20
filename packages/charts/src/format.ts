@@ -1,3 +1,5 @@
+import { formatAmount } from '@asteby/metacore-lib/intl-format'
+
 // Shared chart/widget formatting + accent theming. Reuses the same Intl-based
 // approach as the table cells (dynamic-columns) so dashboard numbers read
 // identically to the grids: org currency + locale, compact notation, percent.
@@ -13,7 +15,7 @@ export interface WidgetFormatCtx {
 
 /**
  * Formats a scalar/series value with the widget's declared format. `currency`
- * uses the org currency + locale (same fallback chain as table cells); `percent`
+ * uses the org currency + locale (no regional fallback: without a currency a plain number is shown); `percent`
  * treats the value as a fraction (0.142 → "14.2%"); `compact` uses Intl compact
  * notation (1_200 → "1.2K").
  */
@@ -25,11 +27,7 @@ export function formatWidgetValue(
     const loc = locale || undefined
     switch (format) {
         case 'currency':
-            return new Intl.NumberFormat(loc, {
-                style: 'currency',
-                currency: currency || 'USD',
-                maximumFractionDigits: 2,
-            }).format(value)
+            return formatAmount(value, { currency, locale })
         case 'percent':
             return new Intl.NumberFormat(loc, {
                 style: 'percent',
@@ -55,10 +53,10 @@ export function formatAxisTick(
     { format, locale, currency }: WidgetFormatCtx,
 ): string {
     const loc = locale || undefined
-    if (format === 'currency') {
+    if (format === 'currency' && currency) {
         return new Intl.NumberFormat(loc, {
             style: 'currency',
-            currency: currency || 'USD',
+            currency,
             notation: 'compact',
             maximumFractionDigits: 1,
         }).format(value)

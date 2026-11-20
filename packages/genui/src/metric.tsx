@@ -3,25 +3,19 @@ import { cn } from '@asteby/metacore-ui'
 import type { GenUIBlockRendererProps } from './registry'
 import { TEXT_TONE } from './generative-ui'
 import type { Tone } from './types'
+import { formatAmount, relativeTime } from '@asteby/metacore-lib'
 
 const TREND_ICON = { up: ArrowUpRight, down: ArrowDownRight, flat: ArrowRight }
 const TREND_LABEL = { up: 'al alza', down: 'a la baja', flat: 'estable' }
 
-const RELATIVE_UNITS: ReadonlyArray<readonly [number, Intl.RelativeTimeFormatUnit]> = [
-  [86_400_000, 'day'],
-  [3_600_000, 'hour'],
-  [60_000, 'minute'],
-  [1000, 'second'],
-]
-
 /** Formats a metric value with Intl (no host dependency). Unknown shapes print as text. */
-export function formatMetric(value: unknown, format: string | undefined, locale?: string, currency = 'MXN'): string {
+export function formatMetric(value: unknown, format: string | undefined, locale?: string, currency?: string): string {
   if (value === null || value === undefined) return '—'
   const n = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)) ? Number(value) : NaN
   try {
     switch (format) {
       case 'currency':
-        return Number.isNaN(n) ? String(value) : new Intl.NumberFormat(locale, { style: 'currency', currency }).format(n)
+        return Number.isNaN(n) ? String(value) : formatAmount(n, { currency, locale })
       case 'percent':
         return Number.isNaN(n) ? String(value) : new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 1 }).format(n > 1 ? n / 100 : n)
       case 'compact':
@@ -32,12 +26,8 @@ export function formatMetric(value: unknown, format: string | undefined, locale?
         return Number.isNaN(d.getTime()) ? String(value) : new Intl.DateTimeFormat(locale, format === 'date' ? { dateStyle: 'medium' } : { dateStyle: 'medium', timeStyle: 'short' }).format(d)
       }
       case 'relative_date': {
-        const d = new Date(String(value))
-        if (Number.isNaN(d.getTime())) return String(value)
-        const diff = d.getTime() - Date.now()
-        // Unidad mas grande que quepa (minutos/horas/dias) para que "hace 3 horas" no sea "hoy".
-        const [step, unit] = RELATIVE_UNITS.find(([ms]) => Math.abs(diff) >= ms) ?? RELATIVE_UNITS[RELATIVE_UNITS.length - 1]!
-        return new Intl.RelativeTimeFormat(locale, { numeric: 'auto' }).format(Math.round(diff / step), unit)
+        const text = relativeTime(String(value), { locale })
+        return text || String(value)
       }
       default:
         return Number.isNaN(n) ? String(value) : new Intl.NumberFormat(locale).format(n)

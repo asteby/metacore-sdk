@@ -1,3 +1,4 @@
+import { formatBytes as formatBytesShared } from '@asteby/metacore-lib'
 import type {
   DataloadPlan,
   InlineSourceInput,
@@ -19,17 +20,9 @@ export function parseTime(iso: string | undefined | null): Date | null {
   return isNaN(d.getTime()) || d.getUTCFullYear() <= 1 ? null : d
 }
 
+/** Human byte size (shared implementation in `@asteby/metacore-lib`). */
 export function formatBytes(n: number): string {
-  if (!Number.isFinite(n) || n < 0) return '—'
-  if (n < 1024) return `${n} B`
-  const units = ['KB', 'MB', 'GB', 'TB']
-  let v = n / 1024
-  let i = 0
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024
-    i++
-  }
-  return `${v >= 100 ? v.toFixed(0) : v.toFixed(1)} ${units[i]}`
+  return formatBytesShared(n)
 }
 
 /** Percentage (0-100, integer) of applicable rows already written. */

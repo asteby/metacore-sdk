@@ -36,6 +36,9 @@
     "test": "vitest run",
     "clean": "rm -rf dist"
   },
+  "dependencies": {
+    "@asteby/metacore-lib": "workspace:^"
+  },
   "peerDependencies": {
     "@radix-ui/react-direction": "^1.1.0",
     "@tanstack/react-query": ">=5",

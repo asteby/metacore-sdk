@@ -1,5 +1,6 @@
 import { BADGE_TONE_CLASS, type Severity } from '@asteby/metacore-ui/layout'
 import { cn } from '@asteby/metacore-ui/lib'
+import { formatAmount } from '@asteby/metacore-lib'
 import type { CardFieldSpec, CardSpec } from './types'
 
 export interface ResolvedCard {
@@ -10,12 +11,12 @@ export interface ResolvedCard {
     meta: { label?: string; value: string }[]
 }
 
-function fmt(v: unknown, f: CardFieldSpec['format'] = 'text', locale?: string): string {
+function fmt(v: unknown, f: CardFieldSpec['format'] = 'text', locale?: string, currency?: string): string {
     if (v == null || v === '') return ''
     try {
         if (f === 'number') return new Intl.NumberFormat(locale).format(Number(v))
         if (f === 'percent') return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(Number(v))}%`
-        if (f === 'currency') return new Intl.NumberFormat(locale, { style: 'currency', currency: 'MXN' }).format(Number(v))
+        if (f === 'currency') return formatAmount(v as number | string, { currency, locale })
         if (f === 'date') return new Date(String(v)).toLocaleDateString(locale)
         if (f === 'datetime') return new Date(String(v)).toLocaleString(locale)
     } catch {
@@ -25,7 +26,7 @@ function fmt(v: unknown, f: CardFieldSpec['format'] = 'text', locale?: string): 
 }
 
 /** Pure: row + manifest CardSpec -> display model. Missing fields are skipped, never throw. */
-export function resolveCard(spec: CardSpec, row: Record<string, unknown>, locale?: string): ResolvedCard {
+export function resolveCard(spec: CardSpec, row: Record<string, unknown>, locale?: string, currency?: string): ResolvedCard {
     const bv = spec.badge ? row[spec.badge.field] : undefined
     const key = bv == null ? '' : String(bv)
     return {
@@ -33,12 +34,12 @@ export function resolveCard(spec: CardSpec, row: Record<string, unknown>, locale
         subtitle: spec.subtitle ? fmt(row[spec.subtitle]) || undefined : undefined,
         badge: spec.badge && key ? { text: spec.badge.labels?.[key] ?? key, tone: spec.badge.tones?.[key] ?? 'info' } : undefined,
         chips: (spec.chips ?? []).map((f) => fmt(row[f])).filter(Boolean),
-        meta: (spec.meta ?? []).map((m) => ({ label: m.label, value: fmt(row[m.field], m.format, locale) })).filter((m) => m.value),
+        meta: (spec.meta ?? []).map((m) => ({ label: m.label, value: fmt(row[m.field], m.format, locale, currency) })).filter((m) => m.value),
     }
 }
 
-export function ConfigurableCard({ spec, row, onClick, locale }: { spec: CardSpec; row: Record<string, unknown>; onClick?: () => void; locale?: string }) {
-    const c = resolveCard(spec, row, locale)
+export function ConfigurableCard({ spec, row, onClick, locale, currency }: { spec: CardSpec; row: Record<string, unknown>; onClick?: () => void; locale?: string; currency?: string }) {
+    const c = resolveCard(spec, row, locale, currency)
     const Tag = onClick ? 'button' : 'div'
     return (
         <Tag

@@ -32,6 +32,10 @@
       "types": "./dist/currency.d.ts",
       "import": "./dist/currency.js"
     },
+    "./intl-format": {
+      "types": "./dist/intl-format.d.ts",
+      "import": "./dist/intl-format.js"
+    },
     "./money": {
       "types": "./dist/money.d.ts",
       "import": "./dist/money.js"
