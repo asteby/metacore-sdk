@@ -133,3 +133,15 @@ describe('request headers', () => {
         expect(post).toHaveBeenCalledWith('/x', { a: 1 }, undefined)
     })
 })
+
+describe('timeout / freshness', () => {
+    it('defaultTimeout applies, per-call timeout wins, freshness passes through', async () => {
+        const get = vi.fn(async () => ({}))
+        const post = vi.fn(async () => ({}))
+        const c = createHostApiClient(stub({ get: get as never, post: post as never }), { defaultTimeout: 30_000 })
+        await c.get('/x')
+        expect(get).toHaveBeenLastCalledWith('/x', { timeout: 30_000 })
+        await c.post('/y', {}, { timeout: 120_000, freshness: 'network' })
+        expect(post).toHaveBeenLastCalledWith('/y', {}, { timeout: 120_000, freshness: 'network' })
+    })
+})

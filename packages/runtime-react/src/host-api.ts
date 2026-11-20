@@ -33,6 +33,12 @@ export interface CreateHostApiOptions {
      * batches.
      */
     batchGets?: boolean
+    /**
+     * Ceiling (ms) for a remote's per-call `timeout`. Default 600000 (10 min).
+     * A remote asking for more, or for `0`, gets this ceiling. `0` here means
+     * the host admits no ceiling (remote `0` = no limit).
+     */
+    maxTimeoutMs?: number
 }
 
 type AxiosLikeError = {
@@ -127,12 +133,30 @@ export function sanitizeRemoteHeaders(
     return Object.keys(out).length ? out : undefined
 }
 
-function toConfig(opts?: HostApiRequestOptions): Record<string, unknown> | undefined {
+export const DEFAULT_MAX_TIMEOUT_MS = 600_000
+
+/** Request-config key the host transport reads to bypass its offline cache. */
+export const HOST_FRESHNESS_KEY = 'metacoreFreshness'
+
+/**
+ * Validate a requested timeout: finite number >= 0 else `undefined` (ignored);
+ * clamp to `max` (0 or above max => max; `max === 0` => no ceiling).
+ */
+export function normalizeTimeout(t: unknown, max: number = DEFAULT_MAX_TIMEOUT_MS): number | undefined {
+    if (typeof t !== 'number' || !Number.isFinite(t) || t < 0) return undefined
+    if (max > 0 && (t === 0 || t > max)) return max
+    return t
+}
+
+function toConfig(opts?: HostApiRequestOptions, maxTimeoutMs?: number): Record<string, unknown> | undefined {
     if (!opts) return undefined
     const config: Record<string, unknown> = {}
     if (opts.params) config.params = opts.params
     if (opts.signal) config.signal = opts.signal
     if (opts.responseType === 'blob') config.responseType = 'blob'
+    const timeout = normalizeTimeout(opts.timeout, maxTimeoutMs)
+    if (timeout !== undefined) config.timeout = timeout
+    if (opts.freshness === 'network') config[HOST_FRESHNESS_KEY] = 'network'
     const headers = sanitizeRemoteHeaders(opts.headers)
     if (headers) config.headers = headers
     return config
@@ -174,7 +198,7 @@ async function bodyOf<T>(p: Promise<{ data: unknown }>, opts?: HostApiRequestOpt
 export function createHostApi(client: ApiClient, options: CreateHostApiOptions = {}): HostApi {
     const capabilityPath = options.capabilityPath ?? '/capabilities/query'
     const withConfig = <A extends unknown[]>(args: A, opts?: HostApiRequestOptions) => {
-        const config = toConfig(opts)
+        const config = toConfig(opts, options.maxTimeoutMs)
         return config ? ([...args, config] as unknown[]) : (args as unknown[])
     }
     const patch = (client as ApiClient & {
@@ -184,7 +208,8 @@ export function createHostApi(client: ApiClient, options: CreateHostApiOptions =
         get: <T,>(path: string, opts?: HostApiRequestOptions) => {
             const args = withConfig([path], opts) as [string, { params?: Record<string, unknown> }?]
             // A GET with per-call headers cannot share a POST /q: it goes on its own.
-            const batch = options.batchGets && opts?.responseType !== 'blob' && !sanitizeRemoteHeaders(opts?.headers)
+            const batch = options.batchGets && opts?.responseType !== 'blob' && !sanitizeRemoteHeaders(opts?.headers) &&
+                opts?.timeout === undefined && opts?.freshness !== 'network'
             return bodyOf<T>(batch ? batchGet(client, ...args) : client.get(...args), opts)
         },
         post: <T,>(path: string, body?: unknown, opts?: HostApiRequestOptions) =>

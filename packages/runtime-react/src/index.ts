@@ -304,7 +304,7 @@ export {
     type PageChromeState,
     type PageChromeStore,
 } from './addon-page-host'
-export { createHostApi, toHostApiError, sanitizeRemoteHeaders, PROTECTED_HOST_HEADERS, type CreateHostApiOptions } from './host-api'
+export { createHostApi, toHostApiError, sanitizeRemoteHeaders, PROTECTED_HOST_HEADERS, normalizeTimeout, DEFAULT_MAX_TIMEOUT_MS, HOST_FRESHNESS_KEY, type CreateHostApiOptions } from './host-api'
 export { HostApiProvider, type HostApiProviderProps } from './host-api-context'
 export {
     createHostApiClient,

@@ -78,6 +78,44 @@ el mismo realm que el host (puede llamar a `fetch`/axios directamente); la defen
 es lo que el backend valida (auth, permisos, tenant), nunca estas cabeceras. Un GET con
 `headers` por llamada no entra en el lote de `batchGets` (va como GET propio).
 
+## Timeout por llamada
+
+El transporte del host tiene su propio timeout (ops: 60 s). Para operaciones lentas
+(cobro multi-pago, devolución, importar CFDI) sube el límite en esa llamada:
+
+```ts
+await api.post('/data/payments/collect_multi', body, { timeout: 180_000 })
+const api = useHostApiClient({ defaultTimeout: 30_000 })   // para todas; la llamada gana
+```
+
+- Debe ser un número finito >= 0; cualquier otro valor se ignora (rige el del host).
+- El host lo topa con `createHostApi(client, { maxTimeoutMs })` (por defecto 600000 = 10 min):
+  un valor mayor, o `0`, se convierte en ese tope. `maxTimeoutMs: 0` declara "sin tope" y
+  entonces `timeout: 0` = sin límite. Así un remote no deja peticiones colgadas.
+- Un timeout rechaza el cliente PERO el servidor puede haber aplicado la operación: no
+  reintentes cobros/devoluciones/importaciones sin comprobar el estado (o usa idempotencia).
+- Tampoco entra en un lote de `batchGets`.
+
+## Lecturas frescas y capa offline
+
+En ops, `installSyncHttp` (`frontend/src/lib/sync`) cuelga de la instancia axios del host:
+(a) ante un fallo de RED (sin respuesta) en un GET `/data|/metadata`, sirve la copia local
+(cabecera `x-ops-from-cache`), (b) en un GET con éxito superpone las escrituras encoladas
+(`overlayQueued`), (c) offline encola escrituras. Un addon NO lo nota: una lectura de
+montos pendientes puede ser una copia vieja. Para lecturas críticas de dinero:
+
+```ts
+const inv = await api.get(`/data/invoices/${id}`, { freshness: 'network' })
+```
+
+`freshness: 'network'` fija `metacoreFreshness: 'network'` en la config axios del host y
+excluye la llamada del lote. Solo lo cumple un host cuyo interceptor lo lea: en ops falta
+que `onNetworkError` (`sync/http-core.ts`) relance el error si `config.metacoreFreshness
+=== 'network'` en lugar de servir del caché (y, si se quiere, que `onReadSuccess` no
+superponga la cola). Hasta entonces la opción se ignora y el comportamiento es el de arriba.
+Recomendación: en cobros/devoluciones leer saldos con `freshness: 'network'` y, si la
+lectura falla, no dejar continuar la operación.
+
 ## Límites actuales
 
 - Sin `Content-Type` manual: el transporte del host fija el boundary multipart.

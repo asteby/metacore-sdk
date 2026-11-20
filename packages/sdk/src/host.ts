@@ -42,6 +42,25 @@ export interface HostApiRequestOptions {
    * the host's.
    */
   headers?: Record<string, string>;
+  /**
+   * Per-call timeout in milliseconds, for slow operations (multi-payment,
+   * returns, CFDI import) where the host's default would report an error even
+   * though the server finished. Must be a finite number >= 0; anything else is
+   * ignored. The host clamps it to its own ceiling (`0` means "the ceiling", or
+   * no limit only if the host configured none), so a remote cannot leave a
+   * request hanging indefinitely. On timeout the request rejects, but the
+   * server may still have applied it: do not blindly retry non-idempotent calls.
+   */
+  timeout?: number;
+  /**
+   * `"network"`: this read must come from the server, never from the host's
+   * offline cache (use it for money-critical reads: pending balances, prior
+   * payments/returns). If the network fails the call rejects instead of
+   * returning a stale copy. Only a host that honors the
+   * `metacoreFreshness` request-config flag enforces it; others ignore it.
+   * Default: the host's normal behavior (may serve cached data when offline).
+   */
+  freshness?: "network";
 }
 
 /**
