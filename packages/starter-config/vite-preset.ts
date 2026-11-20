@@ -205,6 +205,27 @@ export interface MetacoreFederationOptions {
    * `requiredVersion`.
    */
   hostProvided?: string[]
+  /**
+   * Declare ONLY these canonical singletons (subset of
+   * `METACORE_FEDERATION_SINGLETONS`), each with its canonical config
+   * (`singleton`, and `import: false` for the host-only router on remotes).
+   *
+   * Why: a remote that declares a shared package it never imports breaks
+   * `loadShare` at runtime (`Cannot read properties of undefined (reading
+   * 'M_ID')`), so most addons must list only what they import. `only` is
+   * explicit and does not drag singletons added to the canonical list in the
+   * future into addons that do not use them (the reason it is preferred over
+   * an `omit` list, which is intentionally not offered).
+   *
+   * Precedence: `only` selects the canonical base; then `pageShares`/`manifest`
+   * lazy shares, `extras`, `extra`, `hostProvided` and `overrides` are applied
+   * on top, in that order, exactly as without `only` (so `hostProvided` or
+   * `overrides` naming a canonical singleton outside `only` adds it). An
+   * unknown name throws. Without `only`, behaviour is unchanged (full list).
+   * The "every mandatory singleton present" check is relaxed, but a declared
+   * mandatory singleton is still rejected when `singleton` is not `true`.
+   */
+  only?: string[]
 }
 
 export interface MetacoreFederationConfig {
@@ -291,7 +312,10 @@ export function metacoreFederationShared(
     pageShares = [],
     root = process.cwd(),
     hostProvided = [],
+    only,
   } = opts
+  if (only) assertKnownOnly(only)
+  const keep = (name: string) => !only || only.includes(name)
   const role = opts.role ?? (exposes ? 'remote' : 'host')
 
   const shared: Record<string, MetacoreFederationShareConfig> = {}
@@ -300,11 +324,11 @@ export function metacoreFederationShared(
   // `useState`-null (React duplicado) y mantiene contextos compartidos (Auth,
   // Theme, Query, Router) entre módulos federados.
   for (const name of METACORE_FEDERATION_SINGLETONS) {
-    shared[name] = { singleton: true }
+    if (keep(name)) shared[name] = { singleton: true }
   }
   if (role === 'remote') {
     for (const name of METACORE_REMOTE_HOST_ONLY_SINGLETONS) {
-      shared[name] = { singleton: true, import: false }
+      if (keep(name)) shared[name] = { singleton: true, import: false }
     }
   }
   // Páginas federadas: cada `pages[].expose` debe construirse y sus `shares`
@@ -331,11 +355,15 @@ export function metacoreFederationShared(
   }
   // `overrides` — ajusta UN paquete existente sin alterar el resto. Se aplica
   // al final para que tenga la última palabra sobre defaults y `extra`.
+  // Una propiedad con valor `undefined` se ELIMINA de la entry (p. ej.
+  // `{ import: undefined }` quita el `import: false` canónico del router).
   for (const [name, override] of Object.entries(overrides)) {
-    shared[name] = { ...(shared[name] ?? {}), ...override }
+    const merged: Record<string, unknown> = { ...(shared[name] ?? {}), ...override }
+    for (const k of Object.keys(merged)) if (merged[k] === undefined) delete merged[k]
+    shared[name] = merged as MetacoreFederationShareConfig
   }
 
-  assertMetacoreFederationShared(shared)
+  assertMetacoreFederationShared(shared, { partial: !!only })
 
   return {
     name: host,
@@ -348,15 +376,31 @@ export function metacoreFederationShared(
   }
 }
 
+/** Throws a clear error when `only` names something outside the canonical list. */
+function assertKnownOnly(only: string[]): void {
+  const known = METACORE_FEDERATION_SINGLETONS as readonly string[]
+  const unknown = only.filter((n) => !known.includes(n))
+  if (unknown.length) {
+    throw new Error(
+      `metacore federation shared: unknown \`only\` entr${unknown.length > 1 ? 'ies' : 'y'} ` +
+        `${unknown.map((n) => `"${n}"`).join(', ')}. \`only\` accepts canonical singletons ` +
+        `(${known.join(', ')}); add other packages with \`extras\`/\`extra\`.`
+    )
+  }
+}
+
 /**
  * Fails when a required singleton is missing or has `singleton: false`.
  * Called by {@link metacoreFederationShared}; also usable in CI against a
  * hand-rolled `shared` map.
  */
 export function assertMetacoreFederationShared(
-  shared: Record<string, MetacoreFederationShareConfig | undefined>
+  shared: Record<string, MetacoreFederationShareConfig | undefined>,
+  opts: { partial?: boolean } = {}
 ): void {
   for (const name of METACORE_FEDERATION_SINGLETONS) {
+    // `partial` (a `only` subset): absent is fine, present must be a singleton.
+    if (opts.partial && shared[name] === undefined) continue
     if (!shared[name]?.singleton) {
       throw new Error(
         `metacore federation shared: "${name}" must be { singleton: true }. ` +

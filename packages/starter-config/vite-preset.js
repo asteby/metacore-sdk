@@ -77,16 +77,19 @@ function metacoreFederationShared(opts) {
     manifest,
     pageShares = [],
     root = process.cwd(),
-    hostProvided = []
+    hostProvided = [],
+    only
   } = opts;
+  if (only) assertKnownOnly(only);
+  const keep = (name) => !only || only.includes(name);
   const role = opts.role ?? (exposes ? "remote" : "host");
   const shared = {};
   for (const name of METACORE_FEDERATION_SINGLETONS) {
-    shared[name] = { singleton: true };
+    if (keep(name)) shared[name] = { singleton: true };
   }
   if (role === "remote") {
     for (const name of METACORE_REMOTE_HOST_ONLY_SINGLETONS) {
-      shared[name] = { singleton: true, import: false };
+      if (keep(name)) shared[name] = { singleton: true, import: false };
     }
   }
   const lazy = new Set(pageShares);
@@ -106,9 +109,11 @@ function metacoreFederationShared(opts) {
     shared[name] = { ...shared[name] ?? {}, singleton: true, import: false };
   }
   for (const [name, override] of Object.entries(overrides)) {
-    shared[name] = { ...shared[name] ?? {}, ...override };
+    const merged = { ...shared[name] ?? {}, ...override };
+    for (const k of Object.keys(merged)) if (merged[k] === void 0) delete merged[k];
+    shared[name] = merged;
   }
-  assertMetacoreFederationShared(shared);
+  assertMetacoreFederationShared(shared, { partial: !!only });
   return {
     name: host,
     filename,
@@ -119,8 +124,18 @@ function metacoreFederationShared(opts) {
     shared
   };
 }
-function assertMetacoreFederationShared(shared) {
+function assertKnownOnly(only) {
+  const known = METACORE_FEDERATION_SINGLETONS;
+  const unknown = only.filter((n) => !known.includes(n));
+  if (unknown.length) {
+    throw new Error(
+      `metacore federation shared: unknown \`only\` entr${unknown.length > 1 ? "ies" : "y"} ${unknown.map((n) => `"${n}"`).join(", ")}. \`only\` accepts canonical singletons (${known.join(", ")}); add other packages with \`extras\`/\`extra\`.`
+    );
+  }
+}
+function assertMetacoreFederationShared(shared, opts = {}) {
   for (const name of METACORE_FEDERATION_SINGLETONS) {
+    if (opts.partial && shared[name] === void 0) continue;
     if (!shared[name]?.singleton) {
       throw new Error(
         `metacore federation shared: "${name}" must be { singleton: true }. Use metacoreFederationShared() from @asteby/metacore-starter-config/vite and do not override singleton to false.`
