@@ -17,6 +17,7 @@ import type {
     HostQueryPart,
 } from '@asteby/metacore-sdk'
 import type { ApiClient } from './api-context'
+import { isAbortError } from '@asteby/metacore-lib/envelope'
 import { batchGet } from './query-batch'
 
 export interface CreateHostApiOptions {
@@ -111,6 +112,8 @@ async function bodyOf<T>(p: Promise<{ data: unknown }>, opts?: HostApiRequestOpt
         }
         return res.data as T
     } catch (e) {
+        // A cancelled request stays an abort (callers filter it with isAbortError).
+        if (isAbortError(e)) throw e
         throw toHostApiError(opts?.responseType === 'blob' ? await decodeBlobError(e) : e)
     }
 }
