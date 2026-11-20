@@ -10,7 +10,7 @@
 // the image-url resolver and the org IANA timezone — are passed as props so the
 // SDK stays transport- and host-agnostic.
 import { emitRecordMutation } from '../record-mutation-events'
-import { createContext, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ModelSchema } from './types'
 
@@ -72,9 +72,12 @@ import { isNullableBooleanField, omitUntouchedNullBooleans, usesTriState } from 
 import { NullBooleanMark, TriStateBooleanField } from '../tri-state-boolean'
 import { isNilUuid, normalizeNilUuid } from '../nil-uuid'
 import { normalizeRefFieldsForSubmit, withInlineChildren } from './normalize-submit'
-import { InlineRelationRows } from './inline-relation-rows'
 import { relationMin, splitChildErrors } from './inline-relations'
 import { useInlineRelations } from './use-inline-relations'
+
+// La tabla de filas hijas solo se usa al CREAR un registro cuyo modelo declara `create_inline`: se carga bajo demanda para no
+// engordar el grafo inicial del panel (el shell de Ops tiene un techo de no-regresión).
+const InlineRelationRows = lazy(() => import('./inline-relation-rows').then(m => ({ default: m.InlineRelationRows })))
 import { validateDraftRows, type DraftRow } from '../draft-rows'
 import { clearFieldErrorTree, lineItemErrorsFor } from '../field-validation-ui'
 import { validateValues, bagHasErrors, exemptUnchangedRuleIssues } from '../validator'
@@ -1503,6 +1506,7 @@ export function DynamicRecordDialog({
                             )}
                             {isCreate && inline.relations.length > 0 && (
                                 <div className="mt-6 space-y-6" data-slot="inline-relations">
+                                    <Suspense fallback={<div role="status" aria-busy="true" className="h-24 animate-pulse rounded-md bg-muted" data-slot="inline-relations-loading" />}>
                                     {inline.relations.map(rel => (
                                         <InlineRelationRows
                                             key={rel.name}
@@ -1529,6 +1533,7 @@ export function DynamicRecordDialog({
                                             )}
                                         />
                                     ))}
+                                    </Suspense>
                                 </div>
                             )}
                             {!isCreate && record && audit && (
