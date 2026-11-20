@@ -40,3 +40,8 @@ bin/
 # Go workspace (local dev only — never published)
 go.work
 go.work.sum
+
+# Declaraciones emitidas por tsc junto a las fuentes (artefactos de un build mal dirigido)
+packages/sdk/src/**/*.d.ts
+packages/sdk/src/**/*.d.ts.map
+!packages/sdk/src/generated/**
