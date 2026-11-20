@@ -62,7 +62,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node ../../scripts/fix-dist-esm-imports.mjs",
     "dev": "tsc -w -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run && pnpm build && node ../../scripts/check-dist-esm-imports.mjs . && node --input-type=module -e \"await import('@asteby/metacore-lib/envelope')\"",

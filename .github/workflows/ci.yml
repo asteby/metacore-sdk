@@ -29,6 +29,7 @@ jobs:
       # Ningun paquete publicable emite imports relativos sin extension (Node ESM).
       # Solo mira los paquetes ya construidos arriba (filtro origin/main).
       - run: node scripts/check-dist-esm-imports.mjs
+      - run: node scripts/check-packed-esm.mjs lib sdk ui
       - run: node scripts/gen-tailwind-sources.mjs --check
 
   # Gate de codegen (MD0.6): los tipos TS de packages/sdk/src/generated salen de

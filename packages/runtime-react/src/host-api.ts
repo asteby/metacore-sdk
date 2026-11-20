@@ -96,7 +96,19 @@ export const PROTECTED_HOST_HEADERS: ReadonlySet<string> = new Set([
     'transfer-encoding',
     'origin',
     'referer',
+    // Reenvio / identidad de origen: el backend arma URLs publicas y decide
+    // tenant a partir de ellas.
+    'x-forwarded-host',
+    'x-forwarded-proto',
+    'x-forwarded-for',
+    'x-forwarded-port',
+    'forwarded',
+    'x-real-ip',
+    'x-storefront-domain',
+    'x-api-key',
+    'x-http-method-override',
 ])
+const PROTECTED_HEADER_PREFIXES = ['proxy-']
 
 /** Drop protected / malformed headers; returns undefined when none remain. */
 export function sanitizeRemoteHeaders(
@@ -108,7 +120,8 @@ export function sanitizeRemoteHeaders(
         if (typeof value !== 'string') continue
         if (!/^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/.test(name)) continue
         if (/[\r\n]/.test(value)) continue
-        if (PROTECTED_HOST_HEADERS.has(name.toLowerCase())) continue
+        const lower = name.toLowerCase()
+        if (PROTECTED_HOST_HEADERS.has(lower) || PROTECTED_HEADER_PREFIXES.some((p) => lower.startsWith(p))) continue
         out[name] = value
     }
     return Object.keys(out).length ? out : undefined
@@ -170,7 +183,8 @@ export function createHostApi(client: ApiClient, options: CreateHostApiOptions =
     return Object.freeze({
         get: <T,>(path: string, opts?: HostApiRequestOptions) => {
             const args = withConfig([path], opts) as [string, { params?: Record<string, unknown> }?]
-            const batch = options.batchGets && opts?.responseType !== 'blob'
+            // A GET with per-call headers cannot share a POST /q: it goes on its own.
+            const batch = options.batchGets && opts?.responseType !== 'blob' && !sanitizeRemoteHeaders(opts?.headers)
             return bodyOf<T>(batch ? batchGet(client, ...args) : client.get(...args), opts)
         },
         post: <T,>(path: string, body?: unknown, opts?: HostApiRequestOptions) =>

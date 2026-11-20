@@ -13,12 +13,12 @@
  * dual-reads v2 for backwards compatibility.
  */
 // Side-effect imports so declaration-merging blocks (if any) resolve.
-import "./generated/manifest-v3";
-import "./generated/manifest";
+import "./generated/manifest-v3.js";
+import "./generated/manifest.js";
 // ---------------------------------------------------------------------------
 // Module Contract v3 — canonical surface.
 // ---------------------------------------------------------------------------
-export { APIVersion as METACORE_API_VERSION } from "./generated/manifest-v3";
-export { PageLayoutShell, PageLayoutImmersive, MaxPageBudgetKB, MaxPageBreadcrumbs, ViewTypeTable, ViewTypeKanban, ViewTypeMap, ViewTypeTimeline, ViewTypeCalendar, ViewTypeChart, ViewTypeSplit, PanelKindMap, PanelKindTimeline, PanelKindChart, PanelKindRelation, PanelKindStats, PanelKindCustom, } from "./generated/manifest-v3";
-export { HostCapUIPages, HostCapUIEmbeddedPages, HostCapUIDetailPanels, HostCapUIMaps, HostCapUICharts, HostCapUIViewPrefix, } from "./generated/manifest";
-export { APIVersion as METACORE_API_VERSION_V2 } from "./generated/manifest";
+export { APIVersion as METACORE_API_VERSION } from "./generated/manifest-v3.js";
+export { PageLayoutShell, PageLayoutImmersive, MaxPageBudgetKB, MaxPageBreadcrumbs, ViewTypeTable, ViewTypeKanban, ViewTypeMap, ViewTypeTimeline, ViewTypeCalendar, ViewTypeChart, ViewTypeSplit, PanelKindMap, PanelKindTimeline, PanelKindChart, PanelKindRelation, PanelKindStats, PanelKindCustom, } from "./generated/manifest-v3.js";
+export { HostCapUIPages, HostCapUIEmbeddedPages, HostCapUIDetailPanels, HostCapUIMaps, HostCapUICharts, HostCapUIViewPrefix, } from "./generated/manifest.js";
+export { APIVersion as METACORE_API_VERSION_V2 } from "./generated/manifest.js";
