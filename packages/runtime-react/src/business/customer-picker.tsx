@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@asteby/metacore-ui'
 import { RecordPicker, useLatestSearch } from '../record-picker'
 import { useRecordPickerDialog } from '../record-picker-dialog'
+import type { FieldDef } from '../dialogs/dynamic-record'
 import { useCan } from '../permissions-context'
 import { useFormatter } from './format'
 
@@ -46,6 +47,14 @@ export interface CustomerPickerProps {
     canEdit?: boolean
     /** Valores iniciales del alta rápida (p. ej. el texto buscado como nombre). */
     createDefaults?: Record<string, unknown>
+    /**
+     * Campos extra del modal de alta/edicion (se fusionan al esquema servido). Con
+     * `widget: '<nombre>'` registrado via `registerFieldWidget`, el widget puede llenar
+     * el resto del formulario con `setValues` (p. ej. precarga desde un documento).
+     */
+    ensureFields?: FieldDef[]
+    /** Abre la lista al enfocar el cuadro de busqueda (ver `RecordPicker.openOnFocus`). */
+    openOnFocus?: boolean
     currency?: string
     disabled?: boolean
     placeholder?: string
@@ -72,6 +81,8 @@ export function CustomerPicker({
     canCreate,
     canEdit,
     createDefaults,
+    ensureFields,
+    openOnFocus,
     currency,
     disabled,
     placeholder,
@@ -103,6 +114,7 @@ export function CustomerPicker({
         endpoint,
         prefillField: 'name',
         createDefaults,
+        ensureFields,
         onSaved: (rec, kind) => {
             const next = toResult(rec)
             // Al editar se conservan saldo/crédito/alertas que el registro no trae.
@@ -139,6 +151,7 @@ export function CustomerPicker({
         <>
             <RecordPicker<CustomerResult>
                 trigger="input"
+                openOnFocus={openOnFocus}
                 slot="customer-picker"
                 search={searchFn}
                 minChars={2}

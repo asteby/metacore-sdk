@@ -24,6 +24,7 @@ export function CreateRecordDialog({
     schema,
     defaults,
     lockedFields,
+    ensureFields,
     onCreate,
     onUpdate,
     onSaved,
@@ -40,6 +41,7 @@ export function CreateRecordDialog({
             schema={schema}
             defaults={defaults}
             lockedFields={lockedFields}
+            ensureFields={ensureFields}
             onCreate={onCreate}
             onUpdate={onUpdate}
             onSaved={onSaved}

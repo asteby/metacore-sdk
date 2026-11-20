@@ -113,6 +113,8 @@ export interface CreateRecordDialogProps extends RecordDialogProps {
      * Ignored outside create mode.
      */
     lockedFields?: string[]
+    /** Fields merged into the modal schema after load (see DynamicRecordDialog.ensureFields). */
+    ensureFields?: import('./dynamic-record').FieldDef[]
     /** Notification when a create or update succeeds. */
     onSaved?: () => void
 }
