@@ -1,5 +1,12 @@
 # @asteby/metacore-dataload
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [4b0ce51]
+  - @asteby/metacore-lib@0.12.0
+
 ## 0.1.2
 
 ### Patch Changes

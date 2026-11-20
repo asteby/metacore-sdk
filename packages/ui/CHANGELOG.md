@@ -1,5 +1,18 @@
 # @asteby/metacore-ui
 
+## 2.37.0
+
+### Minor Changes
+
+- f1a8458: Estados de carga que siempre resuelven: nuevo primitivo `<LoadState>` y hook `useLoadingGuard` (timeout configurable, error con boton de reintentar, `aria-busy`/`aria-live`, textos i18n `loadState.*` es/en). Usado en el esqueleto de `AppSidebar` (props `isError`/`onRetry`/`loadTimeoutMs`), `DashboardGrid` (`loadTimeoutMs`; un lote que falla ahora muestra error con reintento en vez de tarjetas vacias) y `DynamicTable` (`loadTimeoutMs`; metadata y lista).
+- c1d0bf9: Las rutas fijas `/api/...` ya no ignoran el baseURL del host: el beacon de salida de llamadas y el atlas de mapas del workspace usan el cliente inyectado (`apiBaseUrl` opcional en el host, o `http.defaults.baseURL`), y `resolveTillImageUrl` acepta una base de media configurable. Sin cambios para quien no configure nada.
+- 3a77028: Skeletons por tokens y densidad: `Skeleton` toma el radio de `--skeleton-radius`; nuevos `SkeletonRow`/`SkeletonList` dimensionados por `--skeleton-row-h`, `--skeleton-avatar` y `--skeleton-line-h`, que se compactan con `data-ui-density='compact'` (tokens en `@asteby/metacore-theme`). El dropdown de notificaciones muestra filas esqueleto del tamano de la fila real en vez de texto; el esqueleto de `inbox` usa los mismos tokens.
+
+### Patch Changes
+
+- Updated dependencies [3a77028]
+  - @asteby/metacore-theme@2.37.0
+
 ## 2.34.0
 
 ### Minor Changes

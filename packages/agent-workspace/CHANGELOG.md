@@ -1,5 +1,16 @@
 # @asteby/metacore-agent-workspace
 
+## 6.3.0
+
+### Minor Changes
+
+- c1d0bf9: Las rutas fijas `/api/...` ya no ignoran el baseURL del host: el beacon de salida de llamadas y el atlas de mapas del workspace usan el cliente inyectado (`apiBaseUrl` opcional en el host, o `http.defaults.baseURL`), y `resolveTillImageUrl` acepta una base de media configurable. Sin cambios para quien no configure nada.
+
+### Patch Changes
+
+- Updated dependencies [4b0ce51]
+  - @asteby/metacore-lib@0.12.0
+
 ## 6.2.2
 
 ### Patch Changes

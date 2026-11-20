@@ -1,5 +1,13 @@
 # @asteby/metacore-lib
 
+## 0.12.0
+
+### Minor Changes
+
+- 4b0ce51: `getApiErrorMessage(err, fallback, { lang })` consulta un catalogo de errores por `code` (con `{param}`) antes de caer a `message`. Nuevo `registerErrorCatalog`, `translateErrorCode` y el catalogo es/en del kernel (`kernelErrorCatalog`).
+
+  Soporta el formato real del kernel: errores de validacion 422 `{errors:{<col>:[{code,params,message?}]}}` y cuerpos planos `{code,message}`. Nuevo `getApiFieldErrors(err, {lang})` (columna -> mensajes traducidos).
+
 ## 0.11.0
 
 ### Minor Changes
