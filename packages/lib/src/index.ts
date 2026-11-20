@@ -109,4 +109,14 @@ export type {
   UnwrappedList,
 } from './envelope'
 
+export {
+  registerErrorCatalog,
+  registerErrorCatalogs,
+  translateErrorCode,
+  interpolateErrorTemplate,
+  kernelErrorCatalog,
+} from './error-catalog'
+export type { ErrorCatalog } from './error-catalog'
+export type { ApiErrorMessageOptions } from './envelope'
+
 export { showSubmittedData } from './show-submitted-data'

@@ -1,3 +1,4 @@
+import { translateErrorCode } from './error-catalog'
 /**
  * Kernel response envelope `{ success, data, meta }` — the ONE place the SDK
  * (and every app/addon built on it) unwraps it and extracts error messages.
@@ -124,9 +125,41 @@ const nonEmpty = (v: unknown): string | undefined =>
  * Human message from an axios-style error, an `ApiError`, a fetch failure or
  * a plain string. Never dumps an HTML page (uses its `<title>` or the fallback).
  */
-export function getApiErrorMessage(err: unknown, fallback = 'Error'): string {
+export interface ApiErrorMessageOptions {
+  /** Language of the error catalog (`registerErrorCatalog`); default none. */
+  lang?: string
+}
+
+/** Extracts `{code, params}` from an error body: root, `error{}` or `data{}`. */
+function extractCode(data: unknown): { code?: string; params?: Record<string, unknown> } {
+  if (!isObj(data)) return {}
+  for (const src of [data, data.error, data.data]) {
+    if (!isObj(src)) continue
+    const code = nonEmpty(src.code)
+    if (code) {
+      const params = isObj(src.params) ? src.params : isObj(data.params) ? data.params : undefined
+      return { code, params }
+    }
+  }
+  return {}
+}
+
+export function getApiErrorMessage(
+  err: unknown,
+  fallback = 'Error',
+  opts: ApiErrorMessageOptions = {},
+): string {
   if (err == null) return fallback
   if (typeof err === 'string') return nonEmpty(err) ?? fallback
+
+  if (opts.lang) {
+    const e = err as { code?: unknown; details?: unknown; response?: { data?: unknown } }
+    const fromBody = extractCode(e.response?.data)
+    const fromDetails = extractCode(e.details)
+    const code = fromBody.code ?? fromDetails.code ?? (err instanceof ApiError ? err.code : undefined)
+    const translated = translateErrorCode(code, opts.lang, fromBody.params ?? fromDetails.params)
+    if (translated) return translated
+  }
 
   const ax = err as { response?: { data?: unknown }; message?: unknown }
   const data = ax.response?.data

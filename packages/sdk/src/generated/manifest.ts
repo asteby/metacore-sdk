@@ -244,6 +244,13 @@ export interface Manifest {
    */
   host_capabilities?: string[];
   requires?: Module[];
+  /**
+   * AddonRequires are the peer-addon dependencies projected from v3
+   * compatibility.requires (every key that is not the reserved kernel / sdk /
+   * runtime range). The installer resolves them (installer.CheckInstallable,
+   * ResolveOrder); a key ending in "?" or Optional=true is a soft dependency.
+   */
+  addon_requires?: AddonRequirement[];
   models?: Module[];
   /**
    * Provides lists other addon keys this package satisfies for install /
@@ -1089,6 +1096,12 @@ export interface ActionDef {
    * inbound event (inbound `record.action`). Closed by default.
    */
   ingest?: boolean;
+  /**
+   * StageAuthority is the projection of v3 Action.stage_authority: the exact
+   * "from->to" stage transitions this action is the authority for (they skip
+   * the transition's roles/approval while the action runs). Nil = none.
+   */
+  stageAuthority?: StageAuthorityDef;
   confirm?: boolean;
   confirmMessage?: string;
   /**
@@ -1920,6 +1933,14 @@ export interface ConstraintDef {
    * states what must hold).
    */
   invert?: boolean;
+  /**
+   * EnabledSetting (+ AddonKey, the owning addon) makes the guard opt-in per
+   * org: it is evaluated only while the addon's boolean setting of that key
+   * is true for the org, resolved through dynamic.Config.SettingResolver.
+   * Projected from contributions.rules[].enabled_setting. Empty = always on.
+   */
+  enabledSetting?: string;
+  addonKey?: string;
 }
 /**
  * ApprovalDef is the host/runtime projection of a v3 ApprovalPolicy: the org
@@ -2466,6 +2487,22 @@ export interface CrossRuleDef {
    * update and delete; ref_state only). See v3.CrossRule.Enforce.
    */
   enforce?: string;
+}
+/**
+ * AddonRequirement is one peer-addon dependency of a manifest: addon Key must
+ * be installed at a version inside Range (a semver constraint; empty = any).
+ * Optional dependencies never block an install, upgrade or uninstall.
+ */
+export interface AddonRequirement {
+  key: string;
+  range?: string;
+  optional?: boolean;
+}
+/**
+ * StageAuthorityDef is the runtime projection of v3 StageAuthority.
+ */
+export interface StageAuthorityDef {
+  transitions: string[];
 }
 
 //////////
