@@ -1,5 +1,11 @@
 # @asteby/metacore-starter-config
 
+## 2.9.0
+
+### Minor Changes
+
+- 9292217: Federación de addons: `metacoreFederationShared({ hostProvided })` (singleton + `import: false`), `metacoreFederationPlugin()` (alias del stub `virtual:pwa-register/react` -> ya no hace falta `_pwa-register-stub.ts` por addon, y el build FALLA con mensaje accionable si el `vite.config.ts` declara `shared` a mano; `handRolledShared: 'warn' | 'off'`), más `detectHandRolledFederationShared` / `assertNoHandRolledFederationShared`. Nuevo bin `metacore-tailwind-sources check|write` y export `./tailwind-sources` con la lista de paquetes del SDK que emiten clases Tailwind.
+
 ## 2.8.0
 
 ### Minor Changes

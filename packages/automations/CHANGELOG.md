@@ -1,5 +1,13 @@
 # @asteby/metacore-automations
 
+## 2.0.2
+
+### Patch Changes
+
+- Updated dependencies [2393365]
+  - @asteby/metacore-lib@0.11.0
+  - @asteby/metacore-genui@2.9.1
+
 ## 2.0.1
 
 ### Patch Changes

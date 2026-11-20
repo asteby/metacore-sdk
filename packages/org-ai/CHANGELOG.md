@@ -1,5 +1,12 @@
 # @asteby/metacore-org-ai
 
+## 2.0.2
+
+### Patch Changes
+
+- Updated dependencies [2393365]
+  - @asteby/metacore-lib@0.11.0
+
 ## 2.0.1
 
 ### Patch Changes
