@@ -36,6 +36,7 @@ import {
     useSyncExternalStore,
     type ReactNode,
 } from 'react'
+import { HostApiContext } from './host-api-context'
 import type {
     AddonHostContext,
     Breadcrumb,
@@ -164,9 +165,24 @@ export function useHostContext(): AddonHostContext {
     return usePageHost('useHostContext').host
 }
 
-/** Authenticated API client provided by the host (never exposes the token). */
+/**
+ * Authenticated API client provided by the host (never exposes the token).
+ * Resolves from <AddonPageHost> or, for surfaces mounted outside a page
+ * (modals, pickers), from <HostApiProvider>. Throws when neither exists: a
+ * remote never falls back to reading credentials itself.
+ */
 export function useHostApi(): HostApi {
-    return usePageHost('useHostApi').api
+    const page = useContext(AddonPageHostContext)
+    const provided = useContext(HostApiContext)
+    const api = page?.api ?? provided
+    if (!api) {
+        throw new Error(
+            'useHostApi() must run inside <AddonPageHost> (pages) or <HostApiProvider api={createHostApi(client)}> (modals, pickers); ' +
+                'the host mounts one around every federated surface; addons must not read the token from localStorage. ' +
+                'In tests use renderWithHost() from @asteby/metacore-runtime-react/testing.',
+        )
+    }
+    return api
 }
 
 function normalizeBase(base: string): string {

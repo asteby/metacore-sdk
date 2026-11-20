@@ -305,6 +305,14 @@ export {
     type PageChromeStore,
 } from './addon-page-host'
 export { createHostApi, toHostApiError, type CreateHostApiOptions } from './host-api'
+export { HostApiProvider, type HostApiProviderProps } from './host-api-context'
+export {
+    createHostApiClient,
+    type HostApiClient,
+    type HostRequestConfig,
+    type AxiosLikeClient,
+} from './host-api-client'
+export { useHostApiClient } from './use-host-api-client'
 export {
     FederatedErrorBoundary,
     type FederatedErrorBoundaryProps,
