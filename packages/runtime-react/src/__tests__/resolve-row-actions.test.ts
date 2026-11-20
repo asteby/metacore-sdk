@@ -106,4 +106,48 @@ describe('isRowActionVisible', () => {
         // Flat lookup must NOT match nested conditions (regression of row[field]).
         expect(isActionConditionMet(approve, { 'user.verified': false } as any)).toBe(false)
     })
+
+    it('isActionConditionMet compares numerically (gt/gte/lt/lte) and composes with all/any', () => {
+        const gt0 = { condition: { field: 'debt', operator: 'gt', value: '0' } }
+        expect(isActionConditionMet(gt0, { debt: '12.50' })).toBe(true)
+        expect(isActionConditionMet(gt0, { debt: 0 })).toBe(false)
+        expect(isActionConditionMet(gt0, { debt: null })).toBe(false)
+        expect(isActionConditionMet(gt0, { debt: 'abc' })).toBe(false)
+        expect(isActionConditionMet({ condition: { field: 's', operator: 'lt', value: '5' } }, { s: 4 })).toBe(true)
+        expect(isActionConditionMet({ condition: { field: 's', operator: 'lte', value: '5' } }, { s: 5 })).toBe(true)
+        expect(isActionConditionMet({ condition: { field: 's', operator: 'gte', value: '5' } }, { s: 4 })).toBe(false)
+        const both = {
+            condition: {
+                operator: 'all',
+                field: '',
+                value: '',
+                conditions: [
+                    { field: 'amount', operator: 'gt', value: '0' },
+                    { field: 'cat', operator: 'neq', value: '4' },
+                ],
+            },
+        }
+        expect(isActionConditionMet(both, { amount: 10, cat: 1 })).toBe(true)
+        expect(isActionConditionMet(both, { amount: 10, cat: 4 })).toBe(false)
+        const either = { condition: { operator: 'any', field: '', value: '', conditions: [{ field: 'a', operator: 'truthy', value: '' }, { field: 'b', operator: 'truthy', value: '' }] } }
+        expect(isActionConditionMet(either, { a: null, b: 1 })).toBe(true)
+        expect(isActionConditionMet(either, { a: null, b: 0 })).toBe(false)
+    })
+
+    it('supports nested groups and legacy aliases stay intact', () => {
+        const nested = {
+            condition: {
+                operator: 'any',
+                conditions: [
+                    { operator: 'all', conditions: [{ field: 'a', operator: 'gt', value: 1 }, { field: 'b', operator: 'falsy' }] },
+                    { field: 'c', operator: 'in', value: [1, 2] },
+                ],
+            },
+        }
+        expect(isActionConditionMet(nested, { a: 2, b: 0, c: 9 })).toBe(true)
+        expect(isActionConditionMet(nested, { a: 2, b: 1, c: 2 })).toBe(true)
+        expect(isActionConditionMet(nested, { a: 2, b: 1, c: 9 })).toBe(false)
+        expect(isActionConditionMet({ condition: { field: 'x', operator: 'notEquals', value: 'y' } }, { x: 'z' })).toBe(true)
+        expect(isActionConditionMet({ condition: { field: 'x', operator: 'weird' } }, { x: 'z' })).toBe(true)
+    })
 })

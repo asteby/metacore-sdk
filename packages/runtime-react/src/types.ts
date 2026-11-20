@@ -612,10 +612,32 @@ export interface ColumnItemField {
     ref?: string
 }
 
+/**
+ * Canonical operator names (same vocabulary as the kernel's declarative
+ * conditions): `eq` `neq` `in` `not_in` `gt` `gte` `lt` `lte` `truthy` `falsy`,
+ * plus the `all` / `any` groups. Legacy aliases (`equals`, `notEquals`, `notin`,
+ * `==`, `!=`, `present`, `set`, `blank`, `empty`) are still evaluated but are not
+ * part of the typed contract.
+ */
+export type ActionConditionOperator =
+    | 'eq' | 'neq' | 'in' | 'not_in'
+    | 'gt' | 'gte' | 'lt' | 'lte'
+    | 'truthy' | 'falsy'
+    | 'all' | 'any'
+
 export interface ActionCondition {
-    field: string
-    operator: 'eq' | 'neq' | 'in' | 'not_in'
-    value: string | string[]
+    /** Row field (dotted paths allowed). Unused by `all`/`any` groups. */
+    field?: string
+    /**
+     * `gt|gte|lt|lte` compare numerically (a non-numeric side never matches);
+     * `truthy|falsy` test presence and take no `value`; `all|any` combine
+     * `conditions` (AND / OR, nestable; an empty list passes).
+     */
+    operator: ActionConditionOperator
+    /** Comparison operand; a list for `in` / `not_in`. Omitted for `truthy|falsy` and groups. */
+    value?: string | number | boolean | Array<string | number | boolean>
+    /** Members of an `all` / `any` group. */
+    conditions?: ActionCondition[]
 }
 
 /**
