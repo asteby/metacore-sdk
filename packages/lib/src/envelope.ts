@@ -130,18 +130,72 @@ export interface ApiErrorMessageOptions {
   lang?: string
 }
 
-/** Extracts `{code, params}` from an error body: root, `error{}` or `data{}`. */
-function extractCode(data: unknown): { code?: string; params?: Record<string, unknown> } {
-  if (!isObj(data)) return {}
-  for (const src of [data, data.error, data.data]) {
-    if (!isObj(src)) continue
-    const code = nonEmpty(src.code)
-    if (code) {
-      const params = isObj(src.params) ? src.params : isObj(data.params) ? data.params : undefined
-      return { code, params }
-    }
+interface CodedError {
+  code?: string
+  params?: Record<string, unknown>
+  message?: string
+}
+
+const toCoded = (v: unknown): CodedError | undefined => {
+  if (!isObj(v)) return undefined
+  const code = nonEmpty(v.code)
+  if (!code) return undefined
+  return {
+    code,
+    params: isObj(v.params) ? v.params : undefined,
+    message: nonEmpty(v.message),
   }
-  return {}
+}
+
+/**
+ * Field errors of a kernel 422: `{errors: {<col>: [{code, params?, message?}]}}`.
+ * Returns the raw entries per column (empty object when the body has none).
+ */
+function fieldErrorsOf(body: unknown): Record<string, CodedError[]> {
+  const out: Record<string, CodedError[]> = {}
+  if (!isObj(body) || !isObj(body.errors)) return out
+  for (const [col, list] of Object.entries(body.errors)) {
+    const items = (Array.isArray(list) ? list : [list]).map(toCoded).filter((x): x is CodedError => !!x)
+    if (items.length) out[col] = items
+  }
+  return out
+}
+
+/** Code of a flat error body: root (`unknown_filter`, `automation.*`), `error{}` or `data{}`. */
+function flatCodedOf(body: unknown): CodedError | undefined {
+  if (!isObj(body)) return undefined
+  const root = toCoded(body)
+  if (root) return { ...root, params: root.params ?? undefined }
+  return toCoded(body.error) ?? toCoded(body.data)
+}
+
+function bodyOf(err: unknown): unknown {
+  const e = err as { response?: { data?: unknown }; details?: unknown }
+  return e?.response?.data ?? e?.details
+}
+
+function render(c: CodedError, lang?: string): string | undefined {
+  if (lang) {
+    const t = translateErrorCode(c.code, lang, c.params)
+    if (t) return t
+  }
+  return c.message
+}
+
+/**
+ * Field errors of a kernel 422 as `{column: [message, ...]}`: each entry is the
+ * catalog translation for `lang` (by `code` + `params`), else its own
+ * `message`, else its `code`.
+ */
+export function getApiFieldErrors(
+  err: unknown,
+  opts: ApiErrorMessageOptions = {},
+): Record<string, string[]> {
+  const out: Record<string, string[]> = {}
+  for (const [col, items] of Object.entries(fieldErrorsOf(bodyOf(err)))) {
+    out[col] = items.map((c) => render(c, opts.lang) ?? c.code ?? '')
+  }
+  return out
 }
 
 export function getApiErrorMessage(
@@ -152,13 +206,16 @@ export function getApiErrorMessage(
   if (err == null) return fallback
   if (typeof err === 'string') return nonEmpty(err) ?? fallback
 
-  if (opts.lang) {
-    const e = err as { code?: unknown; details?: unknown; response?: { data?: unknown } }
-    const fromBody = extractCode(e.response?.data)
-    const fromDetails = extractCode(e.details)
-    const code = fromBody.code ?? fromDetails.code ?? (err instanceof ApiError ? err.code : undefined)
-    const translated = translateErrorCode(code, opts.lang, fromBody.params ?? fromDetails.params)
-    if (translated) return translated
+  const body = bodyOf(err)
+  // 422 field errors win over the generic `message` ("validation.failed").
+  for (const items of Object.values(fieldErrorsOf(body))) {
+    const m = items[0] && render(items[0], opts.lang)
+    if (m) return m
+  }
+  const flat = flatCodedOf(body) ?? (err instanceof ApiError && err.code ? { code: err.code } : undefined)
+  if (flat && opts.lang) {
+    const t = translateErrorCode(flat.code, opts.lang, flat.params)
+    if (t) return t
   }
 
   const ax = err as { response?: { data?: unknown }; message?: unknown }

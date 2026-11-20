@@ -99,6 +99,7 @@ export {
   unwrapList,
   unwrapListResponse,
   getApiErrorMessage,
+  getApiFieldErrors,
   isAbortError,
 } from './envelope'
 export type {
