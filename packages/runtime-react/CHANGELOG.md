@@ -1,5 +1,12 @@
 # @asteby/metacore-runtime-react
 
+## 53.24.0
+
+### Minor Changes
+
+- 398fef6: ActionCondition: operadores `gt|gte|lt|lte` (comparacion numerica), `truthy|falsy` tipados y grupos `all|any` anidables, con los mismos nombres que el kernel. `field` y `value` pasan a opcionales y `value` acepta number/boolean. Los alias legacy (`equals`, `notEquals`, ...) siguen evaluandose.
+- 8e2fbaa: Cliente HTTP único para addons federados: `createHostApiClient(hostApi)`, `useHostApiClient()` y `<HostApiProvider>`. Desenvuelve el envelope del kernel, unifica errores en `ApiError`, propaga abort y soporta blob y multipart; baseURL, token y headers (org/sucursal/idioma) los pone el host. `useHostApi()` también resuelve desde `HostApiProvider` (modales y pickers fuera de `AddonPageHost`) y falla con un error claro sin host.
+
 ## 53.23.2
 
 ### Patch Changes
