@@ -1,4 +1,4 @@
-export { DataTablePagination } from './pagination'
+export { DataTablePagination, Pagination, type PaginationProps } from './pagination'
 export { DataTableColumnHeader } from './column-header'
 export { DataTableFacetedFilter } from './faceted-filter'
 export { DataTableViewOptions } from './view-options'
