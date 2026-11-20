@@ -548,6 +548,11 @@ export interface CredentialDef {
    */
   visible_when?: any /* v3.VisibleWhen */;
   write_only?: boolean;
+  /**
+   * Auto projects v3 Setting.auto: the host generates the secret (see
+   * v3.SettingAutoStorefrontBearer) instead of asking for it.
+   */
+  auto?: string;
 }
 /**
  * ScheduleDef is the host/runtime projection of a v3 Schedule: a cron job the
@@ -922,10 +927,28 @@ export interface SettingDef {
   options?: Option[];
   secret?: boolean;
   /**
-   * Scope is "org" (default, "" = org) or "branch": each branch may override
-   * the org value. See ResolveSetting.
+   * Scope is "org" (default, "" = org), "entity" (each entity / razón social
+   * may override the org value), "branch" (each branch may override the org
+   * value, inheriting its entity's) or "market" (each market, e.g. "mx"/"us",
+   * may override it). See ResolveSettingScopedEntity for the precedence.
    */
   scope?: string;
+  /**
+   * Description projects v3 Setting.description: help text under the field
+   * (an i18n key or literal; the SDK resolves it against the addon bundle).
+   */
+  description?: string;
+  /**
+   * OptionsSource projects v3 Setting.options_source (type "dynamic_select"):
+   * the WASM export that returns the options at config time.
+   */
+  options_source?: string;
+  /**
+   * Ref projects v3 Setting.ref (type "dynamic_select"): the model key whose
+   * rows are the options, resolved declaratively (same primitive as a
+   * column's ref) and bounded to the tenant. Alternative to OptionsSource.
+   */
+  ref?: string;
   /**
    * VisibleWhen / WriteOnly project v3 Setting.visible_when / write_only:
    * conditional visibility among sibling settings, and a value the host
@@ -955,6 +978,17 @@ export const SettingScopeOrg = "org";
  * Setting scopes.
  */
 export const SettingScopeBranch = "branch";
+/**
+ * Setting scopes.
+ */
+export const SettingScopeMarket = "market";
+/**
+ * SettingScopeEntity: each entity (razón social, RFC 0001) may override the
+ * org value. A "branch"-scoped key also INHERITS the entity override, so an
+ * entity can set one value for all of its branches and a branch can still
+ * override it.
+ */
+export const SettingScopeEntity = "entity";
 /**
  * Option is a select-field choice.
  * Icon/Color/Image are OPTIONAL visual hints forwarded verbatim from
@@ -1050,6 +1084,11 @@ export interface ActionDef {
    * payload.approval_id). See dynamic.ConsumePINGrant.
    */
   supervisorPolicy?: string;
+  /**
+   * Ingest is the projection of v3 Action.ingest: the action may be run by an
+   * inbound event (inbound `record.action`). Closed by default.
+   */
+  ingest?: boolean;
   confirm?: boolean;
   confirmMessage?: string;
   /**
@@ -1535,6 +1574,13 @@ export interface ModelDefinition {
    */
   sequences?: SequenceDef[];
   /**
+   * RuleGuards are the pre-write guards projected from the addon's
+   * contributions.rules[] with then.kind request_approval that target this
+   * model (P5). Same evaluation as column Constraints (Invert = true);
+   * dynamic.BuildModelConstraints folds them in.
+   */
+  ruleGuards?: ConstraintDef[];
+  /**
    * Snapshots carries the v3 Model.snapshots (columns copied from a related row
    * at create) through the v3 → host conversion. See manifest/v3.Snapshot.
    */
@@ -1752,14 +1798,32 @@ export interface StageDef {
    * Locked: a record in this stage is read-only (v3 Stage.Locked).
    */
   locked?: boolean;
+  /**
+   * EditableWhenLocked: columns that stay writable in a Locked stage
+   * (v3 Stage.EditableWhenLocked).
+   */
+  editableWhenLocked?: string[];
 }
 /**
  * TransitionDef is the host/runtime projection of a v3 Transition: one allowed
- * (from → to) stage move.
+ * (from → to) stage move plus its optional policy (see manifest/v3.Transition).
  */
 export interface TransitionDef {
   from: string;
   to: string;
+  guard?: string;
+  roles?: string[];
+  requiresFields?: string[];
+  approval?: ApprovalDef;
+  reopen?: boolean;
+  sla?: TransitionSLA;
+}
+/**
+ * TransitionSLA is the host projection of v3 TransitionSLA (informational).
+ */
+export interface TransitionSLA {
+  hours: number /* int */;
+  onBreach?: string;
 }
 /**
  * TransitionHookDef is the host/runtime projection of a v3 TransitionHook. Set
@@ -1823,6 +1887,10 @@ export interface GrantDef {
 export interface SequenceDef {
   key: string;
   scope?: string;
+  scopeColumn?: string;
+  period?: string;
+  gapless?: boolean;
+  assignOn?: string;
   format: string;
 }
 /**
@@ -1845,6 +1913,13 @@ export interface ConstraintDef {
    * / expiry / label). Only meaningful with OnViolation == "request_approval".
    */
   approval?: ApprovalDef;
+  /**
+   * Invert flips the polarity: the predicate states what TRIGGERS the guard
+   * (a v3 contributions.rules[] `when` with then.kind request_approval), so
+   * the write is flagged when Expr is TRUE. Constraints leave it false (Expr
+   * states what must hold).
+   */
+  invert?: boolean;
 }
 /**
  * ApprovalDef is the host/runtime projection of a v3 ApprovalPolicy: the org
@@ -1986,6 +2061,20 @@ export interface RelationDef {
    * Optional; defaults false. Pure UI metadata.
    */
   embed?: boolean;
+  /**
+   * CreateInline declares that the child rows of this relation are captured
+   * together with the parent: Service.Create accepts them under
+   * `_children.<Name>` and writes parent + children in one call (see
+   * docs/inline-relations.md). Requires Kind one_to_many, Embed true and not
+   * Readonly. Optional; defaults false. Mirrors v3 ModelRelation.create_inline.
+   */
+  create_inline?: boolean;
+  /**
+   * Min is the minimum number of child rows a create must carry under
+   * `_children.<Name>`. Only with CreateInline; >= 0. Enforced only when the
+   * create sends `_children` (a plain create without it is unchanged).
+   */
+  min?: number /* int */;
   /**
    * Rollups declare PARENT columns the kernel maintains as aggregates over
    * this relation's child rows (Tier-1 of the declarative compute engine).

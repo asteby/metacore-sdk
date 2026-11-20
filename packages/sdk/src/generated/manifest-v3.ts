@@ -46,6 +46,80 @@ export interface APIPathSegment {
 }
 
 //////////
+// source: auto.go
+
+/**
+ * SettingAutoStorefrontBearer is the bearer secret a storefront sends to the
+ * addon's webhooks with verify "bearer" (secret_ref "<connector>.<key>"). It
+ * replaces "invent a 32+ char secret and paste it in two places".
+ */
+export const SettingAutoStorefrontBearer = "storefront_bearer";
+/**
+ * SettingAutoWebhookSigning is the secret the host generates to sign and
+ * verify inbound webhooks with verify "hmac-sha256" (secret_ref
+ * "<connector>.<key>"). It replaces "invent a 32+ char secret and paste it
+ * in two places".
+ */
+export const SettingAutoWebhookSigning = "webhook_signing";
+/**
+ * AutoSecretPrefix marks a host-generated secret so a leaked one is
+ * recognisable in logs and secret scanners.
+ */
+export const AutoSecretPrefix = "mcs_";
+/**
+ * AutoSecretBytes is the entropy of a generated secret (256 bits).
+ */
+export const AutoSecretBytes = 32;
+
+//////////
+// source: block_refs.go
+
+/**
+ * MaxContributionBlocks caps the named blocks one addon declares.
+ */
+export const MaxContributionBlocks = 64;
+/**
+ * MaxBlockRefDepth caps the nesting of refs (a block referencing a block
+ * referencing a block ...). 3 allows page -> composite -> leaf.
+ */
+export const MaxBlockRefDepth = 3;
+/**
+ * MaxBlockUIBytes caps one named block body (same tile budget as a widget).
+ */
+export const MaxBlockUIBytes = 64 * 1024; // = MaxWidgetUIBytes
+/**
+ * BlockDef is one named, reusable block (contributions.blocks[]).
+ */
+export interface BlockDef {
+  /**
+   * Key is the block's id, unique within the addon, snake_case. Another
+   * addon references it as "<addon>.<key>". Required.
+   */
+  key: string;
+  /**
+   * Title is an optional i18n key describing the block (catalogs, tooling).
+   */
+  title?: string;
+  /**
+   * Permission optionally gates the block wherever it is referenced: the
+   * expansion wraps it in a section carrying this permission.
+   */
+  permission?: string;
+  /**
+   * UI is the genui/v2 document of the block (same contract as PageDef.UI,
+   * i18n:"keys", at most MaxBlockUIBytes). Its top-level blocks are what a
+   * ref splices in; its data sources travel with them. Required.
+   */
+  ui: unknown;
+}
+/**
+ * ForeignBlocks is the catalog of blocks of OTHER addons a host knows, keyed by
+ * addon key then block key. Entries must already be expanded (their own refs
+ * resolved) by the host that owns them.
+ */
+export type ForeignBlocks = { [key: string]: { [key: string]: BlockDef}};
+
+//////////
 // source: branding.go
 
 /**
@@ -201,6 +275,39 @@ export const RuleRequiresStateInStages = "requires_state_in_stages";
  * everywhere one minor release after it ships.
  */
 export const RuleAuditColumnType = "audit_column_type";
+/**
+ * RuleFinalStageOutgoing: a transition leaving an is_final stage must
+ * carry `reopen: true` or an approval block (the explicit exit). Introduced with the
+ * strict stage machine (P3). Promote to a hard error everywhere one minor
+ * release after it ships.
+ * Warning-only in BOTH modes (warnOnlyWindow): the hub reads bundles with
+ * Strict, and reopen/archive exits are legitimate in real addons.
+ */
+export const RuleFinalStageOutgoing = "final_stage_outgoing";
+/**
+ * RuleSlotKindUnknown: contributions.slots[].slot_kind is neither in the
+ * ops.host/v1 catalog nor published by this manifest's own
+ * extension_points.slot_kinds.
+ */
+export const RuleSlotKindUnknown = "slot_kind_unknown";
+/**
+ * RulePrivateFrontendIntegrity: metadata.visibility=private and a frontend
+ * block require frontend.integrity.
+ */
+export const RulePrivateFrontendIntegrity = "private_frontend_integrity";
+/**
+ * RulePrivateExplicitCapabilities: metadata.visibility=private and any wasm
+ * handler require a non-empty capabilities[].
+ */
+export const RulePrivateExplicitCapabilities = "private_explicit_capabilities";
+/**
+ * RuleEventEmitCapability: events.emits[].name is not covered by any of the
+ * addon's own `event:emit` capabilities (exact name, "prefix.*" or "*"), so a
+ * guest of this addon could not publish it. Warning-only in both modes for
+ * its first minor. Canonical CRUD names (addon.Model.action) are published by
+ * the host on the owner's behalf and are exempt.
+ */
+export const RuleEventEmitCapability = "event_emit_capability";
 
 //////////
 // source: connector_blocks.go
@@ -299,6 +406,115 @@ export interface FormBlockResultRow {
   label?: string;
   value: string;
   kind?: string;
+}
+
+//////////
+// source: event_catalog.go
+
+/**
+ * Sensitivity classifies the personal-data exposure of an event payload so the
+ * host can warn before routing it outside the platform.
+ */
+export type Sensitivity = string;
+export const SensitivityPublic: Sensitivity = "public";
+export const SensitivityInternal: Sensitivity = "internal";
+export const SensitivityPersonal: Sensitivity = "personal";
+/**
+ * Bounds applied at load time. They keep a catalog entry small enough to ship
+ * to the browser on every panel open.
+ */
+export const MaxEventsPerAddon = 200;
+/**
+ * Bounds applied at load time. They keep a catalog entry small enough to ship
+ * to the browser on every panel open.
+ */
+export const MaxEventPayloadSchemaLen = 16 << 10; // serialized bytes
+/**
+ * Bounds applied at load time. They keep a catalog entry small enough to ship
+ * to the browser on every panel open.
+ */
+export const MaxEventSchemaDepth = 8;
+/**
+ * Bounds applied at load time. They keep a catalog entry small enough to ship
+ * to the browser on every panel open.
+ */
+export const MaxEventSchemaNodes = 500;
+/**
+ * EventsDecl is the manifest `events` block.
+ */
+export interface EventsDecl {
+  /**
+   * Emits are the events this addon publishes on the bus.
+   */
+  emits?: EmittedEvent[];
+  /**
+   * Consumes are the events this addon reacts to (informative).
+   */
+  consumes?: ConsumedEvent[];
+}
+/**
+ * EmittedEvent declares one event an addon emits.
+ */
+export interface EmittedEvent {
+  /**
+   * Name is "<domain>.<entity>.<action>", e.g. "sales.order.created".
+   */
+  name: string;
+  /**
+   * Description is an i18n key (resolved by the host catalog), not prose.
+   */
+  description?: string;
+  /**
+   * Aggregate is the entity the event sequence belongs to (snake_case).
+   */
+  aggregate?: string;
+  /**
+   * PayloadSchema is a bounded JSON Schema of the event payload. Only local
+   * "#/..." references are allowed.
+   */
+  payload_schema?: unknown;
+  /**
+   * Sensitivity defaults to "internal" when omitted.
+   */
+  sensitivity?: Sensitivity;
+  /**
+   * Since is the addon version (semver) that started emitting it.
+   */
+  since?: string;
+}
+/**
+ * ConsumedEvent declares one event an addon reacts to.
+ */
+export interface ConsumedEvent {
+  name: string;
+  description?: string;
+}
+/**
+ * CatalogEntry is one row of the aggregated event catalog.
+ */
+export interface CatalogEntry {
+  addon: string;
+  addon_name?: string;
+  addon_version?: string;
+  name: string;
+  description?: string;
+  aggregate?: string;
+  payload_schema?: unknown;
+  sensitivity: Sensitivity;
+  since?: string;
+}
+/**
+ * CatalogFilter narrows Catalog. Zero value = everything.
+ */
+export interface CatalogFilter {
+  /**
+   * Addons keeps only these addon keys (empty = all).
+   */
+  Addons: string[];
+  /**
+   * Sensitivity keeps only these levels (empty = all).
+   */
+  Sensitivity: Sensitivity[];
 }
 
 //////////
@@ -1023,6 +1239,11 @@ export interface Manifest {
   runtime?: Runtime;
   contributions?: Contributions;
   extension_points?: ExtensionPoints;
+  /**
+   * Events declares the event catalog (RFC 0003): what this addon emits and
+   * consumes. Optional; see event_catalog.go.
+   */
+  events?: EventsDecl;
   lifecycle?: Lifecycle;
   i18n?: I18n;
   rbac?: RBAC;
@@ -2111,15 +2332,63 @@ export interface Stage {
    * the record editable.
    */
   locked?: boolean;
+  /**
+   * EditableWhenLocked lists the columns that stay writable while the record
+   * sits in this `locked` stage (a delivered sale still accepts `notes`, a
+   * stamped invoice its `payment_reference`). Every other column is refused
+   * 422 record_locked. Only meaningful with Locked; the names must be
+   * declared columns of the model. Empty = fully read-only (the default).
+   */
+  editable_when_locked?: string[];
 }
 /**
  * Transition is one allowed move between two stages of a stage machine. From
  * and To are Stage keys; the kernel rejects any Update that moves the
  * StageField to a (from, to) pair not present in the model's Transitions.
+ * The optional policy fields gate WHO may make the move and UNDER WHAT
+ * CONDITIONS; each is additive (a transition with only From/To behaves as
+ * before) and enforced by the generic Update path (REST/PATCH):
+ *   - Roles: the acting user must hold one of these org roles (403 otherwise).
+ *   - RequiresFields: columns that must be non-empty on the merged row
+ *     (persisted values overlaid with the incoming patch) for the move.
+ *   - Guard: a predicate `<arith> <op> <arith>` over the merged row's numeric
+ *     columns (same grammar as Constraint.Expr); false rejects the move.
+ *   - Approval: the move parks as a pending ApprovalRequest and only applies
+ *     once a user holding Approval.Roles approves it (e.g. cancelling a paid
+ *     sale, reopening a final stage).
+ *   - Reopen: marks a deliberate exit from an is_final stage (reopen a closed
+ *     conversation, archive a published campaign). Without Reopen or Approval
+ *     an exit from a final stage is flagged by the final_stage_outgoing rule.
+ * SCOPE: these policies are enforced by the generic Update path only. The wasm
+ * data_mutate / data_batch imports apply just the (from → to) whitelist
+ * (GateWrite): no roles, approval, guard, requires_fields or locked-stage check
+ * (tracked as K3b, wasm parity).
+ *   - SLA: how long a record may sit in the destination stage; informational
+ *     metadata projected to hosts (the kernel does not enforce the breach).
  */
 export interface Transition {
   from: string;
   to: string;
+  guard?: string;
+  roles?: string[];
+  requires_fields?: string[];
+  approval?: ApprovalPolicy;
+  reopen?: boolean;
+  sla?: TransitionSLA;
+}
+/**
+ * TransitionSLA is the time budget of the destination stage of a Transition.
+ */
+export interface TransitionSLA {
+  /**
+   * Hours a record may stay in the destination stage before it is overdue.
+   */
+  hours: number /* int */;
+  /**
+   * OnBreach names what the host does on breach: "notify" (default) or
+   * "escalate". Informational for the kernel.
+   */
+  on_breach?: string;
 }
 /**
  * TransitionHook is a declarative side effect the kernel fires when a record
@@ -2244,6 +2513,18 @@ export interface ModelRelation {
    * Optional; defaults false. Only meaningful for one_to_many.
    */
   embed?: boolean;
+  /**
+   * CreateInline declares that the child rows are captured together with the
+   * parent: the kernel's Create accepts them under `_children.<name>` and
+   * writes parent + children in one call (all-or-nothing). Requires
+   * kind one_to_many, embed true and not readonly. Optional; defaults false.
+   */
+  create_inline?: boolean;
+  /**
+   * Min is the minimum number of child rows a create carrying `_children`
+   * must send for this relation. Only with create_inline; >= 0.
+   */
+  min?: number /* int */;
   /**
    * Rollups declare PARENT columns whose value is an aggregate over this
    * relation's child rows (Tier-1 of the declarative compute engine, akin to
@@ -2750,14 +3031,48 @@ export interface Sequence {
   key: string;
   /**
    * Scope selects the counter's partitioning: "org" (one counter per
-   * organization, the default) or "branch" (one counter per branch, so each
-   * branch has its own folio series). Empty = "org".
+   * organization, the default), "branch" (one counter per branch, so each
+   * branch has its own folio series) or "column" (one counter per distinct
+   * value of ScopeColumn: a fiscal series per issuer, a file number per
+   * clinic). Empty = "org".
    */
   scope?: string;
   /**
+   * ScopeColumn names the model column whose value partitions the counter.
+   * Required when Scope is "column", forbidden otherwise. The column must be
+   * declared on the model; an empty value on create falls back to the org-wide
+   * partition.
+   */
+  scope_column?: string;
+  /**
+   * Period restarts the counter: "none" (default, never), "year", "month" or
+   * "day" (UTC calendar). A daily order ticket, a yearly file number. The
+   * matching {yyyy}/{yy}/{mm}/{dd} format tokens render the period.
+   */
+  period?: string;
+  /**
+   * Gapless makes the numbering gap-free: the counter increments INSIDE the
+   * transaction that inserts the numbered row, so a failed insert releases the
+   * number (the default autocommit counter may skip one). Concurrent creates
+   * of the same partition serialize on the counter row. A gapless sequence is
+   * consumed only by its bound columns (create / transition); the standalone
+   * `sequence_next` import refuses it, since a guest failure after the call
+   * would burn the number.
+   */
+  gapless?: boolean;
+  /**
+   * AssignOn selects when the bound columns are stamped: "create" (default)
+   * or "transition:<stage>" — the number is issued when the record enters that
+   * stage of the model's stage machine (a fiscal folio at "issued", not at
+   * "draft"). Drafts then carry no number and cannot burn one.
+   */
+  assign_on?: string;
+  /**
    * Format is the template rendered around the numeric value. It MUST contain
    * exactly one `{seq}` or zero-padded `{seq:0N}` placeholder (e.g. "A-{seq:06}"
-   * → "A-000042"). Any other text is emitted verbatim.
+   * → "A-000042"). Optional tokens: {yyyy} {yy} {mm} {dd} (the period's date,
+   * need a matching Period) and {scope} (the ScopeColumn value, or the branch
+   * id). Any other text is emitted verbatim.
    */
   format: string;
 }
@@ -3039,6 +3354,20 @@ export interface Contributions {
    */
   dashboard?: DashboardWidget[];
   /**
+   * Pages contributes declarative pages (a genui/v2 body wrapped with an
+   * identity, a permission and an i18n title). A navigation entry opens one
+   * with NavItem.Page. Optional; see PageDef.
+   */
+  pages?: PageDef[];
+  /**
+   * Blocks contributes named, reusable genui/v2 blocks, defined ONCE and
+   * referenced from page bodies ({"type":"ref","ref":"<key>"}), from
+   * dashboard widgets (DashboardWidget.Block) and from other blocks. Another
+   * addon in compatibility.requires references one as "<addon>.<key>".
+   * Optional; see BlockDef and ExpandBlockRefs.
+   */
+  blocks?: BlockDef[];
+  /**
    * Documents contributes printable document templates. Each entry binds a
    * bundle-relative HTML template to one of the addon's models; the host
    * hydrates the template with the record (and its child rows) and the org
@@ -3136,8 +3465,19 @@ export interface RuleDef {
  */
 export interface RuleThen {
   /**
-   * Kind is "flag" (record a rule_flags row) or "notify" (in-app
-   * notification). Required.
+   * Kind is "flag" (record a rule_flags row), "notify" (in-app notification)
+   * or "request_approval" (P5). Required.
+   * request_approval makes the rule a PRE-WRITE guard instead of a post-event
+   * observation: when `when` holds on the row about to be written, the write
+   * is not applied but parked as a pending ApprovalRequest and every surface
+   * answers `approval_required` (REST 202-class error with the request id,
+   * wasm data_mutate / data_batch envelope code with {policy, context}). A
+   * user holding Approval.Roles approves it and the SAME write is replayed,
+   * skipping only this rule. It unifies price floors, out-of-cap discounts,
+   * overdue credit and refunds without a ticket under one declarative
+   * primitive (same engine as column constraints with
+   * on_violation: request_approval, with the predicate polarity inverted:
+   * the constraint states what must hold, the rule what triggers).
    */
   kind: string;
   /**
@@ -3154,6 +3494,12 @@ export interface RuleThen {
    * (non-empty) for "notify"; ignored for "flag".
    */
   notify_roles?: string[];
+  /**
+   * Approval says who may approve (roles, reason_required, expires_hours,
+   * label). Required when Kind is "request_approval", forbidden otherwise.
+   * `approval.when` is not allowed (the rule's own `when` is the predicate).
+   */
+  approval?: ApprovalPolicy;
 }
 /**
  * PublicRoute is one public, login-less view of a record an addon contributes
@@ -3466,7 +3812,11 @@ export interface DocumentDef {
  * computes the aggregate from Query with the kernel aggregation engine and the
  * SDK paints it with a built-in renderer. Kind "custom" is FEDERATED: the host
  * mounts the addon's own React component (named by Expose, from the addon's
- * frontend bundle) into Slot, with the same Card chrome so it blends in.
+ * frontend bundle) into Slot, with the same Card chrome so it blends in. Kind
+ * "block" is DOCUMENTED: the tile body is a genui/v2 document, either inline
+ * (UI) or a reference to a named block (Block), validated exactly like
+ * PageDef.UI, so a widget composes any block of the catalog (map, timeline,
+ * metric, chart...) without a bundle or a query.
  */
 export interface DashboardWidget {
   /**
@@ -3488,7 +3838,7 @@ export interface DashboardWidget {
   icon?: string;
   /**
    * Kind is the renderer selector: stat|bar|line|area|pie|donut|list|
-   * progress|custom. Required.
+   * progress|block|custom. Required.
    */
   kind: string;
   /**
@@ -3549,6 +3899,27 @@ export interface DashboardWidget {
    * "custom"; the addon must also declare a frontend block. Ignored otherwise.
    */
   expose?: string;
+  /**
+   * UI is the genui/v2 document that is the tile body of a kind:"block"
+   * widget. A block widget has exactly ONE origin: this inline document or
+   * Block. Forbidden for every other kind. Same contract as PageDef.UI
+   * (closed block catalog, depth/blocks limits, i18n:"keys") with a
+   * MaxWidgetUIBytes cap. Block widgets carry neither Query nor Expose.
+   */
+  ui?: unknown;
+  /**
+   * Block references a named block (contributions.blocks[].key of this
+   * addon, or "<addon>.<key>" of an addon in compatibility.requires) as the
+   * tile body, so the same block is defined once and shown on a page and on
+   * the dashboard. Exclusive with UI; kind:"block" only. The host expands it
+   * (ExpandBlockRefs) when it serves the catalog.
+   */
+  block?: string;
+  /**
+   * RefreshS is the optional backup poll interval in seconds (>= 10) the
+   * host re-fetches the widget at. Applies to any kind. 0/absent = no poll.
+   */
+  refresh_s?: number /* int */;
   /**
    * Condition gates this contribution server-side: when set, the host only
    * serves it to organizations where the predicate holds (e.g. another addon
@@ -3670,6 +4041,12 @@ export interface NavItem {
   permission?: string;
   items?: NavItem[];
   /**
+   * Page opens the declarative page contributions.pages[].key instead of a
+   * model screen. A page entry has its own identity: it must not combine
+   * with url, model, view_type, view or group_by. Empty = unchanged.
+   */
+  page?: string;
+  /**
    * Filter declares a static column→value filter the host applies when it
    * renders this entry's list view, so an addon can publish one nav entry per
    * status (e.g. {"status":"reception"} for an "En recepción" entry pointing
@@ -3773,6 +4150,22 @@ export interface SlotContribution {
   entry: string;
   order?: number /* int */;
   permission?: string;
+  /**
+   * Props is static JSON handed to the mounted component as its `props`
+   * (docs/spec/v3/slots.md). Optional.
+   */
+  props?: { [key: string]: any};
+  /**
+   * TimeoutMS bounds how long the host waits for the remote component to
+   * load before applying Fallback, 1000..30000. 0 = host default.
+   */
+  timeout_ms?: number /* int */;
+  /**
+   * Fallback is what the host renders when the contribution fails to load or
+   * throws: "hide" (default; render nothing) or "notice" (a neutral inline
+   * notice). A broken remote never takes the host shell down.
+   */
+  fallback?: string;
   /**
    * Condition gates this contribution server-side: when set, the host only
    * serves it to organizations where the predicate holds (e.g. another addon
@@ -3896,6 +4289,16 @@ export interface Action {
    * Approval, which parks the request for an asynchronous decision.
    */
   supervisor_policy?: string;
+  /**
+   * Ingest opts the action in to be run by an inbound event (`record.action`
+   * of the inbound chain): without it the kernel refuses to run the action
+   * from an ingest contract, so a declared payment capture or a destructive
+   * operation can never be reached by a signed event by accident. It is
+   * incompatible with Approval, SupervisorPolicy and ConfirmTyped (an event
+   * cannot approve, hold a PIN or type a confirmation) and with a `table` or
+   * `create` placement (no record context). Default false.
+   */
+  ingest?: boolean;
   /**
    * ModalWidth lets an addon size the action's modal explicitly: a CSS length
    * ("720px", "60rem") or a number (px). Empty = the host's default (compact
@@ -4379,6 +4782,17 @@ export interface Subscription {
  * (contributions.notifications[]). The host matches `On` against canonical
  * CRUD event names (addon.Model.action), renders Title/Body/Link with a tiny
  * Mustache subset, and fans out to the audience described by To.
+ * When filters on the event (ops evaluates it in notification_bridge.go):
+ *   - keys are paths: "after.<field>", "before.<field>", a bare "<field>" (read
+ *     from after, then before) or one of id, model, action, addon_key, actor_id.
+ *     Paths are one level deep: nested objects are not reachable.
+ *   - values must be a string or a list of strings. The field is compared as
+ *     TEXT, exactly but ignoring case; a list matches ANY of its items (OR);
+ *     all keys must match (AND). A JSON boolean or number never matches: write
+ *     "true" or "5". There is no negation, comparison or substring, and an
+ *     empty string matches an absent field.
+ * Entered fires only when Field changed between before and after and the new
+ * value is one of Values (any non-empty value when Values is empty).
  */
 export interface NotificationRule {
   key: string;
@@ -4650,6 +5064,13 @@ export interface Setting {
    */
   options_source?: string;
   /**
+   * Ref (type "dynamic_select") names the model whose rows are the options
+   * ("Warehouse"), resolved declaratively and bounded to the tenant — the same
+   * primitive as a column's ref, without a WASM export. Use it OR
+   * OptionsSource, not both.
+   */
+  ref?: string;
+  /**
    * Section binds this setting to a FormLayout section (by its key), exactly
    * like a Column.Section — lets a connector's credentials group into the
    * connector's form_layout sections / wizard steps. Empty = the implicit
@@ -4666,7 +5087,10 @@ export interface Setting {
    * per organization. "branch" lets each branch override it: the effective
    * value for a branch is its own override, else the org value, else Default
    * (see manifest.ResolveSetting). Lets a chain run a strict stock policy in
-   * one store and a permissive one in another (POS-1).
+   * one store and a permissive one in another (POS-1). "market" does the same
+   * per market ("mx", "us"): market override, else org value, else Default
+   * (see manifest.ResolveSettingScoped; precedence market > branch > org >
+   * default).
    */
   scope?: string;
   /**
@@ -4684,6 +5108,17 @@ export interface Setting {
    * A write_only setting cannot declare a default.
    */
   write_only?: boolean;
+  /**
+   * Auto marks a connector credential the HOST generates instead of asking a
+   * person to invent and paste it. Only valid on a connector credential of
+   * type "secret" (never a third-party key: Stripe, Mercado Pago, Emissary,
+   * YSell cannot be self-generated). Known values: see SettingAuto*. The
+   * host creates the value when the addon is installed or upgraded, stores it
+   * encrypted, hides the field in the connect form and offers "rotate". A
+   * required auto credential is never reported missing. Empty = a person
+   * supplies it (today's behaviour).
+   */
+  auto?: string;
 }
 /**
  * SettingOption is a value/label pair for select-typed settings.
@@ -5279,6 +5714,58 @@ export const MaxPageBudgetKB = 150;
  */
 export const MaxPageBreadcrumbs = 4;
 /**
+ * MaxContributionPages caps the declarative pages one addon declares.
+ */
+export const MaxContributionPages = 32;
+/**
+ * MaxPageUIBytes caps one page body before parsing it (genui/v2 has its
+ * own, equal, limit; checking here avoids decoding an oversized blob).
+ */
+export const MaxPageUIBytes = 128 * 1024;
+/**
+ * MaxWidgetUIBytes caps the genui/v2 body of a kind:"block" dashboard
+ * widget (contributions.dashboard[].ui) before parsing it. Tighter than a
+ * page: a widget is a tile of the board, not a screen.
+ */
+export const MaxWidgetUIBytes = 64 * 1024;
+/**
+ * MinWidgetRefreshS is the floor of DashboardWidget.RefreshS (seconds):
+ * the backup poll must not hammer the host.
+ */
+export const MinWidgetRefreshS = 10;
+/**
+ * PageDef is one declarative page of the addon (contributions.pages[]): the
+ * body is a genui/v2 document (no second UI language) wrapped with identity,
+ * permission and an i18n title. Navigation reaches it with NavItem.Page.
+ * The body is validated by genui/v2 (block catalog, depth, sizes, refs).
+ * Page-level fields planned for later phases (path, layout, requires,
+ * url_state, refresh) are intentionally not part of this type yet.
+ */
+export interface PageDef {
+  /**
+   * Key is the page's stable id, unique within the addon (snake_case).
+   */
+  key: string;
+  /**
+   * Title is the i18n key of the page title (header, document title).
+   */
+  title: string;
+  /**
+   * Icon is an optional lucide icon name.
+   */
+  icon?: string;
+  /**
+   * Permission gates the page: a dotted permission key, same vocabulary as
+   * NavItem.Permission ("hub_instances.index").
+   */
+  permission?: string;
+  /**
+   * UI is the genui/v2 document that is the page body. It must carry
+   * "i18n":"keys": every text is an i18n key of the addon's locales.
+   */
+  ui: unknown;
+}
+/**
  * View types a NavItem may declare. ViewTypeTable and ViewTypeKanban predate
  * the declarative views and need no host capability; the rest are rendered by
  * a lazily loaded SDK renderer and require host capability "ui.views.<type>".
@@ -5455,6 +5942,38 @@ export interface MapView {
    * ColorBy names a column whose option colours tint each feature.
    */
   color_by?: string;
+  /**
+   * Precision is the location precision of every point of the model:
+   * "exact", "city" or "country". Approximate points are aggregated into
+   * one bubble per location and the zoom is capped. Excludes PrecisionField.
+   */
+  precision?: string;
+  /**
+   * PrecisionField names a column carrying the precision per row (same
+   * values as Precision). Excludes Precision.
+   */
+  precision_field?: string;
+  /**
+   * AreaField names a column with the area name or code (e.g. country_iso)
+   * that labels the aggregated bubble.
+   */
+  area_field?: string;
+  /**
+   * ImageField names a column with the image or logo URL of each point (a
+   * store, branch, vehicle...). Renderers treat it as untrusted data.
+   */
+  image_field?: string;
+  /**
+   * ColorField names a column with the brand colour (#RGB or #RRGGBB) of each
+   * point. It only tints the avatar ring and initials; status colouring stays
+   * on ColorBy.
+   */
+  color_field?: string;
+  /**
+   * SubtitleField names a column printed as the second line under the name
+   * of each point in popups and lists (e.g. a host or an address).
+   */
+  subtitle_field?: string;
   /**
    * Popup lists the columns shown when a feature is selected (max 8).
    */
