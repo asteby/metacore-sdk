@@ -723,6 +723,8 @@ export interface OptionDef {
     icon?: string
     color?: string
     image?: string
+    /** Secondary text; matched by the searchable select search box and shown under the label. */
+    description?: string
     when?: OptionWhen
 }
 
@@ -752,6 +754,16 @@ export interface ActionFieldDef {
      */
     nullable?: boolean
     options?: OptionDef[]
+    /**
+     * Searchable select: `true` always renders the combobox with a search box
+     * (filters while typing, accent/case-insensitive, by label, code and option
+     * `description`), `false` always the flat select, unset = combobox when the
+     * field has more than 8 options (`SEARCHABLE_SELECT_THRESHOLD`). The kernel
+     * serves it as `searchable` (FieldDef.Searchable). Static selects only.
+     */
+    searchable?: boolean
+    /** Per-field override of the option count above which the select becomes searchable. */
+    searchThreshold?: number
     defaultValue?: any
     placeholder?: string
     searchEndpoint?: string

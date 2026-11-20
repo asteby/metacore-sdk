@@ -54,6 +54,8 @@ import { useBranchCreateGate } from '../branch-create-gate'
 import { toastServerError, extractFieldErrors, localizeFieldIssue, localizeFieldErrorMap } from '../server-error'
 import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-field'
 import { RecordPicker } from '../record-picker'
+import { SearchableSelectField } from '../searchable-select-field'
+import { isSearchableSelect } from '../searchable-select'
 import { DynamicMultiSelectField } from '../dynamic-multi-select-field'
 import { UploadField, validateUploadFile } from '../upload-field'
 import { DynamicRelations } from '../dynamic-relations'
@@ -117,6 +119,8 @@ export interface FieldOption {
     color?: string
     icon?: string
     image?: string
+    /** Secondary text; also matched by the searchable select search box. */
+    description?: string
 }
 
 export interface FieldDef {
@@ -131,6 +135,14 @@ export interface FieldDef {
      */
     nullable?: boolean
     options?: FieldOption[]
+    /**
+     * Searchable select: `true` always renders the combobox with a search box,
+     * `false` always the flat select, unset = combobox when the field has more
+     * than SEARCHABLE_SELECT_THRESHOLD (8) options. Served by the kernel as
+     * `searchable`. `searchThreshold` overrides the 8.
+     */
+    searchable?: boolean
+    searchThreshold?: number
     defaultValue?: any
     placeholder?: string
     readonly?: boolean
@@ -2587,6 +2599,20 @@ export function EditField({ field, value, onChange, record, invalid, error, labe
     }
 
     if (field.type === 'select' && field.options?.length) {
+        // Long static list (or `searchable: true`): combobox with a search box.
+        if (isSearchableSelect(field, field.options.length)) {
+            return (
+                <SearchableSelectField
+                    id={field.key}
+                    ariaLabel={field.label || field.key}
+                    options={field.options}
+                    value={value}
+                    onChange={onChange}
+                    required={!!field.required}
+                    invalid={invalid}
+                />
+            )
+        }
         return (
             <Select value={String(value ?? '')} onValueChange={onChange}>
                 <SelectTrigger className={cn("w-full", invalidCls)} aria-invalid={invalid || undefined}>
