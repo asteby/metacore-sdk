@@ -65,7 +65,7 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -w -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
+    "test": "vitest run && pnpm build && node ../../scripts/check-dist-esm-imports.mjs . && node --input-type=module -e \"await import('@asteby/metacore-lib/envelope')\"",
     "clean": "rm -rf dist"
   },
   "peerDependencies": {

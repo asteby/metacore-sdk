@@ -19,8 +19,8 @@
  * suggests prices, it is never used to charge.
  */
 
-import { InvalidMoneyError, MoneyError, MoneyValue, canonicalDecimal, isoCurrencySpec } from './money'
-import type { CurrencySpec, Money } from './money'
+import { InvalidMoneyError, MoneyError, MoneyValue, canonicalDecimal, isoCurrencySpec } from './money.js'
+import type { CurrencySpec, Money } from './money.js'
 
 export type RoundingDirection = 'up' | 'down' | 'nearest'
 

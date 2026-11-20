@@ -4,8 +4,8 @@ export {
   formatRelative,
   getAllTimezones,
   detectTimezone,
-} from './date'
-export type { TimezoneInfo } from './date'
+} from './date.js'
+export type { TimezoneInfo } from './date.js'
 
 export {
   formatAmount,
@@ -13,25 +13,25 @@ export {
   relativeTime,
   formatBytes,
   compareVersions,
-} from './intl-format'
+} from './intl-format.js'
 export type {
   FormatAmountOptions,
   FormatLocalizedDateOptions,
   FormatBytesOptions,
   RelativeTimeOptions,
   MoneyDisplay,
-} from './intl-format'
+} from './intl-format.js'
 
-export { formatNumber, formatPercentage, formatDuration, truncate } from './format'
-export type { FormatNumberOptions, FormatDurationOptions } from './format'
+export { formatNumber, formatPercentage, formatDuration, truncate } from './format.js'
+export type { FormatNumberOptions, FormatDurationOptions } from './format.js'
 
 export {
   formatCurrency,
   getCurrencySymbol,
   parseCurrency,
   SPANISH_SYMBOLS,
-} from './currency'
-export type { CurrencyInfo } from './currency'
+} from './currency.js'
+export type { CurrencyInfo } from './currency.js'
 
 export {
   MoneyValue,
@@ -47,7 +47,7 @@ export {
   PrecisionError,
   OverflowError,
   InvalidMoneyError,
-} from './money'
+} from './money.js'
 export type {
   Money,
   CurrencySpec,
@@ -55,7 +55,7 @@ export type {
   Rate,
   MoneyErrorCode,
   FormatMoneyOptions,
-} from './money'
+} from './money.js'
 
 export {
   roundPrice,
@@ -63,7 +63,7 @@ export {
   validateRoundingRule,
   pricingErrorCode,
   NegativeAmountError,
-} from './pricing'
+} from './pricing.js'
 export type {
   RoundingRule,
   RoundingDirection,
@@ -72,10 +72,10 @@ export type {
   DeriveInput,
   DerivedPrice,
   PricingErrorCode,
-} from './pricing'
+} from './pricing.js'
 
-export { handleServerError } from './errors'
-export type { ErrorLabels, ToastLike, LoggerLike } from './errors'
+export { handleServerError } from './errors.js'
+export type { ErrorLabels, ToastLike, LoggerLike } from './errors.js'
 
 export {
   HtmlResponseError,
@@ -87,8 +87,8 @@ export {
   htmlTitle,
   htmlSnippet,
   newCorrelationId,
-} from './http-errors'
-export type { HtmlResponseErrorInit, DetectHtmlInput } from './http-errors'
+} from './http-errors.js'
+export type { HtmlResponseErrorInit, DetectHtmlInput } from './http-errors.js'
 
 export {
   ApiError,
@@ -101,14 +101,14 @@ export {
   getApiErrorMessage,
   getApiFieldErrors,
   isAbortError,
-} from './envelope'
+} from './envelope.js'
 export type {
   Envelope,
   EnvelopeMeta,
   ResponseLike,
   ApiErrorInit,
   UnwrappedList,
-} from './envelope'
+} from './envelope.js'
 
 export {
   registerErrorCatalog,
@@ -116,8 +116,8 @@ export {
   translateErrorCode,
   interpolateErrorTemplate,
   kernelErrorCatalog,
-} from './error-catalog'
-export type { ErrorCatalog } from './error-catalog'
-export type { ApiErrorMessageOptions } from './envelope'
+} from './error-catalog.js'
+export type { ErrorCatalog } from './error-catalog.js'
+export type { ApiErrorMessageOptions } from './envelope.js'
 
-export { showSubmittedData } from './show-submitted-data'
+export { showSubmittedData } from './show-submitted-data.js'

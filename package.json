@@ -19,6 +19,7 @@
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "test": "turbo run test",
+    "check:dist-esm": "node scripts/check-dist-esm-imports.mjs",
     "clean": "turbo run clean && rm -rf node_modules",
     "changeset": "changeset",
     "version": "changeset version && pnpm install --lockfile-only",

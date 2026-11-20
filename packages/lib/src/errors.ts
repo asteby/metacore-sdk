@@ -14,7 +14,7 @@ export interface ErrorLabels {
   timeout: string
 }
 
-import { looksLikeHtml } from './http-errors'
+import { looksLikeHtml } from './http-errors.js'
 
 const DEFAULT_LABELS: ErrorLabels = {
   generic: 'Something went wrong!',

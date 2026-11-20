@@ -77,12 +77,51 @@ function safeData(data: unknown): unknown {
     }
 }
 
+/**
+ * Headers the host owns. A remote may add headers but never set these: they
+ * carry the credentials, the tenant scope or transport framing. Compared
+ * lowercase.
+ */
+export const PROTECTED_HOST_HEADERS: ReadonlySet<string> = new Set([
+    'authorization',
+    'proxy-authorization',
+    'cookie',
+    'x-organization-id',
+    'x-org-id',
+    'x-branch-id',
+    'accept-language',
+    'host',
+    'content-length',
+    'content-type',
+    'transfer-encoding',
+    'origin',
+    'referer',
+])
+
+/** Drop protected / malformed headers; returns undefined when none remain. */
+export function sanitizeRemoteHeaders(
+    headers: Record<string, string> | undefined,
+): Record<string, string> | undefined {
+    if (!headers || typeof headers !== 'object') return undefined
+    const out: Record<string, string> = {}
+    for (const [name, value] of Object.entries(headers)) {
+        if (typeof value !== 'string') continue
+        if (!/^[A-Za-z0-9!#$%&'*+.^_`|~-]+$/.test(name)) continue
+        if (/[\r\n]/.test(value)) continue
+        if (PROTECTED_HOST_HEADERS.has(name.toLowerCase())) continue
+        out[name] = value
+    }
+    return Object.keys(out).length ? out : undefined
+}
+
 function toConfig(opts?: HostApiRequestOptions): Record<string, unknown> | undefined {
     if (!opts) return undefined
     const config: Record<string, unknown> = {}
     if (opts.params) config.params = opts.params
     if (opts.signal) config.signal = opts.signal
     if (opts.responseType === 'blob') config.responseType = 'blob'
+    const headers = sanitizeRemoteHeaders(opts.headers)
+    if (headers) config.headers = headers
     return config
 }
 
