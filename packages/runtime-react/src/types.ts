@@ -198,6 +198,9 @@ export interface AuditMeta {
 }
 
 export interface TableMetadata {
+    /** i18n key for `title` (host resources win over the raw backend text). */
+    titleKey?: string
+    title_key?: string
     title: string
     endpoint: string
     columns: ColumnDefinition[]

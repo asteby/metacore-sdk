@@ -910,3 +910,6 @@ export type { BulkImageTarget } from './bulk-image-target'
 export type { BatchLog as BulkImageBatchLog } from './bulk-image-import'
 export * from './attention'
 export * from './view-system'
+
+export { useModelLabels, resolveModelLabels, defaultSingular } from './model-labels'
+export type { ModelLabels, ModelLabelInput, ModelLabelT } from './model-labels'

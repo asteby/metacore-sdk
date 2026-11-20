@@ -42,6 +42,7 @@ import {
 } from './document-form-dialog'
 import { ExportDialog } from './dialogs/export'
 import { ImportDialog } from './dialogs/import'
+import { useModelLabels } from './model-labels'
 import { getModelExtension } from './model-extension-registry'
 import { ModelActionToolbar } from './model-action-toolbar'
 import { BulkImageImportButton } from './bulk-image-dialog'
@@ -187,12 +188,14 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
         }
     }, [model, cachedMeta, api])
 
-    const title = titleOverride ?? ext?.title ?? metadata?.title ?? model
-    const resolvedNewLabel = newLabel ?? ext?.newLabel
-    const singular = useMemo(() => {
-        const t = title.replace(/s$/i, '')
-        return t.charAt(0).toUpperCase() + t.slice(1)
-    }, [title])
+    const { title, newLabel: resolvedNewLabel } = useModelLabels({
+        model,
+        title: metadata?.title,
+        titleKey: metadata?.titleKey ?? metadata?.title_key,
+        titleOverride: titleOverride ?? ext?.title,
+        newLabelOverride: newLabel ?? ext?.newLabel,
+        newPrefix: strings.newPrefix,
+    })
 
     const enableCRUD = metadata?.enableCRUDActions ?? false
     // Una sola primaria: placement create, replaces_create, create_mode o la
@@ -310,7 +313,7 @@ export function DynamicCRUDPage(props: DynamicCRUDPageProps) {
                                 className='inline-flex items-center gap-2 h-9 px-3 rounded-md bg-primary text-primary-foreground hover:opacity-90 text-sm font-medium'
                             >
                                 <Plus className='size-4' />
-                                {resolvedNewLabel ?? `${strings.newPrefix} ${singular}`}
+                                {resolvedNewLabel}
                             </button>
                         )}
                     </div>
