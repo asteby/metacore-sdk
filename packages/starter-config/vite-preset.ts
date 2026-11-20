@@ -678,7 +678,14 @@ export async function defineMetacoreConfig(
   const plugins: PluginOption[] = []
 
   if (router) {
-    const { tanstackRouter } = await import('@tanstack/router-plugin/vite')
+    // Optional peer: `ts-ignore` (not `ts-expect-error`) so consumers that
+    // typecheck this published source without the peer installed don't fail
+    // with TS2307. Typed locally instead of from the package.
+    // @ts-ignore
+    const routerMod = (await import('@tanstack/router-plugin/vite')) as unknown as {
+      tanstackRouter: (opts: Record<string, unknown>) => PluginOption
+    }
+    const { tanstackRouter } = routerMod
     plugins.push(
       tanstackRouter({
         target: 'react',
@@ -691,7 +698,12 @@ export async function defineMetacoreConfig(
   plugins.push(react(), tailwindcss())
 
   if (pwa) {
-    const { VitePWA } = await import('vite-plugin-pwa')
+    // Optional peer, see router import above.
+    // @ts-ignore
+    const pwaMod = (await import('vite-plugin-pwa')) as unknown as {
+      VitePWA: (opts: Record<string, unknown>) => PluginOption
+    }
+    const { VitePWA } = pwaMod
     plugins.push(
       VitePWA({
         strategies: pwa.strategies ?? 'injectManifest',
