@@ -241,6 +241,8 @@ export function DynamicForm({
         try { await onSubmit(data) } finally { setSubmitting(false) }
     }
 
+    const patchValues = (patch: Record<string, any>) => setValues((prev: Record<string, any>) => ({ ...prev, ...patch }))
+
     // Renders one group's fields into the responsive 2-column grid: scalar
     // header fields flow through it; line-items grids (and textareas) span full
     // width so the row table / memo gets room. Shared by every layout mode.
@@ -256,6 +258,7 @@ export function DynamicForm({
                     error={errors[field.key]}
                     initialValues={initialValues}
                     onFieldMeta={onFieldMeta}
+                    setValues={patchValues}
                 />
             ))}
         </div>
@@ -376,6 +379,8 @@ interface FieldRendererProps {
     onFieldMeta?: (key: string, meta: { width?: number; height?: number }) => void
     /** id único (useId) de la etiqueta visible; el control de tres estados la referencia. */
     labelId?: string
+    /** Patches several form values at once (forwarded to host field widgets). */
+    setValues?: (patch: Record<string, any>) => void
 }
 
 interface FieldRowProps extends FieldRendererProps {
@@ -386,7 +391,7 @@ interface FieldRowProps extends FieldRendererProps {
 // component so a STATIC enum select whose options are all gated out by a sibling
 // value (`when`) can hide the ENTIRE row (label included) and run its reset
 // effect with valid hook ordering.
-function FieldRow({ field, value, onChange, values, error, initialValues, onFieldMeta }: FieldRowProps) {
+function FieldRow({ field, value, onChange, values, error, initialValues, onFieldMeta, setValues }: FieldRowProps) {
     // Único por instancia: dos formularios montados con el mismo campo no chocan.
     const labelId = `${useId()}-label`
     const isStaticSelect =
@@ -427,6 +432,7 @@ function FieldRow({ field, value, onChange, values, error, initialValues, onFiel
                 error={error}
                 onFieldMeta={onFieldMeta}
                 labelId={labelId}
+                setValues={setValues}
             />
             {error && <span className="text-red-500 text-sm" role="alert">{error}</span>}
         </div>
@@ -470,13 +476,14 @@ function FieldRenderer({
     error,
     onFieldMeta,
     labelId,
+    setValues,
 }: FieldRendererProps & { effectiveOptions?: import('./types').OptionDef[]; error?: string }) {
     // Host-registered widget (`widget: "<name>"`) wins over every built-in and
     // type-based branch. Unregistered names fall through untouched.
     useFieldWidgetRegistryVersion()
     const HostWidget = getFieldWidget(field.widget)
     if (HostWidget) {
-        return <HostWidget field={field} value={value} onChange={onChange} error={error} record={values} />
+        return <HostWidget field={field} value={value} onChange={onChange} error={error} record={values} setValues={setValues} />
     }
     // Repeatable line-items group → render the row grid. Its value is an array
     // of row objects rather than a scalar.

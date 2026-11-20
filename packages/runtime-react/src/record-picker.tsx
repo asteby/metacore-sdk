@@ -273,6 +273,12 @@ export interface RecordPickerProps<T> {
     variant?: RecordPickerVariant
     /** Input mode: the typed text IS the value (never shows a selected display). */
     freeText?: boolean
+    /**
+     * Input mode: open the list when the text box gains focus (no click on a
+     * chevron, no typing first). Pair with `minChars={0}` to show the first
+     * results right away.
+     */
+    openOnFocus?: boolean
     icon?: LucideIcon
     id?: string
     ariaLabel?: string
@@ -377,6 +383,7 @@ export function RecordPicker<T>(props: RecordPickerProps<T>) {
         className,
         triggerClassName,
         triggerProps,
+        openOnFocus = false,
         inputRef,
         minListWidth = '14rem',
         maxListWidth,
@@ -806,6 +813,9 @@ export function RecordPicker<T>(props: RecordPickerProps<T>) {
                                             onChange={(e) => {
                                                 setQuery(e.target.value)
                                                 setOpen(true)
+                                            }}
+                                            onFocus={() => {
+                                                if (openOnFocus) setOpen(true)
                                             }}
                                             onBlur={() => close()}
                                             onKeyDown={onKeyDown}

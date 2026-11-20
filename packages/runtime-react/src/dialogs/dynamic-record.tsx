@@ -1366,6 +1366,7 @@ export function DynamicRecordDialog({
                         mode={mode}
                         locked={isCreate && !!lockedFields?.includes(field.key)}
                         error={fieldErrors[field.key]}
+                        setValues={patch => setFormValues((prev: Record<string, any>) => ({ ...prev, ...patch }))}
                         onChange={val => {
                             if (getDeriveFrom(field)) {
                                 if (val === '' || val == null) manualDerived.current.delete(field.key)
@@ -1662,6 +1663,8 @@ interface FieldRowProps {
     value: any
     mode: 'view' | 'edit' | 'create'
     onChange: (val: any) => void
+    /** Patches several form values at once (forwarded to host field widgets). */
+    setValues?: (patch: Record<string, any>) => void
     /** Localized validation error for this field, shown in red under the input. */
     error?: string
     /**
@@ -1673,7 +1676,7 @@ interface FieldRowProps {
     locked?: boolean
 }
 
-function FieldRow({ field, record, value, mode, onChange, error, locked }: FieldRowProps) {
+function FieldRow({ field, record, value, mode, onChange, setValues, error, locked }: FieldRowProps) {
     // A `readonly` field is server/system-generated (e.g. the GitHub addon's
     // `number`/`github_url`, filled by the API after the outbound create). On
     // CREATE it is excluded from the form entirely (see `visibleFields`); on EDIT
@@ -1700,7 +1703,7 @@ function FieldRow({ field, record, value, mode, onChange, error, locked }: Field
             ) : isEditReadonly ? (
                 <ReadonlyEditField field={field} value={value} />
             ) : (
-                <EditField field={field} value={value} onChange={onChange} record={record} invalid={!!error} error={error} labelId={labelId} />
+                <EditField field={field} value={value} onChange={onChange} setValues={setValues} record={record} invalid={!!error} error={error} labelId={labelId} />
             )}
 
             {error && mode !== 'view' && (
@@ -2396,12 +2399,14 @@ function JsonObjectViewValue({ value }: { value: Record<string, unknown> }) {
     )
 }
 
-export function EditField({ field, value, onChange, record, invalid, error, labelId }: {
+export function EditField({ field, value, onChange, setValues, record, invalid, error, labelId }: {
     field: FieldDef
     /** id de la etiqueta visible (FieldRow); el control de tres estados la referencia. */
     labelId?: string
     value: any
     onChange: (val: any) => void
+    /** Patches several form values at once (forwarded to host field widgets). */
+    setValues?: (patch: Record<string, any>) => void
     /** The full record being edited — supplies FK relation siblings + line-items. */
     record?: any
     /** When true, paint the control with a destructive border (Laravel-style). */
@@ -2428,6 +2433,7 @@ export function EditField({ field, value, onChange, record, invalid, error, labe
                 field={field as unknown as ActionFieldDef}
                 value={value}
                 onChange={onChange}
+                setValues={setValues}
                 error={error}
                 record={record}
             />

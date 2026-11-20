@@ -37,6 +37,12 @@ export interface FieldWidgetProps {
      * record dialog (`EditField`) it is the loaded/edited record.
      */
     record?: Record<string, any>
+    /**
+     * Merge several sibling fields into the form at once. For widgets that fill
+     * the form from an external source (a scanned document, a lookup) instead of
+     * editing their own value. Absent where the host form cannot patch siblings.
+     */
+    setValues?: (patch: Record<string, any>) => void
 }
 
 export type FieldWidgetComponent = React.ComponentType<FieldWidgetProps>

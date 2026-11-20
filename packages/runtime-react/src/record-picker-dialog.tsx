@@ -10,6 +10,7 @@
 import { unwrapResponse } from '@asteby/metacore-lib/envelope'
 import { useState, type ReactNode } from 'react'
 import { CreateRecordDialog } from './dialogs/create-record-dialog'
+import type { FieldDef } from './dialogs/dynamic-record'
 import { useApi } from './api-context'
 import { withSearchPrefill } from './record-picker-actions'
 
@@ -24,6 +25,8 @@ export interface UseRecordPickerDialogOptions {
     createDefaults?: Record<string, unknown>
     /** Fields of `createDefaults` rendered locked on create. */
     lockedCreateFields?: string[]
+    /** Fields merged into the modal schema (e.g. a `widget` field that fills siblings via `setValues`). */
+    ensureFields?: FieldDef[]
     /** The saved record (`{ id, ...fields }`). */
     onSaved: (record: Record<string, unknown>, kind: 'create' | 'edit') => void
 }
@@ -43,6 +46,7 @@ export function useRecordPickerDialog({
     prefillField = 'name',
     createDefaults,
     lockedCreateFields,
+    ensureFields,
     onSaved,
 }: UseRecordPickerDialogOptions): UseRecordPickerDialogResult {
     const api = useApi()
@@ -60,6 +64,7 @@ export function useRecordPickerDialog({
             endpoint={base}
             defaults={state.recordId ? undefined : state.defaults}
             lockedFields={state.recordId ? undefined : lockedCreateFields}
+            ensureFields={ensureFields}
             onCreate={async (data) => {
                 const rec = unwrapRecord(await api.post(base, data))
                 onSaved(rec, 'create')
