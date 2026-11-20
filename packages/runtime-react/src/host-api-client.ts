@@ -28,11 +28,26 @@ export interface HostRequestConfig {
      * and the other headers it owns; they can never be overridden from here.
      */
     headers?: Record<string, string>
+    /**
+     * Per-call timeout (ms) for slow operations; overrides `defaultTimeout`.
+     * Finite number >= 0, else ignored. The host clamps it to its ceiling, so
+     * `0` means that ceiling (never unlimited unless the host allows it).
+     * A timeout rejects the call but the server may still have applied it.
+     */
+    timeout?: number
+    /**
+     * `'network'`: never serve this read from the host's offline cache (use for
+     * money-critical reads). Rejects on network failure. Enforced only by hosts
+     * that honor it (ops does not yet unless it reads `metacoreFreshness`).
+     */
+    freshness?: 'network'
 }
 
 export interface HostApiClientOptions {
     /** Headers sent on every call; per-call `headers` win over them. */
     defaultHeaders?: Record<string, string>
+    /** Timeout (ms) for every call; a per-call `timeout` wins. */
+    defaultTimeout?: number
 }
 
 /** Minimal axios-like surface (what DynamicSelectField & co. call). */
@@ -64,7 +79,7 @@ export interface HostApiClient {
         path: string,
         file: File | Blob | FormData,
         fields?: Record<string, string>,
-        opts?: { fileField?: string; signal?: AbortSignal },
+        opts?: { fileField?: string; signal?: AbortSignal; timeout?: number; headers?: Record<string, string> },
     ): Promise<T>
     /**
      * Axios-like adapter for runtime-react fields that expect `{ data }` with
@@ -96,10 +111,14 @@ function toApiError(e: unknown, signal?: AbortSignal): Error {
 /** Build the client over the host-injected {@link HostApi}. */
 export function createHostApiClient(api: HostApi, options: HostApiClientOptions = {}): HostApiClient {
     const defaults = options.defaultHeaders
-    // Additive: without defaults or per-call headers the config is untouched.
+    const defaultTimeout = options.defaultTimeout
+    // Additive: without defaults or per-call options the config is untouched.
     const cfg = <C extends HostRequestConfig | undefined>(c: C): C => {
-        if (!defaults) return c
-        return { ...(c ?? {}), headers: { ...defaults, ...(c?.headers ?? {}) } } as C
+        if (!defaults && defaultTimeout === undefined) return c
+        const out: HostRequestConfig = { ...(c ?? {}) }
+        if (defaults) out.headers = { ...defaults, ...(c?.headers ?? {}) }
+        if (defaultTimeout !== undefined && c?.timeout === undefined) out.timeout = defaultTimeout
+        return out as C
     }
     const run = async <R,>(p: () => Promise<R>, signal?: AbortSignal): Promise<R> => {
         try {
@@ -130,7 +149,7 @@ export function createHostApiClient(api: HostApi, options: HostApiClientOptions 
                 form.append(opts?.fileField ?? 'file', file as Blob)
                 for (const [k, v] of Object.entries(fields ?? {})) form.append(k, v)
             }
-            return body(() => api.post(path, form, cfg(opts?.signal ? { signal: opts.signal } : undefined)), opts?.signal)
+            return body(() => api.post(path, form, cfg(opts?.signal || opts?.timeout !== undefined || opts?.headers ? { signal: opts.signal, timeout: opts.timeout, headers: opts.headers } : undefined)), opts?.signal)
         },
         axiosLike: () => {
             // Envelope kept (the runtime-react fields unwrap it themselves),

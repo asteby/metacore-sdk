@@ -9,7 +9,7 @@ import { createHostApiClient, type HostApiClient, type HostApiClientOptions } fr
  */
 export function useHostApiClient(options?: HostApiClientOptions): HostApiClient {
     const api = useHostApi()
-    const key = options?.defaultHeaders ? JSON.stringify(options.defaultHeaders) : ''
+    const key = JSON.stringify([options?.defaultHeaders ?? null, options?.defaultTimeout ?? null])
     // eslint-disable-next-line react-hooks/exhaustive-deps
     return useMemo(() => createHostApiClient(api, options), [api, key])
 }

@@ -201,3 +201,44 @@ describe('createHostApi remote headers', () => {
         expect(client.post).not.toHaveBeenCalled()
     })
 })
+
+describe('createHostApi timeout / freshness', () => {
+    it('forwards a valid per-call timeout and ignores invalid ones', async () => {
+        const client = axiosLike()
+        const api = createHostApi(client)
+        await api.post('/x', {}, { timeout: 120_000 })
+        expect(client.post).toHaveBeenLastCalledWith('/x', {}, { timeout: 120_000 })
+        for (const bad of [-1, Number.NaN, Infinity, '5' as unknown as number]) {
+            await api.get('/y', { timeout: bad })
+            expect(client.get).toHaveBeenLastCalledWith('/y', {})
+        }
+    })
+
+    it('clamps to the host ceiling; 0 means the ceiling unless the host has none', async () => {
+        const client = axiosLike()
+        const api = createHostApi(client, { maxTimeoutMs: 90_000 })
+        await api.get('/a', { timeout: 10 * 60_000 })
+        expect(client.get).toHaveBeenLastCalledWith('/a', { timeout: 90_000 })
+        await api.get('/b', { timeout: 0 })
+        expect(client.get).toHaveBeenLastCalledWith('/b', { timeout: 90_000 })
+        const unlimited = createHostApi(client, { maxTimeoutMs: 0 })
+        await unlimited.get('/c', { timeout: 0 })
+        expect(client.get).toHaveBeenLastCalledWith('/c', { timeout: 0 })
+        await createHostApi(client).get('/d', { timeout: 0 })
+        expect(client.get).toHaveBeenLastCalledWith('/d', { timeout: 600_000 })
+    })
+
+    it('freshness network sets the host flag and is never batched', async () => {
+        const client = axiosLike()
+        const api = createHostApi(client, { batchGets: true })
+        await api.get('/data/Invoice', { freshness: 'network', timeout: 5000 })
+        expect(client.get).toHaveBeenCalledWith('/data/Invoice', { timeout: 5000, metacoreFreshness: 'network' })
+        expect(client.post).not.toHaveBeenCalled()
+    })
+
+    it('PROTECTED_HOST_HEADERS is untouched by the new options', async () => {
+        const client = axiosLike()
+        await createHostApi(client).get('/x', { timeout: 1000, headers: { Authorization: 'x', 'X-Correlation-ID': 'c' } })
+        expect(client.get).toHaveBeenLastCalledWith('/x', { timeout: 1000, headers: { 'X-Correlation-ID': 'c' } })
+    })
+})
