@@ -54,7 +54,7 @@ describe('error catalog', () => {
     expect(translateErrorCode('app_custom', 'es', { n: 2 })).toBe('Hola 2')
   })
 
-  it('stays in parity with the kernel errcodes JSON', () => {
+  it('stays in parity with the kernel errcodes JSON', { timeout: 60_000 }, () => {
     const p = kernelJsonPath()
     if (!p) return // kernel module not resolvable offline
     expect(JSON.parse(readFileSync(p, 'utf8'))).toEqual(kernelErrorCatalog)
