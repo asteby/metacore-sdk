@@ -4,6 +4,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "../../scripts/fix-dist-esm-imports.mjs", "../../scripts/esm-specifiers.mjs"],
       "outputs": ["dist/**"]
     },
     "dev": {

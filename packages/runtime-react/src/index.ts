@@ -304,11 +304,12 @@ export {
     type PageChromeState,
     type PageChromeStore,
 } from './addon-page-host'
-export { createHostApi, toHostApiError, type CreateHostApiOptions } from './host-api'
+export { createHostApi, toHostApiError, sanitizeRemoteHeaders, PROTECTED_HOST_HEADERS, type CreateHostApiOptions } from './host-api'
 export { HostApiProvider, type HostApiProviderProps } from './host-api-context'
 export {
     createHostApiClient,
     type HostApiClient,
+    type HostApiClientOptions,
     type HostRequestConfig,
     type AxiosLikeClient,
 } from './host-api-client'

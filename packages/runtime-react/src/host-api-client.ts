@@ -22,6 +22,17 @@ export { ApiError, isAbortError }
 export interface HostRequestConfig {
     params?: HostApiParams
     signal?: AbortSignal
+    /**
+     * Extra headers for this call (e.g. `X-Correlation-ID`), merged over the
+     * client's `defaultHeaders`. The host drops Authorization, X-Organization-ID
+     * and the other headers it owns; they can never be overridden from here.
+     */
+    headers?: Record<string, string>
+}
+
+export interface HostApiClientOptions {
+    /** Headers sent on every call; per-call `headers` win over them. */
+    defaultHeaders?: Record<string, string>
 }
 
 /** Minimal axios-like surface (what DynamicSelectField & co. call). */
@@ -83,7 +94,13 @@ function toApiError(e: unknown, signal?: AbortSignal): Error {
 }
 
 /** Build the client over the host-injected {@link HostApi}. */
-export function createHostApiClient(api: HostApi): HostApiClient {
+export function createHostApiClient(api: HostApi, options: HostApiClientOptions = {}): HostApiClient {
+    const defaults = options.defaultHeaders
+    // Additive: without defaults or per-call headers the config is untouched.
+    const cfg = <C extends HostRequestConfig | undefined>(c: C): C => {
+        if (!defaults) return c
+        return { ...(c ?? {}), headers: { ...defaults, ...(c?.headers ?? {}) } } as C
+    }
     const run = async <R,>(p: () => Promise<R>, signal?: AbortSignal): Promise<R> => {
         try {
             return await p()
@@ -95,15 +112,15 @@ export function createHostApiClient(api: HostApi): HostApiClient {
         run(async () => unwrapEnvelope<T>(await p()), signal)
 
     const client: HostApiClient = {
-        get: (path, c) => body(() => api.get(path, c), c?.signal),
-        post: (path, b, c) => body(() => api.post(path, b, c), c?.signal),
-        put: (path, b, c) => body(() => api.put(path, b, c), c?.signal),
-        patch: (path, b, c) => body(() => api.patch(path, b, c), c?.signal),
-        delete: (path, c) => body(() => api.delete(path, c), c?.signal),
+        get: (path, c) => body(() => api.get(path, cfg(c)), c?.signal),
+        post: (path, b, c) => body(() => api.post(path, b, cfg(c)), c?.signal),
+        put: (path, b, c) => body(() => api.put(path, b, cfg(c)), c?.signal),
+        patch: (path, b, c) => body(() => api.patch(path, b, cfg(c)), c?.signal),
+        delete: (path, c) => body(() => api.delete(path, cfg(c)), c?.signal),
         list: (path, c) =>
-            run(async () => unwrapList(await api.get(path, c)), c?.signal),
+            run(async () => unwrapList(await api.get(path, cfg(c))), c?.signal),
         blob: (path, c) =>
-            run(() => api.get<Blob>(path, { ...c, responseType: 'blob' }), c?.signal),
+            run(() => api.get<Blob>(path, { ...cfg(c), responseType: 'blob' }), c?.signal),
         upload: (path, file, fields, opts) => {
             let form: FormData
             if (typeof FormData !== 'undefined' && file instanceof FormData) {
@@ -113,7 +130,7 @@ export function createHostApiClient(api: HostApi): HostApiClient {
                 form.append(opts?.fileField ?? 'file', file as Blob)
                 for (const [k, v] of Object.entries(fields ?? {})) form.append(k, v)
             }
-            return body(() => api.post(path, form, opts?.signal ? { signal: opts.signal } : undefined), opts?.signal)
+            return body(() => api.post(path, form, cfg(opts?.signal ? { signal: opts.signal } : undefined)), opts?.signal)
         },
         axiosLike: () => {
             // Envelope kept (the runtime-react fields unwrap it themselves),
@@ -125,11 +142,11 @@ export function createHostApiClient(api: HostApi): HostApiClient {
                     return { data }
                 }, signal)
             return {
-                get: (u, c) => raw(() => api.get(u, c), c?.signal),
-                post: (u, b, c) => raw(() => api.post(u, b, c), c?.signal),
-                put: (u, b, c) => raw(() => api.put(u, b, c), c?.signal),
-                patch: (u, b, c) => raw(() => api.patch(u, b, c), c?.signal),
-                delete: (u, c) => raw(() => api.delete(u, c), c?.signal),
+                get: (u, c) => raw(() => api.get(u, cfg(c)), c?.signal),
+                post: (u, b, c) => raw(() => api.post(u, b, cfg(c)), c?.signal),
+                put: (u, b, c) => raw(() => api.put(u, b, cfg(c)), c?.signal),
+                patch: (u, b, c) => raw(() => api.patch(u, b, cfg(c)), c?.signal),
+                delete: (u, c) => raw(() => api.delete(u, cfg(c)), c?.signal),
             }
         },
     }

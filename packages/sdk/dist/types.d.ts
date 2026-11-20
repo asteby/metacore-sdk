@@ -12,15 +12,15 @@
  * the v2 shape keep type-checking during the migration window. The kernel
  * dual-reads v2 for backwards compatibility.
  */
-import "./generated/manifest-v3";
-import "./generated/manifest";
-export { APIVersion as METACORE_API_VERSION } from "./generated/manifest-v3";
-export type { Manifest, Metadata, MetadataLocale, Icon, Compatibility, Requirement, Tenancy, Capability, Model, Column, Index, ForeignKey, Reference, ModelExtension, Contributions, NavGroup, NavItem, SlotContribution as ManifestSlotContribution, Action, ActionField, FieldOption, FieldValidation, Tool, Subscription, Handler, ExtensionPoints, PublishedEvent, PublishedSlot, Lifecycle, UpgradeStep, I18n, I18nBundle, RBAC, Role, PermissionDef, Setting, SettingOption, Billing, MeteredEvent, Preset, PresetAddon, Theme, ConnectorPack, ConnectorProvider, Signature, Frontend, FrontendPage, PageBreadcrumb, NavRequire, NavView, MapView, MapPoint, MapLayer, MapRoute, TimelineView, TimelineSource, CalendarView, ChartView, SplitView, ModelDetail, DetailPanel, RelationPanel, StatsPanel, StatItem, WidgetQuery, } from "./generated/manifest-v3";
-export { PageLayoutShell, PageLayoutImmersive, MaxPageBudgetKB, MaxPageBreadcrumbs, ViewTypeTable, ViewTypeKanban, ViewTypeMap, ViewTypeTimeline, ViewTypeCalendar, ViewTypeChart, ViewTypeSplit, PanelKindMap, PanelKindTimeline, PanelKindChart, PanelKindRelation, PanelKindStats, PanelKindCustom, } from "./generated/manifest-v3";
-export { HostCapUIPages, HostCapUIEmbeddedPages, HostCapUIDetailPanels, HostCapUIMaps, HostCapUICharts, HostCapUIViewPrefix, } from "./generated/manifest";
-export type { Module, FrontendSpec, BackendSpec, Permission, SettingDef, Option, ToolDef, ToolInputParam, ActionDef, ActionTrigger, FieldDef, HookDef, HookTarget, ModelDefinition, RelationDef, ColumnDef, ValidationRule, } from "./generated/manifest";
-export type { Manifest as LegacyManifest, Capability as LegacyCapability, NavGroup as LegacyNavGroup, NavItem as LegacyNavItem, ModelExtension as LegacyModelExtension, Signature as LegacySignature, MetadataLocale as LegacyMetadataLocale, } from "./generated/manifest";
-export { APIVersion as METACORE_API_VERSION_V2 } from "./generated/manifest";
+import "./generated/manifest-v3.js";
+import "./generated/manifest.js";
+export { APIVersion as METACORE_API_VERSION } from "./generated/manifest-v3.js";
+export type { Manifest, Metadata, MetadataLocale, Icon, Compatibility, Requirement, Tenancy, Capability, Model, Column, Index, ForeignKey, Reference, ModelExtension, Contributions, NavGroup, NavItem, SlotContribution as ManifestSlotContribution, Action, ActionField, FieldOption, FieldValidation, Tool, Subscription, Handler, ExtensionPoints, PublishedEvent, PublishedSlot, Lifecycle, UpgradeStep, I18n, I18nBundle, RBAC, Role, PermissionDef, Setting, SettingOption, Billing, MeteredEvent, Preset, PresetAddon, Theme, ConnectorPack, ConnectorProvider, Signature, Frontend, FrontendPage, PageBreadcrumb, NavRequire, NavView, MapView, MapPoint, MapLayer, MapRoute, TimelineView, TimelineSource, CalendarView, ChartView, SplitView, ModelDetail, DetailPanel, RelationPanel, StatsPanel, StatItem, WidgetQuery, } from "./generated/manifest-v3.js";
+export { PageLayoutShell, PageLayoutImmersive, MaxPageBudgetKB, MaxPageBreadcrumbs, ViewTypeTable, ViewTypeKanban, ViewTypeMap, ViewTypeTimeline, ViewTypeCalendar, ViewTypeChart, ViewTypeSplit, PanelKindMap, PanelKindTimeline, PanelKindChart, PanelKindRelation, PanelKindStats, PanelKindCustom, } from "./generated/manifest-v3.js";
+export { HostCapUIPages, HostCapUIEmbeddedPages, HostCapUIDetailPanels, HostCapUIMaps, HostCapUICharts, HostCapUIViewPrefix, } from "./generated/manifest.js";
+export type { Module, FrontendSpec, BackendSpec, Permission, SettingDef, Option, ToolDef, ToolInputParam, ActionDef, ActionTrigger, FieldDef, HookDef, HookTarget, ModelDefinition, RelationDef, ColumnDef, ValidationRule, } from "./generated/manifest.js";
+export type { Manifest as LegacyManifest, Capability as LegacyCapability, NavGroup as LegacyNavGroup, NavItem as LegacyNavItem, ModelExtension as LegacyModelExtension, Signature as LegacySignature, MetadataLocale as LegacyMetadataLocale, } from "./generated/manifest.js";
+export { APIVersion as METACORE_API_VERSION_V2 } from "./generated/manifest.js";
 /**
  * AddonLayout selects how the host shell wraps the federated addon when it
  * mounts. Default (undefined / "shell") keeps the legacy behaviour: the addon

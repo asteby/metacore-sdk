@@ -45,7 +45,7 @@
     "./sw.ts": "./templates/sw.ts"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node ../../scripts/fix-dist-esm-imports.mjs",
     "dev": "tsc -w -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",

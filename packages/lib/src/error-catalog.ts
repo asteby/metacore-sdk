@@ -4,7 +4,7 @@
  * language with `{param}` placeholders; `getApiErrorMessage` consults it BEFORE
  * falling back to `message`. Pure, no React.
  */
-import kernelCatalog from './error-catalog.data.json'
+import kernelCatalog from './error-catalog.data.json' with { type: 'json' }
 
 export type ErrorCatalog = Record<string, string>
 

@@ -117,3 +117,19 @@ describe('useHostApiClient', () => {
         spy.mockRestore()
     })
 })
+
+describe('request headers', () => {
+    it('merges defaultHeaders with per-call headers (per-call wins) and passes them to the HostApi', async () => {
+        const get = vi.fn(async () => ({ ok: 1 }))
+        const c = createHostApiClient(stub({ get: get as never }), { defaultHeaders: { 'X-A': '1', 'X-B': '1' } })
+        await c.get('/x', { headers: { 'X-B': '2', 'X-Correlation-ID': 'cid' } })
+        expect(get).toHaveBeenCalledWith('/x', { headers: { 'X-A': '1', 'X-B': '2', 'X-Correlation-ID': 'cid' } })
+    })
+
+    it('is additive: no headers means the config is untouched', async () => {
+        const post = vi.fn(async () => ({}))
+        const c = createHostApiClient(stub({ post: post as never }))
+        await c.post('/x', { a: 1 })
+        expect(post).toHaveBeenCalledWith('/x', { a: 1 }, undefined)
+    })
+})

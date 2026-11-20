@@ -26,6 +26,8 @@ jobs:
         run: npm install -g npm@11 && npm --version
       - run: pnpm install --frozen-lockfile=false
       - run: pnpm --filter "./packages/*" -r build
+      # El tarball que se publicaria debe cargar en Node ESM (subpaths de `exports`).
+      - run: node scripts/check-packed-esm.mjs lib sdk ui
       - name: Create Release PR or Publish
         uses: changesets/action@v1
         with:

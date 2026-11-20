@@ -151,3 +151,53 @@ describe('createHostApi', () => {
         expect(e.message).toBe('Network error')
     })
 })
+
+describe('createHostApi remote headers', () => {
+    it('forwards extra headers but never lets a remote override host-owned ones', async () => {
+        const client = axiosLike()
+        const api = createHostApi(client)
+        await api.post('/data/sales', { a: 1 }, {
+            headers: {
+                'X-Correlation-ID': 'cid-1',
+                Authorization: 'Bearer evil',
+                authorization: 'Bearer evil',
+                'X-Organization-ID': 'other-org',
+                'x-organization-id': 'other-org',
+                'X-Branch-ID': '9',
+                'Accept-Language': 'xx',
+                Cookie: 'a=b',
+                'X-Bad': 'a\r\nInjected: 1',
+            },
+        })
+        expect(client.post).toHaveBeenCalledWith('/data/sales', { a: 1 }, { headers: { 'X-Correlation-ID': 'cid-1' } })
+        await api.get('/x', { headers: { Authorization: 'Bearer evil' } })
+        expect(client.get).toHaveBeenLastCalledWith('/x', {})
+    })
+
+    it('also protects forwarding/identity headers and Proxy-*', async () => {
+        const client = axiosLike()
+        await createHostApi(client).get('/x', {
+            headers: {
+                'X-Forwarded-Host': 'evil.example',
+                'X-Forwarded-Proto': 'http',
+                'X-Forwarded-For': '1.1.1.1',
+                Forwarded: 'for=1.1.1.1',
+                'X-Real-IP': '1.1.1.1',
+                'X-Storefront-Domain': 'evil.example',
+                'X-API-Key': 'k',
+                'X-HTTP-Method-Override': 'DELETE',
+                'Proxy-Foo': 'x',
+                'X-Correlation-ID': 'ok',
+            },
+        })
+        expect(client.get).toHaveBeenLastCalledWith('/x', { headers: { 'X-Correlation-ID': 'ok' } })
+    })
+
+    it('batchGets: a GET with per-call headers is not grouped into POST /q', async () => {
+        const client = axiosLike()
+        const api = createHostApi(client, { batchGets: true })
+        await api.get('/data/Shipment', { headers: { 'X-Correlation-ID': 'c1' } })
+        expect(client.get).toHaveBeenCalledWith('/data/Shipment', { headers: { 'X-Correlation-ID': 'c1' } })
+        expect(client.post).not.toHaveBeenCalled()
+    })
+})

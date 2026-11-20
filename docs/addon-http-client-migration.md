@@ -53,9 +53,32 @@ Notas:
   `createHostApiClient(useHostApi())` dentro de un hook; no hay singleton ni fallback a
   `localStorage`. Sin host, `useHostApi()` lanza un error explicativo.
 
+## Cabeceras por petición
+
+Para `X-Correlation-ID` y similares: `headers` por llamada y/o `defaultHeaders` al crear
+el cliente (la por-llamada gana).
+
+```ts
+const api = useHostApiClient({ defaultHeaders: { 'X-Client': 'pos' } })
+await api.post('/data/sales', body, { headers: { 'X-Correlation-ID': cid } })
+// o fuera del hook: createHostApiClient(hostApi, { defaultHeaders })
+```
+
+Las añade el host a las suyas, pero descarta (sin distinguir mayúsculas) las que
+posee: `Authorization`, `Proxy-Authorization`, `Cookie`, `X-Organization-ID`, `X-Org-ID`,
+`X-Branch-ID`, `Accept-Language`, `Host`, `Content-Length`, `Content-Type`,
+`Transfer-Encoding`, `Origin`, `Referer`, `X-Forwarded-Host/Proto/For/Port`, `Forwarded`,
+`X-Real-IP`, `X-Storefront-Domain`, `X-API-Key`, `X-HTTP-Method-Override` y todo `Proxy-*`
+(lista en `PROTECTED_HOST_HEADERS`). Nombres
+inválidos o valores con saltos de línea también se descartan. Un remote puede añadir
+cabeceras, nunca sustituir las del host.
+
+Honestidad: esto es higiene de contrato, NO una barrera de seguridad. El remote corre en
+el mismo realm que el host (puede llamar a `fetch`/axios directamente); la defensa real
+es lo que el backend valida (auth, permisos, tenant), nunca estas cabeceras. Un GET con
+`headers` por llamada no entra en el lote de `batchGets` (va como GET propio).
+
 ## Límites actuales
 
-- Headers por petición (p. ej. `X-Correlation-ID` de POS `runWithCorrelation`) no se
-  pueden fijar desde el addon: el host debe ofrecerlo (siguiente iteración).
 - Sin `Content-Type` manual: el transporte del host fija el boundary multipart.
 - Offline/`getApiBase()` (POS, kiosk): el host decide la base y la cola offline.

@@ -1,4 +1,4 @@
-import { translateErrorCode } from './error-catalog'
+import { translateErrorCode } from './error-catalog.js'
 /**
  * Kernel response envelope `{ success, data, meta }` — the ONE place the SDK
  * (and every app/addon built on it) unwraps it and extracts error messages.

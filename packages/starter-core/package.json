@@ -24,7 +24,7 @@
     }
   },
   "scripts": {
-    "build": "vite build && tsc -p tsconfig.json --emitDeclarationOnly",
+    "build": "vite build && tsc -p tsconfig.json --emitDeclarationOnly && node ../../scripts/fix-dist-esm-imports.mjs",
     "dev": "vite build --watch",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",

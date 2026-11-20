@@ -34,6 +34,14 @@ export interface HostApiRequestOptions {
    * `code`/`data` come from the server's JSON error body.
    */
   responseType?: "json" | "blob";
+  /**
+   * Extra request headers (e.g. `X-Correlation-ID`). The host merges them with
+   * its own and drops, case-insensitively, any that carry its credentials or
+   * scope (`Authorization`, `X-Organization-ID`, `X-Branch-ID`,
+   * `Accept-Language`, `Cookie`...): a remote can add headers, never replace
+   * the host's.
+   */
+  headers?: Record<string, string>;
 }
 
 /**
