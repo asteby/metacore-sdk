@@ -10,6 +10,7 @@
 // the image-url resolver and the org IANA timezone — are passed as props so the
 // SDK stays transport- and host-agnostic.
 import { emitRecordMutation } from '../record-mutation-events'
+import { modelVerbTitle, resolveModelNoun } from '../model-labels'
 import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ModelSchema } from './types'
@@ -286,6 +287,9 @@ interface ModalMetadata {
     titleKey?: string
     createTitle?: string
     editTitle?: string
+    /** Backend-localized singular noun ("cliente"): feeds "Crear/Editar/Eliminar {noun}". Host i18n `models.<model>.singular` wins. */
+    singular_label?: string
+    singularLabel?: string
     /**
      * Optional per-model dialog texts. When present they replace the generic
      * description / submit label of the mode; absent → the built-in texts.
@@ -334,13 +338,17 @@ interface ModalMetadata {
     messages?: { created?: string; updated?: string; deleted?: string }
 }
 
-type TFn = (key: string) => string
+type TFn = (key: string, opts?: Record<string, unknown>) => string
 
 // localizedModelName resolves the (possibly addon-i18n) model name: prefer the
 // translated titleKey, fall back to the backend-provided raw title.
-function localizedModelName(meta: ModalMetadata, t: TFn): string {
-    if (meta.titleKey && t(meta.titleKey) !== meta.titleKey) return t(meta.titleKey)
-    return meta.title || ''
+function localizedModelName(meta: ModalMetadata, t: TFn, model = ''): string {
+    return resolveModelNoun(t, {
+        model,
+        singularLabel: meta.singular_label ?? meta.singularLabel,
+        titleKey: meta.titleKey,
+        title: meta.title,
+    })
 }
 
 export interface DynamicRecordDialogProps {
@@ -642,9 +650,9 @@ function modeTexts(
 
 const MODE_CONFIG = {
     create: {
-        getTitle: (meta: ModalMetadata, t: TFn) => {
-            const name = localizedModelName(meta, t)
-            return name ? `Crear ${name}` : (meta.createTitle || meta.title || 'Nuevo registro')
+        getTitle: (meta: ModalMetadata, t: TFn, model = '') => {
+            const name = localizedModelName(meta, t, model)
+            return name ? modelVerbTitle(t, 'create', name, `Crear ${name}`) : (meta.createTitle || meta.title || 'Nuevo registro')
         },
         description: 'Completa los campos para crear un nuevo registro.',
         submitLabel: 'Crear',
@@ -652,9 +660,9 @@ const MODE_CONFIG = {
         cancelLabel: 'Cancelar',
     },
     edit: {
-        getTitle: (meta: ModalMetadata, t: TFn) => {
-            const name = localizedModelName(meta, t)
-            return name ? `Editar ${name}` : (meta.editTitle || meta.title || 'Editar registro')
+        getTitle: (meta: ModalMetadata, t: TFn, model = '') => {
+            const name = localizedModelName(meta, t, model)
+            return name ? modelVerbTitle(t, 'edit', name, `Editar ${name}`) : (meta.editTitle || meta.title || 'Editar registro')
         },
         description: 'Modifica los campos y guarda los cambios.',
         submitLabel: 'Guardar cambios',
@@ -662,7 +670,7 @@ const MODE_CONFIG = {
         cancelLabel: 'Cancelar',
     },
     view: {
-        getTitle: (meta: ModalMetadata, t: TFn) => localizedModelName(meta, t) || meta.title || 'Ver registro',
+        getTitle: (meta: ModalMetadata, t: TFn, model = '') => localizedModelName(meta, t, model) || meta.title || 'Ver registro',
         description: 'Información detallada del registro.',
         submitLabel: '',
         submittingLabel: '',
@@ -1314,14 +1322,21 @@ export function DynamicRecordDialog({
     }
 
     const title = modalMeta
-        ? config.getTitle(modalMeta, t)
+        ? config.getTitle(modalMeta, t, model)
         : mode === 'create'
           ? 'Nuevo registro'
           : mode === 'edit'
             ? 'Editar registro'
             : 'Ver registro'
 
-    const texts = modeTexts(modalMeta, mode, config)
+    // Generic dialog texts go through the host's i18n (`dynamic.*`, es defaults) so an English host
+    // gets English buttons without per-model metadata; per-model metadata texts still win.
+    const texts = modeTexts(modalMeta, mode, {
+        description: t(`dynamic.${mode}_description`, { defaultValue: config.description }),
+        submitLabel: t(`dynamic.${mode}_submit`, { defaultValue: config.submitLabel }),
+    })
+    const submittingLabel = t(`dynamic.${mode}_submitting`, { defaultValue: config.submittingLabel })
+    const cancelLabel = t(`dynamic.${mode}_cancel`, { defaultValue: config.cancelLabel })
 
     const visibleFields = filterVisibleFields(modalMeta?.fields, mode, formValues, attributeClasses)
 
@@ -1580,11 +1595,11 @@ export function DynamicRecordDialog({
                             on; the first step still shows Cancel. */}
                         {isSteps && clampedStep > 0 ? (
                             <Button variant="outline" onClick={goBackStep} disabled={saving || deleting}>
-                                Anterior
+                                {t('dynamic.previous', { defaultValue: 'Anterior' })}
                             </Button>
                         ) : (
                             <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving || deleting}>
-                                {config.cancelLabel}
+                                {cancelLabel}
                             </Button>
                         )}
                         {isView && onDelete && (
@@ -1594,12 +1609,12 @@ export function DynamicRecordDialog({
                                 disabled={deleting || loading}
                             >
                                 {deleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                {deleting ? 'Eliminando...' : 'Eliminar'}
+                                {deleting ? t('dynamic.deleting', { defaultValue: 'Eliminando...' }) : t('dynamic.delete_confirm', { defaultValue: 'Eliminar' })}
                             </Button>
                         )}
                         {isView && onEdit && (
                             <Button onClick={onEdit} disabled={deleting || loading}>
-                                Editar
+                                {t('dynamic.edit', { defaultValue: 'Editar' })}
                             </Button>
                         )}
                         {/* Non-final wizard step → "Siguiente" validates the step
@@ -1607,7 +1622,7 @@ export function DynamicRecordDialog({
                             every non-wizard form) keeps the real submit button. */}
                         {isEditable && isSteps && !isLastStep && (
                             <Button type="button" onClick={goNextStep} disabled={saving || loading}>
-                                Siguiente
+                                {t('dynamic.next', { defaultValue: 'Siguiente' })}
                             </Button>
                         )}
                         {isEditable && (!isSteps || isLastStep) && (
@@ -1617,7 +1632,7 @@ export function DynamicRecordDialog({
                                 disabled={saving || loading}
                             >
                                 {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                {saving ? config.submittingLabel : texts.submitLabel}
+                                {saving ? submittingLabel : texts.submitLabel}
                             </Button>
                         )}
                     </div>
@@ -2616,7 +2631,7 @@ export function EditField({ field, value, onChange, record, invalid, error, labe
         return (
             <Select value={String(value ?? '')} onValueChange={onChange}>
                 <SelectTrigger className={cn("w-full", invalidCls)} aria-invalid={invalid || undefined}>
-                    <SelectValue placeholder="Seleccionar..." />
+                    <SelectValue placeholder={t('dynamic.select_placeholder', { defaultValue: 'Seleccionar...' })} />
                 </SelectTrigger>
                 <SelectContent>
                     {field.options.map(opt => (
@@ -2674,7 +2689,7 @@ export function EditField({ field, value, onChange, record, invalid, error, labe
                         <CalendarIcon className="mr-2 h-4 w-4" />
                         {validDate
                             ? format(validDate, 'PPP', { locale: es })
-                            : "Seleccionar fecha"}
+                            : t('dynamic.select_date', { defaultValue: 'Seleccionar fecha' })}
                     </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" align="start">
@@ -2901,6 +2916,7 @@ function extractArray(res: any): any[] {
 const searchCache = new Map<string, any[]>()
 
 function SearchField({ field, value, onChange }: { field: FieldDef; value: any; onChange: (val: any) => void }) {
+    const { t } = useTranslation()
     const api = useApi()
     const [selectedLabel, setSelectedLabel] = useState('')
     const ep = field.searchEndpoint!
@@ -2947,14 +2963,14 @@ function SearchField({ field, value, onChange }: { field: FieldDef; value: any; 
             selected={value ? { value, label: selectedLabel } : null}
             renderValue={() => (
                 <span className={cn('min-w-0 flex-1 truncate', !selectedLabel && 'text-muted-foreground')}>
-                    {selectedLabel || `Seleccionar ${what}...`}
+                    {selectedLabel || t('dynamic.select_what', { what, defaultValue: `Seleccionar ${what}...` })}
                 </span>
             )}
             onSelect={(item) => {
                 onChange(itemValue(item))
                 setSelectedLabel(itemLabel(item))
             }}
-            searchPlaceholder={`Buscar ${what}...`}
+            searchPlaceholder={t('dynamic.search_what', { what, defaultValue: `Buscar ${what}...` })}
             emptyText="Sin resultados."
         />
     )

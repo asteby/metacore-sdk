@@ -202,6 +202,16 @@ export interface TableMetadata {
     titleKey?: string
     title_key?: string
     title: string
+    /**
+     * Backend-localized model nouns. `singular_label` ("cliente") feeds dialog
+     * verbs ("Editar cliente") and the create label; `plural_label` the list
+     * title; `new_label` ("Nuevo cliente") the create button; `gender` ("m"|"f"|"n")
+     * picks Nuevo/Nueva when the label is derived. Host i18n `models.<model>.*` wins.
+     */
+    singular_label?: string
+    plural_label?: string
+    new_label?: string
+    gender?: 'm' | 'f' | 'n'
     endpoint: string
     columns: ColumnDefinition[]
     actions: ActionDefinition[]
