@@ -18,6 +18,12 @@ export type ProductTileProps = {
    * would slice off the edges.
    */
   imageFit?: 'cover' | 'contain'
+  /** CSS aspect-ratio of the image box (default '4 / 3'); e.g. '1 / 1' for square catalogs. */
+  imageAspect?: string
+  /** Product code / SKU, shown in mono under the title (alongside subtitle). */
+  code?: string | null
+  /** Free footer row under the price (stock line, unit, quick actions). */
+  footer?: React.ReactNode
   disabled?: boolean
   /** Corner overlay (stock badge, etc.). */
   badge?: React.ReactNode
@@ -40,6 +46,9 @@ export function ProductTile({
   price,
   imageUrl,
   imageFit = 'cover',
+  imageAspect = '4 / 3',
+  code,
+  footer,
   disabled = false,
   badge,
   hoverAction,
@@ -60,7 +69,7 @@ export function ProductTile({
     >
       <div
         className='bg-muted relative w-full overflow-hidden'
-        style={{ aspectRatio: '4 / 3' }}
+        style={{ aspectRatio: imageAspect }}
       >
         {imageUrl ? (
           // eslint-disable-next-line @next/next/no-img-element -- till tiles are host-agnostic
@@ -101,7 +110,13 @@ export function ProductTile({
             {subtitle}
           </span>
         ) : null}
+        {code ? (
+          <span className='text-muted-foreground truncate font-mono text-xs'>
+            {code}
+          </span>
+        ) : null}
         <div className='text-sm'>{price}</div>
+        {footer ? <div className='text-muted-foreground text-xs'>{footer}</div> : null}
       </div>
     </Card>
     </div>

@@ -17,23 +17,41 @@ import {
   SelectValue,
 } from '@/primitives/select'
 
-type DataTablePaginationProps<TData> = {
-  table: Table<TData>
-  className?: string
+export type PaginationProps = {
+  /** Current page, 1-based. */
+  page: number
+  pageCount: number
+  onPageChange: (page: number) => void
+  /** Rows per page. Omit (with onPageSizeChange) to hide the size selector. */
+  pageSize?: number
+  onPageSizeChange?: (size: number) => void
   pageSizeOptions?: number[]
+  className?: string
   leftActions?: React.ReactNode
 }
 
-export function DataTablePagination<TData>({
-  table,
-  className,
+/**
+ * Paginator that depends on no table library: any list (cards, a POS grid, a
+ * server-paginated feed) can use it. {@link DataTablePagination} is the
+ * TanStack adapter over this same component.
+ */
+export function Pagination({
+  page,
+  pageCount,
+  onPageChange,
+  pageSize,
+  onPageSizeChange,
   pageSizeOptions = [10, 20, 30, 40, 50],
+  className,
   leftActions,
-}: DataTablePaginationProps<TData>) {
+}: PaginationProps) {
   const { t } = useTranslation()
-  const currentPage = table.getState().pagination.pageIndex + 1
-  const totalPages = table.getPageCount()
+  const currentPage = page
+  const totalPages = pageCount
   const pageNumbers = getPageNumbers(currentPage, totalPages)
+  const canPrev = currentPage > 1
+  const canNext = currentPage < totalPages
+  const showSize = pageSize != null && !!onPageSizeChange
 
   return (
     <div
@@ -49,28 +67,28 @@ export function DataTablePagination<TData>({
           {t('datatable.page_x_of_y', { current: currentPage, total: totalPages })}
         </div>
         <div className='flex items-center gap-2 @max-2xl/content:flex-row-reverse'>
-          <Select
-            value={`${table.getState().pagination.pageSize}`}
-            onValueChange={(value) => {
-              table.setPageSize(Number(value))
-            }}
-          >
-            <SelectTrigger className='h-9 w-[70px]'>
-              <SelectValue
-                placeholder={String(table.getState().pagination.pageSize)}
-              />
-            </SelectTrigger>
-            <SelectContent side='top'>
-              {pageSizeOptions.map((pageSize) => (
-                <SelectItem key={pageSize} value={`${pageSize}`}>
-                  {pageSize}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className='hidden text-sm font-medium sm:block'>
-            {t('datatable.rows_per_page')}
-          </p>
+          {showSize ? (
+            <>
+              <Select
+                value={`${pageSize}`}
+                onValueChange={(value) => onPageSizeChange?.(Number(value))}
+              >
+                <SelectTrigger className='h-9 w-[70px]'>
+                  <SelectValue placeholder={String(pageSize)} />
+                </SelectTrigger>
+                <SelectContent side='top'>
+                  {pageSizeOptions.map((size) => (
+                    <SelectItem key={size} value={`${size}`}>
+                      {size}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className='hidden text-sm font-medium sm:block'>
+                {t('datatable.rows_per_page')}
+              </p>
+            </>
+          ) : null}
           {leftActions}
         </div>
       </div>
@@ -83,8 +101,8 @@ export function DataTablePagination<TData>({
           <Button
             variant='outline'
             className='size-9 p-0 @max-md/content:hidden'
-            onClick={() => table.setPageIndex(0)}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => onPageChange(1)}
+            disabled={!canPrev}
           >
             <span className='sr-only'>{t('datatable.go_first_page')}</span>
             <DoubleArrowLeftIcon className='h-4 w-4' />
@@ -92,8 +110,8 @@ export function DataTablePagination<TData>({
           <Button
             variant='outline'
             className='size-9 p-0'
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={!canPrev}
           >
             <span className='sr-only'>{t('datatable.go_previous_page')}</span>
             <ChevronLeftIcon className='h-4 w-4' />
@@ -107,7 +125,7 @@ export function DataTablePagination<TData>({
                 <Button
                   variant={currentPage === pageNumber ? 'default' : 'outline'}
                   className='h-9 min-w-9 px-3'
-                  onClick={() => table.setPageIndex((pageNumber as number) - 1)}
+                  onClick={() => onPageChange(pageNumber as number)}
                 >
                   <span className='sr-only'>
                     {t('datatable.go_page', { page: pageNumber })}
@@ -121,8 +139,8 @@ export function DataTablePagination<TData>({
           <Button
             variant='outline'
             className='size-9 p-0'
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={!canNext}
           >
             <span className='sr-only'>{t('datatable.go_next_page')}</span>
             <ChevronRightIcon className='h-4 w-4' />
@@ -130,8 +148,8 @@ export function DataTablePagination<TData>({
           <Button
             variant='outline'
             className='size-9 p-0 @max-md/content:hidden'
-            onClick={() => table.setPageIndex(table.getPageCount() - 1)}
-            disabled={!table.getCanNextPage()}
+            onClick={() => onPageChange(totalPages)}
+            disabled={!canNext}
           >
             <span className='sr-only'>{t('datatable.go_last_page')}</span>
             <DoubleArrowRightIcon className='h-4 w-4' />
@@ -139,5 +157,34 @@ export function DataTablePagination<TData>({
         </div>
       </div>
     </div>
+  )
+}
+
+type DataTablePaginationProps<TData> = {
+  table: Table<TData>
+  className?: string
+  pageSizeOptions?: number[]
+  leftActions?: React.ReactNode
+}
+
+/** TanStack adapter over {@link Pagination} (same UI and behavior as before). */
+export function DataTablePagination<TData>({
+  table,
+  className,
+  pageSizeOptions,
+  leftActions,
+}: DataTablePaginationProps<TData>) {
+  const { pageIndex, pageSize } = table.getState().pagination
+  return (
+    <Pagination
+      page={pageIndex + 1}
+      pageCount={table.getPageCount()}
+      onPageChange={(p) => table.setPageIndex(p - 1)}
+      pageSize={pageSize}
+      onPageSizeChange={(s) => table.setPageSize(s)}
+      pageSizeOptions={pageSizeOptions}
+      className={className}
+      leftActions={leftActions}
+    />
   )
 }

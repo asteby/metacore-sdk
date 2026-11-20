@@ -586,6 +586,8 @@ export { DynamicRecordDialog, ViewValue } from './dialogs/dynamic-record'
 export { normalizeRefFieldsForSubmit } from './dialogs/normalize-submit'
 export type { DynamicRecordDialogProps, FieldDef, FieldOption, GetImageUrl } from './dialogs/dynamic-record'
 export { CreateRecordDialog } from './dialogs/create-record-dialog'
+export { useInfiniteScrollSentinel, dedupeById } from './use-infinite-scroll'
+export type { UseInfiniteScrollOptions, InfiniteScrollRefs } from './use-infinite-scroll'
 export { EntitySelect } from './entity-select'
 export type { EntitySelectProps, EntitySelectOption } from './entity-select'
 // RecordPicker — the ONE "pick a related record" control (search, single /
