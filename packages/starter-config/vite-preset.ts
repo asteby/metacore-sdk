@@ -11,7 +11,7 @@
  *     router: true,
  *   })
  */
-import { readdirSync, statSync } from 'node:fs'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { UserConfig, Plugin, PluginOption, DepOptimizationOptions } from 'vite'
@@ -197,6 +197,14 @@ export interface MetacoreFederationOptions {
   pageShares?: string[]
   /** Base dir for a relative `manifest` path. Default `process.cwd()`. */
   root?: string
+  /**
+   * Packages the host always provides (e.g. `@asteby/metacore-ui`,
+   * `@asteby/metacore-runtime-react`): declared `{ singleton: true, import: false }`
+   * so the remote never bundles a fallback copy. Replaces the hand-written
+   * `import: false` entries of older addons. Use `overrides` to also relax
+   * `requiredVersion`.
+   */
+  hostProvided?: string[]
 }
 
 export interface MetacoreFederationConfig {
@@ -282,6 +290,7 @@ export function metacoreFederationShared(
     manifest,
     pageShares = [],
     root = process.cwd(),
+    hostProvided = [],
   } = opts
   const role = opts.role ?? (exposes ? 'remote' : 'host')
 
@@ -315,6 +324,10 @@ export function metacoreFederationShared(
   // cuando un caller quiere algo distinto al default.
   for (const [name, cfg] of Object.entries(extra)) {
     shared[name] = { singleton: true, ...cfg }
+  }
+  // `hostProvided` — el host siempre los provee: sin copia de fallback.
+  for (const name of hostProvided) {
+    shared[name] = { ...(shared[name] ?? {}), singleton: true, import: false }
   }
   // `overrides` — ajusta UN paquete existente sin alterar el resto. Se aplica
   // al final para que tenga la última palabra sobre defaults y `extra`.
@@ -492,6 +505,89 @@ export const metacoreFederationAliases: Record<string, string> = {
   'virtual:pwa-register/react': fileURLToPath(
     new URL('./pwa-register-stub.js', import.meta.url)
   ),
+}
+
+/**
+ * Detects a hand-rolled federation `shared` map in an addon's `vite.config.ts`
+ * source: the file wires `@module-federation/vite` (or declares
+ * `singleton: true` entries by hand) WITHOUT going through
+ * {@link metacoreFederationShared}. Returns the problem description, or `null`
+ * when the config is fine.
+ *
+ * Why it is an error: a copy-pasted `shared` drifts from the canonical contract
+ * (`METACORE_FEDERATION_SINGLETONS`) — a missing singleton (react-query, router)
+ * only fails at runtime in the host, as "No QueryClient set" or a `useState`
+ * null crash. Tune per-package differences (`import: false`, `requiredVersion`)
+ * through the helper's `overrides` / `extra` / `hostProvided` options instead.
+ */
+export function detectHandRolledFederationShared(source: string): string | null {
+  if (/\bmetacoreFederationShared\s*\(/.test(source)) return null
+  const usesFederation =
+    /@module-federation\/vite/.test(source) || /\bfederation\s*\(/.test(source)
+  const handSingletons = /singleton\s*:\s*true/.test(source)
+  if (usesFederation || handSingletons) {
+    return (
+      'hand-written federation `shared` map detected. Replace it with ' +
+      "`federation(metacoreFederationShared({ host, exposes, manifest }))` from " +
+      "'@asteby/metacore-starter-config/vite' (use `hostProvided`, `overrides` or " +
+      '`extra` for per-package tweaks) — see docs/federation.md.'
+    )
+  }
+  return null
+}
+
+/** Throws (actionable message) when {@link detectHandRolledFederationShared} finds a hand-rolled `shared`. */
+export function assertNoHandRolledFederationShared(source: string, file = 'vite.config.ts'): void {
+  const problem = detectHandRolledFederationShared(source)
+  if (problem) throw new Error(`metacore federation (${file}): ${problem}`)
+}
+
+export interface MetacoreFederationPluginOptions {
+  /**
+   * `error` (default) fails the build when the config declares `shared` by
+   * hand; `warn` only logs; `off` skips the check.
+   */
+  handRolledShared?: 'error' | 'warn' | 'off'
+}
+
+/**
+ * Vite plugin every federated addon adds next to `federation(...)`:
+ *
+ * 1. Provides the `virtual:pwa-register/react` stub alias
+ *    ({@link metacoreFederationAliases}) — addons no longer ship their own
+ *    `_pwa-register-stub.ts` + alias. A user alias for the same specifier wins.
+ * 2. Fails the build (or warns) when the config declares federation `shared`
+ *    by hand instead of {@link metacoreFederationShared}.
+ *
+ * ```ts
+ * plugins: [
+ *   federation(metacoreFederationShared({ host, exposes, manifest })),
+ *   metacoreFederationPlugin(),
+ * ]
+ * ```
+ */
+export function metacoreFederationPlugin(opts: MetacoreFederationPluginOptions = {}): Plugin {
+  const mode = opts.handRolledShared ?? 'error'
+  return {
+    name: 'metacore-federation',
+    config() {
+      return { resolve: { alias: { ...metacoreFederationAliases } } }
+    },
+    configResolved(config) {
+      if (mode === 'off' || !config.configFile) return
+      let source: string
+      try {
+        source = readFileSync(config.configFile, 'utf8')
+      } catch {
+        return
+      }
+      const problem = detectHandRolledFederationShared(source)
+      if (!problem) return
+      const msg = `metacore federation (${path.basename(config.configFile)}): ${problem}`
+      if (mode === 'error') throw new Error(msg)
+      config.logger.warn(msg)
+    },
+  }
 }
 
 export interface MetacorePwaOptions {

@@ -117,6 +117,63 @@ The fix is either of:
    `shareScope?`, `packagePath?`, `generate?`) if you have a structural
    reason not to use the helper. This is what the helper does internally.
 
+## Addon `vite.config.ts` checklist (no hand-rolled `shared`, no pwa stub)
+
+```ts
+import { federation } from '@module-federation/vite'
+import {
+  metacoreFederationShared,
+  metacoreFederationPlugin,
+} from '@asteby/metacore-starter-config/vite'
+
+plugins: [
+  federation(
+    metacoreFederationShared({
+      host: 'metacore_<key>',
+      exposes,
+      manifest,
+      // host always provides these: singleton + import:false (no fallback copy)
+      hostProvided: ['@asteby/metacore-ui', '@asteby/metacore-runtime-react'],
+      // relax a version skew with the host
+      overrides: { '@asteby/metacore-runtime-react': { requiredVersion: false } },
+      // singleton extras the addon really imports
+      extras: ['sonner'],
+    })
+  ),
+  metacoreFederationPlugin(),
+]
+```
+
+`metacoreFederationPlugin()` (a) fails the build if the config declares a
+`shared` map by hand (`singleton: true` literals / `federation(` without
+`metacoreFederationShared`; `handRolledShared: 'warn' | 'off'` to relax) and
+(b) aliases `virtual:pwa-register/react` to the stub shipped by the preset, so
+`src/_pwa-register-stub.ts` and its alias can be deleted.
+
+Migrating the existing hand-written maps: every per-addon difference maps to an
+option — `import: false` -> `hostProvided`; `requiredVersion: false` ->
+`overrides`; `sonner` -> `extras`; `react-i18next`/`i18next`/react-query/sdk/
+app-providers/theme/auth are already canonical singletons (ui/runtime-react
+are NOT `import:false` by default, hence `hostProvided`); `lucide-react` is
+intentionally not shared; nothing uses `eager`. `@tanstack/react-router` is
+already a remote `import: false` singleton.
+
+## Tailwind `@source` for SDK packages
+
+Tailwind v4 ignores `node_modules`. Import every SDK package that emits classes
+with one line (generated list, `scripts/gen-tailwind-sources.mjs`, 26 packages):
+
+```css
+@import '@asteby/metacore-theme/sources.css';
+```
+
+Under pnpm that file's relative paths may not reach the app's links; use
+`pnpm exec metacore-tailwind-sources write` (emits app-relative `@source`
+lines into `src/styles/metacore-sources.css`) and
+`metacore-tailwind-sources check` in CI: it fails listing every `@asteby/*`
+dependency of the app with no `@source` coverage. The SDK CI fails when
+`sources.css` is stale (`node scripts/gen-tailwind-sources.mjs --check`).
+
 ## The singleton list (currently thirteen)
 
 `metacoreFederationShared()` declares the following packages as

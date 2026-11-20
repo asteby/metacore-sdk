@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react-swc";
@@ -9,14 +9,9 @@ import {
   metacorePageShareConfig,
   readMetacoreManifest
 } from "./federation-pages.js";
-
 export * from "./federation-pages.js";
-
-/** Align with hub `validateFrontendBudgets` (512 KiB remoteEntry). */
 const METACORE_REMOTE_ENTRY_MAX_BYTES = 512 * 1024;
-/** Align with hub `validateFrontendBudgets` (4 MiB frontend/). */
 const METACORE_FRONTEND_MAX_BYTES = 4 * 1024 * 1024;
-
 const metacoreOptimizeDepsInclude = [
   "@asteby/metacore-app-providers",
   "@asteby/metacore-auth",
@@ -47,6 +42,15 @@ const METACORE_FEDERATION_SINGLETONS = [
   "react/jsx-runtime",
   "react-i18next",
   "i18next",
+  // @tanstack/react-query MUST be a singleton: it carries a React context
+  // (the QueryClient). The host renders `<QueryClientProvider>` and the shared
+  // `@asteby/metacore-app-providers` calls `useQueryClient`/`useQuery` inside
+  // it (org-config, platform-config providers). Without sharing react-query,
+  // the host provider and the app-providers consumer can resolve DIFFERENT
+  // copies of react-query — different context — and the app crashes with
+  // "No QueryClient set, use QueryClientProvider to set one" thrown from the
+  // app-providers loadShare chunk. Intermittent because it depends on which
+  // container wins the app-providers share negotiation / chunk load order.
   "@tanstack/react-query",
   "@asteby/metacore-ui",
   "@asteby/metacore-runtime-react",
@@ -54,6 +58,10 @@ const METACORE_FEDERATION_SINGLETONS = [
   "@asteby/metacore-app-providers",
   "@asteby/metacore-theme",
   "@asteby/metacore-auth",
+  // The host router is a singleton: a remote page navigates through the host's
+  // TanStack router (useAddonNavigate), never a second copy. Remotes get it
+  // with `import: false` (the host always provides it), so an addon that does
+  // not install the router still builds.
   "@tanstack/react-router"
 ];
 const METACORE_REMOTE_HOST_ONLY_SINGLETONS = ["@tanstack/react-router"];
@@ -68,7 +76,8 @@ function metacoreFederationShared(opts) {
     overrides = {},
     manifest,
     pageShares = [],
-    root = process.cwd()
+    root = process.cwd(),
+    hostProvided = []
   } = opts;
   const role = opts.role ?? (exposes ? "remote" : "host");
   const shared = {};
@@ -93,6 +102,9 @@ function metacoreFederationShared(opts) {
   for (const [name, cfg] of Object.entries(extra)) {
     shared[name] = { singleton: true, ...cfg };
   }
+  for (const name of hostProvided) {
+    shared[name] = { ...shared[name] ?? {}, singleton: true, import: false };
+  }
   for (const [name, override] of Object.entries(overrides)) {
     shared[name] = { ...shared[name] ?? {}, ...override };
   }
@@ -100,6 +112,8 @@ function metacoreFederationShared(opts) {
   return {
     name: host,
     filename,
+    // Host: remotes vacío por default (se registran dinámicamente en runtime).
+    // Si el caller pasa `apps`, se incluyen estáticamente.
     ...apps ? { remotes: { ...apps } } : {},
     ...exposes ? { exposes: { ...exposes } } : {},
     shared
@@ -109,9 +123,7 @@ function assertMetacoreFederationShared(shared) {
   for (const name of METACORE_FEDERATION_SINGLETONS) {
     if (!shared[name]?.singleton) {
       throw new Error(
-        `metacore federation shared: "${name}" must be { singleton: true }. ` +
-          `Use metacoreFederationShared() from @asteby/metacore-starter-config/vite ` +
-          `and do not override singleton to false.`
+        `metacore federation shared: "${name}" must be { singleton: true }. Use metacoreFederationShared() from @asteby/metacore-starter-config/vite and do not override singleton to false.`
       );
     }
   }
@@ -151,14 +163,12 @@ function assertFederationDistBudgets(outDir, opts = {}) {
   walk(outDir);
   if (total > maxTotal) {
     throw new Error(
-      `frontend budget exceeded: ${outDir} is ${total} bytes (max ${maxTotal}). ` +
-        `Split exposes or trim the remote — oversized federation taxes every host shell open.`
+      `frontend budget exceeded: ${outDir} is ${total} bytes (max ${maxTotal}). Split exposes or trim the remote \u2014 oversized federation taxes every host shell open.`
     );
   }
   if (remoteEntry > maxRemote) {
     throw new Error(
-      `frontend budget exceeded: ${filename} is ${remoteEntry} bytes (max ${maxRemote}). ` +
-        `Keep the container thin and lazy-load feature chunks.`
+      `frontend budget exceeded: ${filename} is ${remoteEntry} bytes (max ${maxRemote}). Keep the container thin and lazy-load feature chunks.`
     );
   }
   return { total, remoteEntry };
@@ -169,9 +179,7 @@ function metacoreFederationBudgetPlugin(opts = {}) {
     name: "metacore-federation-budget",
     apply: "build",
     configResolved(config) {
-      outDir = opts.outDir
-        ? path.resolve(config.root, opts.outDir)
-        : path.resolve(config.root, config.build.outDir);
+      outDir = opts.outDir ? path.resolve(config.root, opts.outDir) : path.resolve(config.root, config.build.outDir);
     },
     closeBundle() {
       assertFederationDistBudgets(outDir, opts);
@@ -183,6 +191,42 @@ const metacoreFederationAliases = {
     new URL("./pwa-register-stub.js", import.meta.url)
   )
 };
+function detectHandRolledFederationShared(source) {
+  if (/\bmetacoreFederationShared\s*\(/.test(source)) return null;
+  const usesFederation = /@module-federation\/vite/.test(source) || /\bfederation\s*\(/.test(source);
+  const handSingletons = /singleton\s*:\s*true/.test(source);
+  if (usesFederation || handSingletons) {
+    return "hand-written federation `shared` map detected. Replace it with `federation(metacoreFederationShared({ host, exposes, manifest }))` from '@asteby/metacore-starter-config/vite' (use `hostProvided`, `overrides` or `extra` for per-package tweaks) \u2014 see docs/federation.md.";
+  }
+  return null;
+}
+function assertNoHandRolledFederationShared(source, file = "vite.config.ts") {
+  const problem = detectHandRolledFederationShared(source);
+  if (problem) throw new Error(`metacore federation (${file}): ${problem}`);
+}
+function metacoreFederationPlugin(opts = {}) {
+  const mode = opts.handRolledShared ?? "error";
+  return {
+    name: "metacore-federation",
+    config() {
+      return { resolve: { alias: { ...metacoreFederationAliases } } };
+    },
+    configResolved(config) {
+      if (mode === "off" || !config.configFile) return;
+      let source;
+      try {
+        source = readFileSync(config.configFile, "utf8");
+      } catch {
+        return;
+      }
+      const problem = detectHandRolledFederationShared(source);
+      if (!problem) return;
+      const msg = `metacore federation (${path.basename(config.configFile)}): ${problem}`;
+      if (mode === "error") throw new Error(msg);
+      config.logger.warn(msg);
+    }
+  };
+}
 async function defineMetacoreConfig(options = {}) {
   const {
     router = true,
@@ -252,9 +296,12 @@ export {
   METACORE_REMOTE_HOST_ONLY_SINGLETONS,
   assertFederationDistBudgets,
   assertMetacoreFederationShared,
+  assertNoHandRolledFederationShared,
   defineMetacoreConfig,
+  detectHandRolledFederationShared,
   metacoreFederationAliases,
   metacoreFederationBudgetPlugin,
+  metacoreFederationPlugin,
   metacoreFederationShared,
   metacoreOptimizeDeps,
   metacoreOptimizeDepsInclude

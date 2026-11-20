@@ -50,6 +50,15 @@ If you already have your own Tailwind entry and only want the tokens:
 @import '@asteby/metacore-theme/tokens.css';
 ```
 
+### Tokens and `@source` in apps
+
+An app should NOT copy `tokens.css` (`:root` / `.dark` colour variables,
+`--success/--warning/--info`, sidebar, charts): import
+`@asteby/metacore-theme/index.css` (or `tokens.css`) and keep in its own
+`theme.css` only brand overrides (the variables that differ, e.g. `--primary`).
+Also `@import '@asteby/metacore-theme/sources.css'` so Tailwind sees the classes
+of every SDK package (see `docs/federation.md`, "Tailwind `@source`").
+
 ### Glass theme pack
 
 A translucent skin (floating panels, blur + saturation, hairline rim, soft

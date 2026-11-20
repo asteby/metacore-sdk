@@ -10,6 +10,9 @@
   },
   "type": "module",
   "main": "./tailwind-preset.js",
+  "bin": {
+    "metacore-tailwind-sources": "./bin/metacore-tailwind-sources.mjs"
+  },
   "files": [
     "tailwind-preset.js",
     "tsconfig.base.json",
@@ -20,6 +23,9 @@
     "federation-pages.d.ts",
     "pwa-register-stub.js",
     "pwa-register-stub.d.ts",
+    "tailwind-sources.js",
+    "tailwind-sources.d.ts",
+    "bin",
     "eslint-preset.js",
     "fonts.js",
     "fonts.d.ts",
@@ -35,6 +41,10 @@
     "./pwa-register-stub": {
       "types": "./pwa-register-stub.d.ts",
       "import": "./pwa-register-stub.js"
+    },
+    "./tailwind-sources": {
+      "types": "./tailwind-sources.d.ts",
+      "import": "./tailwind-sources.js"
     },
     "./eslint": "./eslint-preset.js",
     "./fonts": {
