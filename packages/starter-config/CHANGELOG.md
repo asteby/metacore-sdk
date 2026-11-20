@@ -1,5 +1,15 @@
 # @asteby/metacore-starter-config
 
+## 2.10.0
+
+### Minor Changes
+
+- 63063b8: `metacoreFederationShared({ only })`: declara SOLO un subconjunto de los singletons canonicos (misma config canonica por clave; el router host-only conserva `import: false` en remotes). Un remote que declara un shared que no importa rompe `loadShare` (`M_ID`), asi que los addons pueden migrar al helper sin arrastrar singletons de mas. Nombre desconocido en `only` lanza error; `hostProvided`/`extras`/`extra`/`overrides` se aplican encima de `only`; en `overrides`, una propiedad `undefined` se elimina. `assertMetacoreFederationShared(shared, { partial })` relaja la exigencia de presencia. Sin `only` el comportamiento no cambia. El guard de `shared` a mano acepta configs generadas con `only`.
+
+### Patch Changes
+
+- 966dc53: `vite-preset.ts` (que consumen los hosts al tipar `vite.config.ts`) ya no falla con `Cannot find module '@tanstack/router-plugin/vite'` / `vite-plugin-pwa` cuando esos peers opcionales no estan instalados: los imports dinamicos se tipan localmente. Nuevo test que impide que los tipos publicados importen paquetes que no sean dependencias requeridas.
+
 ## 2.9.0
 
 ### Minor Changes

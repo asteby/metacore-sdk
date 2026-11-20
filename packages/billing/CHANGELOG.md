@@ -1,5 +1,12 @@
 # @asteby/metacore-billing
 
+## 26.0.3
+
+### Patch Changes
+
+- Updated dependencies [4b0ce51]
+  - @asteby/metacore-lib@0.12.0
+
 ## 26.0.2
 
 ### Patch Changes

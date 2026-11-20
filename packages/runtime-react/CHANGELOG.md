@@ -1,5 +1,19 @@
 # @asteby/metacore-runtime-react
 
+## 53.25.0
+
+### Minor Changes
+
+- da6e937: Celdas `initial`/`initials` y `avatar` sin imagen: iniciales con color estable por texto (mismo hash que el resto de avatares) y sin peticion de red. `resolveAvatarSrc` ya no convierte una etiqueta (p. ej. el nombre enviado en `avatar`) en una URL, lo que provocaba un 404 por fila; nuevo helper `looksLikeImageRef`.
+- f1a8458: Estados de carga que siempre resuelven: nuevo primitivo `<LoadState>` y hook `useLoadingGuard` (timeout configurable, error con boton de reintentar, `aria-busy`/`aria-live`, textos i18n `loadState.*` es/en). Usado en el esqueleto de `AppSidebar` (props `isError`/`onRetry`/`loadTimeoutMs`), `DashboardGrid` (`loadTimeoutMs`; un lote que falla ahora muestra error con reintento en vez de tarjetas vacias) y `DynamicTable` (`loadTimeoutMs`; metadata y lista).
+- f8b50c0: `useModelLabels`/`resolveModelLabels`: el titulo de la pagina, el nombre singular y la etiqueta del boton Crear de `DynamicCRUDPage` se resuelven por i18n desde el modelo (`models.<model>.title|singular|new`, `titleKey` de metadata, prefijo `common.new`), overridables por el host; sin claves, el comportamiento anterior no cambia. `TableMetadata` gana `titleKey`/`title_key` opcionales.
+
+### Patch Changes
+
+- Updated dependencies [4b0ce51]
+  - @asteby/metacore-lib@0.12.0
+  - @asteby/metacore-charts@0.1.2
+
 ## 53.24.0
 
 ### Minor Changes

@@ -1,5 +1,11 @@
 # @asteby/metacore-sdk
 
+## 3.21.0
+
+### Minor Changes
+
+- 4b0ce51: Kernel v0.295.1: tipos regenerados (`rules[].enabled_setting`, `stage_authority`, `Transition.reopen`, `addon_requires`).
+
 ## 3.20.0
 
 ### Minor Changes

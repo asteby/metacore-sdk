@@ -1,5 +1,13 @@
 # @asteby/metacore-inbox
 
+## 0.1.2
+
+### Patch Changes
+
+- 3a77028: Skeletons por tokens y densidad: `Skeleton` toma el radio de `--skeleton-radius`; nuevos `SkeletonRow`/`SkeletonList` dimensionados por `--skeleton-row-h`, `--skeleton-avatar` y `--skeleton-line-h`, que se compactan con `data-ui-density='compact'` (tokens en `@asteby/metacore-theme`). El dropdown de notificaciones muestra filas esqueleto del tamano de la fila real en vez de texto; el esqueleto de `inbox` usa los mismos tokens.
+- Updated dependencies [4b0ce51]
+  - @asteby/metacore-lib@0.12.0
+
 ## 0.1.1
 
 ### Patch Changes
