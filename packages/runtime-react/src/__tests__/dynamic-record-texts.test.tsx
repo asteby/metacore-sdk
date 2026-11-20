@@ -73,3 +73,25 @@ describe('DynamicRecordDialog textos por modelo', () => {
         expect(screen.getByRole('button', { name: 'Guardar cambios' })).toBeTruthy()
     })
 })
+
+describe('DynamicRecordDialog titulos con singular_label', () => {
+    it('edit: "Editar cliente" desde singular_label (no usa el title tecnico)', async () => {
+        renderDialog('edit', { title: 'Client', singular_label: 'cliente' })
+        await waitFor(() => expect(screen.getByText('Editar cliente')).toBeTruthy())
+        expect(screen.queryByText('Editar Client')).toBeNull()
+    })
+    it('create: "Crear figura" y sin singular_label conserva el comportamiento previo', async () => {
+        renderDialog('create', { title: 'Clínica', singular_label: 'figura' })
+        await waitFor(() => expect(screen.getByText('Crear figura')).toBeTruthy())
+        cleanup()
+        renderDialog('create', { title: 'Clínica' })
+        await waitFor(() => expect(screen.getByText('Crear Clínica')).toBeTruthy())
+    })
+    it('el host sobreescribe con models.<model>.singular y los verbos con dynamic.edit_title', async () => {
+        i18n.addResourceBundle('es', 'translation', { models: { clinics: { singular: 'sede' } }, dynamic: { edit_title: 'Modificar {{name}}' } }, true, true)
+        renderDialog('edit', { title: 'Client', singular_label: 'cliente' })
+        await waitFor(() => expect(screen.getByText('Modificar sede')).toBeTruthy())
+        i18n.removeResourceBundle('es', 'translation')
+        i18n.addResourceBundle('es', 'translation', {})
+    })
+})
