@@ -2359,10 +2359,11 @@ export interface Stage {
  *   - Reopen: marks a deliberate exit from an is_final stage (reopen a closed
  *     conversation, archive a published campaign). Without Reopen or Approval
  *     an exit from a final stage is flagged by the final_stage_outgoing rule.
- * SCOPE: these policies are enforced by the generic Update path only. The wasm
- * data_mutate / data_batch imports apply just the (from → to) whitelist
- * (GateWrite): no roles, approval, guard, requires_fields or locked-stage check
- * (tracked as K3b, wasm parity).
+ * SCOPE: enforced by the generic Update path and, since K3b, by the wasm
+ * data_mutate / data_batch imports too (Config.WasmStagePolicy: warn by default,
+ * enforce to refuse/park; docs/wasm-abi.md § 14.11). A wasm action that must
+ * drive a roles/approval transition on purpose declares it with
+ * Action.stage_authority.
  *   - SLA: how long a record may sit in the destination stage; informational
  *     metadata projected to hosts (the kernel does not enforce the breach).
  */
@@ -3456,6 +3457,16 @@ export interface RuleDef {
    */
   event_types?: string[];
   /**
+   * EnabledSetting makes the rule opt-in per organization: it names a
+   * BOOLEAN, org-scoped entry of this manifest's own settings[]. The rule is
+   * evaluated only while that setting is true for the acting org; when the
+   * setting is false/unset, the host has no resolver or the resolver errors,
+   * the rule is skipped (OFF by default, fail closed toward off). Empty =
+   * always evaluated (the legacy behaviour). Lets one addon ship a
+   * guard (price floor, credit cap, ...) that each org switches on.
+   */
+  enabled_setting?: string;
+  /**
    * Then is the rule's outcome. Required.
    */
   then: RuleThen;
@@ -4299,6 +4310,18 @@ export interface Action {
    * `create` placement (no record context). Default false.
    */
   ingest?: boolean;
+  /**
+   * StageAuthority is the EXPLICIT, narrow way a wasm action drives a stage
+   * transition that declares `roles` or `approval` (K3b). The wasm
+   * data_mutate / data_batch imports enforce those policies against the
+   * acting user (or park the move as an ApprovalRequest); an action that is
+   * itself the authority for a move (cancel_sale, abort_sale: the caller
+   * already holds the action's permission) lists the exact `from->to` pairs
+   * here and, while that action runs, those moves skip the transition's
+   * `roles` and `approval`. guard, requires_fields and locked ALWAYS apply.
+   * Requires the action to be a record action (no ingest, see Ingest).
+   */
+  stage_authority?: StageAuthority;
   /**
    * ModalWidth lets an addon size the action's modal explicitly: a CSS length
    * ("720px", "60rem") or a number (px). Empty = the host's default (compact
@@ -5685,6 +5708,26 @@ export interface DocumentFormLines {
    */
   open_documents?: DocumentFormOpenDocuments;
 }
+/**
+ * StageAuthority declares that an action is the authority for the listed stage
+ * transitions of its target model (see Action.StageAuthority).
+ */
+export interface StageAuthority {
+  /**
+   * Authority is the source of the authority. The only value is
+   * "action_permission": the caller's permission to run THIS action.
+   */
+  authority: string;
+  /**
+   * Transitions are "<from>-><to>" pairs, each declared in the target model's
+   * stage machine. Required, non-empty.
+   */
+  transitions: string[];
+}
+/**
+ * StageAuthorityActionPermission is the only StageAuthority.Authority value.
+ */
+export const StageAuthorityActionPermission = "action_permission";
 
 //////////
 // source: ui.go
