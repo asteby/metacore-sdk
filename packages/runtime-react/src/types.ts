@@ -613,9 +613,16 @@ export interface ColumnItemField {
 }
 
 export interface ActionCondition {
+    /** Row field (ignored by the `all`/`any` groups). */
     field: string
-    operator: 'eq' | 'neq' | 'in' | 'not_in'
+    /**
+     * `gt|gte|lt|lte` compare numerically; `truthy|falsy` test presence; `all|any` combine
+     * `conditions` (AND / OR).
+     */
+    operator: 'eq' | 'neq' | 'in' | 'not_in' | 'gt' | 'gte' | 'lt' | 'lte' | 'truthy' | 'falsy' | 'all' | 'any'
     value: string | string[]
+    /** Members of an `all` / `any` group. */
+    conditions?: ActionCondition[]
 }
 
 /**

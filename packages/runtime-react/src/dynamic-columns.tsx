@@ -287,7 +287,24 @@ export const isActionAllowedForRowState = (action: any, row: any, stageField?: s
  */
 export const isActionConditionMet = (action: any, row: any): boolean => {
     if (!action?.condition) return true
-    const { field, operator, value } = action.condition
+    return evalActionCondition(action.condition, row)
+}
+
+/**
+ * Evaluates one ActionCondition (or an `all`/`any` composition of them) against a row.
+ * Besides the equality/membership/truthy family it supports numeric comparisons
+ * (`gt` | `gte` | `lt` | `lte`: both sides coerced with Number(); a non-numeric side never matches)
+ * and `all` / `any` groups (`{ operator: 'all', conditions: [...] }`), so a host can ship
+ * `amount > 0 && status != 4` as data instead of an unexpressible legacy string.
+ */
+export const evalActionCondition = (cond: any, row: any): boolean => {
+    const { field, operator, value } = cond ?? {}
+    const group = String(operator ?? '').toLowerCase()
+    if (group === 'all' || group === 'any') {
+        const list: any[] = Array.isArray(cond.conditions) ? cond.conditions : []
+        if (list.length === 0) return true
+        return group === 'all' ? list.every((c) => evalActionCondition(c, row)) : list.some((c) => evalActionCondition(c, row))
+    }
     if (!field) return true
 
     const coerce = (v: unknown): string => {
@@ -324,6 +341,16 @@ export const isActionConditionMet = (action: any, row: any): boolean => {
         case 'blank':
         case 'empty':
             return rowValue === '' || rowValue === 'false' || rowValue === '0'
+        case 'gt':
+        case 'gte':
+        case 'lt':
+        case 'lte': {
+            if (rowValue === '' || values[0] === '' || values[0] === undefined) return false
+            const l = Number(rowValue)
+            const r = Number(values[0])
+            if (Number.isNaN(l) || Number.isNaN(r)) return false
+            return op === 'gt' ? l > r : op === 'gte' ? l >= r : op === 'lt' ? l < r : l <= r
+        }
         default:
             return true
     }
