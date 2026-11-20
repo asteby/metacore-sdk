@@ -109,8 +109,12 @@ export function ProductTile({
 }
 
 /** Resolve media key / absolute URL for till tiles. Empty → no image. */
-export function resolveTillImageUrl(image: string | null | undefined): string {
+export function resolveTillImageUrl(
+  image: string | null | undefined,
+  /** Media root of the host API (keeps the base URL configurable). */
+  mediaBase = '/api/media',
+): string {
   if (!image) return ''
   if (/^https?:\/\//.test(image) || image.startsWith('/')) return image
-  return `/api/media/${image}`
+  return `${mediaBase.replace(/\/+$/, '')}/${image}`
 }

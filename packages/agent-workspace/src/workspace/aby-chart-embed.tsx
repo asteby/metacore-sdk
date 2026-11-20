@@ -25,9 +25,10 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { unwrapResponse } from '@asteby/metacore-lib/envelope'
 import { cn } from '@asteby/metacore-ui'
 import type { ChartKind, ChartSpec } from '../team-chat/data/types'
-import { useWorkspaceHost } from '../host'
+import { api, useWorkspaceHost } from '../host'
 
 const PALETTE = [
   '#10b981',
@@ -73,10 +74,10 @@ export function AbyChartEmbed({ spec, className }: { spec: ChartSpec; className?
     if (kind !== 'choropleth') return
     const cc = spec.country_code || 'MX'
     let cancelled = false
-    fetch(`/api/bi/geo/${encodeURIComponent(cc)}`, { credentials: 'include' })
-      .then((r) => r.json())
-      .then((j) => {
-        if (!cancelled) setAtlas(j.data ?? null)
+    api
+      .get(`/bi/geo/${encodeURIComponent(cc)}`)
+      .then((r) => {
+        if (!cancelled) setAtlas(unwrapResponse<unknown>(r) ?? null)
       })
       .catch(() => undefined)
     return () => {

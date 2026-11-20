@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { api } from '../../host'
+import { api, workspaceApiUrl } from '../../host'
 import { useWebSocketContext, type WSEvent } from '../../host'
 import { useWorkspaceUser } from '../../host'
 import {
@@ -1547,7 +1547,7 @@ export function useWebRTCCall() {
       })
       try {
         const token = localStorage.getItem('auth_token') || ''
-        void fetch(`/api/internal-chat/calls/${s.callId}/leave`, {
+        void fetch(workspaceApiUrl(`/internal-chat/calls/${s.callId}/leave`), {
           method: 'POST',
           credentials: 'include',
           keepalive: true,

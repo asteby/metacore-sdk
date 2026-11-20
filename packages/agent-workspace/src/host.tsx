@@ -15,6 +15,8 @@ import { usePlatformConfig } from '@asteby/metacore-app-providers'
 
 /** Minimal axios-shaped client: the host passes its authenticated instance. */
 export interface WorkspaceHttp {
+  /** axios-style defaults; `baseURL` is where the client's relative paths resolve. */
+  defaults?: { baseURL?: string }
   get<T = any>(url: string, config?: any): Promise<{ data: T }>
   post<T = any>(url: string, body?: any, config?: any): Promise<{ data: T }>
   put<T = any>(url: string, body?: any, config?: any): Promise<{ data: T }>
@@ -80,6 +82,11 @@ export interface WorkspaceCapabilities {
 
 export interface AgentWorkspaceHostValue {
   http: WorkspaceHttp
+  /**
+   * API root for the few requests that cannot go through `http` (e.g. a
+   * keepalive fetch on pagehide). Defaults to `http.defaults.baseURL`, then `/api`.
+   */
+  apiBaseUrl?: string
   realtime: WorkspaceRealtime
   user: WorkspaceUser | null
   navGroups: WorkspaceNavGroup[] | undefined
@@ -103,7 +110,7 @@ export function AgentWorkspaceProvider({ children, capabilities, ...rest }: Agen
   const value = useMemo<AgentWorkspaceHostValue>(
     () => ({ ...rest, capabilities: capabilities ?? {} }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rest.http, rest.realtime, rest.user, rest.navGroups, rest.storageNamespace, rest.branding, capabilities],
+    [rest.http, rest.apiBaseUrl, rest.realtime, rest.user, rest.navGroups, rest.storageNamespace, rest.branding, capabilities],
   )
   // Non-React modules (helpers, stores) read the same host synchronously.
   current = value
@@ -120,6 +127,17 @@ export function useWorkspaceHost(): AgentWorkspaceHostValue {
 export function getWorkspaceHost(): AgentWorkspaceHostValue {
   if (!current) throw new Error('AgentWorkspaceProvider is not mounted')
   return current
+}
+
+/** Joins an API root and a path without doubling or dropping the slash. */
+export function joinApiUrl(base: string, path: string): string {
+  return `${base.replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`
+}
+
+/** URL for `path` under the host's API root (never a hardcoded `/api`). */
+export function workspaceApiUrl(path: string): string {
+  const h = getWorkspaceHost()
+  return joinApiUrl(h.apiBaseUrl ?? h.http.defaults?.baseURL ?? '/api', path)
 }
 
 /** Drop-in for the old module-level `api` import. */
