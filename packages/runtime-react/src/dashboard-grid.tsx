@@ -7,6 +7,7 @@
 import * as React from 'react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@asteby/metacore-ui/lib'
+import { LoadState } from '@asteby/metacore-ui/primitives'
 import { useCan, usePermissionsActive } from './permissions-context'
 import type {
     DashboardGridProps,
@@ -58,6 +59,7 @@ export function DashboardGrid({
     groups,
     widgets,
     loadData,
+    loadTimeoutMs,
     isAdmin,
     locale,
     currency,
@@ -102,6 +104,9 @@ export function DashboardGrid({
         Record<string, import('./dashboard-types').WidgetData> | null
     >(null)
     const [loading, setLoading] = React.useState(true)
+    // Batch failure / hung request -> actionable error with retry (not an eternal skeleton).
+    const [loadFailed, setLoadFailed] = React.useState(false)
+    const [reloadTick, setReloadTick] = React.useState(0)
 
     React.useEffect(() => {
         let cancelled = false
@@ -111,6 +116,7 @@ export function DashboardGrid({
             return
         }
         setLoading(true)
+        setLoadFailed(false)
         loadData(keys)
             .then((res) => {
                 if (!cancelled) {
@@ -119,10 +125,9 @@ export function DashboardGrid({
                 }
             })
             .catch(() => {
-                // Batch failure: still render the grid; every widget falls to
-                // its empty/error state rather than blanking the page.
                 if (!cancelled) {
                     setData({})
+                    setLoadFailed(true)
                     setLoading(false)
                 }
             })
@@ -130,7 +135,7 @@ export function DashboardGrid({
             cancelled = true
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [keySig, loadData])
+    }, [keySig, loadData, reloadTick])
 
     // Flatten every group into ONE ordered list (compact KPIs before charts) for
     // the masonry grid. MUST run before any early return — it is a hook, and a
@@ -166,41 +171,50 @@ export function DashboardGrid({
         )
     }
 
+    const gridClass = cn(
+        // Masonry: balanced CSS columns. Cards take their natural height
+        // (compact stats, taller charts) and flow to equalize column
+        // height, so there are NO blank cells.
+        'columns-1 gap-4 md:columns-2 xl:columns-3',
+        className,
+    )
+    const translated = (spec: DashboardWidgetSpec) => ({
+        ...spec,
+        title: tr(spec.title, spec.title),
+        subtitle: tr(spec.subtitle, spec.subtitle),
+    })
+
     return (
-        <div
-            data-testid="dashboard-grid"
-            className={cn(
-                // Masonry: balanced CSS columns. Cards take their natural height
-                // (compact stats, taller charts) and flow to equalize column
-                // height, so there are NO blank cells — the gaps a fixed grid
-                // leaves around mixed 1×1 / 2×2 tiles simply don't exist here.
-                'columns-1 gap-4 md:columns-2 xl:columns-3',
-                className,
-            )}
+        <LoadState
+            loading={loading}
+            error={loadFailed}
+            timeoutMs={loadTimeoutMs}
+            onRetry={() => setReloadTick((n) => n + 1)}
+            labels={{ title: s.loadErrorTitle, hint: s.loadErrorHint, retry: s.retry }}
+            skeleton={
+                <div data-testid="dashboard-grid" className={gridClass}>
+                    {ordered.map((spec) => (
+                        <div key={spec.key} className="mb-4 break-inside-avoid">
+                            <WidgetSkeleton spec={translated(spec)} />
+                        </div>
+                    ))}
+                </div>
+            }
         >
-            {ordered.map((spec) => {
-                const rspec = {
-                    ...spec,
-                    title: tr(spec.title, spec.title),
-                    subtitle: tr(spec.subtitle, spec.subtitle),
-                }
-                return (
+            <div data-testid="dashboard-grid" className={gridClass}>
+                {ordered.map((spec) => (
                     <div key={spec.key} className="mb-4 break-inside-avoid">
-                        {loading ? (
-                            <WidgetSkeleton spec={rspec} />
-                        ) : (
-                            <WidgetRenderer
-                                spec={rspec}
-                                data={data?.[spec.key]}
-                                locale={locale}
-                                currency={currency}
-                                emptyText={spec.empty ? tr(spec.empty, spec.empty) : s.widgetEmpty}
-                                errorText={s.widgetError}
-                            />
-                        )}
+                        <WidgetRenderer
+                            spec={translated(spec)}
+                            data={data?.[spec.key]}
+                            locale={locale}
+                            currency={currency}
+                            emptyText={spec.empty ? tr(spec.empty, spec.empty) : s.widgetEmpty}
+                            errorText={s.widgetError}
+                        />
                     </div>
-                )
-            })}
-        </div>
+                ))}
+            </div>
+        </LoadState>
     )
 }

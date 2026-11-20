@@ -13,6 +13,7 @@ import {
   SidebarMenuButton,
 } from '@/primitives/sidebar'
 import { Skeleton } from '@/primitives/skeleton'
+import { LoadState } from '@/primitives/load-state'
 import { NavGroup, type NavLinkComponent } from './nav-group'
 import type { NavGroupData, NavLinkItem } from './types'
 import { filterNavGroups } from './filter-nav'
@@ -27,6 +28,12 @@ export interface AppSidebarProps {
   LinkComponent: NavLinkComponent
   /** Loading state for nav groups — shows skeleton placeholder. */
   isLoading?: boolean
+  /** Nav request failed: shows an error with retry instead of the skeleton. */
+  isError?: boolean
+  /** Retry handler for the error / timed-out state (e.g. react-query's `refetch`). */
+  onRetry?: () => void
+  /** Ms the skeleton may stay before it is treated as a failure. Default 15000; 0 disables. */
+  loadTimeoutMs?: number
   /** Sidebar header slot (typically a team switcher / organization card). */
   header?: React.ReactNode
   /** Sidebar footer slot (typically a branch-switcher or nav-user). */
@@ -55,6 +62,9 @@ export function AppSidebar({
   currentHref,
   LinkComponent,
   isLoading = false,
+  isError = false,
+  onRetry,
+  loadTimeoutMs,
   header,
   footer,
   onItemHover,
@@ -78,10 +88,15 @@ export function AppSidebar({
       {header && <SidebarHeader>{header}</SidebarHeader>}
 
       <SidebarContent>
-        {isLoading ? (
-          <SidebarSkeletonContent />
-        ) : (
-          navGroups.map((group) => (
+        <LoadState
+          loading={isLoading}
+          error={isError}
+          timeoutMs={loadTimeoutMs}
+          onRetry={onRetry}
+          size='inline'
+          skeleton={<SidebarSkeletonContent />}
+        >
+          {navGroups.map((group) => (
             <NavGroup
               key={group.title}
               {...group}
@@ -90,8 +105,8 @@ export function AppSidebar({
               onItemHover={onItemHover}
               activeUrls={activeUrls}
             />
-          ))
-        )}
+          ))}
+        </LoadState>
       </SidebarContent>
 
       {footer && <SidebarFooter>{footer}</SidebarFooter>}
