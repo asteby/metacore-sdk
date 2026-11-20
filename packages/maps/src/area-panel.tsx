@@ -25,6 +25,27 @@ export const LIST_SCROLL: React.CSSProperties = {
 
 const MUTED = 'var(--muted-foreground, #6b7280)'
 
+/**
+ * Button of a map panel. Hosts reset native button chrome (Tailwind preflight), which leaves a bare label that does not
+ * read as clickable; this one carries its own border, padding, hover-safe tokens and a focus ring via `outline`.
+ */
+export const PANEL_BUTTON: React.CSSProperties = {
+    font: 'inherit',
+    fontSize: 13,
+    fontWeight: 500,
+    lineHeight: 1.2,
+    color: 'var(--foreground, inherit)',
+    background: 'var(--secondary, rgba(127,127,127,.14))',
+    border: '1px solid var(--border, rgba(127,127,127,.4))',
+    borderRadius: 6,
+    padding: '5px 12px',
+    cursor: 'pointer',
+}
+
+export function PanelButton({ style, ...rest }: React.ButtonHTMLAttributes<HTMLButtonElement>): React.ReactElement {
+    return <button type="button" {...rest} style={{ ...PANEL_BUTTON, ...style }} />
+}
+
 /** Status pill: the text plus its tone (colour is never the only channel). */
 export function StatusBadge({ text, color }: { text: string; color?: string }): React.ReactElement {
     const bg = safeColor(color)
@@ -81,9 +102,9 @@ export function AreaPanel({ title, count, members, colors, listLabel, closeLabel
                     <p style={{ margin: 0, fontWeight: 600 }}>{title}</p>
                     <p style={{ margin: 0, fontSize: 12, color: MUTED }}>{count}</p>
                 </div>
-                <button type="button" onClick={onClose} aria-label={closeLabel} title={closeLabel} style={{ fontSize: 16, lineHeight: 1, padding: '2px 8px', cursor: 'pointer' }}>
+                <PanelButton onClick={onClose} aria-label={closeLabel} title={closeLabel} style={{ fontSize: 16, lineHeight: 1, padding: '2px 9px' }}>
                     ×
-                </button>
+                </PanelButton>
             </div>
             <ul ref={list} aria-label={listLabel} style={{ listStyle: 'none', margin: 0, padding: 0, ...LIST_SCROLL, display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gap: 2 }}>
                 {members.map((m) => {
