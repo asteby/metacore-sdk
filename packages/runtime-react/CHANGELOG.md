@@ -1,5 +1,15 @@
 # @asteby/metacore-runtime-react
 
+## 53.34.0
+
+### Minor Changes
+
+- 2e0dd22: Add `useFitment` and pure fitment matching (`fitFor`, `targetsForSubject`, `rulesForSubject`, `matchesSpec`) over the org's `FitmentRule` rows (addon `catalog_fitment`): a subject (vehicle, device, machine) with attributes → the targets that fit (tire sizes, consumables, spare parts), with scalar / set / range attribute specs. No industry vocabulary: model names and attribute keys are data. Also adds `useOptionalApi()` (the ApiProvider client or `null`).
+
+### Patch Changes
+
+- 9769056: `usePrintDocument`: el aviso «Preparando impresión…» se reemplaza en su lugar (mismo id de sonner) por el de éxito o el de error, en vez de descartarlo y abrir otro al instante. Con un error del servidor se veían los dos avisos encimados durante la animación y el de progreso parecía roto.
+
 ## 53.33.0
 
 ### Minor Changes
