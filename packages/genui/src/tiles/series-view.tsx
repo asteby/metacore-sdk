@@ -1,5 +1,5 @@
 import { useId, useState, type ReactNode } from 'react'
-import { BarChart3, Table2 } from 'lucide-react'
+import { BarChart3, LineChart, Table2 } from 'lucide-react'
 import { cn } from '@asteby/metacore-ui'
 import { BlockState, type BlockStateKind } from './block-state'
 
@@ -21,8 +21,11 @@ export interface SeriesViewLabels {
   table: string
   period: string
   view: string
+  /** Variante `single`: texto del boton cuando muestra la grafica / la tabla. */
+  showTable: string
+  showChart: string
 }
-export const SERIES_VIEW_LABELS: SeriesViewLabels = { chart: 'Grafica', table: 'Tabla', period: 'Periodo', view: 'Vista' }
+export const SERIES_VIEW_LABELS: SeriesViewLabels = { chart: 'Grafica', table: 'Tabla', period: 'Periodo', view: 'Vista', showTable: 'Ver tabla', showChart: 'Ver grafica' }
 
 export interface SeriesViewProps {
   /** Nombre accesible de la grafica y su tabla (el titulo del widget). */
@@ -36,6 +39,10 @@ export interface SeriesViewProps {
   onViewChange?: (view: 'chart' | 'table') => void
   /** Alto del cuerpo en px; la grafica y la tabla comparten alto (sin salto al cambiar). */
   height?: number
+  /** `group` (por omision): dos botones Grafica/Tabla. `single`: UN boton que alterna ("Ver tabla" / "Ver grafica"). */
+  toggle?: 'group' | 'single'
+  /** Contenido a la izquierda del conmutador, en su misma fila (p. ej. la leyenda). */
+  toolbar?: ReactNode
   state?: BlockStateKind
   stateMessage?: ReactNode
   onRetry?: () => void
@@ -49,7 +56,7 @@ export interface SeriesViewProps {
  * grafica la tabla sigue en el DOM solo para lectores de pantalla; el conmutador es un grupo de botones
  * con `aria-pressed`. Grafica y tabla comparten alto: cambiar de vista no mueve la pagina.
  */
-export function SeriesView({ title, columns, rows, chart, view, onViewChange, height = 260, state, stateMessage, onRetry, retryLabel, labels, className }: SeriesViewProps) {
+export function SeriesView({ title, columns, rows, chart, view, onViewChange, height = 260, toggle = 'group', toolbar, state, stateMessage, onRetry, retryLabel, labels, className }: SeriesViewProps) {
   const l = { ...SERIES_VIEW_LABELS, ...labels }
   const [local, setLocal] = useState<'chart' | 'table'>('chart')
   const current = view ?? local
@@ -60,25 +67,41 @@ export function SeriesView({ title, columns, rows, chart, view, onViewChange, he
   const showTable = current === 'table'
   return (
     <figure data-genui-block='series-view' data-view={current} className={cn('m-0 flex flex-col gap-2', className)}>
-      <div role='group' aria-label={l.view} className='flex justify-end gap-1'>
-        {(['chart', 'table'] as const).map((v) => {
-          const Icon = v === 'chart' ? BarChart3 : Table2
-          const on = current === v
-          return (
-            <button
-              key={v}
-              type='button'
-              aria-pressed={on}
-              aria-controls={`${uid}-body`}
-              onClick={() => set(v)}
-              className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring', on ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground')}
-            >
-              <Icon className='size-3.5' aria-hidden />
-              {v === 'chart' ? l.chart : l.table}
-            </button>
-          )
-        })}
-      </div>
+      {toggle === 'single' ? (
+        <div className='flex min-h-6 items-center justify-between gap-3'>
+          {toolbar ?? <span />}
+          <button
+            type='button'
+            aria-pressed={showTable}
+            aria-controls={`${uid}-body`}
+            onClick={() => set(showTable ? 'chart' : 'table')}
+            className='inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground outline-none transition hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none'
+          >
+            {showTable ? <LineChart className='size-3.5' aria-hidden /> : <Table2 className='size-3.5' aria-hidden />}
+            {showTable ? l.showChart : l.showTable}
+          </button>
+        </div>
+      ) : (
+        <div role='group' aria-label={l.view} className='flex justify-end gap-1'>
+          {(['chart', 'table'] as const).map((v) => {
+            const Icon = v === 'chart' ? BarChart3 : Table2
+            const on = current === v
+            return (
+              <button
+                key={v}
+                type='button'
+                aria-pressed={on}
+                aria-controls={`${uid}-body`}
+                onClick={() => set(v)}
+                className={cn('inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring', on ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground')}
+              >
+                <Icon className='size-3.5' aria-hidden />
+                {v === 'chart' ? l.chart : l.table}
+              </button>
+            )
+          })}
+        </div>
+      )}
       <div id={`${uid}-body`} style={{ height }} className={cn('min-h-0', showTable && 'overflow-auto')}>
         {showTable ? null : chart}
         <table className={showTable ? 'w-full text-sm' : 'sr-only'}>

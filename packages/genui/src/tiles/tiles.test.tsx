@@ -101,3 +101,16 @@ describe('BlockState', () => {
     expect(retry).toHaveBeenCalledOnce()
   })
 })
+
+describe('SeriesView single toggle', () => {
+  const rows = [{ label: 'Lun', total: 10 }]
+  const columns = [{ key: 'total', label: 'Total' }]
+  it('uses ONE button that flips Ver tabla / Ver grafica, with the toolbar in the same row', () => {
+    render(<SeriesView title='V' columns={columns} rows={rows} chart={<div data-testid='c' />} toggle='single' toolbar={<span>Leyenda</span>} height={220} />)
+    expect(screen.getAllByRole('button')).toHaveLength(1)
+    expect(screen.getByText('Leyenda')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Ver tabla' }))
+    expect(screen.queryByTestId('c')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Ver grafica' }).getAttribute('aria-pressed')).toBe('true')
+  })
+})
