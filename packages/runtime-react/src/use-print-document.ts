@@ -192,18 +192,20 @@ export function usePrintDocument() {
             feedback = true,
         }: PrintDocumentArgs): Promise<string> => {
             const fb = feedback === false ? {} : feedback === true ? { progress: true, success: true, error: true } : feedback
+            // UN solo aviso por documento: el de progreso se REEMPLAZA en su lugar (mismo id) por el de éxito o de error. Antes se
+            // descartaba el de progreso y se abría otro al instante: durante la animación de salida se veían los dos encimados
+            // (el aviso «roto» de «Preparando impresión…» con el error de fondo).
             const toastId = fb.progress ? toast.loading(noun(mode)) : undefined
+            const into = toastId !== undefined ? { id: toastId } : undefined
             try {
                 const blobUrl = await run({ model, id, key, mode, filename })
-                if (toastId !== undefined) toast.dismiss(toastId)
-                if (fb.success) toast.success(readyMessage(mode))
+                if (fb.success) toast.success(readyMessage(mode), into)
+                else if (toastId !== undefined) toast.dismiss(toastId)
                 return blobUrl
             } catch (err) {
-                if (toastId !== undefined) toast.dismiss(toastId)
-                if (fb.error) toast.error(await documentErrorMessage(err))
+                if (fb.error) toast.error(await documentErrorMessage(err), into)
+                else if (toastId !== undefined) toast.dismiss(toastId)
                 throw err
-            } finally {
-                if (toastId !== undefined) toast.dismiss(toastId)
             }
         },
         [run],

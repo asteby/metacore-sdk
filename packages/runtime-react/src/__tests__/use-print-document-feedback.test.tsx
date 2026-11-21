@@ -30,8 +30,8 @@ describe('usePrintDocument feedback', () => {
         const { result } = renderHook(() => usePrintDocument(), { wrapper: wrap(client) })
         await result.current({ model: 'Invoice', id: '1', key: 'cfdi', mode: 'download' })
         expect(toast.loading).toHaveBeenCalled()
-        expect(toast.success).toHaveBeenCalledWith('Documento descargado')
-        expect(toast.dismiss).toHaveBeenCalled()
+        expect(toast.success).toHaveBeenCalledWith('Documento descargado', { id: 'tid' }) // reemplaza al de progreso en su lugar
+        expect(toast.dismiss).not.toHaveBeenCalled()
         expect(toast.error).not.toHaveBeenCalled()
     })
 
@@ -40,7 +40,7 @@ describe('usePrintDocument feedback', () => {
         const client = { get: vi.fn().mockRejectedValue({ response: { status: 409, data: body } }) } as unknown as ApiClient
         const { result } = renderHook(() => usePrintDocument(), { wrapper: wrap(client) })
         await expect(result.current({ model: 'Invoice', id: '1', key: 'cfdi', mode: 'download' })).rejects.toBeTruthy()
-        expect(toast.error).toHaveBeenCalledWith('La factura aún no está timbrada')
+        expect(toast.error).toHaveBeenCalledWith('La factura aún no está timbrada', { id: 'tid' })
     })
 
     it('feedback:false no muestra nada; error:false deja el error al llamador', async () => {
@@ -49,6 +49,7 @@ describe('usePrintDocument feedback', () => {
         await expect(result.current({ model: 'I', id: '1', key: 'k', mode: 'open', feedback: false })).rejects.toBeTruthy()
         await expect(result.current({ model: 'I', id: '1', key: 'k', mode: 'open', feedback: { progress: true, error: false } })).rejects.toBeTruthy()
         expect(toast.error).not.toHaveBeenCalled()
+        expect(toast.dismiss).toHaveBeenCalledWith('tid') // sin aviso de error propio, el de progreso no se queda
     })
 
     it('documentErrorMessage cae a un mensaje genérico', async () => {
