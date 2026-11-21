@@ -192,6 +192,7 @@ export * from './form-layout-ui'
 // Setup/health: only the documented public components and their types live at
 // the root; helpers (flow-model, connector-form-model, messages…) come from the
 // `@asteby/metacore-runtime-react/setup` subpath so they do not pollute this namespace.
+// Componentes: envoltorios perezosos (setup-lazy) para que el chunk compartido no cargue ./setup.
 export {
     SetupFlow,
     SetupFormStep,
@@ -200,6 +201,8 @@ export {
     StepStatusBadge,
     AddonConfigSurface,
     ConnectorBlocks,
+} from './setup-lazy'
+export {
     type ConnectorBlocksProps,
     type ConnectorFormBlock,
     type BlockResult,
@@ -344,7 +347,7 @@ export {
 } from './addon-layout-context'
 export * from './slot'
 export * from './slots'
-export * from './loom'
+export * from './loom/public'
 export * from './capability-gate'
 export {
     PermissionsProvider,
