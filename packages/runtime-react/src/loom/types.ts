@@ -27,6 +27,11 @@ export interface SeamContract {
     writable?: ReadonlySet<string>
     /** Intenciones que el anfitrión atiende (`record.select`, `record.edit`). */
     intents?: readonly string[]
+    /**
+     * Clase de datos por campo escribible (p. ej. `password: 'secret'`). Un parche que toca un campo
+     * `secret` nunca se aplica solo: siempre pasa por el diff revisable.
+     */
+    fieldClasses?: Readonly<Record<string, DataClass>>
 }
 
 export type GraftKind = 'view' | 'action' | 'transform' | 'source'
@@ -78,6 +83,11 @@ export interface PartDef {
     component?: GraftComponent<any>
     /** Carga perezosa (chunk local o remoto federado). */
     load?: () => Promise<GraftModule>
+    /**
+     * La Part tiene su propio paso de revisión campo a campo (el lector de constancia). Solo entonces
+     * una propuesta `apply: 'auto'` se aplica directa (con «Deshacer»); sin esto, siempre diff.
+     */
+    selfReview?: boolean
 }
 
 export interface GraftDef {
@@ -103,6 +113,8 @@ export interface GraftDef {
     part?: string
     component?: GraftComponent<any>
     load?: () => Promise<GraftModule>
+    /** Igual que `PartDef.selfReview`, para un injerto con componente en línea. */
+    selfReview?: boolean
 }
 
 export interface ProposalInput {
@@ -113,7 +125,10 @@ export interface ProposalInput {
     confidence?: number
     /** Etiquetas legibles por campo, si el injerto las conoce. */
     labels?: Record<string, string>
-    /** `review` (por omisión) o `auto` si el preset lo permite. */
+    /**
+     * `review` (por omisión) o `auto`. `auto` solo vale si la Part declara `selfReview` y ningún campo
+     * del parche es de clase `secret`; si no, el seam lo baja a `review`.
+     */
     apply?: 'review' | 'auto'
 }
 

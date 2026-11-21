@@ -16,7 +16,7 @@ import {
 import { FederatedErrorBoundary } from '../federated-error-boundary'
 import { useCan } from '../permissions-context'
 import { useLoomConfig } from './provider'
-import { attenuatePatch, projectLenses, redactMessage, resolveSeam, sensitiveClasses } from './resolve'
+import { attenuatePatch, effectiveApply, projectLenses, redactMessage, resolveSeam, sensitiveClasses } from './resolve'
 import { getPart, listGrafts, loomVersion, subscribeLoom } from './store'
 import type {
     GraftCapabilities,
@@ -138,8 +138,10 @@ function GraftMount({
                 live.current.report({ type: 'proposal_dropped_keys', seam: contract.id, graft: graft.id, addon, keys: dropped })
             }
             if (!Object.keys(allowed).length || !live.current.onProposal) return
+            const selfReview = !!(graft.selfReview || (graft.part && getPart(graft.part)?.selfReview))
             live.current.onProposal({
                 ...input,
+                apply: effectiveApply(input.apply, selfReview, Object.keys(allowed), contract.fieldClasses),
                 patch: allowed,
                 id: `${graft.id}#${++proposalSeq}`,
                 graft: graft.id,
@@ -148,14 +150,21 @@ function GraftMount({
                 dropped,
             })
         },
-        [graft.id, graft.writes, contract.id, contract.writable, addon],
+        [graft, contract.id, contract.writable, contract.fieldClasses, addon],
     )
     const emit = useCallback(
         (intent: string, payload?: unknown) => {
             if (!contract.intents?.includes(intent)) return false
-            return live.current.onIntent?.(intent, payload, graft) ?? false
+            // Una intención que lleva un parche (`record.edit`) sigue la misma regla de `apply` que `propose`.
+            let out = payload
+            const p = payload as { patch?: Record<string, unknown>; apply?: 'review' | 'auto' } | null
+            if (p && typeof p === 'object' && p.apply === 'auto') {
+                const selfReview = !!(graft.selfReview || (graft.part && getPart(graft.part)?.selfReview))
+                out = { ...p, apply: effectiveApply('auto', selfReview, Object.keys(p.patch ?? {}), contract.fieldClasses) }
+            }
+            return live.current.onIntent?.(intent, out, graft) ?? false
         },
-        [contract.intents, graft],
+        [contract.intents, contract.fieldClasses, graft],
     )
     const caps = useMemo<GraftCapabilities>(() => ({ propose, emit, can }), [propose, emit, can])
     const meta = useMemo(() => ({ id: graft.id, addon, seam: contract.id }), [graft.id, addon, contract.id])

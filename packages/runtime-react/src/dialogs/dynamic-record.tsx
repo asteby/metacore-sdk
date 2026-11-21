@@ -104,6 +104,7 @@ import { getFieldWidget, useFieldWidgetRegistryVersion } from '../field-widget-r
 import { Seam } from '../loom/seam'
 import { ProposalReview, useProposalQueue } from '../loom/proposals'
 import { RECORD_FORM_SECTION, recordDialogHeaderContract } from '../loom/seams'
+import { effectiveApply } from '../loom/resolve'
 import { TimeZoneContext, CurrencyContext, useNumberLocale, useSystemActor } from '../org-runtime-context'
 import { AuthorshipCell, hasSpecialAuthorship, readProvenance } from '../provenance'
 
@@ -924,10 +925,21 @@ export function DynamicRecordDialog({
     )
     // Loom: seam `record.dialog.header`. Los injertos proponen; el diálogo muestra el diff y aplica.
     const proposals = useProposalQueue(formValues, applyPrefill)
-    const headerContract = useMemo(() => recordDialogHeaderContract(prefillAllowedKeys), [prefillAllowedKeys])
+    // Campos secretos (contraseñas, `data_class: secret`): una propuesta que los toca nunca se aplica sola.
+    const fieldClasses = useMemo(() => {
+        const out: Record<string, 'secret'> = {}
+        for (const f of (modalMeta?.fields ?? []) as any[]) {
+            if (f.type === 'password' || f.widget === 'password' || f.data_class === 'secret') out[f.key] = 'secret'
+        }
+        return out
+    }, [modalMeta])
+    const headerContract = useMemo(
+        () => recordDialogHeaderContract(prefillAllowedKeys, undefined, fieldClasses),
+        [prefillAllowedKeys, fieldClasses],
+    )
     const sectionContract = useMemo(
-        () => recordDialogHeaderContract(prefillAllowedKeys, RECORD_FORM_SECTION),
-        [prefillAllowedKeys],
+        () => recordDialogHeaderContract(prefillAllowedKeys, RECORD_FORM_SECTION, fieldClasses),
+        [prefillAllowedKeys, fieldClasses],
     )
     const headerLenses = useMemo(
         () => ({
@@ -961,6 +973,8 @@ export function DynamicRecordDialog({
         if (!Object.keys(patch).length) return
         proposals.push({
             ...initialProposal,
+            // La revisión propia ya la exigió el seam al emitir; aquí solo se veta `secret`.
+            apply: effectiveApply(initialProposal.apply, true, Object.keys(patch), fieldClasses),
             patch,
             id: 'host#initial',
             graft: 'host.initial',
@@ -969,7 +983,7 @@ export function DynamicRecordDialog({
             dropped: [],
         })
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, initialProposal, loading, modalMeta, prefillAllowedKeys])
+    }, [open, initialProposal, loading, modalMeta, prefillAllowedKeys, fieldClasses])
     const config = MODE_CONFIG[mode]
 
     // ── Fetch metadata + record when dialog opens ──────────────────────────

@@ -10,7 +10,7 @@ export {
     subscribeLoom,
     loomVersion,
 } from './store'
-export { resolveSeam, attenuatePatch, matchesWrite, projectLenses, sensitiveClasses, redactMessage } from './resolve'
+export { resolveSeam, effectiveApply, attenuatePatch, matchesWrite, projectLenses, sensitiveClasses, redactMessage } from './resolve'
 export { LoomProvider, useLoomConfig, type LoomProviderProps, type LoomConfig } from './provider'
 export { Seam, SeamInspector, useSeam, type SeamProps, type SeamHostContext } from './seam'
 export { useProposalQueue, ProposalReview, type ProposalQueue, type ProposalReviewProps } from './proposals'
