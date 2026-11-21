@@ -192,3 +192,36 @@ function AppliedCode({
     </F>
   )
 }
+
+export type CheckoutDiscountCodeProps = DiscountCodeFormProps & {
+  /**
+   * `collapsible` (default): «¿Tienes un cupón?» plegado, para no empujar el pago ni invitar a salir a buscar cupones; se abre solo
+   * si el carrito ya trae un cupón o hubo un error. `open`: el campo visible (columna del resumen en escritorio).
+   */
+  variant?: 'collapsible' | 'open'
+  /** Clases de la caja plegable (`<details>`), de su encabezado (`<summary>`, con el chevron por CSS) y del panel interior. */
+  detailsClassName?: string
+  summaryClassName?: string
+  panelClassName?: string
+}
+
+/**
+ * El campo de cupón de la pantalla de PAGO, como pieza estándar de las tiendas: el mismo formulario (`DiscountCodeForm`, misma
+ * acción `discount` de la ruta) en dos presentaciones. La tienda decide DÓNDE ponerlo —plegado bajo el resumen en teléfono, abierto
+ * en la columna del resumen en escritorio— y solo viste las clases. No pinta nada si la promoción vigente bloquea los cupones.
+ */
+export function CheckoutDiscountCode({ variant = 'collapsible', detailsClassName, summaryClassName, panelClassName, ...form }: CheckoutDiscountCodeProps) {
+  const locale = useResolvedLocale(form.locale)
+  const m = promotionMessages(locale, form.messages)
+  if (couponsBlocked(form.promotions)) return null
+  if (variant === 'open') return <DiscountCodeForm {...form} />
+  const open = !!form.codes?.length || !!form.error
+  return (
+    <details className={detailsClassName} {...(open ? { open: true } : {})} data-sf-checkout-discount-code>
+      <summary className={summaryClassName}>{m['code.toggle']}</summary>
+      <div className={panelClassName}>
+        <DiscountCodeForm {...form} hideLabel />
+      </div>
+    </details>
+  )
+}
