@@ -1,5 +1,11 @@
 # @asteby/metacore-genui
 
+## 2.13.1
+
+### Patch Changes
+
+- e92e9e5: Pruebas axe-core de RankedList, SeriesView, BlockState y PageGraphView (solo desarrollo).
+
 ## 2.13.0
 
 ### Minor Changes
