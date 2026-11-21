@@ -259,6 +259,13 @@ export interface Options {
    * then come back as warnings.
    */
   Strict: boolean;
+  /**
+   * RoleCatalog, when set, completes the role rules that need other addons
+   * (R-A: only an extension may require a provider; R-B against a contract's
+   * writable_models; unknown implemented contracts). The hub and ops pass
+   * theirs. nil skips those checks and never panics.
+   */
+  RoleCatalog: RoleCatalog;
 }
 /**
  * RuleRequiresStateInStages: contributions.actions[].requires_state values
@@ -584,6 +591,194 @@ export interface SetValue {
 }
 
 //////////
+// source: loom.go
+
+/**
+ * UIBlock is the Loom block (RFC 0005, docs/rfc/0005-contribuciones-de-ui.md): the
+ * components this addon exposes (Parts), the extension points it publishes
+ * for others (Seams) and its grafts (Part -> Seam). Optional and additive: a
+ * manifest without `ui` is served exactly as before, and the legacy
+ * contributions.slots[] keeps working (the resolver projects it as grafts).
+ */
+export interface UIBlock {
+  exposes?: UIPart[];
+  seams?: UISeam[];
+  contributions?: UIGraft[];
+}
+/**
+ * UIPart is a component the addon exposes with a contract. It does not know
+ * where it is mounted.
+ */
+export interface UIPart {
+  /**
+   * ID is qualified: "<addon_key>.<name>".
+   */
+  id: string;
+  version?: string;
+  /**
+   * Expose is the federated remote's expose ("./parts/csf-import").
+   */
+  expose: string;
+  props_schema?: string;
+  needs?: UINeeds;
+  /**
+   * SelfReview: the Part has its own field-by-field review step, so a
+   * proposal it marks apply:auto is applied directly (with undo). Without it,
+   * every proposal goes through the host's reviewable diff. Never auto on
+   * secret fields (the client enforces both rules).
+   */
+  self_review?: boolean;
+  description?: string;
+}
+/**
+ * UINeeds is what a Part needs to run.
+ */
+export interface UINeeds {
+  /**
+   * Network: "none" (default), "org" (only this host's API) or "hosts".
+   */
+  network?: string;
+  /**
+   * Hosts is the allowlist when Network is "hosts"; they go to the addon CSP.
+   */
+  hosts?: string[];
+  offline?: boolean;
+  /**
+   * Records are host-mediated, read-only lookups the Part may ask for while
+   * having no network of its own (e.g. a document reader checking whether the
+   * customer already exists). The HOST runs them with the user's permissions:
+   * exact-field match, capped results, no listings. See UIRecordsNeed.
+   */
+  records?: UIRecordsNeed;
+  /**
+   * Device lists the browser devices the Part may use (camera, microphone,
+   * geolocation). The SDK only lets a Part request a device it declared; the
+   * admin screen shows it like app permissions.
+   */
+  device?: string[];
+}
+/**
+ * UIRecordsNeed lists the models a Part may look up through the host
+ * (records.find). The data it returns is class pii.
+ */
+export interface UIRecordsNeed {
+  find?: string[];
+}
+/**
+ * UISeam is a typed extension point this addon owns (generalizes
+ * extension_points.slot_kinds[]).
+ */
+export interface UISeam {
+  /**
+   * ID is qualified: "<addon_key>.<name>" (e.g. "pos.cart.summary").
+   */
+  id: string;
+  version: string;
+  /**
+   * Lenses maps each lens the seam offers to its data class.
+   */
+  lenses?: { [key: string]: string};
+  /**
+   * Writable lists the fields a graft may propose changes to (empty = none).
+   */
+  writable?: string[];
+  /**
+   * Intents the host handles (e.g. "pos.checkout.block").
+   */
+  intents?: string[];
+  /**
+   * Cardinality: "many" (default) or "one".
+   */
+  cardinality?: string;
+  deprecated?: UIDeprecated;
+  description?: string;
+}
+/**
+ * UIDeprecated marks a seam major as on its way out.
+ */
+export interface UIDeprecated {
+  since: string;
+  removal?: string;
+  message?: string;
+}
+/**
+ * UIGraft mounts a Part on a Seam.
+ */
+export interface UIGraft {
+  /**
+   * ID is qualified: "<addon_key>.<name>".
+   */
+  id: string;
+  /**
+   * Part is the qualified id of an exposed Part (this addon's or another's).
+   */
+  part: string;
+  /**
+   * Seam is a seam id: SDK/host catalog or published by an addon.
+   */
+  seam: string;
+  /**
+   * Requires is a semver range over the seam contract ("^1").
+   */
+  requires?: string;
+  /**
+   * Kind: view (default) | action | transform | source.
+   */
+  kind?: string;
+  /**
+   * Mode: contribute (default) | wrap | replace. replace is preset-only.
+   */
+  mode?: string;
+  order?: number /* int */;
+  when?: UIWhen;
+  /**
+   * Reads are the lenses the graft receives; nothing else reaches it.
+   */
+  reads?: string[];
+  /**
+   * Writes are the fields it may propose ("prefix.*" allowed).
+   */
+  writes?: string[];
+  /**
+   * Emits are the seam intents it may request.
+   */
+  emits?: string[];
+  /**
+   * Network / Hosts / Offline: same contract as UINeeds.
+   */
+  network?: string;
+  hosts?: string[];
+  offline?: boolean;
+  /**
+   * Device: same contract as UINeeds.Device, for the graft.
+   */
+  device?: string[];
+  props?: { [key: string]: any};
+}
+/**
+ * UIWhen gates a graft. Every present clause must hold. The server evaluates
+ * it (the source of truth); the client re-evaluates only the live parts
+ * (model, mode) for UX and Explain.
+ */
+export interface UIWhen {
+  model?: string[];
+  mode?: string[];
+  permission?: string[];
+  any_permission?: string[];
+  flag?: string;
+  setting?: UISettingWhen;
+  condition?: Condition;
+}
+/**
+ * UISettingWhen holds when the effective setting is truthy, or equal to
+ * Equals when it is present.
+ */
+export interface UISettingWhen {
+  key: string;
+  equals?: any;
+}
+
+//////////
 // source: option_display.go
 
 /**
@@ -889,6 +1084,202 @@ export interface OptionalRequirement {
   Reason: string;
   Enables: string[];
 }
+
+//////////
+// source: role_infer.go
+
+/**
+ * Role inference (X-R1, part 1): the types and projection the role rules look
+ * at, and the warning-only inference of a role that a manifest does not
+ * declare. The enforcing rules (R-A..R-D) live in role_validate.go.
+ * Compatibility window (one release): a manifest WITHOUT metadata.role keeps
+ * installing; its role is inferred (InferRole) and reported as the
+ * warning-only rule role_missing.
+ */
+/**
+ * RuleRoleMissing: metadata.role is not declared but the manifest points to
+ * one (the inferred role is named in the message). Warning-only.
+ */
+export const RuleRoleMissing = "role_missing";
+/**
+ * RoleFacts is the slice of a manifest the role rules look at.
+ */
+export interface RoleFacts {
+  Key: string;
+  Role: string;
+  /**
+   * Preset is true for kind Preset (infers role preset).
+   */
+  Preset: boolean;
+  /**
+   * Requires are the addon keys of compatibility.requires.
+   */
+  Requires: RoleRequire[];
+  Contracts: Contract[];
+  Implements: Implements[];
+  ExtendsAddon?: ExtendsAddon;
+  Replaces: string[];
+  /**
+   * DBWrites are the targets of the db:write capabilities.
+   */
+  DBWrites: string[];
+  /**
+   * OwnModelKeys / OwnTables are the models the addon declares.
+   */
+  OwnModelKeys: string[];
+  OwnTables: string[];
+  /**
+   * ProvidedCapabilities are the keys of provides_capabilities[].
+   */
+  ProvidedCapabilities: string[];
+  /**
+   * NavigationGroups counts contributions.navigation entries.
+   */
+  NavigationGroups: number /* int */;
+}
+/**
+ * RoleRequire is one compatibility.requires entry.
+ */
+export interface RoleRequire {
+  Key: string;
+  Optional: boolean;
+}
+
+//////////
+// source: role_validate.go
+
+/**
+ * RuleRoleInferred: a role rule is violated by a manifest whose role is
+ * only inferred. Warning-only until the role is declared.
+ */
+export const RuleRoleInferred = "role_inferred";
+/**
+ * RuleRoleProviderForeignWrite: a provider holds db:write outside its own
+ * namespace and no catalog was supplied to check the contract's
+ * writable_models. Warning-only.
+ */
+export const RuleRoleProviderForeignWrite = "role_provider_foreign_write";
+/**
+ * RoleCatalog lets a host that knows other addons (the hub, ops) complete the
+ * rules that cannot be decided from one manifest. All methods are optional in
+ * effect: a nil RoleCatalog skips those checks.
+ */
+export type RoleCatalog = any;
+
+//////////
+// source: rowcondition.go
+
+/**
+ * RowCondition is the ONE declarative per-row predicate of the manifest: data,
+ * not code. The same shape gates an action (contributions.actions[].condition),
+ * a printable document and the generic CRUD of a model (models[].row_conditions),
+ * and the SDK renders it with the same vocabulary (ActionCondition in
+ * @asteby/metacore-runtime-react), so the button a user does not see is also the
+ * operation the server refuses.
+ * Leaf: {field, operator, value}. Group: {operator: "all"|"any", conditions}.
+ * 	eq | neq            equality (numbers and booleans coerce; "" == missing)
+ * 	in | not_in         membership in the list `value`
+ * 	gt | gte | lt | lte numeric comparison; a non-numeric side never matches
+ * 	truthy | falsy      the field is present (non-blank, not false/0) or not
+ * 	all | any           AND / OR over `conditions` (nestable; an empty list
+ * 	                    passes)
+ * Legacy aliases (equals, ==, notequals, not_equals, !=, notin, present, set,
+ * blank, empty) are accepted and normalised by NormalizeRowOperator. An empty
+ * operator on a leaf is eq. `field` may be a dotted path into nested objects.
+ */
+export interface RowCondition {
+  field?: string;
+  operator?: string;
+  value?: any;
+  conditions?: RowCondition[];
+}
+/**
+ * Canonical row-condition operators.
+ */
+export const RowOpEq = "eq";
+/**
+ * Canonical row-condition operators.
+ */
+export const RowOpNeq = "neq";
+/**
+ * Canonical row-condition operators.
+ */
+export const RowOpIn = "in";
+/**
+ * Canonical row-condition operators.
+ */
+export const RowOpNotIn = "not_in";
+/**
+ * Canonical row-condition operators.
+ */
+export const RowOpGt = "gt";
+/**
+ * Canonical row-condition operators.
+ */
+export const RowOpGte = "gte";
+/**
+ * Canonical row-condition operators.
+ */
+export const RowOpLt = "lt";
+/**
+ * Canonical row-condition operators.
+ */
+export const RowOpLte = "lte";
+/**
+ * Canonical row-condition operators.
+ */
+export const RowOpTruthy = "truthy";
+/**
+ * Canonical row-condition operators.
+ */
+export const RowOpFalsy = "falsy";
+/**
+ * Canonical row-condition operators.
+ */
+export const RowOpAll = "all";
+/**
+ * Canonical row-condition operators.
+ */
+export const RowOpAny = "any";
+/**
+ * RowGate is one gated operation of RowConditions: the condition the persisted
+ * row must satisfy, and the i18n key the refusal carries.
+ */
+export interface RowGate {
+  RowCondition: RowCondition;
+  /**
+   * ErrorKey is the i18n key of the refusal message. Empty = a generic one.
+   */
+  error_key?: string;
+}
+/**
+ * RowConditions declares, as data, which rows of a model the generic CRUD may
+ * change or remove (models[].row_conditions): `update: {field: "id",
+ * operator: "neq", value: 1}` protects a default row, `delete: {field: "debt",
+ * operator: "lte", value: 0}` forbids deleting a customer that still owes. The
+ * server evaluates the PERSISTED row before the write and refuses with 409
+ * (code "row_condition_failed"), whatever the client shows. Create has no
+ * persisted row and is not gated here. Actions carry their own `condition`.
+ */
+export interface RowConditions {
+  update?: RowGate;
+  delete?: RowGate;
+}
+
+//////////
+// source: scope_validate.go
+
+/**
+ * ScopeKind es el valor de Model.scope.
+ */
+export type ScopeKind = string;
+export const ScopeMerchant: ScopeKind = "merchant";
+export const ScopeMarket: ScopeKind = "market";
+export const ScopeShared: ScopeKind = "shared";
+export const ScopeGroup: ScopeKind = "group";
+/**
+ * marketsColumnName es la columna convencional que el host usa para filtrar por mercado (dynamic.MarketsColumn).
+ */
 
 //////////
 // source: setup.go
@@ -1240,6 +1631,11 @@ export interface Manifest {
   contributions?: Contributions;
   extension_points?: ExtensionPoints;
   /**
+   * UI is the Loom block (RFC 0005): exposed Parts, published Seams and
+   * grafts. Optional; see ui.go.
+   */
+  ui?: UIBlock;
+  /**
    * Events declares the event catalog (RFC 0003): what this addon emits and
    * consumes. Optional; see event_catalog.go.
    */
@@ -1342,6 +1738,29 @@ export interface Manifest {
    * addon provides no capability (the default).
    */
   provides_capabilities?: ProvidedCapability[];
+  /**
+   * Contracts are the versioned contracts this addon OWNS (role "contract"):
+   * operations, events, states, settings and selection policy that providers
+   * implement. Empty = the addon owns no contract (the default).
+   */
+  contracts?: Contract[];
+  /**
+   * Implements lists the contracts (owned by another addon) this addon
+   * implements (roles "provider" and "extension"). Empty = none.
+   */
+  implements?: Implements[];
+  /**
+   * ExtendsAddon names the provider or contract addon an "extension" addon
+   * complements. It cannot exist without it, so its key must also be in
+   * compatibility.requires.
+   */
+  extends_addon?: ExtendsAddon;
+  /**
+   * Replaces lists addon keys this addon supersedes (a rename or split):
+   * the installer can migrate an installation of the old key. Informative
+   * for validation; never a dependency.
+   */
+  replaces?: string[];
   /**
    * OptionMetrics CONTRIBUTES computed values to the options of a model (own
    * or another addon's), e.g. inventory's "stock_available" for
@@ -1974,7 +2393,88 @@ export interface Metadata {
    * the authority on ownership.
    */
   owner?: string;
+  /**
+   * Role places the addon in the base + successors pattern (see the Role*
+   * constants and role_validate.go). Empty = not declared: the host infers it
+   * (InferRole) and reports the warning-only rule role_missing; the
+   * role-dependent rules (R-A..R-D) are hard errors only for a DECLARED role.
+   */
+  role?: string;
+  /**
+   * Deprecated marks the whole addon as superseded. Informative: catalogs
+   * show it and point to ReplacedBy; nothing is blocked.
+   */
+  deprecated?: Deprecation;
 }
+/**
+ * Deprecation is the end-of-life notice of an addon, a contract or one
+ * contract operation (plan §4A.4: deprecated{since, replacement, sunset}). The
+ * hub warns and fleet telemetry counts the calls; nothing is blocked by the
+ * kernel. The field names are part of the frozen contract.
+ */
+export interface Deprecation {
+  /**
+   * Since is the version (semver) from which it is deprecated.
+   */
+  since?: string;
+  /**
+   * Replacement names the successor: an addon key, a contract key, or an
+   * operation key, according to what is deprecated.
+   */
+  replacement?: string;
+  /**
+   * Sunset is the date (YYYY-MM-DD) after which it may stop being served.
+   */
+  sunset?: string;
+}
+/**
+ * Addon roles (metadata.role). Taxonomy of the base + successors pattern: a
+ * contract addon owns a versioned contract and the canonical data; providers
+ * implement it; extensions complement a provider or contract.
+ */
+export const RoleFoundation = "foundation";
+/**
+ * Addon roles (metadata.role). Taxonomy of the base + successors pattern: a
+ * contract addon owns a versioned contract and the canonical data; providers
+ * implement it; extensions complement a provider or contract.
+ */
+export const RoleContract = "contract";
+/**
+ * Addon roles (metadata.role). Taxonomy of the base + successors pattern: a
+ * contract addon owns a versioned contract and the canonical data; providers
+ * implement it; extensions complement a provider or contract.
+ */
+export const RoleProvider = "provider";
+/**
+ * Addon roles (metadata.role). Taxonomy of the base + successors pattern: a
+ * contract addon owns a versioned contract and the canonical data; providers
+ * implement it; extensions complement a provider or contract.
+ */
+export const RoleExtension = "extension";
+/**
+ * Addon roles (metadata.role). Taxonomy of the base + successors pattern: a
+ * contract addon owns a versioned contract and the canonical data; providers
+ * implement it; extensions complement a provider or contract.
+ */
+export const RoleLocalization = "localization";
+/**
+ * Addon roles (metadata.role). Taxonomy of the base + successors pattern: a
+ * contract addon owns a versioned contract and the canonical data; providers
+ * implement it; extensions complement a provider or contract.
+ */
+export const RoleVertical = "vertical";
+/**
+ * Addon roles (metadata.role). Taxonomy of the base + successors pattern: a
+ * contract addon owns a versioned contract and the canonical data; providers
+ * implement it; extensions complement a provider or contract.
+ */
+export const RoleApp = "app";
+/**
+ * Addon roles (metadata.role). Taxonomy of the base + successors pattern: a
+ * contract addon owns a versioned contract and the canonical data; providers
+ * implement it; extensions complement a provider or contract.
+ */
+export const RolePreset = "preset";
 /**
  * Metadata visibility values.
  */
@@ -2069,6 +2569,13 @@ export interface Model {
   key: string;
   table: string;
   label?: string;
+  /**
+   * Aliases are extra slugs that resolve to this model next to Key and Table
+   * (RFC 0004): /metadata, /data and /options accept them, matching ignores
+   * case and separators ("order-items" == "order_items" == "OrderItems").
+   * They never change permissions: the canonical model's apply.
+   */
+  aliases?: string[];
   columns: Column[];
   indices?: Index[];
   foreign_keys?: ForeignKey[];
@@ -2092,6 +2599,12 @@ export interface Model {
    * ordinary model. See CONTRACT-item-master.md §3.1.
    */
   extends?: string;
+  /**
+   * Scope declares which organizational boundary this model lives behind (RFC 0006): merchant (belongs to one merchant, via its
+   * branch), market (shared master, visible per its markets column), shared (organization-wide master) or group (group view only).
+   * Empty = undeclared (nothing changes). The kernel only validates coherence (see ScopeKind); the host enforces it.
+   */
+  scope?: ScopeKind;
   /**
    * SearchKeys declares normalized search keys composed from this model's
    * columns, e.g. a tire size "{section_width_mm}/{aspect_ratio}R{rim_diameter_in}".
@@ -2231,6 +2744,25 @@ export interface Model {
    */
   append_only?: boolean;
   /**
+   * View makes the model read-only and backed by a SQL view instead of a
+   * table: the kernel emits CREATE OR REPLACE VIEW from View.SQL (no table,
+   * indices, RLS or seed) and refuses every create/update/delete/restore with
+   * the stable code "read_only". The SELECT must expose the declared columns
+   * (id and organization_id included); the tenant scope is applied by the
+   * runtime on organization_id like any model. Use it for aggregates (totals
+   * per product) that must be a first-class dynamic table with search, sort
+   * and filters. Incompatible with append_only, a stage machine and extensions.
+   */
+  view?: ModelView;
+  /**
+   * RowConditions gates the generic UPDATE and DELETE of the model on the
+   * PERSISTED row, as data (see RowConditions): `update: {field: "id",
+   * operator: "neq", value: 1}` protects a default row, `delete: {field:
+   * "debt", operator: "lte", value: 0}` forbids deleting a customer that still
+   * owes. Refused with 409 `row_condition_failed`; nil = ungated.
+   */
+  row_conditions?: RowConditions;
+  /**
    * Audit controls the kernel's audit-column standard (created_at, updated_at,
    * deleted_at, created_by_id, updated_by_id, deleted_by_id — docs/audit-columns.md).
    * The kernel adds those columns to EVERY model whether or not the manifest
@@ -2259,6 +2791,14 @@ export interface Model {
    * has no stage machine (the default; flat models are unaffected).
    */
   stage_field?: string;
+  /**
+   * StageCheck opts the model into a database CHECK derived from Stages:
+   * CHECK (stage_field IN (stage keys)), created NOT VALID so rows that predate
+   * the machine never block the install; validate separately once the data is
+   * clean. Needs StageField and Stages. Default false: the kernel then only
+   * guards moves on its own write paths.
+   */
+  stage_check?: boolean;
   /**
    * Stages enumerates the ordered lifecycle stages of the StageField column.
    * Each Stage supplies the value/label/colour the kernel projects onto the
@@ -2372,6 +2912,13 @@ export interface Transition {
   to: string;
   guard?: string;
   roles?: string[];
+  /**
+   * Permission names a capability ("orders.confirm") that also authorizes this
+   * move: a user who holds it may make the transition without holding one of
+   * Roles, so a single transition can be delegated without creating a role.
+   * With both set, either is enough. Empty = only Roles (or nothing) gates it.
+   */
+  permission?: string;
   requires_fields?: string[];
   approval?: ApprovalPolicy;
   reopen?: boolean;
@@ -2451,8 +2998,9 @@ export interface Formula {
    */
   tier?: number /* int */;
   /**
-   * Handler is the Tier-3 backend, "wasm:<export>" — an export the addon's
-   * wasm module declares. Required (and only allowed) when Tier is 3. The
+   * Handler is the Tier-3 backend, "wasm:<export>" or "compiled:<fn>" — an
+   * export the addon's wasm module declares, or a Go export of a compiled-in
+   * module (runtime/compiled). Required (and only allowed) when Tier is 3. The
    * invocation is host-wired (dynamic.HookRegistry.SetFormulaInvoker); when no
    * invoker is configured the formula is skipped, never a hard failure.
    */
@@ -2684,6 +3232,14 @@ export interface Column {
    */
   option_filter?: OptionFilter;
   /**
+   * OptionFitment declares that this picker's options are checked for FIT
+   * against a subject chosen elsewhere in the same form (see OptionFitment):
+   * the SDK flags or hides the options whose attributes the organization's
+   * fitment rules do not accept for that subject. Pure UI metadata; the
+   * DDL/install plane ignores it. Optional.
+   */
+  option_fitment?: OptionFitment;
+  /**
    * OptionsSource declares a DYNAMIC select for the column: instead of a
    * hardcoded Options list, it names a PROVIDER key (e.g.
    * "registered_models", "installed_addons") the HOST registers and resolves
@@ -2768,6 +3324,18 @@ export interface Column {
    */
   section?: string;
   /**
+   * ShowInTable shows a KERNEL-MANAGED column in the list table. The kernel owns
+   * id, created_at and updated_at (it injects and stamps them on every model),
+   * so by default a declaration of one only documents the physical shape and
+   * the column is NOT shown. `show_in_table: true` on one of those three opts it in:
+   * the table gets a sortable column after the declared ones (label/type/
+   * cell_style/visibility honoured; the form never gets it, nor does the DDL).
+   * It is only valid on those columns (every other column already shows unless
+   * `visibility` hides it) and not with visibility "modal" or "list". Absent =
+   * unchanged behaviour.
+   */
+  show_in_table?: boolean;
+  /**
    * Visibility scopes where the column is rendered, with the same closed set
    * as the host ColumnDef.Visibility:
    *   ""/"all" — everywhere (default);
@@ -2845,6 +3413,18 @@ export interface Column {
    * Empty = readable by whoever may read the record (backward compatible).
    */
   read_permission?: string;
+  /**
+   * WritePermission makes the column writable only by callers holding this
+   * permission (e.g. "billing.invoice.set_discount"). The dynamic create/update
+   * REJECTS a changed value from a caller without it with 403 (code
+   * "column_write_denied"); a value the caller merely echoes back unchanged
+   * (an edit form posts every field) is dropped instead of failing the save.
+   * Reads are unaffected (use read_permission to hide a column). Declared actions
+   * write through their own path and are not gated. Same dotted key shape as
+   * read_permission; a key under this addon's own prefix must be declared in
+   * rbac.permissions. Empty = writable by whoever may write the record.
+   */
+  write_permission?: string;
   /**
    * RejectDeletedRef, on a column with a Ref, makes a CREATE fail when the
    * referenced row exists but is soft-deleted (deleted_at set): a NEW sale
@@ -3748,9 +4328,10 @@ export interface ConfigEntry {
  * value read from the target record (status/state gates use requires_state).
  */
 export interface RecordFieldCondition {
-  field: string;
-  operator?: string; // eq|neq|in|not_in|truthy|falsy (default eq)
+  field?: string;
+  operator?: string; // see RowCondition (default eq)
   value?: any;
+  conditions?: RowCondition[];
 }
 /**
  * DocumentDef is one printable document an addon contributes
@@ -3813,6 +4394,15 @@ export interface DocumentDef {
    * shown to end users unless the host chooses to surface it.
    */
   comment?: string;
+  /**
+   * Kind is the optional regional/semantic kind of the document
+   * (snake_case, e.g. "invoice", "credit_note"). The host passes
+   * it as doc_kind to the documents.enrich capability so a region pack can
+   * enrich the record before the template is hydrated, instead of the host
+   * guessing from the key or model name. Empty = no enrichment is asked
+   * for. Additive: manifests without it behave as before.
+   */
+  kind?: string;
 }
 /**
  * DashboardWidget is one tile an addon contributes to the host's modular
@@ -4461,6 +5051,12 @@ export interface ActionField {
    */
   option_filter?: OptionFilter;
   /**
+   * OptionFitment flags or hides this picker's options that the fitment rules
+   * do not accept for a subject chosen in another field (see OptionFitment).
+   * Mirrors Column.option_fitment. Pure UI metadata.
+   */
+  option_fitment?: OptionFitment;
+  /**
    * Scan opts this action field into CAMERA BARCODE SCANNING: the SDK shows a
    * camera button that scans a barcode to FILL the field fast — a text/number
    * input (e.g. a SKU) or a dynamic_select reference (scan feeds the picker's
@@ -4468,6 +5064,13 @@ export interface ActionField {
    * modelbase.FieldDef.Scan. Country/business-agnostic UI metadata. Optional.
    */
   scan?: boolean;
+  /**
+   * Searchable forces (true) or disables (false) the searchable combobox for a
+   * select action field. Omitted = auto: the SDK/host switch to the combobox
+   * when the field has more than modelbase.SearchableSelectThreshold options.
+   * The host projects it onto modelbase.FieldDef.Searchable. Pure UI metadata.
+   */
+  searchable?: boolean;
   /**
    * VisibleWhen declares CONDITIONAL VISIBILITY for this action field: the SDK
    * renders it only when a SIBLING field's current value matches the predicate
@@ -4605,6 +5208,43 @@ export interface DynamicOptions {
    * column of Source when Source is an own model. Optional.
    */
   extra_columns?: string[];
+}
+/**
+ * OptionFitmentFlag keeps every option and marks the ones that do not fit.
+ */
+export const OptionFitmentFlag = "flag";
+/**
+ * OptionFitmentFilter hides the options that do not fit.
+ */
+export const OptionFitmentFilter = "filter";
+/**
+ * OptionFitment declares, on a picker column (or action field), that the
+ * candidates must fit a SUBJECT picked in another field of the same form (the
+ * row being edited, or the header of the document the row belongs to), using
+ * the fitment rules the organization keeps as records: a subject accepts
+ * targets according to those rules. The kernel only validates and carries the
+ * declaration; the SDK resolves it (rules + the subject row + the options'
+ * attributes), so no host code is involved.
+ * 	SubjectField — name of the field holding the subject's id, looked up in the
+ * 	               row first and then in the header form. ONE field: support for
+ * 	               several subjects, if ever needed, arrives as a NEW additive
+ * 	               field (e.g. subject_fields), never by changing this type.
+ * 	               Required.
+ * 	SubjectModel — model of the subject, whose row supplies the attributes the
+ * 	               rules compare. Required.
+ * 	TargetModel  — the rules' target model: names which rules apply and which
+ * 	               attribute group of the option's row is compared. Required.
+ * 	Mode         — "flag" (default: mark non-fitting options) or "filter" (hide
+ * 	               them). A consumer that does not know a mode MUST behave as
+ * 	               "flag" (marking never loses data). A subject with no rules
+ * 	               for the target never flags or hides anything: no data is not
+ * 	               a mismatch.
+ */
+export interface OptionFitment {
+  subject_field: string;
+  subject_model: string;
+  target_model: string;
+  mode?: string;
 }
 /**
  * OptionFilterRule hides options of a relation / dynamic picker. The SDK
@@ -5370,11 +6010,15 @@ export interface Condition {
    */
   unmet?: string;
   /**
-   * Field/Operator/Value optionally gate a row action on the target record.
+   * Field/Operator/Value optionally gate a row action on the target record
+   * (see RowCondition for the operator vocabulary); with operator all|any,
+   * Conditions combines nested predicates. The SERVER enforces it: an action
+   * whose target row does not match is refused, whatever the client shows.
    */
   field?: string;
   operator?: string;
   value?: any;
+  conditions?: RowCondition[];
 }
 /**
  * Unmet policies for Condition.Unmet.
@@ -5728,6 +6372,216 @@ export interface StageAuthority {
  * StageAuthorityActionPermission is the only StageAuthority.Authority value.
  */
 export const StageAuthorityActionPermission = "action_permission";
+/**
+ * ModelView is the SQL definition of a view-backed model (Model.view).
+ */
+export interface ModelView {
+  /**
+   * SQL is a single SELECT statement (no trailing ";"). It is stored as the
+   * view body verbatim, so it must come from the manifest author, never from
+   * request data.
+   */
+  sql: string;
+}
+/**
+ * Contract is a versioned capability contract owned by a "contract" addon.
+ */
+export interface Contract {
+  /**
+   * Key is "<family>.<name>" in lower snake case, e.g. "acme.document". The
+   * FAMILY of a contract is its first segment (Family()): there is no
+   * separate field, so the two can never disagree. The owning addon is
+   * conventionally "<family>_core".
+   */
+  key: string;
+  /**
+   * Version is the contract's semver. A minor is additive only.
+   */
+  version: string;
+  /**
+   * Operations are the verbs a provider implements.
+   */
+  operations?: ContractOperation[];
+  /**
+   * Events the contract emits, each versioned.
+   */
+  events?: ContractEvent[];
+  /**
+   * States binds the canonical record's stage machine to the contract.
+   */
+  states?: ContractStates;
+  /**
+   * WritableModels are the owner's models a provider may write (R-B).
+   */
+  writable_models?: string[];
+  /**
+   * ProviderSettings are the per-provider settings the base renders.
+   */
+  provider_settings?: ContractSetting[];
+  /**
+   * Selection says how a provider is chosen at runtime.
+   */
+  selection?: ContractSelection;
+  /**
+   * Health names the operation polled to report a provider's status.
+   */
+  health?: ContractHealth;
+  /**
+   * Conformance is the path of the contract's conformance vectors.
+   */
+  conformance?: string;
+  /**
+   * Deprecated marks this contract version line as superseded.
+   */
+  deprecated?: Deprecation;
+}
+/**
+ * FailoverNever: the effect is irreversible or the outcome can be
+ * indeterminate; the call stays pending and is reconciled, never retried on
+ * another provider.
+ */
+export const FailoverNever = "never";
+/**
+ * FailoverAllowed: reads and idempotent calls without external effect.
+ */
+export const FailoverAllowed = "allowed";
+/**
+ * FailoverBeforeEffect: the host may retry on another provider only when
+ * the failed provider provably did not receive the request.
+ */
+export const FailoverBeforeEffect = "before_effect";
+/**
+ * ContractOperation is one verb of a contract.
+ */
+export interface ContractOperation {
+  key: string;
+  /**
+   * Kind is "action" (changes state) or "query" (read-only).
+   */
+  kind: string;
+  input?: string;
+  output?: string;
+  /**
+   * Idempotent promises that repeating the call with the same key is safe.
+   */
+  idempotent?: boolean;
+  /**
+   * TimeoutS is the per-call budget in seconds (0 = host default).
+   */
+  timeout_s?: number /* int */;
+  /**
+   * Failover is "never", "allowed" or "before_effect" (FailoverNever,
+   * FailoverAllowed, FailoverBeforeEffect): whether and when the host may
+   * retry the operation on another provider after a failure. Empty = never.
+   */
+  failover?: string;
+  /**
+   * Errors is the closed set of error codes the operation may return.
+   */
+  errors?: string[];
+  /**
+   * Required false makes the operation optional for a provider (default true).
+   */
+  required?: boolean;
+  /**
+   * Deprecated marks this operation as superseded.
+   */
+  deprecated?: Deprecation;
+}
+/**
+ * ContractEvent is a versioned event of a contract.
+ */
+export interface ContractEvent {
+  name: string;
+  version: number /* int */;
+  /**
+   * PayloadSchema is the path of the payload JSON schema. Optional on
+   * purpose: making it required later would break manifests, relaxing it
+   * never does; the conformance suite is what asks for it.
+   */
+  payload_schema?: string;
+}
+/**
+ * ContractStates binds a model's stage machine to a contract.
+ */
+export interface ContractStates {
+  model: string;
+  field: string;
+  /**
+   * Indeterminate is the stage an unknown outcome stays in.
+   */
+  indeterminate?: string;
+}
+/**
+ * ContractSetting is one provider setting declared by a contract.
+ */
+export interface ContractSetting {
+  key: string;
+  type: string;
+  options?: string[];
+  default?: any;
+  /**
+   * ConfirmTypedOn names the value that demands a typed confirmation.
+   */
+  confirm_typed_on?: string;
+}
+/**
+ * ContractSelection is the runtime provider-selection policy.
+ */
+export interface ContractSelection {
+  /**
+   * Cardinality is "one" (a single active provider) or "many".
+   */
+  cardinality?: string;
+  /**
+   * Scopes the binding may be set at: org|entity|branch|country|channel.
+   */
+  scopes?: string[];
+}
+/**
+ * ContractHealth is the periodic provider health probe.
+ */
+export interface ContractHealth {
+  operation: string;
+  /**
+   * Every is a duration such as "5m".
+   */
+  every?: string;
+}
+/**
+ * Implements declares that the addon implements a contract of another addon.
+ */
+export interface Implements {
+  /**
+   * Contract is the contract key.
+   */
+  contract: string;
+  /**
+   * Version is a semver range the implemented contract must satisfy.
+   */
+  version: string;
+  /**
+   * Scope lists the binding scopes (org|entity|branch|country|channel) at
+   * which this implementation can be selected; empty = any scope the
+   * contract's selection allows.
+   */
+  scope?: string[];
+  /**
+   * Countries scopes the implementation to ISO 3166-1 alpha-2 markets.
+   */
+  countries?: string[];
+  /**
+   * Operations lists the operations implemented (empty = all required).
+   */
+  operations?: string[];
+}
+/**
+ * ExtendsAddon names the addon an extension complements.
+ */
+export interface ExtendsAddon {
+  key: string;
+  version: string;
+}
 
 //////////
 // source: ui.go

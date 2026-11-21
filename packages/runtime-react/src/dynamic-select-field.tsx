@@ -25,6 +25,7 @@
 // never the raw id; an id that no longer exists reads "(registro eliminado)".
 import { useEffect, useRef, useState } from 'react'
 import { getOptionFilter } from './option-filter'
+import { getOptionFitment } from './fitment/option-fitment'
 import { useTranslation } from 'react-i18next'
 import { Badge, Button } from '@asteby/metacore-ui/primitives'
 import { Check, ScanLine } from 'lucide-react'
@@ -121,6 +122,11 @@ export interface DynamicSelectFieldProps {
      * edited so the product stock is the one of that warehouse.
      */
     optionsContext?: Record<string, string | null | undefined>
+    /**
+     * Id of the subject the column's `option_fitment` checks the options against
+     * (resolved by the caller from the form / row). Ignored without the declaration.
+     */
+    fitmentSubjectId?: string
 }
 
 /**
@@ -145,6 +151,7 @@ export function DynamicSelectField({
     createLockedFields,
     invalid = false,
     optionsContext,
+    fitmentSubjectId,
 }: DynamicSelectFieldProps) {
     const { t } = useTranslation()
     const ph = (fallback: string) =>
@@ -195,6 +202,8 @@ export function DynamicSelectField({
         optionFilter,
         keepValue: value,
         context: optionsContext,
+        fitment: getOptionFitment(field),
+        fitmentSubjectId,
         // Fetch only while open (a held value's label comes from the `?ids=`
         // lookup below, readonly included). Blocked cascades and static lists
         // never fetch.

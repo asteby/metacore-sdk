@@ -19,3 +19,15 @@ export {
     type FitmentResult,
     type UseFitmentOptions,
 } from './use-fitment'
+export {
+    applyOptionFitment,
+    getOptionFitment,
+    loadSubjectRow,
+    loadTargetRows,
+    modelOfRef,
+    resetOptionFitmentCache,
+    resolveFitmentSubjectId,
+    useOptionFitment,
+    type OptionFitmentSpec,
+    type UseOptionFitmentArgs,
+} from './option-fitment'

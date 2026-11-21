@@ -31,6 +31,7 @@ import {
 import { ScanLine } from 'lucide-react'
 import { BarcodeScanner } from './barcode-scanner'
 import { getOptionFilter } from './option-filter'
+import { getOptionFitment, resolveFitmentSubjectId } from './fitment/option-fitment'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { DynamicLineItems } from './dynamic-line-items'
 import { DynamicSelectField } from './dynamic-select-field'
@@ -496,7 +497,15 @@ function FieldRenderer({
     // dumping every row into a plain <select>.
     if (widget === 'dynamic_select') {
         const seedOption = seedOptionFromSibling(field, value, initialValues)
-        return <DynamicSelectField field={field} value={value} onChange={onChange} seedOption={seedOption} />
+        return (
+            <DynamicSelectField
+                field={field}
+                value={value}
+                onChange={onChange}
+                seedOption={seedOption}
+                fitmentSubjectId={resolveFitmentSubjectId(getOptionFitment(field), values)}
+            />
+        )
     }
     // Multi-value FK/jsonb-array field (field.multiple:true) — a record that
     // legitimately relates to several rows at once (e.g. a price list that
@@ -527,7 +536,7 @@ function FieldRenderer({
     // the path the kernel auto-derives for FK columns; legacy callers
     // shipping inline `options` keep working in the branch below.
     if (widget === 'select' && field.ref) {
-        return <RefSelect field={field} value={value} onChange={onChange} />
+        return <RefSelect field={field} value={value} onChange={onChange} values={values} />
     }
     switch (widget) {
         case 'textarea':
@@ -682,13 +691,15 @@ export function guardEmptySelect(
     }
 }
 
-function RefSelect({ field, value, onChange }: FieldRendererProps) {
+function RefSelect({ field, value, onChange, values }: FieldRendererProps) {
     const { options, loading } = useOptionsResolver({
         modelKey: '',          // unused — `ref` drives the URL
         fieldKey: 'id',
         ref: field.ref,
         optionFilter: getOptionFilter(field),
         keepValue: value,
+        fitment: getOptionFitment(field),
+        fitmentSubjectId: resolveFitmentSubjectId(getOptionFitment(field), values),
     })
     return (
         <Select

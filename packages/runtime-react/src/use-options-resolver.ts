@@ -16,6 +16,7 @@ import { cacheScope, onCacheScopeChange } from './cache-scope'
 import { applyOptionFilter, type OptionFilterRule } from './option-filter'
 import { loadQueryPart, optionsBatchToken, optionsModelFromUrl } from './query-batch'
 import type { OptionDisplayData } from './option-display'
+import { modelOfRef, useOptionFitment, type OptionFitmentSpec } from './fitment/option-fitment'
 
 export interface ResolvedOption {
     /** Canonical id (server-side primary key). */
@@ -41,6 +42,8 @@ export interface ResolvedOption {
      * Solo se llena cuando el option trae números o strings además de id/label.
      */
     meta?: Record<string, unknown>
+    /** Fit state set by `option_fitment` in `flag` mode (absent when unknown / not declared). */
+    fit?: 'fits' | 'no'
 }
 
 export interface OptionsMeta {
@@ -112,6 +115,14 @@ export interface UseOptionsResolverArgs {
      * edited → stock in that warehouse). Empty values are dropped.
      */
     context?: Record<string, string | null | undefined>
+    /**
+     * Column `option_fitment`: flags / hides the options that do not fit the
+     * subject chosen in another field (see `fitment/option-fitment`). Undefined
+     * → options untouched (retrocompat).
+     */
+    fitment?: OptionFitmentSpec | null
+    /** Id of the fitment subject (resolved by the caller from the row / header). */
+    fitmentSubjectId?: string
 }
 
 export interface UseOptionsResolverResult {
@@ -407,8 +418,16 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
         [options, filterKey, keepValue],
     )
 
-    return {
+    const fitOptions = useOptionFitment({
+        spec: args.fitment ?? null,
+        subjectId: args.fitmentSubjectId ?? '',
+        sourceModel: modelOfRef(ref),
         options: visibleOptions,
+        keepValue,
+    })
+
+    return {
+        options: fitOptions,
         meta,
         loading,
         error,
