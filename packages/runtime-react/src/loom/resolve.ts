@@ -114,6 +114,20 @@ function freeze<T>(v: T): T {
     return v
 }
 
+/**
+ * Modo efectivo de una propuesta: `auto` solo si el injerto/Part tiene revisión propia y ningún campo
+ * del parche es `secret`. Cualquier otro caso es `review` (diff revisable).
+ */
+export function effectiveApply(
+    requested: 'review' | 'auto' | undefined,
+    selfReview: boolean,
+    keys: readonly string[],
+    fieldClasses: Readonly<Record<string, DataClass>> | undefined,
+): 'review' | 'auto' {
+    if (requested !== 'auto' || !selfReview) return 'review'
+    return keys.some((k) => fieldClasses?.[k] === 'secret') ? 'review' : 'auto'
+}
+
 const SENSITIVE: ReadonlySet<DataClass> = new Set<DataClass>(['pii', 'pii.fiscal', 'secret'])
 
 /** Clases sensibles que un injerto lee: si hay alguna, sus errores salen redactados. */

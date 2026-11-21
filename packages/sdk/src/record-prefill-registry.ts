@@ -74,7 +74,20 @@ export function recordPrefillsVersion(): number {
   return snapshotVersion;
 }
 
+let deprecationWarned = false;
+
+/**
+ * @deprecated Usa Loom (RFC 0005): `registerPart` + `registerGraft({ seam: 'record.dialog.header', when: { model },
+ * reads, writes })` de `@asteby/metacore-runtime-react`; `applyValues` pasa a ser `caps.propose` (diff y deshacer).
+ * Sigue funcionando: dos versiones menores con este aviso y despues queda como adaptador permanente.
+ */
 export function registerRecordPrefill(c: RecordPrefillContribution, owner?: string): () => void {
+  if (!deprecationWarned && typeof console !== "undefined") {
+    deprecationWarned = true;
+    console.warn(
+      "[metacore] registerRecordPrefill esta en desuso: usa registerGraft en el seam 'record.dialog.header' (Loom, RFC 0005). Seguira funcionando como adaptador.",
+    );
+  }
   registry.set(c.id, { contribution: c, owner });
   notify();
   return () => {

@@ -1,6 +1,6 @@
 // Catálogo de seams del SDK (contratos versionados). Cada seam documenta sus
 // lentes (con clase de datos), lo que acepta como propuesta y sus intenciones.
-import type { SeamContract } from './types'
+import type { DataClass, SeamContract } from './types'
 
 /** Arriba del formulario de DynamicRecordDialog (alta/edición). */
 export const RECORD_DIALOG_HEADER = 'record.dialog.header'
@@ -31,9 +31,11 @@ export interface RecordDialogHeaderLenses {
 export function recordDialogHeaderContract(
     writable: ReadonlySet<string>,
     id: RecordFormSeam = RECORD_DIALOG_HEADER,
+    fieldClasses?: Readonly<Record<string, DataClass>>,
 ): SeamContract {
     return {
         id,
+        fieldClasses,
         version: '1.0.0',
         lenses: { model: 'public', mode: 'public', recordId: 'internal', values: 'pii', fields: 'public' },
         writable,
