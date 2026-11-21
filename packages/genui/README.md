@@ -129,8 +129,8 @@ Additive layer for declarative addon pages (see `examples/fleet-map.tsx`):
 state, an event bus and optional `url_state`. `defineBlock`/`registerPageBlock`
 define the custom block contract (`block@1`: props, reads, writes, events);
 federation/iframe loading is NOT implemented, an unregistered component renders
-a stub. These page-level keys are proposals and are not yet in the shared
-genui/v2 JSON Schema; core blocks still go through `parseGenUI`.
+a stub. The page-level keys (`areas`, `area`, `mobile`, `kpi_card`, `section` modes, `tabs`, `on_denied`, `tabs[].icon` by name) are already in the shared
+genui/v2 JSON Schema (and in the kernel copy); `genui.page-graph/v1` is a separate document (`page-graph.schema.json`).
 
 ### Table block UX (`table`)
 
