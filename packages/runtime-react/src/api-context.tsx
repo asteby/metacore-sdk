@@ -127,6 +127,11 @@ function mutating<T>(request: Promise<T>): Promise<T> {
     return request.finally(forgetRemembered)
 }
 
+/** Like {@link useApi} but returns `null` instead of throwing when no <ApiProvider> is mounted. */
+export function useOptionalApi(): ApiClient | null {
+    return useContext(ApiContext)
+}
+
 /** Returns the host-injected api client. Throws if no <ApiProvider> is mounted. */
 export function useApi(): ApiClient {
     const ctx = useContext(ApiContext)
