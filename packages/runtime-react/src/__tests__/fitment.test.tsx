@@ -92,7 +92,7 @@ describe('rules', () => {
         const r = [rule({ subject_attrs: { make: 'A' }, target_attrs: { section_width_mm: 205, rim_diameter_in: 16 } })]
         const product = { id: 'p1', name: 'x', 'TireSpec.section_width_mm': 205, 'TireSpec.rim_diameter_in': '16' }
         expect(fitFor(r, 'Vehicle', { make: 'A' }, 'TireSpec', product)).toBe('fits')
-        expect(fitFor(r, 'Vehicle', { make: 'A' }, 'TireSpec', { 'Other.section_width_mm': 205 })).toBe('no')
+        expect(fitFor(r, 'Vehicle', { make: 'A' }, 'TireSpec', { 'Other.section_width_mm': 205 })).toBe('unknown')
         const variant = { attributes: '{"section_width_mm":"205","rim_diameter_in":16}' }
         expect(fitFor(r, 'Vehicle', { make: 'A' }, 'TireSpec', variant)).toBe('fits')
     })
