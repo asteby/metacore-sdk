@@ -27,9 +27,11 @@ import type {
     LoomEvent,
     ProposalInput,
     Proposal,
+    RecordsFinder,
     ResolvedSeam,
     SeamContract,
 } from './types'
+import { makeRecordsCap } from './records'
 
 
 const lazyCache = new WeakMap<() => Promise<GraftModule>, LazyExoticComponent<ComponentType<any>>>()
@@ -68,6 +70,8 @@ export interface SeamProps {
     onProposal?: (p: Proposal) => void
     /** Atiende una intención; devuelve true si la manejó. */
     onIntent?: (intent: string, payload: unknown, graft: GraftDef) => boolean
+    /** Búsquedas mediadas (`caps.records.find`). Sin él, ningún injerto puede buscar. */
+    records?: RecordsFinder
     /** Mientras un injerto perezoso baja. */
     loading?: ReactNode
     className?: string
@@ -81,6 +85,7 @@ function GraftMount({
     lenses,
     onProposal,
     onIntent,
+    records,
     loading,
     report,
 }: {
@@ -89,6 +94,7 @@ function GraftMount({
     lenses: Readonly<Record<string, unknown>>
     onProposal?: (p: Proposal) => void
     onIntent?: SeamProps['onIntent']
+    records?: RecordsFinder
     loading: ReactNode
     report: (e: LoomEvent) => void
 }) {
@@ -135,7 +141,21 @@ function GraftMount({
         },
         [contract.intents, contract.fieldClasses, graft],
     )
-    const caps = useMemo<GraftCapabilities>(() => ({ propose, emit, can }), [propose, emit, can])
+    const recordsCap = useMemo(
+        () =>
+            makeRecordsCap({
+                allowed: graft.recordsFind ?? (graft.part ? getPart(graft.part)?.recordsFind : undefined),
+                finder: records,
+                can,
+                report: (e) => live.current.report(e),
+                meta: { seam: contract.id, graft: graft.id, addon },
+            }),
+        [graft, records, can, contract.id, addon],
+    )
+    const caps = useMemo<GraftCapabilities>(
+        () => (recordsCap ? { propose, emit, can, records: recordsCap } : { propose, emit, can }),
+        [propose, emit, can, recordsCap],
+    )
     const meta = useMemo(() => ({ id: graft.id, addon, seam: contract.id }), [graft.id, addon, contract.id])
 
     if (!C) return null
@@ -166,7 +186,7 @@ function GraftMount({
 
 const EMPTY: Record<string, unknown> = Object.freeze({}) as Record<string, unknown>
 
-export function Seam({ contract, lenses, host, onProposal, onIntent, loading = null, className }: SeamProps) {
+export function Seam({ contract, lenses, host, onProposal, onIntent, records, loading = null, className }: SeamProps) {
     const cfg = useLoomConfig()
     const resolved = useSeam(contract, host)
     const report = useCallback((e: LoomEvent) => cfg?.onEvent?.(e), [cfg])
@@ -181,6 +201,7 @@ export function Seam({ contract, lenses, host, onProposal, onIntent, loading = n
                     lenses={lenses}
                     onProposal={onProposal}
                     onIntent={onIntent}
+                    records={records}
                     loading={loading}
                     report={report}
                 />

@@ -59,7 +59,30 @@ export interface GraftCapabilities {
     emit: (intent: string, payload?: unknown) => boolean
     /** RBAC del usuario actual (mismo `useCan` del host). */
     can: (permission: string) => boolean
+    /**
+     * Búsqueda de solo lectura MEDIADA por el anfitrión (`needs.records.find`): la Part no tiene red;
+     * el host consulta con su cliente de datos y los permisos del usuario. Campo exacto, como mucho
+     * `RECORDS_FIND_MAX` resultados, sin listados. Ausente si la Part no la declaró o el host no la ofrece.
+     */
+    records?: { find: (q: RecordsFindQuery) => Promise<ReadonlyArray<Readonly<Record<string, unknown>>>> }
 }
+
+/** Una búsqueda por igualdad exacta de un campo. */
+export interface RecordsFindQuery {
+    /** Modelo declarado en `recordsFind` (`customers.Customer` o `Customer`). */
+    model: string
+    /** Campo del modelo (`tax_id`). */
+    field: string
+    /** Valor exacto (no admite comodines). */
+    value: string
+    /** 1..RECORDS_FIND_MAX (por omisión 3). */
+    limit?: number
+}
+
+/** Lo que implementa el anfitrión: recibe la consulta ya validada y acotada. */
+export type RecordsFinder = (q: Required<RecordsFindQuery>) => Promise<Record<string, unknown>[]>
+
+export const RECORDS_FIND_MAX = 5
 
 export interface GraftProps<P = Record<string, unknown>> {
     /** Sólo las lentes declaradas en `reads`, congeladas. */
@@ -88,6 +111,8 @@ export interface PartDef {
      * una propuesta `apply: 'auto'` se aplica directa (con «Deshacer»); sin esto, siempre diff.
      */
     selfReview?: boolean
+    /** Modelos que la Part puede buscar por el anfitrión (`ui.exposes[].needs.records.find`). */
+    recordsFind?: string[]
 }
 
 export interface GraftDef {
@@ -115,6 +140,8 @@ export interface GraftDef {
     load?: () => Promise<GraftModule>
     /** Igual que `PartDef.selfReview`, para un injerto con componente en línea. */
     selfReview?: boolean
+    /** Igual que `PartDef.recordsFind`, para un injerto con componente en línea. */
+    recordsFind?: string[]
 }
 
 export interface ProposalInput {
@@ -180,3 +207,15 @@ export interface LoomEnv {
 export type LoomEvent =
     | { type: 'graft_failed'; seam: string; graft: string; addon: string; reason: 'load' | 'render'; message: string }
     | { type: 'proposal_dropped_keys'; seam: string; graft: string; addon: string; keys: string[] }
+    /** Auditoría de `records.find`: modelo, campo y cuántos resultados; NUNCA el valor buscado (pii). */
+    | {
+          type: 'records_find'
+          seam: string
+          graft: string
+          addon: string
+          model: string
+          field: string
+          outcome: 'ok' | 'denied' | 'error'
+          count: number
+          reason?: string
+      }
