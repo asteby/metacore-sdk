@@ -1,5 +1,11 @@
 # @asteby/metacore-i18n
 
+## 32.5.0
+
+### Minor Changes
+
+- 14be603: genui: los textos fijos de v2, paginas y bloques de tablero salen del `t` del `GenUIProvider` (claves `genui.*`, respaldo en espanol; hook `useGenUILabel`). i18n: claves `genui.*` en es y en.
+
 ## 32.4.0
 
 ### Minor Changes
