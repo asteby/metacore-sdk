@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 53.29.1
+
+### Patch Changes
+
+- 6c1525f: Loom: `<ProposalReview>` deja aire con el formulario (la barra «Deshacer» ya no queda pegada a los campos de `DynamicRecordDialog`).
+
 ## 53.29.0
 
 ### Minor Changes
