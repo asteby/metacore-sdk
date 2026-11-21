@@ -12,6 +12,7 @@ import { TEXT_TONE } from '../generative-ui'
 import { usePageIcon } from '../icons'
 import { formatMetric } from '../metric'
 import { BlockState } from '../tiles/block-state'
+import { useGenUILabel } from '../labels'
 import type { Tone } from '../types'
 import type { Area, AreaRow, BlockGrid, BlockKpiCard, BlockSection, BlockTabs, ExtName, ExtProps, GridTrack, PermissionKey, TabIcon } from '../generated/genui-v2'
 import { PageProvider, evalPredicate, getPath, isSafePath, resolveRef, usePageContext, type PageContextValue, type PageProviderProps } from './context'
@@ -266,6 +267,7 @@ function Core({ block, data }: { block: PageBlockDef; data?: Record<string, unkn
   // Estado de su fuente: un bloque hoja con la fuente caida o cargando no se queda mudo ni en blanco.
   const name = typeof block.source === 'string' ? block.source.replace(/^data\./, '') : undefined
   const st = name !== undefined ? pc.sourceStatus[name] : undefined
+  const MSG = useMsg()
   const loaded = name !== undefined && !!g.sources && Object.hasOwn(g.sources, name) && g.sources[name] !== undefined
   if (st?.status === 'error') return <BlockState kind='error' marker='source-error' message={st.error || MSG.error} onRetry={st.retry} retryLabel={MSG.retry} />
   if (st?.status === 'loading' && !loaded && block.type !== 'metric') return <BlockState kind='loading' marker='source-loading' />
@@ -353,7 +355,6 @@ function PageGrid({ block, data, allowExt }: { block: PageGridDef; data?: Record
 // ---- stats / kpi_card ----
 
 const TREND_ICON = { up: ArrowUpRight, down: ArrowDownRight, flat: ArrowRight }
-const TREND_LABEL = { up: 'al alza', down: 'a la baja', flat: 'estable' }
 
 interface TileProps {
   label: string
@@ -366,6 +367,7 @@ interface TileProps {
 }
 
 function Tile({ label, value, tone = 'default', trend, hint, onClick, cta }: TileProps) {
+  const l = useGenUILabel()
   const Trend = trend ? TREND_ICON[trend] : null
   const body = (
     <>
@@ -374,7 +376,7 @@ function Tile({ label, value, tone = 'default', trend, hint, onClick, cta }: Til
       {Trend ? (
         <span className='inline-flex items-center gap-1 text-xs text-muted-foreground'>
           <Trend className='size-3' aria-hidden />
-          {TREND_LABEL[trend!]}
+          {l(`genui.trend.${trend!}`)}
         </span>
       ) : null}
       {hint ? <span className='text-xs text-muted-foreground'>{hint}</span> : null}
@@ -512,12 +514,17 @@ function sectionStatus(block: PageSectionDef, pc: PageContextValue, rows: unknow
   return rows && rows.length === 0 && block.empty ? 'empty' : 'ready'
 }
 
-const MSG = { denied: 'No tienes acceso a esta seccion.', failed: 'Esta seccion fallo al mostrarse.', error: 'No se pudo cargar.', retry: 'Reintentar', loading: 'Cargando' }
+/** Textos fijos de la pagina (i18n `genui.*`, respaldo en espanol). */
+function useMsg() {
+  const l = useGenUILabel()
+  return { denied: l('genui.denied'), failed: l('genui.section_failed'), error: l('genui.error'), retry: l('genui.retry'), loading: l('genui.loading') }
+}
 
 export function PageSection({ block, data }: { block: PageSectionDef; data?: Record<string, unknown> }) {
   const pc = usePageContext()
   const g = useGenUI()
   const text = useText()
+  const MSG = useMsg()
   const mode: PageSectionMode = block.mode ?? 'declarative'
   if (block.permission && !pc.can(block.permission)) {
     return block.on_denied === 'notice' ? (
@@ -569,6 +576,7 @@ function TabIconView({ name }: { name: unknown }) {
 }
 
 function TabBody({ opt, data }: { opt: PageTabOption; data?: Record<string, unknown> }) {
+  const MSG = useMsg()
   return (
     <SectionBoundary id={opt.key} framed={false} label={MSG.failed} retryLabel={MSG.retry}>
       {typeof opt.component === 'string' ? (
@@ -587,6 +595,7 @@ function TabBody({ opt, data }: { opt: PageTabOption; data?: Record<string, unkn
  * teclado (flechas, Home, End); en pantalla angosta pasa a select.
  */
 function PageTabs({ block, data }: { block: PageTabsDef; data?: Record<string, unknown> }) {
+  const l = useGenUILabel()
   const pc = usePageContext()
   const text = useText()
   const narrow = useNarrow()
@@ -618,7 +627,7 @@ function PageTabs({ block, data }: { block: PageTabsDef; data?: Record<string, u
   const mounted = (key: string) => key === active || (!!block.keep_alive && visited.includes(key))
 
   const bar = narrow && block.mobile !== 'scroll' ? (
-    <select aria-label={label ?? 'Vista'} data-genui-block='tabs-select' value={active} onChange={(e) => select(e.target.value)} className='h-9 rounded-md border bg-background px-2 text-sm'>
+    <select aria-label={label ?? l('genui.view')} data-genui-block='tabs-select' value={active} onChange={(e) => select(e.target.value)} className='h-9 rounded-md border bg-background px-2 text-sm'>
       {opts.map((o) => <option key={o.key} value={o.key}>{text(o.label)}</option>)}
     </select>
   ) : (
@@ -709,9 +718,10 @@ function CustomMount({ def, props, id }: { def: BlockDefinition<any>; props: Obj
 }
 
 function CustomStub({ name, fallback }: { name: string; fallback?: string }) {
+  const l = useGenUILabel()
   return (
     <p role='status' data-genui-block='custom-stub' data-component={name} className='m-0 rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
-      {fallback || `Bloque personalizado no disponible: ${name}`}
+      {fallback || l('genui.custom_unavailable', { name })}
     </p>
   )
 }
@@ -724,6 +734,7 @@ function CustomBody({ block }: { block: PageSectionDef }) {
 }
 
 function ExtBlock({ block }: { block: PageBlockDef }) {
+  const MSG = useMsg()
   const def = typeof block.ext === 'string' ? getPageBlock(block.ext) : undefined
   if (!def) return <CustomStub name={String(block.ext ?? '')} fallback={block.fallback} />
   return (

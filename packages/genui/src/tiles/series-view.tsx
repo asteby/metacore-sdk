@@ -1,6 +1,7 @@
 import { useId, useState, type ReactNode } from 'react'
 import { BarChart3, LineChart, Table2 } from 'lucide-react'
 import { cn } from '@asteby/metacore-ui'
+import { useGenUILabel } from '../labels'
 import { BlockState, type BlockStateKind } from './block-state'
 
 export interface SeriesColumn {
@@ -57,7 +58,8 @@ export interface SeriesViewProps {
  * con `aria-pressed`. Grafica y tabla comparten alto: cambiar de vista no mueve la pagina.
  */
 export function SeriesView({ title, columns, rows, chart, view, onViewChange, height = 260, toggle = 'group', toolbar, state, stateMessage, onRetry, retryLabel, labels, className }: SeriesViewProps) {
-  const l = { ...SERIES_VIEW_LABELS, ...labels }
+  const t = useGenUILabel()
+  const l = { chart: t('genui.series.chart'), table: t('genui.series.table'), period: t('genui.series.period'), view: t('genui.view'), showTable: t('genui.series.show_table'), showChart: t('genui.series.show_chart'), ...labels }
   const [local, setLocal] = useState<'chart' | 'table'>('chart')
   const current = view ?? local
   const uid = useId()
