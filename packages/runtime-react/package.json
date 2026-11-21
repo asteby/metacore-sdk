@@ -31,6 +31,10 @@
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js"
     },
+    "./loom": {
+      "types": "./dist/loom/index.d.ts",
+      "import": "./dist/loom/index.js"
+    },
     "./views/map": {
       "types": "./dist/views/map-view.d.ts",
       "import": "./dist/views/map-view.js"

@@ -1,4 +1,5 @@
-// Loom — sistema de contribuciones de UI (RFC 0005 del kernel).
+// Loom — sistema de contribuciones de UI (RFC 0005 del kernel). Subpath `@asteby/metacore-runtime-react/loom`:
+// implementación directa (sin envoltorios perezosos), para addons y pruebas.
 export * from './types'
 export {
     registerGraft,
@@ -10,10 +11,13 @@ export {
     subscribeLoom,
     loomVersion,
 } from './store'
-export { resolveSeam, effectiveApply, attenuatePatch, matchesWrite, projectLenses, sensitiveClasses, redactMessage } from './resolve'
+export { effectiveApply } from './apply'
+export { useProposalQueue, type ProposalQueue } from './queue'
+export { useHasGrafts } from './use-seam'
+export { resolveSeam, attenuatePatch, matchesWrite, projectLenses, sensitiveClasses, redactMessage } from './resolve'
 export { LoomProvider, useLoomConfig, type LoomProviderProps, type LoomConfig } from './provider'
 export { Seam, SeamInspector, useSeam, type SeamProps, type SeamHostContext } from './seam'
-export { useProposalQueue, ProposalReview, type ProposalQueue, type ProposalReviewProps } from './proposals'
+export { ProposalReview, type ProposalReviewProps } from './proposals'
 export {
     applyOverlays,
     mergeConfig,
