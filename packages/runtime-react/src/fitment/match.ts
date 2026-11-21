@@ -104,6 +104,48 @@ export function rulesForSubject(rules: readonly FitmentRule[], subjectModel: str
     return rules.filter((r) => active(r) && r.subject_model === subjectModel && matchesAttrs(r.subject_attrs, subject))
 }
 
+const MAX_RANGE_VALUES = 100
+
+function specValues(spec: unknown): string[] {
+    if (Array.isArray(spec)) return spec.filter((v) => !isBlank(v) && !isRecord(v)).map((v) => String(v).trim())
+    if (isRecord(spec)) {
+        const from = toNumber(spec.from)
+        const to = toNumber(spec.to)
+        if (from === null || to === null || to < from || to - from >= MAX_RANGE_VALUES) return []
+        const out: string[] = []
+        for (let n = Math.ceil(from); n <= Math.floor(to); n++) out.push(String(n))
+        return out
+    }
+    return isBlank(spec) ? [] : [String(spec).trim()]
+}
+
+/**
+ * Values the rules offer for one subject attribute, given what is already chosen: the options of a
+ * cascading selector (make → model → year). Only rules compatible with `chosen` count; a rule that
+ * does not constrain `attrKey` offers nothing (it applies to any value, so it cannot be enumerated).
+ * Ranges are expanded to whole numbers (at most 100); the result is deduplicated and sorted
+ * numerically when every value is a number, alphabetically otherwise.
+ */
+export function subjectOptions(
+    rules: readonly FitmentRule[],
+    subjectModel: string,
+    attrKey: string,
+    chosen: FitmentAttrs = {},
+): string[] {
+    const seen = new Map<string, string>()
+    for (const r of rules) {
+        if (!active(r) || r.subject_model !== subjectModel) continue
+        const spec = parseAttrs(r.subject_attrs)
+        const compatible = Object.keys(chosen).every((k) => !(k in spec) || isBlank(chosen[k]) || matchesSpec(spec[k], chosen[k]))
+        if (!compatible || !(attrKey in spec)) continue
+        for (const v of specValues(spec[attrKey])) if (!seen.has(norm(v))) seen.set(norm(v), v)
+    }
+    const list = [...seen.values()]
+    return list.every((v) => toNumber(v) !== null)
+        ? list.sort((a, b) => Number(a) - Number(b))
+        : list.sort((a, b) => a.localeCompare(b))
+}
+
 /**
  * Distinct target attribute bags the subject accepts (e.g. the tire sizes of a
  * vehicle), in rule order. `targetModel` narrows when a subject model has

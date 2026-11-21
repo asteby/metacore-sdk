@@ -7,6 +7,7 @@ import {
     matchesSpec,
     resetFitmentCache,
     rulesForSubject,
+    subjectOptions,
     targetsForSubject,
     toFitmentRule,
     useFitment,
@@ -100,6 +101,22 @@ describe('rules', () => {
         const r = [rule({ subject_attrs: { make: 'A' }, target_attrs: { section_width_mm: 205 } })]
         expect(fitFor(r, 'Vehicle', { make: 'A' }, 'TireSpec', { id: 'svc', name: 'Alineación' })).toBe('unknown')
         expect(fitFor(r, 'Vehicle', { make: 'A' }, 'TireSpec', { 'TireSpec.section_width_mm': null })).toBe('unknown')
+    })
+    it('subjectOptions: cascade over the rules, ranges expanded, dedup + sort, inactive/other models ignored', () => {
+        const r = [
+            rule({ subject_attrs: { make: 'Toyota', model: 'Hilux', year: { from: 2016, to: 2018 } } }),
+            rule({ subject_attrs: { make: 'toyota', model: 'Corolla', year: [2010, 2011] } }),
+            rule({ subject_attrs: { make: 'Nissan', model: 'Versa' } }),
+            rule({ subject_attrs: { make: 'Ghost' }, is_active: false }),
+            rule({ subject_model: 'Printer', subject_attrs: { make: 'HP' } }),
+            rule({ subject_attrs: {} }), // universal: offers nothing to enumerate
+        ]
+        expect(subjectOptions(r, 'Vehicle', 'make')).toEqual(['Nissan', 'Toyota'])
+        expect(subjectOptions(r, 'Vehicle', 'model', { make: 'TOYOTA' })).toEqual(['Corolla', 'Hilux'])
+        expect(subjectOptions(r, 'Vehicle', 'year', { make: 'Toyota', model: 'Hilux' })).toEqual(['2016', '2017', '2018'])
+        expect(subjectOptions(r, 'Vehicle', 'year', { make: 'Toyota' })).toEqual(['2010', '2011', '2016', '2017', '2018'])
+        expect(subjectOptions(r, 'Vehicle', 'year', { make: 'Nissan' })).toEqual([]) // no year constraint to enumerate
+        expect(subjectOptions([rule({ subject_attrs: { year: { from: 1, to: 500 } } })], 'Vehicle', 'year')).toEqual([]) // absurd range refused
     })
     it('toFitmentRule parses jsonb strings and defaults', () => {
         const r = toFitmentRule({ id: 1, subject_model: 'Vehicle', subject_attrs: '{"make":"x"}', target_model: 'T', target_attrs: 'garbage' })

@@ -4,6 +4,7 @@ export {
     matchesSpec,
     parseAttrs as parseFitmentAttrs,
     rulesForSubject,
+    subjectOptions,
     targetAttrsOf,
     targetsForSubject,
     toFitmentRule,
