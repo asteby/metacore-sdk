@@ -91,7 +91,7 @@ export function ProposalReview({ queue, labelOf, values }: ProposalReviewProps) 
     const label = (p: Proposal, k: string) => p.labels?.[k] ?? labelOf?.(k) ?? k
     if (!queue.pending.length && !queue.applied) return null
     return (
-        <div className="grid gap-2" data-loom-proposals="">
+        <div className="mb-4 grid gap-2" data-loom-proposals="">
             {queue.pending.map((p) => {
                 const keys = Object.keys(p.patch)
                 return (
