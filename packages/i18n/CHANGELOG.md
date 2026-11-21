@@ -1,5 +1,11 @@
 # @asteby/metacore-i18n
 
+## 32.4.0
+
+### Minor Changes
+
+- a779779: ui: `Tone`/`toneClasses`/`toTone`/`toneVar`, `ToneBadge`, `ToneDot`, `ToneAlert`, `Delta` (i18n `ui.delta.*` es/en) y `KpiCard` en `@asteby/metacore-ui/shared`, y `FloatingNumpad` (teclado numérico flotante sobre `VirtualKeyboard`) en `/touch`. charts: `Sparkline` admite `responsive` y `endDot` (punto final fuera del SVG, sin deformarse).
+
 ## 32.3.1
 
 ### Patch Changes
