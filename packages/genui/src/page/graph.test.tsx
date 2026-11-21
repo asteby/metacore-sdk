@@ -2,7 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { defineBlock, registerPageBlock } from './custom'
-import { PAGE_GRAPH_VERSION, graphIds, indexGraph, pageToGraph, parsePageGraph, resolveGraph, type GraphNode, type PageGraph } from './graph'
+import { PAGE_GRAPH_VERSION, fromBlockGraph, graphIds, indexGraph, pageToGraph, toBlockGraph, parsePageGraph, resolveGraph, type GraphNode, type PageGraph } from './graph'
 import { PageGraphView } from './graph-view'
 import example from '../../examples/dashboard.page-graph.json'
 
@@ -179,5 +179,46 @@ describe('PageGraphView', () => {
     expect(tabs.map((t) => t.textContent)).toEqual(['Ventas', 'Cliente 360'])
     fireEvent.click(tabs[1]!)
     expect(screen.getByText('Cliente 360 no disponible')).toBeTruthy()
+  })
+})
+
+describe('flat bridge (applyOverlays)', () => {
+  const g = example as unknown as PageGraph
+
+  it('round-trips the tree without loss', () => {
+    const { graph: flat, lost } = toBlockGraph(g, '1.0.0')
+    expect(lost).toEqual([])
+    expect(flat.blocks.map((b) => b.id)).toEqual(graphIds(g).filter((id) => id !== 'client360.base'))
+    expect(flat.blocks.find((b) => b.id === 'kpi.margin')).toMatchObject({ region: 'kpis', config: { area: 'b', label: 'Margen', visible: { permission: 'reports.margin.read' } } })
+    expect(flat.blocks.find((b) => b.id === 'client360')!.fallback).toMatchObject({ id: 'client360.base', type: 'section' })
+    const back = fromBlockGraph(flat, { state: g.state, data: g.data, title: g.title })
+    expect(back.orphans).toEqual([])
+    expect(back.graph).toEqual({ ...g, root: JSON.parse(JSON.stringify(g.root, (k, v) => (k === 'origin' ? undefined : v))) })
+    expect(parsePageGraph(back.graph).ok).toBe(true)
+  })
+
+  it('reports the children of a fallback_node it cannot carry', () => {
+    const r = toBlockGraph(graph([node('a', { fallback_node: node('b', { children: [node('c')] }) })]), '1')
+    expect(r.lost).toHaveLength(1)
+  })
+
+  it('rebuilds the tree after reordering and drops blocks whose container was removed', () => {
+    const { graph: flat } = toBlockGraph(g, '1.0.0')
+    const moved = { ...flat, blocks: [...flat.blocks.filter((b) => b.id !== 'kpi.sales'), flat.blocks.find((b) => b.id === 'kpi.sales')!] }
+    const r1 = fromBlockGraph(moved)
+    expect((r1.graph.root[0]!.children ?? []).map((c) => c.id)).toEqual(['kpi.margin', 'kpi.fleet', 'kpi.sales'])
+    const r2 = fromBlockGraph({ ...flat, blocks: flat.blocks.filter((b) => b.id !== 'kpis') })
+    expect(r2.orphans).toEqual(['kpi.sales', 'kpi.margin', 'kpi.fleet'])
+  })
+
+  it('keeps a replaced block where it was (replace does not copy the region) and fills origin', () => {
+    const { graph: flat } = toBlockGraph(g, '1.0.0')
+    const i = flat.blocks.findIndex((b) => b.id === 'kpi.margin')
+    const original = flat.blocks[i]!
+    const replaced = { id: 'kpi.margin', type: 'kpi_card', config: { label: 'Margen neto', value: 1 }, fallback: original }
+    const r = fromBlockGraph({ ...flat, blocks: flat.blocks.map((b, j) => (j === i ? replaced : b)) }, {}, { 'kpi.margin': { origin: 'preset.7leguas' } })
+    const n = indexGraph(r.graph).get('kpi.margin')!
+    expect(n.parentId).toBe('kpis')
+    expect(n.node).toMatchObject({ origin: 'preset.7leguas', props: { label: 'Margen neto' }, fallback_node: { id: 'kpi.margin', props: { label: 'Margen' } } })
   })
 })
