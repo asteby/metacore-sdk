@@ -113,6 +113,9 @@
     "password_min_length": "La contraseña debe tener al menos {{min}} caracteres",
     "name_min_length": "El nombre debe tener al menos {{min}} caracteres"
   },
+  "ui": {
+    "delta": { "up": "sube", "down": "baja", "flat": "sin cambio", "percent": "por ciento" }
+  },
   "datatable": {
     "search_placeholder": "Buscar...",
     "filter_by_date": "Filtrar por fecha",

@@ -27,3 +27,4 @@ export {
 } from './keyboard-layouts'
 export { useIdleReset, type UseIdleResetResult } from './use-idle-reset'
 export { useWakeLock, type UseWakeLockResult } from './use-wake-lock'
+export { FloatingNumpad, type FloatingNumpadProps } from './floating-numpad'

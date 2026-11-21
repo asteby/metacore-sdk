@@ -53,3 +53,19 @@ describe('Sparkline', () => {
         expect(render(<Sparkline data={[]} />).container.querySelector('path')).toBeNull()
     })
 })
+
+describe('Sparkline responsive / endDot', () => {
+    it('stretches to its parent and draws the end dot outside the SVG', () => {
+        const { container } = render(<Sparkline data={[1, 3, 2]} responsive endDot color="red" />)
+        const svg = container.querySelector('svg')!
+        expect(svg.getAttribute('width')).toBe('100%')
+        expect(svg.getAttribute('preserveAspectRatio')).toBe('none')
+        expect(svg.querySelector('circle')).toBeNull()
+        expect(container.querySelector('[data-sparkline-dot]')).not.toBeNull()
+    })
+    it('keeps the plain SVG when neither is requested', () => {
+        const { container } = render(<Sparkline data={[1, 3, 2]} />)
+        expect(container.querySelector('[data-sparkline-dot]')).toBeNull()
+        expect(container.firstElementChild?.tagName.toLowerCase()).toBe('svg')
+    })
+})
