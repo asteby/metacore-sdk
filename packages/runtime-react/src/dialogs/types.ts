@@ -115,6 +115,10 @@ export interface CreateRecordDialogProps extends RecordDialogProps {
     lockedFields?: string[]
     /** Fields merged into the modal schema after load (see DynamicRecordDialog.ensureFields). */
     ensureFields?: import('./dynamic-record').FieldDef[]
+    /** Intenciones del seam `record.dialog.header` (see DynamicRecordDialog.onIntent). */
+    onIntent?: (intent: string, payload: unknown) => boolean
+    /** Propuesta inicial mostrada como diff (see DynamicRecordDialog.initialProposal). */
+    initialProposal?: import('./dynamic-record').DynamicRecordDialogProps['initialProposal']
     /** Notification when a create or update succeeds. */
     onSaved?: () => void
 }

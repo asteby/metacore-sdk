@@ -344,6 +344,7 @@ export {
 } from './addon-layout-context'
 export * from './slot'
 export * from './slots'
+export * from './loom'
 export * from './capability-gate'
 export {
     PermissionsProvider,

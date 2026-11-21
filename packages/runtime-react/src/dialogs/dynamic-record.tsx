@@ -101,6 +101,9 @@ import { CollectionCell, type ItemField } from '../collection-cell'
 import type { ActionFieldDef, RelationMeta } from '../types'
 import { ImageUrlContext, identityImageUrl, type GetImageUrl } from '../image-url-context'
 import { getFieldWidget, useFieldWidgetRegistryVersion } from '../field-widget-registry'
+import { Seam } from '../loom/seam'
+import { ProposalReview, useProposalQueue } from '../loom/proposals'
+import { RECORD_FORM_SECTION, recordDialogHeaderContract } from '../loom/seams'
 import { TimeZoneContext, CurrencyContext, useNumberLocale, useSystemActor } from '../org-runtime-context'
 import { AuthorshipCell, hasSpecialAuthorship, readProvenance } from '../provenance'
 
@@ -452,6 +455,16 @@ export interface DynamicRecordDialogProps {
      * own list/detail query so the parent row's totals refresh underneath.
      */
     onChange?: () => void
+    /**
+     * Intenciones que piden los injertos del seam `record.dialog.header` (Loom, RFC 0005):
+     * `record.select` `{ record }` y `record.edit` `{ id, patch }`. Devuelve true si la atendió.
+     */
+    onIntent?: (intent: string, payload: unknown) => boolean
+    /**
+     * Propuesta inicial (p. ej. la que trae una intención `record.edit`): se muestra como diff
+     * revisable sobre el registro cargado. Sólo pasan campos editables del formulario.
+     */
+    initialProposal?: { patch: Record<string, unknown>; reason?: string; labels?: Record<string, string>; apply?: 'review' | 'auto' }
 }
 
 function resolvePath(obj: any, path: string): any {
@@ -826,6 +839,8 @@ export function DynamicRecordDialog({
     timeZone,
     currency,
     onChange,
+    onIntent,
+    initialProposal,
 }: DynamicRecordDialogProps) {
     const api = useApi()
     const branchGate = useBranchCreateGate()
@@ -907,6 +922,54 @@ export function DynamicRecordDialog({
         (patch: Record<string, any>) => setFormValues(prev => ({ ...prev, ...patch })),
         [],
     )
+    // Loom: seam `record.dialog.header`. Los injertos proponen; el diálogo muestra el diff y aplica.
+    const proposals = useProposalQueue(formValues, applyPrefill)
+    const headerContract = useMemo(() => recordDialogHeaderContract(prefillAllowedKeys), [prefillAllowedKeys])
+    const sectionContract = useMemo(
+        () => recordDialogHeaderContract(prefillAllowedKeys, RECORD_FORM_SECTION),
+        [prefillAllowedKeys],
+    )
+    const headerLenses = useMemo(
+        () => ({
+            model,
+            mode: isCreate ? 'create' : 'edit',
+            recordId: recordId ?? undefined,
+            values: formValues,
+            fields: (modalMeta?.fields ?? []).map((f: any) => ({
+                key: String(f.key),
+                label: f.label ? localizeFieldLabel(f.label, t) : String(f.key),
+                type: f.type,
+            })),
+        }),
+        [model, isCreate, recordId, formValues, modalMeta, t],
+    )
+    const fieldLabelOf = useCallback(
+        (key: string) => headerLenses.fields.find(f => f.key === key)?.label ?? key,
+        [headerLenses],
+    )
+    // La propuesta inicial entra una vez, cuando el formulario ya tiene sus campos.
+    const seededProposal = useRef(false)
+    useEffect(() => {
+        if (!open) {
+            seededProposal.current = false
+            return
+        }
+        if (seededProposal.current || !initialProposal || loading || !modalMeta) return
+        seededProposal.current = true
+        const patch: Record<string, unknown> = {}
+        for (const [k, v] of Object.entries(initialProposal.patch)) if (prefillAllowedKeys.has(k)) patch[k] = v
+        if (!Object.keys(patch).length) return
+        proposals.push({
+            ...initialProposal,
+            patch,
+            id: 'host#initial',
+            graft: 'host.initial',
+            addon: 'host',
+            previous: {},
+            dropped: [],
+        })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, initialProposal, loading, modalMeta, prefillAllowedKeys])
     const config = MODE_CONFIG[mode]
 
     // ── Fetch metadata + record when dialog opens ──────────────────────────
@@ -1449,6 +1512,16 @@ export function DynamicRecordDialog({
                                     onApply={applyPrefill}
                                 />
                             )}
+                            {isEditable && (
+                                <Seam
+                                    contract={headerContract}
+                                    lenses={headerLenses}
+                                    host={{ model, mode: isCreate ? 'create' : 'edit' }}
+                                    onProposal={proposals.push}
+                                    onIntent={onIntent ? (intent, payload) => onIntent(intent, payload) : undefined}
+                                />
+                            )}
+                            {isEditable && <ProposalReview queue={proposals} values={formValues} labelOf={fieldLabelOf} />}
                             <form
                                 id={formId}
                                 // Stable Aby / guidance contract: unique id={formId}
@@ -1510,6 +1583,16 @@ export function DynamicRecordDialog({
                                     </div>
                                 )}
                             </form>
+                            {isEditable && (
+                                <Seam
+                                    contract={sectionContract}
+                                    lenses={headerLenses}
+                                    host={{ model, mode: isCreate ? 'create' : 'edit' }}
+                                    onProposal={proposals.push}
+                                    onIntent={onIntent ? (intent, payload) => onIntent(intent, payload) : undefined}
+                                    className="mt-4 grid gap-3"
+                                />
+                            )}
 
 
                             {/* Líneas del documento: SOLO las relaciones de
