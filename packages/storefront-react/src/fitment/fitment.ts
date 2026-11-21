@@ -67,6 +67,13 @@ export type FitmentConfig = {
    * a tag or table row with any equivalent name counts. Default none.
    */
   makeAliases?: Readonly<Record<string, string>>
+  /**
+   * Make abbreviations that appear only in the free-text compatibility TABLE (`{ vw: 'volkswagen', chevy: 'chevrolet' }`).
+   * They are added to `makeAliases` when a table row is matched and nowhere else: they never become fit-tag variants
+   * (`fitKeyVariants`, `fitFilterTags`), so they cost no slot of the backend's `tags_any` and never make a part fit by
+   * themselves. Default none.
+   */
+  tableMakeAliases?: Readonly<Record<string, string>>
 }
 
 export const DEFAULT_FITMENT_CONFIG: FitmentConfig = {
@@ -240,8 +247,16 @@ function modelsOf(catalog: VehicleCatalog, draft: Pick<VehicleDraft, 'make' | 'y
     .flatMap((make) => make.models.filter((m) => modelCovers(m, year)).map((model) => ({ make, model })))
 }
 
-export function makeOptions(catalog: VehicleCatalog): Option[] {
-  return catalog.makes.filter((m) => m.models.length > 0).map((m) => ({ value: m.id, label: m.label }))
+export type MakeOptionsConfig = {
+  /** `catalog` (default): the catalog's order (priority). `label`: alphabetical by name, the usual order of a selector. */
+  sort?: 'catalog' | 'label'
+  /** Collation of `sort: 'label'` (e.g. `es`). Default: the runtime's. */
+  locale?: string
+}
+
+export function makeOptions(catalog: VehicleCatalog, config: MakeOptionsConfig = {}): Option[] {
+  const options = catalog.makes.filter((m) => m.models.length > 0).map((m) => ({ value: m.id, label: m.label }))
+  return config.sort === 'label' ? options.sort((a, b) => a.label.localeCompare(b.label, config.locale)) : options
 }
 
 export function yearOptions(catalog: VehicleCatalog, draft: Pick<VehicleDraft, 'make' | 'model'>): Option[] {
@@ -449,7 +464,7 @@ function engineFit(rowEngine: string, vehicle: Vehicle): 'match' | 'other' | 'un
 }
 
 function rowNamesMake(row: CompatRow, vehicle: Vehicle, config: FitmentConfig): boolean {
-  const aliases = lowerKeys(config.makeAliases)
+  const aliases = lowerKeys({ ...config.makeAliases, ...config.tableMakeAliases })
   const names = new Set([...makeVariants(vehicle.make.id, config).map((m) => m.toLowerCase()), slug(vehicle.make.label)])
   const make = slug(row.make)
   return names.has(make) || names.has(aliases[make] ?? '')

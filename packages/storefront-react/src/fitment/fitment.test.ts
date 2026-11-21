@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { resolveSubject, type SubjectKind } from '@asteby/storefront'
 import {
-  compatRows, DEFAULT_FITMENT_CONFIG, draftFromVehicle, engineOptions, fitFilterTags, fitState, fitStatus, fitmentConfig, makeOptions,
+  compatRows, DEFAULT_FITMENT_CONFIG, fitKeyVariants, rowIsVehicle, draftFromVehicle, engineOptions, fitFilterTags, fitState, fitStatus, fitmentConfig, makeOptions,
   modelOptions, parseCatalog, popularVehicles, reconcileDraft, resolveVehicle, rowCoversYear, safeRedirect, splitModelValue,
   vehicleCatalogToTree, vehicleFromDraft, vehicleKey, vehicleLongName, vehicleName, withFit, withoutQueryParam, yearOptions, EMPTY_DRAFT,
 } from './fitment.js'
@@ -204,5 +204,63 @@ describe('engines with stretches of years (a parts catalog with real gaps)', () 
     // Makes without models are left out; the labels survive.
     expect(vehicleCatalogToTree(catalog)).not.toHaveProperty('pending')
     expect(tree.nissan!.label).toBe('Nissan')
+  })
+})
+
+describe('makeOptions order', () => {
+  const unsorted = parseCatalog({
+    makes: [
+      { id: 'volkswagen', label: 'Volkswagen', models: [{ id: 'a', from: 2000, to: 2001, engines: ['1-6'] }] },
+      { id: 'audi', label: 'Audi', models: [{ id: 'b', from: 2000, to: 2001, engines: ['1-6'] }] },
+      { id: 'nissan', label: 'Ñissan', models: [{ id: 'c', from: 2000, to: 2001, engines: ['1-6'] }] },
+      { id: 'bmw', label: 'BMW', models: [{ id: 'd', from: 2000, to: 2001, engines: ['1-6'] }] },
+    ],
+  })
+  it("keeps the catalog's order by default (no behavior change)", () => {
+    expect(makeOptions(unsorted).map((o) => o.value)).toEqual(['volkswagen', 'audi', 'nissan', 'bmw'])
+    expect(makeOptions(unsorted, { sort: 'catalog' }).map((o) => o.value)).toEqual(['volkswagen', 'audi', 'nissan', 'bmw'])
+  })
+  it('sorts by name with the given collation', () => {
+    expect(makeOptions(unsorted, { sort: 'label', locale: 'es' }).map((o) => o.value)).toEqual(['audi', 'bmw', 'nissan', 'volkswagen'])
+  })
+  it('does not mutate the catalog', () => {
+    makeOptions(unsorted, { sort: 'label' })
+    expect(unsorted.makes.map((m) => m.id)).toEqual(['volkswagen', 'audi', 'nissan', 'bmw'])
+  })
+})
+
+describe('tableMakeAliases', () => {
+  const vw = resolveVehicle(
+    parseCatalog({ makes: [{ id: 'volkswagen', label: 'Volkswagen', models: [{ id: 'jetta', label: 'Jetta', from: 2010, to: 2014, engines: [{ id: '2-5', label: '2.5 L' }] }] }] }),
+    'volkswagen/jetta/2012/2-5',
+  )!
+  const rows = compatRows({ attributes: { compatibility: 'VW|Jetta|2010-2014|2.5|' } })
+
+  it('are read only from the table: an abbreviation names the make there', () => {
+    const config = fitmentConfig({ tableMakeAliases: { vw: 'volkswagen' } })
+    expect(rowIsVehicle(rows[0], vw, config)).toBe(true)
+    expect(fitStatus({ tags: [], attributes: { compatibility: 'VW|Jetta|2010-2014|2.5|' } }, vw, config)).toBe('fits')
+  })
+
+  it('without them the abbreviation is not the make (default unchanged)', () => {
+    expect(rowIsVehicle(rows[0], vw, DEFAULT_FITMENT_CONFIG)).toBe(false)
+  })
+
+  it('never become fit-tag variants: no tags_any slot, no fit by tag', () => {
+    const config = fitmentConfig({ makeAliases: { gm: 'chevrolet' }, tableMakeAliases: { vw: 'volkswagen', chevy: 'chevrolet' } })
+    expect(fitKeyVariants('volkswagen/jetta/2012/2-5', config)).toEqual(['volkswagen/jetta/2012/2-5'])
+    expect(fitKeyVariants('chevrolet/aveo/2010/1-6', config)).toEqual(['chevrolet/aveo/2010/1-6', 'gm/aveo/2010/1-6'])
+    expect(fitFilterTags({ key: 'volkswagen/jetta/2012/2-5' }, config)).toEqual(['fit:volkswagen/jetta/2012/2-5', 'fit:universal'])
+    expect(fitStatus({ tags: ['fit:vw/jetta/2012/2-5', 'fit:other'] }, vw, config)).toBe('no')
+  })
+
+  it('combine with makeAliases in the table (a tag alias also names the make there)', () => {
+    const chev = resolveVehicle(
+      parseCatalog({ makes: [{ id: 'chevrolet', label: 'Chevrolet', models: [{ id: 'aveo', label: 'Aveo', from: 2008, to: 2011, engines: [{ id: '1-6', label: '1.6 L' }] }] }] }),
+      'chevrolet/aveo/2010/1-6',
+    )!
+    const config = fitmentConfig({ makeAliases: { gm: 'chevrolet' }, tableMakeAliases: { chevy: 'chevrolet' } })
+    const t = compatRows({ attributes: { compatibility: 'GM|Aveo|2008-2011|1.6|;Chevy|Aveo|2008-2011|1.6|' } })
+    expect(t.map((r) => rowIsVehicle(r, chev, config))).toEqual([true, true])
   })
 })
