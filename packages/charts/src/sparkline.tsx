@@ -19,6 +19,10 @@ export interface SparklineProps {
     /** Accessible name. Without it the sparkline is decorative (`aria-hidden`). */
     label?: string
     className?: string
+    /** Fill the parent (width/height 100%, stretched viewBox) instead of a fixed pixel size. */
+    responsive?: boolean
+    /** Mark the latest value with a dot. Drawn as an HTML element (not SVG) so a stretched viewBox never turns it into an ellipse. */
+    endDot?: boolean
 }
 
 export interface SparklineGeometry {
@@ -67,17 +71,21 @@ export function Sparkline({
     area = false,
     label,
     className,
+    responsive = false,
+    endDot = false,
 }: SparklineProps) {
     const stroke = color ?? accentClasses(accent).chartVar
     const geo = sparklineGeometry(data, width, height)
     const a11y = label ? { role: 'img' as const, 'aria-label': label } : { 'aria-hidden': true as const }
-    return (
+    const last = geo.points[geo.points.length - 1]
+    const svg = (
         <svg
             xmlns="http://www.w3.org/2000/svg"
             viewBox={`0 0 ${width} ${height}`}
-            width={width}
-            height={height}
-            className={className}
+            width={responsive ? '100%' : width}
+            height={responsive ? '100%' : height}
+            preserveAspectRatio={responsive ? 'none' : undefined}
+            className={responsive ? undefined : className}
             data-sparkline=""
             {...a11y}
         >
@@ -90,9 +98,34 @@ export function Sparkline({
                     strokeWidth={strokeWidth}
                     strokeLinecap="round"
                     strokeLinejoin="round"
+                    vectorEffect={responsive ? 'non-scaling-stroke' : undefined}
                 />
             )}
             {geo.points.length === 1 && <circle cx={geo.points[0]![0]} cy={geo.points[0]![1]} r={strokeWidth + 0.5} fill={stroke} />}
         </svg>
+    )
+    if (!responsive && !endDot) return svg
+    return (
+        <span className={className} style={{ position: 'relative', display: 'block', width: responsive ? '100%' : width, height: responsive ? '100%' : height }}>
+            {svg}
+            {endDot && last ? (
+                <span
+                    aria-hidden
+                    data-sparkline-dot=""
+                    style={{
+                        position: 'absolute',
+                        left: `${(last[0] / width) * 100}%`,
+                        top: `${(last[1] / height) * 100}%`,
+                        width: 10,
+                        height: 10,
+                        transform: 'translate(-50%, -50%)',
+                        borderRadius: '9999px',
+                        background: stroke,
+                        border: '2px solid var(--viz-surface, var(--card, #fff))',
+                        boxSizing: 'border-box',
+                    }}
+                />
+            ) : null}
+        </span>
     )
 }
