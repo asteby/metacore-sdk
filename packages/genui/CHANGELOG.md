@@ -1,5 +1,11 @@
 # @asteby/metacore-genui
 
+## 2.12.0
+
+### Minor Changes
+
+- b37cc36: SeriesView: `toggle="single"` (un solo boton "Ver tabla" / "Ver grafica") y `toolbar` (contenido en la misma fila, p. ej. la leyenda).
+
 ## 2.11.0
 
 ### Minor Changes
