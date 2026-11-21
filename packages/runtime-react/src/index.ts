@@ -640,8 +640,8 @@ export type {
     CreateRecordDialogProps,
     ViewRecordDialogProps,
 } from './dialogs/types'
-export { ExportDialog } from './dialogs/export'
-export { ImportDialog } from './dialogs/import'
+// Envoltorios perezosos (lazy-heavy.tsx): fuera del chunk compartido de federación.
+export { ExportDialog, ImportDialog } from './lazy-heavy'
 export {
     DynamicCRUDPage,
     type DynamicCRUDPageProps,

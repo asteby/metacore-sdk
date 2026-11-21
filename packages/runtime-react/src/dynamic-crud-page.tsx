@@ -40,8 +40,7 @@ import {
     withoutDelegatedTypes,
     type DelegatedCreate,
 } from './document-form-dialog'
-import { ExportDialog } from './dialogs/export'
-import { ImportDialog } from './dialogs/import'
+import { ExportDialog, ImportDialog } from './lazy-heavy'
 import { useModelLabels } from './model-labels'
 import { getModelExtension } from './model-extension-registry'
 import { ModelActionToolbar } from './model-action-toolbar'
