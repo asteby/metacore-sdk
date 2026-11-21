@@ -12,6 +12,7 @@ export {
     loomVersion,
 } from './store'
 export { effectiveApply } from './apply'
+export { GraftDeviceContext, useDeviceAllowed, type LoomDevice } from './device'
 export { makeRecordsCap, RecordsFindError, type RecordsCapOptions } from './records'
 export { useProposalQueue, type ProposalQueue } from './queue'
 export { useHasGrafts } from './use-seam'

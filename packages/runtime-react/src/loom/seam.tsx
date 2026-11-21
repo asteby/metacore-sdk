@@ -32,6 +32,7 @@ import type {
     SeamContract,
 } from './types'
 import { makeRecordsCap } from './records'
+import { GraftDeviceContext } from './device'
 
 
 const lazyCache = new WeakMap<() => Promise<GraftModule>, LazyExoticComponent<ComponentType<any>>>()
@@ -157,6 +158,10 @@ function GraftMount({
         [propose, emit, can, recordsCap],
     )
     const meta = useMemo(() => ({ id: graft.id, addon, seam: contract.id }), [graft.id, addon, contract.id])
+    const devices = useMemo<readonly string[]>(
+        () => Object.freeze([...(graft.device ?? (graft.part ? getPart(graft.part)?.device : undefined) ?? [])]),
+        [graft],
+    )
 
     if (!C) return null
     return (
@@ -176,9 +181,11 @@ function GraftMount({
                 // Falla en silencio: el anfitrión sigue igual que sin el injerto.
                 fallback={() => null}
             >
-                <Suspense fallback={loading}>
-                    <C lenses={view} props={graft.props ?? EMPTY} caps={caps} graft={meta} />
-                </Suspense>
+                <GraftDeviceContext.Provider value={devices}>
+                    <Suspense fallback={loading}>
+                        <C lenses={view} props={graft.props ?? EMPTY} caps={caps} graft={meta} />
+                    </Suspense>
+                </GraftDeviceContext.Provider>
             </FederatedErrorBoundary>
         </div>
     )

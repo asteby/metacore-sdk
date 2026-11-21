@@ -113,6 +113,8 @@ export interface PartDef {
     selfReview?: boolean
     /** Modelos que la Part puede buscar por el anfitrión (`ui.exposes[].needs.records.find`). */
     recordsFind?: string[]
+    /** Dispositivos del navegador que puede usar (`needs.device`). Sin declarar: ninguno. */
+    device?: string[]
 }
 
 export interface GraftDef {
@@ -142,6 +144,8 @@ export interface GraftDef {
     selfReview?: boolean
     /** Igual que `PartDef.recordsFind`, para un injerto con componente en línea. */
     recordsFind?: string[]
+    /** Igual que `PartDef.device`. */
+    device?: string[]
 }
 
 export interface ProposalInput {

@@ -13,6 +13,7 @@ export {
     loomVersion,
 } from './store'
 export { effectiveApply } from './apply'
+export { GraftDeviceContext, useDeviceAllowed, type LoomDevice } from './device'
 export { useProposalQueue, type ProposalQueue } from './queue'
 export { LoomProvider, useLoomConfig, type LoomProviderProps, type LoomConfig } from './provider'
 export { useSeam, useHasGrafts, type SeamHostContext } from './use-seam'
