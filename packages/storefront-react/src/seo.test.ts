@@ -63,6 +63,10 @@ describe('localBusinessJsonLd hours and geo', () => {
 })
 
 describe('listingSeo', () => {
+  it('is part of the public API', async () => {
+    expect(typeof (await import('./index.js')).listingSeo).toBe('function')
+  })
+
   const base = 'https://t.test/collections/brakes'
   const seo = (qs: string, opts?: { cursorParam?: string }) => listingSeo(new URL(`${base}${qs}`), base, opts)
 
