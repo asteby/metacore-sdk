@@ -93,7 +93,13 @@ describe('rules', () => {
         const r = [rule({ subject_attrs: { make: 'A' }, target_attrs: { section_width_mm: 205, rim_diameter_in: 16 } })]
         const product = { id: 'p1', name: 'x', 'TireSpec.section_width_mm': 205, 'TireSpec.rim_diameter_in': '16' }
         expect(fitFor(r, 'Vehicle', { make: 'A' }, 'TireSpec', product)).toBe('fits')
-        expect(fitFor(r, 'Vehicle', { make: 'A' }, 'TireSpec', { 'Other.section_width_mm': 205 })).toBe('unknown')
+        // a rule may name the row's own model: attributes of ANY extension are compared
+        expect(fitFor(r, 'Vehicle', { make: 'A' }, 'Product', { 'TireSpec.section_width_mm': 205, 'TireSpec.rim_diameter_in': 16 })).toBe('unknown')
+        const rp = [rule({ subject_attrs: { make: 'A' }, target_model: 'Product', target_attrs: { section_width_mm: 205 } })]
+        expect(fitFor(rp, 'Vehicle', { make: 'A' }, 'Product', { 'TireSpec.section_width_mm': 205 })).toBe('fits')
+        expect(fitFor(rp, 'Vehicle', { make: 'A' }, 'Product', { 'TireSpec.section_width_mm': 215 })).toBe('no')
+        // explicit extension of the named model wins over another extension's column of the same name
+        expect(fitFor(rp, 'Vehicle', { make: 'A' }, 'Product', { 'Product.section_width_mm': 205, 'Other.section_width_mm': 1 })).toBe('fits')
         const variant = { attributes: '{"section_width_mm":"205","rim_diameter_in":16}' }
         expect(fitFor(r, 'Vehicle', { make: 'A' }, 'TireSpec', variant)).toBe('fits')
     })

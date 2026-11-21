@@ -370,6 +370,19 @@ export interface Manifest {
    */
   metadata_i18n?: { [key: string]: MetadataLocale};
   /**
+   * Role is v3 metadata.role (base + successors pattern); Deprecated is
+   * metadata.deprecated. Contracts / Implements / ExtendsAddon / Replaces are
+   * the root v3 blocks of the same names, carried verbatim so the legacy
+   * validator and hosts apply the same role rules (v3.CheckRoles). All
+   * optional: empty for an addon that declares none.
+   */
+  role?: string;
+  deprecated?: any /* v3.Deprecation */;
+  contracts?: any /* v3.Contract */[];
+  implements?: any /* v3.Implements */[];
+  extends_addon?: any /* v3.ExtendsAddon */;
+  replaces?: string[];
+  /**
    * Connectors / Schedules / Webhooks are the host projection of the v3
    * pipeline-runtime primitives (see manifest/v3.Connector/Schedule/
    * InboundWebhook). Connectors enumerate the per-org credential providers the
@@ -497,6 +510,11 @@ export interface DocumentDef {
    * v3.DocumentDef.Condition.
    */
   condition?: any /* v3.RecordFieldCondition */;
+  /**
+   * Kind is the document's semantic kind (documents.enrich doc_kind).
+   * Projected verbatim from v3.DocumentDef.Kind.
+   */
+  kind?: string;
 }
 /**
  * ConnectorDef is the host/runtime projection of a v3 Connector: a third-party
@@ -1352,6 +1370,12 @@ export interface FieldDef {
    */
   scan?: boolean;
   /**
+   * Searchable forces (true) or disables (false) the searchable combobox of a
+   * select field; nil lets the renderer decide by option count (see
+   * modelbase.FieldDef.Searchable). Forwarded through the host round-trip.
+   */
+  searchable?: boolean;
+  /**
    * OptionsSource forwards the v3 ActionField.options_source (a host-registered
    * dynamic options provider key, e.g. "connector_repos"). It rides the matching
    * modelbase.FieldDef json tag so the key survives the v3 → host conversion and
@@ -1399,6 +1423,10 @@ export interface FieldDef {
    * matches modelbase.FieldDef.OptionFilter. Empty = every option is listed.
    */
   option_filter?: any /* v3.OptionFilter */;
+  /**
+   * OptionFitment forwards the v3 ActionField.option_fitment (see Column).
+   */
+  option_fitment?: any /* v3.OptionFitment */;
   /**
    * DefaultFromRecord forwards the v3 ActionField.default_from_record (a
    * column name, or a list whose first non-empty value wins) so the SDK seeds
@@ -1472,6 +1500,9 @@ export interface HookDef {
  * 	Type = "wasm"    — invoke the exported function `Function` on the
  * 	                   addon's compiled wasm module. The function MUST
  * 	                   appear in Backend.Exports.
+ * 	Type = "compiled" — invoke the Go export `Function` of a compiled-in module
+ * 	                   (Host.LoadNative); same seam as "wasm", but no wasm
+ * 	                   backend and no Backend.Exports entry is required.
  * 	Type = "webhook" — POST the event payload to URL (HMAC-signed via
  * 	                   the host's webhook dispatcher).
  * 	Type = "prompt"  — reserved for a future LLM dispatcher; validates
@@ -1529,11 +1560,26 @@ export interface ModelDefinition {
    * (it is the target row's id) and, when the host resolves where the target
    * table lives, a FOREIGN KEY to it with ON DELETE CASCADE. Empty = an
    * ordinary model.
+   * Aliases carries v3 Model.aliases: extra slugs that resolve to this model
+   * (see the modelalias package). Empty = key and table only.
    */
+  aliases?: string[];
   extends?: string;
+  /**
+   * Scope carries v3 Model.scope (merchant | market | shared | group): the organizational boundary the model lives behind
+   * (RFC 0006). Empty = undeclared. The host's data scope reads it; the kernel only validated it.
+   */
+  scope?: string;
   org_scoped?: boolean;
   soft_delete?: boolean;
   columns: ColumnDef[];
+  /**
+   * DisplayColumns are the kernel-managed columns (id, created_at, updated_at)
+   * the manifest opted into showing in the list table (v3 Column.show_in_table). They
+   * are NOT part of Columns, so DDL, validation and forms never see them; only
+   * the derived table metadata (dynamic.DeriveTableColumns) appends them.
+   */
+  display_columns?: ColumnDef[];
   /**
    * Indices carries the v3 model's PARTIAL indices (those with a Where). Plain
    * single-column indices keep riding ColumnDef.Index/Unique; only entries with
@@ -1576,6 +1622,10 @@ export interface ModelDefinition {
    * StageField/Stages = no stage machine (the legacy, unrestricted behaviour).
    */
   stageField?: string;
+  /**
+   * StageCheck carries v3 Model.stage_check (see there).
+   */
+  stageCheck?: boolean;
   stages?: StageDef[];
   transitions?: TransitionDef[];
   onTransition?: TransitionHookDef[];
@@ -1624,6 +1674,17 @@ export interface ModelDefinition {
    * (dynamic.Service and the wasm data_mutate / data_batch imports).
    */
   append_only?: boolean;
+  /**
+   * View is the host/runtime projection of v3 Model.view: the SELECT backing a
+   * read-only, view-backed model. Empty = an ordinary table.
+   */
+  view?: string;
+  /**
+   * RowConditions is the host/runtime projection of v3 Model.row_conditions:
+   * per-row data gates on the generic UPDATE and DELETE, enforced by
+   * dynamic.Service through Config.RowConditionResolver.
+   */
+  row_conditions?: any /* v3.RowConditions */;
   /**
    * NoAudit is the host/runtime projection of v3 Model `audit: false`: the
    * model opts out of the kernel audit-column standard (who-columns and the
@@ -1826,6 +1887,10 @@ export interface TransitionDef {
   to: string;
   guard?: string;
   roles?: string[];
+  /**
+   * Permission is a capability that also authorizes the move (v3 Transition.permission).
+   */
+  permission?: string;
   requiresFields?: string[];
   approval?: ApprovalDef;
   reopen?: boolean;
@@ -1873,7 +1938,7 @@ export interface Formula {
    */
   tier?: number /* int */;
   /**
-   * Handler is the Tier-3 backend, "wasm:<export>". Set only when Tier is 3.
+   * Handler is the Tier-3 backend, "wasm:<export>" or "compiled:<fn>". Set only when Tier is 3.
    */
   handler?: string;
 }
@@ -2215,6 +2280,12 @@ export interface ColumnDef {
    */
   read_permission?: string;
   /**
+   * WritePermission carries the v3 Column.write_permission onto
+   * modelbase.ColumnDef.WritePermission: a caller without it cannot change the
+   * column through the dynamic create/update (403 column_write_denied).
+   */
+  write_permission?: string;
+  /**
    * RejectDeletedRef carries the v3 Column.reject_deleted_ref opt-in: a
    * create whose Ref points at a soft-deleted row is rejected. See
    * manifest/v3.Column.RejectDeletedRef.
@@ -2339,6 +2410,12 @@ export interface ColumnDef {
    * modelbase.ColumnDef/FieldDef.OptionFilter. Pure UI metadata.
    */
   option_filter?: any /* v3.OptionFilter */;
+  /**
+   * OptionFitment carries the v3 Column.option_fitment (flag / hide the
+   * options that do not fit a subject chosen in the same form) onto the
+   * served modelbase.ColumnDef/FieldDef.OptionFitment. Pure UI metadata.
+   */
+  option_fitment?: any /* v3.OptionFitment */;
 }
 /**
  * VisibleWhenDef is the legacy carrier for the v3 VisibleWhen block. It rides
@@ -2405,6 +2482,11 @@ export interface ConditionDef {
   field?: string;
   operator?: string;
   value?: any;
+  /**
+   * Conditions combines nested row predicates when Operator is all|any
+   * (see v3.RowCondition). Same vocabulary as the SDK ActionCondition.
+   */
+  conditions?: any /* v3.RowCondition */[];
 }
 /**
  * RouteDef is the host projection of a v3 contribution Route: one entry of a

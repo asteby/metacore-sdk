@@ -41,6 +41,7 @@ import { DynamicSelectField, DEFAULT_DEPENDS_HINT } from './dynamic-select-field
 import { SearchableSelectField } from './searchable-select-field'
 import { isSearchableSelect } from './searchable-select'
 import { getOptionFilter } from './option-filter'
+import { getOptionFitment, resolveFitmentSubjectId } from './fitment/option-fitment'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 
 export interface DynamicLineItemsProps {
@@ -458,6 +459,7 @@ function CellRenderer({ field, value, onChange, onPick, disabled, formValues, ro
                 onChange={onChange}
                 onPick={onPick}
                 dependsValue={dependsValue}
+                fitmentSubjectId={resolveFitmentSubjectId(getOptionFitment(field), formValues, rowValues)}
                 readonly={ro}
                 invalid={invalid}
             />
@@ -594,6 +596,7 @@ function RefCell({ field, value, onChange, onPick, disabled, formValues, rowValu
     // optionsConfig.source → query the source model (`/options/<source>` with
     // `field=<value>`); else fall back to the field's `ref`.
     const optSource = resolveOptionsSource(field)
+    const fitment = getOptionFitment(field)
 
     const { options, loading } = useOptionsResolver({
         modelKey: '',
@@ -604,6 +607,8 @@ function RefCell({ field, value, onChange, onPick, disabled, formValues, rowValu
         optionFilter: getOptionFilter(field),
         keepValue: value,
         enabled: !blockedByDependency,
+        fitment: fitment,
+        fitmentSubjectId: resolveFitmentSubjectId(fitment, formValues, rowValues),
     })
 
     // Clear the selection when the parent scope changes (skip initial mount).

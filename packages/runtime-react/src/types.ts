@@ -574,6 +574,11 @@ export interface ColumnDefinition {
     /** snake_case alias served by the kernel manifest for `optionFilter`. */
     option_filter?: OptionFilter
     /**
+     * `option_fitment` (manifest v3 Column): flag / hide the options that do not fit the subject
+     * chosen in another field. See `fitment/option-fitment.ts`.
+     */
+    option_fitment?: import('./fitment/option-fitment').OptionFitmentSpec
+    /**
      * Write-time rules the SDK also pre-flights. Object form `{regex,min,max,custom}`
      * or a Laravel / go-playground string (`required|min:2|email`).
      */
@@ -795,6 +800,11 @@ export interface ActionFieldDef {
     optionFilter?: OptionFilter
     /** snake_case alias served by the kernel manifest for `optionFilter`. */
     option_filter?: OptionFilter
+    /**
+     * `option_fitment` (manifest v3 Column): flag / hide the options that do not fit the subject
+     * chosen in another field. See `fitment/option-fitment.ts`.
+     */
+    option_fitment?: import('./fitment/option-fitment').OptionFitmentSpec
     /**
      * snake_case aliases the kernel manifest may serve for a belongs_to FK
      * target instead of `ref`. Treated as equivalent to `ref` by the SDK so a
