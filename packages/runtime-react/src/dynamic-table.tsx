@@ -92,8 +92,7 @@ import { visibleRelationInclude } from './list-include'
 import { useDebouncedValue } from './use-debounced-value'
 import { useCan, usePermissionsActive, useRoleGate, gateTableMetadata, modelCapability } from './permissions-context'
 import { useDynamicRowActions } from './dynamic-row-actions'
-import { ExportDialog } from './dialogs/export'
-import { ImportDialog } from './dialogs/import'
+import { ExportDialog, ImportDialog } from './lazy-heavy'
 import {
     buildListScopeValues,
     evaluateVisibleWhenForListScope,
