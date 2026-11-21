@@ -10,6 +10,7 @@ import {
   indexNowKeyResponse,
   isFilteredListingUrl,
   ga4AddToCart,
+  ga4DataLayerPushes,
   ga4BeginCheckout,
   ga4Bootstrap,
   ga4Item,
@@ -180,5 +181,14 @@ describe('operational switches', () => {
     expect(indexNowKeyResponse({ method: 'GET', url: 'https://x.test/other.txt' }, key)).toBeNull()
     expect(indexNowKeyResponse({ method: 'GET', url: 'https://x.test/short.txt' }, 'short')).toBeNull()
     expect(indexNowKeyResponse({ method: 'GET', url: `https://x.test/${key}.txt` }, undefined)).toBeNull()
+  })
+})
+
+describe("ga4DataLayerPushes", () => {
+  it("clears the previous ecommerce object, then pushes the event with its params as ecommerce", () => {
+    const e = ga4AddToCart({ item_id: "A1", item_name: "Pad", quantity: 2 }, "MXN", "mx")
+    const [clear, push] = ga4DataLayerPushes(e)
+    expect(clear).toEqual({ ecommerce: null })
+    expect(push).toEqual({ event: "add_to_cart", ecommerce: e.params })
   })
 })

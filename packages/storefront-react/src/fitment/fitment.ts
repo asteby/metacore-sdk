@@ -189,11 +189,11 @@ export function fitTag(key: string, config: FitmentConfig = DEFAULT_FITMENT_CONF
   return `${config.tagPrefix}${key}`
 }
 
-const engineCovers = (e: VehicleEngine, model: VehicleModel, year: number) =>
+export const engineCovers = (e: VehicleEngine, model: VehicleModel, year: number) =>
   e.ranges ? e.ranges.some(([a, b]) => year >= a && year <= b) : year >= (e.from ?? model.from) && year <= (e.to ?? model.to)
 
 // A model covers a year only when one of its engines does: no phantom years inside `from`–`to` that no engine has parts for.
-const modelCovers = (m: VehicleModel, year: number | null) => year == null || m.engines.some((e) => engineCovers(e, m, year))
+export const modelCovers = (m: VehicleModel, year: number | null) => year == null || m.engines.some((e) => engineCovers(e, m, year))
 
 function num(v: string): number | null {
   const n = Number(v)

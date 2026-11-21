@@ -297,6 +297,16 @@ export function ga4Item(product: Pick<Product, 'id' | 'title' | 'vendor' | 'cate
   return item
 }
 
+/**
+ * The same event as Tag Manager `dataLayer` pushes (the format GA4 tags read in GTM): first `{ ecommerce: null }` to clear
+ * the previous ecommerce object, then `{ event, ecommerce: params }`. Push them in order with `window.dataLayer.push(...)`.
+ * A store that loads GTM sends events this way (the GA4 tag lives in the container) instead of `gtag`, so a visit is
+ * never counted twice.
+ */
+export function ga4DataLayerPushes(e: Ga4Event): [{ ecommerce: null }, { event: Ga4Event['event']; ecommerce: Record<string, unknown> }] {
+  return [{ ecommerce: null }, { event: e.event, ecommerce: e.params }]
+}
+
 function ecommerce(event: Ga4Event['event'], items: readonly Ga4Item[], currency: string, market: string, extra: Record<string, unknown> = {}): Ga4Event {
   const value = items.reduce((sum, i) => sum + (i.price ?? 0) * (i.quantity ?? 1), 0)
   return { event, params: { currency, value: Math.round(value * 100) / 100, items: [...items], market, ...extra } }

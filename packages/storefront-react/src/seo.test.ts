@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { OpeningHours, Shop, ShopBranch } from '@asteby/storefront'
-import { localBusinessJsonLd, openingHoursJsonLd } from './seo.js'
+import { listingSeo, localBusinessJsonLd, openingHoursJsonLd } from './seo.js'
 
 const branch = (over: Partial<ShopBranch> = {}): ShopBranch => ({
   id: 'b1', name: 'Centro', address: 'Av. 1', city: 'CDMX', phone: null, lat: 19.4326, lng: -99.1332, hours: null, ...over,
@@ -60,4 +60,23 @@ describe('localBusinessJsonLd hours and geo', () => {
       expect('geo' in first(branch({ lat, lng }))).toBe(false)
     }
   })
+})
+
+describe('listingSeo', () => {
+  it('is part of the public API', async () => {
+    expect(typeof (await import('./index.js')).listingSeo).toBe('function')
+  })
+
+  const base = 'https://t.test/collections/brakes'
+  const seo = (qs: string, opts?: { cursorParam?: string }) => listingSeo(new URL(`${base}${qs}`), base, opts)
+
+  it('no query: indexable, base canonical', () => expect(seo('')).toEqual({ filtered: false, canonical: base }))
+  it('only the cursor: indexable with its own canonical (crawlable paging)', () => expect(seo('?after=abc')).toEqual({ filtered: false, canonical: `${base}?after=abc` }))
+  it('cursor + any filter: noindex, base canonical', () => expect(seo('?after=abc&f.brand=A')).toEqual({ filtered: true, canonical: base }))
+  it('a filter without cursor is filtered', () => expect(seo('?sort=price')).toEqual({ filtered: true, canonical: base }))
+  it('custom cursor param (a store with localized URLs)', () => {
+    expect(seo('?tras=abc', { cursorParam: 'tras' })).toEqual({ filtered: false, canonical: `${base}?tras=abc` })
+    expect(seo('?tras=abc')).toEqual({ filtered: true, canonical: base })
+  })
+  it('escapes the cursor in the canonical', () => expect(seo('?after=a%2Fb%3D').canonical).toBe(`${base}?after=a%2Fb%3D`))
 })

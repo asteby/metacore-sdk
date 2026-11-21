@@ -497,4 +497,28 @@ export function verificationTokens(raw: string | null | undefined): string[] {
     .filter((t) => /^[A-Za-z0-9_-]{8,128}$/.test(t))
 }
 
+/**
+ * Google Tag Manager container ids from configuration (comma or space separated), only well-formed ones
+ * (`GTM-XXXXXXX`): never a value that could break out of the inline script or the noscript iframe URL.
+ */
+export function gtmIds(raw: string | null | undefined): string[] {
+  return [...new Set(String(raw ?? '').split(/[\s,]+/).map((t) => t.trim()).filter((t) => /^GTM-[A-Z0-9]{4,10}$/.test(t)))]
+}
+
+/**
+ * The official Tag Manager loader for one container (pushes `gtm.start` and loads `gtm.js`): a bare
+ * `<script async src=".../gtm.js?id=…">` never starts the container. `id` must come from `gtmIds`; anything else throws.
+ * The matching `<noscript>` iframe is `gtmNoscriptSrc(id)`.
+ */
+export function gtmScript(id: string): string {
+  if (!/^GTM-[A-Z0-9]{4,10}$/.test(id)) throw new Error('gtmScript: invalid container id')
+  return `(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s);j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','${id}');`
+}
+
+/** `src` of the `<noscript><iframe>` that goes right after `<body>` (for visitors without JavaScript). */
+export function gtmNoscriptSrc(id: string): string {
+  if (!/^GTM-[A-Z0-9]{4,10}$/.test(id)) throw new Error('gtmNoscriptSrc: invalid container id')
+  return `https://www.googletagmanager.com/ns.html?id=${id}`
+}
+
 export * from './seo-kit.js'
