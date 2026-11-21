@@ -51,6 +51,7 @@ import { es } from 'date-fns/locale'
 import { ExternalLink, Loader2, CalendarIcon, Upload, X as XIcon, ScanLine } from 'lucide-react'
 import { BarcodeScanner } from '../barcode-scanner'
 import { useApi } from '../api-context'
+import { modelCapability, useCan } from '../permissions-context'
 import { useBranchCreateGate } from '../branch-create-gate'
 import { toastServerError, extractFieldErrors, localizeFieldIssue, localizeFieldErrorMap } from '../server-error'
 import { DynamicSelectField, OptionLead, OptionThumb } from '../dynamic-select-field'
@@ -819,7 +820,68 @@ function applyEnsureFields(meta: ModalMetadata | null | undefined, ensureFields?
     return { ...meta, fields }
 }
 
-export function DynamicRecordDialog({
+/**
+ * Intenciones de Loom con manejo por defecto: si quien abrió el diálogo no atiende
+ * `record.select` / `record.edit` (devuelve false o no pasa `onIntent`), el propio diálogo pasa al
+ * registro existente: `record.select` abre su edición (o su ficha si el usuario no puede editar) y
+ * `record.edit` abre su edición con el parche como propuesta revisable. El diálogo se remonta, así
+ * que no arrastra estado (valores ni propuestas) del alta.
+ */
+export function DynamicRecordDialog(props: DynamicRecordDialogProps) {
+    const can = useCan()
+    const [target, setTarget] = useState<{
+        seq: number
+        recordId: string
+        mode: 'edit' | 'view'
+        proposal?: DynamicRecordDialogProps['initialProposal']
+    } | null>(null)
+    // Al cerrar se vuelve al diálogo original.
+    useEffect(() => {
+        if (!props.open) setTarget(null)
+    }, [props.open])
+    const hostIntent = props.onIntent
+    const model = props.model
+    const onIntent = useCallback(
+        (intent: string, payload: unknown): boolean => {
+            if (hostIntent?.(intent, payload)) return true
+            const p = (payload ?? {}) as {
+                record?: { id?: unknown }
+                id?: unknown
+                patch?: Record<string, unknown>
+                reason?: string
+                apply?: 'review' | 'auto'
+            }
+            if (intent === 'record.select' && p.record?.id != null) {
+                const mode = can(modelCapability(model, 'update')) ? 'edit' : 'view'
+                setTarget((t) => ({ seq: (t?.seq ?? 0) + 1, recordId: String(p.record!.id), mode }))
+                return true
+            }
+            if (intent === 'record.edit' && p.id != null) {
+                const proposal = p.patch ? { patch: p.patch, reason: p.reason, apply: p.apply } : undefined
+                setTarget((t) => ({ seq: (t?.seq ?? 0) + 1, recordId: String(p.id), mode: 'edit', proposal }))
+                return true
+            }
+            return false
+        },
+        [hostIntent, can, model],
+    )
+    if (!target) return <DynamicRecordDialogImpl {...props} onIntent={onIntent} />
+    return (
+        <DynamicRecordDialogImpl
+            key={`target-${target.seq}`}
+            {...props}
+            mode={target.mode}
+            recordId={target.recordId}
+            initialRecord={undefined}
+            defaults={undefined}
+            lockedFields={undefined}
+            initialProposal={target.proposal}
+            onIntent={onIntent}
+        />
+    )
+}
+
+function DynamicRecordDialogImpl({
     open,
     onOpenChange,
     nestedInlineCreateSelf,

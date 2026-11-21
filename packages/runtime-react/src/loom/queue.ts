@@ -1,6 +1,6 @@
 // Cola de propuestas (sin UI): estado, aplicar, descartar, deshacer. La vista del diff
 // (`ProposalReview`) se carga perezosa.
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Proposal } from './types'
 
 export interface ProposalQueue {
@@ -26,6 +26,23 @@ export function useProposalQueue(
     const [applied, setApplied] = useState<Proposal | null>(null)
     const valuesRef = useRef(values)
     valuesRef.current = values
+
+    // La barra «Se aplicaron N campos» solo tiene sentido mientras esos valores siguen en el
+    // formulario: si el anfitrión los reemplazó (recarga del registro, cambio de modo, reinicio),
+    // se retira para no mostrar un «deshacer» de algo que ya no está.
+    // Solo después de haberlos visto en el formulario (el anfitrión puede aplicarlos un render después).
+    const seenApplied = useRef<Proposal | null>(null)
+    useEffect(() => {
+        if (!applied) {
+            seenApplied.current = null
+            return
+        }
+        const same = (a: unknown, b: unknown) => a === b || JSON.stringify(a) === JSON.stringify(b)
+        const keys = Object.keys(applied.patch)
+        const present = keys.some((k) => same(values[k], applied.patch[k]))
+        if (present) seenApplied.current = applied
+        else if (seenApplied.current === applied) setApplied(null)
+    }, [values, applied])
 
     const commit = useCallback(
         (p: Proposal) => {
