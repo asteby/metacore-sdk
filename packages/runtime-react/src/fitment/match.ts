@@ -30,7 +30,7 @@ export type FitmentAttrs = Record<string, unknown>
 export type FitState =
     /** At least one applicable rule accepts the target. */
     | 'fits'
-    /** Rules exist for the subject and target model, none accepts the target. */
+    /** Rules exist for the subject and target model, none accepts the target (the target does carry the compared attributes). */
     | 'no'
     /** No rule says anything about this subject: do not claim either way. */
     | 'unknown'
@@ -156,6 +156,10 @@ export function fitFor(
     const applicable = rulesForSubject(rules, subjectModel, subject).filter((r) => r.target_model === targetModel)
     if (applicable.length === 0) return 'unknown'
     const bag = targetAttrsOf(target, targetModel)
+    // A target that carries none of the attributes the rules constrain (a service, a product of
+    // another kind) is not "wrong", it is not comparable: say nothing.
+    const constrained = new Set(applicable.flatMap((r) => Object.keys(parseAttrs(r.target_attrs))))
+    if (![...constrained].some((k) => !isBlank(bag[k]))) return 'unknown'
     return applicable.some((r) => matchesAttrs(r.target_attrs, bag)) ? 'fits' : 'no'
 }
 

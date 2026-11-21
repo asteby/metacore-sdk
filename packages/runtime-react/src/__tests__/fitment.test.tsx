@@ -96,6 +96,11 @@ describe('rules', () => {
         const variant = { attributes: '{"section_width_mm":"205","rim_diameter_in":16}' }
         expect(fitFor(r, 'Vehicle', { make: 'A' }, 'TireSpec', variant)).toBe('fits')
     })
+    it('a target with none of the constrained attributes is unknown, not "no"', () => {
+        const r = [rule({ subject_attrs: { make: 'A' }, target_attrs: { section_width_mm: 205 } })]
+        expect(fitFor(r, 'Vehicle', { make: 'A' }, 'TireSpec', { id: 'svc', name: 'Alineación' })).toBe('unknown')
+        expect(fitFor(r, 'Vehicle', { make: 'A' }, 'TireSpec', { 'TireSpec.section_width_mm': null })).toBe('unknown')
+    })
     it('toFitmentRule parses jsonb strings and defaults', () => {
         const r = toFitmentRule({ id: 1, subject_model: 'Vehicle', subject_attrs: '{"make":"x"}', target_model: 'T', target_attrs: 'garbage' })
         expect(r).toMatchObject({ id: '1', subject_attrs: { make: 'x' }, target_attrs: {}, is_active: true })
