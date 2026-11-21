@@ -1,0 +1,81 @@
+{
+  "version": "genui.page-graph/v1",
+  "id": "dashboard",
+  "title": "Tablero",
+  "state": { "range": "30d" },
+  "data": {
+    "sales": { "widget": "sales.dashboard.total" }
+  },
+  "root": [
+    {
+      "id": "kpis",
+      "type": "grid",
+      "props": { "areas": ["a b c"], "columns": ["1fr", "1fr", "1fr"], "mobile": ["a", "b", "c"] },
+      "children": [
+        {
+          "id": "kpi.sales",
+          "type": "kpi_card",
+          "area": "a",
+          "props": { "label": "Ventas", "value": { "$ref": "data.sales.value" }, "format": "currency", "trend": "up", "tone": "success" },
+          "origin": "base"
+        },
+        {
+          "id": "kpi.margin",
+          "type": "kpi_card",
+          "area": "b",
+          "props": { "label": "Margen", "value": 0.31, "format": "percent" },
+          "visible": { "permission": "reports.margin.read" },
+          "origin": "base"
+        },
+        {
+          "id": "kpi.fleet",
+          "type": "kpi_card",
+          "area": "c",
+          "props": { "label": "Vehiculos en taller", "value": 12 },
+          "visible": { "setting": { "key": "workshop.enabled", "equals": true } },
+          "origin": "preset:7leguas"
+        }
+      ]
+    },
+    {
+      "id": "detail",
+      "type": "tabs",
+      "props": { "label": "Detalle", "variant": "segmented" },
+      "children": [
+        {
+          "id": "detail.sales",
+          "type": "tab",
+          "props": { "key": "sales", "label": "Ventas" },
+          "children": [
+            {
+              "id": "sales.section",
+              "type": "section",
+              "props": { "mode": "declarative", "title": "Ventas por dia", "source": "data.sales", "empty": "Sin ventas en el rango" },
+              "children": [{ "id": "sales.stats", "type": "stats", "props": { "items": [{ "label": "Total", "value": { "$ref": "data.sales.value" }, "format": "currency" }] } }]
+            }
+          ]
+        },
+        {
+          "id": "detail.custom",
+          "type": "tab",
+          "props": { "key": "custom", "label": "Cliente 360" },
+          "children": [
+            {
+              "id": "client360",
+              "type": "section",
+              "props": { "mode": "custom", "chrome": "bare", "component": "crm.client360@1", "props": { "compact": true } },
+              "fallback": "Cliente 360 no disponible",
+              "fallback_node": {
+                "id": "client360.base",
+                "type": "section",
+                "props": { "mode": "declarative", "title": "Clientes" },
+                "origin": "base"
+              },
+              "origin": "addon:crm@1.0.0"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

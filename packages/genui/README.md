@@ -165,3 +165,43 @@ See `examples/fleet-switcher-icons.tsx`. Kernel follow-up: the shared schema
 still restricts `tabs[].icon` to the closed enum; it must also accept the
 pattern `^[A-Za-z][A-Za-z0-9]{0,63}$` for host icon names to pass `parseGenUI`.
 The SDK already works with both.
+
+## Page as data (`genui.page-graph/v1`)
+
+A page is a tree of **nodes with a stable `id`**, so a patch (overlay) can address a block by id instead of by
+position. Example: `examples/dashboard.page-graph.json`; shape: `page-graph.schema.json` (export of this package).
+
+```ts
+import { PageGraphView, parsePageGraph, resolveGraph, indexGraph, pageToGraph } from '@asteby/metacore-genui'
+
+<GenUIProvider sources={sources} t={t}>
+  <PageGraphView graph={graph} can={can} settings={orgSettings} onNodeError={report} onResolved={({ hidden }) => explain(hidden)} />
+</GenUIProvider>
+```
+
+- **Node**: `{ id, type, props?, children?, area?, visible?, fallback?, fallback_node?, origin? }`. `props` is the block's own
+  fields (never `type`, `id`, `blocks`, `tabs`, `when`, `area`, `fallback`: the node owns them). `children` become `blocks`;
+  in `tabs` the children are `tab` nodes (`props.key`, `props.label`), each with its own blocks.
+- **Visibility** (all declared conditions must hold): `permission` (viewer `can`) and `setting` (org/preset setting,
+  `{ key, equals | in | not_in | empty }`) prune the node at compile time and are reported in `hidden`
+  (`{ id, reason, detail }`, the input of an "Explain: why do I not see this"); `when` is a live predicate on
+  `state.*` / `ctx.*` / `data.*`. Without `can`, every declared permission is denied.
+- **Isolation per block**: every node is wrapped in a layout-neutral marker (`display: contents`, `data-graph-node="<id>"`)
+  and an error boundary. A node that throws shows an alert with retry and reports `onNodeError({ id, error })`; if it
+  declares `fallback_node` (e.g. the original block an overlay replaced) that node renders instead. Loading / error / empty of
+  a block's data source are per block (`section`, core blocks), not page-wide.
+- **Validation**: `parsePageGraph` never throws and returns every error with a stable code (`page_graph.id_duplicate`,
+  `page_graph.limit.depth`...). Limits: 500 nodes, depth 8, 64 children, 256 KB, ids `^[A-Za-z][A-Za-z0-9_.:-]{0,95}$`.
+- **For overlay engines** (the merge function is NOT here): `indexGraph(graph)` gives id -> `{ node, parentId, index, via }`,
+  `graphIds` the ids in document order, and `resolveGraph(graph, env)` compiles to page blocks. A merge only has to
+  produce another valid `PageGraph` (re-validate with `parsePageGraph`); `origin` carries who contributed each node.
+- **Adopting an existing page**: `pageToGraph({ state, data, blocks }, { id })` assigns `<parent>.<type>-<index>` ids to blocks
+  without one and lists them in `generated` (index-based ids move when order changes: set explicit ids before writing overlays).
+
+## Dashboard tiles
+
+Presentational blocks promoted from real dashboards (the host formats, resolves icons and fetches data; colour comes from theme
+variables `--tone-<tone>[-text|-soft]` with fallback to existing tokens): `KpiTile` (value, `Delta`, hint, `TrendSpark`, hero /
+glow, loading / error / empty without changing height), `RankedList` (ranking or list; real links; focusable scroll region;
+off-screen rows deferred past `RANKED_LAZY_ROWS`), `SeriesView` (any chart + an always-reachable data table and a view toggle),
+`BlockState` (the one loading / error / empty piece), `toTileTone`.

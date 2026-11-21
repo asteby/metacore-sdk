@@ -21,7 +21,8 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./schema.json": "./schema/genui-v2.schema.json"
+    "./schema.json": "./schema/genui-v2.schema.json",
+    "./page-graph.schema.json": "./schema/page-graph-v1.schema.json"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json && node ../../scripts/fix-dist-esm-imports.mjs",
