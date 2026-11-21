@@ -917,3 +917,5 @@ export * from './view-system'
 
 export { useModelLabels, resolveModelLabels, resolveModelNoun, modelVerbTitle, defaultSingular } from './model-labels'
 export type { ModelLabels, ModelLabelInput, ModelLabelT } from './model-labels'
+
+export * from './fitment'
