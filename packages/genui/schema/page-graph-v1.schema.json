@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://metacore.asteby.com/schemas/genui.page-graph/v1.json",
+  "title": "genui.page-graph/v1",
+  "description": "Pagina como datos: arbol de nodos con id estable. La fuente de verdad de las reglas finas (ids unicos, profundidad, tab solo bajo tabs, props sin claves estructurales) es parsePageGraph; este esquema describe la forma para herramientas y para el servidor.",
+  "type": "object",
+  "required": ["version", "id", "root"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "const": "genui.page-graph/v1" },
+    "id": { "$ref": "#/$defs/id" },
+    "title": {},
+    "state": { "type": "object" },
+    "data": { "type": "object" },
+    "root": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/node" } }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_.:-]{0,95}$" },
+    "predicate": {
+      "type": "object",
+      "required": ["ref"],
+      "properties": {
+        "ref": { "type": "string", "pattern": "^(state|ctx|data)\\." },
+        "equals": {},
+        "in": { "type": "array" },
+        "not_in": { "type": "array" },
+        "empty": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "visibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "permission": { "type": "string", "minLength": 1 },
+        "setting": {
+          "type": "object",
+          "required": ["key"],
+          "properties": { "key": { "type": "string", "minLength": 1 }, "equals": {}, "in": { "type": "array" }, "not_in": { "type": "array" }, "empty": { "type": "boolean" } },
+          "additionalProperties": false
+        },
+        "when": { "$ref": "#/$defs/predicate" }
+      }
+    },
+    "node": {
+      "type": "object",
+      "required": ["id", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "type": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$" },
+        "props": { "type": "object", "not": { "anyOf": [{ "required": ["type"] }, { "required": ["id"] }, { "required": ["blocks"] }, { "required": ["tabs"] }, { "required": ["when"] }, { "required": ["area"] }, { "required": ["fallback"] }] } },
+        "children": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/node" } },
+        "area": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "visible": { "$ref": "#/$defs/visibility" },
+        "fallback": { "type": "string" },
+        "fallback_node": { "$ref": "#/$defs/node" },
+        "origin": { "type": "string", "maxLength": 128 }
+      }
+    }
+  }
+}

@@ -3,7 +3,7 @@
 // Contratos de page@1 que el esquema genui/v2 (compartido con el kernel) ya
 // valida. Se interpretan aqui sobre definiciones tipadas (`PageBlockDef`) cuyos
 // campos hoja salen de los tipos generados; los bloques del nucleo se delegan a `GenUI`.
-import { Component, useId, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ErrorInfo, type KeyboardEvent, type ReactNode } from 'react'
+import { Component, createContext, useContext, useId, useMemo, useRef, useState, useSyncExternalStore, type ComponentType, type CSSProperties, type ErrorInfo, type KeyboardEvent, type ReactNode } from 'react'
 import { ArrowDownRight, ArrowRight, ArrowUpRight } from 'lucide-react'
 import { Button, Card, CardContent, CardHeader, CardTitle, cn } from '@asteby/metacore-ui'
 import { GenUI } from '../render-v2'
@@ -11,6 +11,7 @@ import { GenUIProvider, useGenUI, type GenUIActionRequest, type GenUISources } f
 import { TEXT_TONE } from '../generative-ui'
 import { usePageIcon } from '../icons'
 import { formatMetric } from '../metric'
+import { BlockState } from '../tiles/block-state'
 import type { Tone } from '../types'
 import type { Area, AreaRow, BlockGrid, BlockKpiCard, BlockSection, BlockTabs, ExtName, ExtProps, GridTrack, PermissionKey, TabIcon } from '../generated/genui-v2'
 import { PageProvider, evalPredicate, getPath, isSafePath, resolveRef, usePageContext, type PageContextValue, type PageProviderProps } from './context'
@@ -167,7 +168,7 @@ export function usePageAction() {
 // ---- ErrorBoundary por seccion ----
 
 interface BoundaryProps { id?: string; label: string; retryLabel: string; onError?: (e: Error, i: ErrorInfo) => void; children?: ReactNode }
-class SectionBoundary extends Component<BoundaryProps, { error: Error | null }> {
+class SectionBoundaryImpl extends Component<BoundaryProps, { error: Error | null }> {
   override state = { error: null as Error | null }
   static getDerivedStateFromError(error: Error) {
     return { error }
@@ -188,6 +189,15 @@ class SectionBoundary extends Component<BoundaryProps, { error: Error | null }> 
   }
 }
 
+/**
+ * Aislamiento de una seccion/ext. Con marco por nodo (`PageGraphView`) el marco ya es la frontera (y aplica
+ * `fallback_node` y la telemetria): aqui solo se deja pasar para que el error llegue a el.
+ */
+function SectionBoundary({ id, children, ...rest }: BoundaryProps & { framed?: boolean }) {
+  const framed = useContext(PageBlockFrameContext) !== null && typeof id === 'string' && rest.framed !== false
+  return framed ? <>{children}</> : <SectionBoundaryImpl id={id} {...rest}>{children}</SectionBoundaryImpl>
+}
+
 // ---- lista de bloques ----
 
 export interface PageBlocksProps {
@@ -198,7 +208,21 @@ export interface PageBlocksProps {
 
 /** Renderiza bloques de pagina. Los tipos desconocidos para la pagina se delegan a `GenUI`. */
 export function PageBlocks({ blocks, data }: PageBlocksProps) {
-  return <>{blocks.map((b, i) => <PageBlock key={b.id ?? i} block={b} data={data} />)}</>
+  return <>{blocks.map((b, i) => <PageBlockView key={b.id ?? i} block={b} data={data} />)}</>
+}
+
+/**
+ * Marco opcional por bloque: lo provee `PageGraphView` para aislar cada nodo (error boundary, fallback,
+ * `data-graph-node`). Sin proveedor los bloques se pintan tal cual (sin envoltorio).
+ */
+export type PageBlockFrame = ComponentType<{ block: PageBlockDef; children: ReactNode }>
+export const PageBlockFrameContext = createContext<PageBlockFrame | null>(null)
+
+/** Un bloque de pagina con su marco (si lo hay). Exportado para que el marco pinte un `fallback_node`. */
+export function PageBlockView({ block, data, allowExt = true }: { block: PageBlockDef; data?: Record<string, unknown>; allowExt?: boolean }) {
+  const Frame = useContext(PageBlockFrameContext)
+  const inner = <PageBlock block={block} data={data} allowExt={allowExt} />
+  return Frame && typeof block.id === 'string' ? <Frame block={block}>{inner}</Frame> : inner
 }
 
 function PageBlock({ block, data, allowExt = true }: { block: PageBlockDef; data?: Record<string, unknown>; allowExt?: boolean }) {
@@ -243,21 +267,8 @@ function Core({ block, data }: { block: PageBlockDef; data?: Record<string, unkn
   const name = typeof block.source === 'string' ? block.source.replace(/^data\./, '') : undefined
   const st = name !== undefined ? pc.sourceStatus[name] : undefined
   const loaded = name !== undefined && !!g.sources && Object.hasOwn(g.sources, name) && g.sources[name] !== undefined
-  if (st?.status === 'error') {
-    return (
-      <div role='alert' data-genui-block='source-error' className='flex flex-col items-start gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground'>
-        <p className='m-0'>{st.error || MSG.error}</p>
-        {st.retry ? (
-          <Button size='sm' variant='secondary' onClick={st.retry}>
-            {MSG.retry}
-          </Button>
-        ) : null}
-      </div>
-    )
-  }
-  if (st?.status === 'loading' && !loaded && block.type !== 'metric') {
-    return <div role='status' aria-busy='true' aria-label={MSG.loading} data-genui-block='source-loading' className='h-24 animate-pulse rounded-md bg-muted' />
-  }
+  if (st?.status === 'error') return <BlockState kind='error' marker='source-error' message={st.error || MSG.error} onRetry={st.retry} retryLabel={MSG.retry} />
+  if (st?.status === 'loading' && !loaded && block.type !== 'metric') return <BlockState kind='loading' marker='source-loading' />
   return <GenUI spec={spec} fallback={<Fallback block={block} />} />
 }
 
@@ -306,7 +317,7 @@ function PageGrid({ block, data, allowExt }: { block: PageGridDef; data?: Record
     return (
       <div>
         {title}
-        <div className={cn('grid gap-2', GRID_COLS[cols])}>{children.map((b, i) => <PageBlock key={b.id ?? i} block={b} data={data} allowExt={allowExt} />)}</div>
+        <div className={cn('grid gap-2', GRID_COLS[cols])}>{children.map((b, i) => <PageBlockView key={b.id ?? i} block={b} data={data} allowExt={allowExt} />)}</div>
       </div>
     )
   }
@@ -330,7 +341,7 @@ function PageGrid({ block, data, allowExt }: { block: PageGridDef; data?: Record
           if (!placed) return null
           return (
             <div key={b.id ?? i} data-area={b.area} className='min-w-0' style={{ gridArea: b.area }}>
-              <PageBlock block={b} data={data} allowExt={allowExt} />
+              <PageBlockView block={b} data={data} allowExt={allowExt} />
             </div>
           )
         })}
@@ -522,22 +533,11 @@ export function PageSection({ block, data }: { block: PageSectionDef; data?: Rec
   const status = bare ? 'ready' : sectionStatus(block, pc, rows)
 
   let content: ReactNode
-  if (status === 'loading') content = <div role='status' aria-busy='true' aria-label={MSG.loading} data-genui-block='section-loading' className='h-24 animate-pulse rounded-md bg-muted' />
-  else if (status === 'error') {
-    const st = pc.sourceStatus[name!]
-    content = (
-      <div role='alert' data-genui-block='section-error' className='flex flex-col items-start gap-2 text-sm'>
-        <p className='m-0'>{st?.error || MSG.error}</p>
-        {st?.retry ? (
-          <Button size='sm' variant='secondary' onClick={st.retry}>
-            {MSG.retry}
-          </Button>
-        ) : null}
-      </div>
-    )
-  } else if (status === 'empty') content = <p data-genui-block='section-empty' className='m-0 text-sm text-muted-foreground'>{text(block.empty)}</p>
+  if (status === 'loading') content = <BlockState kind='loading' marker='section-loading' />
+  else if (status === 'error') content = <BlockState kind='error' marker='section-error' message={pc.sourceStatus[name!]?.error || MSG.error} onRetry={pc.sourceStatus[name!]?.retry} retryLabel={MSG.retry} minHeight={0} />
+  else if (status === 'empty') content = <BlockState kind='empty' marker='section-empty' message={text(block.empty)} minHeight={0} />
   else if (mode === 'custom') content = <CustomBody block={block} />
-  else content = <>{(block.blocks ?? []).map((b, i) => <PageBlock key={b.id ?? i} block={b} data={data} allowExt={mode === 'hybrid'} />)}</>
+  else content = <>{(block.blocks ?? []).map((b, i) => <PageBlockView key={b.id ?? i} block={b} data={data} allowExt={mode === 'hybrid'} />)}</>
 
   const title = !bare && block.title ? text(block.title) : undefined
   const framed = bare ? (
@@ -570,11 +570,11 @@ function TabIconView({ name }: { name: unknown }) {
 
 function TabBody({ opt, data }: { opt: PageTabOption; data?: Record<string, unknown> }) {
   return (
-    <SectionBoundary id={opt.key} label={MSG.failed} retryLabel={MSG.retry}>
+    <SectionBoundary id={opt.key} framed={false} label={MSG.failed} retryLabel={MSG.retry}>
       {typeof opt.component === 'string' ? (
         <CustomBody block={{ type: 'section', id: opt.key, component: opt.component, props: opt.props } as PageSectionDef} />
       ) : (
-        <>{(opt.blocks ?? []).map((b, i) => <PageBlock key={b.id ?? i} block={b} data={data} />)}</>
+        <>{(opt.blocks ?? []).map((b, i) => <PageBlockView key={b.id ?? i} block={b} data={data} />)}</>
       )}
     </SectionBoundary>
   )

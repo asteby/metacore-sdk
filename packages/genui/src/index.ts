@@ -36,3 +36,5 @@ export * from './page'
 // Adaptador de host (`genui.host/v1`): GenUIBody para paginas, Tablero y chat.
 export * from './host'
 export * from './host'
+// Bloques de tablero reutilizables (KpiTile, RankedList, SeriesView, Delta, BlockState).
+export * from './tiles'
