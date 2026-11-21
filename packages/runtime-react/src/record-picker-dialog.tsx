@@ -27,6 +27,12 @@ export interface UseRecordPickerDialogOptions {
     lockedCreateFields?: string[]
     /** Fields merged into the modal schema (e.g. a `widget` field that fills siblings via `setValues`). */
     ensureFields?: FieldDef[]
+    /**
+     * Un injerto del modal (Loom `record.dialog.header`) detectó que el registro ya existe y pide
+     * usarlo (`record.select`): se cierra el modal y se entrega el registro. Sin él, la intención
+     * no se atiende y el injerto sigue su camino (p. ej. rellena el formulario).
+     */
+    onSelectExisting?: (record: Record<string, unknown>) => void
     /** The saved record (`{ id, ...fields }`). */
     onSaved: (record: Record<string, unknown>, kind: 'create' | 'edit') => void
 }
@@ -47,14 +53,42 @@ export function useRecordPickerDialog({
     createDefaults,
     lockedCreateFields,
     ensureFields,
+    onSelectExisting,
     onSaved,
 }: UseRecordPickerDialogOptions): UseRecordPickerDialogResult {
     const api = useApi()
     const base = endpoint ?? `/data/${model}/me`
-    const [state, setState] = useState<{ recordId?: string; defaults?: Record<string, unknown> } | null>(null)
+    const [state, setState] = useState<{
+        recordId?: string
+        defaults?: Record<string, unknown>
+        proposal?: { patch: Record<string, unknown>; reason?: string; apply?: 'review' | 'auto' }
+    } | null>(null)
+
+    // Intenciones Loom: `record.select` entrega el existente; `record.edit` reabre en edición con
+    // el parche como propuesta revisable (nada se guarda sin confirmar).
+    const onIntent = (intent: string, payload: unknown): boolean => {
+        const p = (payload ?? {}) as {
+            record?: Record<string, unknown>
+            id?: unknown
+            patch?: Record<string, unknown>
+            reason?: string
+            apply?: 'review' | 'auto'
+        }
+        if (intent === 'record.select' && onSelectExisting && p.record) {
+            setState(null)
+            onSelectExisting(p.record)
+            return true
+        }
+        if (intent === 'record.edit' && p.id != null) {
+            setState({ recordId: String(p.id), proposal: p.patch ? { patch: p.patch, reason: p.reason, apply: p.apply } : undefined })
+            return true
+        }
+        return false
+    }
 
     const dialog = state ? (
         <CreateRecordDialog
+            key={state.recordId ?? 'new'}
             modelKey={model}
             open
             onOpenChange={(o) => {
@@ -65,6 +99,8 @@ export function useRecordPickerDialog({
             defaults={state.recordId ? undefined : state.defaults}
             lockedFields={state.recordId ? undefined : lockedCreateFields}
             ensureFields={ensureFields}
+            onIntent={onIntent}
+            initialProposal={state.proposal}
             onCreate={async (data) => {
                 const rec = unwrapRecord(await api.post(base, data))
                 onSaved(rec, 'create')

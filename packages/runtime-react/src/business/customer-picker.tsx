@@ -115,6 +115,10 @@ export function CustomerPicker({
         prefillField: 'name',
         createDefaults,
         ensureFields,
+        onSelectExisting: (rec) => {
+            onChange(toResult(rec))
+            setText('')
+        },
         onSaved: (rec, kind) => {
             const next = toResult(rec)
             // Al editar se conservan saldo/crédito/alertas que el registro no trae.

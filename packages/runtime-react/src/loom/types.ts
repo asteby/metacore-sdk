@@ -1,0 +1,167 @@
+// Loom — contratos del sistema de contribuciones de UI (RFC 0005 del kernel).
+//
+//   Seam     punto de extensión tipado de un componente anfitrión (`record.dialog.header`).
+//   Part     componente expuesto por un addon con contrato (`fiscal_mexico.csf-import`).
+//   Graft    injerto: Part → Seam con orden, condiciones, lentes leídas y campos escritos.
+//   Lens     proyección de solo lectura del contexto del seam, con clase de datos.
+//   Proposal lo que un injerto quiere cambiar: el anfitrión lo aplica, lo muestra como diff o lo descarta.
+//
+// El servidor es la fuente de verdad de QUÉ injertos ve el usuario (RBAC, ajustes, preset);
+// el cliente vuelve a filtrar sólo para UX y explica por qué algo no se montó.
+import type { ComponentType } from 'react'
+
+/** Clase de datos de una lente. Decide la redacción en errores/telemetría. */
+export type DataClass = 'public' | 'internal' | 'money' | 'pii' | 'pii.fiscal' | 'secret'
+
+/** Contrato que el anfitrión publica para un seam. */
+export interface SeamContract {
+    id: string
+    /** Semver del contrato (`1.0.0`). Un injerto declara `requires: '^1'`. */
+    version: string
+    /** Lentes que el seam ofrece y su clase de datos. */
+    lenses: Readonly<Record<string, DataClass>>
+    /**
+     * Campos que un injerto puede proponer cambiar en este seam. `undefined` = el seam no
+     * acepta propuestas. El anfitrión lo calcula (p. ej. los campos editables del formulario).
+     */
+    writable?: ReadonlySet<string>
+    /** Intenciones que el anfitrión atiende (`record.select`, `record.edit`). */
+    intents?: readonly string[]
+}
+
+export type GraftKind = 'view' | 'action' | 'transform' | 'source'
+
+/** Condiciones de montaje. Todas las presentes deben cumplirse. */
+export interface GraftWhen {
+    /** Todos estos permisos RBAC. */
+    permission?: string | string[]
+    /** Al menos uno de estos permisos. */
+    anyPermission?: string[]
+    /** Feature flag activo. */
+    flag?: string
+    /** Ajuste de la organización/addon: presente y verdadero, o igual a `equals`. */
+    setting?: { key: string; equals?: unknown }
+    /** Modelos del anfitrión (acepta `Customer` o `customers.Customer`). */
+    model?: string[]
+    /** Modos del anfitrión (`create`, `edit`, `view`). */
+    mode?: string[]
+}
+
+export interface GraftCapabilities {
+    /** Proponer un parche. Sólo pasan los campos de `writes` ∩ `contract.writable`. */
+    propose: (p: ProposalInput) => void
+    /** Pedir al anfitrión una intención declarada en el contrato. false = nadie la atendió. */
+    emit: (intent: string, payload?: unknown) => boolean
+    /** RBAC del usuario actual (mismo `useCan` del host). */
+    can: (permission: string) => boolean
+}
+
+export interface GraftProps<P = Record<string, unknown>> {
+    /** Sólo las lentes declaradas en `reads`, congeladas. */
+    lenses: Readonly<Record<string, unknown>>
+    /** Props estáticas del manifiesto/registro. */
+    props: P
+    caps: GraftCapabilities
+    graft: { id: string; addon: string; seam: string }
+}
+
+export type GraftComponent<P = Record<string, unknown>> = ComponentType<GraftProps<P>>
+
+export type GraftModule = GraftComponent<any> | { default: GraftComponent<any> }
+
+/** Componente expuesto por un addon (lo que el manifiesto llama `extension_points.parts[]`). */
+export interface PartDef {
+    /** `<addon>.<nombre>`. */
+    id: string
+    addon?: string
+    version?: string
+    component?: GraftComponent<any>
+    /** Carga perezosa (chunk local o remoto federado). */
+    load?: () => Promise<GraftModule>
+}
+
+export interface GraftDef {
+    /** Id estable `<addon>.<nombre>`; registrar el mismo id reemplaza. */
+    id: string
+    addon?: string
+    seam: string
+    /** Rango semver del contrato del seam (`^1`). Sin él, cualquiera. */
+    requires?: string
+    kind?: GraftKind
+    /** Ascendente; empates por orden de registro. */
+    order?: number
+    when?: GraftWhen
+    /** Lentes que lee. Una lente no declarada no llega. */
+    reads?: string[]
+    /** Campos que puede proponer cambiar. Admite `prefijo.*`. */
+    writes?: string[]
+    /** Red que necesita (declarativo; lo hace cumplir el sandbox/CSP, ver RFC §Seguridad). */
+    network?: 'none' | 'org' | string[]
+    offline?: boolean
+    props?: Record<string, unknown>
+    /** Part que monta (registrado con `registerPart`) o el componente en línea. */
+    part?: string
+    component?: GraftComponent<any>
+    load?: () => Promise<GraftModule>
+}
+
+export interface ProposalInput {
+    patch: Record<string, unknown>
+    /** Por qué (se muestra al usuario): «Datos de la constancia fiscal». */
+    reason?: string
+    /** 0..1. */
+    confidence?: number
+    /** Etiquetas legibles por campo, si el injerto las conoce. */
+    labels?: Record<string, string>
+    /** `review` (por omisión) o `auto` si el preset lo permite. */
+    apply?: 'review' | 'auto'
+}
+
+export interface Proposal extends ProposalInput {
+    id: string
+    graft: string
+    addon: string
+    /** Valores antes del parche (para el diff y el deshacer). */
+    previous: Record<string, unknown>
+    /** Claves descartadas por no estar en `writes`/`writable`. */
+    dropped: string[]
+}
+
+export type SkipReason =
+    | 'not_granted'
+    | 'permission'
+    | 'flag'
+    | 'setting'
+    | 'model'
+    | 'mode'
+    | 'version'
+    | 'no_component'
+
+export interface SkippedGraft {
+    graft: GraftDef
+    reason: SkipReason
+    detail?: string
+}
+
+export interface ResolvedSeam {
+    mounted: GraftDef[]
+    skipped: SkippedGraft[]
+}
+
+/** Lo que el anfitrión sabe del usuario/organización para evaluar `when`. */
+export interface LoomEnv {
+    can: (permission: string) => boolean
+    flags?: ReadonlySet<string>
+    settings?: Readonly<Record<string, unknown>>
+    model?: string
+    mode?: string
+    /**
+     * Ids de injertos que el servidor autorizó para este usuario. Presente = el cliente no monta
+     * nada fuera de la lista (el servidor manda). Ausente = sólo código local de confianza.
+     */
+    granted?: ReadonlySet<string>
+}
+
+export type LoomEvent =
+    | { type: 'graft_failed'; seam: string; graft: string; addon: string; reason: 'load' | 'render'; message: string }
+    | { type: 'proposal_dropped_keys'; seam: string; graft: string; addon: string; keys: string[] }

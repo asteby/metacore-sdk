@@ -28,6 +28,8 @@ export function CreateRecordDialog({
     onCreate,
     onUpdate,
     onSaved,
+    onIntent,
+    initialProposal,
 }: CreateRecordDialogProps) {
     const mode = recordId ? 'edit' : 'create'
     return (
@@ -45,6 +47,8 @@ export function CreateRecordDialog({
             onCreate={onCreate}
             onUpdate={onUpdate}
             onSaved={onSaved}
+            onIntent={onIntent}
+            initialProposal={initialProposal}
         />
     )
 }
