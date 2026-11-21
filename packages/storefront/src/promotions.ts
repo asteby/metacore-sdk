@@ -70,6 +70,7 @@ export type PromotionMessageKey =
   | 'code.remove'
   | 'code.applied'
   | 'code.invalid'
+  | 'code.toggle'
   | 'code.pending_shipping'
   | 'code.invalid_format'
   | 'code.reason.not_found'
@@ -144,6 +145,7 @@ const ES: PromotionMessages = {
   'code.remove': 'Quitar',
   'code.applied': 'Cupón {code} aplicado.',
   'code.invalid': 'Escribe un cupón válido: letras, números, guion o guion bajo.',
+  'code.toggle': '¿Tienes un cupón?',
   'code.pending_shipping': 'El cupón {code} es válido: el envío gratis se aplica al elegir envío a domicilio.',
   'code.invalid_format': 'Escribe un cupón válido: letras, números, guion o guion bajo.',
   'code.reason.not_found': 'El cupón {code} no existe. Revisa que esté bien escrito.',
@@ -217,6 +219,7 @@ const EN: PromotionMessages = {
   'code.remove': 'Remove',
   'code.applied': 'Code {code} applied.',
   'code.invalid': 'Enter a valid code: letters, numbers, hyphen or underscore.',
+  'code.toggle': 'Have a discount code?',
   'code.pending_shipping': 'Code {code} is valid: free shipping applies once you choose home delivery.',
   'code.invalid_format': 'Enter a valid code: letters, numbers, hyphen or underscore.',
   'code.reason.not_found': 'Code {code} does not exist. Check the spelling.',
