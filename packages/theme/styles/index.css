@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import './tokens.css';
+@import './tones.css';
 @import './scrollbars.css';
 
 @custom-variant dark (&:is(.dark *));

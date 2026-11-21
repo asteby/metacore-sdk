@@ -1,0 +1,151 @@
+/*
+ * TONES + VIZ + SURFACES — capa semántica de color para estados, deltas, insignias, gráficas y tarjetas de tablero.
+ *
+ * Todo se DERIVA de los tokens del tema vivo (tokens.css): cambiar marca, pack (glass…) o modo claro/oscuro recolorea todo sin
+ * tocar componentes. Los sólidos `--tone-{success,warning,danger,info,muted,brand}` y su par `--on-tone-*` ya viven en
+ * tokens.css (y su contraste AA lo impone src/tokens-contrast.test.ts); aquí se agregan las derivadas que usan insignias y
+ * avisos: `-soft` (fondo de baja opacidad), `-border` y `-text` (el sólido ya es texto-seguro sobre --card y sobre su tinte).
+ *
+ *   bg-tone-success-soft  border-tone-success-border  text-tone-success-text  bg-tone-success
+ *
+ * CATEGÓRICO: --viz-1..6 en ORDEN FIJO (nunca cíclico; la 7.ª serie se agrupa en "Otros"). El slot 1 es la marca; 2..6 son pasos
+ * validados con el validador del skill dataviz (L 0.43–0.77 claro / 0.48–0.66 oscuro, croma >= 0.1, ΔE CVD adyacente >= 8,
+ * piso normal >= 15). El contraste contra la superficie queda bajo 3:1 en algunos pasos del modo claro: SIEMPRE con leyenda,
+ * etiqueta directa o vista de tabla (nunca solo color). SECUENCIAL: --viz-seq-1..5, un tono (la marca) de claro a oscuro.
+ *
+ * SUPERFICIES EN CAPAS (fondo < tarjeta < tarjeta elevada): salen del gris del tema (--card / --foreground), NO de --primary;
+ * solo el brillo (`dash-glow`) y el borde al pasar el cursor usan la marca.
+ *
+ * Se importa desde index.css; las apps que solo cargan tokens.css lo importan aparte (`@asteby/metacore-theme/tones.css`).
+ */
+:root {
+  --tone-muted-soft: color-mix(in oklab, var(--tone-muted) 13%, transparent);
+  --tone-muted-border: color-mix(in oklab, var(--tone-muted) 28%, transparent);
+  --tone-muted-text: var(--tone-muted);
+  --tone-brand-soft: color-mix(in oklab, var(--tone-brand) 11%, transparent);
+  --tone-brand-border: color-mix(in oklab, var(--tone-brand) 26%, transparent);
+  --tone-brand-text: var(--tone-brand);
+  --tone-success-soft: color-mix(in oklab, var(--tone-success) 12%, transparent);
+  --tone-success-border: color-mix(in oklab, var(--tone-success) 30%, transparent);
+  --tone-success-text: var(--tone-success);
+  --tone-warning-soft: color-mix(in oklab, var(--tone-warning) 14%, transparent);
+  --tone-warning-border: color-mix(in oklab, var(--tone-warning) 30%, transparent);
+  --tone-warning-text: var(--tone-warning);
+  --tone-danger-soft: color-mix(in oklab, var(--tone-danger) 11%, transparent);
+  --tone-danger-border: color-mix(in oklab, var(--tone-danger) 28%, transparent);
+  --tone-danger-text: var(--tone-danger);
+  --tone-info-soft: color-mix(in oklab, var(--tone-info) 12%, transparent);
+  --tone-info-border: color-mix(in oklab, var(--tone-info) 28%, transparent);
+  --tone-info-text: var(--tone-info);
+}
+
+/* Categórica, orden FIJO: marca, azul, aqua, amarillo, violeta, magenta. Claro. */
+:root {
+  --viz-1: oklch(from var(--tone-brand) clamp(0.43, l, 0.77) c h);
+  --viz-2: #2a78d6;
+  --viz-3: #1baf7a;
+  --viz-4: #eda100;
+  --viz-5: #6250d6;
+  --viz-6: #e87ba4;
+  --viz-seq-1: color-mix(in oklab, var(--primary) 18%, var(--card));
+  --viz-seq-2: color-mix(in oklab, var(--primary) 38%, var(--card));
+  --viz-seq-3: color-mix(in oklab, var(--primary) 62%, var(--card));
+  --viz-seq-4: var(--primary);
+  --viz-seq-5: color-mix(in oklab, var(--primary) 78%, black);
+}
+.dark {
+  --viz-1: oklch(from var(--tone-brand) clamp(0.48, l, 0.66) c h);
+  --viz-2: #3987e5;
+  --viz-3: #199e70;
+  --viz-4: #c98500;
+  --viz-5: #9085e9;
+  --viz-6: #d55181;
+  --viz-seq-1: color-mix(in oklab, var(--primary) 30%, var(--card));
+  --viz-seq-2: color-mix(in oklab, var(--primary) 50%, var(--card));
+  --viz-seq-3: color-mix(in oklab, var(--primary) 72%, var(--card));
+  --viz-seq-4: var(--primary);
+  --viz-seq-5: color-mix(in oklab, var(--primary) 70%, white);
+}
+
+/* Superficies en capas desde el gris del tema (--foreground claro, --card oscuro). */
+:root {
+  --surface-1: oklch(from var(--foreground) 0.995 min(c, 0.012) h / 0.82);
+  --surface-2: oklch(from var(--foreground) 1 min(c, 0.01) h / 0.95);
+  --surface-solid: oklch(from var(--foreground) 0.995 min(c, 0.012) h);
+  --surface-inset: oklch(from var(--foreground) 0.35 min(c, 0.02) h / 0.045);
+  --surface-border: oklch(from var(--foreground) 0.3 min(c, 0.04) h / 0.12);
+  --surface-highlight: oklch(1 0 0 / 0.7);
+  --surface-shadow: 0 1px 2px oklch(from var(--foreground) 0.2 min(c, 0.04) h / 0.06), 0 8px 24px -12px oklch(from var(--foreground) 0.25 min(c, 0.06) h / 0.16);
+  --surface-glow: 0 10px 32px -14px color-mix(in oklab, var(--primary) 38%, transparent);
+  --viz-grid: oklch(from var(--foreground) 0.3 min(c, 0.03) h / 0.09);
+  --viz-surface: var(--surface-solid);
+}
+.dark {
+  --surface-1: oklch(from var(--card) 0.27 c h / 0.62);
+  --surface-2: oklch(from var(--card) 0.31 c h / 0.78);
+  --surface-solid: oklch(from var(--card) 0.27 c h);
+  --surface-inset: oklch(1 0 0 / 0.045);
+  --surface-border: oklch(1 0 0 / 0.09);
+  --surface-highlight: oklch(1 0 0 / 0.07);
+  --surface-shadow: 0 1px 2px oklch(0 0 0 / 0.28), 0 12px 32px -14px oklch(0 0 0 / 0.45);
+  --surface-glow: 0 12px 36px -14px color-mix(in oklab, var(--primary) 42%, transparent);
+  --viz-grid: oklch(1 0 0 / 0.07);
+}
+
+@theme inline {
+  --color-tone-muted: var(--tone-muted);
+  --color-tone-muted-soft: var(--tone-muted-soft);
+  --color-tone-muted-border: var(--tone-muted-border);
+  --color-tone-muted-text: var(--tone-muted-text);
+  --color-tone-brand: var(--tone-brand);
+  --color-tone-brand-soft: var(--tone-brand-soft);
+  --color-tone-brand-border: var(--tone-brand-border);
+  --color-tone-brand-text: var(--tone-brand-text);
+  --color-tone-success: var(--tone-success);
+  --color-tone-success-soft: var(--tone-success-soft);
+  --color-tone-success-border: var(--tone-success-border);
+  --color-tone-success-text: var(--tone-success-text);
+  --color-tone-warning: var(--tone-warning);
+  --color-tone-warning-soft: var(--tone-warning-soft);
+  --color-tone-warning-border: var(--tone-warning-border);
+  --color-tone-warning-text: var(--tone-warning-text);
+  --color-tone-danger: var(--tone-danger);
+  --color-tone-danger-soft: var(--tone-danger-soft);
+  --color-tone-danger-border: var(--tone-danger-border);
+  --color-tone-danger-text: var(--tone-danger-text);
+  --color-tone-info: var(--tone-info);
+  --color-tone-info-soft: var(--tone-info-soft);
+  --color-tone-info-border: var(--tone-info-border);
+  --color-tone-info-text: var(--tone-info-text);
+  --color-viz-1: var(--viz-1);
+  --color-viz-2: var(--viz-2);
+  --color-viz-3: var(--viz-3);
+  --color-viz-4: var(--viz-4);
+  --color-viz-5: var(--viz-5);
+  --color-viz-6: var(--viz-6);
+}
+
+/* Tarjeta de tablero (glass + borde con luz arriba + sombra), elevada al hover, con brillo de marca, e inset (filas/chips). */
+@utility dash-surface {
+  background: var(--surface-1);
+  border: 1px solid var(--surface-border);
+  box-shadow: inset 0 1px 0 var(--surface-highlight), var(--surface-shadow);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  backdrop-filter: blur(14px) saturate(1.15);
+  transition: background-color 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+@utility dash-surface-hover {
+  &:hover {
+    background: var(--surface-2);
+    border-color: color-mix(in oklab, var(--primary) 35%, var(--surface-border));
+  }
+}
+@utility dash-glow {
+  box-shadow: inset 0 1px 0 var(--surface-highlight), var(--surface-shadow), var(--surface-glow);
+}
+@utility dash-inset {
+  background: var(--surface-inset);
+}

@@ -26,6 +26,7 @@
     "./tokens.css": "./styles/tokens.css",
     "./index.css": "./styles/index.css",
     "./glass.css": "./styles/glass.css",
+    "./tones.css": "./styles/tones.css",
     "./sources.css": "./styles/sources.css",
     "./fonts": {
       "types": "./dist/fonts.d.ts",
