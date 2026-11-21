@@ -103,7 +103,7 @@ const ID = /^[A-Za-z][A-Za-z0-9_.:-]{0,95}$/
 const TYPE = /^[a-z][a-z0-9_]{0,31}$/
 const FORBIDDEN = new Set(['__proto__', 'constructor', 'prototype'])
 /** Claves estructurales que `props` no puede traer (las gobierna el nodo). */
-const RESERVED = new Set(['type', 'id', 'blocks', 'tabs', 'when', 'area', 'fallback'])
+const RESERVED = new Set(['type', 'id', 'blocks', 'tabs', 'when', 'area', 'fallback', 'visible'])
 
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v)
 
@@ -331,4 +331,108 @@ export function pageToGraph(
     root: ui.blocks.map((b, i) => conv(b, undefined, i)),
   }
   return { graph, generated }
+}
+
+// ---- puente con el grafo plano de overlays (Loom, `applyOverlays` de runtime-react) ----
+//
+// La fusion de overlays trabaja sobre una lista PLANA de bloques `{ id, type, region, config, fallback }`.
+// Este grafo es un arbol. El puente es sin perdida para todo lo que un overlay puede tocar:
+// `region` = id del padre (sin region = raiz); el orden de la lista es el orden del documento
+// (padre antes que sus hijos; hermanos en orden); `config` = `props` + `area` + `visible` + `fallback`
+// (texto); `fallback` plano = `fallback_node` (solo hoja: sus hijos no viajan y se reportan en `lost`).
+// Tipos estructurales: este paquete no depende de runtime-react.
+
+export interface FlatBlock {
+  id: string
+  type: string
+  region?: string
+  config?: Record<string, unknown>
+  fallback?: FlatBlock
+}
+
+export interface FlatGraph {
+  id: string
+  version: string
+  blocks: FlatBlock[]
+}
+
+
+function toFlat(n: GraphNode, region: string | undefined, lost: string[]): FlatBlock {
+  const config: Record<string, unknown> = { ...(n.props ?? {}) }
+  if (n.area !== undefined) config.area = n.area
+  if (n.visible !== undefined) config.visible = n.visible
+  if (n.fallback !== undefined) config.fallback = n.fallback
+  const flat: FlatBlock = { id: n.id, type: n.type }
+  if (region !== undefined) flat.region = region
+  if (Object.keys(config).length) flat.config = config
+  if (n.fallback_node) {
+    if (n.fallback_node.children?.length) lost.push(`${n.fallback_node.id}: los hijos de un fallback_node no viajan al grafo plano`)
+    flat.fallback = toFlat({ ...n.fallback_node, children: undefined, fallback_node: undefined }, region, lost)
+  }
+  return flat
+}
+
+/** Arbol -> lista plana para `applyOverlays`. `version` es la de la base (la que declaran los `targets`). */
+export function toBlockGraph(graph: Pick<PageGraph, 'id' | 'root'>, version: string): { graph: FlatGraph; lost: string[] } {
+  const blocks: FlatBlock[] = []
+  const lost: string[] = []
+  const walk = (nodes: GraphNode[], region: string | undefined) => {
+    for (const n of nodes) {
+      blocks.push(toFlat(n, region, lost))
+      if (n.children) walk(n.children, n.id)
+    }
+  }
+  walk(graph.root, undefined)
+  return { graph: { id: graph.id, version, blocks }, lost }
+}
+
+function fromFlat(b: FlatBlock): GraphNode {
+  const { area, visible, fallback, ...props } = (b.config ?? {}) as Record<string, unknown>
+  const node: GraphNode = { id: b.id, type: b.type }
+  if (Object.keys(props).length) node.props = props
+  if (typeof area === 'string') node.area = area
+  if (visible && typeof visible === 'object') node.visible = visible as GraphVisibility
+  if (typeof fallback === 'string') node.fallback = fallback
+  if (b.fallback) node.fallback_node = fromFlat(b.fallback)
+  return node
+}
+
+export interface FromFlatResult {
+  graph: PageGraph
+  /** Bloques cuyo padre ya no existe (p. ej. un overlay quito el contenedor): se descartan con sus hijos. */
+  orphans: string[]
+}
+
+/**
+ * Lista plana (resultado de `applyOverlays`) -> arbol. `meta` trae lo que el plano no lleva (`state`, `data`, `title`);
+ * `provenance` (la del overlay) rellena `origin`. Revalidar con `parsePageGraph` antes de pintar.
+ */
+export function fromBlockGraph(
+  flat: FlatGraph,
+  meta: { state?: PageGraph['state']; data?: PageGraph['data']; title?: unknown } = {},
+  provenance?: Record<string, { origin: string }>,
+): FromFlatResult {
+  const nodes = new Map<string, GraphNode>()
+  const order: FlatBlock[] = []
+  for (const b of flat.blocks) {
+    // `replace` no copia la region del original: el bloque que lo sustituye se queda donde estaba.
+    const region = b.region ?? b.fallback?.region
+    const node = fromFlat(b)
+    if (provenance?.[b.id]) node.origin = provenance[b.id]!.origin
+    nodes.set(b.id, node)
+    order.push({ ...b, region })
+  }
+  const root: GraphNode[] = []
+  const orphans: string[] = []
+  for (const b of order) {
+    const node = nodes.get(b.id)!
+    if (b.region === undefined) root.push(node)
+    else {
+      const parent = nodes.get(b.region)
+      if (parent) (parent.children ??= []).push(node)
+      else orphans.push(b.id)
+    }
+  }
+  const graph: PageGraph = { version: PAGE_GRAPH_VERSION, id: flat.id, ...(meta.title !== undefined ? { title: meta.title } : {}), ...(meta.state ? { state: meta.state } : {}), ...(meta.data ? { data: meta.data } : {}), root }
+  return { graph, orphans }
 }

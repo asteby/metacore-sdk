@@ -49,7 +49,7 @@
       "properties": {
         "id": { "$ref": "#/$defs/id" },
         "type": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$" },
-        "props": { "type": "object", "not": { "anyOf": [{ "required": ["type"] }, { "required": ["id"] }, { "required": ["blocks"] }, { "required": ["tabs"] }, { "required": ["when"] }, { "required": ["area"] }, { "required": ["fallback"] }] } },
+        "props": { "type": "object", "not": { "anyOf": [{ "required": ["type"] }, { "required": ["id"] }, { "required": ["blocks"] }, { "required": ["tabs"] }, { "required": ["when"] }, { "required": ["area"] }, { "required": ["fallback"] }, { "required": ["visible"] }] } },
         "children": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/node" } },
         "area": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
         "visible": { "$ref": "#/$defs/visibility" },

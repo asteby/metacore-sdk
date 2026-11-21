@@ -195,6 +195,7 @@ import { PageGraphView, parsePageGraph, resolveGraph, indexGraph, pageToGraph } 
 - **For overlay engines** (the merge function is NOT here): `indexGraph(graph)` gives id -> `{ node, parentId, index, via }`,
   `graphIds` the ids in document order, and `resolveGraph(graph, env)` compiles to page blocks. A merge only has to
   produce another valid `PageGraph` (re-validate with `parsePageGraph`); `origin` carries who contributed each node.
+- **Bridge to Loom overlays**: `applyOverlays` (runtime-react) merges a FLAT list `{ id, type, region, config, fallback }`. `toBlockGraph(graph, baseVersion)` flattens the tree (`region` = parent id, document order, `config` = `props` + `area` + `visible` + `fallback`, `fallback` = `fallback_node` leaf) and `fromBlockGraph(flat, meta, provenance)` rebuilds the tree (blocks whose container was removed are returned in `orphans`; a `replace` keeps the block in its place and its original becomes `fallback_node`; `provenance` fills `origin`). Re-validate with `parsePageGraph` before rendering. `props` may not contain `visible` (the node owns it).
 - **Adopting an existing page**: `pageToGraph({ state, data, blocks }, { id })` assigns `<parent>.<type>-<index>` ids to blocks
   without one and lists them in `generated` (index-based ids move when order changes: set explicit ids before writing overlays).
 
