@@ -1,6 +1,7 @@
 export * from './fitment.js'
 export * from './facets.js'
 export * from './listing.js'
+export * from './vehicle-pages.js'
 export * from './vehicle-make.js'
 export * from './vehicle-make-logo.js'
 export * from './vehicle-combobox.js'

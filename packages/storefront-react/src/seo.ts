@@ -38,6 +38,23 @@ const clean = (s: string | null | undefined, max?: number): string | undefined =
   return max && text.length > max ? text.slice(0, max - 1).trimEnd() + '…' : text
 }
 
+/**
+ * SEO state of a product listing (collection, catalog). Paging alone is NOT a filter: a page reached only by its cursor
+ * is crawlable with its own canonical (so search engines can walk the whole catalog; blocking the cursor in robots.txt
+ * caps a store at the first page of every collection); any other query parameter (filters, sort, search, "show all")
+ * makes the page `filtered`, which the caller marks `noindex` and canonicalizes to the base URL.
+ *
+ * `cursorParam` is the query parameter that carries the page cursor (default `after`). `canonicalBase` is the absolute
+ * URL of the listing without query.
+ */
+export function listingSeo(url: URL, canonicalBase: string, options: { cursorParam?: string } = {}): { filtered: boolean; canonical: string } {
+  const cursorParam = options.cursorParam ?? 'after'
+  const others = [...url.searchParams.keys()].filter((k) => k !== cursorParam)
+  const cursor = url.searchParams.get(cursorParam)
+  const canonical = cursor && others.length === 0 ? `${canonicalBase}?${encodeURIComponent(cursorParam)}=${encodeURIComponent(cursor)}` : canonicalBase
+  return { filtered: others.length > 0, canonical }
+}
+
 /** Generic title/description/canonical/Open Graph/Twitter descriptors. */
 export function seoMeta(input: SeoMetaInput): MetaDescriptor[] {
   const out: MetaDescriptor[] = []

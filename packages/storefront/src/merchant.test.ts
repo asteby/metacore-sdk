@@ -12,6 +12,9 @@ import {
   truncateText,
   validGtin,
   verificationTokens,
+  gtmIds,
+  gtmNoscriptSrc,
+  gtmScript,
   type FeedOptions,
 } from './merchant.js'
 import type { Product, ProductVariant } from './types.js'
@@ -357,5 +360,28 @@ describe('verificationTokens', () => {
     expect(verificationTokens('abcDEF123_-xyz, otro-token-valido "><script>')).toEqual(['abcDEF123_-xyz', 'otro-token-valido'])
     expect(verificationTokens(undefined)).toEqual([])
     expect(verificationTokens('corto')).toEqual([])
+  })
+})
+
+describe("Google Tag Manager", () => {
+  it("gtmIds keeps only well-formed container ids, deduped, from commas or spaces", () => {
+    expect(gtmIds("GTM-TSQBSV7L, GTM-W67VSCZP GTM-TSQBSV7L")).toEqual(["GTM-TSQBSV7L", "GTM-W67VSCZP"])
+    expect(gtmIds("G-P61CJKG7W4, gtm-abc12345, GTM-\"><script>, GTM-A, GTM-TOOLONGTOOLONG1")).toEqual([])
+    expect(gtmIds(undefined)).toEqual([])
+    expect(gtmIds("")).toEqual([])
+  })
+
+  it("gtmScript is the official loader (gtm.start + gtm.js) for that container only", () => {
+    const js = gtmScript("GTM-TSQBSV7L")
+    expect(js).toContain("gtm.start")
+    expect(js).toContain("https://www.googletagmanager.com/gtm.js?id=")
+    expect(js).toContain("\"GTM-TSQBSV7L\"".replace(/"/g, "'"))
+    expect(js).not.toContain("GTM-W67VSCZP")
+  })
+
+  it("gtmScript and gtmNoscriptSrc refuse ids that could break out", () => {
+    expect(() => gtmScript("x');alert(1)//")).toThrow()
+    expect(() => gtmNoscriptSrc("GTM-A\"><script>")).toThrow()
+    expect(gtmNoscriptSrc("GTM-TSQBSV7L")).toBe("https://www.googletagmanager.com/ns.html?id=GTM-TSQBSV7L")
   })
 })
