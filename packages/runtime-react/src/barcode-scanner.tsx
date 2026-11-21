@@ -1,4 +1,5 @@
 import * as React from 'react'
+import { useDeviceAllowed } from './loom/device'
 import { Camera, Flashlight, FlashlightOff, ScanLine, X } from 'lucide-react'
 import { Button } from '@asteby/metacore-ui'
 
@@ -188,6 +189,8 @@ export function BarcodeScanner({
     const [torchAvailable, setTorchAvailable] = React.useState(false)
     const [torchOn, setTorchOn] = React.useState(false)
     const beep = useScanBeep()
+    // Dentro de un injerto de Loom solo se abre la cámara si la Part declaró needs.device: camera.
+    const cameraAllowed = useDeviceAllowed('camera')
 
     const stop = React.useCallback(() => {
         if (rafRef.current != null) cancelAnimationFrame(rafRef.current)
@@ -216,6 +219,10 @@ export function BarcodeScanner({
         setError(null)
         setTorchAvailable(false)
         setTorchOn(false)
+        if (!cameraAllowed) {
+            setError('Este módulo no declaró uso de la cámara. Escribe el código a mano.')
+            return
+        }
 
         const Ctor = getDetectorCtor()
         if (!navigator.mediaDevices?.getUserMedia || !Ctor) {
@@ -290,7 +297,7 @@ export function BarcodeScanner({
             cancelled = true
             stop()
         }
-    }, [open, continuous, beepOnScan, onDetected, onClose, stop, beep])
+    }, [open, continuous, beepOnScan, onDetected, onClose, stop, beep, cameraAllowed])
 
     if (!open) return null
 
