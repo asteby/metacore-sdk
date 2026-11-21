@@ -1,5 +1,12 @@
 # @asteby/storefront-react
 
+## 0.68.1
+
+### Patch Changes
+
+- Updated dependencies [c1384b1]
+  - @asteby/storefront@0.46.0
+
 ## 0.68.0
 
 ### Minor Changes
