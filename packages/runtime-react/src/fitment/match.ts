@@ -173,14 +173,22 @@ export function targetsForSubject(
 /**
  * Attribute bag of a target row. A product list row carries the columns of
  * extension models as `"<Model>.<column>"` (e.g. `"TireSpec.rim_diameter_in"`)
- * and variants carry an `attributes` object: both are folded in, so the caller
- * can hand over the raw row. Plain keys win over folded ones.
+ * and variants carry an `attributes` object: all are folded in, so the caller
+ * can hand over the raw row and a rule can name just the row's own model
+ * (`Product`) without knowing which extension adds the attributes. Precedence:
+ * plain keys, then `<targetModel>.<column>`, then other extensions, then `attributes`.
  */
 export function targetAttrsOf(row: FitmentAttrs, targetModel: string): FitmentAttrs {
-    const out: FitmentAttrs = { ...parseAttrs(row.attributes) }
+    const own: FitmentAttrs = {}
+    const others: FitmentAttrs = {}
     const prefix = `${targetModel}.`
-    for (const k of Object.keys(row)) if (k.startsWith(prefix)) out[k.slice(prefix.length)] = row[k]
-    return { ...out, ...row }
+    for (const k of Object.keys(row)) {
+        const dot = k.indexOf('.')
+        if (dot <= 0) continue
+        if (k.startsWith(prefix)) own[k.slice(prefix.length)] = row[k]
+        else others[k.slice(dot + 1)] = row[k]
+    }
+    return { ...parseAttrs(row.attributes), ...others, ...own, ...row }
 }
 
 /**
