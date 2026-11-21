@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import axe from 'axe-core'
 import { renderToString } from 'react-dom/server'
 import type { CartPromotions } from '@asteby/storefront'
-import { DiscountCodeForm } from './index.js'
+import { CheckoutDiscountCode, DiscountCodeForm } from './index.js'
 
 afterEach(cleanup)
 
@@ -76,5 +76,39 @@ describe('DiscountCodeForm con bloqueo de cupones', () => {
   it('muestra el motivo promo_blocks_codes si el servidor rechaza un código ya guardado', () => {
     render(<DiscountCodeForm codes={[{ code: 'OTONO10', applicable: false, reason: 'promo_blocks_codes' }]} locale="es-MX" />)
     expect(screen.getByRole('alert').textContent).toContain('no se aceptan cupones')
+  })
+})
+
+describe('CheckoutDiscountCode (el cupón de la pantalla de pago)', () => {
+  it('plegado por omisión: «¿Tienes un cupón?» y el formulario dentro, sin ocupar el pago', () => {
+    const { container } = render(<CheckoutDiscountCode codes={[]} locale="es-MX" />)
+    const details = container.querySelector('details[data-sf-checkout-discount-code]')!
+    expect(details.hasAttribute('open')).toBe(false)
+    expect(details.querySelector('summary')!.textContent).toBe('¿Tienes un cupón?')
+    expect(details.querySelector('input[name=code]')).toBeTruthy()
+    expect(details.querySelector('input[type=hidden][name=intent]')?.getAttribute('value')).toBe('discount')
+  })
+
+  it('se abre solo si el carrito ya trae un cupón o hubo un error', () => {
+    const a = render(<CheckoutDiscountCode codes={[{ code: 'PROTEK10', applicable: true }]} locale="es-MX" />)
+    expect(a.container.querySelector('details')!.hasAttribute('open')).toBe(true)
+    cleanup()
+    const b = render(<CheckoutDiscountCode codes={[]} error="Cupón desconocido" locale="es-MX" />)
+    expect(b.container.querySelector('details')!.hasAttribute('open')).toBe(true)
+    expect(screen.getByRole('alert').textContent).toContain('Cupón desconocido')
+  })
+
+  it('variant open: el campo visible, sin caja plegable', () => {
+    const { container } = render(<CheckoutDiscountCode variant="open" codes={[]} locale="es-MX" />)
+    expect(container.querySelector('details')).toBeNull()
+    expect(screen.getByLabelText('Cupón de descuento')).toBeTruthy()
+  })
+
+  it('en inglés y con una promoción que bloquea cupones no pinta nada', () => {
+    const en = render(<CheckoutDiscountCode codes={[]} locale="en-US" />)
+    expect(en.container.querySelector('summary')!.textContent).toBe('Have a discount code?')
+    cleanup()
+    const blocked = render(<CheckoutDiscountCode codes={[]} locale="es-MX" promotions={{ blocks_codes: true } as unknown as CartPromotions} />)
+    expect(blocked.container.innerHTML).toBe('')
   })
 })
