@@ -106,6 +106,7 @@ import { ProposalReview, Seam } from '../loom/lazy'
 import { useProposalQueue } from '../loom/queue'
 import { RECORD_FORM_SECTION, recordDialogHeaderContract } from '../loom/seams'
 import { effectiveApply } from '../loom/apply'
+import { unwrapListResponse } from '@asteby/metacore-lib/envelope'
 import { TimeZoneContext, CurrencyContext, useNumberLocale, useSystemActor } from '../org-runtime-context'
 import { AuthorshipCell, hasSpecialAuthorship, readProvenance } from '../provenance'
 
@@ -961,6 +962,18 @@ export function DynamicRecordDialog({
         [headerLenses],
     )
     // La propuesta inicial entra una vez, cuando el formulario ya tiene sus campos.
+    // Loom `records.find`: búsqueda mediada para injertos sin red. Igualdad exacta con el filtro
+    // estándar del listado (`f_<campo>=eq:<valor>`) y el RBAC del servidor; la validación y los
+    // límites los aplica el seam (loom/records.ts).
+    const findRecords = useCallback(
+        async (q: { model: string; field: string; value: string; limit: number }) => {
+            const bareOf = (m: string) => m.split('.').pop() ?? m
+            const base = bareOf(q.model) === bareOf(model) && endpoint ? endpoint : `/data/${q.model}`
+            const res = await api.get(base, { params: { [`f_${q.field}`]: `eq:${q.value}`, per_page: q.limit } })
+            return unwrapListResponse<Record<string, unknown>>(res as { data?: unknown }).items
+        },
+        [api, model, endpoint],
+    )
     const seededProposal = useRef(false)
     useEffect(() => {
         if (!open) {
@@ -1534,6 +1547,7 @@ export function DynamicRecordDialog({
                                     host={{ model, mode: isCreate ? 'create' : 'edit' }}
                                     onProposal={proposals.push}
                                     onIntent={onIntent ? (intent, payload) => onIntent(intent, payload) : undefined}
+                                    records={findRecords}
                                 />
                             )}
                             {isEditable && <ProposalReview queue={proposals} values={formValues} labelOf={fieldLabelOf} />}
@@ -1605,6 +1619,7 @@ export function DynamicRecordDialog({
                                     host={{ model, mode: isCreate ? 'create' : 'edit' }}
                                     onProposal={proposals.push}
                                     onIntent={onIntent ? (intent, payload) => onIntent(intent, payload) : undefined}
+                                    records={findRecords}
                                     className="mt-4 grid gap-3"
                                 />
                             )}

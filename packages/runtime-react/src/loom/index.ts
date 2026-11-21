@@ -12,6 +12,7 @@ export {
     loomVersion,
 } from './store'
 export { effectiveApply } from './apply'
+export { makeRecordsCap, RecordsFindError, type RecordsCapOptions } from './records'
 export { useProposalQueue, type ProposalQueue } from './queue'
 export { useHasGrafts } from './use-seam'
 export { resolveSeam, attenuatePatch, matchesWrite, projectLenses, sensitiveClasses, redactMessage } from './resolve'

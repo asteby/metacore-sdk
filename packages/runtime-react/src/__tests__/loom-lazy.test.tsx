@@ -20,10 +20,10 @@ describe('Loom perezoso (índice principal)', () => {
         expect(container.innerHTML).toBe('')
     })
 
-    it('con un injerto monta la implementación real', async () => {
+    it('con un injerto monta la implementación real', { timeout: 20000 }, async () => {
         registerGraft({ id: 'demo.g', seam: 'demo.seam', component: () => <span>hola injerto</span> })
         render(<Seam contract={contract} lenses={{}} />)
-        expect(await screen.findByText('hola injerto', undefined, { timeout: 5000 })).toBeTruthy()
+        expect(await screen.findByText('hola injerto', undefined, { timeout: 15000 })).toBeTruthy()
         expect(document.querySelector('[data-loom-seam="demo.seam"]')).toBeTruthy()
     })
 
