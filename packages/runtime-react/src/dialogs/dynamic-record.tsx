@@ -106,6 +106,7 @@ import { ProposalReview, Seam } from '../loom/lazy'
 import { useProposalQueue } from '../loom/queue'
 import { RECORD_FORM_SECTION, recordDialogHeaderContract } from '../loom/seams'
 import { effectiveApply } from '../loom/apply'
+import { unwrapListResponse } from '@asteby/metacore-lib/envelope'
 import { TimeZoneContext, CurrencyContext, useNumberLocale, useSystemActor } from '../org-runtime-context'
 import { AuthorshipCell, hasSpecialAuthorship, readProvenance } from '../provenance'
 
@@ -968,10 +969,8 @@ export function DynamicRecordDialog({
         async (q: { model: string; field: string; value: string; limit: number }) => {
             const bareOf = (m: string) => m.split('.').pop() ?? m
             const base = bareOf(q.model) === bareOf(model) && endpoint ? endpoint : `/data/${q.model}`
-            const res: any = await api.get(base, { params: { [`f_${q.field}`]: `eq:${q.value}`, per_page: q.limit } })
-            const body = res?.data?.data ?? res?.data
-            const rows = Array.isArray(body) ? body : Array.isArray(body?.items) ? body.items : Array.isArray(body?.data) ? body.data : []
-            return rows as Record<string, unknown>[]
+            const res = await api.get(base, { params: { [`f_${q.field}`]: `eq:${q.value}`, per_page: q.limit } })
+            return unwrapListResponse<Record<string, unknown>>(res as { data?: unknown }).items
         },
         [api, model, endpoint],
     )
