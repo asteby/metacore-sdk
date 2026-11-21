@@ -6,6 +6,7 @@
 import { Component, useEffect, useMemo, useRef, type ErrorInfo, type ReactNode } from 'react'
 import { Button, cn } from '@asteby/metacore-ui'
 import { PageBlockFrameContext, PageBlockView, PageView, type PageBlockDef, type PageBlockFrame, type PageViewProps } from './blocks'
+import { useGenUILabel } from '../labels'
 import { parsePageGraph, resolveGraph, type GraphError, type HiddenNode, type PageGraph } from './graph'
 
 export interface PageGraphLabels {
@@ -14,7 +15,6 @@ export interface PageGraphLabels {
   invalid: string
 }
 
-const LABELS: PageGraphLabels = { failed: 'Este bloque fallo al mostrarse.', retry: 'Reintentar', invalid: 'La pagina no es valida.' }
 
 export interface PageGraphViewProps extends Omit<PageViewProps, 'ui' | 'can'> {
   /** Grafo sin confiar: se valida aqui. */
@@ -67,7 +67,8 @@ class NodeBoundary extends Component<BoundaryProps, { error: Error | null }> {
 export function PageGraphView({ graph, can, settings, onNodeError, onInvalid, onResolved, labels, className, ...provider }: PageGraphViewProps) {
   const parsed = useMemo(() => parsePageGraph(graph), [graph])
   const resolved = useMemo(() => (parsed.ok ? resolveGraph(parsed.graph, { can, settings }) : null), [parsed, can, settings])
-  const text = useMemo<PageGraphLabels>(() => ({ ...LABELS, ...labels }), [labels])
+  const l = useGenUILabel()
+  const text = useMemo<PageGraphLabels>(() => ({ failed: l('genui.block_failed'), retry: l('genui.retry'), invalid: l('genui.page_invalid'), ...labels }), [labels, l])
 
   useEffect(() => {
     if (!parsed.ok) onInvalid?.(parsed.errors)

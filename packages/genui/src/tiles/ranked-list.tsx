@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { cn } from '@asteby/metacore-ui'
 import { Badge } from '@asteby/metacore-ui'
+import { useGenUILabel } from '../labels'
 import { BlockState, type BlockStateKind } from './block-state'
 import { BADGE_VARIANT, TEXT_TONE } from '../tones'
 import type { Tone } from '../types'
@@ -43,11 +44,12 @@ export interface RankedListProps {
 export const RANKED_LAZY_ROWS = 40
 
 function Row({ item, n, ranked, lazy, onSelect }: { item: RankedItem; n: number; ranked?: boolean; lazy: boolean; onSelect?: (i: RankedItem) => void }) {
+  const l = useGenUILabel()
   const tone: Tone = item.tone ?? 'default'
   const body = (
     <>
       {ranked ? (
-        <span aria-label={`Posicion ${n}`} className={cn('flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums', n === 1 ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground')}>
+        <span aria-label={l('genui.ranked.position', { n })} className={cn('flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums', n === 1 ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground')}>
           {n}
         </span>
       ) : null}

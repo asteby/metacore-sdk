@@ -114,7 +114,12 @@
     "name_min_length": "Name must be at least {{min}} characters"
   },
   "ui": {
-    "delta": { "up": "rises", "down": "falls", "flat": "no change", "percent": "percent" }
+    "delta": {
+      "up": "rises",
+      "down": "falls",
+      "flat": "no change",
+      "percent": "percent"
+    }
   },
   "datatable": {
     "search_placeholder": "Search...",
@@ -261,5 +266,31 @@
     "empty": "No results",
     "error": "Could not load the list",
     "load_more": "Load more"
+  },
+  "genui": {
+    "denied": "You do not have access to this section.",
+    "section_failed": "This section failed to display.",
+    "block_failed": "This block failed to display.",
+    "page_invalid": "The page is not valid.",
+    "error": "Could not load.",
+    "retry": "Retry",
+    "loading": "Loading",
+    "view": "View",
+    "custom_unavailable": "Custom block unavailable: {{name}}",
+    "trend": {
+      "up": "rising",
+      "down": "falling",
+      "flat": "steady"
+    },
+    "series": {
+      "chart": "Chart",
+      "table": "Table",
+      "period": "Period",
+      "show_table": "Show table",
+      "show_chart": "Show chart"
+    },
+    "ranked": {
+      "position": "Position {{n}}"
+    }
   }
 }

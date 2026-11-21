@@ -3,10 +3,10 @@ import { cn } from '@asteby/metacore-ui'
 import type { GenUIBlockRendererProps } from './registry'
 import { TEXT_TONE } from './generative-ui'
 import type { Tone } from './types'
+import { useGenUILabel } from './labels'
 import { formatAmount, relativeTime } from '@asteby/metacore-lib'
 
 const TREND_ICON = { up: ArrowUpRight, down: ArrowDownRight, flat: ArrowRight }
-const TREND_LABEL = { up: 'al alza', down: 'a la baja', flat: 'estable' }
 
 /** Formats a metric value with Intl (no host dependency). Unknown shapes print as text. */
 export function formatMetric(value: unknown, format: string | undefined, locale?: string, currency?: string): string {
@@ -64,6 +64,7 @@ function Spark({ values }: { values: number[] }) {
 
 /** `metric` block: one KPI with trend, severity thresholds and an optional sparkline. */
 export function MetricBlock({ block, rows, text, locale, currency }: GenUIBlockRendererProps) {
+  const l = useGenUILabel()
   const first = block.source ? rows?.[0] : undefined
   const raw = block.source ? first?.[block.field as string] : block.value
   const value = typeof raw === 'object' && raw !== null ? text(raw) : raw
@@ -86,7 +87,7 @@ export function MetricBlock({ block, rows, text, locale, currency }: GenUIBlockR
           {Icon ? (
             <>
               <Icon className='size-4' aria-hidden />
-              <span className='sr-only'>{TREND_LABEL[block.trend as 'up']}</span>
+              <span className='sr-only'>{l(`genui.trend.${block.trend as 'up'}`)}</span>
             </>
           ) : null}
         </p>
