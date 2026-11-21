@@ -1,7 +1,7 @@
 import { useId, useState, type ReactNode } from 'react'
 import { BarChart3, Table2 } from 'lucide-react'
 import { cn } from '@asteby/metacore-ui'
-import { BlockState, type BlockStateKind, type BlockStateLabels } from './block-state'
+import { BlockState, type BlockStateKind } from './block-state'
 
 export interface SeriesColumn {
   key: string
@@ -39,7 +39,7 @@ export interface SeriesViewProps {
   state?: BlockStateKind
   stateMessage?: ReactNode
   onRetry?: () => void
-  stateLabels?: Partial<BlockStateLabels>
+  retryLabel?: string
   labels?: Partial<SeriesViewLabels>
   className?: string
 }
@@ -49,14 +49,14 @@ export interface SeriesViewProps {
  * grafica la tabla sigue en el DOM solo para lectores de pantalla; el conmutador es un grupo de botones
  * con `aria-pressed`. Grafica y tabla comparten alto: cambiar de vista no mueve la pagina.
  */
-export function SeriesView({ title, columns, rows, chart, view, onViewChange, height = 260, state, stateMessage, onRetry, stateLabels, labels, className }: SeriesViewProps) {
+export function SeriesView({ title, columns, rows, chart, view, onViewChange, height = 260, state, stateMessage, onRetry, retryLabel, labels, className }: SeriesViewProps) {
   const l = { ...SERIES_VIEW_LABELS, ...labels }
   const [local, setLocal] = useState<'chart' | 'table'>('chart')
   const current = view ?? local
   const uid = useId()
   const set = (v: 'chart' | 'table') => (view === undefined && setLocal(v), onViewChange?.(v))
-  if (state) return <BlockState kind={state} message={stateMessage} onRetry={onRetry} labels={stateLabels} minHeight={height} className={className} />
-  if (rows.length === 0) return <BlockState kind='empty' message={stateMessage} labels={stateLabels} minHeight={height} className={className} />
+  if (state) return <BlockState kind={state} message={stateMessage} onRetry={onRetry} retryLabel={retryLabel} minHeight={height} className={className} />
+  if (rows.length === 0) return <BlockState kind='empty' message={stateMessage} retryLabel={retryLabel} minHeight={height} className={className} />
   const showTable = current === 'table'
   return (
     <figure data-genui-block='series-view' data-view={current} className={cn('m-0 flex flex-col gap-2', className)}>

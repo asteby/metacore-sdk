@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react'
 import { cn } from '@asteby/metacore-ui'
-import { BlockState, type BlockStateKind, type BlockStateLabels } from './block-state'
-import { toneColor, toneSoft, type TileTone } from './tone-css'
+import { Badge } from '@asteby/metacore-ui'
+import { BlockState, type BlockStateKind } from './block-state'
+import { BADGE_VARIANT, TEXT_TONE } from '../tones'
+import type { Tone } from '../types'
 
 export interface RankedItem {
   /** Estable: es la `key` de React y lo que recibe `onSelect`. */
@@ -12,7 +14,7 @@ export interface RankedItem {
   value?: ReactNode
   /** Proporcion 0-1 respecto al mayor: dibuja una barra fina bajo el texto. */
   share?: number
-  tone?: TileTone
+  tone?: Tone
   /** Insignia corta junto al titulo (estado, categoria). */
   badge?: string
   /** Enlace real (navegacion con teclado y "abrir en pestana"). */
@@ -31,7 +33,7 @@ export interface RankedListProps {
   state?: BlockStateKind
   stateMessage?: ReactNode
   onRetry?: () => void
-  stateLabels?: Partial<BlockStateLabels>
+  retryLabel?: string
   /** Texto del estado vacio. */
   emptyText?: ReactNode
   className?: string
@@ -41,11 +43,11 @@ export interface RankedListProps {
 export const RANKED_LAZY_ROWS = 40
 
 function Row({ item, n, ranked, lazy, onSelect }: { item: RankedItem; n: number; ranked?: boolean; lazy: boolean; onSelect?: (i: RankedItem) => void }) {
-  const tone = item.tone ?? 'neutral'
+  const tone: Tone = item.tone ?? 'default'
   const body = (
     <>
       {ranked ? (
-        <span aria-label={`Posicion ${n}`} className='flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums' style={n === 1 ? { color: toneColor('primary'), background: toneSoft('primary') } : { color: toneColor('neutral'), background: toneSoft('neutral') }}>
+        <span aria-label={`Posicion ${n}`} className={cn('flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold tabular-nums', n === 1 ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground')}>
           {n}
         </span>
       ) : null}
@@ -53,15 +55,15 @@ function Row({ item, n, ranked, lazy, onSelect }: { item: RankedItem; n: number;
         <span className='flex items-center gap-2'>
           <span className='truncate text-sm font-medium'>{item.label}</span>
           {item.badge ? (
-            <span className='shrink-0 rounded-full px-2 py-0.5 text-xs font-medium' style={{ color: toneColor(tone), background: toneSoft(tone) }}>
+            <Badge variant={BADGE_VARIANT[tone]} className='shrink-0'>
               {item.badge}
-            </span>
+            </Badge>
           ) : null}
         </span>
         {item.sub ? <span className='block truncate text-xs text-muted-foreground'>{item.sub}</span> : null}
         {typeof item.share === 'number' && Number.isFinite(item.share) ? (
           <span aria-hidden className='mt-1.5 block h-1 w-full overflow-hidden rounded-full bg-muted'>
-            <span className='block h-1 rounded-full' style={{ width: `${Math.round(Math.min(1, Math.max(0, item.share)) * 100)}%`, background: toneColor(item.tone ?? 'primary') }} />
+            <span className={cn('block h-1 rounded-full bg-current', item.tone ? TEXT_TONE[tone] : 'text-primary')} style={{ width: `${Math.round(Math.min(1, Math.max(0, item.share)) * 100)}%` }} />
           </span>
         ) : null}
       </span>
@@ -92,9 +94,9 @@ function Row({ item, n, ranked, lazy, onSelect }: { item: RankedItem; n: number;
  * proporcion y valor; las filas con `href` son enlaces reales. Con muchas filas difiere el pintado de
  * las ocultas sin cambiar el alto del contenedor. Estados cargando/error/vacio con el mismo marco.
  */
-export function RankedList({ items, ranked, label, maxHeight, onSelect, state, stateMessage, onRetry, stateLabels, emptyText, className }: RankedListProps) {
-  if (state) return <BlockState kind={state} message={stateMessage} onRetry={onRetry} labels={stateLabels} className={className} />
-  if (items.length === 0) return <BlockState kind='empty' message={emptyText} labels={stateLabels} className={className} />
+export function RankedList({ items, ranked, label, maxHeight, onSelect, state, stateMessage, onRetry, retryLabel, emptyText, className }: RankedListProps) {
+  if (state) return <BlockState kind={state} message={stateMessage} onRetry={onRetry} retryLabel={retryLabel} className={className} />
+  if (items.length === 0) return <BlockState kind='empty' message={emptyText} retryLabel={retryLabel} className={className} />
   const scroll = maxHeight !== undefined
   const lazy = items.length > RANKED_LAZY_ROWS
   const list = (

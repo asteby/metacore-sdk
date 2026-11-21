@@ -3,8 +3,6 @@ import { cn } from '@asteby/metacore-ui'
 import type { GenUIBlockRendererProps } from './registry'
 import { TEXT_TONE } from './generative-ui'
 import type { Tone } from './types'
-import { TrendSpark } from './tiles/spark'
-import { toTileTone } from './tiles/tone-css'
 import { formatAmount, relativeTime } from '@asteby/metacore-lib'
 
 const TREND_ICON = { up: ArrowUpRight, down: ArrowDownRight, flat: ArrowRight }
@@ -49,6 +47,21 @@ export function toneFor(value: unknown, thresholds: Array<{ at: number; tone: To
   return tone
 }
 
+function Spark({ values }: { values: number[] }) {
+  if (values.length < 2) return null
+  const w = 96
+  const h = 28
+  const min = Math.min(...values)
+  const max = Math.max(...values)
+  const span = max - min || 1
+  const pts = values.map((v, i) => `${((i / (values.length - 1)) * w).toFixed(1)},${(h - 2 - ((v - min) / span) * (h - 4)).toFixed(1)}`).join(' ')
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden className='shrink-0 text-muted-foreground'>
+      <polyline points={pts} fill='none' stroke='currentColor' strokeWidth={1.5} strokeLinejoin='round' strokeLinecap='round' />
+    </svg>
+  )
+}
+
 /** `metric` block: one KPI with trend, severity thresholds and an optional sparkline. */
 export function MetricBlock({ block, rows, text, locale, currency }: GenUIBlockRendererProps) {
   const first = block.source ? rows?.[0] : undefined
@@ -84,7 +97,7 @@ export function MetricBlock({ block, rows, text, locale, currency }: GenUIBlockR
         ) : null}
         {block.hint ? <p className='m-0 text-xs text-muted-foreground'>{text(block.hint)}</p> : null}
       </div>
-      {spark.length > 1 ? <div className='w-24 shrink-0'><TrendSpark data={spark} tone={toTileTone(tone)} height={28} /></div> : null}
+      <Spark values={spark} />
     </div>
   )
 }

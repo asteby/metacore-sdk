@@ -267,8 +267,8 @@ function Core({ block, data }: { block: PageBlockDef; data?: Record<string, unkn
   const name = typeof block.source === 'string' ? block.source.replace(/^data\./, '') : undefined
   const st = name !== undefined ? pc.sourceStatus[name] : undefined
   const loaded = name !== undefined && !!g.sources && Object.hasOwn(g.sources, name) && g.sources[name] !== undefined
-  if (st?.status === 'error') return <BlockState kind='error' message={st.error || MSG.error} onRetry={st.retry} labels={{ retry: MSG.retry }} />
-  if (st?.status === 'loading' && !loaded && block.type !== 'metric') return <BlockState kind='loading' labels={{ loading: MSG.loading }} />
+  if (st?.status === 'error') return <BlockState kind='error' marker='source-error' message={st.error || MSG.error} onRetry={st.retry} retryLabel={MSG.retry} />
+  if (st?.status === 'loading' && !loaded && block.type !== 'metric') return <BlockState kind='loading' marker='source-loading' />
   return <GenUI spec={spec} fallback={<Fallback block={block} />} />
 }
 
@@ -533,9 +533,9 @@ export function PageSection({ block, data }: { block: PageSectionDef; data?: Rec
   const status = bare ? 'ready' : sectionStatus(block, pc, rows)
 
   let content: ReactNode
-  if (status === 'loading') content = <BlockState kind='loading' labels={{ loading: MSG.loading }} />
-  else if (status === 'error') content = <BlockState kind='error' message={pc.sourceStatus[name!]?.error || MSG.error} onRetry={pc.sourceStatus[name!]?.retry} labels={{ retry: MSG.retry }} minHeight={0} />
-  else if (status === 'empty') content = <BlockState kind='empty' message={text(block.empty)} minHeight={0} />
+  if (status === 'loading') content = <BlockState kind='loading' marker='section-loading' />
+  else if (status === 'error') content = <BlockState kind='error' marker='section-error' message={pc.sourceStatus[name!]?.error || MSG.error} onRetry={pc.sourceStatus[name!]?.retry} retryLabel={MSG.retry} minHeight={0} />
+  else if (status === 'empty') content = <BlockState kind='empty' marker='section-empty' message={text(block.empty)} minHeight={0} />
   else if (mode === 'custom') content = <CustomBody block={block} />
   else content = <>{(block.blocks ?? []).map((b, i) => <PageBlockView key={b.id ?? i} block={b} data={data} allowExt={mode === 'hybrid'} />)}</>
 

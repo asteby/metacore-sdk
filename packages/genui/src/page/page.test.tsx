@@ -240,7 +240,7 @@ describe('section', () => {
       </GenUIProvider>
     )
     const { rerender } = render(view({}))
-    expect(screen.getByRole('status', { name: 'Cargando' })).toBeTruthy()
+    expect(screen.getByRole('status')).toBeTruthy()
     rerender(view({}, { s: { status: 'error', error: 'boom', retry } }))
     expect(screen.getByRole('alert').textContent).toContain('boom')
     fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }))

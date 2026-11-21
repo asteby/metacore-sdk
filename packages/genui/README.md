@@ -198,10 +198,10 @@ import { PageGraphView, parsePageGraph, resolveGraph, indexGraph, pageToGraph } 
 - **Adopting an existing page**: `pageToGraph({ state, data, blocks }, { id })` assigns `<parent>.<type>-<index>` ids to blocks
   without one and lists them in `generated` (index-based ids move when order changes: set explicit ids before writing overlays).
 
-## Dashboard tiles
+## Dashboard blocks
 
-Presentational blocks promoted from real dashboards (the host formats, resolves icons and fetches data; colour comes from theme
-variables `--tone-<tone>[-text|-soft]` with fallback to existing tokens): `KpiTile` (value, `Delta`, hint, `TrendSpark`, hero /
-glow, loading / error / empty without changing height), `RankedList` (ranking or list; real links; focusable scroll region;
-off-screen rows deferred past `RANKED_LAZY_ROWS`), `SeriesView` (any chart + an always-reachable data table and a view toggle),
-`BlockState` (the one loading / error / empty piece), `toTileTone`.
+KPI cards, deltas, tones and the sparkline are NOT here: use `KpiCard`, `Delta` and `toneClasses` from `@asteby/metacore-ui` and `Sparkline`
+(`responsive`, `endDot`) from `@asteby/metacore-charts`. What the kit did not have lives here: `RankedList` (ranking or list; real links;
+focusable scroll region; off-screen rows deferred past `RANKED_LAZY_ROWS`; `Tone` badges), `SeriesView` (any chart + an always-reachable
+data table and a view toggle, one shared height) and `BlockState` (`DataState` of the UI kit with a fixed minimum height, so loading ->
+content does not shift the page; `marker` sets `data-genui-block`).
