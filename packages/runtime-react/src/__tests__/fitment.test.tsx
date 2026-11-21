@@ -88,6 +88,14 @@ describe('rules', () => {
         expect(fitFor(r, 'Vehicle', { make: 'A' }, 'TireSpec', { rim_diameter_in: 18, speed: 'v' })).toBe('no')
         expect(fitFor(r, 'Vehicle', { make: 'A' }, 'TireSpec', { speed: 'v' })).toBe('no') // missing attr is not a fit
     })
+    it('fitFor accepts a raw list row: extension columns "Model.col" and variant attributes', () => {
+        const r = [rule({ subject_attrs: { make: 'A' }, target_attrs: { section_width_mm: 205, rim_diameter_in: 16 } })]
+        const product = { id: 'p1', name: 'x', 'TireSpec.section_width_mm': 205, 'TireSpec.rim_diameter_in': '16' }
+        expect(fitFor(r, 'Vehicle', { make: 'A' }, 'TireSpec', product)).toBe('fits')
+        expect(fitFor(r, 'Vehicle', { make: 'A' }, 'TireSpec', { 'Other.section_width_mm': 205 })).toBe('no')
+        const variant = { attributes: '{"section_width_mm":"205","rim_diameter_in":16}' }
+        expect(fitFor(r, 'Vehicle', { make: 'A' }, 'TireSpec', variant)).toBe('fits')
+    })
     it('toFitmentRule parses jsonb strings and defaults', () => {
         const r = toFitmentRule({ id: 1, subject_model: 'Vehicle', subject_attrs: '{"make":"x"}', target_model: 'T', target_attrs: 'garbage' })
         expect(r).toMatchObject({ id: '1', subject_attrs: { make: 'x' }, target_attrs: {}, is_active: true })

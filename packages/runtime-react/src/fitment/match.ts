@@ -129,6 +129,19 @@ export function targetsForSubject(
 }
 
 /**
+ * Attribute bag of a target row. A product list row carries the columns of
+ * extension models as `"<Model>.<column>"` (e.g. `"TireSpec.rim_diameter_in"`)
+ * and variants carry an `attributes` object: both are folded in, so the caller
+ * can hand over the raw row. Plain keys win over folded ones.
+ */
+export function targetAttrsOf(row: FitmentAttrs, targetModel: string): FitmentAttrs {
+    const out: FitmentAttrs = { ...parseAttrs(row.attributes) }
+    const prefix = `${targetModel}.`
+    for (const k of Object.keys(row)) if (k.startsWith(prefix)) out[k.slice(prefix.length)] = row[k]
+    return { ...out, ...row }
+}
+
+/**
  * Fit state of `target` (the attributes of a product / part / consumable) for
  * `subject`. `unknown` when no active rule covers the subject for that target
  * model: the UI must not warn or filter in that case.
@@ -142,7 +155,8 @@ export function fitFor(
 ): FitState {
     const applicable = rulesForSubject(rules, subjectModel, subject).filter((r) => r.target_model === targetModel)
     if (applicable.length === 0) return 'unknown'
-    return applicable.some((r) => matchesAttrs(r.target_attrs, target)) ? 'fits' : 'no'
+    const bag = targetAttrsOf(target, targetModel)
+    return applicable.some((r) => matchesAttrs(r.target_attrs, bag)) ? 'fits' : 'no'
 }
 
 /** Normalises a raw `/data/FitmentRule` row (jsonb as object or string). */
