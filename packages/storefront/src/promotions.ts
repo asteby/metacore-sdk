@@ -8,6 +8,7 @@
  */
 import { availabilityLocale, formatAvailabilityMessage, type AvailabilityLocale } from './availability.js'
 import { formatMoney } from './money.js'
+import { StorefrontError } from './errors.js'
 import type { CartPromotions, Money, PromotionReward } from './types.js'
 
 export type PromotionLocale = AvailabilityLocale
@@ -68,6 +69,7 @@ export type PromotionMessageKey =
   | 'code.applying'
   | 'code.remove'
   | 'code.applied'
+  | 'code.invalid'
   | 'code.pending_shipping'
   | 'code.invalid_format'
   | 'code.reason.not_found'
@@ -141,6 +143,7 @@ const ES: PromotionMessages = {
   'code.applying': 'Aplicando…',
   'code.remove': 'Quitar',
   'code.applied': 'Cupón {code} aplicado.',
+  'code.invalid': 'Escribe un cupón válido: letras, números, guion o guion bajo.',
   'code.pending_shipping': 'El cupón {code} es válido: el envío gratis se aplica al elegir envío a domicilio.',
   'code.invalid_format': 'Escribe un cupón válido: letras, números, guion o guion bajo.',
   'code.reason.not_found': 'El cupón {code} no existe. Revisa que esté bien escrito.',
@@ -213,6 +216,7 @@ const EN: PromotionMessages = {
   'code.applying': 'Applying…',
   'code.remove': 'Remove',
   'code.applied': 'Code {code} applied.',
+  'code.invalid': 'Enter a valid code: letters, numbers, hyphen or underscore.',
   'code.pending_shipping': 'Code {code} is valid: free shipping applies once you choose home delivery.',
   'code.invalid_format': 'Enter a valid code: letters, numbers, hyphen or underscore.',
   'code.reason.not_found': 'Code {code} does not exist. Check the spelling.',
@@ -412,6 +416,31 @@ export function normalizeDiscountCode(raw: string | null | undefined): string | 
   const code = (raw ?? '').trim().toUpperCase()
   if (!code) return null
   return DISCOUNT_CODE_PATTERN.test(code) ? code : false
+}
+
+/** Outcome of a «discount» form post: the cart OPS answered with, or the status and text to show next to the field. */
+export type DiscountCodeIntentResult<C> = { ok: true; cart: C } | { ok: false; status: number; error: string }
+
+/**
+ * The server half of the coupon field, shared by every route that offers one (cart AND checkout): validates the typed code's
+ * format, saves it on the cart (empty removes it) and maps an OPS rejection of the REQUEST to text for the field. Whether the code
+ * APPLIES is not decided here: the cart comes back with `discount_codes` and the reason, shown by `<DiscountCodeForm>`. A failure
+ * that is not a StorefrontError (network, bug) is rethrown to the route's error boundary.
+ */
+export async function applyDiscountCodeIntent<C>(
+  sf: { carts: { setDiscountCodes(cartId: string, codes: string[]): Promise<C> } },
+  cartId: string,
+  raw: unknown,
+  opts: { locale?: string; messages?: Pick<PromotionMessages, 'code.invalid'> } = {},
+): Promise<DiscountCodeIntentResult<C>> {
+  const code = normalizeDiscountCode(typeof raw === 'string' ? raw : '')
+  if (code === false) return { ok: false, status: 400, error: (opts.messages ?? promotionMessages(opts.locale))['code.invalid'] }
+  try {
+    return { ok: true, cart: await sf.carts.setDiscountCodes(cartId, code ? [code] : []) }
+  } catch (err) {
+    if (err instanceof StorefrontError) return { ok: false, status: err.status >= 400 ? err.status : 400, error: err.message }
+    throw err
+  }
 }
 
 /**

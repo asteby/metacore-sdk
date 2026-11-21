@@ -95,8 +95,10 @@ export {
   discountCodeFeedback,
   discountCodeMessage,
   normalizeDiscountCode,
+  applyDiscountCodeIntent,
 } from './promotions.js'
 export type {
+  DiscountCodeIntentResult,
   DiscountBarState,
   DiscountCodeFeedback,
   DiscountBarView,
