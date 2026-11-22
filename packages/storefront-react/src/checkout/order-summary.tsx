@@ -12,6 +12,10 @@ export type OrderSummaryMessages = {
   title: string
   subtotal: string
   discount: string
+  /** Source of a discount in the breakdown: the amount promotion. */
+  discountAutomatic: string
+  /** Source of a discount in the breakdown: a coupon, `{code}`. */
+  discountCode: string
   shipping: string
   /** Shipping not chosen yet. */
   shippingPending: string
@@ -34,6 +38,8 @@ const ES: OrderSummaryMessages = {
   title: 'Tu pedido',
   subtotal: 'Subtotal',
   discount: 'Descuento',
+  discountAutomatic: 'Promoción por monto',
+  discountCode: 'Cupón {code}',
   shipping: 'Envío',
   shippingPending: 'Al elegir la entrega',
   updating: 'Actualizando…',
@@ -51,6 +57,8 @@ const EN: OrderSummaryMessages = {
   title: 'Your order',
   subtotal: 'Subtotal',
   discount: 'Discount',
+  discountAutomatic: 'Amount promotion',
+  discountCode: 'Coupon {code}',
   shipping: 'Shipping',
   shippingPending: 'Calculated at delivery',
   updating: 'Updating…',
@@ -70,7 +78,7 @@ export function orderSummaryMessages(locale?: string | null, overrides?: Partial
 }
 
 export type OrderSummaryClassNames = Partial<
-  Record<'root' | 'title' | 'lines' | 'line' | 'media' | 'qty' | 'lineTitle' | 'variant' | 'linePrice' | 'totals' | 'row' | 'discount' | 'muted' | 'free' | 'total' | 'note', string>
+  Record<'root' | 'title' | 'lines' | 'line' | 'media' | 'qty' | 'lineTitle' | 'variant' | 'linePrice' | 'totals' | 'row' | 'discount' | 'source' | 'muted' | 'free' | 'total' | 'note', string>
 >
 
 export type OrderSummaryProps = {
@@ -109,14 +117,11 @@ const positive = (m: Money | null | undefined): m is Money => !!m && Number(m.am
 /** Lines and totals of the order. The total row is `aria-live`, so a new total after choosing delivery is announced. */
 export function OrderSummary(props: OrderSummaryProps) {
   const { lines, cost, updating: upd = false, quoting = false, media = true, renderAmount, title, headingLevel = 2, classNames: cx = {}, children } = props
-  const updating = upd || quoting
   const locale = useResolvedLocale(props.locale)
   const m = orderSummaryMessages(locale, props.messages)
   const money = (v: Money) => (renderAmount ? renderAmount(v) : formatMoney(v, locale))
   const renderLineMedia = props.renderLineMedia ?? (media ? defaultLineMedia : undefined)
   const H = headingLevel === 3 ? 'h3' : 'h2'
-  const discounts = cost.discounts?.filter((d) => positive(d.amount)) ?? []
-  const discountTotal: Money | null = positive(cost.discount) ? cost.discount : discounts.length === 1 ? discounts[0]!.amount : null
   return (
     <div className={cx.root} data-sf-summary>
       {title === false ? null : (
@@ -161,6 +166,27 @@ export function OrderSummary(props: OrderSummaryProps) {
         })}
       </ul>
       {children}
+      <OrderTotals cost={cost} updating={upd} quoting={quoting} renderAmount={renderAmount} locale={locale} messages={props.messages} classNames={cx} />
+    </div>
+  )
+}
+
+export type OrderTotalsProps = Pick<OrderSummaryProps, 'cost' | 'updating' | 'quoting' | 'renderAmount' | 'locale' | 'messages' | 'classNames'>
+
+/**
+ * Subtotal, one «Descuento» row with the server total (plus a breakdown by source, «Promoción por monto» / «Cupón X», when two or
+ * more discounts add up), shipping, taxes and total, exactly as `cart.cost` sends them. Used by `OrderSummary` (checkout) and by the
+ * shop's cart page, so both read the same. The total row is `aria-live`.
+ */
+export function OrderTotals({ cost, updating: upd = false, quoting = false, renderAmount, classNames: cx = {}, ...props }: OrderTotalsProps) {
+  const updating = upd || quoting
+  const locale = useResolvedLocale(props.locale)
+  const m = orderSummaryMessages(locale, props.messages)
+  const money = (v: Money) => (renderAmount ? renderAmount(v) : formatMoney(v, locale))
+  const sources = cost.discounts?.filter((d) => positive(d.amount)) ?? []
+  const discountTotal: Money | null = positive(cost.discount) ? cost.discount : sources.length === 1 ? sources[0]!.amount : null
+  return (
+    <>
       <dl className={cx.totals} data-sf-summary-totals aria-busy={updating || undefined}>
         <div className={cx.row} data-sf-summary-row="subtotal">
           <dt>{m.subtotal}</dt>
@@ -173,6 +199,14 @@ export function OrderSummary(props: OrderSummaryProps) {
             <dd>−{money(discountTotal)}</dd>
           </div>
         ) : null}
+        {sources.length > 1
+          ? sources.map((d) => (
+              <div key={d.id} className={cx.source} data-sf-summary-row="source">
+                <dt>{d.kind === 'code' && d.code ? m.discountCode.replace('{code}', d.code) : m.discountAutomatic}</dt>
+                <dd>−{money(d.amount)}</dd>
+              </div>
+            ))
+          : null}
         <div className={cx.row} data-sf-summary-row="shipping">
           <dt>{m.shipping}</dt>
           <dd className={updating || !cost.shipping ? cx.muted : undefined}>
@@ -197,7 +231,7 @@ export function OrderSummary(props: OrderSummaryProps) {
           {m.taxesIncluded.split('{amount}').flatMap((part, i) => (i === 0 ? [part] : [<span key={i}>{money(cost.tax!)}</span>, part]))}
         </p>
       ) : null}
-    </div>
+    </>
   )
 }
 

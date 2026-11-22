@@ -31,3 +31,6 @@ export type { FrequencyInput, PathPattern, PromoFrequency, PromoSeenStore, Promo
 
 export { CheckoutDiscountCode, DiscountCodeForm } from './discount-code.js'
 export type { CheckoutDiscountCodeProps, DiscountCodeFormProps } from './discount-code.js'
+
+export { DiscountPanel } from './discount-panel.js'
+export type { DiscountPanelLayout, DiscountPanelProps } from './discount-panel.js'
