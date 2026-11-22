@@ -70,6 +70,10 @@
 }
 [data-sf-promo-milestones] > li[data-edge="start"] { align-items: flex-start; text-align: start; transform: translateX(calc(var(--_dot) / -2)); }
 [data-sf-promo-milestones] > li[data-edge="end"] { align-items: flex-end; text-align: end; transform: translateX(calc(-100% + var(--_dot) / 2)); }
+/* Hitos juntos (data-crowded, ver crowdedAnchors): el anterior termina en su marcador y el siguiente empieza en el suyo, sin encimarse. */
+[data-sf-promo-milestones] > li[data-crowded="end"] { align-items: flex-end; text-align: end; transform: translateX(calc(-100% + var(--_dot) / 2)); }
+[data-sf-promo-milestones] > li[data-crowded="start"] { align-items: flex-start; text-align: start; transform: translateX(calc(var(--_dot) / -2)); }
+[data-sf-promo-tier-label], [data-sf-promo-tier-threshold] { white-space: nowrap; }
 [data-sf-promo-dot] {
   display: grid; place-items: center; width: var(--_dot); height: var(--_dot); margin-bottom: .25rem; box-sizing: border-box;
   border-radius: 999px; color: transparent; background: var(--card, var(--background));

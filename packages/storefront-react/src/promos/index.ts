@@ -1,7 +1,7 @@
 export { PromoPopup } from './promo-popup.js'
 export type { PromoPopupEvent, PromoPopupProps } from './promo-popup.js'
 
-export { CartProgressBars, PromoProgressBar } from './cart-progress-bars.js'
+export { CartProgressBars, PromoProgressBar, crowdedAnchors, CROWDED_GAP } from './cart-progress-bars.js'
 export type { CartProgressBarsProps, ProgressBarProps } from './cart-progress-bars.js'
 
 export { CrossSellModal } from './cross-sell-modal.js'
