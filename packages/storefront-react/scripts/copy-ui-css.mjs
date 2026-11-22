@@ -41,3 +41,6 @@ writeFileSync(new URL('../dist/subjects.css', import.meta.url), readFileSync(new
 
 // Hoja de NavigationProgress, Skeleton y Spinner (subpath /ui), sin el resto de ui.css.
 writeFileSync(new URL('../dist/progress.css', import.meta.url), read('progress.css'))
+
+// Hoja por omisión de las barras de descuento escalonado y envío gratis (subpath /promos.css).
+writeFileSync(new URL('../dist/promos.css', import.meta.url), readFileSync(new URL('../src/promos/promos.css', import.meta.url), 'utf8'))
