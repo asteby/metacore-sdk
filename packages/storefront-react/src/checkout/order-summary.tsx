@@ -116,6 +116,7 @@ export function OrderSummary(props: OrderSummaryProps) {
   const renderLineMedia = props.renderLineMedia ?? (media ? defaultLineMedia : undefined)
   const H = headingLevel === 3 ? 'h3' : 'h2'
   const discounts = cost.discounts?.filter((d) => positive(d.amount)) ?? []
+  const discountTotal: Money | null = positive(cost.discount) ? cost.discount : discounts.length === 1 ? discounts[0]!.amount : null
   return (
     <div className={cx.root} data-sf-summary>
       {title === false ? null : (
@@ -165,19 +166,13 @@ export function OrderSummary(props: OrderSummaryProps) {
           <dt>{m.subtotal}</dt>
           <dd>{money(cost.subtotal)}</dd>
         </div>
-        {discounts.length
-          ? discounts.map((d) => (
-              <div key={d.id} className={cx.row ? `${cx.row} ${cx.discount ?? ''}`.trim() : cx.discount} data-sf-summary-row="discount">
-                <dt>{d.code ? `${m.discount} (${d.code})` : d.title || m.discount}</dt>
-                <dd>−{money(d.amount)}</dd>
-              </div>
-            ))
-          : positive(cost.discount) ? (
-              <div className={cx.row ? `${cx.row} ${cx.discount ?? ''}`.trim() : cx.discount} data-sf-summary-row="discount">
-                <dt>{m.discount}</dt>
-                <dd>−{money(cost.discount)}</dd>
-              </div>
-            ) : null}
+        {discountTotal ? (
+          // Una sola línea «Descuento»: ahí suman todos (promoción por monto, cupón…); el total lo manda el servidor.
+          <div className={cx.row ? `${cx.row} ${cx.discount ?? ''}`.trim() : cx.discount} data-sf-summary-row="discount">
+            <dt>{m.discount}</dt>
+            <dd>−{money(discountTotal)}</dd>
+          </div>
+        ) : null}
         <div className={cx.row} data-sf-summary-row="shipping">
           <dt>{m.shipping}</dt>
           <dd className={updating || !cost.shipping ? cx.muted : undefined}>
