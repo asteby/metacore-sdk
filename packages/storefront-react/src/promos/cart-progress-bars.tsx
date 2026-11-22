@@ -64,6 +64,25 @@ function highlight(text: string, amount?: string | null): ReactNode {
 /** A milestone near an end is anchored to that edge of the bar, so its label never overflows the card. */
 const edgeOf = (position: number) => (position <= 12 ? 'start' : position >= 88 ? 'end' : undefined)
 
+/** Two consecutive milestones closer than this many percentage points would stack their labels, so they fan out. */
+export const CROWDED_GAP = 22
+
+/**
+ * Per milestone: `end` = its label ends at its own marker (grows to the left), `start` = its label starts at its marker
+ * (grows to the right). Only milestones in a crowded run get one: all but the last of the run are `end`, the last is `start`,
+ * unless it is anchored to the right edge already (`data-edge="end"`), which keeps its own anchor.
+ * Pure, so it is unit-testable; markers are assumed sorted by `position`.
+ */
+export function crowdedAnchors(positions: number[], gap = CROWDED_GAP): ('start' | 'end' | undefined)[] {
+  return positions.map((pos, i) => {
+    const next = positions[i + 1]
+    const prev = positions[i - 1]
+    if (next !== undefined && next - pos < gap) return edgeOf(pos) === 'start' ? undefined : 'end'
+    if (prev !== undefined && pos - prev < gap) return edgeOf(pos) === 'end' ? undefined : 'start'
+    return undefined
+  })
+}
+
 /**
  * One accessible bar: color is never the only signal (text states the remaining amount; milestones are text).
  * The fill width is the server percentage; the transition is off for `prefers-reduced-motion`.
@@ -74,6 +93,7 @@ export function PromoProgressBar({ text, percent, label, showBar = true, milesto
   const [reduced, setReduced] = useState(false)
   useEffect(() => setReduced(prefersReducedMotion()), [])
   const nextId = milestones?.find((t) => !t.reached)?.id
+  const crowded = useMemo(() => crowdedAnchors((milestones ?? []).map((t) => t.position)), [milestones])
   const fill: CSSProperties = { width: `${percent}%`, transition: reduced ? 'none' : 'width 600ms ease' }
   return (
     <div className={className} data-sf-promo-bar={kind} data-state={state}>
@@ -97,8 +117,8 @@ export function PromoProgressBar({ text, percent, label, showBar = true, milesto
       )}
       {showBar && milestones && milestones.length > 0 && (
         <ul data-sf-promo-milestones>
-          {milestones.map((t) => (
-            <li key={t.id} data-reached={t.reached} data-next={t.id === nextId ? true : undefined} data-edge={edgeOf(t.position)} style={{ left: `${t.position}%` }}>
+          {milestones.map((t, i) => (
+            <li key={t.id} data-reached={t.reached} data-next={t.id === nextId ? true : undefined} data-edge={edgeOf(t.position)} data-crowded={crowded[i]} style={{ left: `${t.position}%` }}>
               <span data-sf-promo-dot aria-hidden="true">
                 <svg {...svg} strokeWidth={3.5}>
                   <path d="m5 12 5 5 9-10" />
