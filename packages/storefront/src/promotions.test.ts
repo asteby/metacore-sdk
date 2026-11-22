@@ -51,7 +51,7 @@ describe('promoProgressView: discount bar', () => {
     const v = promoProgressView(promos(), 'es-MX').discount!
     expect(v.state).toBe('next')
     expect(v.percent).toBe(27)
-    expect(v.text).toBe('Añade $1,551 para activar tu descuento automático')
+    expect(v.text).toBe('Te faltan $1,551 para obtener 5 % de descuento')
     expect(v.rewardText).toBe('5 %')
     expect(v.tiers.map((t) => [t.label, t.threshold, t.reached])).toEqual([['5 %', '$2,300', false], ['10 %', '$2,700', false]])
   })
@@ -65,7 +65,7 @@ describe('promoProgressView: discount bar', () => {
       'es-MX',
     ).discount!
     expect(v.state).toBe('upgrade')
-    expect(v.text).toBe('Añade $400 para subir a 10 %')
+    expect(v.text).toBe('Te faltan $400 para pasar de 5 % a 10 % de descuento')
     expect(v.appliedText).toBe('¡Tienes 5 % de descuento!')
   })
   it('max level', () => {
@@ -94,7 +94,7 @@ describe('promoProgressView: free-shipping bar', () => {
   const fs = (patch: Partial<NonNullable<CartPromotions['free_shipping']>>): CartPromotions =>
     promos({ tiers: [], next_tier: null, applied: null, free_shipping: { threshold: mxn('1500.00'), basis: mxn('900.00'), remaining: mxn('600.00'), reached: false, percent: 60, ...patch } })
   it.each([
-    ['progress', fs({}), 'progress', 60, 'Añade $600 para envío gratis', true],
+    ['progress', fs({}), 'progress', 60, 'Te faltan $600 para el envío gratis', true],
     ['reached', fs({ reached: true, remaining: mxn('0.00'), percent: 100 }), 'reached', 100, '¡Felicidades! Tienes envío gratis', true],
     ['no minimum (threshold 0)', fs({ threshold: mxn('0.00'), reached: true }), 'always', 100, 'Envío gratis en todo tu pedido', false],
   ] as const)('%s', (_n, p, state, percent, text, showBar) => {

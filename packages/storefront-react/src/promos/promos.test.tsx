@@ -284,10 +284,10 @@ describe('CartProgressBars', () => {
     const bars = screen.getAllByRole('progressbar')
     expect(bars).toHaveLength(2)
     expect(bars[0]!.getAttribute('aria-valuenow')).toBe('27')
-    expect(bars[0]!.getAttribute('aria-valuetext')).toBe('Añade $1,551 para activar tu descuento automático')
+    expect(bars[0]!.getAttribute('aria-valuetext')).toBe('Te faltan $1,551 para obtener 5 % de descuento')
     expect(bars[0]!.getAttribute('aria-label')).toBe('Progreso del descuento automático')
     expect(bars[1]!.getAttribute('aria-valuenow')).toBe('49')
-    expect(bars[1]!.getAttribute('aria-valuetext')).toBe('Añade $751 para envío gratis')
+    expect(bars[1]!.getAttribute('aria-valuetext')).toBe('Te faltan $751 para el envío gratis')
     expect((bars[0]!.firstElementChild as HTMLElement).style.width).toBe('27%')
     expect(container.querySelector('[data-sf-promo-milestones]')!.textContent).toContain('5 %')
     await noViolations(container)
@@ -304,7 +304,7 @@ describe('CartProgressBars', () => {
     const { container } = render(<CartProgressBars promotions={promos()} locale="es-MX" />)
     const amounts = container.querySelectorAll('[data-sf-promo-amount]')
     expect(Array.from(amounts).map((e) => e.textContent)).toEqual(['$1,551', '$751'])
-    expect(container.querySelector('[data-sf-promo-bar-text]')!.textContent).toBe('Añade $1,551 para activar tu descuento automático')
+    expect(container.querySelector('[data-sf-promo-bar-text]')!.textContent).toBe('Te faltan $1,551 para obtener 5 % de descuento')
     expect(container.querySelectorAll('[data-sf-promo-icon] svg[aria-hidden=true]')).toHaveLength(2)
     const items = container.querySelectorAll('[data-sf-promo-milestones] > li')
     expect(container.querySelectorAll('[data-sf-promo-dot]')).toHaveLength(items.length)
@@ -323,7 +323,7 @@ describe('CartProgressBars', () => {
         promotions={promos({ applied: { tier_id: 't5', reward: { kind: 'percent', percent: '5' }, amount: mxn('115.00') }, next_tier: { tier_id: 't10', threshold: mxn('2700.00'), remaining: mxn('400.00'), reward: { kind: 'percent', percent: '10' }, percent: 85 }, percent_of_max: 85, free_shipping: null })}
       />,
     )
-    expect(container.textContent).toContain('Añade $400 para subir a 10 %')
+    expect(container.textContent).toContain('Te faltan $400 para pasar de 5 % a 10 % de descuento')
   })
 })
 

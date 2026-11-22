@@ -89,14 +89,14 @@ export type PromotionMessageKey =
 export type PromotionMessages = Record<PromotionMessageKey, string>
 
 const ES: PromotionMessages = {
-  'discount.next': 'Añade {remaining} para activar tu descuento automático',
-  'discount.next_upgrade': 'Añade {remaining} para subir a {reward}',
+  'discount.next': 'Te faltan {remaining} para obtener {reward} de descuento',
+  'discount.next_upgrade': 'Te faltan {remaining} para pasar de {current} a {reward} de descuento',
   'discount.applied': '¡Tienes {reward} de descuento!',
   'discount.max': '¡Tienes {reward} de descuento, el máximo!',
   'discount.suppressed': 'Tu código de descuento ya te da un mejor precio.',
   'discount.unlocks': 'Desbloqueas {reward} de descuento',
   'discount.remaining': 'Te faltan {remaining}',
-  'shipping.progress': 'Añade {remaining} para envío gratis',
+  'shipping.progress': 'Te faltan {remaining} para el envío gratis',
   'shipping.reached': '¡Felicidades! Tienes envío gratis',
   'shipping.always': 'Envío gratis en todo tu pedido',
   'reward.free_shipping': 'Envío gratis',
@@ -163,14 +163,14 @@ const ES: PromotionMessages = {
 }
 
 const EN: PromotionMessages = {
-  'discount.next': 'Add {remaining} to unlock your automatic discount',
-  'discount.next_upgrade': 'Add {remaining} to move up to {reward}',
+  'discount.next': 'Add {remaining} more to get {reward} off',
+  'discount.next_upgrade': 'Add {remaining} more to go from {current} to {reward} off',
   'discount.applied': 'You have {reward} off!',
   'discount.max': 'You have {reward} off, the maximum!',
   'discount.suppressed': 'Your discount code already gives you a better price.',
   'discount.unlocks': 'Unlock {reward} off',
   'discount.remaining': '{remaining} to go',
-  'shipping.progress': 'Add {remaining} for free shipping',
+  'shipping.progress': 'Add {remaining} more for free shipping',
   'shipping.reached': 'Congratulations! You get free shipping',
   'shipping.always': 'Free shipping on your whole order',
   'reward.free_shipping': 'Free shipping',
@@ -352,10 +352,10 @@ export function promoProgressView(
       text = appliedReward ? f(m['discount.max'], { reward: appliedReward }) : m['discount.suppressed']
     } else if (applied) {
       state = 'upgrade'
-      text = f(m['discount.next_upgrade'], { remaining: fmt(next.remaining, locale), reward: rewardLabel(next.reward, locale, overrides) })
+      text = f(m['discount.next_upgrade'], { remaining: fmt(next.remaining, locale), current: appliedReward ?? '', reward: rewardLabel(next.reward, locale, overrides) })
     } else {
       state = 'next'
-      text = f(m['discount.next'], { remaining: fmt(next.remaining, locale) })
+      text = f(m['discount.next'], { remaining: fmt(next.remaining, locale), reward: rewardLabel(next.reward, locale, overrides) })
     }
     discount = {
       state,
