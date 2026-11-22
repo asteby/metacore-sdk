@@ -1,0 +1,90 @@
+/*
+ * @asteby/storefront-react/promos.css: estilos por omisión de las barras de descuento escalonado y envío gratis
+ * (CartProgressBars / PromoProgressBar, subpath /promos). CSS plano, sin Tailwind.
+ * Se pinta con los tokens de la tienda: --card, --background, --foreground, --border, --muted-foreground, --primary,
+ * --success, --radius. Para cambiar solo estas barras: --sf-promo-accent (progreso) y --sf-promo-success (logrado).
+ * Sin colores ni marcas escritos aquí: el tema oscuro sale de los tokens de la tienda.
+ */
+[data-sf-promo-bars] {
+  --_accent: var(--sf-promo-accent, var(--primary, currentColor));
+  --_ok: var(--sf-promo-success, var(--success, var(--primary, currentColor)));
+  --_track: .5rem;
+  --_dot: 1.125rem;
+  display: grid; gap: .75rem; min-width: 0;
+}
+[data-sf-promo-bar] {
+  --_tone: var(--_accent);
+  display: grid; gap: .875rem; min-width: 0; padding: .875rem 1rem; box-sizing: border-box;
+  color: var(--foreground); background: var(--card, var(--background));
+  border: 1px solid var(--border); border-radius: calc(var(--radius, .5rem) + 2px);
+}
+[data-sf-promo-bar][data-state="max"], [data-sf-promo-bar][data-state="reached"], [data-sf-promo-bar][data-state="always"] {
+  --_tone: var(--_ok);
+  border-color: color-mix(in srgb, var(--_ok) 45%, var(--border));
+  background: color-mix(in srgb, var(--_ok) 7%, var(--card, var(--background)));
+}
+[data-sf-promo-bar][data-state="suppressed"] { opacity: .65; --_tone: var(--muted-foreground, currentColor); }
+
+[data-sf-promo-head] { display: flex; align-items: center; gap: .75rem; min-width: 0; }
+[data-sf-promo-icon] {
+  display: grid; flex: none; place-items: center; width: 2.25rem; height: 2.25rem; border-radius: 999px;
+  color: var(--_tone); background: color-mix(in srgb, var(--_tone) 14%, transparent);
+}
+[data-sf-promo-icon] svg { width: 1.25rem; height: 1.25rem; }
+[data-sf-promo-bar-text] { margin: 0; min-width: 0; font-size: .875rem; line-height: 1.35; font-weight: 500; overflow-wrap: anywhere; }
+[data-sf-promo-amount] { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--_tone); white-space: nowrap; }
+
+[data-sf-promo-percent] {
+  flex: none; margin-inline-start: auto; padding: .125rem .5rem; border-radius: 999px; font-size: .75rem; font-weight: 700; font-variant-numeric: tabular-nums;
+  color: var(--_tone); background: color-mix(in srgb, var(--_tone) 12%, transparent);
+}
+
+/* Pista y relleno. El ancho del relleno y su transición los pone el componente (respeta prefers-reduced-motion). */
+[data-sf-promo-track] {
+  height: var(--_track); margin-inline: calc(var(--_dot) / 2); overflow: hidden; border-radius: 999px;
+  background: color-mix(in srgb, var(--foreground) 10%, transparent);
+}
+[data-sf-promo-fill] {
+  height: 100%; border-radius: inherit; min-width: var(--_track);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--_tone) 70%, transparent), var(--_tone));
+}
+[data-sf-promo-bar][data-state="max"] [data-sf-promo-fill],
+[data-sf-promo-bar][data-state="reached"] [data-sf-promo-fill] {
+  background: linear-gradient(90deg, var(--_ok), color-mix(in srgb, var(--_ok) 60%, var(--card, var(--background))), var(--_ok));
+  background-size: 200% 100%; animation: sf-promo-shine 2.8s ease-in-out 1;
+}
+[data-sf-promo-bar][data-state="suppressed"] [data-sf-promo-fill] { background: var(--_tone); }
+[data-sf-promo-bar][data-state="max"] [data-sf-promo-icon] { animation: sf-promo-pop 600ms cubic-bezier(.2,1.4,.4,1) 1; }
+@keyframes sf-promo-pop { from { transform: scale(.6); } to { transform: scale(1); } }
+@keyframes sf-promo-shine { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+
+/* Hitos: marcadores sobre la pista; etiqueta debajo. Los extremos se anclan al borde (data-edge) para no desbordar. */
+[data-sf-promo-milestones] {
+  position: relative; height: 3.25rem; margin: calc(-.875rem - (var(--_track) + var(--_dot)) / 2) calc(var(--_dot) / 2) 0; padding: 0; list-style: none;
+}
+[data-sf-promo-milestones] > li {
+  position: absolute; top: 0; display: flex; flex-direction: column; align-items: center; width: max-content; max-width: 6rem;
+  transform: translateX(-50%); line-height: 1.15; text-align: center; font-size: .75rem; color: var(--muted-foreground);
+}
+[data-sf-promo-milestones] > li[data-edge="start"] { align-items: flex-start; text-align: start; transform: translateX(calc(var(--_dot) / -2)); }
+[data-sf-promo-milestones] > li[data-edge="end"] { align-items: flex-end; text-align: end; transform: translateX(calc(-100% + var(--_dot) / 2)); }
+[data-sf-promo-dot] {
+  display: grid; place-items: center; width: var(--_dot); height: var(--_dot); margin-bottom: .25rem; box-sizing: border-box;
+  border-radius: 999px; color: transparent; background: var(--card, var(--background));
+  border: 2px solid color-mix(in srgb, var(--foreground) 25%, transparent);
+}
+[data-sf-promo-dot] svg { width: .625rem; height: .625rem; }
+[data-sf-promo-tier-label] { font-size: .8125rem; font-weight: 700; color: var(--foreground); }
+[data-sf-promo-tier-threshold] { font-variant-numeric: tabular-nums; }
+[data-sf-promo-milestones] > li[data-next] [data-sf-promo-dot] { border-color: var(--_tone); box-shadow: 0 0 0 3px color-mix(in srgb, var(--_tone) 20%, transparent); }
+[data-sf-promo-milestones] > li[data-next] [data-sf-promo-tier-label] { color: var(--_tone); }
+[data-sf-promo-milestones] > li[data-reached="true"] [data-sf-promo-dot] { color: var(--card, var(--background)); background: var(--_ok); border-color: var(--_ok); }
+[data-sf-promo-milestones] > li[data-reached="true"] [data-sf-promo-tier-label] { color: var(--_ok); }
+
+@media (min-width: 30em) {
+  [data-sf-promo-bar] { padding: 1rem 1.125rem; }
+  [data-sf-promo-bar-text] { font-size: .9375rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-sf-promo-fill], [data-sf-promo-icon] { animation: none !important; transition: none !important; }
+}

@@ -207,6 +207,7 @@
     },
     "./ui.css": "./dist/ui.css",
     "./progress.css": "./dist/progress.css",
+    "./promos.css": "./dist/promos.css",
     "./package.json": "./package.json",
     "./tracking": {
       "import": {

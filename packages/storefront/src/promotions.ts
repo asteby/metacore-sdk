@@ -288,6 +288,8 @@ export type DiscountBarView = {
   /** `aria-valuetext`. */
   valueText: string
   remaining: Money | null
+  /** `remaining` formatted as in `text` (to highlight it), or null. */
+  remainingText: string | null
   /** Reward of the next tier (or the applied one at max). */
   rewardText: string | null
   appliedText: string | null
@@ -303,6 +305,8 @@ export type ShippingBarView = {
   text: string
   valueText: string
   remaining: Money | null
+  /** `remaining` formatted as in `text` (to highlight it), or null. */
+  remainingText: string | null
   /** `false` for `always`: there is nothing to fill. */
   showBar: boolean
 }
@@ -359,6 +363,7 @@ export function promoProgressView(
       text,
       valueText: text,
       remaining: next?.remaining ?? null,
+      remainingText: next ? fmt(next.remaining, locale) : null,
       rewardText: next ? rewardLabel(next.reward, locale, overrides) : appliedReward,
       appliedText: appliedReward ? f(m['discount.applied'], { reward: appliedReward }) : null,
       nextText: next ? f(m['discount.unlocks'], { reward: rewardLabel(next.reward, locale, overrides) }) : null,
@@ -377,12 +382,13 @@ export function promoProgressView(
   if (fs) {
     const noMinimum = Number.parseFloat(fs.threshold.amount) === 0
     if (noMinimum) {
-      shipping = { state: 'always', percent: 100, text: m['shipping.always'], valueText: m['shipping.always'], remaining: null, showBar: false }
+      shipping = { state: 'always', percent: 100, text: m['shipping.always'], valueText: m['shipping.always'], remaining: null, remainingText: null, showBar: false }
     } else if (fs.reached) {
-      shipping = { state: 'reached', percent: 100, text: m['shipping.reached'], valueText: m['shipping.reached'], remaining: null, showBar: true }
+      shipping = { state: 'reached', percent: 100, text: m['shipping.reached'], valueText: m['shipping.reached'], remaining: null, remainingText: null, showBar: true }
     } else {
-      const text = f(m['shipping.progress'], { remaining: fmt(fs.remaining, locale) })
-      shipping = { state: 'progress', percent: clampPercent(fs.percent), text, valueText: text, remaining: fs.remaining, showBar: true }
+      const remainingText = fmt(fs.remaining, locale)
+      const text = f(m['shipping.progress'], { remaining: remainingText })
+      shipping = { state: 'progress', percent: clampPercent(fs.percent), text, valueText: text, remaining: fs.remaining, remainingText, showBar: true }
     }
   }
   return { discount, shipping }
