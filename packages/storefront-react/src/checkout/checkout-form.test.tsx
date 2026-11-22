@@ -547,7 +547,7 @@ describe('OrderSummary', () => {
     const { container } = render(
       <OrderSummary lines={[line('a', 'X', 1, '100.00')]} cost={cost({ discount: mxn('10'), discounts: [{ kind: 'code', id: 'd1', title: 'Bienvenida', code: 'HOLA10', amount: mxn('10') }], shipping: mxn('0') })} updating />,
     )
-    expect(container.querySelector('[data-sf-summary-row="discount"]')!.textContent).toMatch(/Descuento \(HOLA10\)−/)
+    expect(container.querySelector('[data-sf-summary-row="discount"]')!.textContent).toMatch(/^Descuento−/)
     expect(container.querySelector('[data-sf-summary-row="shipping"]')!.textContent).toBe('EnvíoActualizando…')
     expect(container.querySelector('dl')!.getAttribute('aria-busy')).toBe('true')
   })

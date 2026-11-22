@@ -8,10 +8,12 @@
 [data-sf-promo-bars] {
   --_accent: var(--sf-promo-accent, var(--primary, currentColor));
   --_ok: var(--sf-promo-success, var(--success, var(--primary, currentColor)));
-  --_track: .5rem;
+  --_track: .625rem;
   --_dot: 1.125rem;
-  display: grid; gap: .75rem; min-width: 0;
+  gap: .625rem; min-width: 0;
 }
+/* `display` en la capa de componentes: una utilidad de la tienda (hidden, lg:hidden…) puede ocultar el bloque. */
+@layer components { [data-sf-promo-bars] { display: grid; } }
 [data-sf-promo-bar] {
   --_tone: var(--_accent);
   display: grid; gap: .875rem; min-width: 0; padding: .875rem 1rem; box-sizing: border-box;
@@ -31,7 +33,7 @@
   color: var(--_tone); background: color-mix(in srgb, var(--_tone) 14%, transparent);
 }
 [data-sf-promo-icon] svg { width: 1.25rem; height: 1.25rem; }
-[data-sf-promo-bar-text] { margin: 0; min-width: 0; font-size: .875rem; line-height: 1.35; font-weight: 500; overflow-wrap: anywhere; }
+[data-sf-promo-bar-text] { margin: 0; min-width: 0; text-wrap: pretty; font-size: .875rem; line-height: 1.35; font-weight: 500; overflow-wrap: anywhere; }
 [data-sf-promo-amount] { font-weight: 800; font-variant-numeric: tabular-nums; color: var(--_tone); white-space: nowrap; }
 
 [data-sf-promo-percent] {
@@ -88,3 +90,48 @@
 @media (prefers-reduced-motion: reduce) {
   [data-sf-promo-fill], [data-sf-promo-icon] { animation: none !important; transition: none !important; }
 }
+
+/*
+ * Cupón de descuento (DiscountCodeForm / CheckoutDiscountCode): campo y botón en UNA fila y a la misma altura,
+ * mensajes de estado debajo. El aspecto del campo y del botón lo siguen poniendo las clases de la tienda
+ * (inputClassName / buttonClassName); aquí solo la estructura, en carrito y pago por igual.
+ */
+[data-sf-discount-code] label { display: block; margin-bottom: .375rem; font-size: .875rem; font-weight: 600; }
+[data-sf-discount-code-row] { display: flex; flex-wrap: wrap; align-items: stretch; gap: .5rem; }
+[data-sf-discount-code-row] input { flex: 1 1 9rem; min-width: 0; min-height: 2.75rem; box-sizing: border-box; text-transform: uppercase; }
+[data-sf-discount-code-row] input::placeholder { text-transform: none; }
+[data-sf-discount-code-row] button { flex: 0 0 auto; min-height: 2.75rem; white-space: nowrap; }
+@media (max-width: 22rem) { [data-sf-discount-code-row] button { flex: 1 1 100%; } }
+[data-sf-discount-code-row] :is(input, button):focus-visible { outline: 2px solid var(--ring, var(--primary, currentColor)); outline-offset: 2px; }
+[data-sf-discount-code-messages]:empty { display: none; }
+[data-sf-discount-code-messages] { margin-top: .5rem; font-size: .875rem; line-height: 1.35; }
+[data-sf-discount-code-messages] > * + * { margin-top: .25rem; }
+[data-sf-discount-code-messages] p { margin: 0; }
+[data-sf-discount-code-status='rejected'], [data-sf-discount-code-status='invalid'], [data-sf-discount-code-status='error'] { color: var(--sale, var(--destructive, currentColor)); font-weight: 600; }
+[data-sf-discount-code-applied] { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+[data-sf-discount-code-applied] p { font-weight: 600; color: var(--success, currentColor); }
+[data-sf-discount-code-applied] button { min-height: 2.75rem; padding-inline: .25rem; }
+
+/* Bloque de descuentos (DiscountPanel): barras + cupón. Variantes por data-layout: aside (resumen del pago), cart (página del carrito), drawer (mini-carrito). */
+[data-sf-discount-panel] { gap: 1rem; min-width: 0; }
+@layer components { [data-sf-discount-panel] { display: grid; } }
+[data-sf-discount-panel][data-layout='aside'] > [data-sf-discount-code],
+[data-sf-discount-panel][data-layout='cart'] > [data-sf-discount-code] {
+  padding-top: 1rem; border-top: 1px solid var(--border, color-mix(in srgb, currentColor 16%, transparent));
+}
+[data-sf-discount-panel][data-layout='drawer'] [data-sf-promo-bar] { padding: .75rem .875rem; gap: .75rem; }
+[data-sf-discount-panel][data-layout='drawer'] [data-sf-promo-bar-text] { font-size: .875rem; }
+
+/* «¿Tienes un cupón?» plegable (CheckoutDiscountCode variant collapsible): caja con +/− por CSS. */
+[data-sf-checkout-discount-code] {
+  border: 1px solid var(--border, color-mix(in srgb, currentColor 16%, transparent)); border-radius: calc(var(--radius, .5rem) + 2px);
+  background: var(--card, var(--background));
+}
+[data-sf-checkout-discount-code] > summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 3rem; padding-inline: 1rem;
+  font-size: .875rem; font-weight: 600; cursor: pointer; list-style: none;
+}
+[data-sf-checkout-discount-code] > summary::-webkit-details-marker { display: none; }
+[data-sf-checkout-discount-code] > summary::after { content: '+'; font-size: 1.25rem; line-height: 1; font-weight: 400; }
+[data-sf-checkout-discount-code][open] > summary::after { content: '−'; }
+[data-sf-checkout-discount-code] > div { padding: 1rem; border-top: 1px solid var(--border, color-mix(in srgb, currentColor 16%, transparent)); }
