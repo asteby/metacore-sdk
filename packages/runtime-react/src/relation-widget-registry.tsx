@@ -15,8 +15,12 @@
 // real (p. ej. el costo del producto → margen por mercado). Un nombre sin
 // registro cae a la tabla inline de siempre: compatibilidad total.
 //
-// Alcance: crear (`create_inline`). En editar las relaciones hijas siguen su
-// panel (`DynamicRelations`), que guarda cada fila por su cuenta.
+// Alcance: crear Y editar (`create_inline`). Al editar, el modal lee las filas ya guardadas de la
+// relación (COMPLETAS: si no logra leerlas todas, la relación no se envía y no se borra nada) y las
+// entrega en `rows`, cada una con su `id`. Al guardar envía `_children[relación]` SOLO si el usuario
+// cambió las filas: las que tienen `id` se actualizan, las nuevas se crean y las que el widget quita
+// del arreglo se BORRAN en el servidor. Un widget que reemplaza filas debe conservar `row.id`
+// (`{ ...row, values }`). Las relaciones sin widget siguen en su panel (`DynamicRelations`).
 import type * as React from 'react'
 import type { DraftRow } from './draft-rows'
 import type { InlineFieldMeta } from './dialogs/inline-relations'
@@ -35,14 +39,16 @@ export interface RelationWidgetProps {
     relation: RelationMeta
     /** Campos capturables del modelo hijo (sin la FK al padre ni los gestionados por el servidor). */
     fields: InlineFieldMeta[]
-    /** Filas borrador actuales. */
+    /** Filas actuales. Al editar, las ya guardadas traen `id` (consérvalo al reemplazarlas). */
     rows: DraftRow[]
     /** Reemplaza las filas (el modal las envía en `_children[relation.name]`). */
     onChange: (rows: DraftRow[]) => void
     /** Valores VIVOS del formulario del padre (se actualizan al teclear). */
     values: Record<string, any>
-    /** El formulario no permite editar ahora (guardando). */
+    /** El formulario no permite editar ahora (guardando, o al editar mientras se leen las filas guardadas). */
     readOnly?: boolean
+    /** `create` al crear el padre; `edit` al editarlo (las filas existentes traen `id`). */
+    mode?: 'create' | 'edit'
     /** Errores por celda `"<i>.<campo>"` y por fila `"<i>"`, ya localizados. */
     errors?: Record<string, string>
     /** Error de conjunto de la relación (mínimo de filas, 422 `min`). */

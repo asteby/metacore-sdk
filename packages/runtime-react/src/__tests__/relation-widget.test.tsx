@@ -238,6 +238,179 @@ describe('DynamicRecordDialog create — widget de relación', () => {
     })
 })
 
+// ───────── editar: el widget también se pinta al editar el padre ─────────
+const savedRow = { id: 'r1', product_id: 'p1', price_list_id: 'L1', price: 10 }
+
+function makeEditApi(opts: { rows?: any[]; total?: number; fail?: boolean; relations?: any[] } = {}) {
+    const base = makeApi(opts.relations ?? [prices])
+    const get = vi.fn(async (url: string, cfg?: { params?: Record<string, unknown> }) => {
+        if (url === '/data/PriceListItem') {
+            if (opts.fail) throw new Error('boom')
+            const rows = opts.rows ?? [savedRow]
+            const page = Number(cfg?.params?.page ?? 1)
+            return { data: { success: true, data: page === 1 ? rows : [], meta: { total: opts.total ?? rows.length } } }
+        }
+        return base.get(url)
+    })
+    return { ...base, get }
+}
+
+function setupEdit(api: any, onUpdate = vi.fn(async (_id: string, _b: Record<string, unknown>) => ({ id: 'p1' }))) {
+    render(
+        <I18nextProvider i18n={makeI18n()}>
+            <ApiProvider client={api as never}>
+                <DynamicRecordDialog
+                    open
+                    onOpenChange={() => {}}
+                    mode="edit"
+                    model="Product"
+                    recordId="p1"
+                    schema={parentSchema as never}
+                    initialRecord={{ id: 'p1', name: 'Whey' }}
+                    onUpdate={onUpdate}
+                />
+            </ApiProvider>
+        </I18nextProvider>,
+    )
+    return onUpdate
+}
+
+// Widget de edición: conserva `id` al cambiar, quita o agrega filas.
+function EditProbe(p: RelationWidgetProps) {
+    return (
+        <div data-testid="eprobe" data-mode={p.mode} data-readonly={String(!!p.readOnly)}>
+            <span data-testid="rows">{p.rows.length}</span>
+            <span data-testid="ids">{p.rows.map((r) => r.id ?? 'new').join(',')}</span>
+            <span data-testid="err">{p.errors?.['0.price'] ?? ''}</span>
+            <button type="button" onClick={() => p.onChange(p.rows.map((r) => ({ ...r, values: { ...r.values, price: 99 } })))}>
+                bump
+            </button>
+            <button type="button" onClick={() => p.onChange(p.rows.slice(1))}>
+                drop
+            </button>
+            <button type="button" onClick={() => p.onChange([...p.rows, makeDraftRow({ price_list_id: 'L2', price: 5 })])}>
+                add
+            </button>
+        </div>
+    )
+}
+
+const loadedProbe = () => waitFor(() => expect(screen.getByTestId('eprobe').dataset.readonly).toBe('false'))
+const waitCalls = async (fn: { mock: { calls: unknown[] } }) => waitFor(() => expect(fn.mock.calls.length).toBe(1))
+
+describe('DynamicRecordDialog edit — widget de relación', () => {
+    it('lee las filas guardadas (con id), pinta el widget en modo edit y reemplaza al panel', async () => {
+        registerRelationWidget('market-prices', EditProbe)
+        setupEdit(makeEditApi())
+        await screen.findByTestId('eprobe')
+        expect(screen.getByTestId('eprobe').dataset.mode).toBe('edit')
+        await loadedProbe()
+        expect(screen.getByTestId('ids').textContent).toBe('r1')
+        expect(screen.getByTestId('rows').textContent).toBe('1')
+    })
+
+    it('mientras lee las filas guardadas el widget va en solo lectura', async () => {
+        registerRelationWidget('market-prices', EditProbe)
+        let release!: () => void
+        const api = makeEditApi()
+        const inner = api.get.getMockImplementation()!
+        api.get.mockImplementation(async (url: string, cfg?: any) => {
+            if (url === '/data/PriceListItem') await new Promise<void>((r) => (release = r))
+            return inner(url, cfg)
+        })
+        setupEdit(api)
+        await waitFor(() => expect(screen.getByTestId('eprobe').dataset.readonly).toBe('true'))
+        await waitFor(() => expect(typeof release).toBe('function'))
+        release()
+        await loadedProbe()
+    })
+
+    it('sin cambios no envía _children (no reescribe ni borra nada)', async () => {
+        registerRelationWidget('market-prices', EditProbe)
+        const onUpdate = setupEdit(makeEditApi())
+        await loadedProbe()
+        submit()
+        await waitCalls(onUpdate)
+        expect(onUpdate.mock.calls[0][1]).not.toHaveProperty('_children')
+    })
+
+    it('cambiar una fila envía el conjunto con su id; una nueva va sin id', async () => {
+        registerRelationWidget('market-prices', EditProbe)
+        const onUpdate = setupEdit(makeEditApi())
+        await loadedProbe()
+        fireEvent.click(screen.getByRole('button', { name: 'bump' }))
+        fireEvent.click(screen.getByRole('button', { name: 'add' }))
+        submit()
+        await waitCalls(onUpdate)
+        expect(onUpdate.mock.calls[0][0]).toBe('p1')
+        expect(onUpdate.mock.calls[0][1]).toMatchObject({
+            _children: {
+                market_prices: [
+                    { id: 'r1', price_list_id: 'L1', price: 99 },
+                    { price_list_id: 'L2', price: 5 },
+                ],
+            },
+        })
+        const rows = (onUpdate.mock.calls[0][1] as any)._children.market_prices
+        expect(rows[1]).not.toHaveProperty('id')
+    })
+
+    it('quitar la fila guardada envía [] (el servidor la borra) tras haberla leído', async () => {
+        registerRelationWidget('market-prices', EditProbe)
+        const onUpdate = setupEdit(makeEditApi())
+        await loadedProbe()
+        fireEvent.click(screen.getByRole('button', { name: 'drop' }))
+        submit()
+        await waitCalls(onUpdate)
+        expect((onUpdate.mock.calls[0][1] as any)._children).toEqual({ market_prices: [] })
+    })
+
+    it('si no se leyeron TODAS las filas no envía la relación: nunca borra a ciegas', async () => {
+        registerRelationWidget('market-prices', EditProbe)
+        // total 5 pero la página 2 viene vacía: lectura incompleta.
+        const onUpdate = setupEdit(makeEditApi({ rows: [savedRow], total: 5 }))
+        await screen.findByTestId('eprobe')
+        await new Promise((r) => setTimeout(r, 40))
+        expect(screen.getByTestId('eprobe').dataset.readonly).toBe('true')
+        fireEvent.click(screen.getByRole('button', { name: 'drop' }))
+        submit()
+        await waitCalls(onUpdate)
+        expect(onUpdate.mock.calls[0][1]).not.toHaveProperty('_children')
+    })
+
+    it('si la lectura falla tampoco envía la relación', async () => {
+        registerRelationWidget('market-prices', EditProbe)
+        const onUpdate = setupEdit(makeEditApi({ fail: true }))
+        await screen.findByTestId('eprobe')
+        await new Promise((r) => setTimeout(r, 40))
+        expect(screen.getByTestId('eprobe').dataset.readonly).toBe('true')
+        fireEvent.click(screen.getByRole('button', { name: 'add' }))
+        submit()
+        await waitCalls(onUpdate)
+        expect(onUpdate.mock.calls[0][1]).not.toHaveProperty('_children')
+    })
+
+    it('el 422 por fila al guardar llega al widget', async () => {
+        registerRelationWidget('market-prices', EditProbe)
+        const onUpdate = vi.fn(async () => {
+            throw { response: { status: 422, data: { errors: { '_children.market_prices.0.price': [{ code: 'invalid_type' }] } } } }
+        })
+        setupEdit(makeEditApi(), onUpdate as never)
+        await loadedProbe()
+        fireEvent.click(screen.getByRole('button', { name: 'bump' }))
+        submit()
+        await waitFor(() => expect(screen.getByTestId('err').textContent).toMatch(/formato inválido/))
+    })
+
+    it('una relación sin widget registrado no se lee ni se pinta al editar (sigue su panel)', async () => {
+        const api = makeEditApi()
+        setupEdit(api)
+        await new Promise((r) => setTimeout(r, 40))
+        expect(screen.queryByTestId('eprobe')).toBeNull()
+        expect(api.get.mock.calls.some((c) => c[0] === '/data/PriceListItem')).toBe(false)
+    })
+})
+
 describe('useActiveMarket', () => {
     const wrap =
         (api: any, id?: string | null) =>

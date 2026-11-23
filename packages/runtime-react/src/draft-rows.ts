@@ -12,6 +12,12 @@ export interface DraftRow {
     /** Clave estable de UI (sobrevive a reordenar/quitar); no se envía. */
     key: string
     values: Record<string, any>
+    /**
+     * Id de una fila YA guardada (editar el padre). Viaja en `_children` como `id` para que el
+     * servidor la actualice; una fila sin `id` es nueva. Un widget que reemplaza filas debe
+     * conservarlo (`{ ...row, values }`); quitar una fila existente del arreglo la borra.
+     */
+    id?: string | number
 }
 
 let seq = 0
@@ -21,8 +27,10 @@ export function newDraftKey(prefix = 'row'): string {
     return `${prefix}_${Date.now().toString(36)}_${seq}`
 }
 
-export function makeDraftRow(values: Record<string, any> = {}, key?: string): DraftRow {
-    return { key: key ?? newDraftKey(), values }
+export function makeDraftRow(values: Record<string, any> = {}, key?: string, id?: string | number): DraftRow {
+    const row: DraftRow = { key: key ?? newDraftKey(), values }
+    if (id !== undefined && id !== null && id !== '') row.id = id
+    return row
 }
 
 /** Agrega al final (orden de captura = orden de envío). */
@@ -95,9 +103,15 @@ export function validateDraftRows(
  * Valores listos para el backend: solo las columnas conocidas, opcionales
  * vacíos omitidos (nunca `""`), números reales y booleanos tal cual.
  */
-export function serializeDraftRows(rows: DraftRow[], columns: DraftColumn[]): Array<Record<string, unknown>> {
+export function serializeDraftRows(
+    rows: DraftRow[],
+    columns: DraftColumn[],
+    opts: { includeId?: boolean } = {},
+): Array<Record<string, unknown>> {
     return rows.map((row) => {
         const out: Record<string, unknown> = {}
+        // Editar: la fila guardada viaja con su `id` (el kernel la actualiza; sin id crea).
+        if (opts.includeId && row.id !== undefined && row.id !== null && row.id !== '') out.id = row.id
         for (const col of columns) {
             const v = row.values[col.key]
             if (isBlankValue(v)) continue

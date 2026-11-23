@@ -78,7 +78,8 @@ import { isNilUuid, normalizeNilUuid } from '../nil-uuid'
 import { normalizeRefFieldsForSubmit, withInlineChildren } from './normalize-submit'
 import { relationMin, splitChildErrors } from './inline-relations'
 import { useInlineRelations } from './use-inline-relations'
-import { getRelationWidget, useRelationWidgetRegistryVersion } from '../relation-widget-registry'
+import { getRelationWidget, listRelationWidgets, useRelationWidgetRegistryVersion } from '../relation-widget-registry'
+import { loadRelationRows, rowsFingerprint } from './relation-rows-loader'
 import { useActiveMarket } from '../use-active-market'
 
 // La tabla de filas hijas solo se usa al CREAR un registro cuyo modelo declara `create_inline`: se carga bajo demanda para no
@@ -939,17 +940,57 @@ function DynamicRecordDialogImpl({
 
     const isCreate = mode === 'create'
 
-    // Relaciones hijas `create_inline`: se capturan como filas borrador y viajan
-    // con el padre en `_children`. Solo al crear; ver/editar no cambia.
+    // Widgets de relación (`relation.widget`): el host puede pintar la relación en lugar de la tabla.
+    useRelationWidgetRegistryVersion()
+    const isEditMode = mode === 'edit'
+    // Relaciones hijas `create_inline`: se capturan como filas borrador y viajan con el padre en
+    // `_children`. Al CREAR son todas; al EDITAR solo las que un widget registrado pinta (el resto
+    // sigue en su panel, `DynamicRelations`, que guarda cada fila por su cuenta). Ver no cambia.
     const inline = useInlineRelations<FieldDef>({
-        enabled: open && isCreate,
+        enabled: open && (isCreate || (isEditMode && listRelationWidgets().length > 0)),
         model,
         localizeLabel: (label) => (t(label) !== label ? t(label) : label),
     })
-    // Widgets de relación (`relation.widget`): el host puede pintar la relación en lugar de la tabla.
-    useRelationWidgetRegistryVersion()
-    const activeMarket = useActiveMarket({ enabled: open && isCreate && inline.relations.some(r => !!getRelationWidget(r.widget)) })
+    const inlineRels = useMemo(
+        () => (isCreate ? inline.relations : isEditMode ? inline.relations.filter(r => !!getRelationWidget(r.widget)) : []),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [isCreate, isEditMode, inline.relations, listRelationWidgets().join('|')],
+    )
+    const activeMarket = useActiveMarket({ enabled: open && inlineRels.some(r => !!getRelationWidget(r.widget)) })
     const [inlineRows, setInlineRows] = useState<Record<string, DraftRow[]>>({})
+    // Editar: filas ya guardadas leídas COMPLETAS (si no, la relación no se envía y no se borra nada)
+    // y su huella inicial, para enviar solo lo que el usuario cambió.
+    const [inlineLoaded, setInlineLoaded] = useState<Record<string, boolean>>({})
+    const inlineBaseline = useRef<Record<string, string>>({})
+    // Las relaciones pintadas por un widget (editar) salen del panel de relaciones: no se duplican.
+    const panelRelations = useMemo(() => {
+        if (!isEditMode || inlineRels.length === 0) return relations
+        const taken = new Set(inlineRels.map(r => r.name))
+        return relations.filter(r => !taken.has(r.name))
+    }, [isEditMode, inlineRels, relations])
+    // Editar: lee las filas guardadas de cada relación con widget (completas o nada).
+    const editRecordId = isEditMode && open && recordId ? String(recordId) : null
+    useEffect(() => {
+        setInlineLoaded({})
+        inlineBaseline.current = {}
+        if (!editRecordId || inlineRels.length === 0 || inline.loading) return
+        setInlineRows({})
+        let cancelled = false
+        void (async () => {
+            for (const rel of inlineRels) {
+                const cols = inline.fields[rel.name] ?? []
+                const res = await loadRelationRows(api, rel, editRecordId, cols)
+                if (cancelled) return
+                if (!res.complete) continue // no se leyó entera: no se envía, no se borra nada
+                inlineBaseline.current[rel.name] = rowsFingerprint(res.rows, cols)
+                setInlineRows(prev => ({ ...prev, [rel.name]: res.rows }))
+                setInlineLoaded(prev => ({ ...prev, [rel.name]: true }))
+            }
+        })()
+        return () => {
+            cancelled = true
+        }
+    }, [api, editRecordId, inlineRels, inline.fields, inline.loading])
     // Errores de filas hijas, ya localizados: `"<relación>.<i>.<campo>"`.
     const [inlineErrors, setInlineErrors] = useState<Record<string, string>>({})
     const inlineLabel = (relation: string, key: string): string => {
@@ -959,7 +1000,8 @@ function DynamicRecordDialogImpl({
     // Validación de las filas (requeridos + mínimo) con mensajes localizados.
     const validateInline = () => {
         const errors: Record<string, string> = {}
-        for (const rel of inline.relations) {
+        for (const rel of inlineRels) {
+            if (!isCreate && !inlineLoaded[rel.name]) continue
             const v = validateDraftRows(inlineRows[rel.name] ?? [], inline.fields[rel.name] ?? [], {
                 min: relationMin(rel),
                 messages: {
@@ -1281,7 +1323,7 @@ function DynamicRecordDialogImpl({
         const rawMap = extractFieldErrors(err)
         // Errores de filas hijas (`_children.<relación>.<i>.<campo>`) van a su celda.
         const split = rawMap
-            ? splitChildErrors(rawMap, inline.relations, inlineLabel, t, i18n.language)
+            ? splitChildErrors(rawMap, inlineRels, inlineLabel, t, i18n.language)
             : undefined
         const map = split?.parent
         const childMsgs = split?.children ?? {}
@@ -1316,7 +1358,7 @@ function DynamicRecordDialogImpl({
         if (!modalMeta) return
 
         // Filas hijas (solo crear): se validan junto al padre para marcar todo de una vez.
-        const inlineIssues = isCreate && inline.relations.length > 0 ? validateInline() : {}
+        const inlineIssues = inlineRels.length > 0 ? validateInline() : {}
         setInlineErrors(inlineIssues)
 
         if (isEditable) {
@@ -1398,10 +1440,26 @@ function DynamicRecordDialogImpl({
         if (isCreate) {
             payload = withInlineChildren(
                 payload,
-                inline.relations.map(rel => ({
+                inlineRels.map(rel => ({
                     relation: rel.name,
                     rows: inlineRows[rel.name] ?? [],
                     columns: inline.fields[rel.name] ?? [],
+                })),
+            )
+        } else if (isEditMode) {
+            // Editar: `_children[relación]` es el conjunto completo (lo que falta se borra), así que solo
+            // viaja una relación que se leyó entera Y que el usuario cambió. Las filas guardadas llevan `id`.
+            const changed = inlineRels.filter(rel => {
+                if (!inlineLoaded[rel.name]) return false
+                return rowsFingerprint(inlineRows[rel.name] ?? [], inline.fields[rel.name] ?? []) !== inlineBaseline.current[rel.name]
+            })
+            payload = withInlineChildren(
+                payload,
+                changed.map(rel => ({
+                    relation: rel.name,
+                    rows: inlineRows[rel.name] ?? [],
+                    columns: inline.fields[rel.name] ?? [],
+                    includeId: true,
                 })),
             )
         }
@@ -1698,11 +1756,11 @@ function DynamicRecordDialogImpl({
                                 de gestión independiente — vive en su propia
                                 página, no adentro de este formulario.
                                 View = strictly read-only; edit = add/edit/delete. */}
-                            {!isCreate && record && relations.length > 0 && (
+                            {!isCreate && record && panelRelations.length > 0 && (
                                 <div className="mt-6">
                                     <DynamicRelations
                                         record={record}
-                                        relations={relations}
+                                        relations={panelRelations}
                                         lineSubtable
                                         embedOnly
                                         canCreate={mode === 'edit'}
@@ -1712,10 +1770,10 @@ function DynamicRecordDialogImpl({
                                     />
                                 </div>
                             )}
-                            {isCreate && inline.relations.length > 0 && (
+                            {(isCreate || isEditMode) && inlineRels.length > 0 && (
                                 <div className="mt-6 space-y-6" data-slot="inline-relations">
                                     <Suspense fallback={<div role="status" aria-busy="true" className="h-24 animate-pulse rounded-md bg-muted" data-slot="inline-relations-loading" />}>
-                                    {inline.relations.map(rel => {
+                                    {inlineRels.map(rel => {
                                         const onRowRemoved = () => setInlineErrors(prev => clearFieldErrorTree(prev, rel.name))
                                         const onCellEdited = (i: number, f: string) =>
                                             setInlineErrors(prev => clearFieldErrorTree(clearFieldErrorTree(prev, `${rel.name}.${i}.${f}`), rel.name))
@@ -1731,7 +1789,8 @@ function DynamicRecordDialogImpl({
                                                         rows={inlineRows[rel.name] ?? []}
                                                         onChange={onRowsChange}
                                                         values={formValues}
-                                                        readOnly={saving}
+                                                        readOnly={saving || (!isCreate && !inlineLoaded[rel.name])}
+                                                        mode={isCreate ? 'create' : 'edit'}
                                                         errors={errors}
                                                         formError={inlineErrors[rel.name]}
                                                         onRowRemoved={onRowRemoved}
