@@ -50,6 +50,8 @@ export interface InlineChildrenInput {
     relation: string
     rows: DraftRow[]
     columns: DraftColumn[]
+    /** Editar: las filas guardadas viajan con su `id`. */
+    includeId?: boolean
 }
 
 /**
@@ -62,7 +64,7 @@ export function withInlineChildren<P extends Record<string, any>>(
 ): P | (P & { _children: Record<string, Array<Record<string, unknown>>> }) {
     if (inline.length === 0) return payload
     const children: Record<string, Array<Record<string, unknown>>> = {}
-    for (const i of inline) children[i.relation] = serializeDraftRows(i.rows, i.columns)
+    for (const i of inline) children[i.relation] = serializeDraftRows(i.rows, i.columns, { includeId: i.includeId })
     return { ...payload, [CHILDREN_KEY]: children }
 }
 
