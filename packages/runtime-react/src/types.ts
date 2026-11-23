@@ -439,6 +439,14 @@ export interface RelationMeta {
      * `_children.<name>`). El cliente lo muestra y bloquea el envío por debajo.
      */
     min?: number
+    /**
+     * Nombre de un widget registrado (`registerRelationWidget`) que pinta esta
+     * relación en el modal de crear EN LUGAR de la tabla inline. Servido por el
+     * kernel; un nombre sin registro cae a la tabla. Aditivo.
+     */
+    widget?: string
+    /** Addon que aporta el widget (diagnóstico; el SDK resuelve solo por `widget`). */
+    addon?: string
 }
 
 export interface FilterDefinition {
