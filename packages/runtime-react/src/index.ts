@@ -681,6 +681,18 @@ export {
     type FieldWidgetComponent,
     type FieldWidgetProps,
 } from './field-widget-registry'
+export { createWidgetRegistry, type WidgetRegistry } from './widget-registry'
+export {
+    registerRelationWidget,
+    getRelationWidget,
+    listRelationWidgets,
+    clearRelationWidgets,
+    useRelationWidgetRegistryVersion,
+    type RelationWidgetComponent,
+    type RelationWidgetProps,
+    type RelationWidgetContext,
+} from './relation-widget-registry'
+export { useActiveMarket, normalizeMarketCode, type ActiveMarket } from './use-active-market'
 export {
     registerAgentResultRenderer,
     resolveAgentResultRenderer,

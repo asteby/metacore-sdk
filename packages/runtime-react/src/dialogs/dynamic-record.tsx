@@ -78,6 +78,8 @@ import { isNilUuid, normalizeNilUuid } from '../nil-uuid'
 import { normalizeRefFieldsForSubmit, withInlineChildren } from './normalize-submit'
 import { relationMin, splitChildErrors } from './inline-relations'
 import { useInlineRelations } from './use-inline-relations'
+import { getRelationWidget, useRelationWidgetRegistryVersion } from '../relation-widget-registry'
+import { useActiveMarket } from '../use-active-market'
 
 // La tabla de filas hijas solo se usa al CREAR un registro cuyo modelo declara `create_inline`: se carga bajo demanda para no
 // engordar el grafo inicial del panel (el shell de Ops tiene un techo de no-regresión).
@@ -944,6 +946,9 @@ function DynamicRecordDialogImpl({
         model,
         localizeLabel: (label) => (t(label) !== label ? t(label) : label),
     })
+    // Widgets de relación (`relation.widget`): el host puede pintar la relación en lugar de la tabla.
+    useRelationWidgetRegistryVersion()
+    const activeMarket = useActiveMarket({ enabled: open && isCreate && inline.relations.some(r => !!getRelationWidget(r.widget)) })
     const [inlineRows, setInlineRows] = useState<Record<string, DraftRow[]>>({})
     // Errores de filas hijas, ya localizados: `"<relación>.<i>.<campo>"`.
     const [inlineErrors, setInlineErrors] = useState<Record<string, string>>({})
@@ -1710,32 +1715,57 @@ function DynamicRecordDialogImpl({
                             {isCreate && inline.relations.length > 0 && (
                                 <div className="mt-6 space-y-6" data-slot="inline-relations">
                                     <Suspense fallback={<div role="status" aria-busy="true" className="h-24 animate-pulse rounded-md bg-muted" data-slot="inline-relations-loading" />}>
-                                    {inline.relations.map(rel => (
-                                        <InlineRelationRows
-                                            key={rel.name}
-                                            relation={rel}
-                                            fields={inline.fields[rel.name] ?? []}
-                                            rows={inlineRows[rel.name] ?? []}
-                                            onChange={rows => setInlineRows(prev => ({ ...prev, [rel.name]: rows }))}
-                                            errors={lineItemErrorsFor(rel.name, inlineErrors)}
-                                            formError={inlineErrors[rel.name]}
-                                            onRowRemoved={() => setInlineErrors(prev => clearFieldErrorTree(prev, rel.name))}
-                                            onCellEdited={(i, f) =>
-                                                setInlineErrors(prev => clearFieldErrorTree(clearFieldErrorTree(prev, `${rel.name}.${i}.${f}`), rel.name))
-                                            }
-                                            disabled={saving}
-                                            renderField={(field, value, onChange, state) => (
-                                                <EditField
-                                                    field={field as FieldDef}
-                                                    value={value}
-                                                    onChange={onChange}
-                                                    record={null}
-                                                    invalid={state.invalid}
-                                                    error={state.error}
-                                                />
-                                            )}
-                                        />
-                                    ))}
+                                    {inline.relations.map(rel => {
+                                        const onRowRemoved = () => setInlineErrors(prev => clearFieldErrorTree(prev, rel.name))
+                                        const onCellEdited = (i: number, f: string) =>
+                                            setInlineErrors(prev => clearFieldErrorTree(clearFieldErrorTree(prev, `${rel.name}.${i}.${f}`), rel.name))
+                                        const onRowsChange = (rows: DraftRow[]) => setInlineRows(prev => ({ ...prev, [rel.name]: rows }))
+                                        const errors = lineItemErrorsFor(rel.name, inlineErrors)
+                                        const Widget = getRelationWidget(rel.widget)
+                                        if (Widget) {
+                                            return (
+                                                <div key={rel.name} data-slot="relation-widget" data-relation={rel.name} data-widget={rel.widget}>
+                                                    <Widget
+                                                        relation={rel}
+                                                        fields={inline.fields[rel.name] ?? []}
+                                                        rows={inlineRows[rel.name] ?? []}
+                                                        onChange={onRowsChange}
+                                                        values={formValues}
+                                                        readOnly={saving}
+                                                        errors={errors}
+                                                        formError={inlineErrors[rel.name]}
+                                                        onRowRemoved={onRowRemoved}
+                                                        onCellEdited={onCellEdited}
+                                                        context={{ branchId: activeMarket.branchId, market: activeMarket.market }}
+                                                    />
+                                                </div>
+                                            )
+                                        }
+                                        return (
+                                            <InlineRelationRows
+                                                key={rel.name}
+                                                relation={rel}
+                                                fields={inline.fields[rel.name] ?? []}
+                                                rows={inlineRows[rel.name] ?? []}
+                                                onChange={onRowsChange}
+                                                errors={errors}
+                                                formError={inlineErrors[rel.name]}
+                                                onRowRemoved={onRowRemoved}
+                                                onCellEdited={onCellEdited}
+                                                disabled={saving}
+                                                renderField={(field, value, onChange, state) => (
+                                                    <EditField
+                                                        field={field as FieldDef}
+                                                        value={value}
+                                                        onChange={onChange}
+                                                        record={null}
+                                                        invalid={state.invalid}
+                                                        error={state.error}
+                                                    />
+                                                )}
+                                            />
+                                        )
+                                    })}
                                     </Suspense>
                                 </div>
                             )}

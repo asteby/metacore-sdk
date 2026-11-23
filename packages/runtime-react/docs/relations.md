@@ -305,3 +305,31 @@ Cuerpo del envío: el de siempre más `_children: { "<relation.name>": [ {fila},
 Errores 422: `_children.<relación>.<i>.<campo>` se pinta en la celda de esa fila; `_children.<relación>.<i>` (`invalid_relation`/`invalid_type`) en la fila; `_children.<relación>` con `min` (params `min`, `count`) como error de la sección. Lo capturado no se pierde al fallar.
 
 Teclado: Enter en una celda avanza al siguiente control y, tras el último, agrega una fila (nunca envía el padre); los botones Agregar/Quitar miden 44 px. Implementación: `dialogs/inline-relation-rows.tsx` (UI), `dialogs/inline-relations.ts` (modelo puro y reparto de errores) y `draft-rows.ts` (núcleo de filas borrador, compartido con `business/line-items`).
+
+## Widgets de relación (`relation.widget`)
+
+Una relación `create_inline` se captura por omisión como tabla de filas borrador. Si el kernel
+sirve `widget: "<nombre>"` en la relación y el host registró ese nombre, el modal de **crear**
+pinta el componente del host en su lugar:
+
+```tsx
+import { registerRelationWidget, type RelationWidgetProps } from '@asteby/metacore-runtime-react'
+
+function MarketPrices({ rows, onChange, values, errors, context }: RelationWidgetProps) {
+  // values: valores VIVOS del padre (p. ej. values.cost_price) para calcular en tiempo real
+  // context.market: mercado de la sucursal activa (branches.market_code), null si no hay
+  // rows: filas borrador { key, values }; onChange las reemplaza
+  // errors: errores del servidor por celda "<i>.<campo>" ya localizados
+}
+
+const dispose = registerRelationWidget('market-prices', MarketPrices)
+```
+
+- Las filas viajan en `_children[relation.name]` (misma serialización y validación de requeridos/`min`
+  que la tabla) y los 422 `_children.<relación>.<i>.<campo>` llegan en `errors`.
+- Avisa `onCellEdited(i, campo)` al cambiar una celda para limpiar su error del servidor.
+- Un nombre sin registro cae a la tabla inline. Quien registra tarde (addon federado) reemplaza la
+  tabla sin recargar.
+- `useActiveMarket()` entrega `{ branchId, market, loading }` desde `BranchProvider` + `branches.market_code`.
+- Alcance: crear. En editar las relaciones hijas siguen su panel (`DynamicRelations`), que guarda
+  cada fila por su cuenta.
