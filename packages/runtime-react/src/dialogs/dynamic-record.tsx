@@ -1034,6 +1034,14 @@ function DynamicRecordDialogImpl({
         (patch: Record<string, any>) => setFormValues(prev => ({ ...prev, ...patch })),
         [],
     )
+    // Widgets de relación que derivan campos del padre: solo los capturables del modal (mismo filtro que el prefill).
+    const patchFromRelationWidget = useCallback(
+        (patch: Record<string, any>) => {
+            const allowed = Object.fromEntries(Object.entries(patch ?? {}).filter(([k]) => prefillAllowedKeys.has(k)))
+            if (Object.keys(allowed).length > 0) setFormValues(prev => ({ ...prev, ...allowed }))
+        },
+        [prefillAllowedKeys],
+    )
     // Loom: seam `record.dialog.header`. Los injertos proponen; el diálogo muestra el diff y aplica.
     const proposals = useProposalQueue(formValues, applyPrefill)
     // Campos secretos (contraseñas, `data_class: secret`): una propuesta que los toca nunca se aplica sola.
@@ -1789,6 +1797,7 @@ function DynamicRecordDialogImpl({
                                                         rows={inlineRows[rel.name] ?? []}
                                                         onChange={onRowsChange}
                                                         values={formValues}
+                                                        setValues={patchFromRelationWidget}
                                                         readOnly={saving || (!isCreate && !inlineLoaded[rel.name])}
                                                         mode={isCreate ? 'create' : 'edit'}
                                                         errors={errors}
