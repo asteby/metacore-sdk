@@ -324,6 +324,18 @@ export {
     type FederatedErrorInfo,
     type FederatedErrorStrings,
 } from './federated-error-boundary'
+export { HostWidgetBoundary, type HostWidgetBoundaryProps } from './host-widget-boundary'
+export {
+    useBundledTranslation,
+    bundledTranslator,
+    pickBundleLanguage,
+    interpolateText,
+    baseLanguage,
+    type TranslationBundles,
+    type BundledT,
+    type UseBundledTranslationOptions,
+    type UseBundledTranslationResult,
+} from './bundled-translation'
 // Declarative views & detail panels: registry + lazy renderers by type.
 export * from './views'
 export {
