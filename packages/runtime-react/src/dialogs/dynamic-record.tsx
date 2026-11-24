@@ -105,6 +105,7 @@ import { CollectionCell, type ItemField } from '../collection-cell'
 import type { ActionFieldDef, RelationMeta } from '../types'
 import { ImageUrlContext, identityImageUrl, type GetImageUrl } from '../image-url-context'
 import { getFieldWidget, useFieldWidgetRegistryVersion } from '../field-widget-registry'
+import { HostWidgetBoundary } from '../host-widget-boundary'
 // Loom: solo el núcleo ligero; la UI de los seams y el diff se cargan perezosos (loom/lazy).
 import { ProposalReview, Seam } from '../loom/lazy'
 import { useProposalQueue } from '../loom/queue'
@@ -1791,6 +1792,7 @@ function DynamicRecordDialogImpl({
                                         if (Widget) {
                                             return (
                                                 <div key={rel.name} data-slot="relation-widget" data-relation={rel.name} data-widget={rel.widget}>
+                                                    <HostWidgetBoundary name={String(rel.widget)} resetKeys={[Widget]}>
                                                     <Widget
                                                         relation={rel}
                                                         fields={inline.fields[rel.name] ?? []}
@@ -1806,6 +1808,7 @@ function DynamicRecordDialogImpl({
                                                         onCellEdited={onCellEdited}
                                                         context={{ branchId: activeMarket.branchId, market: activeMarket.market }}
                                                     />
+                                                    </HostWidgetBoundary>
                                                 </div>
                                             )
                                         }
@@ -1997,7 +2000,11 @@ export function ReadonlyEditField({ field, value }: { field: FieldDef; value: an
     useFieldWidgetRegistryVersion()
     const HostWidget = getFieldWidget(field.widget)
     if (HostWidget) {
-        return <HostWidget field={field as unknown as ActionFieldDef} value={value} onChange={noopChange} disabled />
+        return (
+            <HostWidgetBoundary name={String(field.widget)} resetKeys={[HostWidget]}>
+                <HostWidget field={field as unknown as ActionFieldDef} value={value} onChange={noopChange} disabled />
+            </HostWidgetBoundary>
+        )
     }
     if (field.type === 'boolean' || field.type === 'checkbox' || typeof value === 'boolean') {
         if (value === null || value === undefined || value === '') {
@@ -2702,14 +2709,16 @@ export function EditField({ field, value, onChange, setValues, record, invalid, 
     const HostWidget = getFieldWidget(field.widget)
     if (HostWidget) {
         return (
-            <HostWidget
-                field={field as unknown as ActionFieldDef}
-                value={value}
-                onChange={onChange}
-                setValues={setValues}
-                error={error}
-                record={record}
-            />
+            <HostWidgetBoundary name={String(field.widget)} resetKeys={[HostWidget]}>
+                <HostWidget
+                    field={field as unknown as ActionFieldDef}
+                    value={value}
+                    onChange={onChange}
+                    setValues={setValues}
+                    error={error}
+                    record={record}
+                />
+            </HostWidgetBoundary>
         )
     }
 

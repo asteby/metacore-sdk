@@ -43,6 +43,7 @@ import { UploadField } from './upload-field'
 import { IconPickerField } from './icon-picker-field'
 import { ColorPickerField } from './color-picker-field'
 import { getFieldWidget, useFieldWidgetRegistryVersion } from './field-widget-registry'
+import { HostWidgetBoundary } from './host-widget-boundary'
 import { isBooleanField, isNullableBooleanField, usesTriState } from './nullable-boolean'
 import { TriStateBooleanField } from './tri-state-boolean'
 
@@ -484,7 +485,11 @@ function FieldRenderer({
     useFieldWidgetRegistryVersion()
     const HostWidget = getFieldWidget(field.widget)
     if (HostWidget) {
-        return <HostWidget field={field} value={value} onChange={onChange} error={error} record={values} setValues={setValues} />
+        return (
+            <HostWidgetBoundary name={String(field.widget)} resetKeys={[HostWidget]}>
+                <HostWidget field={field} value={value} onChange={onChange} error={error} record={values} setValues={setValues} />
+            </HostWidgetBoundary>
+        )
     }
     // Repeatable line-items group → render the row grid. Its value is an array
     // of row objects rather than a scalar.
