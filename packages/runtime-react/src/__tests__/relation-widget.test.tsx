@@ -206,6 +206,36 @@ describe('DynamicRecordDialog create — widget de relación', () => {
         await waitFor(() => expect(screen.getByTestId('err').textContent).toBe(''))
     })
 
+    it('setValues fusiona campos capturables del padre y descarta los de solo lectura o ajenos', async () => {
+        registerRelationWidget('market-prices', (p) => (
+            <button type="button" onClick={() => p.setValues?.({ name: 'Derivado', locked: 'x', nope: 1 })}>
+                derive
+            </button>
+        ))
+        const onCreate = vi.fn(async (_b: Record<string, unknown>) => ({ id: '1' }))
+        const schema = {
+            ...parentSchema,
+            fields: [...parentSchema.fields, { key: 'locked', label: 'Candado', type: 'text', readonly: true }],
+        }
+        render(
+            <I18nextProvider i18n={makeI18n()}>
+                <ApiProvider client={makeApi([prices]) as never}>
+                    <DynamicRecordDialog open onOpenChange={() => {}} mode="create" model="Product" schema={schema as never} onCreate={onCreate} />
+                </ApiProvider>
+            </I18nextProvider>,
+        )
+        fireEvent.click(await screen.findByRole('button', { name: 'derive' }))
+        await waitFor(() =>
+            expect((document.querySelector('[data-aby-field="name"] input') as HTMLInputElement).value).toBe('Derivado'),
+        )
+        submit()
+        await waitFor(() => expect(onCreate).toHaveBeenCalledTimes(1))
+        const body = onCreate.mock.calls[0][0]
+        expect(body.name).toBe('Derivado')
+        expect(body).not.toHaveProperty('locked', 'x')
+        expect(body).not.toHaveProperty('nope')
+    })
+
     it('un widget con filas incompletas no envía: requeridos del hijo', async () => {
         registerRelationWidget('market-prices', (p) => (
             <button type="button" onClick={() => p.onChange([makeDraftRow({ price_list_id: 'L1' })])}>

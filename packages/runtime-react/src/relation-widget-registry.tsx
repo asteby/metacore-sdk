@@ -45,6 +45,13 @@ export interface RelationWidgetProps {
     onChange: (rows: DraftRow[]) => void
     /** Valores VIVOS del formulario del padre (se actualizan al teclear). */
     values: Record<string, any>
+    /**
+     * Fusiona campos del PADRE en el formulario (como `FieldWidgetProps.setValues`). Para widgets que
+     * derivan un campo del padre de sus filas (p. ej. el precio base desde el precio de un mercado). Solo
+     * se aplican claves de campos capturables del modal (las de solo lectura se ignoran: un widget no salta
+     * un candado). Ausente donde el host no puede escribir el padre.
+     */
+    setValues?: (patch: Record<string, any>) => void
     /** El formulario no permite editar ahora (guardando, o al editar mientras se leen las filas guardadas). */
     readOnly?: boolean
     /** `create` al crear el padre; `edit` al editarlo (las filas existentes traen `id`). */
