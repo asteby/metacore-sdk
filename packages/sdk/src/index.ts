@@ -14,3 +14,4 @@ export * from "./host.js";
 export * from "./page.js";
 export * from "./integrity.js";
 export * from "./cache-epoch.js";
+export * from "./ai.js";
