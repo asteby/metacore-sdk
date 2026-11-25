@@ -1,5 +1,12 @@
 # @asteby/metacore-i18n
 
+## 32.6.0
+
+### Minor Changes
+
+- be5e368: Claves `supportThread.embed.*` (es/en) para el widget de soporte embebido.
+- be5e368: i18n: claves `supportThread.*` (es/en) para `SupportThread`. inbox: `Composer` acepta `formatting={false}` para ocultar los botones de formato Markdown y dejar solo el de adjuntar.
+
 ## 32.5.0
 
 ### Minor Changes
