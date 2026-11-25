@@ -110,6 +110,11 @@ describe('HtmlSandboxFrame', () => {
 })
 
 describe('Composer', () => {
+  it('formatting={false} keeps only the attach button in the toolbar', () => {
+    render(<Composer onSend={() => {}} formatting={false} />)
+    expect(screen.queryByRole('button', { name: 'Negrita' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Adjuntar archivos' })).toBeTruthy()
+  })
   it('sends with ctrl+enter, builds safe html and clears', async () => {
     const onSend = vi.fn().mockResolvedValue(undefined)
     render(<Composer onSend={onSend} />)
