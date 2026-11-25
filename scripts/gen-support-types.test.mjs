@@ -40,7 +40,7 @@ test('el archivo commiteado coincide con los fixtures (si hay SUPPORT_CONTRACT_T
 
 test('las vistas del hilo comparten MessageView, los campos omitempty son opcionales y los textos son un mapa', () => {
   const out = generate({
-    thread_case: { folio: 'F', channel: 'sch_X', status: 'open', messages: [{ id: '1', author_type: 'reporter', body: 'b', created_at: 't' }] },
+    thread_case: { case_id: 'c', folio: 'F', channel: 'sch_X', status: 'open', messages: [{ id: '1', author_type: 'reporter', body: 'b', created_at: 't' }] },
     thread_message: { id: '2', author_type: 'agent', body: 'b', created_at: 't' },
     public_profile: { brand_color: '#000000', texts: { 'es-MX': { launcher: 'a' }, 'en-US': { launcher: 'b' } } },
   })
