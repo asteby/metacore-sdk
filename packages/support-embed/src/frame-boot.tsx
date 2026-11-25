@@ -1,9 +1,8 @@
 import * as React from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { createInstance } from 'i18next'
-import { I18nextProvider, initReactI18next } from 'react-i18next'
-import { baseResources } from '@asteby/metacore-i18n'
+import { I18nextProvider } from 'react-i18next'
 import { createEmbedTransport, type VisitorTokenStore } from '@asteby/metacore-sdk/support'
+import { createFrameI18n } from './frame-i18n'
 import { createParentPort } from './frame-port'
 import { resolveLocale } from './profile'
 import { SupportFrame } from './support-frame'
@@ -75,8 +74,7 @@ export function bootFrame(win: Window, doc: Document, container: HTMLElement): B
       return
     }
     const { locale, ui } = resolveLocale({ requested: params.get('locale'), navigatorLanguage: win.navigator.language })
-    const i18n = createInstance()
-    void i18n.use(initReactI18next).init({ lng: ui, fallbackLng: 'es', resources: baseResources, interpolation: { escapeValue: false }, initAsync: false })
+    const i18n = createFrameI18n(ui)
     const embed = createEmbedTransport({
       baseUrl: meta(doc, META.baseUrl),
       channel,
