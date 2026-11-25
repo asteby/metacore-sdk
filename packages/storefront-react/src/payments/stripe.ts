@@ -205,11 +205,16 @@ export function stripeElementsAdapter(options: StripeAdapterOptions = {}): Payme
       const currency = opts.amount.currency_code.trim().toLowerCase()
 
       const stripe = factory(pk, { locale: stripeLocale(opts.locale ?? client.locale) })
+      // DYNAMIC payment methods (the ones enabled in the Stripe Dashboard): NO `paymentMethodTypes`. It used to be `['card']`,
+      // and the server named `payment_method_types[0]=card` on the PaymentIntent to match (Stripe refuses to confirm a token
+      // collected with explicit types on an automatic-methods intent). Stripe then stopped accepting that parameter on the API
+      // ("The `payment_method_types` parameter is no longer supported. Payment methods are now managed from your Dashboard
+      // settings", HTTP 400) and every card payment failed. The addon now creates the intent with automatic_payment_methods
+      // (allow_redirects: never), so the Element must be created without explicit types for the two sides to match.
       const elements = stripe.elements({
         mode: 'payment',
         amount: minor,
         currency,
-        paymentMethodTypes: ['card'],
         appearance: stripeAppearance(opts.theme, opts.colorScheme),
       })
       const card = client.options?.find((o) => o.key === 'card') as ({ link?: unknown } & Record<string, unknown>) | undefined
