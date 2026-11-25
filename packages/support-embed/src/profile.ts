@@ -4,6 +4,7 @@
  * llega por red y se aplica al DOM: un campo invalido se descarta, no se aplica ni rompe el resto.
  */
 import type { SupportPublicProfile } from '@asteby/metacore-sdk/support'
+import { parseProfileDisplay, type ProfileDisplay } from './display'
 
 export const PROFILE_LIMITS = {
   maxLocales: 20,
@@ -17,7 +18,7 @@ const BRAND_COLOR = /^#[0-9A-Fa-f]{6}$/
 const LOCALE = /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/
 const EMAIL = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/
 
-export interface SafeProfile {
+export interface SafeProfile extends ProfileDisplay {
   version?: number
   brand_color?: string
   appearance: 'auto' | 'light' | 'dark'
@@ -55,6 +56,8 @@ export function sanitizeProfile(raw: SupportPublicProfile | null | undefined): S
   const logo = httpsUrl(p.logo_url, PROFILE_LIMITS.contactUrl)
   if (logo) out.logo_url = logo
   if (typeof p.default_locale === 'string' && LOCALE.test(p.default_locale)) out.default_locale = p.default_locale
+
+  Object.assign(out, parseProfileDisplay(p))
 
   if (p.texts && typeof p.texts === 'object') {
     for (const [loc, t] of Object.entries(p.texts as Record<string, unknown>).slice(0, PROFILE_LIMITS.maxLocales)) {

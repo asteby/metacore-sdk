@@ -1,7 +1,7 @@
 // GENERADO por scripts/gen-support-types.mjs. No editar a mano.
 // Fuente: fixtures del contrato (metacore-kernel: support/contract/testdata).
-// Huella de los fixtures: sha256:f5cd6b3e7485921dfdfe0c24fc8be8408c7e7d8cc70578c1e71df1ab931d8eb8
-// Fixtures usados: callback_ai_action, callback_desk_message, callback_desk_resolved, callback_issue_closed, callback_issue_commented, desk_case_opened, desk_case_opened_channel, desk_message, embed_session_claims, error_channel_inactive, error_contract_upgrade_required, error_not_linked, error_not_linked_v1, escalate_request_v1, escalate_request_v2, escalate_response_v1, escalate_response_v1_duplicate, escalate_response_v2_pending, link_ack_request, link_request, link_response_active, link_response_pending, message_request_v1, message_request_v2, message_response, public_profile, thread_case, thread_message, visitor_erased
+// Huella de los fixtures: sha256:0fdcb6fa8cd412de40013b395d1c7d565fce42e2eff5a2ccd2ef659c0a1c4509
+// Fixtures usados: callback_ai_action, callback_desk_message, callback_desk_resolved, callback_issue_closed, callback_issue_commented, desk_case_opened, desk_case_opened_channel, desk_message, embed_session_claims, error_channel_inactive, error_contract_upgrade_required, error_not_linked, error_not_linked_v1, escalate_request_v1, escalate_request_v2, escalate_response_v1, escalate_response_v1_duplicate, escalate_response_v2_pending, link_ack_request, link_request, link_response_active, link_response_pending, message_request_v1, message_request_v2, message_response, public_profile, public_profile_inline, public_profile_push, thread_case, thread_message, visitor_erased
 
 export interface SupportAttachment {
   url: string
@@ -254,8 +254,8 @@ export interface SupportEmbedSessionClaims {
 export interface SupportPublicProfile {
   version?: number
   brand_color?: string
-  appearance?: "auto" | (string & {})
-  position?: "bottom-right" | (string & {})
+  appearance?: "auto" | "light" | (string & {})
+  position?: "bottom-left" | "bottom-right" | (string & {})
   logo_url?: string
   default_locale?: string
   texts?: Record<string, {
@@ -264,6 +264,13 @@ export interface SupportPublicProfile {
     offline?: string
   }>
   fallback_contact?: SupportFallbackContact
+  display_mode?: string
+  inline_target?: string
+  inline_height?: number
+  panel_width?: number
+  offset?: number
+  launcher_shape?: string
+  launcher_label?: string
 }
 
 export interface SupportVisitorErasedEvent {

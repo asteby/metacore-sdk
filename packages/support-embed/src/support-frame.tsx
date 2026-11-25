@@ -9,6 +9,7 @@ import {
   type SupportApi,
   type SupportCallbackEvent,
 } from '@asteby/metacore-sdk/support'
+import { parseProfileDisplay, type DisplayMode } from './display'
 import { profileTexts, sanitizeProfile, type SafeProfile } from './profile'
 import { applyProfileTheme } from './theme'
 import type { ToFrame, ToParent } from './protocol'
@@ -33,6 +34,10 @@ export interface SupportFrameProps {
   prefersDark?: boolean
   /** Raiz donde se aplican los tokens del tema. Defecto `document.documentElement`. */
   root?: HTMLElement
+  /** Modo con el que se presenta; en `inline` no hay boton de cerrar. El loader lo comunica con `hello`. */
+  mode?: DisplayMode
+  /** Ocupa el alto de su contenedor en vez del de la ventana (embed en codigo, sin iframe). */
+  fill?: boolean
 }
 
 type Phase = { k: 'starting' } | { k: 'ready'; info: EmbedSessionInfo } | { k: 'unavailable' } | { k: 'error' }
@@ -43,7 +48,7 @@ const SERVICE_OUT = new Set(['channel_quota_exceeded'])
 
 const safeHref = (v: string) => (/^https:\/\//.test(v) ? v : undefined)
 
-export function SupportFrame({ embed, apiBase, locale, port, identity, allowReopen, prefersDark = false, root }: SupportFrameProps) {
+export function SupportFrame({ embed, apiBase, locale, port, identity, allowReopen, prefersDark = false, root, mode: initialMode, fill = false }: SupportFrameProps) {
   const { t } = useSupportT()
   const [phase, setPhase] = React.useState<Phase>({ k: 'starting' })
   const [profile, setProfile] = React.useState<SafeProfile | null>(null)
@@ -51,6 +56,7 @@ export function SupportFrame({ embed, apiBase, locale, port, identity, allowReop
   const [composing, setComposing] = React.useState(false)
   const [serviceOut, setServiceOut] = React.useState(false)
   const [nonce, setNonce] = React.useState(0)
+  const [mode, setMode] = React.useState<DisplayMode>(initialMode ?? 'floating')
   const openRef = React.useRef(false)
   const unread = React.useRef(0)
 
@@ -82,6 +88,7 @@ export function SupportFrame({ embed, apiBase, locale, port, identity, allowReop
         launcher: text.launcher ?? t('title'),
         brand_color: applied.brand?.color ?? '#0f172a',
         on_brand: applied.brand?.on ?? '#ffffff',
+        ...parseProfileDisplay(safe as unknown as Record<string, unknown>),
       })
     },
     [locale, port, prefersDark, root, t],
@@ -127,7 +134,9 @@ export function SupportFrame({ embed, apiBase, locale, port, identity, allowReop
   React.useEffect(
     () =>
       port.on((msg) => {
-        if (msg.t === 'identify') {
+        if (msg.t === 'hello') {
+          if (msg.mode) setMode(msg.mode)
+        } else if (msg.t === 'identify') {
           identity.current = msg.token
           embed.stop()
           setCaseId(null)
@@ -185,14 +194,16 @@ export function SupportFrame({ embed, apiBase, locale, port, identity, allowReop
   const visitor = phase.info.visitor?.display_name
 
   return (
-    <div className="flex h-dvh flex-col bg-background text-foreground">
+    <div className={`flex ${fill ? 'h-full' : 'h-dvh'} flex-col bg-background text-foreground`}>
       <header className="flex items-center gap-2 border-b p-3">
         {profile?.logo_url ? <img src={profile.logo_url} alt="" className="h-6 w-6 rounded" referrerPolicy="no-referrer" /> : null}
         <h1 className="flex-1 text-sm font-semibold">{texts.greeting ?? t('embed.newCaseTitle')}</h1>
         {caseId && !composing ? (
           <Button variant="outline" size="sm" onClick={() => setComposing(true)}>{t('embed.newCase')}</Button>
         ) : null}
-        <Button variant="ghost" size="sm" aria-label={t('embed.close')} onClick={() => port.send({ t: 'close' })}>×</Button>
+        {mode === 'inline' ? null : (
+          <Button variant="ghost" size="sm" aria-label={t('embed.close')} onClick={() => port.send({ t: 'close' })}>×</Button>
+        )}
       </header>
       <main className="min-h-0 flex-1">
         {caseId && !composing ? (
