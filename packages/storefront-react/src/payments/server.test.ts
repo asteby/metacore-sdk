@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { StorefrontError, paymentOutcome, type PaymentAttemptResult, type StorefrontClient } from '@asteby/storefront'
-import { createEmbeddedPayHandlers, jsonPayRoute, deviceSessionId, paymentCsp, paymentCspHeaders, paymentCspMode, paymentNonce, paymentNonceFromHeaders, sameOrigin, createRateLimiter, type EmbeddedPayConfig, type PaySession } from './server.js'
+import { createEmbeddedPayHandlers, jsonPayRoute, deviceSessionId, DEVICE_SESSION_ID_MAX, paymentCsp, paymentCspHeaders, paymentCspMode, paymentNonce, paymentNonceFromHeaders, sameOrigin, createRateLimiter, type EmbeddedPayConfig, type PaySession } from './server.js'
 
 type Draft = { checkout_id?: string; number?: string | null }
 const total = { amount: '500.00', currency_code: 'MXN' }
@@ -171,7 +171,11 @@ describe('helpers', () => {
   })
   it('deviceSessionId drops oversized or odd values instead of failing', () => {
     expect(deviceSessionId('abc-1.2:3')).toBe('abc-1.2:3')
-    expect(deviceSessionId('x'.repeat(201))).toBeUndefined()
+    // The real Device ID of Mercado Pago's JS SDK v2 is ~231 chars: it must pass whole.
+    const real = `armor.${'3f2a9c1b'.repeat(14)}.${'77d04e5a'.repeat(14)}`
+    expect(real.length).toBeGreaterThan(220)
+    expect(deviceSessionId(real)).toBe(real)
+    expect(deviceSessionId('x'.repeat(DEVICE_SESSION_ID_MAX + 1))).toBeUndefined()
     expect(deviceSessionId('a b')).toBeUndefined()
     expect(deviceSessionId(5)).toBeUndefined()
   })
