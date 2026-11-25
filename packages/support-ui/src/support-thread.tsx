@@ -11,6 +11,7 @@ import {
 import { Alert, AlertDescription, AlertTitle, Badge, Button } from '@asteby/metacore-ui/primitives'
 import type { SupportAttachmentView, SupportCaseStatus, SupportMessage } from '@asteby/metacore-sdk/support'
 import { AttachmentViewer, MessageAttachments, usable } from './attachments'
+import { STATUS_VARIANT } from './support-case-card'
 import { useSupportT } from './labels'
 import { useSupportThread, type SupportThreadApi } from './use-support-thread'
 
@@ -45,8 +46,6 @@ const LOAD_ERROR_KEY: Record<string, string> = {
   rate_limited: 'rate_limited',
 }
 const SEND_ERRORS = new Set(['rate_limited', 'case_resolved', 'case_closed', 'body_required', 'body_too_long', 'too_many_attachments', 'invalid_attachment', 'support_disabled', 'forbidden'])
-
-const STATUS_VARIANT = { open: 'info', resolved: 'success', closed: 'muted' } as const satisfies Record<SupportCaseStatus, string>
 
 const cx = (...c: Array<string | false | undefined>) => c.filter(Boolean).join(' ')
 

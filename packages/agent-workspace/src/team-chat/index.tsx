@@ -31,14 +31,18 @@ import { toast } from 'sonner'
 
 import {
   type TeamChatChannel,
+  type TeamChatSection,
   type TeamChatMessage,
   type ChatAttachment,
   type MessageReplyPreview,
   parseAttachments,
+  supportCaseFromAttachment,
   callEventFromMessage,
   messagePreviewText,
   isAudioAttachment,
 } from './data/types'
+import { resolveChannelCapabilities } from './data/capabilities'
+import { ChatSection } from './components/chat-section'
 import { ChatListItem } from './components/chat-list-item'
 import { ChannelAvatar, channelDisplayName } from './components/channel-avatar'
 import { NewMessageDialog } from './components/new-message-dialog'
@@ -62,7 +66,12 @@ const AbyChatPane = lazy(() =>
 const WS_EVENT = 'INTERNAL_CHAT_MESSAGE'
 const WS_REACTION = 'INTERNAL_CHAT_REACTION'
 
-export function TeamChat() {
+export interface TeamChatProps {
+  /** Runs a section header action that has no `href` (see `TeamChatSection`). */
+  onSectionAction?: (sectionKey: string, actionId: string) => void
+}
+
+export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
   const { t, i18n } = useTranslation()
   const { mascot_name: mascotName, mascot_skin: mascotSkin } = useWorkspacePlatformConfig()
   const mascotState = useMascotFaceStore((s) => s.state)
@@ -76,6 +85,7 @@ export function TeamChat() {
   const { startCall: startWebRTCCall, joinCall: joinWebRTCCall, session: callSession } = useCall()
 
   const [channels, setChannels] = useState<TeamChatChannel[]>([])
+  const [sections, setSections] = useState<TeamChatSection[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<TeamChatMessage[]>([])
   const [loadingChannels, setLoadingChannels] = useState(true)
@@ -124,6 +134,9 @@ export function TeamChat() {
     [channels, activeId, showAby],
   )
 
+  // Server-declared per-channel capabilities (all true when the channel declares none).
+  const caps = useMemo(() => resolveChannelCapabilities(activeChannel), [activeChannel])
+
   useEffect(() => {
     if (activeId === ABY_CHANNEL_ID) rememberAbyFocus()
     else if (activeId) rememberTeamChannel(activeId)
@@ -142,6 +155,7 @@ export function TeamChat() {
       const { data } = await api.get('/internal-chat/channels')
       const list: TeamChatChannel[] = data.channels ?? []
       setChannels(list)
+      setSections(Array.isArray(data.sections) ? (data.sections as TeamChatSection[]) : [])
       return list
     } catch {
       toast.error(t('team_chat.load_error', 'No se pudieron cargar los canales'))
@@ -388,6 +402,7 @@ export function TeamChat() {
   )
 
   const startReply = useCallback((m: TeamChatMessage) => {
+    if (!caps.replies) return
     const previewBody =
       m.body?.trim() ||
       messagePreviewText(m) ||
@@ -399,10 +414,11 @@ export function TeamChat() {
       body: previewBody,
     })
     requestAnimationFrame(() => composerRef.current?.focus())
-  }, [])
+  }, [caps.replies])
 
   const toggleReaction = useCallback(
     async (messageId: string, emoji: string) => {
+      if (!caps.reactions) return
       try {
         const { data } = await api.post(`/internal-chat/messages/${messageId}/reactions`, {
           emoji,
@@ -418,10 +434,11 @@ export function TeamChat() {
         toast.error(t('team_chat.reaction_error', 'No se pudo reaccionar'))
       }
     },
-    [t],
+    [t, caps.reactions],
   )
 
   const attachFiles = useCallback(async (fileList: FileList | File[] | null) => {
+    if (!caps.attachments) return
     if (!fileList || (Array.isArray(fileList) ? fileList.length === 0 : fileList.length === 0)) return
     const list = Array.isArray(fileList) ? fileList : Array.from(fileList)
     const uploaded: ChatAttachment[] = []
@@ -446,7 +463,7 @@ export function TeamChat() {
       }
     }
     if (uploaded.length) setPendingFiles((prev) => [...prev, ...uploaded])
-  }, [t])
+  }, [t, caps.attachments])
 
   const handleComposerPaste = useCallback(
     (e: ClipboardEvent<HTMLTextAreaElement>) => {
@@ -485,7 +502,7 @@ export function TeamChat() {
 
   const startCall = useCallback(
     (kind: CallKind) => {
-      if (!activeChannel) return
+      if (!activeChannel || !caps.calls) return
       if (callSession) {
         toast.message('Ya hay una llamada activa')
         return
@@ -496,7 +513,7 @@ export function TeamChat() {
         title: channelDisplayName(activeChannel),
       })
     },
-    [activeChannel, callSession, startWebRTCCall],
+    [activeChannel, callSession, startWebRTCCall, caps.calls],
   )
 
   const joinActiveCall = useCallback(() => {
@@ -524,6 +541,31 @@ export function TeamChat() {
     if (!q) return channels
     return channels.filter((c) => channelDisplayName(c).toLowerCase().includes(q))
   }, [channels, search])
+
+  // Channels grouped under a declared section leave the plain list; a channel pointing at an
+  // undeclared section stays in it (so a stale/unknown key never hides a conversation).
+  const sectionKeys = useMemo(() => new Set(sections.map((s) => s.key)), [sections])
+  const plainChannels = useMemo(
+    () => filteredChannels.filter((c) => !c.section || !sectionKeys.has(c.section)),
+    [filteredChannels, sectionKeys],
+  )
+
+  const renderItem = (ch: TeamChatChannel) => {
+    const live = ch.dm_user ? presenceByUserId[ch.dm_user.id] : undefined
+    const online = live?.online ?? !!ch.dm_user?.online
+    return (
+      <ChatListItem
+        key={ch.id}
+        channel={ch}
+        isSelected={activeId === ch.id}
+        currentUserId={currentUser?.id}
+        youLabel={youLabel}
+        locale={locale}
+        online={online}
+        onSelect={(c) => setActiveId(c.id)}
+      />
+    )
+  }
 
   const headerSubtitle = (() => {
     if (!activeChannel) return ''
@@ -644,29 +686,23 @@ export function TeamChat() {
                       </div>
                     </button>
                   )}
-                  {filteredChannels.length === 0 && search.trim() &&
+                  {sections.map((sec) => {
+                    const items = filteredChannels.filter((c) => c.section === sec.key)
+                    if (search.trim() && items.length === 0) return null
+                    return (
+                      <ChatSection key={sec.key} section={sec} onAction={onSectionAction}>
+                        {items.map((ch) => renderItem(ch))}
+                      </ChatSection>
+                    )
+                  })}
+                  {plainChannels.length === 0 && search.trim() && !sections.some((s) => filteredChannels.some((c) => c.section === s.key)) &&
                   !('aby'.includes(search.trim().toLowerCase()) ||
                     'asistente'.includes(search.trim().toLowerCase())) ? (
                     <div className='flex flex-col items-center justify-center gap-1 py-10 text-center text-sm text-muted-foreground'>
                       {t('team_chat.no_results', 'Sin resultados para tu búsqueda')}
                     </div>
                   ) : (
-                    filteredChannels.map((ch) => {
-                      const live = ch.dm_user ? presenceByUserId[ch.dm_user.id] : undefined
-                      const online = live?.online ?? !!ch.dm_user?.online
-                      return (
-                        <ChatListItem
-                          key={ch.id}
-                          channel={ch}
-                          isSelected={activeId === ch.id}
-                          currentUserId={currentUser?.id}
-                          youLabel={youLabel}
-                          locale={locale}
-                          online={online}
-                          onSelect={(c) => setActiveId(c.id)}
-                        />
-                      )
-                    })
+                    plainChannels.map((ch) => renderItem(ch))
                   )}
                 </>
               )}
@@ -757,7 +793,7 @@ export function TeamChat() {
                   </div>
                 </div>
                 <div className='flex shrink-0 items-center gap-0.5'>
-                  {activeChannel.active_call && !callSession && (
+                  {caps.calls && activeChannel.active_call && !callSession && (
                     <Button
                       size='sm'
                       variant='default'
@@ -769,6 +805,8 @@ export function TeamChat() {
                       Unirse
                     </Button>
                   )}
+                  {caps.calls && (
+                  <>
                   <Button
                     size='icon'
                     variant='ghost'
@@ -796,6 +834,8 @@ export function TeamChat() {
                   >
                     <ScreenShare className='size-4' />
                   </Button>
+                  </>
+                  )}
                 </div>
               </div>
 
@@ -880,16 +920,19 @@ export function TeamChat() {
                                 )
                               }
                               const embedAtts = attachments.filter(isChatEmbed)
+                              // A case card replaces its text body (the body stays as the fallback for old clients).
+                              const hasCaseCard = attachments.some((a) => supportCaseFromAttachment(a) !== null)
+                              const bodyText = hasCaseCard ? '' : m.body
                               const fileAtts = attachments.filter(
                                 (a) => !isChatEmbed(a) && a.type !== 'call' && a.url,
                               )
                               const audioOnly =
-                                !m.body?.trim() &&
+                                !bodyText?.trim() &&
                                 !m.reply_to &&
                                 fileAtts.length > 0 &&
                                 fileAtts.every((a) => isAudioAttachment(a))
                               const embedOnly =
-                                !m.body?.trim() &&
+                                !bodyText?.trim() &&
                                 !m.reply_to &&
                                 embedAtts.length > 0 &&
                                 fileAtts.length === 0
@@ -914,10 +957,11 @@ export function TeamChat() {
                                   )}
                                 >
                                 <MessageReactions
-                                  reactions={m.reactions}
+                                  reactions={caps.reactions ? m.reactions : null}
                                   align={mine ? 'end' : 'start'}
+                                  canReact={caps.reactions}
                                   onToggle={(emoji) => void toggleReaction(m.id, emoji)}
-                                  onReply={() => startReply(m)}
+                                  onReply={caps.replies ? () => startReply(m) : undefined}
                                 >
                                 {audioOnly ? (
                                   <div
@@ -987,15 +1031,15 @@ export function TeamChat() {
                                       }}
                                     />
                                   )}
-                                  {m.body ? <p className='text-sm leading-snug'>{m.body}</p> : null}
+                                  {bodyText ? <p className='text-sm leading-snug'>{bodyText}</p> : null}
                                   {embedAtts.length > 0 && (
                                     <ChatEmbedList
                                       attachments={embedAtts}
-                                      className={cn(m.body || m.reply_to ? 'mt-2' : '')}
+                                      className={cn(bodyText || m.reply_to ? 'mt-2' : '')}
                                     />
                                   )}
                                   {fileAtts.length > 0 && (
-                                    <div className={cn('flex flex-col gap-2', m.body || m.reply_to || embedAtts.length ? 'mt-2' : '')}>
+                                    <div className={cn('flex flex-col gap-2', bodyText || m.reply_to || embedAtts.length ? 'mt-2' : '')}>
                                       {fileAtts.map((a, ai) => {
                                         const isImage = (a.mime_type || '').startsWith('image/')
                                         const isVideo = (a.mime_type || '').startsWith('video/')
@@ -1155,6 +1199,7 @@ export function TeamChat() {
                       onVoiceReady={(file) => void sendAttachments([file], '')}
                       voiceDisabled={sending}
                       attachTitle={t('team_chat.attach', 'Adjuntar')}
+                      canAttach={caps.attachments}
                     />
                     <label className='flex min-h-8 min-w-0 flex-1 items-center self-stretch py-1'>
                       <span className='sr-only'>{t('team_chat.composer', 'Escribe un mensaje…')}</span>
@@ -1169,7 +1214,7 @@ export function TeamChat() {
                           e.target.style.height = 'auto'
                           e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px'
                         }}
-                        onPaste={handleComposerPaste}
+                        onPaste={caps.attachments ? handleComposerPaste : undefined}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && !e.shiftKey) {
                             e.preventDefault()

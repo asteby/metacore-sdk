@@ -21,6 +21,7 @@ export {
 
 // Team chat + calls
 export { TeamChat } from './team-chat'
+export type { TeamChatProps } from './team-chat'
 export { CallProvider, useCall } from './team-chat/call-provider'
 export { ShareToChatHost, requestShareToChat } from './team-chat/share-to-chat-host'
 export * from './team-chat/data/share-embed'
