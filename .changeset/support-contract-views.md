@@ -1,5 +1,0 @@
----
-"@asteby/metacore-sdk": minor
----
-
-`@asteby/metacore-sdk/support`: `SupportCase`/`SupportMessage` ya no se escriben a mano, derivan de los tipos generados `SupportCaseView`/`SupportMessageView` (CaseView/MessageView del contrato de canales; ahora con `case_id` y `channel` opcionales). Compatible: los campos y uniones de la UI no cambian. El generador (`scripts/gen-support-types.mjs`) suma las familias `SupportCaseView`, `SupportMessageView`, `SupportEmbedSessionClaims`, `SupportPublicProfile`, `SupportVisitorErasedEvent` y los campos aditivos de `desk_case_opened` (`case_id`, `channel`, `requester`, `instance_context.plan/last_heartbeat`, opcionales). Nuevo `projectSupportEvent` (espejo de `ProjectEvent` del kernel) que usa `applySupportEvent`: `desk_resolved`/`issue_closed`/`desk_reopened` ahora tambien agregan el mensaje de sistema con la solucion, como el kernel. Codigos de error nuevos (`origin_not_allowed`, `channel_inactive`, `session_expired`, `identity_invalid`, `captcha_required`, `channel_quota_exceeded`, `channel_ai_cap_reached`, `already_resolved`).

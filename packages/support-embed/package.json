@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-support-embed",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "description": "Metacore support widget for company sites: a dependency-free loader (iframe + launcher, origin-checked postMessage) and the frame app (SupportThread over a short-lived embed session, theming by validated public profile, es/en)",
   "license": "Apache-2.0",
   "repository": {

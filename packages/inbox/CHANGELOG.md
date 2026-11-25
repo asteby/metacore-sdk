@@ -1,5 +1,12 @@
 # @asteby/metacore-inbox
 
+## 0.2.0
+
+### Minor Changes
+
+- be5e368: `SupportThread` muestra el boton de adjuntar solo si recibe `uploadAttachment` (nuevo `allowAttachments` para conservar el envio solo por nombre). `Composer` de inbox suma `attachable` (defecto `true`) para ocultar el boton y el selector de archivos.
+- be5e368: i18n: claves `supportThread.*` (es/en) para `SupportThread`. inbox: `Composer` acepta `formatting={false}` para ocultar los botones de formato Markdown y dejar solo el de adjuntar.
+
 ## 0.1.3
 
 ### Patch Changes

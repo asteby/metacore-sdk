@@ -1,5 +1,11 @@
 # @asteby/metacore-integrations
 
+## 0.4.0
+
+### Minor Changes
+
+- be5e368: Nuevo `ApiKeysManager`: gestor de claves (lista con prefijo, emitir con ambito, rotar con solapamiento visible, revocar con confirmacion, secreto mostrado una sola vez con `CredentialOnce`). Headless sobre `ApiKeysApi`; claves `keys.*` es/en. La guia de migracion de `device-api-tokens.tsx` de OPS esta en el README.
+
 ## 0.3.1
 
 ### Patch Changes

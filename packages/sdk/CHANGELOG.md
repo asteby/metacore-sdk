@@ -1,5 +1,14 @@
 # @asteby/metacore-sdk
 
+## 3.25.0
+
+### Minor Changes
+
+- be5e368: `@asteby/metacore-sdk/support`: `SupportCase`/`SupportMessage` ya no se escriben a mano, derivan de los tipos generados `SupportCaseView`/`SupportMessageView` (CaseView/MessageView del contrato de canales; ahora con `case_id` y `channel` opcionales). Compatible: los campos y uniones de la UI no cambian. El generador (`scripts/gen-support-types.mjs`) suma las familias `SupportCaseView`, `SupportMessageView`, `SupportEmbedSessionClaims`, `SupportPublicProfile`, `SupportVisitorErasedEvent` y los campos aditivos de `desk_case_opened` (`case_id`, `channel`, `requester`, `instance_context.plan/last_heartbeat`, opcionales). Nuevo `projectSupportEvent` (espejo de `ProjectEvent` del kernel) que usa `applySupportEvent`: `desk_resolved`/`issue_closed`/`desk_reopened` ahora tambien agregan el mensaje de sistema con la solucion, como el kernel. Codigos de error nuevos (`origin_not_allowed`, `channel_inactive`, `session_expired`, `identity_invalid`, `captcha_required`, `channel_quota_exceeded`, `channel_ai_cap_reached`, `already_resolved`).
+- be5e368: Nuevo `createEmbedTransport` en `@asteby/metacore-sdk/support`: sesion de embed de corta vida (apertura, renovacion al 80 % del TTL, reintento ante `session_expired`, token solo en la clausura), adaptacion de `createSupportApi` a la API del widget del Hub y tiempo real por SSE con `fetch`. Base, rutas, almacen del token de visitante y `fetch` se inyectan.
+- be5e368: Alineado con la API de casos de OPS: `createSupportApi` expone paginación keyset (`listCases`, `getCase({before})`, `listMessages` con `X-Next-Cursor`), `reopen`, `channel` en `createCase` y `supportErrorCode` para los códigos `{error:{code}}`; el transporte devuelve `{ data, headers }`. `SupportThread` carga mensajes anteriores, reabre con `api.reopen` y mapea `support_disabled`, `forbidden`, `not_found`, `rate_limited` y `case_resolved` a estados de UI.
+- be5e368: Nuevo subpath `@asteby/metacore-sdk/support`: tipos del contrato de soporte generados desde los fixtures del kernel (`node scripts/gen-support-types.mjs --src <testdata>`), `applySupportEvent` (reductor puro de eventos del callback), `isAttachmentExpired` y `createSupportApi(transport, { basePath, events })` desacoplado del transporte.
+
 ## 3.24.0
 
 ### Minor Changes
