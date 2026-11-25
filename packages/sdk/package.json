@@ -26,6 +26,10 @@
     "./page": {
       "types": "./dist/page.d.ts",
       "import": "./dist/page.js"
+    },
+    "./support": {
+      "types": "./dist/support.d.ts",
+      "import": "./dist/support.js"
     }
   },
   "scripts": {
