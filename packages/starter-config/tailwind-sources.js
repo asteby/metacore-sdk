@@ -25,6 +25,8 @@ export const METACORE_TAILWIND_SOURCE_PACKAGES = [
   "@asteby/metacore-starter-core",
   "@asteby/metacore-starter-monaco",
   "@asteby/storefront-react",
+  "@asteby/metacore-support-embed",
+  "@asteby/metacore-support-ui",
   "@asteby/metacore-ui",
   "@asteby/metacore-webhooks"
 ]

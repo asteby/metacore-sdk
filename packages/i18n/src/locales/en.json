@@ -33,6 +33,99 @@
     "errorHint": "Something went wrong while fetching this content.",
     "retry": "Retry"
   },
+  "supportThread": {
+    "title": "Support",
+    "status": {
+      "open": "Open",
+      "resolved": "Resolved",
+      "closed": "Closed"
+    },
+    "author": {
+      "you": "You",
+      "agent": "Support",
+      "ai": "AI assistant",
+      "system": "System"
+    },
+    "embed": {
+      "starting": "Connecting…",
+      "newCaseTitle": "How can we help?",
+      "newCase": "New conversation",
+      "subject": "Subject (optional)",
+      "message": "Your message",
+      "start": "Start conversation",
+      "starting2": "Starting…",
+      "unavailableTitle": "Support is out of service",
+      "unavailableBody": "We cannot take your message right now.",
+      "contactEmail": "Write to us at {{email}}",
+      "contactUrl": "Visit our help page",
+      "errorTitle": "Could not connect",
+      "errorBody": "Check your connection and try again.",
+      "close": "Close"
+    },
+    "aiBadge": "AI",
+    "messages": "Case messages",
+    "emptyTitle": "No messages yet",
+    "emptyBody": "Write the first one so the support team can reply.",
+    "loadErrorTitle": "Could not load the case",
+    "loadErrorBody": "Check your connection and try again.",
+    "retry": "Retry",
+    "loading": "Loading the case…",
+    "placeholder": "Write a message to support…",
+    "send": "Send",
+    "attach": "Attach files",
+    "resolvedTitle": "Case resolved",
+    "resolvedBody": "Support marked this case as resolved.",
+    "closedTitle": "Case closed",
+    "closedBody": "This case is closed and no longer accepts messages.",
+    "reopen": "Reopen case",
+    "reopening": "Reopening…",
+    "attachmentsOf": "Message attachments",
+    "viewer": {
+      "title": "Preview of {{name}}",
+      "download": "Download",
+      "close": "Close",
+      "noPreview": "No preview is available for this file type.",
+      "thumb": "Thumbnail of {{name}}",
+      "open": "Open {{name}}"
+    },
+    "expired": {
+      "title": "Attachment expired",
+      "body": "The link for {{name}} has expired and it can no longer be opened or downloaded. Ask support to share it again.",
+      "inline": "{{name}} (expired)"
+    },
+    "loadOlder": "Load earlier messages",
+    "loadingOlder": "Loading…",
+    "loadErrors": {
+      "disabled": {
+        "title": "Support is not enabled",
+        "body": "Your organization does not have support turned on. Ask an administrator to enable it."
+      },
+      "forbidden": {
+        "title": "No access to this case",
+        "body": "You do not have permission to view support or this case."
+      },
+      "not_found": {
+        "title": "Case not found",
+        "body": "The case does not exist or you do not have access to it."
+      },
+      "rate_limited": {
+        "title": "Too many requests",
+        "body": "Wait a moment and try again."
+      }
+    },
+    "sendErrors": {
+      "rate_limited": "Too many requests. Wait a moment and try again.",
+      "case_resolved": "The case is already resolved. Reopen it to reply.",
+      "case_closed": "The case is closed and no longer accepts messages.",
+      "body_required": "The message is empty.",
+      "body_too_long": "The message is too long.",
+      "too_many_attachments": "There are too many attachments.",
+      "invalid_attachment": "One of the attachments is not valid.",
+      "support_disabled": "Support is not enabled for your organization.",
+      "forbidden": "You do not have permission to write in this case.",
+      "unknown": "The message could not be sent. Try again."
+    }
+  },
   "common": {
     "all": "All",
     "search": "Search...",

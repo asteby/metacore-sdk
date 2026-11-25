@@ -110,6 +110,16 @@ describe('HtmlSandboxFrame', () => {
 })
 
 describe('Composer', () => {
+  it('formatting={false} keeps only the attach button in the toolbar', () => {
+    render(<Composer onSend={() => {}} formatting={false} />)
+    expect(screen.queryByRole('button', { name: 'Negrita' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Adjuntar archivos' })).toBeTruthy()
+  })
+  it('attachable={false} removes the attach button and the file picker', () => {
+    render(<Composer onSend={() => {}} formatting={false} attachable={false} />)
+    expect(screen.queryByRole('button', { name: 'Adjuntar archivos' })).toBeNull()
+    expect(screen.queryByTestId('composer-file-input')).toBeNull()
+  })
   it('sends with ctrl+enter, builds safe html and clears', async () => {
     const onSend = vi.fn().mockResolvedValue(undefined)
     render(<Composer onSend={onSend} />)

@@ -36,5 +36,7 @@
 @source "../../metacore-starter-core";
 @source "../../metacore-starter-monaco";
 @source "../../storefront-react";
+@source "../../metacore-support-embed";
+@source "../../metacore-support-ui";
 @source "../../metacore-ui";
 @source "../../metacore-webhooks";

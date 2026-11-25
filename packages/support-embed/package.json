@@ -1,0 +1,67 @@
+{
+  "name": "@asteby/metacore-support-embed",
+  "version": "0.0.0",
+  "description": "Metacore support widget for company sites: a dependency-free loader (iframe + launcher, origin-checked postMessage) and the frame app (SupportThread over a short-lived embed session, theming by validated public profile, es/en)",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asteby/metacore-sdk",
+    "directory": "packages/support-embed"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./loader": "./dist/embed/loader.js",
+    "./frame": "./dist/embed/frame.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node ../../scripts/fix-dist-esm-imports.mjs && tsup",
+    "dev": "tsc -w -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@asteby/metacore-i18n": "workspace:^",
+    "@asteby/metacore-sdk": "workspace:^",
+    "@asteby/metacore-support-ui": "workspace:^",
+    "@asteby/metacore-theme": "workspace:^",
+    "@asteby/metacore-ui": "workspace:^",
+    "react": ">=18",
+    "react-dom": ">=18",
+    "react-i18next": ">=13"
+  },
+  "devDependencies": {
+    "@asteby/metacore-i18n": "workspace:*",
+    "@asteby/metacore-inbox": "workspace:*",
+    "@asteby/metacore-sdk": "workspace:*",
+    "@asteby/metacore-support-ui": "workspace:*",
+    "@asteby/metacore-theme": "workspace:*",
+    "@asteby/metacore-ui": "workspace:*",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "happy-dom": "^20.10.2",
+    "i18next": "^26.0.0",
+    "lucide-react": "^1.0.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-i18next": "^17.0.0",
+    "tsup": "^8.3.5",
+    "typescript": "^6.0.0",
+    "vitest": "^4.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

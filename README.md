@@ -108,6 +108,8 @@ All published as `@asteby/metacore-*` on npm under Apache-2.0. Versions reflect 
 | [`@asteby/metacore-notifications`](./packages/notifications) | Notifications dropdown, app badge, real-time WebSocket updates. | stable |
 | [`@asteby/metacore-ai-chat`](./packages/ai-chat) | Copilot chat: widget, panel, draggable FAB, injectable client/permissions/branding. | beta |
 | [`@asteby/metacore-inbox`](./packages/inbox) | Channel-agnostic inbox: virtualized conversation list, thread view, composer with drafts, sandboxed HTML frame, AI proposal card, shortcuts. | alpha |
+| [`@asteby/metacore-support-ui`](./packages/support-ui) | `SupportThread`: support case thread (person/agent/AI messages, status, attachments with viewer and expiry notice, composer) over an injected transport. | alpha |
+| [`@asteby/metacore-support-embed`](./packages/support-embed) | Support widget for company sites: dependency-free loader (iframe + launcher, origin-checked `postMessage`) and the frame app (`SupportThread` over a short-lived embed session, validated public-profile theming, es/en, anonymous or signed identity). | alpha |
 | [`@asteby/metacore-setup-wizard`](./packages/setup-wizard) | Generic resumable step wizard with live polling, domain setup wizard, DNS record rows, live status badge. | alpha |
 | [`@asteby/metacore-webhooks`](./packages/webhooks) | Webhooks management UI — list, create, logs, test/replay, signing secrets. | stable |
 | [`@asteby/metacore-pwa`](./packages/pwa) | PWA helpers — Vite plugin wrapper, install/update prompts, push, offline. | beta |

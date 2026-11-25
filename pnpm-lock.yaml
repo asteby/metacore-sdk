@@ -1562,6 +1562,111 @@ importers:
         specifier: ^4.0.0
         version: 4.1.12(@types/node@22.20.5)(happy-dom@20.14.6)(vite@8.3.8(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))
 
+  packages/support-embed:
+    devDependencies:
+      '@asteby/metacore-i18n':
+        specifier: workspace:*
+        version: link:../i18n
+      '@asteby/metacore-inbox':
+        specifier: workspace:*
+        version: link:../inbox
+      '@asteby/metacore-sdk':
+        specifier: workspace:*
+        version: link:../sdk
+      '@asteby/metacore-support-ui':
+        specifier: workspace:*
+        version: link:../support-ui
+      '@asteby/metacore-theme':
+        specifier: workspace:*
+        version: link:../theme
+      '@asteby/metacore-ui':
+        specifier: workspace:*
+        version: link:../ui
+      '@testing-library/react':
+        specifier: ^16.3.2
+        version: 16.3.3(@testing-library/dom@10.4.1)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.3.0(@types/react@19.3.0)
+      happy-dom:
+        specifier: ^20.10.2
+        version: 20.14.6
+      i18next:
+        specifier: ^26.0.0
+        version: 26.7.2(typescript@6.0.3)
+      lucide-react:
+        specifier: ^1.0.0
+        version: 1.77.0(@types/react@19.3.0)(react@19.3.1)
+      react:
+        specifier: ^19.2.4
+        version: 19.3.1
+      react-dom:
+        specifier: ^19.2.4
+        version: 19.3.1(react@19.3.1)
+      react-i18next:
+        specifier: ^17.0.0
+        version: 17.1.13(i18next@26.7.2(typescript@6.0.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3)
+      tsup:
+        specifier: ^8.3.5
+        version: 8.5.1(@swc/core@1.15.47)(jiti@2.7.0)(postcss@8.5.28)(tsx@4.23.15)(typescript@6.0.3)
+      typescript:
+        specifier: ^6.0.0
+        version: 6.0.3
+      vitest:
+        specifier: ^4.0.0
+        version: 4.1.12(@types/node@22.20.5)(happy-dom@20.14.6)(vite@8.3.8(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))
+
+  packages/support-ui:
+    devDependencies:
+      '@asteby/metacore-i18n':
+        specifier: workspace:*
+        version: link:../i18n
+      '@asteby/metacore-inbox':
+        specifier: workspace:*
+        version: link:../inbox
+      '@asteby/metacore-sdk':
+        specifier: workspace:*
+        version: link:../sdk
+      '@asteby/metacore-ui':
+        specifier: workspace:*
+        version: link:../ui
+      '@testing-library/react':
+        specifier: ^16.3.2
+        version: 16.3.3(@testing-library/dom@10.4.1)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.3.0(@types/react@19.3.0)
+      happy-dom:
+        specifier: ^20.10.2
+        version: 20.14.6
+      i18next:
+        specifier: ^26.0.0
+        version: 26.7.2(typescript@6.0.3)
+      lucide-react:
+        specifier: ^1.0.0
+        version: 1.77.0(@types/react@19.3.0)(react@19.3.1)
+      react:
+        specifier: ^19.2.4
+        version: 19.3.1
+      react-dom:
+        specifier: ^19.2.4
+        version: 19.3.1(react@19.3.1)
+      react-i18next:
+        specifier: ^17.0.0
+        version: 17.1.13(i18next@26.7.2(typescript@6.0.3))(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(typescript@6.0.3)
+      typescript:
+        specifier: ^6.0.0
+        version: 6.0.3
+      vitest:
+        specifier: ^4.0.0
+        version: 4.1.12(@types/node@22.20.5)(happy-dom@20.14.6)(vite@8.3.8(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))
+
   packages/theme:
     dependencies:
       tailwindcss:

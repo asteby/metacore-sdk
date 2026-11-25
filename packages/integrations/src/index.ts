@@ -67,3 +67,14 @@ export {
   WHEN_OPS,
 } from './policy-utils'
 export type { GuardColumns, PolicyCode, PolicyProblem, WhenIssue, WhenOp } from './policy-utils'
+export { ApiKeysManager } from './api-keys'
+export type {
+  ApiKey,
+  ApiKeyDraft,
+  ApiKeyField,
+  ApiKeyScope,
+  ApiKeyStatus,
+  ApiKeysApi,
+  ApiKeysManagerProps,
+  IssuedApiKey,
+} from './api-keys'

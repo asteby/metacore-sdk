@@ -47,6 +47,10 @@ export interface ComposerProps {
   /** Upload each file as it is picked; omit to hand raw File objects to onSend. */
   uploadAttachment?: (file: File) => Promise<Omit<ComposerAttachment, 'file'>>
   maxAttachmentBytes?: number
+  /** Show the attach button. Default true; `false` hides it (and the file picker) for hosts that cannot take files. */
+  attachable?: boolean
+  /** Show the Markdown formatting buttons (bold, link, list...). Default true; `false` leaves only the attach button. */
+  formatting?: boolean
   placeholder?: string
   disabled?: boolean
   autoFocus?: boolean
@@ -75,6 +79,8 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
     header,
     uploadAttachment,
     maxAttachmentBytes = 25 * 1024 * 1024,
+    attachable = true,
+    formatting = true,
     placeholder,
     disabled,
     autoFocus,
@@ -375,35 +381,43 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
       )}
       <div className="flex items-center gap-1">
         <div role="toolbar" aria-label={labels.formatting} className="flex items-center gap-0.5">
-          <button type="button" className={tool} aria-label={labels.bold} title={`${labels.bold} (Ctrl/⌘ B)`} onClick={() => wrap('**')}>
-            <Bold className="size-4" aria-hidden />
-          </button>
-          <button type="button" className={tool} aria-label={labels.italic} title={`${labels.italic} (Ctrl/⌘ I)`} onClick={() => wrap('*')}>
-            <Italic className="size-4" aria-hidden />
-          </button>
-          <button type="button" className={tool} aria-label={labels.link} title={`${labels.link} (Ctrl/⌘ K)`} onClick={() => setLinkOpen(true)}>
-            <Link2 className="size-4" aria-hidden />
-          </button>
-          <button type="button" className={tool} aria-label={labels.list} onClick={() => prefix('- ')}>
-            <List className="size-4" aria-hidden />
-          </button>
-          <button type="button" className={tool} aria-label={labels.quote} onClick={() => prefix('> ')}>
-            <Quote className="size-4" aria-hidden />
-          </button>
-          <button type="button" className={tool} aria-label={labels.attach} onClick={() => fileInput.current?.click()} disabled={disabled}>
-            <Paperclip className="size-4" aria-hidden />
-          </button>
-          <input
-            ref={fileInput}
-            type="file"
-            multiple
-            hidden
-            data-testid="composer-file-input"
-            onChange={(e) => {
-              if (e.target.files) addFiles(e.target.files)
-              e.target.value = ''
-            }}
-          />
+          {formatting && (
+            <>
+            <button type="button" className={tool} aria-label={labels.bold} title={`${labels.bold} (Ctrl/⌘ B)`} onClick={() => wrap('**')}>
+              <Bold className="size-4" aria-hidden />
+            </button>
+            <button type="button" className={tool} aria-label={labels.italic} title={`${labels.italic} (Ctrl/⌘ I)`} onClick={() => wrap('*')}>
+              <Italic className="size-4" aria-hidden />
+            </button>
+            <button type="button" className={tool} aria-label={labels.link} title={`${labels.link} (Ctrl/⌘ K)`} onClick={() => setLinkOpen(true)}>
+              <Link2 className="size-4" aria-hidden />
+            </button>
+            <button type="button" className={tool} aria-label={labels.list} onClick={() => prefix('- ')}>
+              <List className="size-4" aria-hidden />
+            </button>
+            <button type="button" className={tool} aria-label={labels.quote} onClick={() => prefix('> ')}>
+              <Quote className="size-4" aria-hidden />
+            </button>
+            </>
+          )}
+          {attachable && (
+            <>
+              <button type="button" className={tool} aria-label={labels.attach} onClick={() => fileInput.current?.click()} disabled={disabled}>
+                <Paperclip className="size-4" aria-hidden />
+              </button>
+              <input
+                ref={fileInput}
+                type="file"
+                multiple
+                hidden
+                data-testid="composer-file-input"
+                onChange={(e) => {
+                  if (e.target.files) addFiles(e.target.files)
+                  e.target.value = ''
+                }}
+              />
+            </>
+          )}
         </div>
         <span className="ml-auto mr-2 hidden text-xs text-muted-foreground sm:inline" role="status" aria-live="polite">
           {draftState === 'saving' ? labels.draftSaving : draftState === 'saved' ? labels.draftSaved : ''}

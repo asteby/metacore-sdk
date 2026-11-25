@@ -124,3 +124,29 @@ Un campo que el editor no conoce (p. ej. `scope`) se conserva intacto al editar.
   `guardColumns`, `policyProblems`, `whenProblems`, `transitionTargets`, `resetPolicy`.
 - Al cambiar de modelo se limpian `match`, `mapping`, `guard`, `defaults`, `idempotency_field`, `action`,
   `params` y `to`.
+
+## `ApiKeysManager` (claves de API y tokens de integracion)
+
+`<ApiKeysManager api scopes t />`: lista con prefijo, emitir con ambito (y, si el host lo pide, vencimiento,
+limite por minuto y campos propios como el dispositivo), **rotar con solapamiento visible** (la clave vieja
+muestra «sigue valida hasta ...»), revocar con confirmacion y mostrar el secreto **una sola vez** con
+`CredentialOnce`. Es headless: el host implementa `ApiKeysApi` (`list`, `create`, `rotate?`, `revoke`,
+`remove?`) sobre sus endpoints; ninguna URL vive aqui. `rotate` recibe `{ graceSeconds }` (0 = cortar ya).
+
+### Migrar `wt-ops-ai/frontend/src/pages/devices/device-api-tokens.tsx`
+
+La pagina de dispositivos de OPS (`GenerateTokenDialog`, `TokenList`) es el segundo consumidor del primitivo.
+Equivalencias (el archivo de OPS no se toca desde este repo; la migracion va en la rama de OPS):
+
+| OPS hoy | `ApiKeysManager` |
+|---|---|
+| `POST /device-tokens` con `{name, device_id, scopes: 'a,b', rate_limit_per_minute, expires_in: '90d'}` | `api.create(draft)`: `draft.fields.device_id`, `draft.scopes` (array), `draft.rate_limit_per_minute`, `draft.expires_in_days` (el adaptador de OPS lo convierte a `'90d'` y une los scopes con coma) |
+| respuesta `data.data.token` (se muestra con copiar/ojo) | `IssuedApiKey.secret` (se muestra una vez con `CredentialOnce`) |
+| `GET /device-tokens` (`token_prefix`, `scopes` en CSV, `status`, `expires_at`, `last_used_at`, `device`) | `api.list()` mapeando a `ApiKey` (`prefix`, `scopes.split(',')`, `detail` = nombre del dispositivo) |
+| `POST /device-tokens/:id/revoke` | `api.revoke(id)` |
+| `DELETE /device-tokens/:id` | `api.remove(id)` |
+| no existe rotacion | `api.rotate` se omite hasta que el backend de OPS la ofrezca (`apitoken.Rotate(id, grace)` del kernel) |
+| `GET /device-tokens/stats`, `APIDocsSnippet` | se quedan en la pagina de OPS, alrededor del componente (`onChanged` refresca las estadisticas) |
+
+Campos: `fields=[{name:'device_id', label, options: dispositivos}]`, `expiryOptions=[30,90,365]`,
+`defaultRateLimit=60`, `defaultScopes=['messages:send','messages:read','conversations:read']`.
