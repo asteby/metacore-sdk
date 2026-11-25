@@ -24,6 +24,8 @@ export interface SupportThreadProps {
   /** Uploads one file and returns it as an attachment (with its signed URL). Without it, files are sent by name only. */
   uploadAttachment?: (file: File) => Promise<SupportAttachmentView>
   maxAttachmentBytes?: number
+  /** Show the attach button. Defaults to whether `uploadAttachment` is given: without an uploader (anonymous widget visitors) there is nothing to attach to. Pass `true` to keep the legacy send-by-name behavior. */
+  allowAttachments?: boolean
   /** Overrides the reopen action (default: `api.reopen`). The reopen button shows when this or `api.reopen` exists; the thread reloads after `onReopen`. */
   onReopen?: () => void | Promise<void>
   /** Idempotency key generator for outgoing messages. */
@@ -61,6 +63,7 @@ export function SupportThread({
   authorName,
   uploadAttachment,
   maxAttachmentBytes,
+  allowAttachments,
   onReopen,
   newId,
   now = Date.now,
@@ -181,6 +184,7 @@ export function SupportThread({
           formatting={false}
           uploadAttachment={upload}
           maxAttachmentBytes={maxAttachmentBytes}
+          attachable={allowAttachments ?? Boolean(uploadAttachment)}
           labels={labels}
         />
       </>

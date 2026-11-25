@@ -46,6 +46,22 @@
       "ai": "AI assistant",
       "system": "System"
     },
+    "embed": {
+      "starting": "Connecting…",
+      "newCaseTitle": "How can we help?",
+      "newCase": "New conversation",
+      "subject": "Subject (optional)",
+      "message": "Your message",
+      "start": "Start conversation",
+      "starting2": "Starting…",
+      "unavailableTitle": "Support is out of service",
+      "unavailableBody": "We cannot take your message right now.",
+      "contactEmail": "Write to us at {{email}}",
+      "contactUrl": "Visit our help page",
+      "errorTitle": "Could not connect",
+      "errorBody": "Check your connection and try again.",
+      "close": "Close"
+    },
     "aiBadge": "AI",
     "messages": "Case messages",
     "emptyTitle": "No messages yet",

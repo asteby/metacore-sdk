@@ -46,6 +46,22 @@
       "ai": "Asistente IA",
       "system": "Sistema"
     },
+    "embed": {
+      "starting": "Conectando…",
+      "newCaseTitle": "¿En qué podemos ayudarte?",
+      "newCase": "Nueva conversación",
+      "subject": "Asunto (opcional)",
+      "message": "Tu mensaje",
+      "start": "Iniciar conversación",
+      "starting2": "Iniciando…",
+      "unavailableTitle": "El soporte está fuera de servicio",
+      "unavailableBody": "No podemos recibir tu mensaje por ahora.",
+      "contactEmail": "Escríbenos a {{email}}",
+      "contactUrl": "Visita nuestra página de ayuda",
+      "errorTitle": "No pudimos conectar",
+      "errorBody": "Revisa tu conexión e inténtalo de nuevo.",
+      "close": "Cerrar"
+    },
     "aiBadge": "IA",
     "messages": "Mensajes del caso",
     "emptyTitle": "Aún no hay mensajes",

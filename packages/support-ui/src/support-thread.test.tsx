@@ -187,8 +187,27 @@ describe('SupportThread composer', () => {
     expect(api.sendMessage.mock.calls[0]?.[1].attachments?.[0]).toMatchObject({ name: 'foto.png', url: 'https://hub.example/files/foto.png?sig=z' })
   })
 
+  it('shows no attach button without uploadAttachment (anonymous widget) unless allowAttachments is set', async () => {
+    const { api } = fakeApi(baseCase())
+    const first = view(api)
+    await screen.findByRole('log')
+    expect(screen.queryByRole('button', { name: 'Adjuntar archivos' })).toBeNull()
+    expect(screen.queryByTestId('composer-file-input')).toBeNull()
+    first.unmount()
+    view(api, { allowAttachments: true })
+    await screen.findByRole('log')
+    expect(screen.getByRole('button', { name: 'Adjuntar archivos' })).toBeTruthy()
+  })
+
+  it('shows the attach button when the host provides uploadAttachment', async () => {
+    const { api } = fakeApi(baseCase())
+    view(api, { uploadAttachment: async (f) => png(f.name) })
+    await screen.findByRole('log')
+    expect(screen.getByRole('button', { name: 'Adjuntar archivos' })).toBeTruthy()
+  })
+
   it('hides the formatting toolbar buttons (plain support chat)', async () => {
-    view(fakeApi(baseCase()).api)
+    view(fakeApi(baseCase()).api, { uploadAttachment: async (f) => png(f.name) })
     await screen.findByRole('log')
     expect(screen.queryByRole('button', { name: 'Negrita' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Adjuntar archivos' })).toBeTruthy()
