@@ -4,25 +4,7 @@
  * llega por red y se aplica al DOM: un campo invalido se descarta, no se aplica ni rompe el resto.
  */
 import type { SupportPublicProfile } from '@asteby/metacore-sdk/support'
-import { parseProfileDisplay, type DisplayMode, type LauncherShape, type ProfileDisplay } from './display'
-
-/**
- * TODO(kernel feat/support-embed-display-modes): estos campos los anade el contrato del kernel a
- * `PublicProfile`. Cuando esa rama se publique, regenerar `packages/sdk/src/generated/support-contract.ts`
- * con `scripts/gen-support-types.mjs --src <testdata del kernel>` y borrar este tipo manual
- * (`SupportPublicProfile` ya los traera).
- */
-export interface PublicProfileDisplayFields {
-  display_mode?: DisplayMode | (string & {})
-  inline_target?: string
-  inline_height?: number
-  panel_width?: number
-  offset?: number
-  launcher_shape?: LauncherShape | (string & {})
-  launcher_label?: string
-}
-
-export type PublicProfileInput = SupportPublicProfile & PublicProfileDisplayFields
+import { parseProfileDisplay, type ProfileDisplay } from './display'
 
 export const PROFILE_LIMITS = {
   maxLocales: 20,
@@ -46,7 +28,6 @@ export interface SafeProfile extends ProfileDisplay {
   default_locale?: string
   texts: Record<string, { launcher?: string; greeting?: string; offline?: string }>
   fallback_contact?: { email?: string; url?: string }
-  /** Presentacion (todo opcional; ausente = `floating` con los defectos del modo). */
 }
 
 const httpsUrl = (v: unknown, max: number): string | undefined => {
@@ -63,7 +44,7 @@ const text = (v: unknown, max: number): string | undefined =>
   typeof v === 'string' && v.length > 0 && [...v].length <= max ? v : undefined
 
 /** Devuelve el perfil con solo los campos validos y los defectos del contrato para el resto. */
-export function sanitizeProfile(raw: PublicProfileInput | null | undefined): SafeProfile {
+export function sanitizeProfile(raw: SupportPublicProfile | null | undefined): SafeProfile {
   const p = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
   const out: SafeProfile = {
     appearance: p.appearance === 'light' || p.appearance === 'dark' ? p.appearance : 'auto',
