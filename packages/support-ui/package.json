@@ -1,6 +1,6 @@
 {
   "name": "@asteby/metacore-support-ui",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Metacore support thread: SupportThread component and useSupportThread hook (transport injected by the host), built on metacore-ui and metacore-inbox",
   "license": "Apache-2.0",
   "repository": {
