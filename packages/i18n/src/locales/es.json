@@ -33,6 +33,51 @@
     "errorHint": "Ocurrió un error al obtener este contenido.",
     "retry": "Reintentar"
   },
+  "supportThread": {
+    "title": "Soporte",
+    "status": {
+      "open": "Abierto",
+      "resolved": "Resuelto",
+      "closed": "Cerrado"
+    },
+    "author": {
+      "you": "Tú",
+      "agent": "Soporte",
+      "ai": "Asistente IA",
+      "system": "Sistema"
+    },
+    "aiBadge": "IA",
+    "messages": "Mensajes del caso",
+    "emptyTitle": "Aún no hay mensajes",
+    "emptyBody": "Escribe el primero para que el equipo de soporte te responda.",
+    "loadErrorTitle": "No se pudo cargar el caso",
+    "loadErrorBody": "Revisa tu conexión e inténtalo de nuevo.",
+    "retry": "Reintentar",
+    "loading": "Cargando el caso…",
+    "placeholder": "Escribe un mensaje a soporte…",
+    "send": "Enviar",
+    "attach": "Adjuntar archivos",
+    "resolvedTitle": "Caso resuelto",
+    "resolvedBody": "Soporte marcó este caso como resuelto.",
+    "closedTitle": "Caso cerrado",
+    "closedBody": "Este caso está cerrado y ya no admite mensajes.",
+    "reopen": "Reabrir caso",
+    "reopening": "Reabriendo…",
+    "attachmentsOf": "Adjuntos del mensaje",
+    "viewer": {
+      "title": "Vista previa de {{name}}",
+      "download": "Descargar",
+      "close": "Cerrar",
+      "noPreview": "No hay vista previa para este tipo de archivo.",
+      "thumb": "Miniatura de {{name}}",
+      "open": "Abrir {{name}}"
+    },
+    "expired": {
+      "title": "Adjunto caducado",
+      "body": "El enlace de {{name}} caducó y ya no se puede abrir ni descargar. Pide a soporte que lo vuelva a compartir.",
+      "inline": "{{name}} (caducado)"
+    }
+  },
   "common": {
     "all": "Todos",
     "search": "Buscar...",

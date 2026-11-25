@@ -33,6 +33,51 @@
     "errorHint": "Something went wrong while fetching this content.",
     "retry": "Retry"
   },
+  "supportThread": {
+    "title": "Support",
+    "status": {
+      "open": "Open",
+      "resolved": "Resolved",
+      "closed": "Closed"
+    },
+    "author": {
+      "you": "You",
+      "agent": "Support",
+      "ai": "AI assistant",
+      "system": "System"
+    },
+    "aiBadge": "AI",
+    "messages": "Case messages",
+    "emptyTitle": "No messages yet",
+    "emptyBody": "Write the first one so the support team can reply.",
+    "loadErrorTitle": "Could not load the case",
+    "loadErrorBody": "Check your connection and try again.",
+    "retry": "Retry",
+    "loading": "Loading the case…",
+    "placeholder": "Write a message to support…",
+    "send": "Send",
+    "attach": "Attach files",
+    "resolvedTitle": "Case resolved",
+    "resolvedBody": "Support marked this case as resolved.",
+    "closedTitle": "Case closed",
+    "closedBody": "This case is closed and no longer accepts messages.",
+    "reopen": "Reopen case",
+    "reopening": "Reopening…",
+    "attachmentsOf": "Message attachments",
+    "viewer": {
+      "title": "Preview of {{name}}",
+      "download": "Download",
+      "close": "Close",
+      "noPreview": "No preview is available for this file type.",
+      "thumb": "Thumbnail of {{name}}",
+      "open": "Open {{name}}"
+    },
+    "expired": {
+      "title": "Attachment expired",
+      "body": "The link for {{name}} has expired and it can no longer be opened or downloaded. Ask support to share it again.",
+      "inline": "{{name}} (expired)"
+    }
+  },
   "common": {
     "all": "All",
     "search": "Search...",
