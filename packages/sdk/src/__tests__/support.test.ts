@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   applySupportEvent,
+  supportErrorCode,
   createSupportApi,
   isAttachmentExpired,
   type SupportCallbackEvent,
@@ -55,22 +56,73 @@ describe("isAttachmentExpired", () => {
 });
 
 describe("createSupportApi", () => {
-  it("delega en el transporte inyectado con rutas bajo basePath", async () => {
-    const transport = vi.fn().mockResolvedValue({});
+  const ok = (data: unknown, cursor?: string) => ({
+    data,
+    headers: { get: (n: string) => (n.toLowerCase() === "x-next-cursor" ? (cursor ?? null) : null) },
+  });
+
+  it("getCase y sendMessage usan rutas bajo basePath y query sin undefined", async () => {
+    const transport = vi.fn().mockResolvedValue(ok({}));
     const api = createSupportApi(transport as never, { basePath: "/x/support/" });
-    await api.getCase("OPS 1");
+    await api.getCase("OPS 1", { limit: 20, before: "cur" });
     await api.sendMessage("OPS-1", { clientMessageId: "c1", body: "hola" });
-    expect(transport).toHaveBeenNthCalledWith(1, expect.objectContaining({ method: "GET", path: "/x/support/cases/OPS%201" }));
+    expect(transport).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ method: "GET", path: "/x/support/cases/OPS%201", query: { limit: 20, before: "cur" } }),
+    );
     expect(transport).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ method: "POST", path: "/x/support/cases/OPS-1/messages", body: { client_message_id: "c1", body: "hola", attachments: undefined } }),
     );
   });
+
+  it("listCases y listMessages exponen el cursor de X-Next-Cursor", async () => {
+    const transport = vi
+      .fn()
+      .mockResolvedValueOnce(ok([{ folio: "A" }], "next1"))
+      .mockResolvedValueOnce(ok([{ id: "m" }]))
+      .mockResolvedValueOnce(ok([{ id: "m0" }], "older"));
+    const api = createSupportApi(transport as never);
+    const first = await api.listCases({ status: "open", limit: 10 });
+    expect(first).toEqual({ items: [{ folio: "A" }], nextCursor: "next1" });
+    expect(transport.mock.calls[0]?.[0]).toMatchObject({ path: "/api/support/cases", query: { status: "open", limit: 10, cursor: undefined } });
+    expect((await api.listCases({ cursor: "next1" })).nextCursor).toBeUndefined();
+    const older = await api.listMessages("OPS-1", { before: "c", limit: 5 });
+    expect(older.nextCursor).toBe("older");
+    expect(transport.mock.calls[2]?.[0]).toMatchObject({ path: "/api/support/cases/OPS-1/messages", query: { limit: 5, before: "c" } });
+  });
+
+  it("reopen manda el cuerpo opcional", async () => {
+    const transport = vi.fn().mockResolvedValue(ok({ folio: "OPS-1" }));
+    const api = createSupportApi(transport as never);
+    await api.reopen("OPS-1");
+    await api.reopen("OPS-1", { body: "sigue fallando", clientMessageId: "r1" });
+    expect(transport.mock.calls[0]?.[0]).toMatchObject({ method: "POST", path: "/api/support/cases/OPS-1/reopen" });
+    expect(transport.mock.calls[1]?.[0].body).toEqual({ client_message_id: "r1", body: "sigue fallando" });
+  });
+
+  it("createCase envia el canal", async () => {
+    const transport = vi.fn().mockResolvedValue(ok({}));
+    await createSupportApi(transport as never).createCase({ subject: "s", description: "d", channel: "addon_soporte", severity: "high" });
+    expect(transport.mock.calls[0]?.[0].body).toMatchObject({ channel: "addon_soporte", severity: "high" });
+  });
+
   it("subscribe usa la fuente inyectada o es un no-op", () => {
     const off = vi.fn();
     const events = vi.fn().mockReturnValue(off);
     expect(createSupportApi(vi.fn() as never, { events }).subscribe("F", () => {})).toBe(off);
     expect(() => createSupportApi(vi.fn() as never).subscribe("F", () => {})()).not.toThrow();
+  });
+});
+
+describe("supportErrorCode", () => {
+  it("lee {error:{code}} directo o dentro de body/data/response", () => {
+    const body = { error: { code: "case_resolved", message: "x" } };
+    expect(supportErrorCode(body)).toBe("case_resolved");
+    expect(supportErrorCode({ status: 409, body })).toBe("case_resolved");
+    expect(supportErrorCode({ response: { data: { error: { code: "rate_limited" } } } })).toBe("rate_limited");
+    expect(supportErrorCode(new Error("boom"))).toBeUndefined();
+    expect(supportErrorCode(null)).toBeUndefined();
   });
 });
 
