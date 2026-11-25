@@ -11,7 +11,7 @@
 // SDK stays transport- and host-agnostic.
 import { emitRecordMutation } from '../record-mutation-events'
 import { modelVerbTitle, resolveModelNoun } from '../model-labels'
-import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { createContext, lazy, Suspense, useCallback, useContext, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ModelSchema } from './types'
 
@@ -78,7 +78,7 @@ import { isNilUuid, normalizeNilUuid } from '../nil-uuid'
 import { normalizeRefFieldsForSubmit, withInlineChildren } from './normalize-submit'
 import { relationMin, splitChildErrors } from './inline-relations'
 import { useInlineRelations } from './use-inline-relations'
-import { getRelationWidget, listRelationWidgets, useRelationWidgetRegistryVersion } from '../relation-widget-registry'
+import { getRelationWidget, listRelationWidgets, relationWidgetSupportsView, useRelationWidgetRegistryVersion } from '../relation-widget-registry'
 import { loadRelationRows, rowsFingerprint } from './relation-rows-loader'
 import { useActiveMarket } from '../use-active-market'
 
@@ -957,7 +957,11 @@ function DynamicRecordDialogImpl({
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [isCreate, isEditMode, inline.relations, listRelationWidgets().join('|')],
     )
-    const activeMarket = useActiveMarket({ enabled: open && inlineRels.some(r => !!getRelationWidget(r.widget)) })
+    // Ver: una relación de composición (`embed`) con widget que declara `supportsView` se pinta con ese widget en solo
+    // lectura, en lugar del panel genérico (que solo lista renglones explícitos y decía «No hay registros» para, p. ej.,
+    // un producto cuyo precio sale del precio base). Sin la marca, el panel genérico de siempre.
+    const hasViewWidgets = mode === 'view' && relations.some(r => r.embed === true && relationWidgetSupportsView(getRelationWidget(r.widget)))
+    const activeMarket = useActiveMarket({ enabled: open && (hasViewWidgets || inlineRels.some(r => !!getRelationWidget(r.widget))) })
     const [inlineRows, setInlineRows] = useState<Record<string, DraftRow[]>>({})
     // Editar: filas ya guardadas leídas COMPLETAS (si no, la relación no se envía y no se borra nada)
     // y su huella inicial, para enviar solo lo que el usuario cambió.
@@ -969,6 +973,31 @@ function DynamicRecordDialogImpl({
         const taken = new Set(inlineRels.map(r => r.name))
         return relations.filter(r => !taken.has(r.name))
     }, [isEditMode, inlineRels, relations])
+    const renderViewRelation = useCallback(
+        (rel: RelationMeta): ReactNode => {
+            const Widget = getRelationWidget(rel.widget)
+            if (mode !== 'view' || !Widget || !relationWidgetSupportsView(Widget)) return null
+            return (
+                <div data-slot="relation-widget" data-relation={rel.name} data-widget={rel.widget} data-mode="view">
+                    <HostWidgetBoundary name={String(rel.widget)} resetKeys={[Widget]}>
+                        <Widget
+                            relation={rel}
+                            fields={inline.fields[rel.name] ?? []}
+                            rows={[]}
+                            onChange={noopRows}
+                            values={(record as Record<string, any> | null | undefined) ?? formValues}
+                            readOnly
+                            mode="view"
+                            recordId={(record as { id?: string | number } | null | undefined)?.id ?? recordId ?? undefined}
+                            context={{ branchId: activeMarket.branchId, market: activeMarket.market }}
+                        />
+                    </HostWidgetBoundary>
+                </div>
+            )
+        },
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [mode, record, recordId, formValues, inline.fields, activeMarket.branchId, activeMarket.market, listRelationWidgets().join('|')],
+    )
     // Editar: lee las filas guardadas de cada relación con widget (completas o nada).
     const editRecordId = isEditMode && open && recordId ? String(recordId) : null
     useEffect(() => {
@@ -1772,6 +1801,7 @@ function DynamicRecordDialogImpl({
                                         relations={panelRelations}
                                         lineSubtable
                                         embedOnly
+                                        renderRelation={mode === 'view' ? renderViewRelation : undefined}
                                         canCreate={mode === 'edit'}
                                         canEdit={mode === 'edit'}
                                         canDelete={mode === 'edit'}
@@ -1995,6 +2025,8 @@ function FieldRow({ field, record, value, mode, onChange, setValues, error, lock
 // counterpart; everything else renders the formatted display value in a disabled
 // text input.
 const noopChange = () => {}
+/** Ver: el widget de relación recibe `onChange` por contrato, pero en solo lectura nunca lo llama. */
+const noopRows = () => {}
 
 export function ReadonlyEditField({ field, value }: { field: FieldDef; value: any }) {
     useFieldWidgetRegistryVersion()

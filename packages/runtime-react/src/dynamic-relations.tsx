@@ -10,7 +10,7 @@
 //   - merges the relation's static `scope` (polymorphic discriminators, e.g.
 //     { owner_model: "Customer" }) into the panel's `filters` so the child list
 //     is scoped by the FK AND every scope column.
-import { useMemo } from 'react'
+import { useMemo, type ReactNode } from 'react'
 import { cn } from '@asteby/metacore-ui/lib'
 import { DynamicRelation, type DynamicRelationStrings } from './dynamic-relation'
 import type { RelationMeta } from './types'
@@ -62,6 +62,11 @@ export interface DynamicRelationsProps {
      * lado seguro.
      */
     embedOnly?: boolean
+    /**
+     * Vista propia de una relación: si devuelve un nodo, reemplaza al panel genérico de esa relación (el modal de
+     * detalle pinta así los widgets de relación en solo lectura). `null`/`undefined`/`false` = panel genérico.
+     */
+    renderRelation?: (rel: RelationMeta) => ReactNode | null | undefined | false
     /** Bubble up when any panel's data changes (create/delete/attach/detach). */
     onChange?: (relation: RelationMeta) => void
 }
@@ -131,6 +136,7 @@ export function DynamicRelations({
     strings,
     lineSubtable = false,
     embedOnly = false,
+    renderRelation,
     onChange,
 }: DynamicRelationsProps) {
     const parentId = useMemo(
@@ -155,6 +161,16 @@ export function DynamicRelations({
         // panels sat flush against each other with no breathing room.
         <div className={cn('space-y-6', className)} data-dynamic-relations="">
             {visible.map((rel, idx) => {
+                // Un host puede pintar ESTA relación con su propia vista (p. ej. un widget en solo lectura): si devuelve un
+                // nodo, reemplaza al panel; null/undefined/false deja el panel genérico.
+                const custom = renderRelation?.(rel)
+                if (custom !== null && custom !== undefined && custom !== false) {
+                    return (
+                        <div key={relationKey(rel, idx)} data-relation-custom={rel.name}>
+                            {custom}
+                        </div>
+                    )
+                }
                 const filters = buildRelationFilters(rel, parentId)
                 const panelStrings: Partial<DynamicRelationStrings> = {
                     ...(strings || {}),
