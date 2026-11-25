@@ -3,6 +3,9 @@ name: Release npm packages
 on:
   push:
     branches: [main]
+  # A mano: relanza la publicación si GitHub perdió el evento de push de un merge (incidente del 2026-11-25:
+  # el commit del fix quedó en main sin corrida). Hace lo mismo que el push.
+  workflow_dispatch:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
