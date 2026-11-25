@@ -29,6 +29,11 @@ export const FAMILIES = [
   ['SupportCallbackEvent', ['callback_']],
   ['SupportDeskIngestEvent', ['desk_']],
   ['SupportErrorBody', ['error_']],
+  ['SupportCaseView', ['thread_case']],
+  ['SupportMessageView', ['thread_message']],
+  ['SupportEmbedSessionClaims', ['embed_session_claims']],
+  ['SupportPublicProfile', ['public_profile']],
+  ['SupportVisitorErasedEvent', ['visitor_erased']],
 ]
 
 /** Ruta dentro de una familia -> nombre de tipo compartido (se fusionan entre familias). */
@@ -47,10 +52,44 @@ export const NAMED = {
   'SupportEscalateResponse.case': 'SupportCaseRef',
   'SupportEscalateResponse.link': 'SupportLinkSummary',
   'SupportLinkResponse.link': 'SupportLinkInfo',
+  // Vistas del hilo: CaseView.messages[] y MessageView son el mismo tipo.
+  'SupportCaseView.messages[]': 'SupportMessageView',
+  SupportMessageView: 'SupportMessageView',
+  'SupportCaseView.messages[].attachments[]': 'SupportAttachment',
+  'SupportMessageView.attachments[]': 'SupportAttachment',
+  'SupportDeskIngestEvent.case.channel': 'SupportChannelRef',
+  'SupportVisitorErasedEvent.channel': 'SupportChannelRef',
+  'SupportDeskIngestEvent.case.requester': 'SupportRequester',
+  'SupportPublicProfile.fallback_contact': 'SupportFallbackContact',
 }
 
+/** Rutas cuyo objeto es un mapa clave libre -> valor (p. ej. textos por idioma). */
+export const MAPS = new Set(['SupportPublicProfile.texts'])
+
+/**
+ * Campos opcionales que un solo fixture no puede mostrar (el contrato los marca omitempty en Go:
+ * support/contract/channels.go y profile.go). Ruta = la del tipo que los contiene.
+ */
+const CV = 'SupportCaseView'
+const MV = 'SupportCaseView.messages[]'
+const PP = 'SupportPublicProfile'
+export const OPTIONAL = new Set([
+  ...['case_id', 'channel', 'description', 'severity', 'hub_state', 'solution', 'opened_at', 'updated_at', 'resolved_at', 'messages_older_cursor'].map((f) => `${CV}.${f}`),
+  ...['author_name', 'attachments'].map((f) => `${MV}.${f}`),
+  `${MV}.attachments[].content_type`,
+  'SupportDeskIngestEvent.case.requester.email',
+  ...['version', 'brand_color', 'appearance', 'position', 'logo_url', 'default_locale', 'texts', 'fallback_contact'].map((f) => `${PP}.${f}`),
+  ...['launcher', 'greeting', 'offline'].map((f) => `${PP}.texts.*.${f}`),
+  ...['email', 'url'].map((f) => `${PP}.fallback_contact.${f}`),
+  'SupportVisitorErasedEvent.case_ids',
+  'SupportVisitorErasedEvent.contract',
+])
+
+/** Campos cuyo valor es libre aunque el nombre este en ENUM_FIELDS (id publico, no enumeracion). */
+const NOT_ENUM = new Set([`${CV}.channel`])
+
 /** Campos string que se emiten como union de valores observados. */
-const ENUM_FIELDS = new Set(['event', 'severity', 'role', 'author_type', 'type', 'status', 'state', 'source', 'channel', 'code', 'reason', 'priority'])
+const ENUM_FIELDS = new Set(['event', 'severity', 'role', 'author_type', 'type', 'status', 'state', 'source', 'channel', 'code', 'reason', 'priority', 'kind', 'appearance', 'position', 'hub_state'])
 
 const prim = (v) => (v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v)
 
@@ -108,7 +147,7 @@ function emit(shape, path, ind, key) {
     case 'prim': {
       const parts = []
       for (const t of [...shape.types].sort()) {
-        if (t === 'string' && shape.values.size > 0 && ENUM_FIELDS.has(key)) {
+        if (t === 'string' && shape.values.size > 0 && ENUM_FIELDS.has(key) && !NOT_ENUM.has(path)) {
           parts.push(...[...shape.values].sort().map((s) => JSON.stringify(s)), '(string & {})')
         } else parts.push(t)
       }
@@ -120,8 +159,14 @@ function emit(shape, path, ind, key) {
     }
     case 'union':
       return shape.parts.map((p) => emit(p, path, ind, key)).join(' | ')
-    case 'object':
+    case 'object': {
+      if (MAPS.has(path)) {
+        let values = null
+        for (const f of shape.fields.values()) values = merge(values, f.shape)
+        return `Record<string, ${emit(values, `${path}.*`, ind, key)}>`
+      }
       return emitObject(shape, path, ind)
+    }
   }
   return 'unknown'
 }
@@ -130,7 +175,7 @@ function emitObject(shape, path, ind) {
   const pad = '  '.repeat(ind + 1)
   const lines = []
   for (const [k, f] of shape.fields) {
-    const opt = f.count < shape.n ? '?' : ''
+    const opt = f.count < shape.n || OPTIONAL.has(`${path}.${k}`) ? '?' : ''
     lines.push(`${pad}${q(k)}${opt}: ${emit(f.shape, `${path}.${k}`, ind + 1, k)}`)
   }
   return `{\n${lines.join('\n')}\n${'  '.repeat(ind)}}`
@@ -172,6 +217,7 @@ export function generate(files) {
     out.push(`export interface ${name} ${emitObject(reg.get(name), pathOf(name), 0)}`, '')
   }
   for (const [family, shape] of familyShapes) {
+    if (reg.has(family)) continue // ya emitido como tipo compartido
     out.push(`export interface ${family} ${emitObject(shape, family, 0)}`, '')
   }
   const events = new Set()
