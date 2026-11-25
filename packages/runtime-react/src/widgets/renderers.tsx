@@ -57,8 +57,14 @@ export function StatWidget(p: WidgetRenderProps) {
             }
         >
             {hasValue ? (
-                <div className="flex min-h-[2.5rem] items-end">
-                    <div className="text-[2rem] font-semibold leading-none tabular-nums tracking-tight text-foreground">
+                <div className="flex min-h-[2.5rem] min-w-0 items-end">
+                    {/* Fluid size from the card width (cqi) so long amounts like
+                        "16.497,82" never get clipped on 2-column phone grids;
+                        wraps as a last resort instead of overflowing. */}
+                    <div
+                        title={formatWidgetValue(value!, ctx)}
+                        className="min-w-0 max-w-full break-words text-[length:clamp(1.25rem,13cqi,2rem)] font-semibold leading-none tabular-nums tracking-tight text-foreground [overflow-wrap:anywhere]"
+                    >
                         {formatWidgetValue(value!, ctx)}
                     </div>
                 </div>

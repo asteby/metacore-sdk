@@ -46,31 +46,43 @@ export function WidgetCard({
             {...rest}
             className={cn(
                 // base: subtle border, ring on hover, gentle lift, mount fade-in
-                'group/widget relative flex h-full flex-col overflow-hidden',
+                // `@container`: the KPI value scales with the card's own width
+                // (2-column phone grids give ~190px cards), see StatWidget.
+                '@container group/widget relative flex h-full flex-col overflow-hidden',
                 'border-border/60 transition-all duration-200',
                 'hover:border-border hover:ring-1 hover:ring-ring/30 hover:shadow-sm',
                 'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-1 motion-safe:duration-500',
                 className,
             )}
         >
-            <CardHeader className="flex flex-row items-start justify-between gap-3 space-y-0 pb-2">
-                <div className="flex min-w-0 items-start gap-3">
+            {/* Compact padding on narrow cards; `flex-wrap` lets the delta chip drop
+                below the title instead of overlapping the icon. */}
+            <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-x-2 gap-y-1.5 space-y-0 px-4 pb-2 pt-4 @[15rem]:px-6 @[15rem]:pt-6">
+                {/* basis 7rem: below that width the delta chip wraps to its own row */}
+                <div className="flex min-w-0 flex-[1_1_7rem] items-start gap-2 @[15rem]:gap-3">
                     {showIcon && (
                         <span
                             className={cn(
-                                'flex size-9 shrink-0 items-center justify-center rounded-lg',
+                                'flex size-8 shrink-0 items-center justify-center rounded-lg @[15rem]:size-9',
                                 a.chip,
                             )}
                         >
-                            <DynamicIcon name={icon!} className="size-[18px]" />
+                            <DynamicIcon name={icon!} className="size-4 @[15rem]:size-[18px]" />
                         </span>
                     )}
-                    <div className="min-w-0">
-                        <div className="truncate text-sm font-medium leading-tight text-foreground">
+                    <div className="min-w-0 flex-1">
+                        {/* Wrap up to 2 lines (never a bare "Total d…"); full text in the tooltip. */}
+                        <div
+                            title={title}
+                            className="line-clamp-2 break-words text-sm font-medium leading-tight text-foreground"
+                        >
                             {title}
                         </div>
                         {subtitle && (
-                            <div className="mt-0.5 truncate text-xs text-muted-foreground">
+                            <div
+                                title={subtitle}
+                                className="mt-0.5 line-clamp-2 break-words text-xs text-muted-foreground"
+                            >
                                 {subtitle}
                             </div>
                         )}
@@ -78,7 +90,7 @@ export function WidgetCard({
                 </div>
                 {headerExtra && <div className="shrink-0">{headerExtra}</div>}
             </CardHeader>
-            <CardContent className="flex min-h-0 flex-1 flex-col pt-1">
+            <CardContent className="flex min-h-0 flex-1 flex-col px-4 pb-4 pt-1 @[15rem]:px-6 @[15rem]:pb-6">
                 {children}
             </CardContent>
         </Card>
