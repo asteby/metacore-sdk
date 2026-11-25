@@ -182,7 +182,9 @@ describe('paymentErrorView', () => {
     [err(429, 'rate_limited'), 'too_many_attempts', false, false],
     [err(500, 'server_error'), 'network', true, true], // a 500 with no readable body: the charge may have happened
     [new StorefrontError({ status: 500, code: 'server_error', message: 'x', retryable: false }), 'generic', false, true],
-    [err(400, 'validation'), 'generic', false, true],
+    // A refused field of the order is a VALIDATION with its own text (it used to be "generic", which blamed the card for a bad phone).
+    [new StorefrontError({ status: 400, code: 'validation', field: 'phone', message: 'Enter your 10-digit phone number.' }), 'validation', false, true],
+    [new StorefrontError({ status: 422, code: 'payment_provider_rejected', message: 'Tu banco rechazó el pago con esa tarjeta.' }), 'generic', false, true], // the kind is the SHOP's call (error.kind), not the code alone
     [new TypeError('Failed to fetch'), 'network', true, true],
     [undefined, 'network', true, true],
   ] as [unknown, string, boolean, boolean][])('%# -> %s (same attempt: %s)', (e, kind, same, canRetry) => {

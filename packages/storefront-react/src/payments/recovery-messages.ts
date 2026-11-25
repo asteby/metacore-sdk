@@ -98,3 +98,54 @@ export function paymentRecoveryMessages(locale?: string | null, overrides?: Part
   const base = (locale ?? 'es-MX').toLowerCase().startsWith('en') ? EN : ES
   return overrides ? { ...base, ...overrides } : base
 }
+
+/**
+ * What to tell the buyer when the shop refused ONE field of the order before charging (a `validation` with a `field`).
+ * OPS' own wording is technical and in the organisation's language, not the buyer's; this says how to fix it, in the
+ * shop's locale. Unknown field: `undefined` (the caller keeps OPS' text). `field` may arrive as `phone`,
+ * `shipping_address.phone`, `buyer.phone`: only the last segment counts.
+ */
+const FIELD_ES: Record<string, string> = {
+  phone: 'El teléfono debe tener 10 dígitos, sin lada internacional (por ejemplo 5512345678).',
+  email: 'Revisa tu correo: parece que no es válido.',
+  postal_code: 'Revisa tu código postal.',
+  name: 'Escribe tu nombre y apellido.',
+  address: 'Revisa tu calle y número.',
+  city: 'Escribe tu ciudad.',
+  state: 'Elige tu estado.',
+}
+const FIELD_EN: Record<string, string> = {
+  phone: 'Enter your 10-digit phone number, without the country code (for example 7045550123).',
+  email: 'Check your email: it does not look valid.',
+  postal_code: 'Check your postal code.',
+  name: 'Enter your first and last name.',
+  address: 'Check your street and number.',
+  city: 'Enter your city.',
+  state: 'Choose your state.',
+}
+const FIELD_ALIAS: Record<string, string> = {
+  telefono: 'phone',
+  mobile: 'phone',
+  zip: 'postal_code',
+  zip_code: 'postal_code',
+  postcode: 'postal_code',
+  postal: 'postal_code',
+  first_name: 'name',
+  last_name: 'name',
+  full_name: 'name',
+  line1: 'address',
+  street: 'address',
+  address1: 'address',
+  address_line1: 'address',
+  street_name: 'address',
+  region: 'state',
+  province: 'state',
+}
+
+export function validationFieldMessage(locale: string | null | undefined, field: string | null | undefined): string | undefined {
+  if (!field) return undefined
+  const last = String(field).split('.').pop()!.trim().toLowerCase().replace(/[\s-]+/g, '_')
+  const key = FIELD_ALIAS[last] ?? last
+  const table = (locale ?? 'es-MX').toLowerCase().startsWith('en') ? FIELD_EN : FIELD_ES
+  return table[key]
+}

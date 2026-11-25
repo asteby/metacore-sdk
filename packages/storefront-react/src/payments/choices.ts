@@ -20,7 +20,7 @@ import type {
   PaymentOptionKey,
   PaymentPoint,
 } from '@asteby/storefront'
-import { paymentRecoveryMessages, type PaymentRecoveryMessages } from './recovery-messages.js'
+import { paymentRecoveryMessages, validationFieldMessage, type PaymentRecoveryMessages } from './recovery-messages.js'
 
 /** One row of "Payment method". `value` is what travels in the form (`payment_choice`). */
 export type PayChoice = {
@@ -215,7 +215,10 @@ export function payErrorResponse(err: ErrorLike, options: PayErrorOptions = {}):
   // Texts the shop wrote itself (missing fields, expired cart, a row it does not offer) are kept; OPS' own message,
   // often technical or in English, is replaced by the catalog text for the kind.
   const own = (options.ownMessage || kind === 'validation' || kind === 'expired' || kind === 'price_mismatch' || (kind === 'other' && status < 500)) && err.message
-  const message = own || paymentRecoveryMessages(options.locale, options.messages)[`error.${kind}`]
+  // A refused FIELD gets the text that says how to fix it in the shop's locale (OPS' own wording is technical and in the
+  // organisation's language); a text the shop wrote itself (`ownMessage`) still wins. Unknown field: OPS' text, as before.
+  const fieldText = kind === 'validation' && !options.ownMessage ? validationFieldMessage(options.locale, err.field) : undefined
+  const message = fieldText || own || paymentRecoveryMessages(options.locale, options.messages)[`error.${kind}`]
   return {
     status: safeHttpStatus(status),
     body: {

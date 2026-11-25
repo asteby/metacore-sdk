@@ -783,7 +783,14 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
             rotateAttempt()
             setMountKey((k) => k + 1)
             setStatus('ready')
-          } else if (view.kind === 'generic') {
+          } else if (view.kind === 'validation') {
+            // A field of the ORDER (phone, address…) was refused before charging: nothing was charged and the card was
+            // not used, so the buyer fixes that field and pays again with what they already typed. Do NOT remount the form
+            // (it would wipe the card number) and say which field in `error.field`.
+            pendingData.current = null
+            rotateAttempt()
+            setStatus('ready')
+          } else if (view.kind === 'generic' || view.kind === 'provider_declined') {
             pendingData.current = null
             rotateAttempt()
             setMountKey((k) => k + 1)

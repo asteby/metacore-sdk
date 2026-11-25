@@ -36,6 +36,9 @@ export type PaymentMessageKey =
   | 'error.out_of_stock'
   | 'error.too_many_attempts'
   | 'error.generic'
+  | 'error.validation'
+  | 'error.provider_declined'
+  | 'error.merchant_config'
   | 'action.retry'
   | 'action.try_again'
   | 'action.pay'
@@ -99,6 +102,9 @@ const ES: PaymentMessages = {
   'error.out_of_stock': 'Uno o más productos de tu carrito se agotaron mientras pagabas. No se hizo ningún cobro. Revisa tu carrito para continuar.',
   'error.too_many_attempts': 'Por seguridad no podemos intentar con más tarjetas. Paga en efectivo o escríbenos.',
   'error.generic': 'No pudimos procesar tu pago. Intenta de nuevo.',
+  'error.validation': 'Revisa los datos marcados antes de pagar. No se hizo ningún cobro.',
+  'error.provider_declined': 'No pudimos procesar tu pago con esa tarjeta. Revisa los datos o prueba con otro método; no se hizo ningún cobro.',
+  'error.merchant_config': 'Por ahora no podemos procesar pagos con tarjeta. No es un problema con tu tarjeta: puedes pagar de otra forma.',
   'action.retry': 'Reintentar',
   'action.try_again': 'Intentar de nuevo',
   'action.pay': 'Pagar',
@@ -161,6 +167,9 @@ const EN: PaymentMessages = {
   'error.out_of_stock': 'One or more products in your cart ran out while you were paying. You were not charged. Review your cart to continue.',
   'error.too_many_attempts': 'For security we cannot try more cards. Pay in cash or contact us.',
   'error.generic': 'We could not process your payment. Please try again.',
+  'error.validation': 'Check the highlighted details before paying. You were not charged.',
+  'error.provider_declined': "We couldn't process your payment with that card. Check the details or try another method; you were not charged.",
+  'error.merchant_config': 'We cannot take card payments right now. It is not a problem with your card: you can pay another way.',
   'action.retry': 'Retry',
   'action.try_again': 'Try again',
   'action.pay': 'Pay',
@@ -380,9 +389,19 @@ export type PaymentErrorKind =
   | 'expired' // 409: reservation expired
   | 'out_of_stock' // 409 insufficient_stock: a product ran out at checkout; nothing was charged: back to the cart, no retry
   | 'too_many_attempts' // 429
+  | 'validation' // 400/422: a field of the order was refused BEFORE charging (phone, address…): say which, keep the card form
+  | 'provider_declined' // the provider refused the charge at API level: definitive, nothing was charged
+  | 'merchant_config' // the shop's own provider setup: not the buyer's fault, never retry
   | 'generic'
 
-export type PaymentErrorView = { kind: PaymentErrorKind; message: string; retrySameAttempt: boolean; canRetry: boolean }
+export type PaymentErrorView = {
+  kind: PaymentErrorKind
+  message: string
+  retrySameAttempt: boolean
+  canRetry: boolean
+  /** Order field the shop reported (`validation` only), e.g. `phone`: lets the UI mark it. */
+  field?: string
+}
 
 /**
  * Maps a transport error (a `StorefrontError` or anything with `status`/`code`)
@@ -411,6 +430,21 @@ export function paymentErrorView(err: unknown, locale?: string | null, overrides
   if (status === 409) return { kind: 'generic', message: m['error.generic'], retrySameAttempt: false, canRetry: true }
   if (status === 429 || code === 'too_many_attempts') {
     return { kind: 'too_many_attempts', message: m['error.too_many_attempts'], retrySameAttempt: false, canRetry: false }
+  }
+  // The shop's pay route already CLASSIFIED the failure and wrote a text for the buyer (`error.kind` / `error.message`,
+  // sanitised server-side: OPS' own wording only travels for a validation, everything else is the catalog text). The
+  // buyer must see THAT reason instead of a card message that blames the card for, say, a bad phone number.
+  const said = typeof e.message === 'string' ? e.message.trim() : ''
+  const serverKind = (e as { kind?: unknown }).kind
+  const field = typeof (e as { field?: unknown }).field === 'string' && (e as { field: string }).field ? (e as { field: string }).field : undefined
+  if (serverKind === 'validation' || (code === 'validation' && status >= 400 && status < 500)) {
+    return { kind: 'validation', message: said || m['error.validation'], retrySameAttempt: false, canRetry: true, ...(field ? { field } : {}) }
+  }
+  if (serverKind === 'provider_declined') {
+    return { kind: 'provider_declined', message: said || m['error.provider_declined'], retrySameAttempt: false, canRetry: true }
+  }
+  if (serverKind === 'merchant_config') {
+    return { kind: 'merchant_config', message: said || m['error.merchant_config'], retrySameAttempt: false, canRetry: false }
   }
   // What OPS declared wins over the status: `retryable:false` is an answer (generic), any other 5xx (also a 500 with no readable body) is an outage whose charge may have happened: same key.
   const declared = (e as { retryable?: unknown }).retryable
