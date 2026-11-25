@@ -7,6 +7,8 @@ export default defineConfig([
     entry: { loader: 'src/loader-entry.ts' },
     outDir: 'dist/embed',
     format: ['iife'],
+    // tsup nombra los IIFE `*.global.js`; el paquete (`exports["./loader"]`) y el Hub sirven `loader.js`.
+    outExtension: () => ({ js: '.js' }),
     minify: true,
     target: 'es2020',
     platform: 'browser',
