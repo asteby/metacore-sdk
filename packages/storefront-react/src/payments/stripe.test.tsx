@@ -177,7 +177,7 @@ describe('stripeElementsAdapter.load', () => {
 })
 
 describe('stripeElementsAdapter.mount / collect / update / handleAction / unmount', () => {
-  it('creates a deferred-intent Payment Element with the server total in minor units, card only, themed', async () => {
+  it('creates a deferred-intent Payment Element with the server total in minor units, dynamic methods (no explicit types), themed', async () => {
     const f = fakeStripe()
     const opts = mountOpts({ theme: { baseColor: '#123456', inputBackgroundColor: '#000', borderRadiusMedium: '6px' }, colorScheme: 'dark', locale: 'es-MX', email: 'a@b.us' })
     await stripeElementsAdapter({ getSdk: () => f.factory }).mount(opts)
@@ -186,9 +186,10 @@ describe('stripeElementsAdapter.mount / collect / update / handleAction / unmoun
       mode: 'payment',
       amount: 218500,
       currency: 'usd',
-      paymentMethodTypes: ['card'],
       appearance: { theme: 'night', variables: { colorPrimary: '#123456', colorBackground: '#000', borderRadius: '6px' } },
     })
+    // Stripe no longer accepts payment_method_types: the Element must never name explicit types (the server uses automatic_payment_methods).
+    expect(Object.keys(f.stripe.elements.mock.calls[0]![0])).not.toContain('paymentMethodTypes')
     expect(f.elements.create.mock.calls[0]![0]).toBe('payment')
     expect(f.elements.create.mock.calls[0]![1]).toMatchObject({ defaultValues: { billingDetails: { email: 'a@b.us' } } })
     expect(f.element.mount).toHaveBeenCalledWith(opts.container)
