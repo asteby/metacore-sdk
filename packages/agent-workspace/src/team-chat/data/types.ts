@@ -129,6 +129,27 @@ export interface TeamChatCapabilities {
   attachments: boolean
 }
 
+/** An action in a section header. `href` navigates; otherwise the host's `onSectionAction` runs. */
+export interface TeamChatSectionAction {
+  id: string
+  label: string
+  /** lucide icon name (any casing/separator). */
+  icon?: string
+  href?: string
+}
+
+/**
+ * A pinned, titled group of conversations above the regular list (generic: support, billing,
+ * announcements...). Declared by the server in `GET /internal-chat/channels` as `sections`;
+ * channels join one through `channel.section === section.key`. All text is server-provided.
+ */
+export interface TeamChatSection {
+  key: string
+  title: string
+  hint?: string
+  actions?: TeamChatSectionAction[]
+}
+
 export interface TeamChatChannel {
   id: string
   name: string
@@ -144,6 +165,8 @@ export interface TeamChatChannel {
   active_call?: { id: string; kind: string; status: string } | null
   /** Server-declared capabilities; omitted = everything supported (legacy behaviour). */
   capabilities?: Partial<TeamChatCapabilities> | null
+  /** Key of a `TeamChatSection` (from the channels response) this conversation is grouped under. */
+  section?: string
   /** Virtual system contact key (e.g. "support"); informational, the SDK does not branch on it. */
   thread?: string
 }

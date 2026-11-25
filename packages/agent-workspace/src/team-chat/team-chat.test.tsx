@@ -54,13 +54,20 @@ const channel = (over: Partial<TeamChatChannel> = {}): TeamChatChannel => ({
   ...over,
 })
 
-async function mount(ch: TeamChatChannel, messages: TeamChatMessage[] = [], l: 'es' | 'en' = 'es') {
+async function mount(
+  ch: TeamChatChannel,
+  messages: TeamChatMessage[] = [],
+  l: 'es' | 'en' = 'es',
+  extra: { sections?: unknown; onSectionAction?: (k: string, a: string) => void } = {},
+) {
   get.mockImplementation(async (url: string) =>
-    url.endsWith('/messages') ? { data: { messages: [...messages].reverse() } } : { data: { channels: [ch] } },
+    url.endsWith('/messages')
+      ? { data: { messages: [...messages].reverse() } }
+      : { data: { channels: [ch], ...(extra.sections ? { sections: extra.sections } : {}) } },
   )
   render(
     <I18nextProvider i18n={lang(l)}>
-      <TeamChat />
+      <TeamChat onSectionAction={extra.onSectionAction} />
     </I18nextProvider>,
   )
   const item = await screen.findByText('Soporte Asteby')
@@ -172,5 +179,51 @@ describe('TeamChat support case cards', () => {
     await mount(channel(), [msg({ id: 'm1', body: 'Caso OPS-1 abierto: algo' })])
     expect(screen.queryByTestId('support-case-card')).toBeNull()
     expect(screen.getByText('Caso OPS-1 abierto: algo')).toBeTruthy()
+  })
+})
+
+describe('TeamChat pinned sections', () => {
+  const sections = [
+    {
+      key: 'support',
+      title: 'Soporte',
+      hint: '¿Algo no funciona? Abre un ticket y te atenderemos en su chat.',
+      actions: [
+        { id: 'tickets', label: 'Tickets', icon: 'ticket', href: '/soporte/casos' },
+        { id: 'new', label: 'Nuevo ticket', icon: 'plus' },
+      ],
+    },
+  ]
+
+  it('without sections the list is unchanged (no section landmarks)', async () => {
+    await mount(channel())
+    expect(screen.queryByTestId('chat-section-support')).toBeNull()
+    expect(screen.queryByRole('heading', { level: 3 })).toBeNull()
+  })
+
+  it('renders the heading, hint, link action and callback action, grouping the thread under it', async () => {
+    const onAction = vi.fn()
+    await mount(channel({ section: 'support' }), [], 'es', { sections, onSectionAction: onAction })
+    const sec = screen.getByTestId('chat-section-support')
+    expect(within(sec).getByRole('heading', { name: 'Soporte' })).toBeTruthy()
+    expect(within(sec).getByText(/Abre un ticket/)).toBeTruthy()
+    expect(within(sec).getByRole('link', { name: 'Tickets' }).getAttribute('href')).toBe('/soporte/casos')
+    expect(within(sec).getByText('Soporte Asteby')).toBeTruthy()
+    fireEvent.click(within(sec).getByRole('button', { name: 'Nuevo ticket' }))
+    expect(onAction).toHaveBeenCalledWith('support', 'new')
+    expect(sec.getAttribute('aria-labelledby')).toBeTruthy()
+  })
+
+  it('omits callback actions when the host gives no handler, and keeps links', async () => {
+    await mount(channel({ section: 'support' }), [], 'es', { sections })
+    const sec = screen.getByTestId('chat-section-support')
+    expect(within(sec).queryByRole('button', { name: 'Nuevo ticket' })).toBeNull()
+    expect(within(sec).getByRole('link', { name: 'Tickets' })).toBeTruthy()
+  })
+
+  it('a channel pointing at an undeclared section stays in the plain list', async () => {
+    await mount(channel({ section: 'ghost' }), [], 'es', { sections })
+    expect(within(screen.getByTestId('chat-section-support')).queryByText('Soporte Asteby')).toBeNull()
+    expect(screen.getAllByText('Soporte Asteby').length).toBeGreaterThan(0)
   })
 })

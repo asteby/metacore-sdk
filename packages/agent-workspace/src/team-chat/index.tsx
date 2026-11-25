@@ -31,6 +31,7 @@ import { toast } from 'sonner'
 
 import {
   type TeamChatChannel,
+  type TeamChatSection,
   type TeamChatMessage,
   type ChatAttachment,
   type MessageReplyPreview,
@@ -41,6 +42,7 @@ import {
   isAudioAttachment,
 } from './data/types'
 import { resolveChannelCapabilities } from './data/capabilities'
+import { ChatSection } from './components/chat-section'
 import { ChatListItem } from './components/chat-list-item'
 import { ChannelAvatar, channelDisplayName } from './components/channel-avatar'
 import { NewMessageDialog } from './components/new-message-dialog'
@@ -64,7 +66,12 @@ const AbyChatPane = lazy(() =>
 const WS_EVENT = 'INTERNAL_CHAT_MESSAGE'
 const WS_REACTION = 'INTERNAL_CHAT_REACTION'
 
-export function TeamChat() {
+export interface TeamChatProps {
+  /** Runs a section header action that has no `href` (see `TeamChatSection`). */
+  onSectionAction?: (sectionKey: string, actionId: string) => void
+}
+
+export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
   const { t, i18n } = useTranslation()
   const { mascot_name: mascotName, mascot_skin: mascotSkin } = useWorkspacePlatformConfig()
   const mascotState = useMascotFaceStore((s) => s.state)
@@ -78,6 +85,7 @@ export function TeamChat() {
   const { startCall: startWebRTCCall, joinCall: joinWebRTCCall, session: callSession } = useCall()
 
   const [channels, setChannels] = useState<TeamChatChannel[]>([])
+  const [sections, setSections] = useState<TeamChatSection[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [messages, setMessages] = useState<TeamChatMessage[]>([])
   const [loadingChannels, setLoadingChannels] = useState(true)
@@ -147,6 +155,7 @@ export function TeamChat() {
       const { data } = await api.get('/internal-chat/channels')
       const list: TeamChatChannel[] = data.channels ?? []
       setChannels(list)
+      setSections(Array.isArray(data.sections) ? (data.sections as TeamChatSection[]) : [])
       return list
     } catch {
       toast.error(t('team_chat.load_error', 'No se pudieron cargar los canales'))
@@ -533,6 +542,31 @@ export function TeamChat() {
     return channels.filter((c) => channelDisplayName(c).toLowerCase().includes(q))
   }, [channels, search])
 
+  // Channels grouped under a declared section leave the plain list; a channel pointing at an
+  // undeclared section stays in it (so a stale/unknown key never hides a conversation).
+  const sectionKeys = useMemo(() => new Set(sections.map((s) => s.key)), [sections])
+  const plainChannels = useMemo(
+    () => filteredChannels.filter((c) => !c.section || !sectionKeys.has(c.section)),
+    [filteredChannels, sectionKeys],
+  )
+
+  const renderItem = (ch: TeamChatChannel) => {
+    const live = ch.dm_user ? presenceByUserId[ch.dm_user.id] : undefined
+    const online = live?.online ?? !!ch.dm_user?.online
+    return (
+      <ChatListItem
+        key={ch.id}
+        channel={ch}
+        isSelected={activeId === ch.id}
+        currentUserId={currentUser?.id}
+        youLabel={youLabel}
+        locale={locale}
+        online={online}
+        onSelect={(c) => setActiveId(c.id)}
+      />
+    )
+  }
+
   const headerSubtitle = (() => {
     if (!activeChannel) return ''
     if (activeChannel.kind === 'dm') {
@@ -652,29 +686,23 @@ export function TeamChat() {
                       </div>
                     </button>
                   )}
-                  {filteredChannels.length === 0 && search.trim() &&
+                  {sections.map((sec) => {
+                    const items = filteredChannels.filter((c) => c.section === sec.key)
+                    if (search.trim() && items.length === 0) return null
+                    return (
+                      <ChatSection key={sec.key} section={sec} onAction={onSectionAction}>
+                        {items.map((ch) => renderItem(ch))}
+                      </ChatSection>
+                    )
+                  })}
+                  {plainChannels.length === 0 && search.trim() && !sections.some((s) => filteredChannels.some((c) => c.section === s.key)) &&
                   !('aby'.includes(search.trim().toLowerCase()) ||
                     'asistente'.includes(search.trim().toLowerCase())) ? (
                     <div className='flex flex-col items-center justify-center gap-1 py-10 text-center text-sm text-muted-foreground'>
                       {t('team_chat.no_results', 'Sin resultados para tu búsqueda')}
                     </div>
                   ) : (
-                    filteredChannels.map((ch) => {
-                      const live = ch.dm_user ? presenceByUserId[ch.dm_user.id] : undefined
-                      const online = live?.online ?? !!ch.dm_user?.online
-                      return (
-                        <ChatListItem
-                          key={ch.id}
-                          channel={ch}
-                          isSelected={activeId === ch.id}
-                          currentUserId={currentUser?.id}
-                          youLabel={youLabel}
-                          locale={locale}
-                          online={online}
-                          onSelect={(c) => setActiveId(c.id)}
-                        />
-                      )
-                    })
+                    plainChannels.map((ch) => renderItem(ch))
                   )}
                 </>
               )}
