@@ -22,6 +22,12 @@ export type MercadoPagoAdapterOptions = {
   getDeviceSessionId?: () => string | undefined
   /** Wait before the single internal re-read of the form data (see `collect`). Default 400. */
   collectRetryDelayMs?: number
+  /**
+   * Max wait for the Device ID when it is not there yet at `collect()`. Mercado Pago's SDK sets
+   * `window.MP_DEVICE_SESSION_ID` 0.5-2 s after `new MercadoPago()`, so a fast autofill + pay could read it too soon.
+   * Default 2500. Never fails the payment: past the wait it is simply omitted.
+   */
+  deviceWaitMs?: number
 }
 
 /**
@@ -65,6 +71,18 @@ export function mercadoPagoBricksAdapter(options: MercadoPagoAdapterOptions = {}
   const retryDelay = options.collectRetryDelayMs ?? 400
   const getDevice =
     options.getDeviceSessionId ?? (() => (typeof window !== 'undefined' ? (window as unknown as { MP_DEVICE_SESSION_ID?: string }).MP_DEVICE_SESSION_ID : undefined))
+
+  const deviceWait = options.deviceWaitMs ?? 2500
+  /** The Device ID as soon as it exists, polling up to `deviceWait`. Optional by design: undefined when it never shows. */
+  const readDevice = async (): Promise<string | undefined> => {
+    const deadline = Date.now() + deviceWait
+    for (;;) {
+      const d = getDevice()
+      if (typeof d === 'string' && d) return d
+      if (Date.now() >= deadline) return undefined
+      await new Promise<void>((r) => setTimeout(r, 100))
+    }
+  }
 
   return {
     kind: MERCADOPAGO_BRICKS_KIND,
@@ -126,8 +144,8 @@ export function mercadoPagoBricksAdapter(options: MercadoPagoAdapterOptions = {}
             if (gone) throw first
             provider_data = await read()
           }
-          const device = getDevice()
-          return { provider_data, ...(typeof device === 'string' && device ? { device_session_id: device } : {}) }
+          const device = await readDevice()
+          return { provider_data, ...(device ? { device_session_id: device } : {}) }
         },
         async update(next) {
           if (gone) throw new Error('payment form is unmounted')

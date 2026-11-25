@@ -113,7 +113,7 @@ const holder = () => ({ current: null as EmbeddedPaymentState | null })
 describe('embedded card form is stable', () => {
   it('three total changes in a row: ONE create, three updates, no remount', async () => {
     const mp = fakeMercadoPago()
-    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor })
+    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor, deviceWaitMs: 0 })
     const h = holder()
     const view = render(<Harness holder={h} amount={money(100)} adapter={adapter} />)
     await waitFor(() => expect(h.current?.status).toBe('ready'))
@@ -129,7 +129,7 @@ describe('embedded card form is stable', () => {
 
   it('totals that change faster than the provider answers end on the last one, without remounting', async () => {
     const mp = fakeMercadoPago({ updateMs: 20 })
-    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor })
+    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor, deviceWaitMs: 0 })
     const h = holder()
     const view = render(<Harness holder={h} amount={money(100)} adapter={adapter} />)
     await waitFor(() => expect(h.current?.status).toBe('ready'))
@@ -141,7 +141,7 @@ describe('embedded card form is stable', () => {
 
   it('a total that changes while the form is still being created is applied right after', async () => {
     const mp = fakeMercadoPago({ createMs: 40 })
-    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor })
+    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor, deviceWaitMs: 0 })
     const h = holder()
     const view = render(<Harness holder={h} amount={money(100)} adapter={adapter} />)
     await sleep(10)
@@ -152,7 +152,7 @@ describe('embedded card form is stable', () => {
 
   it('typing the e-mail after the mount does not remount the form', async () => {
     const mp = fakeMercadoPago()
-    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor })
+    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor, deviceWaitMs: 0 })
     const h = holder()
     const view = render(<Harness holder={h} amount={money(100)} adapter={adapter} />)
     await waitFor(() => expect(h.current?.status).toBe('ready'))
@@ -166,7 +166,7 @@ describe('embedded card form is stable', () => {
 
   it('a total change during the charge is applied AFTER the answer, never while onSubmit is in flight', async () => {
     const mp = fakeMercadoPago()
-    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor })
+    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor, deviceWaitMs: 0 })
     let answer!: (r: PaymentAttemptResult) => void
     const transport: PaymentTransport = { submit: () => new Promise((r) => (answer = r)) }
     const h = holder()
@@ -191,7 +191,7 @@ describe('embedded card form is stable', () => {
 
   it('when update fails the form is remounted ONCE, queued: the old form finishes unmounting before the new create', async () => {
     const mp = fakeMercadoPago({ failUpdate: true })
-    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor })
+    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor, deviceWaitMs: 0 })
     const h = holder()
     const view = render(<Harness holder={h} amount={money(100)} adapter={adapter} />)
     await waitFor(() => expect(h.current?.status).toBe('ready'))
@@ -207,7 +207,7 @@ describe('embedded card form is stable', () => {
 
   it('a provider build without update remounts on a total change, queued', async () => {
     const mp = fakeMercadoPago({ noUpdate: true })
-    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor })
+    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor, deviceWaitMs: 0 })
     const h = holder()
     const view = render(<Harness holder={h} amount={money(100)} adapter={adapter} />)
     await waitFor(() => expect(h.current?.status).toBe('ready'))
@@ -220,7 +220,7 @@ describe('embedded card form is stable', () => {
 
   it('unmounting the component while the form is being created leaves no live form and no create on a detached node', async () => {
     const mp = fakeMercadoPago({ createMs: 40 })
-    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor })
+    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor, deviceWaitMs: 0 })
     const h = holder()
     const view = render(<Harness holder={h} amount={money(100)} adapter={adapter} />)
     await sleep(15) // create is in flight
@@ -233,7 +233,7 @@ describe('embedded card form is stable', () => {
 
   it('a create that never resolves times out and falls back instead of hanging the form (no silent retry)', async () => {
     const mp = fakeMercadoPago({ hangCreates: 1 })
-    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor })
+    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor, deviceWaitMs: 0 })
     const h = holder()
     render(<Harness holder={h} amount={money(100)} adapter={adapter} sdkTimeoutMs={120} createTimeoutMs={40} mountRetries={0} />)
     await waitFor(() => expect(h.current?.status).toBe('fallback'))
@@ -242,7 +242,7 @@ describe('embedded card form is stable', () => {
 
   it('a cold first mount that times out is remounted once, silently: the buyer never sees the failure', async () => {
     const mp = fakeMercadoPago({ hangCreates: 1 })
-    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor })
+    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor, deviceWaitMs: 0 })
     const h = holder()
     const seen = new Set<string>()
     render(<Harness holder={h} amount={money(100)} adapter={adapter} sdkTimeoutMs={120} createTimeoutMs={40} statuses={seen} />)
@@ -254,7 +254,7 @@ describe('embedded card form is stable', () => {
 
   it('a form that fails again after the silent retry falls back (one retry, not a loop)', async () => {
     const mp = fakeMercadoPago({ hangCreates: 5 })
-    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor })
+    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor, deviceWaitMs: 0 })
     const h = holder()
     render(<Harness holder={h} amount={money(100)} adapter={adapter} sdkTimeoutMs={120} createTimeoutMs={40} />)
     await waitFor(() => expect(h.current?.status).toBe('fallback'))
@@ -349,7 +349,7 @@ describe('unknown outcome keeps being checked', () => {
 
   it('after "verifying" the hook keeps reading refresh with growing waits until OPS resolves, on the SAME attempt', async () => {
     const mp = fakeMercadoPago()
-    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor })
+    const adapter = mercadoPagoBricksAdapter({ getSdk: () => mp.ctor, deviceWaitMs: 0 })
     const submit = vi.fn(async () => {
       throw new PaymentHttpError(503, 'network', 'verificando', undefined, { retryable: true, kind: 'transient' })
     })

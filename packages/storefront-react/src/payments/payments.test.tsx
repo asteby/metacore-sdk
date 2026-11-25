@@ -503,6 +503,35 @@ describe('Mercado Pago adapter', () => {
     ['handles null', null, {}],
   ])('sanitize: %s', (_n, input, out) => expect(sanitizeMercadoPagoFormData(input as never)).toEqual(out))
 
+  describe('Device ID (anti-fraud)', () => {
+    const mountWith = async (opts: Parameters<typeof mercadoPagoBricksAdapter>[0]) => {
+      const create = vi.fn(async (_b: string, _id: string, settings: Record<string, any>) => {
+        queueMicrotask(() => settings.callbacks.onReady())
+        return { getFormData: async () => ({ token: 'tok' }), unmount: vi.fn() }
+      })
+      const ctor = vi.fn(function (this: unknown) {
+        return { bricks: () => ({ create }) }
+      }) as never
+      const adapter = mercadoPagoBricksAdapter({ getSdk: () => ctor, ...opts })
+      const el = document.createElement('div')
+      el.id = 'brick-dev'
+      return adapter.mount({ container: el, client: { ...client, kind: 'mercadopago_bricks' }, amount: total, locale: 'es-MX', onReady: vi.fn(), onError: vi.fn() })
+    }
+
+    it('waits for the id when MP sets it a moment after the Brick (it takes 0.5-2 s) and sends it', async () => {
+      const real = `armor.${'3f2a9c1b'.repeat(14)}.${'77d04e5a'.repeat(14)}`
+      let value: string | undefined
+      setTimeout(() => (value = real), 250)
+      const mounted = await mountWith({ getDeviceSessionId: () => value, deviceWaitMs: 2000 })
+      expect(await mounted.collect()).toEqual({ provider_data: { token: 'tok' }, device_session_id: real })
+    })
+
+    it('never blocks or fails the payment when the id never shows: it is just omitted', async () => {
+      const mounted = await mountWith({ getDeviceSessionId: () => undefined, deviceWaitMs: 150 })
+      expect(await mounted.collect()).toEqual({ provider_data: { token: 'tok' } })
+    })
+  })
+
   it('creates a cardPayment brick with hidden button, installments cap, theme and server amount; collect strips amounts', async () => {
     const create = vi.fn(async (_b: string, _id: string, settings: Record<string, any>) => {
       queueMicrotask(() => settings.callbacks.onReady())

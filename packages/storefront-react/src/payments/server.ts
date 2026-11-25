@@ -74,8 +74,13 @@ export function sameOrigin(request: Request, site: string): boolean {
   }
 }
 
-/** Device fingerprint (anti-fraud): OPTIONAL, so it never breaks a payment. Anything over 200 chars or odd is dropped. */
-export const DEVICE_SESSION_ID_MAX = 200
+/**
+ * Device fingerprint (anti-fraud): OPTIONAL, so it never breaks a payment. Anything over the max or odd is dropped.
+ * Mercado Pago's JS SDK v2 generates ~231 chars (`armor.<hex>.<hex>`); the former max of 200 dropped EVERY real
+ * one, so orders reached Mercado Pago without the Device ID. Keep equal to the addons' `maxDeviceSessionIDLen`
+ * (storefront_cart) and `MaxDeviceSessionIDLen` (mercadopago).
+ */
+export const DEVICE_SESSION_ID_MAX = 512
 export function deviceSessionId(v: unknown): string | undefined {
   if (typeof v !== 'string') return undefined
   const id = v.trim()
