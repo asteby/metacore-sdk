@@ -28,7 +28,11 @@ import { createSupportApi } from '@asteby/metacore-sdk/support'
 import { SupportThread } from '@asteby/metacore-support-ui'
 
 // The host owns fetch/auth/realtime. Nothing about endpoints is baked into the component.
-const api = createSupportApi((req) => hostFetchJson(req.path, { method: req.method, body: req.body, signal: req.signal }), {
+// The transport returns { data, headers }: headers must expose X-Next-Cursor (keyset pagination).
+const api = createSupportApi(async (req) => {
+  const res = await hostFetch(req.path, { method: req.method, query: req.query, body: req.body, signal: req.signal })
+  return { data: await res.json(), headers: res.headers } // rejects with the `{error:{code}}` body on non-2xx
+}, {
   basePath: '/api/support',
   events: (folio, onEvent) => hostRealtime.subscribe(`support:${folio}`, onEvent), // optional
 })
@@ -38,12 +42,19 @@ const api = createSupportApi((req) => hostFetchJson(req.path, { method: req.meth
   folio="OPS-000123"
   authorName="Ana"
   uploadAttachment={(file) => hostUpload(file)} // returns { name, url, content_type, size, expires_at? }
-  onReopen={() => reopenCase('OPS-000123')}     // optional: shows "Reopen" on resolved cases
+  // Reopen uses api.reopen (POST /cases/:folio/reopen); pass onReopen only to override it.
 />
 ```
 
-`api` only needs `getCase`, `sendMessage` and `subscribe`, so any stand-in works in tests or
-demos (see `src/support-thread.test.tsx`).
+`api` needs `getCase`, `sendMessage` and `subscribe`; `listMessages` enables "Load earlier messages"
+(`messages_older_cursor` of the case, then `X-Next-Cursor` of each page) and `reopen` enables reopening.
+Any stand-in works in tests or demos (see `src/support-thread.test.tsx`).
+
+API errors (`{error:{code,message}}`, read with `supportErrorCode`) map to UI: `support_disabled`,
+`forbidden`/`unauthorized` and `not_found` show a final message without retry; `rate_limited` is
+retryable; on send, `rate_limited`, `case_resolved` (the composer gives way to the resolved notice),
+`case_closed`, `body_too_long`, `too_many_attachments` and `invalid_attachment` show a notice above
+the composer and keep the message as not sent.
 
 States: loading, error with retry, empty (the composer stays), open, resolved (solution plus
 optional reopen) and closed (no messages accepted). A failed send keeps the message in the

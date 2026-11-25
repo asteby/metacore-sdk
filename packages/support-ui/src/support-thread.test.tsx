@@ -277,3 +277,80 @@ describe('SupportThread accessibility', () => {
     expect(screen.getByRole('region', { name: 'Soporte' })).toBeTruthy()
   })
 })
+
+describe('SupportThread API alignment', () => {
+  it('loads earlier messages with the keyset cursor and hides the button on the last page', async () => {
+    const c = baseCase({ messages_older_cursor: 'c1' })
+    const { api } = fakeApi(c)
+    const listMessages = vi
+      .fn()
+      .mockResolvedValueOnce({ items: [msg({ id: 'm0', author_type: 'agent', author_name: 'Soporte', body: 'Mensaje viejo' })], nextCursor: undefined })
+    view({ ...api, listMessages })
+    fireEvent.click(await screen.findByRole('button', { name: 'Cargar mensajes anteriores' }))
+    expect(await screen.findByText('Mensaje viejo')).toBeTruthy()
+    expect(listMessages).toHaveBeenCalledWith('OPS-000123', expect.objectContaining({ before: 'c1' }))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Cargar mensajes anteriores' })).toBeNull())
+  })
+
+  it('has no load-earlier button without a cursor', async () => {
+    view(fakeApi(baseCase()).api)
+    await screen.findByRole('log')
+    expect(screen.queryByRole('button', { name: 'Cargar mensajes anteriores' })).toBeNull()
+  })
+
+  it('reopens through api.reopen and shows the returned case', async () => {
+    const { api } = fakeApi(baseCase({ status: 'resolved', solution: 'ok' }))
+    const reopen = vi.fn(async () => baseCase({ status: 'open' }))
+    view({ ...api, reopen })
+    fireEvent.click(await screen.findByRole('button', { name: 'Reabrir caso' }))
+    await waitFor(() => expect(reopen).toHaveBeenCalledWith('OPS-000123', expect.anything()))
+    expect(await screen.findByRole('textbox')).toBeTruthy()
+    expect(screen.getByTestId('case-status').textContent).toBe('Abierto')
+  })
+
+  it('maps support_disabled to a final message without retry', async () => {
+    const { api } = fakeApi({ error: { code: 'support_disabled', message: 'x' } } as never)
+    api.getCase.mockRejectedValue({ error: { code: 'support_disabled', message: 'x' } })
+    view(api)
+    expect(await screen.findByText('El soporte no está habilitado')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).toBeNull()
+  })
+
+  it('maps rate_limited on load to a retryable message', async () => {
+    const { api } = fakeApi(baseCase())
+    api.getCase.mockRejectedValue({ response: { data: { error: { code: 'rate_limited' } } } })
+    view(api)
+    expect(await screen.findByText('Demasiadas peticiones')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeTruthy()
+  })
+
+  it('shows the send error for rate_limited and keeps the failed message', async () => {
+    const { api } = fakeApi(baseCase())
+    api.sendMessage.mockRejectedValueOnce({ error: { code: 'rate_limited' } })
+    view(api)
+    await screen.findByRole('log')
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hola' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+    expect((await screen.findByTestId('send-error')).textContent).toContain('Demasiadas peticiones')
+    expect(screen.getByText('No se envió')).toBeTruthy()
+  })
+
+  it('switches to the resolved notice when the server answers case_resolved', async () => {
+    const { api } = fakeApi(baseCase())
+    api.sendMessage.mockRejectedValueOnce({ error: { code: 'case_resolved' } })
+    view(api)
+    await screen.findByRole('log')
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hola' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
+    expect(await screen.findByText('Caso resuelto')).toBeTruthy()
+    expect(screen.queryByRole('textbox')).toBeNull()
+  })
+
+  it('treats an attachment without url and expired:true as expired', async () => {
+    const c = baseCase({
+      messages: [msg({ id: 'm2', author_type: 'agent', author_name: 'Soporte', body: 'Ver', attachments: [{ id: 'm2:0', name: 'x.pdf', expired: true }] })],
+    })
+    view(fakeApi(c).api)
+    expect((await screen.findByTestId('attachment-expired')).textContent).toContain('x.pdf')
+  })
+})

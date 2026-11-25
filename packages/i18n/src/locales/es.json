@@ -76,6 +76,38 @@
       "title": "Adjunto caducado",
       "body": "El enlace de {{name}} caducó y ya no se puede abrir ni descargar. Pide a soporte que lo vuelva a compartir.",
       "inline": "{{name}} (caducado)"
+    },
+    "loadOlder": "Cargar mensajes anteriores",
+    "loadingOlder": "Cargando…",
+    "loadErrors": {
+      "disabled": {
+        "title": "El soporte no está habilitado",
+        "body": "Tu organización no tiene el soporte activado. Pide a un administrador que lo habilite."
+      },
+      "forbidden": {
+        "title": "Sin acceso a este caso",
+        "body": "No tienes permiso para ver el soporte o este caso."
+      },
+      "not_found": {
+        "title": "Caso no encontrado",
+        "body": "El caso no existe o no tienes acceso a él."
+      },
+      "rate_limited": {
+        "title": "Demasiadas peticiones",
+        "body": "Espera un momento e inténtalo de nuevo."
+      }
+    },
+    "sendErrors": {
+      "rate_limited": "Demasiadas peticiones. Espera un momento e inténtalo de nuevo.",
+      "case_resolved": "El caso ya está resuelto. Reábrelo para responder.",
+      "case_closed": "El caso está cerrado y ya no admite mensajes.",
+      "body_required": "El mensaje está vacío.",
+      "body_too_long": "El mensaje es demasiado largo.",
+      "too_many_attachments": "Hay demasiados adjuntos.",
+      "invalid_attachment": "Uno de los adjuntos no es válido.",
+      "support_disabled": "El soporte no está habilitado para tu organización.",
+      "forbidden": "No tienes permiso para escribir en este caso.",
+      "unknown": "No se pudo enviar el mensaje. Inténtalo de nuevo."
     }
   },
   "common": {

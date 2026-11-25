@@ -76,6 +76,38 @@
       "title": "Attachment expired",
       "body": "The link for {{name}} has expired and it can no longer be opened or downloaded. Ask support to share it again.",
       "inline": "{{name}} (expired)"
+    },
+    "loadOlder": "Load earlier messages",
+    "loadingOlder": "Loading…",
+    "loadErrors": {
+      "disabled": {
+        "title": "Support is not enabled",
+        "body": "Your organization does not have support turned on. Ask an administrator to enable it."
+      },
+      "forbidden": {
+        "title": "No access to this case",
+        "body": "You do not have permission to view support or this case."
+      },
+      "not_found": {
+        "title": "Case not found",
+        "body": "The case does not exist or you do not have access to it."
+      },
+      "rate_limited": {
+        "title": "Too many requests",
+        "body": "Wait a moment and try again."
+      }
+    },
+    "sendErrors": {
+      "rate_limited": "Too many requests. Wait a moment and try again.",
+      "case_resolved": "The case is already resolved. Reopen it to reply.",
+      "case_closed": "The case is closed and no longer accepts messages.",
+      "body_required": "The message is empty.",
+      "body_too_long": "The message is too long.",
+      "too_many_attachments": "There are too many attachments.",
+      "invalid_attachment": "One of the attachments is not valid.",
+      "support_disabled": "Support is not enabled for your organization.",
+      "forbidden": "You do not have permission to write in this case.",
+      "unknown": "The message could not be sent. Try again."
     }
   },
   "common": {

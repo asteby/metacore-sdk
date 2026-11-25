@@ -24,7 +24,7 @@ export interface SupportThreadProps {
   /** Uploads one file and returns it as an attachment (with its signed URL). Without it, files are sent by name only. */
   uploadAttachment?: (file: File) => Promise<SupportAttachmentView>
   maxAttachmentBytes?: number
-  /** Reopens a resolved case. The reopen button only shows when this is set; the thread reloads when it resolves. */
+  /** Overrides the reopen action (default: `api.reopen`). The reopen button shows when this or `api.reopen` exists; the thread reloads after `onReopen`. */
   onReopen?: () => void | Promise<void>
   /** Idempotency key generator for outgoing messages. */
   newId?: () => string
@@ -33,7 +33,20 @@ export interface SupportThreadProps {
   className?: string
 }
 
+/** Load failures that retrying cannot fix: no retry button, a specific message. */
+const FINAL_LOAD_ERRORS = new Set(['support_disabled', 'forbidden', 'unauthorized', 'not_found'])
+const LOAD_ERROR_KEY: Record<string, string> = {
+  support_disabled: 'disabled',
+  forbidden: 'forbidden',
+  unauthorized: 'forbidden',
+  not_found: 'not_found',
+  rate_limited: 'rate_limited',
+}
+const SEND_ERRORS = new Set(['rate_limited', 'case_resolved', 'case_closed', 'body_required', 'body_too_long', 'too_many_attachments', 'invalid_attachment', 'support_disabled', 'forbidden'])
+
 const STATUS_VARIANT = { open: 'info', resolved: 'success', closed: 'muted' } as const satisfies Record<SupportCaseStatus, string>
+
+const cx = (...c: Array<string | false | undefined>) => c.filter(Boolean).join(' ')
 
 let uid = 0
 
@@ -54,7 +67,13 @@ export function SupportThread({
   className,
 }: SupportThreadProps) {
   const { t, locale } = useSupportT()
-  const { status, error, supportCase, send, retry, reload } = useSupportThread({ api, folio, authorName, newId })
+  const { status, error, errorCode, supportCase, send, sendErrorCode, retry, hasOlder, loadingOlder, loadOlder, reopen, reload } = useSupportThread({
+    api,
+    folio,
+    authorName,
+    newId,
+  })
+  const canReopen = Boolean(onReopen || api.reopen)
   const [viewing, setViewing] = useState<SupportAttachmentView | null>(null)
   const [reopening, setReopening] = useState(false)
   const uploaded = useRef(new Map<string, SupportAttachmentView>())
@@ -91,12 +110,13 @@ export function SupportThread({
     [supportCase?.messages, t, clock],
   )
 
+  const errKind = errorCode ? LOAD_ERROR_KEY[errorCode] : undefined
   const labels = useMemo<Partial<InboxLabels>>(
     () => ({
       emptyThreadTitle: t('emptyTitle'),
       emptyThreadBody: t('emptyBody'),
-      errorTitle: t('loadErrorTitle'),
-      errorBody: t('loadErrorBody'),
+      errorTitle: t(errKind ? `loadErrors.${errKind}.title` : 'loadErrorTitle'),
+      errorBody: t(errKind ? `loadErrors.${errKind}.body` : 'loadErrorBody'),
       retry: t('retry'),
       loading: t('loading'),
       you: t('author.you'),
@@ -104,7 +124,7 @@ export function SupportThread({
       send: t('send'),
       attach: t('attach'),
     }),
-    [t],
+    [t, errKind],
   )
 
   const upload = useMemo(
@@ -134,11 +154,12 @@ export function SupportThread({
   )
 
   const handleReopen = async () => {
-    if (!onReopen) return
     setReopening(true)
     try {
-      await onReopen()
-      reload()
+      if (onReopen) {
+        await onReopen()
+        reload()
+      } else await reopen()
     } finally {
       setReopening(false)
     }
@@ -148,14 +169,21 @@ export function SupportThread({
   let footer: ReactNode = null
   if (status === 'ready' && caseStatus === 'open') {
     footer = (
-      <Composer
-        onSend={handleSend}
-        draftKey={`support:${folio}`}
-        formatting={false}
-        uploadAttachment={upload}
-        maxAttachmentBytes={maxAttachmentBytes}
-        labels={labels}
-      />
+      <>
+        {sendErrorCode && (
+          <Alert variant="destructive" className="m-3 w-auto" data-testid="send-error">
+            <AlertDescription>{t(SEND_ERRORS.has(sendErrorCode) ? `sendErrors.${sendErrorCode}` : 'sendErrors.unknown')}</AlertDescription>
+          </Alert>
+        )}
+        <Composer
+          onSend={handleSend}
+          draftKey={`support:${folio}`}
+          formatting={false}
+          uploadAttachment={upload}
+          maxAttachmentBytes={maxAttachmentBytes}
+          labels={labels}
+        />
+      </>
     )
   } else if (status === 'ready' && caseStatus) {
     const resolved = caseStatus === 'resolved'
@@ -165,7 +193,7 @@ export function SupportThread({
           <AlertTitle>{t(resolved ? 'resolvedTitle' : 'closedTitle')}</AlertTitle>
           <AlertDescription>
             <p>{supportCase?.solution || t(resolved ? 'resolvedBody' : 'closedBody')}</p>
-            {resolved && onReopen && (
+            {resolved && canReopen && (
               <Button type="button" variant="outline" size="sm" className="mt-2" disabled={reopening} onClick={handleReopen}>
                 {reopening ? t('reopening') : t('reopen')}
               </Button>
@@ -178,13 +206,21 @@ export function SupportThread({
 
   return (
     <InboxProvider locale={locale}>
+      <div className={cx('flex h-full min-h-0 flex-col', className)}>
+      {hasOlder && (
+        <div className="flex shrink-0 justify-center border-b border-border/50 p-2">
+          <Button type="button" variant="ghost" size="sm" disabled={loadingOlder} onClick={() => void loadOlder().catch(() => {})}>
+            {loadingOlder ? t('loadingOlder') : t('loadOlder')}
+          </Button>
+        </div>
+      )}
       <ThreadView
-        className={className}
+        className="min-h-0 flex-1"
         title={supportCase?.subject}
         messages={messages}
         loading={status === 'loading'}
         error={status === 'error' ? error : undefined}
-        onRetry={reload}
+        onRetry={errorCode && FINAL_LOAD_ERRORS.has(errorCode) ? undefined : reload}
         labels={labels}
         actions={
           caseStatus ? (
@@ -212,6 +248,7 @@ export function SupportThread({
         }}
         footer={footer}
       />
+      </div>
       <AttachmentViewer attachment={viewing} now={clock} t={t} onClose={() => setViewing(null)} />
     </InboxProvider>
   )
