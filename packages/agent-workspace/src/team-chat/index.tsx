@@ -35,10 +35,12 @@ import {
   type ChatAttachment,
   type MessageReplyPreview,
   parseAttachments,
+  supportCaseFromAttachment,
   callEventFromMessage,
   messagePreviewText,
   isAudioAttachment,
 } from './data/types'
+import { resolveChannelCapabilities } from './data/capabilities'
 import { ChatListItem } from './components/chat-list-item'
 import { ChannelAvatar, channelDisplayName } from './components/channel-avatar'
 import { NewMessageDialog } from './components/new-message-dialog'
@@ -123,6 +125,9 @@ export function TeamChat() {
     () => (showAby ? null : channels.find((c) => c.id === activeId) ?? null),
     [channels, activeId, showAby],
   )
+
+  // Server-declared per-channel capabilities (all true when the channel declares none).
+  const caps = useMemo(() => resolveChannelCapabilities(activeChannel), [activeChannel])
 
   useEffect(() => {
     if (activeId === ABY_CHANNEL_ID) rememberAbyFocus()
@@ -388,6 +393,7 @@ export function TeamChat() {
   )
 
   const startReply = useCallback((m: TeamChatMessage) => {
+    if (!caps.replies) return
     const previewBody =
       m.body?.trim() ||
       messagePreviewText(m) ||
@@ -399,10 +405,11 @@ export function TeamChat() {
       body: previewBody,
     })
     requestAnimationFrame(() => composerRef.current?.focus())
-  }, [])
+  }, [caps.replies])
 
   const toggleReaction = useCallback(
     async (messageId: string, emoji: string) => {
+      if (!caps.reactions) return
       try {
         const { data } = await api.post(`/internal-chat/messages/${messageId}/reactions`, {
           emoji,
@@ -418,10 +425,11 @@ export function TeamChat() {
         toast.error(t('team_chat.reaction_error', 'No se pudo reaccionar'))
       }
     },
-    [t],
+    [t, caps.reactions],
   )
 
   const attachFiles = useCallback(async (fileList: FileList | File[] | null) => {
+    if (!caps.attachments) return
     if (!fileList || (Array.isArray(fileList) ? fileList.length === 0 : fileList.length === 0)) return
     const list = Array.isArray(fileList) ? fileList : Array.from(fileList)
     const uploaded: ChatAttachment[] = []
@@ -446,7 +454,7 @@ export function TeamChat() {
       }
     }
     if (uploaded.length) setPendingFiles((prev) => [...prev, ...uploaded])
-  }, [t])
+  }, [t, caps.attachments])
 
   const handleComposerPaste = useCallback(
     (e: ClipboardEvent<HTMLTextAreaElement>) => {
@@ -485,7 +493,7 @@ export function TeamChat() {
 
   const startCall = useCallback(
     (kind: CallKind) => {
-      if (!activeChannel) return
+      if (!activeChannel || !caps.calls) return
       if (callSession) {
         toast.message('Ya hay una llamada activa')
         return
@@ -496,7 +504,7 @@ export function TeamChat() {
         title: channelDisplayName(activeChannel),
       })
     },
-    [activeChannel, callSession, startWebRTCCall],
+    [activeChannel, callSession, startWebRTCCall, caps.calls],
   )
 
   const joinActiveCall = useCallback(() => {
@@ -757,7 +765,7 @@ export function TeamChat() {
                   </div>
                 </div>
                 <div className='flex shrink-0 items-center gap-0.5'>
-                  {activeChannel.active_call && !callSession && (
+                  {caps.calls && activeChannel.active_call && !callSession && (
                     <Button
                       size='sm'
                       variant='default'
@@ -769,6 +777,8 @@ export function TeamChat() {
                       Unirse
                     </Button>
                   )}
+                  {caps.calls && (
+                  <>
                   <Button
                     size='icon'
                     variant='ghost'
@@ -796,6 +806,8 @@ export function TeamChat() {
                   >
                     <ScreenShare className='size-4' />
                   </Button>
+                  </>
+                  )}
                 </div>
               </div>
 
@@ -880,16 +892,19 @@ export function TeamChat() {
                                 )
                               }
                               const embedAtts = attachments.filter(isChatEmbed)
+                              // A case card replaces its text body (the body stays as the fallback for old clients).
+                              const hasCaseCard = attachments.some((a) => supportCaseFromAttachment(a) !== null)
+                              const bodyText = hasCaseCard ? '' : m.body
                               const fileAtts = attachments.filter(
                                 (a) => !isChatEmbed(a) && a.type !== 'call' && a.url,
                               )
                               const audioOnly =
-                                !m.body?.trim() &&
+                                !bodyText?.trim() &&
                                 !m.reply_to &&
                                 fileAtts.length > 0 &&
                                 fileAtts.every((a) => isAudioAttachment(a))
                               const embedOnly =
-                                !m.body?.trim() &&
+                                !bodyText?.trim() &&
                                 !m.reply_to &&
                                 embedAtts.length > 0 &&
                                 fileAtts.length === 0
@@ -914,10 +929,11 @@ export function TeamChat() {
                                   )}
                                 >
                                 <MessageReactions
-                                  reactions={m.reactions}
+                                  reactions={caps.reactions ? m.reactions : null}
                                   align={mine ? 'end' : 'start'}
+                                  canReact={caps.reactions}
                                   onToggle={(emoji) => void toggleReaction(m.id, emoji)}
-                                  onReply={() => startReply(m)}
+                                  onReply={caps.replies ? () => startReply(m) : undefined}
                                 >
                                 {audioOnly ? (
                                   <div
@@ -987,15 +1003,15 @@ export function TeamChat() {
                                       }}
                                     />
                                   )}
-                                  {m.body ? <p className='text-sm leading-snug'>{m.body}</p> : null}
+                                  {bodyText ? <p className='text-sm leading-snug'>{bodyText}</p> : null}
                                   {embedAtts.length > 0 && (
                                     <ChatEmbedList
                                       attachments={embedAtts}
-                                      className={cn(m.body || m.reply_to ? 'mt-2' : '')}
+                                      className={cn(bodyText || m.reply_to ? 'mt-2' : '')}
                                     />
                                   )}
                                   {fileAtts.length > 0 && (
-                                    <div className={cn('flex flex-col gap-2', m.body || m.reply_to || embedAtts.length ? 'mt-2' : '')}>
+                                    <div className={cn('flex flex-col gap-2', bodyText || m.reply_to || embedAtts.length ? 'mt-2' : '')}>
                                       {fileAtts.map((a, ai) => {
                                         const isImage = (a.mime_type || '').startsWith('image/')
                                         const isVideo = (a.mime_type || '').startsWith('video/')
@@ -1155,6 +1171,7 @@ export function TeamChat() {
                       onVoiceReady={(file) => void sendAttachments([file], '')}
                       voiceDisabled={sending}
                       attachTitle={t('team_chat.attach', 'Adjuntar')}
+                      canAttach={caps.attachments}
                     />
                     <label className='flex min-h-8 min-w-0 flex-1 items-center self-stretch py-1'>
                       <span className='sr-only'>{t('team_chat.composer', 'Escribe un mensaje…')}</span>
@@ -1169,7 +1186,7 @@ export function TeamChat() {
                           e.target.style.height = 'auto'
                           e.target.style.height = Math.min(e.target.scrollHeight, 128) + 'px'
                         }}
-                        onPaste={handleComposerPaste}
+                        onPaste={caps.attachments ? handleComposerPaste : undefined}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && !e.shiftKey) {
                             e.preventDefault()

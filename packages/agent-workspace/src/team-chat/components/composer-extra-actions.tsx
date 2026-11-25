@@ -23,6 +23,7 @@ export function ComposerExtraActions({
   onToggleDictation,
   dictateTitle = 'Dictar (voz a texto)',
   attachTitle = 'Adjuntar',
+  canAttach = true,
 }: {
   onAttach: () => void
   onEmoji: (emoji: string) => void
@@ -32,21 +33,25 @@ export function ComposerExtraActions({
   onToggleDictation?: () => void
   dictateTitle?: string
   attachTitle?: string
+  /** false hides the attach button and the voice-note recorder (uploads); emoji stays. */
+  canAttach?: boolean
 }) {
   const desktop = (
     <div className='hidden items-center gap-0.5 sm:flex'>
-      <Button
-        size='icon'
-        type='button'
-        variant='ghost'
-        className='h-8 w-8 shrink-0 rounded-md'
-        title={attachTitle}
-        onClick={onAttach}
-      >
-        <Plus size={20} className='stroke-muted-foreground' />
-      </Button>
+      {canAttach && (
+        <Button
+          size='icon'
+          type='button'
+          variant='ghost'
+          className='h-8 w-8 shrink-0 rounded-md'
+          title={attachTitle}
+          onClick={onAttach}
+        >
+          <Plus size={20} className='stroke-muted-foreground' />
+        </Button>
+      )}
       <EmojiPickerButton onPick={onEmoji} />
-      <VoiceNoteButton disabled={voiceDisabled} onReady={onVoiceReady} />
+      {canAttach && <VoiceNoteButton disabled={voiceDisabled} onReady={onVoiceReady} />}
       {onToggleDictation && (
         <Button
           size='icon'
@@ -83,18 +88,20 @@ export function ComposerExtraActions({
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <div className='flex items-center gap-0.5'>
-            <Button
-              size='icon'
-              type='button'
-              variant='ghost'
-              className='h-9 w-9 rounded-md'
-              title={attachTitle}
-              onClick={onAttach}
-            >
-              <Paperclip className='size-4' />
-            </Button>
+            {canAttach && (
+              <Button
+                size='icon'
+                type='button'
+                variant='ghost'
+                className='h-9 w-9 rounded-md'
+                title={attachTitle}
+                onClick={onAttach}
+              >
+                <Paperclip className='size-4' />
+              </Button>
+            )}
             <EmojiPickerButton onPick={onEmoji} />
-            <VoiceNoteButton disabled={voiceDisabled} onReady={onVoiceReady} />
+            {canAttach && <VoiceNoteButton disabled={voiceDisabled} onReady={onVoiceReady} />}
             {onToggleDictation && (
               <Button
                 size='icon'

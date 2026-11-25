@@ -2,12 +2,13 @@ import { ChevronRight, FileSpreadsheet, Link2, type LucideIcon } from 'lucide-re
 import { lazy, Suspense, useMemo } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { cn } from '@asteby/metacore-ui'
+import { SupportCaseCard } from '@asteby/metacore-support-ui'
 const AbyChartEmbed = lazy(() =>
   import('../../workspace/aby-chart-embed').then((m) => ({ default: m.AbyChartEmbed })),
 )
 import { useNavigation, type WorkspaceNavGroup as NavGroup, type WorkspaceNavItem as NavItem } from '../../host'
 import { requestChatWidgetMinimize } from '../../lib/aby-widget'
-import type { ChatAttachment } from '../data/types'
+import { supportCaseFromAttachment, type ChatAttachment } from '../data/types'
 import { humanizeModelKey } from '../data/share-embed'
 import {
   AGENT_CARD,
@@ -16,7 +17,13 @@ import {
 } from '../../workspace/agent-surfaces'
 
 export function isChatEmbed(a: ChatAttachment): boolean {
-  return a.type === 'record' || a.type === 'view' || a.type === 'chart' || a.type === 'image'
+  return (
+    a.type === 'record' ||
+    a.type === 'view' ||
+    a.type === 'chart' ||
+    a.type === 'image' ||
+    supportCaseFromAttachment(a) !== null
+  )
 }
 
 export function ChatEmbedList({
@@ -31,6 +38,7 @@ export function ChatEmbedList({
   const charts = embeds.filter((a) => a.type === 'chart' && a.chart)
   const images = embeds.filter((a) => a.type === 'image' && a.image_data_url)
   const cards = embeds.filter((a) => a.type === 'record' || a.type === 'view')
+  const caseCards = embeds.filter((a) => a.type === 'support_case')
   return (
     <div className={cn('flex w-full flex-col gap-2', className)}>
       {charts.map((a, i) => (
@@ -41,6 +49,10 @@ export function ChatEmbedList({
       {images.map((a, i) => (
         <ChatImageEmbed key={`image-${a.title || i}`} att={a} />
       ))}
+      {caseCards.map((a, i) => {
+        const card = supportCaseFromAttachment(a)
+        return card ? <SupportCaseCard key={`case-${card.folio}-${card.status}-${i}`} {...card} /> : null
+      })}
       {cards.length > 0 ? (
         <div className='flex w-[min(100%,18rem)] flex-col gap-1.5'>
           {cards.map((a, i) => (

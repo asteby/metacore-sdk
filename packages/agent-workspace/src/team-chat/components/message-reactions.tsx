@@ -17,12 +17,15 @@ export function MessageReactions({
   onToggle,
   onReply,
   align = 'start',
+  canReact = true,
   children,
 }: {
   reactions?: MessageReaction[] | null
   onToggle: (emoji: string) => void
   onReply?: () => void
   align?: 'start' | 'end'
+  /** false hides the emoji row of the menu (channel without reactions). */
+  canReact?: boolean
   children: ReactNode
 }) {
   const [menuOpen, setMenuOpen] = useState(false)
@@ -134,6 +137,8 @@ export function MessageReactions({
         align === 'end' ? 'items-end' : 'items-start',
       )}
       onContextMenu={(e) => {
+        // Nothing to offer (no reactions, no reply): leave the native menu alone.
+        if (!canReact && !onReply) return
         e.preventDefault()
         setMenuOpen(true)
       }}
@@ -224,6 +229,7 @@ export function MessageReactions({
               Responder
             </button>
           )}
+          {canReact && (
           <div className='flex items-center gap-0.5 rounded-full px-0.5'>
             {QUICK.map((e) => (
               <button
@@ -238,6 +244,7 @@ export function MessageReactions({
             ))}
             <EmojiPickerButton compact title='Más emojis' onPick={pick} />
           </div>
+          )}
         </div>
       )}
     </div>

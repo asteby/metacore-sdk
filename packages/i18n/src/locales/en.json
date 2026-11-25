@@ -40,6 +40,11 @@
       "resolved": "Resolved",
       "closed": "Closed"
     },
+    "card": {
+      "case": "Case {{folio}}",
+      "solution": "Solution",
+      "openCase": "View case"
+    },
     "author": {
       "you": "You",
       "agent": "Support",

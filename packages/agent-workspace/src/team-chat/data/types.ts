@@ -1,3 +1,4 @@
+import { isSupportCaseStatus, type SupportCaseCardProps } from '@asteby/metacore-support-ui'
 import { stripMarkdownLite } from '../../lib/plain-text'
 
 export type ChannelKind = 'team' | 'branch' | 'dm' | 'topic' | 'broadcast'
@@ -30,6 +31,13 @@ export interface ChatAttachment {
   count?: number
   /** Inline data URL ("data:image/png;base64,…") when type=image (Aby's generate_image tool). */
   image_data_url?: string
+  /**
+   * type=support_case (a case state card the server drops into a thread): `status` is
+   * open | resolved | closed, plus these. `title` is NOT reused so the shape stays explicit.
+   */
+  folio?: string
+  subject?: string
+  solution?: string
 }
 
 export type ChartKind =
@@ -105,6 +113,22 @@ export interface TeamChatDMUser {
   last_seen_at?: string | null
 }
 
+/**
+ * What a channel supports. The server declares it per channel (`TeamChatChannel.capabilities`);
+ * every flag defaults to `true`, so a channel without the field behaves exactly as before.
+ * Only an explicit `false` turns something off (see `resolveChannelCapabilities`).
+ */
+export interface TeamChatCapabilities {
+  /** Audio / video / screen-share buttons and joining an active call. */
+  calls: boolean
+  /** Reaction menu and chips on messages. */
+  reactions: boolean
+  /** Reply-to (swipe / context-menu "Responder") and quoted replies. */
+  replies: boolean
+  /** Attach button, paste-to-attach and voice notes (anything uploaded from the composer). */
+  attachments: boolean
+}
+
 export interface TeamChatChannel {
   id: string
   name: string
@@ -118,6 +142,10 @@ export interface TeamChatChannel {
   last_message?: TeamChatMessage | null
   dm_user?: TeamChatDMUser | null
   active_call?: { id: string; kind: string; status: string } | null
+  /** Server-declared capabilities; omitted = everything supported (legacy behaviour). */
+  capabilities?: Partial<TeamChatCapabilities> | null
+  /** Virtual system contact key (e.g. "support"); informational, the SDK does not branch on it. */
+  thread?: string
 }
 
 // OrgUser is a member of the organization, used by the "Nuevo mensaje"
@@ -141,6 +169,14 @@ export function parseAttachments(
   } catch {
     return []
   }
+}
+
+/** A `support_case` attachment with a valid status and folio, as card props; else null. */
+export function supportCaseFromAttachment(
+  a: ChatAttachment,
+): Pick<SupportCaseCardProps, 'status' | 'folio' | 'subject' | 'solution'> | null {
+  if (a.type !== 'support_case' || !isSupportCaseStatus(a.status) || !a.folio?.trim()) return null
+  return { status: a.status, folio: a.folio, subject: a.subject?.trim() || undefined, solution: a.solution?.trim() || undefined }
 }
 
 export function callEventFromMessage(
