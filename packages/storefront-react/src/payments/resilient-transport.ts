@@ -56,7 +56,7 @@ export function isResolvedAttempt(result: PaymentAttemptResult): boolean {
   return type === 'voucher' || type === 'challenge' || type === 'redirect' || paymentNextAction(p.action) !== null
 }
 
-type Failure = { kind: PaymentErrorClassKind; status: number; code: string; message: string; retryable: boolean; details?: unknown }
+type Failure = { kind: PaymentErrorClassKind; status: number; code: string; message: string; retryable: boolean; details?: unknown; field?: string }
 type ErrBody = { error?: { code?: string; message?: string; retryable?: boolean; kind?: PaymentErrorClassKind; details?: unknown; field?: string; checkout_id?: string } }
 
 async function readJson(res: Response): Promise<unknown> {
@@ -105,14 +105,14 @@ export function createResilientTransport(opts: ResilientTransportOptions): Payme
     // What OPS declared wins: `retryable:false` is never repeated or checked, even if the body says "transient".
     const byCode = classifyPaymentError({ status: res.status, code: e.code ?? null, field: e.field ?? null, retryable: typeof e.retryable === 'boolean' ? e.retryable : null, checkoutId: e.checkout_id ?? null, details: e.details })
     const info = e.kind && !(e.kind === 'transient' && !byCode.retryable) ? { kind: e.kind, retryable: e.retryable === true || byCode.retryable } : byCode
-    return { fail: { kind: info.kind, status: res.status, code: e.code ?? 'server_error', message: e.message || text(info.kind), retryable: info.retryable, details: e.details } }
+    return { fail: { kind: info.kind, status: res.status, code: e.code ?? 'server_error', message: e.message || text(info.kind), retryable: info.retryable, details: e.details, ...(e.field ? { field: e.field } : {}) } }
   }
 
   // Transients reach the hook as "network" (same key, retry button); the rest keep their HTTP status.
   const toError = (f: Failure) =>
     f.kind === 'transient'
       ? new PaymentHttpError(503, 'network', f.message, f.details, { retryable: true, kind: 'transient' })
-      : new PaymentHttpError(f.status || 500, f.code, f.message, f.details, { retryable: f.retryable, kind: f.kind })
+      : new PaymentHttpError(f.status || 500, f.code, f.message, f.details, { retryable: f.retryable, kind: f.kind, field: f.field })
 
   async function resolveByStatus(signal: AbortSignal): Promise<PaymentAttemptResult | null> {
     for (let i = 0; i < polls; i++) {

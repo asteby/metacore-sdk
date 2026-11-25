@@ -99,12 +99,15 @@ export class PaymentHttpError extends Error {
     /** Raw `error.details` (e.g. the new `cost` of a `price_mismatch`); untrusted shape. */
     readonly details?: unknown,
     /** Optional classification from the shop's JSON body (`retryable`, `kind`). */
-    extra?: { retryable?: boolean | undefined; kind?: PaymentErrorClassKind | undefined },
+    extra?: { retryable?: boolean | undefined; kind?: PaymentErrorClassKind | undefined; field?: string | undefined },
   ) {
     super(message ?? code)
     this.retryable = extra?.retryable
     this.kind = extra?.kind
+    this.field = extra?.field
   }
+  /** `error.field` of the shop body: the order field a `validation` refers to (e.g. `phone`), so the UI can say which. */
+  readonly field: string | undefined
   /** `error.retryable` of the shop body: `true` repeat with the SAME key; `false` it is an answer. `undefined`: not said. */
   readonly retryable: boolean | undefined
   /** `error.kind` of the shop body (`classifyPaymentError`). */
@@ -141,12 +144,13 @@ export function createFetchTransport(url: string, options: FetchTransportOptions
   const doFetch = (u: string, init: RequestInit) => (options.fetch ?? globalThis.fetch.bind(globalThis))(u, init)
   async function call(u: string, init: RequestInit): Promise<PaymentAttemptResult> {
     const res = await doFetch(u, { credentials: options.credentials ?? 'same-origin', ...init })
-    const body = (await parse(res)) as { error?: { code?: string; message?: string; details?: unknown; retryable?: boolean; kind?: PaymentErrorClassKind } } | PaymentAttemptResult | null
+    const body = (await parse(res)) as { error?: { code?: string; message?: string; details?: unknown; retryable?: boolean; kind?: PaymentErrorClassKind; field?: string } } | PaymentAttemptResult | null
     if (!res.ok) {
-      const e = (body as { error?: { code?: string; message?: string; details?: unknown; retryable?: boolean; kind?: PaymentErrorClassKind } } | null)?.error
+      const e = (body as { error?: { code?: string; message?: string; details?: unknown; retryable?: boolean; kind?: PaymentErrorClassKind; field?: string } } | null)?.error
       throw new PaymentHttpError(res.status, e?.code ?? 'server_error', e?.message, e?.details, {
         retryable: typeof e?.retryable === 'boolean' ? e.retryable : undefined,
         kind: typeof e?.kind === 'string' ? e.kind : undefined,
+        field: typeof e?.field === 'string' && e.field ? e.field : undefined,
       })
     }
     const result = body as PaymentAttemptResult | null
