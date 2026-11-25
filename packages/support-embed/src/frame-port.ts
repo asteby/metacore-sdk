@@ -4,13 +4,15 @@
  * expone `location.ancestorOrigins` debe coincidir. Desde entonces solo se aceptan mensajes de ese
  * origen y se envia con `targetOrigin` = ese origen (nunca `*`).
  */
-import { envelope, parseToFrame, type ToFrame, type ToParent } from './protocol'
+import { envelope, parseToFrame, type DisplayMode, type ToFrame, type ToParent } from './protocol'
 
 export interface ParentPort {
   /** Se resuelve con el origen del padre tras el primer `hello` valido. */
   origin: Promise<string>
   /** Origen ya conocido, o `undefined`. */
   currentOrigin(): string | undefined
+  /** Modo de presentacion que anuncio el ultimo `hello` del loader (el montaje de React llega despues del primero). */
+  currentMode(): DisplayMode | undefined
   on(handler: (msg: ToFrame) => void): () => void
   /** No hace nada hasta conocer el origen del padre. */
   send(msg: ToParent): void
@@ -19,6 +21,7 @@ export interface ParentPort {
 
 export function createParentPort(win: Window & { location: Location }): ParentPort {
   let origin: string | undefined
+  let mode: DisplayMode | undefined
   const handlers = new Set<(m: ToFrame) => void>()
   let resolve!: (o: string) => void
   const originPromise = new Promise<string>((r) => (resolve = r))
@@ -38,6 +41,7 @@ export function createParentPort(win: Window & { location: Location }): ParentPo
     } else if (e.origin !== origin) {
       return
     }
+    if (msg.t === 'hello' && msg.mode) mode = msg.mode
     handlers.forEach((h) => h(msg))
   }
   win.addEventListener('message', onMessage)
@@ -45,6 +49,7 @@ export function createParentPort(win: Window & { location: Location }): ParentPo
   return {
     origin: originPromise,
     currentOrigin: () => origin,
+    currentMode: () => mode,
     on: (h) => {
       handlers.add(h)
       return () => handlers.delete(h)

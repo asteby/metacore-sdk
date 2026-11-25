@@ -96,6 +96,7 @@ export function bootFrame(win: Window, doc: Document, container: HTMLElement): B
           port={port}
           identity={identity}
           allowReopen={meta(doc, META.allowReopen) === '1'}
+          mode={port.currentMode()}
           prefersDark={win.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false}
         />
       </I18nextProvider>,
