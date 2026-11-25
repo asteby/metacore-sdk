@@ -54,8 +54,15 @@ export interface RelationWidgetProps {
     setValues?: (patch: Record<string, any>) => void
     /** El formulario no permite editar ahora (guardando, o al editar mientras se leen las filas guardadas). */
     readOnly?: boolean
-    /** `create` al crear el padre; `edit` al editarlo (las filas existentes traen `id`). */
-    mode?: 'create' | 'edit'
+    /**
+     * `create` al crear el padre; `edit` al editarlo (las filas existentes traen `id`); `view` al verlo (solo lectura).
+     * `view` solo llega a un widget que lo declara con `supportsView = true` (ver `relationWidgetSupportsView`): sin la
+     * marca el modal de detalle sigue con el panel genérico de relaciones, como siempre. En `view` el host NO carga
+     * filas (`rows` llega vacío): el widget lee lo suyo con `recordId`.
+     */
+    mode?: 'create' | 'edit' | 'view'
+    /** Id del registro padre al ver o editar (undefined al crear). El widget en modo `view` lo usa para leer sus datos. */
+    recordId?: string | number
     /** Errores por celda `"<i>.<campo>"` y por fila `"<i>"`, ya localizados. */
     errors?: Record<string, string>
     /** Error de conjunto de la relación (mínimo de filas, 422 `min`). */
@@ -68,6 +75,15 @@ export interface RelationWidgetProps {
 }
 
 export type RelationWidgetComponent = React.ComponentType<RelationWidgetProps>
+
+/**
+ * ¿El widget sabe pintarse en «Ver» (`mode: 'view'`, solo lectura)? Lo declara con una propiedad estática
+ * `supportsView = true` en su componente. Opt-in a propósito: un widget hecho solo para capturar (crear/editar) no debe
+ * recibir `view` ni salir del panel genérico de relaciones donde hoy se ve el detalle.
+ */
+export function relationWidgetSupportsView(component: unknown): boolean {
+    return !!component && (component as { supportsView?: unknown }).supportsView === true
+}
 
 const registry = createWidgetRegistry<RelationWidgetComponent>()
 

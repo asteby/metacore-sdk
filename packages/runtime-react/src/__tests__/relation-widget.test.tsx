@@ -16,6 +16,7 @@ import {
     getRelationWidget,
     listRelationWidgets,
     registerRelationWidget,
+    relationWidgetSupportsView,
     type RelationWidgetProps,
 } from '../relation-widget-registry'
 import { clearFieldWidgets, getFieldWidget, registerFieldWidget } from '../field-widget-registry'
@@ -487,5 +488,84 @@ describe('useActiveMarket', () => {
         expect(normalizeMarketCode('')).toBeNull()
         expect(normalizeMarketCode(undefined)).toBeNull()
         expect(normalizeMarketCode(5)).toBeNull()
+    })
+})
+
+// ───────── ver: el widget que declara `supportsView` se pinta en solo lectura ─────────
+// El modal de detalle usaba siempre el panel genérico de relaciones, que solo lista renglones explícitos. Un widget que lo
+// pida (supportsView = true) recibe `mode: 'view'` y `recordId`, sin filas (lee lo suyo); los demás siguen en el panel.
+const embeddedPrices = { ...prices, embed: true }
+
+function ViewProbe(p: RelationWidgetProps) {
+    return (
+        <div
+            data-testid="vprobe"
+            data-mode={p.mode}
+            data-readonly={String(!!p.readOnly)}
+            data-record={String(p.recordId ?? '')}
+            data-market={p.context.market ?? ''}
+        >
+            <span data-testid="vrows">{p.rows.length}</span>
+            <span data-testid="vname">{String(p.values.name ?? '')}</span>
+        </div>
+    )
+}
+ViewProbe.supportsView = true
+
+function setupView(api: any) {
+    render(
+        <I18nextProvider i18n={makeI18n()}>
+            <ApiProvider client={api as never}>
+                <DynamicRecordDialog
+                    open
+                    onOpenChange={() => {}}
+                    mode="view"
+                    model="Product"
+                    recordId="p1"
+                    schema={parentSchema as never}
+                    initialRecord={{ id: 'p1', name: 'Whey' }}
+                />
+            </ApiProvider>
+        </I18nextProvider>,
+    )
+}
+
+describe('DynamicRecordDialog view — widget de relación en solo lectura', () => {
+    it('un widget con supportsView se pinta en modo view, solo lectura, con recordId y sin filas, y reemplaza al panel genérico', async () => {
+        registerRelationWidget('market-prices', ViewProbe)
+        const api = makeEditApi({ relations: [embeddedPrices] })
+        setupView(api)
+        const probe = await screen.findByTestId('vprobe')
+        expect(probe.dataset.mode).toBe('view')
+        expect(probe.dataset.readonly).toBe('true')
+        expect(probe.dataset.record).toBe('p1')
+        expect(screen.getByTestId('vrows').textContent).toBe('0')
+        expect(screen.getByTestId('vname').textContent).toBe('Whey')
+        // el panel genérico no se montó: nadie pidió los renglones del modelo hijo
+        expect(api.get.mock.calls.some(([u]) => String(u) === '/data/PriceListItem')).toBe(false)
+    })
+
+    it('un widget SIN supportsView sigue en el panel genérico de relaciones, como antes', async () => {
+        registerRelationWidget('market-prices', EditProbe) // widget de captura: no declara supportsView
+        const api = makeEditApi({ relations: [embeddedPrices] })
+        setupView(api)
+        await waitFor(() => expect(api.get.mock.calls.some(([u]) => String(u) === '/data/PriceListItem')).toBe(true))
+        expect(screen.queryByTestId('eprobe')).toBeNull()
+        expect(screen.queryByTestId('vprobe')).toBeNull()
+    })
+
+    it('una relación sin embed no la pinta el widget (el gate de composición manda)', async () => {
+        registerRelationWidget('market-prices', ViewProbe)
+        setupView(makeEditApi({ relations: [prices] })) // `prices` no es embed
+        await new Promise((r) => setTimeout(r, 50))
+        expect(screen.queryByTestId('vprobe')).toBeNull()
+    })
+
+    it('relationWidgetSupportsView solo es true con la marca explícita', () => {
+        expect(relationWidgetSupportsView(ViewProbe)).toBe(true)
+        expect(relationWidgetSupportsView(EditProbe)).toBe(false)
+        expect(relationWidgetSupportsView(undefined)).toBe(false)
+        expect(relationWidgetSupportsView(null)).toBe(false)
+        expect(relationWidgetSupportsView({ supportsView: 'yes' })).toBe(false)
     })
 })
