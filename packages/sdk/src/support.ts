@@ -6,9 +6,10 @@
  * Nada de URLs ni de auth aqui: el host inyecta un `SupportTransport` (su fetch con
  * sesion) y, si quiere tiempo real, un `SupportEventSource`.
  */
-import type { SupportAttachment, SupportCallbackEvent } from "./generated/support-contract.js";
+import type { SupportAttachment, SupportCallbackEvent, SupportCaseView, SupportMessageView } from "./generated/support-contract.js";
 
 export * from "./generated/support-contract.js";
+export * from "./support-embed.js";
 
 // ---------------------------------------------------------------------------
 // Vista del caso (API de OPS `/api/support/cases`). No forma parte del contrato
@@ -31,38 +32,32 @@ export interface SupportAttachmentView extends Partial<SupportAttachment> {
   expired?: boolean;
 }
 
-export interface SupportMessage {
-  id: string;
+/**
+ * Mensaje del hilo. Sale de `MessageView` del contrato (generado): solo se angosta el
+ * `author_type` (el contrato tolera valores nuevos, la UI pinta los conocidos) y se anade el
+ * estado de envio, que es de cliente.
+ */
+export type SupportMessage = Omit<SupportMessageView, "author_type" | "attachments"> & {
   author_type: SupportAuthorType;
-  author_name?: string;
-  body: string;
-  /** RFC 3339. */
-  created_at: string;
   attachments?: SupportAttachmentView[];
   /** Solo en cliente: estado de envio de un mensaje optimista. */
   state?: "sending" | "failed";
-}
+};
 
 /** Si el Hub ya recibio el caso: en el outbox, aceptado o rechazado. */
 export type SupportHubState = "pending" | "synced" | "failed";
 
-export interface SupportCase {
-  folio: string;
-  subject: string;
-  description?: string;
+/**
+ * Caso con sus ultimos mensajes (50 por defecto, 200 maximo, cronologicos). Sale de `CaseView`
+ * del contrato (generado): `case_id` y `channel` (id publico) solo vienen del Hub; `hub_state`
+ * solo de una instancia. `messages_older_cursor` es el cursor `before` de `listMessages`.
+ */
+export type SupportCase = Omit<SupportCaseView, "status" | "severity" | "hub_state" | "messages"> & {
   status: SupportCaseStatus;
   severity?: string;
   hub_state?: SupportHubState;
-  /** Texto de la solucion cuando `status` es `resolved`. */
-  solution?: string;
-  opened_at?: string;
-  updated_at?: string;
-  resolved_at?: string;
-  /** Los ultimos mensajes (50 por defecto, 200 maximo), en orden cronologico. */
   messages: SupportMessage[];
-  /** Cursor `before` para pedir los mensajes anteriores (`listMessages`). Ausente si no hay mas. */
-  messages_older_cursor?: string;
-}
+};
 
 export interface SupportCaseSummary {
   folio: string;
@@ -99,44 +94,66 @@ export function isAttachmentExpired(a: Pick<SupportAttachmentView, "expired" | "
   return Number.isFinite(t) && t <= now;
 }
 
+/** Resultado de proyectar un evento sobre un hilo (espejo de `contract.ProjectEvent` del kernel). */
+export interface SupportEventProjection {
+  /** Mensaje que agrega el evento; ausente si no agrega ninguno. */
+  message?: SupportMessage;
+  /** Estado del caso que implica; ausente si lo deja igual. */
+  status?: SupportCaseStatus;
+  /** Falso para un evento que el contrato no describe (el receptor debe ignorarlo y aceptarlo). */
+  known: boolean;
+}
+
+/**
+ * Proyecta un evento del callback sobre el hilo con la misma semantica que `ProjectEvent` del
+ * kernel (support/contract/channels.go): ids, autores y estado implicado no se reinventan aqui.
+ */
+export function projectSupportEvent(ev: SupportCallbackEvent): SupportEventProjection {
+  const id = ev.message_id || ev.delivery_id;
+  const created_at = ev.timestamp ? new Date(ev.timestamp * 1000).toISOString() : new Date().toISOString();
+  const make = (author_type: SupportAuthorType, body: string): SupportMessage | undefined =>
+    !body && !ev.attachments?.length
+      ? undefined
+      : {
+          id,
+          author_type,
+          author_name: ev.author_name,
+          body,
+          created_at,
+          attachments: ev.attachments?.map((a, i) => ({ ...a, id: `${id}:${i}` })),
+        };
+  switch (ev.event) {
+    case "desk_message":
+      return { known: true, message: make("agent", ev.body ?? "") };
+    case "issue_commented":
+      return { known: true, message: make("agent", ev.body || ev.comment) };
+    case "ai_action":
+      return { known: true, message: make("ai", ev.body ?? "") };
+    case "desk_resolved":
+      return { known: true, status: "resolved", message: make("system", ev.solution || ev.body || "") };
+    case "issue_closed":
+      return { known: true, status: "closed", message: make("system", ev.solution || ev.comment) };
+    case "desk_reopened":
+      return { known: true, status: "open", message: make("system", ev.body ?? "") };
+    case "visitor_erased":
+      return { known: true };
+    default:
+      return { known: false };
+  }
+}
+
 /**
  * Aplica un evento del callback (`desk_message`, `ai_action`, `desk_resolved`...) a un caso.
  * Es puro e idempotente por `message_id`/`delivery_id`; los eventos desconocidos se ignoran
- * (el contrato exige tolerarlos).
+ * (el contrato exige tolerarlos). La semantica es la de `projectSupportEvent`.
  */
 export function applySupportEvent(current: SupportCase, ev: SupportCallbackEvent): SupportCase {
   if (ev.ticket_folio !== current.folio) return current;
-  const at = ev.timestamp ? new Date(ev.timestamp * 1000).toISOString() : new Date().toISOString();
-  const push = (author_type: SupportAuthorType, body: string): SupportCase => {
-    const id = ev.message_id || ev.delivery_id;
-    if (!body && !ev.attachments?.length) return current;
-    if (current.messages.some((m) => m.id === id)) return current;
-    const message: SupportMessage = {
-      id,
-      author_type,
-      author_name: ev.author_name,
-      body,
-      created_at: at,
-      attachments: ev.attachments?.map((a, i) => ({ ...a, id: `${id}:${i}` })),
-    };
-    return { ...current, messages: [...current.messages, message] };
-  };
-  switch (ev.event) {
-    case "desk_message":
-      return push("agent", ev.body ?? "");
-    case "issue_commented":
-      return push("agent", ev.comment);
-    case "ai_action":
-      return push("ai", ev.body ?? "");
-    case "desk_resolved":
-      return { ...current, status: "resolved", solution: ev.solution || current.solution };
-    case "issue_closed":
-      return { ...current, status: "closed", solution: ev.solution || current.solution };
-    case "desk_reopened":
-      return { ...current, status: "open" };
-    default:
-      return current;
-  }
+  const { message, status } = projectSupportEvent(ev);
+  let next = current;
+  if (message && !current.messages.some((m) => m.id === message.id)) next = { ...next, messages: [...next.messages, message] };
+  if (status) next = { ...next, status, solution: ev.solution || next.solution };
+  return next;
 }
 
 // ---------------------------------------------------------------------------
@@ -185,6 +202,14 @@ export type SupportErrorCode =
   | "too_many_attachments"
   | "invalid_attachment"
   | "case_resolved"
+  | "already_resolved"
+  | "origin_not_allowed"
+  | "channel_inactive"
+  | "session_expired"
+  | "identity_invalid"
+  | "captcha_required"
+  | "channel_quota_exceeded"
+  | "channel_ai_cap_reached"
   | "case_closed"
   | "case_not_resolved"
   | "internal";
