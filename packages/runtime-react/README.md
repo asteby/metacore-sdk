@@ -247,6 +247,13 @@ const { activeBranch } = useActiveBranch()
 3. Diferencia deliberada: un secreto nunca se rellena desde `GET /integrations/:p/values`,
    aunque el backend lo devolviera.
 
+## Selectores y sucursal activa
+
+El kernel acota las opciones de toda relación a la **sucursal activa** (cabecera `X-Branch-ID`) y a su mercado; con «todas las sucursales» no acota nada. Del lado del cliente hay dos reglas, en un solo lugar (`branch-scope.ts`) y para todos los selectores (`DynamicSelectField`, el `select` con `ref` de `DynamicForm`, los modales de acción):
+
+- **Cambiar la sucursal con el formulario abierto vuelve a pedir las opciones.** `useOptionsResolver` y `useResolveOptionIds` leen la sucursal activa (`BranchProvider` o, sin proveedor, `active_branch_id` de la sesión) y la ponen en sus dependencias y en su clave de caché; antes el selector seguía listando las filas de la sucursal anterior hasta cerrar el formulario. Un valor que el operador había elegido y que deja de ser visible bajo la sucursal nueva se verifica por id, se quita y se avisa (`runtime.branch_scope.cleared`); nunca se pisa en silencio.
+- **Preselección de la única opción.** Si un campo relación **requerido**, vacío y que el operador no ha tocado tiene exactamente una opción (ya acotada a la sucursal activa) y el servidor no dice que hay más, se selecciona solo; el operador puede cambiarla. No se aplica a un registro existente (el formulario trae `id`), a campos no requeridos, a listas filtradas por búsqueda ni a campos con `autoSelectSole: false` en el manifest (o `autoSelectSole={false}` en `DynamicSelectField`). Al cambiar de sucursal, lo que el propio mecanismo puso se reevalúa: pasa a la nueva única opción o se limpia. Piezas reutilizables: `useActiveBranchSignature()`, `useSoleOptionPreselect()`, `soleOptionToPreselect()` y `reconcileAutoSelection()` (puras y probadas).
+
 ## Minimal usage
 
 ```tsx

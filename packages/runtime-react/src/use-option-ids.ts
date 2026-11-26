@@ -21,6 +21,7 @@
 import { useContext, useMemo } from 'react'
 import { QueryClient, QueryClientContext, useQueries } from '@tanstack/react-query'
 import { useApi, type ApiClient } from './api-context'
+import { useActiveBranchSignature } from './branch-scope'
 import { onOptionsCacheInvalidated, optionsScope, projectOption, type ResolvedOption } from './use-options-resolver'
 
 export type OptionIdResolution =
@@ -137,6 +138,8 @@ export function useResolveOptionIds(args: UseResolveOptionIdsArgs): UseResolveOp
 
     const url = endpoint || (ref ? `/options/${ref}` : '')
     const effectiveField = field || (ref ? 'id' : '')
+    // Re-render on a branch switch so the key below (which carries the branch) is recomputed.
+    useActiveBranchSignature()
     const scope = optionsScope()
     const list = useMemo(() => [...new Set(ids.map(String).filter((id) => id !== ''))], [ids.map(String).join('\u0001')])
     const active = enabled && !!url && !!effectiveField && list.length > 0
