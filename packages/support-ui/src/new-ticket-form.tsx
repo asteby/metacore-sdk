@@ -92,16 +92,18 @@ export function SupportNewTicketForm({ onSubmit, openTicket, onContinue, onCance
           {t('embed.errorBody')}
         </p>
       ) : null}
-      <div className="flex flex-wrap gap-2">
-        <Button type="submit" disabled={busy || !body.trim() || asking}>
-          {busy ? t('embed.starting2') : t('newTicket.submit')}
-        </Button>
-        {onCancel ? (
-          <Button type="button" variant="ghost" onClick={onCancel}>
-            {t('duplicate.cancel')}
+      {asking ? null : (
+        <div className="flex flex-wrap gap-2">
+          <Button type="submit" disabled={busy || !body.trim()}>
+            {busy ? t('embed.starting2') : t('newTicket.submit')}
           </Button>
-        ) : null}
-      </div>
+          {onCancel ? (
+            <Button type="button" variant="ghost" onClick={onCancel}>
+              {t('duplicate.cancel')}
+            </Button>
+          ) : null}
+        </div>
+      )}
     </form>
   )
 }

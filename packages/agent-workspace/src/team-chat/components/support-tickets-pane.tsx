@@ -48,13 +48,12 @@ export function useSupportCardActions(onDone: (action: SupportCardAction['id']) 
 /** The lifecycle card of a thread message (system card, never a bubble); null if the message is not one. */
 export function SupportEventMessage({
   message,
-  latest,
   onAction,
   busy,
 }: {
   message: TeamChatMessage
-  /** Only the newest card of a ticket keeps its actions (older ones are history). */
-  latest: boolean
+  /** Kept for callers; every card now carries only «Ver ticket» (the footer owns Reopen / Finish). */
+  latest?: boolean
   onAction: (a: SupportCardAction) => void | Promise<void>
   busy: string | null
 }) {
@@ -71,7 +70,8 @@ export function SupportEventMessage({
         solution={ev.solution}
         state={ev.state}
         at={ev.at ?? message.created_at}
-        actions={latest ? ev.actions : ev.actions.filter((a) => a.id === 'view')}
+        // Reabrir / Finalizar viven solo en el pie «¿Se resolvió?»; la tarjeta es historial y solo lleva «Ver ticket».
+        actions={ev.actions.filter((a) => a.id === 'view')}
         onAction={onAction}
         busy={busy}
       />

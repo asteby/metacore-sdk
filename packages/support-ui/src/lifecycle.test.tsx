@@ -81,7 +81,7 @@ describe('shared support components', () => {
       />,
     )
     expect(screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent?.replace(/\d+$/, ''))).toEqual(['Waiting for your reply', 'Open', 'Resolved', 'Finished'])
-    expect(screen.getByLabelText('3 unread')).toBeTruthy()
+    expect(screen.getAllByText('3 unread').length).toBeGreaterThan(0)
     fireEvent.click(screen.getByText('Show more finished'))
     expect(onLoadMore).toHaveBeenCalledWith('closed')
     fireEvent.click(screen.getByTestId('new-ticket'))

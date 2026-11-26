@@ -57,23 +57,23 @@ export function SupportEventCard({ event, folio, subject, solution, state, at, a
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
               <p className="text-sm font-semibold">
-                {title} <span className="font-mono text-xs font-medium text-muted-foreground">{folio}</span>
+                {title} <span className="font-mono text-xs font-medium text-foreground/70">{folio}</span>
               </p>
-              {state ? <SupportStatusBadge state={state} /> : null}
+              <SupportStatusBadge state={eventState} />
             </div>
             {subject ? <p className="break-words text-sm">{subject}</p> : null}
             {solution ? (
-              <div className="rounded-md bg-background/70 px-2 py-1.5 text-xs">
+              <div className="rounded-md bg-background/70 px-2 py-1.5 text-sm">
                 <span className="font-medium">{t('card.solution')}</span>
-                <p className="mt-0.5 whitespace-pre-wrap break-words text-muted-foreground">{solution}</p>
+                <p className="mt-0.5 whitespace-pre-wrap break-words text-foreground/75">{solution}</p>
               </div>
             ) : (
-              <p className="text-xs text-muted-foreground">{t(`event.${event}Hint`)}</p>
+              <p className="text-sm text-foreground/75">{t(`event.${event}Hint`)}</p>
             )}
             <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
               {actions?.length ? <SupportActionBar actions={actions} onAction={onAction} busy={busy} /> : <span />}
               {time ? (
-                <time dateTime={at} className="text-[11px] text-muted-foreground">
+                <time dateTime={at} className="text-xs text-foreground/70">
                   {time}
                 </time>
               ) : null}

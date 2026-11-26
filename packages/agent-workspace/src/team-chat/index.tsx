@@ -58,7 +58,6 @@ import {
   SupportTicketsLanding,
   isSupportEventMessage,
   latestEventActions,
-  latestEventId,
   useSupportCardActions,
 } from './components/support-tickets-pane'
 import { useSupportTickets } from './hooks/use-support-tickets'
@@ -628,7 +627,6 @@ export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
   const isChannel = activeChannel && activeChannel.kind !== 'dm'
 
   // Lifecycle cards: only the newest keeps its actions; a resolved / finished ticket swaps the composer for its prompt.
-  const latestEvtId = useMemo(() => latestEventId(messages), [messages])
   const cardActions = useSupportCardActions(
     useCallback(() => {
       void ticketsRef.current.refresh()
@@ -952,7 +950,7 @@ export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
                       ) : (
                         Object.keys(groupedMessages).map((day) => (
                           <Fragment key={day}>
-                            <div className='sticky top-2 z-20 flex justify-center py-2'>
+                            <div className={cn('flex justify-center py-2', tickets.enabled ? 'relative' : 'sticky top-2 z-20')}>
                               <span className='bg-secondary/80 text-secondary-foreground rounded-full px-3 py-1 text-xs font-medium shadow-xs backdrop-blur-md'>
                                 {day}
                               </span>
@@ -967,7 +965,6 @@ export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
                                   <SupportEventMessage
                                     key={m.id}
                                     message={m}
-                                    latest={m.id === latestEvtId}
                                     onAction={cardActions.run}
                                     busy={cardActions.busy}
                                   />

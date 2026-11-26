@@ -162,11 +162,14 @@ describe('Soporte contact with one thread per ticket', () => {
     expect(cards.map((c) => c.getAttribute('data-event'))).toEqual(['opened', 'resolved'])
     // Real messages stay bubbles.
     expect(screen.getByText('Me cobraron dos veces')).toBeTruthy()
-    // Only the newest card keeps Reabrir / Finalizar; the composer is replaced by the prompt.
-    expect(within(cards[0]).queryByRole('button', { name: 'Reabrir' })).toBeNull()
+    // Cards only carry «Ver ticket»; Reabrir / Finalizar live once, in the footer that replaces the composer.
+    for (const c of cards) expect(within(c).queryByRole('button', { name: 'Reabrir' })).toBeNull()
+    expect(within(cards[0]).getByText('Nuevo')).toBeTruthy()
+    expect(within(cards[1]).getByText('Resuelto')).toBeTruthy()
     expect(screen.queryByPlaceholderText('Escribe un mensaje…')).toBeNull()
     const prompt = screen.getByTestId('support-resolved-prompt')
     expect(within(prompt).getByText('¿Se resolvió?')).toBeTruthy()
+    expect(prompt.textContent).toContain('OPS-BBB')
     expect(within(prompt).getByRole('button', { name: 'Abrir otro ticket' })).toBeTruthy()
     await act(async () => {
       fireEvent.click(within(prompt).getByRole('button', { name: 'Reabrir' }))

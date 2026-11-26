@@ -41,7 +41,6 @@ import {
   SupportTicketsLanding,
   isSupportEventMessage,
   latestEventActions,
-  latestEventId,
   useSupportCardActions,
 } from '../team-chat/components/support-tickets-pane'
 import { useSupportTickets } from '../team-chat/hooks/use-support-tickets'
@@ -438,7 +437,6 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
 
   const activeTeamChannel = teamChannels.find((c) => c.id === teamChannelId) ?? null
   // Lifecycle cards: only the newest keeps its actions; a resolved / finished ticket swaps the composer for its prompt.
-  const latestEvtId = latestEventId(teamMessages)
   const cardActions = useSupportCardActions(
     useCallback(() => {
       void ticketsRef.current.refresh()
@@ -922,7 +920,6 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
                         <SupportEventMessage
                           key={m.id}
                           message={m}
-                          latest={m.id === latestEvtId}
                           onAction={cardActions.run}
                           busy={cardActions.busy}
                         />

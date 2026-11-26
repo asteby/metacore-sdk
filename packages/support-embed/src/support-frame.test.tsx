@@ -152,6 +152,8 @@ describe('SupportFrame', () => {
     renderFrame(embed, port, { allowReopen: true })
     fireEvent.click(await screen.findByText('Donde esta mi pedido'))
     expect(await screen.findByText('¿Se resolvió?')).toBeTruthy()
+    // El texto nombra el folio real, no el id interno del caso (c-1).
+    expect(screen.getByTestId('support-resolved-prompt').textContent).toContain('TIENDA-000007')
     expect(screen.getByRole('button', { name: 'Reabrir' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Abrir otro ticket' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Finalizar' })).toBeNull()

@@ -236,7 +236,7 @@ export function SupportThread({
     const resolved = caseStatus === 'resolved'
     footer = (
       <SupportResolvedPrompt
-        folio={folio}
+        folio={supportCase?.folio ?? folio}
         state={resolved ? 'resolved' : 'closed'}
         solution={supportCase?.solution}
         onReopen={resolved && canReopen ? handleReopen : undefined}

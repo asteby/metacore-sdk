@@ -71,8 +71,8 @@ export function SupportTicketList({ tickets, groups, activeId, loading, error, o
         <h2 className="text-sm font-semibold">
           {t('tickets.title')}
           {total > 0 ? (
-            <Badge variant="info" className="ms-2" aria-label={t('tickets.unreadTotal', { count: String(total) })}>
-              {total}
+            <Badge variant="info" className="ms-2">
+              {t('tickets.unread', { count: String(total) })}
             </Badge>
           ) : null}
         </h2>
@@ -135,11 +135,11 @@ export function SupportTicketList({ tickets, groups, activeId, loading, error, o
                             </span>
                             <span className="flex items-center gap-2">
                               <span className="font-mono text-[11px] text-muted-foreground">{tk.folio}</span>
-                              <SupportStatusBadge state={tk.state} hideHint className="h-5 px-1.5 text-[11px]" />
+                              {g === 'open' ? <SupportStatusBadge state={tk.state} hideHint className="h-5 px-1.5 text-[11px]" /> : null}
                             </span>
                             <span className="flex items-center justify-between gap-2">
                               <span className="line-clamp-1 text-xs text-muted-foreground">
-                                {tk.lastMessage ? `${tk.lastMessage.fromMe ? t('tickets.you') : ''}${tk.lastMessage.body}` : t('tickets.noMessages')}
+                                {tk.lastMessage ? `${tk.lastMessage.fromMe ? t('tickets.you') : ''}${tk.lastMessage.body}` : ''}
                               </span>
                               {unread > 0 ? (
                                 <Badge variant="info" className="h-5 min-w-5 px-1.5" aria-label={t('tickets.unread', { count: String(unread) })}>
