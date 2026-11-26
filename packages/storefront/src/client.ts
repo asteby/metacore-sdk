@@ -210,6 +210,13 @@ export type RequestOptions = {
   clientIp?: string | null
   /** Review grant of a guest buyer (`reviews.grant`), sent as `X-Review-Grant`. */
   reviewGrant?: string | null
+  /**
+   * Language of the CONTENT for this call (`es`, `en`; a region like `es-US` is reduced to `es`). Overrides the client-level
+   * `locale`. Sent as `X-Storefront-Locale` and `Accept-Language`, and on reads (`GET`) also as an explicit `?locale=` so
+   * a cache keyed by URL (CDN, gateway) keeps one entry per language. Without it nothing changes: the client-level
+   * `locale` still goes out only as `Accept-Language`. An invalid value is ignored.
+   */
+  locale?: Locale
   [key: string]: unknown
 }
 
@@ -240,7 +247,23 @@ type RequestSpec = {
   noRedirect?: boolean
 }
 
-const OWN_OPTION_KEYS = new Set(['headers', 'timeoutMs', 'customerToken', 'clientIp', 'reviewGrant', 'idempotencyKey', 'preview', 'signal'])
+const OWN_OPTION_KEYS = new Set(['headers', 'timeoutMs', 'customerToken', 'clientIp', 'reviewGrant', 'idempotencyKey', 'preview', 'signal', 'locale'])
+
+/** Header carrying the per-call content language (see `RequestOptions.locale`). */
+export const LOCALE_HEADER = 'X-Storefront-Locale'
+
+/** A content language: ISO 639-1/2 code in lower case (`es`, `en`). */
+export type Locale = string
+
+/**
+ * Reduces a BCP 47 tag (or an `Accept-Language` entry) to its language: `es-US` / `ES_mx` → `es`. `undefined` for anything that
+ * is not a 2-3 letter language (empty, `*`, numbers, non-strings), so a bad value never reaches the wire.
+ */
+export function normalizeLocale(raw: unknown): Locale | undefined {
+  if (typeof raw !== 'string') return undefined
+  const lang = raw.trim().toLowerCase().split(/[-_]/)[0] ?? ''
+  return /^[a-z]{2,3}$/.test(lang) ? lang : undefined
+}
 
 /** Header the gateway reads (only for tokens with `trust_client_ip`). */
 export const CLIENT_IP_HEADER = 'X-Storefront-Client-IP'
@@ -362,7 +385,13 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
     if (!fetchImpl) throw new TypeError('createStorefrontClient: no fetch available; pass `fetch` in options')
 
     const options: WriteOptions = spec.options ?? {}
-    const search = spec.query instanceof URLSearchParams ? spec.query : appendParams(new URLSearchParams(), spec.query)
+    const callLocale = normalizeLocale(options.locale)
+    let search = spec.query instanceof URLSearchParams ? spec.query : appendParams(new URLSearchParams(), spec.query)
+    // Reads carry the language in the URL too (cache key); never mutate the caller's params, and never override a `locale` the route already uses.
+    if (callLocale && spec.method === 'GET' && !search.has('locale')) {
+      search = new URLSearchParams(search)
+      search.set('locale', callLocale)
+    }
     const qs = search.toString()
     const url = joinUrl(config.baseUrl, spec.path) + (qs ? `?${qs}` : '')
 
@@ -371,6 +400,10 @@ export function createStorefrontClient(config: StorefrontClientOptions) {
     const token = currentToken()
     headers.set('Authorization', `Bearer ${token}`)
     if (config.locale) headers.set('Accept-Language', config.locale)
+    if (callLocale) {
+      headers.set('Accept-Language', callLocale)
+      headers.set(LOCALE_HEADER, callLocale)
+    }
     if (config.domain) headers.set('X-Storefront-Domain', storefrontDomainHeader(config.domain, config.market))
     const customerToken = options.customerToken !== undefined ? options.customerToken : config.customerToken
     if (customerToken) headers.set('X-Customer-Token', customerToken)

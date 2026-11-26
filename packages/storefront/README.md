@@ -152,6 +152,7 @@ Mock behaviour:
   `401` for wrong credentials/codes, `429` after `maxLoginAttempts` (5) failed
   logins, `403` when `password` is disabled. The seed customer has no password
   until `setPassword` (or `resetPassword` with the OTP code).
+- Translated content: `createMockStorefront({ translations: { products: { 'playera-basica': { en: { title, description, description_html, seo_title, seo_description } } }, collections: { ropa: { en: { title } } } } })` lets a store rehearse a second language without OPS. The language is resolved like the server (`?locale=` → `X-Storefront-Locale` → `Accept-Language` → the shop's default), each field falls back to the original when it is not translated, the shop's own language is never translated, `Content-Language` carries the language served, `Vary` adds `Accept-Language, X-Storefront-Locale`, and the translated languages join `shop.locales`. Without the option the mock is unchanged.
 - Market (contract 1.22.0): `createMockStorefront({ market: { code: 'us',
   currency_code: 'USD', locale: 'en-US', prices_include_tax: false, pricing:
   'strict' } })` serves `shop.market`, prices and carts in that currency,
@@ -595,7 +596,7 @@ Errors: a `403 insufficient_scope` is a `StorefrontError` with `code: 'insuffici
 | `customerToken?` | Buyer session → `X-Customer-Token` |
 | `clientIp?` | Shopper IP for server-side calls → `X-Storefront-Client-IP` (see below) |
 | `fetch?` | Custom fetch (default `globalThis.fetch`) |
-| `locale?` | `Accept-Language` |
+| `locale?` | `Accept-Language` (default for every call; see **Content language** for the per-call `locale`) |
 | `domain?` | Public host of the storefront → `X-Storefront-Domain` (see below) |
 | `market?` | Market code (`mx`, `us`) → `X-Storefront-Domain: <domain>#<market>`; ignored without `domain` |
 | `headers?` | Extra headers on every request |
@@ -608,9 +609,11 @@ Resources: `shop.get`, `region`, `products.list/get/recommendations`, `catalog.t
 `carts.create/get/addLines/updateLines/removeLines/setDiscountCodes/setBuyer/setShippingAddress/deliveryOptions/setDelivery/setInvoice/checkout`,
 `customer.requestOtp/createSession/capabilities/register/verifyRegistration/loginWithPassword/setPassword/resetPassword/get/update/orders/order/requestReturn/requestInvoice/pendingPayments/invoiceFile/addresses.{list,create,update,delete}`,
 `content.theme/page/menu/articles/article`. Every method takes a last
-`options` argument: `{ cache, signal, next, headers, timeoutMs, customerToken, clientIp }`
+`options` argument: `{ cache, signal, next, headers, timeoutMs, customerToken, clientIp, locale }`
 (plus `idempotencyKey` on writes and `preview` on pages/articles); unknown keys
 are forwarded to `fetch`.
+
+**Content language (per call).** `{ locale: 'es' }` asks for the CONTENT of that call (product and collection texts, SEO) in that language: the client sends `X-Storefront-Locale` and `Accept-Language` and, on reads, an explicit `?locale=es` so a URL-keyed cache (CDN, gateway) keeps one entry per language. A region is reduced to its language (`es-US` → `es`; `normalizeLocale(tag)` is exported) and an invalid value is ignored. It overrides the client-level `locale` for that call only; without it nothing changes (the client-level `locale` still goes out only as `Accept-Language`). A store with a language in its route passes it on every read: `sf.products.get(handle, { locale: lang })`. The server resolves `?locale=` → `X-Storefront-Locale` → `Accept-Language` → the market's default language, falls back FIELD BY FIELD to the original text, and answers `Content-Language` with the language served; `shop.locales` lists the languages the shop offers.
 
 **Shopper IP (SSR).** A server that renders for many shoppers with one `sk_`/`pt_`
 token shares a single rate-limit bucket, and the OTP limiter would see only the

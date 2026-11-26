@@ -50,6 +50,7 @@ import type {
   Theme,
 } from '../types.js'
 import { isCustomerType } from '../customer-type.js'
+import { langOf, localesWithTranslations, localizeCollection, localizeProduct, resolveContentLocale, translationLanguages, type MockTranslations } from './i18n.js'
 import { nextAction, orderProgress, orderShipments, shipmentsStatus, sortTrackingEvents, isTestShipment } from '../order-progress.js'
 import { isValidPoint, rankByDistance } from '../geo.js'
 import { resolveAvailability } from '../availability.js'
@@ -76,6 +77,7 @@ import {
 
 export { MOCK_CURRENCY, MOCK_CUSTOMER_EMAIL, MOCK_IMAGE_URL, MOCK_POSTAL_CENTROIDS } from './seed.js'
 export { MOCK_SUBJECT_KINDS } from './subjects.js'
+export type { MockTranslatedFields, MockTranslationTable, MockTranslations } from './i18n.js'
 export type { MockReviewOptions, MockReviewSeed } from './reviews.js'
 export { MOCK_CUSTOMER_TYPES } from './customer-types.js'
 export { MOCK_CSF_RULES, MOCK_FISCAL_ID_MX, MOCK_IDENTITY_DOCUMENT_MX_CSF, MOCK_REGION_MX } from './region.js'
@@ -137,6 +139,14 @@ export type MockStorefrontOptions = {
   lowStockThreshold?: number
   /** Artificial latency per request, in ms (default 0). */
   latencyMs?: number
+  /**
+   * Translated content per `handle` and language (`{ products: { 'god-s-protein': { es: { title, description_html } } } }`) so a store can rehearse
+   * `/es` without a real OPS. The mock resolves the language like the server (`?locale=` → `X-Storefront-Locale` → `Accept-Language` → the shop's
+   * default), falls back FIELD BY FIELD to the original text, answers `Content-Language` with the language served and adds
+   * `Accept-Language, X-Storefront-Locale` to `Vary`. Languages with a translation are added to `shop.locales`. Without it the
+   * mock behaves exactly as before.
+   */
+  translations?: MockTranslations
   /** Override seed data. */
   shop?: Partial<Shop>
   products?: Product[]
@@ -365,13 +375,19 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
   const flatShippingCents = Math.round((options.flatShipping ?? 149) * 100)
   const enforceScopes = options.enforceScopes ?? true
 
+  const translations = options.translations
+  function seedShop(): Shop {
+    const shop: Shop = {
+      ...buildShop(currency, imageUrl),
+      ...(market ? { currency_code: market.currency_code, locale: market.locale, market: { ...market } } : {}),
+      ...options.shop,
+    }
+    return translations ? { ...shop, locales: localesWithTranslations(shop.locales, translationLanguages(translations)) } : shop
+  }
+
   function seed(): MockState {
     return {
-      shop: {
-        ...buildShop(currency, imageUrl),
-        ...(market ? { currency_code: market.currency_code, locale: market.locale, market: { ...market } } : {}),
-        ...options.shop,
-      },
+      shop: seedShop(),
       products: structuredClone(options.products ?? buildProducts(currency, imageUrl)),
       collections: structuredClone(options.collections ?? buildCollections(imageUrl)),
       memberships: structuredClone(options.memberships ?? buildMemberships()),
@@ -918,7 +934,18 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
     const hits = pool.filter((p) => fold(p.label).includes(fold(q)) && (!country || p.country === country) && (!zip || !p.zip || p.zip === zip))
     return { body: { suggestions: hits.slice(0, limit), available: true }, cache: 'private' }
   })
-  route('GET', '/products', 'catalog:read', ({ search }) => ({ body: listProducts(search), cache: 'public' }))
+  // Content language (only with the `translations` option): the one the server would resolve, and the original text per field when missing.
+  const defaultLang = () => langOf(state.shop.locale) ?? 'es'
+  const contentLangs = () => [...new Set([defaultLang(), ...state.shop.locales.map((l) => langOf(l)).filter((l): l is string => !!l)])]
+  const servedLang = (search: URLSearchParams, headers: Headers) => resolveContentLocale({ search, headers, available: contentLangs(), fallback: defaultLang() })
+  const langHeaders = (lang: string): Record<string, string> | undefined => (translations ? { 'Content-Language': lang } : undefined)
+  const localizedProduct = (p: Product, lang: string) => (translations ? localizeProduct(p, lang, defaultLang(), translations.products) : p)
+  const localizedCollection = (c: Collection, lang: string) => (translations ? localizeCollection(c, lang, defaultLang(), translations.collections) : c)
+  route('GET', '/products', 'catalog:read', ({ search, headers }) => {
+    const lang = servedLang(search, headers)
+    const list = listProducts(search)
+    return { body: translations ? { ...list, nodes: list.nodes.map((p) => localizedProduct(p, lang)) } : list, cache: 'public', headers: langHeaders(lang) }
+  })
   route('GET', '/tag-facets', 'catalog:read', ({ search }) => {
     try {
       const query = parseTagFacetsQuery(search, options.facetPrefixes)
@@ -928,23 +955,29 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       throw err
     }
   })
-  route('GET', '/products/:handle', 'catalog:read', ({ params }) => ({
-    body: requireNode(state.products.find((p) => p.handle === params[0]), `Product ${params[0]}`),
-    cache: 'public',
-  }))
-  route('GET', '/products/:handle/recommendations', 'catalog:read', ({ params }) => {
+  route('GET', '/products/:handle', 'catalog:read', ({ params, search, headers }) => {
+    const lang = servedLang(search, headers)
+    return { body: localizedProduct(requireNode(state.products.find((p) => p.handle === params[0]), `Product ${params[0]}`), lang), cache: 'public', headers: langHeaders(lang) }
+  })
+  route('GET', '/products/:handle/recommendations', 'catalog:read', ({ params, search, headers }) => {
+    const lang = servedLang(search, headers)
     const product = requireNode(state.products.find((p) => p.handle === params[0]), `Product ${params[0]}`)
     const cols = state.memberships[product.handle] ?? []
     const nodes = state.products
       .filter((p) => p.id !== product.id && p.available_for_sale && (state.memberships[p.handle] ?? []).some((c) => cols.includes(c)))
       .slice(0, 4)
-    return { body: { nodes }, cache: 'public' }
+      .map((p) => localizedProduct(p, lang))
+    return { body: { nodes }, cache: 'public', headers: langHeaders(lang) }
   })
-  route('GET', '/collections', 'catalog:read', ({ search }) => ({ body: paginate(state.collections, search), cache: 'public' }))
-  route('GET', '/collections/:handle', 'catalog:read', ({ params }) => ({
-    body: requireNode(state.collections.find((c) => c.handle === params[0]), `Collection ${params[0]}`),
-    cache: 'public',
-  }))
+  route('GET', '/collections', 'catalog:read', ({ search, headers }) => {
+    const lang = servedLang(search, headers)
+    const page = paginate(state.collections, search)
+    return { body: translations ? { ...page, nodes: page.nodes.map((c) => localizedCollection(c, lang)) } : page, cache: 'public', headers: langHeaders(lang) }
+  })
+  route('GET', '/collections/:handle', 'catalog:read', ({ params, search, headers }) => {
+    const lang = servedLang(search, headers)
+    return { body: localizedCollection(requireNode(state.collections.find((c) => c.handle === params[0]), `Collection ${params[0]}`), lang), cache: 'public', headers: langHeaders(lang) }
+  })
   // Locations. `nearest` must be registered before `:id`. Like the real API it rounds the point to 0.01° and keeps nothing.
   const visibleLocations = () => state.shop.branches as Location[]
   const round2 = (n: number) => Math.round(n * 100) / 100
@@ -2360,6 +2393,9 @@ export function createMockStorefront(options: MockStorefrontOptions = {}) {
       if (method === 'GET' && result.cache === 'public' && r.scope === 'catalog:read' && state.shop.market) {
         headers.Vary = 'X-Storefront-Domain'
         headers['X-Storefront-Market'] = state.shop.market.code
+      }
+      if (translations && method === 'GET' && result.cache === 'public' && r.scope === 'catalog:read') {
+        headers.Vary = [headers.Vary, 'Accept-Language', 'X-Storefront-Locale'].filter(Boolean).join(', ')
       }
       if (method === 'GET' && result.cache === 'public' && status === 200) {
         const etag = `W/"${fnv1a(JSON.stringify(result.body))}"`
