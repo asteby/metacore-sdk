@@ -150,7 +150,7 @@ importers:
         version: 4.6.7
       zustand:
         specifier: ^5.0.0
-        version: 5.0.15(@types/react@19.3.0)(immer@11.1.21)(react@19.3.1)(use-sync-external-store@1.6.0(react@19.3.1))
+        version: 5.1.0(@types/react@19.3.0)(immer@11.1.21)(react@19.3.1)(use-sync-external-store@1.6.0(react@19.3.1))
     devDependencies:
       '@originjs/vite-plugin-federation':
         specifier: ^1.4.1
@@ -335,7 +335,7 @@ importers:
         version: 4.1.12(@types/node@22.20.5)(happy-dom@20.14.6)(vite@8.3.8(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))
       zustand:
         specifier: ^5.0.0
-        version: 5.0.15(@types/react@19.3.0)(immer@11.1.21)(react@19.3.1)(use-sync-external-store@1.6.0(react@19.3.1))
+        version: 5.1.0(@types/react@19.3.0)(immer@11.1.21)(react@19.3.1)(use-sync-external-store@1.6.0(react@19.3.1))
 
   packages/ai-chat:
     dependencies:
@@ -476,7 +476,7 @@ importers:
         version: 4.1.12(@types/node@22.20.5)(happy-dom@20.14.6)(vite@8.3.8(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))
       zustand:
         specifier: ^5.0.0
-        version: 5.0.15(@types/react@19.3.0)(immer@11.1.21)(react@19.3.1)(use-sync-external-store@1.6.0(react@19.3.1))
+        version: 5.1.0(@types/react@19.3.0)(immer@11.1.21)(react@19.3.1)(use-sync-external-store@1.6.0(react@19.3.1))
 
   packages/automations:
     dependencies:
@@ -1218,7 +1218,7 @@ importers:
         version: 4.1.12(@types/node@22.20.5)(happy-dom@20.14.6)(vite@8.3.8(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15))
       zustand:
         specifier: ^5.0.0
-        version: 5.0.15(@types/react@19.3.0)(immer@11.1.21)(react@19.3.1)(use-sync-external-store@1.6.0(react@19.3.1))
+        version: 5.1.0(@types/react@19.3.0)(immer@11.1.21)(react@19.3.1)(use-sync-external-store@1.6.0(react@19.3.1))
 
   packages/sdk:
     dependencies:
@@ -1481,7 +1481,7 @@ importers:
         version: 4.6.7
       zustand:
         specifier: ^5.0.12
-        version: 5.0.15(@types/react@19.3.0)(immer@11.1.21)(react@19.3.1)(use-sync-external-store@1.6.0(react@19.3.1))
+        version: 5.1.0(@types/react@19.3.0)(immer@11.1.21)(react@19.3.1)(use-sync-external-store@1.6.0(react@19.3.1))
 
   packages/starter-monaco:
     devDependencies:
@@ -1992,7 +1992,7 @@ importers:
         version: 4.6.7
       zustand:
         specifier: ^5.0.0
-        version: 5.0.15(@types/react@19.3.0)(immer@11.1.21)(react@19.3.1)(use-sync-external-store@1.6.0(react@19.3.1))
+        version: 5.1.0(@types/react@19.3.0)(immer@11.1.21)(react@19.3.1)(use-sync-external-store@1.6.0(react@19.3.1))
     devDependencies:
       '@tailwindcss/vite':
         specifier: ^4.2.0
@@ -8547,24 +8547,6 @@ packages:
 
   zod@4.6.7:
     resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
-
-  zustand@5.0.15:
-    resolution: {integrity: sha512-MpSEjRiBkA9crSYeOUH32rJC7SVqAbm0Fqcqge/bUi2PPoLcBWKOsG+C8mevmpr8TwXHBVkChbbJiyvkE+i/3A==}
-    engines: {node: '>=12.20.0'}
-    peerDependencies:
-      '@types/react': '>=18.0.0'
-      immer: '>=9.0.6'
-      react: '>=18.0.0'
-      use-sync-external-store: '>=1.2.0'
-    peerDependenciesMeta:
-      '@types/react':
-        optional: true
-      immer:
-        optional: true
-      react:
-        optional: true
-      use-sync-external-store:
-        optional: true
 
   zustand@5.1.0:
     resolution: {integrity: sha512-ciJZlP48M1PTQbVQq81CGVFxHTLpZNrFjKqwjtCU34AWuXTZT/jrF3p9+fI84Cf1eSCMLapxqBy/SNTfwOBuqA==}
@@ -15246,13 +15228,6 @@ snapshots:
   zod@4.4.3: {}
 
   zod@4.6.7: {}
-
-  zustand@5.0.15(@types/react@19.3.0)(immer@11.1.21)(react@19.3.1)(use-sync-external-store@1.6.0(react@19.3.1)):
-    optionalDependencies:
-      '@types/react': 19.3.0
-      immer: 11.1.21
-      react: 19.3.1
-      use-sync-external-store: 1.6.0(react@19.3.1)
 
   zustand@5.1.0(@types/react@19.3.0)(immer@11.1.21)(react@19.3.1)(use-sync-external-store@1.6.0(react@19.3.1)):
     optionalDependencies:
