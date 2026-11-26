@@ -219,7 +219,10 @@ export function stripeElementsAdapter(options: StripeAdapterOptions = {}): Payme
       })
       const card = client.options?.find((o) => o.key === 'card') as ({ link?: unknown } & Record<string, unknown>) | undefined
       const wallets = stripeWallets(options.wallets, card)
-      const defaults = opts.email ? { defaultValues: { billingDetails: { email: opts.email } } } : {}
+      // Only a well-formed ISO alpha-2 goes to Stripe (anything else would make `elements.create` throw and take the form down).
+      const country = opts.country && /^[A-Za-z]{2}$/.test(opts.country) ? opts.country.toUpperCase() : undefined
+      const billingDetails = { ...(opts.email ? { email: opts.email } : {}), ...(country ? { address: { country } } : {}) }
+      const defaults = Object.keys(billingDetails).length > 0 ? { defaultValues: { billingDetails } } : {}
       let element: StripeElement
       try {
         element = elements.create('payment', { layout: 'tabs', wallets, ...defaults })

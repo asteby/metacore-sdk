@@ -75,6 +75,8 @@ export type UseEmbeddedPaymentOptions = {
   /** Mount only while the card option is selected. Default true. */
   enabled?: boolean
   email?: string
+  /** ISO country (`US`) the card form opens with; see `PaymentFormMountOptions.country`. */
+  country?: string
   locale?: string
   /** Replaces the adapter chosen from `client.kind`. */
   adapter?: PaymentFormAdapter
@@ -530,6 +532,7 @@ export function useEmbeddedPayment(options: UseEmbeddedPaymentOptions): Embedded
             client,
             amount: live.current.amount,
             ...(live.current.email ? { email: live.current.email } : {}),
+            ...(live.current.country ? { country: live.current.country } : {}),
             ...(live.current.locale ? { locale: live.current.locale } : {}),
             theme,
             ...(colorScheme ? { colorScheme } : {}),
