@@ -1,5 +1,12 @@
 # @asteby/storefront-react
 
+## 0.73.1
+
+### Patch Changes
+
+- Updated dependencies [00b4539]
+  - @asteby/storefront@0.51.0
+
 ## 0.73.0
 
 ### Minor Changes
