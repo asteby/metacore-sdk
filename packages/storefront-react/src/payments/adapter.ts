@@ -26,6 +26,11 @@ export type PaymentFormMountOptions = {
   /** Total computed by the server. Only passed to the provider widget; never calculated here. */
   amount: Money
   email?: string
+  /**
+   * ISO 3166-1 alpha-2 country the form opens with (billing country). Without it Stripe picks one from the buyer's IP, so a
+   * US store showed "Mexico" to a buyer travelling or using a VPN. The shop passes the market's country; the buyer can still change it.
+   */
+  country?: string
   locale?: string
   /** Visual tokens read from CSS variables (see `readPaymentTheme`). */
   theme?: Record<string, string>

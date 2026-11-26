@@ -196,6 +196,20 @@ describe('stripeElementsAdapter.mount / collect / update / handleAction / unmoun
     await waitFor(() => expect(opts.onReady).toHaveBeenCalledTimes(1))
   })
 
+  it('el país del formulario arranca en el del mercado (sin él Stripe lo deduce de la IP y un comprador de EE. UU. veía «Mexico»)', async () => {
+    const f = fakeStripe()
+    await stripeElementsAdapter({ getSdk: () => f.factory }).mount(mountOpts({ country: 'us', email: 'a@b.us' }))
+    expect(f.elements.create.mock.calls[0]![1]).toMatchObject({ defaultValues: { billingDetails: { email: 'a@b.us', address: { country: 'US' } } } })
+  })
+
+  it('un país mal formado se ignora: no se manda a Stripe (haría fallar elements.create y se caería todo el formulario)', async () => {
+    for (const country of ['USA', 'U', '', '12', 'M X']) {
+      const f = fakeStripe()
+      await stripeElementsAdapter({ getSdk: () => f.factory }).mount(mountOpts({ country }))
+      expect(f.elements.create.mock.calls[0]![1]).not.toHaveProperty('defaultValues')
+    }
+  })
+
   it('por defecto ninguna billetera se ofrece, Link incluido ("Save my information" pide teléfono y bloquea el pago)', async () => {
     const f = fakeStripe()
     await stripeElementsAdapter({ getSdk: () => f.factory }).mount(mountOpts())
