@@ -33,6 +33,7 @@ import { BarcodeScanner } from './barcode-scanner'
 import { getOptionFilter } from './option-filter'
 import { getOptionFitment, resolveFitmentSubjectId } from './fitment/option-fitment'
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
+import { useActiveBranchSignature, useSoleOptionPreselect } from './branch-scope'
 import { DynamicLineItems } from './dynamic-line-items'
 import { DynamicSelectField } from './dynamic-select-field'
 import { SearchableSelectField } from './searchable-select-field'
@@ -508,6 +509,7 @@ function FieldRenderer({
                 value={value}
                 onChange={onChange}
                 seedOption={seedOption}
+                autoSelectSole={!isExistingRecord(initialValues)}
                 fitmentSubjectId={resolveFitmentSubjectId(getOptionFitment(field), values)}
             />
         )
@@ -541,7 +543,7 @@ function FieldRenderer({
     // the path the kernel auto-derives for FK columns; legacy callers
     // shipping inline `options` keep working in the branch below.
     if (widget === 'select' && field.ref) {
-        return <RefSelect field={field} value={value} onChange={onChange} values={values} />
+        return <RefSelect field={field} value={value} onChange={onChange} values={values} initialValues={initialValues} />
     }
     switch (widget) {
         case 'textarea':
@@ -696,8 +698,14 @@ export function guardEmptySelect(
     }
 }
 
-function RefSelect({ field, value, onChange, values }: FieldRendererProps) {
-    const { options, loading } = useOptionsResolver({
+/** A form that edits a saved record (has an id): its empty fields are the record's own state, not defaults to fill. */
+function isExistingRecord(initialValues?: Record<string, any>): boolean {
+    const id = initialValues?.id
+    return id !== undefined && id !== null && id !== ''
+}
+
+function RefSelect({ field, value, onChange, values, initialValues }: FieldRendererProps) {
+    const { options, meta, loading } = useOptionsResolver({
         modelKey: '',          // unused — `ref` drives the URL
         fieldKey: 'id',
         ref: field.ref,
@@ -706,10 +714,25 @@ function RefSelect({ field, value, onChange, values }: FieldRendererProps) {
         fitment: getOptionFitment(field),
         fitmentSubjectId: resolveFitmentSubjectId(getOptionFitment(field), values),
     })
+    // Required + empty + exactly one option (already narrowed to the active branch): preselect it.
+    const { markTouched } = useSoleOptionPreselect({
+        enabled: (field as { autoSelectSole?: boolean }).autoSelectSole !== false && !isExistingRecord(initialValues),
+        required: !!field.required,
+        value,
+        options,
+        meta,
+        loading,
+        searching: false,
+        onChange,
+        branch: useActiveBranchSignature(),
+    })
     return (
         <Select
             value={value || ''}
-            onValueChange={guardEmptySelect(value, onChange, options.map((o: ResolvedOption) => String(o.id)))}
+            onValueChange={(v: string) => {
+                markTouched()
+                guardEmptySelect(value, onChange, options.map((o: ResolvedOption) => String(o.id)))(v)
+            }}
             disabled={loading}
         >
             <SelectTrigger className="w-full">

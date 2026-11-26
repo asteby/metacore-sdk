@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useApi } from './api-context'
 import { cacheScope, onCacheScopeChange } from './cache-scope'
+import { useActiveBranchSignature } from './branch-scope'
 import { applyOptionFilter, type OptionFilterRule } from './option-filter'
 import { loadQueryPart, optionsBatchToken, optionsModelFromUrl } from './query-batch'
 import type { OptionDisplayData } from './option-display'
@@ -263,6 +264,10 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
     const ctxSig = contextKey(context)
 
     const api = useApi()
+    // Active branch: a picker that stays mounted across a branch switch must
+    // refetch (the kernel narrows the options to the active branch). The cache
+    // key already carries the branch; the effect needs it as a dependency too.
+    const branchSig = useActiveBranchSignature()
     const [options, setOptions] = useState<ResolvedOption[]>([])
     const [meta, setMeta] = useState<OptionsMeta | null>(null)
     const [loading, setLoading] = useState(false)
@@ -408,7 +413,7 @@ export function useOptionsResolver(args: UseOptionsResolverArgs): UseOptionsReso
             cancelled = true
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps -- context is keyed by ctxSig
-    }, [api, url, effectiveField, query, limit, enabled, filterValue, refreshKey, ctxSig])
+    }, [api, url, effectiveField, query, limit, enabled, filterValue, refreshKey, ctxSig, branchSig])
 
     // Rules arrive as a fresh array each render; key on their content.
     const filterKey = optionFilter && optionFilter.length > 0 ? JSON.stringify(optionFilter) : ''

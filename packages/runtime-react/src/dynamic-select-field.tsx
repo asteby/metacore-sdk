@@ -37,6 +37,7 @@ import { recordLabel, requestRecordCreate, requestRecordEdit, withSearchPrefill 
 import { useOptionsResolver, type ResolvedOption } from './use-options-resolver'
 import { useResolveOptionIds } from './use-option-ids'
 import { useDebouncedValue } from './use-debounced-value'
+import { useActiveBranchSignature, useSoleOptionPreselect } from './branch-scope'
 import { getDependsOn, getFieldRef, resolveOptionsSource } from './dynamic-form-schema'
 import type { ActionFieldDef } from './types'
 
@@ -123,6 +124,14 @@ export interface DynamicSelectFieldProps {
      */
     optionsContext?: Record<string, string | null | undefined>
     /**
+     * Preselect the option when a REQUIRED, still-empty picker has exactly one (the
+     * lookup is already narrowed to the active branch). Default on; a create-like
+     * form passes nothing, an existing record passes `false`, and a field can opt
+     * out with `autoSelectSole: false` in its manifest. Never overwrites a value
+     * the operator chose.
+     */
+    autoSelectSole?: boolean
+    /**
      * Id of the subject the column's `option_fitment` checks the options against
      * (resolved by the caller from the form / row). Ignored without the declaration.
      */
@@ -151,6 +160,7 @@ export function DynamicSelectField({
     createLockedFields,
     invalid = false,
     optionsContext,
+    autoSelectSole,
     fitmentSubjectId,
 }: DynamicSelectFieldProps) {
     const { t } = useTranslation()
@@ -191,7 +201,15 @@ export function DynamicSelectField({
     // optionsConfig.source → `/options/<source>`. Else searchEndpoint only
     // drives the URL when there's no ref (ref is canonical and wins).
     const optionsEndpoint = source.endpoint ?? (source.ref ? undefined : field.searchEndpoint)
-    const { options: fetchedOptions, loading: fetchLoading } = useOptionsResolver({
+    // Sole-option preselection (required + empty): the lookup runs on mount, not only
+    // when the popover opens, and shares the cache entry of the unfiltered open list.
+    const required = !!field.required
+    const autoEnabled =
+        autoSelectSole !== false && (field as { autoSelectSole?: boolean }).autoSelectSole !== false && required && !readonly && !useStatic && !blockedByDependency
+    const [autoHeld, setAutoHeld] = useState(false)
+    const emptyValue = value == null || value === ''
+    const probe = autoEnabled && (emptyValue || autoHeld)
+    const { options: fetchedOptions, meta: fetchedMeta, loading: fetchLoading } = useOptionsResolver({
         modelKey: '',
         fieldKey: source.fieldKey,
         ref: source.ref,
@@ -207,7 +225,7 @@ export function DynamicSelectField({
         // Fetch only while open (a held value's label comes from the `?ids=`
         // lookup below, readonly included). Blocked cascades and static lists
         // never fetch.
-        enabled: !useStatic && open && !blockedByDependency,
+        enabled: !useStatic && (open || probe) && !blockedByDependency,
     })
 
     const options = useStatic
@@ -222,6 +240,23 @@ export function DynamicSelectField({
         : fetchedOptions
     const loading = useStatic ? false : fetchLoading
 
+    const branchSig = useActiveBranchSignature()
+    const { markTouched } = useSoleOptionPreselect({
+        enabled: autoEnabled,
+        required,
+        value,
+        options: fetchedOptions,
+        meta: fetchedMeta,
+        loading: fetchLoading,
+        searching: search !== '' || debounced !== '',
+        onChange: (v) => onChange(v),
+        onAuto: (o) => {
+            setPicked(o)
+            setAutoHeld(!!o)
+        },
+        branch: branchSig,
+    })
+
     // A new cascade scope invalidates the selection (skip the initial mount).
     const prevScopeRef = useRef<string>(scope)
     useEffect(() => {
@@ -234,10 +269,15 @@ export function DynamicSelectField({
     }, [dependsOn, scope, value, onChange])
 
     const valueKey = value != null && value !== '' ? String(value) : ''
+    // Branch the held value was last checked against. After a switch what was
+    // picked or seeded under the OLD branch proves nothing: only the new branch's
+    // options (or an `?ids=` lookup under it) can confirm the value still belongs.
+    const verifiedBranchRef = useRef(branchSig)
+    const branchChanged = verifiedBranchRef.current !== branchSig
     const knownOption =
-        (picked && String(picked.id) === valueKey ? picked : null) ??
+        (!branchChanged && picked && String(picked.id) === valueKey ? picked : null) ??
         options.find((o) => String(o.id) === valueKey) ??
-        (seedOption && String(seedOption.id) === valueKey ? seedOption : null) ??
+        (!branchChanged && seedOption && String(seedOption.id) === valueKey ? seedOption : null) ??
         null
     // A held value nobody has labelled yet: one `?ids=` lookup (no popover).
     const needsLookup = !!valueKey && !knownOption && !useStatic
@@ -252,6 +292,27 @@ export function DynamicSelectField({
     const selectedOption = knownOption ?? (resolution?.status === 'found' ? resolution.option : null)
     const valueResolving = needsLookup && !selectedOption && idsLoading
     const valueMissing = needsLookup && !selectedOption && resolution?.status === 'missing'
+    const [scopeNote, setScopeNote] = useState(false)
+    useEffect(() => {
+        if (!branchChanged) return
+        if (valueKey === '') {
+            verifiedBranchRef.current = branchSig
+            return
+        }
+        if (selectedOption) {
+            verifiedBranchRef.current = branchSig
+        } else if (valueMissing) {
+            // The value is not visible under the new branch: drop it and say so.
+            verifiedBranchRef.current = branchSig
+            setPicked(null)
+            setAutoHeld(false)
+            onChange('')
+            setScopeNote(true)
+        }
+    }, [branchChanged, branchSig, valueKey, selectedOption, valueMissing, onChange])
+    useEffect(() => {
+        if (scopeNote && valueKey !== '') setScopeNote(false)
+    }, [scopeNote, valueKey])
     const selectedLabel =
         selectedOption?.label ?? (valueResolving ? '' : valueMissing ? DELETED_RECORD_LABEL : valueKey)
     const resolvingNode = (
@@ -266,6 +327,8 @@ export function DynamicSelectField({
     )
 
     const handlePick = (opt: ResolvedOption) => {
+        markTouched()
+        setAutoHeld(false)
         setPicked(opt)
         onChange(String(opt.id))
         onPick?.(opt)
@@ -321,7 +384,7 @@ export function DynamicSelectField({
             </Badge>
         ) : null
 
-    return (
+    const picker = (
         <RecordPicker<ResolvedOption>
             slot="dynamic-select"
             id={field.key}
@@ -434,6 +497,17 @@ export function DynamicSelectField({
                 ) : null
             }
         />
+    )
+    if (!scopeNote) return picker
+    return (
+        <>
+            {picker}
+            <p role="status" data-slot="branch-scope-note" className="mt-1 text-xs text-muted-foreground">
+                {t('runtime.branch_scope.cleared', {
+                    defaultValue: 'La selección no pertenece a la sucursal activa y se quitó.',
+                })}
+            </p>
+        </>
     )
 }
 

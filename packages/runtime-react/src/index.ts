@@ -752,6 +752,16 @@ export {
     type UseOptionsResolverResult,
 } from './use-options-resolver'
 export {
+    readActiveBranchId,
+    useActiveBranchSignature,
+    useSoleOptionPreselect,
+    soleOptionToPreselect,
+    reconcileAutoSelection,
+    type SoleOptionInput,
+    type AutoSelectionCheck,
+    type UseSoleOptionPreselectArgs,
+} from './branch-scope'
+export {
     useResolveOptionIds,
     OPTION_IDS_CHUNK,
     type OptionIdResolution,
