@@ -48,6 +48,21 @@ export type SupportMessage = Omit<SupportMessageView, "author_type" | "attachmen
 export type SupportHubState = "pending" | "synced" | "failed";
 
 /**
+ * Ciclo de vida que ve la persona (API de casos de OPS). Aditivo: una instancia o un Hub que no lo
+ * manda sigue funcionando, la UI deduce el estado de `status` y del ultimo autor. `state` es el
+ * vocabulario unico del cliente (ver `clientStateOf` en `@asteby/metacore-support-ui`).
+ */
+export interface SupportLifecycle {
+  state?: "new" | "in_progress" | "waiting" | "resolved" | "reopened" | "closed";
+  phase?: "open" | "reopened" | "resolved" | "closed";
+  /** `support` (le toca a la mesa) | `reporter` (le toca a la persona). */
+  turn?: "support" | "reporter" | "";
+  /** Movimientos permitidos a la persona ahora (`reopen`, `close`). */
+  actions?: string[];
+  reopen_until?: string;
+}
+
+/**
  * Caso con sus ultimos mensajes (50 por defecto, 200 maximo, cronologicos). Sale de `CaseView`
  * del contrato (generado): `case_id` y `channel` (id publico) solo vienen del Hub; `hub_state`
  * solo de una instancia. `messages_older_cursor` es el cursor `before` de `listMessages`.
@@ -56,6 +71,7 @@ export type SupportCase = Omit<SupportCaseView, "status" | "severity" | "hub_sta
   status: SupportCaseStatus;
   severity?: string;
   hub_state?: SupportHubState;
+  lifecycle?: SupportLifecycle;
   messages: SupportMessage[];
 };
 
@@ -66,6 +82,9 @@ export interface SupportCaseSummary {
   severity?: string;
   hub_state?: SupportHubState;
   updated_at?: string;
+  lifecycle?: SupportLifecycle;
+  /** Mensajes de la mesa que la persona aun no leyo, si el servidor lo sabe. */
+  unread?: number;
 }
 
 export type SupportSeverity = "blocker" | "high" | "normal" | "low";
@@ -256,6 +275,8 @@ export interface SupportApi {
   sendMessage(folio: string, input: SendSupportMessageInput): Promise<SupportMessage>;
   /** `POST /cases/:folio/reopen`. El cuerpo es opcional. */
   reopen(folio: string, input?: { body?: string; clientMessageId?: string }): Promise<SupportCase>;
+  /** `POST /cases/:folio/close`: la persona finaliza el ticket. Opcional: el widget del Hub no lo ofrece. */
+  close?(folio: string): Promise<SupportCase>;
   subscribe(folio: string, onEvent: (ev: SupportCallbackEvent) => void): () => void;
 }
 
@@ -289,6 +310,7 @@ export function createSupportApi(transport: SupportTransport, opts: SupportApiOp
         path: `${caseUrl(folio)}/reopen`,
         body: { client_message_id: input.clientMessageId, body: input.body },
       }),
+    close: (folio) => data<SupportCase>({ method: "POST", path: `${caseUrl(folio)}/close`, body: {} }),
     subscribe: (folio, onEvent) => (opts.events ? opts.events(folio, onEvent) : () => {}),
   };
 }

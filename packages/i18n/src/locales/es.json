@@ -129,6 +129,97 @@
       "support_disabled": "El soporte no está habilitado para tu organización.",
       "forbidden": "No tienes permiso para escribir en este caso.",
       "unknown": "No se pudo enviar el mensaje. Inténtalo de nuevo."
+    },
+    "state": {
+      "new": {
+        "label": "Nuevo",
+        "hint": "Recibimos tu ticket. Soporte lo tomará pronto; mientras tanto puedes agregar más detalles."
+      },
+      "in_progress": {
+        "label": "En atención",
+        "hint": "Soporte está trabajando en tu ticket. Te avisaremos aquí en cuanto respondan."
+      },
+      "waiting": {
+        "label": "Esperando tu respuesta",
+        "hint": "Soporte necesita algo de ti para continuar. Responde en este ticket."
+      },
+      "resolved": {
+        "label": "Resuelto",
+        "hint": "Soporte marcó el ticket como resuelto. Si funcionó, finalízalo; si no, reábrelo."
+      },
+      "reopened": {
+        "label": "Reabierto",
+        "hint": "Reabriste este ticket. Soporte lo retomará pronto."
+      },
+      "closed": {
+        "label": "Finalizado",
+        "hint": "Este ticket está finalizado y ya no admite mensajes. Si lo necesitas, abre otro ticket."
+      }
+    },
+    "action": {
+      "view": "Ver ticket",
+      "reopen": "Reabrir",
+      "finalize": "Finalizar",
+      "openAnother": "Abrir otro ticket",
+      "newTicket": "Nuevo ticket",
+      "reply": "Responder",
+      "back": "Volver a tickets",
+      "working": "Un momento…",
+      "failed": "No se pudo completar la acción. Inténtalo de nuevo."
+    },
+    "event": {
+      "opened": "Ticket abierto",
+      "resolved": "Ticket resuelto",
+      "reopened": "Ticket reabierto",
+      "closed": "Ticket finalizado",
+      "openedHint": "Soporte recibió tu ticket.",
+      "resolvedHint": "Soporte lo marcó como resuelto.",
+      "reopenedHint": "Volvió a atención.",
+      "closedHint": "Ya no admite mensajes."
+    },
+    "resolvedPrompt": {
+      "title": "¿Se resolvió?",
+      "body": "Soporte marcó {{folio}} como resuelto. Cuéntanos si funcionó.",
+      "replyBlocked": "Para escribir aquí, reabre el ticket."
+    },
+    "closedPrompt": {
+      "title": "Ticket finalizado",
+      "body": "{{folio}} está finalizado. Para otro tema, abre un ticket nuevo."
+    },
+    "tickets": {
+      "title": "Tus tickets",
+      "empty": "Aún no tienes tickets",
+      "emptyBody": "Abre un ticket y te atenderemos aquí mismo.",
+      "group": {
+        "waiting": "Esperando tu respuesta",
+        "open": "Abiertos",
+        "resolved": "Resueltos",
+        "closed": "Finalizados"
+      },
+      "loadMore": "Ver más finalizados",
+      "loading": "Cargando tickets…",
+      "loadError": "No se pudieron cargar los tickets",
+      "unread": "{{count}} sin leer",
+      "unreadTotal": "{{count}} mensajes sin leer en tus tickets",
+      "you": "Tú: ",
+      "noMessages": "Sin mensajes",
+      "switch": "Cambiar de ticket",
+      "current": "Ticket actual",
+      "list": "Lista de tickets"
+    },
+    "duplicate": {
+      "title": "Ya tienes un ticket abierto",
+      "body": "El ticket {{folio}} («{{subject}}») sigue abierto. Si es el mismo tema, continúa ahí; si no, abre uno nuevo.",
+      "continue": "Continuar {{folio}}",
+      "openNew": "Abrir uno nuevo",
+      "cancel": "Cancelar"
+    },
+    "newTicket": {
+      "title": "Nuevo ticket",
+      "body": "Cuéntanos qué pasa",
+      "placeholder": "Describe el problema; la primera línea será el asunto.",
+      "submit": "Abrir ticket",
+      "hint": "Se abrirá un ticket aparte, con su propio historial."
     }
   },
   "common": {

@@ -1,6 +1,13 @@
 import * as React from 'react'
-import { Alert, AlertDescription, AlertTitle, Button, Input, Textarea } from '@asteby/metacore-ui/primitives'
-import { SupportThread, useSupportT } from '@asteby/metacore-support-ui'
+import { Alert, AlertDescription, AlertTitle, Button } from '@asteby/metacore-ui/primitives'
+import {
+  SupportNewTicketForm,
+  SupportThread,
+  SupportTicketList,
+  clientStateOf,
+  useSupportT,
+  type SupportTicketItem,
+} from '@asteby/metacore-support-ui'
 import {
   createSupportApi,
   supportErrorCode,
@@ -8,7 +15,9 @@ import {
   type EmbedTransport,
   type SupportApi,
   type SupportCallbackEvent,
+  type SupportCaseSummary,
 } from '@asteby/metacore-sdk/support'
+import { loadSeen, markSeen, type SeenMap } from './ticket-seen'
 import { parseProfileDisplay, type DisplayMode } from './display'
 import { profileTexts, sanitizeProfile, type SafeProfile } from './profile'
 import { applyProfileTheme } from './theme'
@@ -38,7 +47,16 @@ export interface SupportFrameProps {
   mode?: DisplayMode
   /** Ocupa el alto de su contenedor en vez del de la ventana (embed en codigo, sin iframe). */
   fill?: boolean
+  /** Clave del almacen local de lo visto por ticket (el id del canal); defecto compartido. */
+  storageKey?: string
 }
+
+/** What the embed shows: the person's tickets (default), one ticket's thread, or the new-ticket form. */
+type View = { k: 'list' } | { k: 'thread'; id: string } | { k: 'new' }
+
+/** Open tickets whose last message is fetched to know whose turn it is (the Hub list view carries no last author). */
+const ENRICH_MAX = 10
+const LIST_POLL_MS = 30_000
 
 type Phase = { k: 'starting' } | { k: 'ready'; info: EmbedSessionInfo } | { k: 'unavailable' } | { k: 'error' }
 
@@ -48,12 +66,14 @@ const SERVICE_OUT = new Set(['channel_quota_exceeded'])
 
 const safeHref = (v: string) => (/^https:\/\//.test(v) ? v : undefined)
 
-export function SupportFrame({ embed, apiBase, locale, port, identity, allowReopen, prefersDark = false, root, mode: initialMode, fill = false }: SupportFrameProps) {
+export function SupportFrame({ embed, apiBase, locale, port, identity, allowReopen, prefersDark = false, root, mode: initialMode, fill = false, storageKey = 'default' }: SupportFrameProps) {
   const { t } = useSupportT()
   const [phase, setPhase] = React.useState<Phase>({ k: 'starting' })
   const [profile, setProfile] = React.useState<SafeProfile | null>(null)
-  const [caseId, setCaseId] = React.useState<string | null>(null)
-  const [composing, setComposing] = React.useState(false)
+  const [view, setView] = React.useState<View>({ k: 'list' })
+  const [tickets, setTickets] = React.useState<SupportTicketItem[]>([])
+  const [listState, setListState] = React.useState<'loading' | 'ready' | 'error'>('loading')
+  const seen = React.useRef<SeenMap>({})
   const [serviceOut, setServiceOut] = React.useState(false)
   const [nonce, setNonce] = React.useState(0)
   const [mode, setMode] = React.useState<DisplayMode>(initialMode ?? 'floating')
@@ -73,8 +93,43 @@ export function SupportFrame({ embed, apiBase, locale, port, identity, allowReop
           onEvent(ev)
         }),
     })
-    return allowReopen ? base : { ...base, reopen: undefined }
+    // The Hub widget API has no "finish" call: the button is only offered where the transport has one.
+    return { ...base, close: undefined, reopen: allowReopen ? base.reopen : undefined }
   }, [embed, apiBase, port, allowReopen])
+
+  const idOf = (c: SupportCaseSummary) => (c as { case_id?: string }).case_id ?? c.folio
+
+  // The person's tickets with the state they see. The Hub list has no last author, so the few open ones are
+  // peeked at (last message only) to tell "waiting for you" from "in progress"; unread = their reply is newer than the last visit.
+  const refreshList = React.useCallback(async (): Promise<SupportTicketItem[]> => {
+    const page = await api.listCases({ limit: 50 })
+    const rows = await Promise.all(
+      page.items.map(async (c, i): Promise<SupportTicketItem> => {
+        const id = idOf(c)
+        let lastAuthor: string | undefined
+        let last: { body: string; at?: string; fromMe?: boolean } | undefined
+        if (c.status === 'open' && i < ENRICH_MAX) {
+          try {
+            const full = await api.getCase(id, { limit: 1 })
+            const m = full.messages[full.messages.length - 1]
+            if (m) {
+              lastAuthor = m.author_type
+              last = { body: m.body, at: m.created_at, fromMe: m.author_type === 'reporter' }
+            }
+          } catch {
+            // Without the peek the row falls back to its status.
+          }
+        }
+        const state = clientStateOf({ status: c.status, lifecycle: c.lifecycle, lastAuthor })
+        const theirs = lastAuthor === 'agent' || lastAuthor === 'ai'
+        const visited = seen.current[id] ?? 0
+        const unread = c.unread ?? (theirs && last?.at && Date.parse(last.at) > visited ? 1 : 0)
+        return { id, folio: c.folio, subject: c.subject, state, unread, lastMessage: last, updatedAt: c.updated_at }
+      }),
+    )
+    setTickets(rows)
+    return rows
+  }, [api])
 
   const apply = React.useCallback(
     (info: EmbedSessionInfo) => {
@@ -103,13 +158,16 @@ export function SupportFrame({ embed, apiBase, locale, port, identity, allowReop
       .then(async (info) => {
         if (!live) return
         apply(info)
+        seen.current = loadSeen(storageKey)
         try {
-          const page = await api.listCases({ limit: 20 })
+          const rows = await refreshList()
           if (!live) return
-          const latest = page.items.find((c) => c.status === 'open') ?? page.items[0]
-          setCaseId(latest ? ((latest as { case_id?: string }).case_id ?? latest.folio) : null)
+          // Nothing yet: straight to the form; otherwise the list, never one mixed thread.
+          setView(rows.length === 0 ? { k: 'new' } : { k: 'list' })
+          setListState('ready')
         } catch {
-          // Sin casos o lista no disponible: el visitante puede abrir uno nuevo.
+          // Lista no disponible: el visitante puede abrir uno nuevo.
+          setListState('error')
         }
         port.send({ t: 'ready' })
         if (live) setPhase({ k: 'ready', info })
@@ -139,12 +197,14 @@ export function SupportFrame({ embed, apiBase, locale, port, identity, allowReop
         } else if (msg.t === 'identify') {
           identity.current = msg.token
           embed.stop()
-          setCaseId(null)
+          setView({ k: 'list' })
+          setTickets([])
           setNonce((n) => n + 1)
         } else if (msg.t === 'logout') {
           identity.current = undefined
           embed.logout()
-          setCaseId(null)
+          setView({ k: 'list' })
+          setTickets([])
           setNonce((n) => n + 1)
         } else if (msg.t === 'open') {
           openRef.current = true
@@ -156,6 +216,14 @@ export function SupportFrame({ embed, apiBase, locale, port, identity, allowReop
       }),
     [port, embed, identity],
   )
+
+  // Mientras se ve la lista, se refresca sola para que lleguen estados y no leidos nuevos.
+  const listing = phase.k === 'ready' && view.k === 'list'
+  React.useEffect(() => {
+    if (!listing) return
+    const id = window.setInterval(() => void refreshList().catch(() => {}), LIST_POLL_MS)
+    return () => window.clearInterval(id)
+  }, [listing, refreshList])
 
   const texts = profile ? profileTexts(profile, locale) : {}
   const contact = profile?.fallback_contact
@@ -192,86 +260,70 @@ export function SupportFrame({ embed, apiBase, locale, port, identity, allowReop
   }
 
   const visitor = phase.info.visitor?.display_name
+  const channelKey = storageKey
+  const current = view.k === 'thread' ? tickets.find((t) => t.id === view.id) : undefined
+  const openTicket = tickets.find((t) => t.state === 'waiting') ?? tickets.find((t) => t.state === 'new' || t.state === 'in_progress' || t.state === 'reopened')
+  const goList = () => {
+    setView({ k: 'list' })
+    void refreshList().catch(() => {})
+  }
+  const openThread = (t: SupportTicketItem) => {
+    seen.current = markSeen(channelKey, seen.current, t.id)
+    setTickets((prev) => prev.map((x) => (x.id === t.id ? { ...x, unread: 0 } : x)))
+    setView({ k: 'thread', id: t.id })
+  }
+  const others = tickets.filter((t) => view.k === 'thread' && t.id !== view.id && (t.state === 'waiting' || t.state === 'new' || t.state === 'in_progress' || t.state === 'reopened')).slice(0, 8)
 
   return (
     <div className={`flex ${fill ? 'h-full' : 'h-dvh'} flex-col bg-background text-foreground`}>
       <header className="flex items-center gap-2 border-b p-3">
         {profile?.logo_url ? <img src={profile.logo_url} alt="" className="h-6 w-6 rounded" referrerPolicy="no-referrer" /> : null}
         <h1 className="flex-1 text-sm font-semibold">{texts.greeting ?? t('embed.newCaseTitle')}</h1>
-        {caseId && !composing ? (
-          <Button variant="outline" size="sm" onClick={() => setComposing(true)}>{t('embed.newCase')}</Button>
-        ) : null}
         {mode === 'inline' ? null : (
           <Button variant="ghost" size="sm" aria-label={t('embed.close')} onClick={() => port.send({ t: 'close' })}>×</Button>
         )}
       </header>
       <main className="min-h-0 flex-1">
-        {caseId && !composing ? (
-          <SupportThread api={api} folio={caseId} authorName={visitor} />
-        ) : (
-          <NewCase
-            onCreated={(id) => {
-              setComposing(false)
-              setCaseId(id)
-            }}
-            create={async (subject, body) => {
+        {view.k === 'thread' ? (
+          <SupportThread
+            key={view.id}
+            api={api}
+            folio={view.id}
+            authorName={visitor}
+            onBack={goList}
+            others={others}
+            onSwitch={openThread}
+            onOpenAnother={() => setView({ k: 'new' })}
+          />
+        ) : view.k === 'new' ? (
+          <SupportNewTicketForm
+            openTicket={openTicket ? { folio: openTicket.folio, subject: openTicket.subject } : undefined}
+            onContinue={() => openTicket && openThread(openTicket)}
+            onCancel={tickets.length > 0 ? goList : undefined}
+            onSubmit={async (subject, body) => {
               try {
                 const c = await api.createCase({ subject, description: body })
-                return (c as { case_id?: string }).case_id ?? c.folio
+                const id = (c as { case_id?: string }).case_id ?? c.folio
+                seen.current = markSeen(channelKey, seen.current, id)
+                await refreshList().catch(() => [])
+                setView({ k: 'thread', id })
               } catch (e) {
                 if (supportErrorCode(e) === 'channel_quota_exceeded') setServiceOut(true)
                 throw e
               }
             }}
-            t={t}
+          />
+        ) : (
+          <SupportTicketList
+            tickets={tickets}
+            loading={listState === 'loading'}
+            error={listState === 'error'}
+            onSelect={openThread}
+            onNewTicket={() => setView({ k: 'new' })}
+            activeId={current?.id}
           />
         )}
       </main>
     </div>
-  )
-}
-
-function NewCase({
-  create,
-  onCreated,
-  t,
-}: {
-  create: (subject: string, body: string) => Promise<string>
-  onCreated: (id: string) => void
-  t: (key: string, vars?: Record<string, string>) => string
-}) {
-  const [subject, setSubject] = React.useState('')
-  const [body, setBody] = React.useState('')
-  const [busy, setBusy] = React.useState(false)
-  const [failed, setFailed] = React.useState(false)
-  const id = React.useId()
-  return (
-    <form
-      className="space-y-3 p-4"
-      onSubmit={async (e) => {
-        e.preventDefault()
-        if (!body.trim() || busy) return
-        setBusy(true)
-        setFailed(false)
-        try {
-          onCreated(await create(subject.trim(), body.trim()))
-        } catch {
-          setFailed(true)
-        } finally {
-          setBusy(false)
-        }
-      }}
-    >
-      <div className="space-y-1">
-        <label htmlFor={`${id}-s`} className="text-sm font-medium">{t('embed.subject')}</label>
-        <Input id={`${id}-s`} value={subject} maxLength={200} onChange={(e) => setSubject(e.target.value)} />
-      </div>
-      <div className="space-y-1">
-        <label htmlFor={`${id}-b`} className="text-sm font-medium">{t('embed.message')}</label>
-        <Textarea id={`${id}-b`} value={body} maxLength={8000} required rows={5} onChange={(e) => setBody(e.target.value)} />
-      </div>
-      {failed ? <p role="alert" className="text-sm text-destructive">{t('embed.errorBody')}</p> : null}
-      <Button type="submit" disabled={busy || !body.trim()}>{busy ? t('embed.starting2') : t('embed.start')}</Button>
-    </form>
   )
 }

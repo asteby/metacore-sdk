@@ -106,13 +106,13 @@ describe('SupportThread states', () => {
     expect(within(log).getByText('Tú')).toBeTruthy()
     expect(within(log).getByText('Soporte')).toBeTruthy()
     expect(within(log).getByText('IA')).toBeTruthy()
-    expect(screen.getByTestId('case-status').textContent).toBe('Abierto')
+    expect(screen.getByTestId('support-state').textContent).toBe('Esperando tu respuesta')
     expect(screen.getByText('Stock mismatch')).toBeTruthy()
   })
 
   it('renders in English', async () => {
     view(fakeApi(baseCase()).api, {}, 'en')
-    expect((await screen.findByTestId('case-status')).textContent).toBe('Open')
+    expect((await screen.findByTestId('support-state')).textContent).toBe('Waiting for your reply')
     expect(screen.getByRole('textbox').getAttribute('placeholder')).toBe('Write a message to support…')
   })
 
@@ -258,19 +258,19 @@ describe('SupportThread resolved cases', () => {
     const { api } = fakeApi(resolved)
     const onReopen = vi.fn(async () => {})
     view(api, { onReopen })
-    expect(await screen.findByText('Caso resuelto')).toBeTruthy()
+    expect(await screen.findByText('¿Se resolvió?')).toBeTruthy()
     expect(screen.getByText('Se conciliaron los conteos')).toBeTruthy()
-    expect(screen.getByTestId('case-status').textContent).toBe('Resuelto')
+    expect(screen.getByTestId('support-state').textContent).toBe('Resuelto')
     expect(screen.queryByRole('textbox')).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'Reabrir caso' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Reabrir' }))
     await waitFor(() => expect(onReopen).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(api.getCase).toHaveBeenCalledTimes(2))
   })
 
   it('offers no reopen button without a handler, and none for closed cases', async () => {
     view(fakeApi(baseCase({ status: 'closed' })).api, { onReopen: async () => {} })
-    expect(await screen.findByText('Caso cerrado')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Reabrir caso' })).toBeNull()
+    expect(await screen.findByText('Ticket finalizado')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Reabrir' })).toBeNull()
   })
 })
 
@@ -321,10 +321,10 @@ describe('SupportThread API alignment', () => {
     const { api } = fakeApi(baseCase({ status: 'resolved', solution: 'ok' }))
     const reopen = vi.fn(async () => baseCase({ status: 'open' }))
     view({ ...api, reopen })
-    fireEvent.click(await screen.findByRole('button', { name: 'Reabrir caso' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Reabrir' }))
     await waitFor(() => expect(reopen).toHaveBeenCalledWith('OPS-000123', expect.anything()))
     expect(await screen.findByRole('textbox')).toBeTruthy()
-    expect(screen.getByTestId('case-status').textContent).toBe('Abierto')
+    expect(screen.getByTestId('support-state').textContent).toBe('Esperando tu respuesta')
   })
 
   it('maps support_disabled to a final message without retry', async () => {
@@ -361,7 +361,7 @@ describe('SupportThread API alignment', () => {
     await screen.findByRole('log')
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hola' } })
     fireEvent.click(screen.getByRole('button', { name: 'Enviar' }))
-    expect(await screen.findByText('Caso resuelto')).toBeTruthy()
+    expect(await screen.findByText('¿Se resolvió?')).toBeTruthy()
     expect(screen.queryByRole('textbox')).toBeNull()
   })
 
