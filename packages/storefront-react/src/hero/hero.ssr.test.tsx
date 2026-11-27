@@ -96,7 +96,7 @@ describe('banner_carousel section', () => {
     expect(Object.keys(bannerCarouselSchema)).toEqual(['slides', 'synced_slides'])
     expect(bannerCarouselSchema.synced_slides.default).toBe('before')
     expect(bannerCarouselSchema.synced_slides.options.map((o) => o.value)).toEqual(['before', 'after', 'replace', 'off'])
-    expect(Object.keys(bannerCarouselSchema.slides.items)).toEqual(['image', 'image_mobile', 'alt', 'url', 'eyebrow', 'title', 'text', 'cta_label'])
+    expect(Object.keys(bannerCarouselSchema.slides.items)).toEqual(['image', 'image_mobile', 'alt', 'url', 'eyebrow', 'title', 'text', 'cta_label', 'focus', 'text_position', 'text_vertical', 'text_size', 'scrim'])
   })
 
   it('renders a page through the registry and validates its props', () => {
