@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { renderToString } from 'react-dom/server'
-import { createSwatchResolver, defaultColors, optionHasSwatches, parseSwatchAttribute, pastelBackground, resolveSwatch, resolveSwatchSpec, swatchBackground } from './swatch-colors'
+import { createSwatchResolver, defaultColors, optionHasSwatches, parseSwatchAttribute, pastelBackground, resolveSwatch, resolveSwatchSpec, swatchBackground, swatchCatalogDictionaries } from './swatch-colors'
 import { Swatch } from './swatch'
 
 describe('colores básicos', () => {
@@ -141,5 +141,54 @@ describe('badge de color + emoji (prefer: both)', () => {
     expect(html).toContain('data-mixed')
     expect(html).toContain('color-mix(in srgb, #ff4d6d 26%, white)')
     expect(html).toContain('🍓')
+  })
+})
+
+describe('catálogo de muestras de la organización (shop.swatches)', () => {
+  const catalog = [
+    { name: 'Fresa', aliases: ['strawberry', 'Fresas'], colors: ['#FF4D6D'], emoji: '🍓' },
+    { name: 'Cookies and cream', aliases: [], colors: ['#3b2a22', '#f4ead2'], emoji: '🍪🥛' },
+    { name: 'Piña', aliases: ['pineapple'], colors: [], emoji: '🍍' },
+    { name: 'Natural', aliases: ['unflavored'], colors: ['#ffffff'], emoji: null },
+  ]
+  const { colors, emojis } = swatchCatalogDictionaries(catalog)
+  const resolver = createSwatchResolver({ colors: [...defaultColors, ...colors], emojis, prefer: 'both' })
+
+  it('cada nombre y alias, en cualquier idioma, resuelve a la misma muestra', () => {
+    expect(resolver.resolve('STRAWBERRY')).toEqual({ colors: ['#ff4d6d'], emoji: '🍓' })
+    expect(resolver.resolve('Fresa')).toEqual({ colors: ['#ff4d6d'], emoji: '🍓' })
+    expect(resolver.resolve('UNFLAVORED')).toEqual({ colors: ['#ffffff'] })
+  })
+
+  it('normaliza acentos y mayúsculas, y respeta mezclas y la frase más larga', () => {
+    expect(resolver.resolve('PIÑA')).toEqual({ emoji: '🍍' })
+    expect(resolver.resolve('Cookies and Cream')).toEqual({ colors: ['#3b2a22', '#f4ead2'], emoji: '🍪🥛' })
+  })
+
+  it('sin catálogo (undefined, null o vacío) no aporta diccionarios', () => {
+    for (const none of [undefined, null, []]) expect(swatchCatalogDictionaries(none)).toEqual({ colors: [], emojis: [] })
+  })
+
+  it('descarta hex inválidos y muestras sin color ni emoji', () => {
+    const d = swatchCatalogDictionaries([
+      { name: 'Roto', colors: ['no-es-hex', '#12'] },
+      { name: 'Bueno', colors: ['#abc', 'rojo'] },
+    ])
+    expect(d.colors).toEqual([['bueno', '#abc']])
+    expect(d.emojis).toEqual([])
+  })
+
+  it('un nombre con signos de expresión regular (datos de la organización) no rompe ni se interpreta', () => {
+    const { colors: c } = swatchCatalogDictionaries([{ name: 'Fresa (nueva) [x]+', colors: ['#ff4d6d'] }, { name: '.*', colors: ['#000000'] }])
+    const r = createSwatchResolver({ colors: c })
+    expect(() => r.resolve('Fresa (nueva) [x]+')).not.toThrow()
+    expect(r.resolve('Fresa (nueva) [x]+')).toEqual({ colors: ['#ff4d6d'] })
+    // «.*» no es un comodín: no se come cualquier texto.
+    expect(r.resolve('Chocolate')).toBeNull()
+  })
+
+  it('el atributo `colores` del producto sigue mandando sobre el catálogo', () => {
+    const attr = parseSwatchAttribute('Fresa:#000000')
+    expect(resolver.resolve('Fresa', attr)).toEqual({ colors: ['#000000'] })
   })
 })

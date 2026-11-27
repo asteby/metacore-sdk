@@ -56,13 +56,18 @@ function scan<T>(text: string, entries: [string, T][]): T[] {
   const found: { index: number; value: T }[] = []
   let rest = text
   for (const [phrase, value] of [...entries].sort((a, b) => b[0].length - a[0].length)) {
-    const m = new RegExp(`(^|[^a-z])${phrase}s?(?![a-z])`).exec(rest)
+    const m = new RegExp(`(^|[^a-z])${escapeRegExp(phrase)}s?(?![a-z])`).exec(rest)
     if (!m) continue
     const start = m.index + (m[1]?.length ?? 0)
     found.push({ index: start, value })
     rest = rest.slice(0, start) + ' '.repeat(phrase.length + 1) + rest.slice(start + phrase.length + 1)
   }
   return found.sort((a, b) => a.index - b.index).map((f) => f.value)
+}
+
+/** Las frases también pueden llegar de datos de la organización (catálogo de muestras): se escapan, nunca son una expresión. */
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function graphemes(text: string): string[] {
@@ -143,6 +148,32 @@ export function parseSwatchAttribute(raw: unknown): Map<string, SwatchSpec> {
     if (colors.length > 0 || hasEmoji) map.set(name, { ...(colors.length > 0 ? { colors } : {}), ...(hasEmoji ? { emoji } : {}) })
   }
   return map
+}
+
+/**
+ * Una muestra del catálogo de la organización, tal como la sirve la Storefront API en `shop.swatches` (contrato 1.36.0).
+ * `name` y `aliases` son frases del mismo valor (otros idiomas o escrituras); `colors` son hex (uno, o varios para una mezcla).
+ */
+export type SwatchCatalogEntry = { name: string; aliases?: readonly string[] | null; colors?: readonly string[] | null; emoji?: string | null }
+
+/**
+ * Convierte el catálogo de muestras de OPS en los diccionarios del motor (`createSwatchResolver({ colors, emojis })`): una
+ * entrada por cada nombre y alias, normalizados (minúsculas, sin acentos). Los hex inválidos se descartan y una muestra sin color ni
+ * emoji no aporta nada. El resolver conserva su regla: la frase más larga gana y el atributo `colores` del producto manda.
+ */
+export function swatchCatalogDictionaries(catalog: readonly SwatchCatalogEntry[] | null | undefined): { colors: ColorEntry[]; emojis: EmojiEntry[] } {
+  const colors: ColorEntry[] = []
+  const emojis: EmojiEntry[] = []
+  for (const entry of catalog ?? []) {
+    const phrases = [entry.name, ...(entry.aliases ?? [])].map(normalize).filter((p, i, all) => p.length > 0 && all.indexOf(p) === i)
+    const hex = (entry.colors ?? []).map((c) => c.trim()).filter((c) => HEX.test(c)).map((c) => c.toLowerCase()).slice(0, MAX)
+    const emoji = (entry.emoji ?? '').trim()
+    for (const phrase of phrases) {
+      if (hex.length > 0) colors.push([phrase, hex.length === 1 ? hex[0]! : hex])
+      if (emoji.length > 0) emojis.push([phrase, emoji])
+    }
+  }
+  return { colors, emojis }
 }
 
 /** Fondo CSS plano: un color liso, dos mitades, o sectores iguales (hasta 4). */

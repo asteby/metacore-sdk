@@ -275,6 +275,17 @@ export type ShopMarket = {
   pricing: MarketPricingMode
 }
 
+/**
+ * Color and emoji of an option value (flavor, color…), defined by the organization in OPS (contract 1.36.0). `aliases` are other
+ * names or languages of the same value; `colors` are lowercase hex (several = a blend). Normalize the names before matching.
+ */
+export type ShopSwatch = {
+  name: string
+  aliases: string[]
+  colors: string[]
+  emoji: string | null
+}
+
 export type Shop = {
   name: string
   description: string | null
@@ -292,6 +303,11 @@ export type Shop = {
    * then keep using `currency_code` / `locale`.
    */
   market?: ShopMarket | null
+  /**
+   * Swatches of the organization's option values (contract 1.36.0). Absent from older servers or when the catalog source does not
+   * exist: keep your own fallback dictionary. An empty list means the organization has not defined any yet.
+   */
+  swatches?: ShopSwatch[]
 }
 
 // ---------------------------------------------------------------------------
