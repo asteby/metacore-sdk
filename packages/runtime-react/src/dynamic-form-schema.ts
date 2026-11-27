@@ -7,6 +7,7 @@ import { fieldValidationOf } from './validator'
 import { applyOptionWhen, getDependsOn } from './option-when'
 import { resolveValidatorToken } from './use-org-config-bridge'
 import { isNullableBooleanField } from './nullable-boolean'
+import { isJsonField, isValidJsonFormValue } from './json-field-model'
 
 // Viven en option-when.ts (el validador también los usa); se re-exportan aquí
 // para no romper a quien los importaba de este módulo.
@@ -302,6 +303,14 @@ function fieldToZod(field: ActionFieldDef): ZodTypeAny {
         return field.required ? arr.min(1, `${field.label} requiere al menos un renglón`) : arr
     }
 
+    // Campo JSON: objeto/arreglo/null tal cual, o un texto que sea JSON válido (el editor emite el objeto ya analizado).
+    if (isJsonField(field)) {
+        const json = z.custom<unknown>(isValidJsonFormValue, { message: 'JSON inválido' })
+        return field.required
+            ? json.refine((val) => val !== null && val !== undefined && val !== '', `${field.label} es requerido`)
+            : json.optional()
+    }
+
     const v = fieldValidationOf(field)
     const isNumeric = field.type === 'number'
     const isBool = field.type === 'boolean'
@@ -339,7 +348,8 @@ function fieldToZod(field: ActionFieldDef): ZodTypeAny {
     if (field.required) {
         return s.min(Math.max(typeof v.min === 'number' ? v.min : 1, 1), `${field.label} es requerido`)
     }
-    return s.optional().or(z.literal(''))
+    // Una columna jsonb servida como texto trae un objeto/arreglo: pasa intacto (nunca se serializa ni se rechaza por «Invalid input»).
+    return s.optional().or(z.literal('')).or(z.record(z.string(), z.unknown())).or(z.array(z.unknown()))
 }
 
 // Resolves the renderer widget for a field. Explicit `widget` wins; otherwise
@@ -353,6 +363,8 @@ export function resolveWidget(field: ActionFieldDef): string {
     // a declared FK column is a picker regardless of its SQL column type
     // (uuid/text/etc), matching the kernel's option-resolution semantics.
     if (fieldHasRef(field)) return field.multiple ? 'dynamic_multi_select' : 'dynamic_select'
+    // Columnas estructuradas (jsonb/json/objeto): editor JSON, nunca un input de texto (`[object Object]`).
+    if (isJsonField(field)) return 'json'
     switch (field.type) {
         case 'textarea': return 'textarea'
         case 'select': return 'select'

@@ -42,6 +42,8 @@ import { DynamicMultiSelectField } from './dynamic-multi-select-field'
 import { DynamicDateField } from './dynamic-date-field'
 import { UploadField } from './upload-field'
 import { IconPickerField } from './icon-picker-field'
+import { JsonField } from './json-field'
+import { isStructuredValue } from './json-field-model'
 import { ColorPickerField } from './color-picker-field'
 import { getFieldWidget, useFieldWidgetRegistryVersion } from './field-widget-registry'
 import { HostWidgetBoundary } from './host-widget-boundary'
@@ -418,6 +420,8 @@ function FieldRow({ field, value, onChange, values, error, initialValues, onFiel
     const fullWidth =
         isLineItemsField(field) ||
         resolveWidget(field) === 'textarea' ||
+        resolveWidget(field) === 'json' ||
+        (isStructuredValue(value) && ['text', 'textarea'].includes(resolveWidget(field))) ||
         resolveWidget(field) === 'richtext'
     return (
         <div className={'grid gap-2 ' + (fullWidth ? 'sm:col-span-2' : '')}>
@@ -497,7 +501,9 @@ function FieldRenderer({
     if (isLineItemsField(field)) {
         return <DynamicLineItems field={field} value={value} onChange={onChange} />
     }
-    const widget = resolveWidget(field)
+    // Un valor estructurado (objeto/arreglo) en un campo servido como texto: se edita como JSON, jamás como `[object Object]`.
+    const widget = isStructuredValue(value) && ['text', 'textarea'].includes(resolveWidget(field)) ? 'json' : resolveWidget(field)
+    if (widget === 'json') return <JsonField field={field} value={value} onChange={onChange} invalid={Boolean(error)} />
     // Async searchable picker (typeahead against /api/options/<ref>?q=…).
     // Preferred for FK fields with large option sets — no UUID typing, no
     // dumping every row into a plain <select>.
