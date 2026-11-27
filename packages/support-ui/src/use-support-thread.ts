@@ -13,7 +13,7 @@ import {
  * stand-in. `listMessages` enables "load earlier", `reopen` enables reopening a resolved case.
  */
 export type SupportThreadApi = Pick<SupportApi, 'getCase' | 'sendMessage' | 'subscribe'> &
-  Partial<Pick<SupportApi, 'listMessages' | 'reopen'>>
+  Partial<Pick<SupportApi, 'listMessages' | 'reopen' | 'close'>>
 
 export interface UseSupportThreadOptions {
   api: SupportThreadApi
@@ -48,6 +48,8 @@ export interface UseSupportThread {
   loadOlder: () => Promise<void>
   /** Reopens the case through `api.reopen` and shows the case it returns. */
   reopen: (body?: string) => Promise<void>
+  /** Finishes the ticket through `api.close` (no-op when the transport has none). */
+  close: () => Promise<void>
   reload: () => void
 }
 
@@ -188,9 +190,19 @@ export function useSupportThread({ api, folio, authorName, newId = defaultId, pa
     [folio, newId],
   )
 
+  const close = useCallback(async () => {
+    const fn = apiRef.current.close
+    if (!fn) return
+    const c = await fn(folio)
+    setCase(c)
+    setOlderCursor(c.messages_older_cursor)
+    setSendErrorCode(null)
+  }, [folio])
+
   const reload = useCallback(() => setNonce((n) => n + 1), [])
 
   return {
+    close,
     status,
     error,
     errorCode: error ? supportErrorCode(error) : undefined,

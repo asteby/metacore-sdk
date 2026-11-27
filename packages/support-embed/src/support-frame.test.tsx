@@ -11,6 +11,11 @@ import type { ToFrame, ToParent } from './protocol'
 
 afterEach(() => {
   cleanup()
+  try {
+    window.localStorage.clear()
+  } catch {
+    // sin almacenamiento
+  }
   document.documentElement.removeAttribute('style')
   document.documentElement.classList.remove('dark')
 })
@@ -79,11 +84,18 @@ function renderFrame(embed: EmbedTransport, port: FramePort, extra: Partial<Reac
 }
 
 describe('SupportFrame', () => {
-  it('abre sesion, aplica el tema del perfil, avisa al padre y monta el hilo del caso del visitante', async () => {
+  it('abre sesion, aplica el tema del perfil, avisa al padre y muestra la lista de tickets (no un hilo mezclado)', async () => {
     const { embed, requests } = fakeEmbed()
     const { port, sent } = fakePort()
     renderFrame(embed, port)
     expect(screen.getByText('Conectando…')).toBeTruthy()
+    expect(await screen.findByText('Donde esta mi pedido')).toBeTruthy()
+    // El ultimo mensaje es de Soporte: el cliente lo ve como "Esperando tu respuesta", con 1 sin leer y "Nuevo ticket" a la mano.
+    expect(screen.getAllByText('Esperando tu respuesta').length).toBeGreaterThan(0)
+    expect(screen.getByLabelText('1 sin leer')).toBeTruthy()
+    expect(screen.getByTestId('new-ticket')).toBeTruthy()
+    expect(screen.queryByText('No veo el rastreo')).toBeNull()
+    fireEvent.click(screen.getByText('Donde esta mi pedido'))
     expect(await screen.findByText('No veo el rastreo')).toBeTruthy()
     expect(screen.getByText('Hola, en que podemos ayudarte?')).toBeTruthy()
     expect(document.documentElement.style.getPropertyValue('--primary')).toBe('#0E7490')
@@ -97,6 +109,7 @@ describe('SupportFrame', () => {
     const { embed } = fakeEmbed()
     const { port } = fakePort()
     const { container } = renderFrame(embed, port)
+    fireEvent.click(await screen.findByText('Donde esta mi pedido'))
     await screen.findByText(/revisando/)
     expect(container.querySelector('img[src="x"]')).toBeNull()
     expect(screen.queryByLabelText(/adjuntar/i)).toBeNull()
@@ -107,12 +120,43 @@ describe('SupportFrame', () => {
     const { embed, requests } = fakeEmbed({ cases: [] })
     const { port } = fakePort()
     renderFrame(embed, port)
-    fireEvent.change(await screen.findByLabelText('Tu mensaje'), { target: { value: 'Hola, necesito ayuda' } })
+    fireEvent.change(await screen.findByLabelText('Cuéntanos qué pasa'), { target: { value: 'Hola, necesito ayuda' } })
     fireEvent.change(screen.getByLabelText('Asunto (opcional)'), { target: { value: 'Pedido' } })
-    fireEvent.click(screen.getByText('Iniciar conversación'))
+    fireEvent.click(screen.getByText('Abrir ticket'))
     await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.path === `${API}/cases`)).toBe(true))
     expect(requests.find((r) => r.method === 'POST')!.body).toMatchObject({ subject: 'Pedido', description: 'Hola, necesito ayuda' })
     await waitFor(() => expect(requests.some((r) => r.method === 'GET' && r.path === `${API}/cases/c-2`)).toBe(true))
+  })
+
+  it('si abre otro ticket teniendo uno abierto, avisa con el folio y deja continuar el existente o abrir uno nuevo', async () => {
+    const { embed, requests } = fakeEmbed()
+    const { port } = fakePort()
+    renderFrame(embed, port)
+    fireEvent.click(await screen.findByTestId('new-ticket'))
+    fireEvent.change(await screen.findByLabelText('Cuéntanos qué pasa'), { target: { value: 'Otro tema' } })
+    fireEvent.click(screen.getByText('Abrir ticket'))
+    const notice = await screen.findByTestId('support-duplicate-notice')
+    expect(notice.textContent).toContain('TIENDA-000007')
+    expect(requests.some((r) => r.method === 'POST')).toBe(false)
+    fireEvent.click(screen.getByText('Abrir uno nuevo'))
+    await waitFor(() => expect(requests.some((r) => r.method === 'POST' && r.path === `${API}/cases`)).toBe(true))
+  })
+
+  it('un ticket resuelto pregunta "¿Se resolvió?" y ofrece reabrir (si el canal lo permite) y abrir otro; sin "Finalizar" porque el Hub no lo tiene', async () => {
+    const resolved = { ...CASE, status: 'resolved', solution: 'Ya salio el paquete', messages: CASE.messages }
+    const { embed } = fakeEmbed({ cases: [resolved] })
+    const orig = embed.transport
+    embed.transport = (async (req: SupportRequest) =>
+      req.method === 'GET' && req.path === `${API}/cases/c-1` ? { data: resolved } : orig(req)) as EmbedTransport['transport']
+    const { port } = fakePort()
+    renderFrame(embed, port, { allowReopen: true })
+    fireEvent.click(await screen.findByText('Donde esta mi pedido'))
+    expect(await screen.findByText('¿Se resolvió?')).toBeTruthy()
+    // El texto nombra el folio real, no el id interno del caso (c-1).
+    expect(screen.getByTestId('support-resolved-prompt').textContent).toContain('TIENDA-000007')
+    expect(screen.getByRole('button', { name: 'Reabrir' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Abrir otro ticket' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Finalizar' })).toBeNull()
   })
 
   it('origen no permitido o canal inactivo: avisa al loader para retirarse y muestra fuera de servicio', async () => {
@@ -134,7 +178,7 @@ describe('SupportFrame', () => {
     const { port } = fakePort()
     renderFrame(embed, port)
     fireEvent.click(await screen.findByText('Reintentar'))
-    expect(await screen.findByText('No veo el rastreo')).toBeTruthy()
+    expect(await screen.findByText('Donde esta mi pedido')).toBeTruthy()
     expect(embed.start).toHaveBeenCalledTimes(2)
   })
 
@@ -142,7 +186,7 @@ describe('SupportFrame', () => {
     const { embed } = fakeEmbed()
     const { port, emit } = fakePort()
     const { identity } = renderFrame(embed, port)
-    await screen.findByText('No veo el rastreo')
+    await screen.findByText('Donde esta mi pedido')
     await emit({ t: 'identify', token: 'aaa.bbb.ccc' })
     expect(identity.current).toBe('aaa.bbb.ccc')
     expect(embed.stop).toHaveBeenCalled()

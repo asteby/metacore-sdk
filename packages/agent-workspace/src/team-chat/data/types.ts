@@ -1,4 +1,13 @@
-import { isSupportCaseStatus, type SupportCaseCardProps } from '@asteby/metacore-support-ui'
+import {
+  isSupportCaseStatus,
+  isSupportClientState,
+  isSupportEvent,
+  type SupportCardAction,
+  type SupportCaseCardProps,
+  type SupportClientAction,
+  type SupportClientState,
+  type SupportEvent,
+} from '@asteby/metacore-support-ui'
 import { stripMarkdownLite } from '../../lib/plain-text'
 
 export type ChannelKind = 'team' | 'branch' | 'dm' | 'topic' | 'broadcast'
@@ -38,6 +47,15 @@ export interface ChatAttachment {
   folio?: string
   subject?: string
   solution?: string
+  /**
+   * Additive fields of a lifecycle event card (type=support_case): which transition it announces
+   * (opened | resolved | reopened | closed), the ticket's CURRENT client state, when it happened and the
+   * actions available now (texts come from the SDK by id; the server only declares ids, hrefs and requests).
+   */
+  event?: string
+  state?: string
+  at?: string
+  actions?: Array<{ id?: string; href?: string; request?: { method?: string; path?: string } }>
 }
 
 export type ChartKind =
@@ -86,6 +104,10 @@ export interface TeamChatMessage {
   reactions?: MessageReaction[] | null
   created_at: string
   edited_at?: string | null
+  /** Support contact only: the ticket sub-thread (channel id) this message belongs to. */
+  thread_id?: string
+  /** Support contact only: ticket summary riding on live messages so lists update without a refetch. */
+  ticket?: { folio?: string; state?: string; group?: string } | null
 }
 
 export interface MessageReplyPreview {
@@ -169,6 +191,11 @@ export interface TeamChatChannel {
   section?: string
   /** Virtual system contact key (e.g. "support"); informational, the SDK does not branch on it. */
   thread?: string
+  /**
+   * The contact has one sub-thread per ticket: opening it shows the ticket list (`GET /internal-chat/channels/:id/threads`)
+   * and each ticket is its own channel id for messages / send / read. Omitted = a single thread, as always.
+   */
+  sub_threads?: boolean
 }
 
 // OrgUser is a member of the organization, used by the "Nuevo mensaje"
@@ -200,6 +227,35 @@ export function supportCaseFromAttachment(
 ): Pick<SupportCaseCardProps, 'status' | 'folio' | 'subject' | 'solution'> | null {
   if (a.type !== 'support_case' || !isSupportCaseStatus(a.status) || !a.folio?.trim()) return null
   return { status: a.status, folio: a.folio, subject: a.subject?.trim() || undefined, solution: a.solution?.trim() || undefined }
+}
+
+/** A lifecycle event card (opened / resolved / reopened / closed) as props; null for a plain case card or other attachments. */
+export function supportEventFromAttachment(a: ChatAttachment): {
+  event: SupportEvent
+  folio: string
+  subject?: string
+  solution?: string
+  state?: SupportClientState
+  at?: string
+  actions: SupportCardAction[]
+} | null {
+  if (a.type !== 'support_case' || !isSupportEvent(a.event) || !a.folio?.trim()) return null
+  const actions: SupportCardAction[] = []
+  for (const x of a.actions ?? []) {
+    if (!x?.id || !['view', 'reopen', 'finalize', 'open_another', 'reply'].includes(x.id)) continue
+    const href = typeof x.href === 'string' && x.href.startsWith('/') && !x.href.startsWith('//') ? x.href : undefined
+    const request = x.request?.path && x.request.method ? { method: x.request.method, path: x.request.path } : undefined
+    actions.push({ id: x.id as SupportClientAction, href, request })
+  }
+  return {
+    event: a.event,
+    folio: a.folio,
+    subject: a.subject?.trim() || undefined,
+    solution: a.solution?.trim() || undefined,
+    state: isSupportClientState(a.state) ? a.state : undefined,
+    at: a.at,
+    actions,
+  }
 }
 
 export function callEventFromMessage(

@@ -129,6 +129,97 @@
       "support_disabled": "Support is not enabled for your organization.",
       "forbidden": "You do not have permission to write in this case.",
       "unknown": "The message could not be sent. Try again."
+    },
+    "state": {
+      "new": {
+        "label": "New",
+        "hint": "We received your ticket. Support will pick it up soon; meanwhile you can add more details."
+      },
+      "in_progress": {
+        "label": "In progress",
+        "hint": "Support is working on your ticket. We will let you know here as soon as they reply."
+      },
+      "waiting": {
+        "label": "Waiting for your reply",
+        "hint": "Support needs something from you to continue. Reply in this ticket."
+      },
+      "resolved": {
+        "label": "Resolved",
+        "hint": "Support marked the ticket as resolved. If it worked, finish it; if not, reopen it."
+      },
+      "reopened": {
+        "label": "Reopened",
+        "hint": "You reopened this ticket. Support will pick it up again soon."
+      },
+      "closed": {
+        "label": "Finished",
+        "hint": "This ticket is finished and no longer accepts messages. If you need more help, open a new ticket."
+      }
+    },
+    "action": {
+      "view": "View ticket",
+      "reopen": "Reopen",
+      "finalize": "Finish",
+      "openAnother": "Open another ticket",
+      "newTicket": "New ticket",
+      "reply": "Reply",
+      "back": "Back to tickets",
+      "working": "One moment…",
+      "failed": "The action could not be completed. Please try again."
+    },
+    "event": {
+      "opened": "Ticket opened",
+      "resolved": "Ticket resolved",
+      "reopened": "Ticket reopened",
+      "closed": "Ticket finished",
+      "openedHint": "Support received your ticket.",
+      "resolvedHint": "Support marked it as resolved.",
+      "reopenedHint": "Back in progress.",
+      "closedHint": "It no longer accepts messages."
+    },
+    "resolvedPrompt": {
+      "title": "Was it resolved?",
+      "body": "Support marked {{folio}} as resolved. Let us know if it worked.",
+      "replyBlocked": "To write here, reopen the ticket."
+    },
+    "closedPrompt": {
+      "title": "Ticket finished",
+      "body": "{{folio}} is finished. For another topic, open a new ticket."
+    },
+    "tickets": {
+      "title": "Your tickets",
+      "empty": "You have no tickets yet",
+      "emptyBody": "Open a ticket and we will help you right here.",
+      "group": {
+        "waiting": "Waiting for your reply",
+        "open": "Open",
+        "resolved": "Resolved",
+        "closed": "Finished"
+      },
+      "loadMore": "Show more finished",
+      "loading": "Loading tickets…",
+      "loadError": "Tickets could not be loaded",
+      "unread": "{{count}} unread",
+      "unreadTotal": "{{count}} unread messages in your tickets",
+      "you": "You: ",
+      "noMessages": "No messages",
+      "switch": "Switch ticket",
+      "current": "Current ticket",
+      "list": "Ticket list"
+    },
+    "duplicate": {
+      "title": "You already have an open ticket",
+      "body": "Ticket {{folio}} («{{subject}}») is still open. If it is the same topic, continue there; otherwise open a new one.",
+      "continue": "Continue {{folio}}",
+      "openNew": "Open a new one",
+      "cancel": "Cancel"
+    },
+    "newTicket": {
+      "title": "New ticket",
+      "body": "Tell us what is going on",
+      "placeholder": "Describe the problem; the first line becomes the subject.",
+      "submit": "Open ticket",
+      "hint": "A separate ticket with its own history will be opened."
     }
   },
   "common": {

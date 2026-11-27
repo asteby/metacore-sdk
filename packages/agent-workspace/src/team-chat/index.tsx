@@ -51,6 +51,16 @@ import { MessageReactions } from './components/message-reactions'
 import { CallEventBubble } from './components/call-event-bubble'
 import { ChatEmbedList, isChatEmbed } from './components/chat-embed-card'
 import { ComposerExtraActions } from './components/composer-extra-actions'
+import {
+  SupportEventMessage,
+  SupportTicketChrome,
+  SupportTicketFooter,
+  SupportTicketsLanding,
+  isSupportEventMessage,
+  latestEventActions,
+  useSupportCardActions,
+} from './components/support-tickets-pane'
+import { useSupportTickets } from './hooks/use-support-tickets'
 import { VoiceMessage } from './components/voice-message'
 import { ReplyQuote } from './components/reply-quote'
 import { useCall } from './call-provider'
@@ -137,6 +147,15 @@ export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
   // Server-declared per-channel capabilities (all true when the channel declares none).
   const caps = useMemo(() => resolveChannelCapabilities(activeChannel), [activeChannel])
 
+  // A contact with one sub-thread per ticket (support): the list is the landing and each ticket is its own
+  // channel id for messages / send / read. Any other channel keeps viewId === activeId.
+  const tickets = useSupportTickets(activeChannel)
+  const viewId = tickets.enabled ? (tickets.selected?.id ?? null) : activeId
+  const viewIdRef = useRef<string | null>(null)
+  viewIdRef.current = viewId
+  const ticketsRef = useRef(tickets)
+  ticketsRef.current = tickets
+
   useEffect(() => {
     if (activeId === ABY_CHANNEL_ID) rememberAbyFocus()
     else if (activeId) rememberTeamChannel(activeId)
@@ -195,7 +214,7 @@ export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
 
   // Load messages when the active channel changes.
   useEffect(() => {
-    if (!activeId || activeId === ABY_CHANNEL_ID) {
+    if (!viewId || viewId === ABY_CHANNEL_ID) {
       setMessages([])
       setLoadingMessages(false)
       setReplyTo(null)
@@ -208,11 +227,14 @@ export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
     setLoadingMessages(true)
     setMessages([])
     api
-      .get(`/internal-chat/channels/${activeId}/messages`)
+      .get(`/internal-chat/channels/${viewId}/messages`)
       .then(({ data }) => {
         if (cancelled) return
         setMessages(((data.messages ?? []) as TeamChatMessage[]).slice().reverse())
-        markRead(activeId)
+        void markRead(viewId).then(() => {
+          // Reading a ticket lowers the contact's total unread: refresh the row.
+          if (ticketsRef.current.enabled) void loadChannels()
+        })
       })
       .catch(() => {
         if (!cancelled) toast.error(t('team_chat.messages_error', 'No se pudieron cargar los mensajes'))
@@ -221,7 +243,7 @@ export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
     return () => {
       cancelled = true
     }
-  }, [activeId, markRead, t])
+  }, [viewId, markRead, loadChannels, t])
 
   // Tell the global WS notifier which channel is focused so toasts fire for
   // other threads (and clear when leaving this page / clearing selection).
@@ -235,6 +257,18 @@ export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
     const unsub = subscribe(WS_EVENT, (evt: WSEvent) => {
       const msg = evt.payload as TeamChatMessage
       if (!msg?.channel_id) return
+      // Support tickets: the contact channel id rides on the message, the ticket on thread_id.
+      if (msg.thread_id && msg.channel_id === activeIdRef.current && ticketsRef.current.enabled) {
+        const viewing = ticketsRef.current.onLiveMessage(msg)
+        if (viewing) {
+          setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
+          void markRead(msg.thread_id)
+        }
+        setChannels((prev) =>
+          prev.map((c) => (c.id === msg.channel_id ? { ...c, last_message: msg, unread: viewing ? c.unread : c.unread + 1 } : c)),
+        )
+        return
+      }
       if (msg.channel_id === activeIdRef.current) {
         setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
         markRead(msg.channel_id)
@@ -320,7 +354,7 @@ export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
   }, [])
   const send = useCallback(async () => {
     const body = draft.trim()
-    if ((!body && pendingFiles.length === 0) || !activeId || sending) return
+    if ((!body && pendingFiles.length === 0) || !viewId || sending) return
     setSending(true)
     setDraft('')
     const files = pendingFiles
@@ -337,7 +371,7 @@ export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
       } = { body }
       if (files.length) payload.attachments = files
       if (replying?.id) payload.reply_to_id = replying.id
-      const { data } = await api.post(`/internal-chat/channels/${activeId}/messages`, payload)
+      const { data } = await api.post(`/internal-chat/channels/${viewId}/messages`, payload)
       const msg = data.message as TeamChatMessage
       setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
       setChannels((prev) =>
@@ -363,11 +397,11 @@ export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
         }
       })
     }
-  }, [draft, activeId, sending, pendingFiles, replyTo, t])
+  }, [draft, activeId, viewId, sending, pendingFiles, replyTo, t])
 
   const sendAttachments = useCallback(
     async (files: ChatAttachment[], body = '') => {
-      if (!activeId || (!body && files.length === 0)) return
+      if (!viewId || (!body && files.length === 0)) return
       setSending(true)
       const replying = replyTo
       setReplyTo(null)
@@ -379,7 +413,7 @@ export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
           reply_to_id?: string
         } = { body, attachments: files }
         if (replying?.id) payload.reply_to_id = replying.id
-        const { data } = await api.post(`/internal-chat/channels/${activeId}/messages`, payload)
+        const { data } = await api.post(`/internal-chat/channels/${viewId}/messages`, payload)
         const msg = data.message as TeamChatMessage
         setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
         setChannels((prev) =>
@@ -398,7 +432,7 @@ export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
         })
       }
     },
-    [activeId, replyTo, t],
+    [activeId, viewId, replyTo, t],
   )
 
   const startReply = useCallback((m: TeamChatMessage) => {
@@ -591,6 +625,32 @@ export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
   }, [messages, locale])
 
   const isChannel = activeChannel && activeChannel.kind !== 'dm'
+
+  // Lifecycle cards: only the newest keeps its actions; a resolved / finished ticket swaps the composer for its prompt.
+  const cardActions = useSupportCardActions(
+    useCallback(() => {
+      void ticketsRef.current.refresh()
+      if (viewIdRef.current) {
+        api
+          .get(`/internal-chat/channels/${viewIdRef.current}/messages`)
+          .then(({ data }) => setMessages(((data.messages ?? []) as TeamChatMessage[]).slice().reverse()))
+          .catch(() => {})
+      }
+    }, []),
+  )
+  const selectedTicket = tickets.selected
+  const ticketFooter =
+    tickets.enabled && selectedTicket && (selectedTicket.state === 'resolved' || selectedTicket.state === 'closed') ? (
+      <SupportTicketFooter
+        state={selectedTicket.state}
+        folio={selectedTicket.folio}
+        actions={latestEventActions(messages)}
+        onAction={cardActions.run}
+        onOpenAnother={tickets.startNew}
+        busy={cardActions.busy}
+        failed={cardActions.failed}
+      />
+    ) : null
 
   return (
     <>
@@ -839,6 +899,13 @@ export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
                 </div>
               </div>
 
+              {tickets.enabled && !tickets.selected ? (
+                <div className='min-h-0 flex-1'>
+                  <SupportTicketsLanding tickets={tickets} />
+                </div>
+              ) : (
+              <>
+              {tickets.enabled ? <SupportTicketChrome tickets={tickets} /> : null}
               <div className='flex min-h-0 flex-1 flex-col gap-2 rounded-md px-4 pt-0'>
                 <div className='flex min-h-0 flex-1 flex-col'>
                   <div className='relative -me-4 flex min-h-0 flex-1 flex-col overflow-y-hidden'>
@@ -883,7 +950,7 @@ export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
                       ) : (
                         Object.keys(groupedMessages).map((day) => (
                           <Fragment key={day}>
-                            <div className='sticky top-2 z-20 flex justify-center py-2'>
+                            <div className={cn('flex justify-center py-2', tickets.enabled ? 'relative' : 'sticky top-2 z-20')}>
                               <span className='bg-secondary/80 text-secondary-foreground rounded-full px-3 py-1 text-xs font-medium shadow-xs backdrop-blur-md'>
                                 {day}
                               </span>
@@ -893,6 +960,16 @@ export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
                               const prev = groupedMessages[day][index - 1]
                               const showSender = isChannel && !mine && (!prev || prev.sender_id !== m.sender_id)
                               const attachments = parseAttachments(m.attachments)
+                              if (isSupportEventMessage(m)) {
+                                return (
+                                  <SupportEventMessage
+                                    key={m.id}
+                                    message={m}
+                                    onAction={cardActions.run}
+                                    busy={cardActions.busy}
+                                  />
+                                )
+                              }
                               const callEvt = callEventFromMessage(m)
                               if (callEvt) {
                                 return (
@@ -1171,6 +1248,8 @@ export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
                   </div>
                 )}
 
+                {ticketFooter}
+                {!ticketFooter && (
                 <form
                   className='flex w-full flex-none gap-2 pb-3'
                   onSubmit={(e) => {
@@ -1236,7 +1315,10 @@ export function TeamChat({ onSectionAction }: TeamChatProps = {}) {
                     </Button>
                   </div>
                 </form>
+                )}
               </div>
+              </>
+              )}
             </div>
           ) : (
             <div className='bg-card absolute inset-0 start-full z-50 hidden w-full flex-1 flex-col justify-center rounded-md border shadow-xs sm:static sm:z-auto sm:flex'>

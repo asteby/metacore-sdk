@@ -8,10 +8,14 @@ import {
   type InboxLabels,
   type ThreadMessage,
 } from '@asteby/metacore-inbox'
-import { Alert, AlertDescription, AlertTitle, Badge, Button } from '@asteby/metacore-ui/primitives'
+import { Alert, AlertDescription, Badge, Button } from '@asteby/metacore-ui/primitives'
 import type { SupportAttachmentView, SupportCaseStatus, SupportMessage } from '@asteby/metacore-sdk/support'
 import { AttachmentViewer, MessageAttachments, usable } from './attachments'
-import { STATUS_VARIANT } from './support-case-card'
+import { clientStateOf } from './lifecycle'
+import { SupportResolvedPrompt } from './resolved-prompt'
+import { SupportStatusBadge } from './status-badge'
+import { SupportTicketHeader } from './ticket-switcher'
+import type { SupportTicketItem } from './ticket-list'
 import { useSupportT } from './labels'
 import { useSupportThread, type SupportThreadApi } from './use-support-thread'
 
@@ -29,6 +33,17 @@ export interface SupportThreadProps {
   allowAttachments?: boolean
   /** Overrides the reopen action (default: `api.reopen`). The reopen button shows when this or `api.reopen` exists; the thread reloads after `onReopen`. */
   onReopen?: () => void | Promise<void>
+  /** Finishes the ticket (the person confirms it was resolved). The button shows when this or `api.close` exists. */
+  onFinalize?: () => void | Promise<void>
+  /** "Open another ticket" from the resolved / finished footer; hidden when absent. */
+  onOpenAnother?: () => void
+  /** Shows the ticket header (folio, subject, state with its one-line explanation) with a back button; the list is the host's. */
+  onBack?: () => void
+  /** Other tickets for the header switcher, and what picking one does. */
+  others?: SupportTicketItem[]
+  onSwitch?: (t: SupportTicketItem) => void
+  /** Shows the ticket header (with the state explanation) even without a back button. */
+  showHint?: boolean
   /** Idempotency key generator for outgoing messages. */
   newId?: () => string
   /** Clock, injectable for expiry checks. */
@@ -64,20 +79,28 @@ export function SupportThread({
   maxAttachmentBytes,
   allowAttachments,
   onReopen,
+  onFinalize,
+  onOpenAnother,
+  onBack,
+  others,
+  onSwitch,
+  showHint,
   newId,
   now = Date.now,
   className,
 }: SupportThreadProps) {
   const { t, locale } = useSupportT()
-  const { status, error, errorCode, supportCase, send, sendErrorCode, retry, hasOlder, loadingOlder, loadOlder, reopen, reload } = useSupportThread({
+  const { status, error, errorCode, supportCase, send, sendErrorCode, retry, hasOlder, loadingOlder, loadOlder, reopen, close, reload } = useSupportThread({
     api,
     folio,
     authorName,
     newId,
   })
   const canReopen = Boolean(onReopen || api.reopen)
+  const canFinalize = Boolean(onFinalize || api.close)
   const [viewing, setViewing] = useState<SupportAttachmentView | null>(null)
-  const [reopening, setReopening] = useState(false)
+  const [busyAction, setBusyAction] = useState<string | null>(null)
+  const [actionFailed, setActionFailed] = useState(false)
   const uploaded = useRef(new Map<string, SupportAttachmentView>())
   const clock = now()
 
@@ -155,19 +178,40 @@ export function SupportThread({
     [send],
   )
 
-  const handleReopen = async () => {
-    setReopening(true)
+  const runAction = (id: string, fn: () => Promise<void>) => async () => {
+    setBusyAction(id)
+    setActionFailed(false)
     try {
-      if (onReopen) {
-        await onReopen()
-        reload()
-      } else await reopen()
+      await fn()
+    } catch {
+      setActionFailed(true)
     } finally {
-      setReopening(false)
+      setBusyAction(null)
     }
   }
+  const handleReopen = runAction('reopen', async () => {
+    if (onReopen) {
+      await onReopen()
+      reload()
+    } else await reopen()
+  })
+  const handleFinalize = runAction('finalize', async () => {
+    if (onFinalize) {
+      await onFinalize()
+      reload()
+    } else await close()
+  })
 
   const caseStatus = supportCase?.status
+  const lastReal = [...(supportCase?.messages ?? [])].reverse().find((m) => m.author_type !== 'system')
+  const clientState = supportCase
+    ? clientStateOf({
+        status: supportCase.status,
+        lifecycle: supportCase.lifecycle,
+        lastAuthor: lastReal?.author_type,
+        replied: (supportCase.messages ?? []).some((m) => m.author_type === 'agent' || m.author_type === 'ai'),
+      })
+    : undefined
   let footer: ReactNode = null
   if (status === 'ready' && caseStatus === 'open') {
     footer = (
@@ -191,25 +235,33 @@ export function SupportThread({
   } else if (status === 'ready' && caseStatus) {
     const resolved = caseStatus === 'resolved'
     footer = (
-      <div className="p-3 sm:p-4">
-        <Alert>
-          <AlertTitle>{t(resolved ? 'resolvedTitle' : 'closedTitle')}</AlertTitle>
-          <AlertDescription>
-            <p>{supportCase?.solution || t(resolved ? 'resolvedBody' : 'closedBody')}</p>
-            {resolved && canReopen && (
-              <Button type="button" variant="outline" size="sm" className="mt-2" disabled={reopening} onClick={handleReopen}>
-                {reopening ? t('reopening') : t('reopen')}
-              </Button>
-            )}
-          </AlertDescription>
-        </Alert>
-      </div>
+      <SupportResolvedPrompt
+        folio={supportCase?.folio ?? folio}
+        state={resolved ? 'resolved' : 'closed'}
+        solution={supportCase?.solution}
+        onReopen={resolved && canReopen ? handleReopen : undefined}
+        onFinalize={resolved && canFinalize ? handleFinalize : undefined}
+        onOpenAnother={onOpenAnother}
+        busy={busyAction}
+        failed={actionFailed}
+      />
     )
   }
 
+  const ownHeader = Boolean((onBack || showHint) && supportCase && clientState)
   return (
     <InboxProvider locale={locale}>
       <div className={cx('flex h-full min-h-0 flex-col', className)}>
+      {ownHeader && supportCase && clientState ? (
+        <SupportTicketHeader
+          folio={supportCase.folio}
+          subject={supportCase.subject}
+          state={clientState}
+          onBack={onBack}
+          others={others}
+          onSwitch={onSwitch}
+        />
+      ) : null}
       {hasOlder && (
         <div className="flex shrink-0 justify-center border-b border-border/50 p-2">
           <Button type="button" variant="ghost" size="sm" disabled={loadingOlder} onClick={() => void loadOlder().catch(() => {})}>
@@ -219,18 +271,14 @@ export function SupportThread({
       )}
       <ThreadView
         className="min-h-0 flex-1"
-        title={supportCase?.subject}
+        title={ownHeader ? undefined : supportCase?.subject}
         messages={messages}
         loading={status === 'loading'}
         error={status === 'error' ? error : undefined}
         onRetry={errorCode && FINAL_LOAD_ERRORS.has(errorCode) ? undefined : reload}
         labels={labels}
         actions={
-          caseStatus ? (
-            <Badge variant={STATUS_VARIANT[caseStatus] ?? 'muted'} data-testid="case-status">
-              {t(`status.${caseStatus}`)}
-            </Badge>
-          ) : undefined
+          clientState && !ownHeader ? <SupportStatusBadge state={clientState} /> : undefined
         }
         onOpenAttachment={(a) => setViewing(index.attachments.get(a.id) ?? null)}
         onRetrySend={(m) => void retry(m.id).catch(() => {})}

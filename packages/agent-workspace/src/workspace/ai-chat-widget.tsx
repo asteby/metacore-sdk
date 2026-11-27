@@ -34,6 +34,16 @@ import { MessageReactions } from '../team-chat/components/message-reactions'
 import { CallEventBubble } from '../team-chat/components/call-event-bubble'
 import { ChatEmbedList, isChatEmbed } from '../team-chat/components/chat-embed-card'
 import { ComposerExtraActions } from '../team-chat/components/composer-extra-actions'
+import {
+  SupportEventMessage,
+  SupportTicketChrome,
+  SupportTicketFooter,
+  SupportTicketsLanding,
+  isSupportEventMessage,
+  latestEventActions,
+  useSupportCardActions,
+} from '../team-chat/components/support-tickets-pane'
+import { useSupportTickets } from '../team-chat/hooks/use-support-tickets'
 import { VoiceMessage } from '../team-chat/components/voice-message'
 import { ReplyQuote } from '../team-chat/components/reply-quote'
 import { useCall } from '../team-chat/call-provider'
@@ -87,6 +97,13 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
   const [teamReplyTo, setTeamReplyTo] = useState<MessageReplyPreview | null>(null)
   const teamChannelIdRef = useRef<string | null>(null)
   teamChannelIdRef.current = teamChannelId
+  // Support contact with one sub-thread per ticket: the list is the landing, each ticket its own channel id.
+  const tickets = useSupportTickets(teamChannels.find((c) => c.id === teamChannelId) ?? null)
+  const viewId = tickets.enabled ? (tickets.selected?.id ?? null) : teamChannelId
+  const viewIdRef = useRef<string | null>(null)
+  viewIdRef.current = viewId
+  const ticketsRef = useRef(tickets)
+  ticketsRef.current = tickets
   const teamScrollRef = useRef<HTMLDivElement>(null)
   const teamComposerRef = useRef<HTMLInputElement>(null)
   const teamFileRef = useRef<HTMLInputElement>(null)
@@ -198,7 +215,7 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
   }, [open, teamChannelId, loadTeamChannels])
 
   useEffect(() => {
-    if (!teamChannelId || teamChannelId === ABY_CHANNEL_ID) {
+    if (!viewId || viewId === ABY_CHANNEL_ID) {
       setTeamMessages([])
       setTeamMessagesLoading(false)
       setTeamReplyTo(null)
@@ -209,16 +226,22 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
     setTeamMessagesLoading(true)
     setTeamMessages([])
     api
-      .get(`/internal-chat/channels/${teamChannelId}/messages`)
+      .get(`/internal-chat/channels/${viewId}/messages`)
       .then(({ data }) => {
         if (cancelled) return
         const msgs = ((data.messages ?? []) as TeamChatMessage[]).slice().reverse()
         setTeamMessages(msgs)
-        void api.post(`/internal-chat/channels/${teamChannelId}/read`).catch(() => {})
+        void api
+          .post(`/internal-chat/channels/${viewId}/read`)
+          .then(() => {
+            // Reading a ticket lowers the contact's total unread: refresh the row.
+            if (ticketsRef.current.enabled) void loadTeamChannels()
+          })
+          .catch(() => {})
         const newest = msgs[msgs.length - 1]
         setTeamChannels((prev) =>
           prev.map((c) =>
-            c.id === teamChannelId
+            c.id === teamChannelId && !ticketsRef.current.enabled
               ? { ...c, unread: 0, last_message: newest ?? c.last_message }
               : c,
           ),
@@ -233,12 +256,24 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
     return () => {
       cancelled = true
     }
-  }, [teamChannelId])
+  }, [viewId, teamChannelId, loadTeamChannels])
 
   useEffect(() => {
     return subscribe(TEAM_WS, (evt: WSEvent) => {
       const msg = evt.payload as TeamChatMessage
       if (!msg?.channel_id) return
+      // Support tickets: the contact channel id rides on the message, the ticket on thread_id.
+      if (msg.thread_id && msg.channel_id === teamChannelIdRef.current && ticketsRef.current.enabled) {
+        const viewing = open && ticketsRef.current.onLiveMessage(msg)
+        if (viewing) {
+          setTeamMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
+          void api.post(`/internal-chat/channels/${msg.thread_id}/read`).catch(() => {})
+        }
+        setTeamChannels((prev) =>
+          prev.map((c) => (c.id === msg.channel_id ? { ...c, last_message: msg, unread: viewing ? c.unread : c.unread + 1 } : c)),
+        )
+        return
+      }
       if (open && msg.channel_id === teamChannelIdRef.current) {
         setTeamMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
       }
@@ -321,7 +356,7 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
 
   const sendTeamMessage = useCallback(async () => {
     const body = teamDraft.trim()
-    if ((!body && teamPending.length === 0) || !teamChannelId || teamSending) return
+    if ((!body && teamPending.length === 0) || !viewId || teamSending) return
     setTeamSending(true)
     setTeamDraft('')
     const files = teamPending
@@ -336,7 +371,7 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
       } = { body }
       if (files.length) payload.attachments = files
       if (replying?.id) payload.reply_to_id = replying.id
-      const { data } = await api.post(`/internal-chat/channels/${teamChannelId}/messages`, payload)
+      const { data } = await api.post(`/internal-chat/channels/${viewId}/messages`, payload)
       const msg = data.message as TeamChatMessage
       setTeamMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
       setTeamChannels((prev) =>
@@ -352,7 +387,7 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
       setTeamSending(false)
       requestAnimationFrame(() => teamComposerRef.current?.focus())
     }
-  }, [teamDraft, teamChannelId, teamSending, teamPending, teamReplyTo])
+  }, [teamDraft, teamChannelId, viewId, teamSending, teamPending, teamReplyTo])
 
   const attachTeamFiles = useCallback(async (fileList: FileList | File[] | null) => {
     if (!fileList || (Array.isArray(fileList) ? !fileList.length : !fileList.length)) return
@@ -401,6 +436,31 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
 
 
   const activeTeamChannel = teamChannels.find((c) => c.id === teamChannelId) ?? null
+  // Lifecycle cards: only the newest keeps its actions; a resolved / finished ticket swaps the composer for its prompt.
+  const cardActions = useSupportCardActions(
+    useCallback(() => {
+      void ticketsRef.current.refresh()
+      if (viewIdRef.current) {
+        api
+          .get(`/internal-chat/channels/${viewIdRef.current}/messages`)
+          .then(({ data }) => setTeamMessages(((data.messages ?? []) as TeamChatMessage[]).slice().reverse()))
+          .catch(() => {})
+      }
+    }, []),
+  )
+  const selectedTicket = tickets.selected
+  const ticketFooter =
+    tickets.enabled && selectedTicket && (selectedTicket.state === 'resolved' || selectedTicket.state === 'closed') ? (
+      <SupportTicketFooter
+        state={selectedTicket.state}
+        folio={selectedTicket.folio}
+        actions={latestEventActions(teamMessages)}
+        onAction={cardActions.run}
+        onOpenAnother={tickets.startNew}
+        busy={cardActions.busy}
+        failed={cardActions.failed}
+      />
+    ) : null
   const teamUnread = teamChannels.reduce((n, c) => n + (c.unread || 0), 0)
   const abyLiveActive = useAbyLiveStore((s) => s.active)
   const abyLivePhase = useAbyLiveStore((s) => s.phase)
@@ -835,6 +895,13 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
                   </Link>
                 </div>
               </div>
+              {tickets.enabled && !tickets.selected ? (
+                <div className="min-h-0 flex-1">
+                  <SupportTicketsLanding tickets={tickets} />
+                </div>
+              ) : (
+              <>
+              {tickets.enabled ? <SupportTicketChrome tickets={tickets} /> : null}
               <div className="min-h-0 flex-1 overflow-y-auto px-3 py-2" ref={teamScrollRef}>
                 <div className="flex flex-col gap-1.5">
                   {teamMessagesLoading ? (
@@ -848,6 +915,16 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
                     teamMessages.map((m) => {
                     const mine = m.sender_id === currentUser?.id
                     const attachments = parseAttachments(m.attachments)
+                    if (isSupportEventMessage(m)) {
+                      return (
+                        <SupportEventMessage
+                          key={m.id}
+                          message={m}
+                          onAction={cardActions.run}
+                          busy={cardActions.busy}
+                        />
+                      )
+                    }
                     const callEvt = callEventFromMessage(m)
                     if (callEvt) {
                       return (
@@ -1072,6 +1149,8 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
                   <ReplyQuote reply={teamReplyTo} onClear={() => setTeamReplyTo(null)} />
                 </div>
               )}
+              {ticketFooter}
+              {!ticketFooter && (
               <form
                 className="flex shrink-0 items-center gap-0.5 border-t px-1.5 py-2"
                 onSubmit={(e) => {
@@ -1096,10 +1175,10 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
                     requestAnimationFrame(() => teamComposerRef.current?.focus())
                   }}
                   onVoiceReady={async (file) => {
-                    if (!teamChannelId) return
+                    if (!viewId) return
                     setTeamSending(true)
                     try {
-                      const { data } = await api.post(`/internal-chat/channels/${teamChannelId}/messages`, {
+                      const { data } = await api.post(`/internal-chat/channels/${viewId}/messages`, {
                         body: '',
                         attachments: [file],
                       })
@@ -1130,6 +1209,9 @@ export function AIChatWidget({ fabDefault }: { fabDefault?: FabPosition } = {}) 
                   <Send className="h-4 w-4" />
                 </Button>
               </form>
+              )}
+              </>
+              )}
             </>
           ) : (
             <div className="min-h-0 flex-1 overflow-y-auto">

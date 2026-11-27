@@ -226,6 +226,7 @@ export function SupportEmbed(props: SupportEmbedProps) {
               prefersDark={typeof window !== 'undefined' && (window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false)}
               root={rootEl}
               mode={mode}
+              storageKey={channel}
               fill
             />
           </I18nextProvider>
