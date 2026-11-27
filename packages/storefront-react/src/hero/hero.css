@@ -1,7 +1,9 @@
 /*
  * @asteby/storefront-react/hero.css: estilos por omisión de HeroSlider y BannerCarousel (subpath /hero).
  * CSS plano, sin Tailwind; todo se viste con variables y con `classNames`:
- *   --sf-hero-scrim        velo sobre la imagen cuando hay mensaje (por omisión un degradado oscuro de izquierda a derecha)
+ *   --sf-hero-scrim        velo sobre la imagen cuando hay mensaje (por omisión un degradado oscuro hacia el lado del texto; si lo defines
+ *                          sustituye al degradado y a la intensidad `scrim` del editor)
+ *   --sf-hero-scrim-color  canales RGB del velo (por omisión «0 0 0»)
  *   --sf-hero-fg           color del mensaje sobre la imagen
  *   --sf-hero-control-bg / --sf-hero-control-fg   flechas y pausa
  *   --sf-hero-dot          puntos (--sf-hero-dot-active el activo)
@@ -19,14 +21,31 @@
 [data-sf-hero-slide] picture, [data-sf-banner-image] { display: block; }
 [data-sf-banner-image] { width: 100%; height: auto; }
 [data-sf-banner] { position: relative; isolation: isolate; color: var(--sf-hero-fg, #fff); }
+/* Fórmula del banner (ver banner.tsx): el editor de OPS elige dónde va el texto, qué tan fuerte es el velo y qué parte de la imagen
+   se queda a la vista. Sin esos campos = el aspecto de siempre (texto a la izquierda, centrado, velo medio, imagen centrada). */
+[data-sf-banner] { --_a1: 0.7; --_a2: 0.3; --_dir: 90deg; --_justify: center; --_align: flex-start; --_text: start; }
+[data-sf-banner][data-scrim="none"] { --_a1: 0; --_a2: 0; }
+[data-sf-banner][data-scrim="soft"] { --_a1: 0.45; --_a2: 0.15; }
+[data-sf-banner][data-scrim="strong"] { --_a1: 0.85; --_a2: 0.5; }
+[data-sf-banner][data-text-position="right"] { --_dir: 270deg; --_align: flex-end; --_text: end; }
+[data-sf-banner][data-text-position="center"] { --_align: center; --_text: center; }
+[data-sf-banner][data-text-vertical="top"] { --_dir: 180deg; --_justify: flex-start; }
+[data-sf-banner][data-text-vertical="bottom"] { --_dir: 0deg; --_justify: flex-end; }
 [data-sf-banner-scrim] {
   position: absolute; inset: 0;
-  background: var(--sf-hero-scrim, linear-gradient(90deg, rgb(0 0 0 / 0.7), rgb(0 0 0 / 0.3), transparent));
+  background: var(--sf-hero-scrim, linear-gradient(var(--_dir), rgb(var(--sf-hero-scrim-color, 0 0 0) / var(--_a1)), rgb(var(--sf-hero-scrim-color, 0 0 0) / var(--_a2)), transparent));
+}
+/* Texto al centro (ni arriba ni abajo): un velo parejo, no hay lado hacia donde aclarar. */
+[data-sf-banner][data-text-position="center"]:not([data-text-vertical="top"]):not([data-text-vertical="bottom"]) [data-sf-banner-scrim] {
+  background: var(--sf-hero-scrim, rgb(var(--sf-hero-scrim-color, 0 0 0) / var(--_a2)));
 }
 [data-sf-banner-content] {
-  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
-  gap: 0.75rem; padding: 1.5rem 1.5rem 3.5rem;
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: var(--_align); justify-content: var(--_justify);
+  gap: 0.75rem; padding: 1.5rem 1.5rem 3.5rem; text-align: var(--_text);
 }
+[data-sf-banner-content] > * { max-width: 100%; }
+[data-sf-banner][data-text-size="small"] [data-sf-banner-title] { font-size: clamp(1.25rem, 2.6vw, 2.25rem); }
+[data-sf-banner][data-text-size="large"] [data-sf-banner-title] { font-size: clamp(2.25rem, 5.5vw, 4.5rem); }
 [data-sf-banner-eyebrow] { margin: 0; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.85; }
 [data-sf-banner-title] { margin: 0; max-width: 16ch; font-size: clamp(1.75rem, 4vw, 3.25rem); line-height: 1.05; font-weight: 800; }
 [data-sf-banner-text] { margin: 0; max-width: 34ch; font-size: 0.9375rem; opacity: 0.92; }
