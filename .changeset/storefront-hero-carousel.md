@@ -1,5 +1,0 @@
----
-"@asteby/storefront-react": minor
----
-
-Carrusel de portada para cualquier tienda: nuevo subpath `@asteby/storefront-react/hero` (+ `hero.css`). `HeroSlider` es una pista con scroll-snap que funciona sin JavaScript y suma flechas, puntos, pausa, teclado ←/→ y avance automático que respeta `prefers-reduced-motion`, hover/foco y pestaña oculta (WCAG 2.2.2). `BannerCarousel` pinta diapositivas `{ image, image_mobile, alt, url, eyebrow, title, text, cta_label }` con el mensaje como HTML real (traducible por idioma y mercado, no dentro de la imagen), la primera imagen como LCP, tamaños fijos y un solo `<h1>`; una diapositiva sin mensaje es toda un enlace. `bannerCarouselSection()` y `bannerCarouselSchema` registran la sección `banner_carousel` con el contrato del addon `storefront_content` (`slides` + `synced_slides`). Sin acoplarse a la tienda ni al router: enlaces por `renderLink`/`resolveHref`, textos es/en por `locale` y `messages`, estilo por `classNames` y variables `--sf-hero-*`. Aditivo.
