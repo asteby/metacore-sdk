@@ -23,6 +23,7 @@ export default defineConfig({
     contact: 'src/contact/index.ts',
     product: 'src/product/index.ts',
     reviews: 'src/reviews/index.ts',
+    hero: 'src/hero/index.ts',
     ui: 'src/ui/index.ts',
   },
   format: ['esm', 'cjs'],

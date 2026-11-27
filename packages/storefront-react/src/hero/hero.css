@@ -1,0 +1,70 @@
+/*
+ * @asteby/storefront-react/hero.css: estilos por omisión de HeroSlider y BannerCarousel (subpath /hero).
+ * CSS plano, sin Tailwind; todo se viste con variables y con `classNames`:
+ *   --sf-hero-scrim        velo sobre la imagen cuando hay mensaje (por omisión un degradado oscuro de izquierda a derecha)
+ *   --sf-hero-fg           color del mensaje sobre la imagen
+ *   --sf-hero-control-bg / --sf-hero-control-fg   flechas y pausa
+ *   --sf-hero-dot          puntos (--sf-hero-dot-active el activo)
+ *   --sf-hero-mobile-height  alto de una diapositiva con mensaje en móvil (la imagen se recorta con object-fit)
+ */
+[data-sf-hero] { position: relative; overflow: hidden; }
+[data-sf-hero-track] {
+  display: flex; margin: 0; padding: 0; list-style: none; overflow-x: auto;
+  scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain;
+}
+[data-sf-hero-track]::-webkit-scrollbar { display: none; }
+[data-sf-hero-slide] { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; }
+
+/* Diapositiva */
+[data-sf-hero-slide] picture, [data-sf-banner-image] { display: block; }
+[data-sf-banner-image] { width: 100%; height: auto; }
+[data-sf-banner] { position: relative; isolation: isolate; color: var(--sf-hero-fg, #fff); }
+[data-sf-banner-scrim] {
+  position: absolute; inset: 0;
+  background: var(--sf-hero-scrim, linear-gradient(90deg, rgb(0 0 0 / 0.7), rgb(0 0 0 / 0.3), transparent));
+}
+[data-sf-banner-content] {
+  position: absolute; inset: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+  gap: 0.75rem; padding: 1.5rem 1.5rem 3.5rem;
+}
+[data-sf-banner-eyebrow] { margin: 0; font-size: 0.75rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.85; }
+[data-sf-banner-title] { margin: 0; max-width: 16ch; font-size: clamp(1.75rem, 4vw, 3.25rem); line-height: 1.05; font-weight: 800; }
+[data-sf-banner-text] { margin: 0; max-width: 34ch; font-size: 0.9375rem; opacity: 0.92; }
+[data-sf-banner-content] > a {
+  margin-top: 0.5rem; display: inline-block; padding: 0.7rem 1.4rem; border-radius: var(--radius, 0.375rem); font-weight: 700; text-decoration: none;
+  background: var(--background, #fff); color: var(--foreground, #111);
+}
+[data-sf-banner-content] > a:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+@media (max-width: 639px) {
+  [data-sf-banner-image][data-with-message] { height: var(--sf-hero-mobile-height, 26rem); object-fit: cover; }
+}
+@media (min-width: 640px) {
+  [data-sf-banner-content] { padding: 3rem; }
+  [data-sf-banner-text] { font-size: 1.125rem; }
+}
+
+/* Controles (solo con más de una diapositiva) */
+[data-sf-hero-arrow] {
+  position: absolute; top: 50%; z-index: 2; display: none; place-items: center; width: 2.75rem; height: 2.75rem; padding: 0; transform: translateY(-50%);
+  border: 0; border-radius: 9999px; font-size: 1.5rem; line-height: 1; cursor: pointer; backdrop-filter: blur(4px);
+  background: var(--sf-hero-control-bg, rgb(0 0 0 / 0.5)); color: var(--sf-hero-control-fg, #fff);
+}
+[data-sf-hero-arrow]:hover { background: color-mix(in srgb, var(--sf-hero-control-bg, rgb(0 0 0 / 0.5)) 70%, black); }
+[data-sf-hero-arrow="prev"] { left: 0.75rem; }
+[data-sf-hero-arrow="next"] { right: 0.75rem; }
+[data-sf-hero-controls] { position: absolute; inset: auto 0 0.75rem; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 0.5rem; pointer-events: none; }
+[data-sf-hero-controls] > * { pointer-events: auto; }
+[data-sf-hero-dot] { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; padding: 0; border: 0; background: none; cursor: pointer; }
+[data-sf-hero-dot] > span { display: block; width: 0.625rem; height: 0.625rem; border-radius: 9999px; background: var(--sf-hero-dot, rgb(255 255 255 / 0.55)); transition: width 160ms ease, background 160ms ease; }
+[data-sf-hero-dot][aria-current="true"] > span { width: 1.5rem; background: var(--sf-hero-dot-active, #fff); }
+[data-sf-hero-pause] {
+  display: grid; place-items: center; width: 1.5rem; height: 1.5rem; margin-left: 0.25rem; padding: 0; border: 0; border-radius: 9999px; font-size: 0.625rem; cursor: pointer;
+  background: var(--sf-hero-control-bg, rgb(0 0 0 / 0.5)); color: var(--sf-hero-control-fg, #fff);
+}
+[data-sf-hero-arrow]:focus-visible, [data-sf-hero-dot]:focus-visible, [data-sf-hero-pause]:focus-visible { outline: 2px solid var(--sf-hero-control-fg, #fff); outline-offset: 2px; }
+@media (min-width: 640px) {
+  [data-sf-hero-arrow] { display: grid; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-sf-hero-dot] > span { transition: none; }
+}

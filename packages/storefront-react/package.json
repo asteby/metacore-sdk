@@ -253,6 +253,17 @@
       }
     },
     "./reviews.css": "./dist/reviews.css",
+    "./hero": {
+      "import": {
+        "types": "./dist/hero.d.ts",
+        "default": "./dist/hero.js"
+      },
+      "require": {
+        "types": "./dist/hero.d.cts",
+        "default": "./dist/hero.cjs"
+      }
+    },
+    "./hero.css": "./dist/hero.css",
     "./vehicle-makes/*": "./vehicle-makes/*"
   },
   "sideEffects": false,

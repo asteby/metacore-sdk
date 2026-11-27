@@ -991,6 +991,33 @@ const { selectedVariant } = useProductOptions(product, { searchParams })
 - `onIndexChange(index, image)`, textos es/en con `locale` y `messages`. Helpers puros: `galleryImages`, `variantImageIndex`, `isLowResImage`.
 - Mock: `set-sartenes` trae 5 imágenes (la 4.ª de 100×100) para probar el caso «varias» y el de foto chica.
 
+## Carrusel de portada (`@asteby/storefront-react/hero`)
+
+Un slider de campañas para todas las tiendas, editable desde OPS y con el mensaje como HTML real (se traduce por idioma y mercado; nunca va pegado dentro de la imagen). Dos piezas:
+
+- **`HeroSlider`**: pista con scroll-snap (se desliza con el dedo y la primera diapositiva sale ya en el HTML del servidor, sin JavaScript) más flechas, puntos, botón de pausa, teclado ←/→ y avance automático. El avance se detiene con `prefers-reduced-motion`, al pasar el ratón o enfocar dentro, con la pestaña oculta y cuando el comprador lo pausa (WCAG 2.2.2). Con una sola diapositiva no pinta controles.
+- **`BannerCarousel`** sobre `HeroSlider`: diapositivas `{ image, image_mobile?, alt?, url?, eyebrow?, title?, text?, cta_label? }`. La primera imagen es la LCP (`fetchpriority="high"`), las demás `loading="lazy"`; todas con `width`/`height`. El título de la primera es el `<h1>` y los demás `<h2>`. Una diapositiva sin mensaje (un banner sincronizado) es toda un enlace.
+
+```tsx
+import { SectionRegistry } from '@asteby/storefront-react'
+import { bannerCarouselSection } from '@asteby/storefront-react/hero'
+import '@asteby/storefront-react/hero.css'
+import { Link } from 'react-router'
+
+export const sections = new SectionRegistry([
+  bannerCarouselSection({
+    resolveHref: menuHref,                                              // `collection:x` / prefijo de mercado → URL real
+    renderLink: ({ href, className, children }) => <Link to={href} className={className}>{children}</Link>,
+    wrap: (carousel) => <section className="container-page">{carousel}</section>,
+    classNames: { title: 'display-lg', cta: 'btn-light' },              // tipografía y botón de la tienda
+  }),
+])
+```
+
+- **Sección `banner_carousel`**: el tipo que reconoce el addon `storefront_content`. `bannerCarouselSchema` declara `slides` (`image`, `image_mobile`, `alt`, `url` + mensaje opcional) y `synced_slides` (`before` · `after` · `replace` · `off`): el addon mezcla al servir los banners que otros sistemas publican en «Banners del carrusel» (`storefront_banner_slides`).
+- **Sin acoplarse a la tienda ni al router**: los enlaces salen por `renderLink` (por omisión un `<a>`) y `resolveHref`; los textos por `locale` y `messages` (es/en, `heroMessages`).
+- **Estilo** (`hero.css`, opcional): `--sf-hero-scrim`, `-fg`, `-control-bg`, `-control-fg`, `-dot`, `-dot-active`, `-mobile-height`. `classNames`: `root`, `track`, `slide`, `controls`, `button`, `dot` y, en `BannerCarousel`, `message`, `scrim`, `content`, `eyebrow`, `title`, `text`, `cta`, `image`. `imageSize` cambia las medidas (1800×700 y 900×700 por omisión).
+
 ## Contacto: teléfono y burbuja de WhatsApp (`@asteby/storefront-react/contact`)
 
 Un solo lugar para el teléfono y el WhatsApp de cualquier tienda y cualquier giro. Sin número configurado **no se pinta nada**, así que una tienda que no lo use no cambia.

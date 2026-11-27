@@ -44,3 +44,6 @@ writeFileSync(new URL('../dist/progress.css', import.meta.url), read('progress.c
 
 // Hoja por omisión de las barras de descuento escalonado y envío gratis (subpath /promos.css).
 writeFileSync(new URL('../dist/promos.css', import.meta.url), readFileSync(new URL('../src/promos/promos.css', import.meta.url), 'utf8'))
+
+// Hoja por omisión del carrusel de portada (subpath /hero).
+writeFileSync(new URL('../dist/hero.css', import.meta.url), readFileSync(new URL('../src/hero/hero.css', import.meta.url), 'utf8'))
