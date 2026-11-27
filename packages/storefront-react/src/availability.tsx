@@ -14,6 +14,7 @@ import {
   availabilityView,
   cartLineProblemView,
   lineShipLabel,
+  availabilityShipNotice,
   formatAvailabilityMessage,
   isStorefrontError,
   resolveAvailability,
@@ -341,6 +342,34 @@ export function CartLineShipDate({ line, locale, messages, ...rest }: CartLineSh
     <p data-sf-cart-line-ships="" {...rest}>
       {text}
     </p>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// AvailabilityShipNotice (product page: pre-order / made to order)
+// ---------------------------------------------------------------------------
+
+export type AvailabilityShipNoticeProps = AvailabilityInput & {
+  /** Formats the `YYYY-MM-DD` shown (the store's style, e.g. `dd-mm-yyyy`); default: a long date in the locale. */
+  formatDate?: (isoDay: string, locale: string) => string
+} & Omit<ComponentPropsWithoutRef<'div'>, 'children'>
+
+/**
+ * The notice of the product page for a product that sells without stock: "This product will ship on: {date}" and the standing
+ * explanation ("a pre-order ships complete until the date of availability"). It only words what the server sent
+ * (`availability.preorder_release_at` / `restock_eta`); for any other status, or a server that sends nothing, it renders no DOM.
+ * Style it with `[data-sf-ship-notice]` (`=preorder|backorder`), `[data-sf-ship-notice-title]` and `[data-sf-ship-notice-note]`.
+ */
+export function AvailabilityShipNotice({ availability, source, lowStockThreshold, locale, messages, formatDate, ...rest }: AvailabilityShipNoticeProps) {
+  const loc = useLocale(locale)
+  const a = pickAvailability({ availability, source, lowStockThreshold })
+  const notice = availabilityShipNotice(a, loc, { messages: messages ?? null, ...(formatDate ? { formatDate } : {}) })
+  if (!notice) return null
+  return (
+    <div data-sf-ship-notice={notice.status} role="note" {...rest}>
+      {notice.headline ? <p data-sf-ship-notice-title="">{notice.headline}</p> : null}
+      <p data-sf-ship-notice-note="">{notice.note}</p>
+    </div>
   )
 }
 
