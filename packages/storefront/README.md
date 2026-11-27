@@ -237,6 +237,13 @@ const view = availabilityView(a, 'es-MX')         // { tone, label, sublabel, ct
   `CartLine.problem` is computed when the cart is read.
 - `client.restock.subscribe({ sku, email | phone, locale, consent: true })` -> `202 { status: 'pending' }` ("Avísame cuando vuelva").
 - `schemaAvailability(status)` returns the schema.org `ItemAvailability` URL.
+- **Pre-order / made to order (product page).** `availabilityShipNotice(availability, locale, { messages, formatDate })` words what the
+  server sent for a product that sells without stock: `{ status, date, headline, note }` — "This product will ship on: {date}" (only with a
+  date; `preorder_release_at` for `preorder`, `restock_eta` for `backorder`) and the standing note ("a pre-order ships complete until the date of
+  availability"). Any other status returns `null`: nothing is promised, nothing is computed. `formatDate` lets the store use its own date style
+  (e.g. `dd-mm-yyyy`); the default is a long date in the locale. React: `<AvailabilityShipNotice availability={…} />` from `@asteby/storefront-react`
+  (no DOM when there is nothing to say; style it with `[data-sf-ship-notice]`, `-title` and `-note`). Texts: `notice.ships_on`,
+  `notice.preorder_note`, `notice.backorder_note`.
 
 ## Mockup data (`@asteby/storefront/mockup`)
 

@@ -27,6 +27,9 @@ export type AvailabilityMessageKey =
   | 'sub.backorder_eta'
   | 'sub.preorder_date'
   | 'line.ships_on'
+  | 'notice.ships_on'
+  | 'notice.preorder_note'
+  | 'notice.backorder_note'
   | 'cta.add'
   | 'cta.out_of_stock'
   | 'cta.backorder'
@@ -69,6 +72,9 @@ const ES: AvailabilityMessages = {
   'sub.backorder_eta': 'Se envía a partir del {date}',
   'sub.preorder_date': 'Sale a la venta el {date}',
   'line.ships_on': 'Se enviará el: {date}',
+  'notice.ships_on': 'Este producto se enviará el: {date}',
+  'notice.preorder_note': 'En la compra de productos en preventa, el pedido se enviará completo hasta la fecha de disponibilidad.',
+  'notice.backorder_note': 'Este producto se surte bajo pedido: se enviará en cuanto lo recibamos.',
   'cta.add': 'Agregar al carrito',
   'cta.out_of_stock': 'Agotado',
   'cta.backorder': 'Pedir bajo pedido',
@@ -110,6 +116,9 @@ const EN: AvailabilityMessages = {
   'sub.backorder_eta': 'Ships from {date}',
   'sub.preorder_date': 'Available on {date}',
   'line.ships_on': 'Ships on: {date}',
+  'notice.ships_on': 'This product will ship on: {date}',
+  'notice.preorder_note': 'When you buy a pre-order product, your whole order ships together once it is available.',
+  'notice.backorder_note': 'This product is made to order: it ships as soon as we receive it.',
   'cta.add': 'Add to cart',
   'cta.out_of_stock': 'Sold out',
   'cta.backorder': 'Order now, ships later',
@@ -184,6 +193,46 @@ export function lineShipDate(line: Pick<CartLine, 'ships_on' | 'availability'>):
     return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null
   }
   return day(line.ships_on) ?? day(line.availability?.restock_eta) ?? day(line.availability?.preorder_release_at)
+}
+
+/** The notice of the product page for a pre-order or a made-to-order product. */
+export type AvailabilityShipNotice = {
+  status: 'preorder' | 'backorder'
+  /** `YYYY-MM-DD` the server sent (`preorder_release_at` / `restock_eta`), or `null`: no date is promised. */
+  date: string | null
+  /** "This product will ship on: {date}", or `null` without a date. */
+  headline: string | null
+  /** The standing explanation ("…the order ships complete until the date of availability"). */
+  note: string
+}
+
+export type AvailabilityShipNoticeOptions = {
+  messages?: Partial<AvailabilityMessages> | null
+  /** Formats the `YYYY-MM-DD` the notice shows (the store's own style, e.g. `dd-mm-yyyy`); default: long date in the locale. */
+  formatDate?: (isoDay: string, locale: string) => string
+}
+
+/**
+ * What the product page tells the buyer about a product that sells without stock (`preorder` / `backorder`).
+ * Pure: it only words what the server sent; `null` for any other status (nothing is promised, nothing is computed).
+ */
+export function availabilityShipNotice(
+  availability: Pick<Availability, 'status' | 'restock_eta' | 'preorder_release_at'> | null | undefined,
+  locale: string | null | undefined,
+  options: AvailabilityShipNoticeOptions = {},
+): AvailabilityShipNotice | null {
+  if (!availability || (availability.status !== 'preorder' && availability.status !== 'backorder')) return null
+  const m = availabilityMessages(locale, options.messages ?? null)
+  const raw = availability.status === 'preorder' ? availability.preorder_release_at : availability.restock_eta
+  const day = typeof raw === 'string' ? raw.slice(0, 10) : ''
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null
+  const shown = date ? (options.formatDate ? options.formatDate(date, locale || 'es') : formatDate(date, locale)) : null
+  return {
+    status: availability.status,
+    date,
+    headline: shown ? formatAvailabilityMessage(m['notice.ships_on'], { date: shown }) : null,
+    note: m[availability.status === 'preorder' ? 'notice.preorder_note' : 'notice.backorder_note'],
+  }
 }
 
 /** Localized "Ships on: {date}" for a cart line, or `null` without a date. */

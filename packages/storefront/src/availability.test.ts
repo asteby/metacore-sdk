@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   availabilityMessages,
+  availabilityShipNotice,
   availabilityView,
   cartLineProblemView,
   lineShipDate,
@@ -130,5 +131,48 @@ describe('lineShipDate / lineShipLabel', () => {
     expect(lineShipLabel({ ships_on: '2026-11-02' }, 'es-MX')).toBe('Se enviará el: 2 de noviembre de 2026')
     expect(lineShipLabel({ ships_on: '2026-11-02' }, 'en-US')).toBe('Ships on: November 2, 2026')
     expect(lineShipLabel({}, 'es-MX')).toBeNull()
+  })
+})
+
+describe('availabilityShipNotice (aviso de la ficha de producto)', () => {
+  it('preventa con fecha: titular con la fecha y la nota de que el pedido se envía completo', () => {
+    const n = availabilityShipNotice(av({ status: 'preorder', preorder_release_at: '2026-11-26T00:00:00Z' }), 'es-MX', { formatDate: (d) => d.split('-').reverse().join('-') })
+    expect(n).toEqual({
+      status: 'preorder',
+      date: '2026-11-26',
+      headline: 'Este producto se enviará el: 26-11-2026',
+      note: 'En la compra de productos en preventa, el pedido se enviará completo hasta la fecha de disponibilidad.',
+    })
+  })
+
+  it('en inglés y con la fecha larga por omisión (UTC: igual en servidor y navegador)', () => {
+    const n = availabilityShipNotice(av({ status: 'preorder', preorder_release_at: '2026-11-26T00:00:00Z' }), 'en-US')
+    expect(n?.headline).toBe('This product will ship on: November 26, 2026')
+    expect(n?.note).toContain('ships together')
+  })
+
+  it('bajo pedido usa restock_eta y su propia nota; sin fecha no promete ninguna', () => {
+    const withEta = availabilityShipNotice(av({ status: 'backorder', restock_eta: '2026-12-01' }), 'es', { formatDate: (d) => d })
+    expect(withEta).toMatchObject({ status: 'backorder', date: '2026-12-01', headline: 'Este producto se enviará el: 2026-12-01' })
+    expect(withEta?.note).toContain('bajo pedido')
+    const noEta = availabilityShipNotice(av({ status: 'backorder' }), 'es')
+    expect(noEta).toMatchObject({ status: 'backorder', date: null, headline: null })
+    expect(availabilityShipNotice(av({ status: 'preorder' }), 'es')?.headline).toBeNull()
+  })
+
+  it('cualquier otro estado (o nada) no genera aviso', () => {
+    for (const status of ['in_stock', 'low_stock', 'out_of_stock'] as const) expect(availabilityShipNotice(av({ status }), 'es')).toBeNull()
+    expect(availabilityShipNotice(null, 'es')).toBeNull()
+    expect(availabilityShipNotice(undefined, 'es')).toBeNull()
+  })
+
+  it('una fecha que no es fecha no se pinta', () => {
+    expect(availabilityShipNotice(av({ status: 'preorder', preorder_release_at: 'pronto' }), 'es')?.date).toBeNull()
+  })
+
+  it('los textos se pueden sustituir por tienda', () => {
+    const n = availabilityShipNotice(av({ status: 'preorder', preorder_release_at: '2026-11-26' }), 'es', { messages: { 'notice.ships_on': 'Sale el {date}', 'notice.preorder_note': 'Nota propia.' }, formatDate: (d) => d })
+    expect(n?.headline).toBe('Sale el 2026-11-26')
+    expect(n?.note).toBe('Nota propia.')
   })
 })

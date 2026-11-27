@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { renderToString } from 'react-dom/server'
 import type { Availability, Product, ProductVariant } from '@asteby/storefront'
-import { AvailabilityBadge, RestockNotifyForm, StockConflictAlert, VariantOptionState, productJsonLd, productMeta } from './index.js'
+import { AvailabilityBadge, AvailabilityShipNotice, RestockNotifyForm, StockConflictAlert, VariantOptionState, productJsonLd, productMeta } from './index.js'
 
 const av = (patch: Partial<Availability>): Availability => ({
   status: 'in_stock', quantity: null, max_per_order: null, restock_eta: null, preorder_release_at: null, notify_available: false, ...patch,
@@ -79,5 +79,27 @@ describe('schema.org availability in JSON-LD', () => {
     expect(meta(product([server('backorder')]))).toBe('backorder')
     expect(meta(product([server('out_of_stock')]))).toBe('out of stock')
     expect(meta(product([server('low_stock')]))).toBe('in stock')
+  })
+})
+
+describe('AvailabilityShipNotice (ficha de producto)', () => {
+  it('preventa: titular con la fecha y la nota, con atributos para vestirlo', () => {
+    const html = renderToString(
+      <AvailabilityShipNotice availability={av({ status: 'preorder', preorder_release_at: '2026-11-26T00:00:00Z' })} locale="es-MX" formatDate={(d) => d.split('-').reverse().join('-')} />,
+    )
+    expect(html).toContain('data-sf-ship-notice="preorder"')
+    expect(html).toContain('role="note"')
+    expect(html).toContain('Este producto se enviará el: 26-11-2026')
+    expect(html).toContain('el pedido se enviará completo hasta la fecha de disponibilidad')
+  })
+
+  it('bajo pedido sin fecha: solo la nota; sin estado comercial no hay DOM', () => {
+    const backorder = renderToString(<AvailabilityShipNotice availability={av({ status: 'backorder' })} locale="en" />)
+    expect(backorder).toContain('data-sf-ship-notice="backorder"')
+    expect(backorder).not.toContain('data-sf-ship-notice-title')
+    for (const status of ['in_stock', 'low_stock', 'out_of_stock'] as const) {
+      expect(renderToString(<AvailabilityShipNotice availability={av({ status })} />)).toBe('')
+    }
+    expect(renderToString(<AvailabilityShipNotice />)).toBe('')
   })
 })
