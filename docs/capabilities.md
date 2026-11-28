@@ -122,6 +122,40 @@ as a real, statically-detected WASM import (not a text match): a compiled
 module that imports it without the matching `connector:read` capability is
 rejected outright, the same treatment `http_request` gets.
 
+### `ai:complete`
+
+Grants one **AI feature** of the host-implemented capability `ai.complete`:
+LLM completions the host runs through its gateway (OPS: the Hub) and bills to
+the organization's **Pulse** Sparks. The addon never holds LLM keys. Target is
+the feature key (`ticket_triage`, no wildcards) and `reason` — the purpose the
+admin consents to at install — is required. Limits (monthly Sparks cap per
+addon and feature, `max_tier`, `max_tokens`, `personal_data`) go in the
+top-level `ai` block. Kernel reference:
+[`docs/capabilities-ai.md`](https://github.com/asteby/metacore-kernel/blob/main/docs/capabilities-ai.md).
+
+```json
+"capabilities": [
+  { "kind": "ai:complete", "target": "ticket_triage", "reason": "Clasificar tickets entrantes" }
+],
+"ai": { "monthly_sparks_cap": 300, "features": [{ "key": "ticket_triage", "max_tier": "fast", "personal_data": true }] }
+```
+
+Frontend (`@asteby/metacore-runtime-react`):
+
+```tsx
+const ai = useAI('tickets')
+const res = await ai.complete({ feature: 'ticket_triage', prompt: text, tier: 'fast', response_format: { type: 'json_object' } })
+if (res.status === 'ok') applyTriage(res.json)
+else notice(ai.message) // insufficient_pulse, quota_exceeded, rate_limited… are results, not errors
+```
+
+Outside React, `createAIClient(hostApi, 'tickets')` from `@asteby/metacore-sdk`
+does the same. Backend (wasm): `guest.AIComplete` from the kernel's `guest`
+package, over `capability_query`. Only caller bugs throw
+(`AICompleteError`: `forbidden`, `invalid_input`); no Pulse, a reached cap or
+the hub being down resolve to a result whose `status` is not `ok`, so a screen
+never breaks for AI.
+
 ## 4. Declaring capabilities
 
 Keep the list minimal. On install, the host displays each capability's

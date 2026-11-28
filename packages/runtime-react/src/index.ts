@@ -956,3 +956,4 @@ export { useModelLabels, resolveModelLabels, resolveModelNoun, modelVerbTitle, d
 export type { ModelLabels, ModelLabelInput, ModelLabelT } from './model-labels'
 
 export * from './fitment'
+export * from './use-ai'
