@@ -98,8 +98,14 @@ function withLines(cart: Cart, lines: CartLine[], totalQuantity?: number): Cart 
 }
 
 function lineWithQuantity(line: CartLine, quantity: number): CartLine {
+  if (quantity === line.quantity) return line
   const unit = toCents(line.cost.unit)
-  return { ...line, quantity, cost: { ...line.cost, total: money(unit * quantity, line.cost.unit.currency_code) } }
+  const cost = { ...line.cost, total: money(unit * quantity, line.cost.unit.currency_code) }
+  if (cost.automatic_discount) {
+    delete cost.automatic_discount
+    cost.compare_at_unit = null
+  }
+  return { ...line, quantity, cost }
 }
 
 /** Pure optimistic reducers (exported for tests and custom carts). */

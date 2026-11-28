@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type ElementType, type MouseEvent, type ReactNode } from 'react'
 import { formatMoney, type Cart, type CartLine, type Money } from '@asteby/storefront'
 import { CartLineShipDate } from '../availability.js'
+import { CartLinePrice } from '../cart-line-price.js'
 import { useModalDialog } from '../dialog.js'
 import { useResolvedLocale } from '../locale.js'
 import { ProductThumb } from '../ui/product-preview.js'
@@ -398,7 +399,13 @@ function DrawerLine({
   const optimisticPrice = draft !== undefined && draft !== line.quantity
   const price = (
     <span className={cx.price} data-sf-cart-price="" data-sf-optimistic={optimisticPrice || undefined}>
-      {money(optimisticPrice ? scaleLineTotal(line, draft) : line.cost.total)}
+      <CartLinePrice
+        line={line}
+        amount={optimisticPrice ? scaleLineTotal(line, draft) : line.cost.total}
+        showDiscount={quantity === line.quantity && !optimisticPrice}
+        renderAmount={money}
+        locale={locale}
+      />
     </span>
   )
   const controls = (
