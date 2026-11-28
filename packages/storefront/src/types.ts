@@ -64,6 +64,14 @@ export type Availability = {
   notify_available: boolean
 }
 
+/** Public, one-unit quote for an eligible automatic catalog discount. */
+export type CatalogAutomaticDiscount = {
+  name: string
+  original_price: Money
+  price: Money
+  savings: Money
+}
+
 export type ProductVariant = {
   id: string
   sku: string
@@ -71,6 +79,7 @@ export type ProductVariant = {
   selected_options: SelectedOption[]
   price: Money
   compare_at_price: Money | null
+  automatic_discount?: CatalogAutomaticDiscount
   /** Derived from `availability.status` when the server sends it. */
   available_for_sale: boolean
   /** `null` when the stock is not tracked. Derived from `availability.quantity` when the server sends it. */

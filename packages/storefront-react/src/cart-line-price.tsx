@@ -1,4 +1,4 @@
-import { formatMoney, type CartLine, type Money } from '@asteby/storefront'
+import { formatMoney, type CartLine, type CatalogAutomaticDiscount, type Money } from '@asteby/storefront'
 import type { ReactNode } from 'react'
 import { useResolvedLocale } from './locale.js'
 
@@ -26,18 +26,47 @@ export function CartLinePrice({ line, amount = line.cost.total, showDiscount = t
   const money = renderAmount ?? ((value: Money) => formatMoney(value, locale))
   const discount = showDiscount ? line.cost.automatic_discount : undefined
   const original = showDiscount ? discount?.original_total ?? compareAtTotal(line) : null
+  return renderPromotionPrice({ amount, original, locale, money, name: discount?.name, savings: discount?.savings })
+}
+
+export function CatalogPromotionPrice({ quote, locale: requestedLocale, renderAmount }: {
+  quote: CatalogAutomaticDiscount
+  locale?: string
+  renderAmount?: (amount: Money) => ReactNode
+}) {
+  const locale = useResolvedLocale(requestedLocale)
+  const money = renderAmount ?? ((value: Money) => formatMoney(value, locale))
+  return renderPromotionPrice({
+    amount: quote.price, original: quote.original_price, savings: quote.savings,
+    name: quote.name, locale, money,
+  })
+}
+
+function renderPromotionPrice({ amount, original, locale, money, name, savings }: {
+  amount: Money
+  original: Money | null
+  locale: string
+  money: (amount: Money) => ReactNode
+  name?: string
+  savings?: Money
+}) {
   if (!original || original.currency_code !== amount.currency_code || !(Number(original.amount) > Number(amount.amount))) {
     return <>{money(amount)}</>
   }
 
   const english = locale.toLowerCase().startsWith('en')
-  const label = discount?.name?.trim() || (english ? 'Automatic discount' : 'Descuento automático')
+  const label = name?.trim() || (english ? 'Automatic discount' : 'Descuento automático')
+  const hasSavings = savings && savings.currency_code === amount.currency_code && Number(savings.amount) > 0
+  const savingsRate = hasSavings ? Number(savings.amount) / Number(original.amount) : 0
+  const percentage = savingsRate >= 0.0005 && savingsRate <= 1
+    ? new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 1 }).format(savingsRate)
+    : null
   return (
     <span data-sf-line-prices="">
       <del data-sf-line-original-price="">{money(original)}</del>{' '}
       <span data-sf-line-current-price="">{money(amount)}</span>
-      {discount && Number(discount.savings.amount) > 0 && discount.savings.currency_code === amount.currency_code ? (
-        <> <span data-sf-line-automatic-discount="">{label} (−{money(discount.savings)})</span></>
+      {hasSavings ? (
+        <> <span data-sf-line-automatic-discount="">{label} ({percentage && <>−{percentage} · </>}−{money(savings)})</span></>
       ) : null}
     </span>
   )

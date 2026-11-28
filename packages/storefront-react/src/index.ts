@@ -129,4 +129,4 @@ export type {
   PickupInfo,
   PickupOptionProps,
 } from './locations.js'
-export { CartLinePrice, type CartLinePriceProps } from './cart-line-price.js'
+export { CartLinePrice, CatalogPromotionPrice, type CartLinePriceProps } from './cart-line-price.js'
