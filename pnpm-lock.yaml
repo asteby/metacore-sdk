@@ -1161,7 +1161,7 @@ importers:
         version: link:../ui
       '@module-federation/runtime':
         specifier: ^2.5.0
-        version: 2.9.3
+        version: 2.9.4
       '@tanstack/react-query':
         specifier: ^5.95.0
         version: 5.108.2(@types/react@19.3.0)(react@19.3.1)
@@ -3453,8 +3453,8 @@ packages:
   '@module-federation/error-codes@2.9.0':
     resolution: {integrity: sha512-IGpd+VRlji3NyGOGGTsk7YEmPRKcDoBK4YHqIuP+OQwyb2YhHCUHO2vW9RXeQxCuKwi+c6xkTweRYG+Umy+0Zw==}
 
-  '@module-federation/error-codes@2.9.3':
-    resolution: {integrity: sha512-sXWo6XHOFKC1Dcu9DcSA1okZjtIz2y3uM+NJrAoSpeZ9QSPXielkMWT5PtG7MqGE3OQ+/HDawiLK53IOi3NHcQ==}
+  '@module-federation/error-codes@2.9.4':
+    resolution: {integrity: sha512-4JjaxBlQisDfkCTnMC4BaHphJRnlIYeobBNCgYSQY8xSnh1Y6rFFBHX7gyObDTJk66IrAB765G7xA9VYCcLB/g==}
 
   '@module-federation/managers@2.9.0':
     resolution: {integrity: sha512-8KhB2PF4g+M0hGaethU1H4GVWabLn5sF5TvnM6VxgAcDL4TfLY8aC/YobAXHG/SV0jpU5lsGe6s6xy6ccV0MQw==}
@@ -3462,20 +3462,20 @@ packages:
   '@module-federation/runtime-core@2.9.0':
     resolution: {integrity: sha512-dLykRYfpbEJBTdk2NlbNoVVTB196O3qujawTBguLABJkPCWETJNk60NR1yZO34eI+DTH+eGwHU3m7FddAWnbnw==}
 
-  '@module-federation/runtime-core@2.9.3':
-    resolution: {integrity: sha512-E6AjfIWFgZOEATxf+GzBIg54Ejp7QFNTxtVzwnnhEEu01dErBo7qLjJvEPXGiN5sJTNf2a4HIW/wZTM23skouQ==}
+  '@module-federation/runtime-core@2.9.4':
+    resolution: {integrity: sha512-i2uEHkJGliwRmjb5ZOzWkA9xzTPwYjPMReqO0ZnIkpp0JuHaE4nDme9vacMnU2P4qRC2xzhGD0/Tb7uGUsUMtg==}
 
   '@module-federation/runtime@2.9.0':
     resolution: {integrity: sha512-3cyAav0hWP+dNvB7qrcK9CKxQn+JvkbRvLtZz3zS2g0EyxtDFDjgbHY0Afcf7oHf8IHhKeEdzb/3Kjr1Pjmr7A==}
 
-  '@module-federation/runtime@2.9.3':
-    resolution: {integrity: sha512-VCJV1VzKk+jvt+1CcTrslbl3LAKScHFpPxKSviafpMIqeHDWIDEY7ZEbVVJl/GuUjA36R7j0QhOPEjihPcz9/A==}
+  '@module-federation/runtime@2.9.4':
+    resolution: {integrity: sha512-iU5CqFNkmNVZHprp/glbaSn46q4/6PhSlMefrrzCBPMpoTd/pul+d+JbzQVHRtLv4w44SoGS+kFe3x9JF1BGog==}
 
   '@module-federation/sdk@2.9.0':
     resolution: {integrity: sha512-IMjObgBGQTXd33jTTCYcxvz8iOQGLsZ2QIPOj90rDxuBtJsN4WJwYyXqligrhY/e5p/BipUPdbIgKmWL7zFhTw==}
 
-  '@module-federation/sdk@2.9.3':
-    resolution: {integrity: sha512-cT5ko/JDzGrKe8N+MFPgwb07G8fzmpnZbKZjGjXvT9phagQpiOfV6WQZhu1j+HtO152Frv1vjv/1Hhg2wMUL8g==}
+  '@module-federation/sdk@2.9.4':
+    resolution: {integrity: sha512-o7VGOEXtM3ITWrYtFOiaB3y/ssFv6mLs5TBx6QEgwXVzm3URgVgqh1KR1husFa94GTheP4Ei8hq4/B6xMQpT8g==}
 
   '@module-federation/third-party-dts-extractor@2.9.0':
     resolution: {integrity: sha512-R1Xuqnqzw6wQxWV3yU9fX1FydXAeZF2TNVFAVo1N1oLBA2j5y7aUO/Fc3VSNgd9/gxMzJgTVBdA+nMiD2SFCgg==}
@@ -10002,7 +10002,7 @@ snapshots:
 
   '@module-federation/error-codes@2.9.0': {}
 
-  '@module-federation/error-codes@2.9.3': {}
+  '@module-federation/error-codes@2.9.4': {}
 
   '@module-federation/managers@2.9.0':
     dependencies:
@@ -10013,10 +10013,10 @@ snapshots:
       '@module-federation/error-codes': 2.9.0
       '@module-federation/sdk': 2.9.0
 
-  '@module-federation/runtime-core@2.9.3':
+  '@module-federation/runtime-core@2.9.4':
     dependencies:
-      '@module-federation/error-codes': 2.9.3
-      '@module-federation/sdk': 2.9.3
+      '@module-federation/error-codes': 2.9.4
+      '@module-federation/sdk': 2.9.4
 
   '@module-federation/runtime@2.9.0':
     dependencies:
@@ -10024,15 +10024,15 @@ snapshots:
       '@module-federation/runtime-core': 2.9.0
       '@module-federation/sdk': 2.9.0
 
-  '@module-federation/runtime@2.9.3':
+  '@module-federation/runtime@2.9.4':
     dependencies:
-      '@module-federation/error-codes': 2.9.3
-      '@module-federation/runtime-core': 2.9.3
-      '@module-federation/sdk': 2.9.3
+      '@module-federation/error-codes': 2.9.4
+      '@module-federation/runtime-core': 2.9.4
+      '@module-federation/sdk': 2.9.4
 
   '@module-federation/sdk@2.9.0': {}
 
-  '@module-federation/sdk@2.9.3': {}
+  '@module-federation/sdk@2.9.4': {}
 
   '@module-federation/third-party-dts-extractor@2.9.0': {}
 
