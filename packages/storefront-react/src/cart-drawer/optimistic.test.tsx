@@ -36,7 +36,7 @@ describe('estado optimista del cajón', () => {
     expect(isCartDrawerOpen()).toBe(true)
     expect(screen.getByText('Bujía v1')).toBeTruthy()
     expect(screen.getByText(/Agregando…/)).toBeTruthy()
-    expect(screen.getByText(/calculando…/)).toBeTruthy()
+    expect(document.querySelector('[data-sf-cart-subtotal-value]')?.textContent).toContain('59.00')
     expect(screen.getByRole('heading', { name: 'Tu carrito (1)', hidden: true })).toBeTruthy()
     expect(screen.getByRole('status', { hidden: true }).textContent).toContain('Agregado al carrito')
     act(() => cartOptimistic.confirm(id))
