@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cacheScope, resetCacheScopeTracking, setCacheScopeLanguageProvider, syncCacheScope } from './cache-scope'
+import { cacheScope, resetCacheScopeTracking, setCacheScopeLanguageProvider, setCacheScopeProvider, syncCacheScope } from './cache-scope'
 import { useMetadataCache, clearMetadataCache } from './metadata-cache'
 import {
     batchGet,
@@ -31,10 +31,30 @@ beforeEach(() => {
     cacheScope()
 })
 afterEach(() => {
+    setCacheScopeProvider(null)
     login('u-test', 'o-test', 'en')
 })
 
 describe('cacheScope', () => {
+    it('isolates metadata by administrative market and branch', () => {
+        let market: string | null | undefined = 'mx'
+        let branch: string | null = null
+        setCacheScopeProvider(() => ({ org: 'o1', user: 'u1', lang: 'es', market, branch }))
+        const mx = cacheScope()
+        useMetadataCache.getState().setMetadata('Product', meta('MX'))
+        expect(useMetadataCache.getState().getMetadata('Product')?.title).toBe('MX')
+
+        market = 'us'
+        expect(cacheScope()).not.toBe(mx)
+        expect(useMetadataCache.getState().getMetadata('Product')).toBeUndefined()
+        const us = cacheScope()
+        branch = 'b1'
+        expect(cacheScope()).not.toBe(us)
+        market = null
+        const all = cacheScope()
+        market = undefined
+        expect(cacheScope()).not.toBe(all)
+    })
     it('is org:user:lang and fails closed when a part is missing', () => {
         expect(cacheScope()).toBe('o1:u1:es')
         localStorage.setItem('auth_user', JSON.stringify({ id: 'u1' }))

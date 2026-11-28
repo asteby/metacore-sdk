@@ -81,6 +81,7 @@ import { useInlineRelations } from './use-inline-relations'
 import { getRelationWidget, listRelationWidgets, relationWidgetSupportsView, useRelationWidgetRegistryVersion } from '../relation-widget-registry'
 import { loadRelationRows, rowsFingerprint } from './relation-rows-loader'
 import { useActiveMarket } from '../use-active-market'
+import { useAdminMarketSelection } from '../admin-market-context'
 
 // La tabla de filas hijas solo se usa al CREAR un registro cuyo modelo declara `create_inline`: se carga bajo demanda para no
 // engordar el grafo inicial del panel (el shell de Ops tiene un techo de no-regresión).
@@ -962,6 +963,7 @@ function DynamicRecordDialogImpl({
     // un producto cuyo precio sale del precio base). Sin la marca, el panel genérico de siempre.
     const hasViewWidgets = mode === 'view' && relations.some(r => r.embed === true && relationWidgetSupportsView(getRelationWidget(r.widget)))
     const activeMarket = useActiveMarket({ enabled: open && (hasViewWidgets || inlineRels.some(r => !!getRelationWidget(r.widget))) })
+    const catalogMarket = useAdminMarketSelection()
     const [inlineRows, setInlineRows] = useState<Record<string, DraftRow[]>>({})
     // Editar: filas ya guardadas leídas COMPLETAS (si no, la relación no se envía y no se borra nada)
     // y su huella inicial, para enviar solo lo que el usuario cambió.
@@ -989,14 +991,14 @@ function DynamicRecordDialogImpl({
                             readOnly
                             mode="view"
                             recordId={(record as { id?: string | number } | null | undefined)?.id ?? recordId ?? undefined}
-                            context={{ branchId: activeMarket.branchId, market: activeMarket.market }}
+                            context={{ branchId: activeMarket.branchId, market: activeMarket.market, catalogMarket }}
                         />
                     </HostWidgetBoundary>
                 </div>
             )
         },
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [mode, record, recordId, formValues, inline.fields, activeMarket.branchId, activeMarket.market, listRelationWidgets().join('|')],
+        [mode, record, recordId, formValues, inline.fields, activeMarket.branchId, activeMarket.market, catalogMarket, listRelationWidgets().join('|')],
     )
     // Editar: lee las filas guardadas de cada relación con widget (completas o nada).
     const editRecordId = isEditMode && open && recordId ? String(recordId) : null
@@ -1836,7 +1838,7 @@ function DynamicRecordDialogImpl({
                                                         formError={inlineErrors[rel.name]}
                                                         onRowRemoved={onRowRemoved}
                                                         onCellEdited={onCellEdited}
-                                                        context={{ branchId: activeMarket.branchId, market: activeMarket.market }}
+                                                        context={{ branchId: activeMarket.branchId, market: activeMarket.market, catalogMarket }}
                                                     />
                                                     </HostWidgetBoundary>
                                                 </div>

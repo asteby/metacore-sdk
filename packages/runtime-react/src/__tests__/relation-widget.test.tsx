@@ -10,6 +10,7 @@ import i18next from 'i18next'
 
 import { DynamicRecordDialog } from '../dialogs/dynamic-record'
 import { ApiProvider, BranchProvider } from '../api-context'
+import { AdminMarketProvider, type AdminMarketSelection } from '../admin-market-context'
 import { makeDraftRow } from '../draft-rows'
 import {
     clearRelationWidgets,
@@ -73,7 +74,7 @@ function makeApi(relations: any[], branch?: Record<string, unknown>) {
     }
 }
 
-function setup(api: any, opts: { onCreate?: any; branchId?: string } = {}) {
+function setup(api: any, opts: { onCreate?: any; branchId?: string; catalogMarket?: AdminMarketSelection } = {}) {
     const dialog = (
         <DynamicRecordDialog
             open
@@ -87,7 +88,9 @@ function setup(api: any, opts: { onCreate?: any; branchId?: string } = {}) {
     render(
         <I18nextProvider i18n={makeI18n()}>
             <ApiProvider client={api as never}>
-                {opts.branchId ? <BranchProvider branch={{ id: opts.branchId }}>{dialog}</BranchProvider> : dialog}
+                <AdminMarketProvider market={opts.catalogMarket}>
+                    {opts.branchId ? <BranchProvider branch={{ id: opts.branchId }}>{dialog}</BranchProvider> : dialog}
+                </AdminMarketProvider>
             </ApiProvider>
         </I18nextProvider>,
     )
@@ -103,6 +106,7 @@ function Probe(p: RelationWidgetProps) {
         <div data-testid="probe">
             <span data-testid="live">{String(p.values.name ?? '')}</span>
             <span data-testid="market">{p.context.market ?? '-'}</span>
+            <span data-testid="catalog-market">{String(p.context.catalogMarket)}</span>
             <span data-testid="branch">{String(p.context.branchId ?? '-')}</span>
             <span data-testid="fields">{p.fields.map((f) => f.key).join(',')}</span>
             <span data-testid="rows">{p.rows.length}</span>
@@ -255,9 +259,10 @@ describe('DynamicRecordDialog create — widget de relación', () => {
     it('entrega el mercado de la sucursal activa (branches.market_code) al widget', async () => {
         registerRelationWidget('market-prices', Probe)
         const api = makeApi([prices], { id: 'b-us', market_code: 'US' })
-        setup(api, { branchId: 'b-us' })
+        setup(api, { branchId: 'b-us', catalogMarket: null })
         await waitFor(() => expect(screen.getByTestId('market').textContent).toBe('us'))
         expect(screen.getByTestId('branch').textContent).toBe('b-us')
+        expect(screen.getByTestId('catalog-market').textContent).toBe('null')
         expect(api.get).toHaveBeenCalledWith('/data/branches/b-us')
     })
 

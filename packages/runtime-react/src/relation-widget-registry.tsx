@@ -32,6 +32,8 @@ export interface RelationWidgetContext {
     branchId?: string | number | null
     /** `branches.market_code` de la sucursal activa; null = sin mercado o aún cargando. */
     market?: string | null
+    /** Catalog scope selected by the operator. undefined means use the legacy branch market. */
+    catalogMarket?: string | null
 }
 
 export interface RelationWidgetProps {
