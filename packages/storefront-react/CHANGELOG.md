@@ -1,5 +1,17 @@
 # @asteby/storefront-react
 
+## 0.79.0
+
+### Minor Changes
+
+- fb26e74: Expose server-quoted public catalog discounts on variants and render the original price, applied price and savings with a shared component.
+
+### Patch Changes
+
+- fb26e74: Display the effective savings percentage for an applied automatic line discount alongside the original price and monetary savings.
+- Updated dependencies [fb26e74]
+  - @asteby/storefront@0.55.0
+
 ## 0.78.0
 
 ### Minor Changes

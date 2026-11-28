@@ -1,5 +1,11 @@
 # @asteby/storefront
 
+## 0.55.0
+
+### Minor Changes
+
+- fb26e74: Expose server-quoted public catalog discounts on variants and render the original price, applied price and savings with a shared component.
+
 ## 0.54.0
 
 ### Minor Changes
