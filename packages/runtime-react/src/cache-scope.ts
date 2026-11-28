@@ -1,6 +1,6 @@
 /**
  * Scope of every client-side cache that holds server answers shaped by who is
- * asking: `org:user:lang`.
+ * asking: `org:user:lang` plus opt-in branch and catalog market dimensions.
  *
  * Metadata carries the user's permissions (`actions[]`, `can*` flags) and the
  * operator's language, and rows depend on the organization. On a shared
@@ -23,6 +23,10 @@ export interface CacheScopeParts {
     org?: string | null
     user?: string | null
     lang?: string | null
+    /** undefined preserves the legacy scope, null represents all branches. */
+    branch?: string | number | null
+    /** undefined preserves branch-derived behavior, null selects all markets. */
+    market?: string | null
 }
 const listeners = new Set<ScopeListener>()
 let lastScope: string | null | undefined
@@ -46,6 +50,12 @@ export function setCacheScopeLanguageProvider(fn: (() => string | null | undefin
  */
 export function setCacheScopeProvider(fn: (() => CacheScopeParts | null | undefined) | null): void {
     scopeProvider = fn
+}
+
+function scopedDimension(value: string | number | null | undefined): string {
+    if (value === undefined) return 'legacy'
+    if (value === null) return 'all'
+    return `id=${encodeURIComponent(String(value))}`
 }
 
 // One-entry memo: peekCacheScope runs on every render (inScope) and the token
@@ -140,7 +150,9 @@ export function peekCacheScope(): string | null {
             const user = String(p.user ?? '').trim()
             const lang = String(p.lang ?? '').trim() || readLang()
             if (!org || !user || !lang) return null
-            return [org, user, lang].map(encodeURIComponent).join(':')
+            const account = [org, user, lang].map(encodeURIComponent).join(':')
+            if (p.branch === undefined && p.market === undefined) return account
+            return `${account}:branch=${scopedDimension(p.branch)}:market=${scopedDimension(p.market)}`
         } catch {
             return null
         }

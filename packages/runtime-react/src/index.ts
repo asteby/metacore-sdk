@@ -705,6 +705,7 @@ export {
     type RelationWidgetContext,
 } from './relation-widget-registry'
 export { useActiveMarket, normalizeMarketCode, type ActiveMarket } from './use-active-market'
+export { AdminMarketProvider, useAdminMarketSelection, type AdminMarketSelection } from './admin-market-context'
 export {
     registerAgentResultRenderer,
     resolveAgentResultRenderer,
