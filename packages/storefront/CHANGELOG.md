@@ -1,5 +1,11 @@
 # @asteby/storefront
 
+## 0.54.0
+
+### Minor Changes
+
+- 8feefca: Show the original and discounted line prices and the automatic discount in the cart drawer and checkout summary, using the quoted amounts from Storefront.
+
 ## 0.53.0
 
 ### Minor Changes
