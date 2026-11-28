@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { Cart, CartLine } from '@asteby/storefront'
 import { CartDrawer, cartOptimistic, closeCartDrawer, openCartDrawer, type CartDrawerLabels, type CartDrawerPaths } from './index.js'
-import { optimisticSubtotal, scaleLineTotal, stockCap } from './optimistic-quantity.js'
+import { addPendingPrices, optimisticSubtotal, scaleLineTotal, stockCap } from './optimistic-quantity.js'
 
 const mxn = (amount: string) => ({ amount, currency_code: 'MXN' })
 const labels: CartDrawerLabels = {
@@ -21,6 +21,14 @@ const line = (id: string, quantity: number, total: string, discount?: string): C
   }) as unknown as CartLine
 const cart = (lines: CartLine[], subtotal: string): Cart =>
   ({ id: 'c1', lines, total_quantity: lines.reduce((n, l) => n + l.quantity, 0), cost: { subtotal: mxn(subtotal) } }) as unknown as Cart
+
+it('estimates pending additions from unit quotes, including an empty cart', () => {
+  const rows = [{ price: mxn('55.99'), quantity: 2 }]
+  expect(addPendingPrices(null, rows)).toEqual(mxn('111.98'))
+  expect(addPendingPrices(mxn('31.99'), rows)).toEqual(mxn('143.97'))
+  expect(addPendingPrices(mxn('31.99'), [...rows, { quantity: 1 }])).toBeNull()
+  expect(addPendingPrices({ amount: '0.00', currency_code: 'USD' }, rows)).toBeNull()
+})
 
 describe('cantidad optimista: cálculo puro', () => {
   it('escala el precio de la línea por la cantidad, conservando los decimales de OPS', () => {

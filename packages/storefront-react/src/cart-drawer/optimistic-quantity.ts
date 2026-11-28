@@ -1,4 +1,5 @@
 import type { Cart, CartLine, Money } from '@asteby/storefront'
+import type { OptimisticRow } from './optimistic.js'
 
 /**
  * Cantidad optimista del cajón: mientras OPS confirma un cambio de cantidad, la fila y el subtotal se mueven de inmediato
@@ -18,6 +19,20 @@ const fromMinor = (minor: number, digits: number, currency: string): Money => ({
   amount: digits > 0 ? (minor / 10 ** digits).toFixed(digits) : String(Math.round(minor)),
   currency_code: currency,
 })
+
+export function addPendingPrices(subtotal: Money | null, rows: readonly Pick<OptimisticRow, 'price' | 'quantity'>[]): Money | null {
+  if (rows.length === 0) return subtotal
+  const currency = subtotal?.currency_code ?? rows[0]?.price?.currency_code
+  if (!currency) return null
+  const digits = Math.max(decimalsOf(subtotal?.amount ?? '0'), ...rows.map(row => decimalsOf(row.price?.amount ?? '0')))
+  const scale = 10 ** digits
+  let minor = Math.round(Number(subtotal?.amount ?? 0) * scale)
+  for (const { price, quantity } of rows) {
+    if (!price || price.currency_code !== currency || !price.amount.trim()) return null
+    minor += Math.round(Number(price.amount) * scale) * quantity
+  }
+  return Number.isSafeInteger(minor) ? fromMinor(minor, digits, currency) : null
+}
 
 /**
  * Cantidad máxima que se puede pedir de una línea según lo que OPS dijo que hay (`quantity_available`); `null` = no se sabe

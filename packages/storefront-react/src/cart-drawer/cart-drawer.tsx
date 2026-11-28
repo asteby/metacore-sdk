@@ -7,7 +7,7 @@ import { useResolvedLocale } from '../locale.js'
 import { ProductThumb } from '../ui/product-preview.js'
 import { closeCartDrawer, isQuietOpen, useCartDrawer } from './store.js'
 import { cartOptimistic, useOptimisticCart, type OptimisticNotice, type OptimisticRow } from './optimistic.js'
-import { optimisticSubtotal, scaleLineTotal, stockCap } from './optimistic-quantity.js'
+import { addPendingPrices, optimisticSubtotal, scaleLineTotal, stockCap } from './optimistic-quantity.js'
 
 /** Textos del estado optimista. Por omisión es-MX; la tienda puede traducirlos o cambiarlos. */
 export type CartDrawerOptimisticLabels = {
@@ -206,7 +206,7 @@ export function CartDrawer(props: CartDrawerProps) {
   const extraRows = opt.rows.filter((r) => !lines.some((l) => l.merchandise.id === r.variantId))
   const pending = opt.rows.length > 0
   const syncing = Object.keys(drafts).length > 0
-  const subtotal = cart ? (syncing ? optimisticSubtotal(cart, drafts) : cart.cost.subtotal) : null
+  const subtotal = addPendingPrices(cart ? (syncing ? optimisticSubtotal(cart, drafts) : cart.cost.subtotal) : null, opt.rows)
   const empty = lines.length === 0 && extraRows.length === 0
   const close = () => closeCartDrawer()
 
@@ -286,7 +286,7 @@ export function CartDrawer(props: CartDrawerProps) {
             <div className={cx.footer} data-sf-cart-footer="">
               <div className={cx.subtotal} data-sf-cart-subtotal="" aria-busy={pending || syncing || undefined}>
                 <span className={cx.subtotalLabel}>{labels.subtotal}</span>
-                <span className={cx.subtotalValue} data-sf-cart-subtotal-value="" data-sf-optimistic={syncing || undefined}>{subtotal ? money(subtotal) : null}{pending ? <span data-sf-cart-calculating="">{cart ? ' ' : ''}{ol.calculating}</span> : null}</span>
+                <span className={cx.subtotalValue} data-sf-cart-subtotal-value="" data-sf-optimistic={pending || syncing || undefined}>{subtotal ? money(subtotal) : pending ? <span data-sf-cart-calculating="">{ol.calculating}</span> : null}</span>
               </div>
               {labels.note ? <p className={cx.note} data-sf-cart-note="">{labels.note}</p> : null}
               <div className={cx.actions} data-sf-cart-actions="">
@@ -396,12 +396,15 @@ function DrawerLine({
   const image = props.renderImage ? props.renderImage(line) : <ProductThumb image={img ?? null} name={title} size={80} decorative />
 
   const imageNode = <span className={cx.image} data-sf-cart-image="">{image}</span>
-  const optimisticPrice = draft !== undefined && draft !== line.quantity
+  const optimisticPrice = quantity !== line.quantity
+  const displayPrice = pending && draft === undefined && !formData
+    ? addPendingPrices(line.cost.total, [pending])
+    : scaleLineTotal(line, quantity)
   const price = (
     <span className={cx.price} data-sf-cart-price="" data-sf-optimistic={optimisticPrice || undefined}>
       <CartLinePrice
         line={line}
-        amount={optimisticPrice ? scaleLineTotal(line, draft) : line.cost.total}
+        amount={optimisticPrice ? displayPrice ?? line.cost.total : line.cost.total}
         showDiscount={quantity === line.quantity && !optimisticPrice}
         renderAmount={money}
         locale={locale}
@@ -453,6 +456,7 @@ function DrawerLine({
 /** Fila que existe solo en el navegador hasta que OPS la confirma: sin controles, con el precio unitario mostrado. */
 function PendingLine({ row, props, money, label }: { row: OptimisticRow; props: CartDrawerProps; money: (m: Money) => ReactNode; label: string }) {
   const { classNames: cx = {} } = props
+  const price = addPendingPrices(null, [row])
   const isDefault = props.isDefaultVariantTitle ?? defaultIsDefaultVariant
   return (
     <li className={cx.line} data-sf-cart-line="" data-sf-cart-line-pending="" aria-busy="true">
@@ -465,7 +469,7 @@ function PendingLine({ row, props, money, label }: { row: OptimisticRow; props: 
             <span className={cx.lineTitle} data-sf-cart-line-title="">{row.title}</span>
             {row.variantTitle && !isDefault(row.variantTitle) ? <p className={cx.variant} data-sf-cart-variant="">{row.variantTitle}</p> : null}
           </div>
-          {row.price ? <span className={cx.price} data-sf-cart-price="">{money(row.price)}</span> : null}
+          {price ? <span className={cx.price} data-sf-cart-price="">{money(price)}</span> : null}
         </div>
         <p className={cx.variant} data-sf-cart-pending-label="">{label} · ×{row.quantity}</p>
       </div>
