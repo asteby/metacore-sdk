@@ -6,6 +6,7 @@
 import type { ReactNode } from 'react'
 import { formatMoney, type CartCost, type CartLine, type Money } from '@asteby/storefront'
 import { useResolvedLocale } from '../locale.js'
+import { CartLinePrice } from '../cart-line-price.js'
 import { ProductThumb } from '../ui/product-preview.js'
 
 export type OrderSummaryMessages = {
@@ -159,7 +160,7 @@ export function OrderSummary(props: OrderSummaryProps) {
                 ) : null}
               </span>
               <span className={cx.linePrice} data-sf-summary-line-price>
-                {money(l.cost.total)}
+                <CartLinePrice line={l} renderAmount={money} locale={locale} />
               </span>
             </li>
           )

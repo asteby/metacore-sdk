@@ -30,6 +30,17 @@ afterEach(() => {
 })
 
 describe('CartDrawer', () => {
+  it('shows the server automatic discount before and after while keeping the cart subtotal', () => {
+    const item = line('1', 2)
+    item.cost.automatic_discount = { name: 'BLACKFRIDAY', original_total: mxn('125.00'), savings: mxn('25.00') }
+    const { container } = render(<CartDrawer cart={cart([item])} labels={labels} paths={paths} renderMoney={(amount) => amount.amount} />)
+    act(() => openCartDrawer())
+
+    expect(container.querySelector('del[data-sf-line-original-price]')?.textContent).toBe('125.00')
+    expect(container.querySelector('[data-sf-line-current-price]')?.textContent).toBe('100.00')
+    expect(screen.getByText('BLACKFRIDAY (−25.00)')).toBeTruthy()
+    expect(screen.getByText('300.00')).toBeTruthy()
+  })
   it('no se pinta cerrado, ni en el servidor', () => {
     expect(renderToString(<CartDrawer cart={cart([line('1', 2)])} labels={labels} paths={paths} />)).toBe('')
     const { container } = render(<CartDrawer cart={cart([line('1', 2)])} labels={labels} paths={paths} />)

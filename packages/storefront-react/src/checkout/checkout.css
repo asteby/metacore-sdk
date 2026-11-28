@@ -130,6 +130,9 @@
   font-size: 0.9375rem;
   font-weight: 600;
 }
+[data-sf-summary-line-price]:has([data-sf-line-prices]) { max-inline-size: 50%; }
+[data-sf-summary-line-price] [data-sf-line-original-price],
+[data-sf-summary-line-price] [data-sf-line-automatic-discount] { display: block; font-size: .75rem; font-weight: 400; overflow-wrap: anywhere; }
 [data-sf-summary-totals] {
   display: grid;
   gap: 0.625rem;
