@@ -32,12 +32,18 @@ export function CartLinePrice({ line, amount = line.cost.total, showDiscount = t
 
   const english = locale.toLowerCase().startsWith('en')
   const label = discount?.name?.trim() || (english ? 'Automatic discount' : 'Descuento automático')
+  const savings = discount?.savings
+  const hasSavings = savings && savings.currency_code === amount.currency_code && Number(savings.amount) > 0
+  const savingsRate = hasSavings ? Number(savings.amount) / Number(original.amount) : 0
+  const percentage = savingsRate >= 0.0005 && savingsRate <= 1
+    ? new Intl.NumberFormat(locale, { style: 'percent', maximumFractionDigits: 1 }).format(savingsRate)
+    : null
   return (
     <span data-sf-line-prices="">
       <del data-sf-line-original-price="">{money(original)}</del>{' '}
       <span data-sf-line-current-price="">{money(amount)}</span>
-      {discount && Number(discount.savings.amount) > 0 && discount.savings.currency_code === amount.currency_code ? (
-        <> <span data-sf-line-automatic-discount="">{label} (−{money(discount.savings)})</span></>
+      {hasSavings ? (
+        <> <span data-sf-line-automatic-discount="">{label} ({percentage && <>−{percentage} · </>}−{money(savings)})</span></>
       ) : null}
     </span>
   )

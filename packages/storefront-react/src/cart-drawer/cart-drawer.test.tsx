@@ -38,7 +38,7 @@ describe('CartDrawer', () => {
 
     expect(container.querySelector('del[data-sf-line-original-price]')?.textContent).toBe('125.00')
     expect(container.querySelector('[data-sf-line-current-price]')?.textContent).toBe('100.00')
-    expect(screen.getByText('BLACKFRIDAY (−25.00)')).toBeTruthy()
+    expect(screen.getByText('BLACKFRIDAY (−20% · −25.00)')).toBeTruthy()
     expect(screen.getByText('300.00')).toBeTruthy()
   })
   it('no se pinta cerrado, ni en el servidor', () => {
