@@ -1,5 +1,11 @@
 # @asteby/metacore-runtime-react
 
+## 53.44.0
+
+### Minor Changes
+
+- 3737d29: Allow hosts to expose the selected administrative catalog market separately from the operational branch and partition runtime caches by market and branch.
+
 ## 53.43.1
 
 ### Patch Changes
